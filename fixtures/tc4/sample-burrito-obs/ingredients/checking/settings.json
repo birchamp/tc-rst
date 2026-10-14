@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "checkCategories": {
+    "translationWords": [
+      "kt",
+      "names",
+      "other"
+    ],
+    "translationNotes": [
+      "translate"
+    ]
+  }
+}

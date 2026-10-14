@@ -1,0 +1,98 @@
+{
+  "format": "scripture burrito",
+  "meta": {
+    "version": "1.0.0",
+    "category": "source",
+    "generator": {
+      "softwareName": "go-rc2sb",
+      "softwareVersion": "v0.5.0",
+      "userName": ""
+    },
+    "defaultLocale": "en",
+    "dateCreated": "2026-09-18T23:37:29.658Z",
+    "normalization": "NFC"
+  },
+  "idAuthorities": {
+    "dcs": {
+      "id": "https://git.door43.org",
+      "name": {
+        "en": "Door43 Content Service"
+      }
+    }
+  },
+  "identification": {
+    "primary": {
+      "dcs": {
+        "unfoldingWord/en_obs-tq": {
+          "revision": "01b92fe8793d62cff3a2221f5174c768cbad3dc1",
+          "timestamp": "2026-09-18T23:37:29.658Z"
+        }
+      }
+    },
+    "name": {
+      "en": "unfoldingWord® Open Bible Stories Translation Questions"
+    },
+    "description": {
+      "en": "unfoldingWord® Open Bible Stories Translation Questions"
+    },
+    "abbreviation": {
+      "en": "OBSTQ"
+    }
+  },
+  "languages": [
+    {
+      "tag": "en",
+      "name": {
+        "en": "English"
+      },
+      "scriptDirection": "ltr"
+    }
+  ],
+  "type": {
+    "flavorType": {
+      "name": "peripheral",
+      "flavor": {
+        "name": "x-obsquestions"
+      }
+    }
+  },
+  "confidential": false,
+  "localizedNames": {
+    "book-obs": {
+      "abbr": {
+        "en": "OBS"
+      },
+      "short": {
+        "en": "OBS"
+      },
+      "long": {
+        "en": "OBS"
+      }
+    }
+  },
+  "ingredients": {
+    "ingredients/LICENSE.md": {
+      "checksum": {
+        "md5": "d1a735a15a7f55ca4d5ef9d6800821ed"
+      },
+      "mimeType": "text/markdown",
+      "size": 1349
+    },
+    "ingredients/OBS.tsv": {
+      "checksum": {
+        "md5": "38d1ca4915e3b6ef57d06876ca800976"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 87665
+    }
+  },
+  "copyright": {
+    "shortStatements": [
+      {
+        "statement": "© unfoldingWord 2023, CC BY-SA 4.0",
+        "mimetype": "text/plain",
+        "lang": "en"
+      }
+    ]
+  }
+}

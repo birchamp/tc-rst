@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "checkCategories": {
+    "translationWords": ["kt", "names", "other"],
+    "translationNotes": ["translate"]
+  },
+  "ui": {
+    "note": "home for the RCL saveSettings payload (pane/tool settings) — unpersisted TODO in current uw-client-checks",
+    "paneSettings": [
+      { "bibleId": "targetBible", "languageId": "es-419" },
+      { "bibleId": "ugnt", "languageId": "grc", "owner": "unfoldingWord" }
+    ],
+    "toolsSettings": {}
+  }
+}

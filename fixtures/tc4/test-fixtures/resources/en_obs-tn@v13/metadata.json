@@ -1,0 +1,98 @@
+{
+  "format": "scripture burrito",
+  "meta": {
+    "version": "1.0.0",
+    "category": "source",
+    "generator": {
+      "softwareName": "go-rc2sb",
+      "softwareVersion": "v0.5.0",
+      "userName": ""
+    },
+    "defaultLocale": "en",
+    "dateCreated": "2026-09-17T18:20:53.766Z",
+    "normalization": "NFC"
+  },
+  "idAuthorities": {
+    "dcs": {
+      "id": "https://git.door43.org",
+      "name": {
+        "en": "Door43 Content Service"
+      }
+    }
+  },
+  "identification": {
+    "primary": {
+      "dcs": {
+        "unfoldingWord/en_obs-tn": {
+          "revision": "e86138ea13f619f09f7a6dcaa60592716d407fe4",
+          "timestamp": "2026-09-17T18:20:53.766Z"
+        }
+      }
+    },
+    "name": {
+      "en": "unfoldingWord® Open Bible Stories Translation Notes"
+    },
+    "description": {
+      "en": "unfoldingWord® Open Bible Stories Translation Notes"
+    },
+    "abbreviation": {
+      "en": "OBSTN"
+    }
+  },
+  "languages": [
+    {
+      "tag": "en",
+      "name": {
+        "en": "English"
+      },
+      "scriptDirection": "ltr"
+    }
+  ],
+  "type": {
+    "flavorType": {
+      "name": "peripheral",
+      "flavor": {
+        "name": "x-obsnotes"
+      }
+    }
+  },
+  "confidential": false,
+  "localizedNames": {
+    "book-obs": {
+      "abbr": {
+        "en": "OBS"
+      },
+      "short": {
+        "en": "OBS"
+      },
+      "long": {
+        "en": "OBS"
+      }
+    }
+  },
+  "ingredients": {
+    "ingredients/LICENSE.md": {
+      "checksum": {
+        "md5": "9d26957f49b946135b83438241e80932"
+      },
+      "mimeType": "text/markdown",
+      "size": 1345
+    },
+    "ingredients/OBS.tsv": {
+      "checksum": {
+        "md5": "2059cada2248cb56344028eb402123ef"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 435602
+    }
+  },
+  "copyright": {
+    "shortStatements": [
+      {
+        "statement": "© unfoldingWord 2024, CC BY-SA 4.0",
+        "mimetype": "text/plain",
+        "lang": "en"
+      }
+    ]
+  }
+}

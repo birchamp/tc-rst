@@ -1,0 +1,5195 @@
+{
+  "format": "scripture burrito",
+  "meta": {
+    "version": "1.0.0",
+    "category": "source",
+    "generator": {
+      "softwareName": "go-rc2sb",
+      "softwareVersion": "v0.4.0",
+      "userName": ""
+    },
+    "defaultLocale": "en",
+    "dateCreated": "2026-08-03T15:45:56.021Z",
+    "normalization": "NFC"
+  },
+  "idAuthorities": {
+    "dcs": {
+      "id": "https://git.door43.org",
+      "name": {
+        "en": "Door43 Content Service"
+      }
+    }
+  },
+  "identification": {
+    "primary": {
+      "dcs": {
+        "unfoldingWord/en_ta": {
+          "revision": "c7caddfb474efd713f36b35a3ffc927866c7b180",
+          "timestamp": "2026-08-03T15:45:56.021Z"
+        }
+      }
+    },
+    "name": {
+      "en": "unfoldingWord® Translation Academy"
+    },
+    "description": {
+      "en": "unfoldingWord® Translation Academy"
+    },
+    "abbreviation": {
+      "en": "TA"
+    }
+  },
+  "languages": [
+    {
+      "tag": "en",
+      "name": {
+        "en": "English"
+      },
+      "scriptDirection": "ltr"
+    }
+  ],
+  "type": {
+    "flavorType": {
+      "name": "peripheral",
+      "flavor": {
+        "name": "x-peripheralArticles"
+      }
+    }
+  },
+  "confidential": false,
+  "ingredients": {
+    "ingredients/LICENSE.md": {
+      "checksum": {
+        "md5": "5d68180169ded21a9b2bb5bd9ac55019"
+      },
+      "mimeType": "text/markdown",
+      "size": 1315
+    },
+    "ingredients/checking/acceptable/01.md": {
+      "checksum": {
+        "md5": "c0695be6129566c2929117c7483ba30b"
+      },
+      "mimeType": "text/markdown",
+      "size": 1375
+    },
+    "ingredients/checking/acceptable/sub-title.md": {
+      "checksum": {
+        "md5": "572b517729522d0bb1e96e547957416b"
+      },
+      "mimeType": "text/markdown",
+      "size": 49
+    },
+    "ingredients/checking/acceptable/title.md": {
+      "checksum": {
+        "md5": "55c6d80be168f7b6b9f130f384df9af3"
+      },
+      "mimeType": "text/markdown",
+      "size": 16
+    },
+    "ingredients/checking/accuracy-check/01.md": {
+      "checksum": {
+        "md5": "fb6f95fa40bf0151107fd7004e501ba8"
+      },
+      "mimeType": "text/markdown",
+      "size": 7992
+    },
+    "ingredients/checking/accuracy-check/sub-title.md": {
+      "checksum": {
+        "md5": "b7afbd273410f4a67ff1879819f1311d"
+      },
+      "mimeType": "text/markdown",
+      "size": 31
+    },
+    "ingredients/checking/accuracy-check/title.md": {
+      "checksum": {
+        "md5": "e95908e54f9b889fc5c2a666a1665ede"
+      },
+      "mimeType": "text/markdown",
+      "size": 37
+    },
+    "ingredients/checking/alignment-tool/01.md": {
+      "checksum": {
+        "md5": "4c09296f74bf0ea885b935f6cac5cc56"
+      },
+      "mimeType": "text/markdown",
+      "size": 8989
+    },
+    "ingredients/checking/alignment-tool/sub-title.md": {
+      "checksum": {
+        "md5": "61a027e25e241e25dbaf27f76c76fdf8"
+      },
+      "mimeType": "text/markdown",
+      "size": 76
+    },
+    "ingredients/checking/alignment-tool/title.md": {
+      "checksum": {
+        "md5": "a1ec9e71325cc006799829756650c95d"
+      },
+      "mimeType": "text/markdown",
+      "size": 18
+    },
+    "ingredients/checking/alphabet/01.md": {
+      "checksum": {
+        "md5": "423bb85a7c8f16d93abfc630b5e23f13"
+      },
+      "mimeType": "text/markdown",
+      "size": 1208
+    },
+    "ingredients/checking/alphabet/sub-title.md": {
+      "checksum": {
+        "md5": "80e02a91ededf859b4f846f68180b98d"
+      },
+      "mimeType": "text/markdown",
+      "size": 49
+    },
+    "ingredients/checking/alphabet/title.md": {
+      "checksum": {
+        "md5": "03253df0985e0c51e3f623464cbe7654"
+      },
+      "mimeType": "text/markdown",
+      "size": 20
+    },
+    "ingredients/checking/authority-process/01.md": {
+      "checksum": {
+        "md5": "79355afa45e0969e54b85b832ef03b89"
+      },
+      "mimeType": "text/markdown",
+      "size": 2168
+    },
+    "ingredients/checking/authority-process/sub-title.md": {
+      "checksum": {
+        "md5": "75af71a747f1e22fa716ad98be280532"
+      },
+      "mimeType": "text/markdown",
+      "size": 103
+    },
+    "ingredients/checking/authority-process/title.md": {
+      "checksum": {
+        "md5": "20f2b7374c64db46d4f7030f06ed1095"
+      },
+      "mimeType": "text/markdown",
+      "size": 30
+    },
+    "ingredients/checking/church-leader-check/01.md": {
+      "checksum": {
+        "md5": "0c23ec3a071bf0d4b60bc45293fc3a50"
+      },
+      "mimeType": "text/markdown",
+      "size": 2100
+    },
+    "ingredients/checking/church-leader-check/sub-title.md": {
+      "checksum": {
+        "md5": "1add350505847dd11b0b4103f9d73b70"
+      },
+      "mimeType": "text/markdown",
+      "size": 56
+    },
+    "ingredients/checking/church-leader-check/title.md": {
+      "checksum": {
+        "md5": "a45e25445f2ba5f40cf8b4c6dddab621"
+      },
+      "mimeType": "text/markdown",
+      "size": 35
+    },
+    "ingredients/checking/clear/01.md": {
+      "checksum": {
+        "md5": "1d2cdd316b1b9cb035462a8245f187e0"
+      },
+      "mimeType": "text/markdown",
+      "size": 2101
+    },
+    "ingredients/checking/clear/sub-title.md": {
+      "checksum": {
+        "md5": "791dc69871d03362f1ca58dd07167f30"
+      },
+      "mimeType": "text/markdown",
+      "size": 43
+    },
+    "ingredients/checking/clear/title.md": {
+      "checksum": {
+        "md5": "1af49a08e48c74d5fb872ee3d0d2e972"
+      },
+      "mimeType": "text/markdown",
+      "size": 17
+    },
+    "ingredients/checking/community-evaluation/01.md": {
+      "checksum": {
+        "md5": "9a6c63e6b6b05a186f3eb674e092692a"
+      },
+      "mimeType": "text/markdown",
+      "size": 2017
+    },
+    "ingredients/checking/community-evaluation/sub-title.md": {
+      "checksum": {
+        "md5": "07442aef965ed338c62013690d453973"
+      },
+      "mimeType": "text/markdown",
+      "size": 59
+    },
+    "ingredients/checking/community-evaluation/title.md": {
+      "checksum": {
+        "md5": "02013335261bdefd805f1d9d08730a77"
+      },
+      "mimeType": "text/markdown",
+      "size": 39
+    },
+    "ingredients/checking/complete/01.md": {
+      "checksum": {
+        "md5": "e78ba2c31d828aead15b6e47327c3742"
+      },
+      "mimeType": "text/markdown",
+      "size": 1530
+    },
+    "ingredients/checking/complete/sub-title.md": {
+      "checksum": {
+        "md5": "8349cb3f82ff35c463445cec5fe1ee4e"
+      },
+      "mimeType": "text/markdown",
+      "size": 28
+    },
+    "ingredients/checking/complete/title.md": {
+      "checksum": {
+        "md5": "0b5bb8ab31ec45dee0b758baab850db1"
+      },
+      "mimeType": "text/markdown",
+      "size": 20
+    },
+    "ingredients/checking/config.yaml": {
+      "checksum": {
+        "md5": "309b3898457ba059de5150112b07d264"
+      },
+      "mimeType": "text/yaml",
+      "size": 4606
+    },
+    "ingredients/checking/formatting/01.md": {
+      "checksum": {
+        "md5": "034eda23c5a24920bb2f9a7c63b95dd8"
+      },
+      "mimeType": "text/markdown",
+      "size": 1475
+    },
+    "ingredients/checking/formatting/sub-title.md": {
+      "checksum": {
+        "md5": "53df1ed289a0bfd5faf9027cc48899b4"
+      },
+      "mimeType": "text/markdown",
+      "size": 57
+    },
+    "ingredients/checking/formatting/title.md": {
+      "checksum": {
+        "md5": "aa7bc8f54413ed3620c2dff46aa5a0ac"
+      },
+      "mimeType": "text/markdown",
+      "size": 32
+    },
+    "ingredients/checking/goal-checking/01.md": {
+      "checksum": {
+        "md5": "553dd3fcbf1f11932e3fe7ec0b7d4d57"
+      },
+      "mimeType": "text/markdown",
+      "size": 2680
+    },
+    "ingredients/checking/goal-checking/sub-title.md": {
+      "checksum": {
+        "md5": "290f81ce372945e2c19a67e3ecfdbf40"
+      },
+      "mimeType": "text/markdown",
+      "size": 29
+    },
+    "ingredients/checking/goal-checking/title.md": {
+      "checksum": {
+        "md5": "3bd6e68751d95e66ec06368ff7338fd5"
+      },
+      "mimeType": "text/markdown",
+      "size": 20
+    },
+    "ingredients/checking/good/01.md": {
+      "checksum": {
+        "md5": "622459f5491450c5327cf513254d703b"
+      },
+      "mimeType": "text/markdown",
+      "size": 834
+    },
+    "ingredients/checking/good/sub-title.md": {
+      "checksum": {
+        "md5": "5fd686c63f38e18ed3813bc5fbb325d0"
+      },
+      "mimeType": "text/markdown",
+      "size": 112
+    },
+    "ingredients/checking/good/title.md": {
+      "checksum": {
+        "md5": "d4552b7d20337275d3471042a6447d86"
+      },
+      "mimeType": "text/markdown",
+      "size": 48
+    },
+    "ingredients/checking/headings/01.md": {
+      "checksum": {
+        "md5": "afa28c52222892bcd1e901bfc9154bff"
+      },
+      "mimeType": "text/markdown",
+      "size": 3555
+    },
+    "ingredients/checking/headings/sub-title.md": {
+      "checksum": {
+        "md5": "d75de404b28a591ac023874b1e9767d3"
+      },
+      "mimeType": "text/markdown",
+      "size": 44
+    },
+    "ingredients/checking/headings/title.md": {
+      "checksum": {
+        "md5": "e67255c818031062e20bed7029beb681"
+      },
+      "mimeType": "text/markdown",
+      "size": 16
+    },
+    "ingredients/checking/important-term-check/01.md": {
+      "checksum": {
+        "md5": "c2fb91a3e52db6e836d5751d7d178fee"
+      },
+      "mimeType": "text/markdown",
+      "size": 3261
+    },
+    "ingredients/checking/important-term-check/sub-title.md": {
+      "checksum": {
+        "md5": "707e95dde1e2fd54cabb6c4218bdce4c"
+      },
+      "mimeType": "text/markdown",
+      "size": 70
+    },
+    "ingredients/checking/important-term-check/title.md": {
+      "checksum": {
+        "md5": "50288435258d90a6fb9cd159868ffa86"
+      },
+      "mimeType": "text/markdown",
+      "size": 28
+    },
+    "ingredients/checking/intro-check/01.md": {
+      "checksum": {
+        "md5": "c63874984209a1207ef36fd1cc225760"
+      },
+      "mimeType": "text/markdown",
+      "size": 2916
+    },
+    "ingredients/checking/intro-check/sub-title.md": {
+      "checksum": {
+        "md5": "58b2785dda542ac17bca6c2090c38487"
+      },
+      "mimeType": "text/markdown",
+      "size": 28
+    },
+    "ingredients/checking/intro-check/title.md": {
+      "checksum": {
+        "md5": "3aad926e4bcc34d2aaa0f6b6ee861ff1"
+      },
+      "mimeType": "text/markdown",
+      "size": 35
+    },
+    "ingredients/checking/intro-checking/01.md": {
+      "checksum": {
+        "md5": "e02b6df4dd5b1a33389f708bc43260b4"
+      },
+      "mimeType": "text/markdown",
+      "size": 2961
+    },
+    "ingredients/checking/intro-checking/sub-title.md": {
+      "checksum": {
+        "md5": "746f748e305b30c092efd223b3bf0c1c"
+      },
+      "mimeType": "text/markdown",
+      "size": 34
+    },
+    "ingredients/checking/intro-checking/title.md": {
+      "checksum": {
+        "md5": "3a4bd15d1d15e56e3a3913f6eb0c4d86"
+      },
+      "mimeType": "text/markdown",
+      "size": 36
+    },
+    "ingredients/checking/language-community-check/01.md": {
+      "checksum": {
+        "md5": "9d76119b0c778b41f028b41809c6f2cb"
+      },
+      "mimeType": "text/markdown",
+      "size": 6313
+    },
+    "ingredients/checking/language-community-check/sub-title.md": {
+      "checksum": {
+        "md5": "32cd631ab9c3fb48dd5947f5cc8c5f58"
+      },
+      "mimeType": "text/markdown",
+      "size": 53
+    },
+    "ingredients/checking/language-community-check/title.md": {
+      "checksum": {
+        "md5": "39ea70f0ae93008400b8176b752d74f0"
+      },
+      "mimeType": "text/markdown",
+      "size": 52
+    },
+    "ingredients/checking/level3-approval/01.md": {
+      "checksum": {
+        "md5": "05aacf04eff679d7bb590e0d2dc0a8f5"
+      },
+      "mimeType": "text/markdown",
+      "size": 1077
+    },
+    "ingredients/checking/level3-approval/sub-title.md": {
+      "checksum": {
+        "md5": "8a6568beb326cf881b9f1b058f20837e"
+      },
+      "mimeType": "text/markdown",
+      "size": 82
+    },
+    "ingredients/checking/level3-approval/title.md": {
+      "checksum": {
+        "md5": "1bd7df0fe82b80ad4dd15a40e7f56ffe"
+      },
+      "mimeType": "text/markdown",
+      "size": 31
+    },
+    "ingredients/checking/level3-questions/01.md": {
+      "checksum": {
+        "md5": "56297deca2cd4d2c10630188959f40f4"
+      },
+      "mimeType": "text/markdown",
+      "size": 5540
+    },
+    "ingredients/checking/level3-questions/sub-title.md": {
+      "checksum": {
+        "md5": "87c319e2096e7b282a4afb0ee5ad6641"
+      },
+      "mimeType": "text/markdown",
+      "size": 73
+    },
+    "ingredients/checking/level3-questions/title.md": {
+      "checksum": {
+        "md5": "8e811ca08ad467cf0238dd75d37542f5"
+      },
+      "mimeType": "text/markdown",
+      "size": 30
+    },
+    "ingredients/checking/natural/01.md": {
+      "checksum": {
+        "md5": "08fae77c012cd9b743514c9a70c75899"
+      },
+      "mimeType": "text/markdown",
+      "size": 2016
+    },
+    "ingredients/checking/natural/sub-title.md": {
+      "checksum": {
+        "md5": "e43943ebd284c3a8f1a71e76cf55a7a6"
+      },
+      "mimeType": "text/markdown",
+      "size": 27
+    },
+    "ingredients/checking/natural/title.md": {
+      "checksum": {
+        "md5": "3da44e476766dd0371d9f72a0cc5420d"
+      },
+      "mimeType": "text/markdown",
+      "size": 19
+    },
+    "ingredients/checking/other-methods/01.md": {
+      "checksum": {
+        "md5": "2f3e965354091da4d676fc828d29e31b"
+      },
+      "mimeType": "text/markdown",
+      "size": 2947
+    },
+    "ingredients/checking/other-methods/sub-title.md": {
+      "checksum": {
+        "md5": "3e9cfce2329a108956e77cdafda66280"
+      },
+      "mimeType": "text/markdown",
+      "size": 96
+    },
+    "ingredients/checking/other-methods/title.md": {
+      "checksum": {
+        "md5": "f690efe457b61b6f2844369202fb68b3"
+      },
+      "mimeType": "text/markdown",
+      "size": 13
+    },
+    "ingredients/checking/peer-check/01.md": {
+      "checksum": {
+        "md5": "0410ff38e6135447f2726425f49286cf"
+      },
+      "mimeType": "text/markdown",
+      "size": 2439
+    },
+    "ingredients/checking/peer-check/sub-title.md": {
+      "checksum": {
+        "md5": "00bc37dcbb92482bbdb046b79b9bea4b"
+      },
+      "mimeType": "text/markdown",
+      "size": 37
+    },
+    "ingredients/checking/peer-check/title.md": {
+      "checksum": {
+        "md5": "0bb6a0c9092900966179bd5cd33b15a9"
+      },
+      "mimeType": "text/markdown",
+      "size": 18
+    },
+    "ingredients/checking/publishing/01.md": {
+      "checksum": {
+        "md5": "5c8f02a6f7fb7cbd59c0324adceacf74"
+      },
+      "mimeType": "text/markdown",
+      "size": 3552
+    },
+    "ingredients/checking/publishing/sub-title.md": {
+      "checksum": {
+        "md5": "9fd1bf876741cce19f6bddda7d50e3c7"
+      },
+      "mimeType": "text/markdown",
+      "size": 66
+    },
+    "ingredients/checking/publishing/title.md": {
+      "checksum": {
+        "md5": "9fb1f5afe9ff67d5c606041aca565287"
+      },
+      "mimeType": "text/markdown",
+      "size": 10
+    },
+    "ingredients/checking/punctuation/01.md": {
+      "checksum": {
+        "md5": "6a02d80c40269d53a18a0994001502a9"
+      },
+      "mimeType": "text/markdown",
+      "size": 1550
+    },
+    "ingredients/checking/punctuation/sub-title.md": {
+      "checksum": {
+        "md5": "de1bde644823455e4e891b16c4442264"
+      },
+      "mimeType": "text/markdown",
+      "size": 48
+    },
+    "ingredients/checking/punctuation/title.md": {
+      "checksum": {
+        "md5": "cd74f35a9925d4a9a5007d6e94a1358b"
+      },
+      "mimeType": "text/markdown",
+      "size": 22
+    },
+    "ingredients/checking/self-assessment/01.md": {
+      "checksum": {
+        "md5": "d2ae1d16b2d226f75e38661f29c0ca39"
+      },
+      "mimeType": "text/markdown",
+      "size": 8699
+    },
+    "ingredients/checking/self-assessment/sub-title.md": {
+      "checksum": {
+        "md5": "6dce392ae60fcbdc33da9de5a7f1a5db"
+      },
+      "mimeType": "text/markdown",
+      "size": 60
+    },
+    "ingredients/checking/self-assessment/title.md": {
+      "checksum": {
+        "md5": "8b575e7c3fe236548ed3135a5e4e82d9"
+      },
+      "mimeType": "text/markdown",
+      "size": 22
+    },
+    "ingredients/checking/spelling/01.md": {
+      "checksum": {
+        "md5": "dbe2dee624a88f7383d9822323bdba89"
+      },
+      "mimeType": "text/markdown",
+      "size": 2051
+    },
+    "ingredients/checking/spelling/sub-title.md": {
+      "checksum": {
+        "md5": "4aa0d5bddeb543787cb6987b13af343c"
+      },
+      "mimeType": "text/markdown",
+      "size": 50
+    },
+    "ingredients/checking/spelling/title.md": {
+      "checksum": {
+        "md5": "9d6ec86d3c61456aa11b13c1421e5529"
+      },
+      "mimeType": "text/markdown",
+      "size": 19
+    },
+    "ingredients/checking/team-oral-chunk-check/01.md": {
+      "checksum": {
+        "md5": "bd177f549375c2d184a015bcfe7ad7aa"
+      },
+      "mimeType": "text/markdown",
+      "size": 1994
+    },
+    "ingredients/checking/team-oral-chunk-check/sub-title.md": {
+      "checksum": {
+        "md5": "82c2656d967432fe1f60fd793aa0aada"
+      },
+      "mimeType": "text/markdown",
+      "size": 43
+    },
+    "ingredients/checking/team-oral-chunk-check/title.md": {
+      "checksum": {
+        "md5": "4183af74bdcdf7c0b52e6be5ebf9b3a8"
+      },
+      "mimeType": "text/markdown",
+      "size": 21
+    },
+    "ingredients/checking/toc.yaml": {
+      "checksum": {
+        "md5": "42c4e929cb7bc9da77c9f511e3342710"
+      },
+      "mimeType": "text/yaml",
+      "size": 3264
+    },
+    "ingredients/checking/trans-note-check/01.md": {
+      "checksum": {
+        "md5": "d873323140b9aa8ad5027713f8a38c35"
+      },
+      "mimeType": "text/markdown",
+      "size": 3684
+    },
+    "ingredients/checking/trans-note-check/sub-title.md": {
+      "checksum": {
+        "md5": "8d2fabd19bb9c6713291075375ce10a6"
+      },
+      "mimeType": "text/markdown",
+      "size": 37
+    },
+    "ingredients/checking/trans-note-check/title.md": {
+      "checksum": {
+        "md5": "a5603bd7c5d8d4f63627cd1355724af4"
+      },
+      "mimeType": "text/markdown",
+      "size": 28
+    },
+    "ingredients/checking/verses/01.md": {
+      "checksum": {
+        "md5": "08372d40b0fd4b06d0d3020014c054cb"
+      },
+      "mimeType": "text/markdown",
+      "size": 2210
+    },
+    "ingredients/checking/verses/sub-title.md": {
+      "checksum": {
+        "md5": "bc8a0d42e4e1d954411ed0418180d67e"
+      },
+      "mimeType": "text/markdown",
+      "size": 42
+    },
+    "ingredients/checking/verses/title.md": {
+      "checksum": {
+        "md5": "eb64290ab05c7d0f8b132f9cd83a254f"
+      },
+      "mimeType": "text/markdown",
+      "size": 22
+    },
+    "ingredients/checking/vol2-backtranslation-guidelines/01.md": {
+      "checksum": {
+        "md5": "f7cdfd25ee17ac8614ebe8b79f303ffb"
+      },
+      "mimeType": "text/markdown",
+      "size": 5214
+    },
+    "ingredients/checking/vol2-backtranslation-guidelines/sub-title.md": {
+      "checksum": {
+        "md5": "626b4f14c6d99191cd4190dfa94f72a6"
+      },
+      "mimeType": "text/markdown",
+      "size": 61
+    },
+    "ingredients/checking/vol2-backtranslation-guidelines/title.md": {
+      "checksum": {
+        "md5": "0f8fc53465054950ca35216d780adc25"
+      },
+      "mimeType": "text/markdown",
+      "size": 47
+    },
+    "ingredients/checking/vol2-backtranslation-kinds/01.md": {
+      "checksum": {
+        "md5": "806cac45eb9c7efa895e5ff2171b405d"
+      },
+      "mimeType": "text/markdown",
+      "size": 5057
+    },
+    "ingredients/checking/vol2-backtranslation-kinds/sub-title.md": {
+      "checksum": {
+        "md5": "4d75ffd0fcf9c0a9120142b2765a8724"
+      },
+      "mimeType": "text/markdown",
+      "size": 42
+    },
+    "ingredients/checking/vol2-backtranslation-kinds/title.md": {
+      "checksum": {
+        "md5": "f871f48886d76af0ad4fdb295732e167"
+      },
+      "mimeType": "text/markdown",
+      "size": 26
+    },
+    "ingredients/checking/vol2-backtranslation-purpose/01.md": {
+      "checksum": {
+        "md5": "73bf62d378a706690d26d233130274e5"
+      },
+      "mimeType": "text/markdown",
+      "size": 2558
+    },
+    "ingredients/checking/vol2-backtranslation-purpose/sub-title.md": {
+      "checksum": {
+        "md5": "c61e314c4a0c7e8c71f8cf902bec5e10"
+      },
+      "mimeType": "text/markdown",
+      "size": 36
+    },
+    "ingredients/checking/vol2-backtranslation-purpose/title.md": {
+      "checksum": {
+        "md5": "4d9708b984df9399210300dee09b37b2"
+      },
+      "mimeType": "text/markdown",
+      "size": 35
+    },
+    "ingredients/checking/vol2-backtranslation-who/01.md": {
+      "checksum": {
+        "md5": "fde6e1ff7fbb29e70ecf99e8178e1f1b"
+      },
+      "mimeType": "text/markdown",
+      "size": 1515
+    },
+    "ingredients/checking/vol2-backtranslation-who/sub-title.md": {
+      "checksum": {
+        "md5": "92042e93eea3d28ad747e77b74a0c307"
+      },
+      "mimeType": "text/markdown",
+      "size": 35
+    },
+    "ingredients/checking/vol2-backtranslation-who/title.md": {
+      "checksum": {
+        "md5": "3695ed8902b841c37d26ad1da56d7d34"
+      },
+      "mimeType": "text/markdown",
+      "size": 19
+    },
+    "ingredients/checking/vol2-backtranslation-written/01.md": {
+      "checksum": {
+        "md5": "0d2700a3224e209bbea2d52597599747"
+      },
+      "mimeType": "text/markdown",
+      "size": 2420
+    },
+    "ingredients/checking/vol2-backtranslation-written/sub-title.md": {
+      "checksum": {
+        "md5": "a93d8ff4a0c17a9aa0d1c4ffbb8f6116"
+      },
+      "mimeType": "text/markdown",
+      "size": 50
+    },
+    "ingredients/checking/vol2-backtranslation-written/title.md": {
+      "checksum": {
+        "md5": "c3533948260c6ba8d4d779236ccb17a2"
+      },
+      "mimeType": "text/markdown",
+      "size": 34
+    },
+    "ingredients/checking/vol2-backtranslation/01.md": {
+      "checksum": {
+        "md5": "fdca63cc958cd46f4b86907eb8858d7f"
+      },
+      "mimeType": "text/markdown",
+      "size": 1124
+    },
+    "ingredients/checking/vol2-backtranslation/sub-title.md": {
+      "checksum": {
+        "md5": "5621c0538585557f586b203950533284"
+      },
+      "mimeType": "text/markdown",
+      "size": 27
+    },
+    "ingredients/checking/vol2-backtranslation/title.md": {
+      "checksum": {
+        "md5": "c67e211f8e045a30236faa18e9c8e640"
+      },
+      "mimeType": "text/markdown",
+      "size": 16
+    },
+    "ingredients/checking/vol2-steps/01.md": {
+      "checksum": {
+        "md5": "b395acc7033027b404becf91fd95769c"
+      },
+      "mimeType": "text/markdown",
+      "size": 9725
+    },
+    "ingredients/checking/vol2-steps/sub-title.md": {
+      "checksum": {
+        "md5": "6ca19a038e0cfd79d21d4d4025585aac"
+      },
+      "mimeType": "text/markdown",
+      "size": 86
+    },
+    "ingredients/checking/vol2-steps/title.md": {
+      "checksum": {
+        "md5": "d732082ce1c44e2c20ae2fbbbd6c65a8"
+      },
+      "mimeType": "text/markdown",
+      "size": 26
+    },
+    "ingredients/checking/vol2-things-to-check/01.md": {
+      "checksum": {
+        "md5": "96271a3e8217cf693256420c9226cdac"
+      },
+      "mimeType": "text/markdown",
+      "size": 3462
+    },
+    "ingredients/checking/vol2-things-to-check/sub-title.md": {
+      "checksum": {
+        "md5": "3e476fc7ed02986b81c983bf8c751eb1"
+      },
+      "mimeType": "text/markdown",
+      "size": 36
+    },
+    "ingredients/checking/vol2-things-to-check/title.md": {
+      "checksum": {
+        "md5": "3ce0a1a7a6737cc3407c6c1665f10ba2"
+      },
+      "mimeType": "text/markdown",
+      "size": 24
+    },
+    "ingredients/intro/config.yaml": {
+      "checksum": {
+        "md5": "184b375a90871d21146331d6d3c621f1"
+      },
+      "mimeType": "text/yaml",
+      "size": 966
+    },
+    "ingredients/intro/finding-answers/01.md": {
+      "checksum": {
+        "md5": "8c91fdce827354accd457c283cea2d4f"
+      },
+      "mimeType": "text/markdown",
+      "size": 931
+    },
+    "ingredients/intro/finding-answers/sub-title.md": {
+      "checksum": {
+        "md5": "b2300753df6d949b1e88a741e7b3d043"
+      },
+      "mimeType": "text/markdown",
+      "size": 41
+    },
+    "ingredients/intro/finding-answers/title.md": {
+      "checksum": {
+        "md5": "b396a31f788f0d8cc8b9177f35be9f50"
+      },
+      "mimeType": "text/markdown",
+      "size": 15
+    },
+    "ingredients/intro/gl-strategy/01.md": {
+      "checksum": {
+        "md5": "f21b14dc21073dd0d98a5c44d6499acd"
+      },
+      "mimeType": "text/markdown",
+      "size": 2128
+    },
+    "ingredients/intro/gl-strategy/sub-title.md": {
+      "checksum": {
+        "md5": "6c12a73997bc4876365ef7abf788f389"
+      },
+      "mimeType": "text/markdown",
+      "size": 34
+    },
+    "ingredients/intro/gl-strategy/title.md": {
+      "checksum": {
+        "md5": "e461cee68311c119a9b7ef7c793f0b6d"
+      },
+      "mimeType": "text/markdown",
+      "size": 26
+    },
+    "ingredients/intro/open-license/01.md": {
+      "checksum": {
+        "md5": "624f80ff4f571d904d6eaccc1f03abf0"
+      },
+      "mimeType": "text/markdown",
+      "size": 4891
+    },
+    "ingredients/intro/open-license/sub-title.md": {
+      "checksum": {
+        "md5": "4d2944d0e91ffb16bebff69353345640"
+      },
+      "mimeType": "text/markdown",
+      "size": 57
+    },
+    "ingredients/intro/open-license/title.md": {
+      "checksum": {
+        "md5": "edde8fabb811510e2fbca597ce19f7b8"
+      },
+      "mimeType": "text/markdown",
+      "size": 12
+    },
+    "ingredients/intro/statement-of-faith/01.md": {
+      "checksum": {
+        "md5": "b496a665747e7f2fa6fadd51006b4a57"
+      },
+      "mimeType": "text/markdown",
+      "size": 3099
+    },
+    "ingredients/intro/statement-of-faith/sub-title.md": {
+      "checksum": {
+        "md5": "8c3a538fc8085fea656d5af28282db51"
+      },
+      "mimeType": "text/markdown",
+      "size": 19
+    },
+    "ingredients/intro/statement-of-faith/title.md": {
+      "checksum": {
+        "md5": "f0ebfd41fff26965ab5b61433838f142"
+      },
+      "mimeType": "text/markdown",
+      "size": 18
+    },
+    "ingredients/intro/ta-intro/01.md": {
+      "checksum": {
+        "md5": "0a7dabe1f355c2bb905ef5f5e82c9498"
+      },
+      "mimeType": "text/markdown",
+      "size": 1536
+    },
+    "ingredients/intro/ta-intro/sub-title.md": {
+      "checksum": {
+        "md5": "74ee3a6c1692a5bf9c6088029123a0d9"
+      },
+      "mimeType": "text/markdown",
+      "size": 44
+    },
+    "ingredients/intro/ta-intro/title.md": {
+      "checksum": {
+        "md5": "59ccd9882a48a4e11a88a0edb617eb79"
+      },
+      "mimeType": "text/markdown",
+      "size": 51
+    },
+    "ingredients/intro/toc.yaml": {
+      "checksum": {
+        "md5": "9ec723cd5171a716f353a7380d086a46"
+      },
+      "mimeType": "text/yaml",
+      "size": 546
+    },
+    "ingredients/intro/translate-why/01.md": {
+      "checksum": {
+        "md5": "84ca30a47d6818663ccc499746442b2b"
+      },
+      "mimeType": "text/markdown",
+      "size": 1974
+    },
+    "ingredients/intro/translate-why/sub-title.md": {
+      "checksum": {
+        "md5": "7d0509a4b049744153ad7aa80f3914f4"
+      },
+      "mimeType": "text/markdown",
+      "size": 34
+    },
+    "ingredients/intro/translate-why/title.md": {
+      "checksum": {
+        "md5": "af768092e25d4fb94f690296865da42f"
+      },
+      "mimeType": "text/markdown",
+      "size": 26
+    },
+    "ingredients/intro/translation-guidelines/01.md": {
+      "checksum": {
+        "md5": "712247b96e8e3b9d53c73541237533e1"
+      },
+      "mimeType": "text/markdown",
+      "size": 5091
+    },
+    "ingredients/intro/translation-guidelines/sub-title.md": {
+      "checksum": {
+        "md5": "546dbf28792506e6eb10f7c12a9c4462"
+      },
+      "mimeType": "text/markdown",
+      "size": 35
+    },
+    "ingredients/intro/translation-guidelines/title.md": {
+      "checksum": {
+        "md5": "40f73fd726a51f2c294d2544b2ed6e84"
+      },
+      "mimeType": "text/markdown",
+      "size": 22
+    },
+    "ingredients/intro/uw-intro/01.md": {
+      "checksum": {
+        "md5": "5515cde7fb14b406600bf0e36b747b5b"
+      },
+      "mimeType": "text/markdown",
+      "size": 4599
+    },
+    "ingredients/intro/uw-intro/sub-title.md": {
+      "checksum": {
+        "md5": "575633e0c3fc78c4554ae0485ab42968"
+      },
+      "mimeType": "text/markdown",
+      "size": 34
+    },
+    "ingredients/intro/uw-intro/title.md": {
+      "checksum": {
+        "md5": "fa0c0b7e80022f8003d6170da02627a8"
+      },
+      "mimeType": "text/markdown",
+      "size": 25
+    },
+    "ingredients/process/config.yaml": {
+      "checksum": {
+        "md5": "eba3dbc3541e283bc555aa22867beb45"
+      },
+      "mimeType": "text/yaml",
+      "size": 1281
+    },
+    "ingredients/process/intro-publishing/01.md": {
+      "checksum": {
+        "md5": "7be06e225454a516d1af487570c2e8c0"
+      },
+      "mimeType": "text/markdown",
+      "size": 930
+    },
+    "ingredients/process/intro-publishing/sub-title.md": {
+      "checksum": {
+        "md5": "0674c711b499495b0c82f9090e428269"
+      },
+      "mimeType": "text/markdown",
+      "size": 19
+    },
+    "ingredients/process/intro-publishing/title.md": {
+      "checksum": {
+        "md5": "9259f5c8595fbf4608a4a5f321301350"
+      },
+      "mimeType": "text/markdown",
+      "size": 26
+    },
+    "ingredients/process/intro-share/01.md": {
+      "checksum": {
+        "md5": "f1d1a8a0ada4f7bc2f73b59e66550872"
+      },
+      "mimeType": "text/markdown",
+      "size": 1045
+    },
+    "ingredients/process/intro-share/sub-title.md": {
+      "checksum": {
+        "md5": "c260ee5f51c0e2e25d014eafb78e6a3b"
+      },
+      "mimeType": "text/markdown",
+      "size": 29
+    },
+    "ingredients/process/intro-share/title.md": {
+      "checksum": {
+        "md5": "524fb936e49a326bd1edbbd22c0158df"
+      },
+      "mimeType": "text/markdown",
+      "size": 28
+    },
+    "ingredients/process/platforms/01.md": {
+      "checksum": {
+        "md5": "e62d8aa6d9aae792816f37fd6e3cf323"
+      },
+      "mimeType": "text/markdown",
+      "size": 984
+    },
+    "ingredients/process/platforms/sub-title.md": {
+      "checksum": {
+        "md5": "3c4b7ff9c54d757de167f01f5915aa83"
+      },
+      "mimeType": "text/markdown",
+      "size": 33
+    },
+    "ingredients/process/platforms/title.md": {
+      "checksum": {
+        "md5": "c28cf9b742d223e9f638b6b58f59a593"
+      },
+      "mimeType": "text/markdown",
+      "size": 31
+    },
+    "ingredients/process/prechecking-training/01.md": {
+      "checksum": {
+        "md5": "8cf5e9241daffb57ec0e821b3e485537"
+      },
+      "mimeType": "text/markdown",
+      "size": 715
+    },
+    "ingredients/process/prechecking-training/sub-title.md": {
+      "checksum": {
+        "md5": "5150817002811d8881f8e8aeaaba02be"
+      },
+      "mimeType": "text/markdown",
+      "size": 49
+    },
+    "ingredients/process/prechecking-training/title.md": {
+      "checksum": {
+        "md5": "a533fefabf055c9072210540d8837b51"
+      },
+      "mimeType": "text/markdown",
+      "size": 31
+    },
+    "ingredients/process/pretranslation-training/01.md": {
+      "checksum": {
+        "md5": "f2b54d7a8579b24bcf18223fac9307b2"
+      },
+      "mimeType": "text/markdown",
+      "size": 1841
+    },
+    "ingredients/process/pretranslation-training/sub-title.md": {
+      "checksum": {
+        "md5": "5e36f53ca8c76f789b561226b4676a99"
+      },
+      "mimeType": "text/markdown",
+      "size": 52
+    },
+    "ingredients/process/pretranslation-training/title.md": {
+      "checksum": {
+        "md5": "31617a86d0d15e21f2b110e246ab9c56"
+      },
+      "mimeType": "text/markdown",
+      "size": 34
+    },
+    "ingredients/process/process-manual/01.md": {
+      "checksum": {
+        "md5": "892261da2b56932547ecacc6c0f340bd"
+      },
+      "mimeType": "text/markdown",
+      "size": 999
+    },
+    "ingredients/process/process-manual/sub-title.md": {
+      "checksum": {
+        "md5": "94abb6e8c3bfa66a95fce8748b2fcafe"
+      },
+      "mimeType": "text/markdown",
+      "size": 27
+    },
+    "ingredients/process/process-manual/title.md": {
+      "checksum": {
+        "md5": "519d9d63b683cad9f84d35aea2e2718a"
+      },
+      "mimeType": "text/markdown",
+      "size": 34
+    },
+    "ingredients/process/setup-tc/01.md": {
+      "checksum": {
+        "md5": "a1463a70952aaa75c5d8d5b912d6ecdc"
+      },
+      "mimeType": "text/markdown",
+      "size": 2170
+    },
+    "ingredients/process/setup-tc/sub-title.md": {
+      "checksum": {
+        "md5": "d23f0e32ef9964c5754b9015cc2d6868"
+      },
+      "mimeType": "text/markdown",
+      "size": 32
+    },
+    "ingredients/process/setup-tc/title.md": {
+      "checksum": {
+        "md5": "ff997caac567f71ed861bed545d86001"
+      },
+      "mimeType": "text/markdown",
+      "size": 28
+    },
+    "ingredients/process/setup-team/01.md": {
+      "checksum": {
+        "md5": "163a350dc5fc9ea924250eaa6ccdba50"
+      },
+      "mimeType": "text/markdown",
+      "size": 2907
+    },
+    "ingredients/process/setup-team/sub-title.md": {
+      "checksum": {
+        "md5": "637b8e73094d99653b6e5d5bb5a64baa"
+      },
+      "mimeType": "text/markdown",
+      "size": 36
+    },
+    "ingredients/process/setup-team/title.md": {
+      "checksum": {
+        "md5": "9158d3fb0a9ec53093649494a7753b7a"
+      },
+      "mimeType": "text/markdown",
+      "size": 29
+    },
+    "ingredients/process/setup-ts/01.md": {
+      "checksum": {
+        "md5": "8099bffa925b4927556d13c66807f486"
+      },
+      "mimeType": "text/markdown",
+      "size": 3020
+    },
+    "ingredients/process/setup-ts/sub-title.md": {
+      "checksum": {
+        "md5": "4efcf9db1e2bbac69995bdce732f0542"
+      },
+      "mimeType": "text/markdown",
+      "size": 34
+    },
+    "ingredients/process/setup-ts/title.md": {
+      "checksum": {
+        "md5": "80b0cf5a526dde5a228d22f51bdd8138"
+      },
+      "mimeType": "text/markdown",
+      "size": 28
+    },
+    "ingredients/process/share-content/01.md": {
+      "checksum": {
+        "md5": "70b1d4901dd87d3150c63b743a9bca20"
+      },
+      "mimeType": "text/markdown",
+      "size": 1066
+    },
+    "ingredients/process/share-content/sub-title.md": {
+      "checksum": {
+        "md5": "fc01cc1f1f6e6d5714ac8bf7bdc7aa54"
+      },
+      "mimeType": "text/markdown",
+      "size": 24
+    },
+    "ingredients/process/share-content/title.md": {
+      "checksum": {
+        "md5": "764e48feab1ff13f44a2debeb2ed538b"
+      },
+      "mimeType": "text/markdown",
+      "size": 20
+    },
+    "ingredients/process/toc.yaml": {
+      "checksum": {
+        "md5": "8d577362bc08799906abb108ed34ea68"
+      },
+      "mimeType": "text/yaml",
+      "size": 1167
+    },
+    "ingredients/process/translation-overview/01.md": {
+      "checksum": {
+        "md5": "67850c841988bd298679ea718c3a3293"
+      },
+      "mimeType": "text/markdown",
+      "size": 3223
+    },
+    "ingredients/process/translation-overview/sub-title.md": {
+      "checksum": {
+        "md5": "63c49faef2cca2852b92ebd2f38f07ad"
+      },
+      "mimeType": "text/markdown",
+      "size": 66
+    },
+    "ingredients/process/translation-overview/title.md": {
+      "checksum": {
+        "md5": "cfedaf8e4bd7729195e5b8b94f310a50"
+      },
+      "mimeType": "text/markdown",
+      "size": 20
+    },
+    "ingredients/translate/biblicalimageryta/01.md": {
+      "checksum": {
+        "md5": "0b133c5d7853f360a1a12290b1afd50c"
+      },
+      "mimeType": "text/markdown",
+      "size": 6983
+    },
+    "ingredients/translate/biblicalimageryta/sub-title.md": {
+      "checksum": {
+        "md5": "faf2d57e21240f75c89c0c2c63c2ae9f"
+      },
+      "mimeType": "text/markdown",
+      "size": 53
+    },
+    "ingredients/translate/biblicalimageryta/title.md": {
+      "checksum": {
+        "md5": "8f51a479aa2c27cd3799760151b7bcfb"
+      },
+      "mimeType": "text/markdown",
+      "size": 16
+    },
+    "ingredients/translate/bita-animals/01.md": {
+      "checksum": {
+        "md5": "f0fb92bd7d1458972ab3a0b6735d0b65"
+      },
+      "mimeType": "text/markdown",
+      "size": 4554
+    },
+    "ingredients/translate/bita-animals/sub-title.md": {
+      "checksum": {
+        "md5": "9ee3058c32cc21d62c1e9d6deea5f39a"
+      },
+      "mimeType": "text/markdown",
+      "size": 93
+    },
+    "ingredients/translate/bita-animals/title.md": {
+      "checksum": {
+        "md5": "ab5e561d6b8ed5b42fff8bd045a51d9d"
+      },
+      "mimeType": "text/markdown",
+      "size": 29
+    },
+    "ingredients/translate/bita-farming/01.md": {
+      "checksum": {
+        "md5": "180c4120f131e3f280ba39f8e9c16437"
+      },
+      "mimeType": "text/markdown",
+      "size": 4800
+    },
+    "ingredients/translate/bita-farming/sub-title.md": {
+      "checksum": {
+        "md5": "8acf1756d26230f89ff23e3556f74b64"
+      },
+      "mimeType": "text/markdown",
+      "size": 89
+    },
+    "ingredients/translate/bita-farming/title.md": {
+      "checksum": {
+        "md5": "3170d0bad302db7625d01101487dc6fe"
+      },
+      "mimeType": "text/markdown",
+      "size": 29
+    },
+    "ingredients/translate/bita-hq/01.md": {
+      "checksum": {
+        "md5": "cef5772af209752bb3677e3f3880de77"
+      },
+      "mimeType": "text/markdown",
+      "size": 10150
+    },
+    "ingredients/translate/bita-hq/sub-title.md": {
+      "checksum": {
+        "md5": "c99481b499e62f0b0ea464e4ee4f2090"
+      },
+      "mimeType": "text/markdown",
+      "size": 94
+    },
+    "ingredients/translate/bita-hq/title.md": {
+      "checksum": {
+        "md5": "1d134cfda87da75700be6df3bc813594"
+      },
+      "mimeType": "text/markdown",
+      "size": 52
+    },
+    "ingredients/translate/bita-humanbehavior/01.md": {
+      "checksum": {
+        "md5": "7ec55e5c85a786bb46f0dc31af120c30"
+      },
+      "mimeType": "text/markdown",
+      "size": 15122
+    },
+    "ingredients/translate/bita-humanbehavior/sub-title.md": {
+      "checksum": {
+        "md5": "f95047b7db1939bc52f5cf8cbb9bc832"
+      },
+      "mimeType": "text/markdown",
+      "size": 80
+    },
+    "ingredients/translate/bita-humanbehavior/title.md": {
+      "checksum": {
+        "md5": "7d1caa858b1ccbef84168b09a0803a3a"
+      },
+      "mimeType": "text/markdown",
+      "size": 36
+    },
+    "ingredients/translate/bita-manmade/01.md": {
+      "checksum": {
+        "md5": "27d7388c84167563f250ae27f2c35314"
+      },
+      "mimeType": "text/markdown",
+      "size": 4051
+    },
+    "ingredients/translate/bita-manmade/sub-title.md": {
+      "checksum": {
+        "md5": "9b1f2ea36461f0dea773a39ca118a380"
+      },
+      "mimeType": "text/markdown",
+      "size": 82
+    },
+    "ingredients/translate/bita-manmade/title.md": {
+      "checksum": {
+        "md5": "22ced994a502393e02e55ed37e10cc2e"
+      },
+      "mimeType": "text/markdown",
+      "size": 38
+    },
+    "ingredients/translate/bita-part1/01.md": {
+      "checksum": {
+        "md5": "ca466af869eec9c939dce88d184cc9bf"
+      },
+      "mimeType": "text/markdown",
+      "size": 5625
+    },
+    "ingredients/translate/bita-part1/sub-title.md": {
+      "checksum": {
+        "md5": "f61139a5a74255f4d58901425b80b174"
+      },
+      "mimeType": "text/markdown",
+      "size": 65
+    },
+    "ingredients/translate/bita-part1/title.md": {
+      "checksum": {
+        "md5": "0bb3600860d2bbe79be3ca887650df4c"
+      },
+      "mimeType": "text/markdown",
+      "size": 37
+    },
+    "ingredients/translate/bita-part2/01.md": {
+      "checksum": {
+        "md5": "40c8ec5f415542709fb694bedcf47a68"
+      },
+      "mimeType": "text/markdown",
+      "size": 3326
+    },
+    "ingredients/translate/bita-part2/sub-title.md": {
+      "checksum": {
+        "md5": "97c0267cc86a9d4cb28489b0fe38b119"
+      },
+      "mimeType": "text/markdown",
+      "size": 50
+    },
+    "ingredients/translate/bita-part2/title.md": {
+      "checksum": {
+        "md5": "6232e2d18692cb9261a729c3c7a9db60"
+      },
+      "mimeType": "text/markdown",
+      "size": 39
+    },
+    "ingredients/translate/bita-part3/01.md": {
+      "checksum": {
+        "md5": "9c0c7d3f1ac361dccc6a93ad0c449ee7"
+      },
+      "mimeType": "text/markdown",
+      "size": 9515
+    },
+    "ingredients/translate/bita-part3/sub-title.md": {
+      "checksum": {
+        "md5": "91777e2e93bb094f84db5d90bd289995"
+      },
+      "mimeType": "text/markdown",
+      "size": 78
+    },
+    "ingredients/translate/bita-part3/title.md": {
+      "checksum": {
+        "md5": "da83fc198e4ef46bc38b4408b6183183"
+      },
+      "mimeType": "text/markdown",
+      "size": 37
+    },
+    "ingredients/translate/bita-phenom/01.md": {
+      "checksum": {
+        "md5": "9780051f19b0457eae96c86fd276b0e5"
+      },
+      "mimeType": "text/markdown",
+      "size": 6682
+    },
+    "ingredients/translate/bita-phenom/sub-title.md": {
+      "checksum": {
+        "md5": "c2b8e8cecf88025c6577e6171ba9e7a8"
+      },
+      "mimeType": "text/markdown",
+      "size": 80
+    },
+    "ingredients/translate/bita-phenom/title.md": {
+      "checksum": {
+        "md5": "db758202ff76e22b97148b731d398998"
+      },
+      "mimeType": "text/markdown",
+      "size": 39
+    },
+    "ingredients/translate/bita-plants/01.md": {
+      "checksum": {
+        "md5": "ed8cc8f7ea198cf3da8b6001af5685bd"
+      },
+      "mimeType": "text/markdown",
+      "size": 3079
+    },
+    "ingredients/translate/bita-plants/sub-title.md": {
+      "checksum": {
+        "md5": "9250c66c91e92c0413037a0638becf61"
+      },
+      "mimeType": "text/markdown",
+      "size": 69
+    },
+    "ingredients/translate/bita-plants/title.md": {
+      "checksum": {
+        "md5": "f5bee742edfa0dec54e1f7fad9d706f6"
+      },
+      "mimeType": "text/markdown",
+      "size": 28
+    },
+    "ingredients/translate/choose-style/01.md": {
+      "checksum": {
+        "md5": "36684f5970a843be73bc3519bf94f0f3"
+      },
+      "mimeType": "text/markdown",
+      "size": 4777
+    },
+    "ingredients/translate/choose-style/sub-title.md": {
+      "checksum": {
+        "md5": "106f980a1fd9797b6cc7175d3c6e8f62"
+      },
+      "mimeType": "text/markdown",
+      "size": 83
+    },
+    "ingredients/translate/choose-style/title.md": {
+      "checksum": {
+        "md5": "6a377b5afdce04e2826d9e04f74a5afb"
+      },
+      "mimeType": "text/markdown",
+      "size": 28
+    },
+    "ingredients/translate/choose-team/01.md": {
+      "checksum": {
+        "md5": "7f03ef961a6cea734d8b1154ba528973"
+      },
+      "mimeType": "text/markdown",
+      "size": 7688
+    },
+    "ingredients/translate/choose-team/sub-title.md": {
+      "checksum": {
+        "md5": "94917692122fa0e9f92c072b3fa2e774"
+      },
+      "mimeType": "text/markdown",
+      "size": 35
+    },
+    "ingredients/translate/choose-team/title.md": {
+      "checksum": {
+        "md5": "7e3cb482366633b08cd3d7d860adccbd"
+      },
+      "mimeType": "text/markdown",
+      "size": 27
+    },
+    "ingredients/translate/config.yaml": {
+      "checksum": {
+        "md5": "a078c53abce2767fabb97b4da168bb50"
+      },
+      "mimeType": "text/yaml",
+      "size": 20168
+    },
+    "ingredients/translate/figs-123person/01.md": {
+      "checksum": {
+        "md5": "836d4113c7e38a5cf1e04838cb98742b"
+      },
+      "mimeType": "text/markdown",
+      "size": 3865
+    },
+    "ingredients/translate/figs-123person/sub-title.md": {
+      "checksum": {
+        "md5": "6be6bbb510ec11a2fea37638680f3065"
+      },
+      "mimeType": "text/markdown",
+      "size": 125
+    },
+    "ingredients/translate/figs-123person/title.md": {
+      "checksum": {
+        "md5": "eb4f4006f81c96816efb61d791c3c01b"
+      },
+      "mimeType": "text/markdown",
+      "size": 29
+    },
+    "ingredients/translate/figs-abstractnouns/01.md": {
+      "checksum": {
+        "md5": "815577b98723e57d1e048a47550a8363"
+      },
+      "mimeType": "text/markdown",
+      "size": 4977
+    },
+    "ingredients/translate/figs-abstractnouns/sub-title.md": {
+      "checksum": {
+        "md5": "c307e9f85ee3f96f335237812c5c95ef"
+      },
+      "mimeType": "text/markdown",
+      "size": 70
+    },
+    "ingredients/translate/figs-abstractnouns/title.md": {
+      "checksum": {
+        "md5": "21b6c1a8b3f84c2ff656eea1913a621b"
+      },
+      "mimeType": "text/markdown",
+      "size": 14
+    },
+    "ingredients/translate/figs-activepassive/01.md": {
+      "checksum": {
+        "md5": "5bc8c0d7b5931da6af7417f4368d9cd0"
+      },
+      "mimeType": "text/markdown",
+      "size": 5053
+    },
+    "ingredients/translate/figs-activepassive/sub-title.md": {
+      "checksum": {
+        "md5": "fb8f55658cb050ec36616f69f47f30be"
+      },
+      "mimeType": "text/markdown",
+      "size": 74
+    },
+    "ingredients/translate/figs-activepassive/title.md": {
+      "checksum": {
+        "md5": "f8d5c96b63a47ccf724ddf972eafb08e"
+      },
+      "mimeType": "text/markdown",
+      "size": 17
+    },
+    "ingredients/translate/figs-apostrophe/01.md": {
+      "checksum": {
+        "md5": "1db6988f0dd638cf1d5153bb394c4fc8"
+      },
+      "mimeType": "text/markdown",
+      "size": 2367
+    },
+    "ingredients/translate/figs-apostrophe/sub-title.md": {
+      "checksum": {
+        "md5": "acbefa1e69ab32ba3d31542e6197773f"
+      },
+      "mimeType": "text/markdown",
+      "size": 50
+    },
+    "ingredients/translate/figs-apostrophe/title.md": {
+      "checksum": {
+        "md5": "b6ac6f84bcb33f9b5186bda6b4c8b399"
+      },
+      "mimeType": "text/markdown",
+      "size": 10
+    },
+    "ingredients/translate/figs-aside/01.md": {
+      "checksum": {
+        "md5": "4cac4d8893937db06ebc7a2f0f38cec3"
+      },
+      "mimeType": "text/markdown",
+      "size": 3119
+    },
+    "ingredients/translate/figs-aside/sub-title.md": {
+      "checksum": {
+        "md5": "dd50cb1da47afe3fe4cf5f59f87c2780"
+      },
+      "mimeType": "text/markdown",
+      "size": 51
+    },
+    "ingredients/translate/figs-aside/title.md": {
+      "checksum": {
+        "md5": "a3d68d897c2e60e93783fe59e4da7ebf"
+      },
+      "mimeType": "text/markdown",
+      "size": 5
+    },
+    "ingredients/translate/figs-cometaphor/01.md": {
+      "checksum": {
+        "md5": "7c81cdde00af70b35b8138ddf9e21bb6"
+      },
+      "mimeType": "text/markdown",
+      "size": 7839
+    },
+    "ingredients/translate/figs-cometaphor/sub-title.md": {
+      "checksum": {
+        "md5": "bedf050548bdc2d4fe2486222071c6f0"
+      },
+      "mimeType": "text/markdown",
+      "size": 27
+    },
+    "ingredients/translate/figs-cometaphor/title.md": {
+      "checksum": {
+        "md5": "c808940ffc0e69d147e97e9575d08392"
+      },
+      "mimeType": "text/markdown",
+      "size": 16
+    },
+    "ingredients/translate/figs-crowd/01.md": {
+      "checksum": {
+        "md5": "3e5bc73cf546e1be54f9d2ffbf46a39e"
+      },
+      "mimeType": "text/markdown",
+      "size": 319
+    },
+    "ingredients/translate/figs-crowd/sub-title.md": {
+      "checksum": {
+        "md5": "df83c017b3237e6c0918565d8124876d"
+      },
+      "mimeType": "text/markdown",
+      "size": 58
+    },
+    "ingredients/translate/figs-crowd/title.md": {
+      "checksum": {
+        "md5": "ecac6fe5e9f6619a392d146e8b0c692a"
+      },
+      "mimeType": "text/markdown",
+      "size": 5
+    },
+    "ingredients/translate/figs-declarative/01.md": {
+      "checksum": {
+        "md5": "458e6090a7b5f68643a2f9a830bc611e"
+      },
+      "mimeType": "text/markdown",
+      "size": 4252
+    },
+    "ingredients/translate/figs-declarative/sub-title.md": {
+      "checksum": {
+        "md5": "0849330d6cb4a4b967733a3d9f45e8f1"
+      },
+      "mimeType": "text/markdown",
+      "size": 41
+    },
+    "ingredients/translate/figs-declarative/title.md": {
+      "checksum": {
+        "md5": "94e9b2eed433b3eff8f1fe63e042740d"
+      },
+      "mimeType": "text/markdown",
+      "size": 26
+    },
+    "ingredients/translate/figs-distinguish/01.md": {
+      "checksum": {
+        "md5": "0147d8953388c05dc88a10a755832a93"
+      },
+      "mimeType": "text/markdown",
+      "size": 6593
+    },
+    "ingredients/translate/figs-distinguish/sub-title.md": {
+      "checksum": {
+        "md5": "9cf6b62abdb68a474adcf39470b9894a"
+      },
+      "mimeType": "text/markdown",
+      "size": 153
+    },
+    "ingredients/translate/figs-distinguish/title.md": {
+      "checksum": {
+        "md5": "61a7c81b26d6818aff3495b25c1fe804"
+      },
+      "mimeType": "text/markdown",
+      "size": 44
+    },
+    "ingredients/translate/figs-doublenegatives/01.md": {
+      "checksum": {
+        "md5": "49d77cd1a8aa26d3939192fe30adab4e"
+      },
+      "mimeType": "text/markdown",
+      "size": 5890
+    },
+    "ingredients/translate/figs-doublenegatives/sub-title.md": {
+      "checksum": {
+        "md5": "be326bd2c9dc0cc5715c64a004a32981"
+      },
+      "mimeType": "text/markdown",
+      "size": 26
+    },
+    "ingredients/translate/figs-doublenegatives/title.md": {
+      "checksum": {
+        "md5": "0065ff28887ff34e02b82bab716efcf8"
+      },
+      "mimeType": "text/markdown",
+      "size": 16
+    },
+    "ingredients/translate/figs-doublet/01.md": {
+      "checksum": {
+        "md5": "4aaf5ae125d10622cb221ff9d6a21483"
+      },
+      "mimeType": "text/markdown",
+      "size": 3613
+    },
+    "ingredients/translate/figs-doublet/sub-title.md": {
+      "checksum": {
+        "md5": "77a64b2ed2e925d005db127d52262f47"
+      },
+      "mimeType": "text/markdown",
+      "size": 47
+    },
+    "ingredients/translate/figs-doublet/title.md": {
+      "checksum": {
+        "md5": "b9857a0adcbf5adc81356dba5c7ff355"
+      },
+      "mimeType": "text/markdown",
+      "size": 7
+    },
+    "ingredients/translate/figs-ellipsis/01.md": {
+      "checksum": {
+        "md5": "43347fa8f404e48dc88194e6e5d41e53"
+      },
+      "mimeType": "text/markdown",
+      "size": 5060
+    },
+    "ingredients/translate/figs-ellipsis/sub-title.md": {
+      "checksum": {
+        "md5": "534aa23b84093beeb36ed2fd79983a6e"
+      },
+      "mimeType": "text/markdown",
+      "size": 19
+    },
+    "ingredients/translate/figs-ellipsis/title.md": {
+      "checksum": {
+        "md5": "8a97ba435dcdb6750b240cdce3ff3e11"
+      },
+      "mimeType": "text/markdown",
+      "size": 8
+    },
+    "ingredients/translate/figs-euphemism/01.md": {
+      "checksum": {
+        "md5": "216d1d1496548ac1b5f7ffac728ff8bf"
+      },
+      "mimeType": "text/markdown",
+      "size": 2529
+    },
+    "ingredients/translate/figs-euphemism/sub-title.md": {
+      "checksum": {
+        "md5": "e3da5255f74e7c01f92231a1f1ded9cc"
+      },
+      "mimeType": "text/markdown",
+      "size": 20
+    },
+    "ingredients/translate/figs-euphemism/title.md": {
+      "checksum": {
+        "md5": "3609ea18637b71ca1ad2d38f75ef8bd6"
+      },
+      "mimeType": "text/markdown",
+      "size": 9
+    },
+    "ingredients/translate/figs-events/01.md": {
+      "checksum": {
+        "md5": "ea966e537cc76929ab893bdf4e172238"
+      },
+      "mimeType": "text/markdown",
+      "size": 4819
+    },
+    "ingredients/translate/figs-events/sub-title.md": {
+      "checksum": {
+        "md5": "b04ab3eed6e485651319585077228d84"
+      },
+      "mimeType": "text/markdown",
+      "size": 87
+    },
+    "ingredients/translate/figs-events/title.md": {
+      "checksum": {
+        "md5": "445dd862907f62adfc7c1b994c596c79"
+      },
+      "mimeType": "text/markdown",
+      "size": 15
+    },
+    "ingredients/translate/figs-exclamations/01.md": {
+      "checksum": {
+        "md5": "e66b8b10e8fac763daa2d52feb8ce273"
+      },
+      "mimeType": "text/markdown",
+      "size": 4739
+    },
+    "ingredients/translate/figs-exclamations/sub-title.md": {
+      "checksum": {
+        "md5": "a65ca78a2a1bb5783b08ea65cae7a043"
+      },
+      "mimeType": "text/markdown",
+      "size": 42
+    },
+    "ingredients/translate/figs-exclamations/title.md": {
+      "checksum": {
+        "md5": "c27e00f5565b073e9958fd6a7db0100a"
+      },
+      "mimeType": "text/markdown",
+      "size": 12
+    },
+    "ingredients/translate/figs-exclusive/01.md": {
+      "checksum": {
+        "md5": "2e48f3f808f656b4fd4e2a7d1fdbd337"
+      },
+      "mimeType": "text/markdown",
+      "size": 3144
+    },
+    "ingredients/translate/figs-exclusive/sub-title.md": {
+      "checksum": {
+        "md5": "017d7c2270276439ebd65f45fbd50204"
+      },
+      "mimeType": "text/markdown",
+      "size": 55
+    },
+    "ingredients/translate/figs-exclusive/title.md": {
+      "checksum": {
+        "md5": "3904cfe735f8da125a4c3d2e85c6d72a"
+      },
+      "mimeType": "text/markdown",
+      "size": 32
+    },
+    "ingredients/translate/figs-exmetaphor/01.md": {
+      "checksum": {
+        "md5": "d37a2db4b509d13c2026099eac8d76df"
+      },
+      "mimeType": "text/markdown",
+      "size": 7710
+    },
+    "ingredients/translate/figs-exmetaphor/sub-title.md": {
+      "checksum": {
+        "md5": "04ea6283313ce52e410bc8fa40461031"
+      },
+      "mimeType": "text/markdown",
+      "size": 29
+    },
+    "ingredients/translate/figs-exmetaphor/title.md": {
+      "checksum": {
+        "md5": "d63ca7fbeb8766332a8dcb4c956df1e1"
+      },
+      "mimeType": "text/markdown",
+      "size": 40
+    },
+    "ingredients/translate/figs-explicit/01.md": {
+      "checksum": {
+        "md5": "c9bfccc578145ed28b133f6fc37aa788"
+      },
+      "mimeType": "text/markdown",
+      "size": 8914
+    },
+    "ingredients/translate/figs-explicit/sub-title.md": {
+      "checksum": {
+        "md5": "b6d7bfdff3fe11f589605bb6a5c8e9c5"
+      },
+      "mimeType": "text/markdown",
+      "size": 158
+    },
+    "ingredients/translate/figs-explicit/title.md": {
+      "checksum": {
+        "md5": "32f2bec5784d49f060e3f0c057e96c72"
+      },
+      "mimeType": "text/markdown",
+      "size": 42
+    },
+    "ingredients/translate/figs-explicitinfo/01.md": {
+      "checksum": {
+        "md5": "709ded52e4a7779c70fc5573475e139e"
+      },
+      "mimeType": "text/markdown",
+      "size": 5505
+    },
+    "ingredients/translate/figs-explicitinfo/sub-title.md": {
+      "checksum": {
+        "md5": "d2f3e7726c8970e5875b0755581ad133"
+      },
+      "mimeType": "text/markdown",
+      "size": 109
+    },
+    "ingredients/translate/figs-explicitinfo/title.md": {
+      "checksum": {
+        "md5": "a9c59b3e216cc6353c316084af9ad6ff"
+      },
+      "mimeType": "text/markdown",
+      "size": 58
+    },
+    "ingredients/translate/figs-extrainfo/01.md": {
+      "checksum": {
+        "md5": "880bb01b139185fc96c88a6b6c8ca641"
+      },
+      "mimeType": "text/markdown",
+      "size": 2829
+    },
+    "ingredients/translate/figs-extrainfo/sub-title.md": {
+      "checksum": {
+        "md5": "13d17625f476f39e3cc4ed5d987837a6"
+      },
+      "mimeType": "text/markdown",
+      "size": 53
+    },
+    "ingredients/translate/figs-extrainfo/title.md": {
+      "checksum": {
+        "md5": "65eaef58207e9757273d71c444aa7fb2"
+      },
+      "mimeType": "text/markdown",
+      "size": 33
+    },
+    "ingredients/translate/figs-gendernotations/01.md": {
+      "checksum": {
+        "md5": "7b541ec2b1d24fba3eb584799741f33e"
+      },
+      "mimeType": "text/markdown",
+      "size": 4044
+    },
+    "ingredients/translate/figs-gendernotations/sub-title.md": {
+      "checksum": {
+        "md5": "b1030f88775ddb06cc626da9e3417f58"
+      },
+      "mimeType": "text/markdown",
+      "size": 91
+    },
+    "ingredients/translate/figs-gendernotations/title.md": {
+      "checksum": {
+        "md5": "efee3cdede0360433c21085ec9747cf5"
+      },
+      "mimeType": "text/markdown",
+      "size": 34
+    },
+    "ingredients/translate/figs-genericnoun/01.md": {
+      "checksum": {
+        "md5": "41311b687fd20a28eb007017f7ae448f"
+      },
+      "mimeType": "text/markdown",
+      "size": 3172
+    },
+    "ingredients/translate/figs-genericnoun/sub-title.md": {
+      "checksum": {
+        "md5": "cc6f9c1d7f63396f4de9b2e8b5ea439c"
+      },
+      "mimeType": "text/markdown",
+      "size": 59
+    },
+    "ingredients/translate/figs-genericnoun/title.md": {
+      "checksum": {
+        "md5": "c4745d2771384812ebec17b7e2cd92b7"
+      },
+      "mimeType": "text/markdown",
+      "size": 20
+    },
+    "ingredients/translate/figs-go/01.md": {
+      "checksum": {
+        "md5": "e63348f1e29b0bb8841a664fc212a372"
+      },
+      "mimeType": "text/markdown",
+      "size": 4247
+    },
+    "ingredients/translate/figs-go/sub-title.md": {
+      "checksum": {
+        "md5": "94148ebf52c78487f108dc0d8b46d699"
+      },
+      "mimeType": "text/markdown",
+      "size": 83
+    },
+    "ingredients/translate/figs-go/title.md": {
+      "checksum": {
+        "md5": "2af2deea324c1f03b47d38f2ef4b2b33"
+      },
+      "mimeType": "text/markdown",
+      "size": 11
+    },
+    "ingredients/translate/figs-grammar/01.md": {
+      "checksum": {
+        "md5": "f7b37d4137b0b241480b9eb44b6e3bec"
+      },
+      "mimeType": "text/markdown",
+      "size": 1792
+    },
+    "ingredients/translate/figs-grammar/sub-title.md": {
+      "checksum": {
+        "md5": "dc4e8721c3ae53b04a3162f1fc2b2d1b"
+      },
+      "mimeType": "text/markdown",
+      "size": 53
+    },
+    "ingredients/translate/figs-grammar/title.md": {
+      "checksum": {
+        "md5": "94c35bf9b0223da509719af526d320a3"
+      },
+      "mimeType": "text/markdown",
+      "size": 14
+    },
+    "ingredients/translate/figs-hendiadys/01.md": {
+      "checksum": {
+        "md5": "94cf70da22a7d03ea83ed55cd23271da"
+      },
+      "mimeType": "text/markdown",
+      "size": 4544
+    },
+    "ingredients/translate/figs-hendiadys/sub-title.md": {
+      "checksum": {
+        "md5": "f6d45f87b3a8e1c37fbdfd2e833396b1"
+      },
+      "mimeType": "text/markdown",
+      "size": 63
+    },
+    "ingredients/translate/figs-hendiadys/title.md": {
+      "checksum": {
+        "md5": "aa894d366b711f8a8452f20175efafb1"
+      },
+      "mimeType": "text/markdown",
+      "size": 9
+    },
+    "ingredients/translate/figs-hyperbole/01.md": {
+      "checksum": {
+        "md5": "f1fc217fa7032bfddcb46f38daf940b1"
+      },
+      "mimeType": "text/markdown",
+      "size": 8419
+    },
+    "ingredients/translate/figs-hyperbole/sub-title.md": {
+      "checksum": {
+        "md5": "62e2d3b2a30a8c3e9f391a635c99c809"
+      },
+      "mimeType": "text/markdown",
+      "size": 72
+    },
+    "ingredients/translate/figs-hyperbole/title.md": {
+      "checksum": {
+        "md5": "c1cd088c73b2300f63d14d99abf491f0"
+      },
+      "mimeType": "text/markdown",
+      "size": 9
+    },
+    "ingredients/translate/figs-hypo/01.md": {
+      "checksum": {
+        "md5": "7df8b85135ddd66890c46e994f29c1f5"
+      },
+      "mimeType": "text/markdown",
+      "size": 6198
+    },
+    "ingredients/translate/figs-hypo/sub-title.md": {
+      "checksum": {
+        "md5": "fb2dd75c1cf32debc59c6ee79d070ec6"
+      },
+      "mimeType": "text/markdown",
+      "size": 33
+    },
+    "ingredients/translate/figs-hypo/title.md": {
+      "checksum": {
+        "md5": "1b3f24f27f1feabb084a1a2731cc7abc"
+      },
+      "mimeType": "text/markdown",
+      "size": 23
+    },
+    "ingredients/translate/figs-idiom/01.md": {
+      "checksum": {
+        "md5": "9392e594038ebe8044aae3e35e19fff1"
+      },
+      "mimeType": "text/markdown",
+      "size": 3941
+    },
+    "ingredients/translate/figs-idiom/sub-title.md": {
+      "checksum": {
+        "md5": "59dd6f78d8e9fc2b143029bc4165e31a"
+      },
+      "mimeType": "text/markdown",
+      "size": 45
+    },
+    "ingredients/translate/figs-idiom/title.md": {
+      "checksum": {
+        "md5": "1b991052abd050dfa1ee72db4c04942e"
+      },
+      "mimeType": "text/markdown",
+      "size": 5
+    },
+    "ingredients/translate/figs-imperative/01.md": {
+      "checksum": {
+        "md5": "5ed2e436c88a25e173d12ddbbcec61f5"
+      },
+      "mimeType": "text/markdown",
+      "size": 6092
+    },
+    "ingredients/translate/figs-imperative/sub-title.md": {
+      "checksum": {
+        "md5": "d2ea7f91ea3cb2a791335d991540efc8"
+      },
+      "mimeType": "text/markdown",
+      "size": 64
+    },
+    "ingredients/translate/figs-imperative/title.md": {
+      "checksum": {
+        "md5": "0f10a57ff6996f5df18dea05bce81e79"
+      },
+      "mimeType": "text/markdown",
+      "size": 27
+    },
+    "ingredients/translate/figs-imperative3p/01.md": {
+      "checksum": {
+        "md5": "2bbbd20d92ee17ceea1cb0f24ed83bef"
+      },
+      "mimeType": "text/markdown",
+      "size": 5531
+    },
+    "ingredients/translate/figs-imperative3p/sub-title.md": {
+      "checksum": {
+        "md5": "6ea5654a3519c6706ab7d839fe1e93f2"
+      },
+      "mimeType": "text/markdown",
+      "size": 61
+    },
+    "ingredients/translate/figs-imperative3p/title.md": {
+      "checksum": {
+        "md5": "7d929d9291731ae0f16f19759e3bb4b2"
+      },
+      "mimeType": "text/markdown",
+      "size": 24
+    },
+    "ingredients/translate/figs-infostructure/01.md": {
+      "checksum": {
+        "md5": "a1a836c36cf81d7ae9e067d70dbf63e8"
+      },
+      "mimeType": "text/markdown",
+      "size": 5283
+    },
+    "ingredients/translate/figs-infostructure/sub-title.md": {
+      "checksum": {
+        "md5": "f1cae8907732572dfd09523f4daf5615"
+      },
+      "mimeType": "text/markdown",
+      "size": 49
+    },
+    "ingredients/translate/figs-infostructure/title.md": {
+      "checksum": {
+        "md5": "bc61a2f7f1b1e6ee1c9186e0a7292d36"
+      },
+      "mimeType": "text/markdown",
+      "size": 21
+    },
+    "ingredients/translate/figs-intro/01.md": {
+      "checksum": {
+        "md5": "202804bfe973de9fd4629f8a7aa16c78"
+      },
+      "mimeType": "text/markdown",
+      "size": 5000
+    },
+    "ingredients/translate/figs-intro/sub-title.md": {
+      "checksum": {
+        "md5": "619a5252e05aa3383b6880f85852af01"
+      },
+      "mimeType": "text/markdown",
+      "size": 32
+    },
+    "ingredients/translate/figs-intro/title.md": {
+      "checksum": {
+        "md5": "d8314fe8c77c6dd14c8c693ab8a400db"
+      },
+      "mimeType": "text/markdown",
+      "size": 17
+    },
+    "ingredients/translate/figs-irony/01.md": {
+      "checksum": {
+        "md5": "9ec2bd7ca128d8086f0ddf19f7210299"
+      },
+      "mimeType": "text/markdown",
+      "size": 6361
+    },
+    "ingredients/translate/figs-irony/sub-title.md": {
+      "checksum": {
+        "md5": "ac75d9f18dac521347b7acae92f24608"
+      },
+      "mimeType": "text/markdown",
+      "size": 41
+    },
+    "ingredients/translate/figs-irony/title.md": {
+      "checksum": {
+        "md5": "ef0dcd5cd0c119c15fe175f2ac13850e"
+      },
+      "mimeType": "text/markdown",
+      "size": 5
+    },
+    "ingredients/translate/figs-litany/01.md": {
+      "checksum": {
+        "md5": "8608142c9cafbd1a9dffdee64b9f14d8"
+      },
+      "mimeType": "text/markdown",
+      "size": 6693
+    },
+    "ingredients/translate/figs-litany/sub-title.md": {
+      "checksum": {
+        "md5": "f684ae033a9d4220364bbf3e9f0f8be2"
+      },
+      "mimeType": "text/markdown",
+      "size": 43
+    },
+    "ingredients/translate/figs-litany/title.md": {
+      "checksum": {
+        "md5": "183ed8b640a65672ac9bf4846ea65f5c"
+      },
+      "mimeType": "text/markdown",
+      "size": 6
+    },
+    "ingredients/translate/figs-litotes/01.md": {
+      "checksum": {
+        "md5": "7cf401b65115518b07d6182433a52f8a"
+      },
+      "mimeType": "text/markdown",
+      "size": 2878
+    },
+    "ingredients/translate/figs-litotes/sub-title.md": {
+      "checksum": {
+        "md5": "7e2b2a6877de50599bfa93f8b2c07f06"
+      },
+      "mimeType": "text/markdown",
+      "size": 16
+    },
+    "ingredients/translate/figs-litotes/title.md": {
+      "checksum": {
+        "md5": "3d005f9d57b3b043eb4e61f9863e5009"
+      },
+      "mimeType": "text/markdown",
+      "size": 7
+    },
+    "ingredients/translate/figs-merism/01.md": {
+      "checksum": {
+        "md5": "524019e10fc1a530dd232b18762d4a76"
+      },
+      "mimeType": "text/markdown",
+      "size": 2664
+    },
+    "ingredients/translate/figs-merism/sub-title.md": {
+      "checksum": {
+        "md5": "472799b1bd55f3bc78173a6a2f69fb94"
+      },
+      "mimeType": "text/markdown",
+      "size": 76
+    },
+    "ingredients/translate/figs-merism/title.md": {
+      "checksum": {
+        "md5": "9e727bc0c6bad6beb490f83053c81186"
+      },
+      "mimeType": "text/markdown",
+      "size": 6
+    },
+    "ingredients/translate/figs-metaphor/01.md": {
+      "checksum": {
+        "md5": "513163c90d6f75b3cae126b7ef09e0e3"
+      },
+      "mimeType": "text/markdown",
+      "size": 17486
+    },
+    "ingredients/translate/figs-metaphor/sub-title.md": {
+      "checksum": {
+        "md5": "d4b769e02715ce4b4a2c754075914d03"
+      },
+      "mimeType": "text/markdown",
+      "size": 72
+    },
+    "ingredients/translate/figs-metaphor/title.md": {
+      "checksum": {
+        "md5": "1e9edd867eafb54151138230c57a2a19"
+      },
+      "mimeType": "text/markdown",
+      "size": 8
+    },
+    "ingredients/translate/figs-metonymy/01.md": {
+      "checksum": {
+        "md5": "8938a569188941ed90ab50e297662baa"
+      },
+      "mimeType": "text/markdown",
+      "size": 3354
+    },
+    "ingredients/translate/figs-metonymy/sub-title.md": {
+      "checksum": {
+        "md5": "b0709eb808f1e0e8d0370b167228573a"
+      },
+      "mimeType": "text/markdown",
+      "size": 19
+    },
+    "ingredients/translate/figs-metonymy/title.md": {
+      "checksum": {
+        "md5": "93da2a43f3cd20937250635eeeb45406"
+      },
+      "mimeType": "text/markdown",
+      "size": 8
+    },
+    "ingredients/translate/figs-nominaladj/01.md": {
+      "checksum": {
+        "md5": "e1705fa5b300993f3ad1f691d5ebe709"
+      },
+      "mimeType": "text/markdown",
+      "size": 2379
+    },
+    "ingredients/translate/figs-nominaladj/sub-title.md": {
+      "checksum": {
+        "md5": "9b1ca17dcc637980c14753ce0b41546c"
+      },
+      "mimeType": "text/markdown",
+      "size": 50
+    },
+    "ingredients/translate/figs-nominaladj/title.md": {
+      "checksum": {
+        "md5": "19045a353a1ef5c9c829270c84cce788"
+      },
+      "mimeType": "text/markdown",
+      "size": 18
+    },
+    "ingredients/translate/figs-order/01.md": {
+      "checksum": {
+        "md5": "ba834b0da178780c66144eb007ac0b22"
+      },
+      "mimeType": "text/markdown",
+      "size": 2914
+    },
+    "ingredients/translate/figs-order/sub-title.md": {
+      "checksum": {
+        "md5": "b1be4e7615b21aa9ff0a61d525eebba4"
+      },
+      "mimeType": "text/markdown",
+      "size": 32
+    },
+    "ingredients/translate/figs-order/title.md": {
+      "checksum": {
+        "md5": "ad06b78fe1e9bf84861ef87cfcebedee"
+      },
+      "mimeType": "text/markdown",
+      "size": 10
+    },
+    "ingredients/translate/figs-orderGrk/01.md": {
+      "checksum": {
+        "md5": "78d552d762a98b59380b8495e49f9e40"
+      },
+      "mimeType": "text/markdown",
+      "size": 1049
+    },
+    "ingredients/translate/figs-orderGrk/sub-title.md": {
+      "checksum": {
+        "md5": "e743e4f7083cceaf7f9ee82c3d4f5e4f"
+      },
+      "mimeType": "text/markdown",
+      "size": 41
+    },
+    "ingredients/translate/figs-orderGrk/title.md": {
+      "checksum": {
+        "md5": "ad06b78fe1e9bf84861ef87cfcebedee"
+      },
+      "mimeType": "text/markdown",
+      "size": 10
+    },
+    "ingredients/translate/figs-orderHeb/01.md": {
+      "checksum": {
+        "md5": "661fc23146dab07a2a7c75692351e993"
+      },
+      "mimeType": "text/markdown",
+      "size": 2653
+    },
+    "ingredients/translate/figs-orderHeb/sub-title.md": {
+      "checksum": {
+        "md5": "f16798780701557fa8260cd3d1deb774"
+      },
+      "mimeType": "text/markdown",
+      "size": 44
+    },
+    "ingredients/translate/figs-orderHeb/title.md": {
+      "checksum": {
+        "md5": "ad06b78fe1e9bf84861ef87cfcebedee"
+      },
+      "mimeType": "text/markdown",
+      "size": 10
+    },
+    "ingredients/translate/figs-parables/01.md": {
+      "checksum": {
+        "md5": "143307645500ed2645a270dbc80590b6"
+      },
+      "mimeType": "text/markdown",
+      "size": 5358
+    },
+    "ingredients/translate/figs-parables/sub-title.md": {
+      "checksum": {
+        "md5": "5fbbe8b8b3be9a27f0c2d01b2a59e159"
+      },
+      "mimeType": "text/markdown",
+      "size": 18
+    },
+    "ingredients/translate/figs-parables/title.md": {
+      "checksum": {
+        "md5": "bd4e55f1a1869beca1bc7dae6eeb1f47"
+      },
+      "mimeType": "text/markdown",
+      "size": 8
+    },
+    "ingredients/translate/figs-parallelism/01.md": {
+      "checksum": {
+        "md5": "06f692f8cbac620da788c75d272e721c"
+      },
+      "mimeType": "text/markdown",
+      "size": 6628
+    },
+    "ingredients/translate/figs-parallelism/sub-title.md": {
+      "checksum": {
+        "md5": "0c0084c02b87cce50d40fc329c3bb6fd"
+      },
+      "mimeType": "text/markdown",
+      "size": 20
+    },
+    "ingredients/translate/figs-parallelism/title.md": {
+      "checksum": {
+        "md5": "374424d359c920b4d388c77660224bd7"
+      },
+      "mimeType": "text/markdown",
+      "size": 11
+    },
+    "ingredients/translate/figs-partsofspeech/01.md": {
+      "checksum": {
+        "md5": "b11496015a0874d3ee6f6745b27579e2"
+      },
+      "mimeType": "text/markdown",
+      "size": 4490
+    },
+    "ingredients/translate/figs-partsofspeech/sub-title.md": {
+      "checksum": {
+        "md5": "42fcaec8288e2bde0666b4b745249a9a"
+      },
+      "mimeType": "text/markdown",
+      "size": 48
+    },
+    "ingredients/translate/figs-partsofspeech/title.md": {
+      "checksum": {
+        "md5": "752bc41d7c93bef1f6c71fba31f2b73e"
+      },
+      "mimeType": "text/markdown",
+      "size": 15
+    },
+    "ingredients/translate/figs-pastforfuture/01.md": {
+      "checksum": {
+        "md5": "eac4b5dade83b31ed1b083d5b2f17f40"
+      },
+      "mimeType": "text/markdown",
+      "size": 2956
+    },
+    "ingredients/translate/figs-pastforfuture/sub-title.md": {
+      "checksum": {
+        "md5": "615139d7ac41e7dc54c62e0295890923"
+      },
+      "mimeType": "text/markdown",
+      "size": 28
+    },
+    "ingredients/translate/figs-pastforfuture/title.md": {
+      "checksum": {
+        "md5": "f8e6f98018d11829d5f3259af5147524"
+      },
+      "mimeType": "text/markdown",
+      "size": 15
+    },
+    "ingredients/translate/figs-personification/01.md": {
+      "checksum": {
+        "md5": "fd448e521090109c8633c7836b03594b"
+      },
+      "mimeType": "text/markdown",
+      "size": 3447
+    },
+    "ingredients/translate/figs-personification/sub-title.md": {
+      "checksum": {
+        "md5": "94bf3361667b12063e8c9f401e6221da"
+      },
+      "mimeType": "text/markdown",
+      "size": 24
+    },
+    "ingredients/translate/figs-personification/title.md": {
+      "checksum": {
+        "md5": "99303f55222a57174d8af55fbca052cd"
+      },
+      "mimeType": "text/markdown",
+      "size": 15
+    },
+    "ingredients/translate/figs-possession/01.md": {
+      "checksum": {
+        "md5": "914e907545c12b015b66024393b32b99"
+      },
+      "mimeType": "text/markdown",
+      "size": 7571
+    },
+    "ingredients/translate/figs-possession/sub-title.md": {
+      "checksum": {
+        "md5": "d2d27c52f0b3228a6785521c53e44fae"
+      },
+      "mimeType": "text/markdown",
+      "size": 64
+    },
+    "ingredients/translate/figs-possession/title.md": {
+      "checksum": {
+        "md5": "0291e38d9a3d398052be0ca52a7b1592"
+      },
+      "mimeType": "text/markdown",
+      "size": 10
+    },
+    "ingredients/translate/figs-pronouns/01.md": {
+      "checksum": {
+        "md5": "4fd04c216d9a5abd26da06c2c2d69a42"
+      },
+      "mimeType": "text/markdown",
+      "size": 3309
+    },
+    "ingredients/translate/figs-pronouns/sub-title.md": {
+      "checksum": {
+        "md5": "d36ed987449b3002cc9fba502136cb80"
+      },
+      "mimeType": "text/markdown",
+      "size": 68
+    },
+    "ingredients/translate/figs-pronouns/title.md": {
+      "checksum": {
+        "md5": "07ef66b871a379dae1df1ed69d1fd585"
+      },
+      "mimeType": "text/markdown",
+      "size": 8
+    },
+    "ingredients/translate/figs-quotations/01.md": {
+      "checksum": {
+        "md5": "ad77c34c7e8f25e0f2a16dae3bafd2a8"
+      },
+      "mimeType": "text/markdown",
+      "size": 4407
+    },
+    "ingredients/translate/figs-quotations/sub-title.md": {
+      "checksum": {
+        "md5": "e3084b8cca0b4f3d10a77a89b2d1be6e"
+      },
+      "mimeType": "text/markdown",
+      "size": 40
+    },
+    "ingredients/translate/figs-quotations/title.md": {
+      "checksum": {
+        "md5": "00b01a941a5f0393c06608c3ccd8fe01"
+      },
+      "mimeType": "text/markdown",
+      "size": 30
+    },
+    "ingredients/translate/figs-quotemarks/01.md": {
+      "checksum": {
+        "md5": "39c9c7b35cb6c8ee649671578058e3af"
+      },
+      "mimeType": "text/markdown",
+      "size": 6422
+    },
+    "ingredients/translate/figs-quotemarks/sub-title.md": {
+      "checksum": {
+        "md5": "e89c78e4ef556a1edcba2310093282a4"
+      },
+      "mimeType": "text/markdown",
+      "size": 73
+    },
+    "ingredients/translate/figs-quotemarks/title.md": {
+      "checksum": {
+        "md5": "c5d375a80adf833f2bdc000cb15ab6e4"
+      },
+      "mimeType": "text/markdown",
+      "size": 14
+    },
+    "ingredients/translate/figs-quotesinquotes/01.md": {
+      "checksum": {
+        "md5": "39e5bb8a0ab143236e2400568b154f8e"
+      },
+      "mimeType": "text/markdown",
+      "size": 5904
+    },
+    "ingredients/translate/figs-quotesinquotes/sub-title.md": {
+      "checksum": {
+        "md5": "c12c070081d83062e317b2f704a011b6"
+      },
+      "mimeType": "text/markdown",
+      "size": 93
+    },
+    "ingredients/translate/figs-quotesinquotes/title.md": {
+      "checksum": {
+        "md5": "d550a91be08a93eeb0259a3da32e24b7"
+      },
+      "mimeType": "text/markdown",
+      "size": 20
+    },
+    "ingredients/translate/figs-reduplication/01.md": {
+      "checksum": {
+        "md5": "0770b72f6f7c17e753d2b29c5379b8f8"
+      },
+      "mimeType": "text/markdown",
+      "size": 3195
+    },
+    "ingredients/translate/figs-reduplication/sub-title.md": {
+      "checksum": {
+        "md5": "743ec8a8bc1aaebb49f470ae41c01f10"
+      },
+      "mimeType": "text/markdown",
+      "size": 22
+    },
+    "ingredients/translate/figs-reduplication/title.md": {
+      "checksum": {
+        "md5": "3fd64a0cbcf435b05023f8e2dcda282d"
+      },
+      "mimeType": "text/markdown",
+      "size": 13
+    },
+    "ingredients/translate/figs-rpronouns/01.md": {
+      "checksum": {
+        "md5": "58c24d2c3135bfb347273bf0bf38e952"
+      },
+      "mimeType": "text/markdown",
+      "size": 5714
+    },
+    "ingredients/translate/figs-rpronouns/sub-title.md": {
+      "checksum": {
+        "md5": "7c330d79ba328022a05bfa24d0f8b15e"
+      },
+      "mimeType": "text/markdown",
+      "size": 28
+    },
+    "ingredients/translate/figs-rpronouns/title.md": {
+      "checksum": {
+        "md5": "9098343d405e7e07835f8a616bdd1945"
+      },
+      "mimeType": "text/markdown",
+      "size": 18
+    },
+    "ingredients/translate/figs-rquestion/01.md": {
+      "checksum": {
+        "md5": "e81c3779b9bd54cc8f4ac1432312350a"
+      },
+      "mimeType": "text/markdown",
+      "size": 8331
+    },
+    "ingredients/translate/figs-rquestion/sub-title.md": {
+      "checksum": {
+        "md5": "dbec8538c03d7c32aece5f9c988289d3"
+      },
+      "mimeType": "text/markdown",
+      "size": 59
+    },
+    "ingredients/translate/figs-rquestion/title.md": {
+      "checksum": {
+        "md5": "abf133966941709083ca4c888efc7454"
+      },
+      "mimeType": "text/markdown",
+      "size": 19
+    },
+    "ingredients/translate/figs-sentences/01.md": {
+      "checksum": {
+        "md5": "924e2240d66181569e91523e06907439"
+      },
+      "mimeType": "text/markdown",
+      "size": 4231
+    },
+    "ingredients/translate/figs-sentences/sub-title.md": {
+      "checksum": {
+        "md5": "8f0ecf6f4f068595c069ea58ebffc439"
+      },
+      "mimeType": "text/markdown",
+      "size": 33
+    },
+    "ingredients/translate/figs-sentences/title.md": {
+      "checksum": {
+        "md5": "07ba7462999a43597cc5593ffe0cd8f6"
+      },
+      "mimeType": "text/markdown",
+      "size": 18
+    },
+    "ingredients/translate/figs-sentencetypes/01.md": {
+      "checksum": {
+        "md5": "89573296ceae39915149220db68a95f1"
+      },
+      "mimeType": "text/markdown",
+      "size": 5182
+    },
+    "ingredients/translate/figs-sentencetypes/sub-title.md": {
+      "checksum": {
+        "md5": "8cc9f2a48ee94716450a48e40daafb53"
+      },
+      "mimeType": "text/markdown",
+      "size": 69
+    },
+    "ingredients/translate/figs-sentencetypes/title.md": {
+      "checksum": {
+        "md5": "3ab696b2aed5ed48974edc7b6e1c67b9"
+      },
+      "mimeType": "text/markdown",
+      "size": 14
+    },
+    "ingredients/translate/figs-simetaphor/01.md": {
+      "checksum": {
+        "md5": "1e7685b33c03173da20400b48b7e9f46"
+      },
+      "mimeType": "text/markdown",
+      "size": 4492
+    },
+    "ingredients/translate/figs-simetaphor/sub-title.md": {
+      "checksum": {
+        "md5": "0f3322048dd4004f6f4580568cd6ee96"
+      },
+      "mimeType": "text/markdown",
+      "size": 26
+    },
+    "ingredients/translate/figs-simetaphor/title.md": {
+      "checksum": {
+        "md5": "a25631418725c028ebdac03d65c4bfb4"
+      },
+      "mimeType": "text/markdown",
+      "size": 15
+    },
+    "ingredients/translate/figs-simile/01.md": {
+      "checksum": {
+        "md5": "be19051fa3900ed1261d3832d957096d"
+      },
+      "mimeType": "text/markdown",
+      "size": 5257
+    },
+    "ingredients/translate/figs-simile/sub-title.md": {
+      "checksum": {
+        "md5": "359a3137824f2fc835b99cb393c59c33"
+      },
+      "mimeType": "text/markdown",
+      "size": 17
+    },
+    "ingredients/translate/figs-simile/title.md": {
+      "checksum": {
+        "md5": "b440afae29b017b8975020609026bbb6"
+      },
+      "mimeType": "text/markdown",
+      "size": 6
+    },
+    "ingredients/translate/figs-synecdoche/01.md": {
+      "checksum": {
+        "md5": "11c365089e2d4805f7b1bf211f8acf78"
+      },
+      "mimeType": "text/markdown",
+      "size": 2028
+    },
+    "ingredients/translate/figs-synecdoche/sub-title.md": {
+      "checksum": {
+        "md5": "e459128daace40a34184b6b7d0bc5c17"
+      },
+      "mimeType": "text/markdown",
+      "size": 76
+    },
+    "ingredients/translate/figs-synecdoche/title.md": {
+      "checksum": {
+        "md5": "590ba0d2ad33eed93048ffc71572187c"
+      },
+      "mimeType": "text/markdown",
+      "size": 10
+    },
+    "ingredients/translate/figs-verbs/01.md": {
+      "checksum": {
+        "md5": "d60f6c9082fa05fa617ba10505b0fe97"
+      },
+      "mimeType": "text/markdown",
+      "size": 4632
+    },
+    "ingredients/translate/figs-verbs/sub-title.md": {
+      "checksum": {
+        "md5": "ee59a89f2b9de67dcd3a450910326820"
+      },
+      "mimeType": "text/markdown",
+      "size": 65
+    },
+    "ingredients/translate/figs-verbs/title.md": {
+      "checksum": {
+        "md5": "979b575f8a21424ee43ee15efb05dc00"
+      },
+      "mimeType": "text/markdown",
+      "size": 5
+    },
+    "ingredients/translate/figs-you/01.md": {
+      "checksum": {
+        "md5": "a4f57bf9cea05b638233426c30fac159"
+      },
+      "mimeType": "text/markdown",
+      "size": 1789
+    },
+    "ingredients/translate/figs-you/sub-title.md": {
+      "checksum": {
+        "md5": "aed1abeadd33ead208b3d1e5c78ad2af"
+      },
+      "mimeType": "text/markdown",
+      "size": 36
+    },
+    "ingredients/translate/figs-you/title.md": {
+      "checksum": {
+        "md5": "d69be567b7bc45c3629c3f1ae39cb6a3"
+      },
+      "mimeType": "text/markdown",
+      "size": 12
+    },
+    "ingredients/translate/figs-youcrowd/01.md": {
+      "checksum": {
+        "md5": "83ae6080c54d767552ae78f0d323b3fb"
+      },
+      "mimeType": "text/markdown",
+      "size": 4917
+    },
+    "ingredients/translate/figs-youcrowd/sub-title.md": {
+      "checksum": {
+        "md5": "31d5a394d69f2e9b9b7cadc1b73e7b5a"
+      },
+      "mimeType": "text/markdown",
+      "size": 68
+    },
+    "ingredients/translate/figs-youcrowd/title.md": {
+      "checksum": {
+        "md5": "15bab97a20b2c787b2ea3b66f0ac4600"
+      },
+      "mimeType": "text/markdown",
+      "size": 38
+    },
+    "ingredients/translate/figs-youdual/01.md": {
+      "checksum": {
+        "md5": "35e900202995a4dc4e0cf79d6bd84d05"
+      },
+      "mimeType": "text/markdown",
+      "size": 3970
+    },
+    "ingredients/translate/figs-youdual/sub-title.md": {
+      "checksum": {
+        "md5": "682a8b0d42aecf0a742b655ce0dc3b4c"
+      },
+      "mimeType": "text/markdown",
+      "size": 54
+    },
+    "ingredients/translate/figs-youdual/title.md": {
+      "checksum": {
+        "md5": "a76cf7a7c84cc4760b9e6edb00431620"
+      },
+      "mimeType": "text/markdown",
+      "size": 35
+    },
+    "ingredients/translate/figs-youformal/01.md": {
+      "checksum": {
+        "md5": "2156ec2348398ac1cab49dc750ef47b5"
+      },
+      "mimeType": "text/markdown",
+      "size": 4194
+    },
+    "ingredients/translate/figs-youformal/sub-title.md": {
+      "checksum": {
+        "md5": "d4c29fe131082341022d1a72badb292c"
+      },
+      "mimeType": "text/markdown",
+      "size": 43
+    },
+    "ingredients/translate/figs-youformal/title.md": {
+      "checksum": {
+        "md5": "f00526cdef25937f674faf0e01fed2ba"
+      },
+      "mimeType": "text/markdown",
+      "size": 42
+    },
+    "ingredients/translate/figs-yousingular/01.md": {
+      "checksum": {
+        "md5": "8193ada1194261002d4729d39955e558"
+      },
+      "mimeType": "text/markdown",
+      "size": 4769
+    },
+    "ingredients/translate/figs-yousingular/sub-title.md": {
+      "checksum": {
+        "md5": "57afa6b0d9e71c127a009709267a2cab"
+      },
+      "mimeType": "text/markdown",
+      "size": 48
+    },
+    "ingredients/translate/figs-yousingular/title.md": {
+      "checksum": {
+        "md5": "d0689d5e2149850e9f1da8070c0cd5f6"
+      },
+      "mimeType": "text/markdown",
+      "size": 32
+    },
+    "ingredients/translate/file-formats/01.md": {
+      "checksum": {
+        "md5": "3f0b76bc75a01ecb416244b6edb4d87c"
+      },
+      "mimeType": "text/markdown",
+      "size": 4685
+    },
+    "ingredients/translate/file-formats/sub-title.md": {
+      "checksum": {
+        "md5": "2a033c3e8ad7f8991071c686c7999e25"
+      },
+      "mimeType": "text/markdown",
+      "size": 33
+    },
+    "ingredients/translate/file-formats/title.md": {
+      "checksum": {
+        "md5": "c5aa4696210f373700e4632205e8e208"
+      },
+      "mimeType": "text/markdown",
+      "size": 12
+    },
+    "ingredients/translate/first-draft/01.md": {
+      "checksum": {
+        "md5": "ab62a68788ccabf91921817692adf021"
+      },
+      "mimeType": "text/markdown",
+      "size": 7274
+    },
+    "ingredients/translate/first-draft/sub-title.md": {
+      "checksum": {
+        "md5": "15ff21d6501557c248099c3740eaa553"
+      },
+      "mimeType": "text/markdown",
+      "size": 31
+    },
+    "ingredients/translate/first-draft/title.md": {
+      "checksum": {
+        "md5": "1fcffecc929c46162c6ed527d6224d78"
+      },
+      "mimeType": "text/markdown",
+      "size": 11
+    },
+    "ingredients/translate/grammar-collectivenouns/01.md": {
+      "checksum": {
+        "md5": "37ee6ec974ee5aad24a9eb265ad9e9b7"
+      },
+      "mimeType": "text/markdown",
+      "size": 7493
+    },
+    "ingredients/translate/grammar-collectivenouns/sub-title.md": {
+      "checksum": {
+        "md5": "21a589441b8adf5ceec873ab05d45b05"
+      },
+      "mimeType": "text/markdown",
+      "size": 55
+    },
+    "ingredients/translate/grammar-collectivenouns/title.md": {
+      "checksum": {
+        "md5": "0910a2deb28504fcfef539c9baf3f0b7"
+      },
+      "mimeType": "text/markdown",
+      "size": 16
+    },
+    "ingredients/translate/grammar-connect-condition-contrary/01.md": {
+      "checksum": {
+        "md5": "f42f7606f3d2d7cb13121647307b220f"
+      },
+      "mimeType": "text/markdown",
+      "size": 7275
+    },
+    "ingredients/translate/grammar-connect-condition-contrary/sub-title.md": {
+      "checksum": {
+        "md5": "ccdf59c9be3e7a494e486440c2ee73ef"
+      },
+      "mimeType": "text/markdown",
+      "size": 48
+    },
+    "ingredients/translate/grammar-connect-condition-contrary/title.md": {
+      "checksum": {
+        "md5": "87bd84ffde7fe9b42d8ec51d575baac6"
+      },
+      "mimeType": "text/markdown",
+      "size": 40
+    },
+    "ingredients/translate/grammar-connect-condition-fact/01.md": {
+      "checksum": {
+        "md5": "5c0d035df5324aff303f7b0073910a85"
+      },
+      "mimeType": "text/markdown",
+      "size": 4219
+    },
+    "ingredients/translate/grammar-connect-condition-fact/sub-title.md": {
+      "checksum": {
+        "md5": "0390fa137c87fe719d091962b3ee0e90"
+      },
+      "mimeType": "text/markdown",
+      "size": 39
+    },
+    "ingredients/translate/grammar-connect-condition-fact/title.md": {
+      "checksum": {
+        "md5": "4c4edce6288e7b57d90856e4af70f9e2"
+      },
+      "mimeType": "text/markdown",
+      "size": 31
+    },
+    "ingredients/translate/grammar-connect-condition-hypothetical/01.md": {
+      "checksum": {
+        "md5": "4dd33af23dd8c1eb942e7ef537952b2e"
+      },
+      "mimeType": "text/markdown",
+      "size": 4111
+    },
+    "ingredients/translate/grammar-connect-condition-hypothetical/sub-title.md": {
+      "checksum": {
+        "md5": "eb060785b559548cee6deea1f51e4ca2"
+      },
+      "mimeType": "text/markdown",
+      "size": 44
+    },
+    "ingredients/translate/grammar-connect-condition-hypothetical/title.md": {
+      "checksum": {
+        "md5": "09e020edfe23340b335a951e8777c854"
+      },
+      "mimeType": "text/markdown",
+      "size": 36
+    },
+    "ingredients/translate/grammar-connect-exceptions/01.md": {
+      "checksum": {
+        "md5": "f6aab775e3f1293b98e20efaaeb1e733"
+      },
+      "mimeType": "text/markdown",
+      "size": 3783
+    },
+    "ingredients/translate/grammar-connect-exceptions/sub-title.md": {
+      "checksum": {
+        "md5": "757bb93adc77f79bd3eb8fdb87660237"
+      },
+      "mimeType": "text/markdown",
+      "size": 38
+    },
+    "ingredients/translate/grammar-connect-exceptions/title.md": {
+      "checksum": {
+        "md5": "66b006b85fa2854402f1b3bbf2412f2d"
+      },
+      "mimeType": "text/markdown",
+      "size": 30
+    },
+    "ingredients/translate/grammar-connect-logic-contrast/01.md": {
+      "checksum": {
+        "md5": "8bda130f43eac363c8d981aacf6fa365"
+      },
+      "mimeType": "text/markdown",
+      "size": 4185
+    },
+    "ingredients/translate/grammar-connect-logic-contrast/sub-title.md": {
+      "checksum": {
+        "md5": "07d85d5b366db055cf2fef3cec2ce095"
+      },
+      "mimeType": "text/markdown",
+      "size": 44
+    },
+    "ingredients/translate/grammar-connect-logic-contrast/title.md": {
+      "checksum": {
+        "md5": "5556f477eddb54890eee6c97d925b924"
+      },
+      "mimeType": "text/markdown",
+      "size": 33
+    },
+    "ingredients/translate/grammar-connect-logic-goal/01.md": {
+      "checksum": {
+        "md5": "2bfbc5c75bc01ed23ad5fb5c81608ec9"
+      },
+      "mimeType": "text/markdown",
+      "size": 5817
+    },
+    "ingredients/translate/grammar-connect-logic-goal/sub-title.md": {
+      "checksum": {
+        "md5": "d3ec96e0364149755eae5d109e6c7ea3"
+      },
+      "mimeType": "text/markdown",
+      "size": 50
+    },
+    "ingredients/translate/grammar-connect-logic-goal/title.md": {
+      "checksum": {
+        "md5": "ec41f8c3415dc0511f44c9d4a5b200be"
+      },
+      "mimeType": "text/markdown",
+      "size": 40
+    },
+    "ingredients/translate/grammar-connect-logic-result/01.md": {
+      "checksum": {
+        "md5": "60a5a38d8a64e452b3ff4de041557f19"
+      },
+      "mimeType": "text/markdown",
+      "size": 5328
+    },
+    "ingredients/translate/grammar-connect-logic-result/sub-title.md": {
+      "checksum": {
+        "md5": "039fa125966e746394ef11c2264a67d8"
+      },
+      "mimeType": "text/markdown",
+      "size": 51
+    },
+    "ingredients/translate/grammar-connect-logic-result/title.md": {
+      "checksum": {
+        "md5": "0b61a33e1c56eacfece8e465a4055b38"
+      },
+      "mimeType": "text/markdown",
+      "size": 43
+    },
+    "ingredients/translate/grammar-connect-time-background/01.md": {
+      "checksum": {
+        "md5": "8c2195cb92394554b4551230c91a8a59"
+      },
+      "mimeType": "text/markdown",
+      "size": 7039
+    },
+    "ingredients/translate/grammar-connect-time-background/sub-title.md": {
+      "checksum": {
+        "md5": "6a598b793a1e4ce6fa8ac464e1b4ecdd"
+      },
+      "mimeType": "text/markdown",
+      "size": 61
+    },
+    "ingredients/translate/grammar-connect-time-background/title.md": {
+      "checksum": {
+        "md5": "229d3677fe19a87beb84e91a658760fa"
+      },
+      "mimeType": "text/markdown",
+      "size": 35
+    },
+    "ingredients/translate/grammar-connect-time-sequential/01.md": {
+      "checksum": {
+        "md5": "357e3959fb426f84f66e96da1ead1509"
+      },
+      "mimeType": "text/markdown",
+      "size": 4641
+    },
+    "ingredients/translate/grammar-connect-time-sequential/sub-title.md": {
+      "checksum": {
+        "md5": "0c8e69c2946c85b6590fea6f4487f264"
+      },
+      "mimeType": "text/markdown",
+      "size": 63
+    },
+    "ingredients/translate/grammar-connect-time-sequential/title.md": {
+      "checksum": {
+        "md5": "e23bd684fc9b97e4d0d404f73d58a215"
+      },
+      "mimeType": "text/markdown",
+      "size": 41
+    },
+    "ingredients/translate/grammar-connect-time-simultaneous/01.md": {
+      "checksum": {
+        "md5": "35135f1b8e70d355fe64b2e2c2b6c7d4"
+      },
+      "mimeType": "text/markdown",
+      "size": 4171
+    },
+    "ingredients/translate/grammar-connect-time-simultaneous/sub-title.md": {
+      "checksum": {
+        "md5": "2a5d34b23d67c15c83c66546cec8c9fd"
+      },
+      "mimeType": "text/markdown",
+      "size": 66
+    },
+    "ingredients/translate/grammar-connect-time-simultaneous/title.md": {
+      "checksum": {
+        "md5": "6103ad2fa50c1812b86d607ef494226f"
+      },
+      "mimeType": "text/markdown",
+      "size": 43
+    },
+    "ingredients/translate/grammar-connect-words-phrases/01.md": {
+      "checksum": {
+        "md5": "83a87b6927d09b7cee9f65f7f2aaa6fe"
+      },
+      "mimeType": "text/markdown",
+      "size": 10600
+    },
+    "ingredients/translate/grammar-connect-words-phrases/sub-title.md": {
+      "checksum": {
+        "md5": "9c8c9e1e5202bb0fde11831fecdd0060"
+      },
+      "mimeType": "text/markdown",
+      "size": 73
+    },
+    "ingredients/translate/grammar-connect-words-phrases/title.md": {
+      "checksum": {
+        "md5": "4fa46f1ee36f78dceb2370d7eae05523"
+      },
+      "mimeType": "text/markdown",
+      "size": 28
+    },
+    "ingredients/translate/grammar-honorifics/01.md": {
+      "checksum": {
+        "md5": "5c20cffba53010cfe265a5ae64c3af74"
+      },
+      "mimeType": "text/markdown",
+      "size": 323
+    },
+    "ingredients/translate/grammar-honorifics/sub-title.md": {
+      "checksum": {
+        "md5": "c0ba9899aa7a7850c3d678404b7f635d"
+      },
+      "mimeType": "text/markdown",
+      "size": 47
+    },
+    "ingredients/translate/grammar-honorifics/title.md": {
+      "checksum": {
+        "md5": "b432d6e801bb4513754c2ee58d8d03b0"
+      },
+      "mimeType": "text/markdown",
+      "size": 10
+    },
+    "ingredients/translate/guidelines-accurate/01.md": {
+      "checksum": {
+        "md5": "7db83c8b4ad27a79bc09b16f9ccdba55"
+      },
+      "mimeType": "text/markdown",
+      "size": 3350
+    },
+    "ingredients/translate/guidelines-accurate/sub-title.md": {
+      "checksum": {
+        "md5": "29deab68ceb9b0867695d08be02dfdf6"
+      },
+      "mimeType": "text/markdown",
+      "size": 38
+    },
+    "ingredients/translate/guidelines-accurate/title.md": {
+      "checksum": {
+        "md5": "1aa364d1612355896d4fe873855a17d0"
+      },
+      "mimeType": "text/markdown",
+      "size": 28
+    },
+    "ingredients/translate/guidelines-authoritative/01.md": {
+      "checksum": {
+        "md5": "fb97dd515f70c135b5e60dae55367319"
+      },
+      "mimeType": "text/markdown",
+      "size": 2498
+    },
+    "ingredients/translate/guidelines-authoritative/sub-title.md": {
+      "checksum": {
+        "md5": "6f182969f87732fe971560dab4a7b179"
+      },
+      "mimeType": "text/markdown",
+      "size": 36
+    },
+    "ingredients/translate/guidelines-authoritative/title.md": {
+      "checksum": {
+        "md5": "ea9716a9ba78d5efa2f87b5561f76dee"
+      },
+      "mimeType": "text/markdown",
+      "size": 33
+    },
+    "ingredients/translate/guidelines-church-approved/01.md": {
+      "checksum": {
+        "md5": "d19b76aed75436d2c5dadb5de413a50d"
+      },
+      "mimeType": "text/markdown",
+      "size": 2736
+    },
+    "ingredients/translate/guidelines-church-approved/sub-title.md": {
+      "checksum": {
+        "md5": "aaa794852fa100ee9a81ce666b2c054b"
+      },
+      "mimeType": "text/markdown",
+      "size": 45
+    },
+    "ingredients/translate/guidelines-church-approved/title.md": {
+      "checksum": {
+        "md5": "c498d2086558eedb1ba2caad1e53f86a"
+      },
+      "mimeType": "text/markdown",
+      "size": 35
+    },
+    "ingredients/translate/guidelines-clear/01.md": {
+      "checksum": {
+        "md5": "ab76fc744df9c5f3d9ef20668e22e539"
+      },
+      "mimeType": "text/markdown",
+      "size": 5804
+    },
+    "ingredients/translate/guidelines-clear/sub-title.md": {
+      "checksum": {
+        "md5": "26eae889268c2233e29d6dac8a6f0df7"
+      },
+      "mimeType": "text/markdown",
+      "size": 35
+    },
+    "ingredients/translate/guidelines-clear/title.md": {
+      "checksum": {
+        "md5": "32b1175c2a7cc842114f21188a5553ce"
+      },
+      "mimeType": "text/markdown",
+      "size": 25
+    },
+    "ingredients/translate/guidelines-collaborative/01.md": {
+      "checksum": {
+        "md5": "ef590fcce43440502388fd36e13eac61"
+      },
+      "mimeType": "text/markdown",
+      "size": 1627
+    },
+    "ingredients/translate/guidelines-collaborative/sub-title.md": {
+      "checksum": {
+        "md5": "0d5600ee1d8fddce1caa88604c03cef9"
+      },
+      "mimeType": "text/markdown",
+      "size": 36
+    },
+    "ingredients/translate/guidelines-collaborative/title.md": {
+      "checksum": {
+        "md5": "da18d270acc298b7503bff69cb8a59e0"
+      },
+      "mimeType": "text/markdown",
+      "size": 33
+    },
+    "ingredients/translate/guidelines-equal/01.md": {
+      "checksum": {
+        "md5": "799b08ca928c25a5c83f43801f933bfb"
+      },
+      "mimeType": "text/markdown",
+      "size": 5978
+    },
+    "ingredients/translate/guidelines-equal/sub-title.md": {
+      "checksum": {
+        "md5": "9314417dd4b701ff1945cbd23c34c7c2"
+      },
+      "mimeType": "text/markdown",
+      "size": 29
+    },
+    "ingredients/translate/guidelines-equal/title.md": {
+      "checksum": {
+        "md5": "7a40978c6f2d662d7162f135e6d1b77c"
+      },
+      "mimeType": "text/markdown",
+      "size": 25
+    },
+    "ingredients/translate/guidelines-faithful/01.md": {
+      "checksum": {
+        "md5": "2f72e65ba276ab409dce7303d1553c34"
+      },
+      "mimeType": "text/markdown",
+      "size": 4739
+    },
+    "ingredients/translate/guidelines-faithful/sub-title.md": {
+      "checksum": {
+        "md5": "a18c99b3cb3f0575028bd7ee84e9efa9"
+      },
+      "mimeType": "text/markdown",
+      "size": 31
+    },
+    "ingredients/translate/guidelines-faithful/title.md": {
+      "checksum": {
+        "md5": "3588943eadf0d1aa2d2b0f0a9c60cc5d"
+      },
+      "mimeType": "text/markdown",
+      "size": 28
+    },
+    "ingredients/translate/guidelines-historical/01.md": {
+      "checksum": {
+        "md5": "31f2fa85ab78d10370a60e56d95f7c02"
+      },
+      "mimeType": "text/markdown",
+      "size": 4373
+    },
+    "ingredients/translate/guidelines-historical/sub-title.md": {
+      "checksum": {
+        "md5": "db82de4dad8ac73e39a636d93107a962"
+      },
+      "mimeType": "text/markdown",
+      "size": 33
+    },
+    "ingredients/translate/guidelines-historical/title.md": {
+      "checksum": {
+        "md5": "0281132d99e85fe13a47ce9f97be27a9"
+      },
+      "mimeType": "text/markdown",
+      "size": 30
+    },
+    "ingredients/translate/guidelines-intro/01.md": {
+      "checksum": {
+        "md5": "605da0f749a6f4034cc24aaa06331cdd"
+      },
+      "mimeType": "text/markdown",
+      "size": 2815
+    },
+    "ingredients/translate/guidelines-intro/sub-title.md": {
+      "checksum": {
+        "md5": "84421aacc0c044a7d59c57bcc3063faf"
+      },
+      "mimeType": "text/markdown",
+      "size": 45
+    },
+    "ingredients/translate/guidelines-intro/title.md": {
+      "checksum": {
+        "md5": "ff1be2e4eb5bddb487299b9546621f36"
+      },
+      "mimeType": "text/markdown",
+      "size": 35
+    },
+    "ingredients/translate/guidelines-natural/01.md": {
+      "checksum": {
+        "md5": "b08134df04428f1f298560ed20f3f8b4"
+      },
+      "mimeType": "text/markdown",
+      "size": 4495
+    },
+    "ingredients/translate/guidelines-natural/sub-title.md": {
+      "checksum": {
+        "md5": "bad5747f4baf85ca0752ad832ec73b3d"
+      },
+      "mimeType": "text/markdown",
+      "size": 37
+    },
+    "ingredients/translate/guidelines-natural/title.md": {
+      "checksum": {
+        "md5": "0b995527b95f46ea0309de387de986b6"
+      },
+      "mimeType": "text/markdown",
+      "size": 27
+    },
+    "ingredients/translate/guidelines-ongoing/01.md": {
+      "checksum": {
+        "md5": "6d9487f5f036c8d14720666a3aa71c0e"
+      },
+      "mimeType": "text/markdown",
+      "size": 1417
+    },
+    "ingredients/translate/guidelines-ongoing/sub-title.md": {
+      "checksum": {
+        "md5": "85e4fee00491add23a91de85d884b3f7"
+      },
+      "mimeType": "text/markdown",
+      "size": 30
+    },
+    "ingredients/translate/guidelines-ongoing/title.md": {
+      "checksum": {
+        "md5": "3130237190b2b8bcb91ff4fc4c6360a3"
+      },
+      "mimeType": "text/markdown",
+      "size": 27
+    },
+    "ingredients/translate/guidelines-sonofgod/01.md": {
+      "checksum": {
+        "md5": "1be2192520a373075773b065edfc4054"
+      },
+      "mimeType": "text/markdown",
+      "size": 2967
+    },
+    "ingredients/translate/guidelines-sonofgod/sub-title.md": {
+      "checksum": {
+        "md5": "aed9a64186ef9832ecdbd859e7257e03"
+      },
+      "mimeType": "text/markdown",
+      "size": 42
+    },
+    "ingredients/translate/guidelines-sonofgod/title.md": {
+      "checksum": {
+        "md5": "3de2ab75e921df9c2ea78ebd75125d00"
+      },
+      "mimeType": "text/markdown",
+      "size": 29
+    },
+    "ingredients/translate/guidelines-sonofgodprinciples/01.md": {
+      "checksum": {
+        "md5": "df3a3f5aea0f7d3fba028f5f94b42d89"
+      },
+      "mimeType": "text/markdown",
+      "size": 4126
+    },
+    "ingredients/translate/guidelines-sonofgodprinciples/sub-title.md": {
+      "checksum": {
+        "md5": "6bbd63659ab372a0ea7bae34caa356ce"
+      },
+      "mimeType": "text/markdown",
+      "size": 53
+    },
+    "ingredients/translate/guidelines-sonofgodprinciples/title.md": {
+      "checksum": {
+        "md5": "e72554c779ef244d08460d090829a127"
+      },
+      "mimeType": "text/markdown",
+      "size": 26
+    },
+    "ingredients/translate/qualifications/01.md": {
+      "checksum": {
+        "md5": "1cfe63e4f23509a4ef3dc59d7406fec6"
+      },
+      "mimeType": "text/markdown",
+      "size": 2602
+    },
+    "ingredients/translate/qualifications/sub-title.md": {
+      "checksum": {
+        "md5": "58810c14ab9dd628866407c2df7be6ae"
+      },
+      "mimeType": "text/markdown",
+      "size": 44
+    },
+    "ingredients/translate/qualifications/title.md": {
+      "checksum": {
+        "md5": "2c7911f89df7e4adbbc0d7e80b0c2114"
+      },
+      "mimeType": "text/markdown",
+      "size": 25
+    },
+    "ingredients/translate/resources-alter/01.md": {
+      "checksum": {
+        "md5": "0c5eca11b71ea5e0e695076052a35400"
+      },
+      "mimeType": "text/markdown",
+      "size": 2542
+    },
+    "ingredients/translate/resources-alter/sub-title.md": {
+      "checksum": {
+        "md5": "01addae79dc6d6e19d84e3710f3dde72"
+      },
+      "mimeType": "text/markdown",
+      "size": 93
+    },
+    "ingredients/translate/resources-alter/title.md": {
+      "checksum": {
+        "md5": "88169d26af4df63f13f56a5bb6808760"
+      },
+      "mimeType": "text/markdown",
+      "size": 33
+    },
+    "ingredients/translate/resources-alterm/01.md": {
+      "checksum": {
+        "md5": "c52ee18f54e8bbb13950032a629948c1"
+      },
+      "mimeType": "text/markdown",
+      "size": 2344
+    },
+    "ingredients/translate/resources-alterm/sub-title.md": {
+      "checksum": {
+        "md5": "a5a74703bfc5100ca4a43d0fe51faef7"
+      },
+      "mimeType": "text/markdown",
+      "size": 67
+    },
+    "ingredients/translate/resources-alterm/title.md": {
+      "checksum": {
+        "md5": "dc3fccc726e9df347b4066e8d897daf2"
+      },
+      "mimeType": "text/markdown",
+      "size": 34
+    },
+    "ingredients/translate/resources-clarify/01.md": {
+      "checksum": {
+        "md5": "7ddd1397410de94e793de1eb9cdd43ae"
+      },
+      "mimeType": "text/markdown",
+      "size": 1290
+    },
+    "ingredients/translate/resources-clarify/sub-title.md": {
+      "checksum": {
+        "md5": "30d7c5952a27c8376c47710222ebc1ac"
+      },
+      "mimeType": "text/markdown",
+      "size": 54
+    },
+    "ingredients/translate/resources-clarify/title.md": {
+      "checksum": {
+        "md5": "755cf31d76e53735e2de6dad53d36f30"
+      },
+      "mimeType": "text/markdown",
+      "size": 38
+    },
+    "ingredients/translate/resources-connect/01.md": {
+      "checksum": {
+        "md5": "92a10bd175afa8c3587af3e18a1b6b9c"
+      },
+      "mimeType": "text/markdown",
+      "size": 4582
+    },
+    "ingredients/translate/resources-connect/sub-title.md": {
+      "checksum": {
+        "md5": "e5afc533da576058a2ba34d8042fc6db"
+      },
+      "mimeType": "text/markdown",
+      "size": 68
+    },
+    "ingredients/translate/resources-connect/title.md": {
+      "checksum": {
+        "md5": "17b2504aa17180d14078b8926056b469"
+      },
+      "mimeType": "text/markdown",
+      "size": 57
+    },
+    "ingredients/translate/resources-def/01.md": {
+      "checksum": {
+        "md5": "03dd6b58382e2cd2265ae0450d48f09a"
+      },
+      "mimeType": "text/markdown",
+      "size": 1202
+    },
+    "ingredients/translate/resources-def/sub-title.md": {
+      "checksum": {
+        "md5": "f557852c0eb9d4e52adf08a280f710b7"
+      },
+      "mimeType": "text/markdown",
+      "size": 77
+    },
+    "ingredients/translate/resources-def/title.md": {
+      "checksum": {
+        "md5": "96ab5294745754dfc4907a8c5ef61c95"
+      },
+      "mimeType": "text/markdown",
+      "size": 22
+    },
+    "ingredients/translate/resources-eplain/01.md": {
+      "checksum": {
+        "md5": "658b596054139a541656b932c795dc26"
+      },
+      "mimeType": "text/markdown",
+      "size": 1841
+    },
+    "ingredients/translate/resources-eplain/sub-title.md": {
+      "checksum": {
+        "md5": "30337aeef83736d3373dba0120b5cdb7"
+      },
+      "mimeType": "text/markdown",
+      "size": 79
+    },
+    "ingredients/translate/resources-eplain/title.md": {
+      "checksum": {
+        "md5": "23ee9523e9b5f2ffcd045662c047c59c"
+      },
+      "mimeType": "text/markdown",
+      "size": 18
+    },
+    "ingredients/translate/resources-fofs/01.md": {
+      "checksum": {
+        "md5": "728da1a36cf65f33098d2ab133063c18"
+      },
+      "mimeType": "text/markdown",
+      "size": 2651
+    },
+    "ingredients/translate/resources-fofs/sub-title.md": {
+      "checksum": {
+        "md5": "680000686112763885af83b70a239a9e"
+      },
+      "mimeType": "text/markdown",
+      "size": 67
+    },
+    "ingredients/translate/resources-fofs/title.md": {
+      "checksum": {
+        "md5": "d945a47be884d07f503881a3e562fea3"
+      },
+      "mimeType": "text/markdown",
+      "size": 37
+    },
+    "ingredients/translate/resources-iordquote/01.md": {
+      "checksum": {
+        "md5": "3d7b00ed589c581904ee36cfa9e563fa"
+      },
+      "mimeType": "text/markdown",
+      "size": 2498
+    },
+    "ingredients/translate/resources-iordquote/sub-title.md": {
+      "checksum": {
+        "md5": "cb5dca639479b40b81d1700e5807a938"
+      },
+      "mimeType": "text/markdown",
+      "size": 71
+    },
+    "ingredients/translate/resources-iordquote/title.md": {
+      "checksum": {
+        "md5": "99fa039428fe8ee889b5286f346a781c"
+      },
+      "mimeType": "text/markdown",
+      "size": 46
+    },
+    "ingredients/translate/resources-links/01.md": {
+      "checksum": {
+        "md5": "fe189f1c7c31f99fa0ce17da61afbd8b"
+      },
+      "mimeType": "text/markdown",
+      "size": 3281
+    },
+    "ingredients/translate/resources-links/sub-title.md": {
+      "checksum": {
+        "md5": "0907b2c0a057c1182192b668abca2984"
+      },
+      "mimeType": "text/markdown",
+      "size": 51
+    },
+    "ingredients/translate/resources-links/title.md": {
+      "checksum": {
+        "md5": "cc6c5b34b65d8289b3e24cb413cf9c0a"
+      },
+      "mimeType": "text/markdown",
+      "size": 16
+    },
+    "ingredients/translate/resources-long/01.md": {
+      "checksum": {
+        "md5": "54678f13f78211207699bfabf98fb7c4"
+      },
+      "mimeType": "text/markdown",
+      "size": 1013
+    },
+    "ingredients/translate/resources-long/sub-title.md": {
+      "checksum": {
+        "md5": "ed1681eebbfcf40998b2b5343fbc3435"
+      },
+      "mimeType": "text/markdown",
+      "size": 60
+    },
+    "ingredients/translate/resources-long/title.md": {
+      "checksum": {
+        "md5": "3fc602038d039328e578c4b08927c536"
+      },
+      "mimeType": "text/markdown",
+      "size": 26
+    },
+    "ingredients/translate/resources-porp/01.md": {
+      "checksum": {
+        "md5": "8f41a0c51602394cfcc385d7a3d82827"
+      },
+      "mimeType": "text/markdown",
+      "size": 1711
+    },
+    "ingredients/translate/resources-porp/sub-title.md": {
+      "checksum": {
+        "md5": "0e7063408ea91616decf6753988feeac"
+      },
+      "mimeType": "text/markdown",
+      "size": 87
+    },
+    "ingredients/translate/resources-porp/title.md": {
+      "checksum": {
+        "md5": "f4600264809dccb0bf49d54d9f1dcc34"
+      },
+      "mimeType": "text/markdown",
+      "size": 40
+    },
+    "ingredients/translate/resources-questions/01.md": {
+      "checksum": {
+        "md5": "1f4c3e73df24a6995a4b69b476417e7b"
+      },
+      "mimeType": "text/markdown",
+      "size": 2875
+    },
+    "ingredients/translate/resources-questions/sub-title.md": {
+      "checksum": {
+        "md5": "ba1be86de8eb51d526664a43a8cdd12a"
+      },
+      "mimeType": "text/markdown",
+      "size": 63
+    },
+    "ingredients/translate/resources-questions/title.md": {
+      "checksum": {
+        "md5": "50dd99546572f79052fdc5993498230d"
+      },
+      "mimeType": "text/markdown",
+      "size": 43
+    },
+    "ingredients/translate/resources-synequi/01.md": {
+      "checksum": {
+        "md5": "38dd17ada1ca6a7f70bd0ddafd9aeafc"
+      },
+      "mimeType": "text/markdown",
+      "size": 1296
+    },
+    "ingredients/translate/resources-synequi/sub-title.md": {
+      "checksum": {
+        "md5": "59c05811985aed43e9d42f207b8c2cd0"
+      },
+      "mimeType": "text/markdown",
+      "size": 92
+    },
+    "ingredients/translate/resources-synequi/title.md": {
+      "checksum": {
+        "md5": "b3e9442a272b6c1db3777ab4fd12030c"
+      },
+      "mimeType": "text/markdown",
+      "size": 42
+    },
+    "ingredients/translate/resources-types/01.md": {
+      "checksum": {
+        "md5": "36b313a61f01c2a20db8882a2a53e051"
+      },
+      "mimeType": "text/markdown",
+      "size": 5485
+    },
+    "ingredients/translate/resources-types/sub-title.md": {
+      "checksum": {
+        "md5": "8a7ddeb8fa4e60c1747c888f9f811cfd"
+      },
+      "mimeType": "text/markdown",
+      "size": 49
+    },
+    "ingredients/translate/resources-types/title.md": {
+      "checksum": {
+        "md5": "dffc18a7b2fec59464216a0c616bf161"
+      },
+      "mimeType": "text/markdown",
+      "size": 43
+    },
+    "ingredients/translate/resources-words/01.md": {
+      "checksum": {
+        "md5": "b32e16aada2728fbf13b550d3f64053c"
+      },
+      "mimeType": "text/markdown",
+      "size": 4051
+    },
+    "ingredients/translate/resources-words/sub-title.md": {
+      "checksum": {
+        "md5": "906b4c5eb6e9dc9b9045bb43f8ec8c58"
+      },
+      "mimeType": "text/markdown",
+      "size": 76
+    },
+    "ingredients/translate/resources-words/title.md": {
+      "checksum": {
+        "md5": "6e16d2bf558d0deae8e0acb48360215c"
+      },
+      "mimeType": "text/markdown",
+      "size": 39
+    },
+    "ingredients/translate/toc.yaml": {
+      "checksum": {
+        "md5": "070c4907d4b8cc9cdf13ac37c3012ba2"
+      },
+      "mimeType": "text/yaml",
+      "size": 15611
+    },
+    "ingredients/translate/translate-aim/01.md": {
+      "checksum": {
+        "md5": "a233465da8856af58bb335d5c07aa263"
+      },
+      "mimeType": "text/markdown",
+      "size": 5570
+    },
+    "ingredients/translate/translate-aim/sub-title.md": {
+      "checksum": {
+        "md5": "7be84e8ac67ab09c247a0b5bac630094"
+      },
+      "mimeType": "text/markdown",
+      "size": 52
+    },
+    "ingredients/translate/translate-aim/title.md": {
+      "checksum": {
+        "md5": "c08fee3f0925006e8acddb16010008b9"
+      },
+      "mimeType": "text/markdown",
+      "size": 33
+    },
+    "ingredients/translate/translate-alphabet/01.md": {
+      "checksum": {
+        "md5": "a9fe9ca7af6a5fb96bd8d7f686380870"
+      },
+      "mimeType": "text/markdown",
+      "size": 3929
+    },
+    "ingredients/translate/translate-alphabet/sub-title.md": {
+      "checksum": {
+        "md5": "7a046b8189a9f50b2d1a4d05b882b831"
+      },
+      "mimeType": "text/markdown",
+      "size": 45
+    },
+    "ingredients/translate/translate-alphabet/title.md": {
+      "checksum": {
+        "md5": "09bb62240dd8db2c6552467cb996adfd"
+      },
+      "mimeType": "text/markdown",
+      "size": 20
+    },
+    "ingredients/translate/translate-alphabet2/01.md": {
+      "checksum": {
+        "md5": "18929178f735431c12fcf20610d6a10f"
+      },
+      "mimeType": "text/markdown",
+      "size": 7221
+    },
+    "ingredients/translate/translate-alphabet2/sub-title.md": {
+      "checksum": {
+        "md5": "153cf76cc7cba876978faab0fb767e1f"
+      },
+      "mimeType": "text/markdown",
+      "size": 30
+    },
+    "ingredients/translate/translate-alphabet2/title.md": {
+      "checksum": {
+        "md5": "f6e35b556d1ddc426665349e89fe3b1e"
+      },
+      "mimeType": "text/markdown",
+      "size": 20
+    },
+    "ingredients/translate/translate-bdistance/01.md": {
+      "checksum": {
+        "md5": "ce4c79079bc19c07cffd7d2487f534a1"
+      },
+      "mimeType": "text/markdown",
+      "size": 6128
+    },
+    "ingredients/translate/translate-bdistance/sub-title.md": {
+      "checksum": {
+        "md5": "06a92a2b17c58574edb7f3488182379d"
+      },
+      "mimeType": "text/markdown",
+      "size": 68
+    },
+    "ingredients/translate/translate-bdistance/title.md": {
+      "checksum": {
+        "md5": "afb049043b83529a2ee64e402e6d03d2"
+      },
+      "mimeType": "text/markdown",
+      "size": 17
+    },
+    "ingredients/translate/translate-bibleorg/01.md": {
+      "checksum": {
+        "md5": "6f203b0a127cd9d4ce1c035eda9e7758"
+      },
+      "mimeType": "text/markdown",
+      "size": 2260
+    },
+    "ingredients/translate/translate-bibleorg/sub-title.md": {
+      "checksum": {
+        "md5": "7469bd45bbfa8284cb520e9c1a417661"
+      },
+      "mimeType": "text/markdown",
+      "size": 27
+    },
+    "ingredients/translate/translate-bibleorg/title.md": {
+      "checksum": {
+        "md5": "01751250777f7e9e57a3f5346ed73d53"
+      },
+      "mimeType": "text/markdown",
+      "size": 22
+    },
+    "ingredients/translate/translate-blessing/01.md": {
+      "checksum": {
+        "md5": "043f0fb9b736a3f8b828dc2304fcc1d7"
+      },
+      "mimeType": "text/markdown",
+      "size": 4949
+    },
+    "ingredients/translate/translate-blessing/sub-title.md": {
+      "checksum": {
+        "md5": "11607e43a5405737d9e647446f0f070b"
+      },
+      "mimeType": "text/markdown",
+      "size": 49
+    },
+    "ingredients/translate/translate-blessing/title.md": {
+      "checksum": {
+        "md5": "c1e1720c794250f5f1eeec1221d407e4"
+      },
+      "mimeType": "text/markdown",
+      "size": 9
+    },
+    "ingredients/translate/translate-bmoney/01.md": {
+      "checksum": {
+        "md5": "ef9a1fc756fe86069d71fd44044af125"
+      },
+      "mimeType": "text/markdown",
+      "size": 3362
+    },
+    "ingredients/translate/translate-bmoney/sub-title.md": {
+      "checksum": {
+        "md5": "3cd3c6f32093baad14cf6015367a5d70"
+      },
+      "mimeType": "text/markdown",
+      "size": 53
+    },
+    "ingredients/translate/translate-bmoney/title.md": {
+      "checksum": {
+        "md5": "65035e2c064f03ea5438dfcdb262d85b"
+      },
+      "mimeType": "text/markdown",
+      "size": 14
+    },
+    "ingredients/translate/translate-bvolume/01.md": {
+      "checksum": {
+        "md5": "524f463312fcd0894451f591b35b8bb2"
+      },
+      "mimeType": "text/markdown",
+      "size": 7044
+    },
+    "ingredients/translate/translate-bvolume/sub-title.md": {
+      "checksum": {
+        "md5": "2483d55a87c7e233ba1c3656edcf81c9"
+      },
+      "mimeType": "text/markdown",
+      "size": 65
+    },
+    "ingredients/translate/translate-bvolume/title.md": {
+      "checksum": {
+        "md5": "d2f9645e8a5bea5e0aca14371ca06ce9"
+      },
+      "mimeType": "text/markdown",
+      "size": 15
+    },
+    "ingredients/translate/translate-bweight/01.md": {
+      "checksum": {
+        "md5": "9922e60419d188eed06346efcf12002d"
+      },
+      "mimeType": "text/markdown",
+      "size": 4661
+    },
+    "ingredients/translate/translate-bweight/sub-title.md": {
+      "checksum": {
+        "md5": "01185801b5118235cba4ccfc0574cd40"
+      },
+      "mimeType": "text/markdown",
+      "size": 54
+    },
+    "ingredients/translate/translate-bweight/title.md": {
+      "checksum": {
+        "md5": "bc33c8b278a582526edd10fa6053c21d"
+      },
+      "mimeType": "text/markdown",
+      "size": 15
+    },
+    "ingredients/translate/translate-chapverse/01.md": {
+      "checksum": {
+        "md5": "c1369466223d7b44b0f5ce111a6c795e"
+      },
+      "mimeType": "text/markdown",
+      "size": 3492
+    },
+    "ingredients/translate/translate-chapverse/sub-title.md": {
+      "checksum": {
+        "md5": "9bdc68483da46a4502783e2039043b3c"
+      },
+      "mimeType": "text/markdown",
+      "size": 85
+    },
+    "ingredients/translate/translate-chapverse/title.md": {
+      "checksum": {
+        "md5": "cc678ec7c8d6885bd434988fa33ec9de"
+      },
+      "mimeType": "text/markdown",
+      "size": 25
+    },
+    "ingredients/translate/translate-discover/01.md": {
+      "checksum": {
+        "md5": "b210455a30b25e45503f8a53faeb03fd"
+      },
+      "mimeType": "text/markdown",
+      "size": 1582
+    },
+    "ingredients/translate/translate-discover/sub-title.md": {
+      "checksum": {
+        "md5": "fa6876d2da5e583781d8580032908a0e"
+      },
+      "mimeType": "text/markdown",
+      "size": 42
+    },
+    "ingredients/translate/translate-discover/title.md": {
+      "checksum": {
+        "md5": "1d326ac3f0933c48a565459953070831"
+      },
+      "mimeType": "text/markdown",
+      "size": 32
+    },
+    "ingredients/translate/translate-dynamic/01.md": {
+      "checksum": {
+        "md5": "19f4f8d9500a98f313b31e3733348aad"
+      },
+      "mimeType": "text/markdown",
+      "size": 4227
+    },
+    "ingredients/translate/translate-dynamic/sub-title.md": {
+      "checksum": {
+        "md5": "9188c99cd86e27bf6faf62a764da8a0d"
+      },
+      "mimeType": "text/markdown",
+      "size": 36
+    },
+    "ingredients/translate/translate-dynamic/title.md": {
+      "checksum": {
+        "md5": "6a73c47006c0b014d797cdaa01cf6660"
+      },
+      "mimeType": "text/markdown",
+      "size": 26
+    },
+    "ingredients/translate/translate-fandm/01.md": {
+      "checksum": {
+        "md5": "49db081309774620944fe79d70f661fa"
+      },
+      "mimeType": "text/markdown",
+      "size": 2592
+    },
+    "ingredients/translate/translate-fandm/sub-title.md": {
+      "checksum": {
+        "md5": "970091c5bbf533831c4c63c5c9597d24"
+      },
+      "mimeType": "text/markdown",
+      "size": 25
+    },
+    "ingredients/translate/translate-fandm/title.md": {
+      "checksum": {
+        "md5": "1ed5c3f66febaf0cdab8c38fb01aa50a"
+      },
+      "mimeType": "text/markdown",
+      "size": 16
+    },
+    "ingredients/translate/translate-form/01.md": {
+      "checksum": {
+        "md5": "5d561f7b512b2800ebd35310ecaefcca"
+      },
+      "mimeType": "text/markdown",
+      "size": 4249
+    },
+    "ingredients/translate/translate-form/sub-title.md": {
+      "checksum": {
+        "md5": "b130e6a43d965409aa8377baafac4c56"
+      },
+      "mimeType": "text/markdown",
+      "size": 31
+    },
+    "ingredients/translate/translate-form/title.md": {
+      "checksum": {
+        "md5": "0d6683fb8d5b5c2c12d91c51c029f9d0"
+      },
+      "mimeType": "text/markdown",
+      "size": 22
+    },
+    "ingredients/translate/translate-formatsignals/01.md": {
+      "checksum": {
+        "md5": "43405d5c0c12bf16b1c0177c021b9072"
+      },
+      "mimeType": "text/markdown",
+      "size": 3948
+    },
+    "ingredients/translate/translate-formatsignals/sub-title.md": {
+      "checksum": {
+        "md5": "c578f7d1bd8f060edaab537e12bbe3ea"
+      },
+      "mimeType": "text/markdown",
+      "size": 63
+    },
+    "ingredients/translate/translate-formatsignals/title.md": {
+      "checksum": {
+        "md5": "4d52d4a0214c7c1627753ccc31a3fb3c"
+      },
+      "mimeType": "text/markdown",
+      "size": 95
+    },
+    "ingredients/translate/translate-fraction/01.md": {
+      "checksum": {
+        "md5": "800c401834c3f5eb0ed8bc8eb3277367"
+      },
+      "mimeType": "text/markdown",
+      "size": 4638
+    },
+    "ingredients/translate/translate-fraction/sub-title.md": {
+      "checksum": {
+        "md5": "e2ea9037dae15ed9d891e8ebc83fa495"
+      },
+      "mimeType": "text/markdown",
+      "size": 48
+    },
+    "ingredients/translate/translate-fraction/title.md": {
+      "checksum": {
+        "md5": "8792ff634112e24779ab9149341a4ba1"
+      },
+      "mimeType": "text/markdown",
+      "size": 9
+    },
+    "ingredients/translate/translate-hebrewmonths/01.md": {
+      "checksum": {
+        "md5": "d0799766468a91ef4364b858041e0661"
+      },
+      "mimeType": "text/markdown",
+      "size": 6414
+    },
+    "ingredients/translate/translate-hebrewmonths/sub-title.md": {
+      "checksum": {
+        "md5": "0fce992ca5b189035e9b2d83a4a793e7"
+      },
+      "mimeType": "text/markdown",
+      "size": 27
+    },
+    "ingredients/translate/translate-hebrewmonths/title.md": {
+      "checksum": {
+        "md5": "59e3a5856cf003f7ce3271ef46cc44e9"
+      },
+      "mimeType": "text/markdown",
+      "size": 13
+    },
+    "ingredients/translate/translate-help/01.md": {
+      "checksum": {
+        "md5": "9d8210eeec7f5f8542b57fd76be16772"
+      },
+      "mimeType": "text/markdown",
+      "size": 1847
+    },
+    "ingredients/translate/translate-help/sub-title.md": {
+      "checksum": {
+        "md5": "0df964444fc8d0812964fdfb6460e265"
+      },
+      "mimeType": "text/markdown",
+      "size": 37
+    },
+    "ingredients/translate/translate-help/title.md": {
+      "checksum": {
+        "md5": "291caabd4f75e10934d80237baa6a6a3"
+      },
+      "mimeType": "text/markdown",
+      "size": 21
+    },
+    "ingredients/translate/translate-key-terms/01.md": {
+      "checksum": {
+        "md5": "8701e56ba08581942e99ca1444912d54"
+      },
+      "mimeType": "text/markdown",
+      "size": 2099
+    },
+    "ingredients/translate/translate-key-terms/sub-title.md": {
+      "checksum": {
+        "md5": "2f9e746b0f2a953bcbbac1c175f7268a"
+      },
+      "mimeType": "text/markdown",
+      "size": 38
+    },
+    "ingredients/translate/translate-key-terms/title.md": {
+      "checksum": {
+        "md5": "2dc4b81d76e999246912c6f45d636e37"
+      },
+      "mimeType": "text/markdown",
+      "size": 30
+    },
+    "ingredients/translate/translate-kinship/01.md": {
+      "checksum": {
+        "md5": "b485e155d8a63ca5b763fa054da6ba93"
+      },
+      "mimeType": "text/markdown",
+      "size": 5392
+    },
+    "ingredients/translate/translate-kinship/sub-title.md": {
+      "checksum": {
+        "md5": "0d3641b718e0e98b0339bf8007342eb4"
+      },
+      "mimeType": "text/markdown",
+      "size": 52
+    },
+    "ingredients/translate/translate-kinship/title.md": {
+      "checksum": {
+        "md5": "bc16dc52792fec33626fa729f6f0df21"
+      },
+      "mimeType": "text/markdown",
+      "size": 7
+    },
+    "ingredients/translate/translate-levels/01.md": {
+      "checksum": {
+        "md5": "afaf8ee97ad8d9ddc6d39488124a3ca5"
+      },
+      "mimeType": "text/markdown",
+      "size": 1639
+    },
+    "ingredients/translate/translate-levels/sub-title.md": {
+      "checksum": {
+        "md5": "d65395af2e25b68c2dc4f45fede0e991"
+      },
+      "mimeType": "text/markdown",
+      "size": 31
+    },
+    "ingredients/translate/translate-levels/title.md": {
+      "checksum": {
+        "md5": "46b75b9f48c2948e91d6d564c6d77688"
+      },
+      "mimeType": "text/markdown",
+      "size": 17
+    },
+    "ingredients/translate/translate-literal/01.md": {
+      "checksum": {
+        "md5": "d1f15d4f0a51fcd1ea5a32bd3d3af5cd"
+      },
+      "mimeType": "text/markdown",
+      "size": 2602
+    },
+    "ingredients/translate/translate-literal/sub-title.md": {
+      "checksum": {
+        "md5": "f51889cbc371affbb533810ca4d0be4c"
+      },
+      "mimeType": "text/markdown",
+      "size": 30
+    },
+    "ingredients/translate/translate-literal/title.md": {
+      "checksum": {
+        "md5": "6eb166f7ff56042c1bd505a7cb99d62d"
+      },
+      "mimeType": "text/markdown",
+      "size": 20
+    },
+    "ingredients/translate/translate-manual/01.md": {
+      "checksum": {
+        "md5": "60fb336208e79c99ffb6fb4efe87e968"
+      },
+      "mimeType": "text/markdown",
+      "size": 1077
+    },
+    "ingredients/translate/translate-manual/sub-title.md": {
+      "checksum": {
+        "md5": "96f583cc7e055214507bd1719f37a9ab"
+      },
+      "mimeType": "text/markdown",
+      "size": 31
+    },
+    "ingredients/translate/translate-manual/title.md": {
+      "checksum": {
+        "md5": "3790a6da7c0803a0909b3d085f09fdeb"
+      },
+      "mimeType": "text/markdown",
+      "size": 38
+    },
+    "ingredients/translate/translate-manuscripts/01.md": {
+      "checksum": {
+        "md5": "32bd5aa1d65ac50ecd2b6ba292022876"
+      },
+      "mimeType": "text/markdown",
+      "size": 1481
+    },
+    "ingredients/translate/translate-manuscripts/sub-title.md": {
+      "checksum": {
+        "md5": "318bc579a52967190e51fd0270d8499a"
+      },
+      "mimeType": "text/markdown",
+      "size": 59
+    },
+    "ingredients/translate/translate-manuscripts/title.md": {
+      "checksum": {
+        "md5": "d912b27e81a3035eb31d3442455e6a7c"
+      },
+      "mimeType": "text/markdown",
+      "size": 20
+    },
+    "ingredients/translate/translate-more/01.md": {
+      "checksum": {
+        "md5": "c94b9ed43098c5ed062f0f07f7e4f9c3"
+      },
+      "mimeType": "text/markdown",
+      "size": 3216
+    },
+    "ingredients/translate/translate-more/sub-title.md": {
+      "checksum": {
+        "md5": "fe7aeaca5b1140cddad7383b921c7136"
+      },
+      "mimeType": "text/markdown",
+      "size": 42
+    },
+    "ingredients/translate/translate-more/title.md": {
+      "checksum": {
+        "md5": "adaf2a3f1816ce3560b1f146e7f34375"
+      },
+      "mimeType": "text/markdown",
+      "size": 22
+    },
+    "ingredients/translate/translate-names/01.md": {
+      "checksum": {
+        "md5": "0e3ae6285eca1b49e81c58a6b566553c"
+      },
+      "mimeType": "text/markdown",
+      "size": 8144
+    },
+    "ingredients/translate/translate-names/sub-title.md": {
+      "checksum": {
+        "md5": "fa73339be52486f49dc68e654e5d8e43"
+      },
+      "mimeType": "text/markdown",
+      "size": 53
+    },
+    "ingredients/translate/translate-names/title.md": {
+      "checksum": {
+        "md5": "4b7424af7c961328aba8d9e28d016a34"
+      },
+      "mimeType": "text/markdown",
+      "size": 22
+    },
+    "ingredients/translate/translate-numbers/01.md": {
+      "checksum": {
+        "md5": "313c3dc05b65bd40355167a40e9e30bf"
+      },
+      "mimeType": "text/markdown",
+      "size": 4865
+    },
+    "ingredients/translate/translate-numbers/sub-title.md": {
+      "checksum": {
+        "md5": "8a9a6e4c3d2851c2eab33ae9853f98e0"
+      },
+      "mimeType": "text/markdown",
+      "size": 27
+    },
+    "ingredients/translate/translate-numbers/title.md": {
+      "checksum": {
+        "md5": "cbebfa21dbe8e87e788d94a76f073807"
+      },
+      "mimeType": "text/markdown",
+      "size": 7
+    },
+    "ingredients/translate/translate-ordinal/01.md": {
+      "checksum": {
+        "md5": "fe5659b30beeb061bca3f5df3675046f"
+      },
+      "mimeType": "text/markdown",
+      "size": 4394
+    },
+    "ingredients/translate/translate-ordinal/sub-title.md": {
+      "checksum": {
+        "md5": "7caae566e9720a6bf28239d0c45342a9"
+      },
+      "mimeType": "text/markdown",
+      "size": 54
+    },
+    "ingredients/translate/translate-ordinal/title.md": {
+      "checksum": {
+        "md5": "c294911e71d2b6559b838b8eb3a9e86a"
+      },
+      "mimeType": "text/markdown",
+      "size": 15
+    },
+    "ingredients/translate/translate-original/01.md": {
+      "checksum": {
+        "md5": "bccce2cff0dd23896e36eb4128fc3068"
+      },
+      "mimeType": "text/markdown",
+      "size": 3007
+    },
+    "ingredients/translate/translate-original/sub-title.md": {
+      "checksum": {
+        "md5": "5e57a3b6a5a610937dab27b790baa93f"
+      },
+      "mimeType": "text/markdown",
+      "size": 77
+    },
+    "ingredients/translate/translate-original/title.md": {
+      "checksum": {
+        "md5": "d0e1bf1702d2a6d700b15870df774e04"
+      },
+      "mimeType": "text/markdown",
+      "size": 33
+    },
+    "ingredients/translate/translate-plural/01.md": {
+      "checksum": {
+        "md5": "256a7fd840034c32c1186a93cbf7d286"
+      },
+      "mimeType": "text/markdown",
+      "size": 3791
+    },
+    "ingredients/translate/translate-plural/sub-title.md": {
+      "checksum": {
+        "md5": "db37737cd99d3c48f034168c921e940f"
+      },
+      "mimeType": "text/markdown",
+      "size": 70
+    },
+    "ingredients/translate/translate-plural/title.md": {
+      "checksum": {
+        "md5": "a0cf76fbcbab340f53f6bb6c8203d2c9"
+      },
+      "mimeType": "text/markdown",
+      "size": 26
+    },
+    "ingredients/translate/translate-problem/01.md": {
+      "checksum": {
+        "md5": "05c88067dc672f7f89372cabb658b81a"
+      },
+      "mimeType": "text/markdown",
+      "size": 2997
+    },
+    "ingredients/translate/translate-problem/sub-title.md": {
+      "checksum": {
+        "md5": "d8c3b946963732152b1715303816260b"
+      },
+      "mimeType": "text/markdown",
+      "size": 65
+    },
+    "ingredients/translate/translate-problem/title.md": {
+      "checksum": {
+        "md5": "c36272427f5f9d4a67eec3bb5ee7589a"
+      },
+      "mimeType": "text/markdown",
+      "size": 34
+    },
+    "ingredients/translate/translate-process/01.md": {
+      "checksum": {
+        "md5": "48e53bca340b876ecaa7b917ae37a733"
+      },
+      "mimeType": "text/markdown",
+      "size": 558
+    },
+    "ingredients/translate/translate-process/sub-title.md": {
+      "checksum": {
+        "md5": "d3e644441397a9ac371eff49f6a3dfb1"
+      },
+      "mimeType": "text/markdown",
+      "size": 38
+    },
+    "ingredients/translate/translate-process/title.md": {
+      "checksum": {
+        "md5": "2bac19d507f9c08fc47c19073a1d8c5c"
+      },
+      "mimeType": "text/markdown",
+      "size": 23
+    },
+    "ingredients/translate/translate-retell/01.md": {
+      "checksum": {
+        "md5": "af23b24ed285ba822023a31175bb9185"
+      },
+      "mimeType": "text/markdown",
+      "size": 1858
+    },
+    "ingredients/translate/translate-retell/sub-title.md": {
+      "checksum": {
+        "md5": "fff3e02db26949901058090e33354b75"
+      },
+      "mimeType": "text/markdown",
+      "size": 29
+    },
+    "ingredients/translate/translate-retell/title.md": {
+      "checksum": {
+        "md5": "9bd46537996fb439889307001178e225"
+      },
+      "mimeType": "text/markdown",
+      "size": 22
+    },
+    "ingredients/translate/translate-source-licensing/01.md": {
+      "checksum": {
+        "md5": "ed56d31e393ef2faa5908a519d97b198"
+      },
+      "mimeType": "text/markdown",
+      "size": 2589
+    },
+    "ingredients/translate/translate-source-licensing/sub-title.md": {
+      "checksum": {
+        "md5": "0da4ffc823fb890df8cbc383352eda8e"
+      },
+      "mimeType": "text/markdown",
+      "size": 88
+    },
+    "ingredients/translate/translate-source-licensing/title.md": {
+      "checksum": {
+        "md5": "af0e9b919cf31041e69bee029ef5a3c0"
+      },
+      "mimeType": "text/markdown",
+      "size": 39
+    },
+    "ingredients/translate/translate-source-text/01.md": {
+      "checksum": {
+        "md5": "4361299f3744b39f8e616633cdc9b26d"
+      },
+      "mimeType": "text/markdown",
+      "size": 2015
+    },
+    "ingredients/translate/translate-source-text/sub-title.md": {
+      "checksum": {
+        "md5": "8bda08ea03b5fefb9c18194246bf67b5"
+      },
+      "mimeType": "text/markdown",
+      "size": 62
+    },
+    "ingredients/translate/translate-source-text/title.md": {
+      "checksum": {
+        "md5": "775a6f64d5d2b589efd1e5ddaa661b08"
+      },
+      "mimeType": "text/markdown",
+      "size": 22
+    },
+    "ingredients/translate/translate-source-version/01.md": {
+      "checksum": {
+        "md5": "9d7f6729fb70de707ce2d6ed000ce01f"
+      },
+      "mimeType": "text/markdown",
+      "size": 2029
+    },
+    "ingredients/translate/translate-source-version/sub-title.md": {
+      "checksum": {
+        "md5": "fc09f007901dfdb19305841907a15b56"
+      },
+      "mimeType": "text/markdown",
+      "size": 53
+    },
+    "ingredients/translate/translate-source-version/title.md": {
+      "checksum": {
+        "md5": "09ba3de222f313bd891769611098c55e"
+      },
+      "mimeType": "text/markdown",
+      "size": 32
+    },
+    "ingredients/translate/translate-symaction/01.md": {
+      "checksum": {
+        "md5": "4e5094191f7df8f079f2ab6a3833b413"
+      },
+      "mimeType": "text/markdown",
+      "size": 3733
+    },
+    "ingredients/translate/translate-symaction/sub-title.md": {
+      "checksum": {
+        "md5": "c100d180166fa5368fb4fecbfdf5d0a7"
+      },
+      "mimeType": "text/markdown",
+      "size": 52
+    },
+    "ingredients/translate/translate-symaction/title.md": {
+      "checksum": {
+        "md5": "063e24133ce3404ca8dc42379bc0002e"
+      },
+      "mimeType": "text/markdown",
+      "size": 15
+    },
+    "ingredients/translate/translate-tense/01.md": {
+      "checksum": {
+        "md5": "760e26c6d2f625c9bcf86e76ac3dd840"
+      },
+      "mimeType": "text/markdown",
+      "size": 8126
+    },
+    "ingredients/translate/translate-tense/sub-title.md": {
+      "checksum": {
+        "md5": "7b9905efaec801f403a32d724c9bf1cb"
+      },
+      "mimeType": "text/markdown",
+      "size": 46
+    },
+    "ingredients/translate/translate-tense/title.md": {
+      "checksum": {
+        "md5": "63083dabea6d8856b3710f98b336ab9f"
+      },
+      "mimeType": "text/markdown",
+      "size": 23
+    },
+    "ingredients/translate/translate-terms/01.md": {
+      "checksum": {
+        "md5": "330e8b8a8ff90d9cbe0b9a7c805d5a94"
+      },
+      "mimeType": "text/markdown",
+      "size": 6906
+    },
+    "ingredients/translate/translate-terms/sub-title.md": {
+      "checksum": {
+        "md5": "34945e6866f02208a724e4b5dc2e99ed"
+      },
+      "mimeType": "text/markdown",
+      "size": 25
+    },
+    "ingredients/translate/translate-terms/title.md": {
+      "checksum": {
+        "md5": "cd1c62ed73ae7fc38803a9b8f4d8c2bf"
+      },
+      "mimeType": "text/markdown",
+      "size": 13
+    },
+    "ingredients/translate/translate-textvariants/01.md": {
+      "checksum": {
+        "md5": "581010bd5fa0d4a9176e7a58ab5fcd57"
+      },
+      "mimeType": "text/markdown",
+      "size": 4374
+    },
+    "ingredients/translate/translate-textvariants/sub-title.md": {
+      "checksum": {
+        "md5": "287469b6fa4c4a9e6872f4b5d214338b"
+      },
+      "mimeType": "text/markdown",
+      "size": 75
+    },
+    "ingredients/translate/translate-textvariants/title.md": {
+      "checksum": {
+        "md5": "35c671f04c98c1d7d0a25b0603b43783"
+      },
+      "mimeType": "text/markdown",
+      "size": 16
+    },
+    "ingredients/translate/translate-tform/01.md": {
+      "checksum": {
+        "md5": "8c35acbb562acdede81d066376031ae3"
+      },
+      "mimeType": "text/markdown",
+      "size": 1712
+    },
+    "ingredients/translate/translate-tform/sub-title.md": {
+      "checksum": {
+        "md5": "c551b0c5bd2575d47f341f59f1b267b5"
+      },
+      "mimeType": "text/markdown",
+      "size": 35
+    },
+    "ingredients/translate/translate-tform/title.md": {
+      "checksum": {
+        "md5": "671bec84c44d5ae39471e3a035e99ada"
+      },
+      "mimeType": "text/markdown",
+      "size": 21
+    },
+    "ingredients/translate/translate-transliterate/01.md": {
+      "checksum": {
+        "md5": "8d3a93904fc7d61badb3fea7532d4f4b"
+      },
+      "mimeType": "text/markdown",
+      "size": 3727
+    },
+    "ingredients/translate/translate-transliterate/sub-title.md": {
+      "checksum": {
+        "md5": "4bfe9a483a1b25a96553d3f2d48a6b94"
+      },
+      "mimeType": "text/markdown",
+      "size": 76
+    },
+    "ingredients/translate/translate-transliterate/title.md": {
+      "checksum": {
+        "md5": "d528f7ff5f770b3868d81055a949bda4"
+      },
+      "mimeType": "text/markdown",
+      "size": 20
+    },
+    "ingredients/translate/translate-unknown/01.md": {
+      "checksum": {
+        "md5": "7e72c87668cc841b2bd3637f2f42166d"
+      },
+      "mimeType": "text/markdown",
+      "size": 5894
+    },
+    "ingredients/translate/translate-unknown/sub-title.md": {
+      "checksum": {
+        "md5": "00b04d96308a396b2b3f202ec519d6c2"
+      },
+      "mimeType": "text/markdown",
+      "size": 64
+    },
+    "ingredients/translate/translate-unknown/title.md": {
+      "checksum": {
+        "md5": "6c20e637a8de2876a27992e8b87b5fbc"
+      },
+      "mimeType": "text/markdown",
+      "size": 18
+    },
+    "ingredients/translate/translate-useultust/01.md": {
+      "checksum": {
+        "md5": "d6f5a0daaa3265225799b3d6d47a6876"
+      },
+      "mimeType": "text/markdown",
+      "size": 10496
+    },
+    "ingredients/translate/translate-useultust/sub-title.md": {
+      "checksum": {
+        "md5": "d10ebc2cb3a85fb17d626dc5ef3305f7"
+      },
+      "mimeType": "text/markdown",
+      "size": 69
+    },
+    "ingredients/translate/translate-useultust/title.md": {
+      "checksum": {
+        "md5": "2e6ac3015c2bd57f32ca95b2a5abbac6"
+      },
+      "mimeType": "text/markdown",
+      "size": 53
+    },
+    "ingredients/translate/translate-versebridge/01.md": {
+      "checksum": {
+        "md5": "4ee0f534c03946e3efb0581723ac594f"
+      },
+      "mimeType": "text/markdown",
+      "size": 3774
+    },
+    "ingredients/translate/translate-versebridge/sub-title.md": {
+      "checksum": {
+        "md5": "da84e9990fc0787d961edf03eeb8b337"
+      },
+      "mimeType": "text/markdown",
+      "size": 81
+    },
+    "ingredients/translate/translate-versebridge/title.md": {
+      "checksum": {
+        "md5": "146ee50a865070b3ad74cf4fdc27ee04"
+      },
+      "mimeType": "text/markdown",
+      "size": 13
+    },
+    "ingredients/translate/translate-wforw/01.md": {
+      "checksum": {
+        "md5": "698ecd122c9ff51a3ca3efc4fa062db9"
+      },
+      "mimeType": "text/markdown",
+      "size": 4088
+    },
+    "ingredients/translate/translate-wforw/sub-title.md": {
+      "checksum": {
+        "md5": "f8fc7bf4e72a8633e86c29511bfb6e01"
+      },
+      "mimeType": "text/markdown",
+      "size": 60
+    },
+    "ingredients/translate/translate-wforw/title.md": {
+      "checksum": {
+        "md5": "6fbd0ae8a3468a9a7b97e60fe7e8dc05"
+      },
+      "mimeType": "text/markdown",
+      "size": 26
+    },
+    "ingredients/translate/translate-whatis/01.md": {
+      "checksum": {
+        "md5": "9d83c2edc0dac08f2394aee5bf69da2b"
+      },
+      "mimeType": "text/markdown",
+      "size": 2013
+    },
+    "ingredients/translate/translate-whatis/sub-title.md": {
+      "checksum": {
+        "md5": "9fdb25a7cd521775b1bb208704246fe7"
+      },
+      "mimeType": "text/markdown",
+      "size": 20
+    },
+    "ingredients/translate/translate-whatis/title.md": {
+      "checksum": {
+        "md5": "1d6b191c281c0d601f95fbda7dbf26a4"
+      },
+      "mimeType": "text/markdown",
+      "size": 19
+    },
+    "ingredients/translate/translation-difficulty/01.md": {
+      "checksum": {
+        "md5": "b5ed41730843c6e77dd1882626ea697c"
+      },
+      "mimeType": "text/markdown",
+      "size": 5096
+    },
+    "ingredients/translate/translation-difficulty/sub-title.md": {
+      "checksum": {
+        "md5": "523597f2905085bfe438eab34cd042b3"
+      },
+      "mimeType": "text/markdown",
+      "size": 30
+    },
+    "ingredients/translate/translation-difficulty/title.md": {
+      "checksum": {
+        "md5": "4a125785605b7101d341939d6038cc96"
+      },
+      "mimeType": "text/markdown",
+      "size": 26
+    },
+    "ingredients/translate/writing-apocalyptic/01.md": {
+      "checksum": {
+        "md5": "8b79b46709ff2f574ef11703adfdfd26"
+      },
+      "mimeType": "text/markdown",
+      "size": 7424
+    },
+    "ingredients/translate/writing-apocalyptic/sub-title.md": {
+      "checksum": {
+        "md5": "1605d7e588b3f88a8b1b6d364385c117"
+      },
+      "mimeType": "text/markdown",
+      "size": 52
+    },
+    "ingredients/translate/writing-apocalyptic/title.md": {
+      "checksum": {
+        "md5": "c0bb0952718c9f7e9966d88a70fc856d"
+      },
+      "mimeType": "text/markdown",
+      "size": 17
+    },
+    "ingredients/translate/writing-background/01.md": {
+      "checksum": {
+        "md5": "1c3959333bdfa31a0a54231ffd17f8ca"
+      },
+      "mimeType": "text/markdown",
+      "size": 7386
+    },
+    "ingredients/translate/writing-background/sub-title.md": {
+      "checksum": {
+        "md5": "5278a7fbc10efbd08826fee84dadd8f1"
+      },
+      "mimeType": "text/markdown",
+      "size": 99
+    },
+    "ingredients/translate/writing-background/title.md": {
+      "checksum": {
+        "md5": "7aaa0c0304aa824e7afbefe2fe8a02b6"
+      },
+      "mimeType": "text/markdown",
+      "size": 22
+    },
+    "ingredients/translate/writing-decisions/01.md": {
+      "checksum": {
+        "md5": "43ecfcb9f1741051aaf0832936b19a92"
+      },
+      "mimeType": "text/markdown",
+      "size": 1293
+    },
+    "ingredients/translate/writing-decisions/sub-title.md": {
+      "checksum": {
+        "md5": "622a0bb134e30e48b7b6e08d9baf28e7"
+      },
+      "mimeType": "text/markdown",
+      "size": 65
+    },
+    "ingredients/translate/writing-decisions/title.md": {
+      "checksum": {
+        "md5": "03cda16ce887c6b19a72525055e417c6"
+      },
+      "mimeType": "text/markdown",
+      "size": 35
+    },
+    "ingredients/translate/writing-endofstory/01.md": {
+      "checksum": {
+        "md5": "27ddc4e4fca645b07e4f13e9cb2c534c"
+      },
+      "mimeType": "text/markdown",
+      "size": 3423
+    },
+    "ingredients/translate/writing-endofstory/sub-title.md": {
+      "checksum": {
+        "md5": "09fc0056684dcaaa189cabde95b6bb4f"
+      },
+      "mimeType": "text/markdown",
+      "size": 58
+    },
+    "ingredients/translate/writing-endofstory/title.md": {
+      "checksum": {
+        "md5": "e38a66bb96016802acd2359a0bfba6e1"
+      },
+      "mimeType": "text/markdown",
+      "size": 12
+    },
+    "ingredients/translate/writing-intro/01.md": {
+      "checksum": {
+        "md5": "678c697370cd0d4915909ad71c655952"
+      },
+      "mimeType": "text/markdown",
+      "size": 4450
+    },
+    "ingredients/translate/writing-intro/sub-title.md": {
+      "checksum": {
+        "md5": "ea33d3f75c847a3d6d1c15ada66154bd"
+      },
+      "mimeType": "text/markdown",
+      "size": 64
+    },
+    "ingredients/translate/writing-intro/title.md": {
+      "checksum": {
+        "md5": "0374f002f47a7cf230c7b2c13704df1c"
+      },
+      "mimeType": "text/markdown",
+      "size": 14
+    },
+    "ingredients/translate/writing-newevent/01.md": {
+      "checksum": {
+        "md5": "25f9149f5a80a96b5d2cb6d31f437176"
+      },
+      "mimeType": "text/markdown",
+      "size": 7848
+    },
+    "ingredients/translate/writing-newevent/sub-title.md": {
+      "checksum": {
+        "md5": "5b28861d3f2b5f0cdf1f428b2d193f9a"
+      },
+      "mimeType": "text/markdown",
+      "size": 43
+    },
+    "ingredients/translate/writing-newevent/title.md": {
+      "checksum": {
+        "md5": "e2ac9a14d5e24d2e0d151ec03a3d17a4"
+      },
+      "mimeType": "text/markdown",
+      "size": 27
+    },
+    "ingredients/translate/writing-oathformula/01.md": {
+      "checksum": {
+        "md5": "cae466faaeb494e306744ac3711501da"
+      },
+      "mimeType": "text/markdown",
+      "size": 9560
+    },
+    "ingredients/translate/writing-oathformula/sub-title.md": {
+      "checksum": {
+        "md5": "ae83ae47438496a07ca3aaf9acbd008d"
+      },
+      "mimeType": "text/markdown",
+      "size": 50
+    },
+    "ingredients/translate/writing-oathformula/title.md": {
+      "checksum": {
+        "md5": "c53183165b1d967d76520c0c52b8930e"
+      },
+      "mimeType": "text/markdown",
+      "size": 13
+    },
+    "ingredients/translate/writing-participants/01.md": {
+      "checksum": {
+        "md5": "3edb161d0273322116b353557b509c49"
+      },
+      "mimeType": "text/markdown",
+      "size": 6120
+    },
+    "ingredients/translate/writing-participants/sub-title.md": {
+      "checksum": {
+        "md5": "28e564b962f7257e14b5a8d217e8263a"
+      },
+      "mimeType": "text/markdown",
+      "size": 85
+    },
+    "ingredients/translate/writing-participants/title.md": {
+      "checksum": {
+        "md5": "03c8f2477eeba6a99e84015fa60874cc"
+      },
+      "mimeType": "text/markdown",
+      "size": 40
+    },
+    "ingredients/translate/writing-poetry/01.md": {
+      "checksum": {
+        "md5": "75ab18d079cdef532c515173703324ba"
+      },
+      "mimeType": "text/markdown",
+      "size": 6517
+    },
+    "ingredients/translate/writing-poetry/sub-title.md": {
+      "checksum": {
+        "md5": "48bd3fad74821d408935a55a89b209a6"
+      },
+      "mimeType": "text/markdown",
+      "size": 58
+    },
+    "ingredients/translate/writing-poetry/title.md": {
+      "checksum": {
+        "md5": "f8ec59b71981dc5999c300e9395444bf"
+      },
+      "mimeType": "text/markdown",
+      "size": 6
+    },
+    "ingredients/translate/writing-politeness/01.md": {
+      "checksum": {
+        "md5": "d3d63af7d27d3738618011aea851e12f"
+      },
+      "mimeType": "text/markdown",
+      "size": 7249
+    },
+    "ingredients/translate/writing-politeness/sub-title.md": {
+      "checksum": {
+        "md5": "50ac2cd54ffe1a384b22df25384841cc"
+      },
+      "mimeType": "text/markdown",
+      "size": 47
+    },
+    "ingredients/translate/writing-politeness/title.md": {
+      "checksum": {
+        "md5": "da774bd3ea4900969eb6b08fa55188cc"
+      },
+      "mimeType": "text/markdown",
+      "size": 10
+    },
+    "ingredients/translate/writing-pronouns/01.md": {
+      "checksum": {
+        "md5": "10021da65546633dd19efaae45705ff6"
+      },
+      "mimeType": "text/markdown",
+      "size": 6044
+    },
+    "ingredients/translate/writing-pronouns/sub-title.md": {
+      "checksum": {
+        "md5": "374a16c766686b8fca168225a8f24ce7"
+      },
+      "mimeType": "text/markdown",
+      "size": 48
+    },
+    "ingredients/translate/writing-pronouns/title.md": {
+      "checksum": {
+        "md5": "d2c86c9689a100b82834ac96e22919d2"
+      },
+      "mimeType": "text/markdown",
+      "size": 30
+    },
+    "ingredients/translate/writing-proverbs/01.md": {
+      "checksum": {
+        "md5": "49877a847402632a61bd70dd0417e481"
+      },
+      "mimeType": "text/markdown",
+      "size": 4179
+    },
+    "ingredients/translate/writing-proverbs/sub-title.md": {
+      "checksum": {
+        "md5": "378a90f5da9ef0a357585f7ffdc3664f"
+      },
+      "mimeType": "text/markdown",
+      "size": 48
+    },
+    "ingredients/translate/writing-proverbs/title.md": {
+      "checksum": {
+        "md5": "8733dd8dee25126cf5ba8ed07290d863"
+      },
+      "mimeType": "text/markdown",
+      "size": 8
+    },
+    "ingredients/translate/writing-quotations/01.md": {
+      "checksum": {
+        "md5": "f0292e2831206b67c3131b8a5b4a23b7"
+      },
+      "mimeType": "text/markdown",
+      "size": 3547
+    },
+    "ingredients/translate/writing-quotations/sub-title.md": {
+      "checksum": {
+        "md5": "badd4d08c9e5b754816311dc19a93872"
+      },
+      "mimeType": "text/markdown",
+      "size": 51
+    },
+    "ingredients/translate/writing-quotations/title.md": {
+      "checksum": {
+        "md5": "2bf41ef97165faa496d376c4e6cb6125"
+      },
+      "mimeType": "text/markdown",
+      "size": 28
+    },
+    "ingredients/translate/writing-symlanguage/01.md": {
+      "checksum": {
+        "md5": "72eda127ea340e9f9163aa120df89007"
+      },
+      "mimeType": "text/markdown",
+      "size": 4823
+    },
+    "ingredients/translate/writing-symlanguage/sub-title.md": {
+      "checksum": {
+        "md5": "1605d7e588b3f88a8b1b6d364385c117"
+      },
+      "mimeType": "text/markdown",
+      "size": 52
+    },
+    "ingredients/translate/writing-symlanguage/title.md": {
+      "checksum": {
+        "md5": "910c58fa5b881a970b6d89f44b56f4a6"
+      },
+      "mimeType": "text/markdown",
+      "size": 17
+    }
+  },
+  "copyright": {
+    "shortStatements": [
+      {
+        "statement": "© unfoldingWord® 2025, CC BY-SA 4.0",
+        "mimetype": "text/plain",
+        "lang": "en"
+      }
+    ]
+  }
+}

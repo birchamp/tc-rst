@@ -1,0 +1,34 @@
+\id PHM ejemplo_tj
+\usfm 3.0
+\h Filemón
+\toc1 La Epístola de Pablo a Filemón
+\toc2 Filemón
+\toc3 Flm
+\mt Filemón
+\c 1
+\p
+\v 1 ___
+\v 2 ___
+\v 3 ___
+\v 4 ___
+\v 5 ___
+\v 6 ___
+\v 7 ___
+\v 8 ___
+\v 9 ___
+\v 10 ___
+\v 11 ___
+\v 12 ___
+\v 13 ___
+\v 14 ___
+\v 15 ___
+\v 16 ___
+\v 17 ___
+\v 18 ___
+\v 19 ___
+\v 20 ___
+\v 21 ___
+\v 22 ___
+\v 23 ___
+\v 24 ___
+\v 25 ___

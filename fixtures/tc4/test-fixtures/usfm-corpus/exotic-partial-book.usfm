@@ -1,0 +1,16 @@
+\id EXB exotic corpus fixture — partial book, only chapter 3 is present (D26)
+\usfm 3.0
+\ide UTF-8
+\h Exotic B
+\toc1 Exotic Sample B
+\toc2 Exotic B
+\toc3 ExB
+\mt1 Exotic Sample B
+\c 3
+\p
+\v 1 The file starts at chapter 3.
+\v 2 ___
+\v 3-4 A span verse inside a partial book keeps its exact key.
+\q1
+\v 5 Poetry closes the partial book,
+\q2 and the file ends without a final line terminator.

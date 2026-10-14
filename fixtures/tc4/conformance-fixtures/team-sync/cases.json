@@ -1,0 +1,93 @@
+{
+  "fixture": "team-sync",
+  "decision": "D98",
+  "actors": {
+    "translator-a": {
+      "username": "fixture-translator-a",
+      "actor": "journals/translator-a/actor.json",
+      "segments": [
+        "journals/translator-a/segments/2020-01-01T00_00_00.000Z,0001,translator-a.action.json",
+        "journals/translator-a/segments/2026-10-13T09_00_00.000Z,0000,translator-a.action.json",
+        "journals/translator-a/segments/2026-10-13T10_00_00.000Z,0000,translator-a.action.json",
+        "journals/translator-a/segments/2026-10-13T10_10_00.000Z,0000,translator-a.action.json"
+      ]
+    },
+    "translator-b": {
+      "username": "fixture-translator-b",
+      "actor": "journals/translator-b/actor.json",
+      "segments": [
+        "journals/translator-b/segments/2026-10-13T09_00_01.000Z,0000,translator-b.action.json",
+        "journals/translator-b/segments/2026-10-13T10_01_00.000Z,0000,translator-b.action.json",
+        "journals/translator-b/segments/2026-10-13T10_11_00.000Z,0000,translator-b.action.json",
+        "journals/translator-b/segments/2026-10-13T10_20_00.000Z,0000,translator-b.action.json"
+      ]
+    },
+    "translator-c": {
+      "username": "fixture-translator-c",
+      "actor": "journals/translator-c/actor.json",
+      "segments": [
+        "journals/translator-c/segments/2026-10-13T09_00_02.000Z,0000,translator-c.action.json",
+        "journals/translator-c/segments/2026-10-13T10_02_00.000Z,0000,translator-c.action.json",
+        "journals/translator-c/segments/2026-10-13T10_21_00.000Z,0000,translator-c.action.json"
+      ]
+    }
+  },
+  "cases": {
+    "creation": {
+      "description": "A creates the project: the seed of the conformance sample (TIT, JON).",
+      "segments": [
+        "journals/translator-a/segments/2020-01-01T00_00_00.000Z,0001,translator-a.action.json"
+      ]
+    },
+    "names": {
+      "description": "A, B and C each record their own Door43 username once (actor.name.set, v: 3).",
+      "segments": [
+        "journals/translator-a/segments/2026-10-13T09_00_00.000Z,0000,translator-a.action.json",
+        "journals/translator-b/segments/2026-10-13T09_00_01.000Z,0000,translator-b.action.json",
+        "journals/translator-c/segments/2026-10-13T09_00_02.000Z,0000,translator-c.action.json"
+      ]
+    },
+    "different-verses": {
+      "description": "A changes TIT 1:1, B changes TIT 1:2, C changes TIT 1:3. No fork.",
+      "segments": [
+        "journals/translator-a/segments/2026-10-13T10_00_00.000Z,0000,translator-a.action.json",
+        "journals/translator-b/segments/2026-10-13T10_01_00.000Z,0000,translator-b.action.json",
+        "journals/translator-c/segments/2026-10-13T10_02_00.000Z,0000,translator-c.action.json"
+      ],
+      "keys": [
+        "text|TIT|1:1",
+        "text|TIT|1:2",
+        "text|TIT|1:3"
+      ]
+    },
+    "verse-two-ways": {
+      "description": "A and B change TIT 1:4 from the same base. A verse-text fork; B is newest.",
+      "segments": [
+        "journals/translator-a/segments/2026-10-13T10_10_00.000Z,0000,translator-a.action.json",
+        "journals/translator-b/segments/2026-10-13T10_11_00.000Z,0000,translator-b.action.json"
+      ],
+      "key": "text|TIT|1:4",
+      "newest": "2026-10-13T10:11:00.000Z|0000|translator-b"
+    },
+    "check-two-ways": {
+      "description": "B and C set one translationWords check result two ways (status valid, then todo). A non-text fork; C is newest.",
+      "segments": [
+        "journals/translator-b/segments/2026-10-13T10_20_00.000Z,0000,translator-b.action.json",
+        "journals/translator-c/segments/2026-10-13T10_21_00.000Z,0000,translator-c.action.json"
+      ],
+      "key": "dec|translationWords|a9p2|tit|1|1|1",
+      "newest": "2026-10-13T10:21:00.000Z|0000|translator-c"
+    },
+    "invalid-file": {
+      "description": "A segment of C whose body does not match its sha256. Not in journals/.",
+      "path": "cases/invalid-file/translator-c/segments/2026-10-13T10_30_00.000Z,0000,translator-c.action.json",
+      "actor": "translator-c"
+    },
+    "changed-own-file": {
+      "description": "A different valid action at the path of A's own TIT 1:1 segment. Not in journals/.",
+      "path": "cases/changed-own-file/translator-a/segments/2026-10-13T10_00_00.000Z,0000,translator-a.action.json",
+      "own": "journals/translator-a/segments/2026-10-13T10_00_00.000Z,0000,translator-a.action.json",
+      "actor": "translator-a"
+    }
+  }
+}

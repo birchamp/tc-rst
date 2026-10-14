@@ -1,0 +1,178 @@
+{
+  "format": "scripture burrito",
+  "meta": {
+    "version": "1.0.0",
+    "category": "source",
+    "generator": {
+      "softwareName": "go-rc2sb",
+      "softwareVersion": "v0.4.0",
+      "userName": ""
+    },
+    "defaultLocale": "en",
+    "dateCreated": "2026-08-03T15:45:55.871Z",
+    "normalization": "NFC"
+  },
+  "idAuthorities": {
+    "dcs": {
+      "id": "https://git.door43.org",
+      "name": {
+        "en": "Door43 Content Service"
+      }
+    }
+  },
+  "identification": {
+    "primary": {
+      "dcs": {
+        "Idiomas-Puentes/es-419_tn": {
+          "revision": "22f3d0c61e2ab4701cb869547de9c3c43da07208",
+          "timestamp": "2026-08-03T15:45:55.871Z"
+        }
+      }
+    },
+    "name": {
+      "en": "Notas de Traducción"
+    },
+    "description": {
+      "en": "Notas de Traducción"
+    },
+    "abbreviation": {
+      "en": "TN"
+    }
+  },
+  "languages": [
+    {
+      "tag": "es-419",
+      "name": {
+        "en": "Español (Latin American Spanish)"
+      },
+      "scriptDirection": "ltr"
+    }
+  ],
+  "type": {
+    "flavorType": {
+      "name": "parascriptural",
+      "flavor": {
+        "name": "x-bcvnotes"
+      },
+      "currentScope": {
+        "3JN": [],
+        "JON": [],
+        "RUT": [],
+        "TIT": []
+      }
+    }
+  },
+  "confidential": false,
+  "localizedNames": {
+    "book-3jn": {
+      "abbr": {
+        "en": "3Jn"
+      },
+      "short": {
+        "en": "Third John",
+        "es-419": "3 Juan"
+      },
+      "long": {
+        "en": "The Third Letter of John",
+        "es-419": "3 Juan"
+      }
+    },
+    "book-jon": {
+      "abbr": {
+        "en": "Jon"
+      },
+      "short": {
+        "en": "Jonah",
+        "es-419": "Jonás"
+      },
+      "long": {
+        "en": "The Book of Jonah",
+        "es-419": "Jonás"
+      }
+    },
+    "book-rut": {
+      "abbr": {
+        "en": "Rut"
+      },
+      "short": {
+        "en": "Ruth",
+        "es-419": "Rut"
+      },
+      "long": {
+        "en": "The Book of Ruth",
+        "es-419": "Rut"
+      }
+    },
+    "book-tit": {
+      "abbr": {
+        "en": "Tit"
+      },
+      "short": {
+        "en": "Titus",
+        "es-419": "Tito"
+      },
+      "long": {
+        "en": "The Letter of Paul to Titus",
+        "es-419": "Tito"
+      }
+    }
+  },
+  "ingredients": {
+    "ingredients/3JN.tsv": {
+      "checksum": {
+        "md5": "96e67f4c29762bb6a95247261e3d62d3"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 20262,
+      "scope": {
+        "3JN": []
+      }
+    },
+    "ingredients/JON.tsv": {
+      "checksum": {
+        "md5": "4589b3b1e63385f36e0d5f8af4e53cc7"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 71367,
+      "scope": {
+        "JON": []
+      }
+    },
+    "ingredients/LICENSE.md": {
+      "checksum": {
+        "md5": "76e186ab75e829781d830b0fde828e21"
+      },
+      "mimeType": "text/markdown",
+      "size": 2192
+    },
+    "ingredients/RUT.tsv": {
+      "checksum": {
+        "md5": "06e1288755edb967f2c88dbc4a810ed1"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 89010,
+      "scope": {
+        "RUT": []
+      }
+    },
+    "ingredients/TIT.tsv": {
+      "checksum": {
+        "md5": "de3fe1e17dcaae7fef8399f3ce546ab7"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 73425,
+      "scope": {
+        "TIT": []
+      }
+    }
+  },
+  "copyright": {
+    "shortStatements": [
+      {
+        "statement": "© Idiomas Puentes 2024, CC BY-SA 4.0",
+        "mimetype": "text/plain",
+        "lang": "en"
+      }
+    ]
+  }
+}

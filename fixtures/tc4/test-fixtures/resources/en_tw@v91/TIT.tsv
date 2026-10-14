@@ -1,0 +1,183 @@
+Reference	ID	Tags	OrigWords	Occurrence	TWLink
+1:1	trr8	name	Παῦλος	1	./payload/names/paul.md
+1:1	zfgc		δοῦλος	1	./payload/other/servant.md
+1:1	pmq8	keyterm	Θεοῦ	1	./payload/kt/god.md
+1:1	sda6	keyterm	ἀπόστολος	1	./payload/kt/apostle.md
+1:1	nze4	keyterm; name	Ἰησοῦ	1	./payload/kt/jesus.md
+1:1	n9wu	keyterm	Χριστοῦ	1	./payload/kt/christ.md
+1:1	z5q5	keyterm	πίστιν	1	./payload/kt/faith.md
+1:1	dz84	keyterm	ἐκλεκτῶν	1	./payload/kt/elect.md
+1:1	f44k	keyterm	Θεοῦ	2	./payload/kt/god.md
+1:1	tr4u		ἐπίγνωσιν	1	./payload/other/know.md
+1:1	qktr	keyterm	εὐσέβειαν	1	./payload/kt/godly.md
+1:2	pdm7	keyterm	ἐλπίδι	1	./payload/kt/hope.md
+1:2	rjm7	keyterm	αἰωνίου	1	./payload/kt/eternity.md
+1:2	sht2	keyterm	ἐπηγγείλατο	1	./payload/kt/promise.md
+1:2	hmks	keyterm	Θεὸς	1	./payload/kt/god.md
+1:2	xut8		χρόνων	1	./payload/other/age-timeperiod.md
+1:3	dhdb		καιροῖς	1	./payload/other/age-timeperiod.md
+1:3	uz9x	keyterm	τὸν λόγον	1	./payload/kt/wordofgod.md
+1:3	bgv4		κηρύγματι	1	./payload/other/preach.md
+1:3	yu3w	keyterm	ἐπιστεύθην	1	./payload/kt/trust.md
+1:3	snb7	keyterm	τοῦ Σωτῆρος	1	./payload/kt/savior.md
+1:3	uj2x	keyterm	Θεοῦ	1	./payload/kt/god.md
+1:4	w4h6	name	Τίτῳ	1	./payload/names/titus.md
+1:4	c2fm	keyterm	πίστιν	1	./payload/kt/faith.md
+1:4	khr6	keyterm	χάρις	1	./payload/kt/grace.md
+1:4	es8n		εἰρήνη	1	./payload/other/peace.md
+1:4	new9	keyterm	Θεοῦ Πατρὸς	1	./payload/kt/godthefather.md
+1:4	f6ja	keyterm	Χριστοῦ	1	./payload/kt/christ.md
+1:4	jgfj	keyterm; name	Ἰησοῦ	1	./payload/kt/jesus.md
+1:4	mvwu	keyterm	τοῦ Σωτῆρος	1	./payload/kt/savior.md
+1:5	ymd3	name	Κρήτῃ	1	./payload/names/crete.md
+1:5	a98w		καταστήσῃς	1	./payload/other/ordain.md
+1:5	znyx		πρεσβυτέρους	1	./payload/other/elder.md
+1:6	rbuz	keyterm	ἀνέγκλητος	1	./payload/kt/blameless.md
+1:6	nsxd	keyterm	πιστά	1	./payload/kt/faithful.md
+1:6	evqx		ἀνυπότακτα	1	./payload/other/rebel.md
+1:7	g6v8		ἐπίσκοπον	1	./payload/other/overseer.md
+1:7	wejy	keyterm	ἀνέγκλητον	1	./payload/kt/blameless.md
+1:7	mm9y	keyterm	Θεοῦ	1	./payload/kt/god.md
+1:7	nmsw		οἰκονόμον	1	./payload/other/manager.md
+1:7	rfj7		πάροινον	1	./payload/other/wine.md
+1:8	ufbw	keyterm	φιλάγαθον	1	./payload/kt/good.md
+1:8	r9c9	keyterm	δίκαιον	1	./payload/kt/righteous.md
+1:8	pcs8	keyterm	ὅσιον	1	./payload/kt/holy.md
+1:8	qfud		ἐγκρατῆ	1	./payload/other/selfcontrol.md
+1:9	x67x	keyterm	πιστοῦ	1	./payload/kt/faithful.md
+1:9	nngz		παρακαλεῖν	1	./payload/other/courage.md
+1:9	c9tq		τῇ διδασκαλίᾳ	1	./payload/other/doctrine.md
+1:9	ss39		ἐλέγχειν	1	./payload/other/rebuke.md
+1:10	p8yj		καὶ ἀνυπότακτοι	1	./payload/other/rebel.md
+1:10	k8ta		ματαιολόγοι	1	./payload/other/vain.md
+1:10	ucvu		φρεναπάται	1	./payload/other/deceive.md
+1:10	z5xs	keyterm	περιτομῆς	1	./payload/kt/circumcise.md
+1:11	n4aq		οἴκους	1	./payload/other/household.md
+1:11	bjyb		αἰσχροῦ	1	./payload/other/shame.md
+1:11	wjg8		κέρδους	1	./payload/other/profit.md
+1:12	b5s5	keyterm	προφήτης	1	./payload/kt/prophet.md
+1:12	myt5	name	Κρῆτες	1	./payload/names/crete.md
+1:12	wgym	keyterm	κακὰ	1	./payload/kt/evil.md
+1:12	ecyq		θηρία	1	./payload/other/beast.md
+1:13	dsy8	keyterm	ἡ μαρτυρία	1	./payload/kt/testimony.md
+1:13	crce		ἔλεγχε	1	./payload/other/rebuke.md
+1:13	s5qd	keyterm	πίστει	1	./payload/kt/faith.md
+1:14	we3r	keyterm	Ἰουδαϊκοῖς	1	./payload/kt/jew.md
+1:15	gpvr	keyterm	καθαρὰ	1	./payload/kt/purify.md
+1:15	hr5s	keyterm	καθαροῖς	1	./payload/kt/purify.md
+1:15	mn4k		μεμιαμμένοις	1	./payload/other/corrupt.md
+1:15	y2bm	keyterm	ἀπίστοις	1	./payload/kt/believe.md
+1:15	vg9y	keyterm	καθαρόν	1	./payload/kt/purify.md
+1:15	nvgm		μεμίανται	1	./payload/other/corrupt.md
+1:15	qzbf		ὁ νοῦς	1	./payload/other/mind.md
+1:15	unp8	keyterm	ἡ συνείδησις	1	./payload/kt/conscience.md
+1:16	rjjt	keyterm	Θεὸν	1	./payload/kt/god.md
+1:16	napb		εἰδέναι	1	./payload/other/know.md
+1:16	frhh		βδελυκτοὶ	1	./payload/other/detestable.md
+1:16	yxnn	keyterm	ἀγαθὸν	1	./payload/kt/good.md
+2:1	gjgw		τῇ & διδασκαλίᾳ	1	./payload/other/doctrine.md
+2:2	y4e7		πρεσβύτας	1	./payload/other/elder.md
+2:2	skyq	keyterm	τῇ πίστει	1	./payload/kt/faith.md
+2:2	pr7x	keyterm	τῇ ἀγάπῃ	1	./payload/kt/love.md
+2:2	zvdw		τῇ ὑπομονῇ	1	./payload/other/perseverance.md
+2:3	qkdt		ἱεροπρεπεῖς	1	./payload/other/reverence.md
+2:3	cz4m		διαβόλους	1	./payload/other/slander.md
+2:3	jfdu		οἴνῳ	1	./payload/other/wine.md
+2:3	khhe		δεδουλωμένας	1	./payload/other/enslave.md
+2:4	q8p8	keyterm	φιλάνδρους	1	./payload/kt/love.md
+2:4	m7kb	keyterm	φιλοτέκνους	1	./payload/kt/love.md
+2:5	j8nj	keyterm	ἁγνάς	1	./payload/kt/purify.md
+2:5	mguz	keyterm	ἀγαθάς	1	./payload/kt/good.md
+2:5	xd42		ὑποτασσομένας	1	./payload/other/subject.md
+2:5	ub8v	keyterm	λόγος τοῦ Θεοῦ	1	./payload/kt/wordofgod.md
+2:5	rhfd		βλασφημῆται	1	./payload/other/slander.md
+2:6	j7r6	keyterm	παρακάλει	1	./payload/kt/exhort.md
+2:7	ncv7	keyterm	καλῶν	1	./payload/kt/good.md
+2:7	p6a7		διδασκαλίᾳ	1	./payload/other/doctrine.md
+2:8	bxtu		ἐντραπῇ	1	./payload/other/shame.md
+2:8	zdzc	keyterm	φαῦλον	1	./payload/kt/evil.md
+2:9	xaer		δούλους	1	./payload/other/servant.md
+2:9	hc8q	keyterm	δεσπόταις	1	./payload/kt/lord.md
+2:9	hhgu		ὑποτάσσεσθαι	1	./payload/other/subject.md
+2:10	bn72	keyterm	πίστιν	1	./payload/kt/faith.md
+2:10	d9wq	keyterm	ἀγαθήν	1	./payload/kt/good.md
+2:10	pex6		διδασκαλίαν	1	./payload/other/doctrine.md
+2:10	rqa2	keyterm	Σωτῆρος	1	./payload/kt/savior.md
+2:10	pynk	keyterm	Θεοῦ	1	./payload/kt/god.md
+2:11	rxzp	keyterm	χάρις	1	./payload/kt/grace.md
+2:11	xef2	keyterm	τοῦ Θεοῦ	1	./payload/kt/god.md
+2:11	kjwq	keyterm	σωτήριος	1	./payload/kt/save.md
+2:12	trje	keyterm	τὴν ἀσέβειαν	1	./payload/kt/godly.md
+2:12	y4sh	keyterm	τὰς κοσμικὰς	1	./payload/kt/world.md
+2:12	hukr		ἐπιθυμίας	1	./payload/other/lust.md
+2:12	dr9j	keyterm	δικαίως	1	./payload/kt/righteous.md
+2:12	wyfa	keyterm	εὐσεβῶς	1	./payload/kt/godly.md
+2:12	e5gn		αἰῶνι	1	./payload/other/age.md
+2:13	eqaj		προσδεχόμενοι	1	./payload/other/receive.md
+2:13	ctfv	keyterm	μακαρίαν	1	./payload/kt/bless.md
+2:13	pqwf	keyterm	ἐλπίδα	1	./payload/kt/hope.md
+2:13	xzqt	keyterm	τῆς δόξης	1	./payload/kt/glory.md
+2:13	scfu	keyterm	τοῦ & Θεοῦ	1	./payload/kt/god.md
+2:13	bpbw	keyterm	Σωτῆρος	1	./payload/kt/savior.md
+2:13	mgn9	keyterm; name	Ἰησοῦ	1	./payload/kt/jesus.md
+2:13	smpv	keyterm	Χριστοῦ	1	./payload/kt/christ.md
+2:14	uzyk	keyterm	λυτρώσηται	1	./payload/kt/redeem.md
+2:14	xhp7		ἀνομίας	1	./payload/other/lawful.md
+2:14	bxw8	keyterm	καθαρίσῃ	1	./payload/kt/purify.md
+2:14	s2u6	keyterm	ζηλωτὴν	1	./payload/kt/zealous.md
+2:14	jy6c	keyterm	καλῶν	1	./payload/kt/good.md
+2:15	pnzt	keyterm	παρακάλει	1	./payload/kt/exhort.md
+2:15	rvsu		ἔλεγχε	1	./payload/other/rebuke.md
+2:15	ew7w	keyterm	ἐπιταγῆς	1	./payload/kt/authority.md
+3:1	rtff		ἀρχαῖς	1	./payload/other/ruler.md
+3:1	yrw4	keyterm	ἐξουσίαις	1	./payload/kt/authority.md
+3:1	s4xn		ὑποτάσσεσθαι	1	./payload/other/subject.md
+3:1	w9yp	keyterm	ἀγαθὸν	1	./payload/kt/good.md
+3:2	sq5t		βλασφημεῖν	1	./payload/other/slander.md
+3:2	kjtc		ἀμάχους	1	./payload/other/peace.md
+3:2	xrq8	keyterm	πραΰτητα	1	./payload/kt/humble.md
+3:3	tjjs	keyterm	ἀνόητοι	1	./payload/kt/foolish.md
+3:3	udd5		δουλεύοντες	1	./payload/other/enslave.md
+3:3	gz5z		ἐπιθυμίαις	1	./payload/other/lust.md
+3:3	strs	keyterm	κακίᾳ	1	./payload/kt/evil.md
+3:3	p9ch		φθόνῳ	1	./payload/other/envy.md
+3:4	nwn9	keyterm	φιλανθρωπία	1	./payload/kt/love.md
+3:4	x4gg	keyterm	τοῦ Σωτῆρος	1	./payload/kt/savior.md
+3:4	g4b9	keyterm	Θεοῦ	1	./payload/kt/god.md
+3:5	sqsf	keyterm	τῶν ἐν δικαιοσύνῃ	1	./payload/kt/righteous.md
+3:5	uvcs	keyterm	τὸ & ἔλεος	1	./payload/kt/mercy.md
+3:5	y2kk	keyterm	ἔσωσεν	1	./payload/kt/save.md
+3:5	f8tn	keyterm	παλινγενεσίας	1	./payload/kt/bornagain.md
+3:5	e5fx	keyterm	Πνεύματος Ἁγίου	1	./payload/kt/holyspirit.md
+3:6	snat	keyterm; name	Ἰησοῦ	1	./payload/kt/jesus.md
+3:6	bmkx	keyterm	Χριστοῦ	1	./payload/kt/christ.md
+3:6	h9fu	keyterm	τοῦ Σωτῆρος	1	./payload/kt/savior.md
+3:7	va33	keyterm	δικαιωθέντες	1	./payload/kt/justice.md
+3:7	qjc9	keyterm	τῇ & χάριτι	1	./payload/kt/grace.md
+3:7	w3sp		κληρονόμοι	1	./payload/other/heir.md
+3:7	yut8	keyterm	ἐλπίδα	1	./payload/kt/hope.md
+3:7	g6gy	keyterm	αἰωνίου	1	./payload/kt/eternity.md
+3:8	dxb8	keyterm	πιστὸς	1	./payload/kt/faithful.md
+3:8	cmmp	keyterm	καλῶν	1	./payload/kt/good.md
+3:8	aphr	keyterm	πεπιστευκότες	1	./payload/kt/believe.md
+3:8	gbdk	keyterm	Θεῷ	1	./payload/kt/god.md
+3:8	sbrv	keyterm	καλὰ	1	./payload/kt/good.md
+3:8	qttb		ὠφέλιμα	1	./payload/other/profit.md
+3:9	ctja	keyterm	μωρὰς	1	./payload/kt/foolish.md
+3:9	zxns		ἔρεις	1	./payload/other/strife.md
+3:9	kgjd		μάχας	1	./payload/other/strife.md
+3:9	nptj	keyterm	νομικὰς	1	./payload/kt/lawofmoses.md
+3:9	qdwm		μάταιοι	1	./payload/other/vain.md
+3:10	czjk		νουθεσίαν	1	./payload/other/admonish.md
+3:10	cf9q		παραιτοῦ	1	./payload/other/reject.md
+3:11	syjf		εἰδὼς	1	./payload/other/know.md
+3:11	sqgk		ἐξέστραπται	1	./payload/other/perverse.md
+3:11	f74c	keyterm	ἁμαρτάνει	1	./payload/kt/sin.md
+3:12	adg4	name	Τυχικόν	1	./payload/names/tychicus.md
+3:13	v462		νομικὸν	1	./payload/other/law.md
+3:13	sy96	name	Ἀπολλῶν	1	./payload/names/apollos.md
+3:14	m7z9	keyterm	καλῶν	1	./payload/kt/good.md
+3:14	en8v		ἄκαρποι	1	./payload/other/fruit.md
+3:15	xuej	keyterm	φιλοῦντας	1	./payload/kt/love.md
+3:15	b3pn	keyterm	πίστει	1	./payload/kt/faith.md
+3:15	stmk	keyterm	ἡ χάρις	1	./payload/kt/grace.md

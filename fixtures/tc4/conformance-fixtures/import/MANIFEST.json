@@ -1,0 +1,18 @@
+[
+  { "file": "../../sample-burrito", "parser": "fake", "expect": "accept", "language": "es-419", "books": ["JON", "TIT"], "counts": { "chapters": { "JON": 4, "TIT": 3 } } },
+  { "file": "../../sample-burrito", "parser": "burrito", "name": "Muestra SB", "expect": "accept", "language": "es-419", "books": ["JON", "TIT"], "counts": { "chapters": { "JON": 4, "TIT": 3 } } },
+  { "file": "../../sample-burrito-obs", "parser": "burrito", "name": "Muestra OBS", "expect": "accept", "language": "es-419" },
+  { "file": "burrito/tc4-export.zip", "parser": "burrito", "name": "Exportación tC4", "expect": "accept", "language": "es-419", "books": ["JON", "TIT"], "counts": { "chapters": { "JON": 4, "TIT": 3 } } },
+  { "file": "burrito/foreign", "wrap": "es-419_foreign", "parser": "burrito", "expect": "accept", "language": "es-419", "books": ["JON"], "counts": { "chapters": { "JON": 4 } } },
+  { "file": "usfm/57-TIT.usfm", "parser": "usfm", "lang": "es-419", "expect": "accept", "language": "es-419", "books": ["TIT"], "counts": { "chapters": { "TIT": 3 } } },
+  { "file": ["usfm/57-TIT.usfm", "usfm/32-JON.usfm", "usfm/58-PHM.txt"], "parser": "usfm", "name": "Tres libros", "lang": "es-419", "expect": "accept", "language": "es-419", "books": ["JON", "PHM", "TIT"], "counts": { "chapters": { "JON": 4, "PHM": 1, "TIT": 3 } } },
+  { "file": "usfm/no-id.sfm", "parser": "usfm", "expect": "refuse", "code": "import.damaged.usfm-parse" },
+  { "file": "tc3/cfm_fbt_tit_book.zip", "parser": "tc3", "expect": "accept", "language": "cfm", "books": ["TIT"], "counts": { "chapters": { "TIT": 3 } } },
+  { "file": ["tc3/multi/en_kjv_jhn_book.zip", "tc3/multi/en_kjv_job_book.zip", "tc3/multi/en_kjv_luk_book.zip"], "parser": "tc3", "license": "CC BY-SA 4.0", "expect": "accept", "language": "en", "books": ["JHN", "JOB", "LUK"], "counts": { "chapters": { "JHN": 21, "JOB": 42, "LUK": 24 } } },
+  { "file": "damaged/truncated.zip", "parser": "tc3", "expect": "refuse", "code": "import.damaged.truncated", "message": "truncated.zip is not a complete zip file" },
+  { "file": "damaged/burrito-no-metadata", "parser": "burrito", "expect": "refuse", "code": "import.damaged.no-metadata", "message": "burrito-no-metadata.zip: Check failed: metadata.json is present" },
+  { "file": "damaged/burrito-checksum-mismatch", "parser": "burrito", "expect": "refuse", "code": "import.damaged.checksum-mismatch", "message": "burrito-checksum-mismatch.zip: Check failed: every listed ingredient has its md5 and size (ingredients/JON.usfm)" },
+  { "file": "damaged/57-TIT-unclosed.usfm", "parser": "usfm", "expect": "refuse", "code": "import.damaged.usfm-parse", "message": "57-TIT-unclosed.usfm: the \\f marker in chapter 2, verse 1 has no end marker" },
+  { "file": "damaged/tc3-no-manifest", "parser": "tc3", "expect": "refuse", "code": "import.damaged.no-manifest", "message": "tc3-no-manifest.zip has no manifest.json" },
+  { "file": "damaged/tc3-corrupt-entry.zip", "parser": "tc3", "expect": "refuse", "code": "import.damaged.corrupt-entry", "message": "tc3-corrupt-entry.zip is damaged: the file tit/2.json in it does not match its checksum" }
+]

@@ -1,0 +1,39 @@
+\id EXA exotic corpus fixture — poetry, footnotes, lists, aligned words
+\usfm 3.0
+\ide UTF-8
+\h Exotic A
+\toc1 Exotic Sample A
+\toc2 Exotic A
+\toc3 ExA
+\mt1 Exotic Sample A
+\c 1
+\s Prose with footnotes
+\p
+\v 1 The first verse carries a footnote \f + \fr 1:1 \ft Some manuscripts read \fqa another word\fqa* here. \f* inside its body.
+\v 2 The second verse has a keyword footnote \f + \fr 1:2 \fk covenant \ft The term \+w covenant|x-occurrence="1" x-occurrences="1"\+w* is explained elsewhere. \f* and continues after it.
+\v 3 \zaln-s |x-strong="G39720" x-lemma="Παῦλος" x-morph="Gr,N,,,,,NMS," x-occurrence="1" x-occurrences="1" x-content="Παῦλος"\*\w Paul|x-occurrence="1" x-occurrences="1"\w*\zaln-e\*
+\zaln-s |x-strong="G14010" x-lemma="δοῦλος" x-morph="Gr,N,,,,,NMS," x-occurrence="1" x-occurrences="1" x-content="δοῦλος"\*\w a|x-occurrence="1" x-occurrences="1"\w*
+\w servant|x-occurrence="1" x-occurrences="1"\w*\zaln-e\*, with a footnote \f + \fr 1:3 \ft An aligned verse can carry a footnote too. \f* after the milestone.
+\s Poetry
+\b
+\q1
+\v 4-5 Sing the first line of the song,
+\q2 and answer with the second line;
+\q1 lift the third line higher still,
+\q2 and let the fourth line rest. \f + \fr 1:4 \ft The song is one span verse. \f*
+\b
+\d A quiet title between the songs
+\q1
+\v 6 One more line stands alone.
+\c 2
+\s Lists and late prose
+\p
+\v 1 Before the list there is prose.
+\lh
+\v 2 The list has these members:
+\li1 the first member,
+\li2 a nested member,
+\li1 the last member.
+\lf The list ends here.
+\p
+\v 3 After the list the prose returns, and the book ends.

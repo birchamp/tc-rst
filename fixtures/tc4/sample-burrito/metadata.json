@@ -1,0 +1,253 @@
+{
+  "format": "scripture burrito",
+  "meta": {
+    "version": "1.0.0",
+    "category": "source",
+    "generator": {
+      "softwareName": "translationCore 4 (sample)",
+      "softwareVersion": "0.1.0",
+      "userName": "Equipo Ejemplo"
+    },
+    "defaultLocale": "en",
+    "dateCreated": "2026-07-02T12:00:00.000Z",
+    "normalization": "NFC"
+  },
+  "idAuthorities": {
+    "local": {
+      "id": "http://_local_",
+      "name": {
+        "en": "Local Project"
+      }
+    },
+    "dcs": {
+      "id": "https://git.door43.org",
+      "name": {
+        "en": "Door43 Content Service"
+      }
+    }
+  },
+  "identification": {
+    "primary": {
+      "local": {
+        "ejemplo_tj": {
+          "revision": "1",
+          "timestamp": "2026-07-02T12:00:00.000Z"
+        }
+      }
+    },
+    "name": {
+      "en": "Equipo Ejemplo — Tito y Jonás",
+      "es-419": "Equipo Ejemplo — Tito y Jonás"
+    },
+    "description": {
+      "en": "Sample multi-book tC4 drafting+checking project (Titus mid-check; Jonah barely started, incl. a verse-span fixture at 2:9-10)"
+    },
+    "abbreviation": {
+      "en": "ejemplo_tj"
+    }
+  },
+  "languages": [
+    {
+      "tag": "es-419",
+      "name": {
+        "en": "Spanish (Latin America)",
+        "es-419": "Español (Latinoamérica)"
+      },
+      "scriptDirection": "ltr"
+    }
+  ],
+  "type": {
+    "flavorType": {
+      "name": "scripture",
+      "flavor": {
+        "name": "textTranslation",
+        "usfmVersion": "3.0",
+        "translationType": "firstTranslation",
+        "audience": "common",
+        "projectType": "standard"
+      },
+      "currentScope": {
+        "TIT": [],
+        "JON": []
+      }
+    }
+  },
+  "confidential": false,
+  "localizedNames": {},
+  "ingredients": {
+    "ingredients/JON.usfm": {
+      "checksum": {
+        "md5": "33a071cb6e88abeb4354727aa22e0fe8"
+      },
+      "mimeType": "text/plain",
+      "size": 744,
+      "scope": {
+        "JON": []
+      }
+    },
+    "ingredients/TIT.usfm": {
+      "checksum": {
+        "md5": "1ce94f44dd0f1c4e87fa88a7a80f9216"
+      },
+      "mimeType": "text/plain",
+      "size": 1166,
+      "scope": {
+        "TIT": []
+      }
+    },
+    "ingredients/checking/alignments/TIT.json": {
+      "checksum": {
+        "md5": "a85b64a62a7712e49bae0af38b8783a9"
+      },
+      "mimeType": "application/json",
+      "size": 7301,
+      "scope": {
+        "TIT": []
+      },
+      "role": "x-alignment"
+    },
+    "ingredients/checking/resources.json": {
+      "checksum": {
+        "md5": "1566bca9b7c8d7a85042b7cad4e7486b"
+      },
+      "mimeType": "application/json",
+      "size": 6361,
+      "role": "x-resource-links"
+    },
+    "ingredients/checking/settings.json": {
+      "checksum": {
+        "md5": "f92a6a03fef1e3796c73b780301d82d7"
+      },
+      "mimeType": "application/json",
+      "size": 467,
+      "role": "x-check-settings"
+    },
+    "ingredients/checking/translationNotes/TIT.json": {
+      "checksum": {
+        "md5": "490c0191596c7d95ebd5aae0331ccd02"
+      },
+      "mimeType": "application/json",
+      "size": 2732,
+      "scope": {
+        "TIT": []
+      },
+      "role": "x-check-decisions"
+    },
+    "ingredients/checking/translationWords/TIT.json": {
+      "checksum": {
+        "md5": "6835ebf6d9a92f917dd6780f2350bfd4"
+      },
+      "mimeType": "application/json",
+      "size": 1913,
+      "scope": {
+        "TIT": []
+      },
+      "role": "x-check-decisions"
+    },
+    "ingredients/vrs.json": {
+      "checksum": {
+        "md5": "dd0169fcd7e229933ef72c21b202c903"
+      },
+      "mimeType": "application/json",
+      "size": 27681
+    }
+  },
+  "copyright": {
+    "shortStatements": [
+      {
+        "statement": "CC BY-SA 4.0, Equipo Ejemplo"
+      }
+    ]
+  },
+  "relationships": [
+    {
+      "relationType": "source",
+      "flavor": "textTranslation",
+      "id": "dcs::unfoldingWord/el-x-koine_ugnt",
+      "revision": "v0.34"
+    },
+    {
+      "relationType": "source",
+      "flavor": "textTranslation",
+      "id": "dcs::unfoldingWord/hbo_uhb",
+      "revision": "v3.0.0"
+    },
+    {
+      "relationType": "source",
+      "flavor": "textTranslation",
+      "id": "dcs::unfoldingWord/en_ult",
+      "revision": "v91"
+    },
+    {
+      "relationType": "source",
+      "flavor": "textTranslation",
+      "id": "dcs::unfoldingWord/en_ust",
+      "revision": "v91"
+    },
+    {
+      "relationType": "parascriptural",
+      "flavor": "x-bcvnotes",
+      "id": "dcs::es-419_gl/es-419_tn",
+      "revision": "v66"
+    },
+    {
+      "relationType": "parascriptural",
+      "flavor": "x-bcvarticles",
+      "id": "dcs::es-419_gl/es-419_twl",
+      "revision": "v18"
+    },
+    {
+      "relationType": "parascriptural",
+      "flavor": "x-bcvarticles",
+      "id": "dcs::es-419_gl/es-419_tw",
+      "revision": "v37"
+    },
+    {
+      "relationType": "peripheral",
+      "flavor": "x-peripheralArticles",
+      "id": "dcs::es-419_gl/es-419_ta",
+      "revision": "v4"
+    },
+    {
+      "relationType": "parascriptural",
+      "flavor": "x-bcvnotes",
+      "id": "dcs::unfoldingWord/en_tn",
+      "revision": "v91"
+    },
+    {
+      "relationType": "parascriptural",
+      "flavor": "x-bcvarticles",
+      "id": "dcs::unfoldingWord/en_twl",
+      "revision": "v91"
+    },
+    {
+      "relationType": "parascriptural",
+      "flavor": "x-bcvarticles",
+      "id": "dcs::unfoldingWord/en_tw",
+      "revision": "v91"
+    },
+    {
+      "relationType": "peripheral",
+      "flavor": "x-peripheralArticles",
+      "id": "dcs::unfoldingWord/en_ta",
+      "revision": "v91"
+    },
+    {
+      "relationType": "parascriptural",
+      "flavor": "x-bcvquestions",
+      "id": "dcs::unfoldingWord/en_tq",
+      "revision": "v91"
+    },
+    {
+      "relationType": "peripheral",
+      "flavor": "x-lexicon",
+      "id": "dcs::unfoldingWord/en_ugl",
+      "revision": "v0.5"
+    },
+    {
+      "relationType": "peripheral",
+      "flavor": "x-lexicon",
+      "id": "dcs::unfoldingWord/en_uhl"
+    }
+  ]
+}

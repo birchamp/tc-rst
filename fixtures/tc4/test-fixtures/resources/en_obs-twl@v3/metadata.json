@@ -1,0 +1,102 @@
+{
+  "format": "scripture burrito",
+  "meta": {
+    "version": "1.0.0",
+    "category": "source",
+    "generator": {
+      "softwareName": "go-rc2sb",
+      "softwareVersion": "v0.5.0",
+      "userName": ""
+    },
+    "defaultLocale": "en",
+    "dateCreated": "2026-09-17T18:20:54.919Z",
+    "normalization": "NFC"
+  },
+  "idAuthorities": {
+    "dcs": {
+      "id": "https://git.door43.org",
+      "name": {
+        "en": "Door43 Content Service"
+      }
+    }
+  },
+  "identification": {
+    "primary": {
+      "dcs": {
+        "unfoldingWord/en_obs-twl": {
+          "revision": "44ebc9fafe8101665f985007d566f5036a2be85b",
+          "timestamp": "2026-09-17T18:20:54.919Z"
+        }
+      }
+    },
+    "name": {
+      "en": "unfoldingWord® OBS Translation Words Links"
+    },
+    "description": {
+      "en": "unfoldingWord® OBS Translation Words Links"
+    },
+    "abbreviation": {
+      "en": "OBSTWL"
+    }
+  },
+  "languages": [
+    {
+      "tag": "en",
+      "name": {
+        "en": "English"
+      },
+      "scriptDirection": "ltr"
+    }
+  ],
+  "type": {
+    "flavorType": {
+      "name": "parascriptural",
+      "flavor": {
+        "name": "x-bcvarticles"
+      },
+      "currentScope": {
+        "OBS": []
+      }
+    }
+  },
+  "confidential": false,
+  "localizedNames": {
+    "book-obs": {
+      "abbr": {
+        "en": "OBS"
+      },
+      "short": {
+        "en": "OBS"
+      },
+      "long": {
+        "en": "OBS"
+      }
+    }
+  },
+  "ingredients": {
+    "ingredients/LICENSE.md": {
+      "checksum": {
+        "md5": "977cdb061396ee699ec567b4aee82e2b"
+      },
+      "mimeType": "text/markdown",
+      "size": 1594
+    },
+    "ingredients/OBS.tsv": {
+      "checksum": {
+        "md5": "973f9425988fa21b526bffc31281e1f3"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 139464,
+      "scope": {
+        "OBS": []
+      }
+    }
+  },
+  "copyright": {
+    "shortStatements": [
+      {
+        "statement": "Copyright © 2021 by unfoldingWord"
+      }
+    ]
+  }
+}

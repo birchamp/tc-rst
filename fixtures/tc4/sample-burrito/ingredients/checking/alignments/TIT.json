@@ -1,0 +1,296 @@
+{
+  "schemaVersion": 1,
+  "book": "TIT",
+  "chapters": {
+    "1": {
+      "1": {
+        "alignments": [
+          {
+            "topWords": [
+              {
+                "strong": "G39720",
+                "lemma": "Παῦλος",
+                "morph": "Gr,N,,,,,NMS,",
+                "occurrence": 1,
+                "occurrences": 1,
+                "word": "Παῦλος"
+              }
+            ],
+            "bottomWords": [
+              {
+                "occurrence": 1,
+                "occurrences": 1,
+                "word": "Pablo"
+              }
+            ]
+          },
+          {
+            "topWords": [
+              {
+                "strong": "G14010",
+                "lemma": "δοῦλος",
+                "morph": "Gr,N,,,,,NMS,",
+                "occurrence": 1,
+                "occurrences": 1,
+                "word": "δοῦλος"
+              }
+            ],
+            "bottomWords": [
+              {
+                "occurrence": 1,
+                "occurrences": 1,
+                "word": "siervo"
+              }
+            ]
+          },
+          {
+            "topWords": [
+              {
+                "strong": "G23160",
+                "lemma": "θεός",
+                "morph": "Gr,N,,,,,GMS,",
+                "occurrence": 1,
+                "occurrences": 2,
+                "word": "Θεοῦ"
+              }
+            ],
+            "bottomWords": [
+              {
+                "occurrence": 1,
+                "occurrences": 2,
+                "word": "Dios"
+              }
+            ]
+          },
+          {
+            "topWords": [
+              {
+                "strong": "G06520",
+                "lemma": "ἀπόστολος",
+                "morph": "Gr,N,,,,,NMS,",
+                "occurrence": 1,
+                "occurrences": 1,
+                "word": "ἀπόστολος"
+              }
+            ],
+            "bottomWords": [
+              {
+                "occurrence": 1,
+                "occurrences": 1,
+                "word": "apóstol"
+              }
+            ]
+          },
+          {
+            "topWords": [
+              {
+                "strong": "G11610",
+                "lemma": "δέ",
+                "morph": "Gr,CC,,,,,,,,",
+                "occurrence": 1,
+                "occurrences": 1,
+                "word": "δὲ"
+              }
+            ],
+            "bottomWords": []
+          },
+          {
+            "topWords": [
+              {
+                "strong": "G24240",
+                "lemma": "Ἰησοῦς",
+                "morph": "Gr,N,,,,,GMS,",
+                "occurrence": 1,
+                "occurrences": 1,
+                "word": "Ἰησοῦ"
+              },
+              {
+                "strong": "G55470",
+                "lemma": "χριστός",
+                "morph": "Gr,N,,,,,GMS,",
+                "occurrence": 1,
+                "occurrences": 1,
+                "word": "Χριστοῦ"
+              }
+            ],
+            "bottomWords": [
+              {
+                "occurrence": 1,
+                "occurrences": 1,
+                "word": "Jesucristo"
+              }
+            ]
+          },
+          {
+            "topWords": [
+              {
+                "strong": "G25960",
+                "lemma": "κατά",
+                "morph": "Gr,P,,,,,A,,,",
+                "occurrence": 1,
+                "occurrences": 1,
+                "word": "κατὰ"
+              }
+            ],
+            "bottomWords": []
+          },
+          {
+            "topWords": [
+              {
+                "strong": "G41020",
+                "lemma": "πίστις",
+                "morph": "Gr,N,,,,,AFS,",
+                "occurrence": 1,
+                "occurrences": 1,
+                "word": "πίστιν"
+              }
+            ],
+            "bottomWords": []
+          },
+          {
+            "topWords": [
+              {
+                "strong": "G15880",
+                "lemma": "ἐκλεκτός",
+                "morph": "Gr,AR,,,,GMP,",
+                "occurrence": 1,
+                "occurrences": 1,
+                "word": "ἐκλεκτῶν"
+              }
+            ],
+            "bottomWords": []
+          },
+          {
+            "topWords": [
+              {
+                "strong": "G23160",
+                "lemma": "θεός",
+                "morph": "Gr,N,,,,,GMS,",
+                "occurrence": 2,
+                "occurrences": 2,
+                "word": "Θεοῦ"
+              }
+            ],
+            "bottomWords": [
+              {
+                "occurrence": 2,
+                "occurrences": 2,
+                "word": "Dios"
+              }
+            ]
+          }
+        ],
+        "wordBank": [
+          {
+            "occurrence": 1,
+            "occurrences": 5,
+            "word": "de"
+          },
+          {
+            "occurrence": 1,
+            "occurrences": 2,
+            "word": "y"
+          },
+          {
+            "occurrence": 1,
+            "occurrences": 1,
+            "word": "según"
+          },
+          {
+            "occurrence": 1,
+            "occurrences": 3,
+            "word": "la"
+          },
+          {
+            "occurrence": 1,
+            "occurrences": 1,
+            "word": "fe"
+          },
+          {
+            "occurrence": 1,
+            "occurrences": 1,
+            "word": "los"
+          },
+          {
+            "occurrence": 1,
+            "occurrences": 1,
+            "word": "escogidos"
+          },
+          {
+            "occurrence": 1,
+            "occurrences": 1,
+            "word": "el"
+          },
+          {
+            "occurrence": 1,
+            "occurrences": 1,
+            "word": "conocimiento"
+          },
+          {
+            "occurrence": 1,
+            "occurrences": 1,
+            "word": "verdad"
+          },
+          {
+            "occurrence": 1,
+            "occurrences": 1,
+            "word": "que"
+          },
+          {
+            "occurrence": 1,
+            "occurrences": 1,
+            "word": "va"
+          },
+          {
+            "occurrence": 1,
+            "occurrences": 1,
+            "word": "con"
+          },
+          {
+            "occurrence": 1,
+            "occurrences": 1,
+            "word": "piedad"
+          },
+          {
+            "occurrence": 2,
+            "occurrences": 5,
+            "word": "de"
+          },
+          {
+            "occurrence": 2,
+            "occurrences": 2,
+            "word": "y"
+          },
+          {
+            "occurrence": 2,
+            "occurrences": 3,
+            "word": "la"
+          },
+          {
+            "occurrence": 3,
+            "occurrences": 5,
+            "word": "de"
+          },
+          {
+            "occurrence": 3,
+            "occurrences": 3,
+            "word": "la"
+          },
+          {
+            "occurrence": 4,
+            "occurrences": 5,
+            "word": "de"
+          },
+          {
+            "occurrence": 5,
+            "occurrences": 5,
+            "word": "de"
+          }
+        ],
+        "invalid": false,
+        "targetVerseMd5": "f8aee622daff1496bccc7c2e3b358b43",
+        "sourceVersion": "dcs::unfoldingWord/el-x-koine_ugnt@v0.34"
+      }
+    }
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "tool": "translationNotes",
+  "book": "TIT",
+  "resource": {
+    "repoPath": "git.door43.org/es-419_gl/es-419_tn",
+    "version": "v66",
+    "sha": "22f3d0c61e2ab4701cb869547de9c3c43da07208",
+    "languageSet": "primary"
+  },
+  "decisions": [
+    {
+      "contextId": {
+        "checkId": "gr8c",
+        "occurrenceNote": "«Gracia y paz» era un saludo habitual.",
+        "reference": {
+          "bookId": "tit",
+          "chapter": 1,
+          "verse": 4
+        },
+        "tool": "translationNotes",
+        "groupId": "translate-blessing",
+        "quote": [
+          {
+            "word": "χάρις",
+            "occurrence": 1
+          },
+          {
+            "word": "καὶ",
+            "occurrence": 1
+          },
+          {
+            "word": "εἰρήνη",
+            "occurrence": 1
+          }
+        ],
+        "quoteString": "χάρις καὶ εἰρήνη",
+        "glQuote": "Gracia y paz",
+        "occurrence": 1
+      },
+      "category": "translate",
+      "selections": [
+        {
+          "text": "Gracia",
+          "occurrence": 1,
+          "occurrences": 1
+        },
+        {
+          "text": "paz",
+          "occurrence": 1,
+          "occurrences": 1
+        }
+      ],
+      "comments": false,
+      "reminders": false,
+      "nothingToSelect": false,
+      "verseEdits": true,
+      "invalidated": true,
+      "modifiedTimestamp": "2026-07-02T15:40:56.000Z"
+    },
+    {
+      "contextId": {
+        "checkId": "swi9",
+        "occurrenceNote": "«Fe» es un sustantivo abstracto. Si su idioma no usa sustantivos abstractos, puede expresar la idea de otra manera.",
+        "reference": {
+          "bookId": "tit",
+          "chapter": 1,
+          "verse": 1
+        },
+        "tool": "translationNotes",
+        "groupId": "figs-abstractnouns",
+        "quote": [
+          {
+            "word": "κατὰ",
+            "occurrence": 1
+          },
+          {
+            "word": "πίστιν",
+            "occurrence": 1
+          }
+        ],
+        "quoteString": "κατὰ πίστιν",
+        "glQuote": "según la fe",
+        "occurrence": 1
+      },
+      "category": "translate",
+      "selections": [
+        {
+          "text": "fe",
+          "occurrence": 1,
+          "occurrences": 1
+        }
+      ],
+      "comments": "Verificar si «fe» comunica bien el sustantivo abstracto en este contexto.",
+      "reminders": false,
+      "nothingToSelect": false,
+      "verseEdits": false,
+      "invalidated": false,
+      "modifiedTimestamp": "2026-07-02T15:02:11.000Z"
+    }
+  ],
+  "summary": {
+    "note": "derived cache, regenerable — decided counts by category",
+    "decided": {
+      "translate": 2
+    }
+  }
+}

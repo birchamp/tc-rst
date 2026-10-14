@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "tool": "translationWords",
+  "book": "TIT",
+  "resource": {
+    "repoPath": "git.door43.org/es-419_gl/es-419_twl",
+    "version": "v18",
+    "sha": "c2d9547ec95e40c2ba085c597b127c94733feb8a",
+    "languageSet": "primary"
+  },
+  "decisions": [
+    {
+      "contextId": {
+        "checkId": "a9p2",
+        "occurrenceNote": "",
+        "reference": {
+          "bookId": "tit",
+          "chapter": 1,
+          "verse": 1
+        },
+        "tool": "translationWords",
+        "groupId": "apostle",
+        "quote": "ἀπόστολος",
+        "quoteString": "ἀπόστολος",
+        "glQuote": "",
+        "occurrence": 1
+      },
+      "category": "kt",
+      "selections": [
+        {
+          "text": "apóstol",
+          "occurrence": 1,
+          "occurrences": 1
+        }
+      ],
+      "comments": false,
+      "reminders": true,
+      "nothingToSelect": false,
+      "verseEdits": false,
+      "invalidated": false,
+      "modifiedTimestamp": "2026-07-02T14:24:39.000Z"
+    },
+    {
+      "contextId": {
+        "checkId": "t1g7",
+        "occurrenceNote": "",
+        "reference": {
+          "bookId": "tit",
+          "chapter": 1,
+          "verse": 1
+        },
+        "tool": "translationWords",
+        "groupId": "god",
+        "quote": "Θεοῦ",
+        "quoteString": "Θεοῦ",
+        "glQuote": "",
+        "occurrence": 1
+      },
+      "category": "kt",
+      "selections": [
+        {
+          "text": "Dios",
+          "occurrence": 1,
+          "occurrences": 2
+        }
+      ],
+      "comments": false,
+      "reminders": false,
+      "nothingToSelect": false,
+      "verseEdits": false,
+      "invalidated": false,
+      "status": "valid",
+      "modifiedTimestamp": "2026-07-02T14:21:07.000Z"
+    }
+  ],
+  "summary": {
+    "note": "derived cache, regenerable — decided counts by category",
+    "decided": {
+      "kt": 2
+    }
+  }
+}

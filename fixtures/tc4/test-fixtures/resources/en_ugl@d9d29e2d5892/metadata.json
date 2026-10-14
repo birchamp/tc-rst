@@ -1,0 +1,79 @@
+{
+  "format": "scripture burrito",
+  "meta": {
+    "version": "1.0.0",
+    "category": "source",
+    "generator": {
+      "softwareName": "Burrito Truck by MVH Solutions",
+      "softwareVersion": "0.0.1",
+      "userName": "Mark Howe"
+    },
+    "defaultLocale": "en",
+    "dateCreated": "2025-11-24T12:05:15.878Z",
+    "normalization": "NFC"
+  },
+  "idAuthorities": {
+    "uWBurritos": {
+      "id": "https://git.door43.org/uW",
+      "name": {
+        "en": "Door43 uW Burritos"
+      }
+    }
+  },
+  "identification": {
+    "primary": {
+      "uWBurritos": {
+        "TA": {
+          "revision": "1",
+          "timestamp": "2025-11-24T12:05:15.878Z"
+        }
+      }
+    },
+    "name": {
+      "en": "unfoldingWord® Greek Lexicon"
+    },
+    "description": {
+      "en": "unfoldingWord® Greek Lexicon"
+    },
+    "abbreviation": {
+      "en": "TGL"
+    }
+  },
+  "languages": [
+    {
+      "tag": "en",
+      "name": {
+        "en": "English"
+      },
+      "scriptDirection": "ltr"
+    }
+  ],
+  "type": {
+    "flavorType": {
+      "name": "peripheral",
+      "flavor": {
+        "name": "x-lexicon"
+      }
+    }
+  },
+  "confidential": false,
+  "localizedNames": {},
+  "ingredients": {
+      "README.md": {
+      "checksum": {
+        "md5": "6495176912f48cfbcf61f1c0b9d2eb02"
+      },
+      "mimeType": "text/markdown",
+      "size": 24
+    }
+  },
+  "copyright": {
+    "shortStatements": [
+      {
+        "statement": "© unfoldingWord 2022, CC BY-SA 4.0",
+        "mimetype": "text/plain",
+        "lang": "en"
+      }
+    ]
+  }
+}

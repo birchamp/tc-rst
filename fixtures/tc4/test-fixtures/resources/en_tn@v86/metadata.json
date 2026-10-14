@@ -1,0 +1,1138 @@
+{
+  "format": "scripture burrito",
+  "meta": {
+    "version": "1.0.0",
+    "category": "source",
+    "generator": {
+      "softwareName": "go-rc2sb",
+      "softwareVersion": "v0.4.0",
+      "userName": ""
+    },
+    "defaultLocale": "en",
+    "dateCreated": "2026-08-03T15:45:56.428Z",
+    "normalization": "NFC"
+  },
+  "idAuthorities": {
+    "dcs": {
+      "id": "https://git.door43.org",
+      "name": {
+        "en": "Door43 Content Service"
+      }
+    }
+  },
+  "identification": {
+    "primary": {
+      "dcs": {
+        "unfoldingWord/en_tn": {
+          "revision": "c354b8ae66a23c485bf6f38fd35bd8f7ef81e4e5",
+          "timestamp": "2026-08-03T15:45:56.428Z"
+        }
+      }
+    },
+    "name": {
+      "en": "unfoldingWord® Translation Notes"
+    },
+    "description": {
+      "en": "unfoldingWord® Translation Notes"
+    },
+    "abbreviation": {
+      "en": "TN"
+    }
+  },
+  "languages": [
+    {
+      "tag": "en",
+      "name": {
+        "en": "English"
+      },
+      "scriptDirection": "ltr"
+    }
+  ],
+  "type": {
+    "flavorType": {
+      "name": "parascriptural",
+      "flavor": {
+        "name": "x-bcvnotes"
+      },
+      "currentScope": {
+        "1CO": [],
+        "1JN": [],
+        "1PE": [],
+        "1SA": [],
+        "1TH": [],
+        "1TI": [],
+        "2CO": [],
+        "2JN": [],
+        "2PE": [],
+        "2SA": [],
+        "2TH": [],
+        "2TI": [],
+        "3JN": [],
+        "ACT": [],
+        "COL": [],
+        "EPH": [],
+        "EST": [],
+        "EXO": [],
+        "EZR": [],
+        "GAL": [],
+        "GEN": [],
+        "HAG": [],
+        "HEB": [],
+        "JAS": [],
+        "JDG": [],
+        "JHN": [],
+        "JOB": [],
+        "JOL": [],
+        "JON": [],
+        "JOS": [],
+        "JUD": [],
+        "LEV": [],
+        "LUK": [],
+        "MAL": [],
+        "MAT": [],
+        "MRK": [],
+        "NAM": [],
+        "NEH": [],
+        "OBA": [],
+        "PHM": [],
+        "PHP": [],
+        "PRO": [],
+        "REV": [],
+        "ROM": [],
+        "RUT": [],
+        "SNG": [],
+        "TIT": [],
+        "ZEP": []
+      }
+    }
+  },
+  "confidential": false,
+  "localizedNames": {
+    "book-1co": {
+      "abbr": {
+        "en": "1Co"
+      },
+      "short": {
+        "en": "First Corinthians"
+      },
+      "long": {
+        "en": "The First Letter of Paul to the Corinthians"
+      }
+    },
+    "book-1jn": {
+      "abbr": {
+        "en": "1Jn"
+      },
+      "short": {
+        "en": "First John"
+      },
+      "long": {
+        "en": "The First Letter of John"
+      }
+    },
+    "book-1pe": {
+      "abbr": {
+        "en": "1Pe"
+      },
+      "short": {
+        "en": "First Peter"
+      },
+      "long": {
+        "en": "The First Letter of Peter"
+      }
+    },
+    "book-1sa": {
+      "abbr": {
+        "en": "1Sa"
+      },
+      "short": {
+        "en": "First Samuel"
+      },
+      "long": {
+        "en": "The First Book of Samuel"
+      }
+    },
+    "book-1th": {
+      "abbr": {
+        "en": "1Th"
+      },
+      "short": {
+        "en": "First Thessalonians"
+      },
+      "long": {
+        "en": "The First Letter of Paul to the Thessalonians"
+      }
+    },
+    "book-1ti": {
+      "abbr": {
+        "en": "1Ti"
+      },
+      "short": {
+        "en": "First Timothy"
+      },
+      "long": {
+        "en": "The First Letter of Paul to Timothy"
+      }
+    },
+    "book-2co": {
+      "abbr": {
+        "en": "2Co"
+      },
+      "short": {
+        "en": "Second Corinthians"
+      },
+      "long": {
+        "en": "The Second Letter of Paul to the Corinthians"
+      }
+    },
+    "book-2jn": {
+      "abbr": {
+        "en": "2Jn"
+      },
+      "short": {
+        "en": "Second John"
+      },
+      "long": {
+        "en": "The Second Letter of John"
+      }
+    },
+    "book-2pe": {
+      "abbr": {
+        "en": "2Pe"
+      },
+      "short": {
+        "en": "Second Peter"
+      },
+      "long": {
+        "en": "The Second Letter of Peter"
+      }
+    },
+    "book-2sa": {
+      "abbr": {
+        "en": "2Sa"
+      },
+      "short": {
+        "en": "Second Samuel"
+      },
+      "long": {
+        "en": "The Second Book of Samuel"
+      }
+    },
+    "book-2th": {
+      "abbr": {
+        "en": "2Th"
+      },
+      "short": {
+        "en": "Second Thessalonians"
+      },
+      "long": {
+        "en": "The Second Letter of Paul to the Thessalonians"
+      }
+    },
+    "book-2ti": {
+      "abbr": {
+        "en": "2Ti"
+      },
+      "short": {
+        "en": "Second Timothy"
+      },
+      "long": {
+        "en": "The Second Letter of Paul to Timothy"
+      }
+    },
+    "book-3jn": {
+      "abbr": {
+        "en": "3Jn"
+      },
+      "short": {
+        "en": "Third John"
+      },
+      "long": {
+        "en": "The Third Letter of John"
+      }
+    },
+    "book-act": {
+      "abbr": {
+        "en": "Act"
+      },
+      "short": {
+        "en": "Acts"
+      },
+      "long": {
+        "en": "The Acts of the Apostles"
+      }
+    },
+    "book-col": {
+      "abbr": {
+        "en": "Col"
+      },
+      "short": {
+        "en": "Colossians"
+      },
+      "long": {
+        "en": "The Letter of Paul to the Colossians"
+      }
+    },
+    "book-eph": {
+      "abbr": {
+        "en": "Eph"
+      },
+      "short": {
+        "en": "Ephesians"
+      },
+      "long": {
+        "en": "The Letter of Paul to the Ephesians"
+      }
+    },
+    "book-est": {
+      "abbr": {
+        "en": "Est"
+      },
+      "short": {
+        "en": "Esther"
+      },
+      "long": {
+        "en": "The Book of Esther"
+      }
+    },
+    "book-exo": {
+      "abbr": {
+        "en": "Exo"
+      },
+      "short": {
+        "en": "Exodus"
+      },
+      "long": {
+        "en": "The Book of Exodus"
+      }
+    },
+    "book-ezr": {
+      "abbr": {
+        "en": "Ezr"
+      },
+      "short": {
+        "en": "Ezra"
+      },
+      "long": {
+        "en": "The Book of Ezra"
+      }
+    },
+    "book-gal": {
+      "abbr": {
+        "en": "Gal"
+      },
+      "short": {
+        "en": "Galatians"
+      },
+      "long": {
+        "en": "The Letter of Paul to the Galatians"
+      }
+    },
+    "book-gen": {
+      "abbr": {
+        "en": "Gen"
+      },
+      "short": {
+        "en": "Genesis"
+      },
+      "long": {
+        "en": "The Book of Genesis"
+      }
+    },
+    "book-hag": {
+      "abbr": {
+        "en": "Hag"
+      },
+      "short": {
+        "en": "Haggai"
+      },
+      "long": {
+        "en": "The Book of Haggai"
+      }
+    },
+    "book-heb": {
+      "abbr": {
+        "en": "Heb"
+      },
+      "short": {
+        "en": "Hebrews"
+      },
+      "long": {
+        "en": "The Letter to the Hebrews"
+      }
+    },
+    "book-jas": {
+      "abbr": {
+        "en": "Jas"
+      },
+      "short": {
+        "en": "James"
+      },
+      "long": {
+        "en": "The Letter of James"
+      }
+    },
+    "book-jdg": {
+      "abbr": {
+        "en": "Jdg"
+      },
+      "short": {
+        "en": "Judges"
+      },
+      "long": {
+        "en": "The Book of Judges"
+      }
+    },
+    "book-jhn": {
+      "abbr": {
+        "en": "Jhn"
+      },
+      "short": {
+        "en": "John"
+      },
+      "long": {
+        "en": "The Gospel of John"
+      }
+    },
+    "book-job": {
+      "abbr": {
+        "en": "Job"
+      },
+      "short": {
+        "en": "Job"
+      },
+      "long": {
+        "en": "The Book of Job"
+      }
+    },
+    "book-jol": {
+      "abbr": {
+        "en": "Jol"
+      },
+      "short": {
+        "en": "Joel"
+      },
+      "long": {
+        "en": "The Book of Joel"
+      }
+    },
+    "book-jon": {
+      "abbr": {
+        "en": "Jon"
+      },
+      "short": {
+        "en": "Jonah"
+      },
+      "long": {
+        "en": "The Book of Jonah"
+      }
+    },
+    "book-jos": {
+      "abbr": {
+        "en": "Jos"
+      },
+      "short": {
+        "en": "Joshua"
+      },
+      "long": {
+        "en": "The Book of Joshua"
+      }
+    },
+    "book-jud": {
+      "abbr": {
+        "en": "Jud"
+      },
+      "short": {
+        "en": "Jude"
+      },
+      "long": {
+        "en": "The Letter of Jude"
+      }
+    },
+    "book-lev": {
+      "abbr": {
+        "en": "Lev"
+      },
+      "short": {
+        "en": "Leviticus"
+      },
+      "long": {
+        "en": "The Book of Leviticus"
+      }
+    },
+    "book-luk": {
+      "abbr": {
+        "en": "Luk"
+      },
+      "short": {
+        "en": "Luke"
+      },
+      "long": {
+        "en": "The Gospel of Luke"
+      }
+    },
+    "book-mal": {
+      "abbr": {
+        "en": "Mal"
+      },
+      "short": {
+        "en": "Malachi"
+      },
+      "long": {
+        "en": "The Book of Malachi"
+      }
+    },
+    "book-mat": {
+      "abbr": {
+        "en": "Mat"
+      },
+      "short": {
+        "en": "Matthew"
+      },
+      "long": {
+        "en": "The Gospel of Matthew"
+      }
+    },
+    "book-mrk": {
+      "abbr": {
+        "en": "Mrk"
+      },
+      "short": {
+        "en": "Mark"
+      },
+      "long": {
+        "en": "The Gospel of Mark"
+      }
+    },
+    "book-nam": {
+      "abbr": {
+        "en": "Nam"
+      },
+      "short": {
+        "en": "Nahum"
+      },
+      "long": {
+        "en": "The Book of Nahum"
+      }
+    },
+    "book-neh": {
+      "abbr": {
+        "en": "Neh"
+      },
+      "short": {
+        "en": "Nehemiah"
+      },
+      "long": {
+        "en": "The Book of Nehemiah"
+      }
+    },
+    "book-oba": {
+      "abbr": {
+        "en": "Oba"
+      },
+      "short": {
+        "en": "Obadiah"
+      },
+      "long": {
+        "en": "The Book of Obadiah"
+      }
+    },
+    "book-phm": {
+      "abbr": {
+        "en": "Phm"
+      },
+      "short": {
+        "en": "Philemon"
+      },
+      "long": {
+        "en": "The Letter of Paul to Philemon"
+      }
+    },
+    "book-php": {
+      "abbr": {
+        "en": "Php"
+      },
+      "short": {
+        "en": "Philippians"
+      },
+      "long": {
+        "en": "The Letter of Paul to the Philippians"
+      }
+    },
+    "book-pro": {
+      "abbr": {
+        "en": "Pro"
+      },
+      "short": {
+        "en": "Proverbs"
+      },
+      "long": {
+        "en": "The Book of Proverbs"
+      }
+    },
+    "book-rev": {
+      "abbr": {
+        "en": "Rev"
+      },
+      "short": {
+        "en": "Revelation"
+      },
+      "long": {
+        "en": "The Book of Revelation"
+      }
+    },
+    "book-rom": {
+      "abbr": {
+        "en": "Rom"
+      },
+      "short": {
+        "en": "Romans"
+      },
+      "long": {
+        "en": "The Letter of Paul to the Romans"
+      }
+    },
+    "book-rut": {
+      "abbr": {
+        "en": "Rut"
+      },
+      "short": {
+        "en": "Ruth"
+      },
+      "long": {
+        "en": "The Book of Ruth"
+      }
+    },
+    "book-sng": {
+      "abbr": {
+        "en": "Sng"
+      },
+      "short": {
+        "en": "Song of Songs"
+      },
+      "long": {
+        "en": "The Song of Songs"
+      }
+    },
+    "book-tit": {
+      "abbr": {
+        "en": "Tit"
+      },
+      "short": {
+        "en": "Titus"
+      },
+      "long": {
+        "en": "The Letter of Paul to Titus"
+      }
+    },
+    "book-zep": {
+      "abbr": {
+        "en": "Zep"
+      },
+      "short": {
+        "en": "Zephaniah"
+      },
+      "long": {
+        "en": "The Book of Zephaniah"
+      }
+    }
+  },
+  "ingredients": {
+    "ingredients/1CO.tsv": {
+      "checksum": {
+        "md5": "3357ad7b18b373327e3471e7ad58b71b"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 1328732,
+      "scope": {
+        "1CO": []
+      }
+    },
+    "ingredients/1JN.tsv": {
+      "checksum": {
+        "md5": "f177a98c5c8be1704953f5cac7277348"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 250128,
+      "scope": {
+        "1JN": []
+      }
+    },
+    "ingredients/1PE.tsv": {
+      "checksum": {
+        "md5": "3ad3196188a9f0930189d31b72a3e31b"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 191850,
+      "scope": {
+        "1PE": []
+      }
+    },
+    "ingredients/1SA.tsv": {
+      "checksum": {
+        "md5": "df953d1297c17c039f405c0ff490bed0"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 1112891,
+      "scope": {
+        "1SA": []
+      }
+    },
+    "ingredients/1TH.tsv": {
+      "checksum": {
+        "md5": "145ec5f2967216e6a02b8c0173cbbaf3"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 248674,
+      "scope": {
+        "1TH": []
+      }
+    },
+    "ingredients/1TI.tsv": {
+      "checksum": {
+        "md5": "388b2ca5e688058b38a8b0da23b9e6b8"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 297587,
+      "scope": {
+        "1TI": []
+      }
+    },
+    "ingredients/2CO.tsv": {
+      "checksum": {
+        "md5": "08c80d646d6918bb9646cf41168b0102"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 717123,
+      "scope": {
+        "2CO": []
+      }
+    },
+    "ingredients/2JN.tsv": {
+      "checksum": {
+        "md5": "11b0093d0b3d16670d775c42ec362860"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 30180,
+      "scope": {
+        "2JN": []
+      }
+    },
+    "ingredients/2PE.tsv": {
+      "checksum": {
+        "md5": "55db9421411893ee195f0d2b5349c4a6"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 166784,
+      "scope": {
+        "2PE": []
+      }
+    },
+    "ingredients/2SA.tsv": {
+      "checksum": {
+        "md5": "86f42e30916ae9f6dabd2d33a9a4def0"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 939297,
+      "scope": {
+        "2SA": []
+      }
+    },
+    "ingredients/2TH.tsv": {
+      "checksum": {
+        "md5": "ae5e384056e74cf27c21279415c7e4a6"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 78193,
+      "scope": {
+        "2TH": []
+      }
+    },
+    "ingredients/2TI.tsv": {
+      "checksum": {
+        "md5": "57f8f90ad710ee4bc44db3a16a930ec6"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 193089,
+      "scope": {
+        "2TI": []
+      }
+    },
+    "ingredients/3JN.tsv": {
+      "checksum": {
+        "md5": "db61956c4b2feeed825b061661debe1f"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 23371,
+      "scope": {
+        "3JN": []
+      }
+    },
+    "ingredients/ACT.tsv": {
+      "checksum": {
+        "md5": "cbe1d59562ce4018c5b07a7d05795aa9"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 1249624,
+      "scope": {
+        "ACT": []
+      }
+    },
+    "ingredients/COL.tsv": {
+      "checksum": {
+        "md5": "05a8dd3cfc46773023e7509c0df015f5"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 270293,
+      "scope": {
+        "COL": []
+      }
+    },
+    "ingredients/EPH.tsv": {
+      "checksum": {
+        "md5": "fe6dfd1f137eefc3cec180d005d4f1e8"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 141425,
+      "scope": {
+        "EPH": []
+      }
+    },
+    "ingredients/EST.tsv": {
+      "checksum": {
+        "md5": "90174c302351c5a296c21e178958f5a9"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 333183,
+      "scope": {
+        "EST": []
+      }
+    },
+    "ingredients/EXO.tsv": {
+      "checksum": {
+        "md5": "f11201c5d12224bb0651cfc18970b59d"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 802158,
+      "scope": {
+        "EXO": []
+      }
+    },
+    "ingredients/EZR.tsv": {
+      "checksum": {
+        "md5": "cc8a8f09631af42ca6e04165df3eadfe"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 513831,
+      "scope": {
+        "EZR": []
+      }
+    },
+    "ingredients/GAL.tsv": {
+      "checksum": {
+        "md5": "a4a02a3c14a29fa4da09d811b76321fb"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 327268,
+      "scope": {
+        "GAL": []
+      }
+    },
+    "ingredients/GEN.tsv": {
+      "checksum": {
+        "md5": "a0f1fc0a9df635469e3325275f84ad23"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 1546639,
+      "scope": {
+        "GEN": []
+      }
+    },
+    "ingredients/HAG.tsv": {
+      "checksum": {
+        "md5": "81d96725cb080dd2451d712a73d6503f"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 79337,
+      "scope": {
+        "HAG": []
+      }
+    },
+    "ingredients/HEB.tsv": {
+      "checksum": {
+        "md5": "17aa3f1d8c66215df20e6d6199e7252c"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 908543,
+      "scope": {
+        "HEB": []
+      }
+    },
+    "ingredients/JAS.tsv": {
+      "checksum": {
+        "md5": "a6096f58ca6533a1781aaf20267bbb0f"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 235493,
+      "scope": {
+        "JAS": []
+      }
+    },
+    "ingredients/JDG.tsv": {
+      "checksum": {
+        "md5": "3a543d181dd441dc65330c0bb7a396d9"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 716078,
+      "scope": {
+        "JDG": []
+      }
+    },
+    "ingredients/JHN.tsv": {
+      "checksum": {
+        "md5": "56d810dc891806c695e100510d874304"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 905509,
+      "scope": {
+        "JHN": []
+      }
+    },
+    "ingredients/JOB.tsv": {
+      "checksum": {
+        "md5": "0311245e11020d561bf72e345be3cd5c"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 1450829,
+      "scope": {
+        "JOB": []
+      }
+    },
+    "ingredients/JOL.tsv": {
+      "checksum": {
+        "md5": "371f9c272d692cce0dca985d602250ab"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 124194,
+      "scope": {
+        "JOL": []
+      }
+    },
+    "ingredients/JON.tsv": {
+      "checksum": {
+        "md5": "312630fd9d03d41b293a9bef524c3eab"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 89386,
+      "scope": {
+        "JON": []
+      }
+    },
+    "ingredients/JOS.tsv": {
+      "checksum": {
+        "md5": "29fbb10441c68d39ca0c07a53612b0c3"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 447307,
+      "scope": {
+        "JOS": []
+      }
+    },
+    "ingredients/JUD.tsv": {
+      "checksum": {
+        "md5": "5cb64ec7ee8dcc9f7960d19c9aa1d502"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 56687,
+      "scope": {
+        "JUD": []
+      }
+    },
+    "ingredients/LEV.tsv": {
+      "checksum": {
+        "md5": "dcf814530c7032b6a91a23c321c16c6f"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 939551,
+      "scope": {
+        "LEV": []
+      }
+    },
+    "ingredients/LICENSE.md": {
+      "checksum": {
+        "md5": "3c2f848e6aaf41409b90e2b9198550da"
+      },
+      "mimeType": "text/markdown",
+      "size": 1309
+    },
+    "ingredients/LUK.tsv": {
+      "checksum": {
+        "md5": "a5df3637a9e79f0e50f66833f9942842"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 1426153,
+      "scope": {
+        "LUK": []
+      }
+    },
+    "ingredients/MAL.tsv": {
+      "checksum": {
+        "md5": "0c25f006a3c42e96006d4f9701a10021"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 102519,
+      "scope": {
+        "MAL": []
+      }
+    },
+    "ingredients/MAT.tsv": {
+      "checksum": {
+        "md5": "415bc9146a3710a441f65dc6bdc955bd"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 2167368,
+      "scope": {
+        "MAT": []
+      }
+    },
+    "ingredients/MRK.tsv": {
+      "checksum": {
+        "md5": "3dab24ad6a63b4e30621e30072939e37"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 1267361,
+      "scope": {
+        "MRK": []
+      }
+    },
+    "ingredients/NAM.tsv": {
+      "checksum": {
+        "md5": "0915de19acda0ad679f8de96d14e757a"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 79499,
+      "scope": {
+        "NAM": []
+      }
+    },
+    "ingredients/NEH.tsv": {
+      "checksum": {
+        "md5": "bfc0a57084a2a07c8a06e6ca0039ff38"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 636708,
+      "scope": {
+        "NEH": []
+      }
+    },
+    "ingredients/OBA.tsv": {
+      "checksum": {
+        "md5": "9875fe181872856e571196a54093ac32"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 55223,
+      "scope": {
+        "OBA": []
+      }
+    },
+    "ingredients/PHM.tsv": {
+      "checksum": {
+        "md5": "da5c9791735fd53cfcb857eceb0ce971"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 29807,
+      "scope": {
+        "PHM": []
+      }
+    },
+    "ingredients/PHP.tsv": {
+      "checksum": {
+        "md5": "2c8161e52e8ec98c7b0f5f943736569d"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 177033,
+      "scope": {
+        "PHP": []
+      }
+    },
+    "ingredients/PRO.tsv": {
+      "checksum": {
+        "md5": "e898d22366a5812542b0fa02b24dd020"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 1413364,
+      "scope": {
+        "PRO": []
+      }
+    },
+    "ingredients/REV.tsv": {
+      "checksum": {
+        "md5": "56191c83cbcf5468c9f4fdbb3d7bfdd2"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 566432,
+      "scope": {
+        "REV": []
+      }
+    },
+    "ingredients/ROM.tsv": {
+      "checksum": {
+        "md5": "4d1d1418ce82f5c51aad672856243047"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 984439,
+      "scope": {
+        "ROM": []
+      }
+    },
+    "ingredients/RUT.tsv": {
+      "checksum": {
+        "md5": "c56be7b265773dc75315d55a5c4632bf"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 115605,
+      "scope": {
+        "RUT": []
+      }
+    },
+    "ingredients/SNG.tsv": {
+      "checksum": {
+        "md5": "e71949bca46935bec0bc7b12e75bd5ed"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 253852,
+      "scope": {
+        "SNG": []
+      }
+    },
+    "ingredients/TIT.tsv": {
+      "checksum": {
+        "md5": "8368a7021ae1d17b8a587000d915be42"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 61882,
+      "scope": {
+        "TIT": []
+      }
+    },
+    "ingredients/ZEP.tsv": {
+      "checksum": {
+        "md5": "3dfb448f67abec222d4e06eac5155bb5"
+      },
+      "mimeType": "text/tab-separated-values",
+      "size": 143888,
+      "scope": {
+        "ZEP": []
+      }
+    }
+  },
+  "copyright": {
+    "shortStatements": [
+      {
+        "statement": "© unfoldingWord 2025, CC BY-SA 4.0",
+        "mimetype": "text/plain",
+        "lang": "en"
+      }
+    ]
+  }
+}

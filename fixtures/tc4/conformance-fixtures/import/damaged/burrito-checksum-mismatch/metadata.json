@@ -1,0 +1,94 @@
+{
+  "format": "scripture burrito",
+  "meta": {
+    "version": "1.0.0",
+    "category": "source",
+    "generator": {
+      "softwareName": "translationCore 4 (sample)",
+      "softwareVersion": "0.1.0",
+      "userName": "Equipo Ejemplo"
+    },
+    "defaultLocale": "en",
+    "dateCreated": "2026-07-02T12:00:00.000Z",
+    "normalization": "NFC"
+  },
+  "idAuthorities": {
+    "local": {
+      "id": "http://_local_",
+      "name": {
+        "en": "Local Project"
+      }
+    },
+    "dcs": {
+      "id": "https://git.door43.org",
+      "name": {
+        "en": "Door43 Content Service"
+      }
+    }
+  },
+  "identification": {
+    "primary": {
+      "local": {
+        "ejemplo_tj": {
+          "revision": "1",
+          "timestamp": "2026-07-02T12:00:00.000Z"
+        }
+      }
+    },
+    "name": {
+      "en": "Foreign Burrito — Jonás"
+    },
+    "description": {
+      "en": "Sample multi-book tC4 drafting+checking project (Titus mid-check; Jonah barely started, incl. a verse-span fixture at 2:9-10)"
+    },
+    "abbreviation": {
+      "en": "ejemplo_tj"
+    }
+  },
+  "languages": [
+    {
+      "tag": "es-419",
+      "name": {
+        "en": "Spanish (Latin America)",
+        "es-419": "Español (Latinoamérica)"
+      },
+      "scriptDirection": "ltr"
+    }
+  ],
+  "type": {
+    "flavorType": {
+      "name": "scripture",
+      "flavor": {
+        "name": "textTranslation",
+        "usfmVersion": "3.0",
+        "translationType": "firstTranslation",
+        "audience": "common",
+        "projectType": "standard"
+      },
+      "currentScope": {
+        "JON": []
+      }
+    }
+  },
+  "confidential": false,
+  "localizedNames": {},
+  "ingredients": {
+    "ingredients/JON.usfm": {
+      "checksum": {
+        "md5": "33a071cb6e88abeb4354727aa22e0fe8"
+      },
+      "mimeType": "text/plain",
+      "size": 744,
+      "scope": {
+        "JON": []
+      }
+    }
+  },
+  "copyright": {
+    "shortStatements": [
+      {
+        "statement": "CC BY-SA 4.0, Equipo Ejemplo"
+      }
+    ]
+  }
+}
