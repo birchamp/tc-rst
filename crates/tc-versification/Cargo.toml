@@ -1,0 +1,19 @@
+[package]
+name = "tc-versification"
+description = "Versification schemes: parse .vrs and vrs.json, bundle the standard schemes, and map references between schemes through org exactly as Proskomma does."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tc-core = { path = "../tc-core" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
