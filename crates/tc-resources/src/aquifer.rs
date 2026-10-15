@@ -22,7 +22,10 @@ use reqwest::header::{ACCEPT, HeaderMap};
 use serde::Deserialize;
 use tc_core::BookId;
 use tc_door43::{CommitSha, InternetSwitch, TagName, UnreachableCause};
-use tc_helps::aquifer::{AquiferOrder, parse_aquifer_articles, parse_aquifer_metadata};
+use tc_helps::aquifer::{
+    AquiferHelpsKind, AquiferOrder, academy_from_aquifer, notes_from_aquifer,
+    parse_aquifer_articles, parse_aquifer_metadata, questions_from_aquifer, words_from_aquifer,
+};
 use url::Url;
 
 use crate::error::{AquiferError, InstallError, Refusal};
@@ -516,8 +519,9 @@ pub fn install_aquifer_zip(
 }
 
 /// Reads the release as tc-helps will: the metadata names the pinned resource and
-/// language, and every article file parses. Returns the books it covers and how many
-/// articles the converter refused alone.
+/// language, every article file parses, and the converter for its kind turns the
+/// articles into helps. Returns the books it covers and how many articles the reader or
+/// the converter refused alone.
 fn check_release(
     pin: &AquiferPin,
     files: &[(String, Vec<u8>)],
@@ -546,24 +550,49 @@ fn check_release(
             found: metadata.language,
         });
     }
-    if metadata.kind().is_none() {
+    let Some(kind) = metadata.kind() else {
         return Err(Refusal::NotAquifer(format!(
             "{} is not one of the unfoldingWord helps Aquifer mirrors",
             metadata.resource_code
         )));
-    }
+    };
     let mut refused_articles = 0;
     let mut books = Vec::new();
+    let mut articles = Vec::new();
     for (path, _) in files.iter().filter(|(p, _)| is_article_file(p)) {
         let loaded = parse_aquifer_articles(text(path)?)
             .map_err(|e| Refusal::NotAquifer(format!("{path}: {e}")))?;
         refused_articles += loaded.refused.len();
+        articles.extend(loaded.items);
         if metadata.order == AquiferOrder::Canonical
             && let Some(book) = canonical_book(path)
         {
             books.push(book);
         }
     }
+    if articles.is_empty() {
+        return Err(Refusal::NotAquifer("it holds no article".to_owned()));
+    }
+    // Converted as the loader will, so an asset whose articles convert to nothing is
+    // refused here rather than found empty later.
+    let (converted, refused) = match kind {
+        AquiferHelpsKind::Notes => {
+            let notes = notes_from_aquifer(&articles);
+            (notes.items.len(), notes.refused.len())
+        }
+        AquiferHelpsKind::Questions => {
+            let questions = questions_from_aquifer(&articles);
+            (questions.items.len(), questions.refused.len())
+        }
+        AquiferHelpsKind::Words => (words_from_aquifer(&articles).articles.len(), 0),
+        AquiferHelpsKind::Academy => (academy_from_aquifer(&articles).len(), 0),
+    };
+    if converted == 0 {
+        return Err(Refusal::NotAquifer(
+            "tc-helps converts none of its articles".to_owned(),
+        ));
+    }
+    refused_articles += refused;
     books.sort();
     let coverage = match metadata.order {
         AquiferOrder::Canonical => BookCoverage::books(books),

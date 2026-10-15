@@ -83,7 +83,7 @@ pub fn zip(files: &[(&str, &[u8])]) -> Vec<u8> {
 /// Asserts that the store holds no install and no partial one.
 pub fn nothing_installed(store: &ResourceStore) {
     assert!(
-        store.installed().unwrap().is_empty(),
+        store.installed().unwrap().installs.is_empty(),
         "nothing may be installed"
     );
     let partial = store.root().join(".partial");

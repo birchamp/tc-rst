@@ -75,7 +75,7 @@ async fn newer_production_releases_are_offered_per_set_and_nothing_is_installed(
         "only the catalog is asked: {requests:?}"
     );
     assert!(
-        rig.store.installed().unwrap().is_empty(),
+        rig.store.installed().unwrap().installs.is_empty(),
         "nothing is installed"
     );
 
@@ -159,7 +159,7 @@ async fn aquifer_offers_a_newer_release_or_a_reuploaded_asset_by_digest() {
             .all(|r| !r.contains("/releases/download/")),
         "nothing is downloaded"
     );
-    assert!(rig.store.installed().unwrap().is_empty());
+    assert!(rig.store.installed().unwrap().installs.is_empty());
 
     let next = apply_aquifer_upgrade(&helps, &offers[0]).unwrap();
     assert_eq!(next.notes.as_ref(), Some(to));

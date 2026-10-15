@@ -279,6 +279,14 @@ fn list_files(dir: &Path, prefix: &str, out: &mut Vec<String>) -> Result<(), Sto
     Ok(())
 }
 
+/// What a store holds.
+#[derive(Debug, Default)]
+pub struct Inventory {
+    pub installs: Vec<Installed>,
+    /// Install folders whose receipt cannot be read: listed, never used or repaired.
+    pub unreadable: Vec<StoreError>,
+}
+
 /// What [`ResourceStore::seed_from`] did with each install of a bundled store.
 #[derive(Debug, Default)]
 pub struct SeedReport {
@@ -346,8 +354,8 @@ impl ResourceStore {
     fn dcs_dir(&self, pin: &ResourcePin) -> PathBuf {
         self.root
             .join(DCS)
-            .join(pin.repo.owner().as_str().to_ascii_lowercase())
-            .join(pin.repo.name().as_str().to_ascii_lowercase())
+            .join(folder_name(pin.repo.owner().as_str()))
+            .join(folder_name(pin.repo.name().as_str()))
             .join(pin.sha.as_str())
     }
 
@@ -355,8 +363,8 @@ impl ResourceStore {
         let digest = pin.sha256.to_hex();
         self.root
             .join(AQUIFER)
-            .join(pin.repo.owner.as_str().to_ascii_lowercase())
-            .join(pin.repo.name.as_str().to_ascii_lowercase())
+            .join(folder_name(pin.repo.owner.as_str()))
+            .join(folder_name(pin.repo.name.as_str()))
             .join(pin.commit.as_str())
             .join(format!("{}-{}", pin.language, &digest[..16]))
     }
@@ -409,15 +417,19 @@ impl ResourceStore {
         }
     }
 
-    /// Every install, sorted by folder.
-    pub fn installed(&self) -> Result<Vec<Installed>, StoreError> {
-        let mut out = Vec::new();
+    /// Every install, sorted by folder, and every install folder that cannot be read,
+    /// with why. One damaged folder never hides the others.
+    pub fn installed(&self) -> Result<Inventory, StoreError> {
+        let mut out = Inventory::default();
         for (source, depth) in [(DCS, 3), (AQUIFER, 4)] {
             let mut dirs = Vec::new();
             dirs_at_depth(&self.root.join(source), depth, &mut dirs)?;
             dirs.sort();
             for dir in dirs {
-                out.push(read_install(&dir)?);
+                match read_install(&dir) {
+                    Ok(install) => out.installs.push(install),
+                    Err(e) => out.unreadable.push(e),
+                }
             }
         }
         Ok(out)
@@ -428,6 +440,7 @@ impl ResourceStore {
     pub fn installed_dcs_pins(&self) -> Result<Vec<ResourcePin>, StoreError> {
         Ok(self
             .installed()?
+            .installs
             .iter()
             .filter_map(Installed::dcs_pin)
             .collect())
@@ -438,21 +451,41 @@ impl ResourceStore {
     /// first run works offline; seeding again after an update adds the new releases and
     /// keeps the old ones, which projects may still pin.
     pub fn seed_from(&self, bundled: &ResourceStore) -> Result<SeedReport, StoreError> {
+        let inventory = bundled.installed()?;
         let mut report = SeedReport::default();
-        for install in bundled.installed()? {
+        for e in inventory.unreadable {
+            report
+                .refused
+                .push(("an unreadable bundled install".to_owned(), e));
+        }
+        for install in inventory.installs {
             let name = install.origin().describe();
-            if self.find(install.origin())?.is_some() {
-                report.already_installed.push(name);
-                continue;
+            match self.find(install.origin()) {
+                Ok(Some(_)) => {
+                    report.already_installed.push(name);
+                    continue;
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    report.refused.push((name, e));
+                    continue;
+                }
             }
-            if let Err(e) = install.verify() {
-                report.refused.push((name, e));
-                continue;
-            }
-            let mut files = Vec::new();
-            for record in &install.receipt.files {
-                files.push((record.path.clone(), install.read(&record.path)?));
-            }
+            let files = install.verify().and_then(|()| {
+                install
+                    .receipt
+                    .files
+                    .iter()
+                    .map(|r| Ok((r.path.clone(), install.read(&r.path)?)))
+                    .collect::<Result<Vec<_>, StoreError>>()
+            });
+            let files = match files {
+                Ok(files) => files,
+                Err(e) => {
+                    report.refused.push((name, e));
+                    continue;
+                }
+            };
             let staged = Staged {
                 origin: install.receipt.origin.clone(),
                 books: install.receipt.books.clone(),
@@ -567,6 +600,25 @@ impl LocalCoverage for ResourceStore {
     /// unknown, which the resolver treats as "not installed".
     fn local_books(&self, pin: &ResourcePin) -> Option<BookCoverage> {
         self.dcs(pin).ok().flatten()?.books().cloned()
+    }
+}
+
+/// The folder of an account or repository name: lower-cased, because Door43 and GitHub
+/// resolve names without regard to case. Both allow names that Windows would change or
+/// refuse as a folder (a leading or trailing dot, `con`, `nul.x`), and those take a `_`
+/// prefix. Two names that end up in one folder are told apart by the receipt, which the
+/// store reads before it uses an install.
+fn folder_name(name: &str) -> String {
+    const DEVICES: [&str; 22] = [
+        "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8",
+        "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+    ];
+    let lower = name.to_ascii_lowercase();
+    let stem = lower.split('.').next().unwrap_or_default();
+    if lower.starts_with('.') || lower.ends_with('.') || DEVICES.contains(&stem) {
+        format!("_{lower}")
+    } else {
+        lower
     }
 }
 
@@ -730,7 +782,7 @@ mod tests {
             BookCoverage::books([tc_core::BookId::Titus])
         );
         assert!(store.dcs(&pin('b')).unwrap().is_none());
-        assert_eq!(store.installed().unwrap().len(), 1);
+        assert_eq!(store.installed().unwrap().installs.len(), 1);
     }
 
     #[test]
@@ -772,6 +824,67 @@ mod tests {
         }
     }
 
+    fn file_tree() -> impl proptest::strategy::Strategy<Value = Vec<(String, Vec<u8>)>> {
+        use proptest::prelude::*;
+        let path = proptest::collection::vec("[a-z]{1,6}", 1..4).prop_map(|parts| parts.join("/"));
+        proptest::collection::btree_map(path, proptest::collection::vec(any::<u8>(), 0..64), 1..12)
+            .prop_map(|tree| {
+                // A file and a folder of one name cannot both exist.
+                let paths: Vec<String> = tree.keys().cloned().collect();
+                tree.into_iter()
+                    .filter(|(p, _)| !paths.iter().any(|q| q.starts_with(&format!("{p}/"))))
+                    .collect()
+            })
+    }
+
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(32))]
+
+        #[test]
+        fn any_install_reads_back_byte_for_byte(files in file_tree()) {
+            let dir = tempfile::tempdir().unwrap();
+            let store = ResourceStore::open(dir.path()).unwrap();
+            let mut s = staged('a');
+            s.files = files.clone();
+            store.install(s).unwrap();
+            let installed = store.dcs(&pin('a')).unwrap().unwrap();
+            installed.verify().unwrap();
+            for (path, bytes) in &files {
+                proptest::prop_assert_eq!(&installed.read(path).unwrap(), bytes);
+            }
+            proptest::prop_assert_eq!(installed.files().count(), files.len());
+        }
+
+        #[test]
+        fn a_crash_anywhere_leaves_nothing_or_everything(
+            files in file_tree(),
+            stop in 0usize..16,
+        ) {
+            let dir = tempfile::tempdir().unwrap();
+            let store = ResourceStore::open(dir.path()).unwrap();
+            let steps: Vec<Step> = (1..=files.len())
+                .map(Step::FileWritten)
+                .chain([Step::ReceiptWritten, Step::Renamed])
+                .collect();
+            let stop = steps[stop % steps.len()];
+            let mut s = staged('a');
+            s.files = files.clone();
+            let crashed = store.install_until(s, &mut |step| step == stop);
+            proptest::prop_assert!(matches!(crashed, Err(InstallError::Interrupted)));
+            let reopened = ResourceStore::open(dir.path()).unwrap();
+            match reopened.dcs(&pin('a')).unwrap() {
+                None => proptest::prop_assert_ne!(stop, Step::Renamed),
+                Some(installed) => {
+                    installed.verify().unwrap();
+                    for (path, bytes) in &files {
+                        proptest::prop_assert_eq!(&installed.read(path).unwrap(), bytes);
+                    }
+                }
+            }
+            proptest::prop_assert!(!dir.path().join(PARTIAL).exists());
+        }
+    }
+
     #[test]
     fn paths_that_escape_or_collide_are_refused() {
         let dir = tempfile::tempdir().unwrap();
@@ -799,7 +912,57 @@ mod tests {
             store.install(s),
             Err(InstallError::Refused { .. })
         ));
-        assert!(store.installed().unwrap().is_empty());
+        assert!(store.installed().unwrap().installs.is_empty());
+    }
+
+    #[test]
+    fn folder_names_are_safe_on_every_platform() {
+        assert_eq!(folder_name("Es-419_gl"), "es-419_gl");
+        assert_eq!(folder_name("..."), "_...");
+        assert_eq!(folder_name(".hidden"), "_.hidden");
+        assert_eq!(folder_name("CON"), "_con");
+        assert_eq!(folder_name("nul.tn"), "_nul.tn");
+        assert_eq!(folder_name("console"), "console");
+    }
+
+    #[test]
+    fn two_names_sharing_a_folder_never_read_each_others_install() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ResourceStore::open(dir.path()).unwrap();
+        let mut a = staged('a');
+        if let Origin::Dcs { pin, .. } = &mut a.origin {
+            pin.repo = "git.door43.org/_con/x_tn".parse().unwrap();
+        }
+        store.install(a).unwrap();
+        let other = ResourcePin::new(
+            "git.door43.org/con/x_tn".parse().unwrap(),
+            "a".repeat(40).parse().unwrap(),
+        );
+        assert!(matches!(
+            store.dcs(&other),
+            Err(StoreError::Occupied { .. })
+        ));
+    }
+
+    #[test]
+    fn an_unreadable_install_folder_is_listed_and_hides_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ResourceStore::open(dir.path()).unwrap();
+        store.install(staged('a')).unwrap();
+        let stray = dir
+            .path()
+            .join(DCS)
+            .join("someone")
+            .join("x_tn")
+            .join("b".repeat(40));
+        fs::create_dir_all(&stray).unwrap();
+        let inventory = store.installed().unwrap();
+        assert_eq!(inventory.installs.len(), 1);
+        assert!(matches!(
+            inventory.unreadable[..],
+            [StoreError::BadReceipt { .. }]
+        ));
+        assert_eq!(store.installed_dcs_pins().unwrap().len(), 1);
     }
 
     #[test]
