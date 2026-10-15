@@ -1,6 +1,6 @@
 //! Links inside helps: `rc://` links, relative paths between files of a resource, the
-//! `aquifer:` links the Aquifer converter writes, and web addresses. Each resolves to a
-//! typed target the UI can open.
+//! `aquifer:` links the Aquifer converter writes, and web and mail addresses. Each resolves
+//! to a typed target the UI can open.
 //!
 //! The `aquifer:` scheme is this crate's own. The converter writes
 //! `aquifer:resource/<resource_code>/<language>/<content_id>` for an Aquifer
@@ -38,12 +38,14 @@ pub enum LinkTarget {
         id: AquiferContentId,
     },
     Web(String),
+    /// A `mailto:` link: the address and anything after it, as written.
+    Mail(String),
 }
 
 /// The file a relative link is written in. Relative paths resolve against it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LinkBase {
-    /// Only absolute links (`rc://`, `aquifer:`, `http`) resolve.
+    /// Only absolute links (`rc://`, `aquifer:`, `http`, `mailto:`) resolve.
     Absolute,
     /// The root of a DCS export, where TWL rows link `./payload/kt/god.md`.
     ExportRoot,
@@ -53,7 +55,8 @@ pub enum LinkBase {
     AcademyArticle { manual: Manual, slug: Slug },
     /// A translation note on `book`, in chapter `chapter`, or the book introduction when
     /// `chapter` is `None`. Notes link `../01/01.md` as if each lived in
-    /// `<book>/<chapter>/<verse>.md`.
+    /// `<book>/<chapter>/<verse>.md`; Aquifer notes keep those links. A note gives its own
+    /// base with [`crate::Note::link_base`].
     Note { book: BookId, chapter: Option<u16> },
     /// An Open Bible Stories note, which links `01/11` for story 1 frame 11.
     ObsNote,
@@ -86,6 +89,9 @@ pub fn resolve_link(href: &str, base: &LinkBase) -> Result<LinkTarget, Error> {
     }
     if href.starts_with("http://") || href.starts_with("https://") {
         return Ok(LinkTarget::Web(href.to_owned()));
+    }
+    if let Some(address) = href.strip_prefix("mailto:") {
+        return Ok(LinkTarget::Mail(address.to_owned()));
     }
     if href.contains(':') {
         return Err(problem(href, LinkProblem::Unsupported));
@@ -251,7 +257,8 @@ pub struct MarkdownLink {
     pub href: String,
 }
 
-/// Byte ranges of code: fenced blocks and backtick spans. Brackets there are not links.
+/// Byte ranges of code: fenced blocks and backtick spans, in text order. Brackets there are
+/// not links.
 fn code_ranges(markdown: &str) -> Vec<Range<usize>> {
     let mut ranges = Vec::new();
     let mut fence: Option<(usize, &str)> = None;
@@ -291,63 +298,122 @@ fn code_ranges(markdown: &str) -> Vec<Range<usize>> {
     ranges
 }
 
-/// Finds `[label](href)` and `[[href]]` links, in order. Images (`![alt](src)`),
-/// backslash-escaped brackets and brackets inside code are not links.
-pub fn find_links(markdown: &str) -> Vec<MarkdownLink> {
+/// True when an odd run of backslashes ends just before byte `at`, so the character there
+/// is escaped (`\[` is a bracket, `\\[` a backslash and then a link).
+fn escaped(bytes: &[u8], at: usize) -> bool {
+    bytes[..at]
+        .iter()
+        .rev()
+        .take_while(|b| **b == b'\\')
+        .count()
+        % 2
+        == 1
+}
+
+/// A link or an image found by [`scan`].
+pub(crate) struct Scanned {
+    pub link: MarkdownLink,
+    /// `![alt](src)`: the span starts at the `!` and the label is the alt text.
+    pub image: bool,
+}
+
+/// Finds links and images in one pass. Each search for a closing bracket stops at the next
+/// opening bracket or line end, so the scan takes time in proportion to the text.
+pub(crate) fn scan(markdown: &str) -> Vec<Scanned> {
     let bytes = markdown.as_bytes();
     let code = code_ranges(markdown);
-    let mut links = Vec::new();
+    let mut next_code = 0;
+    let mut found = Vec::new();
     let mut i = 0;
     while i < bytes.len() {
-        let escaped = i > 0 && bytes[i - 1] == b'\\';
-        let image = i > 0 && bytes[i - 1] == b'!';
-        let in_code = code.iter().any(|r| r.contains(&i));
-        if bytes[i] != b'[' || escaped || image || in_code {
+        while next_code < code.len() && code[next_code].end <= i {
+            next_code += 1;
+        }
+        let in_code = code.get(next_code).is_some_and(|r| r.start <= i);
+        if bytes[i] != b'[' || in_code || escaped(bytes, i) {
             i += 1;
             continue;
         }
-        if let Some(link) = link_at(markdown, i) {
-            i = link.span.end;
-            links.push(link);
-        } else {
-            i += 1;
+        let image = i > 0 && bytes[i - 1] == b'!' && !escaped(bytes, i - 1);
+        match link_at(markdown, i) {
+            Some(mut link) => {
+                i = link.span.end;
+                if image {
+                    link.span.start -= 1;
+                }
+                found.push(Scanned { link, image });
+            }
+            None => i += 1,
         }
     }
-    links
+    found
 }
 
+/// Finds `[label](href)` and `[[href]]` links, in order. Images (`![alt](src)`),
+/// backslash-escaped brackets and brackets inside code are not links.
+pub fn find_links(markdown: &str) -> Vec<MarkdownLink> {
+    scan(markdown)
+        .into_iter()
+        .filter(|f| !f.image)
+        .map(|f| f.link)
+        .collect()
+}
+
+/// Reads a link at the `[` at byte `start`. A label holds no unescaped `[` and no line
+/// break, and ends at the first unescaped `]`; an href holds no whitespace, and the href of
+/// a `[[href]]` link no bracket.
 fn link_at(text: &str, start: usize) -> Option<MarkdownLink> {
-    let rest = &text[start..];
-    if let Some(inner) = rest.strip_prefix("[[") {
-        let end = inner.find("]]")?;
-        let href = &inner[..end];
-        if href.is_empty() || href.contains(['[', '\n']) {
+    let bytes = text.as_bytes();
+    if bytes.get(start + 1) == Some(&b'[') {
+        let from = start + 2;
+        let mut j = from;
+        loop {
+            match bytes.get(j)? {
+                b']' if bytes.get(j + 1) == Some(&b']') => break,
+                b'[' | b']' => return None,
+                b if b.is_ascii_whitespace() => return None,
+                _ => j += 1,
+            }
+        }
+        if j == from {
             return None;
         }
         return Some(MarkdownLink {
-            span: start..start + 2 + end + 2,
+            span: start..j + 2,
             label: None,
-            href: href.to_owned(),
+            href: text[from..j].to_owned(),
         });
     }
-    let close = rest
-        .match_indices(']')
-        .map(|(i, _)| i)
-        .find(|&i| !rest[..i].ends_with('\\'))?;
-    let label = &rest[1..close];
-    if label.contains(['[', '\n']) {
+    let mut close = start + 1;
+    loop {
+        match bytes.get(close)? {
+            b'\n' => return None,
+            b'[' if !escaped(bytes, close) => return None,
+            b']' if !escaped(bytes, close) => break,
+            _ => close += 1,
+        }
+    }
+    if bytes.get(close + 1) != Some(&b'(') {
         return None;
     }
-    let after = rest[close + 1..].strip_prefix('(')?;
-    let end = after.find(')')?;
-    let href = &after[..end];
-    if href.is_empty() || href.contains(char::is_whitespace) {
+    let from = close + 2;
+    let mut end = from;
+    for c in text[from..].chars() {
+        if c == ')' {
+            break;
+        }
+        if c.is_whitespace() {
+            return None;
+        }
+        end += c.len_utf8();
+    }
+    if end == from || bytes.get(end) != Some(&b')') {
         return None;
     }
     Some(MarkdownLink {
-        span: start..start + close + 2 + end + 1,
-        label: Some(label.to_owned()),
-        href: href.to_owned(),
+        span: start..end + 1,
+        label: Some(text[start + 1..close].to_owned()),
+        href: text[from..end].to_owned(),
     })
 }
 
@@ -406,5 +472,21 @@ mod tests {
         );
         assert_eq!(links[1].label.as_deref(), Some("1:1"));
         assert_eq!(&text[links[1].span.clone()], "[1:1](../01/01.md)");
+    }
+
+    #[test]
+    fn escapes_count_backslashes_and_double_brackets_hold_one_href() {
+        let hrefs =
+            |text: &str| -> Vec<String> { find_links(text).into_iter().map(|l| l.href).collect() };
+        // An even run of backslashes is escaped backslashes; the bracket opens a link.
+        assert_eq!(hrefs(r"\\[a](x) \\\[b](y)"), ["x"]);
+        assert_eq!(hrefs(r"[a\]b](x)"), ["x"]);
+        assert_eq!(hrefs(r"\![a](x) ![b](y)"), ["x"]);
+        // A stray `[` before a link does not swallow it into a `[[href]]`.
+        assert_eq!(hrefs("[[a](x) and y]]"), ["x"]);
+        assert_eq!(
+            hrefs("[[rc://*/tw/dict/bible/kt/god]]"),
+            ["rc://*/tw/dict/bible/kt/god"]
+        );
     }
 }

@@ -18,7 +18,7 @@ use tc_helps::tsv::{
 };
 use tc_helps::{
     AcademyArticleId, BibleLocus, CheckBlocker, CheckReadiness, Error, HelpRef, Manual, NotACheck,
-    Occurrence, TsvTable, WordArticleId, WordCategory,
+    Occurrence, TsvTable, WordArticleId, WordCategory, WriteProblem,
 };
 
 const TIT: TsvScope = TsvScope::Book(BookId::Titus);
@@ -262,11 +262,17 @@ fn every_published_table_writes_back_byte_for_byte() {
         let text = resource(file);
         let notes = parse_notes(&text, scope).unwrap().notes;
         assert_eq!(
-            write_notes(&notes, NotesLayout::Seven).unwrap(),
+            write_notes(&notes, scope, NotesLayout::Seven).unwrap(),
             text,
             "{file}"
         );
     }
+    let text = fixture("helps/tn-tsv9/en_tn_57-TIT.tsv");
+    let legacy = parse_notes(&text, TIT).unwrap().notes;
+    assert_eq!(
+        write_notes(&legacy, TIT, NotesLayout::LegacyNine).unwrap(),
+        text
+    );
     for (file, scope, style) in [
         ("en_twl@v86/TIT.tsv", TIT, WordLinkStyle::ExportPath),
         ("en_tw@v87/TIT.tsv", TIT, WordLinkStyle::ExportPath),
@@ -285,11 +291,176 @@ fn every_published_table_writes_back_byte_for_byte() {
     ] {
         let text = resource(file);
         let links = parse_word_links(&text, scope).unwrap();
-        assert_eq!(write_word_links(&links, style).unwrap(), text, "{file}");
+        assert_eq!(
+            write_word_links(&links, scope, style).unwrap(),
+            text,
+            "{file}"
+        );
     }
     let text = resource("en_obs-tq@v10/OBS.tsv");
     let questions = parse_questions(&text, TsvScope::Obs).unwrap();
-    assert_eq!(write_questions(&questions).unwrap(), text);
+    assert_eq!(write_questions(&questions, TsvScope::Obs).unwrap(), text);
+}
+
+fn write_problem(result: Result<String, Error>) -> WriteProblem {
+    match result {
+        Err(Error::TsvWrite { problem, .. }) => problem,
+        other => panic!("expected a write error, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_table_refuses_items_of_another_book_or_of_the_stories() {
+    let jon = TsvScope::Book(BookId::Jonah);
+    let tit_notes = parse_notes(&resource("en_tn@v86/TIT.tsv"), TIT)
+        .unwrap()
+        .notes;
+    let jon_notes = parse_notes(&resource("en_tn@v86/JON.tsv"), jon)
+        .unwrap()
+        .notes;
+    let obs_notes = parse_notes(&resource("en_obs-tn@v13/OBS.tsv"), TsvScope::Obs)
+        .unwrap()
+        .notes;
+    let mixed: Vec<_> = tit_notes[..3]
+        .iter()
+        .chain(&jon_notes[..3])
+        .cloned()
+        .collect();
+    for layout in [NotesLayout::Seven, NotesLayout::LegacyNine] {
+        assert_eq!(
+            write_problem(write_notes(&mixed, TIT, layout)),
+            WriteProblem::WrongBook {
+                expected: "TIT".into(),
+                found: "JON".into()
+            }
+        );
+    }
+    let stories: Vec<_> = tit_notes[..3]
+        .iter()
+        .chain(&obs_notes[..3])
+        .cloned()
+        .collect();
+    assert_eq!(
+        write_problem(write_notes(&stories, TIT, NotesLayout::Seven)),
+        WriteProblem::Reference("OBS 1:0".into())
+    );
+    assert_eq!(
+        write_problem(write_notes(&stories, TsvScope::Obs, NotesLayout::Seven)),
+        WriteProblem::Reference("TIT front:intro".into())
+    );
+    assert_eq!(
+        write_problem(write_notes(
+            &obs_notes,
+            TsvScope::Obs,
+            NotesLayout::LegacyNine
+        )),
+        WriteProblem::LegacyObs
+    );
+
+    let tit_links = parse_word_links(&resource("en_twl@v86/TIT.tsv"), TIT).unwrap();
+    let jon_links = parse_word_links(&resource("en_tw@v87/JON.tsv"), jon).unwrap();
+    let mixed: Vec<_> = tit_links[..2]
+        .iter()
+        .chain(&jon_links[..2])
+        .cloned()
+        .collect();
+    assert!(matches!(
+        write_problem(write_word_links(&mixed, TIT, WordLinkStyle::ExportPath)),
+        WriteProblem::WrongBook { .. }
+    ));
+    let obs_links = parse_word_links(&resource("en_obs-twl@v3/OBS.tsv"), TsvScope::Obs).unwrap();
+    assert!(matches!(
+        write_problem(write_word_links(&obs_links, TIT, WordLinkStyle::Rc)),
+        WriteProblem::Reference(_)
+    ));
+    let questions = parse_questions(&resource("en_obs-tq@v10/OBS.tsv"), TsvScope::Obs).unwrap();
+    assert!(matches!(
+        write_problem(write_questions(&questions, TIT)),
+        WriteProblem::Reference(_)
+    ));
+}
+
+#[test]
+fn cells_keep_the_form_they_were_read_in() {
+    let text = "Reference\tID\tTags\tSupportReference\tQuote\tOccurrence\tNote\n\
+        1:1-1:3\tab12\ta;b\trc://es-419/ta/man/translate/figs-metaphor\tx\r\t01\tSee \\v 1.\n\
+        1:4\tcd34\t\tfigs-idiom\tΘεοῦ\t1\tOne\\nTwo\n\
+        1:5\tef56\t\trc://*/ta/man/translate/figs-you/01.md\t\t0\t\n";
+    let notes = parse_notes(text, TIT).unwrap().notes;
+    assert_eq!(notes[0].reference.tsv_text(), "1:1-3");
+    assert_eq!(notes[0].tags, ["a", "b"]);
+    assert_eq!(notes[0].quote.as_str(), "x\r");
+    assert_eq!(notes[0].occurrence, Occurrence::nth(1).unwrap());
+    assert_eq!(notes[0].text, "See \\v 1.");
+    assert_eq!(
+        notes[0].read_from.as_ref().unwrap().get("SupportReference"),
+        Some("rc://es-419/ta/man/translate/figs-metaphor")
+    );
+    // Read and written unchanged, the table keeps its bytes.
+    assert_eq!(write_notes(&notes, TIT, NotesLayout::Seven).unwrap(), text);
+
+    // An edit rewrites only the cells it changes.
+    let mut edited = notes.clone();
+    edited[0].occurrence = Occurrence::nth(2).unwrap();
+    edited[1].support_reference = Some(AcademyArticleId::Dcs {
+        manual: Manual::Translate,
+        slug: tc_helps::Slug::parse("figs-explicit").unwrap(),
+    });
+    let written = write_notes(&edited, TIT, NotesLayout::Seven).unwrap();
+    let rows: Vec<&str> = written.lines().collect();
+    assert_eq!(
+        rows[1],
+        "1:1-1:3\tab12\ta;b\trc://es-419/ta/man/translate/figs-metaphor\tx\r\t2\tSee \\v 1."
+    );
+    assert_eq!(
+        rows[2],
+        "1:4\tcd34\t\trc://*/ta/man/translate/figs-explicit\tΘεοῦ\t1\tOne\\nTwo"
+    );
+    assert_eq!(
+        parse_notes(&written, TIT).unwrap().notes[0].occurrence,
+        edited[0].occurrence
+    );
+
+    let links = "Reference\tID\tTags\tOrigWords\tOccurrence\tTWLink\n\
+        1:1\tgh78\tkeyterm;name\tΘεοῦ\t1\trc://en/tw/dict/bible/kt/god.md\n";
+    let parsed = parse_word_links(links, TIT).unwrap();
+    assert_eq!(
+        write_word_links(&parsed, TIT, WordLinkStyle::Rc).unwrap(),
+        links
+    );
+    // Asked for the other style, the link is written in that style.
+    assert!(
+        write_word_links(&parsed, TIT, WordLinkStyle::ExportPath)
+            .unwrap()
+            .ends_with("\t./payload/kt/god.md\n")
+    );
+}
+
+#[test]
+fn a_byte_order_mark_and_crlf_line_ends_read_as_the_table() {
+    let text = resource("en_tn@v86/TIT.tsv");
+    let windows = format!("\u{feff}{}", text.replace('\n', "\r\n"));
+    assert_eq!(
+        parse_notes(&windows, TIT).unwrap(),
+        parse_notes(&text, TIT).unwrap()
+    );
+    // Written back, the table has neither.
+    let notes = parse_notes(&windows, TIT).unwrap().notes;
+    assert_eq!(write_notes(&notes, TIT, NotesLayout::Seven).unwrap(), text);
+}
+
+#[test]
+fn tags_that_would_read_back_as_other_tags_are_refused() {
+    let mut notes = parse_notes(&resource("en_tn@v86/TIT.tsv"), TIT)
+        .unwrap()
+        .notes;
+    for bad in ["a;b", " a", ""] {
+        notes[5].tags = vec![bad.to_owned()];
+        assert_eq!(
+            write_problem(write_notes(&notes, TIT, NotesLayout::Seven)),
+            WriteProblem::Tag(bad.to_owned())
+        );
+    }
 }
 
 #[test]
@@ -316,8 +487,11 @@ fn the_legacy_nine_column_table_reads_into_the_same_notes() {
     );
     assert_eq!(legacy.notes[4].gl_quote, None);
     // The current table has no GLQuote column; writing it there would lose the value.
-    assert!(write_notes(&legacy.notes, NotesLayout::Seven).is_err());
-    let again = write_notes(&legacy.notes, NotesLayout::LegacyNine).unwrap();
+    assert_eq!(
+        write_problem(write_notes(&legacy.notes, TIT, NotesLayout::Seven)),
+        WriteProblem::NoColumn { column: "GLQuote" }
+    );
+    let again = write_notes(&legacy.notes, TIT, NotesLayout::LegacyNine).unwrap();
     assert_eq!(parse_notes(&again, TIT).unwrap(), legacy);
 }
 
@@ -435,43 +609,101 @@ fn row(columns: Vec<String>) -> String {
     columns.join("\t")
 }
 
+/// A SupportReference cell in each form the tables use.
+fn support() -> impl Strategy<Value = String> {
+    let slug = "[a-z][a-z-]{0,15}";
+    prop_oneof![
+        Just(String::new()),
+        slug.prop_map(|s| format!("rc://*/ta/man/translate/{s}")),
+        (prop_oneof![Just("en"), Just("es-419"), Just("*")], slug)
+            .prop_map(|(l, s)| format!("rc://{l}/ta/man/checking/{s}")),
+        slug.prop_map(|s| format!("rc://*/ta/man/translate/{s}/01.md")),
+        slug.prop_map(|s: String| s),
+    ]
+}
+
+fn occurrence() -> impl Strategy<Value = String> {
+    prop_oneof![
+        Just(String::new()),
+        Just("0".to_owned()),
+        Just("-1".to_owned()),
+        (1u32..9).prop_map(|n| n.to_string()),
+        (1u32..9).prop_map(|n| format!("0{n}")),
+    ]
+}
+
+fn tag_cell() -> impl Strategy<Value = String> {
+    prop_oneof![
+        Just(String::new()),
+        Just("keyterm".to_owned()),
+        Just("keyterm; name".to_owned()),
+        Just("keyterm;name".to_owned()),
+        Just(" name ".to_owned()),
+    ]
+}
+
+/// A Reference cell, sometimes in a longer form than the writer's (`1:1-1:3`, `01:02`).
+fn reference_cell() -> impl Strategy<Value = String> {
+    prop_oneof![
+        3 => locus(),
+        1 => (1u16..50, 1u16..50, 1u16..9).prop_map(|(c, v, n)| format!("{c}:{v}-{c}:{}", v + n)),
+        1 => (1u16..9, 1u16..9).prop_map(|(c, v)| format!("0{c}:0{v}")),
+    ]
+}
+
 proptest! {
     #[test]
     fn notes_tables_round_trip(rows in prop::collection::vec(
-        (locus(), "[a-z0-9]{4}", prop::option::of("[a-z-]{1,20}"), cell_text(),
-         prop_oneof![Just(String::new()), Just("0".to_owned()), Just("-1".to_owned()), (1u32..9).prop_map(|n| n.to_string())],
-         "[^\t\r]{0,60}"),
+        (reference_cell(), "[a-z0-9]{4}", tag_cell(), support(), cell_text(), occurrence(),
+         "[^\t\r]{0,60}", any::<bool>()),
         0..20,
     )) {
         let mut text = "Reference\tID\tTags\tSupportReference\tQuote\tOccurrence\tNote\n".to_owned();
-        for (locus, id, slug, quote, occ, note) in &rows {
-            let support = slug.as_ref().map(|s| format!("rc://*/ta/man/translate/{s}")).unwrap_or_default();
-            let note = note.replace('\\', "\\\\").replace('\n', "\\n");
-            text.push_str(&row(vec![locus.clone(), id.clone(), String::new(), support, quote.clone(), occ.clone(), note]));
+        for (reference, id, tags, support, quote, occ, note, escape_all) in &rows {
+            // Published tables double every backslash; a hand-made one may leave some single.
+            let note = if *escape_all { note.replace('\\', "\\\\") } else { note.clone() };
+            let note = note.replace('\n', "\\n");
+            text.push_str(&row(vec![reference.clone(), id.clone(), tags.clone(), support.clone(), quote.clone(), occ.clone(), note]));
             text.push('\n');
         }
         let notes = parse_notes(&text, TIT).unwrap().notes;
         prop_assert_eq!(notes.len(), rows.len());
-        let written = write_notes(&notes, NotesLayout::Seven).unwrap();
+        let written = write_notes(&notes, TIT, NotesLayout::Seven).unwrap();
         prop_assert_eq!(&written, &text);
-        prop_assert_eq!(parse_notes(&written, TIT).unwrap().notes, notes);
+        prop_assert_eq!(parse_notes(&written, TIT).unwrap().notes, notes.clone());
+        // Every value survives a rewrite in the writer's own form too.
+        let mut fresh = notes.clone();
+        for n in &mut fresh {
+            n.read_from = None;
+        }
+        let canonical = write_notes(&fresh, TIT, NotesLayout::Seven).unwrap();
+        let again = parse_notes(&canonical, TIT).unwrap().notes;
+        for (a, b) in again.iter().zip(&notes) {
+            prop_assert_eq!(&a.reference, &b.reference);
+            prop_assert_eq!(&a.tags, &b.tags);
+            prop_assert_eq!(&a.support_reference, &b.support_reference);
+            prop_assert_eq!(&a.quote, &b.quote);
+            prop_assert_eq!(a.occurrence, b.occurrence);
+            prop_assert_eq!(&a.text, &b.text);
+        }
     }
 
     #[test]
     fn word_link_tables_round_trip(rows in prop::collection::vec(
-        (locus(), "[a-z0-9]{4}", prop_oneof![Just("kt"), Just("names"), Just("other")], "[a-z0-9]{1,15}",
-         cell_text(), 1u32..5, prop_oneof![Just(""), Just("keyterm"), Just("name"), Just("keyterm; name")]),
+        (reference_cell(), "[a-z0-9]{4}", prop_oneof![Just("kt"), Just("names"), Just("other")], "[a-z0-9]{1,15}",
+         cell_text(), occurrence(), tag_cell(), prop_oneof![Just("*"), Just("en")], any::<bool>()),
         0..20,
     ), rc in any::<bool>()) {
         let mut text = "Reference\tID\tTags\tOrigWords\tOccurrence\tTWLink\n".to_owned();
-        for (locus, id, cat, slug, words, occ, tags) in &rows {
-            let link = if rc { format!("rc://*/tw/dict/bible/{cat}/{slug}") } else { format!("./payload/{cat}/{slug}.md") };
-            text.push_str(&row(vec![locus.clone(), id.clone(), (*tags).to_owned(), words.clone(), occ.to_string(), link]));
+        for (reference, id, cat, slug, words, occ, tags, lang, md) in &rows {
+            let suffix = if *md { ".md" } else { "" };
+            let link = if rc { format!("rc://{lang}/tw/dict/bible/{cat}/{slug}{suffix}") } else { format!("./payload/{cat}/{slug}.md") };
+            text.push_str(&row(vec![reference.clone(), id.clone(), tags.clone(), words.clone(), occ.clone(), link]));
             text.push('\n');
         }
         let links = parse_word_links(&text, TIT).unwrap();
         let style = if rc { WordLinkStyle::Rc } else { WordLinkStyle::ExportPath };
-        prop_assert_eq!(write_word_links(&links, style).unwrap(), text);
+        prop_assert_eq!(write_word_links(&links, TIT, style).unwrap(), text);
     }
 
     #[test]
@@ -488,7 +720,7 @@ proptest! {
         let questions = parse_questions(&text, TsvScope::Obs).unwrap();
         prop_assert_eq!(&questions.iter().map(|q| q.question.clone()).collect::<Vec<_>>(),
                         &rows.iter().map(|r| r.2.clone()).collect::<Vec<_>>());
-        prop_assert_eq!(write_questions(&questions).unwrap(), text);
+        prop_assert_eq!(write_questions(&questions, TsvScope::Obs).unwrap(), text);
     }
 
     #[test]

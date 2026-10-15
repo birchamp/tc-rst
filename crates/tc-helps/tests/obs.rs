@@ -9,7 +9,7 @@ mod common;
 use common::fixture;
 use proptest::prelude::*;
 use tc_helps::obs::{ObsFrame, ObsImage, ObsStory, parse_obs_story, write_obs_story};
-use tc_helps::{Error, StoryProblem};
+use tc_helps::{Error, StoryField, StoryProblem, StoryWriteProblem};
 
 #[test]
 fn a_drafted_story_reads_title_frames_and_reference() {
@@ -54,8 +54,43 @@ fn all_fifty_template_stories_parse_as_empty_frames() {
                 .enumerate()
                 .all(|(i, f)| f.image.picture() == Some((story.number, i as u16 + 1)))
         );
-        assert_eq!(parse_obs_story(&write_obs_story(&story)).unwrap(), story);
+        // The seed files are tC4's own layout, so writing them changes no byte.
+        assert_eq!(write_obs_story(&story).unwrap(), text, "story {n}");
     }
+}
+
+#[test]
+fn drafted_stories_write_back_byte_for_byte() {
+    for n in 1..=50 {
+        let text = fixture(&format!(
+            "tc4/sample-burrito-obs/ingredients/content/{n:02}.md"
+        ));
+        let story = parse_obs_story(&text).unwrap_or_else(|e| panic!("story {n}: {e}"));
+        assert_eq!(write_obs_story(&story).unwrap(), text, "story {n}");
+    }
+    // An edit to one frame changes only that frame's lines.
+    let text = fixture("tc4/sample-burrito-obs/ingredients/content/01.md");
+    let mut story = parse_obs_story(&text).unwrap();
+    story.frames[2].text = "Al tercer día Dios separó el agua de la tierra.".into();
+    let written = write_obs_story(&story).unwrap();
+    let changed: Vec<(&str, &str)> = text
+        .lines()
+        .zip(written.lines())
+        .filter(|(a, b)| a != b)
+        .collect();
+    assert_eq!(text.lines().count(), written.lines().count());
+    assert_eq!(
+        changed,
+        [("", "Al tercer día Dios separó el agua de la tierra.")]
+    );
+}
+
+#[test]
+fn a_byte_order_mark_and_crlf_line_ends_read_as_the_story() {
+    let text = fixture("tc4/sample-burrito-obs/ingredients/content/01.md");
+    let story = parse_obs_story(&text).unwrap();
+    let windows = format!("\u{feff}{}", text.replace('\n', "\r\n"));
+    assert_eq!(parse_obs_story(&windows).unwrap(), story);
 }
 
 fn story_error(text: &str) -> (usize, StoryProblem) {
@@ -68,7 +103,10 @@ fn story_error(text: &str) -> (usize, StoryProblem) {
 #[test]
 fn malformed_stories_are_refused_naming_the_line() {
     let img = "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg)";
-    assert_eq!(story_error("# 1. A\r\n"), (1, StoryProblem::CarriageReturn));
+    assert_eq!(
+        story_error(&format!("# 1. A\n\n{img}\n\none\rtwo\n")),
+        (5, StoryProblem::CarriageReturn)
+    );
     assert_eq!(story_error("Title\n"), (1, StoryProblem::Title));
     assert_eq!(
         story_error("# 51. Too far\n"),
@@ -89,6 +127,101 @@ fn malformed_stories_are_refused_naming_the_line() {
     assert_eq!(
         story_error("# 1. A\n\n_ref_\n"),
         (3, StoryProblem::ReferenceWithoutFrames)
+    );
+}
+
+fn write_error(story: &ObsStory) -> StoryWriteProblem {
+    match write_obs_story(story) {
+        Err(Error::StoryWrite(problem)) => problem,
+        other => panic!("{story:?}: {other:?}"),
+    }
+}
+
+fn one_frame(text: &str, reference: Option<&str>) -> ObsStory {
+    ObsStory {
+        number: 1,
+        title: "La Creación".into(),
+        frames: vec![ObsFrame {
+            image: ObsImage {
+                alt: "OBS Image".into(),
+                url: "https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg".into(),
+            },
+            text: text.into(),
+        }],
+        reference: reference.map(str::to_owned),
+    }
+}
+
+#[test]
+fn stories_the_format_cannot_carry_are_refused() {
+    // Two paragraphs in a frame, as a translator might type them.
+    assert_eq!(
+        write_error(&one_frame("Uno.\n\nDos.", None)),
+        StoryWriteProblem::BlankLine { frame: 1 }
+    );
+    // The last line of the last frame would move into the reference.
+    assert_eq!(
+        write_error(&one_frame("_emphasised line_", None)),
+        StoryWriteProblem::ReadsAsReference { frame: 1 }
+    );
+    // With a reference after it, the same text is carried.
+    let carried = one_frame("_emphasised line_", Some("Génesis 1-2"));
+    assert_eq!(
+        parse_obs_story(&write_obs_story(&carried).unwrap()).unwrap(),
+        carried
+    );
+    assert_eq!(
+        write_error(&one_frame("![not](an image)", None)),
+        StoryWriteProblem::ImageLine { frame: 1 }
+    );
+    assert_eq!(
+        write_error(&one_frame("a\r", None)),
+        StoryWriteProblem::CarriageReturn { frame: 1 }
+    );
+    assert_eq!(
+        write_error(&one_frame("x", Some(" "))),
+        StoryWriteProblem::EmptyReference
+    );
+    assert_eq!(
+        write_error(&one_frame("x", Some("a\nb"))),
+        StoryWriteProblem::LineBreak {
+            field: StoryField::Reference,
+            frame: None
+        }
+    );
+    let mut story = one_frame("x", None);
+    story.number = 0;
+    assert_eq!(write_error(&story), StoryWriteProblem::StoryNumber(0));
+    story.number = 51;
+    assert_eq!(write_error(&story), StoryWriteProblem::StoryNumber(51));
+    let mut story = one_frame("x", None);
+    story.title = "A\nB".into();
+    assert_eq!(
+        write_error(&story),
+        StoryWriteProblem::LineBreak {
+            field: StoryField::Title,
+            frame: None
+        }
+    );
+    let mut story = one_frame("x", None);
+    story.frames[0].image.alt = "a]b".into();
+    assert_eq!(
+        write_error(&story),
+        StoryWriteProblem::ImageForm { frame: 1 }
+    );
+    story.frames[0].image.alt = "a\nb".into();
+    assert_eq!(
+        write_error(&story),
+        StoryWriteProblem::LineBreak {
+            field: StoryField::ImageAlt,
+            frame: Some(1)
+        }
+    );
+    let mut story = one_frame("x", Some("Génesis 1-2"));
+    story.frames.clear();
+    assert_eq!(
+        write_error(&story),
+        StoryWriteProblem::ReferenceWithoutFrames
     );
 }
 
@@ -125,7 +258,46 @@ proptest! {
                 .collect(),
             reference: reference.map(|r| r.trim().to_owned()).filter(|r| !r.is_empty()),
         };
-        prop_assert_eq!(parse_obs_story(&write_obs_story(&story)).unwrap(), story);
+        prop_assert_eq!(parse_obs_story(&write_obs_story(&story).unwrap()).unwrap(), story);
+    }
+
+    /// Any text at all: the writer refuses it, or it reads back as written.
+    #[test]
+    fn written_stories_read_back_or_are_refused(
+        number in prop_oneof![9 => 1u8..=50, 1 => 0u8..=255],
+        title in prop_oneof![9 => "[a-z ]{0,8}", 1 => "[a-z \n\r]{0,8}"],
+        frames in prop::collection::vec(
+            (prop_oneof![
+                Just(String::new()),
+                "[a-z_ \n\r!\\[\\]()]{1,24}",
+                Just("![x](y)".to_owned()),
+                Just("x\n_x_".to_owned()),
+                Just("a\n\nb".to_owned()),
+                Just("\na".to_owned()),
+                Just(" ".to_owned()),
+            ],
+             prop_oneof![9 => "[a-z ]{0,4}", 1 => "[a-z\\]\n]{0,4}"],
+             prop_oneof![9 => "[a-z./]{0,6}", 1 => "[a-z.)/\n]{0,6}"]),
+            0..5,
+        ),
+        reference in prop::option::of(prop_oneof![
+            8 => "[a-z]{1,8}",
+            1 => "[a-z _\n]{0,8}",
+            1 => prop_oneof![Just(String::new()), Just(" ".to_owned())],
+        ]),
+    ) {
+        let story = ObsStory {
+            number,
+            title,
+            frames: frames
+                .into_iter()
+                .map(|(text, alt, url)| ObsFrame { image: ObsImage { alt, url }, text })
+                .collect(),
+            reference,
+        };
+        if let Ok(text) = write_obs_story(&story) {
+            prop_assert_eq!(parse_obs_story(&text).unwrap(), story);
+        }
     }
 
     #[test]

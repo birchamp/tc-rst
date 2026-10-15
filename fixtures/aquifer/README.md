@@ -17,7 +17,8 @@ release v91 (each repository's README, "Sources").
 | https://github.com/BibleAquifer/UWTranslationManual | `v2026-10-12` | `b993c3bc252262eca6162f5cea2a019b2e069dc4` |
 
 The files were read with `git cat-file blob <commit>:<path>` from clones at those commits,
-on 2026-10-15. The languages are `eng` (English) and `por` (Portuguese).
+on 2026-10-15. The languages are `eng` (English) and `por` (Portuguese), and one French
+(`fra`) notes file.
 
 ## What is here
 
@@ -28,6 +29,7 @@ on 2026-10-15. The languages are `eng` (English) and `por` (Portuguese).
 | `UWTranslationWords/{eng,por}/json/tit-1-1.content.json` | `<lang>/json/NNN.content.json` | Five articles each that Aquifer associates with Titus 1:1. eng: apostle (26324), chosen (26553), faith (26583), godly (26647), Paul (26937). por: Apóstolo (237603), Eleito (237828), Fé (237858), Piedoso (237922), Paulo (238209). |
 | `UWTranslationManual/{eng,por}/json/subset.content.json` | `<lang>/json/001.content.json` | Eight articles each, chosen to cover every HTML element the manual uses: Abstract Nouns, Metaphor (both linked from Titus notes), Biblical Money (`table`), File Formats (`pre`, `code`), Chapter and Verse Numbers (`sup`, `br`, `blockquote`), The Translation Process (`img`), Introduction to Translation Checking (`h5`), Create Equal Translations (`u`). The por articles are the same eight, linked through `article_metadata.localizations`. |
 | `*/{eng,por}/metadata.json` | `<lang>/metadata.json` | The resource metadata, cut down (see below). |
+| `UWTranslationNotes/fra/json/01-subset.content.json` | `fra/json/01.content.json` (git blob `e7f8b08d…`) | Five French notes from the Genesis file, in file order: the two that Aquifer filed with `index_reference` `00000000` although their `associations.passage` names another book (907469, a 2 Timothy 2:16 note, and 918579, titled James 2:3 but with the passage James 2:1), and the first three Genesis 1:1 notes (359406-359408). Each article is byte-identical to its source object. 1,789 notes in the release are filed this way; before the readers placed them by their passage, one of them refused its whole book file. There is no `fra/metadata.json`. |
 
 ### How the files were cut
 

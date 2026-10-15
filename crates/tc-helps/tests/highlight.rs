@@ -252,6 +252,126 @@ fn a_word_cannot_point_at_an_alignment_the_verse_lacks() {
     ));
 }
 
+/// The words of a UHB verse in order, as its `\\w` markers write them.
+fn uhb_words(chapter: u16, verse: u16) -> Vec<String> {
+    let usfm = fixture("tc4/test-fixtures/hbo_uhb/JON.usfm");
+    let marker = format!("\\c {chapter}\n");
+    let body = &usfm[usfm.find(&marker).unwrap() + marker.len()..];
+    let body = &body[..body.find("\\c ").unwrap_or(body.len())];
+    let marker = format!("\\v {verse}\n");
+    let text = &body[body.find(&marker).unwrap() + marker.len()..];
+    let text = &text[..text.find("\\v ").unwrap_or(text.len())];
+    text.split("\\w ")
+        .skip(1)
+        .map(|w| w.split('|').next().unwrap().to_owned())
+        .collect()
+}
+
+/// Each original word as its own alignment, in verse order, with its occurrence counted as
+/// a `\\zaln-s` milestone counts it.
+fn sources(words: &[String]) -> Vec<SourceWord> {
+    words
+        .iter()
+        .enumerate()
+        .map(|(i, w)| {
+            SourceWord::new(
+                w.clone(),
+                1 + words[..i].iter().filter(|x| *x == w).count() as u32,
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn hebrew_quotes_split_maqaf_compounds_into_the_aligned_words() {
+    let words = uhb_words(1, 1);
+    assert_eq!(words.len(), 8, "{words:?}");
+    let src = sources(&words);
+    // en_ult JON 1:1: "Now the word of Yahweh came to Jonah son of Amittai, saying,"
+    let rendering: [&[&str]; 8] = [
+        &["Now"],
+        &["the", "word"],
+        &["of", "Yahweh"],
+        &["came", "to"],
+        &["Jonah"],
+        &["son", "of"],
+        &["Amittai"],
+        &["saying"],
+    ];
+    let mut verse = AlignedVerse::new();
+    for (source, english) in src.iter().zip(rendering) {
+        let id = verse.add_alignment(vec![source.clone()]);
+        for word in english {
+            verse.push_word(*word, Some(id)).unwrap();
+            verse.push_text(" ");
+        }
+    }
+    let notes = parse_notes(
+        &resource("en_tn@v86/JON.tsv"),
+        TsvScope::Book(BookId::Jonah),
+    )
+    .unwrap()
+    .notes;
+    let jdr1 = notes
+        .iter()
+        .find(|n| n.id.upstream_row_id().unwrap().as_str() == "jdr1")
+        .unwrap();
+    assert!(jdr1.quote.as_str().contains('\u{05BE}'));
+    let h = highlight_quote(&verse, &jdr1.quote, jdr1.occurrence);
+    assert_eq!(h.quality, MatchQuality::Exact);
+    assert_eq!(h.texts(&verse).join(" "), "Now the word of Yahweh");
+    assert_eq!(
+        gateway_quote(&verse, &jdr1.quote, jdr1.occurrence).as_deref(),
+        Some("Now the word of Yahweh")
+    );
+    let compound = Quote::new("דְּבַר־יְהוָ֔ה");
+    let h = highlight_quote(&verse, &compound, Occurrence::nth(1).unwrap());
+    assert_eq!(h.quality, MatchQuality::Exact);
+    assert_eq!(h.texts(&verse).join(" "), "the word of Yahweh");
+    assert_eq!(lit(&verse, "אֶל־יוֹנָ֥ה", 1), ["came", "to", "Jonah"]);
+}
+
+#[test]
+fn every_jonah_note_quote_finds_its_words_in_the_uhb_verse() {
+    let notes = parse_notes(
+        &resource("en_tn@v86/JON.tsv"),
+        TsvScope::Book(BookId::Jonah),
+    )
+    .unwrap()
+    .notes;
+    let mut tally: std::collections::BTreeMap<String, usize> = Default::default();
+    let mut maqaf = 0;
+    for n in &notes {
+        let HelpRef::Bible(r) = &n.reference else {
+            continue;
+        };
+        let BibleLocus::Verses(list) = &r.locus else {
+            continue;
+        };
+        if n.quote.is_empty() {
+            continue;
+        }
+        let at = list.ranges()[0].start();
+        // Each Hebrew word aligned to itself: the quote is in the verse's own order.
+        let mut verse = AlignedVerse::new();
+        let words = uhb_words(at.chapter, at.verse);
+        for source in sources(&words) {
+            let id = verse.add_alignment(vec![source.clone()]);
+            verse.push_word(source.content, Some(id)).unwrap();
+            verse.push_text(" ");
+        }
+        let h = highlight_quote(&verse, &n.quote, n.occurrence);
+        *tally.entry(format!("{:?}", h.quality)).or_default() += 1;
+        if n.quote.as_str().contains('\u{05BE}') {
+            maqaf += 1;
+            assert_eq!(h.quality, MatchQuality::Exact, "{}", n.quote);
+        }
+    }
+    assert_eq!(maqaf, 65);
+    let want: std::collections::BTreeMap<String, usize> = [("Exact".to_owned(), 191)].into();
+    assert_eq!(tally, want);
+}
+
 // Story 1 of en_obs v9, quoted as tC4's test quotes it, with the en_obs-tn v13 quotes.
 const OBS_1_1: &str = "This is how God made everything in the beginning. He created the universe and everything in it in six days. After God created the earth it was dark and empty because he had not yet formed anything in it. But God’s Spirit was there over the water.";
 const OBS_1_2: &str = "Then God said, “Let there be light!” And there was light. God saw that the light was good and called it “day.”";

@@ -192,10 +192,15 @@ pub fn normalize_word(word: &str) -> String {
     nfc.trim_matches(|c: char| !letter_or_number(c)).to_owned()
 }
 
-/// The quote's words, spans flattened: `&` and `…` dropped, each word normalized.
+/// The Hebrew maqaf. UHB writes it between two `\w` words (`דְּבַר־יְהוָ֔ה`), so each side is
+/// its own alignment source, while quotes keep the compound as it is printed.
+const MAQAF: char = '\u{05BE}';
+
+/// The quote's words, spans flattened: `&` and `…` dropped, maqaf compounds split, each
+/// word normalized.
 fn quote_words(quote: &str) -> Vec<String> {
     quote
-        .split_whitespace()
+        .split(|c: char| c.is_whitespace() || c == MAQAF)
         .filter(|w| *w != "&" && *w != "…")
         .map(normalize_word)
         .filter(|w| !w.is_empty())

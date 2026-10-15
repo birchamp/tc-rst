@@ -105,6 +105,39 @@ fn an_academy_article_assembles_title_and_body() {
     assert_eq!(bare.page(), "# X\n\nbody");
 }
 
+/// Files saved by Windows editors start with a byte order mark.
+fn bom(text: &str) -> String {
+    format!("\u{feff}{text}")
+}
+
+#[test]
+fn a_byte_order_mark_is_not_part_of_any_article_or_yaml_file() {
+    let god = resource("en_tw@v87/payload-kt-god.md");
+    assert_eq!(
+        parse_word_article(kt("god"), &bom(&god)),
+        parse_word_article(kt("god"), &god)
+    );
+    assert_eq!(parse_word_article(kt("god"), &bom(&god)).title, "God");
+    let title = resource("en_ta@v86/translate-figs-abstractnouns-title.md");
+    let body = resource("en_ta@v86/translate-figs-abstractnouns-01.md");
+    let plain = academy_article(Manual::Translate, slug("x"), &title, Some("Q?"), &body);
+    let marked = academy_article(
+        Manual::Translate,
+        slug("x"),
+        &bom(&title),
+        Some(&bom("Q?")),
+        &bom(&body),
+    );
+    assert_eq!(marked, plain);
+    let toc = resource("en_ta@v86/translate-toc.yaml");
+    assert_eq!(parse_toc(&bom(&toc)).unwrap(), parse_toc(&toc).unwrap());
+    let config = fixture("helps/ta/translate-config.yaml");
+    assert_eq!(
+        parse_academy_config(&bom(&config)).unwrap(),
+        parse_academy_config(&config).unwrap()
+    );
+}
+
 #[test]
 fn the_translate_toc_lists_177_articles_in_reading_order() {
     let toc = parse_toc(&resource("en_ta@v86/translate-toc.yaml")).unwrap();
@@ -178,7 +211,7 @@ fn article_paths_and_links_refuse_what_they_cannot_name() {
         "rc://*/tn/help/xyz/01/01",
         "rc://*/tn/help/gen/aa/01",
         "rc://*/ult/chapter/gen/01",
-        "mailto:x@example.org",
+        "ftp://example.org/x",
         "../../../../outside.md",
     ] {
         let base = LinkBase::Note {
@@ -187,6 +220,11 @@ fn article_paths_and_links_refuse_what_they_cannot_name() {
         };
         assert!(resolve_link(bad, &base).is_err(), "{bad}");
     }
+    // The Portuguese manual links its editors' addresses.
+    assert_eq!(
+        resolve_link("mailto:x@example.org", &LinkBase::Absolute).unwrap(),
+        LinkTarget::Mail("x@example.org".into())
+    );
     let note = resolve_link(
         "../front/intro.md",
         &LinkBase::Note {

@@ -30,6 +30,9 @@ CANONICAL = {'UWTranslationNotes': '56', 'UWTranslationQuestions': '56'}
 # The article_metadata kept for canonical resources: the book intro, the chapter 1 intro
 # and every Titus 1:1 entry.
 KEEP_INDEX = {'56000000', '56001000', '56001001'}
+# A notes file with articles Aquifer filed under no passage (`index_reference` 00000000):
+# (repository, language, book file, how many of its indexed articles to keep beside them).
+UNINDEXED = ('UWTranslationNotes', 'fra', '01', 3)
 
 
 def load(path):
@@ -88,6 +91,17 @@ def main(root, out):
             dump([found[i] for i in ids], os.path.join(out, repo, lang, out_name))
             metadata(os.path.join(root, repo, lang, 'metadata.json'),
                      os.path.join(out, repo, lang, 'metadata.json'), sources, set(ids), None)
+    unindexed(root, out)
+
+
+def unindexed(root, out):
+    """Every article of the file filed under 00000000, and its first few indexed ones, in
+    file order."""
+    repo, lang, book, keep = UNINDEXED
+    articles = load(os.path.join(root, repo, lang, f'json/{book}.content.json'))
+    indexed = [a for a in articles if a['index_reference'] != '00000000'][:keep]
+    kept = [a for a in articles if a['index_reference'] == '00000000' or a in indexed]
+    dump(kept, os.path.join(out, repo, lang, f'json/{book}-subset.content.json'))
 
 
 if __name__ == '__main__':

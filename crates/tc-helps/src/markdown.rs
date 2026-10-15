@@ -31,10 +31,18 @@
 //! - `id`, `class`, `target`, `rel` and `style` attributes, except the `class` and `data-*`
 //!   attributes of `<data>` tags, which become `aquifer:` links;
 //! - `<a>` tags without an `href` keep only their text (Aquifer has some);
+//! - a link inside a link (`<data class="bible-ref"><a href>…</a></data>` in two real
+//!   articles): CommonMark cannot nest links, so the inner one keeps only its text and
+//!   the outer target stays; an image inside a link keeps only its alt text;
+//! - elements nested more than 64 deep (only malformed HTML does this): the deeper tags
+//!   are dropped, their text stays;
 //! - HTML comments.
+//!
+//! Hrefs are written with whitespace, `(`, `)` and `|` percent-encoded, so that no href
+//! ends early or splits a table cell.
 
 use crate::html::{self, Element, Node};
-use crate::links::find_links;
+use crate::links::scan;
 
 /// Converts Aquifer article HTML to the markdown dialect.
 pub fn html_to_markdown(html: &str) -> String {
@@ -294,7 +302,16 @@ fn html_space(c: char) -> bool {
     matches!(c, ' ' | '\t' | '\n' | '\r' | '\u{c}')
 }
 
-fn escape_text(text: &str) -> String {
+/// Where inline markdown is being written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Inline {
+    Text,
+    /// Inside a link label. A link cannot nest in another, so an inner `<a>` or `<data>`
+    /// keeps only its text, and every bracket is escaped so the label ends where it should.
+    Label,
+}
+
+fn escape_text(text: &str, at: Inline) -> String {
     let mut out = String::with_capacity(text.len());
     let mut space = false;
     let mut chars = text.chars().peekable();
@@ -312,6 +329,10 @@ fn escape_text(text: &str) -> String {
                 out.push('\\');
                 out.push(c);
             }
+            '[' | ']' if at == Inline::Label => {
+                out.push('\\');
+                out.push(c);
+            }
             '[' if chars.peek() == Some(&'[') => out.push_str("\\["),
             ']' if chars.peek() == Some(&'(') => out.push_str("\\]"),
             c => out.push(c),
@@ -321,11 +342,15 @@ fn escape_text(text: &str) -> String {
 }
 
 fn inline_nodes<'a>(nodes: impl Iterator<Item = &'a Node>) -> String {
+    inline_in(nodes, Inline::Text)
+}
+
+fn inline_in<'a>(nodes: impl Iterator<Item = &'a Node>, at: Inline) -> String {
     let mut out = String::new();
     for node in nodes {
         match node {
-            Node::Text(t) => out.push_str(&escape_text(t)),
-            Node::Element(e) => inline_element(e, &mut out),
+            Node::Text(t) => out.push_str(&escape_text(t, at)),
+            Node::Element(e) => inline_element(e, at, &mut out),
         }
     }
     out
@@ -348,17 +373,45 @@ fn wrap(marker: &str, inner: &str, out: &mut String) {
     }
 }
 
-fn link(label: &str, href: &str, out: &mut String) {
-    let label = label.trim_matches(' ');
-    out.push('[');
-    out.push_str(label);
-    out.push_str("](");
-    out.push_str(href);
-    out.push(')');
+/// Percent-encodes what would end an href early or split it: whitespace, parentheses, and
+/// `|`, which a table cell escapes.
+fn encode_href(href: &str) -> String {
+    let mut out = String::with_capacity(href.len());
+    for c in href.chars() {
+        if c.is_whitespace() || matches!(c, '(' | ')' | '|') {
+            let mut buf = [0; 4];
+            for b in c.encode_utf8(&mut buf).bytes() {
+                out.push_str(&format!("%{b:02X}"));
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
-fn inline_element(e: &Element, out: &mut String) {
-    let inner = || inline_nodes(e.children.iter());
+fn link(label: &str, href: &str, out: &mut String) {
+    let label = label.replace('\n', " ");
+    let piece = format!("[{}]({})", label.trim_matches(' '), encode_href(href));
+    append(out, &piece);
+}
+
+/// Appends converted markdown. A `!` right before a link would make it an image, so it is
+/// escaped.
+fn append(out: &mut String, piece: &str) {
+    if piece.starts_with('[') && out.ends_with('!') {
+        let before = &out[..out.len() - 1];
+        let backslashes = before.bytes().rev().take_while(|b| *b == b'\\').count();
+        if backslashes % 2 == 0 {
+            out.insert(out.len() - 1, '\\');
+        }
+    }
+    out.push_str(piece);
+}
+
+fn inline_element(e: &Element, at: Inline, out: &mut String) {
+    let inner = || inline_in(e.children.iter(), at);
+    let label = || inline_in(e.children.iter(), Inline::Label);
     match e.name.as_str() {
         "br" => out.push('\n'),
         "strong" | "b" => wrap("**", &inner(), out),
@@ -373,29 +426,30 @@ fn inline_element(e: &Element, out: &mut String) {
                 out.push_str(close);
             }
         }
+        "img" if at == Inline::Label => {
+            out.push_str(&escape_text(e.attr("alt").unwrap_or(""), at));
+        }
         "img" => {
             if let Some(src) = e.attr("src") {
-                out.push_str(&format!(
-                    "![{}]({})",
-                    escape_text(e.attr("alt").unwrap_or("")),
-                    src.replace(' ', "%20")
-                ));
+                let alt = escape_text(e.attr("alt").unwrap_or(""), Inline::Label);
+                out.push_str(&format!("![{alt}]({})", encode_href(src)));
             }
         }
+        "a" | "data" if at == Inline::Label => append(out, &inner()),
         "a" => match e.attr("href").map(str::trim).filter(|h| !h.is_empty()) {
-            Some(href) => link(&inner(), &href.replace(' ', "%20"), out),
-            None => out.push_str(&inner()),
+            Some(href) => link(&label(), href, out),
+            None => append(out, &inner()),
         },
         "data" => match data_href(e) {
-            Some(href) => link(&inner(), &href, out),
-            None => out.push_str(&inner()),
+            Some(href) => link(&label(), &href, out),
+            None => append(out, &inner()),
         },
         name if BLOCKS.contains(&name) => {
             out.push(' ');
             out.push_str(&inner());
             out.push(' ');
         }
-        _ => out.push_str(&inner()),
+        _ => append(out, &inner()),
     }
 }
 
@@ -466,19 +520,30 @@ fn strip_block_marks(line: &str) -> &str {
 }
 
 fn plain_line(line: &str) -> String {
+    let mut links = scan(line).into_iter().peekable();
     let mut out = String::with_capacity(line.len());
-    let mut rest = line;
-    while let Some(c) = rest.chars().next() {
+    let mut at = 0;
+    while let Some(c) = line[at..].chars().next() {
+        while links.next_if(|f| f.link.span.start < at).is_some() {}
+        if let Some(f) = links.next_if(|f| f.link.span.start == at) {
+            match &f.link.label {
+                Some(label) => out.push_str(&plain_line(label)),
+                None => out.push_str(&f.link.href),
+            }
+            at = f.link.span.end;
+            continue;
+        }
+        let rest = &line[at..];
         if c == '\\'
             && let Some(next) = rest[1..].chars().next()
             && next.is_ascii_punctuation()
         {
             out.push(next);
-            rest = &rest[1 + next.len_utf8()..];
+            at += 1 + next.len_utf8();
             continue;
         }
         if c == '*' {
-            rest = &rest[1..];
+            at += 1;
             continue;
         }
         if c == '`' {
@@ -487,32 +552,12 @@ fn plain_line(line: &str) -> String {
             if let Some(end) = rest[ticks..].find(marker) {
                 let code = &rest[ticks..ticks + end];
                 out.push_str(if ticks > 1 { code.trim() } else { code });
-                rest = &rest[ticks + end + ticks..];
+                at += ticks + end + ticks;
                 continue;
             }
         }
-        if c == '!'
-            && rest[1..].starts_with('[')
-            && let Some(l) = find_links(&rest[1..]).first()
-            && l.span.start == 0
-        {
-            out.push_str(&plain_line(l.label.as_deref().unwrap_or("")));
-            rest = &rest[1 + l.span.end..];
-            continue;
-        }
-        if c == '['
-            && let Some(l) = find_links(rest).first()
-            && l.span.start == 0
-        {
-            match &l.label {
-                Some(label) => out.push_str(&plain_line(label)),
-                None => out.push_str(&l.href),
-            }
-            rest = &rest[l.span.end..];
-            continue;
-        }
         out.push(c);
-        rest = &rest[c.len_utf8()..];
+        at += c.len_utf8();
     }
     out
 }

@@ -1,6 +1,7 @@
 //! A lenient HTML reader for Aquifer article content. It reads the small tag set Aquifer
 //! uses and never fails: unknown tags pass their children through, stray end tags are
-//! ignored, and unclosed tags close at the end.
+//! ignored, unclosed tags close at the end, and tags nested deeper than [`MAX_DEPTH`] are
+//! dropped while their text is kept.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Node {
@@ -182,6 +183,11 @@ fn tag(s: &str) -> Option<(Token, &str)> {
     }
 }
 
+/// The deepest element nesting the tree keeps. Real Aquifer articles nest at most 8 deep;
+/// the converters recurse once per level, so an unbounded tree from malformed HTML (thousands
+/// of unclosed tags) would overflow the stack.
+pub(crate) const MAX_DEPTH: usize = 64;
+
 /// Builds the node tree.
 pub(crate) fn parse(html: &str) -> Vec<Node> {
     let mut stack: Vec<Element> = vec![Element {
@@ -204,9 +210,11 @@ pub(crate) fn parse(html: &str) -> Vec<Node> {
                 };
                 if closed || VOID.contains(&element.name.as_str()) {
                     push(&mut stack, Node::Element(element));
-                } else {
+                } else if stack.len() <= MAX_DEPTH {
                     stack.push(element);
                 }
+                // Deeper start tags are dropped; what they hold goes to the deepest kept
+                // element, and their end tags close nothing that is not open.
             }
             Token::End(name) => {
                 let open = stack.iter().skip(1).rposition(|e| e.name == name);

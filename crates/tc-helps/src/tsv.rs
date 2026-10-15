@@ -8,10 +8,22 @@
 //!
 //! In the seven-column notes table, and in the question and response columns, a newline
 //! is written `\n` and a backslash `\\`. The model holds the decoded markdown.
+//!
+//! # Writing
+//!
+//! A table holds one book, or Open Bible Stories; the writers refuse an item from
+//! elsewhere, and any value the table has no column or form for, rather than drop it.
+//! Each item read from a table keeps, in [`ReadCells`], the cells its row wrote in a form
+//! the writers would not produce (`rc://es-419/…` links, bare slugs, `.md` suffixes, `a;b`
+//! tags, `01` occurrences, `1:1-1:3` references, a lone backslash). A writer writes such a
+//! cell back as it was read while the item still holds the value read from it, so a table
+//! read and written unchanged keeps its bytes, and an edit changes only the cells it
+//! touches. The writers write no byte order mark and LF line ends.
 
 use tc_core::BookId;
 
 use crate::Error;
+use crate::articles::without_bom;
 use crate::error::{CellProblem, LinkProblem, TsvTable, WriteProblem};
 use crate::ids::{
     AcademyArticleId, HelpItemId, Manual, Occurrence, Quote, RowId, Slug, WordArticleId,
@@ -90,6 +102,40 @@ pub enum WordLinkStyle {
     ExportPath,
 }
 
+/// The cells of the row an item was read from that the writers would write differently,
+/// by column, as they were written. See the module documentation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadCells(Vec<(&'static str, String)>);
+
+impl ReadCells {
+    /// The cell of `column` as it was read, when the writers would not write it that way.
+    pub fn get(&self, column: &str) -> Option<&str> {
+        self.0
+            .iter()
+            .find(|(c, _)| *c == column)
+            .map(|(_, text)| text.as_str())
+    }
+
+    /// The cells of `raw` that differ from `written`, the writer's own form of the item;
+    /// every cell when the writer refuses the item.
+    fn of(
+        header: &[&'static str],
+        raw: &[&str],
+        written: Result<Vec<String>, Error>,
+    ) -> Option<Self> {
+        let kept: Vec<(&'static str, String)> = header
+            .iter()
+            .zip(raw)
+            .enumerate()
+            .filter(|(i, (_, raw))| {
+                !matches!(&written, Ok(cells) if cells.get(*i).map(String::as_str) == Some(**raw))
+            })
+            .map(|(_, (column, raw))| (*column, (*raw).to_owned()))
+            .collect();
+        (!kept.is_empty()).then_some(Self(kept))
+    }
+}
+
 struct Row<'a> {
     table: TsvTable,
     header: &'static [&'static str],
@@ -115,13 +161,8 @@ impl<'a> Row<'a> {
 
     fn reference(&self, i: usize, scope: TsvScope) -> Result<HelpRef, Error> {
         let text = self.cell(i);
-        let parsed = match scope {
-            TsvScope::Book(book) => {
-                parse_tsv_locus(text).map(|locus| HelpRef::Bible(BibleRef { book, locus }))
-            }
-            TsvScope::Obs => ObsRef::parse(text).map(HelpRef::Obs),
-        };
-        parsed.ok_or_else(|| self.fail(i, CellProblem::Reference(text.to_owned())))
+        parse_reference(text, scope)
+            .ok_or_else(|| self.fail(i, CellProblem::Reference(text.to_owned())))
     }
 
     fn id(&self, i: usize) -> Result<HelpItemId, Error> {
@@ -136,29 +177,64 @@ impl<'a> Row<'a> {
     }
 
     fn support_reference(&self, i: usize) -> Result<Option<AcademyArticleId>, Error> {
-        let text = self.cell(i);
-        if text.is_empty() {
-            return Ok(None);
-        }
-        // The legacy table sometimes names the article by its bare slug; those articles are
-        // all in the translate manual.
-        if !text.contains('/') {
-            return Slug::parse(text)
-                .map(|slug| {
-                    Some(AcademyArticleId::Dcs {
-                        manual: Manual::Translate,
-                        slug,
-                    })
-                })
-                .map_err(|_| self.fail(i, CellProblem::Link(LinkProblem::Slug(text.to_owned()))));
-        }
-        match resolve_link(text, &LinkBase::Absolute) {
-            Ok(LinkTarget::Academy(id)) => Ok(Some(id)),
-            Ok(_) => Err(self.fail(i, CellProblem::Link(LinkProblem::NoTarget))),
-            Err(Error::Link { problem, .. }) => Err(self.fail(i, CellProblem::Link(problem))),
-            Err(other) => Err(other),
-        }
+        parse_support(self.cell(i)).map_err(|p| self.fail(i, CellProblem::Link(p)))
     }
+
+    fn read_cells(&self, written: Result<Vec<String>, Error>) -> Option<ReadCells> {
+        ReadCells::of(self.header, &self.cells, written)
+    }
+}
+
+fn parse_reference(text: &str, scope: TsvScope) -> Option<HelpRef> {
+    match scope {
+        TsvScope::Book(book) => {
+            parse_tsv_locus(text).map(|locus| HelpRef::Bible(BibleRef { book, locus }))
+        }
+        TsvScope::Obs => ObsRef::parse(text).map(HelpRef::Obs),
+    }
+}
+
+fn parse_support(text: &str) -> Result<Option<AcademyArticleId>, LinkProblem> {
+    if text.is_empty() {
+        return Ok(None);
+    }
+    // The legacy table sometimes names the article by its bare slug; those articles are
+    // all in the translate manual.
+    if !text.contains('/') {
+        return Slug::parse(text)
+            .map(|slug| {
+                Some(AcademyArticleId::Dcs {
+                    manual: Manual::Translate,
+                    slug,
+                })
+            })
+            .map_err(|_| LinkProblem::Slug(text.to_owned()));
+    }
+    match resolve_link(text, &LinkBase::Absolute) {
+        Ok(LinkTarget::Academy(id)) => Ok(Some(id)),
+        Ok(_) => Err(LinkProblem::NoTarget),
+        Err(e) => Err(link_problem(e)),
+    }
+}
+
+fn parse_word_link(text: &str) -> Result<WordArticleId, LinkProblem> {
+    match resolve_link(text, &LinkBase::ExportRoot) {
+        Ok(LinkTarget::Word(id)) => Ok(id),
+        Ok(_) => Err(LinkProblem::NoTarget),
+        Err(e) => Err(link_problem(e)),
+    }
+}
+
+fn link_problem(e: Error) -> LinkProblem {
+    match e {
+        Error::Link { problem, .. } => problem,
+        other => LinkProblem::Reference(other.to_string()),
+    }
+}
+
+/// The `Chapter` and `Verse` cells of the legacy table, read as one place.
+fn parse_legacy_place(chapter: &str, verse: &str) -> Option<BibleLocus> {
+    parse_tsv_locus(&format!("{chapter}:{verse}"))
 }
 
 /// Splits a table into rows, checking the header and the column count of every row.
@@ -176,10 +252,9 @@ fn rows<'a>(
         if line.trim().is_empty() {
             continue;
         }
-        let cells: Vec<&str> = line
-            .split('\t')
-            .map(|c| c.strip_suffix('\r').unwrap_or(c))
-            .collect();
+        // A CR before the LF ends a CRLF line; any other CR is cell text.
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        let cells: Vec<&str> = line.split('\t').collect();
         if cells.len() != header.len() {
             return Err(Error::TsvColumnCount {
                 table,
@@ -199,7 +274,7 @@ fn rows<'a>(
 }
 
 fn header_text(first: &str) -> &str {
-    let first = first.strip_prefix('\u{feff}').unwrap_or(first);
+    let first = without_bom(first);
     first.strip_suffix('\r').unwrap_or(first)
 }
 
@@ -261,18 +336,19 @@ fn encode_escapes(text: &str, table: TsvTable) -> Result<String, Error> {
 }
 
 fn unwritable(table: TsvTable, text: &str) -> Error {
-    Error::TsvWrite {
-        table,
-        problem: WriteProblem::Unwritable(text.to_owned()),
-    }
+    write_error(table, WriteProblem::Unwritable(text.to_owned()))
+}
+
+fn write_error(table: TsvTable, problem: WriteProblem) -> Error {
+    Error::TsvWrite { table, problem }
 }
 
 /// A cell that is written as it is: it must not hold a tab or a line break.
-fn plain(text: &str, table: TsvTable) -> Result<&str, Error> {
+fn plain(text: &str, table: TsvTable) -> Result<String, Error> {
     if text.contains(['\t', '\n', '\r']) {
         Err(unwritable(table, text))
     } else {
-        Ok(text)
+        Ok(text.to_owned())
     }
 }
 
@@ -305,7 +381,7 @@ pub fn parse_notes(text: &str, scope: TsvScope) -> Result<ParsedNotes, Error> {
 }
 
 fn note(row: &Row, scope: TsvScope) -> Result<Note, Error> {
-    Ok(Note {
+    let mut note = Note {
         reference: row.reference(0, scope)?,
         id: row.id(1)?,
         tags: tags(row.cell(2)),
@@ -314,7 +390,10 @@ fn note(row: &Row, scope: TsvScope) -> Result<Note, Error> {
         occurrence: row.occurrence(5)?,
         gl_quote: None,
         text: decode_escapes(row.cell(6)),
-    })
+        read_from: None,
+    };
+    note.read_from = row.read_cells(note_row(&note, scope));
+    Ok(note)
 }
 
 fn legacy_note(row: &Row, book: BookId) -> Result<Note, Error> {
@@ -333,12 +412,12 @@ fn legacy_note(row: &Row, book: BookId) -> Result<Note, Error> {
     }
     let (chapter, verse) = (row.cell(1), row.cell(2));
     let chapter_ok = chapter == "front" || number(chapter).is_some();
-    let locus = parse_tsv_locus(&format!("{chapter}:{verse}")).ok_or_else(|| {
+    let locus = parse_legacy_place(chapter, verse).ok_or_else(|| {
         let (i, text) = if chapter_ok { (2, verse) } else { (1, chapter) };
         row.fail(i, CellProblem::Reference(text.to_owned()))
     })?;
     let gl = row.cell(7);
-    Ok(Note {
+    let mut note = Note {
         reference: HelpRef::Bible(BibleRef { book, locus }),
         id: row.id(3)?,
         tags: Vec::new(),
@@ -347,7 +426,10 @@ fn legacy_note(row: &Row, book: BookId) -> Result<Note, Error> {
         occurrence: row.occurrence(6)?,
         gl_quote: (!gl.is_empty()).then(|| gl.to_owned()),
         text: row.cell(8).replace("<br>", "\n"),
-    })
+        read_from: None,
+    };
+    note.read_from = row.read_cells(legacy_row(&note, TsvScope::Book(book)));
+    Ok(note)
 }
 
 /// Parses a translation words links table. `TWLink` may be an `rc://` link or an export
@@ -356,25 +438,24 @@ pub fn parse_word_links(text: &str, scope: TsvScope) -> Result<Vec<WordLink>, Er
     rows(text, TsvTable::WordLinks, &WORD_LINKS)?
         .iter()
         .map(|row| {
-            let link = row.cell(5);
-            let article = match resolve_link(link, &LinkBase::ExportRoot) {
-                Ok(LinkTarget::Word(id)) => id,
-                Ok(_) => {
-                    return Err(row.fail(5, CellProblem::Link(LinkProblem::NoTarget)));
-                }
-                Err(Error::Link { problem, .. }) => {
-                    return Err(row.fail(5, CellProblem::Link(problem)));
-                }
-                Err(other) => return Err(other),
-            };
-            Ok(WordLink {
+            let article =
+                parse_word_link(row.cell(5)).map_err(|p| row.fail(5, CellProblem::Link(p)))?;
+            let mut link = WordLink {
                 reference: row.reference(0, scope)?,
                 id: row.id(1)?,
                 tags: tags(row.cell(2)),
                 orig_words: Quote::new(row.cell(3)),
                 occurrence: row.occurrence(4)?,
                 article,
-            })
+                read_from: None,
+            };
+            let style = if row.cell(5).starts_with("rc://") {
+                WordLinkStyle::Rc
+            } else {
+                WordLinkStyle::ExportPath
+            };
+            link.read_from = row.read_cells(word_link_row(&link, scope, style));
+            Ok(link)
         })
         .collect()
 }
@@ -384,7 +465,7 @@ pub fn parse_questions(text: &str, scope: TsvScope) -> Result<Vec<Question>, Err
     rows(text, TsvTable::Questions, &QUESTIONS)?
         .iter()
         .map(|row| {
-            Ok(Question {
+            let mut question = Question {
                 reference: row.reference(0, scope)?,
                 id: row.id(1)?,
                 tags: tags(row.cell(2)),
@@ -392,19 +473,149 @@ pub fn parse_questions(text: &str, scope: TsvScope) -> Result<Vec<Question>, Err
                 occurrence: row.occurrence(4)?,
                 question: decode_escapes(row.cell(5)),
                 response: decode_escapes(row.cell(6)),
-            })
+                read_from: None,
+            };
+            question.read_from = row.read_cells(question_row(&question, scope));
+            Ok(question)
         })
         .collect()
+}
+
+/// Builds one row: each cell as it was read when it still holds the item's value, else in
+/// the writer's own form.
+struct RowWriter<'a> {
+    table: TsvTable,
+    read: Option<&'a ReadCells>,
+    cells: Vec<String>,
+}
+
+impl<'a> RowWriter<'a> {
+    fn new(table: TsvTable, read: Option<&'a ReadCells>) -> Self {
+        Self {
+            table,
+            read,
+            cells: Vec::new(),
+        }
+    }
+
+    /// `holds` tells whether a cell as read still holds the item's value; `write` gives
+    /// the writer's own form of the value.
+    fn cell(
+        &mut self,
+        column: &str,
+        holds: impl Fn(&str) -> bool,
+        write: impl FnOnce() -> Result<String, Error>,
+    ) -> Result<(), Error> {
+        let kept = self
+            .read
+            .and_then(|r| r.get(column))
+            .filter(|raw| holds(raw));
+        let cell = match kept {
+            Some(raw) => raw.to_owned(),
+            None => write()?,
+        };
+        self.cells.push(cell);
+        Ok(())
+    }
+
+    fn finish(self) -> Result<Vec<String>, Error> {
+        // A CR at the end of a row would read back as a CRLF line end.
+        match self.cells.last() {
+            Some(last) if last.ends_with('\r') => Err(unwritable(self.table, last)),
+            _ => Ok(self.cells),
+        }
+    }
+
+    fn reference(&mut self, reference: &HelpRef, scope: TsvScope) -> Result<(), Error> {
+        in_scope(reference, scope, self.table)?;
+        self.cell(
+            "Reference",
+            |raw| parse_reference(raw, scope).as_ref() == Some(reference),
+            || Ok(reference.tsv_text()),
+        )
+    }
+
+    fn id(&mut self, id: &HelpItemId, what: &'static str) -> Result<(), Error> {
+        let table = self.table;
+        self.cell("ID", |_| false, || row_id(id, table, what))
+    }
+
+    fn tags(&mut self, values: &[String]) -> Result<(), Error> {
+        let table = self.table;
+        self.cell(
+            "Tags",
+            |raw| tags(raw) == values,
+            || tags_cell(values, table),
+        )
+    }
+
+    fn occurrence(&mut self, occurrence: Occurrence) -> Result<(), Error> {
+        self.cell(
+            "Occurrence",
+            |raw| Occurrence::parse_cell(raw) == Some(occurrence),
+            || Ok(occurrence.cell()),
+        )
+    }
+
+    fn support_reference(&mut self, id: &Option<AcademyArticleId>) -> Result<(), Error> {
+        self.cell(
+            "SupportReference",
+            |raw| parse_support(raw).as_ref() == Ok(id),
+            || support_cell(id),
+        )
+    }
+
+    fn plain(&mut self, column: &str, text: &str) -> Result<(), Error> {
+        let table = self.table;
+        self.cell(column, |raw| raw == text, || plain(text, table))
+    }
+
+    fn markdown(&mut self, column: &str, text: &str) -> Result<(), Error> {
+        let table = self.table;
+        self.cell(
+            column,
+            |raw| decode_escapes(raw) == text,
+            || encode_escapes(text, table),
+        )
+    }
+}
+
+/// Refuses an item that belongs to another book, or to Open Bible Stories in a Bible table
+/// and the reverse: its row would read back as belonging to the table's book.
+fn in_scope(reference: &HelpRef, scope: TsvScope, table: TsvTable) -> Result<(), Error> {
+    match (reference, scope) {
+        (HelpRef::Bible(r), TsvScope::Book(book)) if r.book == book => Ok(()),
+        (HelpRef::Bible(r), TsvScope::Book(book)) => Err(write_error(
+            table,
+            WriteProblem::WrongBook {
+                expected: book.code().to_owned(),
+                found: r.book.code().to_owned(),
+            },
+        )),
+        (HelpRef::Obs(_), TsvScope::Obs) => Ok(()),
+        _ => Err(write_error(
+            table,
+            WriteProblem::Reference(reference.to_string()),
+        )),
+    }
 }
 
 fn row_id(id: &HelpItemId, table: TsvTable, what: &'static str) -> Result<String, Error> {
     match id {
         HelpItemId::Row(id) => Ok(id.as_str().to_owned()),
-        HelpItemId::Aquifer(_) => Err(Error::TsvWrite {
-            table,
-            problem: WriteProblem::AquiferItem { what },
-        }),
+        HelpItemId::Aquifer(_) => Err(write_error(table, WriteProblem::AquiferItem { what })),
     }
+}
+
+/// Tags are written `a; b`. A tag that is empty, holds `;` or a line break, or has spaces
+/// at either end would read back as other tags.
+fn tags_cell(values: &[String], table: TsvTable) -> Result<String, Error> {
+    for tag in values {
+        if tag.is_empty() || tag.contains(';') || tag.trim() != tag {
+            return Err(write_error(table, WriteProblem::Tag(tag.clone())));
+        }
+    }
+    plain(&values.join("; "), table)
 }
 
 fn support_cell(id: &Option<AcademyArticleId>) -> Result<String, Error> {
@@ -413,12 +624,12 @@ fn support_cell(id: &Option<AcademyArticleId>) -> Result<String, Error> {
         Some(AcademyArticleId::Dcs { manual, slug }) => {
             Ok(format!("rc://*/ta/man/{}/{}", manual.folder(), slug))
         }
-        Some(AcademyArticleId::Aquifer(_)) => Err(Error::TsvWrite {
-            table: TsvTable::Notes,
-            problem: WriteProblem::AquiferItem {
+        Some(AcademyArticleId::Aquifer(_)) => Err(write_error(
+            TsvTable::Notes,
+            WriteProblem::AquiferItem {
                 what: "Translation Academy link",
             },
-        }),
+        )),
     }
 }
 
@@ -432,81 +643,78 @@ fn table_text(header: &[&str], rows: Vec<Vec<String>>) -> String {
     out
 }
 
-/// Writes notes as a table of the given layout. Values the layout has no column for are
-/// refused rather than dropped.
-pub fn write_notes(notes: &[Note], layout: NotesLayout) -> Result<String, Error> {
-    let t = TsvTable::Notes;
-    let mut rows = Vec::with_capacity(notes.len());
-    match layout {
-        NotesLayout::Seven => {
-            for n in notes {
-                if n.gl_quote.is_some() {
-                    return Err(Error::TsvWrite {
-                        table: t,
-                        problem: WriteProblem::NoColumn { column: "GLQuote" },
-                    });
-                }
-                rows.push(vec![
-                    n.reference.tsv_text(),
-                    row_id(&n.id, t, "note")?,
-                    plain(&n.tags.join("; "), t)?.to_owned(),
-                    support_cell(&n.support_reference)?,
-                    plain(n.quote.as_str(), t)?.to_owned(),
-                    n.occurrence.cell(),
-                    encode_escapes(&n.text, t)?,
-                ]);
-            }
-            Ok(table_text(&NOTES, rows))
-        }
-        NotesLayout::LegacyNine => {
-            let mut book: Option<BookId> = None;
-            for n in notes {
-                let HelpRef::Bible(r) = &n.reference else {
-                    return Err(Error::TsvWrite {
-                        table: t,
-                        problem: WriteProblem::Reference(n.reference.tsv_text()),
-                    });
-                };
-                match book {
-                    Some(b) if b != r.book => {
-                        return Err(Error::TsvWrite {
-                            table: t,
-                            problem: WriteProblem::MixedBooks(
-                                b.code().to_owned(),
-                                r.book.code().to_owned(),
-                            ),
-                        });
-                    }
-                    _ => book = Some(r.book),
-                }
-                if !n.tags.is_empty() {
-                    return Err(Error::TsvWrite {
-                        table: t,
-                        problem: WriteProblem::NoColumn { column: "Tags" },
-                    });
-                }
-                let (chapter, verse) = legacy_place(&r.locus).ok_or_else(|| Error::TsvWrite {
-                    table: t,
-                    problem: WriteProblem::Reference(r.to_string()),
-                })?;
-                if n.text.contains("<br>") {
-                    return Err(unwritable(t, &n.text));
-                }
-                rows.push(vec![
-                    r.book.code().to_owned(),
-                    chapter,
-                    verse,
-                    row_id(&n.id, t, "note")?,
-                    support_cell(&n.support_reference)?,
-                    plain(n.quote.as_str(), t)?.to_owned(),
-                    n.occurrence.cell(),
-                    plain(n.gl_quote.as_deref().unwrap_or(""), t)?.to_owned(),
-                    plain(&n.text.replace('\n', "<br>"), t)?.to_owned(),
-                ]);
-            }
-            Ok(table_text(&NOTES_LEGACY, rows))
-        }
+fn note_row(n: &Note, scope: TsvScope) -> Result<Vec<String>, Error> {
+    let mut w = RowWriter::new(TsvTable::Notes, n.read_from.as_ref());
+    if n.gl_quote.is_some() {
+        return Err(write_error(
+            TsvTable::Notes,
+            WriteProblem::NoColumn { column: "GLQuote" },
+        ));
     }
+    w.reference(&n.reference, scope)?;
+    w.id(&n.id, "note")?;
+    w.tags(&n.tags)?;
+    w.support_reference(&n.support_reference)?;
+    w.plain("Quote", n.quote.as_str())?;
+    w.occurrence(n.occurrence)?;
+    w.markdown("Note", &n.text)?;
+    w.finish()
+}
+
+fn legacy_row(n: &Note, scope: TsvScope) -> Result<Vec<String>, Error> {
+    let t = TsvTable::Notes;
+    let TsvScope::Book(book) = scope else {
+        return Err(write_error(t, WriteProblem::LegacyObs));
+    };
+    in_scope(&n.reference, scope, t)?;
+    let HelpRef::Bible(r) = &n.reference else {
+        return Err(write_error(t, WriteProblem::LegacyObs));
+    };
+    if !n.tags.is_empty() {
+        return Err(write_error(t, WriteProblem::NoColumn { column: "Tags" }));
+    }
+    let mut w = RowWriter::new(t, n.read_from.as_ref());
+    w.cell(
+        "Book",
+        |raw| raw.parse::<BookId>() == Ok(book),
+        || Ok(book.code().to_owned()),
+    )?;
+    // Chapter and Verse name one place together: a kept cell is written with the other
+    // as read or canonical, when the pair still names the item's place.
+    let canonical = legacy_place(&r.locus);
+    let read = |column: &str, canonical: Option<&String>| {
+        n.read_from
+            .as_ref()
+            .and_then(|cells| cells.get(column))
+            .map(str::to_owned)
+            .or_else(|| canonical.cloned())
+    };
+    let pair = (
+        read("Chapter", canonical.as_ref().map(|p| &p.0)),
+        read("Verse", canonical.as_ref().map(|p| &p.1)),
+    );
+    let (chapter, verse) = match pair {
+        (Some(c), Some(v)) if parse_legacy_place(&c, &v).as_ref() == Some(&r.locus) => (c, v),
+        _ => canonical.ok_or_else(|| write_error(t, WriteProblem::Reference(r.to_string())))?,
+    };
+    w.cells.push(chapter);
+    w.cells.push(verse);
+    w.id(&n.id, "note")?;
+    w.support_reference(&n.support_reference)?;
+    w.plain("OrigQuote", n.quote.as_str())?;
+    w.occurrence(n.occurrence)?;
+    w.plain("GLQuote", n.gl_quote.as_deref().unwrap_or(""))?;
+    w.cell(
+        "OccurrenceNote",
+        |raw| raw.replace("<br>", "\n") == n.text,
+        || {
+            if n.text.contains("<br>") {
+                return Err(unwritable(t, &n.text));
+            }
+            plain(&n.text.replace('\n', "<br>"), t)
+        },
+    )?;
+    w.finish()
 }
 
 /// The `Chapter` and `Verse` cells of the legacy table: one chapter per row.
@@ -526,54 +734,99 @@ fn legacy_place(locus: &BibleLocus) -> Option<(String, String)> {
     }
 }
 
-/// Writes a words links table.
-pub fn write_word_links(links: &[WordLink], style: WordLinkStyle) -> Result<String, Error> {
-    let t = TsvTable::WordLinks;
-    let mut rows = Vec::with_capacity(links.len());
-    for l in links {
-        let link = match (&l.article, style) {
-            (WordArticleId::Dcs { category, slug }, WordLinkStyle::Rc) => {
-                format!("rc://*/tw/dict/bible/{}/{}", category.folder(), slug)
+/// Writes notes as a table of the given layout for `scope`. Items of another scope, and
+/// values the layout has no column for, are refused rather than dropped.
+pub fn write_notes(notes: &[Note], scope: TsvScope, layout: NotesLayout) -> Result<String, Error> {
+    match layout {
+        NotesLayout::Seven => {
+            let rows = notes
+                .iter()
+                .map(|n| note_row(n, scope))
+                .collect::<Result<_, _>>()?;
+            Ok(table_text(&NOTES, rows))
+        }
+        NotesLayout::LegacyNine => {
+            if scope == TsvScope::Obs {
+                return Err(write_error(TsvTable::Notes, WriteProblem::LegacyObs));
             }
-            (WordArticleId::Dcs { category, slug }, WordLinkStyle::ExportPath) => {
-                format!("./payload/{}/{}.md", category.folder(), slug)
-            }
-            (WordArticleId::Aquifer(_), _) => {
-                return Err(Error::TsvWrite {
-                    table: t,
-                    problem: WriteProblem::AquiferItem {
-                        what: "translation words article",
-                    },
-                });
-            }
-        };
-        rows.push(vec![
-            l.reference.tsv_text(),
-            row_id(&l.id, t, "word link")?,
-            plain(&l.tags.join("; "), t)?.to_owned(),
-            plain(l.orig_words.as_str(), t)?.to_owned(),
-            l.occurrence.cell(),
-            link,
-        ]);
+            let rows = notes
+                .iter()
+                .map(|n| legacy_row(n, scope))
+                .collect::<Result<_, _>>()?;
+            Ok(table_text(&NOTES_LEGACY, rows))
+        }
     }
+}
+
+fn word_link_row(
+    l: &WordLink,
+    scope: TsvScope,
+    style: WordLinkStyle,
+) -> Result<Vec<String>, Error> {
+    let t = TsvTable::WordLinks;
+    let mut w = RowWriter::new(t, l.read_from.as_ref());
+    w.reference(&l.reference, scope)?;
+    w.id(&l.id, "word link")?;
+    w.tags(&l.tags)?;
+    w.plain("OrigWords", l.orig_words.as_str())?;
+    w.occurrence(l.occurrence)?;
+    w.cell(
+        "TWLink",
+        |raw| {
+            raw.starts_with("rc://") == (style == WordLinkStyle::Rc)
+                && parse_word_link(raw).as_ref() == Ok(&l.article)
+        },
+        || match (&l.article, style) {
+            (WordArticleId::Dcs { category, slug }, WordLinkStyle::Rc) => Ok(format!(
+                "rc://*/tw/dict/bible/{}/{}",
+                category.folder(),
+                slug
+            )),
+            (WordArticleId::Dcs { category, slug }, WordLinkStyle::ExportPath) => {
+                Ok(format!("./payload/{}/{}.md", category.folder(), slug))
+            }
+            (WordArticleId::Aquifer(_), _) => Err(write_error(
+                t,
+                WriteProblem::AquiferItem {
+                    what: "translation words article",
+                },
+            )),
+        },
+    )?;
+    w.finish()
+}
+
+/// Writes a words links table for `scope`.
+pub fn write_word_links(
+    links: &[WordLink],
+    scope: TsvScope,
+    style: WordLinkStyle,
+) -> Result<String, Error> {
+    let rows = links
+        .iter()
+        .map(|l| word_link_row(l, scope, style))
+        .collect::<Result<_, _>>()?;
     Ok(table_text(&WORD_LINKS, rows))
 }
 
-/// Writes a questions table.
-pub fn write_questions(questions: &[Question]) -> Result<String, Error> {
-    let t = TsvTable::Questions;
-    let mut rows = Vec::with_capacity(questions.len());
-    for q in questions {
-        rows.push(vec![
-            q.reference.tsv_text(),
-            row_id(&q.id, t, "question")?,
-            plain(&q.tags.join("; "), t)?.to_owned(),
-            plain(q.quote.as_str(), t)?.to_owned(),
-            q.occurrence.cell(),
-            encode_escapes(&q.question, t)?,
-            encode_escapes(&q.response, t)?,
-        ]);
-    }
+fn question_row(q: &Question, scope: TsvScope) -> Result<Vec<String>, Error> {
+    let mut w = RowWriter::new(TsvTable::Questions, q.read_from.as_ref());
+    w.reference(&q.reference, scope)?;
+    w.id(&q.id, "question")?;
+    w.tags(&q.tags)?;
+    w.plain("Quote", q.quote.as_str())?;
+    w.occurrence(q.occurrence)?;
+    w.markdown("Question", &q.question)?;
+    w.markdown("Response", &q.response)?;
+    w.finish()
+}
+
+/// Writes a questions table for `scope`.
+pub fn write_questions(questions: &[Question], scope: TsvScope) -> Result<String, Error> {
+    let rows = questions
+        .iter()
+        .map(|q| question_row(q, scope))
+        .collect::<Result<_, _>>()?;
     Ok(table_text(&QUESTIONS, rows))
 }
 

@@ -26,7 +26,21 @@ use tc_helps::{
 };
 
 fn articles(rel: &str) -> Vec<AquiferArticle> {
-    parse_aquifer_articles(&aquifer(rel)).unwrap()
+    let loaded = parse_aquifer_articles(&aquifer(rel)).unwrap();
+    assert_eq!(loaded.refused, [], "{rel}");
+    loaded.items
+}
+
+fn notes(rel: &str) -> Vec<Note> {
+    let loaded = notes_from_aquifer(&articles(rel));
+    assert_eq!(loaded.refused, [], "{rel}");
+    loaded.items
+}
+
+fn questions(rel: &str) -> Vec<tc_helps::Question> {
+    let loaded = questions_from_aquifer(&articles(rel));
+    assert_eq!(loaded.refused, [], "{rel}");
+    loaded.items
 }
 
 fn id(s: &str) -> AquiferContentId {
@@ -61,8 +75,7 @@ fn quotes_by_verse(notes: &[Note]) -> BTreeMap<String, Vec<String>> {
 
 #[test]
 fn english_notes_carry_the_same_quotes_as_door43_en_tn_v91_in_the_same_order() {
-    let notes =
-        notes_from_aquifer(&articles("UWTranslationNotes/eng/json/56.content.json")).unwrap();
+    let notes = notes("UWTranslationNotes/eng/json/56.content.json");
     assert_eq!(notes.len(), 206);
     assert_eq!(
         notes
@@ -129,8 +142,7 @@ fn english_notes_carry_the_same_quotes_as_door43_en_tn_v91_in_the_same_order() {
 
 #[test]
 fn no_aquifer_note_can_drive_a_check_until_its_occurrence_is_known() {
-    let notes =
-        notes_from_aquifer(&articles("UWTranslationNotes/eng/json/56.content.json")).unwrap();
+    let notes = notes("UWTranslationNotes/eng/json/56.content.json");
     let mut tally: BTreeMap<String, usize> = BTreeMap::new();
     for n in &notes {
         *tally
@@ -160,8 +172,8 @@ fn no_aquifer_note_can_drive_a_check_until_its_occurrence_is_known() {
 
 #[test]
 fn portuguese_notes_keep_the_original_quotes_and_link_across_languages() {
-    let eng = notes_from_aquifer(&articles("UWTranslationNotes/eng/json/56.content.json")).unwrap();
-    let por = notes_from_aquifer(&articles("UWTranslationNotes/por/json/56.content.json")).unwrap();
+    let eng = notes("UWTranslationNotes/eng/json/56.content.json");
+    let por = notes("UWTranslationNotes/por/json/56.content.json");
     assert_eq!(por.len(), 206);
     assert_eq!(por.iter().filter(|n| !n.quote.is_empty()).count(), 201);
     // Same order, same original-language quote, wherever Portuguese has one.
@@ -206,9 +218,9 @@ fn every_link_in_converted_text_resolves() {
         "UWTranslationNotes/eng/json/56.content.json",
         "UWTranslationNotes/por/json/56.content.json",
     ] {
-        for n in notes_from_aquifer(&articles(rel)).unwrap() {
+        for n in notes(rel) {
             for link in find_links(&n.text) {
-                resolve_link(&link.href, &LinkBase::Absolute)
+                resolve_link(&link.href, &n.link_base())
                     .unwrap_or_else(|e| panic!("{rel} {:?}: {e}", n.id));
                 count += 1;
             }
@@ -237,10 +249,9 @@ fn every_link_in_converted_text_resolves() {
 #[test]
 fn questions_split_into_question_and_answer() {
     for lang in ["eng", "por"] {
-        let qs = questions_from_aquifer(&articles(&format!(
+        let qs = questions(&format!(
             "UWTranslationQuestions/{lang}/json/56.content.json"
-        )))
-        .unwrap();
+        ));
         assert_eq!(qs.len(), 36);
         assert!(
             qs.iter()
@@ -248,8 +259,7 @@ fn questions_split_into_question_and_answer() {
             "{lang}"
         );
     }
-    let qs = questions_from_aquifer(&articles("UWTranslationQuestions/eng/json/56.content.json"))
-        .unwrap();
+    let qs = questions("UWTranslationQuestions/eng/json/56.content.json");
     assert_eq!(qs[0].reference.tsv_text(), "1:1");
     assert_eq!(
         qs[0].question,
@@ -281,19 +291,33 @@ fn words_show_per_verse_but_cannot_drive_a_check() {
             .contains("* [Jude 1:17–19](aquifer:bible/65001017-65001019)")
     );
 
-    let mut helps = Helps::new(HelpsSource::Aquifer(pin(
+    let source = HelpsSource::Aquifer(pin(
         "UWTranslationWords",
         "eng",
         "f8ebe522a769f0f5311a5915d1d61f9e28e6b617",
-    )));
-    helps.add_word_articles(words.articles.clone());
-    helps.add_word_links(words.links.clone());
+    ));
+    let mut helps = Helps::new();
+    // Before the articles are added, a link cannot tell whether its article exists.
+    helps.add_word_links(&source, words.links.clone()).unwrap();
+    let link = helps.word_links_for(tit(1, 1)).next().unwrap();
+    assert_eq!(
+        helps.word_link_readiness(&link),
+        CheckReadiness::Blocked(vec![
+            CheckBlocker::NoOriginalWords,
+            CheckBlocker::WordsNotLoaded,
+            CheckBlocker::OccurrenceUnrecorded
+        ])
+    );
+    helps
+        .add_word_articles(&source, words.articles.clone())
+        .unwrap();
     let here = helps.words_for(tit(1, 1));
     assert_eq!(here.len(), 5);
     assert!(here.iter().all(|(_, article)| article.is_some()));
     let link = helps.word_links_for(tit(1, 1)).next().unwrap();
+    assert_eq!(link.source, &source);
     assert_eq!(
-        helps.word_link_readiness(link),
+        helps.word_link_readiness(&link),
         CheckReadiness::Blocked(vec![
             CheckBlocker::NoOriginalWords,
             CheckBlocker::OccurrenceUnrecorded
@@ -354,20 +378,28 @@ fn academy_articles_convert_every_element_the_manual_uses() {
     assert_eq!(por.len(), 8);
 
     // Portuguese notes link the Portuguese academy articles by id.
-    let mut helps = Helps::new(HelpsSource::Aquifer(pin(
-        "UWTranslationNotes",
+    let notes_pin = HelpsSource::Aquifer(pin("UWTranslationNotes", "por", NOTES_COMMIT));
+    let manual_pin = HelpsSource::Aquifer(pin(
+        "UWTranslationManual",
         "por",
-        NOTES_COMMIT,
-    )));
-    helps.add_academy_articles(por);
-    helps.add_notes(
-        notes_from_aquifer(&articles("UWTranslationNotes/por/json/56.content.json")).unwrap(),
-    );
+        "b993c3bc252262eca6162f5cea2a019b2e069dc4",
+    ));
+    let mut helps = Helps::new();
+    helps.add_academy_articles(&manual_pin, por).unwrap();
+    helps
+        .add_notes(
+            &notes_pin,
+            notes("UWTranslationNotes/por/json/56.content.json"),
+        )
+        .unwrap();
     let first = helps.notes_for(tit(1, 1)).next().unwrap();
+    assert_eq!(first.source, &notes_pin);
     let article = helps
         .academy_article(first.support_reference.as_ref().unwrap())
         .unwrap();
     assert_eq!(article.title, "Substantivos abstratos");
+    // The article answers from the manual's pin, not the notes'.
+    assert_eq!(article.source, &manual_pin);
     let target = resolve_link(&find_links(&first.text)[0].href, &LinkBase::Absolute).unwrap();
     assert!(
         matches!(helps.article(&target), Some(tc_helps::Article::Academy(a)) if a.title == "Substantivos abstratos")
@@ -440,7 +472,7 @@ fn conversion_keeps_every_character_of_text() {
     // The notes model keeps the quotes outside the body; together they hold every character.
     let raw = articles("UWTranslationNotes/eng/json/56.content.json");
     let by_id: BTreeMap<_, _> = raw.iter().map(|a| (a.content_id.clone(), a)).collect();
-    for n in notes_from_aquifer(&raw).unwrap() {
+    for n in notes_from_aquifer(&raw).items {
         let tc_helps::HelpItemId::Aquifer(cid) = &n.id else {
             panic!()
         };
@@ -512,13 +544,16 @@ fn metadata_names_the_resource_and_its_attribution() {
 }
 
 #[test]
-fn malformed_aquifer_json_is_refused_naming_the_article_and_field() {
+fn a_malformed_article_is_refused_alone_naming_its_field() {
     let good = r#"{"content_id": 7, "title": "Titus 1:1 (#1)", "index_reference": "56001001", "language": "eng", "content": "<p>x</p>"}"#;
     let parsed = parse_aquifer_articles(&format!("[{good}]")).unwrap();
+    assert_eq!(parsed.refused, []);
+    let parsed = parsed.items;
     assert_eq!(parsed[0].content_id, id("7"));
     assert_eq!(parsed[0].ordinal(), Some(1));
     assert!(matches!(&parsed[0].index, IndexKey::Passage(r) if r.to_string() == "TIT 1:1"));
 
+    let next = good.replace("7,", "8,").replace("(#1)", "(#2)");
     let cases = [
         (good.replace("56001001", "67001001"), "index_reference"),
         (good.replace("56001001", "56001001-57001001"), "index_reference"),
@@ -530,20 +565,37 @@ fn malformed_aquifer_json_is_refused_naming_the_article_and_field() {
             "associations.passage",
         ),
         (good.replace("7,", "\"has space\","), "content_id"),
+        (good.replace("\"title\": \"Titus 1:1 (#1)\",", ""), "object"),
     ];
     for (json, field) in cases {
-        match parse_aquifer_articles(&format!("[{json}]")) {
-            Err(Error::AquiferArticle {
-                field: f,
-                content_id,
-                ..
-            }) => {
-                assert_eq!(f, field);
+        let loaded = parse_aquifer_articles(&format!("[{next}, {json}]")).unwrap();
+        // The good article still loads.
+        assert_eq!(loaded.items.len(), 1, "{json}");
+        assert_eq!(loaded.items[0].content_id, id("8"));
+        match loaded.refused.as_slice() {
+            [
+                Error::AquiferArticle {
+                    field: f,
+                    content_id,
+                    ..
+                },
+            ] => {
+                assert_eq!(*f, field);
                 assert!(!content_id.is_empty());
             }
             other => panic!("{json}: {other:?}"),
         }
     }
+    // A byte order mark is not part of the JSON.
+    assert_eq!(
+        parse_aquifer_articles(&format!("\u{feff}[{good}]")).unwrap(),
+        parse_aquifer_articles(&format!("[{good}]")).unwrap()
+    );
+    let meta = aquifer("UWTranslationNotes/eng/metadata.json");
+    assert_eq!(
+        parse_aquifer_metadata(&format!("\u{feff}{meta}")).unwrap(),
+        parse_aquifer_metadata(&meta).unwrap()
+    );
     assert!(matches!(
         parse_aquifer_articles("{\"not\": \"a list\"}"),
         Err(Error::Json {
@@ -552,39 +604,94 @@ fn malformed_aquifer_json_is_refused_naming_the_article_and_field() {
         })
     ));
     assert!(matches!(
-        parse_aquifer_articles(&format!(
-            "[{}]",
-            good.replace("\"title\": \"Titus 1:1 (#1)\",", "")
-        )),
-        Err(Error::Json { .. })
-    ));
-    assert!(matches!(
         parse_aquifer_metadata("{\"resource_metadata\": {}}"),
         Err(Error::Json {
             file: JsonFile::AquiferMetadata,
             ..
         })
     ));
-    // A note filed under an alphabetical key cannot be placed in a book.
-    let sorted =
-        parse_aquifer_articles(&format!("[{}]", good.replace("56001001", "apostle"))).unwrap();
-    assert!(notes_from_aquifer(&sorted).is_err());
+    // A note filed under an alphabetical key, or under no passage with no passage to fall
+    // back on, cannot be placed in a book; it alone is refused.
+    for misfiled in ["apostle", "00000000"] {
+        let json = format!("[{next}, {}]", good.replace("56001001", misfiled));
+        let articles = parse_aquifer_articles(&json).unwrap();
+        assert_eq!(articles.refused, []);
+        let notes = notes_from_aquifer(&articles.items);
+        assert_eq!(notes.items.len(), 1);
+        assert!(matches!(
+            notes.refused.as_slice(),
+            [Error::AquiferArticle {
+                field: "index_reference",
+                ..
+            }]
+        ));
+    }
+}
+
+#[test]
+fn notes_filed_under_no_passage_are_placed_by_their_passage() {
+    let loaded = parse_aquifer_articles(&aquifer(
+        "UWTranslationNotes/fra/json/01-subset.content.json",
+    ))
+    .unwrap();
+    assert_eq!(loaded.refused, []);
+    assert_eq!(loaded.items.len(), 5);
+    assert_eq!(
+        loaded
+            .items
+            .iter()
+            .filter(|a| a.index == IndexKey::Unindexed)
+            .count(),
+        2
+    );
+    let notes = notes_from_aquifer(&loaded.items);
+    assert_eq!(notes.refused, []);
+    let places: Vec<String> = notes
+        .items
+        .iter()
+        .map(|n| n.reference.to_string())
+        .collect();
+    assert_eq!(
+        places,
+        ["GEN 1:1", "GEN 1:1", "GEN 1:1", "2TI 2:16", "JAS 2:1"]
+    );
+    let timothy = &notes.items[3];
+    assert_eq!(timothy.id, tc_helps::HelpItemId::Aquifer(id("907469")));
+    assert!(
+        timothy
+            .text
+            .contains("Le pronom «\u{a0}ceux\u{a0}» est masculin"),
+        "{}",
+        timothy.text
+    );
+    let mut helps = Helps::new();
+    let source = HelpsSource::Aquifer(pin("UWTranslationNotes", "fra", NOTES_COMMIT));
+    helps.add_notes(&source, notes.items).unwrap();
+    let on = |r: &str| helps.notes_for(r.parse().unwrap()).count();
+    assert_eq!((on("GEN 1:1"), on("2TI 2:16"), on("JAS 2:1")), (3, 1, 1));
 }
 
 #[test]
 fn notes_and_questions_land_on_their_verses() {
-    let mut helps = Helps::new(HelpsSource::Aquifer(pin(
-        "UWTranslationNotes",
+    let notes_pin = HelpsSource::Aquifer(pin("UWTranslationNotes", "eng", NOTES_COMMIT));
+    let questions_pin = HelpsSource::Aquifer(pin(
+        "UWTranslationQuestions",
         "eng",
-        NOTES_COMMIT,
-    )));
-    helps.add_notes(
-        notes_from_aquifer(&articles("UWTranslationNotes/eng/json/56.content.json")).unwrap(),
-    );
-    helps.add_questions(
-        questions_from_aquifer(&articles("UWTranslationQuestions/eng/json/56.content.json"))
-            .unwrap(),
-    );
+        "f8cc284556dbf4b1bfbd5d8c7bdd7d41ee8775e9",
+    ));
+    let mut helps = Helps::new();
+    helps
+        .add_notes(
+            &notes_pin,
+            notes("UWTranslationNotes/eng/json/56.content.json"),
+        )
+        .unwrap();
+    helps
+        .add_questions(
+            &questions_pin,
+            questions("UWTranslationQuestions/eng/json/56.content.json"),
+        )
+        .unwrap();
     assert_eq!(helps.notes_for(tit(1, 1)).count(), 4);
     assert_eq!(helps.introductions(BookId::Titus, None).count(), 1);
     assert_eq!(helps.introductions(BookId::Titus, Some(3)).count(), 1);
@@ -596,6 +703,99 @@ fn notes_and_questions_land_on_their_verses() {
             .notes_for(tit(1, 1))
             .all(|n| matches!(&n.reference, HelpRef::Bible(r) if r.to_string() == "TIT 1:1"))
     );
+}
+
+#[test]
+fn links_inside_links_and_odd_characters_keep_their_target() {
+    // ind MRK 6:12 note 382783: a bible-ref around an <a href>. Links cannot nest, so the
+    // inner one keeps its text and the outer target stays.
+    let md = html_to_markdown(
+        r#"<p>Lihat <data class="bible-ref" data-start-ref="41006012" data-end-ref="41006012"><a href="../05/12.md">Mrk. 6:12</a></data>.</p>"#,
+    );
+    assert_eq!(md, "Lihat [Mrk. 6:12](aquifer:bible/41006012).");
+    let links = find_links(&md);
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].href, "aquifer:bible/41006012");
+    // arb JHN note 326697: a literal backslash right before the tag.
+    let md = html_to_markdown(
+        r#"<p>\<data class="bible-ref" data-start-ref="43011001" data-end-ref="43011002">2 - 1:11</data></p>"#,
+    );
+    assert_eq!(md, r"\\[2 - 1:11](aquifer:bible/43011001-43011002)");
+    assert_eq!(find_links(&md)[0].href, "aquifer:bible/43011001-43011002");
+    assert_eq!(plain_text(&md), r"\2 - 1:11");
+    // A bracket in a label, parentheses and spaces in an href.
+    let md = html_to_markdown(
+        r#"<p><a href="https://en.wikipedia.org/wiki/Talent_(measurement) x">a]b [c</a></p>"#,
+    );
+    let links = find_links(&md);
+    assert_eq!(links.len(), 1, "{md}");
+    assert_eq!(
+        links[0].href,
+        "https://en.wikipedia.org/wiki/Talent_%28measurement%29%20x"
+    );
+    assert_eq!(plain_text(&md), "a]b [c");
+    // A `!` before a link would make it an image.
+    let md = html_to_markdown(
+        r#"<p>Wow!<span><data class="bible-ref" data-start-ref="43011001">1:1</data></span></p>"#,
+    );
+    assert_eq!(find_links(&md).len(), 1, "{md}");
+    assert_eq!(plain_text(&md), "Wow!1:1");
+    // Some Aquifer notes keep Door43's relative links (`../05/03.md`); the note names
+    // their base.
+    let json = serde_json::json!([
+        {"content_id": 1, "title": "Mark 6:12 (#1)", "index_reference": "41006012",
+         "language": "ind", "content": "<p>Lihat <a href=\"../05/12.md\">5:12</a>.</p>"},
+        {"content_id": 2, "title": "Mark", "index_reference": "41000000",
+         "language": "ind", "content": "<p>Lihat <a href=\"../01/01.md\">1:1</a>.</p>"},
+    ])
+    .to_string();
+    let notes = notes_from_aquifer(&parse_aquifer_articles(&json).unwrap().items).items;
+    let targets: Vec<String> = notes
+        .iter()
+        .map(|n| {
+            let link = &find_links(&n.text)[0];
+            assert!(resolve_link(&link.href, &LinkBase::Absolute).is_err());
+            match resolve_link(&link.href, &n.link_base()).unwrap() {
+                LinkTarget::Bible(r) => r.to_string(),
+                other => panic!("{other:?}"),
+            }
+        })
+        .collect();
+    assert_eq!(targets, ["MRK 1:1", "MRK 5:12"]);
+}
+
+#[test]
+fn malformed_deep_html_converts_without_exhausting_the_stack() {
+    for tag in ["b", "li", "blockquote", "ul", "data", "a href=x"] {
+        let name = tag.split(' ').next().unwrap();
+        let html = format!("<p>{}deep{}</p>", format!("<{tag}>").repeat(100_000), "");
+        let md = html_to_markdown(&html);
+        assert!(plain_text(&md).contains("deep"), "{name}");
+        let json = serde_json::json!([{
+            "content_id": 1,
+            "title": "Titus 1:1 (#1)",
+            "index_reference": "56001001",
+            "language": "eng",
+            "content": html,
+        }])
+        .to_string();
+        let articles = parse_aquifer_articles(&json).unwrap();
+        let notes = notes_from_aquifer(&articles.items);
+        assert_eq!(notes.items.len(), 1, "{name}");
+    }
+}
+
+#[test]
+fn plain_text_takes_time_in_proportion_to_a_long_line() {
+    // Aquifer tables pasted into one row stay one long line.
+    let line = "[1:1](aquifer:bible/56001001) and `code` ".repeat(20_000);
+    let started = std::time::Instant::now();
+    let plain = plain_text(&line);
+    let links = find_links(&line);
+    assert_eq!(links.len(), 20_000);
+    assert_eq!(plain, "1:1 and code ".repeat(20_000));
+    // Quadratic scanning takes minutes here; linear, milliseconds.
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
 }
 
 proptest! {

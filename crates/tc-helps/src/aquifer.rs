@@ -17,6 +17,12 @@
 //!   [`crate::CheckBlocker::OccurrenceUnrecorded`].
 //! - **Academy** articles have no slug and no subtitle.
 //! - **Questions** are reading material in Door43 too.
+//!
+//! The release files have errors of their own. 1,789 notes are filed under
+//! `index_reference` `00000000`, most of them in the file of another book; they are placed
+//! by their `associations.passage` ([`IndexKey::Unindexed`]). An article that still does
+//! not parse or cannot be placed is refused alone, named in [`Loaded::refused`], so it
+//! never costs the rest of its book.
 
 use std::collections::BTreeMap;
 
@@ -24,6 +30,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::Error;
+use crate::articles::without_bom;
 use crate::error::{JsonFile, PinMismatch};
 use crate::html::{self, Element, Node};
 use crate::ids::{
@@ -96,8 +103,39 @@ struct RawResource {
 pub enum IndexKey {
     /// Canonical resources: a passage, or a book or chapter introduction.
     Passage(BibleRef),
+    /// `00000000`: filed under no passage. Real notes files hold such articles for other
+    /// books (the French Genesis file has a 2 Timothy 2:16 note), so the converters place
+    /// them by their first `associations.passage`.
+    Unindexed,
     /// Alphabetical and monograph resources: a sort key.
     Sort(String),
+}
+
+const UNINDEXED: &str = "00000000";
+
+/// What a reader or converter took, and what it refused. A refusal is an
+/// [`Error::AquiferArticle`] naming the article and the field, so one bad article is
+/// reported without costing the rest of its book.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Loaded<T> {
+    pub items: Vec<T>,
+    pub refused: Vec<Error>,
+}
+
+impl<T> Loaded<T> {
+    fn new() -> Self {
+        Self {
+            items: Vec::new(),
+            refused: Vec::new(),
+        }
+    }
+
+    fn take(&mut self, result: Result<T, Error>) {
+        match result {
+            Ok(item) => self.items.push(item),
+            Err(e) => self.refused.push(e),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,13 +198,26 @@ fn article_error(content_id: &str, field: &'static str, problem: impl Into<Strin
     }
 }
 
-/// Reads an Aquifer content file (`json/NN.content.json`): a JSON array of articles.
-pub fn parse_aquifer_articles(json: &str) -> Result<Vec<AquiferArticle>, Error> {
-    let raw: Vec<RawArticle> = serde_json::from_str(json).map_err(|e| Error::Json {
+/// Reads an Aquifer content file (`json/NN.content.json`): a JSON array of articles. A file
+/// that is not such an array is refused; an article that does not parse is refused alone.
+pub fn parse_aquifer_articles(json: &str) -> Result<Loaded<AquiferArticle>, Error> {
+    let values: Vec<Value> = serde_json::from_str(without_bom(json)).map_err(|e| Error::Json {
         file: JsonFile::AquiferArticles,
         problem: e.to_string(),
     })?;
-    raw.into_iter().map(article).collect()
+    let mut loaded = Loaded::new();
+    for value in values {
+        let id = match value.get("content_id") {
+            Some(Value::String(s)) => s.clone(),
+            Some(Value::Number(n)) => n.to_string(),
+            _ => String::new(),
+        };
+        let result = RawArticle::deserialize(value)
+            .map_err(|e| article_error(&id, "object", e.to_string()))
+            .and_then(article);
+        loaded.take(result);
+    }
+    Ok(loaded)
 }
 
 fn article(raw: RawArticle) -> Result<AquiferArticle, Error> {
@@ -178,7 +229,9 @@ fn article(raw: RawArticle) -> Result<AquiferArticle, Error> {
         .bytes()
         .all(|b| b.is_ascii_digit() || b == b'-')
         && raw.index_reference.len() >= 8;
-    let index = if looks_like_key {
+    let index = if raw.index_reference == UNINDEXED {
+        IndexKey::Unindexed
+    } else if looks_like_key {
         IndexKey::Passage(
             parse_aquifer_ref(&raw.index_reference)
                 .map_err(|why| article_error(&id_text, "index_reference", why))?,
@@ -383,7 +436,8 @@ fn meta_error(problem: impl Into<String>) -> Error {
 
 /// Reads a resource's `metadata.json`.
 pub fn parse_aquifer_metadata(json: &str) -> Result<AquiferMetadata, Error> {
-    let v: Value = serde_json::from_str(json).map_err(|e| meta_error(e.to_string()))?;
+    let v: Value =
+        serde_json::from_str(without_bom(json)).map_err(|e| meta_error(e.to_string()))?;
     let rm = v
         .get("resource_metadata")
         .ok_or_else(|| meta_error("no resource_metadata"))?;
@@ -468,9 +522,18 @@ pub fn parse_aquifer_metadata(json: &str) -> Result<AquiferMetadata, Error> {
     })
 }
 
+/// Where a note or question belongs: its index key, or for an unindexed article its first
+/// associated passage.
 fn passage_of(a: &AquiferArticle) -> Result<BibleRef, Error> {
     match &a.index {
         IndexKey::Passage(r) => Ok(r.clone()),
+        IndexKey::Unindexed => a.passages.first().cloned().ok_or_else(|| {
+            article_error(
+                a.content_id.as_str(),
+                "index_reference",
+                format!("{UNINDEXED:?} and no associations.passage place it nowhere"),
+            )
+        }),
         IndexKey::Sort(key) => Err(article_error(
             a.content_id.as_str(),
             "index_reference",
@@ -521,47 +584,50 @@ fn gateway_quote(node: &Node) -> Option<String> {
     (!inner.contains('"')).then(|| inner.trim().to_owned())
 }
 
-/// Sorts converted items into verse order, then by Aquifer's per-verse ordinal.
-fn verse_order(a: &AquiferArticle) -> (Option<Bcv>, u32) {
-    let key = match &a.index {
-        IndexKey::Passage(r) => match &r.locus {
-            BibleLocus::BookIntro => Some(Bcv {
-                book: r.book,
-                chapter: 0,
-                verse: 0,
-            }),
-            BibleLocus::ChapterIntro(c) => Some(Bcv {
-                book: r.book,
-                chapter: *c,
-                verse: 0,
-            }),
-            BibleLocus::Verses(list) => list.ranges().first().map(|range| Bcv {
-                book: r.book,
-                chapter: range.start().chapter,
-                verse: range.start().verse,
-            }),
-        },
-        IndexKey::Sort(_) => None,
+/// The sort key of a placed item: book, chapter and verse (0 for introductions), then
+/// Aquifer's per-verse ordinal.
+fn verse_order(r: &BibleRef, a: &AquiferArticle) -> (Bcv, u32) {
+    let (chapter, verse) = match &r.locus {
+        BibleLocus::BookIntro => (0, 0),
+        BibleLocus::ChapterIntro(c) => (*c, 0),
+        BibleLocus::Verses(list) => {
+            let start = list.start();
+            (start.chapter, start.verse)
+        }
+    };
+    let key = Bcv {
+        book: r.book,
+        chapter,
+        verse,
     };
     (key, a.ordinal().unwrap_or(0))
 }
 
-fn sorted(articles: &[AquiferArticle]) -> Vec<&AquiferArticle> {
-    let mut out: Vec<&AquiferArticle> = articles.iter().collect();
-    out.sort_by_key(|a| verse_order(a));
-    out
+/// Places each article by [`passage_of`], refusing those it cannot place, in verse order.
+fn placed(articles: &[AquiferArticle]) -> (Vec<(&AquiferArticle, BibleRef)>, Vec<Error>) {
+    let mut out = Vec::new();
+    let mut refused = Vec::new();
+    for a in articles {
+        match passage_of(a) {
+            Ok(r) => out.push((a, r)),
+            Err(e) => refused.push(e),
+        }
+    }
+    out.sort_by_key(|(a, r)| verse_order(r, a));
+    (out, refused)
 }
 
-/// Converts the articles of `UWTranslationNotes` into notes, in verse order.
-pub fn notes_from_aquifer(articles: &[AquiferArticle]) -> Result<Vec<Note>, Error> {
-    sorted(articles)
+/// Converts the articles of `UWTranslationNotes` into notes, in verse order. An article
+/// that names no passage is refused alone.
+pub fn notes_from_aquifer(articles: &[AquiferArticle]) -> Loaded<Note> {
+    let (placed, refused) = placed(articles);
+    let items = placed
         .into_iter()
-        .map(|a| {
-            let reference = passage_of(a)?;
+        .map(|(a, reference)| {
             let mut nodes = html::parse(&a.html);
             let id = HelpItemId::Aquifer(a.content_id.clone());
             if is_intro(&reference) {
-                return Ok(Note {
+                return Note {
                     reference: HelpRef::Bible(reference),
                     id,
                     tags: Vec::new(),
@@ -570,7 +636,8 @@ pub fn notes_from_aquifer(articles: &[AquiferArticle]) -> Result<Vec<Note>, Erro
                     occurrence: Occurrence::NotTied,
                     gl_quote: None,
                     text: nodes_to_markdown(&nodes),
-                });
+                    read_from: None,
+                };
             }
             nodes.retain(|n| !is_blank(n));
             let mut quote = Quote::default();
@@ -605,7 +672,7 @@ pub fn notes_from_aquifer(articles: &[AquiferArticle]) -> Result<Vec<Note>, Erro
                 .iter()
                 .find(|l| l.resource_code == MANUAL)
                 .map(|l| AcademyArticleId::Aquifer(l.content_id.clone()));
-            Ok(Note {
+            Note {
                 reference: HelpRef::Bible(reference),
                 id,
                 tags: Vec::new(),
@@ -614,18 +681,21 @@ pub fn notes_from_aquifer(articles: &[AquiferArticle]) -> Result<Vec<Note>, Erro
                 occurrence: Occurrence::Unrecorded,
                 gl_quote,
                 text: nodes_to_markdown(&nodes),
-            })
+                read_from: None,
+            }
         })
-        .collect()
+        .collect();
+    Loaded { items, refused }
 }
 
 /// Converts the articles of `UWTranslationQuestions` into questions, in verse order. The
 /// first paragraph is the question (`<p><strong>…?</strong></p>`); the rest is the answer.
-pub fn questions_from_aquifer(articles: &[AquiferArticle]) -> Result<Vec<Question>, Error> {
-    sorted(articles)
+/// An article that names no passage is refused alone.
+pub fn questions_from_aquifer(articles: &[AquiferArticle]) -> Loaded<Question> {
+    let (placed, refused) = placed(articles);
+    let items = placed
         .into_iter()
-        .map(|a| {
-            let reference = passage_of(a)?;
+        .map(|(a, reference)| {
             let mut nodes = html::parse(&a.html);
             nodes.retain(|n| !is_blank(n));
             let question = if nodes.is_empty() {
@@ -645,7 +715,7 @@ pub fn questions_from_aquifer(articles: &[AquiferArticle]) -> Result<Vec<Questio
                     Node::Text(_) => nodes_to_markdown(std::slice::from_ref(&first)),
                 }
             };
-            Ok(Question {
+            Question {
                 reference: HelpRef::Bible(reference),
                 id: HelpItemId::Aquifer(a.content_id.clone()),
                 tags: Vec::new(),
@@ -653,9 +723,11 @@ pub fn questions_from_aquifer(articles: &[AquiferArticle]) -> Result<Vec<Questio
                 occurrence: Occurrence::Unrecorded,
                 question,
                 response: nodes_to_markdown(&nodes),
-            })
+                read_from: None,
+            }
         })
-        .collect()
+        .collect();
+    Loaded { items, refused }
 }
 
 /// Translation words converted from `UWTranslationWords`.
@@ -683,6 +755,7 @@ pub fn words_from_aquifer(articles: &[AquiferArticle]) -> AquiferWords {
                 orig_words: Quote::default(),
                 occurrence: Occurrence::Unrecorded,
                 article: id.clone(),
+                read_from: None,
             });
         }
         out.articles.push(WordArticle {

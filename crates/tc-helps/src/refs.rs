@@ -69,6 +69,12 @@ impl VerseList {
     pub fn ranges(&self) -> &[VerseRange] {
         &self.0
     }
+
+    /// The first verse of the first range.
+    pub fn start(&self) -> ChapterVerse {
+        // Both constructors refuse an empty list, so the first range exists.
+        self.0[0].start
+    }
 }
 
 /// The part of a book a help item is about.
@@ -186,6 +192,16 @@ impl HelpRef {
         match self {
             HelpRef::Bible(r) => TsvLocus(&r.locus).to_string(),
             HelpRef::Obs(r) => r.to_string(),
+        }
+    }
+}
+
+/// `TIT 1:1` for a Bible place, `OBS 1:2` for a story frame.
+impl fmt::Display for HelpRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HelpRef::Bible(r) => r.fmt(f),
+            HelpRef::Obs(r) => write!(f, "OBS {r}"),
         }
     }
 }

@@ -1,9 +1,20 @@
 //! Open Bible Stories story files (`content/NN.md`): a title line `# N. Title`, then per
 //! frame one image line and one paragraph, then an optional reference line `_…_`.
 //! Every image line starts a frame.
+//!
+//! The reader skips a leading byte order mark and reads CRLF line ends as LF. The writer
+//! writes tC4's layout (`journal/story.mjs`), which the drafted and seed stories in the
+//! fixtures use byte for byte: one blank line after the title; after an image line, one
+//! blank line, the text, and one blank line, or three blank lines for an empty frame (six
+//! at the end of a story with no reference); the reference line, then a final LF. A file
+//! in another layout is rewritten in this one, and LF only.
+
+use std::borrow::Cow;
 
 use crate::Error;
-use crate::error::StoryProblem;
+use crate::articles::without_bom;
+use crate::error::{StoryField, StoryProblem, StoryWriteProblem};
+use crate::refs::ObsRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObsStory {
@@ -92,15 +103,22 @@ fn fail(line: usize, problem: StoryProblem) -> Error {
 
 /// Parses a story file. Line numbers in errors count from 1.
 pub fn parse_obs_story(text: &str) -> Result<ObsStory, Error> {
-    if text.contains('\r') {
-        return Err(fail(1, StoryProblem::CarriageReturn));
+    let text = without_bom(text);
+    let text = if text.contains("\r\n") {
+        Cow::Owned(text.replace("\r\n", "\n"))
+    } else {
+        Cow::Borrowed(text)
+    };
+    if let Some(at) = text.find('\r') {
+        let line = 1 + text[..at].matches('\n').count();
+        return Err(fail(line, StoryProblem::CarriageReturn));
     }
     let lines: Vec<&str> = text.split('\n').collect();
     let (number, title) = title_line(lines.first().copied().unwrap_or_default())
         .ok_or_else(|| fail(1, StoryProblem::Title))?;
     let number = u8::try_from(number)
         .ok()
-        .filter(|n| (1..=50).contains(n))
+        .filter(|n| (1..=ObsRef::STORIES).contains(n))
         .ok_or_else(|| fail(1, StoryProblem::StoryNumber(number)))?;
 
     let mut last = lines.len() - 1;
@@ -161,27 +179,84 @@ pub fn parse_obs_story(text: &str) -> Result<ObsStory, Error> {
     })
 }
 
-/// Writes a story in the published layout: blank lines between title, frames and
-/// reference, and a final newline.
-pub fn write_obs_story(story: &ObsStory) -> String {
-    let mut out = format!("# {}.", story.number);
-    if !story.title.is_empty() {
-        out.push(' ');
-        out.push_str(&story.title);
-    }
-    out.push_str("\n\n");
-    for frame in &story.frames {
-        out.push_str(&frame.image.to_string());
-        out.push_str("\n\n");
-        if !frame.text.is_empty() {
-            out.push_str(&frame.text);
-            out.push_str("\n\n");
+/// Writes a story in tC4's layout (see the module documentation). A story the format
+/// cannot carry, so that it would read back changed, is refused.
+pub fn write_obs_story(story: &ObsStory) -> Result<String, Error> {
+    writable(story).map_err(Error::StoryWrite)?;
+    let mut lines: Vec<Cow<str>> = Vec::new();
+    lines.push(if story.title.is_empty() {
+        Cow::Owned(format!("# {}.", story.number))
+    } else {
+        Cow::Owned(format!("# {}. {}", story.number, story.title))
+    });
+    lines.push(Cow::Borrowed(""));
+    for (i, frame) in story.frames.iter().enumerate() {
+        lines.push(Cow::Owned(frame.image.to_string()));
+        if frame.text.is_empty() {
+            let at_end = i + 1 == story.frames.len() && story.reference.is_none();
+            let blanks = if at_end { 6 } else { 3 };
+            lines.extend(std::iter::repeat_n(Cow::Borrowed(""), blanks));
+        } else {
+            lines.push(Cow::Borrowed(""));
+            lines.extend(frame.text.split('\n').map(Cow::Borrowed));
+            lines.push(Cow::Borrowed(""));
         }
     }
     if let Some(reference) = &story.reference {
-        out.push('_');
-        out.push_str(reference);
-        out.push_str("_\n");
+        lines.push(Cow::Owned(format!("_{reference}_")));
+        lines.push(Cow::Borrowed(""));
     }
-    out
+    Ok(lines.join("\n"))
+}
+
+fn one_line(text: &str, field: StoryField, frame: Option<usize>) -> Result<(), StoryWriteProblem> {
+    if text.contains(['\n', '\r']) {
+        Err(StoryWriteProblem::LineBreak { field, frame })
+    } else {
+        Ok(())
+    }
+}
+
+/// Refuses what [`parse_obs_story`] would read back differently.
+fn writable(story: &ObsStory) -> Result<(), StoryWriteProblem> {
+    if !(1..=ObsRef::STORIES).contains(&story.number) {
+        return Err(StoryWriteProblem::StoryNumber(story.number));
+    }
+    one_line(&story.title, StoryField::Title, None)?;
+    for (i, f) in story.frames.iter().enumerate() {
+        let frame = i + 1;
+        one_line(&f.image.alt, StoryField::ImageAlt, Some(frame))?;
+        one_line(&f.image.url, StoryField::ImageUrl, Some(frame))?;
+        if f.image.alt.contains(']') || f.image.url.contains(')') {
+            return Err(StoryWriteProblem::ImageForm { frame });
+        }
+        if f.text.is_empty() {
+            continue;
+        }
+        if f.text.contains('\r') {
+            return Err(StoryWriteProblem::CarriageReturn { frame });
+        }
+        for line in f.text.split('\n') {
+            if is_blank(line) {
+                return Err(StoryWriteProblem::BlankLine { frame });
+            }
+            if ObsImage::parse(line).is_some() {
+                return Err(StoryWriteProblem::ImageLine { frame });
+            }
+        }
+        let last_line = f.text.rsplit('\n').next().unwrap_or_default();
+        if frame == story.frames.len() && story.reference.is_none() && reference_form(last_line) {
+            return Err(StoryWriteProblem::ReadsAsReference { frame });
+        }
+    }
+    if let Some(reference) = &story.reference {
+        one_line(reference, StoryField::Reference, None)?;
+        if is_blank(reference) {
+            return Err(StoryWriteProblem::EmptyReference);
+        }
+        if story.frames.is_empty() {
+            return Err(StoryWriteProblem::ReferenceWithoutFrames);
+        }
+    }
+    Ok(())
 }

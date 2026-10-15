@@ -11,7 +11,8 @@
 //! - [`links`] resolves `rc://`, relative and `aquifer:` links to typed targets.
 //! - [`markdown`] describes the markdown dialect and converts Aquifer HTML into it.
 //! - [`highlight`] finds the aligned words of a verse that render a quote.
-//! - [`Helps`] holds one source's helps and answers per-passage questions.
+//! - [`Helps`] holds a set of helps, each part from one pinned resource, and answers
+//!   per-passage and per-frame questions with the source of each answer.
 
 pub mod aquifer;
 pub mod articles;
@@ -28,10 +29,10 @@ pub mod obs;
 mod refs;
 pub mod tsv;
 
-pub use collection::{Article, Helps};
+pub use collection::{Article, Found, Helps, HelpsPart};
 pub use error::{
-    CellProblem, Error, JsonFile, LinkProblem, PinMismatch, StoryProblem, TsvTable, WriteProblem,
-    YamlFile,
+    CellProblem, Error, JsonFile, LinkProblem, PinMismatch, StoryField, StoryProblem,
+    StoryWriteProblem, TsvTable, WriteProblem, YamlFile,
 };
 pub use ids::{
     AcademyArticleId, AquiferContentId, CommitSha, HelpItemId, Manual, Occurrence, Quote, RowId,

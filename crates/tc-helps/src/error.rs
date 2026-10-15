@@ -1,5 +1,8 @@
 use std::fmt;
 
+use crate::collection::HelpsPart;
+use crate::metadata::HelpsSource;
+
 /// Every way this crate refuses input. Each variant names where the problem is, so a
 /// refused resource can be reported to the user precisely.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -51,6 +54,16 @@ pub enum Error {
     #[error("pin does not match the resource: {0}")]
     PinMismatch(PinMismatch),
 
+    #[error("the helps set holds {part} from {held}, so it cannot take them from {offered} too")]
+    PinConflict {
+        part: HelpsPart,
+        held: Box<HelpsSource>,
+        offered: Box<HelpsSource>,
+    },
+
+    #[error("cannot write OBS story: {0}")]
+    StoryWrite(StoryWriteProblem),
+
     #[error("invalid {what} {value:?}")]
     InvalidValue { what: &'static str, value: String },
 
@@ -100,8 +113,14 @@ pub enum WriteProblem {
     Reference(String),
     #[error("the table has no {column} column, so the value would be lost")]
     NoColumn { column: &'static str },
-    #[error("the legacy nine-column table holds one book, but rows name {0} and {1}")]
-    MixedBooks(String, String),
+    #[error("the table is for {expected}, but an item is for {found}")]
+    WrongBook { expected: String, found: String },
+    #[error("the legacy nine-column table holds only Bible books")]
+    LegacyObs,
+    #[error(
+        "tag {0:?} would read back as other tags: a tag is not empty, has no `;` and no spaces at either end"
+    )]
+    Tag(String),
     #[error("cell text {0:?} contains a tab or line break the column cannot carry")]
     Unwritable(String),
 }
@@ -166,7 +185,7 @@ impl fmt::Display for JsonFile {
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum StoryProblem {
-    #[error("the file has a carriage return; OBS stories use LF line ends")]
+    #[error("a carriage return that does not end a line; OBS stories use LF line ends")]
     CarriageReturn,
     #[error("the first line is not the title form `# N.` or `# N. Title`")]
     Title,
@@ -179,6 +198,52 @@ pub enum StoryProblem {
     #[error("the reference line has no text between the underscores")]
     EmptyReference,
     #[error("a reference line but no frame")]
+    ReferenceWithoutFrames,
+}
+
+/// The one-line fields of an OBS story.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StoryField {
+    Title,
+    Reference,
+    ImageAlt,
+    ImageUrl,
+}
+
+impl fmt::Display for StoryField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            StoryField::Title => "title",
+            StoryField::Reference => "reference",
+            StoryField::ImageAlt => "image alt text",
+            StoryField::ImageUrl => "image address",
+        })
+    }
+}
+
+/// What a story file cannot carry. Frames count from 1.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum StoryWriteProblem {
+    #[error("story number {0} is outside 1 to 50")]
+    StoryNumber(u8),
+    #[error("the {field} has a line break (frame {frame:?})")]
+    LineBreak {
+        field: StoryField,
+        frame: Option<usize>,
+    },
+    #[error("the image of frame {frame} has `]` in its alt text or `)` in its address")]
+    ImageForm { frame: usize },
+    #[error("the text of frame {frame} has a carriage return")]
+    CarriageReturn { frame: usize },
+    #[error("the text of frame {frame} has a blank line, which would start a second paragraph")]
+    BlankLine { frame: usize },
+    #[error("a line of frame {frame} is an image line, which would start another frame")]
+    ImageLine { frame: usize },
+    #[error("the last line of frame {frame} is in the `_…_` form and would read as the reference")]
+    ReadsAsReference { frame: usize },
+    #[error("the reference is blank")]
+    EmptyReference,
+    #[error("a reference but no frame")]
     ReferenceWithoutFrames,
 }
 

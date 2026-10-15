@@ -3,8 +3,9 @@
 use std::fmt;
 
 use crate::ids::{AcademyArticleId, HelpItemId, Occurrence, Quote, WordArticleId};
-
-use crate::refs::HelpRef;
+use crate::links::LinkBase;
+use crate::refs::{BibleLocus, HelpRef};
+use crate::tsv::ReadCells;
 
 /// A translation note.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +27,10 @@ pub struct Note {
     pub gl_quote: Option<String>,
     /// The note in the app's markdown dialect (see [`crate::markdown`]).
     pub text: String,
+    /// For an item read from a TSV table, the cells its row wrote in a form the writers
+    /// would not produce, so writing it back keeps them (see [`crate::tsv`]). `None` for
+    /// Aquifer items and items made in the app.
+    pub read_from: Option<ReadCells>,
 }
 
 /// A link from words of a verse (or a story frame) to a translation words article.
@@ -39,6 +44,10 @@ pub struct WordLink {
     pub orig_words: Quote,
     pub occurrence: Occurrence,
     pub article: WordArticleId,
+    /// For an item read from a TSV table, the cells its row wrote in a form the writers
+    /// would not produce, so writing it back keeps them (see [`crate::tsv`]). `None` for
+    /// Aquifer items and items made in the app.
+    pub read_from: Option<ReadCells>,
 }
 
 /// A comprehension question.
@@ -53,6 +62,10 @@ pub struct Question {
     pub question: String,
     /// Markdown.
     pub response: String,
+    /// For an item read from a TSV table, the cells its row wrote in a form the writers
+    /// would not produce, so writing it back keeps them (see [`crate::tsv`]). `None` for
+    /// Aquifer items and items made in the app.
+    pub read_from: Option<ReadCells>,
 }
 
 /// A translation words article.
@@ -118,6 +131,8 @@ pub enum CheckBlocker {
     NoOriginalWords,
     /// The pinned translation words resource has no article for the link.
     ArticleMissing,
+    /// No translation words resource is loaded, so whether the article exists is unknown.
+    WordsNotLoaded,
 }
 
 impl fmt::Display for CheckBlocker {
@@ -135,11 +150,31 @@ impl fmt::Display for CheckBlocker {
             CheckBlocker::ArticleMissing => {
                 "the pinned translation words resource has no article for this link"
             }
+            CheckBlocker::WordsNotLoaded => {
+                "no translation words resource is loaded, so the linked article cannot be found"
+            }
         })
     }
 }
 
 impl Note {
+    /// The base the note's relative links resolve against. Door43 notes, and the Aquifer
+    /// notes copied from them, link `../05/03.md` as if each note lived in
+    /// `<book>/<chapter>/<verse>.md`.
+    pub fn link_base(&self) -> LinkBase {
+        match &self.reference {
+            HelpRef::Bible(r) => LinkBase::Note {
+                book: r.book,
+                chapter: match &r.locus {
+                    BibleLocus::BookIntro => None,
+                    BibleLocus::ChapterIntro(c) => Some(*c),
+                    BibleLocus::Verses(list) => Some(list.start().chapter),
+                },
+            },
+            HelpRef::Obs(_) => LinkBase::ObsNote,
+        }
+    }
+
     /// tC's rule: a Bible note is a check when it has a SupportReference; every OBS note is
     /// one. Then it must name words and the occurrence of those words.
     pub fn check_readiness(&self) -> CheckReadiness {
@@ -160,13 +195,16 @@ impl WordLink {
     /// `article_exists` is whether the pinned translation words resource carries the
     /// linked article (tC drops links to missing articles).
     pub fn check_readiness(&self, article_exists: bool) -> CheckReadiness {
+        self.readiness((!article_exists).then_some(CheckBlocker::ArticleMissing))
+    }
+
+    /// The readiness with `article`, what blocks the linked article, if anything.
+    pub(crate) fn readiness(&self, article: Option<CheckBlocker>) -> CheckReadiness {
         let mut blockers = Vec::new();
         if self.orig_words.is_empty() {
             blockers.push(CheckBlocker::NoOriginalWords);
         }
-        if !article_exists {
-            blockers.push(CheckBlocker::ArticleMissing);
-        }
+        blockers.extend(article);
         occurrence_readiness(self.occurrence, blockers)
     }
 }

@@ -2,13 +2,14 @@
 //! Burrito export) or its `manifest.yaml` (the RC repository), and pinning helps sources.
 
 use std::collections::BTreeSet;
+use std::fmt;
 
 use serde_json::Value;
 use tc_core::BookId;
 use yaml_rust2::Yaml;
 
 use crate::Error;
-use crate::articles::{load_yaml, scalar, word_article_id};
+use crate::articles::{load_yaml, scalar, without_bom, word_article_id};
 use crate::error::{JsonFile, PinMismatch, YamlFile};
 use crate::ids::{CommitSha, Sha256Digest, WordArticleId};
 
@@ -138,7 +139,8 @@ fn text_at<'a>(v: &'a Value, path: &[&str]) -> Option<&'a str> {
 
 /// Reads a Scripture Burrito `metadata.json` as DCS exports it.
 pub fn parse_burrito_metadata(json: &str) -> Result<BurritoMetadata, Error> {
-    let v: Value = serde_json::from_str(json).map_err(|e| json_error(e.to_string()))?;
+    let v: Value =
+        serde_json::from_str(without_bom(json)).map_err(|e| json_error(e.to_string()))?;
     let format = v.get("format").or_else(|| v.pointer("/meta/format"));
     if format.and_then(Value::as_str) != Some("scripture burrito") {
         return Err(json_error(
@@ -355,4 +357,29 @@ pub struct AquiferPin {
 pub enum HelpsSource {
     Dcs(DcsPin),
     Aquifer(AquiferPin),
+}
+
+/// `unfoldingWord/en_tn v86 (c354b8a…)`, `Aquifer UWTranslationNotes/por v2026-10-12
+/// (dbfb46e…)`: enough to tell two pins apart in a message.
+impl fmt::Display for HelpsSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let short = |sha: &CommitSha| sha.as_str().chars().take(7).collect::<String>();
+        match self {
+            HelpsSource::Dcs(pin) => {
+                write!(f, "{}/{}", pin.owner, pin.repo)?;
+                if let Some(tag) = &pin.tag {
+                    write!(f, " {tag}")?;
+                }
+                write!(f, " ({}…)", short(&pin.commit))
+            }
+            HelpsSource::Aquifer(pin) => write!(
+                f,
+                "Aquifer {}/{} {} ({}…)",
+                pin.resource_code,
+                pin.language,
+                pin.tag,
+                short(&pin.commit)
+            ),
+        }
+    }
 }

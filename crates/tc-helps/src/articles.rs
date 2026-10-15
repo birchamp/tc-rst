@@ -29,10 +29,17 @@ pub fn word_article_id(path: &str) -> Result<WordArticleId, Error> {
     })
 }
 
+/// Text as a file holds it, without a leading byte order mark, which editors on Windows
+/// write and which is not text.
+pub(crate) fn without_bom(text: &str) -> &str {
+    text.strip_prefix('\u{feff}').unwrap_or(text)
+}
+
 /// Reads a translation words article. The title is the first `# ` heading; the body is
 /// what follows it. An article with no heading keeps its whole text as the body and
 /// takes its slug as the title, as tC does.
 pub fn parse_word_article(id: WordArticleId, markdown: &str) -> WordArticle {
+    let markdown = without_bom(markdown);
     let mut lines = markdown.split_inclusive('\n');
     let mut consumed = 0;
     for line in lines.by_ref() {
@@ -73,14 +80,14 @@ pub fn academy_article(
     body_md: &str,
 ) -> AcademyArticle {
     let subtitle = sub_title_md
-        .map(str::trim)
+        .map(|s| without_bom(s).trim())
         .filter(|s| !s.is_empty())
         .map(str::to_owned);
     AcademyArticle {
         id: AcademyArticleId::Dcs { manual, slug },
-        title: title_md.trim().to_owned(),
+        title: without_bom(title_md).trim().to_owned(),
         subtitle,
-        body: body_md.to_owned(),
+        body: without_bom(body_md).to_owned(),
     }
 }
 
@@ -125,7 +132,8 @@ fn yaml_error(file: YamlFile, problem: impl Into<String>) -> Error {
 }
 
 pub(crate) fn load_yaml(text: &str, file: YamlFile) -> Result<Yaml, Error> {
-    let mut docs = YamlLoader::load_from_str(text).map_err(|e| yaml_error(file, e.to_string()))?;
+    let mut docs = YamlLoader::load_from_str(without_bom(text))
+        .map_err(|e| yaml_error(file, e.to_string()))?;
     if docs.is_empty() {
         return Err(yaml_error(file, "the file is empty"));
     }

@@ -192,6 +192,20 @@ fn an_rc_manifest_names_language_subject_version_and_books() {
 }
 
 #[test]
+fn a_byte_order_mark_is_not_part_of_the_metadata() {
+    let json = resource("en_tn@v86/metadata.json");
+    assert_eq!(
+        parse_burrito_metadata(&format!("\u{feff}{json}")).unwrap(),
+        parse_burrito_metadata(&json).unwrap()
+    );
+    let yaml = fixture("helps/rc/en_tn/manifest.yaml");
+    assert_eq!(
+        parse_rc_manifest(&format!("\u{feff}{yaml}")).unwrap(),
+        parse_rc_manifest(&yaml).unwrap()
+    );
+}
+
+#[test]
 fn metadata_that_is_not_a_resource_is_refused() {
     for bad in ["{", "{}", r#"{"format":"scripture burrito"}"#, r#"[1,2]"#] {
         assert!(
