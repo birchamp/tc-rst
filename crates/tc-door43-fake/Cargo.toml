@@ -1,0 +1,26 @@
+[package]
+name = "tc-door43-fake"
+description = "A fake Door43 (Gitea/DCS) server for tests: the swagger's shapes over fixture data, and git smart HTTP."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio"] }
+base64 = "0.22.1"
+serde.workspace = true
+serde_json.workspace = true
+sha1 = "0.10.7"
+tempfile.workspace = true
+thiserror.workspace = true
+tokio = { version = "1.53.3", features = ["rt", "net", "process", "io-util", "sync", "time", "macros"] }
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[dev-dependencies]
+reqwest = { version = "0.13.5", default-features = false }
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true
