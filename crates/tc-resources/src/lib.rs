@@ -1,6 +1,7 @@
 //! Translation resources for tC: installing, pinning, verifying, upgrading and loading
 //! them, from Door43 (DCS) and from Aquifer, all usable offline once installed.
 
+mod aquifer;
 mod dcs;
 mod error;
 pub mod gateways;
@@ -11,6 +12,10 @@ mod sets;
 mod store;
 pub mod suite;
 
+pub use aquifer::{
+    AquiferClient, AquiferLimits, AquiferRelease, ReleaseAsset, install_aquifer,
+    install_aquifer_zip, pin_aquifer_release,
+};
 pub use dcs::{install_all, install_dcs, install_dcs_as, pin_release};
 pub use error::{AquiferError, InstallError, ParseError, Refusal, StoreError};
 pub use pin::{

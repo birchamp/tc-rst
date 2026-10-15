@@ -4,7 +4,7 @@
 use std::io;
 use std::path::PathBuf;
 
-use tc_door43::{Door43Error, VerificationError};
+use tc_door43::{Door43Error, UnreachableCause, VerificationError};
 
 use crate::pin::Sha256;
 
@@ -133,7 +133,10 @@ pub enum AquiferError {
     #[error("{route}: not sent, because the internet is off for this session")]
     Offline { route: String },
     #[error("{route}: GitHub cannot be reached ({cause})")]
-    Unreachable { route: String, cause: String },
+    Unreachable {
+        route: String,
+        cause: UnreachableCause,
+    },
     #[error("{route}: not found")]
     NotFound { route: String },
     #[error("{route}: GitHub asked the app to slow down (HTTP {status})")]
