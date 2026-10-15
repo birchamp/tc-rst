@@ -131,6 +131,7 @@ pub enum DeviceKind {
 
 /// Random UUID v4 at project creation; derived for a tC4 import (§13.1). Stored in
 /// `ingredients/tc/project.json`. Two projects with different ids are never merged.
+/// Text form: lowercase hyphenated.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ProjectId(uuid::Uuid);
 
@@ -144,7 +145,7 @@ pub struct DeviceSeq(u64);
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BatchId([u8; 16]);
 /// Every change names its batch and the batch's size. A batch applies only when all `n`
-/// changes are present (§7.2 step F2), so no device ever sees half of an action.
+/// changes are present (§7.2 step F2), so no device ever sees half of an action. `n ≥ 1`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BatchRef { pub id: BatchId, pub n: u32 }
 
@@ -171,9 +172,15 @@ pub struct GitOid([u8; 20]);       // git object id; also the pin identity (a co
 
 /// A path relative to the repository root, `/`-separated, obeying the ingredient path grammar
 /// (§3.3) for every segment. Parsed at the boundary; never constructed from unchecked strings.
-/// Two paths **collide** when their case-folded forms are equal (§3.3).
+/// Two paths **collide** when their case-folded forms are equal (§3.3). Concretely: in NFC,
+/// accepted by `tc_burrito::IngredientPath`, and holding none of `~ & + # % { } $ ! '`
+/// (the characters of §3.3 that `IngredientPath` allows), so every `RepoPath` is also a valid
+/// burrito ingredient path.
 pub struct RepoPath(Box<str>);
 ```
+
+In the hash formulas of `DeviceKind` and elsewhere, `‖` is byte concatenation: strings are
+their UTF-8 bytes, and ids and digests (`GitOid`, `Md5`, `ProjectId`) their raw bytes.
 
 ### 2.2 Record keys
 
@@ -225,6 +232,7 @@ pub enum ToolId { TranslationWords, TranslationNotes, TranslationQuestions }
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CheckTarget {
     /// Chapter and verse are tC4's strings: "1", "9-10", "front". Compared as strings.
+    /// A `RefPart` is 1 to 32 ASCII letters, digits and `-`.
     Verse { book: BookId, chapter: RefPart, verse: RefPart },
     Frame { story: StoryNo, frame: FrameNo },
 }
@@ -234,10 +242,21 @@ pub enum CheckTarget {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PinGroup { Primary, Fallback, OriginalLanguage, Lexicon, ExtraScripture }
 
-pub struct SettingKey(Box<str>);   // a top-level key; `__proto__`, `constructor`, `prototype` refused
+pub struct SettingKey(Box<str>);   // a top-level key: NFC, not empty; `__proto__`, `constructor`, `prototype` refused
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum MetaField { Name, Abbreviation, Description, Languages, Copyright, Extra(Box<str>) }
-pub struct UnknownKey { pub kind: Box<str>, pub key_json: Box<str> }   // canonical JSON of the key
+pub enum MetaField { Name, Abbreviation, Description, Languages, Copyright, Extra(MetaPath) }
+/// The dotted metadata.json path of a field the app does not model (`localizedNames`,
+/// `identification.primary.ebible`): NFC, non-empty `.`-separated segments, no control
+/// characters, no segment `__proto__`, `constructor` or `prototype`, and not a path a modelled
+/// field owns (`identification.name`, `identification.abbreviation`,
+/// `identification.description`, `languages`, `copyright`), so no field has two records.
+pub struct MetaPath(Box<str>);
+/// The kind name and the canonical JSON of the key fields: every member of the record object
+/// except `value` (§2.8).
+pub struct UnknownKey { pub kind: Box<str>, pub key_json: Box<str> }
+/// A pin slot name such as `gatewayLanguage`: an ASCII letter, then ASCII letters, digits and
+/// `_`, at most 64 bytes, not `constructor` or `prototype`.
+pub struct SlotName(Box<str>);
 ```
 
 Pane layouts and other per-person UI preferences are not records. They live in app data per
@@ -260,8 +279,8 @@ pub enum Record {
     Check        { key: CheckKey, value: CheckValue },
     Comment      { id: CommentId, value: CommentValue },
     Pins         { group: PinGroup, value: PinGroupValue },
-    Setting      { key: SettingKey, value: Option<serde_json::Value> },   // None = key removed
-    ProjectMeta  { field: MetaField, value: Option<serde_json::Value> },
+    Setting      { key: SettingKey, value: Option<Json> },   // None = key removed
+    ProjectMeta  { field: MetaField, value: Option<Json> },
     Versification { value: VersificationValue },
     DeviceProfile { device: DeviceId, value: DeviceProfileValue },
     StoryBase    { story: StoryNo, value: String },
@@ -271,6 +290,13 @@ pub enum Record {
     BatchRelease { batch: BatchId, value: BatchReleaseValue },
     Unknown(UnknownRecord),
 }
+
+/// A JSON value with integers only (−2⁶³ to 2⁶⁴−1), so every value has one canonical text;
+/// `JsonMap` is its object. Floats cannot be stored; an importer that meets one refuses it.
+pub enum Json { Null, Bool(bool), Int(JsonInt), Str(String), Arr(Vec<Json>), Obj(JsonMap) }
+
+/// `Whole`, or a passage set: one or more SB scope ranges ("1:1-9"), in the order given.
+pub enum Scope { Whole, Ranges(ScopeRanges /* ≥ 1 */) }
 
 pub enum BookPresence {
     /// `how` is part of the value, so "Restore the text" against a concurrent "Start empty"
@@ -303,13 +329,14 @@ pub enum VerseValue {
         /// when the text is edited or moved again, omitted when it equals this verse. The
         /// verse's **anchor** is `from`, else its own number; alignments and comments are
         /// keyed by anchor, so they follow the text (§7.7).
-        from: Option<(ChapterNo, VerseNo)>,
+        from: Option<ChapterVerse>,
     },
     /// This verse is inside the span that starts at `by` (`by < verse`, same chapter).
     Covered { by: VerseNo },
     /// The verse is not in this translation. `moved_to` is set by a renumber.
-    Absent { moved_to: Option<(ChapterNo, VerseNo)> },
+    Absent { moved_to: Option<ChapterVerse> },
 }
+pub struct ChapterVerse { pub chapter: ChapterNo, pub verse: VerseNo }
 
 /// The whitespace of the verse marker `\v<lead><label><term>`. The label is computed from
 /// `verse` and `last`. Canonical: lead " ", term ' '.
@@ -331,6 +358,14 @@ pub struct AlignmentValue {
     pub dismissed: bool,                        // dismissed from the Detached list (§7.7); kept
     pub extra: JsonMap,                         // unknown fields, preserved
 }
+/// tC4 §5.1 `topWords` / `bottomWords` entries. Each `extra` keeps fields tC3 or tC4 wrote
+/// that the model does not name.
+pub struct AlignmentGroup { pub top_words: Vec<SourceWord>, pub bottom_words: Vec<TargetWord>, pub extra: JsonMap }
+pub struct SourceWord {
+    pub word: String, pub strong: Option<String>, pub lemma: Option<String>, pub morph: Option<String>,
+    pub occurrence: u32, pub occurrences: u32, pub extra: JsonMap,
+}
+pub struct TargetWord { pub word: String, pub occurrence: u32, pub occurrences: u32, pub extra: JsonMap }
 
 pub enum CheckValue {
     Decision(DecisionRecord),
@@ -359,6 +394,7 @@ pub struct Judgement {
     pub verse_text_md5: Md5,                    // md5(plain_text_v1(verse)) when judged
 }
 pub enum UserStatus { Valid, Invalid, Todo }
+pub struct Selection { pub text: String, pub occurrence: u32, pub occurrences: u32, pub extra: JsonMap }
 
 pub struct CommentValue { pub target: CommentTarget, pub text: String }
 pub enum CommentTarget {
@@ -370,6 +406,7 @@ pub enum CommentTarget {
 /// Slots of one group, keyed by tC4 slot name (`gatewayLanguage`, `translationNotes`, …).
 /// `ExtraScripture` is one slot holding the ordered list.
 pub struct PinGroupValue(BTreeMap<SlotName, SlotValue>);
+pub struct SlotValue(Json);                     // the slot as tC4 writes it in resources.json
 pub struct ResourceRef { pub repo_path: Box<str>, pub sha: GitOid }   // repoPath compared case-insensitively
 
 pub struct VersificationValue { pub name: Option<Box<str>>, pub bytes: String }   // vrs.json verbatim
@@ -378,6 +415,8 @@ pub struct DeviceProfileValue {
     pub door43_username: Option<Door43Username>,   // only after the D98 consent notice
     pub legacy: Option<LegacyIdentity>,            // the tC4 actor or tC3 user a derived device stands for
 }
+pub struct Door43Username(Box<str>);               // not empty
+pub enum LegacyIdentity { Tc4Actor { actor: Box<str> }, Tc3User { user: Box<str> } }
 
 pub enum CarriedValue {
     /// The file's bytes are the git blob `oid` in the local object database (§11.4).
@@ -390,14 +429,18 @@ pub enum CarriedValue {
 /// chose to apply. Grow-only: no parents, never in conflict; the fold applies the union.
 pub struct BatchReleaseValue { pub changes: Vec<ChangeId> }   // sorted, unique
 
-pub struct UnknownRecord { pub kind: Box<str>, pub key_json: Box<str>, pub value_json: Box<str> }
+/// `value_json` is `None` when the record object has no `value` member.
+pub struct UnknownRecord { pub kind: Box<str>, pub key_json: Box<str>, pub value_json: Option<Box<str>> }
 ```
 
 **Fields from a newer minor.** A change of a known kind whose `v` is above this app's minor may
 hold fields this app does not know (§4.5 V1). It parses as that kind, under that kind's key, with
 the known fields in the typed value. The unknown fields stay in the stored bytes: values are
 compared through their stored canonical JSON (§7.3), so a difference in an unknown field is
-never invisible, and projection ignores them (§12.2 rule 7 makes that safe).
+never invisible, and projection ignores them (§12.2 rule 7 makes that safe). An enum variant
+this app does not know (a new kind of verse value, a new book code) cannot be held in the typed
+value: such a change is quarantined as made by a newer translationCore (`NewerVariant`, §4.5
+V1). Rule 7 makes a new variant raise `minReaderMinor`, so only a read-only older app meets one.
 
 ### 2.4 The verse content split
 
@@ -465,7 +508,8 @@ pub enum Cause {
     /// text. Never a seed stub, so a concurrent edit makes an ordinary conflict (§7.3).
     StartOver,
     System(SystemReason),                   // pin coverage backfill (tC4 D41)
-    /// A cause from a newer minor (§12): shown as "made by a newer translationCore".
+    /// A cause from a newer minor (§12): shown as "made by a newer translationCore". Only
+    /// read, never written.
     Newer { name: Box<str> },
 }
 pub enum ExternalSource {
@@ -485,16 +529,23 @@ pub enum SystemReason { PinCoverageBackfill }
 
 **Canonical JSON.** The author serializes a change once:
 
-- object keys sorted by their UTF-8 bytes; no insignificant whitespace;
-- integers only, no floats anywhere in the format;
+- object keys sorted by their UTF-8 bytes, none twice; no insignificant whitespace;
+- integers only, no floats anywhere in the format, from −2⁶³ to 2⁶⁴−1, without leading
+  zeros, `+` or `-0`; nesting at most 64 levels (V7);
 - strings exactly as given (see "Unicode" below); escapes are `\"`, `\\`, `\b`, `\f`, `\n`,
   `\r`, `\t`, and `\u00xx` (lowercase hex) for the other characters below U+0020; every other
   character is raw UTF-8;
 - ids and hashes as lowercase hex; `DeviceId` in its `d…` form; field names in camelCase;
   a variant of an enum whose variants carry no data (`MarkerTerm`, `UserStatus`, `ToolId`,
   `PinGroup`) as its camelCase name in a string; every other enum variant as
-  `{"variantName": {…}}`, with `{}` when that variant has no fields; `None` fields omitted;
-  empty arrays written.
+  `{"variantName": {…}}`, with `{}` when that variant has no fields and, for a variant that
+  wraps one value (`Cause::Import`, `ChapterFront::Present`, `MetaField::Extra`), that value's
+  encoding in place of `{…}`; `None` fields omitted; `extra` maps omitted when empty; empty
+  arrays written. §2.8 gives the wire form of every type.
+
+A reader checks the form, it does not assume it: bytes that are not exactly what the
+serializer would write (a space, a key out of order, `1.0`, `\u0041`) break rule V1. So every
+value has one byte form, and comparing stored bytes compares values (§7.3).
 
 `ChangeId = sha256(those bytes)`. A reader verifies the hash, then parses. It never
 re-serializes another device's change, so a newer app's extra fields and a different serializer
@@ -616,7 +667,12 @@ pub enum Notice {
     SavedWithDiskError { reason: Box<str> },
     ImportUnfinished { source: Box<str> },
 }
+pub enum PackLoss { Missing, Damaged }
+pub enum RotationReason { FolderCopied, BackupRestored, DuplicateDevice }   // §6.3
 ```
+
+`ConflictId` and `Frontier` are SHA-256 over the 32-byte head ids in ascending order,
+concatenated, without repeats.
 
 ### 2.7 Shown tokens and commands
 
@@ -632,6 +688,11 @@ changes a record must carry the token of what was displayed. This is how I4 hold
 pub struct ShownToken { key: RecordKey, heads: SmallVec<[ChangeId; 2]>, mac: [u8; 16] }
 ```
 
+Byte form: base64url without padding of `payload ‖ mac`. `payload` is the canonical JSON
+`{"heads":[…],"key":{…}}`, heads sorted without repeats and the key as in §2.8; `mac` is the
+first 16 bytes of HMAC-SHA256 of `payload` under the token key, and the token key is
+HMAC-SHA256 under the installation secret of `"tc4-shown-token\0" ‖ the project id's 16 bytes`.
+
 What `heads` holds depends on the record's state when it was displayed:
 
 | State displayed | `heads` in the token |
@@ -640,7 +701,8 @@ What `heads` holds depends on the record's state when it was displayed:
 | Conflict | only the displayed candidate's head and its `also` heads |
 | No record yet | empty |
 
-Commands (`tc-store`, called by `tc-app`). Each one is one batch, all or nothing:
+Commands (types in `tc-journal`, executed by the project actor in `tc-store`, called by
+`tc-app`). Each one is one batch, all or nothing:
 
 ```rust
 pub enum Command {
@@ -652,8 +714,8 @@ pub enum Command {
     SaveAlignment{ shown: ShownToken, verse_shown: ShownToken, value: AlignmentEdit },
     SaveDecision { shown: ShownToken, verse_shown: ShownToken, value: DecisionEdit },
     AddComment   { target: CommentTarget, text: String },
-    SetSetting   { shown: ShownToken, value: Option<serde_json::Value> },
-    SetMeta      { shown: ShownToken, value: Option<serde_json::Value> },
+    SetSetting   { shown: ShownToken, value: Option<Json> },
+    SetMeta      { shown: ShownToken, value: Option<Json> },
     SetPins      { shown: ShownToken, value: PinGroupValue },          // outside an upgrade (§5.6)
     AddBook      { book: BookId, scope: Scope, seed: SeedSource },
     RemoveBook   { book: BookId, presence_shown: ShownToken },
@@ -670,10 +732,77 @@ pub enum Command {
 }
 ```
 
-`SectionValue` is a `VerseValue` or a `ChapterFront` value for the record its token names.
+`SectionValue` is a `VerseValue` or a `ChapterFront` value for the record its token names. The
+other argument types:
+
+```rust
+/// What the aligner made; the actor adds span end, text hash and source from the displayed
+/// verse and the pins (§5.3).
+pub struct AlignmentEdit { pub alignments: Vec<AlignmentGroup>, pub word_bank: Vec<TargetWord>, pub done: bool }
+/// What the checker changed (§5.4); `basis` (context, category, resource) for a first decision.
+pub struct DecisionEdit { pub basis: Option<DecisionBasis>, pub changes: Vec<DecisionChange> }
+pub enum DecisionChange { Status(Option<UserStatus>), Selections(Option<Vec<Selection>>),
+                          NothingToSelect(bool), Comment(Option<String>), Bookmarked(bool) }
+/// The literal source book a new book's stubs copy their structure from (§5.7).
+pub struct SeedSource { pub usfm: String }
+pub enum RestoreMode { KeepText, StartEmpty }
+/// §5.8: each planned change carries its record's heads in the snapshot as parents; the actor
+/// confirms every record still has them before it writes the plan as one batch.
+pub struct UpgradePlan { pub changes: Vec<PlannedChange> }
+pub struct PlannedChange { pub record: Record, pub parents: Vec<ChangeId>, pub cause: Cause }
+/// §8.3: keep one candidate (and its side, for a grouped conflict), or values the person
+/// edited, combined or chose unit by unit, one per record.
+pub enum Choice { Candidate { head: ChangeId }, Values(Vec<Record>) }
+pub enum DraftField { Words, Layout, Section, Frame, StoryRef, CheckComment }
+```
 
 The reply to every command carries the new tokens and the new conflicts it caused, so the screen
 can say "Juan changed this verse while you were editing; both versions are kept" at once.
+
+### 2.8 Wire form
+
+`tc_journal::canon` writes every type as below (§2.5 rules; keys appear here in canonical
+order). `?` marks a member left out when it is `None` (or, for `extra`, empty). The fixture
+`fixtures/journal/v0-every-kind.ndjson` pins these bytes: a test decodes each line and encodes
+it again.
+
+| Type | JSON |
+|---|---|
+| `ChangeBody` | `{"at", "batch", "cause", "device", "parents", "record", "seq", "v"}` |
+| `BatchRef` | `{"id", "n"}` |
+| `Record` | `{"<kind>": {<key members>, "value"?}}` with kinds and key members `bookPresence {book}`, `bookHeader {book}`, `chapterFront {book, chapter}`, `verse {book, chapter, verse}`, `bookLayout {book}`, `alignment {book, chapter, verse}`, `check {key}`, `comment {id}`, `pins {group}`, `setting {key}`, `projectMeta {field}`, `versification {}`, `deviceProfile {device}`, `storyBase {story}`, `frame {frame, story}`, `storyRef {story}`, `carriedFile {path}`, `batchRelease {batch}`; `value` is left out only for a `None` `BookLayout`, `Setting`, `ProjectMeta` or `StoryRef` value |
+| `RecordKey` | the record object without `value` (in shown tokens and `UnknownKey`) |
+| `BookPresence` | `{"present": {"how", "scope"}}`, `{"removed": {"seen": [..]}}` (sorted, no repeats) |
+| `PresentHow` | `"added"`, `"restoredText"`, `"startedEmpty"` |
+| `Scope` | `{"whole": {}}`, `{"ranges": ["1:1-9", ..]}` (at least one, each as SB writes it) |
+| `ChapterFront` | `{"present": "<usfm>"}`, `{"absent": {}}` |
+| `VerseValue` | `{"text": {"from"?, "last", "layout", "marker", "words"}}`, `{"covered": {"by"}}`, `{"absent": {"movedTo"?}}` |
+| `ChapterVerse` | `{"chapter", "verse"}` |
+| `MarkerWs` | `{"lead", "term"}`; `MarkerTerm`: `"space"`, `"tab"`, `"lf"`, `"cr"` |
+| `LayoutItem` | `{"chapter": {"chapter"}}`, `{"verse": {"chapter", "verse"}}` |
+| `AlignmentValue` | `{"alignments", "dismissed", "done", "extra"?, "markedInvalid", "source"?, "sourceVersion", "spanEnd", "targetVerseMd5", "wordBank"}` |
+| `AlignmentGroup` | `{"bottomWords", "extra"?, "topWords"}` |
+| `SourceWord` | `{"extra"?, "lemma"?, "morph"?, "occurrence", "occurrences", "strong"?, "word"}` |
+| `TargetWord` | `{"extra"?, "occurrence", "occurrences", "word"}` |
+| `ResourceRef` | `{"repoPath", "sha"}` |
+| `CheckValue` | `{"decision": <DecisionRecord>}`, `{"movedTo": {"to"}}` |
+| `DecisionRecord` | `{"bookmarked", "category"?, "comment"?, "context", "dismissed", "extra"?, "importedInvalid", "judgement", "resource"}` |
+| `Judgement` | `{"nothingToSelect", "selections"?, "status"?, "verseTextMd5"}`; `UserStatus`: `"valid"`, `"invalid"`, `"todo"` |
+| `Selection` | `{"extra"?, "occurrence", "occurrences", "text"}` |
+| `CheckKey` | `{"checkId", "occurrence", "target", "tool"}`; `ToolId`: `"translationWords"`, `"translationNotes"`, `"translationQuestions"` |
+| `CheckTarget` | `{"verse": {"book", "chapter", "verse"}}` (strings), `{"frame": {"frame", "story"}}` |
+| `CommentValue` | `{"target", "text"}`; target `{"verse": {"book", "chapter", "verse"}}`, `{"check": <CheckKey>}`, `{"frame": {"frame", "story"}}` |
+| `PinGroup` | `"primary"`, `"fallback"`, `"originalLanguage"`, `"lexicon"`, `"extraScripture"` |
+| `PinGroupValue` | `{"<slot name>": <slot value>}` |
+| `MetaField` | `{"name": {}}`, `{"abbreviation": {}}`, `{"description": {}}`, `{"languages": {}}`, `{"copyright": {}}`, `{"extra": "<path>"}` |
+| `VersificationValue` | `{"bytes", "name"?}` |
+| `DeviceProfileValue` | `{"displayName"?, "door43Username"?, "legacy"?}`; legacy `{"tc4Actor": {"actor"}}`, `{"tc3User": {"user"}}` |
+| `CarriedValue` | `{"present": {"md5", "oid", "size"}}`, `{"removed": {}}` |
+| `BatchReleaseValue` | `{"changes": [..]}` (sorted, no repeats) |
+| `Cause` | `{"edit": {}}`, `{"resolve": {}}`, `{"restore": {"from"}}`, `{"carryOver": {"group"}}`, `{"external": {"source", "unknownBase"}}`, `{"import": <ImportSource>}`, `{"seed": {}}`, `{"startOver": {}}`, `{"system": "pinCoverageBackfill"}` |
+| `ExternalSource` | `{"localFile": {"path", "seenMd5"}}`, `{"door43": {"author", "commit", "path"}}`, `{"exchangeFile": {"exporter"?, "path"}}` |
+| `ImportSource` | `{"tc4": {"actor", "op", "ts"}}`, `{"tc4Reconcile": {}}`, `{"tc3": {"user"?}}`, `{"usfm": {"fileName"}}`, `{"burrito": {"fileName"}}` |
+| identifiers | `ChangeId` 64 hex; `ShortId`, `BatchId`, `CommentId`, `Md5`, `PackName` 32 hex; `GitOid` 40 hex; `DeviceId` `d` + 26 base32, whose unused bits are zero; `BookId` its upper-case USFM code; `ProjectId` lowercase hyphenated; numbers as integers (`ChapterNo`, `VerseNo` 1–65,535, `StoryNo` 1–50, `FrameNo` 0–65,535, `WallTime` an `i64`, `DeviceSeq` a `u64`) |
 
 ---
 
@@ -908,7 +1037,10 @@ order from the names; the fold is order-independent. Content:
 `purpose` is `save`, `intake` (changes recorded by an intake, such as ingested Door43 edits) or
 `salvage` (changes recovered from a damaged pack, §4.4). An outside-edit batch adds
 `"reconciles":{"path":…,"seenMd5":…}` so that recording the same file twice is a no-op (§11.1).
-One file holds whole batches only: a section save that creates a span is one file.
+One file holds whole batches only: a section save that creates a span is one file. `device` is a
+Local device. `pending` is the framing version, 1: a file whose verified header declares a larger
+one is from a newer format and is kept, not read, never quarantined or removed. Readers ignore
+header members they do not know, so a newer minor can add one.
 
 **Every file in `.tc/pending/` is read**, whatever its name: a cloud client's
 `…-DESKTOP.batch` or `… (conflicted copy).batch` is read like any other. A file whose header and
@@ -928,6 +1060,11 @@ digits of the SHA-256 of the whole file. Content:
 <change line>                                             N lines, sorted by (device, seq, id)
 ```
 
+`sealer` is a Local device. `replaces` lists the names (32 hex digits) of the packs a
+consolidation absorbed, sorted, no repeats. A clock before the year 0 or after 9999 seals into
+`0000-01` or `9999-12`, so a wrong clock never makes a pack path invalid. Readers ignore header
+members they do not know.
+
 A pack may hold changes of any device (ingested Door43 edits, salvaged changes, imports). The
 fold does not care which pack holds a change; the same change in two packs is one change.
 
@@ -935,18 +1072,26 @@ fold does not care which pack holds a change; the same change in two packs is on
 
 Pack validation, in order:
 
-1. **P1 path.** The path matches `tc/changes/<DeviceId>/<\d{4}-\d{2}>/<32 hex>.ndjson`.
+0. **Newer format.** A file whose first line verifies and declares `tcpack` above 1 is from a
+   newer format, whatever else is wrong with it: `Notice::NewerPack`, carried, not read, never
+   reported as damaged (§12). Every future pack framing therefore keeps a first line that is a
+   verifiable canonical JSON object with a `tcpack` member.
+1. **P1 path.** The path matches `tc/changes/<DeviceId>/<\d{4}-\d{2}>/<32 hex>.ndjson`, the
+   device is a Local device and the month is `01` to `12`. If not, the file is damaged: go to
+   salvage.
 2. **P2 whole file.** `sha256(file)` starts with the name. If not, the file is damaged: go to
    salvage.
 3. **P3 header.** The first line verifies and parses. `tcpack` must be 1; a larger value is a
    pack from a newer format: `Notice::NewerPack`, carried, not read (§12). `project` must be
    this project; otherwise the pack is foreign: not read, and reported. `sealer` must equal the
-   directory.
-4. **P4 lines.** Exactly `count` lines follow, each verifies and parses. A line that fails the
-   per-change rules of §4.5 is a quarantined change; the rest of the pack is used.
+   directory; otherwise the file is damaged: go to salvage.
+4. **P4 lines.** Exactly `count` lines follow, each verifies, and the file ends with a line
+   feed; otherwise the file is damaged. A line that verifies but fails the per-change rules of
+   §4.5 (its JSON may not even parse) is a quarantined change; the rest of the pack is used.
 
-**Salvage.** In a damaged pack, every line that verifies and parses is a genuine change: its id
-is the hash of its bytes, so whoever salvages it gets exactly what its author wrote. The fold
+**Salvage.** In a damaged pack, every line after the first (the first line is the header by
+format, intact or not) that verifies is a genuine change, or a quarantined one: its id is the hash
+of its bytes, so whoever salvages it gets exactly what its author wrote. The fold
 uses the salvaged changes and reports `Notice::QuarantinedPack { salvaged, … }`. Where the damaged file
 stays in the tree (a Door43 tip, §9.2 N3), salvage is recomputed at every open and gives the
 same result on every device. Where it does not (a USB intake, §10.2), the salvaged lines are
@@ -991,26 +1136,36 @@ file whose header names another project (a `.tc/` folder copied between projects
 These rules look at one change alone, so the result does not depend on arrival order. A change
 that breaks one is a **quarantined change**: kept in its file, not folded, listed.
 
-- **V1 shape.** The JSON parses as a `ChangeBody`. In a change whose `v` is above this app's
-  minor: a record kind this app does not know parses as `Record::Unknown` and is folded as an
-  opaque value under its own key (§12); a known kind with fields this app does not know parses
-  as that kind, under that kind's own `RecordKey`, with the unknown fields kept in the stored
-  bytes (§2.3, "Fields from a newer minor"), so it joins that key's heads like any change; a
-  cause this app does not know parses as `Cause::Newer`. An unknown kind, field or cause with
-  `v` at or below this app's minor is malformed.
-- **V2 identity strings.** Check ids, setting keys, slot names and paths are NFC and match their
-  grammar. Normalizing an identity could merge two records, so a non-NFC identity is refused,
-  never normalized (tC4 R-8.5.13).
-- **V3 verse values.** `words` and `layout` contain no `\v` or `\c` marker
-  (`\\[vc](?:[ \t\r\n]|$)`); `layout` passes the layout-only rule of §2.4; `last ≥ verse`;
-  `Covered.by < verse`.
+- **V1 shape.** The bytes are canonical JSON (§2.5) and parse as a `ChangeBody`. In a change
+  whose `v` is above this app's minor: a record kind this app does not know parses as
+  `Record::Unknown` and is folded as an opaque value under its own key (§12); a known kind with
+  fields this app does not know parses as that kind, under that kind's own `RecordKey`, with the
+  unknown fields kept in the stored bytes (§2.3, "Fields from a newer minor"), so it joins that
+  key's heads like any change; a cause this app does not know, or a known cause with a part this
+  app does not know, parses as `Cause::Newer`; any other enum variant this app does not know (a
+  new kind of verse value, a new book code) cannot be held, and the change is quarantined as
+  `NewerVariant`, listed as made by a newer translationCore. An unknown kind, field, variant or
+  cause with `v` at or below this app's minor is malformed.
+- **V2 identity strings.** Check ids, reference parts, setting keys, slot names, project detail
+  paths and paths are NFC and match their grammar (§2.1, §2.2). Normalizing an identity could
+  merge two records, so a non-NFC identity is refused, never normalized (tC4 R-8.5.13).
+- **V3 USFM values.** `words` and `layout` contain no `\v` or `\c` marker
+  (`\\[vc](?:[ \t\r\n]|$)`); `layout` passes the layout rule of §2.4; `last ≥ verse`;
+  `Covered.by < verse`. A `BookHeader` holds no `\c` marker. A `ChapterFront::Present` starts
+  with its own chapter's marker (`\c`, spaces or tabs, the chapter number, then whitespace or
+  the end) and holds no other `\v` or `\c` marker. So no record can add or move a verse or
+  chapter of the projected book.
 - **V4 device profiles.** A `DeviceProfile(d)` change is written by device `d`, or by an Importer
   device for a Tc4Actor or Tc3User profile.
 - **V5 parents.** Sorted, unique, at most 4,096.
 - **V6 grow-only records.** A `Comment` or `BatchRelease` change has no parents.
-- **V7 limits.** JSON nesting depth ≤ 64; a change line ≤ 4 MiB.
-- **V8 carried paths.** A `CarriedFile` path is not a path the app derives (§12, `derivedPaths`)
-  and not under `ingredients/tc/`.
+- **V7 limits.** JSON nesting depth ≤ 64; a change line ≤ 4 MiB, counting its tab, hash and
+  line feed.
+- **V8 carried paths.** A `CarriedFile` path is not a path the app derives and not under
+  `ingredients/tc/`, comparing collision forms (§3.3). The derived paths are those of the
+  change's own minor, or of this app's minor for a newer change (§12.1, `derivedPaths`), never
+  those of the project's `format.json`, so the verdict on a change does not depend on which
+  format documents a device has seen.
 
 Collisions between paths of different records (letter case, §3.3) depend on the set, not on one
 change, so they are handled by the projection (§7.7), never by quarantine.
@@ -1033,8 +1188,9 @@ Packs are never edited. To bound the number of files, a device merges its own pa
 - **What.** Only packs that pass P2 to P4 on this device. The new pack's lines are the union of
   their lines, sorted, and its header `replaces` lists the names of the packs merged and every
   name those packs themselves listed. If the union is over 64 MiB, whole old packs are grouped
-  in seq order into new packs of at most 64 MiB, and each new pack lists the packs it absorbed
-  and the names they listed.
+  in the order of their first line (device, seq, id) into new packs of at most 64 MiB, and each
+  new pack lists the packs it absorbed and the names they listed. A group of one pack is not
+  rewritten, and a pack too large to share a new pack stays as it is.
 - **Order.** Write the new pack (§5.12), re-read and verify it, then remove the packs it
   replaces.
 
@@ -2744,7 +2900,11 @@ paths break the grammar or have a dot segment are foreign entries (§9.4), kept 
 `format.json` holds no app version, so two builds write the same bytes. It is derived: on every
 intake it becomes the maximum of the local and incoming documents (`minor` and `minReaderMinor`
 by maximum; `derivations` and `derivedPaths` from the document with the larger minor), so two
-teammates on different minors converge to the higher one.
+teammates on different minors converge to the higher one. Its bytes are written like
+`metadata.json`: keys sorted, two-space indentation, one trailing line feed. Members a newer
+minor adds, and derivation names this app does not know, are kept and written back; a merge
+takes them, too, from the document with the larger minor, and between two documents of one minor
+from the one whose canonical text is larger, so the merge is commutative.
 
 ### 12.2 Rules
 
@@ -2760,8 +2920,11 @@ teammates on different minors converge to the higher one.
    known kind with unknown fields keeps that kind's own key (§4.5 V1): it joins the same heads
    as the older app's changes of that record, its known fields project as usual, its unknown
    fields are compared byte for byte (§7.3) and ignored by projection, and the record shows
-   "changed by a newer translationCore". An unknown cause parses as `Cause::Newer`. So two app
-   versions holding the same changes compute the same heads, conflicts and derived bytes.
+   "changed by a newer translationCore". An unknown cause parses as `Cause::Newer`. Any other
+   unknown enum variant cannot be held in the typed value: the change is quarantined as made by a
+   newer translationCore (§4.5 V1), and rule 7 makes such an addition raise `minReaderMinor`, so
+   only a read-only app meets it. So two app versions holding the same changes compute the same
+   heads, conflicts and derived bytes.
    Because ids are hashes of stored bytes and the app never re-serializes another device's
    change, nothing is lost when data passes through an older app.
 3. **Derived bytes.** `plainText`, `verseSplit`, `tokenizer` and `selections` decide derived
@@ -2774,7 +2937,9 @@ teammates on different minors converge to the higher one.
    never removed, never recorded as a carried file. A newer app's new sidecar survives an older
    app's checkpoint and sync.
 5. **Packs.** A pack with an unknown `tcpack` is carried unread, reported as "made by a newer
-   translationCore", never as "damaged".
+   translationCore", never as "damaged" (§4.4 step 0); a pending file with a newer `pending` is
+   kept unread. Pack and pending headers may gain members in a newer minor; readers ignore
+   members they do not know.
 6. **Writing.** An app never lowers `minor` or `minReaderMinor`. Writing a change kind introduced
    in minor M raises `minor` to at least M. The first release ships the newer-format refusal, so
    tC4's risk 10 (a newer journal looks "damaged") cannot recur.
@@ -3282,7 +3447,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | `tc-core` | `BookId`, references (exists) |
 | `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`, `PARA_MARKERS` and the layout rule), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1`, the OBS story splice |
 | `tc-burrito` | `build_metadata`, `check`, the vendored SB 1.0.0 schema, the extension table, `collision_form` (§3.3) |
-| `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking. No I/O. |
+| `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking, the command types. No I/O. |
 | `tc-store` | `Vfs`, `FaultFs`, `atomic_write`, the project lock, `ProjectActor` and commands, open and recovery, materialize, seal, consolidate, outside-edit detection and recording, drafts, identity, local git (tree build, commit, index, repack, object database access) |
 | `tc-door43` | the internet switch, the Gitea REST client, and git2 network calls (`fetch`, `push`, `list`) on a repository `tc-store` opened |
 | `tc-sync` | the Door43 sync (§9), the exchange file export and import (§10), the Door43 edit walk (§11.2), `ExchangeReport` |

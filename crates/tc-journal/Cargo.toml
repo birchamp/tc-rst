@@ -1,0 +1,26 @@
+[package]
+name = "tc-journal"
+description = "The tC4 journal: records, changes and their canonical bytes, change lines, pending files, packs, the per-change rules and format versions. No I/O."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tc-core = { path = "../tc-core" }
+tc-usfm = { path = "../tc-usfm" }
+tc-burrito = { path = "../tc-burrito" }
+thiserror.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+unicode-normalization.workspace = true
+hmac = "0.13.0"
+uuid = "1.28.0"
+smallvec = "1.16.3"
+im = "15.1.0"
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
