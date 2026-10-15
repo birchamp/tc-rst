@@ -21,6 +21,8 @@ unicode-normalization.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+# The Psalms vectors are checked against the burrito exports in bundle/en.
+zip.workspace = true
 
 [lints]
 workspace = true

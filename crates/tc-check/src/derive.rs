@@ -13,12 +13,19 @@
 //! no recorded occurrence (Aquifer), is listed in [`CheckList::skipped`] with the reason;
 //! a check with no verse in the project's numbering is listed in [`CheckList::dropped`].
 //! Neither is ever silently lost.
+//!
+//! The place of a check is tC4's too. A row on the front of a chapter (`N:front`, a
+//! Psalm's superscription) is a check on the verse `front` of that chapter, not on the
+//! first verse. A project in another versification drops it as
+//! [`Unplaceable::MalformedReference`], because only numbers can be mapped (tC4 D60).
 
 use std::collections::{BTreeSet, HashSet};
 
 use tc_burrito::ScopeRange;
 use tc_core::BookId;
-use tc_helps::{BibleRef, HelpItemId, HelpRef, Note, ObsRef, Occurrence, WordArticleId, WordLink};
+use tc_helps::{
+    BibleLocus, BibleRef, HelpItemId, HelpRef, Note, ObsRef, Occurrence, WordArticleId, WordLink,
+};
 use tc_versification::{BookCode, MapOutcome, RowReference, Scheme, Unplaceable, map_reference};
 
 use crate::item::{Category, CheckItem, NoteCategory};
@@ -291,26 +298,41 @@ fn note_cell(note: &Note) -> String {
     note.text.replace('\\', "\\\\").replace('\n', "\\n")
 }
 
-/// tC4 reads a check's place by splitting the row's `Reference` cell on `:` and taking
-/// the first two parts, so `1:3,5` is verse `3,5` and `1:30-2:2` is verse `30-2`.
+/// The check's place as tC4 reads it from the row's `Reference` cell (`derive.ts`:
+/// `ref.split(':').map(refPart)`): `front:intro` is chapter `front`, verse `intro`;
+/// `N:intro` and `N:front` are verse `intro` and verse `front` of chapter N. A verse list
+/// keeps the first two `:`-separated parts of the cell as it was written, so `1:3,5` is
+/// verse `3,5` and `1:30-2:2` is verse `30-2`.
 fn bible_target(
     book: BookId,
     place: &BibleRef,
     read_from: Option<&tc_helps::tsv::ReadCells>,
 ) -> Result<CheckTarget, SkipReason> {
-    let written = place.to_string();
-    let cell = read_from
-        .and_then(|r| r.get("Reference"))
-        .map(str::to_owned)
-        .unwrap_or_else(|| {
-            written
-                .split_once(' ')
-                .map_or(written.clone(), |(_, rest)| rest.to_owned())
-        });
-    let mut parts = cell.split(':');
-    let bad = || SkipReason::InvalidReference(cell.clone());
-    let chapter = RefPart::from_cell(parts.next().unwrap_or_default()).map_err(|_| bad())?;
-    let verse = RefPart::from_cell(parts.next().ok_or_else(bad)?).map_err(|_| bad())?;
+    let text = |part: &str| {
+        RefPart::from_cell(part).map_err(|_| SkipReason::InvalidReference(part.to_owned()))
+    };
+    let (chapter, verse) = match &place.locus {
+        BibleLocus::BookIntro => (text("front")?, text("intro")?),
+        BibleLocus::ChapterIntro(c) => (RefPart::number(*c), text("intro")?),
+        BibleLocus::ChapterFront(c) => (RefPart::number(*c), text("front")?),
+        BibleLocus::Verses(_) => {
+            let written = place.to_string();
+            let cell = read_from
+                .and_then(|r| r.get("Reference"))
+                .map(str::to_owned)
+                .unwrap_or_else(|| {
+                    written
+                        .split_once(' ')
+                        .map_or(written.clone(), |(_, rest)| rest.to_owned())
+                });
+            let mut parts = cell.split(':');
+            let bad = || SkipReason::InvalidReference(cell.clone());
+            let chapter =
+                RefPart::from_cell(parts.next().unwrap_or_default()).map_err(|_| bad())?;
+            let verse = RefPart::from_cell(parts.next().ok_or_else(bad)?).map_err(|_| bad())?;
+            (chapter, verse)
+        }
+    };
     Ok(CheckTarget::Verse {
         book,
         chapter,
