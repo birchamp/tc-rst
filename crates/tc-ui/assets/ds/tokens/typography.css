@@ -1,0 +1,166 @@
+:root {
+  --font-ui:        "Mulish","Noto Sans Arabic","Avenir Next","Avenir",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-scripture: "Charis SIL","PT Serif",Georgia,"Times New Roman",serif;
+  --font-greek:     "Noto Serif","Charis SIL",Georgia,serif;  /* Koine — Charis has no Greek */
+  --font-hebrew:    "Noto Serif Hebrew","Noto Serif",serif;
+  --font-arabic:    "Amiri","Noto Serif",serif;              /* Naskh style — standard Arabic */
+  --font-nastaliq:  "Awami Nastaliq","Noto Nastaliq Urdu","Amiri",serif; /* Nastaliq style */
+
+  /* Charis's x-height is .482em. Every non-Latin scripture face is normalised to it
+     with font-size-adjust, so a Greek source pane and its Latin translation read at
+     the same optical size instead of merely the same px. */
+  --fs-adjust-scripture: 0.482; /* @kind font */
+  --font-mono:      ui-monospace,Menlo,Consolas,"SF Mono",monospace;
+
+  /* UI scale — tC4 uses half-pixel steps deliberately; do not round them. */
+  --fs-micro:    9px;   /* micro badge (Recommended, Always included) */
+  --fs-badge:    10px;  /* uppercase pill labels */
+  --fs-label:    11px;  /* overline / field labels */
+  --fs-meta:     11.5px;
+  --fs-caption:  12px;
+  --fs-caption-lg:12.5px;
+  --fs-ui-sm:    13px;
+  --fs-ui:       13.5px; /* default button text */
+  --fs-ui-md:    14px;
+  --fs-ui-lg:    14.5px;
+  --fs-body:     15px;
+  --fs-wordmark:  15.5px; /* app-header wordmark — the one off-scale UI size */
+  --fs-title-sm: 16px;
+  --fs-title:    17px;  /* view title in toolbars */
+  --fs-title-lg: 19px;  /* card headings */
+  --fs-h3:       20px;  /* modal headings */
+  --fs-h2:       22px;
+  --fs-h1:       32px;  /* page heading */
+  --fs-display:  38px;  /* home heading */
+
+  /* Scripture scale — always serif, always looser than UI.
+     Retuned +3.7% for Charis, whose x-height is 3.6% shorter than PT Serif's at the
+     same px. These sizes hold the apparent reading size the product was designed at. */
+  --fs-verse-sm: 16px;
+  --fs-verse:    17.5px;
+  --fs-verse-md: 19.5px;
+  --fs-verse-lg: 22px;  /* reading + drafting columns */
+  --fs-dropcap:  64px;
+
+  /* Nastaliq sets small and stacks diagonally: it needs a size up and far more leading
+     than any other script, or ascenders collide with the line above. Never set a
+     Nastaliq passage at --fs-verse-lg, and never apply font-size-adjust to it — the
+     style has no meaningful x-height to normalise against. */
+  --fs-verse-nastaliq: 26px;
+
+  --fw-regular: 400; /* @kind font */
+  --fw-medium:  600; /* @kind font */
+  --fw-bold:    700; /* @kind font */  /* scripture bold, meta */
+  --fw-heavy:   800; /* @kind font */  /* default for UI labels & buttons */
+  --fw-black:   900; /* @kind font */  /* headings */
+
+  --lh-tight:   1.15; /* @kind font */
+  --lh-ui:      1.45; /* @kind font */
+  --lh-body:    1.55; /* @kind font */
+
+  /* ---- Baseline grid ----
+     Scripture leading is stated in PIXELS, on a 4px grid, so a source column and
+     the translation beside it share baselines. A unitless ratio cannot do this:
+     17.5 × 1.85 and 22 × 1.85 land 8.3px apart, so two columns at different sizes
+     drift line by line down the page — the defect this replaces.
+
+     Each value pairs with ONE size. Using --lh-verse at --fs-verse-lg is now a
+     visible mistake rather than a silent one, which is the point. */
+  --baseline:    4px;
+  --lh-verse-sm: 24px; /* @kind font */  /* 16px   · 1.50 */
+  --lh-verse:    28px; /* @kind font */  /* 17.5px · 1.60 — compare pane */
+  --lh-verse-md: 32px; /* @kind font */  /* 19.5px · 1.64 */
+  --lh-verse-lg: 36px; /* @kind font */  /* 22px   · 1.64 — reading + drafting columns */
+  --lh-nastaliq: 64px; /* @kind font */  /* 26px   · 2.46 — Nastaliq ascender clearance */
+
+  /* ---- Optical tracking ----
+     Two different things, deliberately named apart.
+
+     --tracking-* is LETTERSPACING: a style choice, and only ever on uppercase.
+     --track-*    is OPTICAL TRACKING: a correction, on mixed-case text at every size.
+
+     Type does not scale linearly. The same letterspacing that keeps 10px legible
+     makes 38px look loose, and the fix is continuous, not two fixed values. These
+     come off one curve —
+
+         t(s) = 0.20 · e^(-0.16 · s) - 0.026   (em, s in px)
+
+     — positive below ~12.7px, crossing zero at body sizes, asymptotic to -.026em.
+     Named by pixel size because they ARE a function of size; every --fs-* has its
+     partner here, and Text applies the right one per role so callers rarely touch
+     them. If a size is added to the scale, compute its value; do not reuse a
+     neighbour's. */
+  --track-9:    .021em; /* @kind font */
+  --track-10:   .014em; /* @kind font */
+  --track-11:   .008em; /* @kind font */
+  --track-11-5: .006em; /* @kind font */
+  --track-12:   .003em; /* @kind font */
+  --track-12-5: .001em; /* @kind font */
+  --track-13:  -.001em; /* @kind font */
+  --track-13-5:-.003em; /* @kind font */
+  --track-14:  -.005em; /* @kind font */
+  --track-14-5:-.006em; /* @kind font */
+  --track-15:  -.008em; /* @kind font */
+  --track-15-5:-.009em; /* @kind font */
+  --track-16:  -.011em; /* @kind font */
+  --track-17:  -.013em; /* @kind font */
+  --track-17-5:-.014em; /* @kind font */
+  --track-19:  -.016em; /* @kind font */
+  --track-19-5:-.017em; /* @kind font */
+  --track-20:  -.018em; /* @kind font */
+  --track-22:  -.020em; /* @kind font */
+  --track-32:  -.025em; /* @kind font */
+  --track-38:  -.026em; /* @kind font */
+  --track-64:  -.026em; /* @kind font */
+  /* Not on the curve: the block heading of a helps article. */
+  --track-helps: .02em; /* @kind font */
+
+  /* Uppercase letterspacing. Not on the curve above — caps have no descenders to
+     crowd and want air at any size. */
+  --tracking-status:   .06em; /* @kind font */
+  --tracking-label:    .1em; /* @kind font */
+  --tracking-section:  .12em; /* @kind font */
+  --tracking-overline: .13em; /* @kind font */
+  --tracking-eyebrow:  .22em; /* @kind font */
+}
+
+/* Devanagari has no capitals, so uppercase does nothing there, and letterspacing
+   breaks the headline stroke between letters. The optical curve is drawn for the
+   Latin face, so Hindi takes none of it either (#612). Arabic letters join, and
+   letterspacing breaks the joins, so Arabic takes none of it (#649). */
+html:lang(hi),
+html:lang(ar) {
+  --track-9: 0;
+  --track-10: 0;
+  --track-11: 0;
+  --track-11-5: 0;
+  --track-12: 0;
+  --track-12-5: 0;
+  --track-13: 0;
+  --track-13-5: 0;
+  --track-14: 0;
+  --track-14-5: 0;
+  --track-15: 0;
+  --track-15-5: 0;
+  --track-16: 0;
+  --track-17: 0;
+  --track-17-5: 0;
+  --track-19: 0;
+  --track-19-5: 0;
+  --track-20: 0;
+  --track-22: 0;
+  --track-32: 0;
+  --track-38: 0;
+  --track-64: 0;
+  --track-helps: 0;
+  --tracking-status:   0;
+  --tracking-label:    0;
+  --tracking-section:  0;
+  --tracking-overline: 0;
+  --tracking-eyebrow:  0;
+}
+
+/* #686: a placeholder is interface text. A field in the scripture face (a note, a
+   verse) asks for a face with no Arabic, so with the Arabic interface its placeholder
+   takes the interface face. */
+html:lang(ar) ::placeholder { font-family: var(--font-ui); }

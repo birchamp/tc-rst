@@ -1,0 +1,82 @@
+/* INTERACTION STATES for the primitives.
+
+   Inline styles cannot express :hover, :active or :focus-within, so every
+   interactive primitive carries data-i="<role>" and picks its states up here.
+   One definition per state — a button, a card and a list row cannot drift.
+
+   These rules are tone-driven: they read --tone-* from the nearest data-tone
+   ancestor, so a role gains all seven tones without a rule per tone.
+
+   This is now the only interaction layer. tokens/interactions.css held the
+   older [data-tc] roles for the pre-primitive components; those components are
+   thin shims over the primitives now, carry no data-tc, and the file is
+   deleted. Its !important flags on the fill states went with it. */
+
+[data-i] {
+  transition:
+    background var(--dur-hover) var(--ease-standard),
+    border-color var(--dur-hover) var(--ease-standard),
+    box-shadow var(--dur-hover) var(--ease-standard),
+    color var(--dur-hover) var(--ease-standard);
+}
+[data-i][disabled], [data-i][aria-disabled="true"] { pointer-events: none; }
+
+/* tC4 local: every state declaration below is !important. The primitives set
+   their resting background, border and shadow INLINE, and an inline style beats
+   any stylesheet rule that is not !important — so without the flag none of these
+   states ever renders [VERIFIED — Playwright computed-style hover probe on the
+   rig-served build, main 21e7348 (all change) vs this package as shipped (none
+   change), 2026-09-04]. The pre-primitive interactions.css carried the same flags
+   for the same reason. To sync back to the design master. */
+
+/* Solid tone fill: primary and every other filled action. */
+[data-i="fill"]:hover  { background: var(--tone-hover) !important; }
+[data-i="fill"]:active { background: var(--tone-press) !important; box-shadow: none !important; }
+
+/* Bordered action that is a real alternative. */
+[data-i="outline"]:hover  { background: var(--tone-soft) !important; border-color: var(--tone-border) !important; }
+[data-i="outline"]:active { background: var(--tone-soft) !important; box-shadow: none !important; }
+
+/* Hairline or borderless action that steps aside. */
+[data-i="quiet"]:hover  { background: var(--fill-quiet-hover) !important; }
+[data-i="quiet"]:active { background: var(--uw-mist) !important; }
+
+/* Text-only action. */
+[data-i="text"]:hover  { color: var(--link-hover) !important; }
+[data-i="text"]:active { opacity: .7 !important; }
+
+/* A bordered surface offered as a choice: hovering previews choosing. A SELECTED
+   choice keeps its own (inline) selected look on hover — with the flags above, a
+   tint here would repaint a solid-filled selected chip pale under white text
+   (tC4 local; the retired interactions.css excluded selected surfaces the same way). */
+[data-i="choice"]:not([aria-checked="true"]):not([aria-pressed="true"]):not([data-selected="true"]):hover {
+  border-color: var(--tone-border) !important; background: var(--tone-soft) !important;
+}
+
+/* A container you can open. It lifts; it never tints, because it is not a choice. */
+[data-i="card"]:hover { border-color: var(--tone-border) !important; box-shadow: var(--shadow-hover) !important; }
+
+/* A row inside a panel: menu items, rail rows, table rows. */
+[data-i="row"]:hover  { background: var(--fill-quiet-hover) !important; }
+[data-i="row"]:active { background: var(--uw-mist) !important; }
+
+/* Text entry. */
+[data-i="field"]:focus, [data-i="field"]:focus-within { border-color: var(--uw-inspire) !important; background: #fff !important; }
+[data-i="field"][aria-invalid="true"]:focus,
+[data-i="field"][aria-invalid="true"]:focus-within { border-color: var(--tc-invalid) !important; }
+
+/* A Choice hides a real input behind a drawn mark. Focus lands on the input, so
+   the ring has to be drawn on the mark beside it. */
+[data-choice-input]:focus-visible + [data-choice] { outline: 2px solid var(--uw-inspire); outline-offset: 2px; }
+[data-choice-input]:disabled + [data-choice] { opacity: .55; }
+
+/* The system's only two looping animations, defined once rather than injected
+   per instance. Both belong to Progress in its indeterminate state. */
+@keyframes tcSpin { to { transform: rotate(360deg); } }
+@keyframes tcSlide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(340%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="tcSpin"], [style*="tcSlide"] { animation-duration: 2400ms !important; }
+}

@@ -1,6 +1,6 @@
 // components/forms: Checkbox, DropZone, FilterChip, OptionCard, Radio + RadioGroup, SearchField,
 // Select, SuggestField, TextArea, TextField, Toggle.
-import { noop, group, focus, hover, click, key, AR, T } from './lib.mjs';
+import { el, noop, cell, set, setTo, group, focus, hover, click, key, AR, T } from './lib.mjs';
 
 const FONTS = ['Noto Sans (default)', 'Charis SIL', 'Scheherazade New', 'Padauk — Myanmar', 'Awami Nastaliq'];
 const BOOKS = [
@@ -20,6 +20,12 @@ const LANGS = [
   { value: 'ha', label: 'Hausa', meta: 'Harshen Hausa', code: 'ha' },
   { value: 'haw', label: 'Hawaiian', meta: 'ʻŌlelo Hawaiʻi', code: 'haw' },
   { value: 'hak', label: 'Hakka Chinese', code: 'hak' },
+];
+/* The suggestions for the next letter typed: Hausa's row stays and shows another label and
+   code, Hakka Chinese gains a meta, and Hawaiian goes. */
+const LANGS_NEXT = [
+  { value: 'hak', label: 'Hakka Chinese', meta: 'Hak-kâ-fa', code: 'hak' },
+  { value: 'ha', label: 'Hausa (Niger)', code: 'ha-NE' },
 ];
 const LANGS_AR = [
   { value: 'ar', label: 'العربية', code: 'ar' },
@@ -85,6 +91,10 @@ export default [
     ['focus-visible', { title: 'English', description: 'unfoldingWord', onClick: noop }, { steps: [focus('button')] }],
     ['long-text', { control: 'radio', title: 'Create the project from a translationCore 3 backup with its check decisions', description: 'Every alignment and check decision is carried over. Comments and bookmarks come too, and invalidated checks stay marked for review.', recommended: true }, { frame: { width: 380, height: 192 } }],
     ['rtl', { control: 'radio', title: 'العربية', description: 'unfoldingWord · ar_gl', selected: true, recommended: true, recommendedLabel: 'موصى به' }, { document: AR }],
+    ['element-slots', { selected: true, title: el('span', { dir: 'rtl', children: 'العربية' }), meta: 'ar_gl', description: 'unfoldingWord', trailing: el('Badge', { tone: 'accentSoft', size: 'sm', children: 'Current' }) },
+      { note: 'Elements in the title and trailing slots, as tC4\'s ProjectSettings passes them.' }],
+    ['element-description', { title: 'en_tn', meta: 'Installed', description: el('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-meta)' }, children: '3f9c2a7e41b0d58c6e2f' }), trailing: '→', onClick: noop },
+      { note: 'An element in the description slot, as tC4\'s GuidedFix passes it.' }],
   ]),
 
   ...group('Radio', { frame: { width: 64, height: 56 } }, [
@@ -105,6 +115,8 @@ export default [
     ['no-legend', { 'aria-label': 'Paper', options: ['A4', 'Letter'], value: 'Letter', onChange: noop }, { frame: { height: 96 } }],
     ['focus-visible', { legend: 'Text direction', options: DIRECTIONS.map(({ value, label }) => ({ value, label })), value: 'ltr', onChange: noop }, { frame: { height: 120 }, steps: [focus('input[value="ltr"]')] }],
     ['rtl', { legend: 'اتجاه النص', options: [{ value: 'ltr', label: 'من اليسار إلى اليمين' }, { value: 'rtl', label: 'من اليمين إلى اليسار' }], value: 'rtl', onChange: noop }, { document: AR, frame: { height: 120 } }],
+    ['stateful', { legend: 'Text direction', options: DIRECTIONS.map(({ value, label }) => ({ value, label })), value: cell('dir'), onChange: set('dir', '0') },
+      { frame: { height: 120 }, cells: { dir: 'ltr' }, steps: [click('input[value="rtl"]')], note: 'The owner keeps the value, so the click selects the other option.' }],
   ]),
 
   ...group('SearchField', { frame: { width: 320, height: 68 } }, [
@@ -133,6 +145,13 @@ export default [
     ['open-keyboard', select(), { frame: { height: 330 }, steps: [focus('[role="combobox"]'), key('ArrowDown'), key('ArrowDown')] }],
     ['long-value', select({ label: 'Checking language', options: ['English — unfoldingWord Translation Notes, Words and Questions'], value: 'English — unfoldingWord Translation Notes, Words and Questions' }), { frame: { width: 280 } }],
     ['rtl', select({ label: 'خط النص', options: ['Noto Sans (افتراضي)', 'Awami Nastaliq'], value: 'Noto Sans (افتراضي)' }), { document: AR }],
+    ['open-interleaved-groups', select({ label: 'Book', options: [
+      { value: 'RUT', label: 'Ruth', code: 'RUT', group: 'Old Testament' },
+      { value: 'MAT', label: 'Matthew', code: 'MAT', group: 'New Testament' },
+      { value: 'JON', label: 'Jonah', code: 'JON', group: 'Old Testament' },
+      { value: 'TIT', label: 'Titus', code: 'TIT', group: 'New Testament' },
+    ], value: 'JON' }), { frame: { height: 400 }, steps: OPEN, note: 'A group name that comes back later in the list starts a section of its own, with its own rows.' }],
+    ['open-duplicate-values', select({ options: ['Charis SIL', 'Charis SIL', 'Awami Nastaliq'], value: 'Awami Nastaliq' }), { frame: { height: 260 }, steps: OPEN, note: 'Two options with one value are two rows.' }],
     ['rtl-open', select({ label: 'السفر', options: BOOKS.slice(0, 5).map(([, code], i) => ({ value: code, label: ['راعوث', 'أستير', 'يونان', 'ميخا', 'متى'][i], code })), value: 'JON' }), { document: AR, frame: { height: 330 }, steps: OPEN }],
   ]),
 
@@ -142,6 +161,11 @@ export default [
     ['open', { label: 'Language name', value: 'Ha', onChange: noop, onChoose: noop, suggestions: LANGS }, { frame: { height: 260 }, steps: [focus('input'), key('ArrowDown')] }],
     ['open-typed', { label: 'Language name', value: 'Ha', onChange: noop, onChoose: noop, suggestions: LANGS }, { frame: { height: 260 }, steps: [click('input'), { do: 'type', text: 'u' }] }],
     ['no-suggestions-focused', { label: 'Language name', value: 'Zzz', onChange: noop, suggestions: [] }, { steps: [focus('input')] }],
+    ['suggestions-change', { label: 'Language name', onChange: setTo('sugg', LANGS_NEXT), onChoose: set('picked', '0.label'), suggestions: cell('sugg') }, {
+      frame: { height: 260 }, cells: { sugg: LANGS, picked: '' }, steps: [focus('input'), key('ArrowDown'), { do: 'type', text: 'u' }],
+      wrap: (n) => el('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 }, children: [n, el('Text', { role: 'caption', children: ['Chosen: ', cell('picked')] })] }),
+      note: 'Typing replaces the suggestions while the list is open. The row of Hausa stays, and draws and hands over Hausa (Niger).',
+    }],
     ['rtl-open', { label: 'اسم اللغة', value: 'العر', onChange: noop, onChoose: noop, suggestions: LANGS_AR }, { document: AR, frame: { height: 220 }, steps: [focus('input'), key('ArrowDown')] }],
   ]),
 
@@ -183,5 +207,7 @@ export default [
     ['label-disabled', { label: 'Verse numbers', disabled: true, checked: true }, { frame: { width: 280 } }],
     ['focus-visible', { label: 'Verse numbers', onChange: noop }, { frame: { width: 280 }, steps: [focus('input')] }],
     ['rtl', { label: 'أرقام الآيات', checked: true }, { document: AR, frame: { width: 280 } }],
+    ['stateful', { label: 'Verse numbers', checked: cell('on'), onChange: set('on', '0.target.checked') },
+      { frame: { width: 280 }, cells: { on: false }, steps: [click('input')], note: 'The owner keeps the state, so the click turns the switch on.' }],
   ]),
 ];

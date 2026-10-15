@@ -1,0 +1,128 @@
+/* The print book stylesheet (#20): the PDF (src/data/export/pdf.ts) and the
+   Community Checking preview sheets (src/views/print/PrintPages.jsx) set the
+   book with it, so both break lines the same way. Every rule is scoped to a
+   print-* class, so the app can load it. The page itself (the @page size and
+   margins, the page number) belongs to each surface: pdf.ts writes it into the
+   print document, PrintPages draws the sheets. The page-setup variables come
+   from printVariables (src/views/print/PrintBook.jsx):
+     --print-columns   1 or 2
+     --print-leading   the line height, 1.4 × the spacing factor (Single 1, Double 2)
+   The family is --font-scripture's stack; the print document loads no web
+   font, so a face prints only when it is installed. */
+.print-book {
+  font-family: "Charis SIL", "PT Serif", Georgia, "Times New Roman", serif;
+  font-size: 19.5px;
+  color: #231F20;
+}
+/* The app's element rules (ds/tokens/base.css: h1, h2, p) reach the preview but
+   not the print document; the print elements reset them, so both surfaces set
+   the same lines. */
+.print-title,
+.print-chapter-heading {
+  font-family: inherit;
+  letter-spacing: normal;
+  text-box: normal;
+}
+.print-title {
+  text-align: center;
+  font-size: 38px;
+  font-weight: 700;
+  color: inherit;
+  line-height: 1.2;
+  margin: 0 0 30px;
+}
+/* The book body is one flow through the columns: a chapter continues from the
+   foot of one column to the top of the next, and the next chapter follows it. */
+.print-flow {
+  column-count: var(--print-columns);
+  column-gap: 28px;
+}
+.print-chapter {
+  line-height: var(--print-leading);
+  text-align: justify;
+  margin: 0 0 26px;
+}
+/* A preview sheet's last chapter that goes on to the next sheet: the PDF keeps a
+   chapter as one box, so its margin comes only at the chapter's end. */
+.print-chapter-continues { margin-bottom: 0; }
+.print-dropcap {
+  float: inline-start;
+  font-size: 64px;
+  line-height: 0.8;
+  font-weight: 700;
+  color: #156d91;
+  margin-inline-end: 10px;
+  margin-top: 6px;
+}
+.print-verse-number {
+  font-size: 11px;
+  font-weight: 700;
+  margin-inline-end: 2px;
+  vertical-align: super;
+}
+.print-undrafted { color: #626F78; }
+/* With drop caps off, each chapter opens with its number as a heading, kept
+   with the chapter's first line. A run of undrafted chapters between two
+   drafted ones is one line. */
+.print-chapter-heading {
+  break-after: avoid;
+  font-size: 19.5px;
+  font-weight: 700;
+  color: #156d91;
+  line-height: 1.3;
+  margin: 0 0 6px;
+}
+.print-chapter-gap {
+  break-inside: avoid;
+  text-wrap: wrap;
+  color: #626F78;
+  line-height: 1.4;
+  margin: 0 0 26px;
+}
+/* An OBS project (#360), the flow layout: each drafted story opens on a new
+   page with its title alone on that page; a frame (its picture above its text)
+   is never split, so frames fill a page as they fit. */
+.print-story { break-before: page; }
+.print-story:first-child { break-before: auto; }
+.print-story-title {
+  break-after: page;
+  padding-top: 30%;
+}
+.print-frame {
+  break-inside: avoid;
+  margin: 0 0 26px;
+}
+.print-frame-picture {
+  display: block;
+  width: 100%;
+  margin: 0 0 12px;
+}
+.print-frame-text,
+.print-story-reference {
+  line-height: var(--print-leading);
+  text-align: justify;
+  white-space: pre-wrap;
+  margin: 0;
+}
+.print-story-reference { font-style: italic; color: #626F78; }
+/* #454: a run of undrafted frames is one line in its story, with no picture; a
+   run of undrafted stories between two drafted ones is one line after the
+   story before it (the next story still opens on a new page); a project with
+   no drafted story prints one line that says so. */
+.print-frame-gap,
+.print-story-gap,
+.print-nothing-drafted {
+  break-inside: avoid;
+  color: #626F78;
+  line-height: 1.4;
+  margin: 0 0 26px;
+}
+/* The wrapped layout (#11): the picture is a quarter of the page width at the
+   frame's start corner (PrintStories sets the float side) and the text wraps
+   it; frames flow, so several share a page. */
+.print-stories-wrapped .print-frame { display: flow-root; }
+.print-stories-wrapped .print-frame-picture {
+  width: 25%;
+  margin-block: 0 6px;
+  margin-inline: 0 12px;
+}

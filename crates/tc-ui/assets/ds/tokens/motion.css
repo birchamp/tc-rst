@@ -1,0 +1,8 @@
+:root {
+  /* Composed, never playful. No bounce, no spring, no scale-on-press. */
+  --ease-standard: cubic-bezier(.2,0,.2,1); /* @kind other */
+  --dur-hover: 150ms; /* @kind other */
+  --dur-enter: 200ms; /* @kind other */
+  --dur-panel: 240ms; /* @kind other */
+  --stagger:   70ms; /* @kind other */
+}

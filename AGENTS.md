@@ -38,7 +38,10 @@ that writes project data.
   property tests for convergence and no-loss, plus crash-injection tests.
 - Before you commit, run `cargo fmt --all`, then
   `cargo clippy --workspace --all-targets -- -D warnings`, then `cargo test --workspace`.
-  All three must pass.
+  All three must pass. `tc-ui`'s components compile for `wasm32` only, so a change to
+  `crates/tc-ui` must also pass
+  `cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings`, with
+  and without `--features gallery`. CI runs all of these.
 
 ## Performance
 

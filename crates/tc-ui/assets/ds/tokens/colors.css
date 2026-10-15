@@ -1,0 +1,113 @@
+:root {
+  /* ---- unfoldingWord brand palette (inherited, Pantone-matched) ---- */
+  --uw-black:     #231F20; /* Neutral Black C */
+  --uw-ocean:     #014263; /* 7694 C — deep brand blue */
+  --uw-inspire:   #31ADE3; /* 298 C — PRIMARY */
+  --uw-cultivate: #70C9CC; /* 630 C */
+  --uw-kindle:    #E59D33; /* 7563 C */
+
+  /* ---- Inspire tonal scale ---- */
+  --uw-inspire-50:  #eaf6fc;
+  --uw-inspire-100: #cfecf8;
+  --uw-inspire-200: #a8def4;
+  --uw-inspire-300: #7acded;
+  --uw-inspire-400: #4cbce6;
+  --uw-inspire-500: #31ADE3;
+  --uw-inspire-600: #1f8cba;
+  --uw-inspire-700: #156d91;
+  --uw-inspire-800: #0c4f6b;
+  --uw-inspire-900: #014263;
+
+  /* ---- Ocean-tinted neutrals ---- */
+  --uw-paper:  #F7FAFC; /* app background */
+  --uw-frost:  #ECF2F5; /* muted surface, segmented tracks, progress rails */
+  --uw-mist:   #D9E2E8; /* off switch, dividers */
+  --uw-haze:   #B7C2C9; /* decorative + disabled ONLY — fails AA, never real text */
+  --uw-steel:  #626F78; /* tertiary text, labels, verse numbers — 4.9:1 on --surface-app */
+  --uw-slate:  #4F5E6A; /* secondary text */
+  --uw-ink:    #1E2C36; /* primary UI text */
+  --uw-cream:  #F6EEDC; /* warm accent surface */
+
+  /* ---- Status colors (from translationCore colorscheme.css) ---- */
+  --tc-valid:        #58C17A; /* completed green — progress fills, status pips */
+  --tc-valid-strong: #327547; /* filled buttons + text on light — 5.3:1 on --surface-app */
+  --tc-valid-surface:#E8F7ED;
+  --tc-invalid:      #A21309; /* danger */
+  --tc-todo:         #231F20; /* unresolved / to-do */
+  --tc-highlight:    #FDD910; /* app highlight yellow */
+  --tc-highlight-soft:#FFF1B8; /* text-selection + aligned-word highlight */
+  --tc-warn-surface: #FCF6EA;
+  --tc-warn-border:  rgba(229,157,51,.45);
+  --tc-warn-text:    #8A5B12;
+  --tc-warn-text-2:  #96610F; /* 4.9:1 on --tc-warn-surface, 4.5:1 on --surface-warm */
+  --tc-suggest-bg:   #F0FAFE; /* AI-suggested alignment chip */
+  --tc-suggest-fg:   #0D759F; /* 4.9:1 on --tc-suggest-bg */
+  --tc-dropzone-bg:  #F7FBFD;
+  --tc-kindle-text:  #8A6D2F;
+  --tc-valid-hover:  #348051;
+  --tc-valid-press:  #2C6B44;
+
+  /* Interaction + readable-text values completing the tone sets in tokens/tone.css.
+     Cultivate, Kindle and Invalid previously existed only as fills; a tone set
+     needs a value that can carry text and a value that can be pressed. */
+  --tc-cultivate-text: #2F6F72; /* 5.1:1 on --surface-app — Cultivate itself is 2.0:1 */
+  --tc-kindle-hover:   #D48E28;
+  --tc-kindle-press:   #C07F20;
+  --tc-invalid-surface:#FAEDEB; /* derived: the only red tint in the system */
+  --tc-invalid-hover:  #8C1008;
+  --tc-invalid-press:  #760D06;
+
+  /* Tone values for a dark ground. --tc-invalid #A21309 is unreadable on Ocean
+     (1.3:1), so the invalid tone needs a light counterpart rather than a
+     translucent one — a tint of red over dark blue reads brown. Derived, like
+     --tc-invalid-surface, and the only other red in the system.
+     Consumed by tokens/context.css under [data-on="dark"]. */
+  --tc-invalid-on-dark: #F2938A; /* 5.1:1 on --uw-ocean */
+
+  /* ---- Semantic surfaces ---- */
+  --surface-app:     var(--uw-paper);
+  --surface-card:    #FFFFFF;
+  --surface-panel:   #FFFFFF;   /* rails, helps panel, header when light */
+  --surface-muted:   var(--uw-frost);
+  --surface-inverse: var(--uw-ocean);
+  --surface-accent-soft: var(--uw-inspire-50);
+  --surface-warm:    var(--uw-cream);
+
+  /* ---- Semantic text ---- */
+  --text-heading:  var(--uw-ocean);
+  --text-body:     var(--uw-ink);
+  --text-scripture:var(--uw-black);
+  --text-secondary:var(--uw-slate);
+  --text-tertiary: var(--uw-steel);
+  --text-faint:    var(--uw-haze); /* aria-hidden ornament + disabled text only */
+  --text-inverse:  #FFFFFF;
+  --text-accent:   var(--uw-inspire-700); /* Inspire itself is 2.6:1 — fills only, never text */
+
+  /* ---- Borders ---- */
+  --border-hair:    rgba(35,31,32,.07);
+  --border:         rgba(35,31,32,.10);
+  --border-input:   rgba(35,31,32,.16);
+  --border-strong:  rgba(35,31,32,.18);
+  --tc-grid-line:   rgba(1,66,99,.09);  /* 4px baseline grid, specimen cards only */
+  --tc-box-line:    rgba(162,19,9,.30); /* line-box bounds in the optical specimen */
+  --tc-box-fill:    rgba(162,19,9,.05);
+  --border-inverse: rgba(255,255,255,.22);
+  --border-accent:  var(--uw-inspire);
+
+  /* ---- Interactive ---- */
+  --accent:        var(--uw-inspire);
+  --accent-hover:  #2599cc;
+  --accent-press:  var(--uw-inspire-600);
+  --accent-ring:   rgba(49,173,227,.35);
+  --link:          var(--uw-inspire);
+  --link-hover:    var(--uw-ocean);
+  --disabled-bg:   var(--uw-frost);
+  --disabled-fg:   var(--uw-steel);
+
+  /* ---- Scrims ---- */
+  --scrim-modal:  rgba(1,38,56,.55);
+  --scrim-drawer: rgba(1,66,99,.32);
+
+  /* ---- Gradients (brand mark) ---- */
+  --uw-gradient-mark: linear-gradient(180deg, var(--uw-ocean) 0%, var(--uw-inspire) 100%);
+}

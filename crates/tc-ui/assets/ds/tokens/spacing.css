@@ -1,0 +1,28 @@
+:root {
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 10px;
+  --space-5: 12px;
+  --space-6: 14px;
+  --space-7: 16px;
+  --space-8: 20px;
+  --space-9: 22px;
+  --space-10: 24px;
+  --space-12: 26px;
+  --space-14: 32px;
+  --space-16: 40px;
+  --space-20: 44px;
+  --space-24: 64px;
+
+  /* Layout constants lifted from the tC4 shell */
+  --rail-width:      230px;  /* book rail */
+  --rail-width-wide: 300px;  /* checking-tool rail */
+  --helps-width:     340px;  /* helps panel */
+  --drawer-width:    440px;  /* Translation Academy overlay */
+  --header-height:   56px;
+  --toolbar-height:  53px;
+  --measure-read:    720px;  /* single-column reading */
+  --measure-split:   1100px; /* source | translation split */
+  --measure-page:    980px;  /* home + tool picker */
+}

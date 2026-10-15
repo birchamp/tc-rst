@@ -1,0 +1,134 @@
+/* SURFACE CONTEXT — the ground a component is standing on.
+
+   A component should not need a variant for every background it might land on.
+   Instead a container declares its ground once, and everything inside reads
+   these four slots. Putting a Button, a StatusDot and an Overline into the
+   Ocean title bar then needs no inverse props at all.
+
+   Surface sets data-on automatically when it paints a dark fill; set it by
+   hand only on an element you have coloured yourself. */
+
+:root,
+[data-on="light"] {
+  --fg:            var(--text-body);
+  --fg-strong:     var(--uw-ocean);
+  --fg-muted:      var(--text-tertiary);
+  --fg-faint:      var(--text-faint);
+  --line:          var(--border);
+  --line-strong:   var(--border-input);
+  --fill-plain:       #FFFFFF;
+  --fill-quiet:       var(--surface-app);
+  --fill-quiet-hover: var(--surface-muted);
+}
+
+[data-on="dark"] {
+  --fg:            #FFFFFF;
+  --fg-strong:     #FFFFFF;
+  --fg-muted:      rgba(255,255,255,.60);
+  --fg-faint:      rgba(255,255,255,.40);
+  --line:          var(--border-inverse);
+  --line-strong:   rgba(255,255,255,.32);
+  --fill-plain:       rgba(255,255,255,.08);
+  --fill-quiet:       rgba(255,255,255,.08);
+  --fill-quiet-hover: rgba(255,255,255,.16);
+}
+
+/* ---- The tone axis on a dark ground ----
+
+   A tone's light values do not survive here. A `valid` soft badge in the Ocean
+   title bar renders its #E8F7ED tint on dark blue; a `tone="invalid"` text
+   action renders #A21309, which is unreadable there. The composition looked
+   correct and was not, and nothing warned. AUDIT.md CANNOT-EXPRESS #3.
+
+   TWO RULES, and both are load-bearing.
+
+   1. Override tone SOURCES (--t-<tone>-<slot>), never the --tone-* slots. That
+      is the whole reason tone.css is in two layers: a component stamps
+      data-tone on itself, so a slot re-declared on that element shadows
+      anything an ancestor set, while a source resolves in the element's own
+      context and therefore inherits.
+
+   2. Override only the slots a DECLARING element does not paint itself with.
+      Surface stamps data-on="dark" on the very element it paints, so anything
+      redefined here also lands on that element. Overriding --t-ocean-fill made
+      an Ocean panel turn its own fill translucent white; overriding
+      --t-valid-fill repainted every valid button in the product, because
+      valid's light fill #327547 is dark enough to trip the same test. So the
+      four fill slots — -fill, -on-fill, -hover, -press — are deliberately NOT
+      here for any tone. What is here is the five a container never paints
+      itself with: the bare hue, both tint slots, the text colour and the
+      border.
+
+      The consequence, stated rather than hidden: a FILLED tone surface on a
+      dark ground keeps its light-context fill. `Action weight="fill"
+      tone="valid"` on the Ocean header is #327547 with a white label — legible
+      in itself, but low contrast against the header behind it. On dark ground
+      prefer soft fills and text weights, which is what the tint and text slots
+      below are for; reach for a filled tone surface on dark only when it is
+      large enough to read as its own panel.
+
+      A descendant-only selector (`[data-on="dark"] *`) would let all nine
+      slots be overridden, and was tried. It puts the declarations outside every
+      recognised token scope, so nothing in them registers as a design-system
+      token, and it needs a matching light-restore block whose precedence rests
+      on source order rather than on nesting. Not worth those two costs for the
+      four slots it buys.
+
+   The four --fg/--line/--fill-* slots above ARE element-scoped, because those
+   the declaring element does want: its own text sits on its own fill.
+
+   Three rules produced the values rather than a formula:
+
+   1. A tinted surface on dark ground is the tone at low alpha over whatever is
+      behind it, not a fixed light tint. Alpha keeps it legible on Ocean, on the
+      scrim, and on a photo.
+   2. Text in a tone must be the tone's LIGHT end. Inspire, Cultivate, Valid and
+      Kindle are already light enough to clear AA on Ocean; --tc-invalid is not,
+      so invalid text becomes --tc-invalid-on-dark.
+   3. Ocean and neutral have no dark-ground identity — Ocean on Ocean is not a
+      distinction — so both degrade to translucent white. This is intentional:
+      tone="ocean" on a dark header should read as plain chrome, not vanish. */
+
+[data-on="dark"] {
+  /* neutral — translucent white */
+  --t-neutral:            rgba(255,255,255,.40);
+  --t-neutral-soft:       rgba(255,255,255,.10);
+  --t-neutral-on-soft:    #FFFFFF;
+  --t-neutral-text:       rgba(255,255,255,.72);
+  --t-neutral-border:     rgba(255,255,255,.32);
+
+  /* accent — Inspire is a foreground colour to the brand, and this is the
+     ground the guide's chart actually permits it on. */
+  --t-accent-soft:        rgba(49,173,227,.22);
+  --t-accent-on-soft:     #FFFFFF;
+  --t-accent-text:        var(--uw-inspire-300); /* 8.0:1 on --uw-ocean; --text-accent is 1.8:1 here */
+
+  /* ocean — no identity against itself; its hue, tint and text become chrome */
+  --t-ocean:              rgba(255,255,255,.40);
+  --t-ocean-soft:         rgba(255,255,255,.10);
+  --t-ocean-on-soft:      #FFFFFF;
+  --t-ocean-text:         var(--uw-inspire-300);
+  --t-ocean-border:       rgba(255,255,255,.32);
+
+  /* cultivate */
+  --t-cultivate-soft:     rgba(112,201,204,.22);
+  --t-cultivate-on-soft:  #FFFFFF;
+  --t-cultivate-text:     var(--uw-cultivate); /* 6.4:1 on --uw-ocean */
+
+  /* valid */
+  --t-valid-soft:         rgba(88,193,122,.22);
+  --t-valid-on-soft:      #FFFFFF;
+  --t-valid-text:         var(--tc-valid);      /* 5.5:1 on --uw-ocean */
+
+  /* warn */
+  --t-warn-soft:          rgba(229,157,51,.22);
+  --t-warn-on-soft:       #FFFFFF;
+  --t-warn-text:          var(--uw-kindle);     /* 6.2:1 on --uw-ocean */
+
+  /* invalid — the one tone with no light end in the palette */
+  --t-invalid:            var(--tc-invalid-on-dark);
+  --t-invalid-soft:       rgba(162,19,9,.34);
+  --t-invalid-on-soft:    #FFFFFF;
+  --t-invalid-text:       var(--tc-invalid-on-dark);
+  --t-invalid-border:     var(--tc-invalid-on-dark);
+}

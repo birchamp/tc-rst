@@ -1,6 +1,6 @@
 // components/primitives: Action, Choice, Field, FieldGroup, Input, Layer, Progress, Rule, Stack,
 // Surface, Switcher, Table, Text.
-import { el, noop, group, onDark, row, focus, hover, press, AR, T } from './lib.mjs';
+import { el, noop, cell, set, setTo, group, onDark, row, focus, hover, press, click, key, AR, T } from './lib.mjs';
 
 const WEIGHTS = ['fill', 'soft', 'outline', 'quiet', 'text', 'row'];
 const TONES = ['accent', 'ocean', 'cultivate', 'valid', 'warn', 'invalid', 'neutral'];
@@ -35,6 +35,24 @@ const ROWS = [
   { id: 'jon', book: 'Jonah', code: 'JON', verses: 48, drafted: '4%' },
   { id: 'rut', book: 'Ruth', code: 'RUT', verses: 85, drafted: '0%' },
 ];
+/* The rows after a change: a row inserted above the others, and new data in a row that stays. */
+const ROWS_NEXT = [
+  { id: 'est', book: 'Esther', code: 'EST', verses: 167, drafted: '0%' },
+  { ...ROWS[0], drafted: '15%' },
+  ROWS[1],
+  ROWS[2],
+];
+/* The rows re-sorted under a focused row: Ruth moves from the bottom to the top, or Titus from
+   the top to the bottom. */
+const ROWS_RUTH_FIRST = [ROWS[2], ROWS[0], ROWS[1]];
+const ROWS_TITUS_LAST = [ROWS[1], ROWS[2], ROWS[0]];
+/* Two rows with one id, as a list of books can have when a book was added twice. */
+const ROWS_SAME_ID = [ROWS[0], { ...ROWS[1], id: 'tit' }, ROWS[2]];
+/** A case's component with a line under it that shows a cell. */
+const withReadout = (label, name) => (n) => el('div', {
+  style: { display: 'flex', flexDirection: 'column', gap: 8 },
+  children: [n, el('Text', { role: 'caption', children: [label, cell(name)] })],
+});
 
 const ROLE_TEXT = {
   display: 'Your projects', h1: 'Your projects', h2: 'Project settings', h3: 'Add a project', title: 'Equipo Ejemplo',
@@ -179,6 +197,11 @@ export default [
     ['ring-indeterminate-label', { shape: 'ring', label: 'Opening the project…' }, { frame: { height: 60 } }],
     ['ring-valid', { shape: 'ring', value: 100, tone: 'valid' }, { frame: { width: 64, height: 60 } }],
     ['bar-rtl', { value: 50 }, { document: AR }],
+    ['ring-stateful', { shape: 'ring', value: cell('p'), size: 32 }, {
+      frame: { width: 220, height: 72 }, cells: { p: 20 }, steps: [click('button')],
+      wrap: (n) => row([n, el('Button', { variant: 'secondary', size: 'sm', onClick: setTo('p', 80), children: 'Advance' })]),
+      note: 'The button moves the value from 20 to 80 on the same ring.',
+    }],
   ]),
 
   ...group('Rule', { frame: { width: 320, height: 52 } }, [
@@ -252,6 +275,24 @@ export default [
     ['empty', { columns: COLUMNS, rows: [], empty: el('Text', { role: 'caption', children: 'No books yet.' }) }, { frame: { height: 140 } }],
     ['wrap-column', { columns: [{ key: 'ref', header: 'Ref', width: 60 }, { key: 'note', header: 'Note', wrap: true }], rows: [{ id: 1, ref: '1:1', note: T.note }, { id: 2, ref: '1:2', note: 'Eternal life is life that never ends.' }] }, { frame: { height: 220 } }],
     ['rtl', { columns: [{ key: 'book', header: 'السفر' }, { key: 'verses', header: 'الآيات', align: 'numeric' }], rows: [{ id: 'tit', book: 'تيطس', verses: 46 }, { id: 'jon', book: 'يونان', verses: 48 }], selectedKey: 'tit' }, { document: AR, frame: { height: 160 } }],
+    ['stateful', { columns: COLUMNS, rows: ROWS, selectedKey: cell('sel'), onRowClick: set('sel', '0.id') },
+      { cells: { sel: 'tit' }, steps: [focus('tbody tr:nth-child(2)'), key('Enter')], note: 'Enter selects the focused row, which keeps the focus.' }],
+    ['duplicate-ids', { columns: COLUMNS, rows: ROWS_SAME_ID, onRowClick: set('picked', '0.book') }, {
+      frame: { height: 232 }, cells: { picked: '' }, wrap: withReadout('Opened: ', 'picked'), steps: [click('tbody tr:nth-child(2)')],
+      note: 'Titus and Jonah share the id "tit". Each row draws its own record, and a click on Jonah opens Jonah.',
+    }],
+    ['rows-change', { columns: COLUMNS, rows: cell('rows'), selectedKey: 'jon', onRowClick: setTo('rows', ROWS_NEXT) }, {
+      frame: { height: 248 }, cells: { rows: ROWS }, steps: [focus('tbody tr:nth-child(2)'), key('Enter')],
+      note: 'Enter on Jonah inserts Esther above and changes Titus. Every row keeps its nodes, and Jonah keeps the focus.',
+    }],
+    ['rows-move-up', { columns: COLUMNS, rows: cell('rows'), onRowClick: setTo('rows', ROWS_RUTH_FIRST) }, {
+      cells: { rows: ROWS }, steps: [focus('tbody tr:nth-child(3)'), key('Enter')],
+      note: 'Enter on Ruth moves it from the bottom to the top, as a re-sort does. The row keeps its node and the keyboard focus.',
+    }],
+    ['rows-move-down', { columns: COLUMNS, rows: cell('rows'), onRowClick: setTo('rows', ROWS_TITUS_LAST) }, {
+      cells: { rows: ROWS }, steps: [focus('tbody tr:nth-child(1)'), key('Enter')],
+      note: 'Enter on Titus moves it from the top to the bottom. The row keeps its node and the keyboard focus.',
+    }],
   ]),
 
   ...group('Text', { frame: { width: 360, height: 60 } }, [

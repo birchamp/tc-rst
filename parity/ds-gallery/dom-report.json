@@ -1,0 +1,4320 @@
+{
+  "same": 719,
+  "total": 719,
+  "cases": [
+    {
+      "id": "Badge/accent-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Badge/accent-soft-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Badge/cultivate-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Badge/ocean-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Badge/neutral-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Badge/valid-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Badge/warn-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Badge/accent-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Badge/accent-soft-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Badge/cultivate-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Badge/ocean-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Badge/neutral-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Badge/valid-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Badge/warn-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Badge/long-text",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Badge/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/primary-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/primary-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/primary-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/ocean-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/ocean-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/ocean-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/secondary-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/secondary-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/secondary-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/outline-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/outline-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/outline-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/ghost-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/ghost-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/ghost-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/valid-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/valid-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/valid-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/danger-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/danger-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/danger-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/primary-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/ocean-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/secondary-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/outline-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/ghost-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/valid-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/danger-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/primary-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/ocean-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/secondary-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/outline-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/ghost-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/valid-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/danger-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/primary-pressed",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/primary-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/secondary-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/block",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/glyph-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/long-text",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/rtl-pair",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Divider/horizontal",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Divider/labelled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Divider/vertical",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Divider/on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Divider/rtl-labelled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "IconButton/outline-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "IconButton/outline-28",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "IconButton/outline-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "IconButton/muted-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "IconButton/muted-28",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "IconButton/muted-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "IconButton/plain-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "IconButton/plain-28",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "IconButton/plain-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "IconButton/outline-20",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "IconButton/outline-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "IconButton/outline-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "IconButton/glyph-menu",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Overline/muted",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Overline/accent",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Overline/inverse-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Overline/as-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Overline/long-text",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Overline/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ProgressBar/value-0",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ProgressBar/value-35",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ProgressBar/value-100",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ProgressBar/over-100-clamped",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ProgressBar/tone-valid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ProgressBar/tone-warn",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ProgressBar/tone-invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ProgressBar/tone-ocean",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ProgressBar/tone-cultivate",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ProgressBar/tone-neutral",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ProgressBar/height-3",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ProgressBar/height-8",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ProgressBar/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "StatusDot/valid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "StatusDot/invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "StatusDot/warn",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "StatusDot/accent",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "StatusDot/todo",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "StatusDot/valid-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "StatusDot/invalid-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "StatusDot/warn-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "StatusDot/accent-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "StatusDot/todo-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "StatusDot/size-12",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "StatusDot/rtl-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Accordion/closed",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Accordion/first-open",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Accordion/all-open",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Accordion/row-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Accordion/row-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Accordion/long-title",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Accordion/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Avatar/ocean-44",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Avatar/ocean-32",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Avatar/accent-44",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Avatar/accent-32",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Avatar/cultivate-44",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Avatar/cultivate-32",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Avatar/muted-44",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Avatar/muted-32",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Avatar/circle",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Avatar/size-64",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Avatar/image",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Avatar/rtl-initials",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "KeyValueGrid/two-columns",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "KeyValueGrid/three-columns",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "KeyValueGrid/one-column",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "KeyValueGrid/long-values",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "KeyValueGrid/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ConfirmDialog/default",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ConfirmDialog/destructive",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ConfirmDialog/consequence",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ConfirmDialog/default-labels",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ConfirmDialog/long-title",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ConfirmDialog/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "EmptyState/block",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "EmptyState/block-action",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "EmptyState/title-only",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "EmptyState/description-only",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "EmptyState/long-description",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "EmptyState/inline",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "EmptyState/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "InlineError/default",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "InlineError/long-text",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "InlineError/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Spinner/default",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Spinner/size-32",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Spinner/label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Spinner/tone-valid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Spinner/tone-invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Spinner/tone-warn",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Spinner/tone-ocean",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Spinner/inverse-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Spinner/rtl-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toast/success",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toast/info",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toast/warn",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toast/error",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toast/action",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toast/dismiss",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toast/action-dismiss",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toast/long-message",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toast/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tooltip/resting",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tooltip/hover-bottom",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tooltip/hover-top",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tooltip/hover-start",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tooltip/hover-end",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tooltip/focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tooltip/long-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tooltip/rtl-end",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Checkbox/unchecked",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Checkbox/checked",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Checkbox/indeterminate",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Checkbox/disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Checkbox/disabled-checked",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Checkbox/label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Checkbox/label-checked",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Checkbox/label-description",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Checkbox/label-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Checkbox/focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Checkbox/long-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Checkbox/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "DropZone/default",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "DropZone/hint",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "DropZone/hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "DropZone/focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "DropZone/long-title",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "DropZone/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FilterChip/accent",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FilterChip/accent-selected",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FilterChip/ocean",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FilterChip/ocean-selected",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FilterChip/valid-selected",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FilterChip/mark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FilterChip/hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FilterChip/selected-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FilterChip/focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FilterChip/long-text",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FilterChip/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "OptionCard/default",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "OptionCard/selected",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "OptionCard/radio",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "OptionCard/radio-selected",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "OptionCard/icon",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "OptionCard/recommended",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "OptionCard/trailing",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "OptionCard/disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "OptionCard/hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "OptionCard/focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "OptionCard/long-text",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "OptionCard/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "OptionCard/element-slots",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "OptionCard/element-description",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Radio/unchecked",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Radio/checked",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Radio/disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Radio/disabled-checked",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Radio/label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Radio/label-description",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Radio/focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Radio/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "RadioGroup/legend",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "RadioGroup/descriptions",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "RadioGroup/strings",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "RadioGroup/no-legend",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "RadioGroup/focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "RadioGroup/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "RadioGroup/stateful",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "SearchField/placeholder",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "SearchField/value-clear",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "SearchField/value-no-clear",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "SearchField/focused",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "SearchField/disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "SearchField/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/value",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/value-code",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/no-value",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/hint",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/no-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/open",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/open-search",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/open-groups",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/open-no-matches",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/open-rows",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/open-keyboard",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/long-value",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/open-interleaved-groups",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/open-duplicate-values",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/rtl-open",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "SuggestField/value",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "SuggestField/hint",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "SuggestField/open",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "SuggestField/open-typed",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "SuggestField/no-suggestions-focused",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "SuggestField/suggestions-change",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "SuggestField/rtl-open",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextArea/placeholder",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextArea/value",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextArea/no-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextArea/rows-6",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextArea/scripture",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextArea/scripture-rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextArea/disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextArea/invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextArea/focused",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextArea/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextField/placeholder",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextField/value",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextField/hint",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextField/invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextField/disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextField/focused",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextField/focused-invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextField/size-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextField/size-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextField/no-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextField/long-value",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "TextField/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toggle/off",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toggle/on",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toggle/disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toggle/disabled-on",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toggle/label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toggle/label-on",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toggle/label-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toggle/focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toggle/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toggle/stateful",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "AppHeader/home",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "AppHeader/project",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "AppHeader/project-default-right",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "AppHeader/light",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "AppHeader/no-logo",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "AppHeader/long-project-name",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "AppHeader/project-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "AppHeader/project-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "AppHeader/project-name-rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "AppHeader/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Breadcrumb/default",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Breadcrumb/two-items",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Breadcrumb/single",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Breadcrumb/wrapping",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Breadcrumb/link-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Breadcrumb/link-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Breadcrumb/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Menu/closed",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Menu/open",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Menu/open-align-end",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Menu/open-no-meta",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Menu/item-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Menu/item-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Menu/open-rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/fill",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/soft",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/outline",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/quiet",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/text",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/row",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/fill-accent",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/fill-ocean",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/fill-cultivate",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/fill-valid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/fill-warn",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/fill-invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/fill-neutral",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/outline-ocean",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/outline-invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/outline-valid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/row-invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/soft-invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/text-neutral",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/fill-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/fill-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/text-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/text-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/shape-block",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/shape-square",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/icon-only-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/fill-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/soft-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/outline-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/quiet-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/text-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/row-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/link-href",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/fill-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/soft-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/outline-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/quiet-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/text-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/row-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/fill-pressed",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/quiet-pressed",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/fill-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/text-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/fill-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/soft-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/outline-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/quiet-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/text-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/outline-accent-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/text-invalid-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/long-text",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Action/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/check-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/check-sm-on",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/check-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/check-md-on",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/check-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/check-lg-on",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/radio-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/radio-sm-on",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/radio-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/radio-md-on",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/radio-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/radio-lg-on",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/switch-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/switch-sm-on",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/switch-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/switch-md-on",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/switch-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/switch-lg-on",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/check-indeterminate",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/check-on-valid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/check-on-invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/switch-on-valid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/check-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/check-disabled-on",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/switch-disabled-on",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/check-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/radio-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/switch-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Choice/switch-on-rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Field/label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Field/required",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Field/optional",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Field/hint",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Field/error",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Field/hint-error",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Field/disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Field/size-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Field/placement-end",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Field/placement-end-hint",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Field/placement-start",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Field/placement-start-error",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Field/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FieldGroup/radios",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FieldGroup/row",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FieldGroup/columns",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FieldGroup/hint-required",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FieldGroup/error",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FieldGroup/disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "FieldGroup/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Input/placeholder",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Input/value",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Input/leading",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Input/trailing",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Input/invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Input/disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Input/size-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Input/size-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Input/textarea",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Input/scripture",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Input/scripture-textarea",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Input/focused",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Input/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Layer/center-modal-scrim",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Layer/center-no-scrim",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Layer/end-drawer-scrim",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Layer/start-drawer-scrim",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Layer/bottom-start",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Layer/bottom-end",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Layer/end-drawer-rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/bar-0",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/bar-50",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/bar-100",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/bar-indeterminate",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/bar-valid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/bar-warn",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/bar-invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/bar-height-8",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/ring-0",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/ring-25",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/ring-75",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/ring-100",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/ring-32",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/ring-indeterminate",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/ring-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/ring-indeterminate-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/ring-valid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/bar-rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Progress/ring-stateful",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Rule/hair",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Rule/line",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Rule/labelled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Rule/vertical",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Rule/on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Stack/row-gap-12",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Stack/column-gap-8",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Stack/row-align-center",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Stack/row-justify-between",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Stack/row-wrap",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Stack/columns-3",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Stack/columns-template",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Stack/row-rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/fill-none",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/fill-solid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/fill-soft",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/fill-card",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/fill-app",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/fill-muted",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/fill-quiet",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/fill-paper",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/border-hair",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/border-line",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/border-input",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/border-strong",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/border-tone",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/border-choice",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/border-dashed",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/border-dashed-tone",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/border-choice-selected",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/radius-none",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/radius-xs",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/radius-chip",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/radius-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/radius-input",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/radius-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/radius-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/radius-xl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/radius-2xl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/radius-pill",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/elevation-chip",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/elevation-raised",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/elevation-card",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/elevation-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/elevation-hero",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/elevation-page",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/elevation-modal",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/elevation-drawer",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/elevation-focus",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/solid-ocean",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/solid-valid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/solid-invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/solid-warn",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/solid-cultivate",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/solid-neutral",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/soft-ocean",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/soft-valid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/soft-invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/soft-warn",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/interactive-choice-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/interactive-card-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/interactive-row-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/interactive-quiet-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/clickable-div-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/concentric-inner",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/concentric-elliptical",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Surface/on-dark-text",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/underline",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/pill",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/none",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/counts",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/disabled-option",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/no-selection",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/pill-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/underline-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/pill-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/underline-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/grow",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/tone-ocean",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/tab-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/pill-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/pill-rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/default",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/caption-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/selected-row",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/row-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/row-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/empty",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/wrap-column",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/stateful",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/duplicate-ids",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/rows-change",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/rows-move-up",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/rows-move-down",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-display",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-h1",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-h2",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-h3",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-title",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-title-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-strong",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-body",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-ui",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-caption",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-caption-strong",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-overline",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-label",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-label-num",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-label-micro",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-meta",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-scripture",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-scripture-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-scripture-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/role-quote",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/tone-strong",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/tone-muted",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/tone-faint",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/tone-accent",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/tone-scripture",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/tone-tone-valid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/tone-inverse-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/muted-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/script-greek",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/script-hebrew",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/script-arabic",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/script-nastaliq",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/truncate",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/measure-narrow",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/align-center",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/h2-untrimmed",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/as-h1",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/rtl-body",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/rtl-overline",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Text/rtl-h2",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/tile-0",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/tile-45",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/tile-100",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/tile-active",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/tile-meta",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/tile-children",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/tile-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/tile-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/tile-long-name",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/row-45",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/row-active",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/row-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/tile-rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Callout/info",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Callout/warn",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Callout/kindle",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Callout/success",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Callout/flex-action",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Callout/long-text",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Callout/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Card/default",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Card/flat",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Card/muted",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Card/paper",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Card/ocean",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Card/padding-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Card/interactive-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Card/interactive-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Card/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Drawer/default",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Drawer/no-eyebrow",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Drawer/no-close",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Drawer/width-360",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Drawer/long-content",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Drawer/title-rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Drawer/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Drawer/element-title",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "HelpCard/note",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "HelpCard/word",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "HelpCard/note-active",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "HelpCard/word-active",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "HelpCard/no-action",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "HelpCard/chapter-intro",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "HelpCard/hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "HelpCard/focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "HelpCard/long-body",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "HelpCard/helps-rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/default",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/no-subtitle",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/no-close",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/no-footer",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/width-400",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/long-content",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/element-subtitle",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/nested-select",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/nested-menu",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ScripturePassage/latin-lg",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ScripturePassage/latin-md",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ScripturePassage/latin-sm",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ScripturePassage/highlight",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ScripturePassage/highlight-many",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ScripturePassage/highlight-wraps",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ScripturePassage/three-verses",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ScripturePassage/greek",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ScripturePassage/hebrew",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ScripturePassage/hebrew-highlight",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ScripturePassage/arabic",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ScripturePassage/nastaliq",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ScripturePassage/size-override",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "ScripturePassage/ltr-forced-on-hebrew",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "VerseMarker/n-1",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "VerseMarker/n-12",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "VerseMarker/n-123",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "VerseMarker/size-24",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "VerseMarker/size-48",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "VerseMarker/dragging",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "VerseMarker/focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "VerseMarker/inline-in-text",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "WordChip/default",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "WordChip/selected",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "WordChip/suggested",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "WordChip/placed",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "WordChip/long-word",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "WordChip/bank-row",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/color-unfoldingword-brand-palette",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/color-inspire-tonal-scale",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/color-ocean-tinted-neutrals",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/color-status-colors",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/color-semantic-surfaces",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/color-semantic-text",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/color-borders",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/color-interactive",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/color-scrims",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/color-gradients",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/tone-neutral",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/tone-accent",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/tone-ocean",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/tone-cultivate",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/tone-valid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/tone-warn",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/tone-invalid",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/tone-neutral-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/tone-accent-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/tone-ocean-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/tone-cultivate-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/tone-valid-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/tone-warn-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/tone-invalid-on-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/context-light",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/context-dark",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/type-scale-ui",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/type-scale-scripture",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/type-weights",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/type-roles",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/font-families",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/spacing",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/radius",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/stroke",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/elevation",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/control-heights",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    }
+  ]
+}

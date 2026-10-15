@@ -1,0 +1,33 @@
+/* LAYOUT — the product's defining dimensions.
+
+   These were inline numbers at every call site, which made them the values most
+   likely to drift: they are the ones a designer adjusts. There is deliberately
+   no sizing prop on Surface — that road ends in a utility-class system — so the
+   dimensions are named here and referenced through `style` where they apply.
+   AUDIT.md CANNOT-EXPRESS #4.
+
+   Only dimensions that recur are here. A one-off width stays a number. */
+
+:root {
+  /* Reading measures. --measure-read is the single-column scripture column;
+     --measure-prose is character-based for UI prose, where the font may change. */
+  --measure-read:   720px;
+  --measure-prose:  62ch;
+  --measure-narrow: 380px;  /* an empty state's explanatory line */
+
+  /* Application chrome. */
+  --split-w:  1100px;  /* source + translation, side by side */
+  --rail-w:   230px;   /* book rail */
+  --panel-w:  340px;   /* helps panel */
+  --drawer-w: 440px;   /* end-edge drawer */
+
+  /* Overlay panels. */
+  --modal-w:      520px;
+  --modal-w-sm:   480px;  /* a confirmation states one consequence and stops */
+  --toast-w-min:  300px;
+  --toast-w-max:  440px;
+
+  /* Identity marks. Both are square; the radius is chosen, not derived from size. */
+  --avatar-lg: 44px;
+  --avatar-sm: 32px;
+}
