@@ -24,6 +24,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+/// The most verses one book may hold, counting each verse of a span (§13.5). Psalms, the
+/// longest book, has 2,461. Each verse is a record, and a span marker of a few bytes such as
+/// `\v 1-65535 ` stands for one record per verse, so without a limit a small file could
+/// stand for millions of records and stop every device that reads it.
+pub const MAX_BOOK_VERSES: usize = 65_535;
+
 /// tC4's `BODY_ENDING_TAGS` (`src/data/usfm/indexer.ts`): the paragraph-level markers that
 /// may stand on a layout-only line. A marker matches when its name, lower-cased and with
 /// trailing digits removed (unless the name holds a `-`), is in this list.
@@ -361,6 +367,10 @@ pub enum DecomposeProblem {
     VerseMarkerAtEnd,
     #[error("verse {chapter}:{verse} appears twice")]
     DuplicateVerse { chapter: u16, verse: u16 },
+    #[error(
+        "the book holds more than 65,535 verses, counting each verse of a span; the longest book of the Bible has 2,461"
+    )]
+    TooManyVerses,
 }
 
 /// The 1-based line number of byte `at`.
@@ -446,6 +456,7 @@ pub fn decompose(text: &str) -> Result<BookParts, DecomposeError> {
     };
     let mut order = Vec::new();
     let mut chapter = 0u16;
+    let mut verses_in_book = 0usize;
     for (index, marker) in found.iter().enumerate() {
         let end = found.get(index + 1).map_or(text.len(), |next| next.at);
         match &marker.what {
@@ -475,6 +486,10 @@ pub fn decompose(text: &str) -> Result<BookParts, DecomposeError> {
                     // Every verse marker after the header follows a chapter marker.
                     continue;
                 };
+                verses_in_book += usize::from(last - first) + 1;
+                if verses_in_book > MAX_BOOK_VERSES {
+                    return Err(fail(marker.at, DecomposeProblem::TooManyVerses));
+                }
                 let verses = &mut parts_of_chapter.verses;
                 for verse in *first..=*last {
                     if verses.contains_key(&verse) {

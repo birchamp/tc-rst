@@ -171,10 +171,13 @@ fn check_front(chapter: ChapterNo, front: &str) -> Result<(), RuleViolation> {
             .len();
     let digits = &after_blank[..digits_len];
     let after = &after_blank[digits_len..];
+    // The codec keeps a chapter label as written, zeros included (§13.5), so `\c 000001`
+    // is chapter 1 however many zeros lead it.
+    let significant = digits.trim_start_matches('0');
     let number_ok = digits_start > 0
         && !digits.is_empty()
-        && digits.len() <= 5
-        && digits.parse::<u32>().ok() == Some(u32::from(chapter.get()))
+        && significant.len() <= 5
+        && significant.parse::<u32>().ok() == Some(u32::from(chapter.get()))
         && (after.is_empty() || after.starts_with([' ', '\t', '\r', '\n']));
     if !number_ok {
         return Err(usfm(format!("{own} does not start with \\c {chapter}")));

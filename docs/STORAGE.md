@@ -3138,8 +3138,12 @@ The codec (`tc-usfm`) decomposes a book into records and recomposes it:
   whose end is not after its start, a letter-part label such as `\v 2a` (as tC4 4.0), invalid
   UTF-8, U+0000; also a verse label with a leading zero (`\v 01`: the label is computed from
   the verse numbers, so it could not be given back; a chapter number keeps its zeros in the
-  chapter front), verse or chapter 0, a number above 65,535, a verse marker at the end of the
-  file with no terminator, and any other `\v` or `\c` marker that is not well formed.
+  chapter front, as many as it has), verse or chapter 0, a number above 65,535, a verse marker
+  at the end of the file with no terminator, any other `\v` or `\c` marker that is not well
+  formed, and a book of more than 65,535 verses, counting each verse of a span (Psalms has
+  2,461). Each verse is a record, so without that limit a file of a few kilobytes of
+  `\c N` and `\v 1-65535` lines would stand for millions of records and stop every device that
+  decodes it, at an import, an outside edit (§11.1) or a Door43 web edit (§11.2).
 - `recompose(decompose(x)) == x` for every accepted input, property-tested and checked on tC4's
   USFM identity corpus.
 

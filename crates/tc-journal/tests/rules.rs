@@ -7,6 +7,7 @@
 mod common;
 
 use common::*;
+use proptest::prelude::*;
 use std::sync::Arc;
 use tc_journal::json::{self, Json};
 use tc_journal::record::{
@@ -288,6 +289,8 @@ fn v3_headers_and_chapter_fronts_keep_the_book_structure() {
     for ok in [
         "\\c 2\n",
         "\\c 02\r\n\\p\n",
+        "\\c 000002\n",
+        "\\c 0000000000000000000002\n",
         "\\c\t2",
         "\\c 2 \\ca 3\\ca*\n\\s1 Title\n",
     ] {
@@ -300,6 +303,9 @@ fn v3_headers_and_chapter_fronts_keep_the_book_structure() {
         "\\c 2x\n",
         "\\c 2\n\\v 1 x",
         "\\c 2\n\\c 3\n",
+        "\\c 000003\n",
+        "\\c 00000\n",
+        "\\c 100002\n",
         "",
     ] {
         assert_eq!(refused(front(2, bad)).rule(), Rule::V3, "{bad:?}");
@@ -311,6 +317,186 @@ fn v3_headers_and_chapter_fronts_keep_the_book_structure() {
             value: ChapterFront::Absent,
         }))
         .is_ok()
+    );
+}
+
+/// A book with a verse span of `span` extra verses after `first`, written with `lead`,
+/// `term`, words and layout from the pools below.
+#[derive(Debug, Clone)]
+struct GenVerse {
+    span: u16,
+    lead: &'static str,
+    term: &'static str,
+    words: &'static str,
+    layout: &'static str,
+}
+
+fn gen_book() -> impl Strategy<Value = String> {
+    let verse = (
+        prop_oneof![4 => Just(0u16), 1 => 1u16..4],
+        prop::sample::select(vec![" ", "\t", "  "]),
+        prop::sample::select(vec![" ", "\t", "\n", "\r"]),
+        prop::sample::select(vec![
+            "words",
+            "line one\n\\q2 line two",
+            "",
+            "\\add x\\add*",
+            "a\n\\s1 Heading",
+            "\\w uno|x-occurrence=\"1\"\\w*",
+        ]),
+        prop::sample::select(vec!["", "\n", "\n\\p\n", "\r\n\\q1\r\n", "\n\\ts\\*\n"]),
+    )
+        .prop_map(|(span, lead, term, words, layout)| GenVerse {
+            span,
+            lead,
+            term,
+            words,
+            layout,
+        });
+    let chapter = (
+        0usize..8,
+        prop::sample::select(vec![" ", "\t"]),
+        prop::sample::select(vec!["\n", "\r\n", " \\ca 3\\ca*\n", "\n\\s1 Title\n\\p\n"]),
+        prop::collection::vec(verse, 0..5),
+        any::<bool>(),
+    );
+    (
+        prop::sample::select(vec![
+            "",
+            "\\id TIT\n",
+            "\\id TIT x\r\n\\h Titus\r\n",
+            "\\id TIT\n\\v 1 before\n",
+        ]),
+        prop::collection::vec(chapter, 1..4),
+    )
+        .prop_map(|(header, chapters)| {
+            let mut book = header.to_owned();
+            for (index, (zeros, blank, after, verses, reversed)) in chapters.into_iter().enumerate()
+            {
+                book.push_str(&format!(
+                    "\\c{blank}{}{}{after}",
+                    "0".repeat(zeros),
+                    index + 1
+                ));
+                let mut first = 1u16;
+                let mut written: Vec<String> = verses
+                    .iter()
+                    .map(|v| {
+                        let label = if v.span > 0 {
+                            format!("{first}-{}", first + v.span)
+                        } else {
+                            first.to_string()
+                        };
+                        first += v.span + 1;
+                        // A verse ends where the next marker starts, so each one ends its
+                        // own line.
+                        format!("\\v{}{label}{}{}{}\n", v.lead, v.term, v.words, v.layout)
+                    })
+                    .collect();
+                if reversed {
+                    written.reverse();
+                }
+                book.extend(written);
+            }
+            book
+        })
+}
+
+/// Every part the codec cuts from a book passes the per-change rules, so an import, an
+/// outside edit or a Door43 web edit never writes a change that readers quarantine (which
+/// would drop a chapter's headings and paragraph markers from the projected book).
+#[test]
+fn every_part_decompose_produces_passes_the_rules() {
+    use tc_journal::VerseNo;
+    use tc_usfm::codec::{VersePart, decompose};
+    run_with_census(
+        256,
+        gen_book(),
+        &[
+            "zero-padded chapter",
+            "span",
+            "verse in header",
+            "book layout",
+            "CR terminator",
+            "layout",
+        ],
+        |book, census| {
+            let parts =
+                decompose(&book).map_err(|e| TestCaseError::fail(format!("{e}: {book:?}")))?;
+            let with = |record: Record| {
+                let mut body = verse_body(local(1), 1, 1, "x");
+                body.record = record;
+                Change::new(body)
+                    .map(|_| ())
+                    .map_err(|e| TestCaseError::fail(format!("{e}: {book:?}")))
+            };
+            if parts.header.contains("\\v ") {
+                census.saw("verse in header");
+            }
+            with(Record::BookHeader {
+                book: BookId::Titus,
+                value: UsfmBytes(parts.header.clone()),
+            })?;
+            if let Some(layout) = &parts.layout {
+                census.saw("book layout");
+                let items = layout
+                    .iter()
+                    .map(|item| match *item {
+                        tc_usfm::codec::LayoutItem::Chapter(c) => {
+                            tc_journal::record::LayoutItem::Chapter(chapter(c))
+                        }
+                        tc_usfm::codec::LayoutItem::Verse(c, v) => {
+                            tc_journal::record::LayoutItem::Verse(chapter(c), verse_no(v))
+                        }
+                    })
+                    .collect();
+                with(Record::BookLayout {
+                    book: BookId::Titus,
+                    value: Some(items),
+                })?;
+            }
+            for (number, part) in &parts.chapters {
+                let front = part.front.clone().unwrap_or_default();
+                if front.starts_with("\\c 0") || front.starts_with("\\c\t0") {
+                    census.saw("zero-padded chapter");
+                }
+                with(Record::ChapterFront {
+                    book: BookId::Titus,
+                    chapter: chapter(*number),
+                    value: ChapterFront::Present(UsfmBytes(front)),
+                })?;
+                for (verse, value) in &part.verses {
+                    let value = match value {
+                        VersePart::Text(text) => {
+                            if text.last > *verse {
+                                census.saw("span");
+                            }
+                            if text.marker.term() == tc_journal::record::MarkerTerm::Cr {
+                                census.saw("CR terminator");
+                            }
+                            if !text.layout.is_empty() {
+                                census.saw("layout");
+                            }
+                            VerseValue::Text {
+                                marker: text.marker.clone(),
+                                words: text.words.clone(),
+                                layout: text.layout.clone(),
+                                last: verse_no(text.last),
+                                from: None,
+                            }
+                        }
+                        VersePart::Covered { by } => VerseValue::Covered { by: verse_no(*by) },
+                    };
+                    with(Record::Verse {
+                        book: BookId::Titus,
+                        chapter: chapter(*number),
+                        verse: VerseNo::new(*verse).unwrap(),
+                        value,
+                    })?;
+                }
+            }
+            Ok(())
+        },
     );
 }
 

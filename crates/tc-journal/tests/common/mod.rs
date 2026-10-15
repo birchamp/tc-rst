@@ -781,3 +781,68 @@ pub fn obj(fields: &[(&str, Json)]) -> Json {
             .collect(),
     )
 }
+
+// ---------------------------------------------------------------------------------------
+// Census
+// ---------------------------------------------------------------------------------------
+
+/// The states a property test claims to reach. Each run counts them and fails when one was
+/// never reached (§16.1): a generator that never builds a state tests nothing about it.
+pub struct Census {
+    expected: &'static [&'static str],
+    counts: std::cell::RefCell<BTreeMap<&'static str, u64>>,
+}
+
+impl Census {
+    pub fn new(expected: &'static [&'static str]) -> Self {
+        Self {
+            expected,
+            counts: Default::default(),
+        }
+    }
+
+    /// Counts one case that reached `state`, which must be one of the expected states.
+    pub fn saw(&self, state: &'static str) {
+        assert!(
+            self.expected.contains(&state),
+            "{state:?} is not a state of this census"
+        );
+        *self.counts.borrow_mut().entry(state).or_default() += 1;
+    }
+
+    /// Fails when an expected state was never reached.
+    pub fn check(&self) {
+        let counts = self.counts.borrow();
+        let missing: Vec<&str> = self
+            .expected
+            .iter()
+            .copied()
+            .filter(|state| !counts.contains_key(state))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "the generator never reached {missing:?}; it reached {counts:?}"
+        );
+    }
+}
+
+/// Runs a property over `cases` generated values, then checks the census of the states the
+/// values reached.
+pub fn run_with_census<S: Strategy>(
+    cases: u32,
+    strategy: S,
+    expected: &'static [&'static str],
+    test: impl Fn(S::Value, &Census) -> Result<(), TestCaseError>,
+) {
+    let census = Census::new(expected);
+    let config = ProptestConfig {
+        cases,
+        failure_persistence: None,
+        ..ProptestConfig::default()
+    };
+    let mut runner = proptest::test_runner::TestRunner::new(config);
+    if let Err(error) = runner.run(&strategy, |value| test(value, &census)) {
+        panic!("{error}");
+    }
+    census.check();
+}

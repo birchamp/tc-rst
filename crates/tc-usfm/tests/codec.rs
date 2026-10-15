@@ -6,9 +6,10 @@
 use proptest::prelude::*;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 use tc_usfm::codec::{
-    BookParts, ChapterParts, DecomposeProblem, LayoutItem, MarkerTerm, MarkerWs, StructureIssue,
-    VersePart, VerseText, decompose, decompose_bytes, has_verse_or_chapter_marker,
+    BookParts, ChapterParts, DecomposeProblem, LayoutItem, MAX_BOOK_VERSES, MarkerTerm, MarkerWs,
+    StructureIssue, VersePart, VerseText, decompose, decompose_bytes, has_verse_or_chapter_marker,
     is_layout_only_line, is_valid_layout, join_verse, recompose, split_verse,
 };
 
@@ -202,10 +203,55 @@ fn refusals_name_the_line_and_the_problem() {
 
 #[test]
 fn chapter_numbers_may_have_leading_zeros_because_fronts_are_verbatim() {
-    let text = "\\c 01\n\\v 1 a\n";
-    let parts = decompose(text).unwrap();
-    assert!(parts.chapters.contains_key(&1));
-    assert_eq!(recompose(&parts).usfm, text);
+    for (text, number) in [
+        ("\\c 01\n\\v 1 a\n", 1),
+        ("\\id TIT\n\\c 000001\n\\v 1 a\n", 1),
+        ("\\c 0000000000000000000002\n\\v 1 a\n", 2),
+    ] {
+        let parts = decompose(text).unwrap();
+        assert_eq!(parts.chapters.keys().copied().collect::<Vec<_>>(), [number]);
+        assert_eq!(recompose(&parts).usfm, text);
+    }
+}
+
+/// Each verse is a record, so a few bytes of `\v 1-65535` must not stand for millions of
+/// them: the work and the memory of a decode follow the size of the file, never the length
+/// of its spans (§13.5).
+#[test]
+fn a_book_holds_at_most_65535_verses() {
+    let whole = "\\c 1\n\\v 1-65535 x\n";
+    let parts = decompose(whole).unwrap();
+    assert_eq!(parts.chapters[&1].verses.len(), MAX_BOOK_VERSES);
+    assert_eq!(recompose(&parts).usfm, whole);
+    let refusal = |book: &str| decompose(book).err().map(|e| (e.line, e.problem));
+    let one_more = format!("{whole}\\c 2\n\\v 1 y\n");
+    assert_eq!(
+        refusal(&one_more),
+        Some((4, DecomposeProblem::TooManyVerses))
+    );
+
+    // 400 chapters of the longest span are 7.9 KB, and stood for 26 million verses.
+    let started = Instant::now();
+    let book: String = (1..=400)
+        .map(|c| format!("\\c {c}\n\\v 1-65535 x\n"))
+        .collect();
+    assert_eq!(refusal(&book), Some((4, DecomposeProblem::TooManyVerses)));
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "{:?}",
+        started.elapsed()
+    );
+
+    // Short spans count verse by verse, too: three chapters of 4,400 spans of five verses
+    // are 66,000 verses, and the 4,308th span of the third chapter is one too many.
+    let spans: String = (0..4_400)
+        .map(|i| format!("\\v {}-{} x\n", 5 * i + 1, 5 * i + 5))
+        .collect();
+    let book = format!("\\c 1\n{spans}\\c 2\n{spans}\\c 3\n{spans}");
+    assert_eq!(
+        refusal(&book),
+        Some((2 * 4_401 + 1 + 4_308, DecomposeProblem::TooManyVerses))
+    );
 }
 
 #[test]
