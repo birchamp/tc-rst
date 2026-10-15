@@ -16,6 +16,7 @@ unicode-normalization.workspace = true
 yaml-rust2 = { version = "0.13", default-features = false }
 
 [dev-dependencies]
+md-5.workspace = true
 proptest.workspace = true
 # The v91 tests read the burrito exports in bundle/en.
 zip.workspace = true

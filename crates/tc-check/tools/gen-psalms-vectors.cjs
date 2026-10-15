@@ -12,13 +12,15 @@
 //   [checkId, chapter, verse] in order. tc-check reports those rows instead of deriving
 //   them, because a check key's occurrence is a u32 (STORAGE.md §2.2).
 // - fixtures/helps/v91-tsv-rows.json: for every TSV of en_tn, en_twl and en_tq v91, the
-//   number of rows tC4's TSV reader returns and the lines it skips.
+//   number of rows tC4's TSV reader returns, the md5 of their identities in order (one
+//   `checkId|chapter|verse|occurrence` line each, joined by "\n"), and the lines it skips.
 //
 // It bundles tC4's sources with the esbuild in tC4's node_modules, as
 // crates/tc-align/tools/gen-align-vectors.cjs does, so the vectors come from the code tC4
 // runs. Run from the repository root with a tC4 checkout at the commit fixtures/tc4 came
 // from:
 //   node crates/tc-check/tools/gen-psalms-vectors.cjs /path/to/translationcore4
+const { execFileSync } = require("child_process");
 const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
@@ -39,6 +41,12 @@ for (const [name, version] of Object.entries(pinned)) {
   if (found !== version) throw new Error(`expected ${name}@${version}, found ${found}`);
 }
 const tc4Package = JSON.parse(fs.readFileSync(path.join(tc4, "package.json"), "utf8"));
+// The vectors name the tC4 commit they come from, so the code bundled must be that commit.
+const git = (...args) => execFileSync("git", ["-C", tc4, ...args], { encoding: "utf8" }).trim();
+const tc4Commit = git("rev-parse", "HEAD");
+if (git("status", "--porcelain", "--untracked-files=no", "--", "src")) {
+  throw new Error(`${tc4} has local changes in src/; the vectors must come from a commit`);
+}
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "tc-check-psalms-"));
 const entry = path.join(work, "entry.ts");
@@ -101,7 +109,12 @@ for (const repo of ["en_tn", "en_twl", "en_tq"]) {
       .map((line, i) => [line, i + 1])
       .filter(([line]) => line.trim() === "")
       .map(([, n]) => n);
-    rows[repo][book] = { rows: reader[repo](tsv, book.toLowerCase()).length, skipped };
+    const items = reader[repo](tsv, book.toLowerCase());
+    const lines = items.map((it) => {
+      const c = it.contextId;
+      return [c.checkId, c.reference.chapter, c.reference.verse, c.occurrence].join("|");
+    });
+    rows[repo][book] = { rows: items.length, md5: md5(lines.join("\n")), skipped };
   }
 }
 
@@ -176,7 +189,7 @@ const main = async () => {
     }
   }
 
-  const tc4Source = { commit: "d494a9d6ba9f4cdcc09faff9038c93159106045b", version: tc4Package.version };
+  const tc4Source = { commit: tc4Commit, version: tc4Package.version };
   const write = (file, body) => {
     const text = JSON.stringify(
       { generator: "crates/tc-check/tools/gen-psalms-vectors.cjs", tc4: tc4Source, libraries: pinned, inputs, ...body },
@@ -192,7 +205,7 @@ const main = async () => {
     books,
   });
   write("fixtures/helps/v91-tsv-rows.json", {
-    note: "rows: the length of deriveTnItems(keepPlain) / deriveTwlItems / deriveTqItems; skipped: the lines (from 1 at the header) tsvRows drops",
+    note: "rows: the length of deriveTnItems(keepPlain) / deriveTwlItems / deriveTqItems; md5: of their identities in order, one checkId|chapter|verse|occurrence line each, joined by a newline; skipped: the lines (from 1 at the header) tsvRows drops",
     rows,
   });
 };

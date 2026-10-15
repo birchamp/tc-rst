@@ -11,14 +11,17 @@ mod common;
 use std::collections::BTreeMap;
 
 use common::{export_tables, fixture};
+use md5::{Digest, Md5};
 use serde_json::Value;
 use tc_core::{BookId, Reference};
 use tc_helps::metadata::{DcsPin, HelpsSource};
 use tc_helps::tsv::{
-    NotesLayout, TsvScope, WordLinkStyle, parse_notes, parse_questions, parse_word_links,
-    write_notes, write_word_links,
+    NotesLayout, ReadCells, TsvScope, WordLinkStyle, parse_notes, parse_questions,
+    parse_word_links, write_notes, write_word_links,
 };
-use tc_helps::{BibleLocus, BibleRef, CheckReadiness, CommitSha, HelpRef, Helps, Note};
+use tc_helps::{
+    BibleLocus, BibleRef, CheckReadiness, CommitSha, HelpItemId, HelpRef, Helps, Note, Occurrence,
+};
 
 const PSA: TsvScope = TsvScope::Book(BookId::Psalms);
 
@@ -38,6 +41,46 @@ fn blank_lines(text: &str) -> Vec<u64> {
         .collect()
 }
 
+/// A row as tC4's reader identifies it, `checkId|chapter|verse|occurrence`: the
+/// `Reference` cell as written, split on `:` with digits read as a number (`refPart`), and
+/// the `Occurrence` cell read with `Number()`, which makes an empty cell 0.
+fn tc4_identity(
+    id: &HelpItemId,
+    reference: &HelpRef,
+    occurrence: Occurrence,
+    read_from: Option<&ReadCells>,
+) -> String {
+    let HelpItemId::Row(id) = id else {
+        panic!("{id:?}")
+    };
+    let cell = read_from
+        .and_then(|r| r.get("Reference"))
+        .map_or_else(|| reference.tsv_text(), str::to_owned);
+    let ref_part = |part: &str| {
+        if !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()) {
+            part.parse::<u64>().unwrap().to_string()
+        } else {
+            part.to_owned()
+        }
+    };
+    let mut parts = cell.split(':');
+    let chapter = ref_part(parts.next().unwrap());
+    let verse = ref_part(parts.next().unwrap());
+    let occurrence = match occurrence {
+        Occurrence::Nth(n) => i64::from(n.get()),
+        Occurrence::NotTied | Occurrence::Unrecorded => 0,
+        Occurrence::All => -1,
+    };
+    format!("{}|{chapter}|{verse}|{occurrence}", id.as_str())
+}
+
+fn digest(lines: &[String]) -> String {
+    Md5::digest(lines.join("\n").as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
 #[test]
 fn every_v91_table_reads_and_keeps_every_row_tc4_reads() {
     let expected = tc4_rows();
@@ -52,14 +95,42 @@ fn every_v91_table_reads_and_keeps_every_row_tc4_reads() {
         for (code, text) in &tables {
             let book: BookId = code.parse().unwrap();
             let scope = TsvScope::Book(book);
-            let read = match repo {
-                "en_tn" => parse_notes(text, scope).map(|n| n.notes.len()),
-                "en_twl" => parse_word_links(text, scope).map(|l| l.len()),
-                _ => parse_questions(text, scope).map(|q| q.len()),
+            let identities = match repo {
+                "en_tn" => parse_notes(text, scope).map(|n| {
+                    n.notes
+                        .iter()
+                        .map(|n| {
+                            tc4_identity(&n.id, &n.reference, n.occurrence, n.read_from.as_ref())
+                        })
+                        .collect::<Vec<_>>()
+                }),
+                "en_twl" => parse_word_links(text, scope).map(|links| {
+                    links
+                        .iter()
+                        .map(|l| {
+                            tc4_identity(&l.id, &l.reference, l.occurrence, l.read_from.as_ref())
+                        })
+                        .collect()
+                }),
+                _ => parse_questions(text, scope).map(|questions| {
+                    questions
+                        .iter()
+                        .map(|q| {
+                            tc4_identity(&q.id, &q.reference, q.occurrence, q.read_from.as_ref())
+                        })
+                        .collect()
+                }),
             };
-            let read = read.unwrap_or_else(|e| panic!("{repo} {code}: {e}"));
+            let identities = identities.unwrap_or_else(|e| panic!("{repo} {code}: {e}"));
+            let read = identities.len();
             let tc4 = &expected["rows"][repo][code];
             assert_eq!(Some(read as u64), tc4["rows"].as_u64(), "{repo} {code}");
+            // The same rows in the same order, each with the place and occurrence tC4 gives it.
+            assert_eq!(
+                Some(digest(&identities).as_str()),
+                tc4["md5"].as_str(),
+                "{repo} {code}"
+            );
             // The only lines either reader skips: the empty line after each file's final
             // newline. Every other line is a row, in both readers.
             let skipped = blank_lines(text);

@@ -29,719 +29,896 @@
    "sha256": "7e5fa483c5c9783b7f85d7107c8bec8f6ae9bd2cb7736287d5bfce409e0d6577"
   }
  },
- "note": "rows: the length of deriveTnItems(keepPlain) / deriveTwlItems / deriveTqItems; skipped: the lines (from 1 at the header) tsvRows drops",
+ "note": "rows: the length of deriveTnItems(keepPlain) / deriveTwlItems / deriveTqItems; md5: of their identities in order, one checkId|chapter|verse|occurrence line each, joined by a newline; skipped: the lines (from 1 at the header) tsvRows drops",
  "rows": {
   "en_tn": {
    "1CO": {
     "rows": 2524,
+    "md5": "3d0e07d81f96622b5da1bd0bc56f1926",
     "skipped": [2526]
    },
    "1JN": {
     "rows": 637,
+    "md5": "0acd45294bf9a50d5c47d9beefe12f7d",
     "skipped": [639]
    },
    "1KI": {
     "rows": 2364,
+    "md5": "1c3395c0c0d0ea3fb11e681bc2895602",
     "skipped": [2366]
    },
    "1PE": {
     "rows": 497,
+    "md5": "f8e7f3377db11b5f749e628a6af525f1",
     "skipped": [499]
    },
    "1SA": {
     "rows": 2656,
+    "md5": "2fee93a43112f8447152056ed428c837",
     "skipped": [2658]
    },
    "1TH": {
     "rows": 529,
+    "md5": "6952c525078ad67d5ccf20b411db3d29",
     "skipped": [531]
    },
    "1TI": {
     "rows": 644,
+    "md5": "8a1ee77957b2857822e51b3424924c7d",
     "skipped": [646]
    },
    "2CO": {
     "rows": 1518,
+    "md5": "d2b1ae57501389f6d09092576a2d4429",
     "skipped": [1520]
    },
    "2JN": {
     "rows": 66,
+    "md5": "70610c26da05e5957617940e43d43965",
     "skipped": [68]
    },
    "2KI": {
     "rows": 1810,
+    "md5": "5d3cbbc3ad052a33b412d85c144bb624",
     "skipped": [1812]
    },
    "2PE": {
     "rows": 474,
+    "md5": "bc5e04ba3f64120a4d355e4bb55c606d",
     "skipped": [476]
    },
    "2SA": {
     "rows": 2121,
+    "md5": "7dce1b0c13056ef70ccc1c7262248582",
     "skipped": [2123]
    },
    "2TH": {
     "rows": 197,
+    "md5": "f35a20e5614047b21f41e873a60c6320",
     "skipped": [199]
    },
    "2TI": {
     "rows": 436,
+    "md5": "5dee11288c500c4b8aeae04d5ac110d1",
     "skipped": [438]
    },
    "3JN": {
     "rows": 57,
+    "md5": "257e2a7955fc347afd228617e2457257",
     "skipped": [59]
    },
    "ACT": {
     "rows": 3516,
+    "md5": "f4dd8f1cb954b2708aa489b4cac45ccd",
     "skipped": [3518]
    },
    "AMO": {
     "rows": 578,
+    "md5": "598384336021955cf0567ffa5000c144",
     "skipped": [580]
    },
    "COL": {
     "rows": 579,
+    "md5": "6f5c6b8a687bc51cb219d3c45ad9fd25",
     "skipped": [581]
    },
    "DAN": {
     "rows": 1021,
+    "md5": "ae577138a027c087c8479742785feef2",
     "skipped": [1023]
    },
    "DEU": {
     "rows": 3021,
+    "md5": "fe1790d61c7cd8f37e16a2f417659073",
     "skipped": [3023]
    },
    "EPH": {
     "rows": 454,
+    "md5": "221aa907c5b2e5941ccb726c416ef24d",
     "skipped": [456]
    },
    "EST": {
     "rows": 1071,
+    "md5": "389afcaee35093fb339e4945393484a9",
     "skipped": [1073]
    },
    "EXO": {
     "rows": 2545,
+    "md5": "1019028e052ebdf81785fa1cc04975e2",
     "skipped": [2547]
    },
    "EZR": {
     "rows": 1328,
+    "md5": "6af2bdb3380ba28b4b439c3595dacbe5",
     "skipped": [1330]
    },
    "GAL": {
     "rows": 847,
+    "md5": "287843059f881b3d56b654ef6b5520c2",
     "skipped": [849]
    },
    "GEN": {
     "rows": 5760,
+    "md5": "301d1cfdfaef8080b3387165558aceb7",
     "skipped": [5762]
    },
    "HAB": {
     "rows": 252,
+    "md5": "7e4074aa184f67f4240a4b3b7024c9e8",
     "skipped": [254]
    },
    "HAG": {
     "rows": 153,
+    "md5": "a5e66f4a6ded0678f509ea94b5a98010",
     "skipped": [155]
    },
    "HEB": {
     "rows": 1781,
+    "md5": "5b34cacb922383da1b5d1054290786ed",
     "skipped": [1783]
    },
    "HOS": {
     "rows": 764,
+    "md5": "53e34ffd28f9db391b11a8c207447692",
     "skipped": [766]
    },
    "JAS": {
     "rows": 632,
+    "md5": "55298e34a4a331c8fd6670288bc06b0a",
     "skipped": [634]
    },
    "JDG": {
     "rows": 1660,
+    "md5": "df1e35dc2cd8b4f5c9bf75e272b680ef",
     "skipped": [1662]
    },
    "JHN": {
     "rows": 2645,
+    "md5": "2a82eef4a1490397254f447cf3e2c4ce",
     "skipped": [2647]
    },
    "JOB": {
     "rows": 3320,
+    "md5": "cbdd94b33c8db2b190f08f1a9bd2ad43",
     "skipped": [3322]
    },
    "JOL": {
     "rows": 305,
+    "md5": "82810bab2d9a39fffe5a0757b139a6ae",
     "skipped": [307]
    },
    "JON": {
     "rows": 196,
+    "md5": "22bbc122407826d523d5e34e5a07acda",
     "skipped": [198]
    },
    "JOS": {
     "rows": 1030,
+    "md5": "f01885663180af3de4ccb8bf5745910a",
     "skipped": [1032]
    },
    "JUD": {
     "rows": 160,
+    "md5": "933374493a8dd3d07b8133d415333ecf",
     "skipped": [162]
    },
    "LAM": {
     "rows": 400,
+    "md5": "9d1d70cd7c182898e97f7f6f19cc3d54",
     "skipped": [402]
    },
    "LEV": {
     "rows": 2113,
+    "md5": "46b3bb2abe762909320501af2af1b30e",
     "skipped": [2115]
    },
    "LUK": {
     "rows": 4434,
+    "md5": "63e5623428142d0269e8e6332b408fde",
     "skipped": [4436]
    },
    "MAL": {
     "rows": 252,
+    "md5": "82c4ba587ea4eb1475735b4f96e32c30",
     "skipped": [254]
    },
    "MAT": {
     "rows": 5311,
+    "md5": "66380f5bdad42d6d3c470970d4761863",
     "skipped": [5313]
    },
    "MIC": {
     "rows": 491,
+    "md5": "69d3f8b38e9905d934306b6597739940",
     "skipped": [493]
    },
    "MRK": {
     "rows": 3116,
+    "md5": "d8167bf85ff1db284e195313eb9adc6f",
     "skipped": [3118]
    },
    "NAM": {
     "rows": 200,
+    "md5": "48f96ea745c86ed7d648576009411ec2",
     "skipped": [202]
    },
    "NEH": {
     "rows": 1884,
+    "md5": "22ff76e32139d4a8fd1df5d14b26977f",
     "skipped": [1886]
    },
    "OBA": {
     "rows": 153,
+    "md5": "01ca5650a058827f0644839144d8ec60",
     "skipped": [155]
    },
    "PHM": {
     "rows": 93,
+    "md5": "857e9e7edbf2399436e7592b183c12ea",
     "skipped": [95]
    },
    "PHP": {
     "rows": 450,
+    "md5": "a1a296c0ee2b47a3210c1fb5e05bae18",
     "skipped": [452]
    },
    "PRO": {
     "rows": 4074,
+    "md5": "9b91845a6a888dbeaae2439b715679c0",
     "skipped": [4076]
    },
    "PSA": {
     "rows": 8212,
+    "md5": "545cfa97181bae936dc9b8fa332deb91",
     "skipped": [8214]
    },
    "REV": {
     "rows": 1333,
+    "md5": "036a41cbfc373f22c8bba36ff97fe786",
     "skipped": [1335]
    },
    "ROM": {
     "rows": 2740,
+    "md5": "9315d32b17e45ec12170ebc59b5d5a97",
     "skipped": [2742]
    },
    "RUT": {
     "rows": 293,
+    "md5": "c867f1480662969fb681ae62c48e878c",
     "skipped": [295]
    },
    "SNG": {
     "rows": 554,
+    "md5": "eb7ab11c03a930da20c077a69654aa21",
     "skipped": [556]
    },
    "TIT": {
     "rows": 206,
+    "md5": "8ec65d51ecd611eb71e785aaf47ec5ee",
     "skipped": [208]
    },
    "ZEC": {
     "rows": 826,
+    "md5": "2f7c238942bef4e37811d05c222c3e16",
     "skipped": [828]
    },
    "ZEP": {
     "rows": 290,
+    "md5": "09752360d72d8282262e4463efdf4ad7",
     "skipped": [292]
    }
   },
   "en_twl": {
    "1CO": {
     "rows": 1366,
+    "md5": "5296aa6cc50ac95526cf34fbeae9cd07",
     "skipped": [1368]
    },
    "1JN": {
     "rows": 393,
+    "md5": "ce6eefb2fd046a2e2222274b2a4f6030",
     "skipped": [395]
    },
    "1KI": {
     "rows": 4245,
+    "md5": "ce48ba7e8f34cd88a8e6bc4012da061e",
     "skipped": [4247]
    },
    "1PE": {
     "rows": 483,
+    "md5": "79a31b1a3ed704b29c9b67801034e77a",
     "skipped": [485]
    },
    "1SA": {
     "rows": 4017,
+    "md5": "d7b3dc0a81c3f281b280596ab42f49f0",
     "skipped": [4019]
    },
    "1TH": {
     "rows": 301,
+    "md5": "a79563327e932bd4acab9cecac44fe30",
     "skipped": [303]
    },
    "1TI": {
     "rows": 394,
+    "md5": "3ab57633536134f48a070622af827541",
     "skipped": [396]
    },
    "2CO": {
     "rows": 756,
+    "md5": "21959d7cb0d61a68781038966293d935",
     "skipped": [758]
    },
    "2JN": {
     "rows": 41,
+    "md5": "447a4aed40cec4fdb43abc4eccecf94d",
     "skipped": [43]
    },
    "2KI": {
     "rows": 4260,
+    "md5": "dae0507163623c547b9839f800f90d0d",
     "skipped": [4262]
    },
    "2PE": {
     "rows": 256,
+    "md5": "51f1dc0070995ad96ef2d9d34383cbca",
     "skipped": [258]
    },
    "2SA": {
     "rows": 3316,
+    "md5": "dfe41bf12120968c3271af9b5c021bc0",
     "skipped": [3318]
    },
    "2TH": {
     "rows": 188,
+    "md5": "032dc75ccdfdcabdee3ead0f8765fac0",
     "skipped": [190]
    },
    "2TI": {
     "rows": 289,
+    "md5": "d2a7ad8df347ebda6c1a9489457f934a",
     "skipped": [291]
    },
    "3JN": {
     "rows": 40,
+    "md5": "a0e913bb601c3b025945cf892fdee6a4",
     "skipped": [42]
    },
    "ACT": {
     "rows": 3251,
+    "md5": "20efeb9afd2d9137fbaffd9f8b413903",
     "skipped": [3253]
    },
    "AMO": {
     "rows": 590,
+    "md5": "89885b7a50d36ad24b8b271730b54841",
     "skipped": [592]
    },
    "COL": {
     "rows": 340,
+    "md5": "68a0257cfe5bc138fd23900e4863cefe",
     "skipped": [342]
    },
    "DAN": {
     "rows": 1801,
+    "md5": "92f3b788da38dc9737548396e0e7b034",
     "skipped": [1803]
    },
    "DEU": {
     "rows": 3984,
+    "md5": "6576630297ef58e57214a44f1c34f63e",
     "skipped": [3986]
    },
    "EPH": {
     "rows": 524,
+    "md5": "78d14eaf085e7e7e0a2d6119591c032e",
     "skipped": [526]
    },
    "EST": {
     "rows": 1044,
+    "md5": "5766374d038df97d38d6b160d674c717",
     "skipped": [1046]
    },
    "EXO": {
     "rows": 4284,
+    "md5": "e50a8996b6404bc14bf4d1871d01b1e4",
     "skipped": [4286]
    },
    "EZR": {
     "rows": 1212,
+    "md5": "16d995206b28b23e2426fa3644179aca",
     "skipped": [1214]
    },
    "GAL": {
     "rows": 548,
+    "md5": "36efe09eab2787b69d90ad2f67c2e1d2",
     "skipped": [550]
    },
    "GEN": {
     "rows": 5640,
+    "md5": "89cdda7c6b4f33867687cc0826c892c0",
     "skipped": [5642]
    },
    "HAB": {
     "rows": 220,
+    "md5": "5dc531cc0a572b52024ff495f342438f",
     "skipped": [222]
    },
    "HAG": {
     "rows": 189,
+    "md5": "7309b89da1b8b9b9091da98ef8b1cd07",
     "skipped": [191]
    },
    "HEB": {
     "rows": 1046,
+    "md5": "f6c06c9bb0d13878a91b1c87b87c56fb",
     "skipped": [1048]
    },
    "HOS": {
     "rows": 822,
+    "md5": "121c298114923386fc08dfd81fb0d325",
     "skipped": [824]
    },
    "JAS": {
     "rows": 352,
+    "md5": "cc5a0e0d36dfd4910f7eb4eb6d89cf05",
     "skipped": [354]
    },
    "JDG": {
     "rows": 2605,
+    "md5": "e4e2c993d1a3534a3f9a802e96656355",
     "skipped": [2607]
    },
    "JHN": {
     "rows": 2621,
+    "md5": "c4b678f14e669842e0137671e0f3728d",
     "skipped": [2623]
    },
    "JOB": {
     "rows": 2065,
+    "md5": "b5f374c3f76d46fbec1964574ffd3cd6",
     "skipped": [2067]
    },
    "JOL": {
     "rows": 320,
+    "md5": "23c3adc0871925d0141cdc259fb7848b",
     "skipped": [322]
    },
    "JON": {
     "rows": 200,
+    "md5": "bc6180a9fcdf894359fc0c090f142292",
     "skipped": [202]
    },
    "JOS": {
     "rows": 2942,
+    "md5": "5ba0ab2d0705843e0abd7266c926724d",
     "skipped": [2944]
    },
    "JUD": {
     "rows": 124,
+    "md5": "190717e4d97034e0958457f494215be4",
     "skipped": [126]
    },
    "LAM": {
     "rows": 426,
+    "md5": "e56d92191fb31d46428a5899f27c8366",
     "skipped": [428]
    },
    "LEV": {
     "rows": 1982,
+    "md5": "125396d59a0dbde492ba8bf80e8af264",
     "skipped": [1984]
    },
    "LUK": {
     "rows": 2958,
+    "md5": "ee4c362729a3a7b2be4c36c69de27f58",
     "skipped": [2960]
    },
    "MAL": {
     "rows": 280,
+    "md5": "adfe24f9ed4c4fe805cab0324c73b344",
     "skipped": [282]
    },
    "MAT": {
     "rows": 3100,
+    "md5": "e849322b804a73b9f55b511964e3f7da",
     "skipped": [3102]
    },
    "MIC": {
     "rows": 446,
+    "md5": "f35d7657904e9af47276958accb49a82",
     "skipped": [448]
    },
    "MRK": {
     "rows": 1614,
+    "md5": "5eb79a74ea3ffe1fdae643fc6e89cdbb",
     "skipped": [1616]
    },
    "NAM": {
     "rows": 189,
+    "md5": "2b5494c9b5c263f75c5a8fe97adf2805",
     "skipped": [191]
    },
    "NEH": {
     "rows": 1442,
+    "md5": "bb33763dad9218663c068af9e3624c50",
     "skipped": [1444]
    },
    "OBA": {
     "rows": 106,
+    "md5": "4ce0d358a9228de0862c63cd5e3310dd",
     "skipped": [108]
    },
    "PHM": {
     "rows": 74,
+    "md5": "c9b23a1507ce334857c4691dc0fc42cc",
     "skipped": [76]
    },
    "PHP": {
     "rows": 363,
+    "md5": "6a780d4e0a2e05224e9ae4d3fe7dc79d",
     "skipped": [365]
    },
    "PRO": {
     "rows": 2648,
+    "md5": "82757ba62558aa42525e8252c81d9fd4",
     "skipped": [2650]
    },
    "PSA": {
     "rows": 7683,
+    "md5": "0e7b712e86c9cf283303bba82139ae76",
     "skipped": [7685]
    },
    "REV": {
     "rows": 1734,
+    "md5": "e31968b70328715fa1d84aac1aa1203e",
     "skipped": [1736]
    },
    "ROM": {
     "rows": 1665,
+    "md5": "f5278656b5f55e45acebefe66f86282f",
     "skipped": [1667]
    },
    "RUT": {
     "rows": 297,
+    "md5": "28314e33c9aff089f013b69d7a45d95a",
     "skipped": [299]
    },
    "SNG": {
     "rows": 332,
+    "md5": "7597521c744dfc083898b375d2884bcd",
     "skipped": [334]
    },
    "TIT": {
     "rows": 182,
+    "md5": "c5b4a569c3e98b080eda1cd1f02b5434",
     "skipped": [184]
    },
    "ZEC": {
     "rows": 874,
+    "md5": "b6226620017f0bfdb9c4377849a78300",
     "skipped": [876]
    },
    "ZEP": {
     "rows": 300,
+    "md5": "45909dfc34423413de04408c0005e209",
     "skipped": [302]
    }
   },
   "en_tq": {
    "1CO": {
     "rows": 258,
+    "md5": "c4a9c27223ea254e9a28a3598e072fd8",
     "skipped": [260]
    },
    "1JN": {
     "rows": 69,
+    "md5": "3dcb7a7a055e43586cdface1cc702166",
     "skipped": [71]
    },
    "1KI": {
     "rows": 449,
+    "md5": "084d77aaa631b7eacce0b6ea6e49da71",
     "skipped": [451]
    },
    "1PE": {
     "rows": 69,
+    "md5": "686e6f5c510db7566e1c0121b26b85a5",
     "skipped": [71]
    },
    "1SA": {
     "rows": 406,
+    "md5": "9876ed92d8cdfd61d8759013bc9010b0",
     "skipped": [408]
    },
    "1TH": {
     "rows": 51,
+    "md5": "d46400c5c1fce7d1a539722c99b583c5",
     "skipped": [53]
    },
    "1TI": {
     "rows": 68,
+    "md5": "44db488be5b9c402a234127432b59007",
     "skipped": [70]
    },
    "2CO": {
     "rows": 142,
+    "md5": "6d5c312e0c100f4d87aad83bf0ff1554",
     "skipped": [144]
    },
    "2JN": {
     "rows": 11,
+    "md5": "9cc998a3fa42fce8e13c673d56a5abcb",
     "skipped": [13]
    },
    "2KI": {
     "rows": 254,
+    "md5": "88ed64f372f42a10731566693f27a9dc",
     "skipped": [256]
    },
    "2PE": {
     "rows": 29,
+    "md5": "579abc509742b42bc27937e9e73eca8d",
     "skipped": [31]
    },
    "2SA": {
     "rows": 361,
+    "md5": "c30f7a0df534543a7b1b3e81a1fe3062",
     "skipped": [363]
    },
    "2TH": {
     "rows": 31,
+    "md5": "dfedcc0c56cff40855d72b13af1fc269",
     "skipped": [33]
    },
    "2TI": {
     "rows": 55,
+    "md5": "2b17ef8867257612300fef32a8aecd08",
     "skipped": [57]
    },
    "3JN": {
     "rows": 15,
+    "md5": "3bd4081128ec39f94d948ab6753178f9",
     "skipped": [17]
    },
    "ACT": {
     "rows": 440,
+    "md5": "14f7ce088e89c76bc6e36cbd74c69212",
     "skipped": [442]
    },
    "AMO": {
     "rows": 143,
+    "md5": "495495c0a7a1e789baea42277e0fa013",
     "skipped": [145]
    },
    "COL": {
     "rows": 67,
+    "md5": "a3cd8d34516de0960c3a43d6913f5e65",
     "skipped": [69]
    },
    "DAN": {
     "rows": 339,
+    "md5": "732c476aadf72a580ebdb1c66b9083c8",
     "skipped": [341]
    },
    "DEU": {
     "rows": 482,
+    "md5": "cb4af50184083244b714aa0abd24128c",
     "skipped": [484]
    },
    "EPH": {
     "rows": 94,
+    "md5": "9dd925fdc099741b7236009298b4e8cb",
     "skipped": [96]
    },
    "EST": {
     "rows": 85,
+    "md5": "7d31ef0f44bcbf77319d156ab941d78b",
     "skipped": [87]
    },
    "EXO": {
     "rows": 420,
+    "md5": "413dfeeb731059003564166f7861a857",
     "skipped": [422]
    },
    "EZR": {
     "rows": 72,
+    "md5": "53ba71ab9cb5724457ee102f4c5898e5",
     "skipped": [74]
    },
    "GAL": {
     "rows": 86,
+    "md5": "de4997897e77a28b809b68386f7fcd65",
     "skipped": [88]
    },
    "GEN": {
     "rows": 678,
+    "md5": "2423c748498969f9a6aaf9bb69b1e2cc",
     "skipped": [680]
    },
    "HAB": {
     "rows": 38,
+    "md5": "a18da994eadf3a37d0f9194b13eec07f",
     "skipped": [40]
    },
    "HAG": {
     "rows": 22,
+    "md5": "bb3b16d926b5d72eb3168e5b4b5c949b",
     "skipped": [24]
    },
    "HEB": {
     "rows": 205,
+    "md5": "4e4c2844fe584068953b33cd4304e491",
     "skipped": [207]
    },
    "HOS": {
     "rows": 195,
+    "md5": "46047cf7ed81d5b02285eed5b14be22f",
     "skipped": [197]
    },
    "JAS": {
     "rows": 72,
+    "md5": "95dffbed5ca030c00f2daad82fcdd6e4",
     "skipped": [74]
    },
    "JDG": {
     "rows": 220,
+    "md5": "3c9885763086f2c79d127fd1d1730981",
     "skipped": [222]
    },
    "JHN": {
     "rows": 468,
+    "md5": "c9e71d5b91df01d6a654c1de86a07f9c",
     "skipped": [470]
    },
    "JOB": {
     "rows": 485,
+    "md5": "a3e87a5179aec8cc1f82cfd236211f52",
     "skipped": [487]
    },
    "JOL": {
     "rows": 43,
+    "md5": "1c99d327c50e9fe45ad51e5706efb18d",
     "skipped": [45]
    },
    "JON": {
     "rows": 34,
+    "md5": "9485434406697a3e642ebf7f61b9e0ec",
     "skipped": [36]
    },
    "JOS": {
     "rows": 183,
+    "md5": "060803b14b898d347371a3c2a2177061",
     "skipped": [185]
    },
    "JUD": {
     "rows": 26,
+    "md5": "a795aec6b1cd5e8eebfac758dcf341ef",
     "skipped": [28]
    },
    "LAM": {
     "rows": 91,
+    "md5": "fc540ab7daf7db5b63bb9b4e09ba0df2",
     "skipped": [93]
    },
    "LEV": {
     "rows": 232,
+    "md5": "ec11127f4f8a00d83b63afb900f813cd",
     "skipped": [234]
    },
    "LUK": {
     "rows": 413,
+    "md5": "3fe9540430b70357a82f26bc8ddfee60",
     "skipped": [415]
    },
    "MAL": {
     "rows": 30,
+    "md5": "37a384b2abfaec83b213d6946426c3a6",
     "skipped": [32]
    },
    "MAT": {
     "rows": 484,
+    "md5": "b6508c06cbc5f1e9d0e0f782d915a26a",
     "skipped": [486]
    },
    "MIC": {
     "rows": 104,
+    "md5": "69401a8a13fae47c8f677b47cd322b88",
     "skipped": [106]
    },
    "MRK": {
     "rows": 314,
+    "md5": "097cd6d444f6ef682b86958553f7a8c0",
     "skipped": [316]
    },
    "NAM": {
     "rows": 28,
+    "md5": "42fb613829f6763bc742da3e14a9fcaa",
     "skipped": [30]
    },
    "NEH": {
     "rows": 131,
+    "md5": "f4786dc6867a2ff6b1f9c3f25c07df6f",
     "skipped": [133]
    },
    "OBA": {
     "rows": 12,
+    "md5": "3de7af56c491cd7af41d246fd82515dc",
     "skipped": [14]
    },
    "PHM": {
     "rows": 18,
+    "md5": "26affd1a6b34dc5936405bcb3eaed3b1",
     "skipped": [20]
    },
    "PHP": {
     "rows": 57,
+    "md5": "829aa70cb7e6c6eb309ca249de9843d4",
     "skipped": [59]
    },
    "PRO": {
     "rows": 421,
+    "md5": "d51ae4bb58f68361f23ce479fc17aaa7",
     "skipped": [423]
    },
    "PSA": {
     "rows": 1661,
+    "md5": "5811894ec7e327686965609815021f55",
     "skipped": [1663]
    },
    "REV": {
     "rows": 281,
+    "md5": "0aaed81eda4345592fd0f9f4a94d340d",
     "skipped": [283]
    },
    "ROM": {
     "rows": 239,
+    "md5": "4bd2bf18a342647764aad2ab5a824970",
     "skipped": [241]
    },
    "RUT": {
     "rows": 56,
+    "md5": "6c0ad1c7605ababc4b427d88f8eb50c1",
     "skipped": [58]
    },
    "SNG": {
     "rows": 146,
+    "md5": "47ce9424e6edc7f89292e64ada919c3b",
     "skipped": [148]
    },
    "TIT": {
     "rows": 36,
+    "md5": "6a101e5e349c810de5423c9775b5869b",
     "skipped": [38]
    },
    "ZEC": {
     "rows": 195,
+    "md5": "7a95febcb271d7280eda92e7d2275f7f",
     "skipped": [197]
    },
    "ZEP": {
     "rows": 25,
+    "md5": "a055c15db8897c230067939e3d93b4e2",
     "skipped": [27]
    }
   }
