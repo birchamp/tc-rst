@@ -33,10 +33,21 @@ Each export also holds a few files its metadata does not list (`README.md`, `LIC
 `.gitignore`, `.github/…`, `.gitea/…`). Nothing verified them, so the installer leaves them
 out (`tc_door43::VerifiedSbExport::unlisted`).
 
-The TWL export differs from the repository it comes from: DCS rewrites each `TWLink` from
-`rc://*/tw/dict/bible/<category>/<slug>` to `./payload/<category>/<slug>.md`, and the export
-carries the linked tW articles under `ingredients/payload/`. `tc-helps` reads both forms.
-The other TSV and USFM files are the same bytes in the export and in the repository.
+The tW and TWL exports each carry a copy of the other resource, and both copies are ignored
+(owner ruling, as tC4 D96 ruling 5). Word-link rows come only from the `translationWordsLinks`
+pin (`en_twl`), and articles come only from the `translationWords` pin (`en_tw`):
+
+- The tW export carries 66 TWL book files that DCS builds from `en_twl` master, not from the
+  pinned release (which has 59 books). They are never read, and they do not make the tW pin
+  cover any book: its articles serve every book.
+- The TWL export carries 954 tW articles under `ingredients/payload/`. They are never read,
+  and they do not make the TWL pin cover the whole Bible: its coverage is its book files.
+
+Both copies are listed and checksummed in the export's `metadata.json`, so they stay installed
+unchanged, and nothing reads them. In the TWL export DCS also rewrites each `TWLink` from
+`rc://*/tw/dict/bible/<category>/<slug>` to `./payload/<category>/<slug>.md`; `tc-helps` reads
+both forms as the same article id, which is then looked up in the `en_tw` articles. The other
+TSV and USFM files are the same bytes in the export and in the repository.
 
 ## Plain archives kept for the scale corpus
 
