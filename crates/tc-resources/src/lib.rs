@@ -5,6 +5,7 @@ mod aquifer;
 mod choice;
 mod dcs;
 mod error;
+pub mod gateway_change;
 pub mod gateways;
 mod layout;
 mod load;
@@ -13,6 +14,7 @@ pub mod resolve;
 mod sets;
 mod store;
 pub mod suite;
+pub mod updates;
 
 pub use aquifer::{
     AquiferClient, AquiferLimits, AquiferRelease, ReleaseAsset, install_aquifer,
