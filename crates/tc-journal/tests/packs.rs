@@ -460,7 +460,8 @@ proptest! {
     }
 }
 
-fn big_line(seq: u64) -> Verified {
+/// A valid change whose line, with its tab, hash and line feed, is `len` bytes long.
+fn line_of_size(seq: u64, len: usize) -> Verified {
     let base = verse_body(local(1), seq, 1, "x");
     let mut body = base.clone();
     body.record = Record::Setting {
@@ -468,12 +469,19 @@ fn big_line(seq: u64) -> Verified {
         value: Some(Json::from("")),
     };
     let empty = Change::new(body.clone()).unwrap();
-    let fill = tc_journal::rules::MAX_LINE_BYTES - empty.raw().len() - LINE_OVERHEAD;
+    let fill = len - empty.raw().len() - LINE_OVERHEAD;
     body.record = Record::Setting {
         key: SettingKey::parse("big").unwrap(),
         value: Some(Json::from("a".repeat(fill))),
     };
-    Change::new(body).unwrap().into()
+    let change = Change::new(body).unwrap();
+    assert_eq!(change.raw().len() + LINE_OVERHEAD, len);
+    change.into()
+}
+
+/// A line of the largest size a change may have.
+fn big_line(seq: u64) -> Verified {
+    line_of_size(seq, tc_journal::rules::MAX_LINE_BYTES)
 }
 
 #[test]
@@ -569,6 +577,88 @@ fn consolidation_groups_old_packs_into_packs_of_at_most_64_mib() {
         .flat_map(|r| r.entries.iter().map(Verified::id))
         .collect();
     assert_eq!(held, expected);
+}
+
+/// The 64 MiB limit is inclusive, for a consolidation as for a seal: lines that fill
+/// exactly 64 MiB with their header make one pack, and one byte more makes two.
+#[test]
+fn lines_that_fill_exactly_64_mib_make_one_pack() {
+    // Lines over 4 MiB, which V7 quarantines unread, so the test does not parse 64 MiB of
+    // JSON; a pack holds them like any other line.
+    let line = |n: u8, len: usize| {
+        let json = format!(
+            "{{\"n\":{n},\"x\":\"{}\"}}",
+            "a".repeat(len - LINE_OVERHEAD - 14)
+        );
+        assert_eq!(json.len() + LINE_OVERHEAD, len);
+        parse_change(ChangeId::of(json.as_bytes()), Arc::from(json.as_bytes()))
+    };
+    let quarter = MAX_PACK_BYTES / 4;
+    let header_of = |pack: &EncodedPack| pack.bytes.iter().position(|b| *b == b'\n').unwrap() + 1;
+    // A consolidation's header lists the two packs it replaces; a seal's lists none.
+    let replacing =
+        header_of(&encode_pack(&spec(local(9)), &changes(4), &[name(1), name(2)]).unwrap());
+    let sealing = header_of(&encode_pack(&spec(local(9)), &changes(4), &[]).unwrap());
+    let full: Vec<Verified> = (1..=3).map(|n| line(n, quarter)).collect();
+    for (extra, packs) in [(0, 1), (1, 2)] {
+        let mut lines = full.clone();
+        lines.push(line(4, quarter - replacing + extra));
+        let a = encode_pack(&spec(local(9)), &lines[..2], &[]).unwrap();
+        let b = encode_pack(&spec(local(9)), &lines[2..], &[]).unwrap();
+        let reads = [reread(&a), reread(&b)];
+        let merged = consolidate(&spec(local(9)), &[&reads[0], &reads[1]]).unwrap();
+        // Two packs that cannot share one are each a group of one, which is not rewritten.
+        assert_eq!(merged.len(), 2 - packs, "{extra} byte(s) over");
+        for pack in &merged {
+            assert_eq!(pack.bytes.len(), MAX_PACK_BYTES);
+            assert_eq!(pack.changes.len(), 4);
+            assert_eq!(reread(pack).status, PackStatus::Valid);
+        }
+
+        let mut lines = full.clone();
+        lines.push(line(4, quarter - sealing + extra));
+        let sealed = seal(&spec(local(9)), &lines).unwrap().packs;
+        assert_eq!(sealed.len(), packs, "{extra} byte(s) over");
+        assert_eq!(sealed[0].bytes.len() == MAX_PACK_BYTES, extra == 0);
+    }
+}
+
+/// Only a Local device writes pending files (§4.2): a header that names another kind of
+/// device was not written by a save, so the file is damaged and its lines salvaged.
+#[test]
+fn a_pending_header_names_a_local_device() {
+    let lines = changes(2);
+    let file = |device: DeviceId| {
+        let header = format!(
+            r#"{{"device":"{device}","pending":1,"project":"{}","purpose":"save"}}"#,
+            project()
+        );
+        let mut bytes = line_of(&header);
+        for line in &lines {
+            bytes.extend_from_slice(&encode_line(line.id(), line.raw()));
+        }
+        bytes
+    };
+    let read = read_pending(&file(local(1)), project());
+    assert_eq!(read.status, PendingStatus::Valid);
+    for kind in [
+        DeviceKind::Importer,
+        DeviceKind::Tc4Actor,
+        DeviceKind::Tc3User,
+    ] {
+        let device = DeviceId::derived(kind, b"not a save");
+        let read = read_pending(&file(device), project());
+        assert!(
+            matches!(
+                &read.status,
+                PendingStatus::Damaged(PackError::HeaderMalformed(_))
+            ),
+            "{kind:?}: {:?}",
+            read.status
+        );
+        assert_eq!(read.header, None);
+        assert_eq!(read.entries, lines);
+    }
 }
 
 #[test]

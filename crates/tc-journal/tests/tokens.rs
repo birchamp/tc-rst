@@ -85,6 +85,29 @@ fn a_token_from_another_installation_or_project_is_refused() {
     );
 }
 
+/// A token's bytes and the key it is signed with are part of the format: a screen keeps
+/// tokens across a restart (a draft, §5.14), and an app upgrade must not turn them into
+/// forgeries. The vectors were computed from §2.7 with Python's hmac module, not with this
+/// code: the token key is HMAC-SHA256 under the installation secret of
+/// `"tc4-shown-token\0" ‖ the project id's 16 bytes`.
+#[test]
+fn tokens_have_the_pinned_byte_form_and_key() {
+    let verse = ShownToken::mint(
+        &signing(),
+        RecordKey::Verse(BookId::Titus, chapter(1), verse_no(4)),
+        [ChangeId::of(b"a")],
+    )
+    .unwrap();
+    let pinned = "eyJoZWFkcyI6WyJjYTk3ODExMmNhMWJiZGNhZmFjMjMxYjM5YTIzZGM0ZGE3ODZlZmY4MTQ3YzRlNzJiOTgwNzc4NWFmZWU0OGJiIl0sImtleSI6eyJ2ZXJzZSI6eyJib29rIjoiVElUIiwiY2hhcHRlciI6MSwidmVyc2UiOjR9fX09rvbaRBHqUkSG5mlkaSPA";
+    assert_eq!(verse.to_text(), pinned);
+    assert_eq!(ShownToken::parse(&signing(), pinned), Ok(verse));
+    let empty = ShownToken::mint(&signing(), RecordKey::Versification, []).unwrap();
+    assert_eq!(
+        empty.to_text(),
+        "eyJoZWFkcyI6W10sImtleSI6eyJ2ZXJzaWZpY2F0aW9uIjp7fX199MzG6ZEyr2_zopX8XmltSw"
+    );
+}
+
 proptest! {
     /// Any change to a token's text is refused: a screen cannot claim heads it was not
     /// shown, which is what keeps a stale screen from reverting a teammate (I4).

@@ -189,6 +189,145 @@ fn v1_shape_lists_that_must_be_sorted_and_maps_that_must_be_omitted() {
     assert!(matches!(read(&json), Verified::Change(_)));
 }
 
+/// Values that have one valid form: a writer cannot produce the others, and a reader
+/// quarantines them, so every value has exactly one byte form and one meaning.
+#[test]
+fn v1_values_outside_their_grammar_are_refused() {
+    use tc_journal::record::{CheckValue, DecisionRecord, Door43Username, Judgement, ResourceRef};
+    use tc_journal::{CheckId, CheckKey, CheckTarget, GitOid, Md5, RefPart, ToolId};
+
+    // A verse marker's lead is one or more spaces or tabs: `\v1 ` is no verse marker, so a
+    // verse written with it would join the verse before it.
+    for lead in ["", "x", " x", "\n"] {
+        let mut json = json_of(&verse_body(local(1), 1, 1, "a"));
+        set(
+            &mut json,
+            &["record", "verse", "value", "text", "marker"],
+            "lead",
+            Json::from(lead),
+        );
+        assert_eq!(quarantined(read(&json)).rule(), Rule::V1, "{lead:?}");
+    }
+    assert!(tc_journal::record::MarkerWs::new("", tc_journal::record::MarkerTerm::Space).is_none());
+
+    // A Door43 user name is never empty.
+    let mut profile = verse_body(local(1), 1, 1, "a");
+    profile.record = Record::DeviceProfile {
+        device: local(1),
+        value: DeviceProfileValue {
+            display_name: None,
+            door43_username: Some(Door43Username("maria".into())),
+            legacy: None,
+        },
+    };
+    let mut json = json_of(&profile);
+    set(
+        &mut json,
+        &["record", "deviceProfile", "value"],
+        "door43Username",
+        Json::from(""),
+    );
+    assert_eq!(quarantined(read(&json)).rule(), Rule::V1);
+    if let Record::DeviceProfile { value, .. } = &mut profile.record {
+        value.door43_username = Some(Door43Username("".into()));
+    }
+    assert_eq!(refused(profile).rule(), Rule::V1);
+
+    // A resource pin always names its repository.
+    let mut decision = verse_body(local(1), 1, 1, "a");
+    let resource = |repo_path: &str| ResourceRef {
+        repo_path: repo_path.into(),
+        sha: GitOid::from_bytes([1; 20]),
+    };
+    decision.record = Record::Check {
+        key: CheckKey {
+            tool: ToolId::TranslationNotes,
+            check_id: CheckId::parse("abcd").unwrap(),
+            target: CheckTarget::Verse {
+                book: BookId::Titus,
+                chapter: RefPart::parse("1").unwrap(),
+                verse: RefPart::parse("1").unwrap(),
+            },
+            occurrence: 1,
+        },
+        value: CheckValue::Decision(DecisionRecord {
+            context: Default::default(),
+            category: None,
+            judgement: Judgement {
+                selections: None,
+                nothing_to_select: false,
+                status: None,
+                verse_text_md5: Md5::from_bytes([2; 16]),
+            },
+            comment: None,
+            bookmarked: false,
+            resource: resource("en_tn"),
+            imported_invalid: false,
+            dismissed: false,
+            extra: Default::default(),
+        }),
+    };
+    let mut json = json_of(&decision);
+    set(
+        &mut json,
+        &["record", "check", "value", "decision", "resource"],
+        "repoPath",
+        Json::from(""),
+    );
+    assert_eq!(quarantined(read(&json)).rule(), Rule::V1);
+    if let Record::Check {
+        value: CheckValue::Decision(record),
+        ..
+    } = &mut decision.record
+    {
+        record.resource = resource("");
+    }
+    assert_eq!(refused(decision).rule(), Rule::V1);
+}
+
+/// A book's passage set is written as SB writes it, and only that text reads back: any
+/// text that decodes is the text the value encodes to, so the scope has one byte form.
+#[test]
+fn a_scope_range_reads_back_only_from_its_own_text() {
+    use tc_journal::record::{BookPresence, PresentHow, Scope, ScopeRange, ScopeRanges};
+    let mut body = verse_body(local(1), 1, 1, "a");
+    body.record = Record::BookPresence {
+        book: BookId::Titus,
+        value: BookPresence::Present {
+            scope: Scope::Ranges(
+                ScopeRanges::new(vec!["1:1-9".parse::<ScopeRange>().unwrap()]).unwrap(),
+            ),
+            how: PresentHow::Added,
+        },
+    };
+    let base = json_of(&body);
+    let texts = prop::collection::vec(
+        prop::sample::select(vec![
+            "0", "1", "2", "9", "10", ":", "-", " ", "+", "\u{661}",
+        ]),
+        1..8,
+    )
+    .prop_map(|parts| parts.concat());
+    run_with_census(512, texts, &["read", "refused"], |text, census| {
+        let mut json = base.clone();
+        set(
+            &mut json,
+            &["record", "bookPresence", "value", "present", "scope"],
+            "ranges",
+            Json::Arr(vec![Json::from(text.as_str())]),
+        );
+        match read(&json) {
+            Verified::Change(change) => {
+                census.saw("read");
+                let again = Change::new(change.body().clone()).unwrap();
+                prop_assert_eq!(again.raw(), change.raw(), "{}", text);
+            }
+            Verified::Quarantined(_) => census.saw("refused"),
+        }
+        Ok(())
+    });
+}
+
 // ---------------------------------------------------------------------------------------
 // V2
 // ---------------------------------------------------------------------------------------
