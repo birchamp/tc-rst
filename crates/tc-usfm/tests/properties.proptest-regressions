@@ -1,0 +1,11 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 78a2b25ac632c9b1d0e3c6eb8a2fbe3e7cd4bae781fb2beeae6c6ba9acf78baf # shrinks to verse = "a. a", runs = [(1, 0)], split = false
+cc 6da9d646774c1d55292afd1efdab8e096db86d71a4c36105bb4a16f416c2043b # shrinks to src = "\\id TIT x\n\\h T\n\\c 1\n\\v 1 \n", pick = Index(0), new_body = "\\v 1 "
+cc 8cb35809a57e04ca0470253bb5b448bce00543500790b21133a3afd9d37bb38c # shrinks to verse = "a {a", runs = [(2, 1)], split = false
+cc 4b32503835129e1631c4a3c14c729e090b9c926d3ae86655bb95902a8e4d29fb # shrinks to verse = ("\\zaln-s |x-strong=\"G00000\" x-occurrence=\"1\" x-occurrences=\"1\" x-content=\"λ0\"\\*\n\\zaln-e\\*\\w a|x-occurrence=\"1\" x-occurrences=\"1\"\\w*", "\na", {})
+cc 629dd6c8ba55cf841783a78f4ece46a25346189020931b74aa9328901e20c6bb # shrinks to src = "\\id TIT x\n\\h T\n\\c 1\n\\v 1-2 \n\\v 3 \n\\v 4 \\v 2\r\\v 3-4 \n", pick = Index(11068046444225730970), new_body = "\n"
