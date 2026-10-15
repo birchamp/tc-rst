@@ -42,9 +42,9 @@ rebuild must stay quick at that size for the whole life of a project.
   for the 59 books those releases contain (173,337 rows) and generated rows at the v89
   counts in `fixtures/tc4/conformance-fixtures/check-density.json` for the other seven. The
   Hebrew of every Old Testament book (UHB 3.0.0) and the Greek of every New Testament book
-  (UGNT 0.34) are real, from `fixtures/scale/resources/`.
+  (UGNT 0.34) are real, from `bundle/en/`.
   Translation text and alignments are the real ULT v91 for its 59 books
-  (`fixtures/scale/resources/en_ult-v91.zip`, 369,635 alignment groups) and are sampled from
+  (`bundle/en/en_ult-v91.zip`, 369,635 alignment groups) and are sampled from
   it for the other seven. Three
   devices edit for three years at the §14 rates (about 620,000 changes), with concurrent
   edits of the same records at a realistic rate so that conflicts exist. One deterministic,
