@@ -11,10 +11,15 @@
 
 use crate::canon::{HeaderReader, header_object, to_json};
 use crate::change::Verified;
+use crate::change::parse_change;
 use crate::ids::{ChangeId, DeviceId, DeviceKind, PackId, PackName, ProjectId, WallTime};
 use crate::json::{self, Json, JsonInt};
-use crate::line::{RawLine, encode_line, frame, read_line, split_lines, verify_line};
+use crate::line::{
+    LINE_OVERHEAD, RawLine, encode_line, frame, read_line, split_lines, verify_line,
+    verify_salvaged,
+};
 use std::fmt;
+use std::sync::Arc;
 
 /// The pack framing version this app reads and writes (`tcpack`).
 pub const PACK_FORMAT: u64 = 1;
@@ -219,14 +224,15 @@ pub(crate) enum NotOurs {
 }
 
 /// Reads the verified first line of a pack or pending file for a newer framing version in
-/// `field` or another project's id.
+/// `field` or another project's id. A first line whose line feed became CR LF is read too,
+/// as salvage would read it, so another project's file is never salvaged.
 pub(crate) fn not_ours(
     first: Option<&RawLine<'_>>,
     field: &str,
     known: u64,
     project: ProjectId,
 ) -> Option<NotOurs> {
-    let (_, json) = verify_line(first?.bytes)?;
+    let (_, json) = verify_salvaged(first?.bytes)?;
     let value = json::parse(json).ok()?;
     let map = value.as_obj()?;
     if let Some(Json::Int(n)) = map.get(field)
@@ -326,14 +332,31 @@ pub(crate) fn lines_defect(lines: &[RawLine<'_>]) -> Option<PackError> {
         .then_some(PackError::Truncated)
 }
 
-/// Every line after the first that verifies, as written. The first line is the header by
-/// format, intact or not.
+/// Every line that verifies, as written (§4.4), a CR before its line feed allowed, except a
+/// first line that is a header. A change whose author wrote it is a change wherever it
+/// stands; a header never reads as one.
 pub(crate) fn salvage(lines: &[RawLine<'_>]) -> Vec<Verified> {
     lines
         .iter()
-        .skip(1)
-        .filter_map(|line| read_line(line.bytes))
+        .enumerate()
+        .filter_map(|(index, line)| {
+            let (id, json) = verify_salvaged(line.bytes)?;
+            (index > 0 || !is_header(json)).then(|| parse_change(id, Arc::from(json)))
+        })
         .collect()
+}
+
+/// A header of a pack or a pending file, of any framing version: a JSON object with a
+/// `tcpack` or a `pending` member. No change has either member.
+fn is_header(json: &[u8]) -> bool {
+    json::parse(json)
+        .ok()
+        .and_then(|value| {
+            value
+                .as_obj()
+                .map(|map| map.contains_key("tcpack") || map.contains_key("pending"))
+        })
+        .unwrap_or(false)
 }
 
 fn parse_header(line: &RawLine<'_>) -> Result<PackHeader, PackError> {
@@ -452,20 +475,42 @@ pub fn encode_pack(
     })
 }
 
+/// What a seal writes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Sealed {
+    pub packs: Vec<EncodedPack>,
+    /// Lines too long for any pack, even alone with its header, in sort order. Only a change
+    /// that rule V7 quarantines can be that long (a salvaged line, §4.4); the seal sets it
+    /// aside in `.tc/quarantine/` (§5.11 K1) instead of failing, so it never blocks the seal
+    /// of every other line.
+    pub set_aside: Vec<ChangeId>,
+}
+
 /// The seal of §5.11 K1 and K2: every line, without repeats, sorted by (device, seq, id),
-/// split at line boundaries into packs of at most [`MAX_PACK_BYTES`].
-pub fn seal(spec: &PackSpec, lines: &[Verified]) -> Result<Vec<EncodedPack>, PackWriteError> {
+/// split at line boundaries into packs of at most [`MAX_PACK_BYTES`], and the lines no
+/// pack can hold set aside.
+pub fn seal(spec: &PackSpec, lines: &[Verified]) -> Result<Sealed, PackWriteError> {
+    if spec.sealer.kind() != DeviceKind::Local {
+        return Err(PackWriteError::NotLocal);
+    }
     let mut sorted: Vec<&Verified> = lines.iter().collect();
     sorted.sort_by_key(|line| line.sort_key());
     sorted.dedup_by_key(|line| line.id());
-    let chunks = chunk(&sorted, |count| header_line(spec, count, &[]).len());
-    chunks
+    let alone = header_line(spec, 1, &[]).len() + LINE_OVERHEAD;
+    let (fits, too_long): (Vec<&Verified>, Vec<&Verified>) = sorted
+        .into_iter()
+        .partition(|line| alone + line.raw().len() <= MAX_PACK_BYTES);
+    let packs = chunk(&fits, |count| header_line(spec, count, &[]).len())
         .into_iter()
         .map(|chunk| {
             let owned: Vec<Verified> = chunk.into_iter().cloned().collect();
             encode_pack(spec, &owned, &[])
         })
-        .collect()
+        .collect::<Result<_, _>>()?;
+    Ok(Sealed {
+        packs,
+        set_aside: too_long.into_iter().map(Verified::id).collect(),
+    })
 }
 
 /// Splits sorted lines into the fewest consecutive chunks whose packs fit the limit.
@@ -477,7 +522,7 @@ pub(crate) fn chunk<'a>(
     let mut current: Vec<&Verified> = Vec::new();
     let mut body = 0usize;
     for line in lines {
-        let len = line.raw().len() + crate::line::LINE_OVERHEAD;
+        let len = line.raw().len() + LINE_OVERHEAD;
         if !current.is_empty() && header_len(current.len() + 1) + body + len > MAX_PACK_BYTES {
             chunks.push(std::mem::take(&mut current));
             body = 0;

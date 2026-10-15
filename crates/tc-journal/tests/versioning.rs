@@ -171,7 +171,7 @@ fn a_change_from_a_newer_minor_passes_through_untouched() {
         sealer: local(9),
         sealed: WallTime(1_760_520_000_000),
     };
-    let packs = seal(&spec, &lines).unwrap();
+    let packs = seal(&spec, &lines).unwrap().packs;
     assert_eq!(packs.len(), 1);
     let read = read_pack(&packs[0].path.to_string(), &packs[0].bytes, project());
     assert_eq!(read.status, PackStatus::Valid);

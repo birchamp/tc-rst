@@ -45,6 +45,14 @@ pub fn verify_line(line: &[u8]) -> Option<(ChangeId, &[u8])> {
     (sha256(json) == hash).then(|| (ChangeId::from_bytes(hash), json))
 }
 
+/// [`verify_line`] for salvage: a line whose line feed became CR LF (a copy through a tool
+/// that rewrites line endings) still verifies. Canonical JSON never holds a raw CR, so the
+/// CR can only be the line ending's, and the JSON is untouched. Validation (P3, P4) stays
+/// strict, so such a file is still damaged.
+pub(crate) fn verify_salvaged(line: &[u8]) -> Option<(ChangeId, &[u8])> {
+    verify_line(line).or_else(|| verify_line(line.strip_suffix(b"\r")?))
+}
+
 /// Verifies a line (without its line feed) and reads its change. `None` when the line does
 /// not verify: those bytes are damaged, not a change.
 pub fn read_line(line: &[u8]) -> Option<Verified> {

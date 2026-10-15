@@ -8,6 +8,7 @@ mod common;
 use common::*;
 use proptest::prelude::*;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 use tc_journal::consolidate::{
     OwnPack, SMALL_PACK_BYTES, consolidate, consolidation_groups, redundancy,
 };
@@ -21,9 +22,10 @@ use tc_journal::pending::{
     PendingHeader, PendingStatus, PendingWriteError, Purpose, Reconciles, encode_pending,
     read_pending,
 };
+use tc_journal::rules::Rule;
 use tc_journal::{
     Change, ChangeId, DeviceId, DeviceKind, Md5, PackId, PackName, Record, RepoPath, SettingKey,
-    Verified, WallTime,
+    Verified, WallTime, parse_change,
 };
 
 const OCT_2026: i64 = 1_791_000_000_000;
@@ -63,7 +65,7 @@ fn a_sealed_pack_reads_back_whole_and_sorted() {
     let lines = changes(12);
     let mut doubled = lines.clone();
     doubled.extend(lines.iter().cloned());
-    let packs = seal(&spec(local(9)), &doubled).unwrap();
+    let packs = seal(&spec(local(9)), &doubled).unwrap().packs;
     assert_eq!(packs.len(), 1);
     let pack = &packs[0];
     assert_eq!(pack.path.sealer, local(9));
@@ -110,7 +112,7 @@ fn a_pack_with_a_quarantined_change_is_still_valid() {
     let mut lines = changes(3);
     let bad = r#"{"what":"not a change"}"#;
     lines.push(tc_journal::line::read_line(&line_of(bad)[..line_of(bad).len() - 1]).unwrap());
-    let pack = &seal(&spec(local(9)), &lines).unwrap()[0];
+    let pack = &seal(&spec(local(9)), &lines).unwrap().packs[0];
     let read = reread(pack);
     assert_eq!(read.status, PackStatus::Valid);
     assert_eq!(read.entries.len(), 4);
@@ -127,7 +129,7 @@ fn a_pack_with_a_quarantined_change_is_still_valid() {
 
 #[test]
 fn p1_the_path_must_name_a_local_sealer_a_month_and_the_hash() {
-    let pack = &seal(&spec(local(9)), &changes(2)).unwrap()[0];
+    let pack = &seal(&spec(local(9)), &changes(2)).unwrap().packs[0];
     let good = pack.path.to_string();
     assert_eq!(PackPath::parse(&good), Some(pack.path));
     let actor = DeviceId::derived(DeviceKind::Tc4Actor, b"x");
@@ -153,8 +155,8 @@ fn p1_the_path_must_name_a_local_sealer_a_month_and_the_hash() {
 
 #[test]
 fn p2_the_name_is_the_files_hash() {
-    let a = &seal(&spec(local(9)), &changes(2)).unwrap()[0];
-    let b = &seal(&spec(local(9)), &changes(3)).unwrap()[0];
+    let a = &seal(&spec(local(9)), &changes(2)).unwrap().packs[0];
+    let b = &seal(&spec(local(9)), &changes(3)).unwrap().packs[0];
     let read = read_pack(&b.path.to_string(), &a.bytes, project());
     assert_eq!(read.status, PackStatus::Damaged(PackError::NameMismatch));
     assert_eq!(read.entries.len(), 2);
@@ -162,7 +164,7 @@ fn p2_the_name_is_the_files_hash() {
 
 #[test]
 fn p3_foreign_projects_are_not_read_and_the_sealer_must_be_the_folder() {
-    let pack = &seal(&spec(local(9)), &changes(2)).unwrap()[0];
+    let pack = &seal(&spec(local(9)), &changes(2)).unwrap().packs[0];
     let read = read_pack(&pack.path.to_string(), &pack.bytes, other_project());
     assert_eq!(read.status, PackStatus::Foreign { project: project() });
     assert!(read.entries.is_empty());
@@ -186,7 +188,7 @@ fn p3_foreign_projects_are_not_read_and_the_sealer_must_be_the_folder() {
 /// wrong with it: salvaging its lines would merge two projects.
 #[test]
 fn a_damaged_pack_of_another_project_is_foreign_not_salvaged() {
-    let pack = &seal(&spec(local(9)), &changes(3)).unwrap()[0];
+    let pack = &seal(&spec(local(9)), &changes(3)).unwrap().packs[0];
     let mut damaged = pack.bytes.clone();
     let last = damaged.len() - 2;
     damaged[last] ^= 1;
@@ -298,11 +300,106 @@ fn p3_and_p4_the_header_and_the_line_count() {
 
 #[test]
 fn a_truncated_pack_salvages_every_whole_line() {
-    let pack = &seal(&spec(local(9)), &changes(5)).unwrap()[0];
+    let pack = &seal(&spec(local(9)), &changes(5)).unwrap().packs[0];
     let cut = pack.bytes.len() - 10;
     let read = read_pack(&pack.path.to_string(), &pack.bytes[..cut], project());
     assert_eq!(read.status, PackStatus::Damaged(PackError::NameMismatch));
     assert_eq!(read.entries.len(), 4);
+}
+
+/// Every line feed of `bytes` written as CR LF, as a tool that rewrites line endings would.
+fn crlf(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len() + bytes.len() / 16);
+    for byte in bytes {
+        if *byte == b'\n' {
+            out.push(b'\r');
+        }
+        out.push(*byte);
+    }
+    out
+}
+
+/// A copy through a tool that rewrites line endings leaves every change intact: salvage
+/// reads a line whose line feed became CR LF (§4.4), while validation still finds the file
+/// damaged, so it is quarantined and its changes rewritten in canonical form.
+#[test]
+fn a_file_with_crlf_line_endings_salvages_every_change() {
+    let lines = changes(5);
+    let pack = &seal(&spec(local(9)), &lines).unwrap().packs[0];
+    let path = pack.path.to_string();
+    let read = read_pack(&path, &crlf(&pack.bytes), project());
+    assert_eq!(read.status, PackStatus::Damaged(PackError::NameMismatch));
+    assert_eq!(read.entries, reread(pack).entries);
+    let file = encode_pending(&pending_header(Purpose::Save), &lines).unwrap();
+    let read = read_pending(&crlf(&file.bytes), project());
+    assert_eq!(
+        read.status,
+        PendingStatus::Damaged(PackError::HeaderUnverified)
+    );
+    assert_eq!(read.entries, lines);
+
+    // Another project's file is still foreign, and a newer file still newer.
+    assert_eq!(
+        read_pack(&path, &crlf(&pack.bytes), other_project()).status,
+        PackStatus::Foreign { project: project() }
+    );
+    assert_eq!(
+        read_pending(&crlf(&file.bytes), other_project()).status,
+        PendingStatus::Foreign { project: project() }
+    );
+    let newer = format!(
+        r#"{{"count":1,"project":"{}","replaces":[],"sealed":0,"sealer":"{}","tcpack":2}}"#,
+        project(),
+        local(9)
+    );
+    let a = verse_change(local(1), 1, 1, "a");
+    let (path, bytes) = hand_pack(&newer, &[&a], b"");
+    let read = read_pack(&path, &crlf(&bytes), project());
+    assert_eq!(read.status, PackStatus::Newer { tcpack: 2 });
+    assert!(read.entries.is_empty());
+}
+
+/// A change line is a change wherever it stands, so a file whose header was lost salvages
+/// its first line too. A header, of a pack or of a pending file, never reads as a change.
+#[test]
+fn salvage_takes_the_first_line_unless_it_is_a_header() {
+    let lines = changes(3);
+    let bytes: Vec<u8> = lines
+        .iter()
+        .flat_map(|line| encode_line(line.id(), line.raw()))
+        .collect();
+    let path = format!(
+        "ingredients/tc/changes/{}/2026-10/{}.ndjson",
+        local(9),
+        PackId::of(&bytes).name()
+    );
+    let read = read_pack(&path, &bytes, project());
+    assert!(matches!(
+        read.status,
+        PackStatus::Damaged(PackError::HeaderMalformed(_))
+    ));
+    assert_eq!(read.entries, lines);
+    let read = read_pending(&bytes, project());
+    assert!(matches!(
+        read.status,
+        PendingStatus::Damaged(PackError::HeaderMalformed(_))
+    ));
+    assert_eq!(read.entries, lines);
+
+    // A pending file's header on a pack, and a pack's on a pending file, are headers too.
+    let pending = encode_pending(&pending_header(Purpose::Save), &lines).unwrap();
+    let path = format!(
+        "ingredients/tc/changes/{}/2026-10/{}.ndjson",
+        local(9),
+        PackId::of(&pending.bytes).name()
+    );
+    let read = read_pack(&path, &pending.bytes, project());
+    assert!(matches!(read.status, PackStatus::Damaged(_)));
+    assert_eq!(read.entries, lines);
+    let pack = &seal(&spec(local(9)), &lines).unwrap().packs[0];
+    let read = read_pending(&pack.bytes, project());
+    assert!(matches!(read.status, PendingStatus::Damaged(_)));
+    assert_eq!(read.entries, reread(pack).entries);
 }
 
 /// The byte ranges of a pack's change lines, each with the line feed before and after it.
@@ -328,7 +425,7 @@ proptest! {
         flips in prop::collection::vec((any::<prop::sample::Index>(), 0u8..8), 1..4),
     ) {
         let lines: Vec<Verified> = bodies.into_iter().map(|b| Change::new(b).unwrap().into()).collect();
-        let pack = seal(&spec(local(9)), &lines).unwrap().remove(0);
+        let pack = seal(&spec(local(9)), &lines).unwrap().packs.remove(0);
         let intact = reread(&pack);
         prop_assert_eq!(&intact.status, &PackStatus::Valid);
         prop_assert_eq!(
@@ -384,7 +481,7 @@ fn a_seal_splits_at_64_mib_on_line_boundaries() {
     // Sixteen lines of the largest size fill 64 MiB exactly, so with a header they cannot
     // share one pack.
     let lines: Vec<Verified> = (1..=17).map(big_line).collect();
-    let packs = seal(&spec(local(9)), &lines).unwrap();
+    let packs = seal(&spec(local(9)), &lines).unwrap().packs;
     assert_eq!(packs.len(), 2);
     let mut ids = BTreeSet::new();
     for pack in &packs {
@@ -399,6 +496,48 @@ fn a_seal_splits_at_64_mib_on_line_boundaries() {
         encode_pack(&spec(local(9)), &lines, &[]),
         Err(PackWriteError::TooLarge { .. })
     ));
+}
+
+/// A line too long for any pack, which only a change that V7 quarantines can be (a
+/// salvaged one, §4.4), is set aside instead of failing the seal: every other line is
+/// sealed (§5.11 K1). A line that just fits alone with its header is sealed.
+#[test]
+fn a_line_no_pack_can_hold_is_set_aside_and_the_rest_is_sealed() {
+    let line = |len: usize| {
+        let json = format!("{{\"x\":\"{}\"}}", "a".repeat(len - 8));
+        assert_eq!(json.len(), len);
+        parse_change(ChangeId::of(json.as_bytes()), Arc::from(json.as_bytes()))
+    };
+    let huge = line(65 << 20);
+    assert!(matches!(&huge, Verified::Quarantined(q) if q.rule.rule() == Rule::V7));
+    let normal = changes(2);
+    let mut all = normal.clone();
+    all.push(huge.clone());
+    // As a salvage batch would hold them.
+    let file = encode_pending(&pending_header(Purpose::Salvage), &all).unwrap();
+    let read = read_pending(&file.bytes, project());
+    assert_eq!(read.status, PendingStatus::Valid);
+    let sealed = seal(&spec(local(9)), &read.entries).unwrap();
+    assert_eq!(sealed.set_aside, vec![huge.id()]);
+    assert_eq!(sealed.packs.len(), 1);
+    assert_eq!(reread(&sealed.packs[0]).entries.len(), 2);
+
+    let header = sealed.packs[0]
+        .bytes
+        .iter()
+        .position(|b| *b == b'\n')
+        .unwrap()
+        + 1;
+    let header_alone = header - "2".len() + "1".len();
+    let just_fits = line(MAX_PACK_BYTES - header_alone - LINE_OVERHEAD);
+    let sealed = seal(&spec(local(9)), std::slice::from_ref(&just_fits)).unwrap();
+    assert!(sealed.set_aside.is_empty());
+    assert_eq!(sealed.packs[0].bytes.len(), MAX_PACK_BYTES);
+    assert_eq!(reread(&sealed.packs[0]).status, PackStatus::Valid);
+    let one_more = line(MAX_PACK_BYTES - header_alone - LINE_OVERHEAD + 1);
+    let sealed = seal(&spec(local(9)), std::slice::from_ref(&one_more)).unwrap();
+    assert_eq!(sealed.set_aside, vec![one_more.id()]);
+    assert!(sealed.packs.is_empty());
 }
 
 /// §4.7: when the union is over 64 MiB, whole old packs are grouped in the order of their
@@ -603,8 +742,8 @@ fn consolidation_merges_completed_months_and_many_small_packs() {
 #[test]
 fn a_consolidated_pack_holds_the_union_and_lists_what_it_replaces() {
     let all = changes(9);
-    let a = seal(&spec(local(9)), &all[..4]).unwrap().remove(0);
-    let b = seal(&spec(local(9)), &all[3..7]).unwrap().remove(0);
+    let a = seal(&spec(local(9)), &all[..4]).unwrap().packs.remove(0);
+    let b = seal(&spec(local(9)), &all[3..7]).unwrap().packs.remove(0);
     let ab = consolidate(&spec(local(9)), &[&reread(&a), &reread(&b)]).unwrap();
     assert_eq!(ab.len(), 1);
     let ab = ab.into_iter().next().unwrap();
@@ -616,7 +755,7 @@ fn a_consolidated_pack_holds_the_union_and_lists_what_it_replaces() {
     assert_eq!(ab_read.header.as_ref().unwrap().replaces, expected);
 
     // A later consolidation lists the names the absorbed packs listed, too.
-    let c = seal(&spec(local(9)), &all[7..]).unwrap().remove(0);
+    let c = seal(&spec(local(9)), &all[7..]).unwrap().packs.remove(0);
     let abc = consolidate(&spec(local(9)), &[&ab_read, &reread(&c)])
         .unwrap()
         .remove(0);
@@ -648,8 +787,8 @@ fn a_consolidated_pack_holds_the_union_and_lists_what_it_replaces() {
 #[test]
 fn the_redundancy_rule_is_a_function_of_the_file_set() {
     let all = changes(6);
-    let a = reread(&seal(&spec(local(9)), &all[..3]).unwrap().remove(0));
-    let b = reread(&seal(&spec(local(9)), &all[3..]).unwrap().remove(0));
+    let a = reread(&seal(&spec(local(9)), &all[..3]).unwrap().packs.remove(0));
+    let b = reread(&seal(&spec(local(9)), &all[3..]).unwrap().packs.remove(0));
     let ab = reread(&consolidate(&spec(local(9)), &[&a, &b]).unwrap().remove(0));
 
     let set = vec![a.clone(), b.clone(), ab.clone()];

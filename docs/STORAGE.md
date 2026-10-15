@@ -986,7 +986,7 @@ None of these files is project data that another device needs. Each is written w
 | `materialized.json` | per derived or carried path: `{md5, size, mtimeNs, oid}` | the manifest: what the app last wrote (§5.10) |
 | `heads/<escaped path>.bin` | postcard `HeadsFile`: for every record the file was built from, the heads the written bytes stand for, by the token rule of §2.7 (every head of a settled or merged record; only the provisional candidate and its equal heads for a conflict) | the base of an outside edit (§11.1); an outside editor saw only the provisional text, so its edit never resolves a conflict |
 | `materialize.intent.json` | `{writes: [{path, oldMd5, newMd5}], removes: [path]}` | present only during a materialization |
-| `quarantine/…` | damaged pending files, byte copies | kept until the person dismisses the notice |
+| `quarantine/…` | damaged pending files, byte copies; change lines too long for any pack (§5.11 K1) | kept until the person dismisses the notice |
 | `quarantine.json` | blob ids of damaged or unreadable incoming files already reported | each damaged file is reported once, not at every sync |
 | `intake.json` | `{source, started}` | present only while an exchange-file import writes (§10.2 R7); at open it means the import did not finish |
 | `external/<utc>-<escaped path>` | byte copies of files changed outside the app, and files moved out of `ingredients/` | kept until the person dismisses the notice |
@@ -1073,13 +1073,13 @@ fold does not care which pack holds a change; the same change in two packs is on
 
 Pack validation, in order:
 
-0. **Newer format, other project.** A file whose first line verifies and declares `tcpack`
-   above 1 is from a newer format, whatever else is wrong with it: `Notice::NewerPack`, carried,
-   not read, never reported as damaged (§12). Every future pack framing therefore keeps a first
-   line that is a verifiable canonical JSON object with a `tcpack` member. Otherwise, a file
-   whose first line verifies and names another project in `project` is foreign, whatever else
-   is wrong with it: not read, not salvaged, and reported, because salvaging its lines would
-   merge two projects.
+0. **Newer format, other project.** A file whose first line verifies (a CR before its line feed
+   allowed, as in salvage) and declares `tcpack` above 1 is from a newer format, whatever else
+   is wrong with it: `Notice::NewerPack`, carried, not read, never reported as damaged (§12).
+   Every future pack framing therefore keeps a first line that is a verifiable canonical JSON
+   object with a `tcpack` member. Otherwise, a file whose first line verifies and names another
+   project in `project` is foreign, whatever else is wrong with it: not read, not salvaged, and
+   reported, because salvaging its lines would merge two projects.
 1. **P1 path.** The path matches `tc/changes/<DeviceId>/<\d{4}-\d{2}>/<32 hex>.ndjson`, the
    device is a Local device and the month is `01` to `12`. If not, the file is damaged: go to
    salvage.
@@ -1092,14 +1092,18 @@ Pack validation, in order:
    feed; otherwise the file is damaged. A line that verifies but fails the per-change rules of
    §4.5 (its JSON may not even parse) is a quarantined change; the rest of the pack is used.
 
-**Salvage.** In a damaged pack, every line after the first (the first line is the header by
-format, intact or not) that verifies is a genuine change, or a quarantined one: its id is the hash
-of its bytes, so whoever salvages it gets exactly what its author wrote. The fold
-uses the salvaged changes and reports `Notice::QuarantinedPack { salvaged, … }`. Where the damaged file
-stays in the tree (a Door43 tip, §9.2 N3), salvage is recomputed at every open and gives the
-same result on every device. Where it does not (a USB intake, §10.2), the salvaged lines are
-written to a `salvage` pending batch so they persist. A salvaged part of a batch waits as an
-`IncompleteBatch` until the rest arrives.
+**Salvage.** In a damaged pack, every line that verifies and parses is a genuine change, and
+every line that verifies but breaks a per-change rule (§4.5) is a quarantined one: its id is the
+hash of its bytes, so whoever salvages it gets exactly what its author wrote. For salvage a line
+also verifies with a CR before its line feed, as a tool that rewrites line endings leaves it:
+canonical JSON never holds a raw CR, so the JSON is untouched (P3 and P4 stay strict, so such a
+file is still damaged). The first line is left out when it is a header: a JSON object with a
+`tcpack` or `pending` member, which no change has. The fold uses the salvaged changes and reports
+`Notice::QuarantinedPack { salvaged, … }`. Where the damaged file stays in the tree (a Door43
+tip, §9.2 N3), salvage is recomputed at every open and gives the same result on every device.
+Where it does not (a USB intake, §10.2), the salvaged lines are written to a `salvage` pending
+batch so they persist; a line too long for any pack is set aside by the next seal (§5.11 K1). A
+salvaged part of a batch waits as an `IncompleteBatch` until the rest arrives.
 
 **The expected pack set.** Which packs exist is project state, not whatever the working tree
 happens to hold today: an antivirus program, a cloud client, a copy that skipped long paths or a
@@ -1562,13 +1566,18 @@ Seals run at every checkpoint (§5.13). Each one:
 
 ```
 K1  L = every verified change line of every pending file, deduplicated by id, sorted by
-    (device, seq, id); split at line boundaries into chunks of at most 64 MiB.
+    (device, seq, id); split at line boundaries into chunks of at most 64 MiB. A line too long
+    for a pack even alone with its header is set aside: only a change V7 quarantines can be
+    that long (a salvaged line, §4.4), and it must never stop the seal of every other line.
 K2  For each chunk: atomic_create_dirs(ingredients/tc/changes/<me>/<yyyy-mm>);
-    atomic_write(<that dir>, "<pack32>.ndjson", header + lines, SyncDir::Now).
+    atomic_write(<that dir>, "<pack32>.ndjson", header + lines, SyncDir::Now). Each line set
+    aside: atomic_write(.tc/quarantine, "<id>.line", line, SyncDir::Now); it is listed with the
+    quarantined changes.
 K3  Re-read every new pack from disk; P2 to P4 must pass and its id set must equal the chunk's.
     Any failure: remove the bad pack, keep the pending files, report, stop. Store each verified
     pack as a git blob (repo.blob), so it can be restored even before its commit (§4.4).
-K4  atomic_remove each pending file all of whose change ids are in the verified packs;
+K4  atomic_remove each pending file all of whose change ids are in the verified packs or were
+    set aside in K2;
     fsync .tc/pending. A pending file that could not be read is never removed (§4.4).
 K5  Update ledger.json (lastSeq, lastAt) in app data.
 K6  Consolidate if §4.7 says so (§5.12).

@@ -117,7 +117,7 @@ proptest! {
     ) {
         let lines: Vec<Verified> = bodies.into_iter().map(|b| Change::new(b).unwrap().into()).collect();
         let spec = PackSpec { project: project(), sealer: local(9), sealed: WallTime(0) };
-        let pack = seal(&spec, &lines).unwrap().remove(0);
+        let pack = seal(&spec, &lines).unwrap().packs.remove(0);
         let pending = encode_pending(
             &PendingHeader { device: local(1), project: project(), purpose: Purpose::Save, reconciles: None },
             &lines,
