@@ -235,7 +235,10 @@ pub(crate) fn keyed_list<V: IntoView + 'static>(
 ) -> impl IntoView {
     view! {
         <For
-            each=move || slots.with(|s| s.order().to_vec())
+            each=move || {
+                refocus_after_moves();
+                slots.with(|s| s.order().to_vec())
+            }
             key=Clone::clone
             children=move |slot: keyed::Slot| {
                 // For draws a child for a slot of the list it just read, so the slot is there;
@@ -254,4 +257,42 @@ pub(crate) fn keyed_list<V: IntoView + 'static>(
             }
         />
     }
+}
+
+/// React focuses again, after every commit, the element that had the focus before it, when the
+/// commit's moves dropped it (`restoreSelection`). A browser blurs the node that `insertBefore`
+/// moves, and For moves a kept child that way, so a focused row that a re-sort moves would lose
+/// the focus. Called as For reads its list: For applies the update in the same run, so a
+/// microtask queued here runs once the update is in. The element that had the focus then gets it
+/// back if it is still on the page and the focus fell to the body; focus that something else took
+/// meanwhile stays where it is. A text control keeps its caret across the move, so focusing it
+/// again is enough.
+fn refocus_after_moves() {
+    use wasm_bindgen::JsCast;
+
+    let doc = document();
+    let Some(prior) = doc.active_element() else {
+        return;
+    };
+    if doc.body().is_some_and(|b| prior == *b) {
+        return;
+    }
+    leptos::tachys::renderer::dom::queue_microtask(move || {
+        let doc = document();
+        let dropped = match (doc.active_element(), doc.body()) {
+            (None, _) => true,
+            (Some(now), Some(body)) => now == *body,
+            (Some(_), None) => false,
+        };
+        if !dropped || !prior.is_connected() {
+            return;
+        }
+        if let Ok(el) = prior.dyn_into::<web_sys::HtmlElement>() {
+            let options = web_sys::FocusOptions::new();
+            // React puts back every ancestor's scroll position after it focuses; not scrolling
+            // at all is the same.
+            options.set_prevent_scroll(true);
+            let _ = el.focus_with_options(&options);
+        }
+    });
 }

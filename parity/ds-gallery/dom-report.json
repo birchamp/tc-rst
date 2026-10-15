@@ -1,6 +1,6 @@
 {
-  "same": 717,
-  "total": 717,
+  "same": 719,
+  "total": 719,
   "cases": [
     {
       "id": "Badge/accent-md",
@@ -3334,6 +3334,18 @@
     },
     {
       "id": "Table/rows-change",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/rows-move-up",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/rows-move-down",
       "same": true,
       "errors": [],
       "diffs": []

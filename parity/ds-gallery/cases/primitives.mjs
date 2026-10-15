@@ -42,6 +42,10 @@ const ROWS_NEXT = [
   ROWS[1],
   ROWS[2],
 ];
+/* The rows re-sorted under a focused row: Ruth moves from the bottom to the top, or Titus from
+   the top to the bottom. */
+const ROWS_RUTH_FIRST = [ROWS[2], ROWS[0], ROWS[1]];
+const ROWS_TITUS_LAST = [ROWS[1], ROWS[2], ROWS[0]];
 /* Two rows with one id, as a list of books can have when a book was added twice. */
 const ROWS_SAME_ID = [ROWS[0], { ...ROWS[1], id: 'tit' }, ROWS[2]];
 /** A case's component with a line under it that shows a cell. */
@@ -280,6 +284,14 @@ export default [
     ['rows-change', { columns: COLUMNS, rows: cell('rows'), selectedKey: 'jon', onRowClick: setTo('rows', ROWS_NEXT) }, {
       frame: { height: 248 }, cells: { rows: ROWS }, steps: [focus('tbody tr:nth-child(2)'), key('Enter')],
       note: 'Enter on Jonah inserts Esther above and changes Titus. Every row keeps its nodes, and Jonah keeps the focus.',
+    }],
+    ['rows-move-up', { columns: COLUMNS, rows: cell('rows'), onRowClick: setTo('rows', ROWS_RUTH_FIRST) }, {
+      cells: { rows: ROWS }, steps: [focus('tbody tr:nth-child(3)'), key('Enter')],
+      note: 'Enter on Ruth moves it from the bottom to the top, as a re-sort does. The row keeps its node and the keyboard focus.',
+    }],
+    ['rows-move-down', { columns: COLUMNS, rows: cell('rows'), onRowClick: setTo('rows', ROWS_TITUS_LAST) }, {
+      cells: { rows: ROWS }, steps: [focus('tbody tr:nth-child(1)'), key('Enter')],
+      note: 'Enter on Titus moves it from the top to the bottom. The row keeps its node and the keyboard focus.',
     }],
   ]),
 

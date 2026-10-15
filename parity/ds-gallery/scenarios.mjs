@@ -88,6 +88,12 @@ const SCENARIOS = [
     { click: 'tbody tr:nth-child(2)' }, { key: 'Tab' }, { key: 'Enter' }, { key: 'Shift+Tab' }, { key: ' ' }, { click: 'tbody tr:nth-child(1)' }] },
   { name: 'table-rows-change', case: 'Table/rows-change', steps: [
     { key: 'Tab' }, { key: 'Tab' }, { key: 'Enter' }, { key: 'Shift+Tab' }, { key: 'Enter' }, { key: 'Tab' }, { key: 'Tab' }, { key: ' ' }] },
+  // A re-sort moves the focused row: it keeps the focus, and Tab goes on from its new place.
+  { name: 'table-move-up', case: 'Table/rows-move-up', steps: [
+    { key: 'Tab' }, { key: 'Tab' }, { key: 'Tab' }, { key: 'Enter' }, { key: 'Tab' }, { key: 'Enter' }, { key: 'Shift+Tab' }, { key: ' ' }] },
+  { name: 'table-move-down', case: 'Table/rows-move-down', steps: [
+    { key: 'Tab' }, { key: 'Enter' }, { key: 'Shift+Tab' }, { key: 'Shift+Tab' }, { key: 'Enter' }] },
+  { name: 'table-move-click', case: 'Table/rows-move-down', steps: [{ click: 'tbody tr:nth-child(1)' }, { key: 'Shift+Tab' }, { key: 'Enter' }] },
   { name: 'table-noop', case: 'Table/row-hover', steps: [{ key: 'Tab' }, { key: 'Enter' }, { key: ' ' }, { key: 'Tab' }, { key: 'Enter' }] },
   { name: 'toggle', case: 'Toggle/stateful', steps: [{ click: 'input' }, { click: 'input' }, { key: ' ' }, { click: 'label' }] },
   { name: 'radio-group', case: 'RadioGroup/stateful', steps: [{ click: 'input[value="rtl"]' }, { key: 'ArrowUp' }, { key: 'ArrowDown' }, { click: 'label' }] },

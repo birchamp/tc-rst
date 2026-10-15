@@ -1,7 +1,7 @@
 {
-  "same": 40,
-  "total": 40,
-  "steps": 215,
+  "same": 43,
+  "total": 43,
+  "steps": 231,
   "scenarios": [
     {
       "name": "menu-keys",
@@ -223,6 +223,30 @@
       "name": "table-rows-change",
       "case": "Table/rows-change",
       "steps": 8,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "table-move-up",
+      "case": "Table/rows-move-up",
+      "steps": 8,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "table-move-down",
+      "case": "Table/rows-move-down",
+      "steps": 5,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "table-move-click",
+      "case": "Table/rows-move-down",
+      "steps": 3,
       "same": true,
       "diffs": [],
       "errors": []

@@ -250,7 +250,7 @@
     {
       "name": "Table",
       "file": "components/primitives/Table.jsx",
-      "cases": 11
+      "cases": 13
     },
     {
       "name": "Text",
@@ -19428,6 +19428,226 @@
       },
       "isolate": true,
       "note": "Enter on Jonah inserts Esther above and changes Titus. Every row keeps its nodes, and Jonah keeps the focus."
+    },
+    {
+      "id": "Table/rows-move-up",
+      "component": "Table",
+      "state": "rows-move-up",
+      "file": "components/primitives/Table.jsx",
+      "frame": {
+        "width": 520,
+        "height": 200,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "columns": [
+          {
+            "key": "book",
+            "header": "Book"
+          },
+          {
+            "key": "code",
+            "header": "Code"
+          },
+          {
+            "key": "verses",
+            "header": "Verses",
+            "align": "numeric"
+          },
+          {
+            "key": "drafted",
+            "header": "Drafted",
+            "align": "numeric"
+          }
+        ],
+        "rows": {
+          "$cell": "rows"
+        },
+        "onRowClick": {
+          "$fn": "set",
+          "cell": "rows",
+          "value": [
+            {
+              "id": "rut",
+              "book": "Ruth",
+              "code": "RUT",
+              "verses": 85,
+              "drafted": "0%"
+            },
+            {
+              "id": "tit",
+              "book": "Titus",
+              "code": "TIT",
+              "verses": 46,
+              "drafted": "12%"
+            },
+            {
+              "id": "jon",
+              "book": "Jonah",
+              "code": "JON",
+              "verses": 48,
+              "drafted": "4%"
+            }
+          ]
+        }
+      },
+      "cells": {
+        "rows": [
+          {
+            "id": "tit",
+            "book": "Titus",
+            "code": "TIT",
+            "verses": 46,
+            "drafted": "12%"
+          },
+          {
+            "id": "jon",
+            "book": "Jonah",
+            "code": "JON",
+            "verses": 48,
+            "drafted": "4%"
+          },
+          {
+            "id": "rut",
+            "book": "Ruth",
+            "code": "RUT",
+            "verses": 85,
+            "drafted": "0%"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "do": "focus",
+          "target": "tbody tr:nth-child(3)"
+        },
+        {
+          "do": "key",
+          "key": "Enter"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onRowClick"
+        ]
+      },
+      "isolate": true,
+      "note": "Enter on Ruth moves it from the bottom to the top, as a re-sort does. The row keeps its node and the keyboard focus."
+    },
+    {
+      "id": "Table/rows-move-down",
+      "component": "Table",
+      "state": "rows-move-down",
+      "file": "components/primitives/Table.jsx",
+      "frame": {
+        "width": 520,
+        "height": 200,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "columns": [
+          {
+            "key": "book",
+            "header": "Book"
+          },
+          {
+            "key": "code",
+            "header": "Code"
+          },
+          {
+            "key": "verses",
+            "header": "Verses",
+            "align": "numeric"
+          },
+          {
+            "key": "drafted",
+            "header": "Drafted",
+            "align": "numeric"
+          }
+        ],
+        "rows": {
+          "$cell": "rows"
+        },
+        "onRowClick": {
+          "$fn": "set",
+          "cell": "rows",
+          "value": [
+            {
+              "id": "jon",
+              "book": "Jonah",
+              "code": "JON",
+              "verses": 48,
+              "drafted": "4%"
+            },
+            {
+              "id": "rut",
+              "book": "Ruth",
+              "code": "RUT",
+              "verses": 85,
+              "drafted": "0%"
+            },
+            {
+              "id": "tit",
+              "book": "Titus",
+              "code": "TIT",
+              "verses": 46,
+              "drafted": "12%"
+            }
+          ]
+        }
+      },
+      "cells": {
+        "rows": [
+          {
+            "id": "tit",
+            "book": "Titus",
+            "code": "TIT",
+            "verses": 46,
+            "drafted": "12%"
+          },
+          {
+            "id": "jon",
+            "book": "Jonah",
+            "code": "JON",
+            "verses": 48,
+            "drafted": "4%"
+          },
+          {
+            "id": "rut",
+            "book": "Ruth",
+            "code": "RUT",
+            "verses": 85,
+            "drafted": "0%"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "do": "focus",
+          "target": "tbody tr:nth-child(1)"
+        },
+        {
+          "do": "key",
+          "key": "Enter"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onRowClick"
+        ]
+      },
+      "isolate": true,
+      "note": "Enter on Titus moves it from the top to the bottom. The row keeps its node and the keyboard focus."
     },
     {
       "id": "Text/role-display",

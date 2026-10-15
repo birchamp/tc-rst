@@ -1,7 +1,7 @@
 {
   "about": "Pixels that differ between tC4 (screens/) and the Leptos port (screens-rust/), per case. pixelmatch threshold 0 with anti-aliased pixels counted: any difference in any channel counts.",
-  "total": 717,
-  "zero": 717,
+  "total": 719,
+  "zero": 719,
   "nonzero": 0,
   "unexplained": [],
   "worst": [],
@@ -2784,6 +2784,16 @@
     {
       "id": "Table/rows-change",
       "frame": "520x248",
+      "mismatched": 0
+    },
+    {
+      "id": "Table/rows-move-up",
+      "frame": "520x200",
+      "mismatched": 0
+    },
+    {
+      "id": "Table/rows-move-down",
+      "frame": "520x200",
       "mismatched": 0
     },
     {
