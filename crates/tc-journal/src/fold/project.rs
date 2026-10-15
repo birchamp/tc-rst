@@ -548,7 +548,12 @@ impl FoldState {
                     let end = chapter.and_then(|t| t.ends.get(&rv)).copied().unwrap_or(rv);
                     let content = chapter.and_then(|t| t.content(rv)).unwrap_or_default();
                     let md5 = md5_of(&tc_usfm::plain_text_v1(&content));
-                    let valid = end == value.span_end.get()
+                    // The alignment covers as many verses as it did where it was made: a
+                    // text that moved keeps its alignment valid at its new number.
+                    let length = value.span_end.get().checked_sub(v);
+                    let label_end = length.map_or(rv, |l| rv.saturating_add(l));
+                    let valid = length.is_some()
+                        && end == label_end
                         && md5 == value.target_verse_md5
                         && value.source.as_ref().is_none_or(|s| Some(s.sha) == ol_sha)
                         && !value.marked_invalid;
@@ -557,10 +562,10 @@ impl FoldState {
                     if (rc, rv) != (c, v) {
                         add_anchor(&mut record, c, v);
                     }
-                    if value.span_end.get() < rv {
+                    if value.span_end.get() != label_end {
                         add_span_end(&mut record, value.span_end.get());
                     }
-                    placed.insert((rc, rv, value.span_end.get()), record);
+                    placed.insert((rc, rv, label_end), record);
                 }
                 _ => {
                     let mut record = alignment_record(&value, true);
@@ -716,6 +721,9 @@ impl FoldState {
                 },
             };
             let meta = self.meta(head);
+            // A comment on a check is placed at the live check its `MovedTo` chain ends
+            // at; it shows there and in that check's verse.
+            let mut on_check: Option<CheckKey> = None;
             let placed: Option<(u16, u16)> = match &comment.target {
                 CommentTarget::Verse { chapter, verse, .. } => {
                     match attach::place(self, book, (chapter.get(), verse.get())).0 {
@@ -725,9 +733,13 @@ impl FoldState {
                 }
                 CommentTarget::Check(check) => {
                     let live = attach::follow_moves(self, check);
-                    attach::target_exists(self, &live)
+                    let at = attach::target_exists(self, &live)
                         .then(|| check_verse(&live))
-                        .flatten()
+                        .flatten();
+                    if at.is_some() {
+                        on_check = Some(live);
+                    }
+                    at
                 }
                 CommentTarget::Frame { .. } => None,
             };
@@ -750,6 +762,9 @@ impl FoldState {
                 "placed".into(),
                 placed.map_or(Value::Null, |(c, v)| {
                     let mut p = Map::new();
+                    if let Some(json) = on_check.as_ref().and_then(canon::check_key_json) {
+                        p.insert("check".into(), value(&json));
+                    }
                     p.insert("chapter".into(), Value::from(c));
                     p.insert("verse".into(), Value::from(v));
                     Value::Object(p)

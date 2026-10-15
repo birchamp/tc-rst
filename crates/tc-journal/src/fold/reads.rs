@@ -145,6 +145,12 @@ impl FoldState {
     /// provisional value while it is in conflict (§7.5).
     pub fn projected(&self, key: &RecordKey) -> Option<Record> {
         let k = self.key_idx(key)?;
+        if let Some(shown) = self.shown_after_restore(k) {
+            return match shown {
+                attach::ShownVerse::Change(_, c) => super::record_of(self, c),
+                attach::ShownVerse::Merged(_, record) => Some((*record).clone()),
+            };
+        }
         match &self.entry(k).projected {
             Projected::Nothing => None,
             Projected::Change(c) => super::record_of(self, *c),
@@ -155,10 +161,33 @@ impl FoldState {
     /// The change a record's projection comes from, when it is one change.
     pub fn projected_change(&self, key: &RecordKey) -> Option<ChangeId> {
         let k = self.key_idx(key)?;
+        if let Some(shown) = self.shown_after_restore(k) {
+            return match shown {
+                attach::ShownVerse::Change(_, c) => Some(self.meta(c).id),
+                attach::ShownVerse::Merged(..) => None,
+            };
+        }
         match &self.entry(k).projected {
             Projected::Change(c) => Some(self.meta(*c).id),
             _ => None,
         }
+    }
+
+    /// For a verse whose projected change is a `StartOver` of a *Start empty* that lost
+    /// the presence race to *Restore the text*: what the projection shows instead (§7.6).
+    fn shown_after_restore(&self, k: KeyIdx) -> Option<attach::ShownVerse> {
+        let RecordKey::Verse(book, ..) = &self.entry(k).key else {
+            return None;
+        };
+        let Projected::Change(c) = &self.entry(k).projected else {
+            return None;
+        };
+        let batch = self.batch(self.meta(*c).batch).id;
+        let rewound = super::books::rewound_batches(self, *book);
+        if !rewound.contains(&batch) {
+            return None;
+        }
+        attach::shown_verse(self, k, &rewound)
     }
 
     /// The conflict list, sorted by key: canon book order, then the key, then the kind.

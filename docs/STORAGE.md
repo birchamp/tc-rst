@@ -2165,14 +2165,16 @@ keyed by anchor `a`, placed at the run that starts at `v` by rule 1:
 
 ```
 run   = the projected run that starts at v
-valid = run.end == value.span_end
+end   = v + (value.span_end − a)        the run the alignment was made for, moved with its text
+valid = value.span_end >= a and run.end == end
         and md5(plain_text_v1(words + layout of v's projected Text)) == value.target_verse_md5
         and (value.source is None or value.source.sha == the current original-language pin's sha)
         and not value.marked_invalid
 ```
 
-The record projects with `"invalid": !valid` under the label `label(v, value.span_end)`, with
-every stored field unchanged. A record placed by rules 2 to 4, or a second record placed at a run
+The record projects with `"invalid": !valid` under the label `label(v, end)`, with every stored
+field unchanged. (Comparing `run.end` with `span_end` itself would mark every alignment of a
+renumbered verse invalid although its text and span are unchanged.) A record placed by rules 2 to 4, or a second record placed at a run
 whose own anchor record exists, projects under its key's own label as invalid. A JSON object
 holds one record per label, so a record whose own label another record already holds is left out
 of the sidecar; it stays in the journal, in History and in the Detached list.
@@ -2229,8 +2231,9 @@ and the record is not invalidated (§11.1 X3).
 - `vrs.json`: the `Versification` bytes.
 - `tc/comments/<BOOK>.json`: `{"schemaVersion":1,"book":"TIT","comments":[…]}`, each comment
   `{id, target, placed, text, author, at}`, where `placed` is the verse or check the comment is
-  placed at by the anchor rules above (`null` when detached), sorted by (chapter, verse, at, id);
-  comments on checks go with the check's book.
+  placed at by the anchor rules above (`{chapter, verse}`, plus `check` for a comment on a check:
+  the live key at the end of its `MovedTo` chain; `null` when detached), sorted by (chapter,
+  verse, at, id); comments on checks go with the check's book.
 - `tc/conflicts.json`: `{"schemaVersion":1,"conflicts":[…]}`, each `{id, key, alsoKeys?, kind,
   provisional, candidates: [{change, device, author, at}]}`, one conflict per line in the
   sidecar byte form. It travels in commits and exports, so open questions travel with the text.
@@ -3276,7 +3279,7 @@ and the on-disk end state, not only what the fold returns.
 | # | Case (source) | What tC4 did | What prevents it here | Test |
 |---|---|---|---|---|
 | L1 | Two concurrent verse spans in one book (E1, E1 reversed, F1) | the older structure action applied; the newer one pended `incomplete`; every later edit by its author in that book was anchored on the pending branch and vanished; 0 conflicts shown | a span writes only its own verse records (`Text { last }` and `Covered`); spans on different verses touch different keys; there is no structural chain, so a later edit is a plain verse change that always projects | `loss_e1_two_spans_one_book`, `loss_e1_reversed_order` |
-| L2 | Spans that share a verse | as L1 | the shared verse has two heads: a `VerseStructure` conflict described in words | `loss_e1_overlapping_spans_conflict` |
+| L2 | Spans that share a verse | as L1 | the shared verse has two heads; both spans are passage batches, so it is one `Passage` conflict over both spans (§7.3, §8.1), described in words, with every word shown once | `loss_e1_overlapping_spans_conflict` |
 | L3 | A span while a teammate edits any verse of the book with an older timestamp (E2a) | the span pended `conflicted` forever and hid its author's later edits | different keys, no pending state, no timestamps in any rule | `loss_e2a_span_vs_edit_elsewhere` |
 | L4 | A phantom conflict the span author never caused (E2b) | the span re-headed every slot | a span never writes verses outside its range | `loss_e2b_no_phantom_conflict` |
 | L5 | An edit to a verse a teammate merged away (E3, F2) | retained `orphaned-text`, shown nowhere | verse 5 has `Covered` and `Text` heads: a conflict; the coherence pass keeps verse 5's words in the provisional USFM; *Keep 4 and 5 separate* restores both verses in one action | `loss_e3_edit_vs_merge_away`, `loss_span_resolution_restores_both_verses` |
@@ -3465,6 +3468,9 @@ A soak test runs the real binary as a subprocess, drives scripted saves, syncs a
 Each scenario of §15 is a test with that name in `tc-sync/tests/loss/` or `tc-store/tests/loss/`.
 Each asserts what the person sees (the conflict list, the review rows, the notices, the projected
 verse) and the on-disk end state (the packs, the derived files, `metadata.json`, the commit tree).
+The scenarios the fold decides also have a test of the same name in `tc-journal/tests/loss.rs`
+that asserts the fold's half: the conflict list, the projected values, the placements, the
+anomalies and the derived bytes, the same for every fold order, incremental or whole.
 The tC4 team-sync fixtures (`different-verses`, `verse-two-ways`, `check-two-ways`,
 `invalid-file`, `changed-own-file`) are ported first. Scenarios that need two or three devices use
 separate project folders with separate app-data directories and installation secrets.

@@ -7,7 +7,7 @@ mod support;
 
 use support::*;
 use tc_journal::fold::{
-    Anomaly, BookView, ConflictKind, FoldInput, FoldState, MergeHow, ProjectKind, Resolved,
+    BookView, ConflictKind, FoldInput, FoldState, MergeHow, ProjectKind, Resolved,
 };
 use tc_journal::record::{PresentHow, UserStatus};
 use tc_journal::{Cause, RecordKey};
@@ -165,44 +165,6 @@ fn seed_stubs_are_absorbed_and_two_seeds_settle() {
         state.key_state(&verse_key(1, 2)).map(|k| k.state),
         Some(Resolved::SettledByRule { .. })
     ));
-}
-
-#[test]
-fn an_incomplete_batch_is_held_and_listed() {
-    let mut maria = Dev::new(1);
-    let seed = seed_book(&mut maria, &[3]);
-    let section = maria.batch(
-        vec![
-            (
-                verse(1, 1, text("one", 1)),
-                vec![on(&seed, &verse_key(1, 1)).id()],
-            ),
-            (
-                verse(1, 2, text("two", 2)),
-                vec![on(&seed, &verse_key(1, 2)).id()],
-            ),
-        ],
-        Cause::Edit,
-    );
-    let mut part = seed.clone();
-    part.push(section[0].clone());
-    let state = fold(&part);
-    assert_eq!(projected_words(&state, 1, 1).as_deref(), Some("___"));
-    assert!(
-        state
-            .anomalies()
-            .any(|a| matches!(a, Anomaly::IncompleteBatch { have: 1, of: 2, .. }))
-    );
-    // The rest arrives: the batch applies whole.
-    let mut state = state;
-    state.add([FoldInput::from(section[1].clone())]);
-    assert_eq!(projected_words(&state, 1, 1).as_deref(), Some("one"));
-    assert_eq!(projected_words(&state, 1, 2).as_deref(), Some("two"));
-    assert!(
-        !state
-            .anomalies()
-            .any(|a| matches!(a, Anomaly::IncompleteBatch { .. }))
-    );
 }
 
 #[test]

@@ -52,6 +52,14 @@ impl FoldInput {
         }
     }
 
+    /// The id of the change line.
+    pub fn id(&self) -> ChangeId {
+        match &self.line {
+            Line::Verified(line) => line.id(),
+            Line::Prepared { id, .. } => *id,
+        }
+    }
+
     /// Reads what the fold keeps of the change and drops its decoded value. A loader that
     /// reads packs on several threads calls this there, so the fold itself only indexes
     /// (a decoded value is many small allocations; reading and freeing them is most of the

@@ -4,7 +4,8 @@
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::collections::BTreeMap;
-use tc_journal::fold::{FoldInput, FoldState, ProjectKind};
+use tc_journal::command::PlannedChange;
+use tc_journal::fold::{DerivedFile, FoldInput, FoldState, ProjectKind};
 use tc_journal::json::{Json, JsonMap};
 use tc_journal::record::{
     AlignmentValue, BookPresence, ChapterFront, ChapterVerse, CheckValue, CommentTarget,
@@ -81,6 +82,23 @@ impl Dev {
                 .expect("a valid change")
             })
             .collect()
+    }
+
+    /// Planned changes (a resolution, say) written as one batch.
+    pub fn apply(&mut self, planned: Vec<PlannedChange>) -> Vec<Change> {
+        let cause = planned.first().map_or(Cause::Resolve, |p| p.cause.clone());
+        self.batch(
+            planned.into_iter().map(|p| (p.record, p.parents)).collect(),
+            cause,
+        )
+    }
+
+    /// A second machine that saves as this device: same id, same seq, its own clock.
+    pub fn twin(&self) -> Self {
+        let mut twin = self.clone();
+        twin.at += 7_000;
+        twin.batches += 100;
+        twin
     }
 
     pub fn one(&mut self, record: Record, parents: Vec<ChangeId>) -> Change {
@@ -392,3 +410,220 @@ pub fn projected_words(state: &FoldState, c: u16, v: u16) -> Option<String> {
 }
 
 pub type Views = BTreeMap<u8, Vec<Change>>;
+
+pub fn presence_of(book: BookId, how: PresentHow) -> Record {
+    Record::BookPresence {
+        book,
+        value: BookPresence::Present {
+            scope: Scope::Whole,
+            how,
+        },
+    }
+}
+
+pub fn removed_of(book: BookId, seen: &[ChangeId]) -> Record {
+    let mut seen: Vec<_> = seen.iter().map(ChangeId::short).collect();
+    seen.sort();
+    seen.dedup();
+    Record::BookPresence {
+        book,
+        value: BookPresence::Removed { seen },
+    }
+}
+
+pub fn carried(path: &str, n: u8) -> Record {
+    Record::CarriedFile {
+        path: tc_journal::RepoPath::parse(path).expect("path"),
+        value: tc_journal::record::CarriedValue::Present {
+            oid: oid(n),
+            size: u64::from(n),
+            md5: md5(&n.to_string()),
+        },
+    }
+}
+
+/// Changes in a chapter range of the book's verses, keyed for `on`.
+pub fn verse_ids(
+    changes: &[Change],
+    c: u16,
+    verses: std::ops::RangeInclusive<u16>,
+) -> Vec<ChangeId> {
+    verses.map(|v| on(changes, &verse_key(c, v)).id()).collect()
+}
+
+/// The projected USFM of the book.
+pub fn usfm(state: &FoldState) -> String {
+    state.book_usfm(BOOK).unwrap_or_default()
+}
+
+/// The words of USFM text, sorted: every token but markers and the numbers after `\c`
+/// and `\v`.
+pub fn usfm_words(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut skip = false;
+    for token in text.split_whitespace() {
+        if skip {
+            skip = false;
+            continue;
+        }
+        if token == "\\v" || token == "\\c" || token == "\\id" {
+            skip = true;
+            continue;
+        }
+        if token.starts_with('\\') {
+            continue;
+        }
+        out.push(token.to_owned());
+    }
+    out.sort();
+    out
+}
+
+/// The words of verse texts, sorted, as `usfm_words` reads them.
+pub fn words(texts: &[&str]) -> Vec<String> {
+    let mut out: Vec<String> = texts
+        .iter()
+        .flat_map(|t| t.split_whitespace().map(str::to_owned))
+        .collect();
+    out.sort();
+    out
+}
+
+/// A derived file, parsed.
+pub fn rendered(state: &FoldState, file: &DerivedFile) -> Option<serde_json::Value> {
+    state
+        .render(file)
+        .map(|bytes| serde_json::from_slice(&bytes).expect("derived JSON"))
+}
+
+/// Every derived file's bytes, by path, plus `metadata.json` built from them.
+pub fn derived_bytes(state: &FoldState) -> BTreeMap<String, Vec<u8>> {
+    let mut out = BTreeMap::new();
+    let mut table = Vec::new();
+    for file in state.derived_files() {
+        let bytes = state.render(&file).expect("a listed file renders");
+        table.push(tc_burrito::IngredientEntry {
+            path: tc_burrito::IngredientPath::parse(&file.path()).expect("path"),
+            md5: tc_burrito::Md5::of(&bytes),
+            size: bytes.len() as u64,
+            role: file.role().map(str::to_owned),
+            scope: file.scope(&[]),
+        });
+        out.insert(file.path(), bytes);
+    }
+    for placement in state.carried_files() {
+        out.insert(
+            placement.path.clone(),
+            format!("{}:{}", placement.record.as_str(), placement.oid.to_hex()).into_bytes(),
+        );
+    }
+    let source = state.metadata_source((1, 0));
+    let metadata = tc_burrito::build_metadata(&source, &table).expect("metadata builds");
+    assert!(
+        tc_burrito::validate_metadata_bytes(&metadata).is_empty(),
+        "metadata.json is valid"
+    );
+    out.insert("metadata.json".into(), metadata);
+    out
+}
+
+/// Folds the changes forward, backward, one at a time in reverse and in two halves, and
+/// checks that every way gives the same heads, conflicts, anomalies, Detached list and
+/// derived bytes. Returns the forward fold.
+pub fn assert_converges(changes: &[Change]) -> FoldState {
+    let forward = fold(changes);
+    let mut reversed: Vec<Change> = changes.to_vec();
+    reversed.reverse();
+    same_fold(&forward, &fold(&reversed), "reversed");
+    let mut state = FoldState::new(ProjectKind::Bible);
+    for change in &reversed {
+        state.add([FoldInput::from(change.clone())]);
+    }
+    same_fold(&forward, &state, "one by one");
+    let mut state = FoldState::new(ProjectKind::Bible);
+    let half = changes.len() / 2;
+    state.add(changes[half..].iter().cloned().map(FoldInput::from));
+    state.add(changes[..half].iter().cloned().map(FoldInput::from));
+    same_fold(&forward, &state, "two halves");
+    forward
+}
+
+/// Two folds of one change set agree on everything a person or a file can see.
+pub fn same_fold(expected: &FoldState, got: &FoldState, how: &str) {
+    let (a, b) = (summary(expected), summary(got));
+    assert_eq!(a.0, b.0, "{how}: frontier");
+    for (x, y) in a.1.iter().zip(b.1.iter()) {
+        if x != y {
+            let at = x
+                .bytes()
+                .zip(y.bytes())
+                .position(|(p, q)| p != q)
+                .unwrap_or(0);
+            let from = at.saturating_sub(200);
+            panic!(
+                "{how}: conflicts differ at byte {at}\nexpected …{}\n     got …{}",
+                &x[from..(at + 200).min(x.len())],
+                &y[from..(at + 200).min(y.len())]
+            );
+        }
+    }
+    assert_eq!(a.1.len(), b.1.len(), "{how}: conflict count");
+    assert_eq!(a.2, b.2, "{how}: anomalies");
+    assert_eq!(a.3, b.3, "{how}: detached");
+    let (da, db) = (derived_bytes(expected), derived_bytes(got));
+    for (path, bytes) in &da {
+        assert_eq!(
+            Some(String::from_utf8_lossy(bytes)),
+            db.get(path).map(|b| String::from_utf8_lossy(b)),
+            "{how}: {path}"
+        );
+    }
+    assert_eq!(
+        da.keys().collect::<Vec<_>>(),
+        db.keys().collect::<Vec<_>>(),
+        "{how}: derived paths"
+    );
+}
+
+/// A change's canonical JSON edited and hashed again: a line another program, or a newer
+/// app, could have written.
+pub fn forged(change: &Change, edit: impl FnOnce(&mut JsonMap)) -> FoldInput {
+    let mut json = tc_journal::json::parse(change.raw()).expect("canonical");
+    let Json::Obj(map) = &mut json else {
+        panic!("a change is an object")
+    };
+    edit(map);
+    let raw: std::sync::Arc<[u8]> = json.to_canonical().into();
+    let id = ChangeId::of(&raw);
+    FoldInput::new(tc_journal::change::parse_change(id, raw), None)
+}
+
+/// The last change of `changes` on `key`: the head a view that wrote them in order shows.
+pub fn latest(changes: &[Change], key: &RecordKey) -> Change {
+    changes
+        .iter()
+        .rev()
+        .find(|c| c.body().record.key() == *key)
+        .cloned()
+        .expect("a change on the key")
+}
+
+/// A join of verses `first..=last` of chapter `c`, as written from `view`: the first verse
+/// a span with every joined verse's words, the others covered by it.
+pub fn join(dev: &mut Dev, view: &[Change], c: u16, first: u16, last: u16) -> Vec<Change> {
+    let mut joined = Vec::new();
+    for v in first..=last {
+        joined.push(words_of(&latest(view, &verse_key(c, v)).body().record).expect("text"));
+    }
+    let mut items = vec![(
+        verse(c, first, text(&joined.join(" "), last)),
+        vec![latest(view, &verse_key(c, first)).id()],
+    )];
+    for v in first + 1..=last {
+        items.push((
+            verse(c, v, covered(first)),
+            vec![latest(view, &verse_key(c, v)).id()],
+        ));
+    }
+    dev.batch(items, Cause::Edit)
+}

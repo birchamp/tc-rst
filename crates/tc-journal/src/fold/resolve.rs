@@ -228,8 +228,11 @@ impl FoldState {
         }
     }
 
-    /// The newest text a verse ever had as a verse of its own (its `last` is itself), else
-    /// its newest text: what *Keep separate* writes back (the base before a join).
+    /// The latest text a verse had as a verse of its own (its `last` is itself), else its
+    /// latest text: what *Keep separate* writes back (the base before a join). "Latest" is
+    /// by ancestry: a text that another one continues is never chosen, so a slow clock
+    /// cannot bring back the words a later edit replaced; only between concurrent texts
+    /// does (rank, at, id) choose.
     fn own_text(&self, k: KeyIdx, verse: u16) -> Option<VerseValue> {
         let mut seen: BTreeSet<ChangeIdx> = BTreeSet::new();
         for h in self.entry(k).heads.iter() {
@@ -239,16 +242,25 @@ impl FoldState {
             .into_iter()
             .filter(|c| matches!(self.meta(*c).verse(), Some(VerseShape::Text { .. })))
             .collect();
-        let own = texts
-            .iter()
-            .copied()
-            .filter(|c| matches!(self.meta(*c).verse(), Some(VerseShape::Text { last, .. }) if last == verse))
-            .max_by_key(|c| (self.meta(*c).at, self.meta(*c).id));
-        let any = texts
-            .iter()
-            .copied()
-            .max_by_key(|c| (self.meta(*c).at, self.meta(*c).id));
-        let c = own.or(any)?;
+        let latest = |pool: Vec<ChangeIdx>| -> Option<ChangeIdx> {
+            let mut below: BTreeSet<ChangeIdx> = BTreeSet::new();
+            for c in &pool {
+                for p in super::merge::key_parents(self, *c) {
+                    below.extend(ancestors_or_self(self, p));
+                }
+            }
+            pool.into_iter()
+                .filter(|c| !below.contains(c))
+                .max_by_key(|c| self.meta(*c).order())
+        };
+        let own = latest(
+            texts
+                .iter()
+                .copied()
+                .filter(|c| matches!(self.meta(*c).verse(), Some(VerseShape::Text { last, .. }) if last == verse))
+                .collect(),
+        );
+        let c = own.or_else(|| latest(texts.clone()))?;
         match record_of(self, c)? {
             Record::Verse {
                 value:
@@ -486,28 +498,13 @@ impl FoldState {
             _ => None,
         };
         let base_words = words_of(&base)?;
-        let base_tokens: Vec<&str> = base_words.split_inclusive(char::is_whitespace).collect();
-        let mut edits: Vec<(usize, usize, Vec<String>)> = Vec::new();
+        let base_tokens = tokens(&base_words);
+        let mut versions: Vec<String> = Vec::new();
         for candidate in &conflict.candidates {
-            let words = words_of(&candidate.value)?;
-            let tokens: Vec<&str> = words.split_inclusive(char::is_whitespace).collect();
-            edits.extend(word_edits(&base_tokens, &tokens));
+            versions.push(words_of(&candidate.value)?);
         }
-        edits.sort_by_key(|(start, end, _)| (*start, *end));
-        // Disjoint: no two edits touch the same or adjacent base tokens.
-        for pair in edits.windows(2) {
-            if pair[1].0 <= pair[0].1 {
-                return None;
-            }
-        }
-        let mut out = String::new();
-        let mut at = 0;
-        for (start, end, replacement) in &edits {
-            out.extend(base_tokens[at..*start].iter().copied());
-            out.extend(replacement.iter().map(String::as_str));
-            at = *end;
-        }
-        out.extend(base_tokens[at..].iter().copied());
+        let others: Vec<Vec<&str>> = versions.iter().map(|w| tokens(w)).collect();
+        let out = apply_disjoint(&base_tokens, &others)?.concat();
         let mut merged = conflict
             .candidates
             .iter()
@@ -523,6 +520,126 @@ impl FoldState {
             *words = out;
         }
         Some(merged)
+    }
+
+    /// *Combine* for a passage (§8.3), offered when the two sides' word changes against
+    /// the passage's base, taken over its text with its verse markers, touch disjoint
+    /// ranges: one record per verse of the group, for the person to see and confirm.
+    /// ("Juan's change applied to 2:3, where that text now is.")
+    pub fn combine_passage(&self, id: &ConflictId) -> Option<Vec<Record>> {
+        let conflict = self.listed(id).ok()?;
+        if conflict.kind != ConflictKind::Passage {
+            return None;
+        }
+        let sides: BTreeSet<Side> = conflict.candidates.iter().filter_map(|c| c.side).collect();
+        if sides.len() != 2 {
+            return None;
+        }
+        let mut keys = Self::conflict_keys(conflict);
+        if keys.iter().any(|k| !matches!(k, RecordKey::Verse(..))) {
+            return None;
+        }
+        keys.sort();
+        let batches: BTreeSet<crate::ids::BatchId> = sides
+            .iter()
+            .filter_map(|s| match s {
+                Side::Batch(b) => Some(*b),
+                Side::Others => None,
+            })
+            .collect();
+        // The passage before either side: the single base of a record both sides wrote,
+        // else the record with every passage side rewound.
+        let mut base: Vec<Option<Record>> = Vec::new();
+        for key in &keys {
+            let k = self.idx_of(key)?;
+            let heads: Vec<ChangeIdx> = self.entry(k).heads.to_vec();
+            let before = if heads.len() > 1 {
+                super::merge::ancestry(self, &heads).bases
+            } else {
+                let bad: BTreeSet<ChangeIdx> = self
+                    .entry(k)
+                    .changes
+                    .iter()
+                    .copied()
+                    .filter(|c| batches.contains(&self.batch(self.meta(*c).batch).id))
+                    .collect();
+                rewind(self, &heads, &bad)
+            };
+            match before.as_slice() {
+                [] => base.push(None),
+                [one] => base.push(Some(record_of(self, *one)?)),
+                _ => return None,
+            }
+        }
+        let mut versions: Vec<Vec<Option<Record>>> = Vec::new();
+        for side in &sides {
+            let values = self.keep_side(conflict, *side).ok()?;
+            let by_key: BTreeMap<RecordKey, Record> = values
+                .into_iter()
+                .map(|p| (p.record.key(), p.record))
+                .collect();
+            versions.push(keys.iter().map(|k| by_key.get(k).cloned()).collect());
+        }
+        let mut headers: BTreeMap<String, (RecordKey, VerseValue)> = BTreeMap::new();
+        let base_text = passage_tokens(&base, &mut headers)?;
+        let mut side_texts: Vec<Vec<String>> = Vec::new();
+        for version in &versions {
+            side_texts.push(passage_tokens(version, &mut headers)?);
+        }
+        let base_refs: Vec<&str> = base_text.iter().map(String::as_str).collect();
+        let side_refs: Vec<Vec<&str>> = side_texts
+            .iter()
+            .map(|t| t.iter().map(String::as_str).collect())
+            .collect();
+        let combined = apply_disjoint(&base_refs, &side_refs)?;
+        // Back to records: each header starts a verse; words and the layout follow it.
+        let mut out: BTreeMap<RecordKey, Record> = BTreeMap::new();
+        let mut current: Option<(RecordKey, VerseValue)> = None;
+        let finish = |current: Option<(RecordKey, VerseValue)>,
+                      out: &mut BTreeMap<RecordKey, Record>|
+         -> Option<()> {
+            if let Some((RecordKey::Verse(book, chapter, verse), value)) = current {
+                let record = Self::verse_record(book, chapter, verse, value);
+                if out.insert(record.key(), record).is_some() {
+                    return None;
+                }
+            }
+            Some(())
+        };
+        for token in combined {
+            if let Some(header) = headers.get(&token) {
+                finish(current.take(), &mut out)?;
+                current = Some(header.clone());
+            } else if let Some(layout) = token.strip_prefix(LAYOUT_TOKEN) {
+                match current.as_mut() {
+                    Some((_, VerseValue::Text { layout: l, .. })) => *l = layout.to_owned(),
+                    _ => return None,
+                }
+            } else {
+                match current.as_mut() {
+                    Some((_, VerseValue::Text { words, .. })) => words.push_str(&token),
+                    _ => return None,
+                }
+            }
+        }
+        finish(current.take(), &mut out)?;
+        Some(
+            keys.iter()
+                .filter_map(|key| match key {
+                    RecordKey::Verse(book, chapter, verse) => {
+                        Some(out.remove(key).unwrap_or_else(|| {
+                            Self::verse_record(
+                                *book,
+                                *chapter,
+                                *verse,
+                                VerseValue::Absent { moved_to: None },
+                            )
+                        }))
+                    }
+                    _ => None,
+                })
+                .collect(),
+        )
     }
 
     /// *Choose per line* (§8.3): the record with every agreed unit and, for each disputed
@@ -772,9 +889,92 @@ impl FoldState {
     }
 }
 
+/// Words and the whitespace between them, as alternating tokens, so that joining them gives
+/// back the bytes.
+fn tokens(text: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut start = 0;
+    let mut space: Option<bool> = None;
+    for (i, ch) in text.char_indices() {
+        let is_space = ch.is_whitespace();
+        if space.is_some_and(|s| s != is_space) {
+            out.push(&text[start..i]);
+            start = i;
+        }
+        space = Some(is_space);
+    }
+    if start < text.len() {
+        out.push(&text[start..]);
+    }
+    out
+}
+
+/// The cells a longest-common-subsequence table may have; a larger middle is one edit.
+const LCS_CELLS: usize = 4_000_000;
+
 /// The edits that turn `base` into `other`, as (start, end, replacement) over base token
-/// indices, from a longest common subsequence.
+/// indices: the common prefix and suffix are kept, and the middle is diffed by a longest
+/// common subsequence (or replaced whole when it is too large to diff).
 fn word_edits(base: &[&str], other: &[&str]) -> Vec<(usize, usize, Vec<String>)> {
+    let prefix = base
+        .iter()
+        .zip(other.iter())
+        .take_while(|(a, b)| a == b)
+        .count();
+    let suffix = base[prefix..]
+        .iter()
+        .rev()
+        .zip(other[prefix..].iter().rev())
+        .take_while(|(a, b)| a == b)
+        .count();
+    let base_mid = &base[prefix..base.len() - suffix];
+    let other_mid = &other[prefix..other.len() - suffix];
+    if base_mid.is_empty() && other_mid.is_empty() {
+        return Vec::new();
+    }
+    if (base_mid.len() + 1).saturating_mul(other_mid.len() + 1) > LCS_CELLS {
+        return vec![(
+            prefix,
+            prefix + base_mid.len(),
+            other_mid.iter().map(|t| (*t).to_owned()).collect(),
+        )];
+    }
+    lcs_edits(base_mid, other_mid)
+        .into_iter()
+        .map(|(start, end, replacement)| (start + prefix, end + prefix, replacement))
+        .collect()
+}
+
+/// Applies every side's edits against `base` when no two of them touch the same base
+/// tokens: ranges may meet but not overlap, and two insertions at one point are ambiguous.
+fn apply_disjoint(base: &[&str], sides: &[Vec<&str>]) -> Option<Vec<String>> {
+    let mut edits: Vec<(usize, usize, Vec<String>)> = Vec::new();
+    for side in sides {
+        edits.extend(word_edits(base, side));
+    }
+    edits.sort_by_key(|e| (e.0, e.1));
+    edits.dedup();
+    for pair in edits.windows(2) {
+        let (a, b) = (&pair[0], &pair[1]);
+        let overlap = b.0 < a.1;
+        let same_point = a.0 == a.1 && b.0 == b.1 && a.0 == b.0;
+        if overlap || same_point {
+            return None;
+        }
+    }
+    let mut out: Vec<String> = Vec::new();
+    let mut at = 0;
+    for (start, end, replacement) in edits {
+        out.extend(base[at..start].iter().map(|t| (*t).to_owned()));
+        out.extend(replacement);
+        at = end;
+    }
+    out.extend(base[at..].iter().map(|t| (*t).to_owned()));
+    Some(out)
+}
+
+/// The edits of a longest common subsequence.
+fn lcs_edits(base: &[&str], other: &[&str]) -> Vec<(usize, usize, Vec<String>)> {
     let (n, m) = (base.len(), other.len());
     let mut lcs = vec![vec![0u32; m + 1]; n + 1];
     for i in (0..n).rev() {
@@ -810,4 +1010,64 @@ fn word_edits(base: &[&str], other: &[&str]) -> Vec<(usize, usize, Vec<String>)>
         edits.push((start, n, replacement));
     }
     edits
+}
+
+/// Marks the start of a verse's layout among a passage's tokens; a verse header is a
+/// token that starts with [`HEADER_TOKEN`].
+const LAYOUT_TOKEN: char = '\u{2}';
+const HEADER_TOKEN: char = '\u{1}';
+
+/// A passage as tokens: for each verse, a header naming its key and its fixed fields, its
+/// words and whitespace, and its layout. `None` when a word could be read as a marker.
+fn passage_tokens(
+    records: &[Option<Record>],
+    headers: &mut BTreeMap<String, (RecordKey, VerseValue)>,
+) -> Option<Vec<String>> {
+    let mut out = Vec::new();
+    for record in records.iter().flatten() {
+        let Record::Verse { value, .. } = record else {
+            return None;
+        };
+        // A verse absent with no destination is no verse: the same as no record, which
+        // is what a side that never wrote it has.
+        if matches!(value, VerseValue::Absent { moved_to: None }) {
+            continue;
+        }
+        let key = record.key();
+        let (template, words, layout) = match value {
+            VerseValue::Text {
+                marker,
+                words,
+                layout,
+                last,
+                from,
+            } => (
+                VerseValue::Text {
+                    marker: marker.clone(),
+                    words: String::new(),
+                    layout: String::new(),
+                    last: *last,
+                    from: *from,
+                },
+                Some(words.as_str()),
+                Some(layout.as_str()),
+            ),
+            other => (other.clone(), None, None),
+        };
+        let header = format!("{HEADER_TOKEN}{key:?}{template:?}");
+        headers.insert(header.clone(), (key, template));
+        out.push(header);
+        if let Some(words) = words {
+            for token in tokens(words) {
+                if token.starts_with(HEADER_TOKEN) || token.starts_with(LAYOUT_TOKEN) {
+                    return None;
+                }
+                out.push(token.to_owned());
+            }
+        }
+        if let Some(layout) = layout {
+            out.push(format!("{LAYOUT_TOKEN}{layout}"));
+        }
+    }
+    Some(out)
 }

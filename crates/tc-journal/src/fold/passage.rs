@@ -140,8 +140,10 @@ pub(crate) fn local_projection(state: &FoldState, k: KeyIdx) -> Projected {
 /// The side order: largest (rank, at, id), then the side itself.
 type SideTime = ((u8, crate::ids::WallTime, ChangeId), Side);
 
-fn build_group(state: &mut FoldState, records: Vec<KeyIdx>, dirty: &mut Dirty) {
+fn build_group(state: &mut FoldState, mut records: Vec<KeyIdx>, dirty: &mut Dirty) {
     state.count(Counter::GroupsBuilt, 1);
+    // The order records were discovered in depends on arrival; the conflict must not.
+    records.sort_by(|a, b| state.entry(*a).key.cmp(&state.entry(*b).key));
     let Some(&first) = records.iter().min_by_key(|k| state.entry(**k).key.clone()) else {
         return;
     };
@@ -161,13 +163,11 @@ fn build_group(state: &mut FoldState, records: Vec<KeyIdx>, dirty: &mut Dirty) {
         let anc = ancestry(state, &heads);
         bases.extend(anc.bases.iter().map(|b| state.meta(*b).id));
         let div_set = div(&anc);
-        // The changes of passage batches on this record.
-        let batch_changes: Vec<(BatchIdx, ChangeIdx)> = state
-            .entry(r)
-            .changes
+        // The changes of passage batches on this record that are in its Div set: a
+        // passage batch every head descends from is history, not a side.
+        let batch_changes: Vec<(BatchIdx, ChangeIdx)> = div_set
             .iter()
             .copied()
-            .filter(|c| state.meta(*c).active)
             .map(|c| (state.meta(c).batch, c))
             .filter(|(b, _)| state.batch(*b).passage.contains(&book))
             .collect();
@@ -234,13 +234,13 @@ fn build_group(state: &mut FoldState, records: Vec<KeyIdx>, dirty: &mut Dirty) {
                 .get(h)
                 .and_then(|s| s.first().copied())
                 .or_else(|| {
-                    // A single-head record of the passage: the side of its head's batch.
-                    let b = meta.batch;
-                    state
-                        .batch(b)
-                        .passage
-                        .contains(&book)
-                        .then(|| Side::Batch(state.batch(b).id))
+                    // A single-head record of the passage: the side whose change on it the
+                    // head is or descends from.
+                    let anc = ancestors_or_self(state, *h);
+                    anc.iter()
+                        .map(|a| Side::Batch(state.batch(state.meta(*a).batch).id))
+                        .filter(|s| sides.contains_key(s))
+                        .min()
                 })
                 .unwrap_or(Side::Others);
             if let Some(candidate) = super::attach::candidate(state, *h, Vec::new(), Some(side)) {
@@ -248,6 +248,10 @@ fn build_group(state: &mut FoldState, records: Vec<KeyIdx>, dirty: &mut Dirty) {
             }
         }
     }
+    candidates.sort_by(|a, b| {
+        (a.value.key(), std::cmp::Reverse((a.at, a.head)))
+            .cmp(&(b.value.key(), std::cmp::Reverse((b.at, b.head))))
+    });
     let mut also_keys: Vec<RecordKey> = records
         .iter()
         .filter(|k| **k != first)
