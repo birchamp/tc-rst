@@ -42,7 +42,9 @@ rebuild must stay quick at that size for the whole life of a project.
   for the 59 books those releases contain (173,337 rows) and generated rows at the v89
   counts in `fixtures/tc4/conformance-fixtures/check-density.json` for the other seven. The
   Hebrew of every Old Testament book is real (`fixtures/scale/resources/hbo_uhb-v3.0.0.zip`).
-  Translation text and alignments outside Psalms are sampled from the Psalms ULT. Three
+  Translation text and alignments are the real ULT v91 for its 59 books
+  (`fixtures/scale/resources/en_ult-v91.zip`, 369,635 alignment groups) and are sampled from
+  it for the other seven. Three
   devices edit for three years at the §14 rates (about 620,000 changes), with concurrent
   edits of the same records at a realistic rate so that conflicts exist. One deterministic,
   seeded generator produces both the journal changes and the plain inputs that domain crates
@@ -66,7 +68,7 @@ inside the whole-Bible project, so project size is always present.
 | Checking | Count what an upgrade or gateway change would invalidate | whole Bible, 215,767 checks | 2 s |
 | Checking | Plan the carry-over for an upgrade or gateway change | whole Bible | 5 s in the background; 300 ms per book |
 | Aligning | Open the aligner on a verse | the longest verse in Psalms | 30 ms |
-| Aligning | Suggestions for one verse | model trained on NT + GEN + PSA alignments (tC4's responsiveness fixture) | 50 ms; training in the background; after an alignment save the model updates in the background |
+| Aligning | Suggestions for one verse | model trained on the NT + GEN + PSA alignments of ULT v91 (tC4's responsiveness fixture used v89) | 50 ms; training in the background; after an alignment save the model updates in the background |
 | Aligning | Reflow alignments after a verse edit | one verse | 2 ms |
 | Resources | Load one book's resources from the installed store (original language, ULT, UST, tN, TWL, linked tW articles) | Psalms | 300 ms the first time, then cached; 60 MiB per open book |
 | Project | Cold open | whole Bible | 3 s, with determinate progress |
