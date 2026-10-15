@@ -192,23 +192,24 @@ fn list(p: &Props, key: &str) -> Vec<Value> {
     }
 }
 
+fn select_option(o: &Value) -> Option<SelectOption> {
+    match o {
+        Value::String(s) => Some(SelectOption::from(s.as_str())),
+        Value::Object(o) => Some(SelectOption {
+            value: field_of(o, "value").unwrap_or_default(),
+            label: field_of(o, "label").unwrap_or_default(),
+            code: field_of(o, "code"),
+            meta: field_of(o, "meta"),
+            badge: field_of(o, "badge"),
+            group: field_of(o, "group"),
+            disabled: flag_of(o, "disabled"),
+        }),
+        _ => None,
+    }
+}
+
 fn select_options(p: &Props, key: &str) -> Vec<SelectOption> {
-    list(p, key)
-        .iter()
-        .filter_map(|o| match o {
-            Value::String(s) => Some(SelectOption::from(s.as_str())),
-            Value::Object(o) => Some(SelectOption {
-                value: field_of(o, "value").unwrap_or_default(),
-                label: field_of(o, "label").unwrap_or_default(),
-                code: field_of(o, "code"),
-                meta: field_of(o, "meta"),
-                badge: field_of(o, "badge"),
-                group: field_of(o, "group"),
-                disabled: flag_of(o, "disabled"),
-            }),
-            _ => None,
-        })
-        .collect()
+    list(p, key).iter().filter_map(select_option).collect()
 }
 
 fn strings(p: &Props, key: &str) -> Vec<String> {
@@ -321,12 +322,13 @@ fn rule(p: Props) -> AnyView {
 }
 
 fn progress(p: Props) -> AnyView {
+    let d = ProgressProps::default();
     Progress(ProgressProps {
         value: p.num_signal("value"),
         shape: p.keyword("shape").unwrap_or_default(),
         tone: p.keyword("tone").unwrap_or_default(),
-        height: p.num("height").unwrap_or(5.0),
-        size: p.num("size").unwrap_or(18.0),
+        height: p.num("height").unwrap_or(d.height),
+        size: p.num("size").unwrap_or(d.size),
         label: p.str("label"),
         style: p.css("style"),
         attrs: p.rest(),
@@ -390,13 +392,14 @@ fn field_group(p: Props) -> AnyView {
 }
 
 fn input(p: Props) -> AnyView {
+    let d = InputProps::default();
     Input(InputProps {
         tag: p.keyword("as"),
         variant: p.keyword("variant").unwrap_or_default(),
         size: p.keyword("size"),
         leading: p.children("leading"),
         trailing: maybe_view(&p, "trailing"),
-        rows: p.num("rows").map_or(3, |n| n as u32),
+        rows: p.num("rows").map_or(d.rows, |n| n as u32),
         invalid: MaybeProp::from(p.bool("invalid")),
         disabled: MaybeProp::from(p.bool("disabled")),
         value: controlled(&p, "value"),
@@ -419,6 +422,7 @@ fn layer(p: Props) -> AnyView {
         warn("gallery: Layer without children");
         return ().into_any();
     };
+    let d = LayerProps::new(children.clone());
     Layer(LayerProps {
         open: Some(if p.has("open") {
             p.flag_signal("open")
@@ -429,18 +433,16 @@ fn layer(p: Props) -> AnyView {
         scrim: p.str("scrim").map(|s| Scrim::parse(&s)),
         placement: p.keyword("placement").unwrap_or_default(),
         anchor_to: None,
-        offset: p.num("offset").unwrap_or(6.0),
+        offset: p.num("offset").unwrap_or(d.offset),
         align: p.keyword("align").unwrap_or_default(),
         side: p.keyword("side").unwrap_or_default(),
-        dismiss: p
-            .str("dismiss")
-            .map_or_else(Dismiss::default, |d| Dismiss::parse(&d)),
+        dismiss: p.str("dismiss").map_or(d.dismiss, |x| Dismiss::parse(&x)),
         trap_focus: p.flag("trapFocus"),
         lock_scroll: p.flag("lockScroll"),
-        restore_focus: p.bool("restoreFocus").unwrap_or(true),
+        restore_focus: p.bool("restoreFocus").unwrap_or(d.restore_focus),
         on_dismiss: handler(&p, "onDismiss"),
         navigate: p.keyword("navigate"),
-        animate: p.bool("animate").unwrap_or(true),
+        animate: p.bool("animate").unwrap_or(d.animate),
         scrim_attrs: Attrs::new(),
         role: p.str("role"),
         label: p.str("label"),
@@ -508,14 +510,10 @@ fn table(p: Props) -> AnyView {
             cell: None,
         })
         .collect();
-    let rows: Vec<JsonRow> = list(&p, "rows")
-        .into_iter()
-        .filter_map(|r| r.as_object().cloned().map(JsonRow))
-        .collect();
     let empty = p.value("empty").map(|v| ViewFn::from(move || node(&v)));
     Table(TableProps {
         columns,
-        rows: Signal::from(rows),
+        rows: p.list_signal("rows", |r| r.as_object().cloned().map(JsonRow)),
         caption: p.str("caption"),
         caption_visible: p.flag("captionVisible"),
         row_key: None,
@@ -593,10 +591,11 @@ fn overline(p: Props) -> AnyView {
 }
 
 fn progress_bar(p: Props) -> AnyView {
+    let d = ProgressBarProps::default();
     ProgressBar(ProgressBarProps {
         value: num_or(&p, "value", 0.0),
         tone: p.keyword("tone").unwrap_or_default(),
-        height: p.num("height").unwrap_or(5.0),
+        height: p.num("height").unwrap_or(d.height),
         style: p.css("style"),
         attrs: p.rest(),
     })
@@ -604,9 +603,10 @@ fn progress_bar(p: Props) -> AnyView {
 }
 
 fn status_dot(p: Props) -> AnyView {
+    let d = StatusDotProps::default();
     StatusDot(StatusDotProps {
         status: Signal::from(p.keyword::<Status>("status").unwrap_or_default()),
-        size: p.num("size").unwrap_or(9.0),
+        size: p.num("size").unwrap_or(d.size),
         label: p.str("label"),
         style: p.css("style"),
         attrs: p.rest(),
@@ -637,9 +637,10 @@ fn accordion(p: Props) -> AnyView {
 }
 
 fn avatar(p: Props) -> AnyView {
+    let d = AvatarProps::default();
     Avatar(AvatarProps {
         initials: p.str("initials").unwrap_or_default(),
-        size: p.num("size").unwrap_or(44.0),
+        size: p.num("size").unwrap_or(d.size),
         tone: p.keyword("tone").unwrap_or_default(),
         shape: p.keyword("shape").unwrap_or_default(),
         src: asset(&p, "src"),
@@ -658,9 +659,10 @@ fn key_value_grid(p: Props) -> AnyView {
             v: field_of(o, "v").unwrap_or_default(),
         })
         .collect();
+    let d = KeyValueGridProps::default();
     KeyValueGrid(KeyValueGridProps {
         items,
-        columns: p.num("columns").map_or(2, |n| n as u32),
+        columns: p.num("columns").map_or(d.columns, |n| n as u32),
         style: p.css("style"),
         attrs: p.rest(),
     })
@@ -722,8 +724,9 @@ fn spinner(p: Props) -> AnyView {
         Some(t) => SpinnerTone::Tone(Tone::parse(t).unwrap_or_default()),
         None => SpinnerTone::default(),
     };
+    let d = SpinnerProps::default();
     Spinner(SpinnerProps {
-        size: p.num("size").unwrap_or(18.0),
+        size: p.num("size").unwrap_or(d.size),
         tone,
         label: p.str("label"),
         style: p.css("style"),
@@ -896,7 +899,7 @@ fn suggest_field(p: Props) -> AnyView {
         label: p.str("label"),
         hint: p.str("hint"),
         id: p.str("id"),
-        suggestions: Signal::from(select_options(&p, "suggestions")),
+        suggestions: p.list_signal("suggestions", select_option),
         value: controlled(&p, "value"),
         on_change: handler(&p, "onChange"),
         on_choose: handler(&p, "onChoose"),
@@ -908,11 +911,12 @@ fn suggest_field(p: Props) -> AnyView {
 }
 
 fn text_area(p: Props) -> AnyView {
+    let d = TextAreaProps::default();
     TextArea(TextAreaProps {
         label: p.str("label"),
         variant: p.keyword("variant").unwrap_or_default(),
         dir: p.str("dir"),
-        rows: p.num("rows").map_or(3, |n| n as u32),
+        rows: p.num("rows").map_or(d.rows, |n| n as u32),
         id: p.str("id"),
         invalid: MaybeProp::from(p.bool("invalid")),
         disabled: MaybeProp::from(p.bool("disabled")),
@@ -1132,11 +1136,12 @@ fn scripture_passage(p: Props) -> AnyView {
             text: field_of(o, "text").unwrap_or_default(),
         })
         .collect();
+    let d = ScripturePassageProps::default();
     let props = ScripturePassageProps {
         verses,
         dir: p.str("dir"),
         script: p.keyword("script").unwrap_or_default(),
-        step: p.keyword("step").unwrap_or(Size::Lg),
+        step: p.keyword("step").unwrap_or(d.step),
         size: css_value(p.value("size")),
         highlight: strings(&p, "highlight"),
         style: p.css("style"),
@@ -1146,9 +1151,10 @@ fn scripture_passage(p: Props) -> AnyView {
 }
 
 fn verse_marker(p: Props) -> AnyView {
+    let d = VerseMarkerProps::new(p.num("n").map_or(0, |n| n as u32));
     VerseMarker(VerseMarkerProps {
-        n: p.num("n").map_or(0, |n| n as u32),
-        size: p.num("size").unwrap_or(32.0),
+        n: d.n,
+        size: p.num("size").unwrap_or(d.size),
         state: p.keyword("state").unwrap_or_default(),
         on_pick_up: handler(&p, "onPickUp"),
         label: p.str("label"),

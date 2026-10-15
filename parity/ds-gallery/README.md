@@ -8,7 +8,7 @@ cases from `gallery-spec.json` and compares its images with `screens/`.
   **`d494a9d6ba9f4cdcc09faff9038c93159106045b`** (version `4.0.0-rc.1`, clean tree). The gallery
   imports `src/ds/index.js` and `src/ds/styles.css` from that checkout through a Vite alias. It
   copies nothing and changes nothing there.
-- Output: **712 cases**, 712 PNGs in `screens/<Component>/<state>.png`: 676 component cases for
+- Output: **717 cases**, 717 PNGs in `screens/<Component>/<state>.png`: 681 component cases for
   the 53 components that the 52 files in `src/ds/components` export (`Radio.jsx` exports `Radio`
   and `RadioGroup`), plus 36 token cases. 6.0 MB in total.
 - Contract: `gallery-spec.json` lists every case with its component, state, source file, frame,
@@ -92,8 +92,8 @@ Run them from the repository root. The script builds `tc-ui` with `--features ga
 `-j 2`; set `CARGO_JOBS` to change it) and runs `wasm-bindgen --target web` on the wasm in
 cargo's target directory, which follows `CARGO_TARGET_DIR`. It assembles a static site in
 `target/tc-ui-gallery/` (`--out DIR` to change it): `index.html`, `pkg/`, `assets/` and a copy
-of `gallery-spec.json`. Both profiles draw the same pixels. The release wasm is 1,124,991
-bytes (356 KB with gzip -9), the gallery's spec renderer and `serde_json` included.
+of `gallery-spec.json`. Both profiles draw the same pixels. The release wasm is 1,180,965
+bytes (366 KB with gzip -9), the gallery's spec renderer and `serde_json` included.
 
 ### Capture and compare
 
@@ -104,7 +104,7 @@ node capture-rust.mjs             # build (dev), capture screens-rust/, compare 
 node capture-rust.mjs --release   # the same with the wasm-release build
 node diff.mjs                     # compare again without capturing
 npm run build && node dom-diff.mjs   # the DOM of both galleries; needs the React build in dist/
-node scenarios.mjs                # behaviour after each step of 33 sequences; needs both builds
+node scenarios.mjs                # behaviour after each step of 40 sequences; needs both builds
 ```
 
 `capture-rust.mjs` takes `--only`, `--jobs` and `--no-build` as `capture.mjs` does. It serves
@@ -120,18 +120,21 @@ the report.
 
 A still image and the DOM after at most three steps cannot show behaviour: focus that moves or
 is lost, a layer that should close and does not, a node drawn again where React keeps it (which
-stops its transition and drops any focus on it). `scenarios.mjs` drives 33 sequences of up to 13
+stops its transition and drops any focus on it). `scenarios.mjs` drives 40 sequences of up to 13
 steps on both galleries: roving focus and typeahead in Menu, Select and SuggestField, the focus
 trap of Modal, Drawer and ConfirmDialog, Escape and outside presses with a Select or a Menu open
 inside a Modal, state an owner keeps (a Toggle, a RadioGroup, a Table selection by keyboard, a
-Progress ring), and controlled values a change does not reach. After every step it compares the
+Progress ring, two Accordion panels open at once), lists whose items change while they are
+drawn (Table rows inserted and changed, rows that share a key, Select groups whose name comes
+back, suggestions replaced while the list is open), and controlled values a change does not
+reach. After every step it compares the
 frame's DOM as `dom-diff.mjs` sees it, the focused element, the page's scroll lock, and which
 elements are still the nodes they were (each element is numbered once, in document order, when
 it first appears). It writes `scenario-report.json` and takes `--only` with scenario names.
 
-Result at this commit: 712 of 712 cases at 0 mismatched pixels, with both the dev and the
-wasm-release build. Every `screens-rust/` file is byte-identical to its `screens/` file. 712 of
-712 cases have the same DOM. 33 of 33 scenarios (172 steps) are the same after every step. There
+Result at this commit: 717 of 717 cases at 0 mismatched pixels, with both the dev and the
+wasm-release build. Every `screens-rust/` file is byte-identical to its `screens/` file. 717 of
+717 cases have the same DOM. 40 of 40 scenarios (215 steps) are the same after every step. There
 is no `residuals.json` because nothing needs explaining. Both galleries are captured on the same
 machine, so the machine-dependent rendering under "Skipped, and what to know" (fallback glyphs,
 monospace, Nastaliq) affects both sides alike.
@@ -147,10 +150,10 @@ Each case in `gallery-spec.json`:
 | `frame` | `width`, `height`, `padding` (16 unless stated) and `background` (`#F7FAFC`, which is `--surface-app`). |
 | `document` | `lang` and `dir` of `<html>`. 51 cases use the Arabic interface (`ar`, `rtl`), as tC4 sets it. |
 | `props` | The exact props of the component under test, as JSON. |
-| `render` | Only on 64 cases that place the component in something: a row, an Ocean ground, a centring box. It is the whole tree. Without it the tree is the component with `props`. |
-| `steps` | Interactions before the screenshot (95 cases): `focus` (Tab until the target has keyboard focus), `hover`, `press` (button held), `click`, `key`, `type`. A target is a CSS selector inside the frame. |
-| `needs` | `callbacks`: props that hold a callback (222 cases). `elements`: props that hold elements, such as `children`, `footer`, `trigger`, `center` or a `title` (186 cases). |
-| `cells` | Only on 6 cases that own state, as a screen does: the first value of each cell. A prop `{ "$cell": name }` reads a cell, and a callback `{ "$fn": "set", "cell": name, "from": path }` writes one. A Toggle that turns on, a RadioGroup that changes, a Table row selected by Enter, a Progress ring that moves, and a Modal that closes are drawn by the component, not by a new case. |
+| `render` | Only on 66 cases that place the component in something: a row, an Ocean ground, a centring box. It is the whole tree. Without it the tree is the component with `props`. |
+| `steps` | Interactions before the screenshot (100 cases): `focus` (Tab until the target has keyboard focus), `hover`, `press` (button held), `click`, `key`, `type`. A target is a CSS selector inside the frame. |
+| `needs` | `callbacks`: props that hold a callback (227 cases). `elements`: props that hold elements, such as `children`, `footer`, `trigger`, `center` or a `title` (186 cases). |
+| `cells` | Only on 9 cases that own state, as a screen does: the first value of each cell. A prop `{ "$cell": name }` reads a cell, and a callback `{ "$fn": "set", "cell": name, "from": path }` writes one. A Toggle that turns on, a RadioGroup that changes, a Table row selected by Enter, Table rows and suggestions that change while they are drawn, a Progress ring that moves, and a Modal that closes are drawn by the component, not by a new case. |
 | `isolate` | The case opens a layer, has steps or sets the document language. The browsing index loads it in an iframe. |
 | `note` | Present where a case needs explaining. |
 
@@ -161,7 +164,8 @@ components draw a control only when they get one, such as Modal's ✕ or Toast's
 `{ "$asset": "public/assets/…" }` is a file of the tC4 checkout. Two markers carry state: `{ "$cell":
 "on" }` reads a cell of the case's `cells`, and `{ "$fn": "set", "cell": "on", "from":
 "0.target.checked" }` writes it from the callback's arguments (or `"value"` writes a fixed
-value). Styles are React inline styles.
+value). A cell placed among children draws its value as text, so a case can show what a
+callback handed over. Styles are React inline styles.
 `defaultValue` is a field's initial value.
 
 The `protocol` object in the spec states how each case is drawn. In short: load
@@ -205,8 +209,8 @@ states are real: Modal, Drawer, ConfirmDialog and Layer open in their frame, Men
 | OptionCard | forms/OptionCard.jsx | 14 |
 | Radio, RadioGroup | forms/Radio.jsx | 8, 7 |
 | SearchField | forms/SearchField.jsx | 6 |
-| Select | forms/Select.jsx | 17 |
-| SuggestField | forms/SuggestField.jsx | 6 |
+| Select | forms/Select.jsx | 19 |
+| SuggestField | forms/SuggestField.jsx | 7 |
 | TextArea | forms/TextArea.jsx | 10 |
 | TextField | forms/TextField.jsx | 12 |
 | Toggle | forms/Toggle.jsx | 10 |
@@ -224,7 +228,7 @@ states are real: Modal, Drawer, ConfirmDialog and Layer open in their frame, Men
 | Stack | primitives/Stack.jsx | 8 |
 | Surface | primitives/Surface.jsx | 55 |
 | Switcher | primitives/Switcher.jsx | 17 |
-| Table | primitives/Table.jsx | 9 |
+| Table | primitives/Table.jsx | 11 |
 | Text | primitives/Text.jsx | 40 |
 | BookTile | surfaces/BookTile.jsx | 13 |
 | Callout | surfaces/Callout.jsx | 7 |

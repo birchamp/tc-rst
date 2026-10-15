@@ -1,6 +1,6 @@
 {
-  "same": 712,
-  "total": 712,
+  "same": 717,
+  "total": 717,
   "cases": [
     {
       "id": "Badge/accent-md",
@@ -1527,6 +1527,18 @@
       "diffs": []
     },
     {
+      "id": "Select/open-interleaved-groups",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Select/open-duplicate-values",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
       "id": "Select/rtl-open",
       "same": true,
       "errors": [],
@@ -1558,6 +1570,12 @@
     },
     {
       "id": "SuggestField/no-suggestions-focused",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "SuggestField/suggestions-change",
       "same": true,
       "errors": [],
       "diffs": []
@@ -3304,6 +3322,18 @@
     },
     {
       "id": "Table/stateful",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/duplicate-ids",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Table/rows-change",
       "same": true,
       "errors": [],
       "diffs": []

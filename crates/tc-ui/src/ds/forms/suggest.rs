@@ -8,7 +8,8 @@ use leptos::ev::{KeyboardEvent, MouseEvent};
 use leptos::prelude::*;
 
 use super::select::{SelectOption, row};
-use crate::ds::{Anchor, Attrs, Css, Dismiss, LayerPlacement, Level, use_field};
+use crate::ds::{Anchor, Attrs, Css, Dismiss, LayerPlacement, Level, keyed_list, use_field};
+use crate::keyed::Slots;
 use crate::tokens::{Corner, Edge, Fill, Shadow};
 
 /// Labelled text input with a list of suggestions under it. `suggestions` are rows for the
@@ -179,29 +180,39 @@ fn suggest(
 
     let anchor: Anchor = Callback::new(move |_| boxed.get_untracked().map(Into::into));
     // Rows keyed by value, as React keys them: a row stays the same node while the list
-    // around it changes.
+    // around it changes, and draws (and hands to `on_choose`) the suggestion now at its place.
+    let slots =
+        Memo::new(move |_| suggestions.with(|s| Slots::new(s.iter().map(|o| o.value.clone()))));
     let rows = {
         let opt_id = opt_id.clone();
         move || {
             let opt_id = opt_id.clone();
-            view! {
-                <For
-                    each=move || suggestions.get()
-                    key=|o| o.value.clone()
-                    children=move |o| {
-                        let v = o.value.clone();
-                        let pos = Memo::new(move |_| {
-                            suggestions.with(|s| s.iter().position(|x| x.value == v))
-                        });
-                        let opt_id = opt_id.clone();
-                        let id = Signal::derive(move || opt_id(pos.get().unwrap_or(0)));
-                        let highlighted =
-                            Signal::derive(move || pos.get().is_some_and(|p| p as i64 == hi.get()));
-                        let chosen = o.clone();
-                        row(o, id, Signal::from(false), highlighted, move || choose(chosen.clone()), None)
-                    }
-                />
-            }
+            keyed_list(slots, move |_, at: Memo<usize>| {
+                // keyed_list draws a row for a slot of the suggestions it just read.
+                let Some(first) =
+                    suggestions.with_untracked(|s| s.get(at.get_untracked()).cloned())
+                else {
+                    return ().into_any();
+                };
+                let o = Memo::new(move |prev: Option<&SelectOption>| {
+                    suggestions
+                        .with(|s| s.get(at.get()).cloned())
+                        .or_else(|| prev.cloned())
+                        .unwrap_or_else(|| first.clone())
+                });
+                let opt_id = opt_id.clone();
+                let id = Signal::derive(move || opt_id(at.get()));
+                let highlighted = Signal::derive(move || at.get() as i64 == hi.get());
+                row(
+                    o.into(),
+                    id,
+                    Signal::from(false),
+                    highlighted,
+                    move || choose(o.get_untracked()),
+                    None,
+                )
+                .into_any()
+            })
         }
     };
     let rows: Arc<dyn Fn() -> AnyView + Send + Sync> = Arc::new(move || rows().into_any());

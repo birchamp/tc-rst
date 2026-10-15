@@ -7,13 +7,14 @@
 //! `parity/ds-gallery/gallery-spec.json` for the pixel comparison with tC4.
 //!
 //! The components only run in a browser, so they compile for `wasm32` only. The pure parts
-//! (inline-style building, keyword enums, layout arithmetic, string rules) compile everywhere
-//! and are tested on the host.
+//! (inline-style building, keyword enums, layout arithmetic, string rules, keyed lists)
+//! compile everywhere and are tested on the host.
 
 #[macro_use]
 pub mod css;
 pub mod attrs;
 pub mod geometry;
+pub mod keyed;
 pub mod text;
 pub mod tokens;
 

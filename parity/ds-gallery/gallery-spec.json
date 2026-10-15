@@ -155,12 +155,12 @@
     {
       "name": "Select",
       "file": "components/forms/Select.jsx",
-      "cases": 17
+      "cases": 19
     },
     {
       "name": "SuggestField",
       "file": "components/forms/SuggestField.jsx",
-      "cases": 6
+      "cases": 7
     },
     {
       "name": "TextArea",
@@ -250,7 +250,7 @@
     {
       "name": "Table",
       "file": "components/primitives/Table.jsx",
-      "cases": 9
+      "cases": 11
     },
     {
       "name": "Text",
@@ -7757,6 +7757,109 @@
       "isolate": true
     },
     {
+      "id": "Select/open-interleaved-groups",
+      "component": "Select",
+      "state": "open-interleaved-groups",
+      "file": "components/forms/Select.jsx",
+      "frame": {
+        "width": 340,
+        "height": 400,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "label": "Book",
+        "options": [
+          {
+            "value": "RUT",
+            "label": "Ruth",
+            "code": "RUT",
+            "group": "Old Testament"
+          },
+          {
+            "value": "MAT",
+            "label": "Matthew",
+            "code": "MAT",
+            "group": "New Testament"
+          },
+          {
+            "value": "JON",
+            "label": "Jonah",
+            "code": "JON",
+            "group": "Old Testament"
+          },
+          {
+            "value": "TIT",
+            "label": "Titus",
+            "code": "TIT",
+            "group": "New Testament"
+          }
+        ],
+        "value": "JON",
+        "onChange": {
+          "$fn": "noop"
+        }
+      },
+      "steps": [
+        {
+          "do": "click",
+          "target": "[role=\"combobox\"]"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onChange"
+        ]
+      },
+      "isolate": true,
+      "note": "A group name that comes back later in the list starts a section of its own, with its own rows."
+    },
+    {
+      "id": "Select/open-duplicate-values",
+      "component": "Select",
+      "state": "open-duplicate-values",
+      "file": "components/forms/Select.jsx",
+      "frame": {
+        "width": 340,
+        "height": 260,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "label": "Script font",
+        "options": [
+          "Charis SIL",
+          "Charis SIL",
+          "Awami Nastaliq"
+        ],
+        "value": "Awami Nastaliq",
+        "onChange": {
+          "$fn": "noop"
+        }
+      },
+      "steps": [
+        {
+          "do": "click",
+          "target": "[role=\"combobox\"]"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onChange"
+        ]
+      },
+      "isolate": true,
+      "note": "Two options with one value are two rows."
+    },
+    {
       "id": "Select/rtl-open",
       "component": "Select",
       "state": "rtl-open",
@@ -8061,6 +8164,149 @@
         ]
       },
       "isolate": true
+    },
+    {
+      "id": "SuggestField/suggestions-change",
+      "component": "SuggestField",
+      "state": "suggestions-change",
+      "file": "components/forms/SuggestField.jsx",
+      "frame": {
+        "width": 340,
+        "height": 260,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "label": "Language name",
+        "onChange": {
+          "$fn": "set",
+          "cell": "sugg",
+          "value": [
+            {
+              "value": "hak",
+              "label": "Hakka Chinese",
+              "meta": "Hak-kâ-fa",
+              "code": "hak"
+            },
+            {
+              "value": "ha",
+              "label": "Hausa (Niger)",
+              "code": "ha-NE"
+            }
+          ]
+        },
+        "onChoose": {
+          "$fn": "set",
+          "cell": "picked",
+          "from": "0.label"
+        },
+        "suggestions": {
+          "$cell": "sugg"
+        }
+      },
+      "render": {
+        "$el": "div",
+        "props": {
+          "style": {
+            "display": "flex",
+            "flexDirection": "column",
+            "gap": 8
+          },
+          "children": [
+            {
+              "$el": "SuggestField",
+              "props": {
+                "label": "Language name",
+                "onChange": {
+                  "$fn": "set",
+                  "cell": "sugg",
+                  "value": [
+                    {
+                      "value": "hak",
+                      "label": "Hakka Chinese",
+                      "meta": "Hak-kâ-fa",
+                      "code": "hak"
+                    },
+                    {
+                      "value": "ha",
+                      "label": "Hausa (Niger)",
+                      "code": "ha-NE"
+                    }
+                  ]
+                },
+                "onChoose": {
+                  "$fn": "set",
+                  "cell": "picked",
+                  "from": "0.label"
+                },
+                "suggestions": {
+                  "$cell": "sugg"
+                }
+              }
+            },
+            {
+              "$el": "Text",
+              "props": {
+                "role": "caption",
+                "children": [
+                  "Chosen: ",
+                  {
+                    "$cell": "picked"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "cells": {
+        "sugg": [
+          {
+            "value": "ha",
+            "label": "Hausa",
+            "meta": "Harshen Hausa",
+            "code": "ha"
+          },
+          {
+            "value": "haw",
+            "label": "Hawaiian",
+            "meta": "ʻŌlelo Hawaiʻi",
+            "code": "haw"
+          },
+          {
+            "value": "hak",
+            "label": "Hakka Chinese",
+            "code": "hak"
+          }
+        ],
+        "picked": ""
+      },
+      "steps": [
+        {
+          "do": "focus",
+          "target": "input"
+        },
+        {
+          "do": "key",
+          "key": "ArrowDown"
+        },
+        {
+          "do": "type",
+          "text": "u"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onChange",
+          "onChoose"
+        ]
+      },
+      "isolate": true,
+      "note": "Typing replaces the suggestions while the list is open. The row of Hausa stays, and draws and hands over Hausa (Niger)."
     },
     {
       "id": "SuggestField/rtl-open",
@@ -18905,6 +19151,283 @@
       },
       "isolate": true,
       "note": "Enter selects the focused row, which keeps the focus."
+    },
+    {
+      "id": "Table/duplicate-ids",
+      "component": "Table",
+      "state": "duplicate-ids",
+      "file": "components/primitives/Table.jsx",
+      "frame": {
+        "width": 520,
+        "height": 232,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "columns": [
+          {
+            "key": "book",
+            "header": "Book"
+          },
+          {
+            "key": "code",
+            "header": "Code"
+          },
+          {
+            "key": "verses",
+            "header": "Verses",
+            "align": "numeric"
+          },
+          {
+            "key": "drafted",
+            "header": "Drafted",
+            "align": "numeric"
+          }
+        ],
+        "rows": [
+          {
+            "id": "tit",
+            "book": "Titus",
+            "code": "TIT",
+            "verses": 46,
+            "drafted": "12%"
+          },
+          {
+            "id": "tit",
+            "book": "Jonah",
+            "code": "JON",
+            "verses": 48,
+            "drafted": "4%"
+          },
+          {
+            "id": "rut",
+            "book": "Ruth",
+            "code": "RUT",
+            "verses": 85,
+            "drafted": "0%"
+          }
+        ],
+        "onRowClick": {
+          "$fn": "set",
+          "cell": "picked",
+          "from": "0.book"
+        }
+      },
+      "render": {
+        "$el": "div",
+        "props": {
+          "style": {
+            "display": "flex",
+            "flexDirection": "column",
+            "gap": 8
+          },
+          "children": [
+            {
+              "$el": "Table",
+              "props": {
+                "columns": [
+                  {
+                    "key": "book",
+                    "header": "Book"
+                  },
+                  {
+                    "key": "code",
+                    "header": "Code"
+                  },
+                  {
+                    "key": "verses",
+                    "header": "Verses",
+                    "align": "numeric"
+                  },
+                  {
+                    "key": "drafted",
+                    "header": "Drafted",
+                    "align": "numeric"
+                  }
+                ],
+                "rows": [
+                  {
+                    "id": "tit",
+                    "book": "Titus",
+                    "code": "TIT",
+                    "verses": 46,
+                    "drafted": "12%"
+                  },
+                  {
+                    "id": "tit",
+                    "book": "Jonah",
+                    "code": "JON",
+                    "verses": 48,
+                    "drafted": "4%"
+                  },
+                  {
+                    "id": "rut",
+                    "book": "Ruth",
+                    "code": "RUT",
+                    "verses": 85,
+                    "drafted": "0%"
+                  }
+                ],
+                "onRowClick": {
+                  "$fn": "set",
+                  "cell": "picked",
+                  "from": "0.book"
+                }
+              }
+            },
+            {
+              "$el": "Text",
+              "props": {
+                "role": "caption",
+                "children": [
+                  "Opened: ",
+                  {
+                    "$cell": "picked"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "cells": {
+        "picked": ""
+      },
+      "steps": [
+        {
+          "do": "click",
+          "target": "tbody tr:nth-child(2)"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onRowClick"
+        ]
+      },
+      "isolate": true,
+      "note": "Titus and Jonah share the id \"tit\". Each row draws its own record, and a click on Jonah opens Jonah."
+    },
+    {
+      "id": "Table/rows-change",
+      "component": "Table",
+      "state": "rows-change",
+      "file": "components/primitives/Table.jsx",
+      "frame": {
+        "width": 520,
+        "height": 248,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "columns": [
+          {
+            "key": "book",
+            "header": "Book"
+          },
+          {
+            "key": "code",
+            "header": "Code"
+          },
+          {
+            "key": "verses",
+            "header": "Verses",
+            "align": "numeric"
+          },
+          {
+            "key": "drafted",
+            "header": "Drafted",
+            "align": "numeric"
+          }
+        ],
+        "rows": {
+          "$cell": "rows"
+        },
+        "selectedKey": "jon",
+        "onRowClick": {
+          "$fn": "set",
+          "cell": "rows",
+          "value": [
+            {
+              "id": "est",
+              "book": "Esther",
+              "code": "EST",
+              "verses": 167,
+              "drafted": "0%"
+            },
+            {
+              "id": "tit",
+              "book": "Titus",
+              "code": "TIT",
+              "verses": 46,
+              "drafted": "15%"
+            },
+            {
+              "id": "jon",
+              "book": "Jonah",
+              "code": "JON",
+              "verses": 48,
+              "drafted": "4%"
+            },
+            {
+              "id": "rut",
+              "book": "Ruth",
+              "code": "RUT",
+              "verses": 85,
+              "drafted": "0%"
+            }
+          ]
+        }
+      },
+      "cells": {
+        "rows": [
+          {
+            "id": "tit",
+            "book": "Titus",
+            "code": "TIT",
+            "verses": 46,
+            "drafted": "12%"
+          },
+          {
+            "id": "jon",
+            "book": "Jonah",
+            "code": "JON",
+            "verses": 48,
+            "drafted": "4%"
+          },
+          {
+            "id": "rut",
+            "book": "Ruth",
+            "code": "RUT",
+            "verses": 85,
+            "drafted": "0%"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "do": "focus",
+          "target": "tbody tr:nth-child(2)"
+        },
+        {
+          "do": "key",
+          "key": "Enter"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onRowClick"
+        ]
+      },
+      "isolate": true,
+      "note": "Enter on Jonah inserts Esther above and changes Titus. Every row keeps its nodes, and Jonah keeps the focus."
     },
     {
       "id": "Text/role-display",

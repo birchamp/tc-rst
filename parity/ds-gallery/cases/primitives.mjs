@@ -35,6 +35,20 @@ const ROWS = [
   { id: 'jon', book: 'Jonah', code: 'JON', verses: 48, drafted: '4%' },
   { id: 'rut', book: 'Ruth', code: 'RUT', verses: 85, drafted: '0%' },
 ];
+/* The rows after a change: a row inserted above the others, and new data in a row that stays. */
+const ROWS_NEXT = [
+  { id: 'est', book: 'Esther', code: 'EST', verses: 167, drafted: '0%' },
+  { ...ROWS[0], drafted: '15%' },
+  ROWS[1],
+  ROWS[2],
+];
+/* Two rows with one id, as a list of books can have when a book was added twice. */
+const ROWS_SAME_ID = [ROWS[0], { ...ROWS[1], id: 'tit' }, ROWS[2]];
+/** A case's component with a line under it that shows a cell. */
+const withReadout = (label, name) => (n) => el('div', {
+  style: { display: 'flex', flexDirection: 'column', gap: 8 },
+  children: [n, el('Text', { role: 'caption', children: [label, cell(name)] })],
+});
 
 const ROLE_TEXT = {
   display: 'Your projects', h1: 'Your projects', h2: 'Project settings', h3: 'Add a project', title: 'Equipo Ejemplo',
@@ -259,6 +273,14 @@ export default [
     ['rtl', { columns: [{ key: 'book', header: 'السفر' }, { key: 'verses', header: 'الآيات', align: 'numeric' }], rows: [{ id: 'tit', book: 'تيطس', verses: 46 }, { id: 'jon', book: 'يونان', verses: 48 }], selectedKey: 'tit' }, { document: AR, frame: { height: 160 } }],
     ['stateful', { columns: COLUMNS, rows: ROWS, selectedKey: cell('sel'), onRowClick: set('sel', '0.id') },
       { cells: { sel: 'tit' }, steps: [focus('tbody tr:nth-child(2)'), key('Enter')], note: 'Enter selects the focused row, which keeps the focus.' }],
+    ['duplicate-ids', { columns: COLUMNS, rows: ROWS_SAME_ID, onRowClick: set('picked', '0.book') }, {
+      frame: { height: 232 }, cells: { picked: '' }, wrap: withReadout('Opened: ', 'picked'), steps: [click('tbody tr:nth-child(2)')],
+      note: 'Titus and Jonah share the id "tit". Each row draws its own record, and a click on Jonah opens Jonah.',
+    }],
+    ['rows-change', { columns: COLUMNS, rows: cell('rows'), selectedKey: 'jon', onRowClick: setTo('rows', ROWS_NEXT) }, {
+      frame: { height: 248 }, cells: { rows: ROWS }, steps: [focus('tbody tr:nth-child(2)'), key('Enter')],
+      note: 'Enter on Jonah inserts Esther above and changes Titus. Every row keeps its nodes, and Jonah keeps the focus.',
+    }],
   ]),
 
   ...group('Text', { frame: { width: 360, height: 60 } }, [

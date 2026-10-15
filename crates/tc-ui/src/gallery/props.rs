@@ -57,7 +57,7 @@ fn cell_named(name: &str) -> Option<RwSignal<Value>> {
 }
 
 /// The cell a `{ "$cell": name }` names.
-fn cell_of(v: &Value) -> Option<RwSignal<Value>> {
+pub(super) fn cell_of(v: &Value) -> Option<RwSignal<Value>> {
     cell_named(v.get("$cell")?.as_str()?)
 }
 
@@ -77,7 +77,14 @@ impl Arg for leptos::ev::FocusEvent {}
 impl Arg for crate::ds::DismissReason {}
 impl Arg for crate::ds::SelectOption {
     fn pick(&self, path: &str) -> Option<Value> {
-        (path == "0.value").then(|| Value::String(self.value.clone()))
+        let field = match path {
+            "0.value" => Some(&self.value),
+            "0.label" => Some(&self.label),
+            "0.code" => self.code.as_ref(),
+            "0.meta" => self.meta.as_ref(),
+            _ => None,
+        };
+        field.map(|f| Value::String(f.clone()))
     }
 }
 
@@ -156,6 +163,22 @@ impl Props {
             },
             None => Signal::from(None),
         }
+    }
+
+    /// A list the component takes as a signal, item by item: a cell follows its writes. A
+    /// single value is a list of one.
+    pub fn list_signal<T: Clone + PartialEq + Send + Sync + 'static>(
+        &self,
+        key: &str,
+        item: fn(&Value) -> Option<T>,
+    ) -> Signal<Vec<T>> {
+        let s = self.live(key, move |v| {
+            Some(match v {
+                Value::Array(a) => a.iter().filter_map(item).collect::<Vec<_>>(),
+                other => item(other).into_iter().collect(),
+            })
+        });
+        Memo::new(move |_| s.get().unwrap_or_default()).into()
     }
 
     /// A boolean the component takes as a signal; absent is false.
@@ -270,10 +293,16 @@ impl Props {
         }
     }
 
-    /// Elements, rendered when the component calls for them.
+    /// Elements, rendered when the component calls for them. A cell among them draws its
+    /// value and follows its writes, as React draws its owner's state.
     pub fn children(&self, key: &str) -> Option<Children> {
-        let v = self.take(key)?;
+        let v = self.tree(key)?;
         Some(Box::new(move || node(&v)))
+    }
+
+    /// The prop as a tree of nodes, its cells unread: [`node`] draws them live.
+    pub fn tree(&self, key: &str) -> Option<Value> {
+        self.raw(key).cloned()
     }
 
     /// Every prop no getter has read, as HTML attributes (React's `...rest`).

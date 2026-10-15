@@ -1,6 +1,6 @@
 // components/forms: Checkbox, DropZone, FilterChip, OptionCard, Radio + RadioGroup, SearchField,
 // Select, SuggestField, TextArea, TextField, Toggle.
-import { el, noop, cell, set, group, focus, hover, click, key, AR, T } from './lib.mjs';
+import { el, noop, cell, set, setTo, group, focus, hover, click, key, AR, T } from './lib.mjs';
 
 const FONTS = ['Noto Sans (default)', 'Charis SIL', 'Scheherazade New', 'Padauk — Myanmar', 'Awami Nastaliq'];
 const BOOKS = [
@@ -20,6 +20,12 @@ const LANGS = [
   { value: 'ha', label: 'Hausa', meta: 'Harshen Hausa', code: 'ha' },
   { value: 'haw', label: 'Hawaiian', meta: 'ʻŌlelo Hawaiʻi', code: 'haw' },
   { value: 'hak', label: 'Hakka Chinese', code: 'hak' },
+];
+/* The suggestions for the next letter typed: Hausa's row stays and shows another label and
+   code, Hakka Chinese gains a meta, and Hawaiian goes. */
+const LANGS_NEXT = [
+  { value: 'hak', label: 'Hakka Chinese', meta: 'Hak-kâ-fa', code: 'hak' },
+  { value: 'ha', label: 'Hausa (Niger)', code: 'ha-NE' },
 ];
 const LANGS_AR = [
   { value: 'ar', label: 'العربية', code: 'ar' },
@@ -139,6 +145,13 @@ export default [
     ['open-keyboard', select(), { frame: { height: 330 }, steps: [focus('[role="combobox"]'), key('ArrowDown'), key('ArrowDown')] }],
     ['long-value', select({ label: 'Checking language', options: ['English — unfoldingWord Translation Notes, Words and Questions'], value: 'English — unfoldingWord Translation Notes, Words and Questions' }), { frame: { width: 280 } }],
     ['rtl', select({ label: 'خط النص', options: ['Noto Sans (افتراضي)', 'Awami Nastaliq'], value: 'Noto Sans (افتراضي)' }), { document: AR }],
+    ['open-interleaved-groups', select({ label: 'Book', options: [
+      { value: 'RUT', label: 'Ruth', code: 'RUT', group: 'Old Testament' },
+      { value: 'MAT', label: 'Matthew', code: 'MAT', group: 'New Testament' },
+      { value: 'JON', label: 'Jonah', code: 'JON', group: 'Old Testament' },
+      { value: 'TIT', label: 'Titus', code: 'TIT', group: 'New Testament' },
+    ], value: 'JON' }), { frame: { height: 400 }, steps: OPEN, note: 'A group name that comes back later in the list starts a section of its own, with its own rows.' }],
+    ['open-duplicate-values', select({ options: ['Charis SIL', 'Charis SIL', 'Awami Nastaliq'], value: 'Awami Nastaliq' }), { frame: { height: 260 }, steps: OPEN, note: 'Two options with one value are two rows.' }],
     ['rtl-open', select({ label: 'السفر', options: BOOKS.slice(0, 5).map(([, code], i) => ({ value: code, label: ['راعوث', 'أستير', 'يونان', 'ميخا', 'متى'][i], code })), value: 'JON' }), { document: AR, frame: { height: 330 }, steps: OPEN }],
   ]),
 
@@ -148,6 +161,11 @@ export default [
     ['open', { label: 'Language name', value: 'Ha', onChange: noop, onChoose: noop, suggestions: LANGS }, { frame: { height: 260 }, steps: [focus('input'), key('ArrowDown')] }],
     ['open-typed', { label: 'Language name', value: 'Ha', onChange: noop, onChoose: noop, suggestions: LANGS }, { frame: { height: 260 }, steps: [click('input'), { do: 'type', text: 'u' }] }],
     ['no-suggestions-focused', { label: 'Language name', value: 'Zzz', onChange: noop, suggestions: [] }, { steps: [focus('input')] }],
+    ['suggestions-change', { label: 'Language name', onChange: setTo('sugg', LANGS_NEXT), onChoose: set('picked', '0.label'), suggestions: cell('sugg') }, {
+      frame: { height: 260 }, cells: { sugg: LANGS, picked: '' }, steps: [focus('input'), key('ArrowDown'), { do: 'type', text: 'u' }],
+      wrap: (n) => el('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 }, children: [n, el('Text', { role: 'caption', children: ['Chosen: ', cell('picked')] })] }),
+      note: 'Typing replaces the suggestions while the list is open. The row of Hausa stays, and draws and hands over Hausa (Niger).',
+    }],
     ['rtl-open', { label: 'اسم اللغة', value: 'العر', onChange: noop, onChoose: noop, suggestions: LANGS_AR }, { document: AR, frame: { height: 220 }, steps: [focus('input'), key('ArrowDown')] }],
   ]),
 

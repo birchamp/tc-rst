@@ -36,9 +36,11 @@ pub fn Accordion(
         .enumerate()
         .map(|(i, it)| {
             let key = it.key.clone();
+            // A memo, so toggling another item wakes nothing here: an open panel stays the
+            // node it is while the others open and close.
             let on = {
                 let key = key.clone();
-                Signal::derive(move || open.with(|o| o.contains(&key)))
+                Memo::new(move |_| open.with(|o| o.contains(&key)))
             };
             let toggle = {
                 let key = key.clone();

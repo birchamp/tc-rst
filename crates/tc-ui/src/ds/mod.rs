@@ -26,6 +26,7 @@ use leptos::tachys::reactive_graph::OwnedView;
 
 pub use crate::attrs::Attrs;
 pub use crate::css::Css;
+use crate::keyed::{self, Slots};
 pub use crate::tokens::*;
 
 pub mod core;
@@ -131,17 +132,31 @@ macro_rules! props_default {
 
 props_default!(
     ActionProps,
+    AvatarProps,
     ChoiceProps,
     FieldGroupProps,
     FieldProps,
     InputProps,
+    KeyValueGridProps,
+    ProgressBarProps,
     ProgressProps,
     RuleProps,
+    ScripturePassageProps,
     SearchFieldProps,
+    SpinnerProps,
     StackProps,
+    StatusDotProps,
     SurfaceProps,
+    TextAreaProps,
     TextProps,
 );
+
+impl VerseMarkerProps {
+    /// The marker of verse `n` with every other prop at its default.
+    pub fn new(n: u32) -> Self {
+        Self::builder().n(n).build()
+    }
+}
 
 impl LayerProps {
     /// A Layer of `children` with every other prop at its default.
@@ -209,4 +224,34 @@ pub(crate) fn next_id(prefix: &'static str) -> String {
         *n += 1;
         format!("{prefix}{n}")
     })
+}
+
+/// React's keyed list: one child per slot of `slots`, drawn once and kept while its slot stays
+/// in the list. `child` gets its slot and its position, which follows the list, so a child
+/// reads its own data by position and never another child's that shares its key.
+pub(crate) fn keyed_list<V: IntoView + 'static>(
+    slots: Memo<Slots>,
+    child: impl Fn(keyed::Slot, Memo<usize>) -> V + Clone + Send + Sync + 'static,
+) -> impl IntoView {
+    view! {
+        <For
+            each=move || slots.with(|s| s.order().to_vec())
+            key=Clone::clone
+            children=move |slot: keyed::Slot| {
+                // For draws a child for a slot of the list it just read, so the slot is there;
+                // once it leaves the list, the child keeps its last position until it goes.
+                let first = slots.with_untracked(|s| s.index(&slot)).unwrap_or_default();
+                let at = {
+                    let slot = slot.clone();
+                    Memo::new(move |prev: Option<&usize>| {
+                        slots
+                            .with(|s| s.index(&slot))
+                            .or(prev.copied())
+                            .unwrap_or(first)
+                    })
+                };
+                child(slot, at)
+            }
+        />
+    }
 }

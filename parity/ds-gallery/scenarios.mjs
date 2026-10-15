@@ -48,6 +48,14 @@ const SCENARIOS = [
   { name: 'suggest-keys', case: 'SuggestField/value', steps: [
     { key: 'Tab' }, { key: 'ArrowDown' }, { key: 'ArrowDown' }, { key: 'ArrowDown' }, { key: 'ArrowUp' }, { key: 'Enter' },
     { key: 'ArrowDown' }, { key: 'Escape' }, { type: 'x' }, { key: 'ArrowDown' }, { key: 'Tab' }] },
+  { name: 'suggest-change-keys', case: 'SuggestField/suggestions-change', steps: [
+    { key: 'Tab' }, { key: 'ArrowDown' }, { type: 'u' }, { key: 'ArrowDown' }, { key: 'ArrowDown' }, { key: 'Enter' }] },
+  { name: 'suggest-change-click', case: 'SuggestField/suggestions-change', steps: [
+    { key: 'Tab' }, { key: 'ArrowDown' }, { type: 'u' }, { click: '[role="option"]:nth-child(2)' }] },
+  { name: 'select-interleaved', case: 'Select/open-interleaved-groups', steps: [
+    { click: '[role="combobox"]' }, { key: 'ArrowDown' }, { key: 'ArrowUp' }, { key: 'ArrowUp' }, { key: 'End' }, { key: 'Enter' }] },
+  { name: 'select-duplicate-values', case: 'Select/open-duplicate-values', steps: [
+    { click: '[role="combobox"]' }, { key: 'Home' }, { key: 'ArrowDown' }, { hover: '[role="option"]:nth-child(1)' }, { key: 'Escape' }] },
   { name: 'switcher-roving', case: 'Switcher/underline', steps: [
     { key: 'Tab' }, { key: 'ArrowRight' }, { key: 'ArrowRight' }, { key: 'Home' }, { key: 'End' }, { key: 'ArrowLeft' }, { key: 'Tab' }] },
   { name: 'switcher-disabled', case: 'Switcher/disabled-option', steps: [{ key: 'Tab' }, { key: 'ArrowRight' }, { key: 'End' }] },
@@ -74,6 +82,12 @@ const SCENARIOS = [
     { click: 'button' }, { click: 'button' }, { key: 'Tab' }, { key: 'Enter' }, { key: ' ' }, { key: 'Tab' }, { key: 'Enter' }] },
   { name: 'table-select', case: 'Table/stateful', steps: [
     { key: 'Tab' }, { key: 'Enter' }, { key: 'Tab' }, { key: 'Enter' }, { key: ' ' }, { key: 'Shift+Tab' }, { key: 'Enter' }, { click: 'tbody tr:nth-child(3)' }] },
+  { name: 'accordion-two-open', case: 'Accordion/first-open', steps: [
+    { key: 'Tab' }, { key: 'Tab' }, { key: 'Enter' }, { key: ' ' }, { key: 'Enter' }, { key: 'Shift+Tab' }, { key: 'Enter' }, { key: 'Enter' }] },
+  { name: 'table-duplicate-keys', case: 'Table/duplicate-ids', steps: [
+    { click: 'tbody tr:nth-child(2)' }, { key: 'Tab' }, { key: 'Enter' }, { key: 'Shift+Tab' }, { key: ' ' }, { click: 'tbody tr:nth-child(1)' }] },
+  { name: 'table-rows-change', case: 'Table/rows-change', steps: [
+    { key: 'Tab' }, { key: 'Tab' }, { key: 'Enter' }, { key: 'Shift+Tab' }, { key: 'Enter' }, { key: 'Tab' }, { key: 'Tab' }, { key: ' ' }] },
   { name: 'table-noop', case: 'Table/row-hover', steps: [{ key: 'Tab' }, { key: 'Enter' }, { key: ' ' }, { key: 'Tab' }, { key: 'Enter' }] },
   { name: 'toggle', case: 'Toggle/stateful', steps: [{ click: 'input' }, { click: 'input' }, { key: ' ' }, { click: 'label' }] },
   { name: 'radio-group', case: 'RadioGroup/stateful', steps: [{ click: 'input[value="rtl"]' }, { key: 'ArrowUp' }, { key: 'ArrowDown' }, { click: 'label' }] },

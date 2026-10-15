@@ -10,8 +10,9 @@ use wasm_bindgen::JsCast;
 
 use crate::ds::{
     Anchor, Attrs, Badge, BadgeSize, BadgeTone, Css, Dismiss, FieldContext, LayerPlacement, Level,
-    Text, TextRole, TextTone, provide, spread, use_field,
+    Text, TextRole, TextTone, keyed_list, provide, spread, use_field,
 };
+use crate::keyed::{Slot, Slots};
 use crate::text::option_matches;
 use crate::tokens::{Corner, Edge, Fill, Shadow};
 
@@ -44,17 +45,18 @@ impl From<&str> for SelectOption {
     }
 }
 
-/// `Row` in Select.jsx: one row look for every list. A row is keyed by its option's value, so
-/// it stays the same node while the highlight, the selection and the filter change.
+/// `Row` in Select.jsx: one row look for every list. The option is a signal: a list keeps a
+/// row's node while the row's option changes, and the row redraws its text in place, as React
+/// does.
 pub(crate) fn row(
-    opt: SelectOption,
+    opt: Signal<SelectOption>,
     id: Signal<String>,
     selected: Signal<bool>,
     highlighted: Signal<bool>,
     on_choose: impl Fn() + 'static,
     on_highlight: Option<Arc<dyn Fn() + Send + Sync>>,
 ) -> impl IntoView {
-    let disabled = opt.disabled;
+    let disabled = Memo::new(move |_| opt.with(|o| o.disabled));
     let s = move || {
         let (selected, highlighted) = (selected.get(), highlighted.get());
         let mut s = css! {
@@ -78,7 +80,7 @@ pub(crate) fn row(
                 None
             },
         );
-        s.set("cursor", if disabled { "default" } else { "pointer" });
+        s.set("cursor", if disabled.get() { "default" } else { "pointer" });
         s.to_style()
     };
     let check = css! {
@@ -88,7 +90,7 @@ pub(crate) fn row(
         "font-weight": 900,
         "font-size": "var(--fs-ui-sm)",
     };
-    let label = move || {
+    let label_style = move || {
         css! {
             "flex": "1 1 auto",
             "min-width": 0,
@@ -98,13 +100,13 @@ pub(crate) fn row(
             "font-size": "var(--fs-ui-sm)",
             "letter-spacing": "var(--track-13)",
             "font-weight": "var(--fw-heavy)",
-            "color": if disabled { "var(--disabled-fg)" } else if selected.get() { "var(--text-heading)" } else { "var(--text-body)" },
+            "color": if disabled.get() { "var(--disabled-fg)" } else if selected.get() { "var(--text-heading)" } else { "var(--text-body)" },
         }
         .to_style()
     };
     // A long meta gives way to the label: its shrink factor is large enough that the label's
     // own share of the shrink stays under the layout unit.
-    let meta = css! {
+    let meta_css = css! {
         "flex": "0 1000000 auto",
         "min-width": 0,
         "white-space": "nowrap",
@@ -112,49 +114,63 @@ pub(crate) fn row(
         "text-overflow": "ellipsis",
         "font-size": "var(--fs-label)",
         "color": "var(--text-tertiary)",
+    }
+    .to_style();
+    // Each trailing part comes and goes with its text, and keeps its node while the text
+    // changes.
+    let part = move |get: fn(&SelectOption) -> &Option<String>| {
+        let text = Memo::new(move |_| opt.with(|o| get(o).clone().unwrap_or_default()));
+        let shown = Memo::new(move |_| text.with(|t| !t.is_empty()));
+        (text, shown)
     };
-    let badge = opt.badge.clone().filter(|b| !b.is_empty()).map(|b| {
-        view! { <Badge tone=BadgeTone::Neutral size=BadgeSize::Sm style=css! { "flex": "none" }>{b}</Badge> }
-    });
-    let meta_view = opt
-        .meta
-        .clone()
-        .filter(|m| !m.is_empty())
-        .map(|m| view! { <span style=meta.to_style()>{m}</span> });
-    let code_view = opt
-        .code
-        .clone()
-        .filter(|c| !c.is_empty())
-        .map(|c| view! { <span style=code_css().to_style()>{c}</span> });
+    let (badge, has_badge) = part(|o| &o.badge);
+    let (meta, has_meta) = part(|o| &o.meta);
+    let (code, has_code) = part(|o| &o.code);
+    let badge_view = move || {
+        has_badge.get().then(|| {
+            view! { <Badge tone=BadgeTone::Neutral size=BadgeSize::Sm style=css! { "flex": "none" }>{move || badge.get()}</Badge> }
+        })
+    };
+    let meta_view = move || {
+        has_meta
+            .get()
+            .then(|| view! { <span style=meta_css.clone()>{move || meta.get()}</span> })
+    };
+    let code_view = move || {
+        has_code
+            .get()
+            .then(|| view! { <span style=code_css().to_style()>{move || code.get()}</span> })
+    };
     view! {
         <div
             role="option"
             id=id
             aria-selected=move || if selected.get() { "true" } else { "false" }
-            aria-disabled=disabled.then_some("true")
+            aria-disabled=move || disabled.get().then_some("true")
             on:mouseenter=move |_| {
                 if let Some(h) = &on_highlight {
                     h();
                 }
             }
             on:click=move |_| {
-                if !disabled {
+                if !disabled.get_untracked() {
                     on_choose();
                 }
             }
             style=s
         >
             <span aria-hidden="true" style=check.to_style()>{move || if selected.get() { "✓" } else { "" }}</span>
-            <span style=label>{opt.label.clone()}</span>
-            {badge}
+            <span style=label_style>{move || opt.with(|o| o.label.clone())}</span>
+            {badge_view}
             {meta_view}
             {code_view}
         </div>
     }
 }
 
-/// Listed options under one group header, or under none, as React keys them: by the group's
-/// name, or by the run's position for a run without one. `rows` are indexes into the options.
+/// Listed options under one group header, or under none, keyed as React keys them: by the
+/// group's name, or by the run's position for a run without one. `rows` are indexes into the
+/// options.
 #[derive(Debug, Clone, PartialEq)]
 struct Section {
     key: String,
@@ -523,15 +539,20 @@ fn Dropdown(
     let (list_id_panel, list_id_button) = (list_id.clone(), list_id.clone());
     let opt_id = StoredValue::new(opt_id);
 
-    // Sections in option order; options without a group form one headerless run.
+    // Sections in option order; options without a group form one headerless run. React keys
+    // a section by its group's name, so a name that comes back later in the list repeats a
+    // key: each section is a slot of its own and draws its own rows.
     let sections = Memo::new(move |_| {
         let mut sections: Vec<Section> = Vec::new();
         for &i in visible.get().iter() {
-            let g = opts.with_value(|o| o[i].group.clone());
+            let g = opts.with_value(|o| o[i].group.clone().filter(|g| !g.is_empty()));
             match sections.last_mut() {
                 Some(s) if s.name == g => s.rows.push(i),
                 _ => sections.push(Section {
-                    key: g.clone().unwrap_or_else(|| format!("s{}", sections.len())),
+                    key: match &g {
+                        Some(name) => format!("group {name}"),
+                        None => format!("run {}", sections.len()),
+                    },
                     name: g,
                     rows: vec![i],
                 }),
@@ -539,40 +560,68 @@ fn Dropdown(
         }
         sections
     });
-    let option_row = move |i: usize| {
-        let o = opts.with_value(|o| o[i].clone());
-        let v = o.value.clone();
-        let pos = Memo::new(move |_| visible.with(|vis| vis.iter().position(|&j| j == i)));
-        let selected = Signal::derive(move || value.with(|s| s.as_ref() == Some(&v)));
+    let section_slots =
+        Memo::new(move |_| sections.with(|s| Slots::new(s.iter().map(|x| x.key.clone()))));
+    // One row, for the option at index `i` of the options, which follows the row's slot.
+    let option_row = move |i: Memo<usize>| {
+        let o =
+            Memo::new(move |_| opts.with_value(|o| o.get(i.get()).cloned().unwrap_or_default()));
+        let pos = Memo::new(move |_| {
+            let i = i.get();
+            visible.with(|vis| vis.iter().position(|&j| j == i))
+        });
+        let selected = Signal::derive(move || {
+            o.with(|o| value.with(|v| v.as_deref() == Some(o.value.as_str())))
+        });
         let highlighted = Signal::derive(move || pos.get() == Some(hi.get()));
         let highlight: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
             if let Some(p) = pos.get_untracked() {
                 hi.set(p);
             }
         });
-        let id = Signal::from(opt_id.with_value(|f| f(i)));
+        let id = Signal::derive(move || opt_id.with_value(|f| f(i.get())));
         row(
-            o,
+            o.into(),
             id,
             selected,
             highlighted,
-            move || choose(i),
+            move || choose(i.get_untracked()),
             Some(highlight),
         )
     };
-    let section = move |key: String| {
-        let this = {
-            let key = key.clone();
-            Memo::new(move |_| sections.with(|s| s.iter().find(|x| x.key == key).cloned()))
+    let section = move |_: Slot, at: Memo<usize>| {
+        // keyed_list draws a section for a slot of the sections it just read.
+        let Some(first) = sections.with_untracked(|s| s.get(at.get_untracked()).cloned()) else {
+            return ().into_any();
         };
-        let rows = view! {
-            <For
-                each=move || this.with(|s| s.as_ref().map(|s| s.rows.clone()).unwrap_or_default())
-                key=move |i| opts.with_value(|o| o[*i].value.clone())
-                children=option_row
-            />
-        };
-        match this.with_untracked(|s| s.as_ref().and_then(|s| s.name.clone())) {
+        let name = first.name.clone();
+        let this = Memo::new(move |prev: Option<&Section>| {
+            sections
+                .with(|s| s.get(at.get()).cloned())
+                .or_else(|| prev.cloned())
+                .unwrap_or_else(|| first.clone())
+        });
+        // Rows keyed by value, as React keys them inside their section.
+        let row_slots = Memo::new(move |_| {
+            this.with(|s| {
+                Slots::new(
+                    s.rows
+                        .iter()
+                        .map(|&i| opts.with_value(|o| o[i].value.clone())),
+                )
+            })
+        });
+        let rows = keyed_list(row_slots, move |_, k: Memo<usize>| {
+            let first = this.with_untracked(|s| s.rows.get(k.get_untracked()).copied());
+            let i = Memo::new(move |prev: Option<&usize>| {
+                this.with(|s| s.rows.get(k.get()).copied())
+                    .or(prev.copied())
+                    .or(first)
+                    .unwrap_or_default()
+            });
+            option_row(i)
+        });
+        match name {
             Some(name) => {
                 let head = css! {
                     "position": "sticky",
@@ -584,10 +633,7 @@ fn Dropdown(
                     "gap": 6,
                     "align-items": "baseline",
                 };
-                let count = move || {
-                    this.with(|s| s.as_ref().map_or(0, |s| s.rows.len()))
-                        .to_string()
-                };
+                let count = move || this.with(|s| s.rows.len()).to_string();
                 let group_label = name.clone();
                 view! {
                     <div role="group" aria-label=group_label>
@@ -614,8 +660,7 @@ fn Dropdown(
             }
             .into_any();
         }
-        view! { <For each=move || sections.get() key=|s| s.key.clone() children=move |s| section(s.key) /> }
-            .into_any()
+        keyed_list(section_slots, section).into_any()
     };
     let listbox = ViewFn::from(listbox);
 

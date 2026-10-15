@@ -3,6 +3,7 @@
 //!   `{ "$el": "Button", "props": {…} }`  a DS component (capitalised) or an HTML/SVG tag
 //!   `{ "$fn": "noop" }`                   a callback that does nothing; only its presence matters
 //!   `{ "$asset": "public/assets/x.png" }` a file of the tC4 checkout, served by the gallery
+//!   `{ "$cell": "picked" }`               the text of one of the case's cells, kept current
 //!
 //! Everything else is plain JSON.
 
@@ -70,6 +71,17 @@ pub fn node(v: &Value) -> AnyView {
                 components::render(name, Props::new(name, props))
             }
         }
+        Value::Object(_) => match super::props::cell_of(v) {
+            Some(cell) => (move || {
+                cell.with(|v| match v {
+                    Value::String(s) => s.clone(),
+                    Value::Number(n) => js_number(n.as_f64().unwrap_or(0.0)),
+                    _ => String::new(),
+                })
+            })
+            .into_any(),
+            None => ().into_any(),
+        },
         _ => ().into_any(),
     }
 }
@@ -77,7 +89,7 @@ pub fn node(v: &Value) -> AnyView {
 /// An HTML or SVG element with its props as attributes.
 fn html(tag: &str, p: Props) -> AnyView {
     let style = p.css("style");
-    let children = p.value("children");
+    let children = p.tree("children");
     let mut attrs = p.rest();
     if !style.is_empty() {
         attrs.set("style", style.to_style());

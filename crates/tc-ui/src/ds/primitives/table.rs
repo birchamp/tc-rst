@@ -8,7 +8,8 @@ use leptos::ev::KeyboardEvent;
 use leptos::prelude::*;
 
 use crate::css::CssValue;
-use crate::ds::{Attrs, ColumnAlign, Css, Text, TextRole, spread};
+use crate::ds::{Attrs, ColumnAlign, Css, Text, TextRole, keyed_list, spread};
+use crate::keyed::{Slot, Slots};
 
 /// A row of a Table: its fields by column key, and its identity. Equality tells a row whose
 /// data changed from one that only moved.
@@ -21,11 +22,13 @@ pub trait Record: Clone + PartialEq + Send + Sync + 'static {
     }
 }
 
-/// Renders one cell of a row.
-pub type Cell<R> = Arc<dyn Fn(&R, usize) -> AnyView + Send + Sync>;
+/// Renders one cell of a row, once: the row's record and its index are signals, so the cell
+/// keeps its nodes (and any focus in them) while its row's data or position changes, as React
+/// keeps the nodes a cell returns.
+pub type Cell<R> = Arc<dyn Fn(Signal<R>, Signal<usize>) -> AnyView + Send + Sync>;
 
 /// One column of a Table.
-pub struct Column<R> {
+pub struct Column<R: Record> {
     pub key: String,
     pub header: String,
     pub align: ColumnAlign,
@@ -37,7 +40,7 @@ pub struct Column<R> {
     pub cell: Option<Cell<R>>,
 }
 
-impl<R> Clone for Column<R> {
+impl<R: Record> Clone for Column<R> {
     fn clone(&self) -> Self {
         Self {
             key: self.key.clone(),
@@ -51,7 +54,7 @@ impl<R> Clone for Column<R> {
     }
 }
 
-impl<R> Column<R> {
+impl<R: Record> Column<R> {
     pub fn new(key: impl Into<String>, header: impl Into<String>) -> Self {
         Self {
             key: key.into(),
@@ -65,7 +68,7 @@ impl<R> Column<R> {
     }
 }
 
-fn cell_css<R>(col: &Column<R>, header: bool) -> Css {
+fn cell_css<R: Record>(col: &Column<R>, header: bool) -> Css {
     let mut s = css! {
         "padding": "9px 12px",
         "text-align": match col.align {
@@ -147,38 +150,37 @@ pub fn Table<R: Record>(
         })
         .collect_view();
     let columns = StoredValue::new(columns);
-    // Each row as drawn: its key, its index and its record. Rows are keyed as React keys them,
-    // so a row whose key stays keeps its `<tr>` (and the keyboard focus on it) while the
-    // selection or the data around it changes.
-    let keyed = Memo::new(move |_| {
+    // Rows are keyed as React keys them (`row_key`, else the `id`, else the index), so a row
+    // whose key stays keeps its `<tr>`, and the keyboard focus on it, while the selection or
+    // the rows around it change. A key that repeats takes the next slot of that key, so every
+    // row is drawn with its own data.
+    let slots = Memo::new(move |_| {
         rows.with(|rows| {
-            rows.iter()
-                .enumerate()
-                .map(|(i, r)| {
-                    let k = row_key
-                        .as_ref()
-                        .map(|f| f(r, i))
-                        .or_else(|| r.id())
-                        .unwrap_or_else(|| i.to_string());
-                    (k, i, r.clone())
-                })
-                .collect::<Vec<_>>()
+            Slots::new(rows.iter().enumerate().map(|(i, r)| {
+                row_key
+                    .as_ref()
+                    .map(|f| f(r, i))
+                    .or_else(|| r.id())
+                    .unwrap_or_else(|| i.to_string())
+            }))
         })
     });
     let has_empty = empty.is_some();
-    let show_empty = Memo::new(move |_| has_empty && keyed.with(Vec::is_empty));
-    let row = move |k: String| {
-        let current = {
-            let k = k.clone();
-            Memo::new(move |_| {
-                keyed.with(|rows| {
-                    rows.iter()
-                        .find(|(rk, _, _)| *rk == k)
-                        .map(|(_, i, r)| (*i, r.clone()))
-                })
-            })
+    let show_empty = Memo::new(move |_| has_empty && slots.with(Slots::is_empty));
+    let row = move |slot: Slot, at: Memo<usize>| {
+        // For draws a row for a slot of the rows it just read, so the row is there.
+        let Some(first) = rows.with_untracked(|r| r.get(at.get_untracked()).cloned()) else {
+            return ().into_any();
         };
-        let on = Memo::new(move |_| selected_key.with(|s| s.as_ref() == Some(&k)));
+        // The row's record follows its position; it is the same value, and wakes nothing,
+        // while only the position changes.
+        let record = Memo::new(move |prev: Option<&R>| {
+            rows.with(|r| r.get(at.get()).cloned())
+                .or_else(|| prev.cloned())
+                .unwrap_or_else(|| first.clone())
+        });
+        let key = slot.key().to_string();
+        let on = Memo::new(move |_| selected_key.with(|s| s.as_deref() == Some(key.as_str())));
         let clickable = on_row_click.is_some();
         let style = move || {
             let mut s = Css::new();
@@ -187,25 +189,21 @@ pub fn Table<R: Record>(
             s.to_style()
         };
         let activate = move || {
-            if let (Some(cb), Some((i, r))) = (on_row_click, current.get_untracked()) {
-                cb.run((r, i));
+            if let Some(cb) = on_row_click {
+                cb.run((record.get_untracked(), at.get_untracked()));
             }
         };
         let cells = columns.with_value(|cols| {
             cols.iter()
                 .enumerate()
                 .map(|(ci, c)| {
-                    let col = c.clone();
-                    let content = move || {
-                        current.with(|cur| {
-                            cur.as_ref().map(|(i, r)| match &col.cell {
-                                Some(cell) => cell(r, *i),
-                                None => {
-                                    let text = r.field(&col.key);
-                                    view! { <Text role=TextRole::Ui>{text}</Text> }.into_any()
-                                }
-                            })
-                        })
+                    let content = match &c.cell {
+                        Some(cell) => cell(record.into(), at.into()),
+                        None => {
+                            let key = c.key.clone();
+                            let text = move || record.with(|r| r.field(&key));
+                            view! { <Text role=TextRole::Ui>{text}</Text> }.into_any()
+                        }
                     };
                     if ci == 0 && c.row_header {
                         let s = cell_css(c, false).merge(&css! { "font-weight": "inherit" });
@@ -236,6 +234,7 @@ pub fn Table<R: Record>(
                 {cells}
             </tr>
         }
+        .into_any()
     };
     let body = move || {
         if show_empty.get() {
@@ -248,8 +247,7 @@ pub fn Table<R: Record>(
             }
             .into_any()
         } else {
-            view! { <For each=move || keyed.get() key=|(k, _, _)| k.clone() children=move |(k, _, _)| row(k) /> }
-                .into_any()
+            keyed_list(slots, row).into_any()
         }
     };
     view! {

@@ -1,7 +1,7 @@
 {
-  "same": 33,
-  "total": 33,
-  "steps": 172,
+  "same": 40,
+  "total": 40,
+  "steps": 215,
   "scenarios": [
     {
       "name": "menu-keys",
@@ -63,6 +63,38 @@
       "name": "suggest-keys",
       "case": "SuggestField/value",
       "steps": 11,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "suggest-change-keys",
+      "case": "SuggestField/suggestions-change",
+      "steps": 6,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "suggest-change-click",
+      "case": "SuggestField/suggestions-change",
+      "steps": 4,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "select-interleaved",
+      "case": "Select/open-interleaved-groups",
+      "steps": 6,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "select-duplicate-values",
+      "case": "Select/open-duplicate-values",
+      "steps": 5,
       "same": true,
       "diffs": [],
       "errors": []
@@ -166,6 +198,30 @@
     {
       "name": "table-select",
       "case": "Table/stateful",
+      "steps": 8,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "accordion-two-open",
+      "case": "Accordion/first-open",
+      "steps": 8,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "table-duplicate-keys",
+      "case": "Table/duplicate-ids",
+      "steps": 6,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "table-rows-change",
+      "case": "Table/rows-change",
       "steps": 8,
       "same": true,
       "diffs": [],
