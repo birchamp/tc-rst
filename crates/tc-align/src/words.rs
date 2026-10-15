@@ -9,8 +9,7 @@ use md5::{Digest, Md5};
 use std::fmt;
 use std::str::FromStr;
 use tc_core::VerseSpan;
-use tc_usfm::markers::{self, MarkerClass};
-use tc_usfm::{Book, Document, Node, Segment, SegmentKind, SourceWord, TargetWord};
+use tc_usfm::{Book, Document, Node, Segment, SegmentKind, SourceWord, Span, TargetWord};
 
 /// The original-language words of one verse, in verse order, numbered by occurrence.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -56,19 +55,23 @@ impl SourceVerse {
     /// The words of an original-language verse text such as UGNT or UHB writes it:
     /// `\w Παῦλος|lemma="Παῦλος" strong="G39720" x-morph="Gr,N,,,,,NMS,"\w*`.
     ///
-    /// Every `\w` of the verse counts, at any depth of character markup and after any
-    /// heading, title or other paragraph-level marker inside the verse (a mid-verse
-    /// `\s5`, a Psalm's `\d`, an acrostic's `\qa`), as tC4's bootstrap counts them; only
-    /// notes, figures and other non-text spans are skipped. `lemma`, `strong` (or
-    /// `strongs`) and `morph` are read with or without the `x-` prefix, and the default
-    /// attribute is the lemma.
+    /// The words are the `\w` words that usfm-js, which tC4 reads the original with, makes
+    /// verse objects of, so the bootstrap gives a card to each word tC4 gives one. They
+    /// count at any depth of character markup and after any heading, title or other
+    /// paragraph-level marker inside the verse (a mid-verse `\s5`, a Psalm's `\d`, an
+    /// acrostic's `\qa`). The words of a note, figure, sidebar or other span usfm-js keeps
+    /// as text do not count: such a span runs to its own end marker, across paragraphs, or
+    /// to the end of the verse. Opened inside a span usfm-js shows, such as `\add` or
+    /// `\k-s`, it hides nothing, and tC4 counts its words. `lemma`, `strong` (or `strongs`)
+    /// and `morph` are read with or without the `x-` prefix, and the default attribute is
+    /// the lemma.
     /// Written occurrence attributes are ignored: occurrences are counted by text across
     /// the verse, as word-aligner's `getOrderedVerseObjects` counts them for tC4's
     /// bootstrap. Other attributes are kept in [`SourceWord::extra`] as written.
     pub fn from_usfm(body: &str) -> Result<Self, Error> {
         let doc = Document::parse(body);
         let mut found = Vec::new();
-        collect_source_words(doc.nodes(), &mut found)?;
+        collect_source_words(doc.nodes(), &mut Phrases::default(), &mut found)?;
         Ok(Self::new(found))
     }
 
@@ -116,57 +119,201 @@ fn push_leading(segment: &Segment<'_>, out: &mut String) {
     }
 }
 
-/// Notes, figures, alternate and published numbers, categories and quotation references:
-/// spans whose content is never verse text (the same set `tc-usfm` skips).
-fn is_non_text_span(name: &str) -> bool {
-    markers::classify(name) == MarkerClass::Note
-        || matches!(name, "fig" | "ca" | "va" | "vp" | "cat" | "rq")
+/// Spans usfm-js keeps as text, not as verse objects, when they open outside every shown
+/// span: its markers with an end marker and no `display` flag (`USFM_PROPERTIES` in
+/// usfm-js 3.4.3). Notes, figures, sidebars, alternate and published numbers, and the
+/// rarer reference and index spans.
+const HIDDEN_SPANS: &[&str] = &[
+    "ca", "cat", "ef", "esb", "ex", "f", "fa", "fdc", "fe", "fig", "fm", "fqa", "fv", "ior", "iqt",
+    "ndx", "pro", "rq", "rt", "sis", "va", "vp", "x", "xdc", "xnt", "xop", "xot", "xt",
+];
+
+/// Spans usfm-js shows, with their words as verse objects: its markers with an end marker
+/// and the `display` flag, `\w` aside. So are the `\k-s`, `\zaln-s` and `\qt-s` milestones.
+const SHOWN_SPANS: &[&str] = &[
+    "add", "bd", "bdit", "bk", "dc", "em", "it", "jmp", "k", "li", "lik", "litl", "liv", "liv1",
+    "liv2", "liv3", "liv4", "liv5", "nd", "no", "ord", "pn", "png", "qac", "qs", "qt", "qt1",
+    "qt2", "qt3", "qt4", "qt5", "rb", "sc", "sig", "sls", "sup", "tl", "wa", "wg", "wh", "wj",
+    "zaln",
+];
+
+/// The `\+name` forms usfm-js shows. It knows no other nested marker.
+const SHOWN_NESTED_SPANS: &[&str] = &[
+    "add", "bd", "bdit", "bk", "dc", "em", "it", "k", "nd", "no", "ord", "pn", "png", "qt", "sc",
+    "sig", "sls", "sup", "tl", "wj",
+];
+
+/// Which `\w` words usfm-js turns into verse objects, which are the words tC4's bootstrap
+/// gives cards. usfm-js keeps a hidden span ([`HIDDEN_SPANS`]) that opens outside every
+/// shown span as one piece of text up to its own end marker, across paragraphs and
+/// headings, or up to the next `\v` or `\c`, where the verse text given here ends, so no
+/// word in it counts. Opened inside a shown span, the same marker hides nothing. Any end
+/// marker that is not the innermost shown span's also ends every shown span it passes, as
+/// usfm-js's `endSpan` pops them.
+#[derive(Default)]
+struct Phrases<'a> {
+    /// The hidden span that is open, and how many spans of its name are open in it.
+    hidden: Option<(&'a str, usize)>,
+    /// The shown spans that are open, innermost last: nested or not, and base name.
+    shown: Vec<(bool, &'a str)>,
 }
 
-fn collect_source_words(nodes: &[Node<'_>], out: &mut Vec<SourceWord>) -> Result<(), Error> {
-    for node in nodes {
-        let Node::Span(span) = node else {
-            continue;
-        };
-        if is_non_text_span(span.name()) {
-            continue;
-        }
-        if span.name() != "w" {
-            collect_source_words(&span.children, out)?;
-            continue;
-        }
-        let mut content = String::new();
-        for child in &span.children {
-            if let Node::Text(text) = child {
-                content.push_str(text);
+/// An end marker as usfm-js matches it against the spans that are open.
+enum End<'a> {
+    /// `\name*` or `\+name*`.
+    Star { nested: bool, name: &'a str },
+    /// `\name-e\*`, or a milestone that ends nothing it names, such as `\ts\*`.
+    Milestone(&'a str),
+    /// `\esbe`.
+    Sidebar,
+}
+
+impl<'a> Phrases<'a> {
+    fn counts_words(&self) -> bool {
+        self.hidden.is_none()
+    }
+
+    fn open(&mut self, nested: bool, name: &'a str) {
+        if let Some((hidden, depth)) = &mut self.hidden {
+            if !nested && name == *hidden {
+                *depth += 1;
             }
+            return;
         }
-        let mut word = SourceWord {
-            content,
-            strong: None,
-            lemma: None,
-            morph: None,
-            occurrence: 0,
-            occurrences: 0,
-            extra: Vec::new(),
+        let milestone = name.strip_suffix("-s").filter(|_| !nested);
+        let shown = match milestone {
+            Some(base) => matches!(
+                base,
+                "k" | "zaln" | "qt" | "qt1" | "qt2" | "qt3" | "qt4" | "qt5"
+            ),
+            None if nested => SHOWN_NESTED_SPANS.contains(&name),
+            None => SHOWN_SPANS.contains(&name),
         };
-        if let Some(attributes) = &span.attributes {
-            for attribute in attributes.parse().map_err(Error::Usfm)? {
-                let value = attribute.value.to_owned();
-                match attribute.key {
-                    None | Some("lemma" | "x-lemma") => word.lemma = Some(value),
-                    Some("strong" | "x-strong" | "strongs" | "x-strongs") => {
-                        word.strong = Some(value);
-                    }
-                    Some("morph" | "x-morph") => word.morph = Some(value),
-                    Some("occurrence" | "x-occurrence" | "occurrences" | "x-occurrences") => {}
-                    Some(key) => word.extra.push((key.to_owned(), value)),
+        if shown {
+            self.shown.push((nested, milestone.unwrap_or(name)));
+        } else if !nested && self.shown.is_empty() && HIDDEN_SPANS.contains(&name) {
+            self.hidden = Some((name, 0));
+        }
+    }
+
+    fn end(&mut self, end: End<'a>) {
+        if let Some((hidden, depth)) = &mut self.hidden {
+            let closes = match end {
+                // A sidebar ends only at `\esbe`, never at `\esb*`.
+                End::Star { nested, name } => !nested && name == *hidden && name != "esb",
+                End::Sidebar => *hidden == "esb",
+                End::Milestone(_) => false,
+            };
+            if closes {
+                match depth.checked_sub(1) {
+                    Some(fewer) => *depth = fewer,
+                    None => self.hidden = None,
                 }
             }
+            return;
         }
-        out.push(word);
+        let matches = |&(nested, base): &(bool, &str)| match end {
+            End::Star { nested: n, name } => nested == n && base == name,
+            End::Milestone(name) => !nested && base == name,
+            End::Sidebar => false,
+        };
+        let keep = self.shown.iter().rposition(matches).unwrap_or(0);
+        self.shown.truncate(keep);
+    }
+}
+
+fn collect_source_words<'a>(
+    nodes: &'a [Node<'a>],
+    phrases: &mut Phrases<'a>,
+    out: &mut Vec<SourceWord>,
+) -> Result<(), Error> {
+    for node in nodes {
+        match node {
+            Node::Span(span) if span.name() == "w" && !span.open.is_nested() => {
+                if phrases.counts_words() {
+                    out.push(source_word(span)?);
+                }
+            }
+            Node::Span(span) => {
+                phrases.open(span.open.is_nested(), span.name());
+                collect_source_words(&span.children, phrases, out)?;
+                if let Some(close) = &span.close {
+                    phrases.end(End::Star {
+                        nested: close.is_nested(),
+                        name: close.name(),
+                    });
+                }
+            }
+            Node::Marker(marker) => marker_event(
+                phrases,
+                marker.is_nested(),
+                marker.is_closing(),
+                marker.name(),
+            ),
+            Node::Milestone(milestone) => {
+                marker_event(
+                    phrases,
+                    milestone.marker.is_nested(),
+                    false,
+                    milestone.name(),
+                );
+            }
+            Node::Text(_) | Node::Bom(_) | Node::Stray(_) => {}
+        }
     }
     Ok(())
+}
+
+/// A marker or milestone outside a span: an opening marker, an end marker, or one that
+/// neither opens nor ends anything (a paragraph, a heading, an unknown marker).
+fn marker_event<'a>(phrases: &mut Phrases<'a>, nested: bool, closing: bool, name: &'a str) {
+    if closing {
+        phrases.end(End::Star { nested, name });
+    } else if nested {
+        phrases.open(nested, name);
+    } else if name == "esbe" {
+        phrases.end(End::Sidebar);
+    } else if matches!(name, "ts" | "ts-s") {
+        // usfm-js reads a chunk milestone as an end marker that matches no span.
+        phrases.end(End::Milestone(name));
+    } else if let Some(base) = name.strip_suffix("-e") {
+        phrases.end(End::Milestone(base));
+    } else {
+        phrases.open(nested, name);
+    }
+}
+
+fn source_word(span: &Span<'_>) -> Result<SourceWord, Error> {
+    let mut content = String::new();
+    for child in &span.children {
+        if let Node::Text(text) = child {
+            content.push_str(text);
+        }
+    }
+    let mut word = SourceWord {
+        content,
+        strong: None,
+        lemma: None,
+        morph: None,
+        occurrence: 0,
+        occurrences: 0,
+        extra: Vec::new(),
+    };
+    if let Some(attributes) = &span.attributes {
+        for attribute in attributes.parse().map_err(Error::Usfm)? {
+            let value = attribute.value.to_owned();
+            match attribute.key {
+                None | Some("lemma" | "x-lemma") => word.lemma = Some(value),
+                Some("strong" | "x-strong" | "strongs" | "x-strongs") => {
+                    word.strong = Some(value);
+                }
+                Some("morph" | "x-morph") => word.morph = Some(value),
+                Some("occurrence" | "x-occurrence" | "occurrences" | "x-occurrences") => {}
+                Some(key) => word.extra.push((key.to_owned(), value)),
+            }
+        }
+    }
+    Ok(word)
 }
 
 /// The target-language verse an alignment is made against: its plain text, the text's

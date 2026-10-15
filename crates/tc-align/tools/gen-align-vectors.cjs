@@ -15,8 +15,10 @@
 //   Titus; `predictLinks` from memory-only models and from boosted models trained with
 //   `Math.random` seeded as tC4's tests seed it; and the growth bench's protocol on Titus.
 // - heading-vectors.json: `bootstrapVerse` against heading-source.usfm, original-language
-//   verses with headings, titles and notes inside them or before the next `\c`, and two
-//   spans across such headings.
+//   verses with headings, titles, notes, sidebars and the other spans usfm-js hides inside
+//   them or before the next `\v` or `\c`, and spans across such headings and sidebars.
+// - span-source.usfm and span-vectors.json: a verse for each span usfm-js knows and for a
+//   few it does not, and `bootstrapVerse` against each.
 //
 // Run from the repository root with a tC4 checkout at the commit fixtures/tc4 came from:
 //   node crates/tc-align/tools/gen-align-vectors.cjs /path/to/translationcore4 fixtures/align
@@ -25,7 +27,7 @@ const os = require("os");
 const path = require("path");
 
 const [tc4, outDir, ...only] = process.argv.slice(2);
-if (!tc4 || !outDir) throw new Error("usage: gen-align-vectors.cjs <tc4 checkout> <out dir> [bootstrap|extract|reflow|headings|suggest ...]");
+if (!tc4 || !outDir) throw new Error("usage: gen-align-vectors.cjs <tc4 checkout> <out dir> [bootstrap|extract|reflow|headings|spans|suggest ...]");
 const wanted = (section) => only.length === 0 || only.includes(section);
 const nm = path.join(tc4, "node_modules");
 const pinned = {
@@ -242,13 +244,46 @@ const unmerge = (content, original) => {
     for (const c of Object.keys(chapters).filter((k) => /^\d+$/.test(k))) {
       for (const v of Object.keys(chapters[c]).filter((k) => /^\d+$/.test(k))) refs.push([c, v]);
     }
-    // Spans across a mid-verse heading and across a heading that stands before `\c 2`.
-    refs.push(["1", "1-2"], ["1", "10-11"]);
+    // Spans across a mid-verse heading, a heading that stands before `\c 2` and a sidebar
+    // that stands before the next `\v`.
+    refs.push(["1", "1-2"], ["1", "10-11"], ["3", "2-3"]);
     for (const [c, v] of refs) {
       const text = "one two";
       headings.push({ ref: `${c}:${v}`, source: HEADINGS, text, record: tc.bootstrapVerse(text, verseObjectsFor(HEADINGS, c, v), SOURCE_OT) });
     }
     write("heading-vectors.json", headings);
+  }
+
+  // ---- spans ----
+  // span-source.usfm: one verse for each span usfm-js knows (each marker of its
+  // USFM_PROPERTIES with an end marker, `\w` aside) and for a few it does not, holding a
+  // word and then a footnote with a word. tC4 counts both words inside a span usfm-js
+  // shows and neither inside one it hides. A span it does not know shelters nothing, so
+  // the footnote hides its word as at the top of the verse.
+  if (wanted("spans")) {
+    const { USFM_PROPERTIES } = require(path.join(nm, "usfm-js/lib/js/USFM.js"));
+    const SPANS = "fixtures/align/span-source.usfm";
+    const w = (word, strong) => `\\w ${word}|lemma="${word}" strong="${strong}"\\w*`;
+    const [a, b, z] = [w("אַ", "H1"), w("בּ", "H2"), w("ז", "H13")];
+    const known = Object.keys(USFM_PROPERTIES).filter((t) => USFM_PROPERTIES[t].endTag && t !== "w");
+    const unknown = ["ft", "fq", "fk", "xo", "xq", "xyz", "+f", "+xt", "+pro", "+jmp", "+qs"];
+    const lines = ["\\id PSA Synthetic: a word and a footnote inside each span usfm-js knows, for tc-align", "\\usfm 3.0", "\\c 1", "\\p"];
+    [...known, ...unknown].forEach((tag, n) => {
+      const ends = [].concat(USFM_PROPERTIES[tag]?.endTag ?? "*");
+      const base = tag.replace(/-s$/, "");
+      const [open, close] =
+        tag === "esb" ? ["\\esb ", "\\esbe "]
+        : ends.includes("*") ? [`\\${tag} `, `\\${tag}* `]
+        : [`\\${base}-s |x-content="ש"\\*`, `\\${base}-e\\* `];
+      lines.push(`\\v ${n + 1} ${a} ${open}${a} \\f + \\ft ${z}\\f*${close}${b}`);
+    });
+    fs.writeFileSync(path.join(outDir, "span-source.usfm"), lines.join("\n") + "\n");
+    const spans = [];
+    for (let v = 1; v <= known.length + unknown.length; v++) {
+      const text = "one two";
+      spans.push({ ref: `1:${v}`, source: SPANS, text, record: tc.bootstrapVerse(text, verseObjectsFor(SPANS, 1, v), SOURCE_OT) });
+    }
+    write("span-vectors.json", spans);
   }
 
   // ---- suggestions ----

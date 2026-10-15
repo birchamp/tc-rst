@@ -61,8 +61,28 @@ fn bootstrap_gives_cards_to_original_words_after_a_heading_inside_the_verse_as_t
     // it; a footnote whose words are not verse words; a heading with words between the
     // last verse of chapter 1 and `\c 2`, which tC4 counts in 1:11, and a `\cl` and a
     // heading after `\c 2`, which no verse counts; and spans across both kinds of heading.
+    // Chapters 3 and 4: sidebars inside a verse, before the next `\v` and before `\c 4`, and
+    // the rarer spans usfm-js hides (`\pro`, `\xt`, `\ior`...), whose words tC4 does not
+    // count; a footnote that stays open across a paragraph to its `\f*` or to the next `\v`;
+    // and footnotes inside `\add` and `\k-s`, whose words tC4 counts until an end marker or
+    // a chunk milestone that matches neither has ended the `\add` or `\k-s`.
     let cases = vectors("heading-vectors.json");
-    assert_eq!(cases.len(), 14);
+    assert_eq!(cases.len(), 32);
+    assert_bootstrap_cards(&cases);
+}
+
+#[test]
+fn bootstrap_counts_the_words_inside_each_span_as_tc4_does() {
+    // A word and then a footnote inside each of the 96 spans usfm-js knows and 11 it does
+    // not, such as `\+jmp`: tC4 counts both inside the 68 it shows, neither inside the 28
+    // it hides, and only the word inside one it does not know.
+    let cases = vectors("span-vectors.json");
+    assert_eq!(cases.len(), 107);
+    assert_bootstrap_cards(&cases);
+}
+
+/// The cards of each case's bootstrap are the cards of tC4's.
+fn assert_bootstrap_cards(cases: &[Value]) {
     for case in cases {
         let reference = case["ref"].as_str().unwrap();
         let source = source_verse(case["source"].as_str().unwrap(), reference);
