@@ -1,0 +1,4 @@
+# Regenerated on every run: the built tC4 client and the mock server's working state.
+.cache/
+.state/
+node_modules/

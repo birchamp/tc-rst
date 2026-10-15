@@ -1,0 +1,21 @@
+{
+  "name": "tc4-baseline",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Visual-parity baseline for translationCore 4: a mock Pankosmia server plus a Playwright capture script.",
+  "type": "module",
+  "scripts": {
+    "capture": "node capture.mjs",
+    "client": "node capture.mjs --build-only",
+    "state": "node fixtures/build-state.mjs",
+    "serve": "node mock-server/server.mjs",
+    "vendor": "node fixtures/vendor/make-vendor.mjs"
+  },
+  "dependencies": {
+    "fflate": "0.8.2",
+    "playwright": "1.56.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

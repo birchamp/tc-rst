@@ -1,0 +1,665 @@
+{
+  "translationCore3": {
+    "repo": "unfoldingWord/translationCore",
+    "commit": "5729aa7b977ef85356139f73d957ee65a276460b"
+  },
+  "bundles": {
+    "ugnt": {
+      "dir": "tcResources/el-x-koine/bibles/ugnt/v0.34_unfoldingWord",
+      "file": "books.zip",
+      "version": "0.34",
+      "sha256": "bffd8996e86794cc4b94175eee9b7765816b6fd459ac560913b23cfe5975dd3c"
+    },
+    "tw": {
+      "dir": "tcResources/en/translationHelps/translationWords/v88_unfoldingWord",
+      "file": "contents.zip",
+      "version": "88",
+      "sha256": "d17d35f1c73076a5c19c76bb259b9589f990a230d87b65743b973c19245f4b36"
+    },
+    "ta": {
+      "dir": "tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord",
+      "file": "contents.zip",
+      "version": "88",
+      "sha256": "d651c7fb08ee10365f7a0041b64db99dcc8747a18fc7242e4fa4e53b43d216cd"
+    }
+  },
+  "npm": {
+    "name": "open-bible-stories",
+    "version": "0.0.5",
+    "integrity": "sha512-WrBadu6Xuht6U5tLIkfxXdH9bdo9zUj3BWgqFSwA8Woeg71XiYTG7JzDmMyV9X55NDsrPyUBX64P9gtkVOCyVg==",
+    "file": "dist/components/Examples/EditorExample.js"
+  },
+  "absentFromBundles": [
+    "translate/figs-inclusive.md"
+  ],
+  "files": {
+    "el-x-koine_ugnt/TIT.usfm": {
+      "md5": "65133339aca588706545122b56eedde7",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/el-x-koine/bibles/ugnt/v0.34_unfoldingWord/books.zip#tit/{1,2,3}.json (usfm-js toUSFM)"
+    },
+    "en_obs/01.md": {
+      "md5": "eeaabe633a42492a6cf80c2f4223b116",
+      "source": "npm open-bible-stories@0.0.5:dist/components/Examples/EditorExample.js (mdString)"
+    },
+    "en_ta/translate/figs-abstractnouns/01.md": {
+      "md5": "332841de5eb131a33aab01eeb26c523d",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-abstractnouns.md (after the title line)"
+    },
+    "en_ta/translate/figs-abstractnouns/title.md": {
+      "md5": "5391961fbb32fc8dab8dc55dddf0c915",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-abstractnouns.md (the title line)"
+    },
+    "en_ta/translate/figs-activepassive/01.md": {
+      "md5": "f830108bc9e196d222656543517d927c",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-activepassive.md (after the title line)"
+    },
+    "en_ta/translate/figs-activepassive/title.md": {
+      "md5": "24a5721067bc30c46953302cd2fa338d",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-activepassive.md (the title line)"
+    },
+    "en_ta/translate/figs-doublenegatives/01.md": {
+      "md5": "c85b4d625609143739b35a36a1b67c2e",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-doublenegatives.md (after the title line)"
+    },
+    "en_ta/translate/figs-doublenegatives/title.md": {
+      "md5": "7409f87f1803f988d6379bc839d9f9e3",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-doublenegatives.md (the title line)"
+    },
+    "en_ta/translate/figs-doublet/01.md": {
+      "md5": "9aad4766dc565571fca61f43e7a3bd34",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-doublet.md (after the title line)"
+    },
+    "en_ta/translate/figs-doublet/title.md": {
+      "md5": "eb1087dad1bbd4666a4796719d6c056c",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-doublet.md (the title line)"
+    },
+    "en_ta/translate/figs-ellipsis/01.md": {
+      "md5": "c13b8c96f6c7848c6c3d83412eb3e2f1",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-ellipsis.md (after the title line)"
+    },
+    "en_ta/translate/figs-ellipsis/title.md": {
+      "md5": "060ffbbfaf32f76ccb8663c47151b495",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-ellipsis.md (the title line)"
+    },
+    "en_ta/translate/figs-exclusive/01.md": {
+      "md5": "2e48f3f808f656b4fd4e2a7d1fdbd337",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-exclusive.md (after the title line)"
+    },
+    "en_ta/translate/figs-exclusive/title.md": {
+      "md5": "450493fa83a7a2c3308ca188c151b347",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-exclusive.md (the title line)"
+    },
+    "en_ta/translate/figs-explicit/01.md": {
+      "md5": "9326d33d6f081ea9adea969cf2269d95",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-explicit.md (after the title line)"
+    },
+    "en_ta/translate/figs-explicit/title.md": {
+      "md5": "c31f2226150fc18f522db89d51d79646",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-explicit.md (the title line)"
+    },
+    "en_ta/translate/figs-gendernotations/01.md": {
+      "md5": "e470a6c3c86fb80a755cadf6c8bed7ab",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-gendernotations.md (after the title line)"
+    },
+    "en_ta/translate/figs-gendernotations/title.md": {
+      "md5": "b0472804a931eb28b2d5fb698351f41c",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-gendernotations.md (the title line)"
+    },
+    "en_ta/translate/figs-hendiadys/01.md": {
+      "md5": "49c519d428cc5486907409c30e844bda",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-hendiadys.md (after the title line)"
+    },
+    "en_ta/translate/figs-hendiadys/title.md": {
+      "md5": "4ff6b7e318cdd2ae507e1f418c000e59",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-hendiadys.md (the title line)"
+    },
+    "en_ta/translate/figs-hyperbole/01.md": {
+      "md5": "d483792e9b2743bef6bef6cf034f73d9",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-hyperbole.md (after the title line)"
+    },
+    "en_ta/translate/figs-hyperbole/title.md": {
+      "md5": "24894f7d94afc182a23b7259ae67a33c",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-hyperbole.md (the title line)"
+    },
+    "en_ta/translate/figs-hypo/01.md": {
+      "md5": "7df8b85135ddd66890c46e994f29c1f5",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-hypo.md (after the title line)"
+    },
+    "en_ta/translate/figs-hypo/title.md": {
+      "md5": "85c665a77eb8b4b6e12c7f34f9927b30",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-hypo.md (the title line)"
+    },
+    "en_ta/translate/figs-idiom/01.md": {
+      "md5": "4ddeb77a35d8810013a403d017a62e3f",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-idiom.md (after the title line)"
+    },
+    "en_ta/translate/figs-idiom/title.md": {
+      "md5": "6300d60a08e8a743716bceab204c1e43",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-idiom.md (the title line)"
+    },
+    "en_ta/translate/figs-metaphor/01.md": {
+      "md5": "d23c05bf3c33e6fd5f9b54b5257cda6d",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-metaphor.md (after the title line)"
+    },
+    "en_ta/translate/figs-metaphor/title.md": {
+      "md5": "7f6e5a083f8dee84361fb1d737c0d7de",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-metaphor.md (the title line)"
+    },
+    "en_ta/translate/figs-metonymy/01.md": {
+      "md5": "4bb81d5046fdd3c02e0aaf0d798f57aa",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-metonymy.md (after the title line)"
+    },
+    "en_ta/translate/figs-metonymy/title.md": {
+      "md5": "fa62251877ad10728cd6fa5e52b0443b",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-metonymy.md (the title line)"
+    },
+    "en_ta/translate/figs-nominaladj/01.md": {
+      "md5": "f91699afcf19720c3e28ab32b66b2f73",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-nominaladj.md (after the title line)"
+    },
+    "en_ta/translate/figs-nominaladj/title.md": {
+      "md5": "d725c333991186a348411e62c4fe60f5",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-nominaladj.md (the title line)"
+    },
+    "en_ta/translate/figs-personification/01.md": {
+      "md5": "d5bb28083d148dda7fd75fe6c3178abe",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-personification.md (after the title line)"
+    },
+    "en_ta/translate/figs-personification/title.md": {
+      "md5": "11cdbfece9579c5a3fdffa4d92cede3b",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-personification.md (the title line)"
+    },
+    "en_ta/translate/figs-possession/01.md": {
+      "md5": "405faae61c7fa0e406a9d738d41f723b",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-possession.md (after the title line)"
+    },
+    "en_ta/translate/figs-possession/title.md": {
+      "md5": "2aa0c3d4dd91068623902a9b79cf2a61",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-possession.md (the title line)"
+    },
+    "en_ta/translate/figs-pronouns/01.md": {
+      "md5": "4fd04c216d9a5abd26da06c2c2d69a42",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-pronouns.md (after the title line)"
+    },
+    "en_ta/translate/figs-pronouns/title.md": {
+      "md5": "0643a4e92c55faa279b666935068bed9",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-pronouns.md (the title line)"
+    },
+    "en_ta/translate/figs-synecdoche/01.md": {
+      "md5": "d2b81046ec5bd722726a806f1e109778",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-synecdoche.md (after the title line)"
+    },
+    "en_ta/translate/figs-synecdoche/title.md": {
+      "md5": "403dddeb09341ef8cd5217e4e4d7d1db",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-synecdoche.md (the title line)"
+    },
+    "en_ta/translate/figs-yousingular/01.md": {
+      "md5": "00b0fa7c0e548289c0058cf7e34cf83a",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-yousingular.md (after the title line)"
+    },
+    "en_ta/translate/figs-yousingular/title.md": {
+      "md5": "d0689d5e2149850e9f1da8070c0cd5f6",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/figs-yousingular.md (the title line)"
+    },
+    "en_ta/translate/grammar-connect-exceptions/01.md": {
+      "md5": "eeda34d63be6d8d89337383b57346a49",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/grammar-connect-exceptions.md (after the title line)"
+    },
+    "en_ta/translate/grammar-connect-exceptions/title.md": {
+      "md5": "66b006b85fa2854402f1b3bbf2412f2d",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/grammar-connect-exceptions.md (the title line)"
+    },
+    "en_ta/translate/grammar-connect-logic-contrast/01.md": {
+      "md5": "ca24493a6a69ecb9d13abd9932a16b0e",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/grammar-connect-logic-contrast.md (after the title line)"
+    },
+    "en_ta/translate/grammar-connect-logic-contrast/title.md": {
+      "md5": "df3084cf1c4561670cba5a65af07e4d5",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/grammar-connect-logic-contrast.md (the title line)"
+    },
+    "en_ta/translate/grammar-connect-logic-goal/01.md": {
+      "md5": "3895693cc7ef9a6b388a7946a6060a61",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/grammar-connect-logic-goal.md (after the title line)"
+    },
+    "en_ta/translate/grammar-connect-logic-goal/title.md": {
+      "md5": "ec41f8c3415dc0511f44c9d4a5b200be",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/grammar-connect-logic-goal.md (the title line)"
+    },
+    "en_ta/translate/grammar-connect-logic-result/01.md": {
+      "md5": "b155fe1cc010c19c31b1fcc039870a56",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/grammar-connect-logic-result.md (after the title line)"
+    },
+    "en_ta/translate/grammar-connect-logic-result/title.md": {
+      "md5": "0b61a33e1c56eacfece8e465a4055b38",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/grammar-connect-logic-result.md (the title line)"
+    },
+    "en_ta/translate/grammar-connect-time-sequential/01.md": {
+      "md5": "50a2e9b8e56ef0ead73fe31e577acfb2",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/grammar-connect-time-sequential.md (after the title line)"
+    },
+    "en_ta/translate/grammar-connect-time-sequential/title.md": {
+      "md5": "e23bd684fc9b97e4d0d404f73d58a215",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/grammar-connect-time-sequential.md (the title line)"
+    },
+    "en_ta/translate/grammar-connect-words-phrases/01.md": {
+      "md5": "da3db30f22c2e5f4beb46ec66105de10",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/grammar-connect-words-phrases.md (after the title line)"
+    },
+    "en_ta/translate/grammar-connect-words-phrases/title.md": {
+      "md5": "2f78a69a699e6c8761906f37299fa9f9",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/grammar-connect-words-phrases.md (the title line)"
+    },
+    "en_ta/translate/translate-blessing/01.md": {
+      "md5": "9e05a7e780ae0c3b61b6b798b35ae231",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/translate-blessing.md (after the title line)"
+    },
+    "en_ta/translate/translate-blessing/title.md": {
+      "md5": "014f656b73f0b9a8b9cc1af7e547fdc8",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/translate-blessing.md (the title line)"
+    },
+    "en_ta/translate/translate-names/01.md": {
+      "md5": "b9cff537c341e1d0d9858e571f4c3401",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/translate-names.md (after the title line)"
+    },
+    "en_ta/translate/translate-names/title.md": {
+      "md5": "79dca68cfcd39cef87197163b7b9b203",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/translate-names.md (the title line)"
+    },
+    "en_ta/translate/translate-unknown/01.md": {
+      "md5": "6d5f47130289a0807bac13a45d761753",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/translate-unknown.md (after the title line)"
+    },
+    "en_ta/translate/translate-unknown/title.md": {
+      "md5": "b65a3610b11430a5a59972dd8e883d63",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/translate-unknown.md (the title line)"
+    },
+    "en_ta/translate/writing-pronouns/01.md": {
+      "md5": "fca186b8ee888adc59e4888c367f8412",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/writing-pronouns.md (after the title line)"
+    },
+    "en_ta/translate/writing-pronouns/title.md": {
+      "md5": "d2c86c9689a100b82834ac96e22919d2",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/writing-pronouns.md (the title line)"
+    },
+    "en_ta/translate/writing-proverbs/01.md": {
+      "md5": "628884f87a36132521d648889565c13d",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/writing-proverbs.md (after the title line)"
+    },
+    "en_ta/translate/writing-proverbs/title.md": {
+      "md5": "72bb6e21593085a965f88c8435d03b3c",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationAcademy/v88_unfoldingWord/contents.zip#translate/writing-proverbs.md (the title line)"
+    },
+    "en_tw/payload/kt/apostle.md": {
+      "md5": "e7c88918196e7fd77871b537fc1eeea5",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/apostle.md"
+    },
+    "en_tw/payload/kt/authority.md": {
+      "md5": "24a1c2f4e509dc2c8ff402e43a7198e2",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/authority.md"
+    },
+    "en_tw/payload/kt/believe.md": {
+      "md5": "8e89722509efad5a942d7a1a7d569598",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/believe.md"
+    },
+    "en_tw/payload/kt/blameless.md": {
+      "md5": "7a26ac3efc6a15547737c0f1063b6bac",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/blameless.md"
+    },
+    "en_tw/payload/kt/bless.md": {
+      "md5": "97fdd003393228bc500bd6ba045ed925",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/bless.md"
+    },
+    "en_tw/payload/kt/bornagain.md": {
+      "md5": "2a956a0d91a66622d1aaf27cdd1ef3f0",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/bornagain.md"
+    },
+    "en_tw/payload/kt/christ.md": {
+      "md5": "aa456e09d45162f61b9629e87b4f775a",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/christ.md"
+    },
+    "en_tw/payload/kt/circumcise.md": {
+      "md5": "3f5d2e52f915f4a8adc0d4a75026b898",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/circumcise.md"
+    },
+    "en_tw/payload/kt/conscience.md": {
+      "md5": "3b5aa623d52067dd1b805e799018b625",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/conscience.md"
+    },
+    "en_tw/payload/kt/elect.md": {
+      "md5": "e007cced3ceea2f61b47337638e2f335",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/elect.md"
+    },
+    "en_tw/payload/kt/eternity.md": {
+      "md5": "11b70395287b958c2b7a1dbb140d22cf",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/eternity.md"
+    },
+    "en_tw/payload/kt/evil.md": {
+      "md5": "95ee67465d91a314be019dd8dc9db278",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/evil.md"
+    },
+    "en_tw/payload/kt/exhort.md": {
+      "md5": "cbca26711222a6505b865d22444ca00f",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/exhort.md"
+    },
+    "en_tw/payload/kt/faith.md": {
+      "md5": "0f53cd73372f136ff6d3f6fd8168c639",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/faith.md"
+    },
+    "en_tw/payload/kt/faithful.md": {
+      "md5": "bfb9876b70e1bf07fe30dd2281f210d8",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/faithful.md"
+    },
+    "en_tw/payload/kt/foolish.md": {
+      "md5": "c8c2646c372d32e97763d5815f076b1b",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/foolish.md"
+    },
+    "en_tw/payload/kt/glory.md": {
+      "md5": "d85b2ae7ef98e2d3fabe0b8e41a8e73e",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/glory.md"
+    },
+    "en_tw/payload/kt/god.md": {
+      "md5": "99ba764175344afefc24fe023865d7d5",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/god.md"
+    },
+    "en_tw/payload/kt/godly.md": {
+      "md5": "c64157f2618a779ff3f1ff14c2b3dadd",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/godly.md"
+    },
+    "en_tw/payload/kt/godthefather.md": {
+      "md5": "fda5808214ebfdb7e96b32d6fc729856",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/godthefather.md"
+    },
+    "en_tw/payload/kt/good.md": {
+      "md5": "48b28b024714abf2ed43ad1525b4c9fc",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/good.md"
+    },
+    "en_tw/payload/kt/grace.md": {
+      "md5": "b5590a8f30c962374392c8aaed949267",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/grace.md"
+    },
+    "en_tw/payload/kt/holy.md": {
+      "md5": "fea22d4ecf94cca4bad257fb8479a5cd",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/holy.md"
+    },
+    "en_tw/payload/kt/holyspirit.md": {
+      "md5": "4193156fa71cbb09f861a22891c775c9",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/holyspirit.md"
+    },
+    "en_tw/payload/kt/hope.md": {
+      "md5": "36cff2c8a3a62771140216df9839f743",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/hope.md"
+    },
+    "en_tw/payload/kt/humble.md": {
+      "md5": "e727f74cdb944a157ad44064ade51290",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/humble.md"
+    },
+    "en_tw/payload/kt/jesus.md": {
+      "md5": "f21789aaf85848cfb831e6a1571c8e0b",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/jesus.md"
+    },
+    "en_tw/payload/kt/jew.md": {
+      "md5": "52af080f5b5baf98185799b9b4e5819b",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/jew.md"
+    },
+    "en_tw/payload/kt/justice.md": {
+      "md5": "62aad9cc43b93a546a1ca60cd695908f",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/justice.md"
+    },
+    "en_tw/payload/kt/lawofmoses.md": {
+      "md5": "87ac3d53274cd3c6e0862a90be630082",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/lawofmoses.md"
+    },
+    "en_tw/payload/kt/lord.md": {
+      "md5": "1115c9c58963b8c12f67a014a4dd061b",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/lord.md"
+    },
+    "en_tw/payload/kt/love.md": {
+      "md5": "5c01e0ec8a598fa461c8191917d8d83b",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/love.md"
+    },
+    "en_tw/payload/kt/mercy.md": {
+      "md5": "d4179e4474de0a678dcab56803cb0598",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/mercy.md"
+    },
+    "en_tw/payload/kt/promise.md": {
+      "md5": "92748c23350e37ad5d9d7fc853c3f074",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/promise.md"
+    },
+    "en_tw/payload/kt/prophet.md": {
+      "md5": "6be7038948e9458ffaafc21ee6d7ef08",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/prophet.md"
+    },
+    "en_tw/payload/kt/purify.md": {
+      "md5": "b1149925e24bc10c7e2bd0e0bcf3a579",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/purify.md"
+    },
+    "en_tw/payload/kt/redeem.md": {
+      "md5": "dfaf4a93567ba84d40b7d4dc2fbfee59",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/redeem.md"
+    },
+    "en_tw/payload/kt/righteous.md": {
+      "md5": "da8370ae9a18db5513c16643f419bcdc",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/righteous.md"
+    },
+    "en_tw/payload/kt/save.md": {
+      "md5": "e9305674b3bea960375e27c3738a329a",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/save.md"
+    },
+    "en_tw/payload/kt/savior.md": {
+      "md5": "2702d3036f4b58fb7fbdc1175d1627dc",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/savior.md"
+    },
+    "en_tw/payload/kt/sin.md": {
+      "md5": "d11172190a38c17b80fd33e3e3c08807",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/sin.md"
+    },
+    "en_tw/payload/kt/testimony.md": {
+      "md5": "38a82b84c99612b0e3d0e88beaac2886",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/testimony.md"
+    },
+    "en_tw/payload/kt/trust.md": {
+      "md5": "6d72661bdccee5774ae1fbcf9a2d50eb",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/trust.md"
+    },
+    "en_tw/payload/kt/wordofgod.md": {
+      "md5": "ec179ddb7d62a8261f6d21ff53c292ec",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/wordofgod.md"
+    },
+    "en_tw/payload/kt/world.md": {
+      "md5": "bc89aa239be3ec15d83f380170b37872",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/world.md"
+    },
+    "en_tw/payload/kt/zealous.md": {
+      "md5": "7f13467f4976ae9873d7e52385332edd",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#kt/articles/zealous.md"
+    },
+    "en_tw/payload/names/apollos.md": {
+      "md5": "1270100211401f4272f73cced517fd88",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#names/articles/apollos.md"
+    },
+    "en_tw/payload/names/crete.md": {
+      "md5": "8e132b919945bc8caa9bc79d40d00c35",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#names/articles/crete.md"
+    },
+    "en_tw/payload/names/paul.md": {
+      "md5": "148ea0d7fccf2c80c3d40185d16c1545",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#names/articles/paul.md"
+    },
+    "en_tw/payload/names/titus.md": {
+      "md5": "e8156a63e851aa8545c55cc05db6068a",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#names/articles/titus.md"
+    },
+    "en_tw/payload/names/tychicus.md": {
+      "md5": "8772cecf73a555a87917010275d0fa00",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#names/articles/tychicus.md"
+    },
+    "en_tw/payload/other/admonish.md": {
+      "md5": "79fdb3dc0a974e3910834936f3b6a2f2",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/admonish.md"
+    },
+    "en_tw/payload/other/age-timeperiod.md": {
+      "md5": "7919bfa15a306f94066eeb63f1cb1a08",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/age-timeperiod.md"
+    },
+    "en_tw/payload/other/age.md": {
+      "md5": "2ecf13f57cc7d417f77a449ec47e1b31",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/age.md"
+    },
+    "en_tw/payload/other/beast.md": {
+      "md5": "7c76b5da80615c2ae480ce1d58e45edd",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/beast.md"
+    },
+    "en_tw/payload/other/corrupt.md": {
+      "md5": "6a9c77e49d5d72c87f0f1b4e818f0503",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/corrupt.md"
+    },
+    "en_tw/payload/other/courage.md": {
+      "md5": "18be2a689e8c0a89eb56b8b149820ae5",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/courage.md"
+    },
+    "en_tw/payload/other/deceive.md": {
+      "md5": "90ac2134c3078b0e7b76d71e64b042a3",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/deceive.md"
+    },
+    "en_tw/payload/other/detestable.md": {
+      "md5": "fbea5f16d848e8be6af2dfd3fdeb9fa2",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/detestable.md"
+    },
+    "en_tw/payload/other/doctrine.md": {
+      "md5": "80e33e95a5e190f24d1e9bdfcd60bc02",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/doctrine.md"
+    },
+    "en_tw/payload/other/elder.md": {
+      "md5": "c0af9734a027cbdf48d9a4c155438755",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/elder.md"
+    },
+    "en_tw/payload/other/enslave.md": {
+      "md5": "abc40ed7bfce66128f2ce4e61c583266",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/enslave.md"
+    },
+    "en_tw/payload/other/envy.md": {
+      "md5": "e12d2fc82e239eef31c1f0907814bb0e",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/envy.md"
+    },
+    "en_tw/payload/other/fruit.md": {
+      "md5": "fe07583415f49c754bbe82290e719c23",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/fruit.md"
+    },
+    "en_tw/payload/other/heir.md": {
+      "md5": "5cc6c47ee9ad72dccf3634421f7d3966",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/heir.md"
+    },
+    "en_tw/payload/other/household.md": {
+      "md5": "515b1457454a1f09fed7df83ea53b4d5",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/household.md"
+    },
+    "en_tw/payload/other/know.md": {
+      "md5": "803b0fa13aa7a7adce74d89b68766536",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/know.md"
+    },
+    "en_tw/payload/other/law.md": {
+      "md5": "ad4fd7903a0140bb292aa9e74d606569",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/law.md"
+    },
+    "en_tw/payload/other/lawful.md": {
+      "md5": "040e172fbd80ef763e6f7492277d3bd5",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/lawful.md"
+    },
+    "en_tw/payload/other/lust.md": {
+      "md5": "c814e6617582a3ac06bf3942be1930c2",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/lust.md"
+    },
+    "en_tw/payload/other/manager.md": {
+      "md5": "bb0701decb6e0d7415783e034554bf67",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/manager.md"
+    },
+    "en_tw/payload/other/mind.md": {
+      "md5": "c486a0f1875388df6104de53bfba2869",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/mind.md"
+    },
+    "en_tw/payload/other/ordain.md": {
+      "md5": "d0db52e3dd1266d562a740e81d9c2324",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/ordain.md"
+    },
+    "en_tw/payload/other/overseer.md": {
+      "md5": "15a132dd7e7397557046eaab81a269ce",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/overseer.md"
+    },
+    "en_tw/payload/other/peace.md": {
+      "md5": "eac4badeb851b0f0c0f391fb1bfc27a1",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/peace.md"
+    },
+    "en_tw/payload/other/perseverance.md": {
+      "md5": "57c491962f5cef501b2ff2e5c87dafdd",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/perseverance.md"
+    },
+    "en_tw/payload/other/perverse.md": {
+      "md5": "fb1d57bc7c63b687ed00257f2795ff7f",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/perverse.md"
+    },
+    "en_tw/payload/other/preach.md": {
+      "md5": "5f16fc981f9d94aff5d54412cefb957b",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/preach.md"
+    },
+    "en_tw/payload/other/profit.md": {
+      "md5": "82a8a968cb8d3ca0cea64fe8e1f48f3c",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/profit.md"
+    },
+    "en_tw/payload/other/rebel.md": {
+      "md5": "e695e1123941fd716cbd644fa02c3416",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/rebel.md"
+    },
+    "en_tw/payload/other/rebuke.md": {
+      "md5": "20451aa324e36d00074a081faad4aa38",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/rebuke.md"
+    },
+    "en_tw/payload/other/receive.md": {
+      "md5": "7c8c7949eb6b12e98f81942d2acfbb7f",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/receive.md"
+    },
+    "en_tw/payload/other/reject.md": {
+      "md5": "6d0af265132065ab3c880c842c27265c",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/reject.md"
+    },
+    "en_tw/payload/other/reverence.md": {
+      "md5": "ef1a27a47af3284526eb9ed162f419c4",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/reverence.md"
+    },
+    "en_tw/payload/other/ruler.md": {
+      "md5": "97047cb48b6489daf98d5d516d5a0816",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/ruler.md"
+    },
+    "en_tw/payload/other/selfcontrol.md": {
+      "md5": "9895094b75ddaa4b2f0ad5b81523bcc3",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/selfcontrol.md"
+    },
+    "en_tw/payload/other/servant.md": {
+      "md5": "444199a0ba3e63793b470d7cdfb04e83",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/servant.md"
+    },
+    "en_tw/payload/other/shame.md": {
+      "md5": "da0cce2d8c94e8edd055cfadc144cb86",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/shame.md"
+    },
+    "en_tw/payload/other/slander.md": {
+      "md5": "24dd014cba2acf8b33ac0a019420192d",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/slander.md"
+    },
+    "en_tw/payload/other/strife.md": {
+      "md5": "4dc65b8dc9bb5705476666875bd8771a",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/strife.md"
+    },
+    "en_tw/payload/other/subject.md": {
+      "md5": "d50d2789ef39025598e8802bf94439db",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/subject.md"
+    },
+    "en_tw/payload/other/vain.md": {
+      "md5": "4044acc71dac79191f22986fdaecb90b",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/vain.md"
+    },
+    "en_tw/payload/other/wine.md": {
+      "md5": "4c79b9e96c0384fbe49d5ed35ae6c2d2",
+      "source": "github.com/unfoldingWord/translationCore@5729aa7:tcResources/en/translationHelps/translationWords/v88_unfoldingWord/contents.zip#other/articles/wine.md"
+    }
+  }
+}
