@@ -10,21 +10,21 @@ rust-version.workspace = true
 tc-core = { path = "../tc-core" }
 tc-door43 = { path = "../tc-door43" }
 tc-helps = { path = "../tc-helps" }
-reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "system-proxy"] }
+reqwest = { workspace = true, features = ["rustls", "system-proxy"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10.9"
 thiserror.workspace = true
-url = "2.5.8"
-zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+url.workspace = true
+zip.workspace = true
 
 [dev-dependencies]
-axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
-md-5 = "0.10.6"
+axum = { workspace = true, features = ["http1", "tokio"] }
+md-5.workspace = true
 proptest.workspace = true
 tempfile.workspace = true
 tc-door43-fake = { path = "../tc-door43-fake" }
-tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "net", "time"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "time"] }
 
 [lints]
 workspace = true
