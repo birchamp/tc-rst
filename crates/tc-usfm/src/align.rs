@@ -76,7 +76,10 @@
 //! - `weave(&parse_aligned(x)?.plain, &parse_aligned(x)?.groups) == x` byte for byte for
 //!   every verse of en_ult and en_ust Titus (the tests check all 92), for every Psalm
 //!   superscription verse of the ULT and UST v91, and in general for aligned text in the
-//!   layout above.
+//!   layout above. Cut into verses as tC4 cuts a book to align and export it, every verse
+//!   of the ULT v91 and UST v91 that does not come back byte for byte is one that tC4's own
+//!   export does not write back either (`tests/resources.rs` checks each verse against
+//!   tC4's export and says how the others come out).
 //! - For other aligned text the groups survive but bytes may differ: attributes in
 //!   another order, a run that tC4 would have cut, a `\zaln-e` after the punctuation that
 //!   follows its last word, other whitespace before a `\w`, a `\zaln-s` that closes
