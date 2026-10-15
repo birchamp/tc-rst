@@ -41,7 +41,8 @@ rebuild must stay quick at that size for the whole life of a project.
   with verse counts from the versification files. Checks are the real tN and TWL v91 rows
   for the 59 books those releases contain (173,337 rows) and generated rows at the v89
   counts in `fixtures/tc4/conformance-fixtures/check-density.json` for the other seven. The
-  Hebrew of every Old Testament book is real (`fixtures/scale/resources/hbo_uhb-v3.0.0.zip`).
+  Hebrew of every Old Testament book (UHB 3.0.0) and the Greek of every New Testament book
+  (UGNT 0.34) are real, from `fixtures/scale/resources/`.
   Translation text and alignments are the real ULT v91 for its 59 books
   (`fixtures/scale/resources/en_ult-v91.zip`, 369,635 alignment groups) and are sampled from
   it for the other seven. Three

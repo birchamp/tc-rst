@@ -22,6 +22,6 @@ Licenses: the content licenses are in `tc4/LICENSE-CONTENT.md`. unfoldingWord re
 ## `scale/`
 
 Real data for the performance budgets in `docs/PERFORMANCE.md`: unfoldingWord releases
-(UHB 3.0.0; tN, TWL, tW and tA v91) byte for byte, and Psalms files (the aligned ULT, the
+(UHB 3.0.0, UGNT 0.34; ULT, tN, TWL, tW and tA v91) byte for byte, and Psalms files (the aligned ULT, the
 UHB, the tN and TWL rows, and the WEB text). Read `scale/README.md` for provenance and
 checksums.
