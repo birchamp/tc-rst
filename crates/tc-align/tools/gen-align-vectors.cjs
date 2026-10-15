@@ -15,7 +15,8 @@
 //   Titus; `predictLinks` from memory-only models and from boosted models trained with
 //   `Math.random` seeded as tC4's tests seed it; and the growth bench's protocol on Titus.
 // - heading-vectors.json: `bootstrapVerse` against heading-source.usfm, original-language
-//   verses with headings, titles and notes inside them.
+//   verses with headings, titles and notes inside them or before the next `\c`, and two
+//   spans across such headings.
 //
 // Run from the repository root with a tC4 checkout at the commit fixtures/tc4 came from:
 //   node crates/tc-align/tools/gen-align-vectors.cjs /path/to/translationcore4 fixtures/align
@@ -236,9 +237,16 @@ const unmerge = (content, original) => {
     const HEADINGS = "fixtures/align/heading-source.usfm";
     const headings = [];
     verseObjectsFor(HEADINGS, 1, 1);
-    for (const v of Object.keys(bookJson.get(HEADINGS).chapters["1"]).filter((k) => /^\d+$/.test(k))) {
+    const chapters = bookJson.get(HEADINGS).chapters;
+    const refs = [];
+    for (const c of Object.keys(chapters).filter((k) => /^\d+$/.test(k))) {
+      for (const v of Object.keys(chapters[c]).filter((k) => /^\d+$/.test(k))) refs.push([c, v]);
+    }
+    // Spans across a mid-verse heading and across a heading that stands before `\c 2`.
+    refs.push(["1", "1-2"], ["1", "10-11"]);
+    for (const [c, v] of refs) {
       const text = "one two";
-      headings.push({ ref: `1:${v}`, source: HEADINGS, text, record: tc.bootstrapVerse(text, verseObjectsFor(HEADINGS, 1, v), SOURCE_OT) });
+      headings.push({ ref: `${c}:${v}`, source: HEADINGS, text, record: tc.bootstrapVerse(text, verseObjectsFor(HEADINGS, c, v), SOURCE_OT) });
     }
     write("heading-vectors.json", headings);
   }

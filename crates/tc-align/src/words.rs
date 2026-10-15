@@ -10,7 +10,7 @@ use std::fmt;
 use std::str::FromStr;
 use tc_core::VerseSpan;
 use tc_usfm::markers::{self, MarkerClass};
-use tc_usfm::{Book, Document, Node, Segment, SourceWord, TargetWord};
+use tc_usfm::{Book, Document, Node, Segment, SegmentKind, SourceWord, TargetWord};
 
 /// The original-language words of one verse, in verse order, numbered by occurrence.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -21,10 +21,11 @@ pub struct SourceVerse {
 impl SourceVerse {
     /// The original-language words of a verse or span of `book` (UGNT, UHB), read from
     /// the text tC4 reads for a verse: from after its `\v` marker to the next `\v` or
-    /// `\c` marker (usfm-js's verse objects). That is the unit's body and the next unit's
-    /// leading markers: `tc-usfm` gives a heading that stands before the next `\v`, with
-    /// its words, to the next verse (an acrostic's `\qa`, a mid-verse `\s5`), and tC4
-    /// counts those words in this verse.
+    /// `\c` marker (usfm-js's verse objects). That is the unit's body and what the next
+    /// segment holds before its own `\v` or `\c` marker: `tc-usfm` gives a heading that
+    /// stands before the next `\v`, with its words, to the next verse (an acrostic's
+    /// `\qa`, a mid-verse `\s5`), and one that stands before the next `\c` to that
+    /// chapter, and tC4 counts those words in this verse.
     ///
     /// A span is its member verses in order, numbered across the span
     /// ([`SourceVerse::span`]). A member verse the book does not have adds no words, as
@@ -33,16 +34,19 @@ impl SourceVerse {
         let segments = book.segments();
         let mut parts = Vec::new();
         for verse in verses.verses() {
-            let Some(at) = segments.iter().position(|s| {
-                s.as_verse().is_some_and(|u| {
-                    u.chapter() == Some(chapter) && u.verses() == Some(VerseSpan::single(verse))
-                })
-            }) else {
+            let found = segments.iter().enumerate().find_map(|(at, s)| {
+                s.as_verse()
+                    .filter(|u| {
+                        u.chapter() == Some(chapter) && u.verses() == Some(VerseSpan::single(verse))
+                    })
+                    .map(|u| (at, u))
+            });
+            let Some((at, unit)) = found else {
                 continue;
             };
-            let mut text = segments[at].as_verse().map_or("", |u| u.body()).to_owned();
-            if let Some(next) = segments.get(at + 1).and_then(Segment::as_verse) {
-                text.push_str(next.leading());
+            let mut text = unit.body().to_owned();
+            if let Some(next) = segments.get(at + 1) {
+                push_leading(next, &mut text);
             }
             parts.push(Self::from_usfm(&text)?);
         }
@@ -90,6 +94,25 @@ impl SourceVerse {
 
     pub fn is_empty(&self) -> bool {
         self.words.is_empty()
+    }
+}
+
+/// Append what `segment` holds before its `\v` or `\c` marker: the headings, paragraph
+/// markers and milestones `tc-usfm` gives to the verse or chapter they lead into.
+fn push_leading(segment: &Segment<'_>, out: &mut String) {
+    match segment.kind() {
+        SegmentKind::Verse(unit) => out.push_str(unit.leading()),
+        SegmentKind::Chapter(_) => {
+            let doc = Document::parse(segment.text());
+            for node in doc
+                .nodes()
+                .iter()
+                .take_while(|n| !matches!(n, Node::Marker(m) if m.is_chapter()))
+            {
+                node.write_to(out);
+            }
+        }
+        SegmentKind::Header => {}
     }
 }
 

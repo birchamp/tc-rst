@@ -58,14 +58,17 @@ fn bootstrap_matches_tc4_for_greek_and_hebrew_verses_and_a_span() {
 #[test]
 fn bootstrap_gives_cards_to_original_words_after_a_heading_inside_the_verse_as_tc4_does() {
     // A mid-verse `\s5`, `\r`, `\qa`, `\sp`, `\d`, `\ms`, `\s` or `\cl` and the words after
-    // it, and a footnote whose words are not verse words.
+    // it; a footnote whose words are not verse words; a heading with words between the
+    // last verse of chapter 1 and `\c 2`, which tC4 counts in 1:11, and a `\cl` and a
+    // heading after `\c 2`, which no verse counts; and spans across both kinds of heading.
     let cases = vectors("heading-vectors.json");
-    assert_eq!(cases.len(), 10);
+    assert_eq!(cases.len(), 14);
     for case in cases {
         let reference = case["ref"].as_str().unwrap();
         let source = source_verse(case["source"].as_str().unwrap(), reference);
         let verse = TargetVerse::new(case["text"].as_str().unwrap());
-        let value = AlignmentValue::bootstrap(&source, &verse, basis(1));
+        let span_end = parse_ref(reference).1.end();
+        let value = AlignmentValue::bootstrap(&source, &verse, basis(span_end));
         assert_eq!(
             cards(&value),
             json_cards(&case["record"]["alignments"]),
