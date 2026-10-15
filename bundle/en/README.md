@@ -84,6 +84,37 @@ it with the commit's tree. That needs the commit's tree id from Door43 once. The
 pipeline looks it up and records it in `fetched.lock`, and from then on the installer checks
 the tree offline.
 
+### Repackaged as one JSON file per lexicon
+
+Thousands of tiny files are slow to install, copy and scan, so the lexicons are not installed
+as archives (owner ruling, 2026-10-15). `tc-resources` repackages each verified archive into
+one JSON file, and the app loads that file whole and looks entries up in memory. The same
+function runs when the app is packaged and whenever a lexicon is installed later, so there is
+one format and one code path. The installer ships only the JSON files; the archives above stay
+here as their verified source.
+
+The file is UTF-8 JSON, written in a fixed order so that repackaging the same archive always
+gives the same bytes. `fetched.lock` records each file's sha256 next to its archive's tree id,
+and the installer checks it.
+
+```json
+{
+  "format": "tc-lexicon",
+  "version": 1,
+  "source": { "repo": "uW/en_uhl", "commit": "72df5ac2…", "archiveSha256": "bbb8e3c4…" },
+  "metadata": { "…": "the archive's metadata.json, unchanged as a value (license and credits)" },
+  "entries": { "1": { "brief": "father", "long": "…" }, "2": { "…": "…" } },
+  "index": [ { "id": "H1", "name": "אָב" } ]
+}
+```
+
+- `entries` holds every `ingredients/content/<n>.json` value unchanged, keyed by `<n>`, in
+  ascending numeric order. An entry with fields other than `brief` and `long` keeps them.
+- `index` is `ingredients/index.json` unchanged, and is present only when the archive has
+  one (`en_uhl`).
+- A reader refuses a `format` it does not know or a `version` newer than it reads, in words,
+  and the app shows the lexicon as unavailable rather than guessing.
+
 ## Fetched when the app is packaged
 
 The OBS image pack is too large to keep in git, so the packaging step downloads it. The

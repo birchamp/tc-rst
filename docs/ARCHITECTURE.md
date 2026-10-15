@@ -70,7 +70,7 @@ Every crate lives in `crates/`. Arrows read "is used by".
 | `tc-door43`, `tc-door43-fake` | The Door43 HTTP client, the internet switch, and a fake server for tests. |
 | `tc-journal` | Operations, journal segments, the fold, conflicts. See `STORAGE.md`. |
 | `tc-store` | The project folder: atomic writes, rebuilding derived files, recovery, local git history. |
-| `tc-resources` | Installing, pinning, verifying and upgrading resources from Door43 or Aquifer. Seeds the bundled English suite from `bundle/en/`. |
+| `tc-resources` | Installing, pinning, verifying and upgrading resources from Door43 or Aquifer. Seeds the bundled English suite from `bundle/en/`. Repackages each lexicon into one JSON file that the app reads into memory. |
 | `tc-check` | Building tN and tW checks, selections, decisions, invalidation. |
 | `tc-align` | Alignment editing, keeping alignments across edits, suggestions. |
 | `tc-obs` | Open Bible Stories: stories and frames. |

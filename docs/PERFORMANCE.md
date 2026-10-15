@@ -72,6 +72,7 @@ inside the whole-Bible project, so project size is always present.
 | Aligning | Suggestions for one verse | model trained on the NT + GEN + PSA alignments of ULT v91 (tC4's responsiveness fixture used v89) | 50 ms; training in the background; after an alignment save the model updates in the background |
 | Aligning | Reflow alignments after a verse edit | one verse | 2 ms |
 | Resources | Load one book's resources from the installed store (original language, ULT, UST, tN, TWL, linked tW articles) | Psalms | 300 ms the first time, then cached; 60 MiB per open book |
+| Resources | Load a lexicon (one JSON file per lexicon) and look up an entry | the Hebrew lexicon, 8,674 entries | 100 ms to load once per session; lookups in memory, under 1 ms |
 | Project | Cold open | whole Bible | 3 s, with determinate progress |
 | Project | Materialize one book | Psalms | 300 ms, in the background |
 | Project | Checkpoint | whole Bible | 500 ms |
