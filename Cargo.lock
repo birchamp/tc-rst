@@ -2056,6 +2056,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tc-corpus"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tc-burrito",
+ "tc-core",
+ "tc-journal",
+ "tc-usfm",
+ "tc-versification",
+ "thiserror",
+ "zip",
+]
+
+[[package]]
 name = "tc-door43"
 version = "0.1.0"
 dependencies = [

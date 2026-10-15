@@ -27,6 +27,7 @@ proptest = "1"
 tempfile = "3"
 sha2 = "0.11.1"
 unicode-normalization = "0.1.25"
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # Full debug info made each agent worktree's target dir several GB and filled the disk.
 [profile.dev]
@@ -36,3 +37,15 @@ debug = "line-tables-only"
 # minutes.
 [profile.dev.package.sha2]
 opt-level = 3
+
+# Every `cargo test` generates the Psalms corpus and one ten times larger, and folds both,
+# for the operation-count tests of docs/PERFORMANCE.md rule 2: about half a million changes.
+# Unoptimized, that alone took minutes.
+[profile.dev.package.tc-journal]
+opt-level = 2
+
+[profile.dev.package.tc-corpus]
+opt-level = 2
+
+[profile.dev.package.tc-usfm]
+opt-level = 2

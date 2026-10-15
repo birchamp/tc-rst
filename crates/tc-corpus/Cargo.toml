@@ -1,0 +1,21 @@
+[package]
+name = "tc-corpus"
+description = "The deterministic scale corpus of docs/PERFORMANCE.md: real Psalms data and a whole Bible generated from it, as journal changes and as plain domain inputs. For tests and benchmarks only."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+tc-core = { path = "../tc-core" }
+tc-usfm = { path = "../tc-usfm" }
+tc-burrito = { path = "../tc-burrito" }
+tc-journal = { path = "../tc-journal" }
+tc-versification = { path = "../tc-versification" }
+serde_json.workspace = true
+thiserror.workspace = true
+zip.workspace = true
+
+[lints]
+workspace = true

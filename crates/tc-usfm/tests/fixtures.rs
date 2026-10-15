@@ -132,13 +132,31 @@ fn aligned_verses_weave_back_byte_for_byte() {
 /// Every verse of every fixture reads apart. Each one without other word markup (such as
 /// UHB's `\w` words with `lemma`) weaves back into the same plain text and links, with
 /// the occurrence numbers the plain text gives.
+///
+/// The ULT aligns the Psalms' superscriptions (`\d`) and Psalm 119's acrostic headings
+/// (`\qa`). Weave aligns only verse text, so those verses are refused, in words, and only
+/// those: a refusal anywhere else fails the test.
 #[test]
 fn every_fixture_verse_reads_apart_and_weaves_back() {
-    let (mut woven, mut word_markup) = (0, 0);
+    let (mut woven, mut word_markup, mut headings) = (0, 0, 0);
     for (path, text) in all_usfm() {
         for unit in Book::parse(&text).verses() {
             let at = format!("{} {:?}:{}", path.display(), unit.chapter(), unit.label());
-            let parsed = parse_aligned(unit.body()).unwrap_or_else(|e| panic!("{at}: {e}"));
+            let parsed = match parse_aligned(unit.body()) {
+                Ok(parsed) => parsed,
+                Err(Error::AlignmentOutsideVerseText(heading))
+                    if path.ends_with("scale/psa/en_ult/19-PSA.usfm")
+                        && (unit.body().contains("\\d ") || unit.body().contains("\\qa ")) =>
+                {
+                    assert!(
+                        heading.contains("\\zaln-s") || heading.contains("\\w "),
+                        "{at}"
+                    );
+                    headings += 1;
+                    continue;
+                }
+                Err(e) => panic!("{at}: {e}"),
+            };
             if let Ok(counted) = tc_usfm::target_words(&parsed.plain) {
                 assert_eq!(counted, parsed.words, "{at}");
             }
@@ -163,6 +181,8 @@ fn every_fixture_verse_reads_apart_and_weaves_back() {
     assert!(woven > 500, "only {woven} verses woven");
     // UHB Jonah's 48 verses, and the copies of it.
     assert!(word_markup >= 48, "{word_markup}");
+    // The Psalms with an aligned superscription, and Psalm 119's 22 stanzas.
+    assert!(headings > 22, "{headings}");
 }
 
 /// The exotic corpus aligns `a servant` but leaves a later `a` bare, so the written
