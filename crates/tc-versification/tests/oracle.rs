@@ -13,8 +13,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tc_core::VerseSpan;
 use tc_versification::{
-    BookCode, MapOutcome, MappingTable, Scheme, SchemeReference, Unplaceable, VerseRef,
-    Versification, map_reference, map_verse,
+    BookCode, MapOutcome, MappingTable, RefPart, RowReference, Scheme, SchemeReference,
+    Unplaceable, VerseRef, Versification, map_reference, map_verse,
 };
 
 fn fixtures() -> PathBuf {
@@ -223,7 +223,11 @@ fn every_table_lookup_matches_proskomma_map_verse() {
                         .get(&input)
                         .map_or_else(|| vec![input], |h| h[0].clone());
                     let hop = table.apply(input);
-                    assert_eq!(hop.targets, want, "{name} {direction} {input}");
+                    assert_eq!(
+                        hop.targets().collect::<Vec<_>>(),
+                        want,
+                        "{name} {direction} {input}"
+                    );
                     checked += 1;
                 }
             }
@@ -386,7 +390,11 @@ fn map_reference_matches_tc4() {
                         let want = expected
                             .remove(&(b, c, v))
                             .unwrap_or(MapOutcome::Mapped(input));
-                        assert_eq!(map_reference(&from, &to, &input), want, "{pair} {input}");
+                        assert_eq!(
+                            map_reference(&from, &to, &input.into()),
+                            want,
+                            "{pair} {input}"
+                        );
                     }
                 }
             }
@@ -405,7 +413,7 @@ fn map_reference_matches_tc4() {
                 verses: span(v),
             };
             assert_eq!(
-                map_reference(&from, &to, &input),
+                map_reference(&from, &to, &input.into()),
                 parse_outcome(rhs),
                 "{pair} {input}"
             );
@@ -417,6 +425,59 @@ fn map_reference_matches_tc4() {
     );
 }
 
+/// tC4's outcome text, as `generate.mjs` writes it.
+fn outcome_text(outcome: &MapOutcome) -> String {
+    match outcome {
+        MapOutcome::SameFrame(r) => format!("{r} unmapped"),
+        MapOutcome::Mapped(r) => r.to_string(),
+        MapOutcome::Unplaceable { reason, candidates } => {
+            let name = match reason {
+                Unplaceable::VerseZero => "verse-zero",
+                Unplaceable::NoChapter => "no-chapter",
+                Unplaceable::PastChapterEnd => "past-chapter-end",
+                Unplaceable::Ambiguous => "ambiguous",
+                Unplaceable::SpanSplit => "span-split",
+                Unplaceable::MalformedReference => "malformed-reference",
+            };
+            let candidates: Vec<String> = candidates.iter().map(ToString::to_string).collect();
+            if candidates.is_empty() {
+                format!("!{name}")
+            } else {
+                format!("!{name} {}", candidates.join(","))
+            }
+        }
+    }
+}
+
+#[test]
+fn row_reference_forms_match_tc4() {
+    let oracle = oracle("tc4-ref-forms.json");
+    let pairs = oracle["pairs"].as_object().unwrap();
+    assert_eq!(pairs.len(), 6);
+    let mut same_frame = 0usize;
+    let mut malformed = 0usize;
+    for (pair, lines) in pairs {
+        let (from_name, to_name) = pair.split_once('>').unwrap();
+        let (from, to) = (scheme(from_name), scheme(to_name));
+        for line in strings(lines) {
+            let (input, want) = line.split_once('=').unwrap();
+            let (b, cv) = input.split_once(' ').unwrap();
+            let (c, v) = cv.split_once(':').unwrap();
+            let reference = RowReference {
+                book: book(b),
+                chapter: RefPart::parse(c),
+                verse: RefPart::parse(v),
+            };
+            let got = map_reference(&from, &to, &reference);
+            same_frame += usize::from(matches!(got, MapOutcome::SameFrame(_)));
+            malformed += usize::from(want == "!malformed-reference");
+            assert_eq!(outcome_text(&got), want, "{pair} {input}");
+        }
+    }
+    assert!(same_frame >= 30, "only {same_frame} same-frame inputs");
+    assert!(malformed >= 50, "only {malformed} malformed inputs");
+}
+
 #[test]
 fn same_frame_passes_through_untouched() {
     // A composed eng -> org -> eng round trip moves NEH 7:68 to 7:69; the same frame must
@@ -425,8 +486,8 @@ fn same_frame_passes_through_untouched() {
     let input: SchemeReference =
         SchemeReference::from("NEH 7:68".parse::<tc_core::Reference>().unwrap());
     assert_eq!(
-        map_reference(&eng, &eng, &input),
-        MapOutcome::SameFrame(input)
+        map_reference(&eng, &eng, &input.into()),
+        MapOutcome::SameFrame(input.into())
     );
     let composed = map_verse(&eng, &eng, "NEH 7:68".parse().unwrap());
     assert_eq!(

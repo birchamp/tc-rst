@@ -153,6 +153,63 @@ fn a_shadowed_rule_is_reported() {
 }
 
 #[test]
+fn a_source_verse_the_scheme_lacks_is_reported() {
+    // eng has no EZR 14; Proskomma maps the verse to itself anyway.
+    let m = std_map(StandardScheme::Eng, StandardScheme::Lxx, "EZR 14:18");
+    assert_eq!(m.targets().collect::<Vec<_>>(), vec![verse("EZR 14:18")]);
+    assert!(m.losses.contains(&Loss::SourceMissing {
+        absence: Absence::NoChapter
+    }));
+    assert_eq!(m.exact(), None);
+    let m = std_map(StandardScheme::Eng, StandardScheme::Org, "JON 1:18");
+    assert!(m.losses.contains(&Loss::SourceMissing {
+        absence: Absence::PastChapterEnd
+    }));
+    let m = std_map(StandardScheme::Org, StandardScheme::Org, "PSA 3:0");
+    assert!(m.losses.contains(&Loss::SourceMissing {
+        absence: Absence::VerseZero
+    }));
+}
+
+#[test]
+fn excluded_verses_are_reported_on_both_sides() {
+    // Proskomma's lxx.vrs excludes GEN 31:51.
+    let lxx = proskomma("lxx");
+    let org = StandardScheme::Org.scheme();
+    assert!(lxx.is_excluded(verse("GEN 31:51")));
+    assert!(lxx.versification().contains(verse("GEN 31:51")));
+    let into = map_verse(org, &lxx, verse("GEN 31:51"));
+    assert!(into.losses.contains(&Loss::Excluded {
+        verse: verse("GEN 31:51")
+    }));
+    assert_eq!(into.exact(), None);
+    let out = map_verse(&lxx, org, verse("GEN 31:51"));
+    assert!(out.losses.contains(&Loss::SourceExcluded));
+    assert_eq!(out.exact(), None);
+    // Every excluded verse of lxx is reported, as a source and wherever org lands on it.
+    let mut landed = 0usize;
+    for &x in lxx.versification().excluded_verses() {
+        assert!(
+            map_verse(&lxx, org, x)
+                .losses
+                .contains(&Loss::SourceExcluded),
+            "lxx {x}"
+        );
+        for pivot in lxx.to_org(x).targets() {
+            let m = map_verse(org, &lxx, pivot);
+            if m.targets().any(|t| t == x) {
+                assert!(
+                    m.losses.contains(&Loss::Excluded { verse: x }),
+                    "org {pivot} -> lxx {x}"
+                );
+                landed += 1;
+            }
+        }
+    }
+    assert!(landed > 200, "only {landed} landings on excluded verses");
+}
+
+#[test]
 fn every_lossy_verse_of_every_standard_pair_says_why() {
     // The contract: a mapping with no reported loss lands on exactly one verse that exists
     // in the target and maps back to the source alone.
@@ -164,6 +221,17 @@ fn every_lossy_verse_of_every_standard_pair_says_why() {
             for book in v.books() {
                 for (i, &last) in v.verse_counts(book).unwrap().iter().enumerate() {
                     let chapter = u16::try_from(i + 1).unwrap();
+                    // Verse 0 and the verse past the end are not in the source scheme.
+                    for missing in [0, last + 1] {
+                        let m = map_verse(f, t, VerseRef::new(book, chapter, missing));
+                        assert!(
+                            m.losses
+                                .iter()
+                                .any(|l| matches!(l, Loss::SourceMissing { .. })),
+                            "{from:?}>{to:?} {}",
+                            m.source
+                        );
+                    }
                     for n in 1..=last {
                         let m = map_verse(f, t, VerseRef::new(book, chapter, n));
                         if !m.is_lossless() {

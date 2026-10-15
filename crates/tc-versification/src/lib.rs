@@ -7,8 +7,9 @@
 //! - [`Scheme`] compiles a versification's tables. [`map_verse`] maps a verse from one
 //!   scheme to another through `org` exactly as proskomma-core 0.11.3 does, and lists
 //!   every way the result loses or bends information ([`Loss`]).
-//! - [`map_reference`] applies tC4's frame rule on top: a reference becomes a
-//!   project-frame reference or a refusal with a reason, matching tC4's `mapReference`.
+//! - [`map_reference`] applies tC4's frame rule on top: a resource row's reference
+//!   ([`RowReference`]) passes through within one frame, or becomes a project-frame
+//!   reference or a refusal with a reason, matching tC4's `mapReference`.
 //! - [`resolve_scheme`] establishes which scheme a project is in, from its recorded name
 //!   or a fingerprint of its `vrs.json`, as tC4's `resolveProjectScheme` does.
 //!
@@ -25,13 +26,18 @@ mod table;
 mod versification;
 
 pub use book::{BookCode, InvalidBookCode};
-pub use reference::{MAX_SPAN_VERSES, MapOutcome, SchemeReference, Unplaceable, map_reference};
+pub use reference::{
+    MAX_SPAN_VERSES, MapOutcome, RefPart, RowReference, SchemeReference, Unplaceable, map_reference,
+};
 pub use resolve::{
     SchemeResolution, UNRECORDED_SCHEME, VrsRegister, canonical_scheme, is_scheme_name,
     resolve_scheme,
 };
 pub use scheme::{Landing, Loss, Scheme, VerseMapping, map_span, map_verse};
-pub use spec::{InvalidMapping, InvalidVerseRef, MappedRange, Mapping, Part, VerseRef};
+pub use spec::{
+    InvalidMapping, InvalidVerseRef, MappedRange, Mapping, Part, UnappliedForm, UnappliedMapping,
+    VerseRef,
+};
 pub use standard::StandardScheme;
 pub use table::{CompileError, Hop, MappingTable, reverse_mappings};
-pub use versification::{Absence, ParseError, Versification};
+pub use versification::{Absence, MAX_SKIPPED_CHAPTERS, ParseError, Versification, WriteError};

@@ -29,8 +29,9 @@ struct Rule {
     first: u16,
     last: u16,
     book: BookCode,
-    /// `(chapter, first verse)` of each target.
-    starts: Vec<(u16, u16)>,
+    /// `(chapter, first verse)` of the first target, then of each other target.
+    first_start: (u16, u16),
+    more_starts: Vec<(u16, u16)>,
     mapping: Mapping,
 }
 
@@ -47,22 +48,46 @@ pub enum CompileError {
 }
 
 /// Where one verse lands through one table: Proskomma's `[book, [[chapter, verse], ...]]`.
+/// Only [`MappingTable::apply`] builds one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hop<'a> {
-    /// Never empty, and every entry is in the same book. More than one entry is a
-    /// one-to-many mapping. Entries can repeat when a source lists a target twice.
-    pub targets: Vec<VerseRef>,
-    /// The rule that moved the verse, as this table applies it. `None` when no rule holds
-    /// the verse and it maps to itself.
-    pub rule: Option<&'a Mapping>,
-    /// Later rules that also hold the verse. Proskomma applies only the first.
-    pub shadowed: Vec<&'a Mapping>,
+    first: VerseRef,
+    rest: Vec<VerseRef>,
+    rule: Option<&'a Mapping>,
+    shadowed: Vec<&'a Mapping>,
 }
 
-impl Hop<'_> {
+impl<'a> Hop<'a> {
+    /// Never empty, and every entry is in the same book. More than one entry is a
+    /// one-to-many mapping. Entries can repeat when a source lists a target twice.
+    pub fn targets(&self) -> impl Iterator<Item = VerseRef> + '_ {
+        std::iter::once(self.first).chain(self.rest.iter().copied())
+    }
+
+    /// How many targets there are, counting repeats. At least 1.
+    pub fn target_count(&self) -> usize {
+        1 + self.rest.len()
+    }
+
+    /// The first target.
+    pub fn first(&self) -> VerseRef {
+        self.first
+    }
+
+    /// The book every target is in.
     pub fn book(&self) -> BookCode {
-        // `apply` always returns at least one target.
-        self.targets[0].book
+        self.first.book
+    }
+
+    /// The rule that moved the verse, as this table applies it. `None` when no rule holds
+    /// the verse and it maps to itself.
+    pub fn rule(&self) -> Option<&'a Mapping> {
+        self.rule
+    }
+
+    /// Later rules that also hold the verse. Proskomma applies only the first.
+    pub fn shadowed(&self) -> &[&'a Mapping] {
+        &self.shadowed
     }
 }
 
@@ -95,7 +120,8 @@ impl MappingTable {
     /// (`do_cv`) put in front of it.
     pub fn apply(&self, verse: VerseRef) -> Hop<'_> {
         let unchanged = Hop {
-            targets: vec![verse],
+            first: verse,
+            rest: Vec::new(),
             rule: None,
             shadowed: Vec::new(),
         };
@@ -109,16 +135,14 @@ impl MappingTable {
             return unchanged;
         };
         let offset = verse.verse - rule.first;
+        // `Rule::compile` refuses a rule whose targets could pass u16::MAX, so this never
+        // saturates.
+        let land = |&(chapter, start): &(u16, u16)| {
+            VerseRef::new(rule.book, chapter, start.saturating_add(offset))
+        };
         Hop {
-            targets: rule
-                .starts
-                .iter()
-                // `Rule::compile` refuses a rule whose targets could pass u16::MAX, so
-                // this never saturates.
-                .map(|&(chapter, start)| {
-                    VerseRef::new(rule.book, chapter, start.saturating_add(offset))
-                })
-                .collect(),
+            first: land(&rule.first_start),
+            rest: rule.more_starts.iter().map(land).collect(),
             rule: Some(&rule.mapping),
             shadowed: holding.map(|r| &r.mapping).collect(),
         }
@@ -128,8 +152,13 @@ impl MappingTable {
 impl Rule {
     fn compile(mapping: Mapping) -> Result<Self, CompileError> {
         let source = *mapping.source();
-        // `Mapping` guarantees at least one target.
-        let first_target = mapping.targets()[0];
+        let start = |t: &MappedRange| (t.chapter, t.first);
+        let (first_target, more_targets) = match mapping.targets() {
+            [first, more @ ..] => (first, more),
+            // `Mapping`'s fields are private, its constructors (`new`, `single`) each give
+            // it a target, and `push_target` only adds one.
+            [] => unreachable!("a mapping with no target"),
+        };
         let crosses_book = first_target.book != source.book;
         let book = if crosses_book {
             first_target.book
@@ -137,11 +166,9 @@ impl Rule {
             source.book
         };
         let last = source.end();
-        let starts: Vec<(u16, u16)> = mapping
-            .targets()
-            .iter()
-            .map(|t| (t.chapter, t.first))
-            .collect();
+        let first_start = start(first_target);
+        let more_starts: Vec<(u16, u16)> = more_targets.iter().map(start).collect();
+        let starts = || std::iter::once(&first_start).chain(&more_starts);
 
         let mut bytes = 1 + nbyte_len(source.first.into()) + nbyte_len(last.into());
         if crosses_book {
@@ -153,8 +180,8 @@ impl Rule {
                 })?;
             bytes += nbyte_len(index);
         }
-        bytes += nbyte_len(starts.len());
-        for &(chapter, start) in &starts {
+        bytes += nbyte_len(1 + more_starts.len());
+        for &(chapter, start) in starts() {
             bytes += nbyte_len(chapter.into()) + nbyte_len(start.into());
         }
         if bytes > 63 {
@@ -164,9 +191,7 @@ impl Rule {
             });
         }
         if let Some(width) = last.checked_sub(source.first)
-            && starts
-                .iter()
-                .any(|&(_, start)| start.checked_add(width).is_none())
+            && starts().any(|&(_, start)| start.checked_add(width).is_none())
         {
             return Err(CompileError::VerseOverflow {
                 mapping: mapping.to_string(),
@@ -176,7 +201,8 @@ impl Rule {
             first: source.first,
             last,
             book,
-            starts,
+            first_start,
+            more_starts,
             mapping,
         })
     }
@@ -228,6 +254,10 @@ mod tests {
         s.parse().unwrap()
     }
 
+    fn targets(hop: &Hop<'_>) -> Vec<VerseRef> {
+        hop.targets().collect()
+    }
+
     #[test]
     fn first_rule_wins_and_offsets_count_from_the_first_target() {
         let table = MappingTable::forward(&[
@@ -236,30 +266,29 @@ mod tests {
         ])
         .unwrap();
         let hop = table.apply(verse("S3Y 1:29"));
-        assert_eq!(hop.targets, vec![verse("DAG 3:52")]);
-        assert_eq!(hop.shadowed.len(), 1);
+        assert_eq!(targets(&hop), vec![verse("DAG 3:52")]);
+        assert_eq!(hop.shadowed().len(), 1);
         // The second rule's single target is spread over the source range.
         assert_eq!(
-            table.apply(verse("S3Y 1:31")).targets,
+            targets(&table.apply(verse("S3Y 1:31"))),
             vec![verse("DAG 3:62")]
         );
         assert_eq!(
-            table.apply(verse("S3Y 1:32")).targets,
+            targets(&table.apply(verse("S3Y 1:32"))),
             vec![verse("S3Y 1:32")]
         );
-        assert_eq!(table.apply(verse("S3Y 2:1")).rule, None);
+        assert_eq!(table.apply(verse("S3Y 2:1")).rule(), None);
     }
 
     #[test]
     fn all_targets_take_one_book() {
         let table = MappingTable::forward(&[mapping("PSA 1:1", &["PSA 2:1", "MAN 1:1"])]).unwrap();
-        assert_eq!(
-            table.apply(verse("PSA 1:1")).targets,
-            vec![verse("PSA 2:1"), verse("PSA 1:1")]
-        );
+        let hop = table.apply(verse("PSA 1:1"));
+        assert_eq!(targets(&hop), vec![verse("PSA 2:1"), verse("PSA 1:1")]);
+        assert_eq!(hop.book(), hop.first().book);
         let table = MappingTable::forward(&[mapping("PSA 1:1", &["MAN 2:1", "PSA 1:1"])]).unwrap();
         assert_eq!(
-            table.apply(verse("PSA 1:1")).targets,
+            targets(&table.apply(verse("PSA 1:1"))),
             vec![verse("MAN 2:1"), verse("MAN 1:1")]
         );
     }
@@ -280,8 +309,8 @@ mod tests {
         .unwrap();
         // Both reversed rules hold ESG 1:1; the `a` rule comes first.
         let hop = table.apply(verse("ESG 1:1"));
-        assert_eq!(hop.targets, vec![verse("ESG 1:1")]);
-        assert_eq!(hop.shadowed.len(), 1);
+        assert_eq!(targets(&hop), vec![verse("ESG 1:1")]);
+        assert_eq!(hop.shadowed().len(), 1);
     }
 
     #[test]

@@ -77,11 +77,13 @@ pub fn resolve_scheme(
 
 /// A scheme document's meaning, for comparing two documents: tC4's `canonicalizeScheme`.
 /// Keys are sorted at every depth, `mappedVerses` values take the array form, and numbers
-/// compare by value, as JavaScript reads them. `None` when the text is not JSON.
+/// compare by value, as JavaScript reads them. `None` when the text is not JSON. A
+/// leading byte order mark is skipped, as `Versification::from_json` skips it.
 ///
 /// Real burritos re-serialize the same scheme with other key orders and whitespace, so
 /// bytes identify nothing.
 pub fn canonical_scheme(json: &str) -> Option<String> {
+    let json = json.strip_prefix('\u{feff}').unwrap_or(json);
     let mut doc: Value = serde_json::from_str(json).ok()?;
     if let Some(Value::Object(table)) = doc.get_mut("mappedVerses") {
         for value in table.values_mut() {

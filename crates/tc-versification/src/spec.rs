@@ -193,10 +193,17 @@ pub struct Mapping {
 pub enum InvalidMapping {
     #[error("mapping {0} has no target")]
     NoTarget(MappedRange),
+    #[error("mapping source {0} has a sub-verse letter; only a target may carry one")]
+    PartSource(MappedRange),
 }
 
 impl Mapping {
+    /// A scheme's `mappedVerses` entry. The source may not carry a sub-verse letter:
+    /// neither file format can write one.
     pub fn new(source: MappedRange, targets: Vec<MappedRange>) -> Result<Self, InvalidMapping> {
+        if source.part.is_some() {
+            return Err(InvalidMapping::PartSource(source));
+        }
         if targets.is_empty() {
             return Err(InvalidMapping::NoTarget(source));
         }
@@ -234,6 +241,66 @@ impl fmt::Display for Mapping {
     }
 }
 
+/// A mapping line that Paratext reads but Proskomma's `vrs2json` does not, so mapping
+/// never applies it. Proskomma reads only lines that start with a book code, so it skips
+/// every `#!` line and every `&` line. `eng.vrs` has one: `#! &ACT 19:40-41 = ACT 19:40`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct UnappliedMapping {
+    form: UnappliedForm,
+    source: MappedRange,
+    target: MappedRange,
+}
+
+/// How a `.vrs` file writes an [`UnappliedMapping`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UnappliedForm {
+    /// An ordinary mapping hidden behind `#!`: `#! GEN 31:55 = GEN 32:1`.
+    Hidden,
+    /// A mapping marked with `&`, behind `#!` or not: `&ACT 19:40-41 = ACT 19:40`.
+    Ampersand,
+}
+
+impl UnappliedMapping {
+    /// Refuses a source with a sub-verse letter, as [`Mapping::new`] does.
+    pub fn new(
+        form: UnappliedForm,
+        source: MappedRange,
+        target: MappedRange,
+    ) -> Result<Self, InvalidMapping> {
+        if source.part.is_some() {
+            return Err(InvalidMapping::PartSource(source));
+        }
+        Ok(Self {
+            form,
+            source,
+            target,
+        })
+    }
+
+    pub fn form(&self) -> UnappliedForm {
+        self.form
+    }
+
+    pub fn source(&self) -> &MappedRange {
+        &self.source
+    }
+
+    pub fn target(&self) -> &MappedRange {
+        &self.target
+    }
+}
+
+/// The `.vrs` line, always behind `#!` so that Proskomma keeps skipping it.
+impl fmt::Display for UnappliedMapping {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mark = match self.form {
+            UnappliedForm::Hidden => "",
+            UnappliedForm::Ampersand => "&",
+        };
+        write!(f, "#! {mark}{} = {}", self.source, self.target)
+    }
+}
+
 /// A decimal number as the formats write it: digits only, no leading zero except `0`
 /// itself, at most 65535. Refusing leading zeros keeps one spelling per value, which
 /// matters because Proskomma keys its reverse table by the exact target text.
@@ -245,6 +312,19 @@ pub(crate) fn number(s: &str) -> Option<u16> {
         bytes => bytes.iter().all(u8::is_ascii_digit),
     };
     if canonical { s.parse().ok() } else { None }
+}
+
+/// Plain digits as tC4 reads them with `Number`: leading zeros allowed, at most 65535.
+pub(crate) fn digits(s: &str) -> Option<u16> {
+    if s.is_empty() || !s.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let significant = s.trim_start_matches('0');
+    if significant.is_empty() {
+        Some(0)
+    } else {
+        significant.parse().ok()
+    }
 }
 
 #[cfg(test)]
@@ -281,6 +361,33 @@ mod tests {
                 MappedRange::parse_target(bad).is_none(),
                 "{bad:?} should be refused"
             );
+        }
+    }
+
+    #[test]
+    fn a_mapping_source_cannot_carry_a_part() {
+        let part = MappedRange::parse_target("GEN 1:1a").unwrap();
+        let plain = MappedRange::parse_target("GEN 1:2").unwrap();
+        assert_eq!(
+            Mapping::new(part, vec![plain]),
+            Err(InvalidMapping::PartSource(part))
+        );
+        assert!(Mapping::new(plain, vec![part]).is_ok());
+        assert_eq!(
+            UnappliedMapping::new(UnappliedForm::Hidden, part, plain),
+            Err(InvalidMapping::PartSource(part))
+        );
+        let hidden = UnappliedMapping::new(UnappliedForm::Ampersand, plain, part).unwrap();
+        assert_eq!(hidden.to_string(), "#! &GEN 1:2 = GEN 1:1a");
+    }
+
+    #[test]
+    fn digits_accept_leading_zeros() {
+        assert_eq!(digits("031"), Some(31));
+        assert_eq!(digits("000"), Some(0));
+        assert_eq!(digits("0065535"), Some(65535));
+        for bad in ["", "65536", "3 ", "-1", "+3", "1e2"] {
+            assert_eq!(digits(bad), None, "{bad:?}");
         }
     }
 

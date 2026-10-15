@@ -47,3 +47,14 @@ here differ from them, so mapping through one or the other can differ:
 - `vul.json` has no `maxVerses` for `EST`, `EZA` and `5EZ`. In `vul.vrs` those three lines
   end with a space, and the converter that produced the JSON dropped them. This is why
   tC4 reports "vul has no EST chapter 1".
+- `vul.vrs` lists `6EZ 1:63 12:78`: chapter 12 has 78 verses, and chapters 2 to 11 are
+  skipped, so `Versification::from_vrs` gives `6EZ` 12 chapters, the skipped ones with
+  0 verses. `vul.json` has `"6EZ": ["63", "78"]`, so its chapter 2 has 78 verses and it
+  has no chapter 12.
+- `lxx.vrs` lists 304 excluded verses (`-GEN 31:51`, ...); `lxx.json` has none.
+- `lxx.vrs` gives its 74 partial verses on `#!` lines (`#! *EXO 28:29,-,a `). Each of
+  these lines ends with a space, which `lxx.json` keeps at the end of the last segment
+  (`"a "`), and which a `.vrs` reader loses when it trims the line. For the same reason
+  `Versification::to_vrs` refuses to write `lxx.json`.
+- `eng.vrs` has one mapping that Paratext reads and Proskomma does not:
+  `#! &ACT 19:40-41 = ACT 19:40`. `eng.json` does not have it.

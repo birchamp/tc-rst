@@ -7,8 +7,8 @@
 use proptest::prelude::*;
 use std::collections::BTreeSet;
 use tc_versification::{
-    BookCode, MappedRange, Mapping, Part, Scheme, StandardScheme, VerseRef, Versification,
-    map_verse,
+    BookCode, MappedRange, Mapping, Part, Scheme, StandardScheme, UnappliedForm, UnappliedMapping,
+    VerseRef, Versification, WriteError, map_verse,
 };
 
 const SOURCE_BOOKS: [&str; 6] = ["GEN", "PSA", "TIT", "S3Y", "DAG", "XYZ"];
@@ -49,8 +49,26 @@ fn mapping() -> impl Strategy<Value = Mapping> {
         .prop_map(|(source, targets)| Mapping::new(source, targets).unwrap())
 }
 
+/// Segments as files write them, and the characters a `.vrs` line cannot hold: commas,
+/// line breaks, and white space that trimming a line removes.
 fn segment() -> impl Strategy<Value = String> {
-    "[a-z-]{1,3}"
+    "[a-c ,\n\r\t-]{0,3}"
+}
+
+fn unapplied() -> impl Strategy<Value = UnappliedMapping> {
+    (
+        any::<bool>(),
+        range(&SOURCE_BOOKS, false),
+        range(&TARGET_BOOKS, true),
+    )
+        .prop_map(|(ampersand, source, target)| {
+            let form = if ampersand {
+                UnappliedForm::Ampersand
+            } else {
+                UnappliedForm::Hidden
+            };
+            UnappliedMapping::new(form, source, target).unwrap()
+        })
 }
 
 /// Any scheme the parsers accept, lossy or not.
@@ -64,8 +82,9 @@ fn versification() -> impl Strategy<Value = Versification> {
         prop::collection::vec(mapping(), 0..10),
         prop::collection::vec(verse_ref(), 0..3),
         prop::collection::btree_map(verse_ref(), prop::collection::vec(segment(), 0..3), 0..3),
+        prop::collection::vec(unapplied(), 0..3),
     )
-        .prop_map(|(books, mappings, excluded, partial)| {
+        .prop_map(|(books, mappings, excluded, partial, unapplied)| {
             let mut seen = BTreeSet::new();
             let mappings = mappings
                 .into_iter()
@@ -76,7 +95,15 @@ fn versification() -> impl Strategy<Value = Versification> {
                 .with_excluded_verses(excluded)
                 .with_partial_verses(partial.into_iter().collect())
                 .unwrap()
+                .with_unapplied_mappings(unapplied)
         })
+}
+
+/// Whether a `.vrs` partial-verse line would read this segment back differently.
+fn breaks_a_vrs_line(parts: &[String], segment: &str) -> bool {
+    segment.contains([',', '\n', '\r'])
+        || (parts.last().map(String::as_str) == Some(segment)
+            && segment.ends_with(char::is_whitespace))
 }
 
 /// A scheme with no lossy entry: some runs of verses move, whole and one-to-one, into
@@ -203,14 +230,14 @@ fn assert_round_trips(scheme: &Scheme, skip: &BTreeSet<VerseRef>) -> Result<usiz
             continue;
         }
         let forward = scheme.to_org(x);
-        prop_assert_eq!(forward.targets.len(), 1, "{} to org", x);
-        let back = scheme.from_org(forward.targets[0]);
+        prop_assert_eq!(forward.target_count(), 1, "{} to org", x);
+        let back = scheme.from_org(forward.first());
         prop_assert_eq!(
-            &back.targets,
-            &vec![x],
+            back.targets().collect::<Vec<_>>(),
+            vec![x],
             "{} -> {} -> back",
             x,
-            forward.targets[0]
+            forward.first()
         );
         checked += 1;
     }
@@ -219,13 +246,40 @@ fn assert_round_trips(scheme: &Scheme, skip: &BTreeSet<VerseRef>) -> Result<usiz
 
 proptest! {
     #[test]
-    fn json_round_trips(v in versification()) {
-        prop_assert_eq!(Versification::from_json(&v.to_json()).unwrap(), v);
+    fn json_round_trips_or_refuses_unapplied_mappings(v in versification()) {
+        match v.to_json() {
+            Ok(text) => prop_assert_eq!(Versification::from_json(&text).unwrap(), v),
+            Err(e) => {
+                prop_assert!(matches!(e, WriteError::UnappliedMapping(_)), "{}", e);
+                prop_assert!(!v.unapplied_mappings().is_empty());
+            }
+        }
     }
 
     #[test]
-    fn vrs_round_trips(v in versification()) {
-        prop_assert_eq!(Versification::from_vrs(&v.to_vrs()).unwrap(), v);
+    fn vrs_round_trips_or_refuses_a_segment_it_cannot_write(v in versification()) {
+        match v.to_vrs() {
+            Ok(text) => prop_assert_eq!(Versification::from_vrs(&text).unwrap(), v),
+            Err(WriteError::Segment { verse, segment }) => {
+                let parts = v
+                    .partial_verses()
+                    .iter()
+                    .find(|(at, _)| *at == verse)
+                    .map(|(_, parts)| parts.as_slice())
+                    .unwrap_or_default();
+                prop_assert!(breaks_a_vrs_line(parts, &segment), "{:?} in {:?}", segment, parts);
+            }
+            Err(e) => prop_assert!(false, "unexpected refusal: {}", e),
+        }
+    }
+
+    #[test]
+    fn vrs_writes_every_segment_it_can(v in versification()) {
+        let writable = v
+            .partial_verses()
+            .iter()
+            .all(|(_, parts)| parts.iter().all(|p| !breaks_a_vrs_line(parts, p)));
+        prop_assert_eq!(v.to_vrs().is_ok(), writable);
     }
 
     #[test]

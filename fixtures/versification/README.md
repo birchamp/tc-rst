@@ -33,6 +33,7 @@ like the rest of this repository), last run on 2026-10-15:
 | `hops.json` | proskomma-core 0.11.3 `mapVerse` through the forward and reversed table of 17 schemes: the six tC4 JSON schemes, the synthetic `syn` scheme and all ten `.vrs` files |
 | `compose.json` | the two-hop composition Proskomma's `do_cv` makes, built from proskomma-core's own tables and `mapVerse`, for 52 pairs: every pair of the six tC4 schemes, `syn` paired with `eng` and `org`, and Proskomma's `.vrs` copies (which keep one-to-many entries) paired with its `org` and `eng`. The generator also runs every input through Proskomma's `mappedCv` GraphQL query on generated docSets and stops if the two disagree |
 | `tc4-map-reference.json` | tC4's own `src/data/mapReference.ts` (commit `d494a9d6ba9f4cdcc09faff9038c93159106045b`), run from its TypeScript source, for `eng` to and from each other scheme |
+| `tc4-ref-forms.json` | the same `mapReference` on 30 hand-picked resource-row references (verse 0, one-verse spans such as `5-5`, reversed and oversized spans, leading zeros, `front`, comma lists, letter verses, non-numeric chapters), each part read as tC4's `derive.ts` `refPart` reads it, for 6 pairs including the same frame `eng>eng` |
 
 Each file states its input domain in its `note` field. To keep the files small, results
 equal to their input are left out, and runs of single-verse shifts are written as one

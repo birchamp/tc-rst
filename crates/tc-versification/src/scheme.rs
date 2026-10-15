@@ -4,6 +4,7 @@ use crate::book::BookCode;
 use crate::spec::{Mapping, VerseRef};
 use crate::table::{CompileError, Hop, MappingTable};
 use crate::versification::{Absence, Versification};
+use std::collections::HashSet;
 use std::ops::RangeInclusive;
 
 /// A versification scheme with its mapping tables built, ready to map verses.
@@ -13,6 +14,7 @@ pub struct Scheme {
     versification: Versification,
     to_org: MappingTable,
     from_org: MappingTable,
+    excluded: HashSet<VerseRef>,
 }
 
 impl Scheme {
@@ -27,8 +29,14 @@ impl Scheme {
             name: name.into(),
             to_org: MappingTable::forward(versification.mappings())?,
             from_org: MappingTable::reverse(versification.mappings())?,
+            excluded: versification.excluded_verses().iter().copied().collect(),
             versification,
         })
+    }
+
+    /// Whether the scheme lists this verse in `excludedVerses`.
+    pub fn is_excluded(&self, verse: VerseRef) -> bool {
+        self.excluded.contains(&verse)
     }
 
     pub fn name(&self) -> &str {
@@ -58,8 +66,9 @@ pub struct VerseMapping {
     /// One landing per verse the source has in `org`, in order. Usually one.
     pub landings: Vec<Landing>,
     /// Everything that keeps this from being a faithful one-to-one move. Empty means the
-    /// source lands on exactly one verse, that verse exists in the target scheme, it maps
-    /// back to the source alone, and no rule on the way was bent or overruled.
+    /// source is a verse of the source scheme, it lands on exactly one verse of the
+    /// target scheme, neither scheme excludes either verse, the target maps back to the
+    /// source alone, and no rule on the way was bent or overruled.
     pub losses: Vec<Loss>,
 }
 
@@ -74,8 +83,16 @@ pub struct Landing {
 /// A way a mapping loses or bends information. Each is reported, never dropped.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Loss {
+    /// The source verse is not in the source scheme's verse counts. Proskomma maps it
+    /// anyway.
+    SourceMissing { absence: Absence },
+    /// The source scheme lists the source verse in `excludedVerses`.
+    SourceExcluded,
     /// A target verse does not exist in the target scheme.
     Missing { verse: VerseRef, absence: Absence },
+    /// The target scheme lists a target verse in `excludedVerses`: it numbers the verse,
+    /// but a text in that scheme leaves it out.
+    Excluded { verse: VerseRef },
     /// The source lands on this many distinct verses.
     FanOut { count: usize },
     /// Mapping the landing back gives these verses instead of the source alone: other
@@ -129,9 +146,8 @@ fn compose<'a>(
 ) -> (Hop<'a>, Vec<(VerseRef, Hop<'a>)>) {
     let forward = from.to_org(verse);
     let back = forward
-        .targets
-        .iter()
-        .map(|&pivot| (pivot, to.from_org(pivot)))
+        .targets()
+        .map(|pivot| (pivot, to.from_org(pivot)))
         .collect();
     (forward, back)
 }
@@ -140,18 +156,24 @@ fn compose<'a>(
 /// every loss.
 ///
 /// This always composes the two tables, even when `from` and `to` are the same scheme;
-/// `map_reference` is where same-frame references pass through untouched. The source
-/// verse is not checked against `from`'s verse counts.
+/// `map_reference` is where same-frame references pass through untouched. Like
+/// Proskomma, it maps a verse the source scheme does not have, and reports that as a
+/// loss. Unlike `map_reference`, which follows tC4, it reports excluded verses.
 pub fn map_verse(from: &Scheme, to: &Scheme, verse: VerseRef) -> VerseMapping {
     let (forward, back) = compose(from, to, verse);
     let mut losses = Vec::new();
+    if let Some(absence) = from.versification().absence(verse) {
+        losses.push(Loss::SourceMissing { absence });
+    } else if from.is_excluded(verse) {
+        losses.push(Loss::SourceExcluded);
+    }
     for hop in std::iter::once(&forward).chain(back.iter().map(|(_, hop)| hop)) {
-        if let Some(rule) = hop.rule {
+        if let Some(rule) = hop.rule() {
             for loss in rule_losses(rule) {
                 push_unique(&mut losses, loss);
             }
         }
-        for rule in &hop.shadowed {
+        for rule in hop.shadowed() {
             push_unique(
                 &mut losses,
                 Loss::Shadowed {
@@ -164,7 +186,7 @@ pub fn map_verse(from: &Scheme, to: &Scheme, verse: VerseRef) -> VerseMapping {
         .into_iter()
         .map(|(pivot, hop)| Landing {
             pivot,
-            targets: hop.targets,
+            targets: hop.targets().collect(),
         })
         .collect();
 
@@ -180,11 +202,14 @@ pub fn map_verse(from: &Scheme, to: &Scheme, verse: VerseRef) -> VerseMapping {
                 verse: target,
                 absence,
             });
+        } else if to.is_excluded(target) {
+            losses.push(Loss::Excluded { verse: target });
         }
     }
     let back = distinct(targets.iter().flat_map(|&target| {
         let (_, hops) = compose(to, from, target);
-        hops.into_iter().flat_map(|(_, hop)| hop.targets)
+        hops.into_iter()
+            .flat_map(|(_, hop)| hop.targets().collect::<Vec<_>>())
     }));
     if back != [verse] {
         losses.push(Loss::NotReversible { back });

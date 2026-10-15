@@ -510,3 +510,48 @@ writeJson('oracle/tc4-map-reference.json', {
     "Outcomes that map to the same reference are left out.",
   pairs: tc4Out,
 });
+
+// ---------------------------------------------------------------------------
+// tC4's mapReference() on the reference forms a resource row can carry, each part read
+// as tC4's derive.ts reads it (refPart: plain digits become a number, anything else
+// stays text). Covers verse 0, one-verse spans, reversed and oversized spans, and the
+// forms tC4 passes through within one frame and refuses across frames.
+// ---------------------------------------------------------------------------
+
+const refPart = (s) => (/^\d+$/.test(s) ? Number(s) : s);
+const FORM_PAIRS = [
+  ['eng', 'eng'],
+  ['eng', 'org'],
+  ['eng', 'rsc'],
+  ['eng', 'lxx'],
+  ['rsc', 'eng'],
+  ['lxx', 'eng'],
+];
+const FORM_INPUTS = [
+  'PSA 51:0', 'PSA 51:00', 'PSA 51:0-2', 'PSA 51:1', 'PSA 51:1-2',
+  'JON 1:5-5', 'JON 1:17', 'JON 1:17-17', 'JON 1:18', 'JON 1:18-18', 'JON 1:3-2',
+  'JON 1:05', 'JON 1:017', 'JON 1:016-017', 'JON 1:1-1000', 'JON 1:1-1001',
+  'JON 01:1', 'JON 0:1', 'JON 1:', 'JON 1: 3', 'JON 1:+3',
+  'PSA 116:10-10', 'ACT 19:41-41', 'ACT 19:42', 'ACT 19:42-42',
+  'PSA 3:front', 'PSA 5:1,3', 'JON 1:1a', 'JON front:intro', 'JON 1-2:1',
+];
+const formsOut = {};
+for (const [from, to] of FORM_PAIRS) {
+  const lines = [];
+  for (const input of FORM_INPUTS) {
+    const space = input.indexOf(' ');
+    const [chapter, verse] = input.slice(space + 1).split(':').map(refPart);
+    const o = await mapReference({ from, to, book: input.slice(0, space), chapter, verse, schemes: docs });
+    lines.push(`${input}=${outcomeText(o)}`);
+  }
+  formsOut[`${from}>${to}`] = lines;
+}
+writeJson('oracle/tc4-ref-forms.json', {
+  tc4Commit,
+  proskomma: PROSKOMMA_VERSION,
+  note:
+    "tC4 src/data/mapReference.ts mapReference() on hand-picked resource-row references, chapter and verse " +
+    "each read by derive.ts refPart (plain digits become a number). Every input is listed: 'INPUT=B c:v' " +
+    "(mapped), 'INPUT=B c:v unmapped' (same frame, passed through), or 'INPUT=!reason[ candidates]' (refused).",
+  pairs: formsOut,
+});
