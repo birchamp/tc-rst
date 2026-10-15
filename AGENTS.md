@@ -40,6 +40,14 @@ that writes project data.
   `cargo clippy --workspace --all-targets -- -D warnings`, then `cargo test --workspace`.
   All three must pass.
 
+## Performance
+
+- A project holds a whole Bible for years: about 620,000 changes and 215,767 checks. Read
+  `docs/PERFORMANCE.md` before you write code that runs when a person acts.
+- An interactive action costs what it touches (a verse, a chapter, a check, a book), never
+  the size of the project or its history. Prove it with operation-count tests on the Psalms
+  corpus and on a corpus ten times larger, and meet the budgets in release builds.
+
 ## Commits
 
 - Each commit is one coherent change that builds and passes its tests.
