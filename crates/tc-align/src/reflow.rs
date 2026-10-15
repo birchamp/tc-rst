@@ -3,15 +3,18 @@
 //! [`reflow`] keeps every link whose target word the new text still has, by text and
 //! occurrence, with its occurrence count updated; drops only the links to words that are
 //! gone; rebuilds the bank from the new text's other words in verse order; and never
-//! touches a card's source words or makes a link.
+//! touches a card's source words or makes a link. It reports each dropped link in
+//! [`Reflowed::dropped`].
 //!
-//! It reports each dropped link in [`Reflowed::dropped`]. Nothing here writes: per
-//! STORAGE.md §5.2 a text edit writes nothing on an alignment, so the stored value stays
-//! as it was and computes as invalid (its hash no longer matches, §7.7). The reflowed
-//! value is what the aligner opens with, and it is stored only when the translator saves
-//! the verse, as a new change whose parent is the old one. Until then, and in History
-//! after, the old value with every dropped link is kept.
-
+//! Nothing here writes. tC4 writes the reflow of every edited verse at draft save, so a
+//! dropped link is gone without a word. Here a text save writes nothing on alignments
+//! (STORAGE.md §5.1, §5.2): the stored value stays as it was and computes invalid, since
+//! its hash no longer matches (§7.7). The aligner opens the verse with the reflowed value
+//! ([`crate::Aligner::open`]). When the reflow is [lossless](Reflowed::is_lossless) it is
+//! saved on leaving the verse, as tC4 would have saved it. When it dropped links, the
+//! aligner shows them and saves only after the translator edits the verse or keeps the
+//! reflow; until then the stored value, with every link, stays as it is, and after that
+//! it stays in History as the parent of the new change.
 use crate::value::{AlignmentValue, Group};
 use crate::words::TargetVerse;
 use tc_usfm::{SourceWord, TargetWord};
@@ -37,6 +40,13 @@ pub struct Reflowed {
     pub dropped: Vec<DroppedLink>,
 }
 
+impl Reflowed {
+    /// Every link was kept: the reflow only renumbered words and banked new ones.
+    pub fn is_lossless(&self) -> bool {
+        self.dropped.is_empty()
+    }
+}
+
 /// Why a reflow left the value as it is. In every case the caller keeps the stored value
 /// unchanged and its computed validity stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -51,7 +61,8 @@ pub enum NoReflow {
     NoWords,
 }
 
-/// Carry `value` over to the edited `verse`. See the module documentation.
+/// Carry `value` over to the edited `verse`, or say why tC4 would leave it as it is.
+/// See the module documentation.
 pub fn reflow(value: &AlignmentValue, verse: &TargetVerse) -> Result<Reflowed, NoReflow> {
     if value.marked_invalid {
         return Err(NoReflow::MarkedInvalid);
@@ -65,6 +76,13 @@ pub fn reflow(value: &AlignmentValue, verse: &TargetVerse) -> Result<Reflowed, N
     if verse.words().is_empty() {
         return Err(NoReflow::NoWords);
     }
+    Ok(carry(value, verse))
+}
+
+/// The reflow itself, without tC4's reasons to leave a value alone. The aligner uses it
+/// to show any stale value against the verse it shows, so that every word it offers is a
+/// word of that verse.
+pub(crate) fn carry(value: &AlignmentValue, verse: &TargetVerse) -> Reflowed {
     let mut kept = vec![false; verse.words().len()];
     let mut dropped = Vec::new();
     let mut alignments = Vec::with_capacity(value.alignments.len());
@@ -103,8 +121,8 @@ pub fn reflow(value: &AlignmentValue, verse: &TargetVerse) -> Result<Reflowed, N
         ..value.clone()
     };
     next.settle(verse);
-    Ok(Reflowed {
+    Reflowed {
         value: next,
         dropped,
-    })
+    }
 }

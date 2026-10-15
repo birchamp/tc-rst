@@ -11,7 +11,8 @@ use proptest::prelude::*;
 use std::collections::BTreeMap;
 use tc_align::usfm::{from_aligned, weave_verse};
 use tc_align::{
-    AlignmentValue, NoReflow, SourceVerse, SourceWord, TargetVerse, TargetWord, record, reflow,
+    Aligner, AlignmentValue, NoReflow, SourceVerse, SourceWord, TargetVerse, TargetWord, record,
+    reflow,
 };
 
 const TARGET_WORDS: [&str; 7] = ["a", "b", "c", "de", "Dios", "λόγος", "וַ\u{2060}יְהִי"];
@@ -202,6 +203,28 @@ proptest! {
             Err(NoReflow::Current) => prop_assert_eq!(&text, &new_text),
             Err(NoReflow::NothingPlaced) => prop_assert_eq!(value.placed(), 0),
             Err(other) => prop_assert!(false, "unexpected {:?}", other),
+        }
+    }
+
+    #[test]
+    fn the_aligner_offers_the_words_of_the_shown_verse_and_accounts_for_every_link(
+        source in source_strategy(),
+        text in text_strategy(),
+        new_text in text_strategy(),
+        ops in prop::collection::vec(op_strategy(), 0..40),
+        flagged in prop::bool::ANY,
+    ) {
+        let (mut stored, _) = edited(&source, &text, &ops);
+        stored.marked_invalid = flagged;
+        let new_verse = TargetVerse::new(&new_text);
+        let aligner = Aligner::open(Some(&stored), new_verse.clone(), &source, basis(1));
+        prop_assert_eq!(
+            sorted(aligner.value().all_target_words().cloned()),
+            sorted(new_verse.words().to_vec())
+        );
+        prop_assert_eq!(stored.placed(), aligner.value().placed() + aligner.dropped().len());
+        if !aligner.dropped().is_empty() {
+            prop_assert!(!aligner.is_changed(), "a lossy carry-over waits for the translator");
         }
     }
 

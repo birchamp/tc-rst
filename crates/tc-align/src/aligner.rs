@@ -11,7 +11,7 @@
 //! on leaving the verse or two seconds after the last change (STORAGE.md §5.3).
 
 use crate::edit::EditError;
-use crate::reflow::{DroppedLink, reflow};
+use crate::reflow::{self, DroppedLink};
 use crate::suggest::{self, Proposal, RawLink, SessionInput};
 use crate::value::{AlignmentValue, Basis};
 use crate::words::{SourceVerse, TargetVerse};
@@ -30,41 +30,60 @@ pub struct Aligner {
     verse: TargetVerse,
     proposals: Vec<Proposal>,
     dropped: Vec<DroppedLink>,
+    earlier: Option<AlignmentValue>,
     changed: bool,
 }
 
 impl Aligner {
-    /// Open a verse. A stored value with cards is opened as it is; one made against
-    /// other text is first carried over to `verse` by [`reflow`], whose dropped links
-    /// are then in [`Aligner::dropped`]. With no stored value, or one with no cards (the
-    /// removal form, or the empty value a span change leaves), the verse starts from
-    /// [`AlignmentValue::bootstrap`].
+    /// Open a verse.
+    ///
+    /// - With no stored value, or one with no cards (the removal form, or the empty
+    ///   value a span change leaves in tC4), the verse starts from
+    ///   [`AlignmentValue::bootstrap`].
+    /// - A stored value made for another span than `basis.span_end` (the verse was
+    ///   joined into a span or split from one since) does not fit the original words
+    ///   shown: the verse starts from the bootstrap, and the stored value is kept aside
+    ///   in [`Aligner::earlier`] for the app to offer, as STORAGE.md §7.7 does.
+    /// - A stored value made against this text opens as it is.
+    /// - A stored value made against other text opens carried over to `verse` (see
+    ///   [`crate::reflow`]), so every word the aligner offers is a word of the verse.
+    ///   If the carry-over dropped a link, the links are in [`Aligner::dropped`], and the
+    ///   aligner counts as changed only after the translator edits the verse or calls
+    ///   [`Aligner::keep_reflow`]; leaving without either keeps the stored value as it
+    ///   is. A carry-over that dropped nothing counts as changed at once, as tC4 saves
+    ///   it, unless tC4 would have left the value alone (it was marked invalid, or held
+    ///   no placed word).
     pub fn open(
         stored: Option<&AlignmentValue>,
         verse: TargetVerse,
         source: &SourceVerse,
         basis: Basis,
     ) -> Self {
-        let Some(stored) = stored.filter(|s| !s.alignments.is_empty()) else {
-            return Self {
-                value: AlignmentValue::bootstrap(source, &verse, basis),
-                verse,
-                proposals: Vec::new(),
-                dropped: Vec::new(),
-                changed: false,
-            };
-        };
-        let (value, dropped, changed) = match reflow(stored, &verse) {
-            Ok(reflowed) => (reflowed.value, reflowed.dropped, true),
-            Err(_) => (stored.clone(), Vec::new(), false),
-        };
-        Self {
-            value,
+        let mut aligner = Self {
+            value: AlignmentValue::bootstrap(source, &verse, basis.clone()),
             verse,
             proposals: Vec::new(),
-            dropped,
-            changed,
+            dropped: Vec::new(),
+            earlier: None,
+            changed: false,
+        };
+        let Some(stored) = stored.filter(|s| !s.alignments.is_empty()) else {
+            return aligner;
+        };
+        if stored.span_end != basis.span_end {
+            aligner.earlier = Some(stored.clone());
+            return aligner;
         }
+        if !stored.is_stale_against(&aligner.verse) {
+            aligner.value = stored.clone();
+            return aligner;
+        }
+        let tc4_would_reflow = reflow::reflow(stored, &aligner.verse).is_ok();
+        let carried = reflow::carry(stored, &aligner.verse);
+        aligner.changed = tc4_would_reflow && carried.is_lossless();
+        aligner.value = carried.value;
+        aligner.dropped = carried.dropped;
+        aligner
     }
 
     pub fn value(&self) -> &AlignmentValue {
@@ -85,12 +104,24 @@ impl Aligner {
         self.value.is_stale_against(&self.verse)
     }
 
-    /// Links the reflow on opening could not keep, to show the translator.
+    /// Links the carry-over on opening could not keep, to show the translator.
     pub fn dropped(&self) -> &[DroppedLink] {
         &self.dropped
     }
 
-    /// The value differs from the stored one: by an edit, or by the reflow on opening.
+    /// The translator has seen [`Aligner::dropped`] and keeps the carried-over
+    /// alignment: it is saved like an edit.
+    pub fn keep_reflow(&mut self) {
+        self.changed = true;
+    }
+
+    /// A stored alignment made for another span, kept aside when the verse opened.
+    pub fn earlier(&self) -> Option<&AlignmentValue> {
+        self.earlier.as_ref()
+    }
+
+    /// The value is to be saved: the translator edited it or marked it valid, or the
+    /// carry-over on opening lost nothing (see [`Aligner::open`]).
     pub fn is_changed(&self) -> bool {
         self.changed
     }

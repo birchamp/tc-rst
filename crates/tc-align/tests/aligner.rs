@@ -139,23 +139,101 @@ fn proposals_follow_their_card_through_a_merge() {
     assert_eq!(aligner.value().alignments[0].targets[0].text, "servant");
 }
 
-#[test]
-fn a_stored_alignment_made_for_other_text_opens_reflowed_and_says_what_it_dropped() {
+/// Paul and servant placed on TIT 1:1, saved against `TEXT`.
+fn paul_and_servant() -> AlignmentValue {
     let mut first = open(None, TEXT);
     first.place(0, &banked(&first, "Paul")).unwrap();
     first.place(1, &banked(&first, "servant")).unwrap();
-    let stored = first.into_value();
+    first.into_value()
+}
+
+fn sorted_words(words: impl IntoIterator<Item = TargetWord>) -> Vec<(String, u32)> {
+    let mut out: Vec<_> = words.into_iter().map(|w| (w.text, w.occurrence)).collect();
+    out.sort();
+    out
+}
+
+#[test]
+fn a_stored_alignment_made_for_other_text_opens_reflowed_and_says_what_it_dropped() {
+    let stored = paul_and_servant();
     let edited = "Paul, a slave of God and an apostle of Jesus Christ";
-    let aligner = open(Some(&stored), edited);
-    assert!(aligner.is_changed());
+    let mut aligner = open(Some(&stored), edited);
     assert!(!aligner.is_stale());
     assert_eq!(aligner.value().placed(), 1);
     assert_eq!(aligner.dropped().len(), 1);
     assert_eq!(aligner.dropped()[0].word.text, "servant");
     assert_eq!(aligner.dropped()[0].sources[0].content, "δοῦλος");
+    assert!(
+        !aligner.is_changed(),
+        "a carry-over that dropped a link is not saved until the translator acts"
+    );
     // The stored value is untouched: it stays as it was, kept, and computes invalid.
     assert_eq!(stored.placed(), 2);
     assert!(stored.is_stale_against(&TargetVerse::new(edited)));
+    aligner.keep_reflow();
+    assert!(aligner.is_changed());
+
+    let mut edited_after = open(Some(&stored), edited);
+    edited_after
+        .place(1, &banked(&edited_after, "slave"))
+        .unwrap();
+    assert!(
+        edited_after.is_changed(),
+        "an edit saves the carried-over value"
+    );
+}
+
+#[test]
+fn a_carry_over_that_drops_nothing_is_saved_as_tc4_saves_it() {
+    let stored = paul_and_servant();
+    let edited = "Paul, a servant of God, and an apostle of Jesus Christ.";
+    let aligner = open(Some(&stored), edited);
+    assert!(aligner.dropped().is_empty());
+    assert!(aligner.is_changed());
+    assert_eq!(aligner.value().placed(), 2);
+    assert!(!aligner.is_stale());
+}
+
+#[test]
+fn a_stale_value_tc4_would_not_reflow_opens_with_the_words_of_the_shown_verse() {
+    let edited = "Paul, a slave of God";
+    // Nothing placed: the bank of the old text is not offered.
+    let mut merged = open(None, TEXT);
+    merged.merge(0, 1).unwrap();
+    let stored = merged.into_value();
+    let aligner = open(Some(&stored), edited);
+    assert_eq!(
+        sorted_words(aligner.value().all_target_words().cloned()),
+        sorted_words(TargetVerse::new(edited).words().to_vec())
+    );
+    assert_eq!(
+        aligner.value().alignments,
+        stored.alignments,
+        "the phrase is kept"
+    );
+    assert!(!aligner.is_changed());
+
+    // Marked invalid by tC3 or tC4: shown carried over with what it would drop, not saved.
+    let mut flagged = paul_and_servant();
+    flagged.marked_invalid = true;
+    let aligner = open(Some(&flagged), edited);
+    assert_eq!(aligner.dropped().len(), 1);
+    assert_eq!(
+        sorted_words(aligner.value().all_target_words().cloned()),
+        sorted_words(TargetVerse::new(edited).words().to_vec())
+    );
+    assert!(!aligner.is_changed());
+}
+
+#[test]
+fn a_value_made_for_another_span_is_set_aside_and_the_verse_starts_over() {
+    let mut stored = paul_and_servant();
+    stored.span_end = std::num::NonZeroU16::new(2).unwrap();
+    let aligner = open(Some(&stored), TEXT);
+    assert_eq!(aligner.value(), open(None, TEXT).value());
+    assert_eq!(aligner.earlier(), Some(&stored));
+    assert!(!aligner.is_changed());
+    assert!(open(Some(&paul_and_servant()), TEXT).earlier().is_none());
 }
 
 #[test]
