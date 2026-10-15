@@ -18,8 +18,10 @@
 //! | `ExtraScripture` | [`ProjectPins::extra_scripture`] | one slot, `extraScripture`, holding the ordered list of `{id, ...pin}` |
 //!
 //! What this version does not know (a newer app's) is kept and written back unchanged: a
-//! slot in [`LanguageSet::extra`], a pin's or pane's field in [`ResourcePin::extra`], and
-//! a key of `resources.json` beside the five groups in [`ProjectPins::unknown`]. Writing
+//! slot in [`LanguageSet::extra`], a `gatewayLanguage` field in
+//! [`LanguageSet::gateway_extra`], a slot beside `nt` and `ot` in [`Testaments::extra`], a
+//! pin's or pane's field in [`ResourcePin::extra`], and a key of `resources.json` beside
+//! the five groups in [`ProjectPins::unknown`]. Writing
 //! refuses a pin that tC4's §5.3 grammar refuses: one without a flavor
 //! ([`UnwritablePin`]).
 //!
@@ -203,6 +205,10 @@ pub struct LanguageSet {
     pub pins: BTreeMap<SetSlot, ResourcePin>,
     /// Slots this version does not know, kept as they were read and written back.
     pub extra: Map<String, Value>,
+    /// Fields of the `gatewayLanguage` object beside `languageId` and `owner`, kept as
+    /// they were read and written back. They stay out of [`GatewayLanguage`], which
+    /// identifies a gateway and is compared and hashed as one.
+    pub gateway_extra: Map<String, Value>,
 }
 
 /// What a project is about, which decides the slots a complete set needs (D75).
@@ -218,6 +224,7 @@ impl LanguageSet {
             gateway,
             pins: BTreeMap::new(),
             extra: Map::new(),
+            gateway_extra: Map::new(),
         }
     }
 
@@ -274,21 +281,24 @@ impl LanguageSet {
     /// The tC4 §5.3 object: `gatewayLanguage`, then each pinned slot in tC4's order, then
     /// the slots this version does not know.
     pub fn to_json(&self) -> Result<Value, UnwritablePin> {
-        let mut out = Map::new();
-        out.insert(
-            GATEWAY_LANGUAGE.to_owned(),
-            serde_json::json!({
-                "languageId": self.gateway.language,
-                "owner": self.gateway.owner.as_str(),
-            }),
+        let mut gateway = Map::new();
+        gateway.insert(
+            LANGUAGE_ID.to_owned(),
+            Value::from(self.gateway.language.as_str()),
         );
+        gateway.insert(OWNER.to_owned(), Value::from(self.gateway.owner.as_str()));
+        for (key, value) in &self.gateway_extra {
+            gateway.entry(key.clone()).or_insert_with(|| value.clone());
+        }
+        let mut out = Map::new();
+        out.insert(GATEWAY_LANGUAGE.to_owned(), Value::Object(gateway));
         for slot in SetSlot::ALL {
             if let Some(pin) = self.pins.get(&slot) {
                 out.insert(slot.name().to_owned(), pin_json(slot.name(), pin)?);
             }
         }
         for (key, value) in &self.extra {
-            out.insert(key.clone(), value.clone());
+            out.entry(key.clone()).or_insert_with(|| value.clone());
         }
         Ok(Value::Object(out))
     }
@@ -302,17 +312,25 @@ impl LanguageSet {
         let gateway = object
             .get(GATEWAY_LANGUAGE)
             .ok_or_else(|| ParseError::Pins("a language set has no gatewayLanguage".to_owned()))?;
+        let gateway = gateway
+            .as_object()
+            .ok_or_else(|| ParseError::Pins("gatewayLanguage is not an object".to_owned()))?;
         let text = |key: &str| {
             gateway
                 .get(key)
                 .and_then(Value::as_str)
                 .ok_or_else(|| ParseError::Pins(format!("gatewayLanguage has no {key}")))
         };
-        let language = text("languageId")?.to_owned();
-        let owner = text("owner")?
+        let language = text(LANGUAGE_ID)?.to_owned();
+        let owner = text(OWNER)?
             .parse()
-            .map_err(|_| ParseError::Pins(format!("gatewayLanguage owner {:?}", text("owner"))))?;
+            .map_err(|_| ParseError::Pins(format!("gatewayLanguage owner {:?}", text(OWNER))))?;
         let mut set = LanguageSet::new(GatewayLanguage { language, owner });
+        set.gateway_extra = gateway
+            .iter()
+            .filter(|(key, _)| !matches!(key.as_str(), LANGUAGE_ID | OWNER))
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
         for (key, value) in object {
             if key == GATEWAY_LANGUAGE {
                 continue;
@@ -331,6 +349,8 @@ impl LanguageSet {
 }
 
 const GATEWAY_LANGUAGE: &str = "gatewayLanguage";
+const LANGUAGE_ID: &str = "languageId";
+const OWNER: &str = "owner";
 const EXTRA_SCRIPTURE: &str = "extraScripture";
 const SCHEMA_VERSION: &str = "schemaVersion";
 const LANGUAGE_SETS: &str = "languageSets";
@@ -365,6 +385,9 @@ fn read_pin(slot: &str, value: &Value) -> Result<ResourcePin, ParseError> {
 pub struct Testaments {
     pub nt: Option<ResourcePin>,
     pub ot: Option<ResourcePin>,
+    /// Slots beside `nt` and `ot` this version does not know, kept as they were read and
+    /// written back.
+    pub extra: Map<String, Value>,
 }
 
 impl Testaments {
@@ -386,6 +409,11 @@ impl Testaments {
         }
     }
 
+    /// Whether the group has anything to write: a pin or a slot a newer app added.
+    fn is_empty(&self) -> bool {
+        self.nt.is_none() && self.ot.is_none() && self.extra.is_empty()
+    }
+
     fn to_json(&self) -> Result<Value, UnwritablePin> {
         let mut out = Map::new();
         if let Some(pin) = &self.nt {
@@ -393,6 +421,9 @@ impl Testaments {
         }
         if let Some(pin) = &self.ot {
             out.insert("ot".to_owned(), pin_json("ot", pin)?);
+        }
+        for (key, value) in &self.extra {
+            out.entry(key.clone()).or_insert_with(|| value.clone());
         }
         Ok(Value::Object(out))
     }
@@ -406,7 +437,9 @@ impl Testaments {
             match key.as_str() {
                 "nt" => out.nt = Some(read_pin(key, value)?),
                 "ot" => out.ot = Some(read_pin(key, value)?),
-                other => return Err(ParseError::Pins(format!("unknown testament {other:?}"))),
+                _ => {
+                    out.extra.insert(key.clone(), value.clone());
+                }
             }
         }
         Ok(out)
@@ -681,7 +714,7 @@ impl ProjectPins {
             (ORIGINAL_LANGUAGE, &self.original_language),
             (LEXICON, &self.lexicon),
         ] {
-            if group.nt.is_some() || group.ot.is_some() {
+            if !group.is_empty() {
                 resources.insert(name.to_owned(), group.to_json()?);
             }
         }
@@ -777,10 +810,14 @@ mod tests {
         json["languageSets"]["primary"]["translationNotes"]["x-future"] =
             serde_json::json!({"b": [2]});
         json["extraScripture"][0]["x-pane"] = serde_json::json!(1);
+        json["languageSets"]["primary"]["gatewayLanguage"]["x-gl"] = serde_json::json!("kept");
+        json["resources"]["originalLanguage"]["x-testament"] = serde_json::json!({"c": 3});
+        // A group holding only a newer app's slot is still written.
+        json["resources"]["lexicon"] = serde_json::json!({"x-lexicon": true});
         let pins = ProjectPins::from_resources_json(&json).unwrap();
         assert_eq!(pins.to_resources_json().unwrap(), json);
-        // A pin's and a pane's fields also survive a rewrite of their group's record.
-        for group in [PinGroup::Primary, PinGroup::ExtraScripture] {
+        // Each field also survives a rewrite of its group's record.
+        for group in PinGroup::ALL {
             let value = pins.group_json(group).unwrap();
             let mut back = ProjectPins::default();
             back.set_group_json(group, &value).unwrap();
@@ -788,8 +825,32 @@ mod tests {
         }
         let primary = pins.group_json(PinGroup::Primary).unwrap();
         assert_eq!(primary["translationNotes"]["x-future"]["b"][0], 2);
+        assert_eq!(primary["gatewayLanguage"]["x-gl"], "kept");
+        assert_eq!(primary["gatewayLanguage"]["languageId"], "es-419");
         let panes = pins.group_json(PinGroup::ExtraScripture).unwrap();
         assert_eq!(panes["extraScripture"][0]["x-pane"], 1);
+        let ol = pins.group_json(PinGroup::OriginalLanguage).unwrap();
+        assert_eq!(ol["x-testament"]["c"], 3);
+        assert!(ol["nt"]["repoPath"].is_string());
+        let lexicon = pins.group_json(PinGroup::Lexicon).unwrap();
+        assert_eq!(lexicon, serde_json::json!({"x-lexicon": true}));
+    }
+
+    #[test]
+    fn a_newer_apps_field_never_overrides_what_this_version_knows() {
+        let mut pins = ProjectPins::from_resources_json(&real_resources_json()).unwrap();
+        let primary = pins.primary.as_mut().unwrap();
+        primary
+            .gateway_extra
+            .insert("owner".to_owned(), serde_json::json!("someone-else"));
+        primary
+            .extra
+            .insert("translationNotes".to_owned(), serde_json::json!(0));
+        pins.original_language
+            .extra
+            .insert("nt".to_owned(), serde_json::json!(0));
+        let written = pins.to_resources_json().unwrap();
+        assert_eq!(written, real_resources_json());
     }
 
     #[test]

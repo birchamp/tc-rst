@@ -650,7 +650,7 @@ mod tests {
                     '9',
                     "scripture/textTranslation",
                 )),
-                ot: None,
+                ..Default::default()
             },
             lexicon: Default::default(),
             extra_scripture: vec![ScripturePane {

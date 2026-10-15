@@ -77,43 +77,45 @@ fn language_set() -> impl Strategy<Value = LanguageSet> {
             project_pin(),
             0..6,
         ),
+        unknown_fields(),
+        unknown_fields(),
     )
-        .prop_map(|(language, owner, pins)| LanguageSet {
-            gateway: GatewayLanguage {
-                language,
-                owner: owner.parse().unwrap(),
+        .prop_map(
+            |(language, owner, pins, extra, gateway_extra)| LanguageSet {
+                gateway: GatewayLanguage {
+                    language,
+                    owner: owner.parse().unwrap(),
+                },
+                pins,
+                extra,
+                gateway_extra,
             },
-            pins,
-            extra: serde_json::Map::new(),
-        })
+        )
+}
+
+fn testaments() -> impl Strategy<Value = Testaments> {
+    (
+        proptest::option::of(project_pin()),
+        proptest::option::of(project_pin()),
+        unknown_fields(),
+    )
+        .prop_map(|(nt, ot, extra)| Testaments { nt, ot, extra })
 }
 
 fn project_pins() -> impl Strategy<Value = ProjectPins> {
     (
         proptest::option::of(language_set()),
         proptest::option::of(language_set()),
-        (
-            proptest::option::of(project_pin()),
-            proptest::option::of(project_pin()),
-        ),
-        (
-            proptest::option::of(project_pin()),
-            proptest::option::of(project_pin()),
-        ),
+        testaments(),
+        testaments(),
         proptest::collection::vec(("[a-z]{2,4}", project_pin()), 0..3),
     )
         .prop_map(
-            |(primary, fallback, (ol_nt, ol_ot), (lx_nt, lx_ot), panes)| ProjectPins {
+            |(primary, fallback, original_language, lexicon, panes)| ProjectPins {
                 primary,
                 fallback,
-                original_language: Testaments {
-                    nt: ol_nt,
-                    ot: ol_ot,
-                },
-                lexicon: Testaments {
-                    nt: lx_nt,
-                    ot: lx_ot,
-                },
+                original_language,
+                lexicon,
                 extra_scripture: panes
                     .into_iter()
                     .map(|(id, pin)| ScripturePane {

@@ -213,10 +213,12 @@ static SUITE: LazyLock<Suite> = LazyLock::new(|| {
     let original_language = Testaments {
         nt: Some(pin(UGNT)),
         ot: Some(pin(UHB)),
+        ..Testaments::default()
     };
     let lexicon = Testaments {
         nt: Some(pin(UGL)),
         ot: Some(pin(UHL)),
+        ..Testaments::default()
     };
     let extra_scripture = vec![pane("ult", ULT), pane("ust", UST)];
     let obs_images = pin(OBS_IMAGES);
