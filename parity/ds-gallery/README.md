@@ -57,8 +57,68 @@ steps. `?case=Button/primary-md&auto=1` shows one case alone.
 | `build-spec.mjs` | Writes and checks `gallery-spec.json`. |
 | `gallery-spec.json` | The contract: every case, the capture protocol and the node format. The app renders from it, so the spec and the screens cannot disagree. |
 | `src/main.jsx`, `src/render.jsx` | The gallery app: one case alone (`?case=`) or the browsing index. `render.jsx` turns a spec tree into React elements. |
+| `protocol.mjs` | The capture protocol, shared by both captures: the static server, Chromium's flags, the steps, the settle, the screenshot. |
 | `capture.mjs` | Build, serve, screenshot, check. |
 | `screens/` | The baseline. |
+| `capture-rust.mjs` | The same capture of the Leptos port (`crates/tc-ui`), into `screens-rust/`, then `diff.mjs`. |
+| `diff.mjs`, `diff-report.json` | The pixel comparison of `screens-rust/` with `screens/`, per case. |
+| `dom-diff.mjs`, `dom-report.json` | The DOM comparison of the two galleries, per case. |
+| `screens-rust/` | The port's screens. Git-ignored: `capture-rust.mjs` writes them again. |
+| `residuals.json` | Optional: an explanation per case id for a case that does not reach 0. Absent while every case is at 0. |
+
+## The Leptos port
+
+`crates/tc-ui` ports every component to Leptos 0.8.22 (client-side rendering, compiled to
+`wasm32-unknown-unknown`) with the same DOM. Its `gallery` feature draws every case of
+`gallery-spec.json` by the same protocol: the same page globals (`__galleryBooted`, `__mount`,
+`__galleryMounted`), the same frame and tC4's stylesheet, fonts and images, copied verbatim into
+`crates/tc-ui/assets/`.
+
+### Build
+
+Needs the `wasm32-unknown-unknown` target and the wasm-bindgen CLI at the version the crate pins.
+No trunk and no cargo-leptos.
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.129 --locked   # once; the crate pins =0.2.129
+
+crates/tc-ui/build-gallery.sh             # dev profile, about 1.5 minutes from clean
+crates/tc-ui/build-gallery.sh --release   # wasm-release profile: opt-level z, LTO, 1 unit
+```
+
+Run them from the repository root. The script builds `tc-ui` with `--features gallery` (cargo
+`-j 2`; set `CARGO_JOBS` to change it), runs `wasm-bindgen --target web`, and assembles a static
+site in `target/tc-ui-gallery/` (`--out DIR` to change it): `index.html`, `pkg/`, `assets/` and a
+copy of `gallery-spec.json`. Both profiles draw the same pixels. The release wasm is 1,017,408
+bytes (327 KB with gzip -9), the gallery's spec renderer and `serde_json` included.
+
+### Capture and compare
+
+```sh
+cd parity/ds-gallery
+npm install                       # once; adds pixelmatch and pngjs to the baseline's packages
+node capture-rust.mjs             # build (dev), capture screens-rust/, compare (about 7 minutes)
+node capture-rust.mjs --release   # the same with the wasm-release build
+node diff.mjs                     # compare again without capturing
+npm run build && node dom-diff.mjs   # the DOM of both galleries; needs the React build in dist/
+```
+
+`capture-rust.mjs` takes `--only`, `--jobs` and `--no-build` as `capture.mjs` does. It serves
+`target/tc-ui-gallery/` with the same static server and captures each case with the same code
+(`protocol.mjs`) into `screens-rust/`. `diff.mjs` counts, per case, the pixels that differ in any
+channel (pixelmatch with threshold 0 and anti-aliased pixels counted) and writes
+`diff-report.json`. For a case that differs it writes `diffs/<C>/<s>.png` (git-ignored) and takes
+the explanation from `residuals.json`. It fails when a case differs without one. `dom-diff.mjs`
+compares, per case and after the steps, the frame's elements, their attributes, every longhand of
+their inline style, their text, input values and checked states, and the focused element, and
+writes `dom-report.json`.
+
+Result at this commit: 702 of 702 cases at 0 mismatched pixels, with both the dev and the
+wasm-release build. Every `screens-rust/` file is byte-identical to its `screens/` file. 702 of
+702 cases have the same DOM. There is no `residuals.json` because nothing needs explaining. Both galleries are captured on the same
+machine, so the machine-dependent rendering under "Skipped, and what to know" (fallback glyphs,
+monospace, Nastaliq) affects both sides alike.
 
 ## The contract
 
