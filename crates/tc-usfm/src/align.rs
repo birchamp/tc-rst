@@ -45,13 +45,19 @@
 //!
 //! Where alignment markup may stand:
 //!
-//! - In verse text it is read and stripped.
+//! - In verse text it is read and stripped. That includes the text of the headings
+//!   usfm-js shows as verse text, `\d`, `\sp`, `\qa` and `\lit`
+//!   ([`crate::markers::shows_as_verse_text`]): en_ult and en_ust write a Psalm's
+//!   superscription inside verse 1 as `\v 1 \d \zaln-s …`, tC4 counts and aligns its words
+//!   with the verse's, and its export writes them back the same way.
+//!   `tests/superscriptions.rs` checks this heading rule against tC4's export.
 //! - A note, figure or other non-text span (`\f`, `\x`, `\fig`, `\ca`…) is a text of its
 //!   own: it is kept whole, as tC4 keeps it, and [`weave`] copies it whole. So a
 //!   `\+w covenant|x-occurrence="1" x-occurrences="1"\+w*` inside a footnote stays there.
-//! - In a heading or sidebar inside the body it is refused with
-//!   [`Error::AlignmentOutsideVerseText`], because weave aligns only verse text and could
-//!   not write it back.
+//! - In any other heading (`\s`, `\ms`, `\r`, `\rem`…) or in a sidebar inside the body it
+//!   is refused with [`Error::AlignmentOutsideVerseText`]: usfm-js does not show that text
+//!   as verse text, tC4's export cannot merge an alignment into it, and weave could not
+//!   write it back.
 //! - Broken word markup outside notes (a `\w` without `\w*`, a `\w*` that closes nothing,
 //!   a `\zaln-s` or `\zaln-e` without its `\*`) is refused with
 //!   [`Error::BrokenWordMarkup`], and an aligned word written as a nested `\+w` with
@@ -68,14 +74,15 @@
 //! # How exact the round trip is
 //!
 //! - `weave(&parse_aligned(x)?.plain, &parse_aligned(x)?.groups) == x` byte for byte for
-//!   every verse of en_ult and en_ust Titus (the tests check all 92), and in general for
-//!   aligned text in the layout above.
+//!   every verse of en_ult and en_ust Titus (the tests check all 92), for every Psalm
+//!   superscription verse of the ULT and UST v91, and in general for aligned text in the
+//!   layout above.
 //! - For other aligned text the groups survive but bytes may differ: attributes in
-//!   another order, a run that tC4 would have cut, other whitespace before a `\w`, a
-//!   `\zaln-s` that closes before the `\zaln-s` nested in it, renumbered occurrences,
-//!   words that were bare and are now wrapped in `\w`, or an empty
-//!   `\zaln-s…\*\zaln-e\*` pair (reported as a group without targets, which weave does
-//!   not write, as tC4 does not).
+//!   another order, a run that tC4 would have cut, a `\zaln-e` after the punctuation that
+//!   follows its last word, other whitespace before a `\w`, a `\zaln-s` that closes
+//!   before the `\zaln-s` nested in it, renumbered occurrences, words that were bare and
+//!   are now wrapped in `\w`, or an empty `\zaln-s…\*\zaln-e\*` pair (reported as a group
+//!   without targets, which weave does not write, as tC4 does not).
 //! - A verse that also holds non-alignment `\w` markup (a glossary or Strong's word)
 //!   outside notes reads apart, but cannot be woven: see [`weave`].
 //! - From the plain side, `parse_aligned(&weave(p, groups)?)?.plain == p` unless `p` has
@@ -1179,8 +1186,12 @@ mod tests {
     fn alignment_in_a_heading_or_sidebar_is_refused() {
         let heading = format!("{ZALN}\\w A|x-occurrence=\"1\" x-occurrences=\"1\"\\w*\\zaln-e\\*");
         for body in [
-            format!("\\d {heading}\n\\q1 line"),
+            format!("\\s {heading}\n\\q1 line"),
             format!("text\n\\s {heading}\n\\p more"),
+            format!("text\n\\ms1 {heading}\n\\p more"),
+            format!("text\n\\r {heading}\n\\p more"),
+            // usfm-js knows `\d` by that name only.
+            format!("\\d1 {heading}\n\\q1 line"),
             "text\n\\s Title \\w A|x-occurrence=\"1\" x-occurrences=\"1\"\\w*\n\\p more".to_owned(),
             format!("text\n\\esb \\p {heading}\n\\esbe\n\\p more"),
             // A milestone opened in a heading would move onto the verse text after it.
@@ -1199,6 +1210,62 @@ mod tests {
         let parsed = parse_aligned(&after).unwrap();
         assert_eq!(parsed.plain, "\\s Title\n\\q1 A");
         assert_eq!(parsed.groups.len(), 1);
+    }
+
+    /// A superscription written inside verse 1, as en_ult writes PSA 11:1, in short: it is
+    /// verse text, its words are numbered with the verse's, and the verse weaves back into
+    /// the same bytes.
+    #[test]
+    fn a_superscription_inside_a_verse_is_verse_text() {
+        let zaln = |content: &str| {
+            format!(
+                "\\zaln-s |x-strong=\"G0001\" x-occurrence=\"1\" x-occurrences=\"1\" x-content=\"{content}\"\\*"
+            )
+        };
+        let w = |text: &str, n: u32, m: u32| {
+            format!("\\w {text}|x-occurrence=\"{n}\" x-occurrences=\"{m}\"\\w*")
+        };
+        let verse = format!(
+            "\\d {}{}\n{}\\zaln-e\\*.\n\\q1 {}{}\n{}\\zaln-e\\*.\n",
+            zaln("לְ\u{2060}דָוִד"),
+            w("Of", 1, 1),
+            w("David", 1, 2),
+            zaln("דָּוִד"),
+            w("David", 2, 2),
+            w("sang", 1, 1),
+        );
+        let parsed = parse_aligned(&verse).unwrap();
+        assert_eq!(parsed.plain, "\\d Of David.\n\\q1 David sang.\n");
+        assert!(parsed.renumbered.is_empty());
+        assert_eq!(
+            parsed.groups,
+            vec![
+                one(&["לְ\u{2060}דָוִד"], &[("Of", 1, 1), ("David", 1, 2)]),
+                one(&["דָּוִד"], &[("David", 2, 2), ("sang", 1, 1)]),
+            ]
+        );
+        assert_eq!(weave(&parsed.plain, &parsed.groups).unwrap(), verse);
+        assert_eq!(target_words(&parsed.plain).unwrap(), parsed.words);
+    }
+
+    /// usfm-js shows the text of `\d`, `\sp`, `\qa` and `\lit` as verse text wherever it
+    /// stands in a verse, and tC4's export aligns it there.
+    #[test]
+    fn headings_shown_as_verse_text_are_aligned_wherever_they_stand() {
+        for marker in ["d", "sp", "qa", "lit"] {
+            let plain = format!("a\n\\{marker} b\n\\q1 a b\n");
+            let words: Vec<(&str, u32, u32)> =
+                vec![("a", 1, 2), ("b", 1, 2), ("a", 2, 2), ("b", 2, 2)];
+            let groups: Vec<AlignmentGroup> = words.iter().map(|&w| one(&["α"], &[w])).collect();
+            let woven = weave(&plain, &groups).unwrap();
+            assert_eq!(
+                shape(&woven),
+                format!("<α>[a]</>\n\\{marker} <α>[b]</>\n\\q1 <α>[a]</>\n<α>[b]</>\n")
+            );
+            let parsed = parse_aligned(&woven).unwrap();
+            assert_eq!(parsed.plain, plain);
+            assert_eq!(parsed.groups, groups);
+        }
     }
 
     #[test]

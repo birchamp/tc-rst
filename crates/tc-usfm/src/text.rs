@@ -8,9 +8,13 @@
 //! - Notes (`\f`, `\fe`, `\ef`, `\x`, `\ex`), figures (`\fig`), alternate and published
 //!   numbers (`\ca`, `\va`, `\vp`), `\cat` and `\rq` are left out with everything inside.
 //! - Milestones such as `\zaln-s`, `\zaln-e` and `\ts\*` carry no text.
-//! - A heading inside the body (`\s`, `\d`, `\r`, `\rem`…) is left out up to the next
+//! - A heading inside the body (`\s`, `\ms`, `\r`, `\rem`…) is left out up to the next
 //!   paragraph marker. A sidebar (`\esb` to `\esbe`) is left out with everything inside.
 //!   A paragraph marker, verse or chapter marker counts as a space.
+//! - The text of `\d`, `\sp`, `\qa` and `\lit` is kept: usfm-js shows it as verse content,
+//!   so a Psalm's superscription written inside verse 1 (`\v 1 \d To the chief musician.`)
+//!   is part of verse 1, its words counted with the verse's, as tC4's aligner counts them.
+//!   The marker counts as a space ([`markers::shows_as_verse_text`]).
 //!
 //! Then the text is normalized: every run of whitespace becomes one U+0020 SPACE, and
 //! leading and trailing whitespace is removed. Whitespace here is Unicode `White_Space`
@@ -110,8 +114,10 @@ pub(crate) struct Flow {
 
 impl Flow {
     /// The flow after `marker`. Headings, titles and chapter labels start a heading's text;
-    /// paragraph, verse and chapter markers end it. `\esb` starts a sidebar and only
-    /// `\esbe` ends it, because a sidebar holds headings and paragraphs of its own.
+    /// paragraph, verse and chapter markers end it, and so do the headings whose text is
+    /// verse text ([`markers::shows_as_verse_text`], such as a superscription's `\d`).
+    /// `\esb` starts a sidebar and only `\esbe` ends it, because a sidebar holds headings
+    /// and paragraphs of its own.
     pub(crate) fn after(self, marker: &Marker<'_>) -> Self {
         if marker.is_closing() || marker.is_nested() {
             return self;
@@ -127,10 +133,10 @@ impl Flow {
             _ => {}
         }
         let heading = match marker.class() {
-            MarkerClass::Heading
-            | MarkerClass::Identification
-            | MarkerClass::Introduction
-            | MarkerClass::ChapterLevel => true,
+            MarkerClass::Heading => !markers::shows_as_verse_text(marker.name()),
+            MarkerClass::Identification | MarkerClass::Introduction | MarkerClass::ChapterLevel => {
+                true
+            }
             MarkerClass::Paragraph | MarkerClass::Verse | MarkerClass::Chapter => false,
             MarkerClass::Note | MarkerClass::NoteContent | MarkerClass::Character => self.heading,
         };
@@ -183,6 +189,21 @@ mod tests {
             plain_text(body),
             "The first word has a note here. and Lord's line.\u{A0}!"
         );
+    }
+
+    #[test]
+    fn a_superscription_is_verse_text_and_a_section_heading_is_not() {
+        let body = "\\d A psalm of David.\n\\q1 Yahweh, hear David.\n\\s Not this\n\\q2 and \\sp this\n\\q1 too.";
+        assert_eq!(
+            plain_text(body),
+            "A psalm of David. Yahweh, hear David. and this too."
+        );
+        let david: Vec<(u32, u32)> = verse_words(body)
+            .iter()
+            .filter(|w| w.text == "David")
+            .map(|w| (w.occurrence, w.occurrences))
+            .collect();
+        assert_eq!(david, vec![(1, 2), (2, 2)]);
     }
 
     #[test]
