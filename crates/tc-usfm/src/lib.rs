@@ -14,11 +14,14 @@
 //!   export write it.
 //! - [`codec`] cuts a book into the journal's records (header, chapter fronts, verse words
 //!   and layout) and writes it back byte for byte.
+//! - [`derivations`] holds the versioned derivations that decide computed validity:
+//!   [`plain_text_v1`], [`tokenize_v1`] and [`selections_v1`], tC4's behaviour byte for byte.
 
 pub mod align;
 mod attributes;
 pub mod book;
 pub mod codec;
+pub mod derivations;
 mod doc;
 mod lex;
 pub mod markers;
@@ -31,6 +34,7 @@ pub use align::{
 };
 pub use attributes::{Attribute, Attributes};
 pub use book::{Book, ChapterMark, Segment, SegmentKind, VerseUnit};
+pub use derivations::{SelectionCount, plain_text_v1, selections_v1, tokenize_v1};
 pub use doc::{Document, Marker, Milestone, Node, Span};
 pub use text::plain_text;
 

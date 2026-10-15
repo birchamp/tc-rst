@@ -2063,13 +2063,26 @@ as present and the fold lists `LastBookRemoved` for it, so the burrito stays val
 The derivation functions live in `tc-usfm` and are versioned (§12):
 
 - `plain_text_v1(content)`: byte-compatible with tC4's `verseTextMd5` input (usfm-js 3.4.3:
-  parse `"\v 1 " + content` with `{chunk: true}`, concatenate the `text` of every verse object,
-  trim). Imported tC4 and tC3 alignments keep their hashes and their validity.
-- `tokenize_v1`: string-punctuation-tokenizer 2.0.0's default tokenizer.
-- `selections_v1(text, selections)`: word-aligner-lib `validateVerseSelections` semantics.
+  parse `"\v 1 " + content` with `{chunk: true}`, concatenate the top-level `text` of every
+  verse object, trim with JavaScript's `trim`). Imported tC4 and tC3 alignments keep their
+  hashes and their validity. The md5 is taken over the UTF-8 bytes of the result.
+- `tokenize_v1(text)`: string-punctuation-tokenizer 2.0.0's default `tokenize`: the words and
+  numbers, in order.
+- `selections_v1(text, selections)`: word-aligner-lib 1.0.1 `validateVerseSelections`
+  semantics: the text goes through usfm-js's `removeMarker`, and the selections still fit when
+  each one's `text` occurs in the result exactly `occurrences` times (non-overlapping; an empty
+  text occurs 0 times).
+
+usfm-js throws a TypeError on a few malformed nestings (for example a `\zaln` milestone with no
+words inside another milestone, met by `removeMarker`). The library has no value there, so
+version 1 defines one: `plain_text_v1` is the content trimmed, which changes with every edit,
+and `selections_v1` says the selections fit, as tC4's `decisionIsStale` does when the validator
+fails. A marker named after a member of JavaScript's `Object.prototype` (`\constructor`,
+`\toString`) is read as an unknown marker; usfm-js looks it up as that member and may throw.
 
 Each is tested against golden outputs generated once from the JavaScript libraries and committed
-under `fixtures/derivations/`.
+under `fixtures/derivations/` (every verse of tC4's USFM fixtures, edge cases and seeded random
+verses; `crates/tc-usfm/tools/gen-derivation-vectors.cjs`), including tC4's sample hash.
 
 **Anchors: attached records follow the text.** Alignments and verse comments are attached to a
 verse's text, not to a number. The **anchor** of a verse with a projected `Text` value is its

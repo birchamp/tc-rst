@@ -27,8 +27,8 @@
 //! (its slot runs to the next `\v`), and it drops the text of `\li` list items and of
 //! `\w` words inside `\zaln` milestones. A record that tC4 stamped on such a verse does
 //! not match the md5 of this text: in particular every verse with a poetry or paragraph
-//! line break inside it. This crate does not yet reproduce usfm-js's text, so code that
-//! must check a stored `targetVerseMd5` cannot use this function for it.
+//! line break inside it. Code that must check a stored `targetVerseMd5` uses
+//! [`crate::plain_text_v1`], which reproduces usfm-js's text.
 
 use crate::doc::{Document, Marker, Node};
 use crate::markers::{self, MarkerClass};
