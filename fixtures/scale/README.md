@@ -8,6 +8,7 @@ measured on it. The project owner supplied the unfoldingWord files on 2026-10-15
 | File | Release | Contents | sha256 |
 |---|---|---|---|
 | `hbo_uhb-v3.0.0.zip` | Hebrew Bible (UHB) 3.0.0, issued 2026-04-12 | 39 books of USFM with lemma, Strong's and morphology | `c4abce7cad1532d9481b289fc3819d8ab0ca01ef41899e205117cd3dc8cac8b5` |
+| `el-x-koine_ugnt-v0.34.zip` | Greek New Testament (UGNT) 0.34, issued 2023-09-26 | 27 books of USFM, 7,958 verses, 137,990 words with lemma, Strong's and morphology | `07318be27d0027146a62363c20ffedd0db695d7680f4b32c8ae8bd3020a29d00` |
 | `en_ult-v91.zip` | unfoldingWord Literal Text v91, issued 2026-09-26 (aligned to UHB 3.0.0 and UGNT 0.34) | 59 books, 23,900 verses, 369,635 `\zaln-s` groups | `f5c08f7a50ef88afe7b4811acdee352b0302e9f0bf1269f217d97121d2113d44` |
 | `en_tn-v91.zip` | translationNotes v91, issued 2026-09-26 | 59 books, 87,573 rows | `45fed63b7e11594be6c6de288832be97285d9d11995cc968a0960be574ad4855` |
 | `en_twl-v91.zip` | translationWords Links v91, issued 2026-09-26 (relates to UHB 3.0.0 and UGNT 0.34) | 59 books, 85,764 rows | `6b4979dc684fde52298f9a60e40281690eec148024558b2a8a012257b315f437` |
@@ -28,9 +29,8 @@ seven books the corpus generator uses the v89 row counts in
 | `en_twl/twl_PSA.tsv` | translationWords Links v91, Psalms: 7,683 rows | `en_twl/twl_PSA.tsv` in `resources/en_twl-v91.zip`, unchanged | `cb254eeaa6d9f442eccd642aa6cda862ec0f238ee330b1a5576269870fc8ccd4` |
 | `web/web_psa.usx` | World English Bible British Edition, Psalms, USX 3.0: 2,461 verses | `test/test_data/usx/web_psa.usx` in https://github.com/Proskomma/proskomma-core at commit `0204ad3` | `a80457f92ac663a2d43777ac94f82ddfb8d4ff8b5bb0acf5e9659f138f029514` |
 
-Still missing: the Greek New Testament (UGNT) and the UST. The Greek words of the New Testament are in the ULT alignments. Until
-they are added, benchmarks generate what they need from the data above and label it as
-generated.
+The UST is not included on purpose: it is another aligned text with the same shape as the
+ULT, which the corpus already covers.
 
-Licenses: the unfoldingWord resources (UHB, ULT, tN, tW, TWL, tA) are CC BY-SA 4.0,
+Licenses: the unfoldingWord resources (UHB, UGNT, ULT, tN, tW, TWL, tA) are CC BY-SA 4.0,
 © unfoldingWord. The World English Bible is in the public domain.
