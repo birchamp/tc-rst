@@ -289,6 +289,9 @@ pub(crate) struct Dirty {
     pub books: BTreeSet<BookId>,
     pub chapters: BTreeSet<(BookId, u16)>,
     pub attached: BTreeSet<KeyIdx>,
+    /// Passage batches that grew after some of their changes were folded: their passage
+    /// grew, so the groups it reaches are rebuilt.
+    pub regroup: BTreeSet<BatchIdx>,
     pub pins: bool,
     pub paths: bool,
     pub unknown: bool,
@@ -769,6 +772,7 @@ impl FoldState {
                 (entry.id, complete, entry.members.clone())
             };
             let released = self.released.get(&id).cloned();
+            let had_folded = members.iter().any(|c| self.meta(*c).active);
             let mut newly: Vec<ChangeIdx> = Vec::new();
             for &c in &members {
                 let meta = self.meta(c);
@@ -791,6 +795,20 @@ impl FoldState {
             }
             if !newly.is_empty() {
                 let passage = self.passage_books(b);
+                if passage != self.batches[b.get()].passage && !dirty.all {
+                    // A release that grows the batch can make it a passage batch: every
+                    // record it already wrote is judged again as part of its passage.
+                    for &c in &members {
+                        if self.meta(c).active {
+                            let k = self.meta(c).key;
+                            dirty.simple.remove(&k);
+                            dirty.keys.insert(k);
+                        }
+                    }
+                }
+                if had_folded && !passage.is_empty() && !dirty.all {
+                    dirty.regroup.insert(b);
+                }
                 self.batches[b.get()].passage = passage;
             }
             for c in newly {

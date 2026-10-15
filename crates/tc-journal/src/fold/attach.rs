@@ -920,24 +920,33 @@ pub(crate) fn stage_paths(state: &mut FoldState, dirty: &mut Dirty) {
     ] {
         derived.insert(tc_burrito::collision_form(path), path.to_owned());
     }
-    // Carried files that project: their path, by collision form.
-    let mut carried: BTreeMap<String, Vec<(RepoPath, KeyIdx, crate::ids::GitOid)>> =
+    // Carried files with a present head, by collision form. Any present head counts, not
+    // only the provisional one, so whether two paths collide never reads a clock (I3).
+    let mut carried: BTreeMap<String, Vec<(RepoPath, KeyIdx, Option<crate::ids::GitOid>)>> =
         BTreeMap::new();
     for k in state.carried_keys.iter() {
         let RecordKey::CarriedFile(path) = &state.entry(*k).key else {
             continue;
         };
-        let oid = match &state.entry(*k).projected {
+        let present = state
+            .entry(*k)
+            .heads
+            .iter()
+            .any(|h| matches!(state.meta(*h).shape, Shape::Carried { oid: Some(_) }));
+        if !present {
+            continue;
+        }
+        let shown = match &state.entry(*k).projected {
             Projected::Change(c) => match state.meta(*c).shape {
-                Shape::Carried { oid: Some(oid) } => oid,
-                _ => continue,
+                Shape::Carried { oid: Some(oid) } => Some(oid),
+                _ => None,
             },
-            _ => continue,
+            _ => None,
         };
         carried
             .entry(path.collision_form())
             .or_default()
-            .push((path.clone(), *k, oid));
+            .push((path.clone(), *k, shown));
     }
     let mut moves: BTreeMap<RepoPath, String> = BTreeMap::new();
     let mut conflicts = Vec::new();
@@ -948,9 +957,12 @@ pub(crate) fn stage_paths(state: &mut FoldState, dirty: &mut Dirty) {
         }
         files.sort_by(|a, b| a.0.as_str().as_bytes().cmp(b.0.as_str().as_bytes()));
         let keep = if derived_here { 0 } else { 1 };
-        let moved: Vec<&(RepoPath, KeyIdx, crate::ids::GitOid)> = files.iter().skip(keep).collect();
+        let moved: Vec<&(RepoPath, KeyIdx, Option<crate::ids::GitOid>)> =
+            files.iter().skip(keep).collect();
         for (path, _, oid) in &moved {
-            moves.insert(path.clone(), moved_path(path.as_str(), oid, "case"));
+            if let Some(oid) = oid {
+                moves.insert(path.clone(), moved_path(path.as_str(), oid, "case"));
+            }
         }
         let keys: Vec<KeyIdx> = files.iter().map(|f| f.1).collect();
         let mut heads: Vec<ChangeIdx> = Vec::new();

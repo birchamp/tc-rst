@@ -33,12 +33,18 @@ pub(crate) fn stage_groups(state: &mut FoldState, dirty: &mut Dirty) {
             .filter(|k| matches!(state.entry(*k).key, RecordKey::Verse(..)))
             .collect()
     } else {
-        dirty
+        let mut todo: BTreeSet<KeyIdx> = dirty
             .changed
             .iter()
             .copied()
             .filter(|k| matches!(state.entry(*k).key, RecordKey::Verse(..)))
-            .collect()
+            .collect();
+        for &b in &dirty.regroup {
+            for book in state.batch(b).passage.clone() {
+                todo.extend(passage_records(state, b, book));
+            }
+        }
+        todo
     };
     if todo.is_empty() {
         return;

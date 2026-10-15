@@ -271,31 +271,53 @@ impl FoldState {
 
     /// The heads a shown token lists for a record (§2.7): every head of a settled or merged
     /// record; for a record in conflict, only the displayed candidate (the provisional one
-    /// unless `displayed` names another head) and the heads with its identical value.
+    /// unless `displayed` names another head) and the heads with its identical value. When
+    /// the screen shows an earlier version (a passage side rewound for the provisional
+    /// text, §7.3, or a *Start empty* rewound after *Restore the text*, §7.6), the token
+    /// names that version, so an edit continues what was shown and every head stays.
     pub fn shown_heads(&self, key: &RecordKey, displayed: Option<ChangeId>) -> Vec<ChangeId> {
         let Some(k) = self.key_idx(key) else {
             return Vec::new();
         };
         let entry = self.entry(k);
+        if displayed.is_none()
+            && let Some(shown) = self.shown_after_restore(k)
+        {
+            return match shown {
+                attach::ShownVerse::Change(_, c) => vec![self.meta(c).id],
+                attach::ShownVerse::Merged(..) => {
+                    entry.heads.iter().map(|h| self.meta(*h).id).collect()
+                }
+            };
+        }
         let in_conflict =
             entry.group.is_some() || matches!(entry.local, Local::Conflict { .. } | Local::Passage);
         if !in_conflict {
             return entry.heads.iter().map(|h| self.meta(*h).id).collect();
         }
-        let shown = displayed
+        let chosen = displayed
             .and_then(|id| self.ids.get(&id).copied())
-            .filter(|c| entry.heads.contains(c))
-            .or_else(|| match &entry.projected {
-                Projected::Change(c) if entry.heads.contains(c) => Some(*c),
-                _ => entry
+            .filter(|c| entry.heads.contains(c));
+        let shown = match (chosen, &entry.projected) {
+            (Some(c), _) => c,
+            (None, Projected::Change(c)) => *c,
+            // The record shows nothing while its passage side did not have it.
+            (None, Projected::Nothing) => return Vec::new(),
+            (None, Projected::Merged(_)) => {
+                match entry
                     .heads
                     .iter()
                     .copied()
-                    .max_by_key(|h| self.meta(*h).order()),
-            });
-        let Some(shown) = shown else {
-            return Vec::new();
+                    .max_by_key(|h| self.meta(*h).order())
+                {
+                    Some(h) => h,
+                    None => return Vec::new(),
+                }
+            }
         };
+        if !entry.heads.contains(&shown) {
+            return vec![self.meta(shown).id];
+        }
         let value = super::value_of(self, shown);
         let mut out: Vec<ChangeId> = entry
             .heads

@@ -726,7 +726,8 @@ What `heads` holds depends on the record's state when it was displayed:
 |---|---|
 | Settled, SettledByRule, Merged | every head (the person saw a value that stands for all of them) |
 | Conflict | only the displayed candidate's head and its `also` heads |
-| No record yet | empty |
+| An earlier version shown for a conflict (a passage side rewound for the provisional text, §7.3; a *Start empty* rewound after *Restore the text*, §7.6) | that version's change, which is not a head, so an edit continues what was shown and every head stays |
+| No record yet, or nothing shown for it while its passage side did not have it | empty |
 
 Commands (types in `tc-journal`, executed by the project actor in `tc-store`, called by
 `tc-app`). Each one is one batch, all or nothing:
@@ -1899,7 +1900,7 @@ together, because mixing them would make a state nobody chose.
 | `Verse` | If every head and every base is `Text` with equal `last`, `marker` and `from`: `words` and `layout`. Otherwise the whole value is one unit. So a paragraph break added by one person and a rewording by another merge; two rewordings of any part of the words conflict; a span against a text conflicts. A record that diverges from a passage batch is never merged by units (see "Passages"). |
 | `Check` with `Decision` values | `judgement` (selections, nothing to select, status, verse text md5, `imported_invalid`); `comment`; `bookmarked`; `dismissed`; `basis` (context, category, resource); each `extra` key. If any head or base is `MovedTo`, the whole value is one unit. |
 | `Pins` | each slot of the group (`gatewayLanguage`, `translationNotes`, …); `ExtraScripture` is one slot |
-| `Setting` | each leaf path of the JSON value (objects recurse; arrays and scalars are leaves); a removed key against a present one is the whole value |
+| `Setting` | each leaf path of the JSON value (objects recurse; arrays and scalars are leaves); a removed key against a present one is the whole value. An object the merged leaves leave empty, which no head has empty, is left out: one head removed it and the others kept it unchanged |
 | `DeviceProfile` | `display_name`, `door43_username`, `legacy` |
 | `ProjectMeta` | as `Setting`: each leaf path of the JSON value (so two translators' `localizedNames` for different books merge) |
 | `Alignment` | `dismissed`; every other field together (two people's links are never mixed) |
@@ -2243,7 +2244,9 @@ and the record is not invalidated (§11.1 X3).
 - Carried files: the provisional head's blob at the path; each other conflicting head's blob at
   `<stem>.conflict-<first 8 hex of its oid>.<ext>`. A carried path that collides with a derived
   path or another carried path (§3.3) is placed at `<stem>.case-<first 8 hex of its oid>.<ext>`
-  and listed as a `PathCase` conflict, with *Rename* and *Remove* choices.
+  and listed as a `PathCase` conflict, with *Rename* and *Remove* choices. A carried record
+  takes part in collisions when any of its heads is `Present`, not only its provisional head,
+  so whether a `PathCase` conflict is listed never depends on a clock (I3).
 
 **Sidecar byte form.** The tC4 document shapes are kept, but the bytes are compact JSON with one
 record per line: the document opens on the first line, each record is one line ending in `,`
@@ -3401,7 +3404,11 @@ The generators must reach the states they claim. Each run counts the states it p
 (conflicts per kind, criss-cross bases, structure issues, book removals with unseen work,
 incomplete batches, duplicate devices, damaged packs) and fails if a counter is zero over the
 run (tC4 D51: a generator that re-folds after every event never builds a fork). Devices keep
-their own stale views on purpose.
+their own stale views on purpose. The team generator lives in `tc-journal/tests/sim`; the fold
+properties run there over the in-memory union, and its `Transport` trait is how `tc-store` (the
+exchange zip) and `tc-sync` (the local git server) run the same scripts through their transports.
+Its scripts write every record kind but OBS frames, whose records go through the same merge code
+and are covered by the projection tests.
 
 | Name | Generator | Assertion | Fails if |
 |---|---|---|---|
@@ -3416,7 +3423,7 @@ their own stale views on purpose.
 | `merge_units_sound` | records with criss-cross histories and random unit changes | an agreed unit's value equals the value written by every head that changed that unit relative to every base | the base choice lets one head override another |
 | `provisional_usfm_never_drops_words` | concurrent spans, splits, joins, renumbers that shift ranges across a chapter boundary, marker drags, *Start empty*, verse edits and paragraph breaks, in books with and without a `BookLayout` | per chapter, the multiset of words in the projected USFM equals the multiset of the chapter state built from the provisional side of every `Passage` conflict; every record whose projected value is `Text` has its words in the USFM exactly once; an incoherent covered verse shows its newest own text; every incoherence is listed | the coherence pass drops a verse, a passage is judged verse by verse, or the layout skips a record |
 | `every_head_reachable_from_a_screen` | the generators above, with carry-overs, renumbers, joins and removals concurrent with comments, alignments and decisions | every head of every record kind is placed on a screen (a verse, a run's aligner, a check, a settings page, History of a removed book), is a conflict candidate, or is listed under Detached or as an anomaly | an attached record is left on an identity no screen shows |
-| `mixed_minor_versions_converge` | the same change set folded by the current app and by a build of the previous minor, with changes that carry inert newer fields and causes | identical heads, conflict lists and derived bytes | an unknown field moves a change to another key |
+| `mixed_minor_versions_converge` | the same change set folded by the current app and by a build of the previous minor, with changes that carry inert newer fields and causes. Until a previous minor is released, `tc-journal` emulates it: the team history written again with inert newer-minor fields on a third of its changes (an older device's edit of such a record drops them, as it would) | identical heads, conflict lists and derived bytes; emulated: every change on its own key, the same heads, every conflict of the plain history still listed, an added conflict only where versions differ in a newer field, and no newer field in any derived file | an unknown field moves a change to another key |
 | `arbitrary_meta_never_blocks_commit` | arbitrary JSON as `ProjectMeta`, pin and scope values, from commands and from decoded outside edits | `build_metadata` succeeds, the document passes `tc_burrito::check`, a checkpoint commits, and every invalid value is listed as `InvalidForBurrito` | any value can make M2 or C3 fail |
 | `book_removal_hides_nothing_unseen` | removals concurrent with edits of every record kind of the book | every change the remover did not hold is projected or in a listed conflict | removal visibility ignores a record kind |
 | `outside_edit_reconcile_conserves` | random outside edits of USFM, sidecars, `metadata.json` and OBS stories: small edits, reverts to older values, verse deletions, more than 50 keys, line-ending and trailing-space rewrites, book files for absent books, unreadable files, edits racing a teammate's sync | no head lost; destructive and reverting edits are conflicts; whitespace-only rewrites record nothing; a book file adds its book; unreadable files keep a byte copy | a known-base edit replaces a value it did not see |

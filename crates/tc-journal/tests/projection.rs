@@ -245,3 +245,55 @@ fn a_chapter_projects_alone() {
     let _ = FoldInput::from(book[0].clone());
     let _ = RecordKey::Versification;
 }
+
+#[test]
+fn a_story_splices_its_frames_and_reference_into_the_template() {
+    let mut ana = Dev::new(1);
+    let story = tc_journal::StoryNo::new(1).expect("story");
+    let frame = tc_journal::FrameNo;
+    let template = "# The Creation\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg)\n\nThis is how God made everything.\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-02.jpg)\n\nBut the earth was empty.\n\n_A Bible story from: Genesis 1-2_\n";
+    let changes = vec![
+        ana.one(
+            Record::StoryBase {
+                story,
+                value: template.into(),
+            },
+            vec![],
+        ),
+        ana.one(
+            Record::Frame {
+                story,
+                frame: frame(0),
+                value: "La creación".into(),
+            },
+            vec![],
+        ),
+        ana.one(
+            Record::Frame {
+                story,
+                frame: frame(1),
+                value: "Así es como Dios hizo todo.".into(),
+            },
+            vec![],
+        ),
+        ana.one(
+            Record::StoryRef {
+                story,
+                value: Some("Una historia bíblica de: Génesis 1-2".into()),
+            },
+            vec![],
+        ),
+    ];
+    let state = FoldState::fold(
+        ProjectKind::Stories,
+        changes.into_iter().map(FoldInput::from),
+    );
+    let file = DerivedFile::Story(story);
+    assert!(state.derived_files().contains(&file));
+    let bytes = state.render(&file).expect("story");
+    assert_eq!(
+        String::from_utf8(bytes).expect("utf-8"),
+        "# La creación\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg)\n\nAsí es como Dios hizo todo.\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-02.jpg)\n\nBut the earth was empty.\n\n_Una historia bíblica de: Génesis 1-2_\n",
+        "frame 2 has no record and keeps the template's text"
+    );
+}

@@ -813,6 +813,8 @@ impl Census {
     /// Fails when an expected state was never reached.
     pub fn check(&self) {
         let counts = self.counts.borrow();
+        // Seen with `--nocapture`: how often each state was reached, for tuning.
+        eprintln!("census {counts:?}");
         let missing: Vec<&str> = self
             .expected
             .iter()

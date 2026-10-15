@@ -597,14 +597,9 @@ pub(crate) fn merge_units(
         for (unit, unit_value) in &chosen {
             unit.write(&mut value, unit_value.clone());
         }
-        if let RecordKey::Check(_) = key
-            && let Some(Json::Obj(outer)) = value.as_mut()
-            && let Some(Json::Obj(decision)) = outer.get_mut("decision")
-            && decision
-                .get("extra")
-                .is_some_and(|e| e.as_obj().is_some_and(JsonMap::is_empty))
-        {
-            decision.remove("extra");
+        if let Some(root) = value.as_mut() {
+            let heads: Vec<Option<&Json>> = heads.iter().map(Option::as_ref).collect();
+            prune_emptied(root, &mut Vec::new(), &heads);
         }
         Some(value)
     } else {
@@ -615,6 +610,34 @@ pub(crate) fn merge_units(
         agreed,
         disputed,
         changed,
+    }
+}
+
+/// Removes the objects that unit writes emptied and no head has empty: when one head
+/// removed a whole object and another kept it unchanged, the merge removes it, rather than
+/// leaving an empty object nobody wrote.
+fn prune_emptied(value: &mut Json, path: &mut Vec<String>, heads: &[Option<&Json>]) {
+    let Json::Obj(map) = value else {
+        return;
+    };
+    let names: Vec<String> = map.keys().cloned().collect();
+    for name in names {
+        path.push(name.clone());
+        if let Some(child) = map.get_mut(&name) {
+            prune_emptied(child, path, heads);
+            let emptied = child.as_obj().is_some_and(JsonMap::is_empty);
+            let some_head_has_it_empty = heads.iter().any(|h| {
+                let mut at = *h;
+                for segment in path.iter() {
+                    at = at.and_then(|j| j.as_obj()).and_then(|m| m.get(segment));
+                }
+                at.and_then(Json::as_obj).is_some_and(JsonMap::is_empty)
+            });
+            if emptied && !some_head_has_it_empty {
+                map.remove(&name);
+            }
+        }
+        path.pop();
     }
 }
 

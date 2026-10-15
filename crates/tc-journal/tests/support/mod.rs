@@ -517,6 +517,11 @@ pub fn derived_bytes(state: &FoldState) -> BTreeMap<String, Vec<u8>> {
             format!("{}:{}", placement.record.as_str(), placement.oid.to_hex()).into_bytes(),
         );
     }
+    if state.projected_books().is_empty() {
+        // A Bible project always keeps a book (the last-book rule); a test that never
+        // added one has no metadata.json to build.
+        return out;
+    }
     let source = state.metadata_source((1, 0));
     let metadata = tc_burrito::build_metadata(&source, &table).expect("metadata builds");
     assert!(
@@ -550,6 +555,24 @@ pub fn assert_converges(changes: &[Change]) -> FoldState {
 
 /// Two folds of one change set agree on everything a person or a file can see.
 pub fn same_fold(expected: &FoldState, got: &FoldState, how: &str) {
+    same_summary(expected, got, how);
+    let (da, db) = (derived_bytes(expected), derived_bytes(got));
+    for (path, bytes) in &da {
+        assert_eq!(
+            Some(String::from_utf8_lossy(bytes)),
+            db.get(path).map(|b| String::from_utf8_lossy(b)),
+            "{how}: {path}"
+        );
+    }
+    assert_eq!(
+        da.keys().collect::<Vec<_>>(),
+        db.keys().collect::<Vec<_>>(),
+        "{how}: derived paths"
+    );
+}
+
+/// Two folds agree on heads, conflicts, anomalies and the Detached list.
+pub fn same_summary(expected: &FoldState, got: &FoldState, how: &str) {
     let (a, b) = (summary(expected), summary(got));
     assert_eq!(a.0, b.0, "{how}: frontier");
     for (x, y) in a.1.iter().zip(b.1.iter()) {
@@ -570,19 +593,6 @@ pub fn same_fold(expected: &FoldState, got: &FoldState, how: &str) {
     assert_eq!(a.1.len(), b.1.len(), "{how}: conflict count");
     assert_eq!(a.2, b.2, "{how}: anomalies");
     assert_eq!(a.3, b.3, "{how}: detached");
-    let (da, db) = (derived_bytes(expected), derived_bytes(got));
-    for (path, bytes) in &da {
-        assert_eq!(
-            Some(String::from_utf8_lossy(bytes)),
-            db.get(path).map(|b| String::from_utf8_lossy(b)),
-            "{how}: {path}"
-        );
-    }
-    assert_eq!(
-        da.keys().collect::<Vec<_>>(),
-        db.keys().collect::<Vec<_>>(),
-        "{how}: derived paths"
-    );
 }
 
 /// A change's canonical JSON edited and hashed again: a line another program, or a newer
