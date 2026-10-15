@@ -1,0 +1,31 @@
+[package]
+name = "tc-resources"
+description = "Installing, pinning, verifying, upgrading and loading translation resources from Door43 and Aquifer."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tc-core = { path = "../tc-core" }
+tc-door43 = { path = "../tc-door43" }
+tc-helps = { path = "../tc-helps" }
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "system-proxy"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10.9"
+tempfile.workspace = true
+thiserror.workspace = true
+tokio = { version = "1.53.3", features = ["rt"] }
+tracing = "0.1.44"
+url = "2.5.8"
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[dev-dependencies]
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
+proptest.workspace = true
+tc-door43-fake = { path = "../tc-door43-fake" }
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "net", "time"] }
+
+[lints]
+workspace = true
