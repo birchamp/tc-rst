@@ -19,6 +19,12 @@ thiserror.workspace = true
 # research probe cross-checked against ajv on 48 documents.
 jsonschema = { version = "=0.58.6", default-features = false }
 md-5 = "0.11.0"
+# Two ingredient paths that differ only by Unicode normalization (NFC or NFD) name one file
+# on macOS, so path collisions are found on the NFC form.
+unicode-normalization = "0.1.25"
+# Invisible format characters (General Category Cf) are refused in ingredient paths: HFS+
+# ignores several of them when it compares names, and direction overrides disguise names.
+unicode-general-category = "1.1.0"
 
 [dev-dependencies]
 proptest.workspace = true

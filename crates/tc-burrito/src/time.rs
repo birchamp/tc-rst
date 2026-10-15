@@ -3,11 +3,17 @@ use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Why a string is not an RFC 3339 date-time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, thiserror::Error)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, thiserror::Error)]
 #[serde(rename_all = "camelCase")]
 pub enum TimestampError {
     #[error("the date-time has no timezone; end it with 'Z' or an offset such as '+01:00'")]
     MissingTimezone,
+    /// `2026-07-02 12:00:00Z`. RFC 3339 allows applications to choose a space, but its
+    /// `date-time` grammar, which JSON Schema uses, needs 'T'. tC4's ajv-formats accepts
+    /// the space; this validator and the jsonschema crate refuse it, so a burrito that
+    /// leaves the app passes strict validators too.
+    #[error("the date and time are separated by a space; RFC 3339 date-times use 'T'")]
+    SpaceSeparator,
     #[error("not an RFC 3339 date-time such as 2026-07-02T12:00:00.000Z")]
     Malformed,
 }
@@ -84,14 +90,18 @@ fn civil_from_days(days: u64) -> (u64, u64, u64) {
     (year, month, day)
 }
 
-/// Checks `text` against RFC 3339 `date-time`: `YYYY-MM-DDTHH:MM:SS[.fraction]` then `Z` or
-/// `±HH:MM`. `T` and `Z` may be lower case, as the RFC allows. Day numbers are checked
-/// against the month, leap years included, and a leap second `:60` only at 23:59 UTC, as
-/// the schema's `date-time` format checks it.
+/// Checks `text` against the RFC 3339 `date-time` grammar:
+/// `YYYY-MM-DDTHH:MM:SS[.fraction]` then `Z` or `±HH:MM`. `T` and `Z` may be lower case,
+/// as the RFC allows. Day numbers are checked against the month, leap years included, and
+/// a leap second `:60` only at 23:59 UTC. This agrees with the jsonschema crate's
+/// `date-time` format (a property test compares them); it does not agree with tC4's
+/// ajv-formats, which also takes whitespace for the `T` (see
+/// [`TimestampError::SpaceSeparator`]).
 pub(crate) fn check_date_time(text: &str) -> Result<(), TimestampError> {
     let mut cursor = Cursor(text.as_bytes());
-    let date_ok = cursor.date();
-    let time = date_ok && matches!(cursor.byte(), Some(b'T' | b't'));
+    let separator = cursor.date().then(|| cursor.byte()).flatten();
+    let space = separator == Some(b' ');
+    let time = matches!(separator, Some(b'T' | b't')) || space;
     let Some((minute_of_day, second)) = time.then(|| cursor.time()).flatten() else {
         return Err(TimestampError::Malformed);
     };
@@ -104,6 +114,9 @@ pub(crate) fn check_date_time(text: &str) -> Result<(), TimestampError> {
     let utc_minute = (minute_of_day - offset).rem_euclid(24 * 60);
     if second == 60 && utc_minute != 23 * 60 + 59 {
         return Err(TimestampError::Malformed);
+    }
+    if space {
+        return Err(TimestampError::SpaceSeparator);
     }
     Ok(())
 }
@@ -249,6 +262,13 @@ mod tests {
                 Err(TimestampError::MissingTimezone)
             );
         }
+        for spaced in ["2026-07-02 12:00:00Z", "2026-07-02 12:00:00.000+01:00"] {
+            assert_eq!(
+                check_date_time(spaced),
+                Err(TimestampError::SpaceSeparator),
+                "{spaced}"
+            );
+        }
         for bad in [
             "2026-07-02",
             "yesterday",
@@ -256,7 +276,8 @@ mod tests {
             "2026-13-01T00:00:00Z",
             "2025-02-29T00:00:00Z",
             "2026-07-02T24:00:00Z",
-            "2026-07-02 12:00:00Z",
+            "2026-07-02 12:00:00.Z",
+            "2026-07-02\t12:00:00Z",
             "2026-07-02T12:00:00.Z",
             "2026-07-02T12:00:00+0100",
             "2026-07-02T12:00:00Z ",

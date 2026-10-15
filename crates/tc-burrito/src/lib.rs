@@ -17,6 +17,10 @@
 //! md5 digests, media types and scopes. A document with a bad one does not parse into the
 //! model, and the validator says why. Values the app only shows or carries (names, tags,
 //! ids, timestamps) are kept as written, and the validator judges them.
+//!
+//! The JSON reader refuses what a read-modify-write could not give back: a key written
+//! twice, a number an f64 cannot hold exactly, a lone surrogate escape. The writer refuses
+//! an `extra` map that repeats a modelled key.
 
 mod error;
 mod files;
@@ -38,9 +42,9 @@ pub use model::{
     Agency, AgencyRole, Audience, BurritoType, Category, Checksum, Copyright, Extra, Flavor,
     FlavorType, FlavorTypeName, Format, Generator, IdAuthority, Identification, Ingredient,
     LOCAL_AUTHORITY, Language, License, LocalizedName, LocalizedText, Meta, Metadata, NewProject,
-    Normalization, OtherFlavor, PrimaryId, Progress, ProjectKind, ProjectType, RelationType,
-    Relationship, Revision, Role, ScriptDirection, ShortStatement, SpecVersion, TargetArea,
-    TextStories, TextTranslation, TranslationType,
+    Normalization, OtherFlavor, PrimaryId, PrimaryIdError, Progress, ProjectKind, ProjectType,
+    RelationType, Relationship, Revision, Role, ScriptDirection, ShortStatement, SpecVersion,
+    TargetArea, TextStories, TextTranslation, TranslationType,
 };
 pub use open_enum::UnknownValue;
 pub use path::{IngredientPath, PathRule};

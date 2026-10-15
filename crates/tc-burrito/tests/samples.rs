@@ -10,9 +10,10 @@ use common::{bible_dir, fixture, obs_dir, read_metadata};
 use serde_json::Value;
 use std::path::Path;
 use tc_burrito::{
-    Copyright, FlavorType, Generator, IngredientPath, Language, LocalizedText, MemProject,
-    Metadata, NewProject, ProjectKind, Role, Scope, ScopeBook, ScriptDirection, TextTranslation,
-    Timestamp, to_canonical_json, validate_dir, validate_metadata_bytes, validate_project,
+    Copyright, Error, Flavor, FlavorType, Generator, IngredientPath, Language, LocalizedText,
+    MemProject, Metadata, NewProject, PrimaryIdError, ProjectKind, Role, Scope, ScopeBook,
+    ScriptDirection, TextTranslation, Timestamp, to_canonical_json, validate_dir,
+    validate_metadata_bytes, validate_project,
 };
 use tc_core::BookId;
 
@@ -59,6 +60,81 @@ fn the_model_reads_what_the_app_needs() {
     assert_eq!(obs.kind(), Some(ProjectKind::OpenBibleStories));
     let matthew = obs.current_scope().unwrap().get(BookId::Matthew).unwrap();
     assert_eq!(matthew[13].to_string(), "44-46");
+}
+
+fn bible() -> Metadata {
+    Metadata::from_slice(&std::fs::read(bible_dir().join("metadata.json")).unwrap()).unwrap()
+}
+
+/// Where writing `model` finds a shadowed field, if it does.
+fn shadowed(model: &Metadata) -> Option<String> {
+    assert!(matches!(
+        model.to_canonical_json(),
+        Err(Error::ShadowedField { .. })
+    ));
+    match model.to_value() {
+        Err(Error::ShadowedField { pointer }) => Some(pointer),
+        _ => None,
+    }
+}
+
+#[test]
+fn an_extra_key_never_overrides_a_modelled_field() {
+    let mut model = bible();
+    model
+        .extra
+        .insert("ingredients".to_owned(), serde_json::json!({}));
+    assert_eq!(shadowed(&model).as_deref(), Some("/ingredients"));
+
+    let mut model = bible();
+    model
+        .extra
+        .insert("confidential".to_owned(), serde_json::json!(true));
+    assert_eq!(shadowed(&model).as_deref(), Some("/confidential"));
+
+    let mut model = bible();
+    let tit = IngredientPath::parse("ingredients/TIT.usfm").unwrap();
+    let ingredient = model.ingredients.get_mut(&tit).unwrap();
+    ingredient
+        .extra
+        .insert("size".to_owned(), serde_json::json!(999));
+    assert_eq!(
+        shadowed(&model).as_deref(),
+        Some("/ingredients/ingredients~1TIT.usfm/size")
+    );
+
+    let mut model = bible();
+    let Flavor::TextTranslation(flavor) = &mut model.burrito_type.flavor_type.flavor else {
+        panic!("the Bible sample is textTranslation");
+    };
+    flavor
+        .extra
+        .insert("name".to_owned(), serde_json::json!("textStories"));
+    assert_eq!(
+        shadowed(&model).as_deref(),
+        Some("/type/flavorType/flavor/name")
+    );
+
+    // A key the model does not know is written as given.
+    let mut model = bible();
+    let ingredient = model.ingredients.get_mut(&tit).unwrap();
+    ingredient
+        .extra
+        .insert("x-note".to_owned(), serde_json::json!(1));
+    let value = model.to_value().unwrap();
+    assert_eq!(value["ingredients"]["ingredients/TIT.usfm"]["x-note"], 1);
+    assert_eq!(value["ingredients"]["ingredients/TIT.usfm"]["size"], 1166);
+}
+
+#[test]
+fn the_primary_id_is_missing_one_or_ambiguous() {
+    let mut model = bible();
+    let ids = model.identification.primary.get_mut("local").unwrap();
+    let revision = ids["ejemplo_tj"].clone();
+    ids.insert("otro_tj".to_owned(), revision);
+    assert_eq!(model.primary(), Err(PrimaryIdError::Ambiguous));
+    model.identification.primary.clear();
+    assert_eq!(model.primary(), Err(PrimaryIdError::Missing));
 }
 
 #[test]

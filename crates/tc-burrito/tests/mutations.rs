@@ -121,8 +121,6 @@ fn probe_controls() -> Vec<Case> {
                     path: TIT.to_owned(),
                     value: "application/vnd.foo+json".to_owned(),
                 }),
-                // The only Titus ingredient is no longer text.
-                uncovered("TIT"),
             ],
         ),
         case(
@@ -558,6 +556,90 @@ fn more_document_cases() -> Vec<Case> {
             |m| m["type"]["flavorType"]["flavor"]["audience"] = json!("youth"),
             vec![schema("/type/flavorType/flavor/audience", "enum")],
         ),
+        case(
+            "63 dateCreated with a space separator (tC4's ajv-formats accepts it)",
+            |m| m["meta"]["dateCreated"] = json!("2026-07-02 12:00:00Z"),
+            vec![
+                schema("/meta/dateCreated", "format"),
+                date_created("2026-07-02 12:00:00Z", SpaceSeparator),
+            ],
+        ),
+        case(
+            "64 metadata.json in another letter case (schema allows)",
+            |m| add_ingredient_copy(m, "Metadata.json"),
+            vec![unsafe_path("Metadata.json", MetadataFile)],
+        ),
+        case(
+            "65 metadata.json in capitals (schema allows)",
+            |m| add_ingredient_copy(m, "METADATA.JSON"),
+            vec![unsafe_path("METADATA.JSON", MetadataFile)],
+        ),
+        case(
+            "66 one path in NFC and in NFD",
+            |m| {
+                add_ingredient_copy(m, "ingredients/Jon\u{e1}s.usfm");
+                add_ingredient_copy(m, "ingredients/Jona\u{301}s.usfm");
+            },
+            vec![code(Problem::PathCaseCollision {
+                first: "ingredients/Jon\u{e1}s.usfm".to_owned(),
+                second: "ingredients/Jona\u{301}s.usfm".to_owned(),
+            })],
+        ),
+        case(
+            "67 a TSV of notes does not cover a book without USFM",
+            |m| {
+                let mut notes = ingredients(m).remove(TIT).unwrap();
+                notes["mimeType"] = json!("text/tab-separated-values");
+                ingredients(m).insert("ingredients/notes/TIT.tsv".to_owned(), notes);
+            },
+            vec![uncovered("TIT")],
+        ),
+        case(
+            "68 a USX file covers its book",
+            |m| {
+                let mut usx = ingredients(m).remove(TIT).unwrap();
+                usx["mimeType"] = json!("text/xml");
+                ingredients(m).insert("ingredients/TIT.usx".to_owned(), usx);
+            },
+            vec![],
+        ),
+        case(
+            "69 a file and a folder at one path (schema allows)",
+            |m| {
+                add_ingredient_copy(m, "ingredients/extra.json");
+                add_ingredient_copy(m, "ingredients/extra.json/inner.json");
+            },
+            vec![code(Problem::PathIsAlsoFolder {
+                file: "ingredients/extra.json".to_owned(),
+                inside: "ingredients/extra.json/inner.json".to_owned(),
+            })],
+        ),
+        case(
+            "70 a file and a folder at one path in another letter case",
+            |m| {
+                add_ingredient_copy(m, "ingredients/Extra");
+                add_ingredient_copy(m, "ingredients/extra/a/b.json");
+            },
+            vec![code(Problem::PathIsAlsoFolder {
+                file: "ingredients/Extra".to_owned(),
+                inside: "ingredients/extra/a/b.json".to_owned(),
+            })],
+        ),
+        case(
+            "71 a Windows short name (schema allows)",
+            |m| add_ingredient_copy(m, "INGRED~1/TIT.usfm"),
+            vec![unsafe_path("INGRED~1/TIT.usfm", ShortName)],
+        ),
+        case(
+            "72 a right-to-left override in a path (schema allows)",
+            |m| add_ingredient_copy(m, "ingredients/TIT\u{202e}nosj.usfm"),
+            vec![unsafe_path("ingredients/TIT\u{202e}nosj.usfm", FormatChar)],
+        ),
+        case(
+            "73 a device name with a superscript digit (schema allows)",
+            |m| add_ingredient_copy(m, "ingredients/COM\u{b9}.usfm"),
+            vec![unsafe_path("ingredients/COM\u{b9}.usfm", ReservedName)],
+        ),
     ]
 }
 
@@ -727,10 +809,6 @@ fn bytes_that_are_not_one_json_document_are_refused() {
         validate_metadata_bytes(b"{\"format\": ").as_slice(),
         [Problem::NotJson { .. }]
     ));
-    assert!(matches!(
-        validate_metadata_bytes(b"\xef\xbb\xbf{}").as_slice(),
-        [Problem::NotJson { .. }]
-    ));
     let mut text =
         String::from_utf8(std::fs::read(common::bible_dir().join("metadata.json")).unwrap())
             .unwrap();
@@ -749,6 +827,245 @@ fn bytes_that_are_not_one_json_document_are_refused() {
         tc_burrito::Metadata::from_slice(text.as_bytes()),
         Err(tc_burrito::Error::DuplicateKey { .. })
     ));
+}
+
+fn bible_text() -> String {
+    String::from_utf8(std::fs::read(common::bible_dir().join("metadata.json")).unwrap()).unwrap()
+}
+
+#[test]
+fn a_byte_order_mark_is_named_and_the_rest_still_checked() {
+    let text = bible_text();
+    let mut bytes = b"\xef\xbb\xbf".to_vec();
+    bytes.extend_from_slice(text.as_bytes());
+    assert_eq!(
+        validate_project(&bytes, &bible_files()),
+        [Problem::ByteOrderMark]
+    );
+    let broken = bytes.len() - text.len() + text.find("\"confidential\": false").unwrap();
+    bytes.splice(
+        broken..broken + 21,
+        b"\"confidential\": 0    ".iter().copied(),
+    );
+    assert_eq!(
+        summarize(validate_metadata_bytes(&bytes)),
+        summarize(vec![
+            Problem::ByteOrderMark,
+            Problem::Schema {
+                pointer: "/confidential".to_owned(),
+                keyword: "type".to_owned(),
+                schema_path: String::new(),
+                message: String::new(),
+            },
+        ])
+    );
+    // The reader skips the mark, and the writer never writes one.
+    let mut with_mark = b"\xef\xbb\xbf".to_vec();
+    with_mark.extend_from_slice(text.as_bytes());
+    let model = tc_burrito::Metadata::from_slice(&with_mark).unwrap();
+    assert_eq!(
+        model,
+        tc_burrito::Metadata::from_slice(text.as_bytes()).unwrap()
+    );
+    assert!(model.to_canonical_json().unwrap().starts_with(b"{"));
+}
+
+/// The Bible sample with an `x-` flavor, whose schema allows any field, holding `raw` as
+/// the JSON text of the field `value`.
+fn with_raw_flavor_field(raw: &str) -> Vec<u8> {
+    let mut document = common::read_metadata(&common::bible_dir());
+    document["type"]["flavorType"]["flavor"] = json!({"name": "x-tc4Project", "value": "@@"});
+    serde_json::to_string(&document)
+        .unwrap()
+        .replacen("\"@@\"", raw, 1)
+        .into_bytes()
+}
+
+#[test]
+fn numbers_are_kept_exactly_or_refused() {
+    let pointer = "/type/flavorType/flavor/value";
+    for kept in [
+        "0",
+        "-0",
+        "1E2",
+        "0.1",
+        "1.50",
+        "1e23",
+        "-2.5e-8",
+        "18446744073709551615",
+        "-9223372036854775808",
+        "1.7976931348623157e308",
+    ] {
+        let bytes = with_raw_flavor_field(kept);
+        assert_eq!(validate_metadata_bytes(&bytes), [], "{kept}");
+        // The writer may spell the number differently, never as another value.
+        let model = tc_burrito::Metadata::from_slice(&bytes).unwrap();
+        let written = model.to_canonical_json().unwrap();
+        let reread = tc_burrito::Metadata::from_slice(&written).unwrap();
+        assert_eq!(reread, model, "{kept}");
+        assert_eq!(validate_metadata_bytes(&written), [], "{kept}");
+    }
+    let huge = format!("1{}", "0".repeat(400));
+    for changed in [
+        "123456789012345678901234567890",
+        "18446744073709551616",
+        "-9223372036854775809",
+        "0.30000000000000000000001",
+        "1e-400",
+        "4.9e-324",
+        "1e400",
+        "-1e400",
+        "1e99999999999999999999",
+        huge.as_str(),
+    ] {
+        let bytes = with_raw_flavor_field(changed);
+        assert_eq!(
+            validate_metadata_bytes(&bytes),
+            [Problem::UnrepresentableNumber {
+                pointer: pointer.to_owned()
+            }],
+            "{changed}"
+        );
+        assert!(
+            matches!(
+                tc_burrito::Metadata::from_slice(&bytes),
+                Err(tc_burrito::Error::UnrepresentableNumber { pointer: at }) if at == pointer
+            ),
+            "{changed}"
+        );
+    }
+}
+
+#[test]
+fn json_the_app_cannot_hold_is_refused_with_its_cause() {
+    let pointer = "/type/flavorType/flavor/value";
+    assert_eq!(
+        validate_metadata_bytes(&with_raw_flavor_field(r#""broken \ud800 text""#)),
+        [Problem::LoneSurrogate {
+            pointer: pointer.to_owned()
+        }]
+    );
+    assert_eq!(
+        validate_metadata_bytes(&with_raw_flavor_field(r#""a pair \ud83d\ude00 is fine""#)),
+        []
+    );
+    // The flavor object is four levels deep, so 96 more fit within the limit of 100.
+    let nested = |levels: usize| format!("{}{}", "[".repeat(levels), "]".repeat(levels));
+    assert_eq!(
+        validate_metadata_bytes(&with_raw_flavor_field(&nested(96))),
+        []
+    );
+    let deep = format!("{pointer}{}", "/0".repeat(96));
+    for levels in [97, 300] {
+        assert_eq!(
+            validate_metadata_bytes(&with_raw_flavor_field(&nested(levels))),
+            [Problem::TooDeep {
+                pointer: deep.clone()
+            }],
+            "{levels}"
+        );
+    }
+}
+
+#[test]
+fn hidden_and_backup_files_on_disk_are_not_unlisted_ingredients() {
+    let root = tempfile::tempdir().unwrap();
+    common::copy_dir(&common::bible_dir(), root.path());
+    let ingredients = root.path().join("ingredients");
+    std::fs::write(ingredients.join(".tmp-metadata.json"), b"partial").unwrap();
+    std::fs::create_dir(ingredients.join(".cache")).unwrap();
+    std::fs::write(ingredients.join(".cache/a"), b"x").unwrap();
+    std::fs::write(ingredients.join("TIT.usfm.bak"), b"old").unwrap();
+    std::fs::write(ingredients.join("checking/.DS_Store"), b"x").unwrap();
+    assert_eq!(tc_burrito::validate_dir(root.path()), []);
+
+    std::fs::write(ingredients.join("MAT.usfm"), b"\\id MAT\n").unwrap();
+    assert_eq!(
+        tc_burrito::validate_dir(root.path()),
+        [Problem::UnlistedFile {
+            path: "ingredients/MAT.usfm".to_owned()
+        }]
+    );
+}
+
+#[test]
+fn a_file_and_a_folder_at_one_path_are_refused_in_memory() {
+    let mut document = common::read_metadata(&common::bible_dir());
+    add_ingredient_copy(&mut document, "ingredients/extra.json");
+    add_ingredient_copy(&mut document, "ingredients/extra.json/inner.json");
+    let mut files = bible_files();
+    let tit = files.get(TIT).unwrap().to_vec();
+    files.insert("ingredients/extra.json", tit.clone());
+    files.insert("ingredients/extra.json/inner.json", tit);
+    assert_eq!(
+        project_problems(&document, &files),
+        [code(Problem::PathIsAlsoFolder {
+            file: "ingredients/extra.json".to_owned(),
+            inside: "ingredients/extra.json/inner.json".to_owned(),
+        })]
+    );
+}
+
+#[test]
+fn problems_read_back_from_json() {
+    let problems = vec![
+        Problem::MissingMetadata,
+        Problem::ByteOrderMark,
+        Problem::UnrepresentableNumber {
+            pointer: "/x".to_owned(),
+        },
+        Problem::UnsafePath {
+            path: "c:/x".to_owned(),
+            rule: PathRule::ForbiddenChar(':'),
+        },
+        Problem::InvalidTimestamp {
+            field: TimestampField::DateCreated,
+            value: "2026-07-02 12:00:00Z".to_owned(),
+            reason: TimestampError::SpaceSeparator,
+        },
+        Problem::CopyrightNotExactlyOne {
+            found: vec![CopyrightBasis::PublicDomain, CopyrightBasis::Licenses],
+        },
+        Problem::PathIsAlsoFolder {
+            file: "a".to_owned(),
+            inside: "a/b".to_owned(),
+        },
+        Problem::SizeMismatch {
+            path: TIT.to_owned(),
+            listed: 1,
+            actual: u64::MAX,
+        },
+    ];
+    let text = serde_json::to_string(&problems).unwrap();
+    assert_eq!(
+        serde_json::from_str::<Vec<Problem>>(&text).unwrap(),
+        problems
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_linked_metadata_file_is_not_followed() {
+    let root = tempfile::tempdir().unwrap();
+    common::copy_dir(&common::bible_dir(), root.path());
+    let outside = tempfile::tempdir().unwrap();
+    let metadata = root.path().join("metadata.json");
+    std::fs::rename(&metadata, outside.path().join("metadata.json")).unwrap();
+    std::os::unix::fs::symlink(outside.path().join("metadata.json"), &metadata).unwrap();
+    assert_eq!(
+        tc_burrito::validate_dir(root.path()),
+        [Problem::NotAFile {
+            path: "metadata.json".to_owned()
+        }]
+    );
+    std::fs::remove_file(&metadata).unwrap();
+    std::fs::create_dir(&metadata).unwrap();
+    assert_eq!(
+        tc_burrito::validate_dir(root.path()),
+        [Problem::NotAFile {
+            path: "metadata.json".to_owned()
+        }]
+    );
 }
 
 #[cfg(unix)]

@@ -2,13 +2,15 @@ use crate::error::ValueError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
+use unicode_general_category::{GeneralCategory, get_general_category};
+use unicode_normalization::UnicodeNormalization;
 
 /// The rule an ingredient path breaks.
 ///
 /// The SB 1.0 schema only refuses a leading `/` and the characters `: ? * " < > |`. These
 /// rules add what keeps a path safe to join to the project root on every platform, and
 /// what Pankosmia and tC4 need to round-trip the file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, thiserror::Error)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, thiserror::Error)]
 #[serde(rename_all = "camelCase")]
 pub enum PathRule {
     #[error("the path is empty")]
@@ -29,26 +31,43 @@ pub enum PathRule {
     Whitespace,
     #[error("the path contains a control character")]
     Control,
+    /// Zero-width characters and direction overrides (General Category Cf). HFS+ ignores
+    /// several of them when it compares names, and an override can disguise a name.
+    #[error("the path contains an invisible format character, such as a zero-width space")]
+    FormatChar,
     #[error("the path contains {0:?}, which the burrito schema forbids")]
     ForbiddenChar(char),
     #[error("a segment is a device name Windows reserves")]
     ReservedName,
+    /// Windows can reach a file by an 8.3 short name such as `INGRED~1`, so a segment of
+    /// that shape may name another ingredient's file.
+    #[error("a segment has '~' followed by a digit, the shape of a Windows short name")]
+    ShortName,
+    /// Any spelling that a case-insensitive file system resolves to `metadata.json`.
     #[error("metadata.json describes the burrito and cannot be one of its ingredients")]
     MetadataFile,
 }
 
 /// The path of an ingredient, relative to the project root, with `/` between segments,
 /// such as `ingredients/TIT.usfm`. A value of this type is always safe to join to the
-/// project root: it cannot be absolute, climb out with `..`, or name a hidden file.
+/// project root: it cannot be absolute, climb out with `..`, name a hidden file, or name
+/// `metadata.json` under any spelling a Windows or macOS file system resolves to it.
+/// Two different paths can still name one file on those systems (`a.usfm` and `A.usfm`);
+/// the validator reports such pairs.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct IngredientPath(String);
 
 const FORBIDDEN: [char; 7] = [':', '?', '*', '"', '<', '>', '|'];
 
-const RESERVED: [&str; 22] = [
-    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+/// Windows device names. Windows reads the superscript digits ¹ ² ³ as digits in `COM` and
+/// `LPT` names, and Microsoft's naming rules also list `COM0` and `LPT0`.
+const RESERVED: [&str; 32] = [
+    "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$", "COM0", "COM1", "COM2", "COM3", "COM4",
+    "COM5", "COM6", "COM7", "COM8", "COM9", "COM¹", "COM²", "COM³", "LPT0", "LPT1", "LPT2", "LPT3",
+    "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9", "LPT¹", "LPT²", "LPT³",
 ];
+
+pub(crate) const METADATA_FILE: &str = "metadata.json";
 
 impl IngredientPath {
     pub fn parse(text: &str) -> Result<Self, ValueError> {
@@ -105,6 +124,9 @@ pub(crate) fn check(text: &str) -> Result<(), PathRule> {
         if c.is_whitespace() {
             return Err(PathRule::Whitespace);
         }
+        if get_general_category(c) == GeneralCategory::Format {
+            return Err(PathRule::FormatChar);
+        }
         if FORBIDDEN.contains(&c) {
             return Err(PathRule::ForbiddenChar(c));
         }
@@ -122,6 +144,13 @@ pub(crate) fn check(text: &str) -> Result<(), PathRule> {
         if segment.ends_with('.') {
             return Err(PathRule::TrailingDot);
         }
+        if segment
+            .as_bytes()
+            .windows(2)
+            .any(|pair| matches!(pair, [b'~', digit] if digit.is_ascii_digit()))
+        {
+            return Err(PathRule::ShortName);
+        }
         let device = segment.split('.').next().unwrap_or(segment);
         if RESERVED
             .iter()
@@ -130,10 +159,21 @@ pub(crate) fn check(text: &str) -> Result<(), PathRule> {
             return Err(PathRule::ReservedName);
         }
     }
-    if text == "metadata.json" {
+    if fold(text) == METADATA_FILE {
         return Err(PathRule::MetadataFile);
     }
     Ok(())
+}
+
+/// The form under which Windows and macOS see two names as one file: NFC, then every
+/// character upper-cased and lower-cased again, so `É` (NFD) meets `é`, `ſ` meets `s` and
+/// `ς` meets `σ`. Folding more than a given file system does only finds more collisions.
+pub(crate) fn fold(text: &str) -> String {
+    text.nfc()
+        .flat_map(char::to_uppercase)
+        .flat_map(char::to_lowercase)
+        .nfc()
+        .collect()
 }
 
 impl fmt::Display for IngredientPath {
@@ -188,6 +228,9 @@ mod tests {
             "ingredients/LICENSE.md",
             "ingredients/Jonás.usfm",
             "LICENSE",
+            "ingredients/metadata.json",
+            "ingredients/a~b.usfm",
+            "ingredients/COM10.usfm",
         ] {
             assert!(IngredientPath::parse(ok).is_ok(), "{ok}");
         }
@@ -215,11 +258,43 @@ mod tests {
             ("a?b", PathRule::ForbiddenChar('?')),
             ("ingredients/con.usfm", PathRule::ReservedName),
             ("ingredients/LPT1", PathRule::ReservedName),
+            ("ingredients/COM¹.usfm", PathRule::ReservedName),
+            ("ingredients/lpt³", PathRule::ReservedName),
+            ("ingredients/CONIN$", PathRule::ReservedName),
+            ("ingredients/conout$.txt", PathRule::ReservedName),
+            ("ingredients/lpt0.txt", PathRule::ReservedName),
+            ("ingredients/TIT\u{202e}nosj.usfm", PathRule::FormatChar),
+            ("ingredients/a\u{200b}b.usfm", PathRule::FormatChar),
+            ("metadata\u{200c}.json", PathRule::FormatChar),
+            ("ingredients/\u{feff}TIT.usfm", PathRule::FormatChar),
+            ("INGRED~1/TIT.usfm", PathRule::ShortName),
+            ("METADA~1.JSO", PathRule::ShortName),
             ("metadata.json", PathRule::MetadataFile),
+            ("Metadata.json", PathRule::MetadataFile),
+            ("METADATA.JSON", PathRule::MetadataFile),
+            ("metadata.JSON", PathRule::MetadataFile),
+            // U+017F LATIN SMALL LETTER LONG S upper-cases to S.
+            ("metadata.j\u{17f}on", PathRule::MetadataFile),
         ];
         for (text, rule) in cases {
             assert_eq!(check(text), Err(rule), "{text:?}");
         }
+    }
+
+    #[test]
+    fn folding_meets_case_and_normalization_variants() {
+        let same = [
+            (
+                "ingredients/Jon\u{e1}s.usfm",
+                "ingredients/jona\u{301}s.USFM",
+            ),
+            ("ingredients/TIT.usfm", "INGREDIENTS/tit.usfm"),
+            ("ingredients/\u{3a3}", "ingredients/\u{3c2}"),
+        ];
+        for (a, b) in same {
+            assert_eq!(fold(a), fold(b), "{a:?} {b:?}");
+        }
+        assert_ne!(fold("ingredients/TIT.usfm"), fold("ingredients/TIT.usf"));
     }
 
     #[test]

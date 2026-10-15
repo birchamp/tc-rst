@@ -6,7 +6,7 @@
 
 use crate::error::Error;
 use crate::ingredient::{FileFacts, Md5, MimeType};
-use crate::json::{StrictJsonError, parse_strict, to_canonical_json};
+use crate::json::{StrictJsonError, parse_strict, strip_bom, to_canonical_json};
 use crate::open_enum::open_enum;
 use crate::path::IngredientPath;
 use crate::scope::Scope;
@@ -17,6 +17,10 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 
 /// Keys a struct does not model, with their values as read.
+///
+/// A key the owning struct models (`size` in an [`Ingredient`]'s map) must not be added
+/// here: [`Metadata::to_value`] and [`Metadata::to_canonical_json`] refuse such a model
+/// with [`Error::ShadowedField`] rather than let one value replace the other.
 pub type Extra = BTreeMap<String, Value>;
 
 /// Reads a present optional field. Absent fields become `None` through `#[serde(default)]`;
@@ -163,22 +167,29 @@ impl Metadata {
         }
     }
 
-    /// Reads `metadata.json` bytes. A document with a key written twice is refused, because
-    /// reading it would keep only one of the two values.
+    /// Reads `metadata.json` bytes. A leading byte order mark is skipped, as RFC 8259
+    /// allows; the canonical writer never writes one. A document with a key written twice,
+    /// or with a number the writer would change, is refused, because writing it back would
+    /// lose a value.
     pub fn from_slice(bytes: &[u8]) -> Result<Self, Error> {
-        let value = parse_strict(bytes).map_err(|error| match error {
-            StrictJsonError::Syntax(error) => Error::Json(error),
-            StrictJsonError::DuplicateKey { pointer } => Error::DuplicateKey { pointer },
-        })?;
-        Self::from_value(&value)
+        let (_, bytes) = strip_bom(bytes);
+        Self::from_value(&parse_strict(bytes)?)
     }
 
     pub fn from_value(value: &Value) -> Result<Self, Error> {
         Self::deserialize(value).map_err(Error::Model)
     }
 
+    /// The model as JSON. A key in an `extra` map that its struct also models is refused
+    /// with [`Error::ShadowedField`] instead of overriding the typed field.
     pub fn to_value(&self) -> Result<Value, Error> {
-        serde_json::to_value(self).map_err(Error::Model)
+        // Serializing to text keeps both copies of a shadowed key, where serializing to a
+        // `Value` would keep the last one without a trace; the strict reader then finds it.
+        let text = serde_json::to_vec(self).map_err(Error::Model)?;
+        parse_strict(&text).map_err(|error| match error {
+            StrictJsonError::DuplicateKey { pointer } => Error::ShadowedField { pointer },
+            other => other.into(),
+        })
     }
 
     /// The bytes to store as `metadata.json`. The same model always gives the same bytes.
@@ -217,23 +228,35 @@ impl Metadata {
         }
     }
 
-    pub fn primary(&self) -> Option<PrimaryId<'_>> {
-        let mut authorities = self.identification.primary.iter();
-        let (authority, ids) = authorities.next()?;
-        if authorities.next().is_some() {
-            return None;
+    /// The project's own identifier. tC4 writes exactly one; SB 1.0 allows one authority
+    /// with several identifiers, which leaves the project's own one ambiguous.
+    pub fn primary(&self) -> Result<PrimaryId<'_>, PrimaryIdError> {
+        let mut found = self
+            .identification
+            .primary
+            .iter()
+            .flat_map(|(authority, ids)| {
+                ids.iter().map(move |(id, revision)| PrimaryId {
+                    authority,
+                    id,
+                    revision,
+                })
+            });
+        match (found.next(), found.next()) {
+            (Some(primary), None) => Ok(primary),
+            (None, _) => Err(PrimaryIdError::Missing),
+            (Some(_), Some(_)) => Err(PrimaryIdError::Ambiguous),
         }
-        let mut ids = ids.iter();
-        let (id, revision) = ids.next()?;
-        if ids.next().is_some() {
-            return None;
-        }
-        Some(PrimaryId {
-            authority,
-            id,
-            revision,
-        })
     }
+}
+
+/// Why [`Metadata::primary`] found no single identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, thiserror::Error)]
+pub enum PrimaryIdError {
+    #[error("identification.primary lists no identifier")]
+    Missing,
+    #[error("identification.primary lists more than one identifier")]
+    Ambiguous,
 }
 
 /// The project's single primary identifier, from `identification.primary`.
@@ -508,20 +531,27 @@ impl Flavor {
     }
 }
 
+/// A flavor's fields with its `name`. Fields stream into the same object, so a `name` in
+/// an `extra` map reaches the writer as a second key instead of vanishing.
+#[derive(Serialize)]
+struct Named<'a, T> {
+    name: &'a str,
+    #[serde(flatten)]
+    fields: &'a T,
+}
+
 impl Serialize for Flavor {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let fields = match self {
-            Self::TextTranslation(flavor) => serde_json::to_value(flavor),
-            Self::TextStories(flavor) => serde_json::to_value(flavor),
-            Self::Other(flavor) => serde_json::to_value(&flavor.extra),
+        let name = self.name();
+        match self {
+            Self::TextTranslation(fields) => Named { name, fields }.serialize(serializer),
+            Self::TextStories(fields) => Named { name, fields }.serialize(serializer),
+            Self::Other(flavor) => Named {
+                name,
+                fields: &flavor.extra,
+            }
+            .serialize(serializer),
         }
-        .map_err(serde::ser::Error::custom)?;
-        let mut map = match fields {
-            Value::Object(map) => map,
-            _ => Map::new(),
-        };
-        map.insert("name".to_owned(), Value::String(self.name().to_owned()));
-        map.serialize(serializer)
     }
 }
 

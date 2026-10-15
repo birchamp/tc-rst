@@ -5,9 +5,9 @@
 
 use crate::files::{DirProject, FileState, ProjectFiles};
 use crate::ingredient::is_schema_mime_type;
-use crate::json::{StrictJsonError, parse_strict};
+use crate::json::{MAX_DEPTH, StrictJsonError, parse_strict, strip_bom};
 use crate::model::Metadata;
-use crate::path::{IngredientPath, PathRule, check as check_path};
+use crate::path::{IngredientPath, METADATA_FILE, PathRule, check as check_path, fold};
 use crate::schema::validator;
 use crate::time::{TimestampError, check_date_time, is_schema_date};
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ use std::path::Path;
 
 /// A reason a burrito is not valid. Problems name the place with a JSON Pointer or an
 /// ingredient path, so a caller can map each one to a message or a refusal code.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
 #[serde(
     tag = "kind",
     rename_all = "camelCase",
@@ -32,8 +32,21 @@ pub enum Problem {
     Unreadable { path: String, message: String },
     #[error("metadata.json is not JSON: {message}")]
     NotJson { message: String },
+    /// RFC 8259 forbids writing one, and many JSON readers refuse it. The rest of the
+    /// document is still checked; the canonical writer drops the mark.
+    #[error("metadata.json starts with a byte order mark, which many JSON readers refuse")]
+    ByteOrderMark,
     #[error("metadata.json has the key at {pointer:?} more than once")]
     DuplicateKey { pointer: String },
+    /// The number is out of the f64 range (`1e400`) or has more precision than an f64
+    /// keeps (a 30-digit integer), so a read-modify-write would change it.
+    #[error("the number at {pointer:?} cannot be kept exactly, so writing it back would change it")]
+    UnrepresentableNumber { pointer: String },
+    /// A `\ud800` escape without its other half: valid JSON text, but not a character.
+    #[error("the string at {pointer:?} escapes half of a UTF-16 surrogate pair, which is not text")]
+    LoneSurrogate { pointer: String },
+    #[error("metadata.json nests deeper than {max} levels at {pointer:?}", max = MAX_DEPTH)]
+    TooDeep { pointer: String },
     /// The embedded schema did not compile. Every document is then refused.
     #[error("the Scripture Burrito schema could not be loaded: {message}")]
     SchemaUnavailable { message: String },
@@ -65,10 +78,17 @@ pub enum Problem {
     },
     #[error("ingredient path {path:?}: {rule}")]
     UnsafePath { path: String, rule: PathRule },
+    /// The paths differ only in letter case or Unicode normalization (NFC or NFD).
     #[error(
-        "ingredient paths {first:?} and {second:?} differ only in letter case, so one overwrites the other on Windows and macOS"
+        "ingredient paths {first:?} and {second:?} differ only in letter case or Unicode normalization, so one overwrites the other on Windows and macOS"
     )]
     PathCaseCollision { first: String, second: String },
+    /// One listed path is a file and another lists files inside a folder of that name. No
+    /// folder on disk can hold both.
+    #[error(
+        "ingredient {file:?} is a file, but ingredient {inside:?} is inside a folder of that name"
+    )]
+    PathIsAlsoFolder { file: String, inside: String },
     #[error(
         "ingredient {path:?} has mimeType {value:?}, which is not lower-case type/subtype without dots or parameters"
     )]
@@ -83,7 +103,10 @@ pub enum Problem {
     CopyrightNotExactlyOne { found: Vec<CopyrightBasis> },
     #[error("ingredient {path:?} is listed but there is no file")]
     MissingIngredient { path: String },
-    #[error("ingredient {path:?} is a folder, a link or another special file")]
+    /// A folder, a symbolic link or another special file, where an ingredient or
+    /// `metadata.json` should be a regular file. Links are refused so a project can never
+    /// make the validator read outside its folder.
+    #[error("{path:?} is a folder, a link or another special file, not a regular file")]
     NotAFile { path: String },
     #[error("ingredient {path:?} lists md5 {listed}, but the file's md5 is {actual}")]
     ChecksumMismatch {
@@ -159,45 +182,77 @@ pub fn validate_metadata(document: &Value) -> Vec<Problem> {
     problems
 }
 
-/// Parses `bytes` strictly (a key written twice is a problem) and checks the document.
+/// Parses `bytes` strictly (a key written twice or a number that would change is a
+/// problem) and checks the document.
 pub fn validate_metadata_bytes(bytes: &[u8]) -> Vec<Problem> {
-    match parse_document(bytes) {
-        Ok(document) => validate_metadata(&document),
-        Err(problem) => vec![problem],
+    let mut problems = Vec::new();
+    if let Some(document) = parse_document(bytes, &mut problems) {
+        problems.extend(validate_metadata(&document));
     }
+    problems
 }
 
 /// Checks `metadata.json` bytes together with the project's files: every listed ingredient
 /// exists and has the listed md5 and size, and every file under `ingredients/` is listed.
 pub fn validate_project(metadata: &[u8], files: &(impl ProjectFiles + ?Sized)) -> Vec<Problem> {
-    let document = match parse_document(metadata) {
-        Ok(document) => document,
-        Err(problem) => return vec![problem],
-    };
-    let mut problems = validate_metadata(&document);
-    check_files(&document, files, &mut problems);
+    let mut problems = Vec::new();
+    if let Some(document) = parse_document(metadata, &mut problems) {
+        problems.extend(validate_metadata(&document));
+        check_files(&document, files, &mut problems);
+    }
     problems
 }
 
 /// Checks the project folder at `root`.
 pub fn validate_dir(root: &Path) -> Vec<Problem> {
-    match std::fs::read(root.join("metadata.json")) {
-        Ok(bytes) => validate_project(&bytes, &DirProject::new(root)),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => vec![Problem::MissingMetadata],
-        Err(error) => vec![Problem::Unreadable {
-            path: "metadata.json".to_owned(),
+    let path = root.join(METADATA_FILE);
+    let unreadable = |error: io::Error| match error.kind() {
+        io::ErrorKind::NotFound => vec![Problem::MissingMetadata],
+        _ => vec![Problem::Unreadable {
+            path: METADATA_FILE.to_owned(),
             message: error.to_string(),
         }],
+    };
+    // Checked like an ingredient: following a link would read outside the project folder.
+    match std::fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.is_file() => {}
+        Ok(_) => {
+            return vec![Problem::NotAFile {
+                path: METADATA_FILE.to_owned(),
+            }];
+        }
+        Err(error) => return unreadable(error),
+    }
+    match std::fs::read(&path) {
+        Ok(bytes) => validate_project(&bytes, &DirProject::new(root)),
+        Err(error) => unreadable(error),
     }
 }
 
-fn parse_document(bytes: &[u8]) -> Result<Value, Problem> {
-    parse_strict(bytes).map_err(|error| match error {
-        StrictJsonError::Syntax(error) => Problem::NotJson {
-            message: error.to_string(),
-        },
-        StrictJsonError::DuplicateKey { pointer } => Problem::DuplicateKey { pointer },
-    })
+/// Reads the document strictly. A byte order mark is reported and skipped, so the rest of
+/// the document is still checked.
+fn parse_document(bytes: &[u8], problems: &mut Vec<Problem>) -> Option<Value> {
+    let (bom, bytes) = strip_bom(bytes);
+    if bom {
+        problems.push(Problem::ByteOrderMark);
+    }
+    match parse_strict(bytes) {
+        Ok(document) => Some(document),
+        Err(error) => {
+            problems.push(match error {
+                StrictJsonError::Syntax(error) => Problem::NotJson {
+                    message: error.to_string(),
+                },
+                StrictJsonError::DuplicateKey { pointer } => Problem::DuplicateKey { pointer },
+                StrictJsonError::UnrepresentableNumber { pointer } => {
+                    Problem::UnrepresentableNumber { pointer }
+                }
+                StrictJsonError::LoneSurrogate { pointer } => Problem::LoneSurrogate { pointer },
+                StrictJsonError::TooDeep { pointer } => Problem::TooDeep { pointer },
+            });
+            None
+        }
+    }
 }
 
 fn schema_problems(document: &Value) -> Vec<Problem> {
@@ -336,7 +391,7 @@ fn check_ingredient_entries(root: &Map<String, Value>, out: &mut Vec<Problem>) {
     let Some(ingredients) = root.get("ingredients").and_then(Value::as_object) else {
         return;
     };
-    let mut by_folded_case: BTreeMap<String, &str> = BTreeMap::new();
+    let mut by_folded: BTreeMap<String, &str> = BTreeMap::new();
     for (path, entry) in ingredients {
         if let Err(rule) = check_path(path) {
             out.push(Problem::UnsafePath {
@@ -344,7 +399,7 @@ fn check_ingredient_entries(root: &Map<String, Value>, out: &mut Vec<Problem>) {
                 rule,
             });
         }
-        if let Some(first) = by_folded_case.insert(path.to_lowercase(), path) {
+        if let Some(first) = by_folded.insert(fold(path), path) {
             out.push(Problem::PathCaseCollision {
                 first: first.to_owned(),
                 second: path.clone(),
@@ -369,12 +424,22 @@ fn check_ingredient_entries(root: &Map<String, Value>, out: &mut Vec<Problem>) {
             out.push(Problem::MissingChecksum { path: path.clone() });
         }
     }
+    for (folded, inside) in &by_folded {
+        for (slash, _) in folded.match_indices('/') {
+            if let Some(file) = folded.get(..slash).and_then(|folder| by_folded.get(folder)) {
+                out.push(Problem::PathIsAlsoFolder {
+                    file: (*file).to_owned(),
+                    inside: (*inside).to_owned(),
+                });
+            }
+        }
+    }
 }
 
 /// For a scripture burrito, every book of `currentScope` must appear in the scope of an
-/// ingredient. For `textTranslation` the ingredient must be text (`text/*`), so an
-/// alignment or check file in JSON does not stand in for a missing USFM book. Coverage is
-/// by book; chapter and verse ranges are not compared.
+/// ingredient. For `textTranslation` the ingredient must be a USFM or USX file (by its
+/// extension), so an alignment, a TSV of notes or a Markdown file does not stand in for a
+/// missing book. Coverage is by book; chapter and verse ranges are not compared.
 fn check_scope_coverage(root: &Map<String, Value>, out: &mut Vec<Problem>) {
     let Some(flavor_type) = flavor_type(root) else {
         return;
@@ -391,24 +456,32 @@ fn check_scope_coverage(root: &Map<String, Value>, out: &mut Vec<Problem>) {
         return;
     };
     let ingredients = root.get("ingredients").and_then(Value::as_object);
-    let covers = |entry: &Value, book: &str| {
+    let covers = |path: &str, entry: &Value, book: &str| {
         let in_scope = entry
             .get("scope")
             .and_then(Value::as_object)
             .is_some_and(|scope| scope.contains_key(book));
-        let is_text = entry
-            .get("mimeType")
-            .and_then(Value::as_str)
-            .is_some_and(|mime| mime.starts_with("text/"));
-        in_scope && (is_text || !text_only)
+        in_scope && (!text_only || is_scripture_text(path))
     };
     for book in current.keys() {
-        let covered = ingredients
-            .is_some_and(|ingredients| ingredients.values().any(|entry| covers(entry, book)));
+        let covered = ingredients.is_some_and(|ingredients| {
+            ingredients
+                .iter()
+                .any(|(path, entry)| covers(path, entry, book))
+        });
         if !covered {
             out.push(Problem::UncoveredBook { book: book.clone() });
         }
     }
+}
+
+/// Whether the file name ends in `.usfm`, `.sfm` or `.usx`, in any letter case.
+fn is_scripture_text(path: &str) -> bool {
+    path.rsplit_once('.').is_some_and(|(_, extension)| {
+        ["usfm", "sfm", "usx"]
+            .iter()
+            .any(|known| extension.eq_ignore_ascii_case(known))
+    })
 }
 
 fn check_copyright(root: &Map<String, Value>, out: &mut Vec<Problem>) {
