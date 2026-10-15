@@ -541,16 +541,56 @@ fn gen_book() -> impl Strategy<Value = String> {
         })
 }
 
+/// Text of USFM pieces in any order, well-formed or not, which the codec accepts or refuses.
+fn gen_soup() -> impl Strategy<Value = String> {
+    let piece = prop::sample::select(vec![
+        "\\c 1\n",
+        "\\c 2 ",
+        "\\c 003\r\n",
+        "\\v 1 ",
+        "\\v 2\n",
+        "\\v 2-3 ",
+        "\\v 4\t",
+        "\\v 5\r",
+        "\\v",
+        "\\c",
+        "\\v 01 ",
+        " ",
+        "\n",
+        "\r\n",
+        "\r",
+        "\t",
+        "\\p",
+        "\\q1",
+        "a",
+        "b c",
+        "\\s1 x",
+        "\\vp 1\\vp*",
+        "\\ts\\*",
+        "\\w w\\w*",
+        "\\",
+        "-",
+        "5",
+        "\\id X ",
+    ]);
+    prop::collection::vec(piece, 0..24).prop_map(|pieces| pieces.concat())
+}
+
 /// Every part the codec cuts from a book passes the per-change rules, so an import, an
 /// outside edit or a Door43 web edit never writes a change that readers quarantine (which
-/// would drop a chapter's headings and paragraph markers from the projected book).
+/// would drop a verse, or a chapter's headings and paragraph markers, from the projected
+/// book). Books built to decode must decode; text of random pieces may be refused.
 #[test]
 fn every_part_decompose_produces_passes_the_rules() {
     use tc_journal::VerseNo;
     use tc_usfm::codec::{VersePart, decompose};
+    let books = prop_oneof![
+        3 => gen_book().prop_map(|book| (book, true)),
+        2 => gen_soup().prop_map(|book| (book, false)),
+    ];
     run_with_census(
-        256,
-        gen_book(),
+        512,
+        books,
         &[
             "zero-padded chapter",
             "span",
@@ -558,10 +598,21 @@ fn every_part_decompose_produces_passes_the_rules() {
             "book layout",
             "CR terminator",
             "layout",
+            "random text refused",
+            "random text with verses",
         ],
-        |book, census| {
-            let parts =
-                decompose(&book).map_err(|e| TestCaseError::fail(format!("{e}: {book:?}")))?;
+        |(book, must_decode), census| {
+            let parts = match decompose(&book) {
+                Ok(parts) => parts,
+                Err(_) if !must_decode => {
+                    census.saw("random text refused");
+                    return Ok(());
+                }
+                Err(e) => return Err(TestCaseError::fail(format!("{e}: {book:?}"))),
+            };
+            if !must_decode && parts.chapters.values().any(|c| !c.verses.is_empty()) {
+                census.saw("random text with verses");
+            }
             let with = |record: Record| {
                 let mut body = verse_body(local(1), 1, 1, "x");
                 body.record = record;

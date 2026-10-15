@@ -108,21 +108,41 @@ fn tokens_have_the_pinned_byte_form_and_key() {
     );
 }
 
-proptest! {
-    /// Any change to a token's text is refused: a screen cannot claim heads it was not
-    /// shown, which is what keeps a stale screen from reverting a teammate (I4).
-    #[test]
-    fn a_tampered_token_is_refused(at in any::<prop::sample::Index>(), to in 0u8..64, heads in prop::collection::vec(arb_change_id(), 0..3)) {
-        let token = ShownToken::mint(&signing(), some_keys().remove(2), heads).unwrap();
-        let text = token.to_text();
-        let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-        let mut bytes = text.clone().into_bytes();
-        let at = at.index(bytes.len());
-        bytes[at] = alphabet[usize::from(to)];
-        let tampered = String::from_utf8(bytes).unwrap();
-        prop_assume!(tampered != text);
-        prop_assert!(ShownToken::parse(&signing(), &tampered).is_err());
-    }
+/// Any change to a token's text is refused, in its content or in its MAC: a screen cannot
+/// claim heads it was not shown, which is what keeps a stale screen from reverting a
+/// teammate (I4).
+#[test]
+fn a_tampered_token_is_refused() {
+    let strategy = (
+        any::<prop::sample::Index>(),
+        0u8..64,
+        prop::collection::vec(arb_change_id(), 0..3),
+    );
+    run_with_census(
+        256,
+        strategy,
+        &["content", "mac"],
+        |(at, to, heads), census| {
+            let token = ShownToken::mint(&signing(), some_keys().remove(2), heads).unwrap();
+            let text = token.to_text();
+            let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+            let mut bytes = text.clone().into_bytes();
+            let at = at.index(bytes.len());
+            bytes[at] = alphabet[usize::from(to)];
+            let tampered = String::from_utf8(bytes).unwrap();
+            if tampered == text {
+                return Ok(());
+            }
+            // The last 22 characters hold the 16 bytes of the MAC (and a few bits of content).
+            census.saw(if at + 22 >= text.len() {
+                "mac"
+            } else {
+                "content"
+            });
+            prop_assert!(ShownToken::parse(&signing(), &tampered).is_err());
+            Ok(())
+        },
+    );
 }
 
 #[test]

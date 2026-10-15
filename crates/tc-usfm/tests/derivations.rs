@@ -4,6 +4,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod census;
+
+use census::run_with_census;
 use md5::{Digest, Md5};
 use proptest::prelude::*;
 use std::path::PathBuf;
@@ -152,19 +155,33 @@ fn selections_v1_follows_validate_verse_selections() {
     assert!(selections_v1("anything", &[]));
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(512))]
-
-    /// The derivations are total: any text, USFM-like or not, has a value.
-    #[test]
-    fn derivations_never_panic(text in "(\\\\[a-z+*]{0,6}[0-9]?|[ \\n\\r\\t|*\"=-]|\\PC){0,40}") {
-        let plain = plain_text_v1(&text);
-        prop_assert_eq!(plain.trim(), plain.as_str());
-        let words = tokenize_v1(&plain);
-        let selections: Vec<SelectionCount<'_>> =
-            words.iter().map(|w| SelectionCount { text: w, occurrences: 1 }).collect();
-        let _ = selections_v1(&text, &selections);
-    }
+/// The derivations are total: any text, USFM-like or not, has a value.
+#[test]
+fn derivations_never_panic() {
+    run_with_census(
+        512,
+        "(\\\\[a-z+*]{0,6}[0-9]?|[ \\n\\r\\t|*\"=-]|\\PC){0,40}",
+        &["no text", "text", "selections fit", "selections do not fit"],
+        |text, census| {
+            let plain = plain_text_v1(&text);
+            prop_assert_eq!(plain.trim(), plain.as_str());
+            census.saw(if plain.is_empty() { "no text" } else { "text" });
+            let words = tokenize_v1(&plain);
+            let selections: Vec<SelectionCount<'_>> = words
+                .iter()
+                .map(|w| SelectionCount {
+                    text: w,
+                    occurrences: 1,
+                })
+                .collect();
+            census.saw(if selections_v1(&text, &selections) {
+                "selections fit"
+            } else {
+                "selections do not fit"
+            });
+            Ok(())
+        },
+    );
 }
 
 /// The long differential run: `TC_USFM_DERIVATION_VECTORS` names a file written by

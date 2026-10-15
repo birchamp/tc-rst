@@ -16,12 +16,75 @@ use tc_journal::{
     Verified, WallTime, parse_change,
 };
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(768))]
+/// Every record kind and every cause a change of this minor can have.
+const KINDS: &[&str] = &[
+    "bookPresence",
+    "bookHeader",
+    "chapterFront",
+    "verse",
+    "bookLayout",
+    "alignment",
+    "check",
+    "comment",
+    "pins",
+    "setting",
+    "projectMeta",
+    "versification",
+    "deviceProfile",
+    "storyBase",
+    "frame",
+    "storyRef",
+    "carriedFile",
+    "batchRelease",
+];
+const CAUSES: &[&str] = &[
+    "edit",
+    "resolve",
+    "restore",
+    "carryOver",
+    "external",
+    "import",
+    "seed",
+    "startOver",
+    "system",
+];
 
-    /// Fails if the encoder and the parser disagree on any value.
-    #[test]
-    fn canonical_change_round_trip(body in arb_body()) {
+fn cause_name(cause: &Cause) -> &'static str {
+    match cause {
+        Cause::Edit => "edit",
+        Cause::Resolve => "resolve",
+        Cause::Restore { .. } => "restore",
+        Cause::CarryOver { .. } => "carryOver",
+        Cause::External { .. } => "external",
+        Cause::Import(_) => "import",
+        Cause::Seed => "seed",
+        Cause::StartOver => "startOver",
+        Cause::System(_) => "system",
+        Cause::Newer { .. } => "newer",
+    }
+}
+
+fn kinds_and_causes() -> &'static [&'static str] {
+    static ALL: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+    ALL.get_or_init(|| KINDS.iter().chain(CAUSES).copied().collect())
+}
+
+/// Counts the record kind and the cause of a generated change.
+fn saw_body(body: &ChangeBody, census: &Census) {
+    let kind = body.record.key();
+    let kind = KINDS
+        .iter()
+        .find(|name| **name == kind.kind_name())
+        .unwrap_or_else(|| panic!("a kind this minor does not know: {}", kind.kind_name()));
+    census.saw(kind);
+    census.saw(cause_name(&body.cause));
+}
+
+/// Fails if the encoder and the parser disagree on any value, of any kind or cause.
+#[test]
+fn canonical_change_round_trip() {
+    run_with_census(768, arb_body(), kinds_and_causes(), |body, census| {
+        saw_body(&body, census);
         let change = Change::new(body.clone()).unwrap_or_else(|e| panic!("{e}: {body:?}"));
         prop_assert_eq!(change.body(), &body);
         prop_assert_eq!(change.id(), ChangeId::of(change.raw()));
@@ -38,18 +101,43 @@ proptest! {
         prop_assert_eq!(read, Verified::Change(change.clone()));
         let again = parse_change(change.id(), change.raw().clone());
         prop_assert_eq!(again.as_change().map(Change::body), Some(&body));
-    }
+        Ok(())
+    });
+}
 
-    /// One flipped byte in a line is never read as a change.
-    #[test]
-    fn a_damaged_line_never_verifies(body in arb_body(), at in any::<prop::sample::Index>(), bit in 0u8..8) {
-        let change = Change::new(body).unwrap();
-        let mut line = encode_line(change.id(), change.raw());
-        line.pop();
-        let at = at.index(line.len());
-        line[at] ^= 1 << bit;
-        prop_assert!(verify_line(&line).is_none());
-    }
+/// One flipped bit anywhere in a line, in its JSON, its tab or its hash, is never read as a
+/// change.
+#[test]
+fn a_damaged_line_never_verifies() {
+    let strategy = (arb_body(), 0usize..3, any::<prop::sample::Index>(), 0u8..8);
+    run_with_census(
+        512,
+        strategy,
+        &["json", "tab", "hash"],
+        |(body, part, at, bit), census| {
+            let change = Change::new(body).unwrap();
+            let mut line = encode_line(change.id(), change.raw());
+            line.pop();
+            let json = change.raw().len();
+            let at = match part {
+                0 => {
+                    census.saw("json");
+                    at.index(json)
+                }
+                1 => {
+                    census.saw("tab");
+                    json
+                }
+                _ => {
+                    census.saw("hash");
+                    json + 1 + at.index(64)
+                }
+            };
+            line[at] ^= 1 << bit;
+            prop_assert!(verify_line(&line).is_none());
+            Ok(())
+        },
+    );
 }
 
 #[test]

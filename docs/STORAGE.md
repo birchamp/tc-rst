@@ -3143,7 +3143,8 @@ The codec (`tc-usfm`) decomposes a book into records and recomposes it:
   Chapter marker: `\c[ \t]+\d+` followed by whitespace or the end of the file. Digits are
   ASCII. Every `\v` or `\c` followed by a space, a tab, a line break or the end of the file
   (the pattern of V3) must be one of these markers, except that verse markers before the first
-  chapter marker are header bytes, kept as written. A verse's content runs to the next verse or
+  chapter marker are header bytes, kept as written; so must a `\v` or `\c` right before one of
+  these markers, which would end its part, where V3 reads it as a marker. A verse's content runs to the next verse or
   chapter marker anywhere, or the end of the file (tC4 R-8.4.1).
 - `BookHeader` is every byte before the first `\c`, verbatim. `ChapterFront` runs from `\c N` to
   the byte before that chapter's first verse marker.

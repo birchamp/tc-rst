@@ -449,6 +449,19 @@ pub fn decompose(text: &str) -> Result<BookParts, DecomposeError> {
         }
     }
 
+    // A `\v` or `\c` right before a marker is followed by a backslash, so it is no
+    // marker here; but it would end its part, where the pattern of V3 reads it as one
+    // (`\v` at the end of words), so the part could not be stored.
+    for marker in &found {
+        let before = &bytes[..marker.at];
+        if before.ends_with(b"\\v") {
+            return Err(fail(marker.at - 2, DecomposeProblem::VerseLabel));
+        }
+        if before.ends_with(b"\\c") {
+            return Err(fail(marker.at - 2, DecomposeProblem::ChapterLabel));
+        }
+    }
+
     let header_end = found.first().map_or(text.len(), |f| f.at);
     let mut parts = BookParts {
         header: text[..header_end].to_owned(),

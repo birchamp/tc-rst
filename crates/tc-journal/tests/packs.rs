@@ -414,50 +414,78 @@ fn line_spans(bytes: &[u8]) -> Vec<(usize, usize)> {
     spans
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(256))]
+/// An intact pack passes P2 to P4; a damaged one salvages exactly the lines whose bytes
+/// (and the line feeds around them) are intact, and nothing else.
+#[test]
+fn pack_round_trip_and_salvage() {
+    let strategy = (
+        prop::collection::vec(arb_body(), 1..10),
+        prop::collection::vec((any::<prop::sample::Index>(), 0u8..8), 1..4),
+    );
+    run_with_census(
+        256,
+        strategy,
+        &[
+            "every line salvaged",
+            "some lines salvaged",
+            "no line salvaged",
+        ],
+        |(bodies, flips), census| {
+            let lines: Vec<Verified> = bodies
+                .into_iter()
+                .map(|b| Change::new(b).unwrap().into())
+                .collect();
+            let pack = seal(&spec(local(9)), &lines).unwrap().packs.remove(0);
+            let intact = reread(&pack);
+            prop_assert_eq!(&intact.status, &PackStatus::Valid);
+            prop_assert_eq!(
+                intact
+                    .entries
+                    .iter()
+                    .map(Verified::id)
+                    .collect::<BTreeSet<_>>(),
+                lines.iter().map(Verified::id).collect::<BTreeSet<_>>()
+            );
 
-    /// An intact pack passes P2 to P4; a damaged one salvages exactly the lines whose bytes
-    /// (and the line feeds around them) are intact, and nothing else.
-    #[test]
-    fn pack_round_trip_and_salvage(
-        bodies in prop::collection::vec(arb_body(), 1..10),
-        flips in prop::collection::vec((any::<prop::sample::Index>(), 0u8..8), 1..4),
-    ) {
-        let lines: Vec<Verified> = bodies.into_iter().map(|b| Change::new(b).unwrap().into()).collect();
-        let pack = seal(&spec(local(9)), &lines).unwrap().packs.remove(0);
-        let intact = reread(&pack);
-        prop_assert_eq!(&intact.status, &PackStatus::Valid);
-        prop_assert_eq!(
-            intact.entries.iter().map(Verified::id).collect::<BTreeSet<_>>(),
-            lines.iter().map(Verified::id).collect::<BTreeSet<_>>()
-        );
-
-        let mut damaged = pack.bytes.clone();
-        let mut touched = BTreeSet::new();
-        for (at, bit) in &flips {
-            let at = at.index(damaged.len());
-            damaged[at] ^= 1 << bit;
-            touched.insert(at);
-        }
-        if damaged == pack.bytes {
-            return Ok(());
-        }
-        let read = read_pack(&pack.path.to_string(), &damaged, project());
-        prop_assert!(matches!(read.status, PackStatus::Damaged(_)), "{:?}", read.status);
-        let spans = line_spans(&pack.bytes);
-        let expected: BTreeSet<ChangeId> = spans
-            .iter()
-            .zip(intact.entries.iter())
-            .filter(|((from, to), _)| touched.range(from..=to).next().is_none())
-            .map(|(_, entry)| entry.id())
-            .collect();
-        let salvaged: BTreeSet<ChangeId> = read.entries.iter().map(Verified::id).collect();
-        prop_assert_eq!(&salvaged, &expected);
-        for entry in &read.entries {
-            prop_assert!(intact.entries.contains(entry), "a salvaged change differs from what its author wrote");
-        }
-    }
+            let mut damaged = pack.bytes.clone();
+            let mut touched = BTreeSet::new();
+            for (at, bit) in &flips {
+                let at = at.index(damaged.len());
+                damaged[at] ^= 1 << bit;
+                touched.insert(at);
+            }
+            if damaged == pack.bytes {
+                return Ok(());
+            }
+            let read = read_pack(&pack.path.to_string(), &damaged, project());
+            prop_assert!(
+                matches!(read.status, PackStatus::Damaged(_)),
+                "{:?}",
+                read.status
+            );
+            let spans = line_spans(&pack.bytes);
+            let expected: BTreeSet<ChangeId> = spans
+                .iter()
+                .zip(intact.entries.iter())
+                .filter(|((from, to), _)| touched.range(from..=to).next().is_none())
+                .map(|(_, entry)| entry.id())
+                .collect();
+            let salvaged: BTreeSet<ChangeId> = read.entries.iter().map(Verified::id).collect();
+            prop_assert_eq!(&salvaged, &expected);
+            census.saw(match salvaged.len() {
+                0 => "no line salvaged",
+                n if n == lines.len() => "every line salvaged",
+                _ => "some lines salvaged",
+            });
+            for entry in &read.entries {
+                prop_assert!(
+                    intact.entries.contains(entry),
+                    "a salvaged change differs from what its author wrote"
+                );
+            }
+            Ok(())
+        },
+    );
 }
 
 /// A valid change whose line, with its tab, hash and line feed, is `len` bytes long.

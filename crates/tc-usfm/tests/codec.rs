@@ -3,6 +3,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod census;
+
+use census::{Census, run_with_census};
 use proptest::prelude::*;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -188,6 +191,20 @@ fn refusals_name_the_line_and_the_problem() {
         ("\\c x\n", 1, DecomposeProblem::ChapterLabel),
         ("\\id A\n\\c 1a\n", 2, DecomposeProblem::ChapterLabel),
         ("\\c 0\n", 1, DecomposeProblem::ChapterZero),
+        // A `\v` or `\c` right before a marker would end its part, where V3 reads it as a
+        // marker.
+        ("\\c 1 \\v 1 \\v\\c 2 ", 1, DecomposeProblem::VerseLabel),
+        (
+            "\\c 1\n\\v 1 a\n\\v\\c 2\n",
+            3,
+            DecomposeProblem::VerseLabel,
+        ),
+        ("\\id X \\c\\c 1\n", 1, DecomposeProblem::ChapterLabel),
+        (
+            "\\c 1\n\\v 1 a \\c\\v 2 b",
+            2,
+            DecomposeProblem::ChapterLabel,
+        ),
         ("\\c 1\n\\v 1 a\u{0}\n", 2, DecomposeProblem::Nul),
     ];
     for (text, line, problem) in cases {
@@ -571,57 +588,212 @@ fn book() -> impl Strategy<Value = String> {
         })
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(512))]
-
-    #[test]
-    fn codec_round_trip(text in book()) {
-        let parts = decompose(&text).unwrap();
-        let back = recompose(&parts);
-        prop_assert!(back.issues.is_empty(), "{:?}", back.issues);
-        prop_assert_eq!(back.usfm, text);
+/// The states `book()` claims to reach, read from a decomposed book.
+fn book_states(text: &str, parts: &BookParts, census: &Census) {
+    if text.starts_with('\u{feff}') {
+        census.saw("byte order mark");
     }
-
-    #[test]
-    fn split_and_join_round_trip(content in verse_content()) {
-        let (words, layout) = split_verse(&content);
-        prop_assert_eq!(join_verse(words, layout), content.clone());
-        prop_assert!(is_valid_layout(words, layout));
-        // Words never end with a layout-only line, so splitting the words alone keeps them.
-        if !words.is_empty() {
-            prop_assert_eq!(split_verse(words), (words, ""));
+    if text.contains("\r\n") {
+        census.saw("CRLF");
+    }
+    if let Some(layout) = &parts.layout {
+        let chapters: Vec<u16> = layout
+            .iter()
+            .filter_map(|item| match item {
+                LayoutItem::Chapter(c) => Some(*c),
+                LayoutItem::Verse(..) => None,
+            })
+            .collect();
+        if chapters.windows(2).any(|pair| pair[0] > pair[1]) {
+            census.saw("chapters out of order");
+        } else {
+            census.saw("verses out of order");
         }
     }
-
-    #[test]
-    fn split_and_join_round_trip_for_any_string(content in ".*") {
-        let (words, layout) = split_verse(&content);
-        prop_assert_eq!(join_verse(words, layout), content.clone());
-        prop_assert!(is_valid_layout(words, layout));
+    for chapter in parts.chapters.values() {
+        if chapter
+            .front
+            .as_deref()
+            .is_some_and(|front| front.contains("\\s1"))
+        {
+            census.saw("heading");
+        }
+        if chapter.verses.is_empty() {
+            census.saw("chapter without verses");
+        }
+        for (verse, part) in &chapter.verses {
+            let VersePart::Text(text) = part else {
+                continue;
+            };
+            if text.last > *verse {
+                census.saw("span");
+            }
+            if text.marker.lead().contains('\t') || text.marker.term() == MarkerTerm::Tab {
+                census.saw("tab in a marker");
+            }
+            if text.marker.lead() != " " || text.marker.term() != MarkerTerm::Space {
+                census.saw("odd marker whitespace");
+            }
+            if text.words.contains("\\q") || text.layout.contains("\\q") {
+                census.saw("poetry");
+            }
+            if !text.layout.is_empty() {
+                census.saw("layout");
+            }
+        }
     }
+}
 
-    /// Any text either is refused or round-trips, and an accepted text's verse values obey
-    /// the rules a stored verse value must pass.
-    #[test]
-    fn accepted_soup_round_trips(pieces in prop::collection::vec(prop::sample::select(&[
-        "\\c 1", "\\c 2", "\\c 3", "\\v 1", "\\v 2", "\\v 2-3", "\\v 4", "\\v 01", "\\v",
-        "\\c", " ", "\n", "\r\n", "\r", "\t", "\\p", "\\q1", "a", "b c", "\\s1 x", "\\vp 1\\vp*",
-        "\\ts\\*", "\\w w\\w*", "\\", "-", "5",
-    ][..]), 0..24)) {
-        let text: String = pieces.concat();
-        if let Ok(parts) = decompose(&text) {
+#[test]
+fn codec_round_trip() {
+    run_with_census(
+        512,
+        book(),
+        &[
+            "byte order mark",
+            "CRLF",
+            "chapters out of order",
+            "verses out of order",
+            "heading",
+            "chapter without verses",
+            "span",
+            "tab in a marker",
+            "odd marker whitespace",
+            "poetry",
+            "layout",
+        ],
+        |text, census| {
+            let parts = decompose(&text).unwrap();
+            book_states(&text, &parts, census);
+            let back = recompose(&parts);
+            prop_assert!(back.issues.is_empty(), "{:?}", back.issues);
+            prop_assert_eq!(back.usfm, text);
+            Ok(())
+        },
+    );
+}
+
+fn split_states(words: &str, layout: &str, census: &Census) {
+    census.saw(match (words.is_empty(), layout.is_empty()) {
+        (false, false) => "words and layout",
+        (false, true) => "words only",
+        (true, false) => "layout only",
+        (true, true) => "empty",
+    });
+}
+
+#[test]
+fn split_and_join_round_trip() {
+    run_with_census(
+        512,
+        verse_content(),
+        &["words and layout", "words only", "layout only", "empty"],
+        |content, census| {
+            let (words, layout) = split_verse(&content);
+            split_states(words, layout, census);
+            prop_assert_eq!(join_verse(words, layout), content.clone());
+            prop_assert!(is_valid_layout(words, layout));
+            // Words never end with a layout-only line, so splitting the words alone keeps them.
+            if !words.is_empty() {
+                prop_assert_eq!(split_verse(words), (words, ""));
+            }
+            Ok(())
+        },
+    );
+}
+
+#[test]
+fn split_and_join_round_trip_for_any_string() {
+    // Any characters, with the line breaks and paragraph markers a split looks for.
+    let text = "(\\PC|[ \t\r\n\\*]|\r\n|\\\\[pqmb][12]?|\\\\s1){0,24}";
+    run_with_census(
+        512,
+        text,
+        &["words and layout", "words only", "layout only", "empty"],
+        |content, census| {
+            let (words, layout) = split_verse(&content);
+            split_states(words, layout, census);
+            prop_assert_eq!(join_verse(words, layout), content.clone());
+            prop_assert!(is_valid_layout(words, layout));
+            Ok(())
+        },
+    );
+}
+
+/// Any text either is refused or round-trips, and an accepted text's verse values obey
+/// the rules a stored verse value must pass.
+#[test]
+fn accepted_soup_round_trips() {
+    // Well-formed markers often enough that many texts are accepted with verses, and
+    // malformed ones that must be refused.
+    let well_formed = prop::sample::select(
+        &[
+            "\\c 1\n",
+            "\\c 2 ",
+            "\\c 3\r\n",
+            "\\v 1 ",
+            "\\v 2\n",
+            "\\v 2-3 ",
+            "\\v 4\t",
+            "\\v 5\r",
+        ][..],
+    );
+    let anything = prop::sample::select(
+        &[
+            "\\c 1",
+            "\\c 2",
+            "\\c 3",
+            "\\v 1",
+            "\\v 2",
+            "\\v 2-3",
+            "\\v 4",
+            "\\v 01",
+            "\\v",
+            "\\c",
+            " ",
+            "\n",
+            "\r\n",
+            "\r",
+            "\t",
+            "\\p",
+            "\\q1",
+            "a",
+            "b c",
+            "\\s1 x",
+            "\\vp 1\\vp*",
+            "\\ts\\*",
+            "\\w w\\w*",
+            "\\",
+            "-",
+            "5",
+        ][..],
+    );
+    let pieces = prop::collection::vec(prop_oneof![1 => well_formed, 3 => anything], 0..24);
+    run_with_census(
+        512,
+        pieces,
+        &["accepted", "refused", "accepted with verses"],
+        |pieces, census| {
+            let text: String = pieces.concat();
+            let Ok(parts) = decompose(&text) else {
+                census.saw("refused");
+                return Ok(());
+            };
+            census.saw("accepted");
             let back = recompose(&parts);
             prop_assert!(back.issues.is_empty());
             prop_assert_eq!(&back.usfm, &text);
             for chapter in parts.chapters.values() {
                 for part in chapter.verses.values() {
                     if let VersePart::Text(text) = part {
+                        census.saw("accepted with verses");
                         prop_assert!(!has_verse_or_chapter_marker(&text.words));
                         prop_assert!(!has_verse_or_chapter_marker(&text.layout));
                         prop_assert!(is_valid_layout(&text.words, &text.layout));
                     }
                 }
             }
-        }
-    }
+            Ok(())
+        },
+    );
 }
