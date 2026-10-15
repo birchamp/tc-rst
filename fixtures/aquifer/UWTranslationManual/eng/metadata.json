@@ -1,0 +1,424 @@
+{
+"resource_metadata": {
+"aquifer_type": "Guide",
+"resource_type": "Bible Translation Manual",
+"title": "unfoldingWord® Translation Academy",
+"aquifer_name": "unfoldingWord® Translation Academy",
+"version": "1.1.2",
+"collection_title": "unfoldingWord® Translation Academy",
+"short_name": "UWTM",
+"license_info": {
+"title": "unfoldingWord® Translation Academy",
+"copyright": {
+"dates": "2022",
+"holder": {
+"name": "unfoldingWord",
+"url": "https://unfoldingword.org/utw"
+}
+},
+"licenses": [
+{
+"eng": {
+"name": "CC BY-SA 4.0 license",
+"url": "https://creativecommons.org/licenses/by-sa/4.0/legalcode.en"
+}
+}
+],
+"showAdaptationNoticeForEnglish": false,
+"showAdaptationNoticeForNonEnglish": true
+},
+"adaptation_notice": "<p><b>unfoldingWord® Translation Academy</b> © 2022 unfoldingWord. Released under CC BY-SA 4.0 license. <cite>unfoldingWord® Translation Academy</cite> has been adapted in the following languages: Tok Pisin, Arabic (عربي), French (Français), Hindi (हिंदी), Indonesian (Bahasa Indonesia), Portuguese (Português), Russian (Русский), Spanish (Español), Swahili (Kiswahili), and Simplified Chinese (简体中文) from <cite>unfoldingWord® Translation Academy</cite> © 2022 unfoldingWord. Released under CC BY-SA 4.0 license by Mission Mutual",
+"resource_code": "UWTranslationManual",
+"date_created": "2026-10-12",
+"language": "eng",
+"localizations": [
+"arb",
+"hin",
+"ind",
+"nep",
+"por",
+"zht",
+"guj"
+],
+"order": "monograph",
+"content_type": "Html"
+},
+"scripture_burrito": {
+"format": "scripture burrito",
+"meta": {
+"version": "1.0.0",
+"category": "source",
+"defaultLocale": "en",
+"dateCreated": "2026-10-12T13:59:15.499334"
+},
+"idAuthorities": {
+"aquifer": {
+"id": "https://aquifer.bible",
+"name": {
+"en": "Bible Aquifer"
+}
+}
+},
+"identification": {
+"primary": {
+"aquifer": {
+"UWTranslationManual": {
+"timestamp": "2026-10-12T13:59:15.499334"
+}
+}
+},
+"name": {
+"en": "unfoldingWord® Translation Academy"
+},
+"abbreviation": {
+"en": "UWTM"
+}
+},
+"languages": [
+{
+"tag": "en",
+"name": {
+"en": "English"
+}
+}
+],
+"type": {
+"flavorType": {
+"name": "peripheral",
+"flavor": {
+"name": "textAquiferMonograph",
+"audience": "common"
+},
+"currentScope": {}
+}
+},
+"ingredients": {
+"json/001.content.json": {
+"mimeType": "text/json",
+"size": 12908579
+}
+},
+"copyright": {
+"licenses": [
+{
+"url": "https://creativecommons.org/licenses/by-sa/4.0/legalcode.en"
+}
+],
+"shortStatements": [
+{
+"statement": "<p>unfoldingWord® Translation Academy © 2022 unfoldingWord.</p>",
+"mimetype": "text/html",
+"lang": "en"
+}
+]
+}
+},
+"article_metadata": {
+"33342": {
+"content_id": "33342",
+"reference_id": 26756,
+"index_reference": "create equal translations",
+"localizations": {
+"arb": {
+"content_id": 781681,
+"language": "arb",
+"title": "إنشاء ترجمات متساوية"
+},
+"guj": {
+"content_id": 884252,
+"language": "guj",
+"title": "સમાન અનુવાદો બનાવો"
+},
+"hin": {
+"content_id": 727381,
+"language": "hin",
+"title": "समान अनुवाद को तैयार करना"
+},
+"nep": {
+"content_id": 727752,
+"language": "nep",
+"title": "समान अनुवादहरू बनाउनुहोस्"
+},
+"por": {
+"content_id": 800121,
+"language": "por",
+"title": "Criar traduções iguais"
+},
+"zht": {
+"content_id": 817732,
+"language": "zht",
+"title": "建立對等的翻譯"
+}
+}
+},
+"33397": {
+"content_id": "33397",
+"reference_id": 26811,
+"index_reference": "translation process",
+"localizations": {
+"arb": {
+"content_id": 781736,
+"language": "arb",
+"title": "عملية الترجمة"
+},
+"guj": {
+"content_id": 884306,
+"language": "guj",
+"title": "અનુવાદની પ્રક્રિયા"
+},
+"hin": {
+"content_id": 727446,
+"language": "hin",
+"title": "अनुवाद प्रक्रिया"
+},
+"nep": {
+"content_id": 727834,
+"language": "nep",
+"title": "अनुवादको प्रक्रिया"
+},
+"por": {
+"content_id": 800176,
+"language": "por",
+"title": "O processo de tradução"
+},
+"zht": {
+"content_id": 831921,
+"language": "zht",
+"title": "翻譯過程"
+}
+}
+},
+"33322": {
+"content_id": "33322",
+"reference_id": 26736,
+"index_reference": "file formats",
+"localizations": {
+"arb": {
+"content_id": 781661,
+"language": "arb",
+"title": "تنسيقات الملفات"
+},
+"guj": {
+"content_id": 884233,
+"language": "guj",
+"title": "ફાઈલનું બંધારણ"
+},
+"hin": {
+"content_id": 727361,
+"language": "hin",
+"title": "फाइल प्रारूप"
+},
+"nep": {
+"content_id": 727733,
+"language": "nep",
+"title": "फाइल ढाँचाहरू"
+},
+"por": {
+"content_id": 800101,
+"language": "por",
+"title": "Formatos de arquivo"
+},
+"zht": {
+"content_id": 817724,
+"language": "zht",
+"title": "檔案格式"
+}
+}
+},
+"33375": {
+"content_id": "33375",
+"reference_id": 26789,
+"index_reference": "chapter and verse numbers",
+"localizations": {
+"arb": {
+"content_id": 781714,
+"language": "arb",
+"title": "أرقام الأصحاحات والآيات"
+},
+"guj": {
+"content_id": 884285,
+"language": "guj",
+"title": "અધ્યાય અને કલમની સંખ્યા"
+},
+"hin": {
+"content_id": 727425,
+"language": "hin",
+"title": "अध्याय एवं आयतों की संख्याएँ"
+},
+"nep": {
+"content_id": 727813,
+"language": "nep",
+"title": "अध्याय र पद सङ्ख्याहरू"
+},
+"por": {
+"content_id": 800154,
+"language": "por",
+"title": "Números de capítulos e versículos"
+},
+"zht": {
+"content_id": 806707,
+"language": "zht",
+"title": "章節編號"
+}
+}
+},
+"33257": {
+"content_id": "33257",
+"reference_id": 26671,
+"index_reference": "abstract nouns",
+"localizations": {
+"arb": {
+"content_id": 781596,
+"language": "arb",
+"title": "الأسماء المجردة"
+},
+"guj": {
+"content_id": 884172,
+"language": "guj",
+"title": "﻿﻿﻿અમૂર્ત નામો"
+},
+"hin": {
+"content_id": 727303,
+"language": "hin",
+"title": "भाववाचक संज्ञा"
+},
+"ind": {
+"content_id": 727510,
+"language": "ind",
+"title": "Kata Benda Abstrak"
+},
+"nep": {
+"content_id": 727672,
+"language": "nep",
+"title": "भाववाचक नाम"
+},
+"por": {
+"content_id": 800036,
+"language": "por",
+"title": "Substantivos abstratos"
+},
+"zht": {
+"content_id": 806680,
+"language": "zht",
+"title": "抽象名詞"
+}
+}
+},
+"33372": {
+"content_id": "33372",
+"reference_id": 26786,
+"index_reference": "biblical money",
+"localizations": {
+"arb": {
+"content_id": 781711,
+"language": "arb",
+"title": "المال في الكتاب المُقَدَّس"
+},
+"guj": {
+"content_id": 884282,
+"language": "guj",
+"title": "બાઈબલમાં વર્ણિત ચલણ"
+},
+"hin": {
+"content_id": 727422,
+"language": "hin",
+"title": "बाइबल में धन"
+},
+"nep": {
+"content_id": 727810,
+"language": "nep",
+"title": "बाइबलीय पैसा"
+},
+"por": {
+"content_id": 800151,
+"language": "por",
+"title": "Dinheiro bíblico"
+},
+"zht": {
+"content_id": 806704,
+"language": "zht",
+"title": "聖經中的錢"
+}
+}
+},
+"33292": {
+"content_id": "33292",
+"reference_id": 26706,
+"index_reference": "metaphor",
+"localizations": {
+"arb": {
+"content_id": 781631,
+"language": "arb",
+"title": "الاستعارة"
+},
+"guj": {
+"content_id": 884206,
+"language": "guj",
+"title": "રૂપક"
+},
+"hin": {
+"content_id": 727335,
+"language": "hin",
+"title": "रूपक"
+},
+"ind": {
+"content_id": 727537,
+"language": "ind",
+"title": "Metafora"
+},
+"nep": {
+"content_id": 727706,
+"language": "nep",
+"title": "रूपक"
+},
+"por": {
+"content_id": 800071,
+"language": "por",
+"title": "Metáfora"
+},
+"zht": {
+"content_id": 825964,
+"language": "zht",
+"title": "隱喻"
+}
+}
+},
+"689645": {
+"content_id": "689645",
+"reference_id": 209465,
+"index_reference": "introduction to translation checking",
+"localizations": {
+"arb": {
+"content_id": 781784,
+"language": "arb",
+"title": "مقدمة التحقق من الترجمة"
+},
+"hin": {
+"content_id": 727260,
+"language": "hin",
+"title": "अनुवाद की जाँचों का परिचय"
+},
+"ind": {
+"content_id": 727576,
+"language": "ind",
+"title": "Introduksi kepada Pemeriksaan Terjemahan"
+},
+"nep": {
+"content_id": 727763,
+"language": "nep",
+"title": "अनुवाद जाँचको परिचय"
+},
+"por": {
+"content_id": 800224,
+"language": "por",
+"title": "Introdução à Verificação de Tradução"
+},
+"zht": {
+"content_id": 817763,
+"language": "zht",
+"title": "翻譯檢查簡介"
+}
+}
+}
+}
+}

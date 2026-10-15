@@ -1,0 +1,173 @@
+[
+{
+"content_id": "907469",
+"reference_id": 225341,
+"version": "1.0.4",
+"title": "2 Timothy 2:16 (#7)",
+"media_type": "Text",
+"index_reference": "00000000",
+"language": "fra",
+"review_level": "None",
+"content": "<p>«&nbsp;ceux&nbsp;»</p><p>Le pronom «&nbsp;ceux&nbsp;» est masculin, mais il est utilisé dans un sens générique qui pourrait inclure les hommes et les femmes. Selon ce qui est le plus naturel dans votre langue, choisissez un mot, une expression ou une formulation qui exprime ce sens clairement. Traduction alternative&nbsp;: «&nbsp;les gens&nbsp;» ou «&nbsp;les personnes&nbsp;».<data class=\"bible-ref\" data-start-ref=\"55002016\" data-end-ref=\"55002016\"> </data></p><p>Voir: <data class=\"resource-ref\" data-content-id=\"33276\" data-resource-code=\"UWTranslationManual\" data-language=\"eng\">Mots masculins qui incluent les femmes </data></p>",
+"associations": {
+"passage": [
+{
+"start_ref": "55002016",
+"start_ref_usfm": "2TI 2:16",
+"end_ref": "55002016",
+"end_ref_usfm": "2TI 2:16"
+}
+],
+"resource": [
+{
+"reference_id": "26690",
+"content_id": "33276",
+"resource_code": "UWTranslationManual",
+"label": "Mots masculins qui incluent les femmes",
+"language": "eng"
+}
+],
+"acai": []
+}
+},
+{
+"content_id": "918579",
+"reference_id": 225446,
+"version": "1.0.4",
+"title": "Jacques 2.3 (#11)",
+"media_type": "Text",
+"index_reference": "00000000",
+"language": "fra",
+"review_level": "None",
+"content": "<p><span>«&nbsp;celui&nbsp;» - «&nbsp;au pauvre&nbsp;»</span></p><p><span>Les mots <strong>celui</strong> et <strong>au</strong> <strong>pauvre</strong> ont une forme masculine, mais ils sont utilisés dans un sens générique qui peut faire référence à un homme ou une femme. Selon ce qui est le plus naturel dans votre langue, choisissez un mot, une expression ou une formulation qui exprime ce sens clairement. Traduction alternative&nbsp;: «&nbsp;la personne qui porte&nbsp;» - «&nbsp;à la personne pauvre&nbsp;».</span></p><p>Voir : <data class=\"resource-ref\" data-content-id=\"33276\" data-resource-code=\"UWTranslationManual\" data-language=\"eng\">Mots masculins qui incluent les femmes</data></p>",
+"associations": {
+"passage": [
+{
+"start_ref": "59002001",
+"start_ref_usfm": "JAS 2:1",
+"end_ref": "59002001",
+"end_ref_usfm": "JAS 2:1"
+}
+],
+"resource": [
+{
+"reference_id": "26690",
+"content_id": "33276",
+"resource_code": "UWTranslationManual",
+"label": "Mots masculins qui incluent les femmes",
+"language": "eng"
+}
+],
+"acai": []
+}
+},
+{
+"content_id": "359406",
+"reference_id": 169360,
+"version": "1.0.4",
+"title": "Genèse 1.1 (#1)",
+"media_type": "Text",
+"index_reference": "01001001",
+"language": "fra",
+"review_level": "None",
+"content": "<p><span style='direction: rtl;'>בְּ⁠רֵאשִׁ֖ית</span></p><p><strong>«&nbsp;Au commencement&nbsp;»</strong></p><p>Les structures de la langue hébraïque utilisées tout au long du chapitre indiquent que le premier chapitre de la Genèse est un véritable récit historique, et le verset&nbsp;1 est le premier événement de cette histoire. Le contexte plus général des Écritures le confirme, car elles nous enseignent que Dieu, au début du monde, a tout créé à partir de rien (Ps 33.6, 9&nbsp;; Hé&nbsp;11.3). Au verset&nbsp;1, il vaut mieux utiliser un verbe («&nbsp;commença&nbsp;») plutôt qu’un nom abstrait (<strong>commencement</strong>) dans certaines langues. Faites au mieux en fonction de votre langue. Traduction alternative&nbsp;: «&nbsp;Au commencement des temps&nbsp;»</p><p>Voir&nbsp;: <data class=\"resource-ref\" data-content-id=\"33257\" data-resource-code=\"UWTranslationManual\" data-language=\"eng\">Les noms abstraits</data></p>",
+"associations": {
+"passage": [
+{
+"start_ref": "01001001",
+"start_ref_usfm": "GEN 1:1",
+"end_ref": "01001001",
+"end_ref_usfm": "GEN 1:1"
+}
+],
+"resource": [
+{
+"reference_id": "26671",
+"content_id": "33257",
+"resource_code": "UWTranslationManual",
+"label": "Les noms abstraits",
+"language": "eng"
+}
+],
+"acai": [
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Éternel"
+}
+]
+}
+},
+{
+"content_id": "359407",
+"reference_id": 169361,
+"version": "1.0.4",
+"title": "Genèse 1.1 (#2)",
+"media_type": "Text",
+"index_reference": "01001001",
+"language": "fra",
+"review_level": "None",
+"content": "<p><strong>«&nbsp;Dieu&nbsp;»</strong></p><p>Traduisez le titre <strong>Dieu</strong> afin de désigner l’Être Suprême qui a tout créé, qui a un pouvoir absolu, qui sait tout et qui est présent partout. Il est le seul vrai Dieu et a toujours existé.</p><p>Voir&nbsp;: <data class=\"resource-ref\" data-content-id=\"33384\" data-resource-code=\"UWTranslationManual\" data-language=\"eng\">Création d’un répertoire des termes clés</data></p>",
+"associations": {
+"passage": [
+{
+"start_ref": "01001001",
+"start_ref_usfm": "GEN 1:1",
+"end_ref": "01001001",
+"end_ref_usfm": "GEN 1:1"
+}
+],
+"resource": [
+{
+"reference_id": "26798",
+"content_id": "33384",
+"resource_code": "UWTranslationManual",
+"label": "Création d’un répertoire des termes clés",
+"language": "eng"
+}
+],
+"acai": []
+}
+},
+{
+"content_id": "359408",
+"reference_id": 169362,
+"version": "1.0.4",
+"title": "Genèse 1.1 (#3)",
+"media_type": "Text",
+"index_reference": "01001001",
+"language": "fra",
+"review_level": "None",
+"content": "<p><span style='direction: rtl;'>בָּרָ֣א</span></p><p><strong>«&nbsp;créa&nbsp;»</strong></p><p>Dans la Bible hébraïque, le verbe «&nbsp;créer&nbsp;» désigne une activité que seul Dieu accomplit, et il veut dire souvent (comme c’est le cas ici) qu’il a fait quelque chose à partir de rien. De plus, les temps verbaux dans le texte hébreu (ainsi que les conjonctions) montrent que le chapitre&nbsp;1 est un récit qui raconte une véritable histoire et les événements dans l’ordre où ils se sont réellement produits. Assurez-vous que votre traduction fasse la même chose. Traduction alternative&nbsp;: «&nbsp;fit&nbsp;»</p><p>Voir&nbsp;: <data class=\"resource-ref\" data-content-id=\"33384\" data-resource-code=\"UWTranslationManual\" data-language=\"eng\">Création d’un répertoire des termes clés</data><br></p>",
+"associations": {
+"passage": [
+{
+"start_ref": "01001001",
+"start_ref_usfm": "GEN 1:1",
+"end_ref": "01001001",
+"end_ref_usfm": "GEN 1:1"
+}
+],
+"resource": [
+{
+"reference_id": "26798",
+"content_id": "33384",
+"resource_code": "UWTranslationManual",
+"label": "Création d’un répertoire des termes clés",
+"language": "eng"
+}
+],
+"acai": [
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Éternel"
+}
+]
+}
+}
+]

@@ -1,0 +1,732 @@
+{
+"resource_metadata": {
+"aquifer_type": "Guide",
+"resource_type": "Translation Glossary",
+"title": "unfoldingWord® Translation Words",
+"aquifer_name": "unfoldingWord® Translation Words",
+"version": "1.1.2",
+"collection_title": "unfoldingWord® Translation Words",
+"short_name": "UTW",
+"license_info": {
+"title": "unfoldingWord® Translation Words",
+"copyright": {
+"dates": "2022",
+"holder": {
+"name": "unfoldingWord",
+"url": "https://unfoldingword.org/utw"
+}
+},
+"licenses": [
+{
+"eng": {
+"name": "CC BY-SA 4.0 license",
+"url": "https://creativecommons.org/licenses/by-sa/4.0/legalcode.en"
+}
+}
+],
+"showAdaptationNoticeForEnglish": false,
+"showAdaptationNoticeForNonEnglish": true
+},
+"adaptation_notice": "<p><b>unfoldingWord® Translation Words</b> © 2022 unfoldingWord. Released under CC BY-SA 4.0 license. <cite>unfoldingWord® Translation Words</cite> has been adapted in the following languages: Tok Pisin, Arabic (عربي), French (Français), Hindi (हिंदी), Indonesian (Bahasa Indonesia), Portuguese (Português), Russian (Русский), Spanish (Español), Swahili (Kiswahili), and Simplified Chinese (简体中文) from <cite>unfoldingWord® Translation Words</cite> © 2022 unfoldingWord. Released under CC BY-SA 4.0 license by Mission Mutual</p>",
+"resource_code": "UWTranslationWords",
+"date_created": "2026-10-12",
+"language": "eng",
+"localizations": [
+"arb",
+"fra",
+"guj",
+"hin",
+"ind",
+"por",
+"spa",
+"swh",
+"zht"
+],
+"order": "alphabetical",
+"content_type": "Html"
+},
+"scripture_burrito": {
+"format": "scripture burrito",
+"meta": {
+"version": "1.0.0",
+"category": "source",
+"defaultLocale": "en",
+"dateCreated": "2026-10-12T14:02:47.979149"
+},
+"idAuthorities": {
+"aquifer": {
+"id": "https://aquifer.bible",
+"name": {
+"en": "Bible Aquifer"
+}
+}
+},
+"identification": {
+"primary": {
+"aquifer": {
+"UWTranslationWords": {
+"timestamp": "2026-10-12T14:02:47.979149"
+}
+}
+},
+"name": {
+"en": "unfoldingWord® Translation Words"
+},
+"abbreviation": {
+"en": "UTW"
+}
+},
+"languages": [
+{
+"tag": "en",
+"name": {
+"en": "English"
+}
+}
+],
+"type": {
+"flavorType": {
+"name": "peripheral",
+"flavor": {
+"name": "textAquiferAlphabetical",
+"audience": "common"
+},
+"currentScope": {}
+}
+},
+"ingredients": {
+"json/001.content.json": {
+"mimeType": "text/json",
+"size": 1082188,
+"scope": {
+"a": [
+"Aaron",
+"Abel",
+"Abiathar",
+"Abijah",
+"Abimelech",
+"Abner",
+"abomination, abominable",
+"Abraham, Abram",
+"Absalom",
+"abyss, bottomless pit",
+"acacia",
+"acknowledge, admit, admitted",
+"Adam",
+"admonish, warned, aware",
+"Adonijah",
+"adoption, adopt, adopted",
+"adultery, adulterous, adulterer, adulteress",
+"adversary, enemy",
+"advice, advise, advisor, counsel, counselor, counsels",
+"afflict, affliction, distress",
+"age, aged, old, old age, years old",
+"age, era, time",
+"Ahab",
+"Ahasuerus",
+"Ahaz",
+"Ahaziah",
+"Ahijah",
+"Ai",
+"alarm, alarmed",
+"alien, foreigner, sojourn",
+"Almighty",
+"alms",
+"altar",
+"altar of incense, incense altar",
+"Amalek, Amalekite",
+"Amaziah",
+"amen, truly",
+"Ammon, Ammonite",
+"Amnon",
+"Amorite",
+"Amos",
+"Amoz",
+"Anak, Anakites",
+"Andrew",
+"angel, archangel",
+"anguish",
+"Annas",
+"anoint, anointed, anointing",
+"antichrist",
+"Antioch",
+"Apollos",
+"apostle, apostleship",
+"appoint, appointed",
+"Aquila",
+"Arabah",
+"Arabia, Arabian",
+"Aram, Aramean, Aramaic, Aram of Damascus",
+"Ararat",
+"archer",
+"ark",
+"ark of the covenant, ark of Yahweh, box, Box of the Testimony, Box of the Covenant of Yahweh",
+"armor, armory",
+"arrogant, presumptuous",
+"Artaxerxes",
+"Asa",
+"Asaph",
+"Ashdod, Azotus",
+"Asher",
+"Asherah, Asherah pole, Ashtoreth",
+"Ashkelon",
+"Asia",
+"assembly, assemble, congregation, meeting, gather, community",
+"assign, assigned, assignment, reassign",
+"Assyria, Assyrian, Assyrian Empire",
+"astrologer",
+"Athaliah",
+"atonement, atone, atoned",
+"atonement lid",
+"authority",
+"avenge, avenger, revenge, vengeance",
+"awe, awesome",
+"ax",
+"Azariah"
+]
+}
+},
+"json/003.content.json": {
+"mimeType": "text/json",
+"size": 1094378,
+"scope": {
+"c": [
+"Caesar",
+"Caesarea, Caesarea Philippi",
+"Caiaphas",
+"Cain",
+"Caleb",
+"call, called",
+"call, called",
+"call, called, call out, called out",
+"camel",
+"Cana",
+"Canaan, Canaanite",
+"Capernaum",
+"captive, captivate, captivity, catch",
+"Carmel, Mount Carmel",
+"cast out, driving out, throw out",
+"cedar, cedarwood",
+"census",
+"centurion",
+"chaff",
+"Chaldea, Chaldean",
+"chariot, charioteer",
+"Cherethites",
+"cherub, cherubim",
+"chief, leader",
+"chosen, choose, chosen people, Chosen One, elect",
+"Christ, Messiah",
+"Christian",
+"church, Church",
+"Cilicia",
+"circumcise, circumcised, circumcision, uncircumcised, uncircumcision",
+"cistern, well",
+"citizen, citizenship",
+"city of David",
+"clan",
+"Colossae, Colossians",
+"column, pillar",
+"commander",
+"commit, committed",
+"companion, fellow worker, friend",
+"compassion, compassionate",
+"conceive, conceived, conception",
+"concubine",
+"condemn, condemned, condemnation",
+"confess, confession",
+"confirm, confirmation",
+"conscience",
+"consecrate, consecrated, consecration",
+"consume, devour",
+"contempt, contemptible, not worth listening to",
+"Corinth, Corinthians",
+"Cornelius",
+"cornerstone",
+"corrupt, corrupted, corruption, incorruptibility, depraved",
+"corrupt witness, false report, false testimony, false witness",
+"council",
+"courage, courageous, valor",
+"court",
+"court, courtyard",
+"covenant",
+"covenant faithfulness, covenant loyalty, covenant love",
+"cow, bull, calf, cattle, heifer, ox",
+"create, created, creation, creator",
+"creature, creation",
+"Crete, Cretan",
+"cross",
+"crown, crowned",
+"crucify, crucified",
+"cry, cry out, outcry",
+"cupbearer",
+"curse, cursed, cursing",
+"curtain",
+"Cush",
+"cypress",
+"Cyprus",
+"Cyrene",
+"Cyrus"
+]
+}
+},
+"json/006.content.json": {
+"mimeType": "text/json",
+"size": 593540,
+"scope": {
+"f": [
+"faith",
+"faithful, faithfulness, trustworthy",
+"faithless, unfaithful, unfaithfulness",
+"false prophet",
+"family, household",
+"famine",
+"fast, fasting",
+"favor, favorable, favoritism",
+"fear, afraid, frighten",
+"feast, feasting",
+"fellowship",
+"fellowship offering",
+"festival, feast, celebrate",
+"fig",
+"fir, firs",
+"firstborn",
+"firstfruit, firstfruits",
+"fisherman, fishermen, fisher",
+"flock, herd",
+"flood",
+"flute, pipe",
+"fool, foolish, folly",
+"footstool",
+"foreknew, foreknowledge",
+"forgive, forgiven, forgiveness, pardon, pardoned",
+"forsake, forsaken, leave",
+"foundation, founder, founded",
+"fountain, source, spring",
+"frankincense",
+"free, freed, freedom, freeman, freewill, liberty",
+"freewill offering",
+"fruit, fruitful, unfruitful",
+"fulfill, fulfilled, carried out",
+"furnace"
+]
+}
+},
+"json/007.content.json": {
+"mimeType": "text/json",
+"size": 1097193,
+"scope": {
+"g": [
+"Gabriel",
+"Gad",
+"Galatia, Galatians",
+"Galilee, Galilean",
+"gate, gate bar, gatekeeper, gatepost, gateway",
+"Gath, Gittite",
+"Gaza",
+"generation",
+"generation",
+"generation",
+"generation",
+"Gentile",
+"Gerar",
+"Geshur, Geshurites",
+"Gethsemane",
+"giant",
+"Gibeah",
+"Gibeon, Gibeonite",
+"Gideon",
+"Gilead, Gileadite",
+"Gilgal",
+"gird, girded, wrapped around, tied up, belt, tuck in belt, put belt around",
+"Girgashites",
+"glean, gleaning, gleanings",
+"glory, glorious, glorify",
+"goat, goatskin, scapegoat, kid",
+"God",
+"god, false god, goddess, idol, idolater, idolatrous, idolatry",
+"God the Father, heavenly Father, Father",
+"godly, godliness, ungodly, godless, ungodliness, godlessness",
+"gold, golden",
+"Golgotha",
+"Goliath",
+"Gomorrah",
+"good news, gospel",
+"good, right, pleasant, better, best, goodness",
+"Goshen",
+"gossip, gossips, talk nonsense",
+"govern, governor, proconsul, Tirshatha",
+"grace, gracious",
+"grain, grainfields",
+"grain offering",
+"grain offering, meal offering",
+"grape, grapevine",
+"grave, gravedigger, tomb, burial place",
+"Greece, Grecian",
+"Greek, Grecian, Hellenist",
+"guilt, guilty",
+"guilt offering"
+]
+}
+},
+"json/016.content.json": {
+"mimeType": "text/json",
+"size": 1153973,
+"scope": {
+"p": [
+"Paddan Aram",
+"pagan",
+"palace, house",
+"palm",
+"parable",
+"Paran",
+"partial, partiality",
+"Passover",
+"patient, patience, impatient",
+"patriarch",
+"Paul, Saul",
+"peace offering",
+"peace, peaceful, peacemaker",
+"Pentecost, Festival of Weeks",
+"people of God",
+"Peor, Mount Peor, Baal Peor",
+"perfect, complete",
+"perish",
+"Perizzite",
+"persecute",
+"persevere, perseverance",
+"Persia, Persians",
+"perverse, perversion, pervert, depraved, malicious, devious, dishonest, distortion",
+"Peter, Simon Peter, Cephas",
+"Pharaoh, king of Egypt",
+"Pharisee",
+"Philip (the apostle)",
+"Philip (the evangelist)",
+"Philippi, Philippians",
+"Philistia",
+"Philistines",
+"Phinehas",
+"Phoenicia, Syrophoenician",
+"pig, pork, swine",
+"Pilate",
+"pit, pitfall, trench, cistern",
+"plague",
+"plea, plead, please, beg, implore",
+"pledge",
+"plow, plower, plowman, plowmen, plowshare, unplowed",
+"plunder, plundered, spoil, spoils",
+"pomegranate",
+"Pontus",
+"possess, possessed, possession, dispossess",
+"Potiphar",
+"praise, praised, praiseworthy",
+"pray, prayer",
+"preach, preaching, preacher, proclaim, proclamation",
+"predestine, predestined",
+"prey, prey on",
+"pride, boastful",
+"priest, priesthood",
+"prince, princess, governor, provincial governor, official, nobleman, noblemen, nobility",
+"Priscilla, Prisca",
+"profane, profaned",
+"profit, profits, profited, profitable",
+"profit, profits, profited, profitable, unprofitable",
+"promise, promised",
+"Promised Land",
+"prophet, prophecy, prophesy, seer, prophetess",
+"propitiation",
+"prosper, prosperity, prosperous",
+"prostitute, harlot, whored",
+"prostrate",
+"prostrate, bow down, worship",
+"proud, pride, prideful, boast, boastful, boasting",
+"proverb",
+"province, provincial",
+"provoke, provoked, provocation",
+"prudence, prudent",
+"psalm",
+"punish, punished, punishment, unpunished",
+"pure, purify, purification",
+"purple"
+]
+}
+}
+},
+"copyright": {
+"licenses": [
+{
+"url": "https://creativecommons.org/licenses/by-sa/4.0/legalcode.en"
+}
+],
+"shortStatements": [
+{
+"statement": "<p>unfoldingWord® Translation Words © 2022 unfoldingWord.</p>",
+"mimetype": "text/html",
+"lang": "en"
+}
+]
+}
+},
+"article_metadata": {
+"26324": {
+"content_id": "26324",
+"reference_id": 25466,
+"index_reference": "apostle apostleship",
+"localizations": {
+"arb": {
+"content_id": 195920,
+"language": "arb",
+"title": "رسول"
+},
+"fra": {
+"content_id": 466645,
+"language": "fra",
+"title": "Apôtre"
+},
+"guj": {
+"content_id": 881182,
+"language": "guj",
+"title": "પ્રેરિત, પ્રેરિતપદ"
+},
+"hin": {
+"content_id": 179554,
+"language": "hin",
+"title": "प्रेरित"
+},
+"ind": {
+"content_id": 675613,
+"language": "ind",
+"title": "Rasul"
+},
+"por": {
+"content_id": 237603,
+"language": "por",
+"title": "Apóstolo"
+},
+"spa": {
+"content_id": 335575,
+"language": "spa",
+"title": "Apóstol"
+},
+"swh": {
+"content_id": 575366,
+"language": "swh",
+"title": "mtume"
+},
+"zht": {
+"content_id": 390407,
+"language": "zht",
+"title": "使徒"
+}
+}
+},
+"26553": {
+"content_id": "26553",
+"reference_id": 25695,
+"index_reference": "chosen choose chosen people chosen one elect",
+"localizations": {
+"arb": {
+"content_id": 196115,
+"language": "arb",
+"title": "مُختار"
+},
+"fra": {
+"content_id": 466855,
+"language": "fra",
+"title": "Élu"
+},
+"guj": {
+"content_id": 881233,
+"language": "guj",
+"title": "પસંદ કરેલું, પસંદ કરવું, પસંદ કરાયેલા લોકો, પસંદ કરાયેલ વ્યક્તિ, ચૂંટી કાઢવું"
+},
+"hin": {
+"content_id": 179769,
+"language": "hin",
+"title": "चुना हुआ"
+},
+"ind": {
+"content_id": 675794,
+"language": "ind",
+"title": "Dipilih"
+},
+"por": {
+"content_id": 237828,
+"language": "por",
+"title": "Eleito"
+},
+"spa": {
+"content_id": 335593,
+"language": "spa",
+"title": "Elegir"
+},
+"swh": {
+"content_id": 575459,
+"language": "swh",
+"title": "Chagua"
+},
+"zht": {
+"content_id": 390631,
+"language": "zht",
+"title": "選民"
+}
+}
+},
+"26583": {
+"content_id": "26583",
+"reference_id": 25725,
+"index_reference": "faith",
+"localizations": {
+"arb": {
+"content_id": 196143,
+"language": "arb",
+"title": "إيمان"
+},
+"fra": {
+"content_id": 466880,
+"language": "fra",
+"title": "La foi"
+},
+"guj": {
+"content_id": 881241,
+"language": "guj",
+"title": "વિશ્વાસ/શ્રદ્ધા"
+},
+"hin": {
+"content_id": 179798,
+"language": "hin",
+"title": "विश्वास"
+},
+"ind": {
+"content_id": 675824,
+"language": "ind",
+"title": "Iman"
+},
+"por": {
+"content_id": 237858,
+"language": "por",
+"title": "Fé"
+},
+"spa": {
+"content_id": 335599,
+"language": "spa",
+"title": "Fe"
+},
+"swh": {
+"content_id": 575469,
+"language": "swh",
+"title": "Imani"
+},
+"zht": {
+"content_id": 390660,
+"language": "zht",
+"title": "信心"
+}
+}
+},
+"26647": {
+"content_id": "26647",
+"reference_id": 25789,
+"index_reference": "godly godliness ungodly godless ungodliness godlessness",
+"localizations": {
+"arb": {
+"content_id": 196203,
+"language": "arb",
+"title": "تقيّ"
+},
+"fra": {
+"content_id": 466938,
+"language": "fra",
+"title": "Pieux"
+},
+"guj": {
+"content_id": 881258,
+"language": "guj",
+"title": "ઈશ્વરપરાયણ/ઈશ્વરીય, ધર્મનિષ્ઠા/ઈશ્વરપરાયણતા, અધર્મી, નાસ્તિક, નાસ્તિકતા/અનાસ્થા"
+},
+"hin": {
+"content_id": 179860,
+"language": "hin",
+"title": "धर्मी"
+},
+"ind": {
+"content_id": 675881,
+"language": "ind",
+"title": "Saleh"
+},
+"por": {
+"content_id": 237922,
+"language": "por",
+"title": "Piedoso"
+},
+"spa": {
+"content_id": 335605,
+"language": "spa",
+"title": "Divino"
+},
+"swh": {
+"content_id": 627073,
+"language": "swh",
+"title": "Uungu"
+},
+"zht": {
+"content_id": 390721,
+"language": "zht",
+"title": "敬虔"
+}
+}
+},
+"26937": {
+"content_id": "26937",
+"reference_id": 26079,
+"index_reference": "paul saul",
+"localizations": {
+"arb": {
+"content_id": 196444,
+"language": "arb",
+"title": "بولس"
+},
+"fra": {
+"content_id": 467206,
+"language": "fra",
+"title": "Paul"
+},
+"guj": {
+"content_id": 881651,
+"language": "guj",
+"title": "પાઉલ, શાઉલ"
+},
+"hin": {
+"content_id": 180141,
+"language": "hin",
+"title": "पौलुस"
+},
+"ind": {
+"content_id": 676088,
+"language": "ind",
+"title": "Paulus"
+},
+"por": {
+"content_id": 238209,
+"language": "por",
+"title": "Paulo"
+},
+"spa": {
+"content_id": 335631,
+"language": "spa",
+"title": "Pablo"
+},
+"swh": {
+"content_id": 627236,
+"language": "swh",
+"title": "Paulo"
+},
+"zht": {
+"content_id": 391005,
+"language": "zht",
+"title": "保羅"
+}
+}
+}
+}
+}
