@@ -31,3 +31,8 @@ unicode-normalization = "0.1.25"
 # Full debug info made each agent worktree's target dir several GB and filled the disk.
 [profile.dev]
 debug = "line-tables-only"
+
+# The journal hashes every pack and line; unoptimized SHA-256 made its 64 MiB tests take
+# minutes.
+[profile.dev.package.sha2]
+opt-level = 3

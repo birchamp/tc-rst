@@ -401,6 +401,37 @@ fn a_seal_splits_at_64_mib_on_line_boundaries() {
     ));
 }
 
+/// §4.7: when the union is over 64 MiB, whole old packs are grouped in the order of their
+/// first lines into new packs of at most 64 MiB, and a group of one is not rewritten.
+#[test]
+fn consolidation_groups_old_packs_into_packs_of_at_most_64_mib() {
+    // Five lines of the largest size make a pack of about 20 MiB; three fit in 64 MiB.
+    let packs: Vec<EncodedPack> = (0..4u64)
+        .map(|p| {
+            let lines: Vec<Verified> = (1..=5).map(|i| big_line(p * 5 + i)).collect();
+            encode_pack(&spec(local(9)), &lines, &[]).unwrap()
+        })
+        .collect();
+    let reads: Vec<PackRead> = packs.iter().map(reread).collect();
+    // Given in reverse, so the grouping must follow the packs' first lines.
+    let given: Vec<&PackRead> = reads.iter().rev().collect();
+    let merged = consolidate(&spec(local(9)), &given).unwrap();
+    assert_eq!(merged.len(), 1, "the fourth pack would be a group of one");
+    let merged = &merged[0];
+    assert!(merged.bytes.len() <= MAX_PACK_BYTES);
+    let read = reread(merged);
+    assert_eq!(read.status, PackStatus::Valid);
+    let mut first_three: Vec<PackName> = packs[..3].iter().map(|p| p.path.name).collect();
+    first_three.sort();
+    assert_eq!(read.header.unwrap().replaces, first_three);
+    let held: BTreeSet<ChangeId> = read.entries.iter().map(Verified::id).collect();
+    let expected: BTreeSet<ChangeId> = reads[..3]
+        .iter()
+        .flat_map(|r| r.entries.iter().map(Verified::id))
+        .collect();
+    assert_eq!(held, expected);
+}
+
 #[test]
 fn only_a_local_device_writes_packs_and_pending_files() {
     let importer = DeviceId::derived(DeviceKind::Importer, b"import\0x");
