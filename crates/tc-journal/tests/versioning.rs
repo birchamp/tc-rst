@@ -7,7 +7,9 @@
 mod common;
 
 use common::*;
-use tc_journal::format::{FormatDoc, FormatGate, PathPattern, derived_paths, gate};
+use tc_journal::format::{
+    FormatDoc, FormatGate, FormatJson, FormatNumber, PathPattern, derived_paths, gate,
+};
 use tc_journal::line::{encode_line, read_line};
 use tc_journal::pack::{PackSpec, PackStatus, read_pack, seal};
 use tc_journal::pending::{PendingHeader, PendingStatus, Purpose, encode_pending, read_pending};
@@ -294,34 +296,104 @@ fn the_gate_refuses_newer_majors_and_reads_newer_minors() {
     assert_eq!(
         format("format-1.4-read-only.json").gate(),
         FormatGate::ReadOnly {
-            min_reader_minor: 4
+            min_reader_minor: 4.into()
         }
     );
     assert_eq!(
         gate(&std::fs::read(fixtures().join("format-2.0.json")).unwrap()),
-        Ok(FormatGate::Refused { major: 2 })
+        Ok(FormatGate::Refused { major: 2.into() })
     );
     let mut old = FormatDoc::current();
-    old.major = 0;
-    assert_eq!(old.gate(), FormatGate::NeedsMigration { major: 0 });
+    old.major = 0.into();
+    assert_eq!(old.gate(), FormatGate::NeedsMigration { major: 0.into() });
     assert!(FormatDoc::parse(b"{}").is_err());
     assert!(FormatDoc::parse(b"not json").is_err());
     assert!(FormatDoc::parse(br#"{"format":"x","major":1,"minor":0,"minReaderMinor":0,"derivations":{},"derivedPaths":[]}"#).is_err());
     assert!(FormatDoc::parse(br#"{"format":"tc-project","major":1,"minor":-1,"minReaderMinor":0,"derivations":{},"derivedPaths":[]}"#).is_err());
 }
 
-/// Numbers beyond any minor this app could know are compared and written back as they
-/// are, never cut down to a smaller type.
+/// Numbers beyond any minor this app could know are compared as numbers and written back
+/// as they are, never cut down to a smaller type or read as a damaged file (which open
+/// would replace, overwriting a newer major's document instead of refusing it).
 #[test]
-fn format_numbers_of_any_size_are_kept() {
-    let huge = br#"{"derivations":{},"derivedPaths":[],"format":"tc-project","major":70000,"minReaderMinor":0,"minor":0}"#;
-    assert_eq!(gate(huge), Ok(FormatGate::Refused { major: 70000 }));
-    let far = br#"{"derivations":{},"derivedPaths":[],"format":"tc-project","major":1,"minReaderMinor":0,"minor":18446744073709551615}"#;
-    let doc = FormatDoc::parse(far).unwrap();
-    assert_eq!(doc.gate(), FormatGate::Writable);
-    assert_eq!(doc.minor, u64::MAX);
-    assert_eq!(FormatDoc::parse(&doc.to_bytes()).unwrap(), doc);
-    assert_eq!(doc.merge(&FormatDoc::current()).minor, u64::MAX);
+fn format_numbers_of_any_size_are_compared() {
+    let doc = |major: &str, minor: &str, min_reader: &str| {
+        format!(
+            r#"{{"derivations":{{"plainText":{minor}}},"derivedPaths":[],"format":"tc-project","major":{major},"minReaderMinor":{min_reader},"minor":{minor}}}"#
+        )
+    };
+    let two_to_64 = "18446744073709551616";
+    let huge = "9".repeat(400);
+    assert_eq!(
+        gate(doc("70000", "0", "0").as_bytes()),
+        Ok(FormatGate::Refused {
+            major: 70000.into()
+        })
+    );
+    for major in [two_to_64, &huge] {
+        let parsed = FormatDoc::parse(doc(major, "0", "0").as_bytes()).unwrap();
+        assert_eq!(parsed.major.as_str(), major);
+        assert_eq!(
+            parsed.gate(),
+            FormatGate::Refused {
+                major: parsed.major.clone()
+            }
+        );
+    }
+    let far = FormatDoc::parse(doc("1", two_to_64, "0").as_bytes()).unwrap();
+    assert_eq!(far.gate(), FormatGate::Writable);
+    assert!(far.minor > u64::MAX);
+    assert_eq!(far.minor.get(), None);
+    assert_eq!(far.derivations["plainText"].as_str(), two_to_64);
+    let bytes = far.to_bytes();
+    assert!(String::from_utf8_lossy(&bytes).contains(&format!("\"minor\": {two_to_64}")));
+    assert_eq!(FormatDoc::parse(&bytes).unwrap(), far);
+    assert_eq!(far.merge(&FormatDoc::current()).minor, far.minor);
+    assert_eq!(FormatDoc::current().merge(&far).minor, far.minor);
+    let max = FormatDoc::parse(doc("1", &u64::MAX.to_string(), "0").as_bytes()).unwrap();
+    assert!(max.minor == u64::MAX && max.minor < far.minor);
+    assert_eq!(
+        FormatDoc::parse(doc("1", "0", &huge).as_bytes())
+            .unwrap()
+            .gate(),
+        FormatGate::ReadOnly {
+            min_reader_minor: FormatNumber::parse(&huge).unwrap()
+        }
+    );
+    for bad in ["-1", "1.0", "1e3", "01", "\"1\"", "-18446744073709551616"] {
+        assert!(
+            FormatDoc::parse(doc("1", bad, "0").as_bytes()).is_err(),
+            "{bad}"
+        );
+    }
+}
+
+/// A member a newer minor adds is written back exactly, whatever numbers it holds.
+#[test]
+fn unknown_members_are_written_back_exactly() {
+    let text = br#"{"derivations":{},"derivedPaths":[],"format":"tc-project","major":1,"minReaderMinor":0,"minor":5,
+        "ratio":0.50,"count":123456789012345678901234567890,"tiny":-1e-400,"list":[1,[],{},"\u00e9\n",null,true],
+        "nested":{"b":{"a":[false]}}}"#;
+    let doc = FormatDoc::parse(text).unwrap();
+    assert_eq!(doc.extra["ratio"], FormatJson::Number("0.50".into()));
+    let bytes = doc.to_bytes();
+    let written = String::from_utf8(bytes.clone()).unwrap();
+    for kept in [
+        "\"ratio\": 0.50",
+        "\"count\": 123456789012345678901234567890",
+        "\"tiny\": -1e-400",
+        "\"é\\n\"",
+    ] {
+        assert!(written.contains(kept), "{kept} in {written}");
+    }
+    assert_eq!(FormatDoc::parse(&bytes).unwrap(), doc);
+    assert_eq!(FormatDoc::parse(&bytes).unwrap().to_bytes(), bytes);
+    let deep = format!(
+        r#"{{"derivations":{{}},"derivedPaths":[],"format":"tc-project","major":1,"minReaderMinor":0,"minor":0,"x":{}{}}}"#,
+        "[".repeat(100_000),
+        "]".repeat(100_000)
+    );
+    assert!(FormatDoc::parse(deep.as_bytes()).is_err());
 }
 
 #[test]
@@ -330,7 +402,7 @@ fn a_newer_format_json_survives_an_older_app() {
     let back = FormatDoc::parse(&newer.to_bytes()).unwrap();
     assert_eq!(back, newer);
     assert!(back.extra.contains_key("signing"));
-    assert_eq!(back.derivations.get("wordDiff"), Some(&1));
+    assert_eq!(back.derivations.get("wordDiff"), Some(&1.into()));
     // Rule 4: a path the newer format derives and this app does not is kept verbatim.
     assert!(newer.is_newer_derived("ingredients/tc/notes/TIT.json"));
     assert!(!newer.is_newer_derived("ingredients/TIT.usfm"));
@@ -354,14 +426,14 @@ fn merging_format_documents_converges_on_the_higher_minor() {
         }
     }
     let merged = docs[0].merge(&docs[1]);
-    assert_eq!((merged.minor, merged.min_reader_minor), (3, 0));
+    assert!(merged.minor == 3 && merged.min_reader_minor == 0);
     assert!(merged.extra.contains_key("signing"));
     let merged = merged.merge(&docs[2]);
-    assert_eq!((merged.minor, merged.min_reader_minor), (4, 4));
-    assert_eq!(merged.derivations.get("plainText"), Some(&2));
+    assert!(merged.minor == 4 && merged.min_reader_minor == 4);
+    assert_eq!(merged.derivations.get("plainText"), Some(&2.into()));
     // Rule 6: writing never lowers a version.
-    assert_eq!(merged.raised_to(1).minor, 4);
-    assert_eq!(FormatDoc::current().raised_to(2).minor, 2);
+    assert!(merged.raised_to(1).minor == 4);
+    assert!(FormatDoc::current().raised_to(2).minor == 2);
 }
 
 #[test]

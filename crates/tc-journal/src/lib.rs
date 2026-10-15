@@ -38,7 +38,7 @@ pub use change::{
     Cause, Change, ChangeBody, ChangeError, ExternalSource, ImportSource, QuarantinedChange,
     SystemReason, Verified, parse_change,
 };
-pub use format::{FORMAT_MAJOR, FORMAT_MINOR, FormatDoc, FormatGate};
+pub use format::{FORMAT_MAJOR, FORMAT_MINOR, FormatDoc, FormatGate, FormatJson, FormatNumber};
 pub use ids::{
     BatchId, BatchRef, ChangeId, ChapterNo, CommentId, DeviceId, DeviceKind, DeviceSeq, FrameNo,
     GitOid, Md5, PackId, PackName, ProjectId, RepoPath, ShortId, StoryNo, VerseNo, WallTime,

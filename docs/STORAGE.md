@@ -2929,7 +2929,10 @@ teammates on different minors converge to the higher one. Its bytes are written 
 minor adds, and derivation names this app does not know, are kept and written back; a merge
 takes them, too, from the document with the larger minor, and between two documents of one minor
 from the one whose canonical text is larger, so the merge is commutative. `major`, `minor` and
-`minReaderMinor` are non-negative integers, compared as numbers whatever their size. A
+`minReaderMinor` are non-negative integers, compared as numbers whatever their size (and so
+are derivation versions); a member a newer minor adds is written back exactly, its numbers in
+the digits they were written with, and only a member nested deeper than 64 levels, which no app
+writes, makes the document unreadable. A
 `derivedPaths` entry is a `/`-separated pattern in which `*` matches any run of characters
 inside one segment and a `**` segment matches one or more whole segments; the file comes from
 any app or person, so matching must take polynomial time.
