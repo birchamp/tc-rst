@@ -1,0 +1,32 @@
+[package]
+name = "tc-door43"
+description = "Door43 (Gitea/DCS) HTTP client and the app's session internet switch."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+base64 = "0.22.1"
+httpdate = "1.0.3"
+icu_normalizer = { version = "2.3.0", default-features = false, features = ["compiled_data"] }
+md-5 = "0.10.6"
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "system-proxy"] }
+serde.workspace = true
+serde_json.workspace = true
+sha1 = "0.10.7"
+thiserror.workspace = true
+tracing = "0.1.44"
+url = "2.5.8"
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[dev-dependencies]
+proptest.workspace = true
+tc-door43-fake = { path = "../tc-door43-fake" }
+tempfile.workspace = true
+tokio = { version = "1.53.3", features = ["macros", "rt-multi-thread", "net", "process"] }
+tracing-log = "0.2.0"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std"] }
+
+[lints]
+workspace = true
