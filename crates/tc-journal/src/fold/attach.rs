@@ -325,8 +325,8 @@ fn issue_conflict(
         ),
     };
     let mut keys: Vec<KeyIdx> = Vec::new();
-    if let Some(k) = state.key_ids.get(&key) {
-        keys.push(*k);
+    if let Some(k) = state.key_idx(&key) {
+        keys.push(k);
     }
     for v in others {
         if let Some(k) = entry.verses.get(&v) {
@@ -590,6 +590,23 @@ pub(crate) fn target_exists(state: &FoldState, check: &CheckKey) -> bool {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct PinsView {
     pub groups: BTreeMap<PinGroup, PinGroupValue>,
+    /// `resolution(tool, book)` of every tool and book, by [`resolved_slot`].
+    resolved: Vec<Option<ResourceRef>>,
+}
+
+const TOOLS: [ToolId; 3] = [
+    ToolId::TranslationNotes,
+    ToolId::TranslationWords,
+    ToolId::TranslationQuestions,
+];
+
+fn resolved_slot(tool: ToolId, book: BookId) -> usize {
+    let tool = match tool {
+        ToolId::TranslationNotes => 0,
+        ToolId::TranslationWords => 1,
+        ToolId::TranslationQuestions => 2,
+    };
+    tool * BookId::ALL.len() + usize::from(book.ordinal()).saturating_sub(1)
 }
 
 impl PinsView {
@@ -605,7 +622,25 @@ impl PinsView {
                 groups.insert(group, value);
             }
         }
-        Self { groups }
+        let mut view = Self {
+            groups,
+            resolved: Vec::new(),
+        };
+        let mut resolved = vec![None; TOOLS.len() * BookId::ALL.len()];
+        for tool in TOOLS {
+            for book in BookId::ALL {
+                if let Some(slot) = resolved.get_mut(resolved_slot(tool, book)) {
+                    *slot = view.resolution(tool, book).map(|r| r.0);
+                }
+            }
+        }
+        view.resolved = resolved;
+        view
+    }
+
+    /// The pin `resolution(tool, book)` names, from the table [`PinsView::of`] fills.
+    pub(crate) fn resolved(&self, tool: ToolId, book: BookId) -> Option<&ResourceRef> {
+        self.resolved.get(resolved_slot(tool, book))?.as_ref()
     }
 
     /// tC4's D30 ladder: the primary group's pin for the tool when its recorded `books`
@@ -709,10 +744,11 @@ pub(crate) fn stage_attached(state: &mut FoldState, dirty: &mut Dirty) {
     };
     for k in keys {
         let detached = detached(state, k);
-        let key = state.entry(k).key.clone();
         if detached {
+            let key = state.entry(k).key.clone();
             state.detached.insert(key);
-        } else {
+        } else if !dirty.all {
+            let key = state.entry(k).key.clone();
             state.detached.remove(&key);
         }
     }
@@ -726,13 +762,14 @@ fn projects(state: &FoldState, book: Option<BookId>) -> bool {
 /// projected book that has no place on any screen and was not dismissed.
 fn detached(state: &mut FoldState, k: KeyIdx) -> bool {
     state.count(Counter::AttachedPlaced, 1);
-    let entry = state.entry(k).clone();
+    let entry = state.entry(k);
     let shape = match &entry.projected {
         Projected::Change(c) => state.meta(*c).shape.clone(),
         Projected::Merged(record) => merged_shape(record),
         Projected::Nothing => return false,
     };
-    match &entry.key {
+    let key = entry.key.clone();
+    match &key {
         RecordKey::Alignment(book, c, v) => {
             if !projects(state, Some(*book))
                 || matches!(shape, Shape::Alignment { dismissed: true })
@@ -757,8 +794,8 @@ fn detached(state: &mut FoldState, k: KeyIdx) -> bool {
             if dismissed || !projects(state, Some(book)) {
                 return false;
             }
-            let resolved = state.pins.resolution(check.tool, book).map(|r| r.0);
-            !resource_ok(&resource, resolved.as_ref()) || !target_exists(state, check)
+            let resolved = state.pins.resolved(check.tool, book);
+            !resource_ok(&resource, resolved) || !target_exists(state, check)
         }
         RecordKey::Comment(_) => {
             let Shape::Comment { target } = shape else {
@@ -785,9 +822,8 @@ fn detached(state: &mut FoldState, k: KeyIdx) -> bool {
                     !target_exists(state, &live)
                 }
                 CommentTarget::Frame { story, frame } => state
-                    .key_ids
-                    .get(&RecordKey::Frame(*story, *frame))
-                    .is_none_or(|f| matches!(state.entry(*f).projected, Projected::Nothing)),
+                    .key_idx(&RecordKey::Frame(*story, *frame))
+                    .is_none_or(|f| matches!(state.entry(f).projected, Projected::Nothing)),
             }
         }
         _ => false,
@@ -815,10 +851,10 @@ fn set_chained(state: &mut FoldState, book: BookId, k: KeyIdx, chained: bool) {
 pub(crate) fn follow_moves(state: &FoldState, check: &CheckKey) -> CheckKey {
     let mut at = check.clone();
     for _ in 0..64 {
-        let Some(k) = state.key_ids.get(&RecordKey::Check(at.clone())) else {
+        let Some(k) = state.key_idx(&RecordKey::Check(at.clone())) else {
             break;
         };
-        let next = match &state.entry(*k).projected {
+        let next = match &state.entry(k).projected {
             Projected::Change(c) => match &state.meta(*c).shape {
                 Shape::MovedTo { to } => Some((**to).clone()),
                 _ => None,

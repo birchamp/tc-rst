@@ -460,8 +460,8 @@ impl FoldState {
         if self.kind == super::ProjectKind::Bible {
             out.insert(DerivedFile::Settings);
         }
-        if let Some(k) = self.key_ids.get(&RecordKey::Versification)
-            && !matches!(self.entry(*k).projected, Projected::Nothing)
+        if let Some(k) = self.key_idx(&RecordKey::Versification)
+            && !matches!(self.entry(k).projected, Projected::Nothing)
         {
             out.insert(DerivedFile::Versification);
         }
@@ -490,8 +490,8 @@ impl FoldState {
             DerivedFile::Resources => self.resources_json(),
             DerivedFile::Settings => Some(self.settings_json()),
             DerivedFile::Versification => {
-                let k = self.key_ids.get(&RecordKey::Versification)?;
-                match self.projected_record(*k)? {
+                let k = self.key_idx(&RecordKey::Versification)?;
+                match self.projected_record(k)? {
                     Record::Versification { value } => Some(value.bytes.into_bytes()),
                     _ => None,
                 }
@@ -858,11 +858,11 @@ impl FoldState {
         let mut doc = Map::new();
         doc.insert("schemaVersion".into(), Value::from(1));
         let mut settings: Vec<(String, Value)> = Vec::new();
-        for (key, k) in self.key_ids.iter() {
-            if let RecordKey::Setting(name) = key
+        for &k in self.setting_keys.iter() {
+            if let RecordKey::Setting(name) = &self.entry(k).key
                 && let Some(Record::Setting {
                     value: Some(json), ..
-                }) = self.projected_record(*k)
+                }) = self.projected_record(k)
             {
                 settings.push((name.as_str().to_owned(), value(&json)));
             }
@@ -884,21 +884,19 @@ impl FoldState {
     /// spliced in byte for byte. The template's first `# ` line is frame 0, the paragraph
     /// after its n-th image line is frame n, and its last `_…_` line is the reference.
     fn story_markdown(&self, story: StoryNo) -> Option<Vec<u8>> {
-        let base = match self.projected_record(*self.key_ids.get(&RecordKey::StoryBase(story))?)? {
+        let base = match self.projected_record(self.key_idx(&RecordKey::StoryBase(story))?)? {
             Record::StoryBase { value, .. } => value,
             _ => return None,
         };
         let frame = |n: u16| -> Option<String> {
-            let k = self
-                .key_ids
-                .get(&RecordKey::Frame(story, crate::ids::FrameNo(n)))?;
-            match self.projected_record(*k)? {
+            let k = self.key_idx(&RecordKey::Frame(story, crate::ids::FrameNo(n)))?;
+            match self.projected_record(k)? {
                 Record::Frame { value, .. } => Some(value),
                 _ => None,
             }
         };
-        let reference = self.key_ids.get(&RecordKey::StoryRef(story)).and_then(|k| {
-            match self.projected_record(*k) {
+        let reference = self.key_idx(&RecordKey::StoryRef(story)).and_then(|k| {
+            match self.projected_record(k) {
                 Some(Record::StoryRef { value, .. }) => value,
                 _ => None,
             }

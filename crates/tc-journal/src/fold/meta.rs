@@ -5,7 +5,7 @@
 
 use crate::canon;
 use crate::change::{Cause, ChangeBody};
-use crate::ids::{BatchId, ChangeId, DeviceId, DeviceSeq, GitOid, PackId, WallTime};
+use crate::ids::{BatchId, ChangeId, DeviceId, DeviceSeq, GitOid, WallTime};
 use crate::json;
 use crate::keys::{CheckKey, RecordKey};
 use crate::record::{
@@ -141,9 +141,19 @@ pub(crate) struct Meta {
     pub shape: Shape,
     /// The canonical JSON exactly as stored.
     pub raw: Arc<[u8]>,
-    pub packs: SmallVec<[PackId; 1]>,
+    /// The first pack that holds it, in [`super::FoldState`]'s pack table; others are in
+    /// its `more_packs`.
+    pub pack: PackSlot,
     /// Folded: its batch is complete or a release lists it (F2).
     pub active: bool,
+}
+
+/// A pack's place in the fold's pack table, or none (a change only in a pending file).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct PackSlot(pub(crate) u32);
+
+impl PackSlot {
+    pub(crate) const NONE: Self = Self(u32::MAX);
 }
 
 impl Meta {

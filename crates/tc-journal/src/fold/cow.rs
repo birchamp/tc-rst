@@ -166,8 +166,11 @@ impl<K, V> Default for CowMap<K, V> {
 fn shard_of<K: Hash + ?Sized>(key: &K) -> usize {
     let mut hasher = FxHasher::default();
     key.hash(&mut hasher);
-    // The high bits, so the shard does not repeat the low bits the shard's own table uses.
-    (hasher.finish() >> 58) as usize % SHARDS
+    // Bits 40 to 45, which the shard's own table reads for neither purpose: hashbrown takes
+    // the bucket from the low bits and a 7-bit tag from the top bits. Taking the shard from
+    // the top bits left every key of a shard with nearly the same tag, so each probe compared
+    // keys at about half the slots of a group, and a whole-Bible fold spent seconds there.
+    ((hasher.finish() >> 40) as usize) % SHARDS
 }
 
 impl<K: Hash + Eq + Clone, V: Clone> CowMap<K, V> {
@@ -213,6 +216,14 @@ impl<K: Hash + Eq + Clone, V: Clone> CowMap<K, V> {
             self.len -= 1;
         }
         old
+    }
+
+    /// Makes room for about `additional` more entries, spread over the shards.
+    pub(crate) fn reserve(&mut self, additional: usize) {
+        let per_shard = additional / SHARDS + additional / (SHARDS * 8) + 1;
+        for shard in &mut self.shards {
+            Arc::make_mut(shard).reserve(per_shard);
+        }
     }
 
     /// The value at `key`, inserted from `make` when there is none.

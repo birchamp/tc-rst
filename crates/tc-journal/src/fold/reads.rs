@@ -70,10 +70,6 @@ pub enum Placement {
 }
 
 impl FoldState {
-    fn key_idx(&self, key: &RecordKey) -> Option<KeyIdx> {
-        self.key_ids.get(key).copied()
-    }
-
     /// How many changes the fold holds, folded or held.
     pub fn len(&self) -> usize {
         self.metas.len()
@@ -237,7 +233,7 @@ impl FoldState {
             at: meta.at,
             batch: self.batch(meta.batch).id,
             folded: meta.active,
-            packs: meta.packs.to_vec(),
+            packs: self.packs_of(meta),
         }
     }
 

@@ -41,7 +41,7 @@ impl FoldState {
     }
 
     fn idx_of(&self, key: &RecordKey) -> Option<KeyIdx> {
-        self.key_ids.get(key).copied()
+        self.key_idx(key)
     }
 
     /// Every record a conflict is about: its key and its other keys.
