@@ -118,7 +118,10 @@ impl VerseMapping {
 /// table, then each `org` verse back through `to`'s reversed table.
 ///
 /// Proskomma then flattens the landings and labels them all with the first landing's
-/// book. This keeps each landing's own book.
+/// book. This keeps each landing's own book. `do_cv` also skips the reverse hop when the
+/// target docSet has no document for the pivot book (`org` has no `DAG`, so an `eng`
+/// `S3Y` verse reads nothing from an `org` docSet); tC4 maps through the tables alone,
+/// and so does this.
 fn compose<'a>(
     from: &'a Scheme,
     to: &'a Scheme,

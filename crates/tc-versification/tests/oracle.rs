@@ -46,8 +46,15 @@ fn versification(name: &str) -> Versification {
     }
 }
 
+/// A scheme a pair names: a bare name is one of tC4's JSON schemes, `vrs:<path>` a `.vrs`
+/// fixture.
 fn scheme(name: &str) -> Scheme {
-    Scheme::new(name, versification(&format!("json:{name}"))).unwrap()
+    let source = if name.starts_with("vrs:") {
+        name.to_owned()
+    } else {
+        format!("json:{name}")
+    };
+    Scheme::new(name, versification(&source)).unwrap()
 }
 
 fn book(code: &str) -> BookCode {
@@ -230,15 +237,19 @@ fn every_table_lookup_matches_proskomma_map_verse() {
 fn scheme_to_scheme_mapping_matches_proskomma_two_hops() {
     let oracle = oracle("compose.json");
     let pairs = oracle["pairs"].as_object().unwrap();
-    assert_eq!(pairs.len(), 34);
-    let mut cache: HashMap<String, Scheme> = HashMap::new();
-    for name in ["eng", "lxx", "org", "rsc", "rso", "vul", "syn"] {
-        cache.insert(name.to_owned(), scheme(name));
-    }
+    let inputs = oracle["inputs"].as_object().unwrap();
+    assert_eq!(pairs.len(), 52);
+    let mut cache: HashMap<&str, Scheme> = HashMap::new();
+    let mut fan_outs = 0usize;
     for (pair, lines) in pairs {
         let (from_name, to_name) = pair.split_once('>').unwrap();
+        for name in [from_name, to_name] {
+            cache.entry(name).or_insert_with(|| scheme(name));
+        }
         let (from, to) = (&cache[from_name], &cache[to_name]);
         let expected = expand_moves(&strings(lines));
+        fan_outs += expected.values().filter(|hops| hops.len() > 1).count();
+        let mut checked = 0u64;
         for b in from.versification().books() {
             for (i, &last) in from
                 .versification()
@@ -260,10 +271,19 @@ fn scheme_to_scheme_mapping_matches_proskomma_two_hops() {
                         .map(|l| l.targets)
                         .collect();
                     assert_eq!(got, want, "{pair} {input}");
+                    checked += 1;
                 }
             }
         }
+        assert_eq!(
+            Some(checked),
+            inputs[pair].as_u64(),
+            "{pair}: the oracle's input domain"
+        );
     }
+    // Proskomma's .vrs copies keep one-to-many entries, so some verses have several
+    // pivot verses in org and come back through several reverse hops.
+    assert!(fan_outs > 0, "no input had more than one pivot verse");
 }
 
 fn reason(text: &str) -> Unplaceable {

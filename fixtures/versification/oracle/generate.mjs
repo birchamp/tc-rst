@@ -238,36 +238,186 @@ writeJson('oracle/hops.json', {
 // table, then each pivot verse back through the target's reverse table.
 // ---------------------------------------------------------------------------
 
-const PAIR_SCHEMES = [...JSON_SCHEMES, 'syn'];
-const composeOut = {};
-for (const from of PAIR_SCHEMES) {
-  for (const to of PAIR_SCHEMES) {
+// Verse counts of a .vrs file, read as the Rust parser reads them: a chapter that a
+// `BOOK c:n c:n ...` line skips has no verses (vul.vrs lists `6EZ 1:63 12:78`).
+const vrsMaxVerses = (text) => {
+  const out = {};
+  for (const line of text.split(/[\n\r]+/).map((l) => l.trim())) {
+    if (!/^[A-Z0-9]{3}(\s+[0-9]+:[0-9]+)+$/.test(line)) continue;
+    const [book, ...cvs] = line.split(/\s+/);
+    const counts = [];
+    for (const cv of cvs) {
+      const [c, n] = cv.split(':').map(Number);
+      while (counts.length < c - 1) counts.push('0');
+      counts.push(String(n));
+    }
+    out[book] = counts;
+  }
+  return out;
+};
+
+// Every scheme a pair can name: tC4's JSON schemes by bare name, and Proskomma's own
+// .vrs copies, which keep one-to-many entries, as `vrs:proskomma/<name>`.
+const pairSchemes = {};
+for (const n of Object.keys(docs)) {
+  pairSchemes[n] = { maxVerses: docs[n].maxVerses, table: tables[`json:${n}`], mappedVerses: arrayify(docs[n].mappedVerses) };
+}
+for (const n of JSON_SCHEMES) {
+  const name = `vrs:proskomma/${n}`;
+  const text = fs.readFileSync(path.join(OUT, `vrs/proskomma/${n}.vrs`), 'utf8');
+  pairSchemes[name] = { maxVerses: vrsMaxVerses(text), table: tables[name], mappedVerses: vrsJson[`vrs/proskomma/${n}.vrs`], vrs: text };
+}
+
+const PAIRS = [];
+for (const from of [...JSON_SCHEMES, 'syn']) {
+  for (const to of [...JSON_SCHEMES, 'syn']) {
     if (from === to) continue;
     if ((from === 'syn' || to === 'syn') && ![from, to].includes('eng') && ![from, to].includes('org')) continue;
-    const F = tables[`json:${from}`].forward;
-    const R = tables[`json:${to}`].reverse;
-    const enc = runEncoder();
-    for (const [book, chapters] of Object.entries(docs[from].maxVerses)) {
-      chapters.forEach((last, i) => {
-        const c = i + 1;
-        for (let v = 0; v <= Number(last) + 1; v++) {
-          const [pb, pcvs] = apply(F, book, c, v);
-          const hops = pcvs.map(([oc, ov]) => apply(R, pb, oc, ov));
-          if (hops.length === 1 && isIdentity(hops[0], book, c, v)) enc.skip();
-          else enc.push(book, c, v, singleOf(hops), hops.map(hopText).join(';'));
-        }
-      });
-    }
-    composeOut[`${from}>${to}`] = enc.done();
+    PAIRS.push([from, to]);
   }
 }
+for (const n of ['eng', 'lxx', 'rsc', 'rso', 'vul']) {
+  PAIRS.push([`vrs:proskomma/${n}`, 'vrs:proskomma/org'], ['vrs:proskomma/org', `vrs:proskomma/${n}`]);
+  if (n !== 'eng') PAIRS.push([`vrs:proskomma/${n}`, 'vrs:proskomma/eng'], ['vrs:proskomma/eng', `vrs:proskomma/${n}`]);
+}
+
+// Calls `visit(book, c, v, hops)` for every input of a pair's domain: every verse
+// 0..=last+1 of every chapter in the source scheme's verse counts.
+const composePair = (from, to, visit) => {
+  const F = pairSchemes[from].table.forward;
+  const R = pairSchemes[to].table.reverse;
+  for (const [book, chapters] of Object.entries(pairSchemes[from].maxVerses)) {
+    chapters.forEach((last, i) => {
+      const c = i + 1;
+      for (let v = 0; v <= Number(last) + 1; v++) {
+        const [pb, pcvs] = apply(F, book, c, v);
+        visit(book, c, v, pcvs.map(([oc, ov]) => apply(R, pb, oc, ov)));
+      }
+    });
+  }
+};
+
+const composeOut = {};
+const composeInputs = {};
+for (const [from, to] of PAIRS) {
+  const enc = runEncoder();
+  let inputs = 0;
+  composePair(from, to, (book, c, v, hops) => {
+    inputs++;
+    if (hops.length === 1 && isIdentity(hops[0], book, c, v)) enc.skip();
+    else enc.push(book, c, v, singleOf(hops), hops.map(hopText).join(';'));
+  });
+  composeOut[`${from}>${to}`] = enc.done();
+  composeInputs[`${from}>${to}`] = inputs;
+}
+
+// ---------------------------------------------------------------------------
+// The same pairs through Proskomma's own query path. Each scheme gets a docSet whose
+// documents hold every chapter of its verse counts, with text that names its verse
+// (the text before verse 1 is verse 0), and setVerseMapping gives the docSet the
+// scheme's mappings. mappedCv (do_cv) on a source document then reads the target
+// docSet, so the returned text says where Proskomma landed. The composition above
+// must agree with it on every input, once do_cv's reading of documents is accounted
+// for:
+//
+// - with no document for the pivot book in the target docSet, do_cv skips the reverse
+//   hop and then finds no document to read, so it returns nothing;
+// - it reads every landing from the first landing's book;
+// - it leaves out a verse the document lacks.
+// ---------------------------------------------------------------------------
+
+const docSetUsfm = (book, counts) => {
+  let s = `\\id ${book}\n`;
+  counts.forEach((n, i) => {
+    s += `\\c ${i + 1}\n\\p\n${book}x${i + 1}x0\n`;
+    for (let v = 1; v <= Number(n); v++) s += `\\v ${v} ${book}x${i + 1}x${v}\n`;
+  });
+  return s;
+};
+const vrsText = (mv) =>
+  Object.entries(mv)
+    .flatMap(([k, ts]) => ts.map((t) => `${k} = ${t}\n`))
+    .join('');
+
+const docSetPk = new pk.Proskomma();
+const docSetIds = {};
+for (const name of new Set(PAIRS.flat())) {
+  const abbr = `s${Object.keys(docSetIds).length}`;
+  docSetIds[name] = `xxx_${abbr}`;
+  const scheme = pairSchemes[name];
+  for (const [book, counts] of Object.entries(scheme.maxVerses)) {
+    docSetPk.importDocument({ lang: 'xxx', abbr }, 'usfm', docSetUsfm(book, counts));
+  }
+  // setVerseMapping's jsonSource argument is a GraphQL string, which it never parses,
+  // so the JSON schemes go in as .vrs text that vrs2json must read back unchanged.
+  const vrs = scheme.vrs ?? vrsText(scheme.mappedVerses);
+  if (JSON.stringify(V.vrs2json(vrs).mappedVerses) !== JSON.stringify(scheme.mappedVerses)) {
+    throw new Error(`${name}: the .vrs text does not carry the scheme's mappings`);
+  }
+  const r = docSetPk.gqlQuerySync(
+    `mutation { setVerseMapping(docSetId: "${docSetIds[name]}", vrsSource: ${JSON.stringify(vrs)}) }`,
+  );
+  if (r.errors || !r.data.setVerseMapping) throw new Error(`${name}: ${JSON.stringify(r)}`);
+}
+
+const holds = (maxVerses, book, c, v) => {
+  const counts = maxVerses[book];
+  return !!counts && c >= 1 && c <= counts.length && v >= 0 && v <= Number(counts[c - 1]);
+};
+
+let mappedCvChecked = 0;
+for (const [from, to] of PAIRS) {
+  const pair = `${from}>${to}`;
+  const target = pairSchemes[to].maxVerses;
+  const expected = new Map();
+  composePair(from, to, (book, c, v, hops) => {
+    const pivotBook = apply(pairSchemes[from].table.forward, book, c, v)[0];
+    const readBook = hops[0][0];
+    const read = pivotBook in target
+      ? hops.flatMap(([, cvs]) => cvs).filter(([tc, tv]) => holds(target, readBook, tc, tv)).map(([tc, tv]) => `${readBook} ${tc}:${tv}`)
+      : [];
+    expected.set(`${book} ${c}:${v}`, read);
+  });
+  for (const [book, chapters] of Object.entries(pairSchemes[from].maxVerses)) {
+    chapters.forEach((last, i) => {
+      const c = i + 1;
+      const fields = [];
+      for (let v = 0; v <= Number(last) + 1; v++) {
+        fields.push(`v${v}: mappedCv(chapter: "${c}", verses: ["${v}"], mappedDocSetId: "${docSetIds[to]}") { text }`);
+      }
+      const r = docSetPk.gqlQuerySync(
+        `{ docSet(id: "${docSetIds[from]}") { document(bookCode: "${book}") { ${fields.join(' ')} } } }`,
+      );
+      if (r.errors) throw new Error(`${pair} ${book} ${c}: ${JSON.stringify(r.errors)}`);
+      for (let v = 0; v <= Number(last) + 1; v++) {
+        const got = r.data.docSet.document[`v${v}`].map(({ text }) => {
+          const m = /^([A-Z0-9]{3})x(\d+)x(\d+)$/.exec(text.trim());
+          if (!m) throw new Error(`${pair} ${book} ${c}:${v}: unexpected text ${JSON.stringify(text)}`);
+          return `${m[1]} ${m[2]}:${m[3]}`;
+        });
+        const want = expected.get(`${book} ${c}:${v}`);
+        if (JSON.stringify(got) !== JSON.stringify(want)) {
+          throw new Error(`${pair} ${book} ${c}:${v}: mappedCv gave ${JSON.stringify(got)}, the composition ${JSON.stringify(want)}`);
+        }
+        mappedCvChecked++;
+      }
+    });
+  }
+  console.log(`mappedCv agrees on ${pair}`);
+}
+
 writeJson('oracle/compose.json', {
   proskomma: PROSKOMMA_VERSION,
   note:
-    "Two-hop mapping from one tC4 scheme to another through org, as Proskomma's do_cv does it. " +
-    "Domain: every verse 0..=last+1 of every chapter in the source scheme's maxVerses. Results other " +
-    "than the input itself, as 'B c:v=hop[;hop...]' (one reverse hop per pivot verse) or the run " +
-    "form 'B c:v1..v2=B c:w'.",
+    "Two-hop mapping from one scheme to another through org, as Proskomma's do_cv does it: forward " +
+    "through the source scheme's table, then each pivot verse back through the target's reversed " +
+    "table. Bare names are tC4's JSON schemes; vrs:proskomma/<name> are Proskomma's own .vrs copies. " +
+    "Domain: every verse 0..=last+1 of every chapter in the source scheme's verse counts (`inputs` " +
+    "gives the count per pair). Results other than the input itself, as 'B c:v=hop[;hop...]' (one " +
+    "reverse hop per pivot verse) or the run form 'B c:v1..v2=B c:w'. Every input was also run " +
+    `through Proskomma's mappedCv query on generated docSets (${mappedCvChecked} queries), which ` +
+    'agreed once its reading of documents is accounted for (see generate.mjs).',
+  inputs: composeInputs,
   pairs: composeOut,
 });
 
