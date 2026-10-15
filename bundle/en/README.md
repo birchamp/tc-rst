@@ -30,6 +30,23 @@ commit, and it equals the tC4 pin. The project owner supplied the files on 2026-
 | `obs-tq` | `unfoldingWord/en_obs-tq` | v10 | `01b92fe8793d62cff3a2221f5174c768cbad3dc1` |
 | `lexicon.nt` | `uW/en_ugl` | none (commit only) | `d9d29e2d589258ce27f92b59f753a3af03ab7a72` |
 | `lexicon.ot` | `uW/en_uhl` | none (commit only) | `72df5ac25acf9d51e826b20e3ad883a5a657ef4e` |
-| OBS images | `uW/obs_images_360` | none (commit only) | `7146d5b504f6b63b9e11f7dc0b18c594d0ae179d` |
+
+## Fetched when the app is packaged
+
+The OBS image pack is too large to keep in git, so the packaging step downloads it. The
+person who installs the app never downloads it: the installer carries it, and the first run
+seeds it into the resource store like every file above.
+
+| Pin | Repository | Commit |
+|---|---|---|
+| OBS images (`EN_OBS_IMAGES` in tC4) | `uW/obs_images_360` | `7146d5b504f6b63b9e11f7dc0b18c594d0ae179d` |
+
+- The packaging step downloads the archive of exactly that commit. The release pipeline
+  runs it, because this build environment cannot reach Door43.
+- The first download records the archive's sha256 and size in `fetched.lock` in this
+  directory, and that file is committed. Every later download must match it, or the build
+  fails. A changed pin means a new commit and a new lock entry, made on purpose.
+- A build whose installer lacks a pinned file fails. The app never falls back to
+  downloading a bundled file.
 
 Licenses: the unfoldingWord resources are CC BY-SA 4.0, © unfoldingWord.

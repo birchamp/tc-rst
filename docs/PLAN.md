@@ -83,6 +83,10 @@ These constraints come from this build environment:
   open until a run on a machine with access.
 - Electronite cannot run here, so the Graphite proof is open until it runs on the
   release pipeline.
+- The bundled English suite lives in `bundle/en/`. The OBS image pack is too large for git,
+  so the release pipeline downloads it at its pinned commit and checks it against
+  `bundle/en/fetched.lock`. The installer carries it, so nobody who installs the app
+  downloads it. Read `bundle/en/README.md`.
 
 ## Rigor
 
