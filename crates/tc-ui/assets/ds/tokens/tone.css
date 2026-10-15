@@ -1,0 +1,225 @@
+/* TONE — the semantic colour axis.
+
+   One tone set, seven values, in two layers.
+
+   LAYER 1 — sources, on :root. --t-<tone>-<slot>. These are the values.
+   LAYER 2 — slots, scoped by attribute. [data-tone="X"] maps the sources onto
+             the nine --tone-* slots a component reads.
+
+   The indirection is not decoration. A component stamps data-tone on ITSELF, so
+   the scope block re-declares all nine slots on that element — which means a
+   --tone-* slot set on an ancestor is shadowed and can never reach the component.
+   Overriding a SOURCE works, because the scope block resolves var(--t-accent-fill)
+   in the element's own context and therefore inherits it:
+
+       <div style="--t-accent-fill:#1f8cba">   ← every accent fill inside darkens
+         <Action />                             ← including this one
+
+   That is also what will make per-context tone overrides possible: a
+   [data-on="dark"] block redefines sources, not slots. Specimen card under
+   Colors › Accent fill contrast.
+
+   Applied as an attribute: <div data-tone="valid"> … </div>. Nesting re-scopes.
+
+   Slot            Meaning
+   --tone          the identifying hue: pips, rails, bare marks
+   --tone-fill     solid background
+   --tone-on-fill  text/glyph on that solid background
+   --tone-soft     tinted background
+   --tone-on-soft  text on the tint
+   --tone-text     the tone as readable text on app/white — always AA
+   --tone-border   border in the tone
+   --tone-hover / --tone-press   the solid fill under interaction
+
+   --tone-text is NEVER the same value as --tone for accent, cultivate or warn:
+   those hues fail AA as text. That distinction is the reason the slot exists.
+
+   --tone-on-fill is chosen per tone against that tone's own fill, not assumed to
+   be white, and it comes from the BRAND PALETTE rather than the neutral ramp.
+   Kindle and Cultivate are light enough that white fails on them, so both carry
+   Tech (--uw-black #231F20), the palette's black — not --uw-ink #1E2C36, which is
+   an Ocean-tinted neutral for text on app surfaces. Close enough to be mistaken
+   for each other, one a blue-tinted black and the other warm, and a long way
+   apart in argument: the brand's colour-usage chart (guide p.16) rules on
+   brand-colour-on-brand-colour, and it marks Tech on Cultivate and Tech on Kindle
+   as explicit yeses.
+
+   ONE EXCEPTION, and it is the brand's: accent's white on Inspire #31ADE3 measures
+   2.56:1. That chart refuses EVERY brand colour as text on an Inspire background —
+   the Inspire column has no yes in it — so there is no brand-colour alternative.
+   White is on neither axis, and the guide's own palette page (p.14) sets white on
+   Inspire, so this pairing is the brand's practice rather than an oversight.
+   unfoldingWord has confirmed it stays; do not "fix" this value. What is worth knowing when using it: the precedent is display type — the
+   word "Inspire" is roughly 200px tall on that page — and a 13.5px label at the
+   same ratio is a harder read. Prefer a large size, or an Ocean fill, when a
+   filled accent surface has to carry small text. Recorded in readme caveat 10 and
+   AUDIT.md CANNOT-EXPRESS #12, six candidates measured under Colors › Accent fill
+   contrast.
+   Every other fill/on-fill pair in this file clears 3:1, most clear AA. */
+
+/* ---- Layer 1: sources ---- */
+:root {
+  /* neutral */
+  --t-neutral:            var(--uw-mist);
+  --t-neutral-fill:       var(--surface-muted);
+  --t-neutral-on-fill:    var(--text-secondary);
+  --t-neutral-soft:       var(--surface-muted);
+  --t-neutral-on-soft:    var(--text-secondary);
+  --t-neutral-text:       var(--text-secondary);
+  --t-neutral-border:     var(--border-input);
+  --t-neutral-hover:      var(--uw-mist);
+  --t-neutral-press:      var(--uw-mist);
+
+  /* accent */
+  --t-accent:             var(--uw-inspire);
+  --t-accent-fill:        var(--uw-inspire);
+  --t-accent-on-fill:     #FFFFFF; /* 2.56:1 — inherited brand pairing, see the header note */
+  --t-accent-soft:        var(--surface-accent-soft);
+  --t-accent-on-soft:     var(--uw-ocean);
+  --t-accent-text:        var(--text-accent);
+  --t-accent-border:      var(--uw-inspire);
+  --t-accent-hover:       var(--accent-hover);
+  --t-accent-press:       var(--accent-press);
+
+  /* ocean */
+  --t-ocean:              var(--uw-ocean);
+  --t-ocean-fill:         var(--uw-ocean);
+  --t-ocean-on-fill:      #FFFFFF;
+  --t-ocean-soft:         var(--surface-accent-soft);
+  --t-ocean-on-soft:      var(--uw-ocean);
+  --t-ocean-text:         var(--uw-ocean);
+  --t-ocean-border:       var(--uw-ocean);
+  --t-ocean-hover:        var(--uw-inspire-800);
+  --t-ocean-press:        var(--uw-ocean);
+
+  /* cultivate */
+  --t-cultivate:          var(--uw-cultivate);
+  --t-cultivate-fill:     var(--uw-cultivate);
+  --t-cultivate-on-fill:  var(--uw-black); /* white on Cultivate is 1.92:1; Tech is 8.47:1 */
+  --t-cultivate-soft:     var(--surface-accent-soft); /* Cultivate has no tint of its own: the key-word card is Cultivate-bordered on the Inspire tint */
+  --t-cultivate-on-soft:  var(--uw-ocean);
+  --t-cultivate-text:     var(--tc-cultivate-text);
+  --t-cultivate-border:   var(--uw-cultivate);
+  --t-cultivate-hover:    var(--uw-cultivate);
+  --t-cultivate-press:    var(--uw-cultivate);
+
+  /* valid */
+  --t-valid:              var(--tc-valid);
+  --t-valid-fill:         var(--tc-valid-strong);
+  --t-valid-on-fill:      #FFFFFF;
+  --t-valid-soft:         var(--tc-valid-surface);
+  --t-valid-on-soft:      var(--tc-valid-strong);
+  --t-valid-text:         var(--tc-valid-strong);
+  --t-valid-border:       var(--tc-valid);
+  --t-valid-hover:        var(--tc-valid-hover);
+  --t-valid-press:        var(--tc-valid-press);
+
+  /* warn */
+  --t-warn:               var(--uw-kindle);
+  --t-warn-fill:          var(--uw-kindle);
+  --t-warn-on-fill:       var(--uw-black); /* Kindle is never a primary action: its solid fill carries Tech */
+  --t-warn-soft:          var(--tc-warn-surface);
+  --t-warn-on-soft:       var(--tc-warn-text);
+  --t-warn-text:          var(--tc-warn-text-2);
+  --t-warn-border:        var(--tc-warn-border);
+  --t-warn-hover:         var(--tc-kindle-hover);
+  --t-warn-press:         var(--tc-kindle-press);
+
+  /* invalid */
+  --t-invalid:            var(--tc-invalid);
+  --t-invalid-fill:       var(--tc-invalid);
+  --t-invalid-on-fill:    #FFFFFF;
+  --t-invalid-soft:       var(--tc-invalid-surface);
+  --t-invalid-on-soft:    var(--tc-invalid);
+  --t-invalid-text:       var(--tc-invalid);
+  --t-invalid-border:     var(--border-danger);
+  --t-invalid-hover:      var(--tc-invalid-hover);
+  --t-invalid-press:      var(--tc-invalid-press);
+
+}
+
+/* ---- Layer 2: slots ---- */
+:root,
+[data-tone="neutral"] {
+  --tone:           var(--t-neutral);
+  --tone-fill:      var(--t-neutral-fill);
+  --tone-on-fill:   var(--t-neutral-on-fill);
+  --tone-soft:      var(--t-neutral-soft);
+  --tone-on-soft:   var(--t-neutral-on-soft);
+  --tone-text:      var(--t-neutral-text);
+  --tone-border:    var(--t-neutral-border);
+  --tone-hover:     var(--t-neutral-hover);
+  --tone-press:     var(--t-neutral-press);
+}
+
+[data-tone="accent"] {
+  --tone:           var(--t-accent);
+  --tone-fill:      var(--t-accent-fill);
+  --tone-on-fill:   var(--t-accent-on-fill);
+  --tone-soft:      var(--t-accent-soft);
+  --tone-on-soft:   var(--t-accent-on-soft);
+  --tone-text:      var(--t-accent-text);
+  --tone-border:    var(--t-accent-border);
+  --tone-hover:     var(--t-accent-hover);
+  --tone-press:     var(--t-accent-press);
+}
+
+[data-tone="ocean"] {
+  --tone:           var(--t-ocean);
+  --tone-fill:      var(--t-ocean-fill);
+  --tone-on-fill:   var(--t-ocean-on-fill);
+  --tone-soft:      var(--t-ocean-soft);
+  --tone-on-soft:   var(--t-ocean-on-soft);
+  --tone-text:      var(--t-ocean-text);
+  --tone-border:    var(--t-ocean-border);
+  --tone-hover:     var(--t-ocean-hover);
+  --tone-press:     var(--t-ocean-press);
+}
+
+[data-tone="cultivate"] {
+  --tone:           var(--t-cultivate);
+  --tone-fill:      var(--t-cultivate-fill);
+  --tone-on-fill:   var(--t-cultivate-on-fill);
+  --tone-soft:      var(--t-cultivate-soft);
+  --tone-on-soft:   var(--t-cultivate-on-soft);
+  --tone-text:      var(--t-cultivate-text);
+  --tone-border:    var(--t-cultivate-border);
+  --tone-hover:     var(--t-cultivate-hover);
+  --tone-press:     var(--t-cultivate-press);
+}
+
+[data-tone="valid"] {
+  --tone:           var(--t-valid);
+  --tone-fill:      var(--t-valid-fill);
+  --tone-on-fill:   var(--t-valid-on-fill);
+  --tone-soft:      var(--t-valid-soft);
+  --tone-on-soft:   var(--t-valid-on-soft);
+  --tone-text:      var(--t-valid-text);
+  --tone-border:    var(--t-valid-border);
+  --tone-hover:     var(--t-valid-hover);
+  --tone-press:     var(--t-valid-press);
+}
+
+[data-tone="warn"] {
+  --tone:           var(--t-warn);
+  --tone-fill:      var(--t-warn-fill);
+  --tone-on-fill:   var(--t-warn-on-fill);
+  --tone-soft:      var(--t-warn-soft);
+  --tone-on-soft:   var(--t-warn-on-soft);
+  --tone-text:      var(--t-warn-text);
+  --tone-border:    var(--t-warn-border);
+  --tone-hover:     var(--t-warn-hover);
+  --tone-press:     var(--t-warn-press);
+}
+
+[data-tone="invalid"] {
+  --tone:           var(--t-invalid);
+  --tone-fill:      var(--t-invalid-fill);
+  --tone-on-fill:   var(--t-invalid-on-fill);
+  --tone-soft:      var(--t-invalid-soft);
+  --tone-on-soft:   var(--t-invalid-on-soft);
+  --tone-text:      var(--t-invalid-text);
+  --tone-border:    var(--t-invalid-border);
+  --tone-hover:     var(--t-invalid-hover);
+  --tone-press:     var(--t-invalid-press);
+}

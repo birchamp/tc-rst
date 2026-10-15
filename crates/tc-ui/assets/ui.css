@@ -1,0 +1,30 @@
+/* App-level leftovers on top of the design system (src/ds/styles.css).
+   The reset, body type, scrollbars and selection all come from ds/tokens/
+   base.css. */
+html,body,#root{margin:0;padding:0;height:100%;}
+button{font-family:inherit;}
+
+/* #214, #639: the macOS and Windows desktop windows have no title bar;
+   scripts/preload.cjs sets the mark. The app header moves the window and leaves
+   room for the window controls. Each control in the header stays clickable: the
+   brand (the first item of the first column) and every button, tab, link and
+   field. A layer (dialog, drawer, panel) covers the header: Chromium finds the
+   drag area by position, not by what is on top, so the layer is no-drag; a
+   full-height side panel starts below the header, so the window controls are
+   over the scrim only, and the scrim takes the presses on the header (also when
+   it has no color). !important: these are inline styles.
+   The room is physical, not logical: a right-to-left app language mirrors the
+   page, not the window (#657). "hidden" (macOS): 88px at the left for the traffic lights. "overlay"
+   (Windows): the controls overlay, normally at the right; both paddings come
+   from the Window Controls Overlay environment (the title bar area is the
+   part of the top strip that the controls leave free), so the room follows the
+   zoom, the maximized state and the side the system draws the controls on
+   (Electron mirrors the area under an RTL system language), plus the header's
+   own 16px gutter. */
+html[data-title-bar] header{-webkit-app-region:drag;}
+html[data-title-bar="hidden"] header{padding-left:88px !important;}
+html[data-title-bar="overlay"] header{padding-left:calc(env(titlebar-area-x, 0px) + 16px) !important;padding-right:calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px) !important;}
+html[data-title-bar] header > :first-child > :first-child,
+html[data-title-bar] header :is(button,a,input,select,textarea,[role="tab"],[role="button"],[tabindex]),
+html[data-title-bar] [data-layer-placement]{-webkit-app-region:no-drag;}
+html[data-title-bar] :is([data-layer-placement="start"],[data-layer-placement="end"]){padding-top:var(--header-height) !important;pointer-events:auto !important;}

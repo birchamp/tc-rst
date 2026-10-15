@@ -1,0 +1,18 @@
+/* translationCore 4 Design System — global entry.
+   Consumers link this one file. Imports only. */
+@import url("tokens/fonts.css");
+@import url("tokens/colors.css");
+@import url("tokens/tone.css");
+@import url("tokens/context.css");
+@import url("tokens/layer.css");
+@import url("tokens/control.css");
+@import url("tokens/typography.css");
+@import url("tokens/spacing.css");
+@import url("tokens/layout.css");
+@import url("tokens/radius.css");
+@import url("tokens/border.css");
+@import url("tokens/elevation.css");
+@import url("tokens/motion.css");
+@import url("tokens/base.css");
+@import url("tokens/states.css");
+@import url("tokens/range.css");

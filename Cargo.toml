@@ -19,6 +19,15 @@ panic = "warn"
 dbg_macro = "warn"
 todo = "warn"
 
+# The UI's WebAssembly: smallest code, one unit, link-time optimisation.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
