@@ -247,9 +247,10 @@ pub struct SettingKey(Box<str>);   // a top-level key: NFC, not empty; `__proto_
 pub enum MetaField { Name, Abbreviation, Description, Languages, Copyright, Extra(MetaPath) }
 /// The dotted metadata.json path of a field the app does not model (`localizedNames`,
 /// `identification.primary.ebible`): NFC, non-empty `.`-separated segments, no control
-/// characters, no segment `__proto__`, `constructor` or `prototype`, and not a path a modelled
-/// field owns (`identification.name`, `identification.abbreviation`,
-/// `identification.description`, `languages`, `copyright`), so no field has two records.
+/// characters, no segment `__proto__`, `constructor` or `prototype`, and neither a path a
+/// modelled field owns (`identification.name`, `identification.abbreviation`,
+/// `identification.description`, `languages`, `copyright`) nor one above or below such a path
+/// (`identification`, `identification.name.en`), so no field has two records.
 pub struct MetaPath(Box<str>);
 /// The kind name and the canonical JSON of the key fields: every member of the record object
 /// except `value` (§2.8).
@@ -642,7 +643,7 @@ pub enum Anomaly {
 pub enum Notice {
     QuarantinedPack { path: RepoPath, reason: PackError, salvaged: u32 },
     QuarantinedPending { file: Box<str>, reason: PackError, salvaged: u32 },
-    NewerPack { path: RepoPath, tcpack: u32 },                       // carried, not read
+    NewerPack { path: RepoPath, tcpack: u64 },                       // carried, not read
     ClockAhead { device: DeviceId, by_ms: i64 },                     // `at` > this machine's now + 24 h
     CarriedBytesMissing { path: RepoPath, oid: GitOid },
     DeviceRotated { old: DeviceId, new: DeviceId, reason: RotationReason },
@@ -1072,19 +1073,21 @@ fold does not care which pack holds a change; the same change in two packs is on
 
 Pack validation, in order:
 
-0. **Newer format.** A file whose first line verifies and declares `tcpack` above 1 is from a
-   newer format, whatever else is wrong with it: `Notice::NewerPack`, carried, not read, never
-   reported as damaged (§12). Every future pack framing therefore keeps a first line that is a
-   verifiable canonical JSON object with a `tcpack` member.
+0. **Newer format, other project.** A file whose first line verifies and declares `tcpack`
+   above 1 is from a newer format, whatever else is wrong with it: `Notice::NewerPack`, carried,
+   not read, never reported as damaged (§12). Every future pack framing therefore keeps a first
+   line that is a verifiable canonical JSON object with a `tcpack` member. Otherwise, a file
+   whose first line verifies and names another project in `project` is foreign, whatever else
+   is wrong with it: not read, not salvaged, and reported, because salvaging its lines would
+   merge two projects.
 1. **P1 path.** The path matches `tc/changes/<DeviceId>/<\d{4}-\d{2}>/<32 hex>.ndjson`, the
    device is a Local device and the month is `01` to `12`. If not, the file is damaged: go to
    salvage.
 2. **P2 whole file.** `sha256(file)` starts with the name. If not, the file is damaged: go to
    salvage.
-3. **P3 header.** The first line verifies and parses. `tcpack` must be 1; a larger value is a
-   pack from a newer format: `Notice::NewerPack`, carried, not read (§12). `project` must be
-   this project; otherwise the pack is foreign: not read, and reported. `sealer` must equal the
-   directory; otherwise the file is damaged: go to salvage.
+3. **P3 header.** The first line verifies and parses, with `tcpack` 1 and `project` this
+   project (step 0 has set aside every other value). `sealer` must equal the directory;
+   otherwise the file is damaged: go to salvage.
 4. **P4 lines.** Exactly `count` lines follow, each verifies, and the file ends with a line
    feed; otherwise the file is damaged. A line that verifies but fails the per-change rules of
    §4.5 (its JSON may not even parse) is a quarantined change; the rest of the pack is used.
@@ -1128,8 +1131,9 @@ lines are salvaged into a new pending file, and the person sees "One save from 1
 read completely. N of M changes were recovered." "Saved" is shown only after the file's data and
 its rename are durable (§5.0), so this arises only from hardware that lies about flushes. A
 complete temporary pending file is never deleted: open renames it into place (§6.1 O2). A pending
-file whose header names another project (a `.tc/` folder copied between projects) is moved to
-`.tc/quarantine/` unread and reported.
+file whose header verifies and names another project (a `.tc/` folder copied between projects)
+is moved to `.tc/quarantine/` unread and reported, even when the rest of it is damaged: nothing
+of it is salvaged. A newer `pending` version is checked first, as in step 0.
 
 ### 4.5 Per-change rules
 
@@ -2904,7 +2908,11 @@ teammates on different minors converge to the higher one. Its bytes are written 
 `metadata.json`: keys sorted, two-space indentation, one trailing line feed. Members a newer
 minor adds, and derivation names this app does not know, are kept and written back; a merge
 takes them, too, from the document with the larger minor, and between two documents of one minor
-from the one whose canonical text is larger, so the merge is commutative.
+from the one whose canonical text is larger, so the merge is commutative. `major`, `minor` and
+`minReaderMinor` are non-negative integers, compared as numbers whatever their size. A
+`derivedPaths` entry is a `/`-separated pattern in which `*` matches any run of characters
+inside one segment and a `**` segment matches one or more whole segments; the file comes from
+any app or person, so matching must take polynomial time.
 
 ### 12.2 Rules
 

@@ -53,27 +53,54 @@ impl fmt::Display for PathPattern {
     }
 }
 
+/// Patterns come from `format.json`, which any app or person may have written, so matching
+/// takes time proportional to the pattern's length times the path's, never exponential.
 fn match_segments(pattern: &[&str], path: &[&str]) -> bool {
-    match (pattern.split_first(), path.split_first()) {
-        (None, None) => true,
-        (None, Some(_)) => false,
-        (Some((&"**", rest)), _) => {
-            (1..=path.len()).any(|taken| match_segments(rest, &path[taken..]))
+    // reach[j]: the pattern so far matches the first j segments of the path.
+    let mut reach = vec![false; path.len() + 1];
+    reach[0] = true;
+    for segment in pattern {
+        let mut next = vec![false; path.len() + 1];
+        if *segment == "**" {
+            let mut earlier = false;
+            for (j, slot) in next.iter_mut().enumerate() {
+                *slot = earlier;
+                earlier |= reach[j];
+            }
+        } else {
+            for (j, part) in path.iter().enumerate() {
+                if reach[j] && glob(segment.as_bytes(), part.as_bytes()) {
+                    next[j + 1] = true;
+                }
+            }
         }
-        (Some(_), None) => false,
-        (Some((first, rest)), Some((segment, path_rest))) => {
-            glob(first.as_bytes(), segment.as_bytes()) && match_segments(rest, path_rest)
-        }
+        reach = next;
     }
+    reach[path.len()]
 }
 
-/// `*` matches any run of bytes; every other byte matches itself.
+/// `*` matches any run of bytes; every other byte matches itself. Only the last `*` seen
+/// is ever retried, which is enough because a later `*` can absorb whatever an earlier one
+/// would have.
 fn glob(pattern: &[u8], text: &[u8]) -> bool {
-    match pattern.split_first() {
-        None => text.is_empty(),
-        Some((b'*', rest)) => (0..=text.len()).any(|skip| glob(rest, &text[skip..])),
-        Some((c, rest)) => text.first() == Some(c) && glob(rest, &text[1..]),
+    let (mut p, mut t) = (0, 0);
+    let mut retry: Option<(usize, usize)> = None;
+    while t < text.len() {
+        if pattern.get(p) == Some(&b'*') {
+            retry = Some((p, t));
+            p += 1;
+        } else if pattern.get(p) == Some(&text[t]) {
+            p += 1;
+            t += 1;
+        } else if let Some((star, from)) = retry {
+            p = star + 1;
+            t = from + 1;
+            retry = Some((star, from + 1));
+        } else {
+            return false;
+        }
     }
+    pattern[p..].iter().all(|b| *b == b'*')
 }
 
 const DERIVED_V0: &[&str] = &[
@@ -107,9 +134,11 @@ pub const DERIVATIONS_V0: &[(&str, u64)] = &[
 /// `ingredients/tc/format.json`. Fields a newer minor adds are kept and written back.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormatDoc {
-    pub major: u16,
-    pub minor: u16,
-    pub min_reader_minor: u16,
+    /// Read as any non-negative integer, so a number beyond this app's types is still
+    /// compared and written back as it was.
+    pub major: u64,
+    pub minor: u64,
+    pub min_reader_minor: u64,
     /// Derivation name → version, including names a newer minor added.
     pub derivations: BTreeMap<String, u64>,
     pub derived_paths: Vec<PathPattern>,
@@ -132,19 +161,19 @@ pub enum FormatGate {
     /// Open and edit.
     Writable,
     /// `minReaderMinor` is above this app's minor: open, show and export only.
-    ReadOnly { min_reader_minor: u16 },
+    ReadOnly { min_reader_minor: u64 },
     /// A larger major: refused before anything is written.
-    Refused { major: u16 },
+    Refused { major: u64 },
     /// A smaller major: migrated by an explicit, confirmed step that first writes a backup.
-    NeedsMigration { major: u16 },
+    NeedsMigration { major: u64 },
 }
 
 impl FormatDoc {
     /// The document this app writes for a new project.
     pub fn current() -> Self {
         Self {
-            major: FORMAT_MAJOR,
-            minor: FORMAT_MINOR,
+            major: u64::from(FORMAT_MAJOR),
+            minor: u64::from(FORMAT_MINOR),
             min_reader_minor: 0,
             derivations: DERIVATIONS_V0
                 .iter()
@@ -173,10 +202,10 @@ impl FormatDoc {
         {
             return Err(shape("format is not \"tc-project\""));
         }
-        let mut number = |key: &str| -> Result<u16, FormatError> {
+        let mut number = |key: &str| -> Result<u64, FormatError> {
             match map.remove(key) {
                 Some(Json::Int(n)) => {
-                    u16::try_from(n.get()).map_err(|_| shape(&format!("{key} is out of range")))
+                    u64::try_from(n.get()).map_err(|_| shape(&format!("{key} is negative")))
                 }
                 _ => Err(shape(&format!("{key} is not an integer"))),
             }
@@ -252,11 +281,11 @@ impl FormatDoc {
 
     /// What this app may do with a project of this format.
     pub fn gate(&self) -> FormatGate {
-        if self.major > FORMAT_MAJOR {
+        if self.major > u64::from(FORMAT_MAJOR) {
             FormatGate::Refused { major: self.major }
-        } else if self.major < FORMAT_MAJOR {
+        } else if self.major < u64::from(FORMAT_MAJOR) {
             FormatGate::NeedsMigration { major: self.major }
-        } else if self.min_reader_minor > FORMAT_MINOR {
+        } else if self.min_reader_minor > u64::from(FORMAT_MINOR) {
             FormatGate::ReadOnly {
                 min_reader_minor: self.min_reader_minor,
             }
@@ -297,7 +326,7 @@ impl FormatDoc {
     /// Never lowers anything.
     pub fn raised_to(&self, v: u16) -> Self {
         let mut doc = self.clone();
-        doc.minor = doc.minor.max(v);
+        doc.minor = doc.minor.max(u64::from(v));
         doc
     }
 
@@ -331,5 +360,23 @@ mod tests {
         assert!(!checking.matches("ingredients/checkingx/a"));
         assert!(usfm.matches_folded(&tc_burrito::collision_form("Ingredients/tit.USFM")));
         assert!(PathPattern::parse("a//b").is_none());
+        let both = PathPattern::parse("a/**/b/**").unwrap();
+        assert!(both.matches("a/x/b/y"));
+        assert!(both.matches("a/x/y/b/z/w"));
+        assert!(!both.matches("a/b/y"));
+        assert!(!both.matches("a/x/b"));
+        let stars = PathPattern::parse("*a*b*").unwrap();
+        assert!(stars.matches("ab") && stars.matches("xaybz") && !stars.matches("ba"));
+        assert!(PathPattern::parse("*").unwrap().matches(""));
+    }
+
+    #[test]
+    fn hostile_patterns_match_in_polynomial_time() {
+        let started = std::time::Instant::now();
+        let stars = PathPattern::parse(&format!("{}b", "*a".repeat(40))).unwrap();
+        assert!(!stars.matches(&"a".repeat(4000)));
+        let deep = PathPattern::parse(&format!("{}x", "**/".repeat(40))).unwrap();
+        assert!(!deep.matches(&["a"; 400].join("/")));
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
     }
 }

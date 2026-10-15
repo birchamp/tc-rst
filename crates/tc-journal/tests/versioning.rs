@@ -307,6 +307,21 @@ fn the_gate_refuses_newer_majors_and_reads_newer_minors() {
     assert!(FormatDoc::parse(b"{}").is_err());
     assert!(FormatDoc::parse(b"not json").is_err());
     assert!(FormatDoc::parse(br#"{"format":"x","major":1,"minor":0,"minReaderMinor":0,"derivations":{},"derivedPaths":[]}"#).is_err());
+    assert!(FormatDoc::parse(br#"{"format":"tc-project","major":1,"minor":-1,"minReaderMinor":0,"derivations":{},"derivedPaths":[]}"#).is_err());
+}
+
+/// Numbers beyond any minor this app could know are compared and written back as they
+/// are, never cut down to a smaller type.
+#[test]
+fn format_numbers_of_any_size_are_kept() {
+    let huge = br#"{"derivations":{},"derivedPaths":[],"format":"tc-project","major":70000,"minReaderMinor":0,"minor":0}"#;
+    assert_eq!(gate(huge), Ok(FormatGate::Refused { major: 70000 }));
+    let far = br#"{"derivations":{},"derivedPaths":[],"format":"tc-project","major":1,"minReaderMinor":0,"minor":18446744073709551615}"#;
+    let doc = FormatDoc::parse(far).unwrap();
+    assert_eq!(doc.gate(), FormatGate::Writable);
+    assert_eq!(doc.minor, u64::MAX);
+    assert_eq!(FormatDoc::parse(&doc.to_bytes()).unwrap(), doc);
+    assert_eq!(doc.merge(&FormatDoc::current()).minor, u64::MAX);
 }
 
 #[test]

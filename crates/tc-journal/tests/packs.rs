@@ -182,6 +182,25 @@ fn p3_foreign_projects_are_not_read_and_the_sealer_must_be_the_folder() {
     assert_eq!(read.entries.len(), 2);
 }
 
+/// A verified header that names another project makes the file foreign whatever else is
+/// wrong with it: salvaging its lines would merge two projects.
+#[test]
+fn a_damaged_pack_of_another_project_is_foreign_not_salvaged() {
+    let pack = &seal(&spec(local(9)), &changes(3)).unwrap()[0];
+    let mut damaged = pack.bytes.clone();
+    let last = damaged.len() - 2;
+    damaged[last] ^= 1;
+    let read = read_pack(&pack.path.to_string(), &damaged, project());
+    assert!(matches!(read.status, PackStatus::Damaged(_)));
+    assert_eq!(read.entries.len(), 2);
+
+    for bytes in [&pack.bytes, &damaged] {
+        let read = read_pack("not/a/pack/path", bytes, other_project());
+        assert_eq!(read.status, PackStatus::Foreign { project: project() });
+        assert!(read.entries.is_empty());
+    }
+}
+
 fn hand_pack(header: &str, lines: &[&Change], trailing: &[u8]) -> (String, Vec<u8>) {
     let mut bytes = line_of(header);
     for change in lines {
@@ -481,9 +500,11 @@ fn a_damaged_pending_file_is_salvaged_and_a_foreign_one_is_not_read() {
     assert_eq!(read.status, PendingStatus::Damaged(PackError::Truncated));
     assert_eq!(read.entries.len(), 3, "the last line still verifies");
 
-    let read = read_pending(&file.bytes, other_project());
-    assert_eq!(read.status, PendingStatus::Foreign { project: project() });
-    assert!(read.entries.is_empty());
+    for bytes in [&file.bytes, &damaged] {
+        let read = read_pending(bytes, other_project());
+        assert_eq!(read.status, PendingStatus::Foreign { project: project() });
+        assert!(read.entries.is_empty());
+    }
 
     assert_eq!(
         read_pending(b"", project()).status,
@@ -498,6 +519,10 @@ fn a_damaged_pending_file_is_salvaged_and_a_foreign_one_is_not_read() {
         read_pending(&line_of(&bad_purpose), project()).status,
         PendingStatus::Damaged(PackError::HeaderMalformed(_))
     ));
+    assert_eq!(
+        read_pending(&line_of(&bad_purpose), other_project()).status,
+        PendingStatus::Foreign { project: project() }
+    );
 }
 
 // ---------------------------------------------------------------------------------------

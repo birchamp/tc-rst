@@ -268,8 +268,8 @@ const MODELLED_META_PATHS: &[&str] = &[
 identity_string!(
     /// The dotted `metadata.json` path of a project detail the app does not model, such as
     /// `localizedNames` or `identification.primary.ebible`: NFC, non-empty segments
-    /// separated by `.`, no control characters, no prototype names, and not a path a
-    /// modelled field owns.
+    /// separated by `.`, no control characters, no prototype names, and neither a path a
+    /// modelled field owns nor one above or below such a path, so no field has two records.
     MetaPath
 );
 
@@ -290,11 +290,21 @@ impl MetaPath {
         {
             return Err(grammar("non-empty segments that are not prototype names"));
         }
-        if MODELLED_META_PATHS.contains(&text) {
-            return Err(grammar("not a path a modelled project detail owns"));
+        let overlaps = |owned: &&str| text == *owned || nested(text, owned) || nested(owned, text);
+        if MODELLED_META_PATHS.iter().any(overlaps) {
+            return Err(grammar(
+                "not a path a modelled project detail owns, nor one above or below it",
+            ));
         }
         Ok(Self(text.into()))
     }
+}
+
+/// True when dotted path `inner` lies below `outer`.
+fn nested(inner: &str, outer: &str) -> bool {
+    inner
+        .strip_prefix(outer)
+        .is_some_and(|rest| rest.starts_with('.'))
 }
 
 /// tC4's normative decision identity, so decisions round-trip with tC3 and tC4 tools.
@@ -395,6 +405,8 @@ mod tests {
         }
         assert!(MetaPath::parse("localizedNames").is_ok());
         assert!(MetaPath::parse("identification.primary.ebible").is_ok());
+        assert!(MetaPath::parse("identification.upstream").is_ok());
+        assert!(MetaPath::parse("languagesExtra").is_ok());
         for bad in [
             "",
             "a..b",
@@ -402,6 +414,9 @@ mod tests {
             "a.__proto__",
             "languages",
             "identification.name",
+            "identification.name.en",
+            "identification",
+            "languages.0",
             "a\nb",
         ] {
             assert!(MetaPath::parse(bad).is_err(), "{bad}");

@@ -15,7 +15,7 @@ use crate::change::Verified;
 use crate::ids::{DeviceId, DeviceKind, Md5, ProjectId, RepoPath};
 use crate::json::{self, Json};
 use crate::line::{RawLine, encode_line, frame, read_line, split_lines, verify_line};
-use crate::pack::{PackError, declared_version, lines_defect, salvage};
+use crate::pack::{NotOurs, PackError, lines_defect, not_ours, salvage};
 use crate::text::{hex, sha256};
 
 /// The pending-file framing version this app reads and writes.
@@ -88,25 +88,22 @@ pub fn read_pending(bytes: &[u8], project: ProjectId) -> PendingRead {
         status: PendingStatus::Valid,
         entries: Vec::new(),
     };
-    if let Some(version) = lines
-        .first()
-        .and_then(|line| declared_version(line.bytes, "pending"))
-        .filter(|v| *v > PENDING_FORMAT)
-    {
-        read.status = PendingStatus::Newer { pending: version };
-        return read;
+    match not_ours(lines.first(), "pending", PENDING_FORMAT, project) {
+        Some(NotOurs::Newer(pending)) => {
+            read.status = PendingStatus::Newer { pending };
+            return read;
+        }
+        Some(NotOurs::Foreign(owner)) => {
+            read.status = PendingStatus::Foreign { project: owner };
+            return read;
+        }
+        None => {}
     }
     let defect = match lines.first().map(parse_header) {
         None => Some(PackError::Empty),
         Some(Err(error)) => Some(error),
         Some(Ok(header)) => {
-            let foreign = header.project != project;
-            let owner = header.project;
             read.header = Some(header);
-            if foreign {
-                read.status = PendingStatus::Foreign { project: owner };
-                return read;
-            }
             lines_defect(&lines[1..])
         }
     };

@@ -207,14 +207,39 @@ impl PackRead {
     }
 }
 
-/// The `tcpack` or `pending` version a verified header line declares, read before anything
-/// else so a newer file is never reported as damaged.
-pub(crate) fn declared_version(header: &[u8], field: &str) -> Option<u64> {
-    let (_, json) = verify_line(header)?;
-    match json::parse(json).ok()?.as_obj()?.get(field)? {
-        Json::Int(n) => u64::try_from(n.get()).ok(),
-        _ => None,
+/// Why a file cannot be read here, decided from its first line alone before anything else,
+/// so that neither reason is ever reported as damage or salvaged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NotOurs {
+    /// The verified header declares a framing version above `known`.
+    Newer(u64),
+    /// The verified header names another project: salvaging its lines would merge two
+    /// projects.
+    Foreign(ProjectId),
+}
+
+/// Reads the verified first line of a pack or pending file for a newer framing version in
+/// `field` or another project's id.
+pub(crate) fn not_ours(
+    first: Option<&RawLine<'_>>,
+    field: &str,
+    known: u64,
+    project: ProjectId,
+) -> Option<NotOurs> {
+    let (_, json) = verify_line(first?.bytes)?;
+    let value = json::parse(json).ok()?;
+    let map = value.as_obj()?;
+    if let Some(Json::Int(n)) = map.get(field)
+        && let Ok(version) = u64::try_from(n.get())
+        && version > known
+    {
+        return Some(NotOurs::Newer(version));
     }
+    map.get("project")
+        .and_then(Json::as_str)
+        .and_then(ProjectId::parse)
+        .filter(|owner| *owner != project)
+        .map(NotOurs::Foreign)
 }
 
 /// Reads and validates a pack at repository path `path` (§4.4). Never fails: whatever is
@@ -230,13 +255,16 @@ pub fn read_pack(path: &str, bytes: &[u8], project: ProjectId) -> PackRead {
         status: PackStatus::Valid,
         entries: Vec::new(),
     };
-    if let Some(version) = lines
-        .first()
-        .and_then(|line| declared_version(line.bytes, "tcpack"))
-        .filter(|v| *v > PACK_FORMAT)
-    {
-        read.status = PackStatus::Newer { tcpack: version };
-        return read;
+    match not_ours(lines.first(), "tcpack", PACK_FORMAT, project) {
+        Some(NotOurs::Newer(tcpack)) => {
+            read.status = PackStatus::Newer { tcpack };
+            return read;
+        }
+        Some(NotOurs::Foreign(owner)) => {
+            read.status = PackStatus::Foreign { project: owner };
+            return read;
+        }
+        None => {}
     }
     let header = lines.first().map(|line| parse_header(line));
     if let Some(Ok(header)) = &header {
@@ -247,22 +275,13 @@ pub fn read_pack(path: &str, bytes: &[u8], project: ProjectId) -> PackRead {
         (Some(p), _) if id.name() != p.name => Some(PackError::NameMismatch),
         (_, None) => Some(PackError::Empty),
         (_, Some(Err(error))) => Some(error.clone()),
-        (Some(p), Some(Ok(header))) => {
-            if header.project != project {
-                read.status = PackStatus::Foreign {
-                    project: header.project,
-                };
-                return read;
-            }
-            if header.sealer != p.sealer {
-                Some(PackError::SealerMismatch {
-                    header: header.sealer,
-                    folder: p.sealer,
-                })
-            } else {
-                body_defect(header.count, &lines[1..])
-            }
+        (Some(p), Some(Ok(header))) if header.sealer != p.sealer => {
+            Some(PackError::SealerMismatch {
+                header: header.sealer,
+                folder: p.sealer,
+            })
         }
+        (Some(_), Some(Ok(header))) => body_defect(header.count, &lines[1..]),
     };
     match defect {
         None => {
