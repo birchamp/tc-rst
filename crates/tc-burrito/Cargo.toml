@@ -1,0 +1,28 @@
+[package]
+name = "tc-burrito"
+description = "Scripture Burrito 1.0 metadata: a typed model that keeps unknown fields, a canonical writer and an offline validator."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tc-core = { path = "../tc-core" }
+serde.workspace = true
+# Without `float_roundtrip`, about a third of all f64 values read back one digit off, so a
+# read-modify-write would change numbers in fields the model does not know. jsonschema
+# turns it on too; it is stated here because the no-loss rule depends on it.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+thiserror.workspace = true
+# The default features add reqwest and rustls to fetch remote $refs. The schema is embedded,
+# so the validator is built without any network code. The exact pin is the version the
+# research probe cross-checked against ajv on 48 documents.
+jsonschema = { version = "=0.58.6", default-features = false }
+md-5 = "0.11.0"
+
+[dev-dependencies]
+proptest.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
