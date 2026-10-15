@@ -1963,6 +1963,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "tc-check"
+version = "0.1.0"
+dependencies = [
+ "md-5 0.10.6",
+ "proptest",
+ "serde_json",
+ "tc-burrito",
+ "tc-core",
+ "tc-helps",
+ "tc-usfm",
+ "tc-versification",
+ "thiserror",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "tc-core"
 version = "0.1.0"
 dependencies = [
