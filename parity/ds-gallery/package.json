@@ -1,0 +1,25 @@
+{
+  "name": "tc4-ds-gallery",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Design-system baseline gallery for translationCore 4: every vendored DS component and token rendered case by case, with a Playwright capture script.",
+  "type": "module",
+  "scripts": {
+    "spec": "node build-spec.mjs",
+    "dev": "node build-spec.mjs && vite",
+    "build": "node build-spec.mjs && vite build",
+    "capture": "node capture.mjs"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "4.7.0",
+    "playwright": "1.56.1",
+    "vite": "6.4.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
