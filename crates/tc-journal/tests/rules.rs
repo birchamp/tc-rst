@@ -660,6 +660,12 @@ fn v8_a_carried_file_is_never_at_a_derived_or_owned_path() {
         "ingredients/content/front/title.md",
         "README.md",
         "ingredients/checkingx/a.json",
+        "ingredientsx",
+        "checking",
+        "content/01.md",
+        "ingredients/TIT.usfmx/a.wav",
+        "metadata.json.bak",
+        "docs/metadata.json",
     ] {
         assert!(Change::new(carried(ok)).is_ok(), "{ok}");
     }
@@ -673,9 +679,25 @@ fn v8_a_carried_file_is_never_at_a_derived_or_owned_path() {
         "ingredients/tc/project.json",
         "ingredients/TC/changes/x.ndjson",
         "ingredients/tc/notes/a.json",
+        // Folders the app's files are in: a file there could never be written.
+        "ingredients",
+        "ingredients/tc",
+        "Ingredients/TC",
+        "ingredients/checking",
+        "ingredients/content",
+        "ingredients/tc/comments",
+        // Inside a file the app writes.
+        "ingredients/TIT.usfm/a.wav",
+        "ingredients/vrs.json/a.wav",
+        "metadata.json/x.wav",
+        "ingredients/content/01.md/a/b.txt",
     ] {
         let rule = refused(carried(bad));
         assert_eq!(rule.rule(), Rule::V8, "{bad}: {rule}");
+    }
+    // metadata.json is no path a record can name at all (V2).
+    for bad in ["metadata.json", "Metadata.JSON"] {
+        assert!(tc_journal::RepoPath::parse(bad).is_err(), "{bad}");
     }
 }
 

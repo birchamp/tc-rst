@@ -7,7 +7,7 @@
 //! decoded body.
 
 use crate::change::ChangeBody;
-use crate::format::{FORMAT_MINOR, derived_paths};
+use crate::format::{FORMAT_MINOR, PathPattern, derived_paths};
 use crate::ids::{ChapterNo, DeviceId, DeviceKind, RepoPath};
 use crate::record::{ChapterFront, Record, VerseValue};
 use std::fmt;
@@ -260,13 +260,38 @@ fn known_minor(v: u16) -> u16 {
     if v > FORMAT_MINOR { FORMAT_MINOR } else { v }
 }
 
+/// The files translationCore writes besides those its format derives (§3.1, §11.4).
+const OWNED: &[&str] = &["metadata.json", "ingredients/tc/**"];
+
 pub(crate) fn carried_path_problem(path: &RepoPath, minor: u16) -> Option<String> {
     let folded = path.collision_form();
-    if folded.starts_with("ingredients/tc/") {
-        return Some("files under ingredients/tc/ belong to translationCore".into());
+    let derived = derived_paths(minor);
+    let owned: Vec<PathPattern> = OWNED.iter().filter_map(|p| PathPattern::parse(p)).collect();
+    let app_files = || derived.iter().chain(&owned);
+    if let Some(pattern) = app_files().find(|pattern| pattern.matches_folded(&folded)) {
+        return Some(format!("translationCore writes the files at {pattern}"));
     }
-    derived_paths(minor)
-        .iter()
-        .find(|pattern| pattern.matches_folded(&folded))
-        .map(|pattern| format!("translationCore derives the files at {pattern}"))
+    // One path cannot be both a file and a folder, so a carried file that the app's files
+    // need as a folder, or that lies inside one of them, could never be written.
+    for pattern in app_files() {
+        let segments: Vec<&str> = pattern.as_str().split('/').collect();
+        for depth in 1..segments.len() {
+            let folder = segments[..depth].join("/");
+            if PathPattern::parse(&folder).is_some_and(|folder| folder.matches_folded(&folded)) {
+                return Some(format!(
+                    "translationCore needs a folder here, for the files at {pattern}"
+                ));
+            }
+        }
+    }
+    let segments: Vec<&str> = folded.split('/').collect();
+    for depth in 1..segments.len() {
+        let parent = segments[..depth].join("/");
+        if let Some(pattern) = app_files().find(|pattern| pattern.matches_folded(&parent)) {
+            return Some(format!(
+                "the file is inside {parent}, which translationCore writes at {pattern}"
+            ));
+        }
+    }
+    None
 }

@@ -1169,11 +1169,15 @@ that breaks one is a **quarantined change**: kept in its file, not folded, liste
 - **V6 grow-only records.** A `Comment` or `BatchRelease` change has no parents.
 - **V7 limits.** JSON nesting depth ≤ 64; a change line ≤ 4 MiB, counting its tab, hash and
   line feed.
-- **V8 carried paths.** A `CarriedFile` path is not a path the app derives and not under
-  `ingredients/tc/`, comparing collision forms (§3.3). The derived paths are those of the
-  change's own minor, or of this app's minor for a newer change (§12.1, `derivedPaths`), never
-  those of the project's `format.json`, so the verdict on a change does not depend on which
-  format documents a device has seen.
+- **V8 carried paths.** A `CarriedFile` path is not a path the app derives or owns (anything
+  under `ingredients/tc/`; `metadata.json` is no record path at all, V2), not a folder that holds
+  one of those (`ingredients`, `ingredients/tc`, `ingredients/checking`, `ingredients/content`),
+  and not a path inside one of those files (`ingredients/TIT.usfm/a.wav`, `metadata.json/x.wav`),
+  comparing collision forms (§3.3): one path cannot be both a file and a folder, so such a file
+  could never be written, and unlike a case collision that does not depend on other records. The
+  derived paths are those of the change's own minor, or of this app's minor for a newer change
+  (§12.1, `derivedPaths`), never those of the project's `format.json`, so the verdict on a
+  change does not depend on which format documents a device has seen.
 
 Collisions between paths of different records (letter case, §3.3) depend on the set, not on one
 change, so they are handled by the projection (§7.7), never by quarantine.
