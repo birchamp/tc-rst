@@ -12,7 +12,7 @@ use tc_check::change::{Unit, consequences};
 use tc_check::derive::{notes_for_book, word_links_for_book};
 use tc_check::resolve::LanguageSet;
 use tc_check::session::open;
-use tc_check::status::{CheckState, Edit, Triage, apply};
+use tc_check::status::{CheckState, Edit, Triage, apply, assess};
 use tc_check::{
     CheckItem, Collection, Decision, Pins, ResourceRef, Selection, Slot, TextMd5, ToolId,
 };
@@ -360,11 +360,11 @@ fn two_decisions_arriving_at_one_check_are_both_kept_as_a_conflict() {
 
 fn set(lang: &str, org: &str, v: &str, books: &[&str]) -> LanguageSet {
     let mut s = LanguageSet::default();
-    s.pins.insert(
+    s.insert(
         Slot::TranslationNotes,
         pin(&format!("{org}/{lang}_tn"), v, books),
     );
-    s.pins.insert(
+    s.insert(
         Slot::TranslationWordsLinks,
         pin(&format!("{org}/{lang}_twl"), v, books),
     );
@@ -404,8 +404,8 @@ fn a_gateway_change_counts_the_decisions_it_puts_at_risk() {
         primary: Some(primary),
         fallback: Some(fallback),
     };
-    let es_tn = es().pins[&Slot::TranslationNotes].resource.clone();
-    let en_tn = en().pins[&Slot::TranslationNotes].resource.clone();
+    let es_tn = es().get(Slot::TranslationNotes).unwrap().resource.clone();
+    let en_tn = en().get(Slot::TranslationNotes).unwrap().resource.clone();
     let none = |_: &ResourceRef| None;
     let unit = |book, decisions| Unit {
         tool: ToolId::TranslationNotes,
@@ -474,8 +474,8 @@ fn a_decision_a_carry_over_left_behind_is_not_put_at_risk_again() {
         primary: Some(primary),
         fallback: Some(en()),
     };
-    let es_tn = es().pins[&Slot::TranslationNotes].resource.clone();
-    let en_tn = en().pins[&Slot::TranslationNotes].resource.clone();
+    let es_tn = es().get(Slot::TranslationNotes).unwrap().resource.clone();
+    let en_tn = en().get(Slot::TranslationNotes).unwrap().resource.clone();
     let mut titus_decisions = stored_against(BookId::Titus, &en_tn, 12);
     titus_decisions.extend(stored_against(BookId::Titus, &es_tn, 1));
     let units = [Unit {
@@ -488,17 +488,97 @@ fn a_decision_a_carry_over_left_behind_is_not_put_at_risk_again() {
     // A change that leaves Titus on en_tn is harmless.
     let c = consequences(&pins(en()), &pins(en()), &units, none);
     assert!(c.harmless(), "{c:?}");
-    assert_eq!((c.unaffected, c.detached), (1, 1));
+    assert_eq!((c.unaffected, c.revived, c.detached), (1, 0, 1));
 
     // A change that moves Titus puts at risk only what holds now.
     let c = consequences(&pins(en()), &pins(fr()), &units, none);
     assert_eq!(c.at_risk(), 12);
     assert_eq!(c.affected[0].checked_against, en_tn);
-    assert_eq!(c.detached, 1);
+    assert_eq!((c.revived, c.detached), (0, 1));
 
-    // Pinning Spanish again moves the twelve; the left-behind one is not at risk.
+    // Pinning Spanish again moves the twelve and brings the left-behind one back.
     let c = consequences(&pins(en()), &pins(es()), &units, none);
-    assert_eq!((c.at_risk(), c.detached), (12, 1));
+    assert_eq!((c.at_risk(), c.revived, c.detached), (12, 1, 0));
+}
+
+#[test]
+fn a_change_back_to_the_resource_a_decision_was_made_against_revives_it() {
+    // Ruth resolves to es-419_tn and holds three decisions on it and two on en_tn left
+    // from when it resolved to English. Pinning French, which lacks Ruth, puts it back
+    // on English.
+    let es = || set("es-419", "Es-419_gl", "v66", &["RUT"]);
+    let fr = || set("fr", "Xenizo", "v2.0", &["TIT"]);
+    let en = || set("en", "unfoldingWord", "v89", &["RUT"]);
+    let pins = |primary: LanguageSet| Pins {
+        primary: Some(primary),
+        fallback: Some(en()),
+    };
+    let es_tn = es().get(Slot::TranslationNotes).unwrap().resource.clone();
+    let en_tn = en().get(Slot::TranslationNotes).unwrap().resource.clone();
+    let mut ruth = stored_against(BookId::Ruth, &es_tn, 3);
+    ruth.extend(stored_against(BookId::Ruth, &en_tn, 2));
+    let units = [Unit {
+        tool: ToolId::TranslationNotes,
+        collection: Collection::Book(BookId::Ruth),
+        decisions: &ruth,
+    }];
+    let c = consequences(&pins(es()), &pins(fr()), &units, |_| None);
+    assert_eq!((c.at_risk(), c.revived, c.detached), (3, 2, 0));
+    assert!(!c.blocked());
+    // What the count says is what the decisions compute after the change.
+    let after = tc_check::resolve::resolve(
+        &pins(fr()),
+        ToolId::TranslationNotes,
+        Collection::Book(BookId::Ruth),
+    )
+    .unwrap()
+    .pin
+    .resource;
+    let valid_after = ruth
+        .iter()
+        .filter(|d| {
+            assess(&d.decision, Some(&after), None)
+                .invalidation
+                .is_none()
+        })
+        .count();
+    assert_eq!(valid_after, c.revived);
+}
+
+#[test]
+fn a_change_onto_an_unusable_pin_is_blocked() {
+    // The next primary pins tN for Titus with a tag and no commit: no rung would answer
+    // Titus with a usable pin, so its decisions would match none.
+    let en = || set("en", "unfoldingWord", "v89", &["TIT"]);
+    let en_tn = en().get(Slot::TranslationNotes).unwrap().resource.clone();
+    let tag_only = LanguageSet::from_json(&serde_json::json!({
+        "translationNotes": {
+            "repoPath": "git.door43.org/Xenizo/fr_tn",
+            "version": "v2.0",
+            "books": ["TIT"]
+        }
+    }))
+    .unwrap();
+    assert_eq!(tag_only.unusable().count(), 1);
+    let titus_decisions = stored_against(BookId::Titus, &en_tn, 2);
+    let units = [Unit {
+        tool: ToolId::TranslationNotes,
+        collection: Collection::Book(BookId::Titus),
+        decisions: &titus_decisions,
+    }];
+    let c = consequences(
+        &Pins {
+            primary: Some(en()),
+            fallback: Some(en()),
+        },
+        &Pins {
+            primary: Some(tag_only),
+            fallback: Some(en()),
+        },
+        &units,
+        |_| None,
+    );
+    assert_eq!((c.at_risk(), c.blocked()), (2, true));
 }
 
 // ---- properties ----------------------------------------------------------------------

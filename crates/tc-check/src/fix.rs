@@ -10,7 +10,10 @@
 use tc_helps::CommitSha;
 
 use crate::key::{Collection, ToolId};
-use crate::resolve::{Coverage, Pin, Pins, Resolution, ResourceRef, Rung, Slot, coverage_of};
+use crate::resolve::{
+    Answer, Coverage, Pin, Pins, Resolution, ResourceRef, Rung, Slot, SlotPin, UnusablePin,
+    answer_with, coverage_of,
+};
 
 /// A resource installed on this computer: one repository at one commit.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,6 +61,10 @@ pub enum PreflightState {
     /// A pre-release build pinned the translation words repository in the word links
     /// slot; the app reads no links from it, and the project must be created again.
     OldWordLinks,
+    /// The rung that answers holds a value the app cannot use as a pin, such as a tag
+    /// without a commit (D59): no download or file can satisfy it, and the next rung is
+    /// not used in its place. The project's pins must be repaired.
+    UnusablePin,
 }
 
 /// The preflight's answer.
@@ -70,8 +77,11 @@ pub struct Preflight {
     /// The pinned resource this computer lacks, which a fetch or the guided fix gets.
     pub needs: Option<Pin>,
     /// Set when the tool opened on the fallback only because the primary's pin is not
-    /// installed and records no coverage: the screen warns that a substitute is in use.
-    pub unavailable_primary: Option<Pin>,
+    /// installed, or not usable, and records no coverage: the screen warns that a
+    /// substitute is in use.
+    pub unavailable_primary: Option<SlotPin>,
+    /// The unusable pin behind [`PreflightState::UnusablePin`], and its rung.
+    pub unusable: Option<(Rung, UnusablePin)>,
 }
 
 /// Decides what opening the tool needs (tC4 `preflightToolBook`, `preflightObsTool`).
@@ -89,6 +99,11 @@ pub fn preflight(
         resolution,
         needs,
         unavailable_primary,
+        unusable: None,
+    };
+    let unusable = |rung, pin: &UnusablePin| Preflight {
+        unusable: Some((rung, pin.clone())),
+        ..answer(PreflightState::UnusablePin, None, None, None)
     };
     let Some(pins) = pins.filter(|p| p.primary.is_some() || p.fallback.is_some()) else {
         return answer(PreflightState::Unpinned, None, None, None);
@@ -112,11 +127,39 @@ pub fn preflight(
             PreflightState::Unavailable
         }
     };
+    // A slot whose coverage nothing here can tell: a pin that records no books and is
+    // not installed, or an unusable one that records none.
+    let unknown = |held: &&SlotPin| match held {
+        SlotPin::Usable(p) => !coverage_of(p, &local).is_recorded() && !machine.has(&p.resource),
+        SlotPin::Unusable(u) => !u.coverage.is_recorded(),
+    };
+
+    let resolution = match answer_with(pins, tool, collection, local) {
+        Some(Answer::Pin(resolution)) => resolution,
+        Some(Answer::Unusable { rung, pin }) => return unusable(rung, &pin),
+        None => {
+            let ladder: Vec<(Rung, &SlotPin)> = Rung::LADDER
+                .into_iter()
+                .filter_map(|rung| Some((rung, pins.slot(rung, slot)?)))
+                .collect();
+            if ladder.is_empty() {
+                return answer(PreflightState::Unpinned, None, None, None);
+            }
+            // A slot that might cover the book: fetch it rather than say it does not.
+            return match ladder.into_iter().find(|(_, held)| unknown(held)) {
+                Some((_, SlotPin::Usable(pin))) if machine.online => {
+                    answer(PreflightState::Fetch, None, Some(pin.clone()), None)
+                }
+                Some((_, SlotPin::Usable(_))) => {
+                    answer(PreflightState::Unavailable, None, None, None)
+                }
+                Some((rung, SlotPin::Unusable(pin))) => unusable(rung, pin),
+                None => answer(PreflightState::NotCovered, None, None, None),
+            };
+        }
+    };
 
     if collection == Collection::Stories {
-        let Some(resolution) = crate::resolve::resolve(pins, tool, collection) else {
-            return answer(PreflightState::Unpinned, None, None, None);
-        };
         let state = availability(&resolution.pin);
         // tC4 names the story pin only for a download; the guided fix falls back to the
         // resolved pin.
@@ -124,37 +167,19 @@ pub fn preflight(
         return answer(state, Some(resolution), needs, None);
     }
 
-    if let Some(resolution) = crate::resolve::resolve_with(pins, tool, collection, local) {
-        let missing = missing_pin(pins, tool, &resolution, machine);
-        let state = missing.as_ref().map_or(PreflightState::Ready, availability);
-        let unavailable_primary = pins
-            .pin(Rung::Primary, slot)
-            .filter(|p| {
-                resolution.used_fallback()
-                    && !coverage_of(p, &local).is_recorded()
-                    && !machine.has(&p.resource)
-            })
-            .cloned();
-        return answer(state, Some(resolution), missing, unavailable_primary);
+    // The tW tool also reads the resolving set's articles.
+    if let (ToolId::TranslationWords, Some(SlotPin::Unusable(pin))) =
+        (tool, pins.slot(resolution.rung, Slot::TranslationWords))
+    {
+        return unusable(resolution.rung, pin);
     }
-
-    let ladder: Vec<&Pin> = Rung::LADDER
-        .into_iter()
-        .filter_map(|rung| pins.pin(rung, slot))
-        .collect();
-    if ladder.is_empty() {
-        return answer(PreflightState::Unpinned, None, None, None);
-    }
-    // A pinned resource that is not installed and records no books might cover the
-    // book: fetch it rather than say it does not.
-    let unfetched = ladder
-        .into_iter()
-        .find(|p| !coverage_of(p, &local).is_recorded() && !machine.has(&p.resource));
-    match unfetched {
-        Some(pin) if machine.online => answer(PreflightState::Fetch, None, Some(pin.clone()), None),
-        Some(_) => answer(PreflightState::Unavailable, None, None, None),
-        None => answer(PreflightState::NotCovered, None, None, None),
-    }
+    let missing = missing_pin(pins, tool, &resolution, machine);
+    let state = missing.as_ref().map_or(PreflightState::Ready, availability);
+    let unavailable_primary = pins
+        .slot(Rung::Primary, slot)
+        .filter(|held| resolution.used_fallback() && unknown(held))
+        .cloned();
+    answer(state, Some(resolution), missing, unavailable_primary)
 }
 
 /// The pin a resolved tool still lacks: the resolved pin, or for tW the resolving set's
@@ -191,8 +216,12 @@ pub struct GuidedFix {
 /// The guided fix for a tool whose preflight found its resource missing (tC4
 /// `openFix`). The pin to get is the one the preflight named, else the resolved pin,
 /// else the first pin of the ladder that records no books and is not installed (never a
-/// pin recorded as not covering the book). `None` when there is nothing to fix.
+/// pin recorded as not covering the book). `None` when there is nothing to fix, or when
+/// the pin is unusable: getting another rung's resource would not repair it.
 pub fn guided_fix(pins: &Pins, preflight: &Preflight, machine: &Machine<'_>) -> Option<GuidedFix> {
+    if preflight.state == PreflightState::UnusablePin {
+        return None;
+    }
     let slot = Slot::of_tool(preflight.tool, preflight.collection);
     let local = |r: &ResourceRef| machine.local_coverage(r);
     let pin = preflight

@@ -7,9 +7,10 @@
 //! is not affected. A decision that already does not hold against the current
 //! resolution (one a carry-over could not place, which keeps its old resource) is not at
 //! risk again: tC4 rewrote such a decision's resource in the file, so it never counted
-//! it twice, and here it is counted apart as detached. A change that would leave an
-//! affected unit with no resource at all is blocked, because its decisions would then
-//! match no rung.
+//! it twice. Here it is counted apart, as revived when the change resolves its unit back
+//! to the resource it was made against and as detached otherwise. A change that would
+//! leave an affected unit with no usable resource is blocked, because its decisions
+//! would then match no rung.
 
 use crate::carry::{StoredDecision, Summary};
 use crate::key::{Collection, ToolId};
@@ -33,8 +34,8 @@ pub struct Affected {
     pub checked_against: ResourceRef,
     /// How many of its decisions hold against `checked_against` and would no longer.
     pub decisions: usize,
-    /// True when no rung covers it after the change: the change is refused while any
-    /// affected unit is blocked.
+    /// True when no rung answers it with a usable pin after the change: the change is
+    /// refused while any affected unit is blocked.
     pub blocked: bool,
 }
 
@@ -44,8 +45,12 @@ pub struct Consequences {
     /// Units with decisions, none of which the change puts at risk.
     pub unaffected: usize,
     pub affected: Vec<Affected>,
-    /// Decisions that already do not hold against their unit's current resolution. They
-    /// compute as invalidated before and after the change and are kept either way.
+    /// Decisions that do not hold now and will hold after the change, because it
+    /// resolves their unit back to the resource they were made against.
+    pub revived: usize,
+    /// Decisions that hold neither now nor after the change: made against a resource
+    /// their unit resolves to on neither side. They compute as invalidated (resource
+    /// changed) either way and are kept.
     pub detached: usize,
 }
 
@@ -83,13 +88,22 @@ pub fn consequences(
         let before =
             resolve_with(current, unit.tool, unit.collection, &local).map(|r| r.pin.resource);
         let after = resolve_with(next, unit.tool, unit.collection, &local);
+        let after_resource = after.as_ref().map(|r| &r.pin.resource);
+        let holds =
+            |d: &&StoredDecision, on: Option<&ResourceRef>| on == Some(&d.decision.resource);
         let holding = unit
             .decisions
             .iter()
-            .filter(|d| before.as_ref() == Some(&d.decision.resource))
+            .filter(|d| holds(d, before.as_ref()))
             .count();
-        out.detached += unit.decisions.len() - holding;
-        let moves_away = after.as_ref().map(|r| &r.pin.resource) != before.as_ref();
+        let revived = unit
+            .decisions
+            .iter()
+            .filter(|d| !holds(d, before.as_ref()) && holds(d, after_resource))
+            .count();
+        out.revived += revived;
+        out.detached += unit.decisions.len() - holding - revived;
+        let moves_away = after_resource != before.as_ref();
         match before {
             Some(checked_against) if holding > 0 && moves_away => out.affected.push(Affected {
                 tool: unit.tool,

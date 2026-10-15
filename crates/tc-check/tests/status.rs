@@ -310,16 +310,8 @@ fn triage_buttons_record_what_tc4_records() {
 fn the_sample_project_s_decisions_compute_as_tc4_shows_them() {
     let pins_json: Value = serde_json::from_str(&sample("checking/resources.json")).unwrap();
     let pins = Pins {
-        primary: Some(
-            LanguageSet::from_json(&pins_json["languageSets"]["primary"])
-                .unwrap()
-                .set,
-        ),
-        fallback: Some(
-            LanguageSet::from_json(&pins_json["languageSets"]["fallback"])
-                .unwrap()
-                .set,
-        ),
+        primary: Some(LanguageSet::from_json(&pins_json["languageSets"]["primary"]).unwrap()),
+        fallback: Some(LanguageSet::from_json(&pins_json["languageSets"]["fallback"]).unwrap()),
     };
     let usfm = sample("TIT.usfm");
     let mut seen = Vec::new();

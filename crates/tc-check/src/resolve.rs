@@ -229,50 +229,102 @@ impl Slot {
     }
 }
 
-/// One language set: its pins by slot.
+/// What a language set holds in one slot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SlotPin {
+    Usable(Pin),
+    /// A value the app cannot use as a pin. It is kept on its rung so that the ladder
+    /// stops at it rather than use the next rung in its place.
+    Unusable(UnusablePin),
+}
+
+/// A slot value that is not a usable pin, such as a pin with a tag and no commit. No
+/// install or file can satisfy it (tC4 D59), so a (tool, book) it answers cannot open
+/// until the project's pins are repaired.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnusablePin {
+    /// The books it records, read as for a usable pin. It has no commit to look up an
+    /// installed copy by, so a pin that records none covers no book (tC4 `coverageFor`).
+    pub coverage: Coverage,
+    pub reason: Error,
+}
+
+/// One language set: what it holds in each slot.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LanguageSet {
-    pub pins: BTreeMap<Slot, Pin>,
+    pub slots: BTreeMap<Slot, SlotPin>,
 }
 
 impl LanguageSet {
+    /// The usable pin in `slot`.
     pub fn get(&self, slot: Slot) -> Option<&Pin> {
-        self.pins.get(&slot)
+        match self.slots.get(&slot)? {
+            SlotPin::Usable(pin) => Some(pin),
+            SlotPin::Unusable(_) => None,
+        }
+    }
+
+    /// Pins `pin` in `slot`, returning what the slot held.
+    pub fn insert(&mut self, slot: Slot, pin: Pin) -> Option<SlotPin> {
+        self.slots.insert(slot, SlotPin::Usable(pin))
+    }
+
+    /// The usable pins, by slot.
+    pub fn pins(&self) -> impl Iterator<Item = (Slot, &Pin)> {
+        self.slots.iter().filter_map(|(slot, held)| match held {
+            SlotPin::Usable(pin) => Some((*slot, pin)),
+            SlotPin::Unusable(_) => None,
+        })
+    }
+
+    /// The slots that hold a value the app cannot use, which the screens name.
+    pub fn unusable(&self) -> impl Iterator<Item = (Slot, &UnusablePin)> {
+        self.slots.iter().filter_map(|(slot, held)| match held {
+            SlotPin::Usable(_) => None,
+            SlotPin::Unusable(unusable) => Some((*slot, unusable)),
+        })
     }
 
     /// Reads a tC4 language set (`languageSets.primary` of `resources.json`, or the slots
-    /// of a journal `Pins` group) slot by slot: every slot this crate knows, as a pin.
-    /// Other keys, such as `gatewayLanguage`, are not pins and are left out. A slot whose
-    /// pin cannot be read (a pin with a tag and no commit) is refused on its own and
-    /// reported; it reads as unpinned, so the other slots still resolve. Only a
-    /// value that is not an object at all is refused whole.
-    pub fn from_json(value: &Value) -> Result<ReadSet, Error> {
+    /// of a journal `Pins` group) slot by slot. Other keys, such as `gatewayLanguage`, are
+    /// not pins and are left out, and a `null` slot is no pin, as tC4 reads it. A slot
+    /// whose pin cannot be used (a pin with a tag and no commit) is kept as
+    /// [`SlotPin::Unusable`] with the reason, so the other slots still resolve and its
+    /// own (tool, book)s do not silently take the next rung. Only a value that is not an
+    /// object at all is refused whole.
+    pub fn from_json(value: &Value) -> Result<Self, Error> {
         let object = value
             .as_object()
             .ok_or_else(|| Error::Pin(value.to_string()))?;
-        let mut read = ReadSet::default();
-        for (name, pin) in object {
+        let mut set = Self::default();
+        for (name, value) in object {
             let Some(slot) = Slot::parse(name) else {
                 continue;
             };
-            match Pin::from_json(pin) {
-                Ok(pin) => {
-                    read.set.pins.insert(slot, pin);
-                }
-                Err(error) => read.refused.push((slot, error)),
+            if value.is_null() {
+                continue;
             }
+            let held = match Pin::from_json(value) {
+                Ok(pin) => SlotPin::Usable(pin),
+                Err(reason) => SlotPin::Unusable(UnusablePin {
+                    coverage: coverage_from_json(value),
+                    reason,
+                }),
+            };
+            set.slots.insert(slot, held);
         }
-        Ok(read)
+        Ok(set)
     }
 }
 
-/// A language set as read, with the slots whose pins could not be read.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ReadSet {
-    pub set: LanguageSet,
-    /// Each refused slot and why, in the order of the JSON object's keys. The screens
-    /// name these pins as unusable.
-    pub refused: Vec<(Slot, Error)>,
+/// A pin's `books` record. A `books` entry that is not a list of codes records no
+/// coverage, as tC4's `coverageFor` reads it.
+fn coverage_from_json(pin: &Value) -> Coverage {
+    let books: Option<Vec<&str>> = pin
+        .get("books")
+        .and_then(Value::as_array)
+        .and_then(|books| books.iter().map(Value::as_str).collect());
+    books.map_or(Coverage::Unrecorded, Coverage::from_codes)
 }
 
 impl Pin {
@@ -284,14 +336,10 @@ impl Pin {
         let text = |key: &str| value.get(key).and_then(Value::as_str);
         let repo_path = RepoPath::parse(text("repoPath").ok_or_else(bad)?)?;
         let sha = CommitSha::parse(text("sha").ok_or_else(bad)?).map_err(|_| bad())?;
-        let books: Option<Vec<&str>> = value
-            .get("books")
-            .and_then(Value::as_array)
-            .and_then(|books| books.iter().map(Value::as_str).collect());
         Ok(Self {
             resource: ResourceRef { repo_path, sha },
             version: text("version").map(str::to_owned),
-            coverage: books.map_or(Coverage::Unrecorded, Coverage::from_codes),
+            coverage: coverage_from_json(value),
         })
     }
 }
@@ -311,8 +359,14 @@ impl Pins {
         }
     }
 
+    /// The usable pin in a rung's slot.
     pub fn pin(&self, rung: Rung, slot: Slot) -> Option<&Pin> {
         self.set(rung)?.get(slot)
+    }
+
+    /// What a rung's slot holds, usable or not.
+    pub fn slot(&self, rung: Rung, slot: Slot) -> Option<&SlotPin> {
+        self.set(rung)?.slots.get(&slot)
     }
 
     /// The first rung that pins exactly `resource` in `slot`. A pin both rungs carry
@@ -339,9 +393,22 @@ impl Resolution {
     }
 }
 
+/// Where the ladder stops for a (tool, collection): the first rung whose slot covers it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Answer {
+    /// A usable pin.
+    Pin(Resolution),
+    /// A value the app cannot use as a pin. The next rung is not used in its place:
+    /// that would check the book against another language's list without saying so.
+    /// tC4 resolves to such a pin too, and no install ever satisfies it.
+    Unusable { rung: Rung, pin: UnusablePin },
+}
+
 /// The resolution the journal's fold uses (STORAGE.md §7.7): the ladder over the pins
 /// with each pin's recorded coverage only, so it never depends on what is installed. A
 /// story collection is not divided into books, so its first pinned rung answers.
+/// `None` when no rung covers it, or when the rung that does holds an unusable pin
+/// ([`answer_with`] tells these apart); its decisions then compute as resource changed.
 pub fn resolve(pins: &Pins, tool: ToolId, collection: Collection) -> Option<Resolution> {
     resolve_with(pins, tool, collection, |_| None)
 }
@@ -354,17 +421,39 @@ pub fn resolve_with(
     collection: Collection,
     local: impl Fn(&ResourceRef) -> Option<Coverage>,
 ) -> Option<Resolution> {
+    match answer_with(pins, tool, collection, local)? {
+        Answer::Pin(resolution) => Some(resolution),
+        Answer::Unusable { .. } => None,
+    }
+}
+
+/// Where the ladder stops, usable pin or not (tC4 `resolveSetSlot`,
+/// `resolveObsSetSlot`). `local` is as for [`resolve_with`].
+pub fn answer_with(
+    pins: &Pins,
+    tool: ToolId,
+    collection: Collection,
+    local: impl Fn(&ResourceRef) -> Option<Coverage>,
+) -> Option<Answer> {
     let slot = Slot::of_tool(tool, collection);
     Rung::LADDER.into_iter().find_map(|rung| {
-        let pin = pins.pin(rung, slot)?;
-        let covers = match collection {
+        let held = pins.slot(rung, slot)?;
+        let covers = |coverage: &Coverage| match collection {
             Collection::Stories => true,
-            Collection::Book(book) => coverage_of(pin, &local).covers(book),
+            Collection::Book(book) => coverage.covers(book),
         };
-        covers.then(|| Resolution {
-            rung,
-            pin: pin.clone(),
-        })
+        match held {
+            SlotPin::Usable(pin) => covers(&coverage_of(pin, &local)).then(|| {
+                Answer::Pin(Resolution {
+                    rung,
+                    pin: pin.clone(),
+                })
+            }),
+            SlotPin::Unusable(unusable) => covers(&unusable.coverage).then(|| Answer::Unusable {
+                rung,
+                pin: unusable.clone(),
+            }),
+        }
     })
 }
 
