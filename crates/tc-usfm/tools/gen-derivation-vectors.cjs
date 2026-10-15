@@ -14,10 +14,12 @@
 // Run from the repository root, with tC4's pinned packages installed somewhere (tC4's own
 // node_modules works):
 //   node crates/tc-usfm/tools/gen-derivation-vectors.cjs <node_modules> fixtures/derivations
-// With `--random N --seed S --out FILE [--pieces P]` it writes only N random plain-text cases
-// of up to P pieces (24 by default) to FILE, for
-// the long differential run (`TC_USFM_DERIVATION_VECTORS=FILE cargo test -p tc-usfm
-// --test derivations -- --ignored`).
+// With `--random N --seed S --out FILE [--pieces P] [--set walk]` it writes only N random
+// plain-text cases of up to P pieces (24 by default) to FILE, for the long differential run
+// (`TC_USFM_DERIVATION_VECTORS=FILE cargo test -p tc-usfm --lib --test derivations --
+// --ignored`). `--set walk` draws from pieces that nest without text and give objects odd
+// types, texts and children, which reach the nested walk of removeMarker's
+// replaceWordsAndMilestones.
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -95,11 +97,22 @@ const PIECES = [
   "\\v", "\\c", "\\v 2 ", "\\c 3\n", "\\ts\\* \\p", "\\nd*\\nd*", "\\add \\add \\add*", "\\+wj \\+wj*", "\\pb", "\\id x",
 ];
 
+const WALK_PIECES = [
+  "\\add ", "\\add*", "\\nd ", "\\nd*", "\\+nd ", "\\+nd*", "\\f + ", "\\f*", "\\fq ", "\\fq*", "\\qs ", "\\qs*",
+  "\\w \\w*", "\\w |children=\"x\"\\w*", "\\w |children=\"\"\\w*", "\\w |type=\"milestone\"\\w*", "\\w |type=\"x\"\\w*",
+  "\\w |type=\"x\" children=\"yz\"\\w*", "\\w |text=\"\"\\w*", "\\w ,\\w*", "\\w x|type=\"milestone\"\\w*",
+  "\\zaln-s |x\\*", "\\zaln-s |x\\*", "\\zaln-e\\*", "\\zaln-e\\*", "\\zaln-s |children=\"\"\\*", "\\zaln-s |children=\"ab\"\\*",
+  "\\zaln-s |text=\",\"\\*", "\\zaln-s |type=\"x\"\\*", "\\k-s |x\\*", "\\k-e\\*",
+  ",", ".", " ", "\n", "\\zaln-e\\* ", "\\zaln-e\\*\n", "\\k-e\\* ", "\\f* ", "\\fq* ", "\\add* ", "\\nd*\n", "\\w \\w* ",
+  "\\qt-s\\*", "\\qt-e\\* ", "\\ts\\* ", "\\zaln-s |x\n\\*", "\\zaln-e\\*,",
+];
+
 const maxPieces = Number(option("--pieces") || 24);
-const randomContent = (next) => {
+const randomPieces = option("--set") === "walk" ? WALK_PIECES : PIECES;
+const randomContent = (next, pieceSet = PIECES) => {
   const pieces = [];
   const n = 1 + Math.floor(next() * maxPieces);
-  for (let i = 0; i < n; i++) pieces.push(PIECES[Math.floor(next() * PIECES.length)]);
+  for (let i = 0; i < n; i++) pieces.push(pieceSet[Math.floor(next() * pieceSet.length)]);
   return pieces.join("");
 };
 
@@ -108,7 +121,7 @@ if (option("--random")) {
   const next = rng(Number(option("--seed") || 1));
   const cases = [];
   for (let i = 0; i < count; i++) {
-    const content = randomContent(next);
+    const content = randomContent(next, randomPieces);
     cases.push({ content, text: attempt(() => verseText(content)), removed: attempt(() => usfmjs.removeMarker(content)) });
   }
   fs.writeFileSync(option("--out"), JSON.stringify({ libraries: pinned, cases }) + "\n");

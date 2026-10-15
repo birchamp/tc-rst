@@ -22,12 +22,18 @@
 //! milestone). There it has no value, so version 1 defines one: [`plain_text_v1`] is then
 //! the content trimmed, which changes with every edit, and [`selections_v1`] says the
 //! selections fit, as tC4's `decisionIsStale` does when the validator fails.
+//!
+//! `removeMarker` also runs out of stack a few thousand levels of nesting down, at a depth
+//! that depends on the JavaScript engine. Version 1 has no depth limit: the port walks with
+//! its own stacks and gives the value the walk has when it finishes, which is the library's
+//! at every depth the library finishes. Every derivation takes time linear in the length of
+//! the verse and the selections.
 
 mod js;
 mod usfmjs;
 mod usfmjs_tables;
 
-use js::{JsStr, concat, index_of, js, to_string, trim};
+use js::{JsStr, concat, js, to_string, trim};
 use usfmjs::{Key, truthy};
 
 /// The text tC4 hashes for a verse's content (`words + layout` of a verse value): see the
@@ -81,16 +87,40 @@ pub fn selections_v1(text: &str, selections: &[SelectionCount<'_>]) -> bool {
         .all(|s| u64::from(s.occurrences) == count(&shown, &js(s.text)))
 }
 
-/// Non-overlapping occurrences of `needle` in `text`, 0 for an empty needle.
+/// Non-overlapping occurrences of `needle` in `text`, 0 for an empty needle: what a loop of
+/// `indexOf(needle, at)` with `at` set past each match counts. Both come from the project
+/// (a selection is part of a decision), so the search is Knuth-Morris-Pratt, linear in
+/// both lengths; a naive search of a long selection in a long verse takes their product.
 fn count(text: &[u16], needle: &[u16]) -> u64 {
     if needle.is_empty() {
         return 0;
     }
+    // fail[i]: the length of the longest proper border of needle[..=i].
+    let mut fail = vec![0usize; needle.len()];
+    let mut k = 0;
+    for i in 1..needle.len() {
+        while k > 0 && needle[i] != needle[k] {
+            k = fail[k - 1];
+        }
+        if needle[i] == needle[k] {
+            k += 1;
+        }
+        fail[i] = k;
+    }
     let mut found = 0;
-    let mut at = 0;
-    while let Some(next) = index_of(text, needle, at) {
-        found += 1;
-        at = next + needle.len();
+    let mut matched = 0;
+    for unit in text {
+        while matched > 0 && *unit != needle[matched] {
+            matched = fail[matched - 1];
+        }
+        if *unit == needle[matched] {
+            matched += 1;
+        }
+        if matched == needle.len() {
+            found += 1;
+            // The next occurrence starts after this one.
+            matched = 0;
+        }
     }
     found
 }

@@ -2079,6 +2079,13 @@ version 1 defines one: `plain_text_v1` is the content trimmed, which changes wit
 and `selections_v1` says the selections fit, as tC4's `decisionIsStale` does when the validator
 fails. A marker named after a member of JavaScript's `Object.prototype` (`\constructor`,
 `\toString`) is read as an unknown marker; usfm-js looks it up as that member and may throw.
+`removeMarker` also recurses once per level of nesting and runs out of stack (a RangeError) a
+few thousand levels down, at a depth that depends on the JavaScript engine and its state, so
+the library has no stable value there either. Version 1 has no depth limit: its value is the
+walk's when it finishes, which is usfm-js's value at every depth usfm-js finishes. (A verse
+object inside itself would make the walk endless; no parse makes one, and it would count as a
+throw.) Every derivation takes time linear in the length of the verse and the selections, so
+no verse, however built, stalls a fold.
 
 Each is tested against golden outputs generated once from the JavaScript libraries and committed
 under `fixtures/derivations/` (every verse of tC4's USFM fixtures, edge cases and seeded random

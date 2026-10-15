@@ -7,6 +7,7 @@
 use md5::{Digest, Md5};
 use proptest::prelude::*;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 use tc_usfm::{SelectionCount, plain_text_v1, selections_v1, tokenize_v1};
 
 fn fixtures() -> PathBuf {
@@ -182,4 +183,96 @@ fn plain_text_v1_matches_a_generated_corpus() {
         "{} cases, {unfinished} that usfm-js cannot finish",
         cases.len()
     );
+}
+
+/// Verses of about `bytes` bytes built to be slow: a quadratic step in the port shows here
+/// as a time that grows with the square of the verse's length. Each of these took
+/// quadratic time before: usfm-js builds its texts one piece at a time, which is cheap in
+/// JavaScript and was a copy of the whole text per piece here.
+fn hostile_verses(bytes: usize) -> Vec<(&'static str, String)> {
+    let fill = |piece: &str| piece.repeat(bytes / piece.len());
+    let attributes: String = (0..bytes / 8).map(|i| format!("a{i}=\"1\" ")).collect();
+    vec![
+        ("unclosed footnotes", fill("\\f + \\ft ")),
+        (
+            "closed markers in a footnote",
+            format!("\\f + {}\\f*", fill("\\fq x\\fq* ")),
+        ),
+        ("lines of text", fill("a\n")),
+        (
+            "a word with many attributes",
+            format!("\\w x|{attributes}\\w*"),
+        ),
+        (
+            "attributes over many lines",
+            format!("\\w a|b\n{}", fill("c\n")),
+        ),
+        ("nested markers with no text", fill("\\add ")),
+        (
+            "a long selection",
+            format!("{}\u{0}{}b", "a".repeat(bytes), "a".repeat(bytes / 4)),
+        ),
+    ]
+}
+
+/// The time `selections_v1` takes on the verse (it parses the verse as `plain_text_v1`
+/// does, then walks it), the best of `runs`.
+fn time_derivations(verse: &str, runs: usize) -> Duration {
+    // The text after U+0000 is a selection to count in the text before it.
+    let (text, selection) = verse.split_once('\u{0}').unwrap_or((verse, "x"));
+    let selections = [SelectionCount {
+        text: selection,
+        occurrences: 1,
+    }];
+    (0..runs)
+        .map(|_| {
+            let start = Instant::now();
+            let _ = selections_v1(text, &selections);
+            start.elapsed()
+        })
+        .min()
+        .unwrap_or(Duration::MAX)
+}
+
+/// Eight times the verse takes about eight times as long, never the 64 times of a
+/// quadratic step. The fold computes validity on every open, so one slow verse would
+/// stall the project for everyone who opens it.
+#[test]
+fn derivations_take_time_linear_in_the_verse() {
+    let small = 25_000;
+    let mut slow = Vec::new();
+    for ((name, short), (_, long)) in hostile_verses(small)
+        .into_iter()
+        .zip(hostile_verses(8 * small))
+    {
+        let base = time_derivations(&short, 3).max(Duration::from_millis(2));
+        // A busy machine can stretch a run; a quadratic step is slow in every run.
+        let grown = (0..3)
+            .map(|_| time_derivations(&long, 1))
+            .find(|t| *t <= base * 16)
+            .unwrap_or_else(|| time_derivations(&long, 1));
+        if grown > base * 16 {
+            slow.push(format!(
+                "{name}: {} bytes took {base:?}, {} bytes took {grown:?}",
+                short.len(),
+                long.len()
+            ));
+        }
+    }
+    assert!(slow.is_empty(), "{slow:#?}");
+}
+
+/// A verse near the 4 MiB limit of a change line (§4.6) still takes seconds, not minutes.
+/// A debug build checks a quarter of it.
+#[test]
+fn a_verse_of_several_megabytes_takes_seconds() {
+    let (bytes, limit) = if cfg!(debug_assertions) {
+        (1 << 20, Duration::from_secs(60))
+    } else {
+        (4 << 20, Duration::from_secs(10))
+    };
+    let piece = "\\f + \\ft \\fq x\\fq* a\n";
+    let verse = piece.repeat(bytes / piece.len());
+    let took = time_derivations(&verse, 1);
+    assert!(took < limit, "{} bytes took {took:?}", verse.len());
 }

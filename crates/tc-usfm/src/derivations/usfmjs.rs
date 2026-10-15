@@ -22,6 +22,9 @@ use super::js::{
     is_word, js, last_index_of, number_to_string, split, starts_with, substr, substring, to_number,
     trim,
 };
+use std::borrow::Cow;
+use std::collections::BTreeMap;
+
 use super::usfmjs_tables::{
     MARKERS_WITH_NUMBERS, PROPERTIES, SPECIAL_END_TAGS, WORD_SPECIAL_ATTRIBUTES,
 };
@@ -104,7 +107,7 @@ pub(super) enum Val {
 }
 
 /// The property names the parser itself uses; any other name comes from a word attribute.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Key {
     Open,
     Tag,
@@ -148,7 +151,8 @@ impl Key {
 
 #[derive(Debug, Default)]
 pub(super) struct Item {
-    props: Vec<(Key, Val)>,
+    /// A map, so a word with thousands of attributes is read in time linear in its size.
+    props: BTreeMap<Key, Val>,
     /// `Some` for an array.
     elems: Option<Vec<Ref>>,
 }
@@ -166,18 +170,14 @@ impl Heap {
 
     fn arr(&mut self) -> Ref {
         self.items.push(Item {
-            props: Vec::new(),
+            props: BTreeMap::new(),
             elems: Some(Vec::new()),
         });
         self.items.len() - 1
     }
 
     pub(super) fn get(&self, r: Ref, key: &Key) -> Option<&Val> {
-        self.items[r]
-            .props
-            .iter()
-            .find(|(k, _)| k == key)
-            .map(|(_, v)| v)
+        self.items[r].props.get(key)
     }
 
     /// The property when it holds a string.
@@ -193,11 +193,7 @@ impl Heap {
     }
 
     fn set(&mut self, r: Ref, key: Key, value: Val) {
-        let props = &mut self.items[r].props;
-        match props.iter_mut().find(|(k, _)| *k == key) {
-            Some(slot) => slot.1 = value,
-            None => props.push((key, value)),
-        }
+        self.items[r].props.insert(key, value);
     }
 
     fn set_s(&mut self, r: Ref, key: Key, value: JsStr) {
@@ -205,7 +201,48 @@ impl Heap {
     }
 
     fn del(&mut self, r: Ref, key: &Key) {
-        self.items[r].props.retain(|(k, _)| k != key);
+        self.items[r].props.remove(key);
+    }
+
+    /// `object[key] = String(object[key]) + suffix`, extending a string in place: the
+    /// library builds long texts one piece at a time, and copying the text for each piece
+    /// would take time quadratic in its length.
+    fn append(&mut self, r: Ref, key: Key, suffix: &[u16]) {
+        if let Some(Val::Str(text)) = self.items[r].props.get_mut(&key) {
+            text.extend_from_slice(suffix);
+            return;
+        }
+        let mut text = self.string_of(self.get(r, &key));
+        text.extend_from_slice(suffix);
+        self.set_s(r, key, text);
+    }
+
+    /// `object[key] = (object[key] || "") + suffix`, in place.
+    fn append_to_truthy(&mut self, r: Ref, key: Key, suffix: &[u16]) {
+        if self.truthy(r, &key) {
+            self.append(r, key, suffix);
+        } else {
+            self.set_s(r, key, suffix.to_vec());
+        }
+    }
+
+    /// Drops the last code unit of the object's text.
+    fn truncate_text(&mut self, r: Ref) {
+        if let Some(Val::Str(text)) = self.items[r].props.get_mut(&Key::Text) {
+            text.pop();
+            return;
+        }
+        let mut text = self.string_of(self.get(r, &Key::Text));
+        text.pop();
+        self.set_s(r, Key::Text, text);
+    }
+
+    /// `String(object[key])`, borrowed when it is a string.
+    fn text_of(&self, r: Ref, key: &Key) -> Cow<'_, [u16]> {
+        match self.get(r, key) {
+            Some(Val::Str(text)) => Cow::Borrowed(text.as_slice()),
+            other => Cow::Owned(self.string_of(other)),
+        }
     }
 
     /// The elements of an array; a non-array has none.
@@ -792,11 +829,8 @@ impl State {
             && let Some(last) = heap.last(save_to)
             && heap.s(last, &Key::Type).is_some_and(|t| eq(t, "text"))
         {
-            let joined = concat(&[
-                &heap.string_of(heap.get(last, &Key::Text)),
-                &heap.string_of(heap.get(object, &Key::Text)),
-            ]);
-            heap.set_s(last, Key::Text, joined);
+            let text = heap.text_of(object, &Key::Text).into_owned();
+            heap.append(last, Key::Text, &text);
             return;
         }
         heap.push(save_to, object);
@@ -827,15 +861,21 @@ impl State {
                     }
                 }
             } else if self.heap.truthy(last, &Key::Text) {
-                let text = self.heap.string_of(self.heap.get(last, &Key::Text));
-                if is_last_char_new_line(&text) {
-                    if text.len() == 1 {
+                let (new_line, one, space_and_new_line) = {
+                    let text = self.heap.text_of(last, &Key::Text);
+                    (
+                        is_last_char_new_line(&text),
+                        text.len() == 1,
+                        text.len() == 2 && text[0] == u16::from(b' '),
+                    )
+                };
+                if new_line {
+                    if one {
                         self.heap.pop(save_to);
                         last_object = self.heap.last(save_to);
                     } else {
-                        let cut = text[..text.len() - 1].to_vec();
-                        let is_space_only = eq(&cut, " ");
-                        self.heap.set_s(last, Key::Text, cut);
+                        let is_space_only = space_and_new_line;
+                        self.heap.truncate_text(last);
                         if !self.new_align_format
                             && is_space_only
                             && displayable(self.heap.tag(last))
@@ -870,23 +910,31 @@ impl State {
                 self.heap.set_s(last, Key::NextChar, js(" "));
             }
         } else if self.heap.truthy(last, &Key::Text) {
-            let text = self.heap.string_of(self.heap.get(last, &Key::Text));
-            if is_last_char_new_line(&text) {
-                let start_of_line = elems == 1 && text.len() == 1;
-                let remove_new_line = start_of_line || is_next_to_last_char_quote(&text);
-                let cut = text[..text.len() - 1].to_vec();
+            let (new_line, one, after_quote) = {
+                let text = self.heap.text_of(last, &Key::Text);
+                (
+                    is_last_char_new_line(&text),
+                    text.len() == 1,
+                    is_next_to_last_char_quote(&text),
+                )
+            };
+            if new_line {
+                let start_of_line = elems == 1 && one;
+                let remove_new_line = start_of_line || after_quote;
                 if self.new_align_format {
                     if self.heap.s(last, &Key::Type).is_some_and(|t| eq(t, "text")) {
-                        self.heap.set_s(last, Key::Text, concat(&[&cut, &js(" ")]));
+                        self.heap.truncate_text(last);
+                        self.heap.append(last, Key::Text, &js(" "));
                     }
                 } else if remove_new_line {
-                    if text.len() == 1 {
+                    if one {
                         self.heap.pop(save_to);
                     } else {
-                        self.heap.set_s(last, Key::Text, cut);
+                        self.heap.truncate_text(last);
                     }
                 } else {
-                    self.heap.set_s(last, Key::Text, concat(&[&cut, &js(" ")]));
+                    self.heap.truncate_text(last);
+                    self.heap.append(last, Key::Text, &js(" "));
                 }
             }
         }
@@ -977,11 +1025,7 @@ impl State {
                 && matches!(marker, Thing::Text(_))
             {
                 if let Thing::Text(text) = marker {
-                    let joined = concat(&[
-                        &self.heap.string_of(self.heap.get(parent, &Key::Attrib)),
-                        &text,
-                    ]);
-                    self.heap.set_s(parent, Key::Attrib, joined);
+                    self.heap.append(parent, Key::Attrib, &text);
                 }
             } else {
                 let save_to = self.get_last_phrase();
@@ -1010,13 +1054,8 @@ impl State {
 
     /// `(parent.content || "") + text`, with JavaScript's `undefined`.
     fn append_content(&mut self, parent: Ref, text: Opt) {
-        let base = match self.heap.get(parent, &Key::Content) {
-            Some(v) if truthy(v) => self.heap.string_of(Some(v)),
-            _ => Vec::new(),
-        };
         let text = text.unwrap_or_else(|| js("undefined"));
-        self.heap
-            .set_s(parent, Key::Content, concat(&[&base, &text]));
+        self.heap.append_to_truthy(parent, Key::Content, &text);
     }
 
     /// `incrementPhraseNesting`.
@@ -1362,14 +1401,10 @@ impl State {
                         next_char = concat(&[&next_char, &self.heap.string_of(Some(v))]);
                     }
                     if !finish_phrase {
-                        let base = match self.heap.get(parent, &Key::Content) {
-                            Some(v) if truthy(v) => self.heap.string_of(Some(v)),
-                            _ => Vec::new(),
-                        };
-                        self.heap.set_s(
+                        self.heap.append_to_truthy(
                             parent,
                             Key::Content,
-                            concat(&[&base, &end_marker_text, &next_char]),
+                            &concat(&[&end_marker_text, &next_char]),
                         );
                     } else {
                         self.heap.set_s(parent, Key::EndTag, end_marker.clone());
@@ -1657,8 +1692,10 @@ fn get_to_end_of_attributes(
     markers: &[Ref],
 ) -> (JsStr, usize) {
     let star = js("*");
-    let mut end_pos = index_of(&content, &star, pos);
-    while end_pos.is_none() {
+    if index_of(&content, &star, pos).is_some() {
+        return (content, index);
+    }
+    loop {
         let next_line = index + 1;
         if next_line >= markers.len() {
             break;
@@ -1670,10 +1707,11 @@ fn get_to_end_of_attributes(
         let next_content = heap.string_of(heap.get(next_marker, &Key::Content));
         match index_of(&next_content, &star, 0) {
             Some(0) => break,
+            // Neither part holds a `*`, so the joined content does not either: searching it
+            // again would make a long run of lines quadratic.
             None => {
-                content = concat(&[&content, &next_content]);
+                content.extend_from_slice(&next_content);
                 index = next_line;
-                end_pos = index_of(&content, &star, pos);
             }
             Some(found) => {
                 let rest = substr(&next_content, found as isize, None).to_vec();
@@ -1964,8 +2002,21 @@ fn order_keys(verses: &mut [(JsStr, Ref)]) {
 // ---------------------------------------------------------------------------------------
 // removeMarker (filter.js)
 // ---------------------------------------------------------------------------------------
+//
+// The library walks a parsed verse with three mutually recursive functions:
+// `replaceWordsAndMilestones`, `parseMilestone` and `parseChild`. Ported as recursion, a
+// verse of 100,000 nested `\add` markers (500 KB) overflows the stack, and the nested walk
+// of `replaceWordsAndMilestones`, which calls `parseMilestone` on every level it enters,
+// takes time quadratic in the depth. Here each walk keeps its own stack, and what the
+// nested walk needs from `parseMilestone` (whether it throws, whether its text is empty)
+// is summarized once per object from the objects below it.
+//
+// Where the library recurses forever (an object that is its own descendant), it throws a
+// RangeError; that is `Thrown` here too. Where it merely runs out of stack (a few thousand
+// levels, depending on the JavaScript engine), it has no stable value, and version 1 gives
+// the value of the walk with no limit (`docs/STORAGE.md` §7.7).
 
-/// The library throws a TypeError on this input.
+/// The library throws on this input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Thrown;
 
@@ -1989,11 +2040,12 @@ pub(super) fn remove_marker(text: &[u16]) -> Result<JsStr, Thrown> {
         return Ok(text.to_vec());
     };
     let heap = &parsed.heap;
-    let mut word_spacing = Vec::new();
+    let mut walk = Walk::new(heap);
+    let mut spaced = false;
     let mut flattened = Vec::new();
     for object in heap.elems(*verse) {
-        let (flat, spacing) = replace_words_and_milestones(heap, Some(*object), &word_spacing)?;
-        word_spacing = spacing;
+        let flat;
+        (flat, spaced) = walk.replace_words_and_milestones(*object, spaced)?;
         flattened.push(flat);
     }
     let mut verse_text: JsStr = Vec::new();
@@ -2039,108 +2091,514 @@ fn has_truthy(heap: &Heap, object: Option<Ref>, key: &Key) -> bool {
     prop(heap, object, key).as_ref().is_some_and(truthy)
 }
 
+/// True when `text += value` (for a truthy `value`) makes the text longer.
+fn grows(heap: &Heap, value: Option<&Val>) -> bool {
+    value.is_some_and(|v| truthy(v) && !heap.string_of(Some(v)).is_empty())
+}
+
 fn ends_with_pause(text: &[u16]) -> bool {
     let last = substr(text, -1, None);
     [",", ".", "?", ";"].iter().any(|p| eq(last, p))
 }
 
-/// `replaceWordsAndMilestones`: the flattened object and the spacing before the next word.
-/// Nested children are flattened in a copy that `mergeVerseData` never reads, but the walk
-/// still runs, because it can throw.
-fn replace_words_and_milestones(
-    heap: &Heap,
-    object: Option<Ref>,
-    word_spacing: &[u16],
-) -> Result<(Flat, JsStr), Thrown> {
-    let mut text = Vec::new();
-    if is_type(heap, object, "word") {
-        text = concat(&[
-            word_spacing,
-            &heap.string_of(prop(heap, object, &Key::Text).as_ref()),
-        ]);
-    } else if has_truthy(heap, object, &Key::Children) {
-        text = concat(&[word_spacing, &parse_milestone(heap, object)?]);
-    }
-    if !text.is_empty() {
-        let flat = Flat {
-            text: Some(Val::Str(text)),
-            tag: false,
-            next_char: None,
-        };
-        return Ok((flat, js(" ")));
-    }
-    let mut spacing = js(" ");
+/// The word spacing `replaceWordsAndMilestones` returns for an object with no text of its
+/// own: none after an object with a `nextChar` or with text that does not end in a pause.
+fn spaced_after(heap: &Heap, object: Option<Ref>) -> bool {
     if has_truthy(heap, object, &Key::NextChar) {
-        spacing = Vec::new();
-    } else if let Some(t) = prop(heap, object, &Key::Text).filter(truthy)
-        && !ends_with_pause(&heap.string_of(Some(&t)))
-    {
-        spacing = Vec::new();
+        return false;
     }
-    if has_truthy(heap, object, &Key::Children) {
-        let mut nested_spacing = Vec::new();
-        for child in children(heap, object).unwrap_or_default() {
-            nested_spacing = replace_words_and_milestones(heap, child, &nested_spacing)?.1;
-        }
-        // The flattened child is stored back with `children[i] = …`, which strict mode
-        // refuses on a string.
-        if matches!(prop(heap, object, &Key::Children), Some(Val::Str(_))) {
-            return Err(Thrown);
-        }
+    match prop(heap, object, &Key::Text).filter(truthy) {
+        Some(text) => ends_with_pause(&heap.string_of(Some(&text))),
+        None => true,
     }
-    let flat = Flat {
-        text: prop(heap, object, &Key::Text),
-        tag: has_truthy(heap, object, &Key::Tag),
-        next_char: prop(heap, object, &Key::NextChar),
-    };
-    Ok((flat, spacing))
 }
 
-/// `parseMilestone`. It reads `children.length`, so a milestone without children throws.
-fn parse_milestone(heap: &Heap, object: Option<Ref>) -> Result<JsStr, Thrown> {
-    let mut text = match prop(heap, object, &Key::Text).filter(truthy) {
-        Some(v) => heap.string_of(Some(&v)),
-        None => Vec::new(),
-    };
-    let mut word_spacing = Vec::new();
-    for child in children(heap, object).ok_or(Thrown)? {
-        (text, word_spacing) = parse_child(heap, child, text, word_spacing)?;
-        if let Some(next) = prop(heap, child, &Key::NextChar).filter(truthy) {
-            text.extend(heap.string_of(Some(&next)));
-        }
-    }
-    if let Some(next) = prop(heap, object, &Key::NextChar).filter(truthy) {
-        text.extend(heap.string_of(Some(&next)));
-    }
-    Ok(text)
+/// What `parseChild` on an object does to the text of the `parseMilestone` around it,
+/// while that text is still empty.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Effect {
+    /// The text is no longer empty.
+    Grows,
+    /// The text is still empty, and the word spacing is now `" "` or `""`.
+    Empty { spaced: bool },
 }
 
-/// `parseChild`.
-fn parse_child(
-    heap: &Heap,
-    child: Option<Ref>,
-    mut text: JsStr,
-    mut word_spacing: JsStr,
-) -> Result<(JsStr, JsStr), Thrown> {
-    if is_type(heap, child, "word") {
-        let word = heap.string_of(prop(heap, child, &Key::Text).as_ref());
-        text = concat(&[&text, &word_spacing, &word]);
-        word_spacing = js(" ");
-    } else if is_type(heap, child, "milestone") {
-        text = concat(&[&text, &word_spacing, &parse_milestone(heap, child)?]);
-        word_spacing = js(" ");
-    } else {
-        if let Some(t) = prop(heap, child, &Key::Text).filter(truthy) {
-            text.extend(heap.string_of(Some(&t)));
-            if !ends_with_pause(&text) {
-                word_spacing = Vec::new();
-            }
-        }
-        if has_truthy(heap, child, &Key::Children) {
-            for grandchild in children(heap, child).unwrap_or_default() {
-                (text, word_spacing) = parse_child(heap, grandchild, text, word_spacing)?;
-            }
+impl Effect {
+    fn then(self, next: [Effect; 2]) -> Effect {
+        match self {
+            Effect::Grows => Effect::Grows,
+            Effect::Empty { spaced } => next[usize::from(spaced)],
         }
     }
-    Ok((text, word_spacing))
+}
+
+/// What the nested walk of `replaceWordsAndMilestones` needs to know about an object,
+/// computed from the objects below it.
+#[derive(Debug, Clone, Copy)]
+struct Summary {
+    /// `parseChild(object)` throws.
+    throws: bool,
+    /// `parseMilestone(object)` throws.
+    milestone_throws: bool,
+    /// `parseMilestone(object)` gives an empty text.
+    milestone_empty: bool,
+    /// `parseChild(object)` on a still empty text, with word spacing `""` and `" "`.
+    effect: [Effect; 2],
+}
+
+/// An element of a `children` string: no properties at all.
+const NO_OBJECT: Summary = Summary {
+    throws: false,
+    milestone_throws: true,
+    milestone_empty: true,
+    effect: [
+        Effect::Empty { spaced: false },
+        Effect::Empty { spaced: true },
+    ],
+};
+
+struct Walk<'h> {
+    heap: &'h Heap,
+    summaries: Vec<Option<Summary>>,
+    /// Objects on the path of the walk in progress, to find an object that is its own
+    /// descendant.
+    on_path: Vec<bool>,
+}
+
+impl<'h> Walk<'h> {
+    fn new(heap: &'h Heap) -> Self {
+        Self {
+            heap,
+            summaries: vec![None; heap.items.len()],
+            on_path: vec![false; heap.items.len()],
+        }
+    }
+
+    fn enter(&mut self, object: Option<Ref>) -> Result<(), Thrown> {
+        if let Some(r) = object {
+            if self.on_path[r] {
+                return Err(Thrown);
+            }
+            self.on_path[r] = true;
+        }
+        Ok(())
+    }
+
+    fn leave(&mut self, object: Option<Ref>) {
+        if let Some(r) = object {
+            self.on_path[r] = false;
+        }
+    }
+
+    /// `replaceWordsAndMilestones(object, wordSpacing)` for an object of the verse: the
+    /// flattened object and whether the next word is spaced. Nested children are
+    /// flattened in a copy that `mergeVerseData` never reads, but that walk still runs,
+    /// because it can throw.
+    fn replace_words_and_milestones(
+        &mut self,
+        object: Ref,
+        spaced: bool,
+    ) -> Result<(Flat, bool), Thrown> {
+        let heap = self.heap;
+        let object = Some(object);
+        let mut text = Vec::new();
+        if is_type(heap, object, "word") {
+            if spaced {
+                text.push(u16::from(b' '));
+            }
+            text.extend(heap.string_of(prop(heap, object, &Key::Text).as_ref()));
+        } else if has_truthy(heap, object, &Key::Children) {
+            if spaced {
+                text.push(u16::from(b' '));
+            }
+            self.parse_milestone(object, &mut text)?;
+        }
+        if !text.is_empty() {
+            let flat = Flat {
+                text: Some(Val::Str(text)),
+                tag: false,
+                next_char: None,
+            };
+            return Ok((flat, true));
+        }
+        let spacing = spaced_after(heap, object);
+        if has_truthy(heap, object, &Key::Children) {
+            self.flatten_children(object)?;
+        }
+        let flat = Flat {
+            text: prop(heap, object, &Key::Text),
+            tag: has_truthy(heap, object, &Key::Tag),
+            next_char: prop(heap, object, &Key::NextChar),
+        };
+        Ok((flat, spacing))
+    }
+
+    /// The loop of `replaceWordsAndMilestones` over an object's children, and every loop
+    /// below it, for what they can throw.
+    fn flatten_children(&mut self, root: Option<Ref>) -> Result<(), Thrown> {
+        struct Frame {
+            object: Option<Ref>,
+            kids: Vec<Option<Ref>>,
+            at: usize,
+            /// The word spacing threaded through the children.
+            spaced: bool,
+            /// What the object's own call returns, once its children are done.
+            returns: bool,
+        }
+        let heap = self.heap;
+        let frame = |object: Option<Ref>, returns: bool| Frame {
+            object,
+            kids: children(heap, object).unwrap_or_default(),
+            at: 0,
+            spaced: false,
+            returns,
+        };
+        self.enter(root)?;
+        let mut stack = vec![frame(root, false)];
+        while let Some(top) = stack.last_mut() {
+            let Some(child) = top.kids.get(top.at).copied() else {
+                // The flattened child is stored back with `children[i] = …`, which strict
+                // mode refuses on a string.
+                if matches!(prop(heap, top.object, &Key::Children), Some(Val::Str(_))) {
+                    return Err(Thrown);
+                }
+                let (object, returns) = (top.object, top.returns);
+                stack.pop();
+                self.leave(object);
+                if let Some(parent) = stack.last_mut() {
+                    parent.spaced = returns;
+                }
+                continue;
+            };
+            top.at += 1;
+            let spaced = top.spaced;
+            let empty = if is_type(heap, child, "word") {
+                !spaced
+                    && heap
+                        .string_of(prop(heap, child, &Key::Text).as_ref())
+                        .is_empty()
+            } else if has_truthy(heap, child, &Key::Children) {
+                let summary = self.summary(child)?;
+                if summary.milestone_throws {
+                    return Err(Thrown);
+                }
+                !spaced && summary.milestone_empty
+            } else {
+                true
+            };
+            let returns = if empty {
+                spaced_after(heap, child)
+            } else {
+                true
+            };
+            if empty && has_truthy(heap, child, &Key::Children) {
+                self.enter(child)?;
+                stack.push(frame(child, returns));
+            } else if let Some(top) = stack.last_mut() {
+                top.spaced = returns;
+            }
+        }
+        Ok(())
+    }
+
+    /// Appends `parseMilestone(object)` to `out`. `parseChild` appends to the text of the
+    /// innermost `parseMilestone`, which starts at `start` in `out`.
+    fn parse_milestone(&mut self, root: Option<Ref>, out: &mut JsStr) -> Result<(), Thrown> {
+        enum Frame {
+            Milestone {
+                object: Option<Ref>,
+                kids: Vec<Option<Ref>>,
+                at: usize,
+                /// The child whose `nextChar` follows once its `parseChild` is done.
+                pending: Option<Option<Ref>>,
+            },
+            Child {
+                object: Option<Ref>,
+                kids: Vec<Option<Ref>>,
+                at: usize,
+            },
+        }
+        struct Text {
+            start: usize,
+            spaced: bool,
+        }
+        enum Step {
+            Child(Option<Ref>),
+            MilestoneDone(Option<Ref>),
+            ChildDone(Option<Ref>),
+        }
+        /// Starts `parseMilestone(object)`: its own text, then its children.
+        fn open(
+            walk: &mut Walk<'_>,
+            object: Option<Ref>,
+            out: &mut JsStr,
+            frames: &mut Vec<Frame>,
+            texts: &mut Vec<Text>,
+        ) -> Result<(), Thrown> {
+            let heap = walk.heap;
+            let start = out.len();
+            if let Some(text) = prop(heap, object, &Key::Text).filter(truthy) {
+                out.extend(heap.string_of(Some(&text)));
+            }
+            // It reads `children.length`, so a milestone without children throws.
+            let kids = children(heap, object).ok_or(Thrown)?;
+            walk.enter(object)?;
+            texts.push(Text {
+                start,
+                spaced: false,
+            });
+            frames.push(Frame::Milestone {
+                object,
+                kids,
+                at: 0,
+                pending: None,
+            });
+            Ok(())
+        }
+        let heap = self.heap;
+        let mut frames: Vec<Frame> = Vec::new();
+        let mut texts: Vec<Text> = Vec::new();
+        open(self, root, out, &mut frames, &mut texts)?;
+        loop {
+            let step = match frames.last_mut() {
+                None => break,
+                Some(Frame::Milestone {
+                    object,
+                    kids,
+                    at,
+                    pending,
+                }) => {
+                    if let Some(done) = pending.take()
+                        && let Some(next) = prop(heap, done, &Key::NextChar).filter(truthy)
+                    {
+                        out.extend(heap.string_of(Some(&next)));
+                    }
+                    match kids.get(*at).copied() {
+                        Some(child) => {
+                            *at += 1;
+                            *pending = Some(child);
+                            Step::Child(child)
+                        }
+                        None => Step::MilestoneDone(*object),
+                    }
+                }
+                Some(Frame::Child { object, kids, at }) => match kids.get(*at).copied() {
+                    Some(child) => {
+                        *at += 1;
+                        Step::Child(child)
+                    }
+                    None => Step::ChildDone(*object),
+                },
+            };
+            match step {
+                Step::MilestoneDone(object) => {
+                    if let Some(next) = prop(heap, object, &Key::NextChar).filter(truthy) {
+                        out.extend(heap.string_of(Some(&next)));
+                    }
+                    frames.pop();
+                    texts.pop();
+                    self.leave(object);
+                    if let Some(text) = texts.last_mut() {
+                        text.spaced = true;
+                    }
+                }
+                Step::ChildDone(object) => {
+                    frames.pop();
+                    self.leave(object);
+                }
+                // `parseChild`.
+                Step::Child(child) => {
+                    let Some(text) = texts.last_mut() else { break };
+                    if is_type(heap, child, "word") {
+                        if text.spaced {
+                            out.push(u16::from(b' '));
+                        }
+                        out.extend(heap.string_of(prop(heap, child, &Key::Text).as_ref()));
+                        text.spaced = true;
+                    } else if is_type(heap, child, "milestone") {
+                        if text.spaced {
+                            out.push(u16::from(b' '));
+                        }
+                        // The spacing becomes " " when this milestone is done.
+                        open(self, child, out, &mut frames, &mut texts)?;
+                    } else {
+                        if let Some(own) = prop(heap, child, &Key::Text).filter(truthy) {
+                            out.extend(heap.string_of(Some(&own)));
+                            if !ends_with_pause(&out[text.start..]) {
+                                text.spaced = false;
+                            }
+                        }
+                        if has_truthy(heap, child, &Key::Children) {
+                            self.enter(child)?;
+                            frames.push(Frame::Child {
+                                object: child,
+                                kids: children(heap, child).unwrap_or_default(),
+                                at: 0,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The summary of `object`, computed once from the summaries of its children.
+    fn summary(&mut self, object: Option<Ref>) -> Result<Summary, Thrown> {
+        let Some(root) = object else {
+            return Ok(NO_OBJECT);
+        };
+        if let Some(known) = self.summaries[root] {
+            return Ok(known);
+        }
+        let heap = self.heap;
+        // Words are leaves: `parseChild` never looks below one.
+        let below = |r: Ref| -> Vec<Option<Ref>> {
+            if is_type(heap, Some(r), "word") {
+                Vec::new()
+            } else {
+                children(heap, Some(r)).unwrap_or_default()
+            }
+        };
+        self.enter(object)?;
+        let mut stack: Vec<(Ref, Vec<Option<Ref>>, usize)> = vec![(root, below(root), 0)];
+        while let Some((r, kids, at)) = stack.last_mut() {
+            if let Some(Some(kid)) = kids.get(*at).copied() {
+                *at += 1;
+                if self.summaries[kid].is_none() {
+                    self.enter(Some(kid))?;
+                    stack.push((kid, below(kid), 0));
+                }
+                continue;
+            }
+            if *at < kids.len() {
+                *at += 1;
+                continue;
+            }
+            let r = *r;
+            let summary = self.summarize(r);
+            self.summaries[r] = Some(summary);
+            stack.pop();
+            self.leave(Some(r));
+        }
+        self.summaries[root].ok_or(Thrown)
+    }
+
+    /// The summary of `r` from the summaries of its children, which are all known.
+    fn summarize(&self, r: Ref) -> Summary {
+        let heap = self.heap;
+        let object = Some(r);
+        if is_type(heap, object, "word") {
+            let text = heap.string_of(prop(heap, object, &Key::Text).as_ref());
+            return Summary {
+                throws: false,
+                milestone_throws: false,
+                milestone_empty: false,
+                effect: [
+                    if text.is_empty() {
+                        Effect::Empty { spaced: true }
+                    } else {
+                        Effect::Grows
+                    },
+                    Effect::Grows,
+                ],
+            };
+        }
+        let kids = children(heap, object);
+        let list = kids.clone().unwrap_or_default();
+        let of = |kid: &Option<Ref>| kid.and_then(|k| self.summaries[k]).unwrap_or(NO_OBJECT);
+        let kid_throws = list.iter().any(|kid| of(kid).throws);
+        let milestone_throws = kids.is_none() || kid_throws;
+        let own_text = prop(heap, object, &Key::Text);
+        let mut text = if grows(heap, own_text.as_ref()) {
+            Effect::Grows
+        } else {
+            Effect::Empty { spaced: false }
+        };
+        for kid in &list {
+            text = text.then(of(kid).effect);
+            if grows(heap, prop(heap, *kid, &Key::NextChar).as_ref()) {
+                text = Effect::Grows;
+            }
+        }
+        if grows(heap, prop(heap, object, &Key::NextChar).as_ref()) {
+            text = Effect::Grows;
+        }
+        let milestone_empty = text != Effect::Grows;
+        if is_type(heap, object, "milestone") {
+            return Summary {
+                throws: milestone_throws,
+                milestone_throws,
+                milestone_empty,
+                effect: [
+                    if milestone_empty {
+                        Effect::Empty { spaced: true }
+                    } else {
+                        Effect::Grows
+                    },
+                    Effect::Grows,
+                ],
+            };
+        }
+        let truthy_children = has_truthy(heap, object, &Key::Children);
+        let effect = [false, true].map(|spaced| {
+            let mut state = Effect::Empty { spaced };
+            if own_text.as_ref().is_some_and(truthy) {
+                // An empty text does not end in a pause, so the spacing is dropped.
+                state = if grows(heap, own_text.as_ref()) {
+                    Effect::Grows
+                } else {
+                    Effect::Empty { spaced: false }
+                };
+            }
+            if truthy_children {
+                for kid in &list {
+                    state = state.then(of(kid).effect);
+                }
+            }
+            state
+        });
+        Summary {
+            throws: truthy_children && kid_throws,
+            milestone_throws,
+            milestone_empty,
+            effect,
+        }
+    }
+}
+
+/// Two verses whose objects are their own descendants, which no parse makes: one that
+/// `parseMilestone` meets and one that only the nested walk meets, below a word.
+#[cfg(test)]
+pub(super) fn walks_of_cycles() -> [Result<(), Thrown>; 2] {
+    let object = |heap: &mut Heap, ty: &str, kids: &[Ref]| {
+        let r = heap.obj();
+        heap.set_s(r, Key::Type, js(ty));
+        heap.set_s(r, Key::Text, Vec::new());
+        let array = heap.arr();
+        for kid in kids {
+            heap.push(array, *kid);
+        }
+        heap.set(r, Key::Children, Val::Ref(array));
+        r
+    };
+    let tie = |heap: &mut Heap, from: Ref, to: Ref| {
+        if let Some(Val::Ref(array)) = heap.get(from, &Key::Children).cloned() {
+            heap.push(array, to);
+        }
+    };
+    let mut first = Heap::default();
+    let inner = object(&mut first, "x", &[]);
+    let outer = object(&mut first, "x", &[inner]);
+    tie(&mut first, inner, outer);
+    let mut second = Heap::default();
+    let below = object(&mut second, "x", &[]);
+    let word = object(&mut second, "word", &[below]);
+    let top = object(&mut second, "x", &[word]);
+    tie(&mut second, below, below);
+    [(first, outer), (second, top)].map(|(heap, root)| {
+        Walk::new(&heap)
+            .replace_words_and_milestones(root, false)
+            .map(|_| ())
+    })
 }
