@@ -13,7 +13,7 @@
 //! does (D95). It follows redirects only to GitHub's own hosts, and only to the test
 //! server's origin when it talks to one on loopback.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Read};
 use std::time::Duration;
 
@@ -22,9 +22,10 @@ use reqwest::header::{ACCEPT, HeaderMap};
 use serde::Deserialize;
 use tc_core::BookId;
 use tc_door43::{CommitSha, InternetSwitch, TagName, UnreachableCause};
+use tc_helps::HelpRef;
 use tc_helps::aquifer::{
-    AquiferHelpsKind, AquiferOrder, academy_from_aquifer, notes_from_aquifer,
-    parse_aquifer_articles, parse_aquifer_metadata, questions_from_aquifer, words_from_aquifer,
+    AquiferHelpsKind, academy_from_aquifer, notes_from_aquifer, parse_aquifer_articles,
+    parse_aquifer_metadata, questions_from_aquifer, words_from_aquifer,
 };
 use url::Url;
 
@@ -507,25 +508,33 @@ pub fn install_aquifer_zip(
         }));
     }
     let files = unpack(bytes, max_unpacked).map_err(refused)?;
-    let (books, refused_articles) = check_release(pin, &files).map_err(refused)?;
+    let check = check_release(pin, &files).map_err(refused)?;
     store.install(Staged {
         origin: Origin::Aquifer {
             pin: pin.clone(),
-            refused_articles,
+            refused_articles: check.refused_articles,
+            book_files: check.book_files,
         },
-        books,
+        books: check.books,
         files,
     })
 }
 
+/// What reading a release found.
+struct ReleaseCheck {
+    books: Option<BookCoverage>,
+    book_files: BTreeMap<BookId, Vec<String>>,
+    refused_articles: usize,
+}
+
 /// Reads the release as tc-helps will: the metadata names the pinned resource and
 /// language, every article file parses, and the converter for its kind turns the
-/// articles into helps. Returns the books it covers and how many articles the reader or
-/// the converter refused alone.
-fn check_release(
-    pin: &AquiferPin,
-    files: &[(String, Vec<u8>)],
-) -> Result<(Option<BookCoverage>, usize), Refusal> {
+/// articles into helps. For notes and questions it records which files hold each book's
+/// items, by the passage the converter places each at: a release files some notes in
+/// another book's file (`index_reference` `00000000`, see tc-helps' `aquifer` module),
+/// so a file's name does not say which books it holds. A file that refused an article is
+/// also listed under its own book, where the loader names the refusal.
+fn check_release(pin: &AquiferPin, files: &[(String, Vec<u8>)]) -> Result<ReleaseCheck, Refusal> {
     let text = |path: &str| -> Result<&str, Refusal> {
         let (_, bytes) = files
             .iter()
@@ -556,49 +565,92 @@ fn check_release(
             metadata.resource_code
         )));
     };
+    let by_book = is_by_book(kind);
     let mut refused_articles = 0;
-    let mut books = Vec::new();
-    let mut articles = Vec::new();
+    let mut any_article = false;
+    let mut converted = 0;
+    let mut placed = BTreeSet::new();
+    let mut book_files: BTreeMap<BookId, Vec<String>> = BTreeMap::new();
     for (path, _) in files.iter().filter(|(p, _)| is_article_file(p)) {
         let loaded = parse_aquifer_articles(text(path)?)
             .map_err(|e| Refusal::NotAquifer(format!("{path}: {e}")))?;
-        refused_articles += loaded.refused.len();
-        articles.extend(loaded.items);
-        if metadata.order == AquiferOrder::Canonical
-            && let Some(book) = canonical_book(path)
-        {
-            books.push(book);
+        any_article |= !loaded.items.is_empty();
+        // Converted as the loader will, so an asset whose articles convert to nothing is
+        // refused here rather than found empty later.
+        let (items, refused, books) = match kind {
+            AquiferHelpsKind::Notes => {
+                let notes = notes_from_aquifer(&loaded.items);
+                let books = notes.items.iter().filter_map(|n| bible_book(&n.reference));
+                (notes.items.len(), notes.refused.len(), books.collect())
+            }
+            AquiferHelpsKind::Questions => {
+                let questions = questions_from_aquifer(&loaded.items);
+                let books = questions
+                    .items
+                    .iter()
+                    .filter_map(|q| bible_book(&q.reference));
+                (
+                    questions.items.len(),
+                    questions.refused.len(),
+                    books.collect(),
+                )
+            }
+            AquiferHelpsKind::Words => (
+                words_from_aquifer(&loaded.items).articles.len(),
+                0,
+                BTreeSet::new(),
+            ),
+            AquiferHelpsKind::Academy => (
+                academy_from_aquifer(&loaded.items).len(),
+                0,
+                BTreeSet::new(),
+            ),
+        };
+        converted += items;
+        let refused = refused + loaded.refused.len();
+        refused_articles += refused;
+        if by_book {
+            placed.extend(books.iter().copied());
+            let own = canonical_book(path).filter(|_| refused > 0);
+            for book in books.into_iter().chain(own) {
+                let list = book_files.entry(book).or_default();
+                if !list.contains(path) {
+                    list.push(path.clone());
+                }
+            }
         }
     }
-    if articles.is_empty() {
+    if !any_article {
         return Err(Refusal::NotAquifer("it holds no article".to_owned()));
     }
-    // Converted as the loader will, so an asset whose articles convert to nothing is
-    // refused here rather than found empty later.
-    let (converted, refused) = match kind {
-        AquiferHelpsKind::Notes => {
-            let notes = notes_from_aquifer(&articles);
-            (notes.items.len(), notes.refused.len())
-        }
-        AquiferHelpsKind::Questions => {
-            let questions = questions_from_aquifer(&articles);
-            (questions.items.len(), questions.refused.len())
-        }
-        AquiferHelpsKind::Words => (words_from_aquifer(&articles).articles.len(), 0),
-        AquiferHelpsKind::Academy => (academy_from_aquifer(&articles).len(), 0),
-    };
     if converted == 0 {
         return Err(Refusal::NotAquifer(
             "tc-helps converts none of its articles".to_owned(),
         ));
     }
-    refused_articles += refused;
-    books.sort();
-    let coverage = match metadata.order {
-        AquiferOrder::Canonical => BookCoverage::books(books),
-        AquiferOrder::Alphabetical | AquiferOrder::Monograph => Some(BookCoverage::WholeCollection),
+    let books = if by_book {
+        BookCoverage::books(placed)
+    } else {
+        Some(BookCoverage::WholeCollection)
     };
-    Ok((coverage, refused_articles))
+    Ok(ReleaseCheck {
+        books,
+        book_files,
+        refused_articles,
+    })
+}
+
+/// Whether the loader reads this kind one book at a time: notes and questions are
+/// indexed by passage; words and academy are alphabetical and read whole.
+pub(crate) fn is_by_book(kind: AquiferHelpsKind) -> bool {
+    matches!(kind, AquiferHelpsKind::Notes | AquiferHelpsKind::Questions)
+}
+
+pub(crate) fn bible_book(reference: &HelpRef) -> Option<BookId> {
+    match reference {
+        HelpRef::Bible(r) => Some(r.book),
+        HelpRef::Obs(_) => None,
+    }
 }
 
 pub(crate) fn is_article_file(path: &str) -> bool {

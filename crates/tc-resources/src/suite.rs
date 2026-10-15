@@ -16,6 +16,7 @@ use std::sync::LazyLock;
 use crate::pin::ResourcePin;
 use crate::sets::{
     GatewayLanguage, LanguageSet, PaneId, ProjectPins, ScripturePane, SetSlot, Testaments,
+    UnknownKeys,
 };
 
 struct Suite {
@@ -278,6 +279,7 @@ pub fn project_pins() -> ProjectPins {
         original_language: SUITE.original_language.clone(),
         lexicon: SUITE.lexicon.clone(),
         extra_scripture: SUITE.extra_scripture.clone(),
+        unknown: UnknownKeys::default(),
     }
 }
 
@@ -326,7 +328,7 @@ mod tests {
     #[test]
     fn the_suite_round_trips_through_resources_json() {
         let pins = project_pins();
-        let json = pins.to_resources_json();
+        let json = pins.to_resources_json().unwrap();
         assert_eq!(ProjectPins::from_resources_json(&json).unwrap(), pins);
         assert_eq!(
             json["languageSets"]["primary"]["translationNotes"]["flavor"],

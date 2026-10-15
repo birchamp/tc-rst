@@ -13,6 +13,9 @@
 //! | academy articles | `translationAcademy` of the rung that answered the notes | the `academy` asset |
 //! | questions | `translationQuestions`, resolved per book | the `questions` asset |
 //!
+//! An Aquifer note, question or words link goes with the book of its passage, whatever
+//! file the release filed it in: the install indexes which files hold each book.
+//!
 //! The texts are the original-language text of the book's testament, every source pane,
 //! and the simplified text resolved over the ladder; the USFM comes back as its bytes.
 //! Open Bible Stories helps come from Door43 only: Aquifer mirrors none of them.
@@ -32,9 +35,9 @@ use tc_helps::articles::{academy_article, parse_word_article, word_article_id};
 use tc_helps::metadata::{AquiferPin as HelpsAquiferPin, DcsPin, HelpsSource};
 use tc_helps::obs::{ObsStory, parse_obs_story};
 use tc_helps::tsv::{TsvScope, parse_notes, parse_questions, parse_word_links};
-use tc_helps::{Helps, HelpsPart};
+use tc_helps::{HelpRef, Helps, HelpsPart};
 
-use crate::aquifer::{canonical_book, is_article_file};
+use crate::aquifer::{bible_book, canonical_book, is_article_file};
 use crate::choice::{AquiferHelps, HelpsChoice};
 use crate::layout;
 use crate::pin::{AquiferPin, ResourcePin};
@@ -568,14 +571,21 @@ fn load_aquifer_book(
     helps: &mut Helps,
     parts: &mut BTreeMap<HelpsPart, PartStatus>,
 ) {
+    let in_book = |reference: &HelpRef| bible_book(reference) == Some(book);
     let notes = aquifer_part(
         store,
         aquifer.notes.as_ref(),
         Some(book),
         |source, articles, helps| {
             let loaded = notes_from_aquifer(articles);
-            helps.add_notes(source, loaded.items)?;
-            Ok(loaded.refused.iter().map(ToString::to_string).collect())
+            let notes: Vec<_> = loaded
+                .items
+                .into_iter()
+                .filter(|n| in_book(&n.reference))
+                .collect();
+            let count = notes.len();
+            helps.add_notes(source, notes)?;
+            Ok((count, loaded.refused))
         },
         helps,
     );
@@ -586,8 +596,14 @@ fn load_aquifer_book(
         Some(book),
         |source, articles, helps| {
             let loaded = questions_from_aquifer(articles);
-            helps.add_questions(source, loaded.items)?;
-            Ok(loaded.refused.iter().map(ToString::to_string).collect())
+            let questions: Vec<_> = loaded
+                .items
+                .into_iter()
+                .filter(|q| in_book(&q.reference))
+                .collect();
+            let count = questions.len();
+            helps.add_questions(source, questions)?;
+            Ok((count, loaded.refused))
         },
         helps,
     );
@@ -598,9 +614,13 @@ fn load_aquifer_book(
         None,
         |source, articles, helps| {
             let words = words_from_aquifer(articles);
+            let count = words.articles.len();
             helps.add_word_articles(source, words.articles)?;
-            helps.add_word_links(source, words.links)?;
-            Ok(Vec::new())
+            helps.add_word_links(
+                source,
+                words.links.into_iter().filter(|l| in_book(&l.reference)),
+            )?;
+            Ok((count, Vec::new()))
         },
         helps,
     );
@@ -612,16 +632,21 @@ fn load_aquifer_book(
         aquifer.academy.as_ref(),
         None,
         |source, articles, helps| {
-            helps.add_academy_articles(source, academy_from_aquifer(articles))?;
-            Ok(Vec::new())
+            let articles = academy_from_aquifer(articles);
+            let count = articles.len();
+            helps.add_academy_articles(source, articles)?;
+            Ok((count, Vec::new()))
         },
         helps,
     );
     parts.insert(HelpsPart::AcademyArticles, academy);
 }
 
-/// Reads an Aquifer asset's article files: the book's file for a canonical resource
-/// (`book` given), every file otherwise.
+/// Reads an Aquifer asset's article files and hands their articles to `add`, which keeps
+/// what belongs on the screen and returns how many items it kept and what the converter
+/// refused. For a book (`book` given) the files are those the install's index lists for
+/// it, since a release files some notes in another book's file; every file otherwise.
+/// A refused article is named with the book whose file holds it.
 fn aquifer_part(
     store: &ResourceStore,
     pin: Option<&AquiferPin>,
@@ -630,7 +655,7 @@ fn aquifer_part(
         &HelpsSource,
         &[tc_helps::aquifer::AquiferArticle],
         &mut Helps,
-    ) -> Result<Vec<String>, tc_helps::Error>,
+    ) -> Result<(usize, Vec<tc_helps::Error>), tc_helps::Error>,
     helps: &mut Helps,
 ) -> PartStatus {
     let Some(pin) = pin else {
@@ -647,36 +672,66 @@ fn aquifer_part(
             });
         }
     };
-    let files: Vec<String> = installed
-        .files()
-        .filter(|p| is_article_file(p))
-        .filter(|p| book.is_none_or(|b| canonical_book(p) == Some(b)))
-        .map(str::to_owned)
-        .collect();
+    let files: Vec<String> = match book.and_then(|b| installed.aquifer_book_files(b)) {
+        Some(listed) => listed.to_vec(),
+        None => installed
+            .files()
+            .filter(|p| is_article_file(p))
+            .map(str::to_owned)
+            .collect(),
+    };
+    let not_in_resource = || {
+        PartStatus::Missing(Missing::BookNotInResource {
+            source: name.clone(),
+        })
+    };
     if files.is_empty() {
-        return PartStatus::Missing(Missing::BookNotInResource { source: name });
+        return not_in_resource();
     }
-    let result = (|| -> Result<Vec<String>, Missing> {
+    // A file's refusals are this book's to name when the file is the book's own, or is
+    // not numbered by book at all.
+    let names_refusals =
+        |path: &str| book.is_none() || canonical_book(path).is_none_or(|b| Some(b) == book);
+    let result = (|| -> Result<(usize, Vec<String>), Missing> {
         let unreadable = |problem: String| Missing::Unreadable {
             source: name.clone(),
             problem,
         };
         let mut articles = Vec::new();
+        let mut file_of: BTreeMap<String, &str> = BTreeMap::new();
         let mut refused = Vec::new();
         for path in &files {
             let text = read_text(&installed, path, &name)?;
             let loaded =
                 parse_aquifer_articles(&text).map_err(|e| unreadable(format!("{path}: {e}")))?;
+            for article in &loaded.items {
+                file_of.insert(article.content_id.as_str().to_owned(), path);
+            }
             articles.extend(loaded.items);
-            refused.extend(loaded.refused.iter().map(|e| format!("{path}: {e}")));
+            if names_refusals(path) {
+                refused.extend(loaded.refused.iter().map(|e| format!("{path}: {e}")));
+            }
         }
-        let more =
+        let (kept, more) =
             add(&aquifer_source(pin), &articles, helps).map_err(|e| unreadable(e.to_string()))?;
-        refused.extend(more);
-        Ok(refused)
+        for error in more {
+            let path = match &error {
+                tc_helps::Error::AquiferArticle { content_id, .. } => {
+                    file_of.get(content_id).copied()
+                }
+                _ => None,
+            };
+            match path {
+                Some(path) if names_refusals(path) => refused.push(format!("{path}: {error}")),
+                Some(_) => {}
+                None => refused.push(error.to_string()),
+            }
+        }
+        Ok((kept, refused))
     })();
     match result {
-        Ok(refused) => PartStatus::Loaded {
+        Ok((0, refused)) if refused.is_empty() => not_in_resource(),
+        Ok((_, refused)) => PartStatus::Loaded {
             source: aquifer_source(pin),
             rung: None,
             substitute_for: None,

@@ -20,6 +20,7 @@ zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2
 
 [dev-dependencies]
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
+md-5 = "0.10.6"
 proptest.workspace = true
 tempfile.workspace = true
 tc-door43-fake = { path = "../tc-door43-fake" }

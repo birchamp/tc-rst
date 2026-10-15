@@ -8,7 +8,7 @@ mod common;
 use common::{commit_pin, nothing_installed, release, repo_path, rig, zip};
 use tc_core::BookId;
 use tc_door43::{Door43Error, VerificationError};
-use tc_door43_fake::{Fault, FaultRule};
+use tc_door43_fake::{CommitSeed, Fault, FaultRule, RepoSeed, SeedFile, SeedMode};
 use tc_resources::{
     BookCoverage, InstallError, Origin, Packaging, Refusal, ResourceStore, install_all,
     install_dcs, install_dcs_as,
@@ -363,4 +363,46 @@ async fn a_bundled_store_seeds_a_first_run_that_is_offline() {
         repo_path("Es-419_gl/es-419_tn"),
         pin.sha.clone()
     )));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_link_in_a_commit_is_left_out_and_never_written() {
+    let rig = rig().await;
+    rig.fake
+        .add_repo(RepoSeed {
+            owner: "uW".to_owned(),
+            name: "en_links".to_owned(),
+            subject: "Bible".to_owned(),
+            language: "en".to_owned(),
+            topics: Vec::new(),
+            private: false,
+            commits: vec![CommitSeed {
+                message: "A repository holding a link".to_owned(),
+                files: vec![
+                    SeedFile::regular("README.md", b"# Links\n".to_vec()),
+                    SeedFile {
+                        path: "LICENSE.md".to_owned(),
+                        mode: SeedMode::Symlink,
+                        bytes: b"../../../../etc/passwd".to_vec(),
+                    },
+                ],
+                tag: None,
+                release: None,
+            }],
+        })
+        .await
+        .unwrap();
+    let pin = commit_pin(&rig, "uW", "en_links", "HEAD").await;
+    let installed = install_dcs(&rig.store, &rig.client, &pin).await.unwrap();
+    let Origin::Dcs { left_out, .. } = installed.origin() else {
+        panic!("a Door43 install");
+    };
+    assert_eq!(left_out, &["LICENSE.md".to_owned()]);
+    assert!(!installed.has_file("LICENSE.md"));
+    assert!(installed.has_file("README.md"));
+    installed.verify().unwrap();
+    assert!(
+        !installed.dir().join("content").join("LICENSE.md").exists(),
+        "nothing is written for a link"
+    );
 }

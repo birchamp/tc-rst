@@ -29,6 +29,16 @@ pub enum ParseError {
     Pins(String),
 }
 
+/// A pin tC4's §5.3 grammar refuses, found while writing pins: nothing is written. tC4
+/// requires a flavor of every pin; a pin from a release tag gets one when its resource
+/// is installed ([`crate::Installed::dcs_pin`]).
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("slot {slot}: {pin} has no flavor, which every pin needs")]
+pub struct UnwritablePin {
+    pub slot: String,
+    pub pin: String,
+}
+
 /// A problem with the resource store on disk.
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {

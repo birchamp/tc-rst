@@ -31,7 +31,7 @@
 //! One process owns a store: the app's server. Two processes installing into one store
 //! at once is not supported, because opening the store clears `.partial/`.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -39,6 +39,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
+use tc_core::BookId;
 
 use crate::error::{InstallError, Refusal, StoreError};
 use crate::pin::{AquiferPin, BookCoverage, ResourcePin, Sha256};
@@ -87,6 +88,11 @@ pub enum Origin {
         /// Articles the converter refused, each alone; the rest of their files load.
         #[serde(default)]
         refused_articles: usize,
+        /// For notes and questions: the article files that hold each book's items, by
+        /// the passage each is placed at, whatever file it is filed in. Empty for words
+        /// and academy, which are read whole.
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        book_files: BTreeMap<BookId, Vec<String>>,
     },
 }
 
@@ -129,7 +135,9 @@ pub struct Receipt {
     pub receipt_version: u32,
     #[serde(flatten)]
     pub origin: Origin,
-    /// The books the installed files hold; `["BIBLE"]` for a resource not divided into
+    /// The books the install holds: a Door43 resource's book files (a `_tw` repository's
+    /// articles serve every book), or the passages of an Aquifer asset's notes or
+    /// questions, whatever file holds them. `["BIBLE"]` for a resource not divided into
     /// books. Absent when a book-divided resource holds no book.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub books: Option<BookCoverage>,
@@ -180,6 +188,18 @@ impl Installed {
 
     pub fn books(&self) -> Option<&BookCoverage> {
         self.receipt.books.as_ref()
+    }
+
+    /// The article files of an Aquifer notes or questions asset that hold items of
+    /// `book`, wherever the release filed them. `None` when the receipt keeps no such
+    /// index (a Door43 install, or Aquifer words and academy, which are read whole).
+    pub fn aquifer_book_files(&self, book: BookId) -> Option<&[String]> {
+        match &self.receipt.origin {
+            Origin::Aquifer { book_files, .. } if !book_files.is_empty() => {
+                Some(book_files.get(&book).map_or(&[], Vec::as_slice))
+            }
+            _ => None,
+        }
     }
 
     /// Every file, sorted by path.
@@ -392,6 +412,7 @@ impl ResourceStore {
         let wanted = Origin::Aquifer {
             pin: pin.clone(),
             refused_articles: 0,
+            book_files: BTreeMap::new(),
         };
         self.find(&wanted)
     }
@@ -963,6 +984,22 @@ mod tests {
             [StoreError::BadReceipt { .. }]
         ));
         assert_eq!(store.installed_dcs_pins().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_file_whose_size_changed_reads_as_damaged() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ResourceStore::open(dir.path()).unwrap();
+        let installed = store.install(staged('a')).unwrap();
+        let file = installed.dir().join(CONTENT).join("ingredients/TIT.tsv");
+        fs::write(&file, b"Reference").unwrap();
+        for read in [
+            installed.read("ingredients/TIT.tsv").map(|_| ()),
+            installed.read_text("ingredients/TIT.tsv").map(|_| ()),
+        ] {
+            assert!(matches!(read, Err(StoreError::Damaged { .. })), "{read:?}");
+        }
+        assert_eq!(installed.read("metadata.json").unwrap(), b"{}");
     }
 
     #[test]

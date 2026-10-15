@@ -5,7 +5,7 @@
 
 mod common;
 
-use common::aquifer_fake::{AssetFault, FakeAsset, FakeRelease};
+use common::aquifer_fake::{ApiFault, AssetFault, FakeAsset, FakeRelease};
 use common::{aquifer_pin, aquifer_rig, aquifer_zip, nothing_installed, zip};
 use tc_core::BookId;
 use tc_resources::{
@@ -46,12 +46,17 @@ async fn a_release_asset_is_pinned_by_tag_commit_and_digest_then_installed() {
     let Origin::Aquifer {
         pin: held,
         refused_articles,
+        book_files,
     } = installed.origin()
     else {
         panic!("an Aquifer install");
     };
     assert_eq!(held, &pin);
     assert_eq!(*refused_articles, 0);
+    assert_eq!(
+        book_files.get(&BookId::Titus).map(Vec::as_slice),
+        Some(&["json/56.content.json".to_owned()][..])
+    );
     assert_eq!(
         installed.read("json/56.content.json").unwrap(),
         common::fixture("aquifer/UWTranslationNotes/por/json/56.content.json")
@@ -347,4 +352,97 @@ async fn a_release_without_a_digest_cannot_be_pinned() {
     .await
     .unwrap_err();
     assert!(matches!(err, InstallError::Refused { .. }), "{err}");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn turning_the_internet_off_during_a_download_installs_nothing() {
+    let rig = aquifer_rig().await;
+    let pin = aquifer_pin(
+        "UWTranslationNotes",
+        "por",
+        &aquifer_zip("UWTranslationNotes", "por"),
+    );
+    // The request leaves while the switch is on; the answer arrives after it is off.
+    rig.github
+        .fault_next_download(AssetFault::Delay(std::time::Duration::from_millis(400)));
+    let internet = rig.internet.clone();
+    let switch_off = tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        internet.turn_off();
+    });
+    let err = install_aquifer(&rig.store, &rig.client, &pin)
+        .await
+        .unwrap_err();
+    switch_off.await.unwrap();
+    assert!(
+        matches!(err, InstallError::Aquifer(AquiferError::Offline { .. })),
+        "{err}"
+    );
+    nothing_installed(&rig.store);
+}
+
+#[test]
+fn an_asset_holding_a_link_is_refused() {
+    use std::io::Write;
+    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let options = zip::write::SimpleFileOptions::default();
+    writer.start_file("metadata.json", options).unwrap();
+    writer
+        .write_all(&common::fixture(
+            "aquifer/UWTranslationNotes/por/metadata.json",
+        ))
+        .unwrap();
+    writer
+        .add_symlink("json/56.content.json", "../../../../etc/passwd", options)
+        .unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    let pin = aquifer_pin("UWTranslationNotes", "por", &bytes);
+    let dir = tempfile::tempdir().unwrap();
+    let store = tc_resources::ResourceStore::open(dir.path()).unwrap();
+    let err = install_aquifer_zip(&store, &pin, &bytes, MAX).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            InstallError::Refused {
+                refusal: Refusal::Symlink(ref path),
+                ..
+            } if path == "json/56.content.json"
+        ),
+        "{err}"
+    );
+    nothing_installed(&store);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn githubs_rate_limit_is_told_apart_from_a_refusal() {
+    let rig = aquifer_rig().await;
+    let repo = AquiferRepo::bible_aquifer("UWTranslationNotes").unwrap();
+    rig.github.fail_next_api(ApiFault {
+        status: 403,
+        headers: vec![("x-ratelimit-remaining".to_owned(), "0".to_owned())],
+    });
+    let err = rig.client.latest_release(&repo).await.unwrap_err();
+    assert!(
+        matches!(err, AquiferError::RateLimited { status: 403, .. }),
+        "{err}"
+    );
+    rig.github.fail_next_api(ApiFault {
+        status: 403,
+        headers: vec![("x-ratelimit-remaining".to_owned(), "12".to_owned())],
+    });
+    let err = rig.client.latest_release(&repo).await.unwrap_err();
+    assert!(
+        matches!(err, AquiferError::Http { status: 403, .. }),
+        "{err}"
+    );
+    rig.github.fail_next_api(ApiFault {
+        status: 429,
+        headers: Vec::new(),
+    });
+    let err = rig.client.latest_release(&repo).await.unwrap_err();
+    assert!(
+        matches!(err, AquiferError::RateLimited { status: 429, .. }),
+        "{err}"
+    );
+    assert!(rig.client.latest_release(&repo).await.is_ok());
 }

@@ -34,7 +34,9 @@ impl Packaging {
 
 /// Turns a release tag into a pin by one Door43 tag lookup (D59): the commit Door43's tags
 /// API names for the tag. A first install verifies the download against this commit, so
-/// the archive never certifies itself.
+/// the archive never certifies itself. The pin has no flavor yet, so it cannot be written
+/// to a project; the installed resource's [`Installed::dcs_pin`] carries the flavor it
+/// declares.
 pub async fn pin_release(
     client: &Door43Client,
     repo: &RepoPath,
@@ -175,7 +177,11 @@ fn from_export(
         pin.flavor = identity.flavor.clone();
     }
     let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
-    let books = layout::coverage_of(paths.iter().copied(), pin.flavor.as_deref());
+    let books = layout::coverage_of(
+        paths.iter().copied(),
+        pin.flavor.as_deref(),
+        pin.repo.repo(),
+    );
     Ok(Staged {
         origin: Origin::Dcs {
             pin,
@@ -203,7 +209,11 @@ fn from_archive(pin: &ResourcePin, files: Vec<UnpackedFile>) -> Staged {
     let (links, files): (Vec<UnpackedFile>, Vec<UnpackedFile>) =
         files.into_iter().partition(|f| f.mode == FileMode::Symlink);
     let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
-    let books = layout::coverage_of(paths.iter().copied(), pin.flavor.as_deref());
+    let books = layout::coverage_of(
+        paths.iter().copied(),
+        pin.flavor.as_deref(),
+        pin.repo.repo(),
+    );
     Staged {
         origin: Origin::Dcs {
             pin,

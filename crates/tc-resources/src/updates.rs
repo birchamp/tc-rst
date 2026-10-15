@@ -657,6 +657,7 @@ mod tests {
                 id: "ult".parse().unwrap(),
                 pin: pin("en_ult", "v89", '8', "scripture/textTranslation"),
             }],
+            unknown: Default::default(),
         };
         let releases = latest(&[("unfoldingWord/en_tn", "v90", 'e')]);
         let primary = offer_for_set(Rung::Primary, pins.primary.as_ref().unwrap(), &releases);

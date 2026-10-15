@@ -5,9 +5,11 @@
 //! bytes are the same in both; only the paths differ.
 
 use tc_core::BookId;
+use tc_door43::RepoRef;
 use tc_helps::{Manual, Slug};
 
 use crate::pin::BookCoverage;
+use crate::sets::{is_tw_repo, is_twl_repo};
 
 /// The folder a burrito keeps its content in.
 const INGREDIENTS: &str = "ingredients/";
@@ -59,11 +61,17 @@ pub(crate) fn is_word_article(path: &str) -> bool {
 /// The books the files hold, as a pin records them; `["BIBLE"]` for a resource that is
 /// not divided into books (articles, lexicons, Open Bible Stories). `None` for a
 /// book-divided resource that holds no book.
+///
+/// Book files decide before articles do: a `_twl` export also carries the tW articles,
+/// and its coverage is still its book TSVs (tC4 `twlPin.test.ts`, D96). The one
+/// exception is a `_tw` repository: its export carries book TSVs built from `en_twl`
+/// master, which are never read (D96 ruling 5), and its articles serve every book.
 pub(crate) fn coverage_of<'a>(
-    paths: impl Iterator<Item = &'a str> + Clone,
+    paths: impl Iterator<Item = &'a str>,
     flavor: Option<&str>,
+    repo: &RepoRef,
 ) -> Option<BookCoverage> {
-    if paths.clone().any(is_word_article) {
+    if is_tw_repo(repo) {
         return Some(BookCoverage::WholeCollection);
     }
     let mut books: Vec<BookId> = paths.filter_map(book_of).collect();
@@ -71,7 +79,8 @@ pub(crate) fn coverage_of<'a>(
     if let Some(coverage) = BookCoverage::books(books) {
         return Some(coverage);
     }
-    let divided = flavor.is_some_and(|f| BOOK_FLAVORS.contains(&f));
+    // Words links are divided into books, though they share the articles' flavor.
+    let divided = is_twl_repo(repo) || flavor.is_some_and(|f| BOOK_FLAVORS.contains(&f));
     (!divided).then_some(BookCoverage::WholeCollection)
 }
 
@@ -152,28 +161,72 @@ mod tests {
 
     #[test]
     fn coverage_follows_what_the_files_hold() {
-        let paths = [
+        let repo = |name: &str| format!("unfoldingWord/{name}").parse::<RepoRef>().unwrap();
+        let notes = [
             "metadata.json",
             "ingredients/TIT.tsv",
             "ingredients/JON.tsv",
         ];
         assert_eq!(
-            coverage_of(paths.iter().copied(), Some("parascriptural/x-bcvnotes")),
+            coverage_of(
+                notes.iter().copied(),
+                Some("parascriptural/x-bcvnotes"),
+                &repo("en_tn")
+            ),
             BookCoverage::books([BookId::Jonah, BookId::Titus])
-        );
-        let tw = ["ingredients/TIT.tsv", "ingredients/payload/kt/god.md"];
-        assert_eq!(
-            coverage_of(tw.iter().copied(), Some("parascriptural/x-bcvarticles")),
-            Some(BookCoverage::WholeCollection)
         );
         let empty = ["metadata.json"];
         assert_eq!(
-            coverage_of(empty.iter().copied(), Some("parascriptural/x-bcvnotes")),
+            coverage_of(
+                empty.iter().copied(),
+                Some("parascriptural/x-bcvnotes"),
+                &repo("en_tn")
+            ),
             None
         );
         assert_eq!(
-            coverage_of(empty.iter().copied(), Some("peripheral/x-lexicon")),
+            coverage_of(
+                empty.iter().copied(),
+                Some("peripheral/x-lexicon"),
+                &repo("en_ugl")
+            ),
             Some(BookCoverage::WholeCollection)
+        );
+    }
+
+    #[test]
+    fn words_links_cover_their_books_and_the_articles_cover_every_book() {
+        let repo = |name: &str| format!("unfoldingWord/{name}").parse::<RepoRef>().unwrap();
+        let articles = Some("parascriptural/x-bcvarticles");
+        // Both exports carry book TSVs and the articles.
+        let export = ["ingredients/TIT.tsv", "ingredients/payload/kt/god.md"];
+        assert_eq!(
+            coverage_of(export.iter().copied(), articles, &repo("en_twl")),
+            BookCoverage::books([BookId::Titus])
+        );
+        assert_eq!(
+            coverage_of(export.iter().copied(), articles, &repo("EN_TWL")),
+            BookCoverage::books([BookId::Titus])
+        );
+        assert_eq!(
+            coverage_of(export.iter().copied(), articles, &repo("en_tw")),
+            Some(BookCoverage::WholeCollection)
+        );
+        // Links with no book file hold no book; articles with none hold every book.
+        let only_articles = ["ingredients/payload/kt/god.md"];
+        assert_eq!(
+            coverage_of(only_articles.iter().copied(), articles, &repo("en_twl")),
+            None
+        );
+        assert_eq!(
+            coverage_of(only_articles.iter().copied(), articles, &repo("en_tw")),
+            Some(BookCoverage::WholeCollection)
+        );
+        // The Resource Container layout of a links repository.
+        let rc = ["manifest.yaml", "twl_TIT.tsv", "bible/kt/god.md"];
+        assert_eq!(
+            coverage_of(rc.iter().copied(), None, &repo("hi_twl")),
+            BookCoverage::books([BookId::Titus])
         );
     }
 

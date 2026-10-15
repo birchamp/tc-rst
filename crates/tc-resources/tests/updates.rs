@@ -11,7 +11,7 @@ use tc_core::Testament;
 use tc_door43::Door43Error;
 use tc_resources::updates::{
     AquiferUpdate, apply_aquifer_upgrade, apply_upgrade, check_aquifer_updates, check_for_updates,
-    offer_is_stale,
+    latest_releases, offer_is_stale,
 };
 use tc_resources::{
     AquiferHelps, GatewayLanguage, LanguageSet, ProjectPins, ResourcePin, Rung, ScripturePane,
@@ -171,4 +171,53 @@ async fn aquifer_offers_a_newer_release_or_a_reuploaded_asset_by_digest() {
 
     rig.internet.turn_off();
     assert!(check_aquifer_updates(&rig.client, &helps).await.is_err());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_newest_of_several_listed_releases_is_the_one_offered() {
+    let rig = rig().await;
+    let tn86 = release(&rig, "unfoldingWord/en_tn", "v86").await;
+    let tn91 = release(&rig, "unfoldingWord/en_tn", "v91").await;
+    // The catalog's own entries for both releases, dated as Door43 dates them: v91 after
+    // v86.
+    let url = format!(
+        "{}/api/v1/catalog/search?owner=unfoldingWord&repo=en_tn&stage=prod&includeHistory=true",
+        rig.fake.url()
+    );
+    let answer: serde_json::Value =
+        serde_json::from_slice(&reqwest::get(&url).await.unwrap().bytes().await.unwrap()).unwrap();
+    let entry = |tag: &str, released: &str| {
+        let mut entry = answer["data"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["branch_or_tag_name"] == tag)
+            .unwrap()
+            .clone();
+        entry["released"] = released.into();
+        entry
+    };
+    let entries = vec![
+        entry("v91", "2026-06-01T00:00:00Z"),
+        entry("v86", "2025-11-01T00:00:00Z"),
+    ];
+    let repo = tn86.repo.repo().clone();
+    for order in [entries.clone(), entries.into_iter().rev().collect()] {
+        let body = serde_json::json!({"ok": true, "data": order});
+        rig.fake.inject(tc_door43_fake::FaultRule::once(
+            "GET",
+            "/api/v1/catalog/search",
+            tc_door43_fake::Fault::Raw {
+                status: 200,
+                headers: vec![("content-type".to_owned(), "application/json".to_owned())],
+                body: body.to_string().into_bytes(),
+            },
+        ));
+        let latest = latest_releases(&rig.client, std::slice::from_ref(&repo))
+            .await
+            .unwrap();
+        let newest = latest.get(&repo).unwrap();
+        assert_eq!(newest.tag.as_str(), "v91");
+        assert_eq!(newest.sha, tn91.sha);
+    }
 }

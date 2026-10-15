@@ -17,8 +17,11 @@
 //! | `Lexicon` | [`ProjectPins::lexicon`] | `nt`, `ot` |
 //! | `ExtraScripture` | [`ProjectPins::extra_scripture`] | one slot, `extraScripture`, holding the ordered list of `{id, ...pin}` |
 //!
-//! A slot this version does not know (from a newer app) is kept in
-//! [`LanguageSet::extra`] and written back unchanged.
+//! What this version does not know (a newer app's) is kept and written back unchanged: a
+//! slot in [`LanguageSet::extra`], a pin's or pane's field in [`ResourcePin::extra`], and
+//! a key of `resources.json` beside the five groups in [`ProjectPins::unknown`]. Writing
+//! refuses a pin that tC4's §5.3 grammar refuses: one without a flavor
+//! ([`UnwritablePin`]).
 //!
 //! A gateway change rewrites `Primary` and `ExtraScripture` in one batch; a help-set
 //! upgrade rewrites one rung; a text upgrade rewrites the groups that pin the text
@@ -33,7 +36,7 @@ use serde_json::{Map, Value};
 use tc_core::{BookId, Testament};
 use tc_door43::{AccountName, RepoRef};
 
-use crate::error::ParseError;
+use crate::error::{ParseError, UnwritablePin};
 use crate::pin::ResourcePin;
 
 /// The two rungs of the ladder (D30): exactly these, in this order.
@@ -270,7 +273,7 @@ impl LanguageSet {
 
     /// The tC4 §5.3 object: `gatewayLanguage`, then each pinned slot in tC4's order, then
     /// the slots this version does not know.
-    pub fn to_json(&self) -> Value {
+    pub fn to_json(&self) -> Result<Value, UnwritablePin> {
         let mut out = Map::new();
         out.insert(
             GATEWAY_LANGUAGE.to_owned(),
@@ -281,13 +284,13 @@ impl LanguageSet {
         );
         for slot in SetSlot::ALL {
             if let Some(pin) = self.pins.get(&slot) {
-                out.insert(slot.name().to_owned(), pin_json(pin));
+                out.insert(slot.name().to_owned(), pin_json(slot.name(), pin)?);
             }
         }
         for (key, value) in &self.extra {
             out.insert(key.clone(), value.clone());
         }
-        Value::Object(out)
+        Ok(Value::Object(out))
     }
 
     /// Reads a tC4 §5.3 set object. A malformed pin in a known slot is refused, so a bad
@@ -329,10 +332,28 @@ impl LanguageSet {
 
 const GATEWAY_LANGUAGE: &str = "gatewayLanguage";
 const EXTRA_SCRIPTURE: &str = "extraScripture";
+const SCHEMA_VERSION: &str = "schemaVersion";
+const LANGUAGE_SETS: &str = "languageSets";
+const RESOURCES: &str = "resources";
+const ORIGINAL_LANGUAGE: &str = "originalLanguage";
+const LEXICON: &str = "lexicon";
 
-fn pin_json(pin: &ResourcePin) -> Value {
-    // A pin is plain strings and lists, which always serialize.
-    serde_json::to_value(pin).unwrap_or(Value::Null)
+fn pin_json(slot: &str, pin: &ResourcePin) -> Result<Value, UnwritablePin> {
+    writable(slot, pin)?;
+    // A pin is plain strings, lists and JSON values, which always serialize.
+    Ok(serde_json::to_value(pin).unwrap_or(Value::Null))
+}
+
+/// tC4's §5.3 grammar (`pinEntryError`) requires a flavor; the other fields it checks
+/// are valid by their types.
+fn writable(slot: &str, pin: &ResourcePin) -> Result<(), UnwritablePin> {
+    match pin.flavor.as_deref() {
+        Some(flavor) if !flavor.is_empty() => Ok(()),
+        _ => Err(UnwritablePin {
+            slot: slot.to_owned(),
+            pin: pin.to_string(),
+        }),
+    }
 }
 
 fn read_pin(slot: &str, value: &Value) -> Result<ResourcePin, ParseError> {
@@ -365,15 +386,15 @@ impl Testaments {
         }
     }
 
-    fn to_json(&self) -> Value {
+    fn to_json(&self) -> Result<Value, UnwritablePin> {
         let mut out = Map::new();
         if let Some(pin) = &self.nt {
-            out.insert("nt".to_owned(), pin_json(pin));
+            out.insert("nt".to_owned(), pin_json("nt", pin)?);
         }
         if let Some(pin) = &self.ot {
-            out.insert("ot".to_owned(), pin_json(pin));
+            out.insert("ot".to_owned(), pin_json("ot", pin)?);
         }
-        Value::Object(out)
+        Ok(Value::Object(out))
     }
 
     fn from_json(value: &Value) -> Result<Self, ParseError> {
@@ -439,12 +460,26 @@ impl From<PaneId> for String {
     }
 }
 
-/// One source pane of `extraScripture`: a gateway Bible shown beside the translation.
+/// One source pane of `extraScripture`: a gateway Bible shown beside the translation. A
+/// field this version does not know lands in the pin's [`ResourcePin::extra`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScripturePane {
     pub id: PaneId,
     #[serde(flatten)]
     pub pin: ResourcePin,
+}
+
+/// Keys of tC4's `resources.json` this version does not know, kept as read and written
+/// back by [`ProjectPins::to_resources_json`]. No `Pins` record holds them (STORAGE
+/// §2.2): they live as long as the value read from the file.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UnknownKeys {
+    /// Beside `schemaVersion`, `languageSets`, `resources` and `extraScripture`.
+    pub top: Map<String, Value>,
+    /// Under `languageSets`, beside `primary` and `fallback`.
+    pub language_sets: Map<String, Value>,
+    /// Under `resources`, beside `originalLanguage` and `lexicon`.
+    pub resources: Map<String, Value>,
 }
 
 /// A project's pins: the five `PinGroup` values.
@@ -455,6 +490,7 @@ pub struct ProjectPins {
     pub original_language: Testaments,
     pub lexicon: Testaments,
     pub extra_scripture: Vec<ScripturePane>,
+    pub unknown: UnknownKeys,
 }
 
 impl ProjectPins {
@@ -505,29 +541,33 @@ impl ProjectPins {
         })
     }
 
-    /// The value of one `Pins` record, as the JSON object of its slots.
-    pub fn group_json(&self, group: PinGroup) -> Value {
-        match group {
+    /// The value of one `Pins` record, as the JSON object of its slots. Refused when a pin
+    /// of the group has no flavor.
+    pub fn group_json(&self, group: PinGroup) -> Result<Value, UnwritablePin> {
+        Ok(match group {
             PinGroup::Primary | PinGroup::Fallback => {
                 let rung = if group == PinGroup::Primary {
                     Rung::Primary
                 } else {
                     Rung::Fallback
                 };
-                self.set(rung)
-                    .map_or_else(|| Value::Object(Map::new()), LanguageSet::to_json)
+                match self.set(rung) {
+                    Some(set) => set.to_json()?,
+                    None => Value::Object(Map::new()),
+                }
             }
-            PinGroup::OriginalLanguage => self.original_language.to_json(),
-            PinGroup::Lexicon => self.lexicon.to_json(),
+            PinGroup::OriginalLanguage => self.original_language.to_json()?,
+            PinGroup::Lexicon => self.lexicon.to_json()?,
             PinGroup::ExtraScripture => {
-                let panes: Vec<Value> = self
-                    .extra_scripture
-                    .iter()
-                    .map(|p| serde_json::to_value(p).unwrap_or(Value::Null))
-                    .collect();
+                let mut panes = Vec::new();
+                for pane in &self.extra_scripture {
+                    writable(&format!("{EXTRA_SCRIPTURE}.{}", pane.id), &pane.pin)?;
+                    // A pane is plain strings, lists and JSON values, which always serialize.
+                    panes.push(serde_json::to_value(pane).unwrap_or(Value::Null));
+                }
                 serde_json::json!({ EXTRA_SCRIPTURE: panes })
             }
-        }
+        })
     }
 
     /// Replaces one group from the JSON object of its slots. An empty object is an
@@ -574,7 +614,19 @@ impl ProjectPins {
             ));
         }
         let mut pins = ProjectPins::default();
-        if let Some(sets) = value.get("languageSets") {
+        let unknown = |object: Option<&Value>, known: &[&str]| -> Map<String, Value> {
+            object
+                .and_then(Value::as_object)
+                .map(|o| {
+                    o.iter()
+                        .filter(|(k, _)| !known.contains(&k.as_str()))
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        let sets = value.get(LANGUAGE_SETS);
+        if let Some(sets) = sets {
             for (rung, group) in [
                 ("primary", PinGroup::Primary),
                 ("fallback", PinGroup::Fallback),
@@ -584,11 +636,12 @@ impl ProjectPins {
                 }
             }
         }
-        if let Some(resources) = value.get("resources") {
-            if let Some(ol) = resources.get("originalLanguage") {
+        let resources = value.get(RESOURCES);
+        if let Some(resources) = resources {
+            if let Some(ol) = resources.get(ORIGINAL_LANGUAGE) {
                 pins.set_group_json(PinGroup::OriginalLanguage, ol)?;
             }
-            if let Some(lexicon) = resources.get("lexicon") {
+            if let Some(lexicon) = resources.get(LEXICON) {
                 pins.set_group_json(PinGroup::Lexicon, lexicon)?;
             }
         }
@@ -598,44 +651,58 @@ impl ProjectPins {
                 &serde_json::json!({ EXTRA_SCRIPTURE: list }),
             )?;
         }
+        pins.unknown = UnknownKeys {
+            top: unknown(
+                Some(value),
+                &[SCHEMA_VERSION, LANGUAGE_SETS, RESOURCES, EXTRA_SCRIPTURE],
+            ),
+            language_sets: unknown(sets, &["primary", "fallback"]),
+            resources: unknown(resources, &[ORIGINAL_LANGUAGE, LEXICON]),
+        };
         Ok(pins)
     }
 
-    /// Writes tC4's `checking/resources.json` shape (§5.3, `schemaVersion` 2).
-    pub fn to_resources_json(&self) -> Value {
-        let mut out = Map::new();
-        out.insert("schemaVersion".to_owned(), Value::from(2));
-        if self.has_language_sets() {
-            let mut sets = Map::new();
+    /// Writes tC4's `checking/resources.json` shape (§5.3, `schemaVersion` 2), with the
+    /// keys [`ProjectPins::unknown`] kept. Refused when a pin has no flavor.
+    pub fn to_resources_json(&self) -> Result<Value, UnwritablePin> {
+        let mut out = self.unknown.top.clone();
+        out.insert(SCHEMA_VERSION.to_owned(), Value::from(2));
+        if self.has_language_sets() || !self.unknown.language_sets.is_empty() {
+            let mut sets = self.unknown.language_sets.clone();
             for rung in Rung::LADDER {
                 if let Some(set) = self.set(rung) {
-                    sets.insert(rung.to_string(), set.to_json());
+                    sets.insert(rung.to_string(), set.to_json()?);
                 }
             }
-            out.insert("languageSets".to_owned(), Value::Object(sets));
+            out.insert(LANGUAGE_SETS.to_owned(), Value::Object(sets));
         }
-        let mut resources = Map::new();
+        let mut resources = self.unknown.resources.clone();
         for (name, group) in [
-            ("originalLanguage", &self.original_language),
-            ("lexicon", &self.lexicon),
+            (ORIGINAL_LANGUAGE, &self.original_language),
+            (LEXICON, &self.lexicon),
         ] {
             if group.nt.is_some() || group.ot.is_some() {
-                resources.insert(name.to_owned(), group.to_json());
+                resources.insert(name.to_owned(), group.to_json()?);
             }
         }
-        out.insert("resources".to_owned(), Value::Object(resources));
+        out.insert(RESOURCES.to_owned(), Value::Object(resources));
         if !self.extra_scripture.is_empty() {
             out.insert(
                 EXTRA_SCRIPTURE.to_owned(),
-                self.group_json(PinGroup::ExtraScripture)[EXTRA_SCRIPTURE].clone(),
+                self.group_json(PinGroup::ExtraScripture)?[EXTRA_SCRIPTURE].clone(),
             );
         }
-        Value::Object(out)
+        Ok(Value::Object(out))
     }
 }
 
 pub(crate) fn is_twl_repo(repo: &RepoRef) -> bool {
     repo.name.as_str().to_ascii_lowercase().ends_with("_twl")
+}
+
+/// A translation words articles repository: `en_tw`, `<lang>_tw`.
+pub(crate) fn is_tw_repo(repo: &RepoRef) -> bool {
+    repo.name.as_str().to_ascii_lowercase().ends_with("_tw")
 }
 
 /// The tools that derive a check list, and the slot each derives from. Articles never
@@ -698,17 +765,170 @@ mod tests {
         assert!(primary.extra.contains_key("x-futureSlot"));
         assert_eq!(pins.extra_scripture[0].id.as_str(), "ult");
         assert!(pins.lexicon.ot.is_some() && pins.lexicon.nt.is_none());
-        assert_eq!(pins.to_resources_json(), json);
+        assert_eq!(pins.to_resources_json().unwrap(), json);
+    }
+
+    #[test]
+    fn a_newer_apps_fields_are_kept_at_every_level() {
+        let mut json = real_resources_json();
+        json["x-top"] = serde_json::json!({"a": 1});
+        json["languageSets"]["x-rung"] = serde_json::json!([1]);
+        json["resources"]["x-resource"] = serde_json::json!("kept");
+        json["languageSets"]["primary"]["translationNotes"]["x-future"] =
+            serde_json::json!({"b": [2]});
+        json["extraScripture"][0]["x-pane"] = serde_json::json!(1);
+        let pins = ProjectPins::from_resources_json(&json).unwrap();
+        assert_eq!(pins.to_resources_json().unwrap(), json);
+        // A pin's and a pane's fields also survive a rewrite of their group's record.
+        for group in [PinGroup::Primary, PinGroup::ExtraScripture] {
+            let value = pins.group_json(group).unwrap();
+            let mut back = ProjectPins::default();
+            back.set_group_json(group, &value).unwrap();
+            assert_eq!(back.group_json(group).unwrap(), value, "{group:?}");
+        }
+        let primary = pins.group_json(PinGroup::Primary).unwrap();
+        assert_eq!(primary["translationNotes"]["x-future"]["b"][0], 2);
+        let panes = pins.group_json(PinGroup::ExtraScripture).unwrap();
+        assert_eq!(panes["extraScripture"][0]["x-pane"], 1);
+    }
+
+    #[test]
+    fn an_empty_books_list_is_no_record_and_the_pins_still_read() {
+        let mut json = real_resources_json();
+        json["languageSets"]["primary"]["translationNotes"]["books"] = serde_json::json!([]);
+        let pins = ProjectPins::from_resources_json(&json).unwrap();
+        let tn = pins
+            .primary
+            .as_ref()
+            .unwrap()
+            .pin(SetSlot::TranslationNotes)
+            .unwrap();
+        assert_eq!(tn.books, None);
+    }
+
+    /// tC4 `journal/grammar.mjs` `pinEntryError`, for a pin slot (not `gatewayLanguage`):
+    /// `None` when tC4 accepts the entry.
+    fn tc4_pin_entry_error(slot: &str, entry: &Value) -> Option<String> {
+        let entry = entry.as_object()?;
+        let is_extra = slot.starts_with("extraScripture.");
+        let mut fields = vec![
+            ("repoPath", true),
+            ("sha", true),
+            ("version", false),
+            ("flavor", true),
+        ];
+        if is_extra {
+            fields.push(("id", true));
+        }
+        for (key, required) in fields {
+            match entry.get(key) {
+                None if required => return Some(format!("without {key}")),
+                None => {}
+                Some(Value::String(s)) if !s.is_empty() => {}
+                Some(_) => return Some(format!("{key} is not a non-empty string")),
+            }
+        }
+        let sha = entry["sha"].as_str().unwrap_or_default();
+        if sha.len() != 40 || !sha.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+            return Some("sha is not 40 lowercase hex".to_owned());
+        }
+        if let Some(books) = entry.get("books") {
+            let books = books.as_array()?;
+            let whole = books.len() == 1 && books[0] == "BIBLE";
+            let book_code = |b: &Value| {
+                b.as_str().is_some_and(|s| {
+                    s.len() == 3
+                        && s.bytes()
+                            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+                })
+            };
+            if !whole && !books.iter().all(book_code) {
+                return Some("books".to_owned());
+            }
+        }
+        if is_extra && entry["id"].as_str() != slot.strip_prefix("extraScripture.") {
+            return Some("id".to_owned());
+        }
+        None
+    }
+
+    fn written_pins(pins: &ProjectPins) -> Vec<(String, Value)> {
+        let mut out = Vec::new();
+        for group in PinGroup::ALL {
+            let value = pins.group_json(group).unwrap();
+            match group {
+                PinGroup::ExtraScripture => {
+                    for pane in value["extraScripture"].as_array().unwrap() {
+                        let id = pane["id"].as_str().unwrap();
+                        out.push((format!("extraScripture.{id}"), pane.clone()));
+                    }
+                }
+                _ => {
+                    for (slot, entry) in value.as_object().unwrap() {
+                        if slot != GATEWAY_LANGUAGE && !slot.starts_with("x-") {
+                            out.push((slot.clone(), entry.clone()));
+                        }
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn every_written_pin_is_one_tc4_accepts() {
+        let mut real = ProjectPins::from_resources_json(&real_resources_json()).unwrap();
+        real.fallback
+            .as_mut()
+            .unwrap()
+            .pins
+            .get_mut(&SetSlot::TranslationNotes)
+            .unwrap()
+            .books = Some(crate::pin::BookCoverage::WholeCollection);
+        for pins in [real, crate::suite::project_pins()] {
+            let written = written_pins(&pins);
+            assert!(written.len() > 3);
+            for (slot, entry) in written {
+                assert_eq!(tc4_pin_entry_error(&slot, &entry), None, "{slot}: {entry}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_pin_without_a_flavor_is_never_written() {
+        let mut pins = crate::suite::project_pins();
+        let mut tn = pins
+            .primary
+            .as_ref()
+            .unwrap()
+            .pin(SetSlot::TranslationNotes)
+            .unwrap()
+            .clone();
+        tn.flavor = None;
+        assert!(
+            tc4_pin_entry_error("translationNotes", &serde_json::to_value(&tn).unwrap()).is_some()
+        );
+        pins.primary
+            .as_mut()
+            .unwrap()
+            .pins
+            .insert(SetSlot::TranslationNotes, tn);
+        let refused = pins.group_json(PinGroup::Primary).unwrap_err();
+        assert_eq!(refused.slot, "translationNotes");
+        assert!(pins.to_resources_json().is_err());
+        assert!(pins.group_json(PinGroup::Fallback).is_ok());
+        pins.extra_scripture[0].pin.flavor = None;
+        assert!(pins.group_json(PinGroup::ExtraScripture).is_err());
     }
 
     #[test]
     fn each_pin_group_round_trips_through_its_record_value() {
         let pins = ProjectPins::from_resources_json(&real_resources_json()).unwrap();
         for group in PinGroup::ALL {
-            let value = pins.group_json(group);
+            let value = pins.group_json(group).unwrap();
             let mut back = ProjectPins::default();
             back.set_group_json(group, &value).unwrap();
-            assert_eq!(back.group_json(group), value, "{group:?}");
+            assert_eq!(back.group_json(group).unwrap(), value, "{group:?}");
         }
         let mut cleared = pins.clone();
         cleared

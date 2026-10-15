@@ -22,16 +22,40 @@ fn coverage() -> impl Strategy<Value = BookCoverage> {
     ]
 }
 
+fn flavor() -> impl Strategy<Value = String> {
+    "(scripture|parascriptural|peripheral)/[a-zA-Z-]{3,12}"
+}
+
+/// Fields a newer app may add to a pin.
+fn unknown_fields() -> impl Strategy<Value = serde_json::Map<String, serde_json::Value>> {
+    proptest::collection::btree_map("x-[a-z]{1,5}", any::<i32>(), 0..2).prop_map(|m| {
+        m.into_iter()
+            .map(|(k, v)| (k, serde_json::Value::from(v)))
+            .collect()
+    })
+}
+
+/// Any pin, as tC4's JSON may hold it.
 fn pin() -> impl Strategy<Value = ResourcePin> {
+    pin_with(proptest::option::of(flavor()))
+}
+
+/// A pin a project keeps: tC4 requires its flavor.
+fn project_pin() -> impl Strategy<Value = ResourcePin> {
+    pin_with(flavor().prop_map(Some))
+}
+
+fn pin_with(flavor: impl Strategy<Value = Option<String>>) -> impl Strategy<Value = ResourcePin> {
     (
         "[A-Za-z][A-Za-z0-9_.-]{0,12}[A-Za-z0-9]",
         "[a-z]{2,3}_[a-z]{2,3}",
         "[0-9a-f]{40}",
         proptest::option::of("v[0-9]{1,2}(\\.[0-9]{1,2})?"),
-        proptest::option::of("(scripture|parascriptural|peripheral)/[a-zA-Z-]{3,12}"),
+        flavor,
         proptest::option::of(coverage()),
+        unknown_fields(),
     )
-        .prop_map(|(owner, name, sha, version, flavor, books)| {
+        .prop_map(|(owner, name, sha, version, flavor, books, extra)| {
             let mut pin = ResourcePin::new(
                 format!("git.door43.org/{owner}/{name}").parse().unwrap(),
                 sha.parse().unwrap(),
@@ -39,6 +63,7 @@ fn pin() -> impl Strategy<Value = ResourcePin> {
             pin.version = version.map(|v| v.parse().unwrap());
             pin.flavor = flavor;
             pin.books = books;
+            pin.extra = extra;
             pin
         })
 }
@@ -49,7 +74,7 @@ fn language_set() -> impl Strategy<Value = LanguageSet> {
         "[A-Za-z][A-Za-z0-9_-]{0,10}",
         proptest::collection::btree_map(
             (0usize..SetSlot::ALL.len()).prop_map(|i| SetSlot::ALL[i]),
-            pin(),
+            project_pin(),
             0..6,
         ),
     )
@@ -67,9 +92,15 @@ fn project_pins() -> impl Strategy<Value = ProjectPins> {
     (
         proptest::option::of(language_set()),
         proptest::option::of(language_set()),
-        (proptest::option::of(pin()), proptest::option::of(pin())),
-        (proptest::option::of(pin()), proptest::option::of(pin())),
-        proptest::collection::vec(("[a-z]{2,4}", pin()), 0..3),
+        (
+            proptest::option::of(project_pin()),
+            proptest::option::of(project_pin()),
+        ),
+        (
+            proptest::option::of(project_pin()),
+            proptest::option::of(project_pin()),
+        ),
+        proptest::collection::vec(("[a-z]{2,4}", project_pin()), 0..3),
     )
         .prop_map(
             |(primary, fallback, (ol_nt, ol_ot), (lx_nt, lx_ot), panes)| ProjectPins {
@@ -90,6 +121,7 @@ fn project_pins() -> impl Strategy<Value = ProjectPins> {
                         pin,
                     })
                     .collect(),
+                unknown: Default::default(),
             },
         )
 }
@@ -115,11 +147,11 @@ proptest! {
 
     #[test]
     fn pins_round_trip_through_resources_json_and_each_group(pins in project_pins()) {
-        let json = pins.to_resources_json();
+        let json = pins.to_resources_json().unwrap();
         prop_assert_eq!(&ProjectPins::from_resources_json(&json).unwrap(), &pins);
         let mut rebuilt = ProjectPins::default();
         for group in PinGroup::ALL {
-            rebuilt.set_group_json(group, &pins.group_json(group)).unwrap();
+            rebuilt.set_group_json(group, &pins.group_json(group).unwrap()).unwrap();
         }
         prop_assert_eq!(rebuilt, pins);
     }

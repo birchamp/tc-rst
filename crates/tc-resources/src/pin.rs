@@ -22,6 +22,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::{Map, Value};
 use sha2::{Digest, Sha256 as Sha256Hasher};
 use tc_core::BookId;
 use tc_door43::{AccountName, CommitSha, RepoName, RepoRef, TagName};
@@ -209,6 +210,11 @@ impl<'de> Deserialize<'de> for BookCoverage {
 
 /// A Door43 resource pinned to one commit: tC4's §5.3 pin. The commit is the identity;
 /// the version is a label (D58).
+///
+/// tC4 requires a flavor of every pin it stores. A pin made from a release tag
+/// ([`crate::pin_release`]) has none until its resource is installed; the pin a project
+/// keeps is [`crate::Installed::dcs_pin`], which carries the flavor the resource
+/// declares. Writing a pin without one is refused ([`crate::UnwritablePin`]).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResourcePin {
     #[serde(rename = "repoPath")]
@@ -218,8 +224,27 @@ pub struct ResourcePin {
     pub sha: CommitSha,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub flavor: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Recorded coverage. An empty list records nothing and reads as `None`, as tC4
+    /// `coverageFor` reads it.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "recorded_books"
+    )]
     pub books: Option<BookCoverage>,
+    /// Fields this version does not know (a newer app's), kept as read and written back.
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
+}
+
+fn recorded_books<'de, D: Deserializer<'de>>(d: D) -> Result<Option<BookCoverage>, D::Error> {
+    match Option::<Vec<String>>::deserialize(d)? {
+        None => Ok(None),
+        Some(codes) if codes.is_empty() => Ok(None),
+        Some(codes) => BookCoverage::from_codes(&codes)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+    }
 }
 
 impl ResourcePin {
@@ -230,6 +255,7 @@ impl ResourcePin {
             sha,
             flavor: None,
             books: None,
+            extra: Map::new(),
         }
     }
 
@@ -298,7 +324,8 @@ impl FromStr for Sha256 {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let hex = s.strip_prefix("sha256:").unwrap_or(s);
         let bad = || ParseError::Sha256(s.to_owned());
-        if hex.len() != 64 || !hex.is_ascii() {
+        // `from_str_radix` alone would take a sign: "+a" reads as 0x0a.
+        if hex.len() != 64 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err(bad());
         }
         let mut out = [0u8; 32];
@@ -614,6 +641,32 @@ mod tests {
         assert_eq!(hex.parse::<Sha256>().unwrap(), digest);
         assert_eq!(format!("sha256:{hex}").parse::<Sha256>().unwrap(), digest);
         assert!("sha256:abc".parse::<Sha256>().is_err());
+        // A sign is not a hex digit, though `from_str_radix` takes one.
+        assert!("+a".repeat(32).parse::<Sha256>().is_err());
+        assert!(
+            format!("sha256:{}", "-0".repeat(32))
+                .parse::<Sha256>()
+                .is_err()
+        );
+        assert!("g".repeat(64).parse::<Sha256>().is_err());
+    }
+
+    #[test]
+    fn an_empty_books_list_records_nothing_as_in_tc4() {
+        let json = r#"{"repoPath":"git.door43.org/unfoldingWord/en_tn","sha":"e586762e330f482a60c52aedd1c7b3a2f155df8a","flavor":"parascriptural/x-bcvnotes","books":[]}"#;
+        let pin: ResourcePin = serde_json::from_str(json).unwrap();
+        assert_eq!(pin.books, None);
+        let bad = json.replace("[]", r#"["BIBLE","TIT"]"#);
+        assert!(serde_json::from_str::<ResourcePin>(&bad).is_err());
+    }
+
+    #[test]
+    fn a_newer_apps_pin_fields_are_kept() {
+        let json = r#"{"repoPath":"git.door43.org/unfoldingWord/en_tn","sha":"e586762e330f482a60c52aedd1c7b3a2f155df8a","flavor":"parascriptural/x-bcvnotes","x-future":{"a":[1,2]}}"#;
+        let pin: ResourcePin = serde_json::from_str(json).unwrap();
+        assert!(pin.extra.contains_key("x-future"));
+        let back: Value = serde_json::to_value(&pin).unwrap();
+        assert_eq!(back, serde_json::from_str::<Value>(json).unwrap());
     }
 
     #[test]

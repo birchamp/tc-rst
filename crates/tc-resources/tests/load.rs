@@ -141,6 +141,7 @@ fn project(en: &English) -> ProjectPins {
             },
             bundled.extra_scripture[1].clone(),
         ],
+        unknown: Default::default(),
     }
 }
 
@@ -429,6 +430,93 @@ fn aquifer_helps_fill_the_tabs_but_their_notes_cannot_drive_a_check() {
     let ruth = load_book(&store, &ProjectPins::default(), &choice, BookId::Ruth);
     assert!(matches!(
         ruth.parts[&HelpsPart::Notes],
+        PartStatus::Missing(Missing::BookNotInResource { .. })
+    ));
+}
+
+/// A French notes asset in the release's shape: its Genesis file holds, as the real one
+/// does, a 2 Timothy 2:16 note and a James 2:1 note filed under `00000000`, beside three
+/// Genesis 1:1 notes (fixtures/aquifer/README.md). The 2 Timothy file holds one note of
+/// its own, made from a Genesis note placed at 2 Timothy 1:1. There is no French
+/// `metadata.json` in the fixtures, so the English one is used with the language changed.
+fn install_misfiled_notes(store: &ResourceStore) -> tc_resources::AquiferPin {
+    let mut metadata: serde_json::Value =
+        serde_json::from_slice(&fixture("aquifer/UWTranslationNotes/eng/metadata.json")).unwrap();
+    metadata["resource_metadata"]["language"] = "fra".into();
+    let genesis = fixture("aquifer/UWTranslationNotes/fra/json/01-subset.content.json");
+    let articles: Vec<serde_json::Value> = serde_json::from_slice(&genesis).unwrap();
+    let mut own = articles[4].clone();
+    own["content_id"] = 900_001.into();
+    own["index_reference"] = "55001001".into();
+    own["associations"]["passage"] = serde_json::json!([{
+        "start_ref": "55001001",
+        "start_ref_usfm": "2TI 1:1",
+        "end_ref": "55001001",
+        "end_ref_usfm": "2TI 1:1",
+    }]);
+    let second_timothy = serde_json::to_vec(&[own]).unwrap();
+    let bytes = common::zip(&[
+        ("metadata.json", &serde_json::to_vec(&metadata).unwrap()),
+        ("json/01.content.json", &genesis),
+        ("json/55.content.json", &second_timothy),
+    ]);
+    let pin = tc_resources::AquiferPin {
+        repo: tc_resources::AquiferRepo::bible_aquifer("UWTranslationNotes").unwrap(),
+        tag: common::AQUIFER_TAG.parse().unwrap(),
+        commit: common::aquifer_commit("UWTranslationNotes")
+            .parse()
+            .unwrap(),
+        language: "fra".parse().unwrap(),
+        asset: "French-json.zip".parse().unwrap(),
+        sha256: tc_resources::Sha256::of(&bytes),
+    };
+    install_aquifer_zip(store, &pin, &bytes, 1 << 30).unwrap();
+    pin
+}
+
+#[test]
+fn an_aquifer_note_loads_with_its_passage_whatever_file_holds_it() {
+    let (_dir, store) = store();
+    let pin = install_misfiled_notes(&store);
+    let installed = store.aquifer(&pin).unwrap().unwrap();
+    assert_eq!(
+        installed.books(),
+        tc_resources::BookCoverage::books([BookId::Genesis, BookId::SecondTimothy, BookId::James])
+            .as_ref()
+    );
+    let choice = HelpsChoice::Aquifer(AquiferHelps {
+        notes: Some(pin),
+        words: None,
+        academy: None,
+        questions: None,
+    });
+    let load = |book| load_book(&store, &ProjectPins::default(), &choice, book);
+
+    // 2 Timothy has its own file and a note filed in Genesis: both load, nothing refused.
+    let timothy = load(BookId::SecondTimothy);
+    assert!(matches!(
+        &timothy.parts[&HelpsPart::Notes],
+        PartStatus::Loaded { refused, .. } if refused.is_empty()
+    ));
+    assert_eq!(timothy.helps.notes().len(), 2);
+    assert_eq!(timothy.helps.notes_for(reference("2TI 2:16")).count(), 1);
+    assert_eq!(timothy.helps.notes_for(reference("2TI 1:1")).count(), 1);
+
+    // James has no file of its own; its note is in the Genesis file.
+    let james = load(BookId::James);
+    assert!(james.parts[&HelpsPart::Notes].is_loaded());
+    assert_eq!(james.helps.notes().len(), 1);
+    assert_eq!(james.helps.notes_for(reference("JAS 2:1")).count(), 1);
+
+    // Genesis holds its own notes only.
+    let genesis = load(BookId::Genesis);
+    assert_eq!(genesis.helps.notes().len(), 3);
+    assert_eq!(genesis.helps.notes_for(reference("GEN 1:1")).count(), 3);
+    assert_eq!(genesis.helps.notes_for(reference("2TI 2:16")).count(), 0);
+
+    let titus = load(BookId::Titus);
+    assert!(matches!(
+        titus.parts[&HelpsPart::Notes],
         PartStatus::Missing(Missing::BookNotInResource { .. })
     ));
 }

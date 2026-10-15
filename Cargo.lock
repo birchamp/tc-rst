@@ -2041,6 +2041,7 @@ name = "tc-resources"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "md-5 0.10.6",
  "proptest",
  "reqwest",
  "serde",

@@ -9,10 +9,13 @@
 //!
 //! - `has_twl`: whether the owner publishes `<lang>_twl`. An owner without one pins the
 //!   bundled English `en_twl` with its own `<lang>_tw` (D97 ruling 7; `ml` and `ur-deva`).
-//! - `has_bible` and `literal`: the literal Bible is `en_ult` for English, `<lang>_glt`
-//!   elsewhere, or the repository `literal` names (BSOJ publishes `ar_avd`).
-//! - `has_simplified`: `en_ust` for English, `<lang>_gst` elsewhere.
-//! - `has_tq`: `<lang>_tq`.
+//!   This is the one flag that changes what is pinned.
+//! - `has_bible`, `has_simplified` and `has_tq` record what the owner published when tC4
+//!   looked. They are never gates, as in tC4: a set and the source panes take whatever
+//!   `<lang>_ult`/`_glt`, `<lang>_ust`/`_gst` and `<lang>_tq` is installed, because a flag
+//!   goes stale the day an owner publishes.
+//! - `literal`: the literal Bible's name when it is not `<lang>_ult` or `<lang>_glt`
+//!   (BSOJ publishes `ar_avd`).
 
 use std::fmt;
 
@@ -177,7 +180,7 @@ impl Gateway {
             SetSlot::TranslationWordsLinks => Some(suite::english_twl().repo.repo().clone()),
             SetSlot::TranslationWords => self.named("tw"),
             SetSlot::TranslationAcademy => self.named("ta"),
-            SetSlot::TranslationQuestions => self.has_tq.then(|| self.named("tq")).flatten(),
+            SetSlot::TranslationQuestions => self.named("tq"),
             SetSlot::SimplifiedText => self.simplified_candidates().into_iter().next(),
             SetSlot::Obs => self.named("obs"),
             SetSlot::ObsNotes => self.named("obs-tn"),
@@ -190,9 +193,6 @@ impl Gateway {
     /// The names the literal Bible may have, most specific first: the registry's own
     /// name, then `<lang>_ult`, then `<lang>_glt` (tC4 `gatewayBiblesFromInstalled`).
     pub fn literal_candidates(&self) -> Vec<RepoRef> {
-        if !self.has_bible {
-            return Vec::new();
-        }
         let mut out: Vec<RepoRef> = self
             .literal
             .and_then(|n| self.repo(n))
@@ -205,9 +205,6 @@ impl Gateway {
 
     /// The names the simplified Bible may have: `<lang>_ust`, then `<lang>_gst`.
     pub fn simplified_candidates(&self) -> Vec<RepoRef> {
-        if !self.has_simplified {
-            return Vec::new();
-        }
         self.named("ust")
             .into_iter()
             .chain(self.named("gst"))
@@ -277,8 +274,11 @@ pub fn owner_for_repo_name(name: &RepoName) -> Option<&'static str> {
 
 /// A pin among `installed` whose repository is `repo`, preferring the bundled suite's
 /// identity when several commits are installed (tC4 `preferredNamedPin`), else the first.
+/// A pin with no flavor is never taken: tC4 pins only what its metadata identifies.
 fn preferred<'a>(installed: &'a [ResourcePin], repo: &RepoRef) -> Option<&'a ResourcePin> {
-    let mut matches = installed.iter().filter(|p| p.is_repo(repo));
+    let mut matches = installed
+        .iter()
+        .filter(|p| p.flavor.is_some() && p.is_repo(repo));
     let first = matches.next()?;
     let bundled = suite::bundled_pins();
     let is_bundled = |pin: &ResourcePin| bundled.iter().any(|b| b.same_identity(pin));
@@ -388,7 +388,8 @@ mod tests {
     #[test]
     fn registry_quirks_match_tc4() {
         let xenizo = find("fr", "xenizo").unwrap();
-        assert!(!xenizo.has_bible && xenizo.literal_candidates().is_empty());
+        assert!(!xenizo.has_bible);
+        assert_eq!(xenizo.literal_candidates()[0].to_string(), "Xenizo/fr_ult");
         assert_eq!(find("fr", "MVHS").unwrap().key().to_string(), "fr::MVHS");
         let bsoj = find("ar", "BSOJ").unwrap();
         assert_eq!(bsoj.direction, Direction::Rtl);
@@ -506,6 +507,48 @@ mod tests {
         assert_eq!(
             set.pin(SetSlot::TranslationWords).unwrap().repo.to_string(),
             "git.door43.org/Door43-Catalog/ml_tw"
+        );
+    }
+
+    #[test]
+    fn registry_flags_never_hide_what_is_installed() {
+        // Xenizo published no Bible and ru_gl no simplified text when tC4 looked; both
+        // are installed here, and both are used, as tC4 uses them.
+        let xenizo = find("fr", "Xenizo").unwrap();
+        let fr_glt = pin(
+            "git.door43.org/Xenizo/fr_glt",
+            'a',
+            "scripture/textTranslation",
+        );
+        let bibles = gateway_bibles_from_installed(std::slice::from_ref(&fr_glt), xenizo);
+        assert_eq!(bibles.literal, Some(fr_glt));
+
+        let ru = find("ru", "ru_gl").unwrap();
+        assert!(!ru.has_simplified);
+        let installed: Vec<ResourcePin> = [
+            ("ru_tn", "parascriptural/x-bcvnotes"),
+            ("ru_twl", "parascriptural/x-bcvarticles"),
+            ("ru_tw", "parascriptural/x-bcvarticles"),
+            ("ru_ta", "peripheral/x-peripheralArticles"),
+            ("ru_tq", "parascriptural/x-bcvquestions"),
+            ("ru_gst", "scripture/textTranslation"),
+        ]
+        .into_iter()
+        .map(|(name, flavor)| pin(&format!("git.door43.org/ru_gl/{name}"), 'b', flavor))
+        .collect();
+        let set = language_set_from_installed(&installed, ru, ProjectKind::Bible).unwrap();
+        let name = |slot| set.pin(slot).map(|p| p.repo.name().to_string());
+        assert_eq!(name(SetSlot::SimplifiedText).as_deref(), Some("ru_gst"));
+        assert_eq!(
+            name(SetSlot::TranslationQuestions).as_deref(),
+            Some("ru_tq")
+        );
+        assert_eq!(
+            gateway_bibles_from_installed(&installed, ru)
+                .simplified
+                .map(|p| p.repo.name().to_string())
+                .as_deref(),
+            Some("ru_gst")
         );
     }
 

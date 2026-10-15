@@ -40,6 +40,15 @@ pub enum AssetFault {
     Replace(Vec<u8>),
     /// Redirect the release download to this address instead of the asset host.
     RedirectTo(String),
+    /// Wait, then answer normally.
+    Delay(std::time::Duration),
+}
+
+/// An error answer for the next REST API request.
+#[derive(Clone)]
+pub struct ApiFault {
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
 }
 
 #[derive(Default)]
@@ -47,6 +56,7 @@ struct Inner {
     releases: Vec<FakeRelease>,
     requests: Vec<String>,
     fault: Option<AssetFault>,
+    api_fault: Option<ApiFault>,
 }
 
 type Shared = Arc<Mutex<Inner>>;
@@ -106,6 +116,24 @@ impl FakeGithub {
     pub fn fault_next_download(&self, fault: AssetFault) {
         self.inner.lock().unwrap().fault = Some(fault);
     }
+
+    pub fn fail_next_api(&self, fault: ApiFault) {
+        self.inner.lock().unwrap().api_fault = Some(fault);
+    }
+}
+
+/// The REST API's answer to a request the next [`ApiFault`] fails.
+fn api_fault(shared: &Shared) -> Option<Response<Body>> {
+    let fault = shared.lock().unwrap().api_fault.take()?;
+    let mut response = Response::new(Body::from(r#"{"message":"API rate limit exceeded"}"#));
+    *response.status_mut() = StatusCode::from_u16(fault.status).unwrap();
+    for (name, value) in fault.headers {
+        response.headers_mut().insert(
+            header::HeaderName::from_bytes(name.as_bytes()).unwrap(),
+            HeaderValue::from_str(&value).unwrap(),
+        );
+    }
+    Some(response)
 }
 
 fn record(shared: &Shared, path: String) {
@@ -181,6 +209,10 @@ async fn asset(
     let fault = shared.lock().unwrap().fault.take();
     let (body, length) = match fault {
         None => (asset.bytes.clone(), asset.bytes.len()),
+        Some(AssetFault::Delay(wait)) => {
+            tokio::time::sleep(wait).await;
+            (asset.bytes.clone(), asset.bytes.len())
+        }
         Some(AssetFault::Replace(bytes)) => {
             let len = bytes.len();
             (bytes, len)
@@ -204,6 +236,9 @@ async fn latest(
     Path((owner, repo)): Path<(String, String)>,
 ) -> Response<Body> {
     record(&shared, format!("/repos/{owner}/{repo}/releases/latest"));
+    if let Some(response) = api_fault(&shared) {
+        return response;
+    }
     let newest = shared
         .lock()
         .unwrap()
@@ -243,6 +278,9 @@ async fn commit(
         &shared,
         format!("/repos/{owner}/{repo}/commits/{reference}"),
     );
+    if let Some(response) = api_fault(&shared) {
+        return response;
+    }
     match find(&shared, &owner, &repo, &reference) {
         Some(release) => json(serde_json::json!({"sha": release.commit})),
         None => not_found(),

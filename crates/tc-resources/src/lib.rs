@@ -53,7 +53,7 @@ pub use choice::{
     AquiferHelps, CheckBlocker, CheckSources, HELPS_SOURCE_SETTING, HelpsChoice, check_sources,
 };
 pub use dcs::{install_all, install_dcs, install_dcs_as, install_dcs_zip, pin_release};
-pub use error::{AquiferError, InstallError, ParseError, Refusal, StoreError};
+pub use error::{AquiferError, InstallError, ParseError, Refusal, StoreError, UnwritablePin};
 pub use load::{
     BookResources, Missing, ObsResources, PartStatus, SourceText, TextRole, TextStatus, load_book,
     load_obs,
@@ -64,7 +64,7 @@ pub use pin::{
 };
 pub use sets::{
     GatewayLanguage, LanguageSet, PaneId, PinGroup, ProjectKind, ProjectPins, Rung, ScripturePane,
-    SetSlot, Testaments, Tool,
+    SetSlot, Testaments, Tool, UnknownKeys,
 };
 pub use store::{
     FileRecord, Installed, Inventory, Origin, Packaging, Receipt, ResourceStore, SeedReport,
