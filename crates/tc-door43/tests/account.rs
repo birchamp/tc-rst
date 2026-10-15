@@ -96,7 +96,8 @@ async fn a_two_factor_account_needs_its_code() {
             .await,
         Err(Door43Error::AuthFailed { .. })
     ));
-    let with_code = plain.with_one_time_code(OneTimeCode::new(seeded::OTP_CODE.to_owned()));
+    let with_code =
+        plain.with_one_time_code(OneTimeCode::new(seeded::OTP_CODE.to_owned()).unwrap());
     let session = client
         .mint_token(&with_code, &token_name(), &TokenScope::FOR_SHARING)
         .await
@@ -168,6 +169,8 @@ async fn repositories_are_created_for_the_user_or_a_permitted_organization() {
             .unwrap()
     );
     let info = client.repo(&mine.repo, Some(&session)).await.unwrap();
+    assert_eq!(info.clone_url, mine.clone_url);
+    assert_eq!(info.html_url, mine.html_url);
     assert!(
         info.empty,
         "auto_init is off, so the first push fast-forwards"

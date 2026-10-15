@@ -1,8 +1,10 @@
 //! Repositories, tags, releases and organizations, as Door43 answers them, parsed into
 //! the types this crate hands out.
 
+use crate::listing::text;
 use crate::names::{AccountName, CommitSha, RepoRef, ServerUrl, TagName, Visibility};
 use serde::{Deserialize, Deserializer};
+use serde_json::Value;
 use url::Url;
 
 /// Read `null` as the type's default. Gitea writes `null` for some empty fields.
@@ -23,8 +25,10 @@ pub struct RepoInfo {
     /// True for a repository with no commits yet.
     pub empty: bool,
     pub visibility: Visibility,
-    pub html_url: String,
-    pub clone_url: String,
+    /// Both addresses were checked to be on the client's server with no credentials in
+    /// them, so the clone URL is safe to send credentials to.
+    pub html_url: Url,
+    pub clone_url: Url,
     pub title: String,
     pub subject: String,
     pub language: String,
@@ -175,8 +179,26 @@ impl RawRepository {
         ))
     }
 
-    pub(crate) fn parse(self) -> Result<RepoInfo, String> {
+    /// Both addresses, refused unless they are on `server` with no credentials in them
+    /// (tC4 `shareOperation.ts` `remoteAllowed`).
+    fn addresses(&self, server: &ServerUrl) -> Result<(Url, Url), String> {
+        let on_server = |raw: &str, what: &str| -> Result<Url, String> {
+            let url = Url::parse(raw).map_err(|_| format!("the {what} is not a URL"))?;
+            if server.is_same_origin(&url) {
+                Ok(url)
+            } else {
+                Err(format!("the {what} is not on {server}"))
+            }
+        };
+        Ok((
+            on_server(&self.html_url, "page address")?,
+            on_server(&self.clone_url, "clone address")?,
+        ))
+    }
+
+    pub(crate) fn parse(self, server: &ServerUrl) -> Result<RepoInfo, String> {
         let repo = self.repo_ref()?;
+        let (html_url, clone_url) = self.addresses(server)?;
         let stage = |s: Option<RawStage>| s.map(RawStage::parse).transpose();
         let catalog = match self.catalog {
             Some(stages) => StageReleases {
@@ -195,8 +217,8 @@ impl RawRepository {
             } else {
                 Visibility::Public
             },
-            html_url: self.html_url,
-            clone_url: self.clone_url,
+            html_url,
+            clone_url,
             title: self.title,
             subject: self.subject,
             language: self.language,
@@ -205,22 +227,14 @@ impl RawRepository {
         })
     }
 
-    /// A created repository, refused unless both addresses are on `server` with no
-    /// credentials in them (tC4 `shareOperation.ts` `remoteAllowed`).
+    /// A created repository, refused unless both addresses are on `server`.
     pub(crate) fn parse_created(self, server: &ServerUrl) -> Result<CreatedRepo, String> {
         let repo = self.repo_ref()?;
-        let on_server = |raw: &str, what: &str| -> Result<Url, String> {
-            let url = Url::parse(raw).map_err(|_| format!("the {what} is not a URL"))?;
-            if server.is_same_origin(&url) {
-                Ok(url)
-            } else {
-                Err(format!("the {what} is not on {server}"))
-            }
-        };
+        let (html_url, clone_url) = self.addresses(server)?;
         Ok(CreatedRepo {
-            html_url: on_server(&self.html_url, "page address")?,
-            clone_url: on_server(&self.clone_url, "clone address")?,
             repo,
+            html_url,
+            clone_url,
         })
     }
 }
@@ -238,6 +252,10 @@ pub(crate) struct RawCommitMeta {
 }
 
 impl RawTag {
+    pub(crate) fn label(value: &Value) -> String {
+        text(value, "name").to_owned()
+    }
+
     pub(crate) fn parse(self) -> Result<Tag, String> {
         let name: TagName = self.name.parse().map_err(|e| format!("{e}"))?;
         let sha = self.commit.map(|c| c.sha).unwrap_or_default();
@@ -265,6 +283,13 @@ pub(crate) struct RawRelease {
 }
 
 impl RawRelease {
+    pub(crate) fn label(value: &Value) -> String {
+        let id = value
+            .get("id")
+            .map_or_else(|| "?".to_owned(), Value::to_string);
+        format!("release {id} ({})", text(value, "tag_name"))
+    }
+
     pub(crate) fn parse(self) -> Result<Release, String> {
         let state = match (self.draft, self.prerelease) {
             (true, _) => ReleaseState::Draft,

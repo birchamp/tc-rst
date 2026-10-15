@@ -194,16 +194,41 @@ async fn observe(State(shared): AppState, request: Request, next: Next) -> Respo
                 return response;
             }
             Fault::EchoAuthorization => {
-                let seen = request
-                    .headers()
-                    .get(header::AUTHORIZATION)
-                    .and_then(|v| v.to_str().ok())
-                    .unwrap_or_default();
                 return ApiError::new(
                     StatusCode::BAD_REQUEST,
-                    format!("cannot use the header Authorization: {seen}"),
+                    format!(
+                        "cannot use the header Authorization: {}",
+                        authorization_text(&request)
+                    ),
                 )
                 .into_response();
+            }
+            Fault::EchoAuthorizationAsText { filler } => {
+                let body = format!("{}{}", "x".repeat(filler), authorization_text(&request));
+                let mut response = (StatusCode::BAD_REQUEST, body).into_response();
+                response.headers_mut().insert(
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_static("text/html; charset=utf-8"),
+                );
+                return response;
+            }
+            Fault::Raw {
+                status,
+                headers,
+                body,
+            } => {
+                let mut response = Response::new(Body::from(body));
+                *response.status_mut() =
+                    StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+                for (name, value) in headers {
+                    if let (Ok(name), Ok(value)) = (
+                        header::HeaderName::from_bytes(name.as_bytes()),
+                        HeaderValue::from_str(&value),
+                    ) {
+                        response.headers_mut().insert(name, value);
+                    }
+                }
+                return response;
             }
             Fault::RedirectTo(location) => {
                 let mut response = StatusCode::FOUND.into_response();
@@ -216,6 +241,15 @@ async fn observe(State(shared): AppState, request: Request, next: Next) -> Respo
         }
     }
     next.run(request).await
+}
+
+fn authorization_text(request: &Request) -> String {
+    request
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_owned()
 }
 
 fn auth_seen(headers: &HeaderMap) -> AuthSeen {
@@ -1373,6 +1407,14 @@ async fn smart_http_route(
             Err(error) => return error.into_response(),
         },
         (Service::UploadPack, Caller::Anonymous) if rec.private => return challenge(),
+        // As Gitea: a private repository is read only by its owner and the members of its
+        // organization, with a password or a token that can read repositories; to anyone
+        // else it does not exist.
+        (Service::UploadPack, caller) if rec.private => match require(caller, "read:repository") {
+            Ok(login) if shared.state().is_member(&login, &rec.owner) => Some(login),
+            Ok(_) => return ApiError::not_found().into_response(),
+            Err(error) => return error.into_response(),
+        },
         (Service::UploadPack, caller) => caller_login(caller).map(str::to_owned),
     };
     let dir = shared.git.repo_dir(&rec.owner, &rec.name);

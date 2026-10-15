@@ -1,8 +1,10 @@
 //! The DCS catalog: `GET /api/v1/catalog/search` (swagger `catalogSearch`).
 
+use crate::listing::text;
 use crate::names::{AccountName, CommitSha, RepoName, RepoRef, TagName};
 use crate::repos::nullable;
 use serde::Deserialize;
+use serde_json::Value;
 
 /// The stage filter. A stage includes the stages above it: `Preprod` lists production
 /// and pre-production releases, `Latest` adds the default branch.
@@ -112,12 +114,14 @@ pub struct Ingredient {
     pub categories: Vec<String>,
 }
 
+/// Entries stay JSON values here, so that one entry of an unexpected shape is skipped
+/// rather than failing the whole search.
 #[derive(Deserialize)]
 pub(crate) struct RawSearchResults {
     #[serde(default)]
     pub ok: bool,
     #[serde(default)]
-    pub data: Vec<RawCatalogEntry>,
+    pub data: Vec<Value>,
 }
 
 #[derive(Deserialize)]
@@ -170,6 +174,15 @@ struct RawTopics {
 }
 
 impl RawCatalogEntry {
+    pub(crate) fn label(value: &Value) -> String {
+        format!(
+            "{}/{} {}",
+            text(value, "owner"),
+            text(value, "name"),
+            text(value, "branch_or_tag_name")
+        )
+    }
+
     pub(crate) fn parse(self) -> Result<CatalogEntry, String> {
         let repo = RepoRef::new(
             self.owner.parse().map_err(|e| format!("{e}"))?,

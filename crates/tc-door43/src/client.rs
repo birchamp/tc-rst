@@ -2,8 +2,9 @@ use crate::catalog::{CatalogEntry, CatalogQuery, RawCatalogEntry, RawSearchResul
 use crate::error::{AuthStatus, Door43Error, UnreachableCause};
 use crate::git_tree::ObjectId;
 use crate::internet::InternetSwitch;
+use crate::listing::Listing;
 use crate::names::{
-    AccountName, CommitSha, RepoName, RepoRef, ServerUrl, TagName, TokenName, TokenScope,
+    AccountName, CommitSha, NewRepoName, RepoRef, ServerUrl, TagName, TokenName, TokenScope,
     Visibility,
 };
 use crate::repos::{
@@ -13,13 +14,13 @@ use crate::repos::{
 };
 use crate::secret::{Credentials, Session, Token};
 use crate::verify::{VerifiedArchive, VerifiedSbExport, verify_archive, verify_sb_export};
-use base64::Engine;
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderValue, RETRY_AFTER};
 use reqwest::{Method, StatusCode};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
+use serde_json::Value;
 use std::fmt;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use url::Url;
 
 const USER_AGENT: &str = concat!("tc-door43/", env!("CARGO_PKG_VERSION"));
@@ -27,20 +28,27 @@ const JSON: &str = "application/json";
 const ZIP: &str = "application/zip, application/octet-stream";
 const MAX_JSON_BYTES: u64 = 64 << 20;
 const MAX_ERROR_BODY: usize = 16 << 10;
+/// The most of an error body an error message shows.
+const MAX_MESSAGE_CHARS: usize = 200;
+const REDACTED: &str = "<redacted>";
 const PAGE_LIMIT: u32 = 50;
 /// 40 pages of 50 is far beyond any real repository's tags or releases (tC4 uses the same
 /// bound); a listing that keeps going is refused rather than walked forever.
 const MAX_PAGES: u32 = 40;
 const MAX_REDIRECTS: usize = 5;
 
-/// Timeouts and size caps. The defaults suit a slow field connection and the largest
-/// resource exports (en_ult is about 8 MB zipped).
+/// Timeouts and size caps. A download is held in memory while it is checked, so the caps
+/// bound the memory one download takes. The defaults suit a slow field connection on a
+/// low-memory laptop and leave room over the largest real resource (en_ult v89 is 7.7 MB
+/// zipped); raise them for something bigger.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Limits {
     pub connect_timeout: Duration,
     /// The longest wait for the next bytes of an answer.
     pub read_timeout: Duration,
+    /// 64 MiB by default.
     pub max_download_bytes: u64,
+    /// The decompressed total of one archive; 256 MiB by default.
     pub max_unpacked_bytes: u64,
 }
 
@@ -49,8 +57,8 @@ impl Default for Limits {
         Self {
             connect_timeout: Duration::from_secs(20),
             read_timeout: Duration::from_secs(60),
-            max_download_bytes: 512 << 20,
-            max_unpacked_bytes: 2 << 30,
+            max_download_bytes: 64 << 20,
+            max_unpacked_bytes: 256 << 20,
         }
     }
 }
@@ -97,55 +105,54 @@ struct AuthHeaders {
 }
 
 impl AuthHeaders {
-    fn of(auth: Auth<'_>) -> Result<Self, &'static str> {
-        let sensitive = |value: String| -> Result<HeaderValue, &'static str> {
-            let mut header = HeaderValue::from_str(&value)
-                .map_err(|_| "the secret cannot be sent in a header")?;
-            header.set_sensitive(true);
-            Ok(header)
-        };
+    /// The header values were built when the token, code or credentials were made, which
+    /// refused anything a header cannot carry; so this cannot fail.
+    fn of(auth: Auth<'_>) -> Self {
         match auth {
-            Auth::Anonymous => Ok(Self {
+            Auth::Anonymous => Self {
                 authorization: None,
                 one_time_code: None,
                 secrets: Vec::new(),
-            }),
-            Auth::Token(token) => {
-                let secret = token.expose_secret().to_owned();
-                Ok(Self {
-                    authorization: Some(sensitive(format!("token {secret}"))?),
-                    one_time_code: None,
-                    secrets: vec![secret],
-                })
-            }
+            },
+            Auth::Token(token) => Self {
+                authorization: Some(token.header().clone()),
+                one_time_code: None,
+                secrets: forms_of(&[token.expose_secret()]),
+            },
             Auth::Basic(credentials) => {
-                let password = credentials.password().expose_secret().to_owned();
-                // Encoded from UTF-8 bytes: a password outside Latin-1 must still work.
-                let encoded = base64::engine::general_purpose::STANDARD
-                    .encode(format!("{}:{password}", credentials.login()));
-                let mut secrets = vec![password, encoded.clone()];
-                let one_time_code = match credentials.one_time_code() {
-                    Some(code) => {
-                        secrets.push(code.expose_secret().to_owned());
-                        Some(sensitive(code.expose_secret().to_owned())?)
-                    }
-                    None => None,
-                };
-                Ok(Self {
-                    authorization: Some(sensitive(format!("Basic {encoded}"))?),
-                    one_time_code,
-                    secrets,
-                })
+                let code = credentials.one_time_code();
+                let mut raw = vec![credentials.password().expose_secret(), credentials.basic()];
+                raw.extend(code.map(|c| c.expose_secret()));
+                Self {
+                    authorization: Some(credentials.basic_header().clone()),
+                    one_time_code: code.map(|c| c.header().clone()),
+                    secrets: forms_of(&raw),
+                }
             }
         }
     }
+}
 
-    fn scrub(&self, mut message: String) -> String {
-        for secret in self.secrets.iter().filter(|s| !s.is_empty()) {
-            message = message.replace(secret.as_str(), "<redacted>");
+/// Each secret as sent, and as a server might write it back: percent-encoded, or escaped
+/// inside a JSON string.
+fn forms_of(secrets: &[&str]) -> Vec<String> {
+    let mut forms: Vec<String> = Vec::new();
+    for secret in secrets.iter().filter(|s| !s.is_empty()) {
+        let percent: String = url::form_urlencoded::byte_serialize(secret.as_bytes()).collect();
+        let quoted = serde_json::to_string(secret).unwrap_or_default();
+        let json = quoted
+            .strip_prefix('"')
+            .and_then(|q| q.strip_suffix('"'))
+            .unwrap_or_default();
+        for form in [*secret, percent.as_str(), json] {
+            if !form.is_empty() && !forms.iter().any(|f| f == form) {
+                forms.push(form.to_owned());
+            }
         }
-        message
     }
+    // Longest first, so a secret that contains another is replaced whole.
+    forms.sort_by_key(|f| std::cmp::Reverse(f.len()));
+    forms
 }
 
 impl Door43Client {
@@ -201,11 +208,12 @@ impl Door43Client {
         &self.internet
     }
 
-    /// Search the catalog (`GET /api/v1/catalog/search`).
+    /// Search the catalog (`GET /api/v1/catalog/search`). An entry this client cannot read
+    /// is set aside in [`Listing::skipped`], so it never hides the others.
     pub async fn catalog_search(
         &self,
         query: &CatalogQuery,
-    ) -> Result<Vec<CatalogEntry>, Door43Error> {
+    ) -> Result<Listing<CatalogEntry>, Door43Error> {
         let mut url = self.api(&["catalog", "search"]);
         let pairs = query.pairs();
         if !pairs.is_empty() {
@@ -216,15 +224,16 @@ impl Door43Client {
         if !results.ok {
             return Err(unexpected(&route, "the search answered ok: false"));
         }
-        results
-            .data
-            .into_iter()
-            .map(RawCatalogEntry::parse)
-            .collect::<Result<_, _>>()
-            .map_err(|reason| unexpected(&route, reason))
+        Ok(Listing::from_values(
+            &route,
+            results.data,
+            RawCatalogEntry::label,
+            RawCatalogEntry::parse,
+        ))
     }
 
     /// `GET /api/v1/repos/{owner}/{repo}`. A session is needed to see a private repository.
+    /// An answer whose page or clone address is not on this client's server is refused.
     pub async fn repo(
         &self,
         repo: &RepoRef,
@@ -233,7 +242,8 @@ impl Door43Client {
         let url = self.repo_api(repo, &[]);
         let route = route_of(&Method::GET, &url);
         let raw: RawRepository = self.json(Method::GET, url, auth_of(session), None).await?;
-        raw.parse().map_err(|reason| unexpected(&route, reason))
+        raw.parse(&self.server)
+            .map_err(|reason| unexpected(&route, reason))
     }
 
     /// Whether the repository exists (and the session, if any, can see it). Only a 404
@@ -250,15 +260,18 @@ impl Door43Client {
         }
     }
 
-    /// Every tag, walking the pages (`GET /repos/{owner}/{repo}/tags`).
-    pub async fn tags(&self, repo: &RepoRef) -> Result<Vec<Tag>, Door43Error> {
+    /// Every tag, walking the pages (`GET /repos/{owner}/{repo}/tags`). A tag this client
+    /// cannot read is set aside in [`Listing::skipped`].
+    pub async fn tags(&self, repo: &RepoRef) -> Result<Listing<Tag>, Door43Error> {
         let url = self.repo_api(repo, &["tags"]);
         let route = route_of(&Method::GET, &url);
-        let raw: Vec<RawTag> = self.pages(url, Auth::Anonymous).await?;
-        raw.into_iter()
-            .map(RawTag::parse)
-            .collect::<Result<_, _>>()
-            .map_err(|reason| unexpected(&route, reason))
+        let raw: Vec<Value> = self.pages(url, Auth::Anonymous).await?;
+        Ok(Listing::from_values(
+            &route,
+            raw,
+            RawTag::label,
+            RawTag::parse,
+        ))
     }
 
     /// The commit a tag points at, in one call (`GET /repos/{owner}/{repo}/tags/{tag}`).
@@ -283,15 +296,18 @@ impl Door43Client {
         Ok(found.commit)
     }
 
-    /// Every release, newest first as Door43 lists them.
-    pub async fn releases(&self, repo: &RepoRef) -> Result<Vec<Release>, Door43Error> {
+    /// Every release, newest first as Door43 lists them. A release this client cannot read
+    /// is set aside in [`Listing::skipped`].
+    pub async fn releases(&self, repo: &RepoRef) -> Result<Listing<Release>, Door43Error> {
         let url = self.repo_api(repo, &["releases"]);
         let route = route_of(&Method::GET, &url);
-        let raw: Vec<RawRelease> = self.pages(url, Auth::Anonymous).await?;
-        raw.into_iter()
-            .map(RawRelease::parse)
-            .collect::<Result<_, _>>()
-            .map_err(|reason| unexpected(&route, reason))
+        let raw: Vec<Value> = self.pages(url, Auth::Anonymous).await?;
+        Ok(Listing::from_values(
+            &route,
+            raw,
+            RawRelease::label,
+            RawRelease::parse,
+        ))
     }
 
     /// The newest published release. `NotFound` when the repository has none.
@@ -375,13 +391,10 @@ impl Door43Client {
                 Some(body.to_string().into_bytes()),
             )
             .await?;
-        if created.sha1.is_empty() {
-            return Err(unexpected(&route, "the created token carries no secret"));
-        }
-        Ok(Session {
-            username,
-            token: Token::new(created.sha1),
-        })
+        // The error leaves the value out: it is the secret.
+        let token = Token::new(created.sha1)
+            .map_err(|_| unexpected(&route, "the created token is empty or not sendable"))?;
+        Ok(Session { username, token })
     }
 
     /// Resume a session from a token kept in the OS keychain: ask Door43 whose token it
@@ -430,7 +443,7 @@ impl Door43Client {
         &self,
         session: &Session,
         owner: &NewRepoOwner,
-        name: &RepoName,
+        name: &NewRepoName,
         visibility: Visibility,
     ) -> Result<CreatedRepo, Door43Error> {
         let url = match owner {
@@ -573,11 +586,7 @@ impl Door43Client {
             tracing::debug!(%route, "door43 request refused: the internet is off");
             return Err(Door43Error::Offline { route });
         }
-        let headers = AuthHeaders::of(auth).map_err(|reason| Door43Error::AuthFailed {
-            route: route.clone(),
-            status: AuthStatus::Unauthorized,
-            message: reason.to_owned(),
-        })?;
+        let headers = AuthHeaders::of(auth);
         let mut request = self.http.request(method, url).header(ACCEPT, accept);
         if let Some(value) = &headers.authorization {
             request = request.header(AUTHORIZATION, value.clone());
@@ -602,9 +611,9 @@ impl Door43Client {
             .headers()
             .get(RETRY_AFTER)
             .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.trim().parse::<u64>().ok())
-            .map(Duration::from_secs);
-        let message = headers.scrub(message_of(&read_error_body(response).await));
+            .and_then(|v| retry_after(v, SystemTime::now()));
+        let (body, cut) = read_error_body(response).await;
+        let message = message_of(&body, cut, &headers.secrets);
         Err(classify(route, status, message, retry_after))
     }
 
@@ -713,35 +722,182 @@ fn classify(
     }
 }
 
-async fn read_error_body(mut response: reqwest::Response) -> Vec<u8> {
+/// `Retry-After` in seconds, or as an HTTP date measured from `now` (zero once passed).
+fn retry_after(value: &str, now: SystemTime) -> Option<Duration> {
+    let value = value.trim();
+    if let Ok(seconds) = value.parse::<u64>() {
+        return Some(Duration::from_secs(seconds));
+    }
+    let at = httpdate::parse_http_date(value).ok()?;
+    Some(at.duration_since(now).unwrap_or(Duration::ZERO))
+}
+
+/// The first `MAX_ERROR_BODY` bytes, and whether there was more.
+async fn read_error_body(mut response: reqwest::Response) -> (Vec<u8>, bool) {
     let mut body = Vec::new();
-    while body.len() < MAX_ERROR_BODY {
+    while body.len() <= MAX_ERROR_BODY {
         match response.chunk().await {
             Ok(Some(chunk)) => body.extend_from_slice(&chunk),
             _ => break,
         }
     }
+    let cut = body.len() > MAX_ERROR_BODY;
     body.truncate(MAX_ERROR_BODY);
-    body
+    (body, cut)
 }
 
-/// Gitea's error body is `{"message": "...", "url": "..."}`; anything else is shown as
-/// its first 200 characters.
-fn message_of(body: &[u8]) -> String {
+/// The message of an error body, with every form of `secrets` taken out. Gitea's error
+/// body is `{"message": "...", "url": "..."}`; anything else is shown as its first
+/// `MAX_MESSAGE_CHARS` characters. `cut` says the body was cut short before it got here.
+fn message_of(body: &[u8], cut: bool, secrets: &[String]) -> String {
     #[derive(Deserialize)]
     struct ApiError {
         message: Option<String>,
     }
-    if let Ok(ApiError {
-        message: Some(message),
-    }) = serde_json::from_slice(body)
-    {
-        return message;
-    }
-    let text: String = String::from_utf8_lossy(body).chars().take(200).collect();
+    let text = match serde_json::from_slice(body) {
+        Ok(ApiError {
+            message: Some(message),
+        }) => redact(&message, false, secrets),
+        _ => redact(&String::from_utf8_lossy(body), cut, secrets),
+    };
     if text.trim().is_empty() {
         "(no message)".to_owned()
     } else {
         text
+    }
+}
+
+/// `text` without `secrets`, shortened to `MAX_MESSAGE_CHARS`. Each secret is replaced
+/// before the text is shortened, so the cut never leaves part of one. A text that was cut,
+/// here or before (`cut`), also loses a tail that begins a secret, since the rest of that
+/// secret may have been past the cut.
+fn redact(text: &str, cut: bool, secrets: &[String]) -> String {
+    let mut whole = text.to_owned();
+    for secret in secrets.iter().filter(|s| !s.is_empty()) {
+        whole = replace_ignoring_ascii_case(&whole, secret, REDACTED);
+    }
+    let mut shown: String = whole.chars().take(MAX_MESSAGE_CHARS).collect();
+    if cut || shown.len() < whole.len() {
+        let tail = secrets
+            .iter()
+            .map(|secret| secret_prefix_at_end(&shown, secret))
+            .max()
+            .unwrap_or(0);
+        shown.truncate(shown.len() - tail);
+        shown.push('…');
+    }
+    shown
+}
+
+/// Every occurrence of `needle` in `haystack`, matched without regard to ASCII case (a
+/// server may print a hex token in capitals), replaced by `with`.
+fn replace_ignoring_ascii_case(haystack: &str, needle: &str, with: &str) -> String {
+    let lower_haystack = haystack.to_ascii_lowercase();
+    let lower_needle = needle.to_ascii_lowercase();
+    let mut out = String::with_capacity(haystack.len());
+    let mut from = 0;
+    // ASCII lowercasing keeps every byte offset, so offsets found in the lowercase copy are
+    // offsets in `haystack`, on the same character boundaries.
+    while let Some(found) = lower_haystack[from..].find(&lower_needle) {
+        let at = from + found;
+        out.push_str(&haystack[from..at]);
+        out.push_str(with);
+        from = at + needle.len();
+    }
+    out.push_str(&haystack[from..]);
+    out
+}
+
+/// The length in bytes of the longest end of `text` that starts `secret`.
+fn secret_prefix_at_end(text: &str, secret: &str) -> usize {
+    let lower_text = text.to_ascii_lowercase();
+    let lower_secret = secret.to_ascii_lowercase();
+    (1..=lower_text.len().min(lower_secret.len()))
+        .rev()
+        .find(|&len| {
+            lower_secret.is_char_boundary(len)
+                && lower_text.is_char_boundary(lower_text.len() - len)
+                && lower_text.ends_with(&lower_secret[..len])
+        })
+        .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TOKEN: &str = "S3CRETTOKENVALUE0123456789abcdefghijklmn";
+
+    fn secrets() -> Vec<String> {
+        forms_of(&[TOKEN, "pässwörd \"x\"", "dHJhbnNsYXRvcjpjb3JyZWN0"])
+    }
+
+    #[test]
+    fn a_secret_across_the_cut_leaves_no_part_behind() {
+        for offset in 150..=205 {
+            let body = format!("{}token {TOKEN} trailing words", "x".repeat(offset));
+            let shown = message_of(body.as_bytes(), false, &secrets());
+            for len in 4..=TOKEN.len() {
+                assert!(!shown.contains(&TOKEN[..len]), "offset {offset}: {shown}");
+            }
+            assert!(shown.chars().count() <= MAX_MESSAGE_CHARS + 1, "{shown}");
+        }
+    }
+
+    #[test]
+    fn a_body_cut_before_it_arrived_loses_a_trailing_secret_start() {
+        let body = format!("{}{}", "y".repeat(20), &TOKEN[..12]);
+        let shown = message_of(body.as_bytes(), true, &secrets());
+        assert_eq!(shown, format!("{}…", "y".repeat(20)));
+    }
+
+    #[test]
+    fn json_messages_and_their_escaped_forms_are_scrubbed() {
+        let body = serde_json::json!({ "message": format!("bad pässwörd \"x\" and {TOKEN}") });
+        let shown = message_of(body.to_string().as_bytes(), false, &secrets());
+        assert_eq!(shown, "bad <redacted> and <redacted>");
+        let html = format!(
+            "<p>value=p%C3%A4ssw%C3%B6rd+%22x%22 {}</p>",
+            TOKEN.to_lowercase()
+        );
+        let shown = message_of(html.as_bytes(), false, &secrets());
+        assert_eq!(shown, "<p>value=<redacted> <redacted></p>");
+    }
+
+    #[test]
+    fn short_messages_without_secrets_are_kept_whole() {
+        assert_eq!(
+            message_of(b"plain failure", false, &secrets()),
+            "plain failure"
+        );
+        assert_eq!(message_of(b"  ", false, &secrets()), "(no message)");
+        let long = "z".repeat(300);
+        assert_eq!(
+            message_of(long.as_bytes(), false, &[]),
+            format!("{}…", "z".repeat(MAX_MESSAGE_CHARS))
+        );
+    }
+
+    #[test]
+    fn retry_after_takes_seconds_or_an_http_date() {
+        let now = httpdate::parse_http_date("Wed, 21 Oct 2026 07:28:00 GMT").unwrap();
+        assert_eq!(retry_after("7", now), Some(Duration::from_secs(7)));
+        assert_eq!(
+            retry_after("Wed, 21 Oct 2026 07:30:00 GMT", now),
+            Some(Duration::from_secs(120))
+        );
+        assert_eq!(
+            retry_after("Wed, 21 Oct 2026 07:00:00 GMT", now),
+            Some(Duration::ZERO)
+        );
+        assert_eq!(retry_after("soon", now), None);
+    }
+
+    #[test]
+    fn the_default_limits_bound_one_download_in_memory() {
+        let limits = Limits::default();
+        assert!(limits.max_download_bytes + limits.max_unpacked_bytes <= 320 << 20);
+        // Room over the largest real resource export (en_ult v89, 7,709,900 bytes).
+        assert!(limits.max_download_bytes >= 8 * 7_709_900);
     }
 }

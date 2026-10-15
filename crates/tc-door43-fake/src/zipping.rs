@@ -65,6 +65,7 @@ pub(crate) fn sb_export(
             writer.add_directory(name, deflated()).map_err(zip_error)?;
             continue;
         }
+        let mode = entry.unix_mode();
         let mut bytes = Vec::new();
         entry.read_to_end(&mut bytes)?;
         if name == metadata_name {
@@ -74,7 +75,21 @@ pub(crate) fn sb_export(
         if export.corrupt.iter().any(|c| c == relative) {
             bytes.extend_from_slice(b"!");
         }
-        writer.start_file(name, deflated()).map_err(zip_error)?;
+        // Modes are kept as `git archive` wrote them, links included, so a client sees
+        // what the commit holds.
+        if mode.is_some_and(|m| m & 0o170_000 == 0o120_000) {
+            let target = String::from_utf8(bytes)
+                .map_err(|_| FakeError::Invalid(format!("{name}: a link target is not UTF-8")))?;
+            writer
+                .add_symlink(name, target, deflated())
+                .map_err(zip_error)?;
+            continue;
+        }
+        let options = match mode {
+            Some(mode) => deflated().unix_permissions(mode & 0o777),
+            None => deflated(),
+        };
+        writer.start_file(name, options).map_err(zip_error)?;
         writer.write_all(&bytes)?;
     }
     writer

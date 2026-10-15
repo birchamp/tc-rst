@@ -1,5 +1,9 @@
 //! Downloads are verified before they are returned.
 
+// `one_commit_repo` sits outside `#[test]` functions, where clippy.toml already allows
+// unwrap.
+#![allow(clippy::unwrap_used)]
+
 mod common;
 
 use common::{client, client_with, fixture, repo, sha, tag};
@@ -280,6 +284,138 @@ async fn a_commit_without_a_tag_has_no_export() {
         .await;
     assert!(
         matches!(result, Err(Door43Error::NotFound { .. })),
+        "{result:?}"
+    );
+}
+
+async fn one_commit_repo(fake: &FakeDoor43, name: &str, files: Vec<SeedFile>) -> String {
+    let shas = fake
+        .add_repo(RepoSeed {
+            owner: "uW".into(),
+            name: name.into(),
+            subject: String::new(),
+            language: "en".into(),
+            topics: Vec::new(),
+            private: false,
+            commits: vec![CommitSeed {
+                message: "x".into(),
+                files,
+                tag: Some("v1".into()),
+                release: None,
+            }],
+        })
+        .await
+        .unwrap();
+    shas[0].clone()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_commit_whose_names_collide_on_windows_or_macos_is_refused() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    for (name, pair) in [
+        ("case", ["notes/TIT.tsv", "notes/tit.tsv"]),
+        ("dot", ["notes/a", "notes/a."]),
+        ("space", ["notes/a", "notes/a "]),
+        ("nfd", ["caf\u{e9}.md", "cafe\u{301}.md"]),
+    ] {
+        let files = pair
+            .iter()
+            .map(|path| SeedFile::regular(path, format!("text of {path}").into_bytes()))
+            .collect();
+        let commit = one_commit_repo(&fake, name, files).await;
+        let result = client(&fake)
+            .download_archive(&repo(&format!("uW/{name}")), &sha(&commit))
+            .await;
+        assert!(
+            matches!(
+                &result,
+                Err(Door43Error::Verification {
+                    source: VerificationError::CollidingNames { .. },
+                    ..
+                })
+            ),
+            "{name}: {result:?}"
+        );
+    }
+    let commit = one_commit_repo(
+        &fake,
+        "stream",
+        vec![SeedFile::regular("notes/TIT.tsv:hidden", b"x".to_vec())],
+    )
+    .await;
+    let result = client(&fake)
+        .download_archive(&repo("uW/stream"), &sha(&commit))
+        .await;
+    assert!(
+        matches!(
+            &result,
+            Err(Door43Error::Verification {
+                source: VerificationError::NotPortable { .. },
+                ..
+            })
+        ),
+        "{result:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_export_file_the_metadata_does_not_list_is_returned_apart() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    let tsv = fixture("tc4/test-fixtures/resources/en_tn@v86/TIT.tsv");
+    let commit = one_commit_repo(
+        &fake,
+        "extra",
+        vec![
+            SeedFile::regular(
+                "metadata.json",
+                fixture("tc4/test-fixtures/resources/en_tn@v86/metadata.json"),
+            ),
+            SeedFile::regular("ingredients/TIT.tsv", tsv.clone()),
+            SeedFile::regular("ingredients/EXTRA.tsv", b"listed nowhere".to_vec()),
+        ],
+    )
+    .await;
+    let export = client(&fake)
+        .download_sb_export(&repo("uW/extra"), &tag("v1"), &sha(&commit))
+        .await
+        .unwrap();
+    let paths: Vec<&str> = export.files.iter().map(|f| f.path.as_str()).collect();
+    assert_eq!(paths, ["ingredients/TIT.tsv", "metadata.json"]);
+    let unlisted: Vec<&str> = export.unlisted.iter().map(|f| f.path.as_str()).collect();
+    assert_eq!(unlisted, ["ingredients/EXTRA.tsv"]);
+    assert_eq!(export.files[0].bytes, tsv);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_symlink_in_an_export_is_refused() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    let commit = one_commit_repo(
+        &fake,
+        "linked",
+        vec![
+            SeedFile::regular(
+                "metadata.json",
+                fixture("tc4/test-fixtures/resources/en_tn@v86/metadata.json"),
+            ),
+            SeedFile {
+                path: "ingredients/TIT.tsv".into(),
+                mode: SeedMode::Symlink,
+                bytes: b"../../../../home/user/.ssh/id_rsa".to_vec(),
+            },
+        ],
+    )
+    .await;
+    let result = client(&fake)
+        .download_sb_export(&repo("uW/linked"), &tag("v1"), &sha(&commit))
+        .await;
+    assert!(
+        matches!(
+            &result,
+            Err(Door43Error::Verification {
+                source: VerificationError::SymlinkInBurrito(path),
+                ..
+            }) if path == "ingredients/TIT.tsv"
+        ),
         "{result:?}"
     );
 }

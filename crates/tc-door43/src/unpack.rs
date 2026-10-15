@@ -2,11 +2,16 @@
 //!
 //! Every entry is decompressed in full, which makes the zip reader check its CRC-32, so a
 //! truncated or damaged download fails here. Entry names are checked before anything else
-//! looks at them: a name that could escape the archive's folder on any platform is refused,
-//! never repaired, because repairing could merge two entries into one path.
+//! looks at them, and a bad name is refused, never repaired, because repairing could merge
+//! two entries into one path:
+//!
+//! - a name that could escape the archive's folder on any platform ([`escapes_root`]);
+//! - a name Windows cannot write ([`portability_problem`]);
+//! - two names that Windows or macOS would store as one file ([`collision_key`]).
 
 use crate::error::VerificationError;
-use std::collections::BTreeSet;
+use icu_normalizer::ComposingNormalizerBorrowed;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Read};
 
 /// How a file is stored in git: the zip's unix mode, as `git archive` writes it.
@@ -14,7 +19,9 @@ use std::io::{Cursor, Read};
 pub enum FileMode {
     Regular,
     Executable,
-    /// The file's bytes are the link target.
+    /// The file's bytes are the link target, as git stores a symbolic link. Never create
+    /// such an entry as a link on disk: its target can point anywhere, outside the
+    /// resource folder. Write the target as a plain file, or leave the entry out.
     Symlink,
 }
 
@@ -22,17 +29,20 @@ pub enum FileMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnpackedFile {
     pub path: String,
+    /// See [`FileMode::Symlink`] before writing a file to disk.
     pub mode: FileMode,
     pub bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Wrapping {
-    /// Every entry must sit under one top folder, which is removed (Gitea archives).
-    Required,
-    /// Remove the top folder when every entry shares one and the root holds no
-    /// `metadata.json` (the DCS burrito export, tC4 `unwrapExport`).
-    IfSingleTopFolder,
+pub(crate) enum Layout {
+    /// `git archive` output (a Gitea archive): every entry sits under one top folder, which
+    /// is removed, and every entry is content, so none is dropped.
+    GitArchive,
+    /// A burrito zip: the DCS export, or one a person made and picked from a USB drive.
+    /// Debris ([`is_burrito_debris`]) is dropped first; then the top folder is removed when
+    /// every entry shares one and the root holds no `metadata.json` (tC4 `unwrapExport`).
+    Burrito,
 }
 
 #[derive(Debug)]
@@ -56,7 +66,7 @@ struct RawEntry {
 /// Unzip `bytes`, checking every entry. `max_unpacked` caps the total decompressed size.
 pub(crate) fn unpack(
     bytes: &[u8],
-    wrapping: Wrapping,
+    layout: Layout,
     max_unpacked: u64,
 ) -> Result<Unpacked, VerificationError> {
     let mut archive = zip::ZipArchive::new(Cursor::new(bytes))
@@ -73,6 +83,9 @@ pub(crate) fn unpack(
             .to_owned();
         if escapes_root(&name) {
             return Err(VerificationError::EscapesRoot(name));
+        }
+        if layout == Layout::Burrito && is_burrito_debris(&name) {
+            continue;
         }
         let folder = name.ends_with('/');
         let mode = mode_of(file.unix_mode());
@@ -114,12 +127,25 @@ pub(crate) fn unpack(
             bytes: content,
         });
     }
-    strip_and_collect(entries, wrapping, comment)
+    strip_and_collect(entries, layout, comment)
+}
+
+/// Entries that are never part of a burrito: the `.git/` folder and `.DS_Store` files the
+/// DCS export ships, and what macOS Finder adds to a zip it makes (a `__MACOSX/` folder of
+/// AppleDouble `._*` files).
+fn is_burrito_debris(name: &str) -> bool {
+    let body = name.strip_suffix('/').unwrap_or(name);
+    let first = body.split('/').next().unwrap_or_default();
+    let last = body.rsplit('/').next().unwrap_or_default();
+    first == "__MACOSX"
+        || body.split('/').any(|segment| segment == ".git")
+        || last == ".DS_Store"
+        || last.starts_with("._")
 }
 
 fn strip_and_collect(
     entries: Vec<RawEntry>,
-    wrapping: Wrapping,
+    layout: Layout,
     comment: Vec<u8>,
 ) -> Result<Unpacked, VerificationError> {
     if !entries.iter().any(|e| !e.folder) {
@@ -132,10 +158,10 @@ fn strip_and_collect(
             .iter()
             .filter(|e| !e.folder)
             .all(|e| e.name.contains('/'));
-    let prefix = match wrapping {
-        Wrapping::Required | Wrapping::IfSingleTopFolder if single_top => tops.into_iter().next(),
-        Wrapping::Required => return Err(VerificationError::NotWrapped),
-        Wrapping::IfSingleTopFolder => None,
+    let prefix = match layout {
+        Layout::GitArchive | Layout::Burrito if single_top => tops.into_iter().next(),
+        Layout::GitArchive => return Err(VerificationError::NotWrapped),
+        Layout::Burrito => None,
     };
 
     let mut files = Vec::new();
@@ -159,6 +185,12 @@ fn strip_and_collect(
         if !seen.insert(relative.clone()) {
             return Err(VerificationError::DuplicateEntry(relative));
         }
+        if let Some(reason) = portability_problem(&relative) {
+            return Err(VerificationError::NotPortable {
+                path: relative,
+                reason,
+            });
+        }
         if entry.folder {
             folders.insert(relative);
         } else {
@@ -169,6 +201,7 @@ fn strip_and_collect(
             });
         }
     }
+    check_collisions(&files, &folders)?;
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(Unpacked {
         files,
@@ -187,12 +220,11 @@ fn mode_of(unix_mode: Option<u32>) -> FileMode {
     }
 }
 
-/// Whether a zip entry name could write outside the unpacked folder on any platform, or
-/// could name the same file as another entry. Refused: an absolute path, any drive prefix
-/// (`C:x` is relative to drive C's current folder), a NUL, a backslash (a separator on
-/// Windows), and any segment that is empty, `.`, or all dots after `..` (`..`, `...`,
-/// `.. `), since Windows strips trailing dots and spaces. A folder's one trailing `/` is
-/// allowed.
+/// Whether a zip entry name could write outside the unpacked folder on any platform.
+/// Refused: an absolute path, any drive prefix (`C:x` is relative to drive C's current
+/// folder), a NUL, a backslash (a separator on Windows), and any segment that is empty,
+/// `.`, or all dots after `..` (`..`, `...`, `.. `), since Windows strips trailing dots and
+/// spaces. A folder's one trailing `/` is allowed.
 pub(crate) fn escapes_root(name: &str) -> bool {
     let body = name.strip_suffix('/').unwrap_or(name);
     let bytes = body.as_bytes();
@@ -207,6 +239,114 @@ pub(crate) fn escapes_root(name: &str) -> bool {
                 || segment == "."
                 || (segment.starts_with("..") && segment.bytes().all(|b| b == b'.' || b == b' '))
         })
+}
+
+/// Why Windows cannot write `path` as it is named, if it cannot: a character Windows
+/// forbids in a name (`:` would write an NTFS alternate stream), a segment that is nothing
+/// once Windows strips its trailing dots and spaces, or a device name such as `CON` or
+/// `nul.txt`.
+pub(crate) fn portability_problem(path: &str) -> Option<&'static str> {
+    for segment in path.split('/') {
+        if segment
+            .chars()
+            .any(|c| c.is_ascii_control() || matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*'))
+        {
+            return Some("it holds a character Windows does not allow in a name");
+        }
+        let trimmed = segment.trim_end_matches(['.', ' ']);
+        if trimmed.is_empty() {
+            return Some("a name of only dots and spaces");
+        }
+        let stem = trimmed.split('.').next().unwrap_or_default();
+        if is_windows_device(stem.trim_end_matches(' ')) {
+            return Some("Windows reserves this name for a device");
+        }
+    }
+    None
+}
+
+/// `CON`, `PRN`, `AUX`, `NUL`, `COM0`-`COM9`, `LPT0`-`LPT9` (also with superscript ¹²³),
+/// `CONIN$` and `CONOUT$`, in any case.
+pub(crate) fn is_windows_device(stem: &str) -> bool {
+    let upper = stem.to_ascii_uppercase();
+    if matches!(
+        upper.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) {
+        return true;
+    }
+    let Some(rest) = upper
+        .strip_prefix("COM")
+        .or_else(|| upper.strip_prefix("LPT"))
+    else {
+        return false;
+    };
+    let mut chars = rest.chars();
+    matches!(
+        (chars.next(), chars.next()),
+        (Some('0'..='9' | '¹' | '²' | '³'), None)
+    )
+}
+
+/// The name a case-insensitive, normalization-insensitive file system that strips trailing
+/// dots and spaces sees: each segment in Unicode NFC (macOS stores NFD), lowercased, with
+/// trailing dots and spaces removed (Windows).
+pub(crate) fn collision_key(path: &str) -> String {
+    let nfc = ComposingNormalizerBorrowed::new_nfc();
+    path.split('/')
+        .map(|segment| {
+            let folded = nfc.normalize(segment).to_lowercase();
+            nfc.normalize(folded.trim_end_matches(['.', ' ']))
+                .into_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+/// Refuse two paths, files or folders, that differ but share a [`collision_key`], and a
+/// file whose key is a folder's. Folders include those implied by a file's path.
+fn check_collisions(
+    files: &[UnpackedFile],
+    folders: &BTreeSet<String>,
+) -> Result<(), VerificationError> {
+    #[derive(PartialEq)]
+    enum Kind {
+        File,
+        Folder,
+    }
+    let mut by_key: BTreeMap<String, (&str, Kind)> = BTreeMap::new();
+    let implied = files
+        .iter()
+        .flat_map(|f| f.path.match_indices('/').map(|(at, _)| &f.path[..at]));
+    let all = files
+        .iter()
+        .map(|f| (f.path.as_str(), Kind::File))
+        .chain(folders.iter().map(|f| (f.as_str(), Kind::Folder)))
+        .chain(implied.map(|f| (f, Kind::Folder)));
+    for (path, kind) in all {
+        let key = collision_key(path);
+        match by_key.get(&key) {
+            None => {
+                by_key.insert(key, (path, kind));
+            }
+            Some((first, first_kind)) if *first == path && *first_kind == kind => {}
+            Some((first, _)) if *first == path => {
+                return Err(VerificationError::DuplicateEntry(path.to_owned()));
+            }
+            Some((first, _)) => {
+                let (first, second) = if *first <= path {
+                    (*first, path)
+                } else {
+                    (path, *first)
+                };
+                return Err(VerificationError::CollidingNames {
+                    first: first.to_owned(),
+                    second: second.to_owned(),
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -262,7 +402,7 @@ pub(crate) mod tests {
             ],
             "c354b8ae66a23c485bf6f38fd35bd8f7ef81e4e5",
         );
-        let unpacked = unpack(&zip, Wrapping::Required, 1 << 20).unwrap();
+        let unpacked = unpack(&zip, Layout::GitArchive, 1 << 20).unwrap();
         let paths: Vec<_> = unpacked.files.iter().map(|f| f.path.as_str()).collect();
         assert_eq!(
             paths,
@@ -287,10 +427,10 @@ pub(crate) mod tests {
             ],
             "",
         );
-        let unpacked = unpack(&zip, Wrapping::IfSingleTopFolder, 1 << 20).unwrap();
+        let unpacked = unpack(&zip, Layout::Burrito, 1 << 20).unwrap();
         assert_eq!(unpacked.files[1].path, "metadata.json");
         assert_eq!(
-            unpack(&zip, Wrapping::Required, 1 << 20).unwrap_err(),
+            unpack(&zip, Layout::GitArchive, 1 << 20).unwrap_err(),
             VerificationError::NotWrapped
         );
     }
@@ -305,7 +445,7 @@ pub(crate) mod tests {
             "",
         );
         assert_eq!(
-            unpack(&zip, Wrapping::Required, 1 << 20).unwrap_err(),
+            unpack(&zip, Layout::GitArchive, 1 << 20).unwrap_err(),
             VerificationError::NotWrapped
         );
     }
@@ -318,10 +458,142 @@ pub(crate) mod tests {
         ] {
             assert!(escapes_root(name), "{name:?}");
         }
-        // A colon behind more than one letter, or deeper in the path, names no drive.
+        // A colon behind more than one letter, or deeper in the path, names no drive. Such
+        // a name cannot escape, though Windows cannot write it (see `portability_problem`).
         for name in ["a/b", "a/", "a/b.c", "a/..b", "a/b..", "xy:z/c:d"] {
             assert!(!escapes_root(name), "{name:?}");
         }
+    }
+
+    fn wrapped(names: &[&str]) -> Vec<u8> {
+        let entries: Vec<(String, FileMode, &[u8])> = names
+            .iter()
+            .map(|n| (format!("repo/{n}"), FileMode::Regular, &b"x"[..]))
+            .collect();
+        let entries: Vec<(&str, FileMode, &[u8])> = entries
+            .iter()
+            .map(|(n, m, b)| (n.as_str(), *m, *b))
+            .collect();
+        zip_of(&entries, "")
+    }
+
+    #[test]
+    fn names_that_windows_or_macos_would_merge_are_refused() {
+        let nfc = "notes/caf\u{e9}.tsv";
+        let nfd = "notes/cafe\u{301}.tsv";
+        for pair in [
+            ["notes/TIT.tsv", "notes/tit.tsv"],
+            ["notes/a", "notes/a."],
+            ["notes/a", "notes/a "],
+            ["notes/a", "notes/a. ."],
+            [nfc, nfd],
+            ["Notes/x", "notes/y"],
+            ["notes", "Notes/y"],
+            ["ÉTÉ/x", "été/y"],
+        ] {
+            assert!(
+                matches!(
+                    unpack(&wrapped(&pair), Layout::GitArchive, 1 << 20),
+                    Err(VerificationError::CollidingNames { .. })
+                ),
+                "{pair:?}"
+            );
+        }
+        let error = unpack(
+            &wrapped(&["notes/TIT.tsv", "notes/tit.tsv"]),
+            Layout::Burrito,
+            1 << 20,
+        )
+        .unwrap_err();
+        assert_eq!(
+            error,
+            VerificationError::CollidingNames {
+                first: "notes/TIT.tsv".into(),
+                second: "notes/tit.tsv".into()
+            }
+        );
+        // Names that stay apart everywhere are kept.
+        let apart = [
+            "notes/a",
+            "notes/a.b",
+            "notes/ab",
+            "notes/b/a",
+            nfc,
+            "Ñandú/x",
+        ];
+        assert!(unpack(&wrapped(&apart), Layout::GitArchive, 1 << 20).is_ok());
+    }
+
+    #[test]
+    fn names_windows_cannot_write_are_refused() {
+        for name in [
+            "a:b",
+            "x/c:d",
+            "a<b",
+            "a>b",
+            "a\"b",
+            "a|b",
+            "a?b",
+            "a*b",
+            "a\u{1}b",
+            "a\tb",
+            "CON",
+            "con",
+            "nul.txt",
+            "x/Aux.tsv",
+            "COM1",
+            "lpt9.md",
+            "COM\u{b9}",
+            "CONIN$",
+            "con .txt",
+            "PRN.",
+            ". ",
+            "x/. /y",
+        ] {
+            assert!(
+                matches!(
+                    unpack(&wrapped(&[name]), Layout::GitArchive, 1 << 20),
+                    Err(VerificationError::NotPortable { .. })
+                ),
+                "{name:?}"
+            );
+        }
+        for name in [
+            "CONTENT.md",
+            "com10",
+            "lpt",
+            "console/x",
+            "nul_x",
+            "a.b.c",
+            ".hidden",
+        ] {
+            assert!(portability_problem(name).is_none(), "{name:?}");
+        }
+    }
+
+    #[test]
+    fn finder_and_export_debris_is_dropped_from_a_burrito_only() {
+        let entries: [(&str, FileMode, &[u8]); 6] = [
+            ("en_tn/metadata.json", FileMode::Regular, b"{}"),
+            ("en_tn/ingredients/TIT.tsv", FileMode::Regular, b"x"),
+            ("en_tn/.git/HEAD", FileMode::Regular, b"ref"),
+            ("en_tn/ingredients/.DS_Store", FileMode::Regular, b"junk"),
+            (
+                "__MACOSX/en_tn/._metadata.json",
+                FileMode::Regular,
+                b"\0\x05\x16\x07",
+            ),
+            ("en_tn/._TIT.tsv", FileMode::Regular, b"\0\x05\x16\x07"),
+        ];
+        let zip = zip_of(&entries, "");
+        let burrito = unpack(&zip, Layout::Burrito, 1 << 20).unwrap();
+        let paths: Vec<_> = burrito.files.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(paths, ["ingredients/TIT.tsv", "metadata.json"]);
+        // In a git archive every entry is content, and these sit in two top folders.
+        assert_eq!(
+            unpack(&zip, Layout::GitArchive, 1 << 20).unwrap_err(),
+            VerificationError::NotWrapped
+        );
     }
 
     #[test]
@@ -334,7 +606,7 @@ pub(crate) mod tests {
             "",
         );
         assert_eq!(
-            unpack(&zip, Wrapping::Required, 1 << 20).unwrap_err(),
+            unpack(&zip, Layout::GitArchive, 1 << 20).unwrap_err(),
             VerificationError::EscapesRoot("repo/../../evil".into())
         );
     }
@@ -351,7 +623,7 @@ pub(crate) mod tests {
         let at = zip.windows(100).position(|w| w == &content[..100]).unwrap() + 50;
         zip[at] = b'b';
         assert!(matches!(
-            unpack(&zip, Wrapping::Required, 1 << 20),
+            unpack(&zip, Layout::GitArchive, 1 << 20),
             Err(VerificationError::CorruptEntry { .. })
         ));
     }
@@ -361,10 +633,10 @@ pub(crate) mod tests {
         let big = vec![0u8; 10_000];
         let zip = zip_of(&[("repo/big", FileMode::Regular, &big)], "");
         assert_eq!(
-            unpack(&zip, Wrapping::Required, 9_999).unwrap_err(),
+            unpack(&zip, Layout::GitArchive, 9_999).unwrap_err(),
             VerificationError::TooLargeUnpacked { limit: 9_999 }
         );
-        assert!(unpack(&zip, Wrapping::Required, 10_000).is_ok());
+        assert!(unpack(&zip, Layout::GitArchive, 10_000).is_ok());
     }
 
     #[test]
@@ -377,7 +649,7 @@ pub(crate) mod tests {
             "",
         );
         assert_eq!(
-            unpack(&zip, Wrapping::Required, 1 << 20).unwrap_err(),
+            unpack(&zip, Layout::GitArchive, 1 << 20).unwrap_err(),
             VerificationError::DuplicateEntry("a".into())
         );
     }
@@ -385,13 +657,17 @@ pub(crate) mod tests {
     #[test]
     fn garbage_is_not_a_zip() {
         assert!(matches!(
-            unpack(b"not a zip at all", Wrapping::Required, 1 << 20),
+            unpack(b"not a zip at all", Layout::GitArchive, 1 << 20),
             Err(VerificationError::NotAZip(_))
         ));
     }
 
+    /// Lowercase segments with no trailing dot and no device name, so that no two distinct
+    /// paths collide and every path is portable.
     fn segment() -> impl Strategy<Value = String> {
-        "[A-Za-z0-9_][A-Za-z0-9_.-]{0,8}".prop_filter("no dot runs", |s| !s.contains(".."))
+        "[a-z0-9_][a-z0-9_.-]{0,8}".prop_filter("portable and apart", |s| {
+            !s.contains("..") && !s.ends_with('.') && portability_problem(s).is_none()
+        })
     }
 
     fn file_tree() -> impl Strategy<Value = Vec<(String, FileMode, Vec<u8>)>> {
@@ -437,13 +713,32 @@ pub(crate) mod tests {
                 .collect();
             let entries: Vec<(&str, FileMode, &[u8])> =
                 named.iter().map(|(p, m, b)| (p.as_str(), *m, b.as_slice())).collect();
-            let unpacked = unpack(&zip_of(&entries, ""), Wrapping::Required, 1 << 20).unwrap();
+            let unpacked = unpack(&zip_of(&entries, ""), Layout::GitArchive, 1 << 20).unwrap();
             let got: Vec<(String, FileMode, Vec<u8>)> = unpacked
                 .files
                 .into_iter()
                 .map(|f| (f.path, f.mode, f.bytes))
                 .collect();
             prop_assert_eq!(got, files);
+        }
+
+        #[test]
+        fn a_path_and_its_uppercase_twin_are_refused(files in file_tree(), pick in any::<prop::sample::Index>()) {
+            let (path, mode, bytes) = &files[pick.index(files.len())];
+            let twin = path.to_uppercase();
+            prop_assume!(twin != *path);
+            let mut named: Vec<(String, FileMode, Vec<u8>)> = files
+                .iter()
+                .map(|(p, m, b)| (format!("top/{p}"), *m, b.clone()))
+                .collect();
+            named.push((format!("top/{twin}"), *mode, bytes.clone()));
+            let entries: Vec<(&str, FileMode, &[u8])> =
+                named.iter().map(|(p, m, b)| (p.as_str(), *m, b.as_slice())).collect();
+            let refused = unpack(&zip_of(&entries, ""), Layout::GitArchive, 1 << 20);
+            prop_assert!(
+                matches!(refused, Err(VerificationError::CollidingNames { .. })),
+                "{:?}", refused
+            );
         }
 
         #[test]

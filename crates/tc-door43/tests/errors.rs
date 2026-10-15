@@ -173,3 +173,38 @@ async fn a_redirect_within_the_server_is_followed() {
         .unwrap();
     assert_eq!(info.repo, repo("unfoldingWord/en_tn"));
 }
+
+fn rate_limited_until(fake: &FakeDoor43, date: &str) {
+    fail_once(
+        fake,
+        Fault::Raw {
+            status: 429,
+            headers: vec![("Retry-After".into(), date.into())],
+            body: br#"{"message":"rate limit exceeded"}"#.to_vec(),
+        },
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_retry_after_date_becomes_a_wait_from_now() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    rate_limited_until(&fake, "Wed, 21 Oct 2099 07:28:00 GMT");
+    let error = repo_error(&fake).await;
+    assert!(
+        matches!(
+            &error,
+            Door43Error::RateLimited { retry_after: Some(wait), .. }
+                if *wait > Duration::from_secs(365 * 24 * 3600)
+        ),
+        "{error:?}"
+    );
+    rate_limited_until(&fake, "Sun, 06 Nov 1994 08:49:37 GMT");
+    let error = repo_error(&fake).await;
+    assert!(
+        matches!(
+            &error,
+            Door43Error::RateLimited { retry_after: Some(wait), .. } if wait.is_zero()
+        ),
+        "{error:?}"
+    );
+}

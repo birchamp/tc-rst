@@ -23,7 +23,9 @@
 //!   not convert Resource Containers).
 //! - Git smart HTTP for clone, fetch and push: `/{owner}/{repo}.git/info/refs`,
 //!   `.../git-upload-pack`, `.../git-receive-pack`, served by `git http-backend` as CGI.
-//!   Push needs Basic auth with the password or a token with `write:repository`.
+//!   Push needs Basic auth with the password or a token with `write:repository`. A private
+//!   repository is cloned or fetched only by its owner or an organization member, with the
+//!   password or a token with `read:repository`; anyone else gets 404, as from Gitea.
 //!
 //! Auth works as Gitea's does: `Authorization: token <t>` or `Bearer <t>`, or Basic with a
 //! password or a token as the password, plus `X-GITEA-OTP` for an account with a one-time
@@ -175,6 +177,17 @@ pub enum Fault {
     /// 400 whose message repeats the request's `Authorization` header, as a careless
     /// server might.
     EchoAuthorization,
+    /// 400 with a `text/html` body (not Gitea's JSON) of `filler` characters followed by
+    /// the request's `Authorization` header, as a careless proxy might answer.
+    EchoAuthorizationAsText { filler: usize },
+    /// Answer with exactly this status, these headers and this body, for answers the fake
+    /// does not otherwise give: an odd catalog entry, another tag than the one asked for,
+    /// a `Retry-After` date.
+    Raw {
+        status: u16,
+        headers: Vec<(String, String)>,
+        body: Vec<u8>,
+    },
     /// Wait, then answer normally.
     Delay(Duration),
     /// 302 to this address.

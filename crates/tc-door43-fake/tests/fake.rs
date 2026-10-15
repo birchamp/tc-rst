@@ -339,3 +339,144 @@ async fn git_pushes_with_a_token_and_is_refused_without_one() {
                 && !r.query.clone().unwrap_or_default().contains(&token))
     );
 }
+
+/// `git clone` of `owner/name` with `login` and `secret` given by a credential helper.
+async fn clone_as(
+    fake: &FakeDoor43,
+    owner: &str,
+    name: &str,
+    credentials: Option<(&str, &str)>,
+) -> std::process::Output {
+    let work = tempfile::tempdir().unwrap();
+    let mut command = git(work.path(), work.path());
+    if let Some((login, secret)) = credentials {
+        let helper = "!f() { echo username=$FAKE_USER; echo password=$FAKE_SECRET; }; f";
+        command
+            .env("FAKE_USER", login)
+            .env("FAKE_SECRET", secret)
+            .args([
+                "-c",
+                "credential.helper=",
+                "-c",
+                &format!("credential.helper={helper}"),
+            ]);
+    }
+    command
+        .args(["clone", "--quiet", &fake.clone_url(owner, name), "copy"])
+        .output()
+        .await
+        .unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_private_repository_is_cloned_only_by_members_with_a_reading_credential() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    fake.add_user(tc_door43_fake::FakeUser {
+        login: "outsider".into(),
+        email: "outsider@example.org".into(),
+        password: "outsider-pass".into(),
+        one_time_code: None,
+    });
+    fake.add_repo(tc_door43_fake::RepoSeed {
+        owner: seeded::TEAM_ORG.into(),
+        name: "secret-project".into(),
+        subject: String::new(),
+        language: "en".into(),
+        topics: vec![],
+        private: true,
+        commits: vec![tc_door43_fake::CommitSeed {
+            message: "x".into(),
+            files: vec![tc_door43_fake::SeedFile::regular(
+                "a.txt",
+                b"private".to_vec(),
+            )],
+            tag: None,
+            release: None,
+        }],
+    })
+    .await
+    .unwrap();
+    let clone = |credentials| clone_as(&fake, seeded::TEAM_ORG, "secret-project", credentials);
+
+    let anonymous = clone(None).await;
+    assert!(!anonymous.status.success());
+
+    // To an outsider the repository does not exist, as on Gitea.
+    let outsider = clone(Some(("outsider", "outsider-pass"))).await;
+    assert!(
+        !outsider.status.success(),
+        "an outsider cloned a private repository"
+    );
+    assert!(
+        String::from_utf8_lossy(&outsider.stderr).contains("not found"),
+        "{}",
+        String::from_utf8_lossy(&outsider.stderr)
+    );
+    let outsider_token = fake
+        .issue_token("outsider", "t", &["read:repository"])
+        .unwrap();
+    let outsider = clone(Some(("outsider", &outsider_token))).await;
+    assert!(!outsider.status.success(), "an outsider's token cloned it");
+
+    let member_without_scope = fake
+        .issue_token(seeded::USER, "orgs-only", &["read:organization"])
+        .unwrap();
+    let refused = clone(Some((seeded::USER, &member_without_scope))).await;
+    assert!(
+        !refused.status.success(),
+        "a token without read:repository cloned it"
+    );
+
+    let member_token = fake
+        .issue_token(seeded::USER, "reader", &["read:repository"])
+        .unwrap();
+    let member = clone(Some((seeded::USER, &member_token))).await;
+    assert!(
+        member.status.success(),
+        "{}",
+        String::from_utf8_lossy(&member.stderr)
+    );
+
+    // A public repository stays open to anyone signed in.
+    let public = clone_as(
+        &fake,
+        "unfoldingWord",
+        "en_tn",
+        Some(("outsider", "outsider-pass")),
+    )
+    .await;
+    assert!(public.status.success());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn raw_and_text_echo_faults_answer_as_given() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    fake.inject(tc_door43_fake::FaultRule::once(
+        "GET",
+        "/api/v1/repos/unfoldingWord/en_tn",
+        tc_door43_fake::Fault::Raw {
+            status: 429,
+            headers: vec![("Retry-After".into(), "Wed, 21 Oct 2099 07:28:00 GMT".into())],
+            body: b"slow down".to_vec(),
+        },
+    ));
+    let (status, headers, body) = get(&fake, "/api/v1/repos/unfoldingWord/en_tn", None).await;
+    assert_eq!(status, 429);
+    assert_eq!(headers["retry-after"], "Wed, 21 Oct 2099 07:28:00 GMT");
+    assert_eq!(body, b"slow down");
+
+    fake.inject(tc_door43_fake::FaultRule::once(
+        "GET",
+        "/api/v1/user",
+        tc_door43_fake::Fault::EchoAuthorizationAsText { filler: 3 },
+    ));
+    let (status, headers, body) = get(&fake, "/api/v1/user", Some("abc")).await;
+    assert_eq!(status, 400);
+    assert!(
+        headers["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/html")
+    );
+    assert_eq!(body, b"xxxtoken abc");
+}

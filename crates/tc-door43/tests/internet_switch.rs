@@ -18,7 +18,7 @@ async fn every_call_is_refused_before_anything_is_sent_while_the_switch_is_off()
     let tn = repo("unfoldingWord/en_tn");
     let session = Session {
         username: "translator".parse().unwrap(),
-        token: Token::new("not-sent".to_owned()),
+        token: Token::new("not-sent".to_owned()).unwrap(),
     };
 
     let outcomes: Vec<(&str, Result<(), Door43Error>)> = vec![
@@ -59,7 +59,7 @@ async fn every_call_is_refused_before_anything_is_sent_while_the_switch_is_off()
         (
             "session_for_token",
             client
-                .session_for_token(Token::new("x".to_owned()))
+                .session_for_token(Token::new("x".to_owned()).unwrap())
                 .await
                 .map(drop),
         ),

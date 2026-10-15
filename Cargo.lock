@@ -1495,6 +1495,8 @@ name = "tc-door43"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "httpdate",
+ "icu_normalizer",
  "md-5",
  "proptest",
  "reqwest",

@@ -42,7 +42,8 @@ impl FromStr for ObjectId {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, ()> {
-        if s.len() != 40 || !s.is_ascii() {
+        // `from_str_radix` alone would also take a sign, as in `+a`.
+        if s.len() != 40 || !s.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err(());
         }
         let mut out = [0u8; 20];
@@ -216,5 +217,7 @@ mod tests {
                 .parse::<ObjectId>()
                 .is_err()
         );
+        assert!("+a".repeat(20).parse::<ObjectId>().is_err());
+        assert!("-a".repeat(20).parse::<ObjectId>().is_err());
     }
 }

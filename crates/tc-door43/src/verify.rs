@@ -21,21 +21,29 @@
 //! The sha and the tree id both come from the server the bytes come from. The checks bind
 //! the bytes to the commit the server names; they do not prove the server honest.
 //!
+//! A commit can hold symbolic links, so a verified archive can too: see
+//! [`FileMode::Symlink`] before writing one to disk.
+//!
 //! # The DCS Scripture Burrito export (`/<owner>/<repo>/sb/<tag>.zip`)
 //!
 //! DCS builds this zip on each request from the tag's commit. [`verify_sb_export`] accepts
 //! it only when its `metadata.json` declares exactly one DCS revision
 //! (`identification.primary.dcs["<owner>/<repo>"].revision`), that revision equals the
-//! expected sha, and every ingredient the zip holds has the md5 and size the metadata
-//! gives. The expected sha must come from outside the zip: from the pin, or on a first
-//! install from the tags API, so the archive never certifies itself. A matching revision
-//! does not prove that every byte comes from that commit: the `en_tw` export takes its TWL
-//! files from `en_twl` master (D96). Use the archive when the bytes must be reproducible.
+//! expected sha, every ingredient the zip holds has the md5 and size the metadata gives,
+//! and no entry is a symbolic link. The expected sha must come from outside the zip: from
+//! the pin, or on a first install from the tags API, so the archive never certifies itself.
+//! A matching revision does not prove that every byte comes from that commit: the `en_tw`
+//! export takes its TWL files from `en_twl` master (D96). Use the archive when the bytes
+//! must be reproducible.
+//!
+//! Files the metadata does not list were checked by nothing, so they come back apart, in
+//! [`VerifiedSbExport::unlisted`]. The same checks suit a burrito zip a person made: the
+//! debris macOS Finder adds is dropped, and a `metadata.json` may start with a UTF-8 BOM.
 
 use crate::error::VerificationError;
 use crate::git_tree::{ObjectId, tree_id};
 use crate::names::CommitSha;
-use crate::unpack::{UnpackedFile, Wrapping, unpack};
+use crate::unpack::{FileMode, Layout, UnpackedFile, unpack};
 use md5::{Digest, Md5};
 use serde_json::Value;
 
@@ -44,7 +52,8 @@ use serde_json::Value;
 pub struct VerifiedArchive {
     pub commit: CommitSha,
     pub tree: ObjectId,
-    /// Sorted by path, relative to the repository root.
+    /// Sorted by path, relative to the repository root. A symbolic link in the commit is
+    /// here too, as its target text: never create it as a link ([`FileMode::Symlink`]).
     pub files: Vec<UnpackedFile>,
 }
 
@@ -52,21 +61,29 @@ pub struct VerifiedArchive {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedSbExport {
     pub revision: CommitSha,
-    /// Sorted by path, relative to the burrito root (`metadata.json`, `ingredients/...`).
-    /// The export's `.git/` and `.DS_Store` entries are dropped.
+    /// `metadata.json` and every ingredient it lists that the zip holds, each matching its
+    /// md5 and size. Sorted by path, relative to the burrito root. None is a symbolic link.
     pub files: Vec<UnpackedFile>,
+    /// Files the zip holds that `metadata.json` does not list, so nothing checked them.
+    /// They are not part of the verified burrito; the caller decides whether to keep them
+    /// (the `uW` lexicon burritos leave their payload out of the ingredient table). The
+    /// export's `.git/` and `.DS_Store` entries and macOS Finder's `__MACOSX/` and `._*`
+    /// entries are dropped and appear nowhere.
+    pub unlisted: Vec<UnpackedFile>,
     /// Ingredients `metadata.json` lists that the zip does not hold. tC4's evidence says
     /// some exports list articles they do not ship; the caller decides what that means.
     pub missing_ingredients: Vec<String>,
 }
 
+/// Check that `zip` is the content of `commit`, whose git tree is `commit_tree`. See the
+/// module documentation for the checks.
 pub fn verify_archive(
     zip: &[u8],
     commit: &CommitSha,
     commit_tree: &ObjectId,
     max_unpacked: u64,
 ) -> Result<VerifiedArchive, VerificationError> {
-    let unpacked = unpack(zip, Wrapping::Required, max_unpacked)?;
+    let unpacked = unpack(zip, Layout::GitArchive, max_unpacked)?;
     let comment = String::from_utf8_lossy(&unpacked.comment);
     let comment = comment.trim();
     if comment.is_empty() {
@@ -93,25 +110,37 @@ pub fn verify_archive(
     })
 }
 
+/// Check that `zip` is a burrito whose metadata declares `expected` as its DCS revision.
+/// See the module documentation for the checks.
 pub fn verify_sb_export(
     zip: &[u8],
     expected: &CommitSha,
     max_unpacked: u64,
 ) -> Result<VerifiedSbExport, VerificationError> {
-    let unpacked = unpack(zip, Wrapping::IfSingleTopFolder, max_unpacked)?;
-    let files: Vec<UnpackedFile> = unpacked
+    let unpacked = unpack(zip, Layout::Burrito, max_unpacked)?;
+    // A burrito holds no links, and an installer that made one could write anywhere.
+    if let Some(link) = unpacked.files.iter().find(|f| f.mode == FileMode::Symlink) {
+        return Err(VerificationError::SymlinkInBurrito(link.path.clone()));
+    }
+    let metadata = unpacked
         .files
-        .into_iter()
-        .filter(|f| !is_export_debris(&f.path))
-        .collect();
-    let metadata = files
         .iter()
         .find(|f| f.path == "metadata.json")
         .ok_or(VerificationError::MetadataMissing)?;
-    if !files.iter().any(|f| f.path.starts_with("ingredients/")) {
+    if !unpacked
+        .files
+        .iter()
+        .any(|f| f.path.starts_with("ingredients/"))
+    {
         return Err(VerificationError::NoIngredients);
     }
-    let metadata: Value = serde_json::from_slice(&metadata.bytes)
+    // Hand-made metadata may start with a BOM, which JSON does not allow. Only the parse
+    // skips it; the file's bytes come back unchanged.
+    let json = metadata
+        .bytes
+        .strip_prefix(b"\xEF\xBB\xBF")
+        .unwrap_or(&metadata.bytes);
+    let metadata: Value = serde_json::from_slice(json)
         .map_err(|e| VerificationError::MetadataUnreadable(e.to_string()))?;
 
     let declared = declared_revision(&metadata)?;
@@ -121,21 +150,18 @@ pub fn verify_sb_export(
             declared: declared.chars().take(80).collect(),
         });
     }
-    let missing_ingredients = check_ingredients(&metadata, &files)?;
+    let ingredients = ingredient_table(&metadata)?;
+    let missing_ingredients = check_ingredients(ingredients, &unpacked.files)?;
+    let (files, unlisted) = unpacked
+        .files
+        .into_iter()
+        .partition(|f| f.path == "metadata.json" || ingredients.contains_key(&f.path));
     Ok(VerifiedSbExport {
         revision: expected.clone(),
         files,
+        unlisted,
         missing_ingredients,
     })
-}
-
-/// The export ships the repository's `.git/` folder and macOS `.DS_Store` files; neither
-/// belongs to the burrito.
-fn is_export_debris(path: &str) -> bool {
-    path == ".git"
-        || path.starts_with(".git/")
-        || path == ".DS_Store"
-        || path.ends_with("/.DS_Store")
 }
 
 fn declared_revision(metadata: &Value) -> Result<&str, VerificationError> {
@@ -153,15 +179,20 @@ fn declared_revision(metadata: &Value) -> Result<&str, VerificationError> {
     }
 }
 
-fn check_ingredients(
+fn ingredient_table(
     metadata: &Value,
+) -> Result<&serde_json::Map<String, Value>, VerificationError> {
+    metadata
+        .get("ingredients")
+        .and_then(Value::as_object)
+        .ok_or_else(|| VerificationError::MetadataUnreadable("it has no ingredients table".into()))
+}
+
+/// Check every listed ingredient the zip holds; return the listed ones it does not hold.
+fn check_ingredients(
+    ingredients: &serde_json::Map<String, Value>,
     files: &[UnpackedFile],
 ) -> Result<Vec<String>, VerificationError> {
-    let Some(ingredients) = metadata.get("ingredients").and_then(Value::as_object) else {
-        return Err(VerificationError::MetadataUnreadable(
-            "it has no ingredients table".into(),
-        ));
-    };
     let mut missing = Vec::new();
     for (path, entry) in ingredients {
         let Some(file) = files.iter().find(|f| &f.path == path) else {
@@ -203,7 +234,6 @@ fn hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::unpack::FileMode;
     use crate::unpack::tests::zip_of;
 
     const SHA: &str = "c354b8ae66a23c485bf6f38fd35bd8f7ef81e4e5";
@@ -312,6 +342,112 @@ mod tests {
             verify_sb_export(&no_ingredients, &sha(SHA), 1 << 20).unwrap_err(),
             VerificationError::NoIngredients
         );
+    }
+
+    #[test]
+    fn a_symlink_is_refused_even_when_its_target_matches_the_metadata() {
+        let target = b"../../../../home/user/.ssh/id_rsa";
+        let zip = zip_of(
+            &[
+                (
+                    "en_tn/metadata.json",
+                    FileMode::Regular,
+                    &metadata(&[("unfoldingWord/en_tn", SHA)], target),
+                ),
+                ("en_tn/ingredients/TIT.tsv", FileMode::Symlink, target),
+            ],
+            "",
+        );
+        assert_eq!(
+            verify_sb_export(&zip, &sha(SHA), 1 << 20).unwrap_err(),
+            VerificationError::SymlinkInBurrito("ingredients/TIT.tsv".into())
+        );
+        let unlisted_link = zip_of(
+            &[
+                (
+                    "en_tn/metadata.json",
+                    FileMode::Regular,
+                    &metadata(&[("unfoldingWord/en_tn", SHA)], b"x"),
+                ),
+                ("en_tn/ingredients/TIT.tsv", FileMode::Regular, b"x"),
+                ("en_tn/ingredients/link", FileMode::Symlink, b"/etc/passwd"),
+            ],
+            "",
+        );
+        assert_eq!(
+            verify_sb_export(&unlisted_link, &sha(SHA), 1 << 20).unwrap_err(),
+            VerificationError::SymlinkInBurrito("ingredients/link".into())
+        );
+    }
+
+    #[test]
+    fn files_the_metadata_does_not_list_come_back_apart() {
+        let tsv = b"Reference\tID\n";
+        let zip = zip_of(
+            &[
+                (
+                    "en_tn/metadata.json",
+                    FileMode::Regular,
+                    &metadata(&[("unfoldingWord/en_tn", SHA)], tsv),
+                ),
+                ("en_tn/ingredients/TIT.tsv", FileMode::Regular, tsv),
+                (
+                    "en_tn/ingredients/EXTRA.tsv",
+                    FileMode::Regular,
+                    b"never checked",
+                ),
+                ("en_tn/README.md", FileMode::Regular, b"# en_tn"),
+            ],
+            "",
+        );
+        let verified = verify_sb_export(&zip, &sha(SHA), 1 << 20).unwrap();
+        let paths = |files: &[UnpackedFile]| -> Vec<String> {
+            files.iter().map(|f| f.path.clone()).collect()
+        };
+        assert_eq!(
+            paths(&verified.files),
+            ["ingredients/TIT.tsv", "metadata.json"]
+        );
+        assert_eq!(
+            paths(&verified.unlisted),
+            ["README.md", "ingredients/EXTRA.tsv"]
+        );
+        assert_eq!(verified.unlisted[1].bytes, b"never checked");
+    }
+
+    #[test]
+    fn a_burrito_zipped_by_macos_finder_with_a_bom_is_accepted_unchanged() {
+        let tsv = b"Reference\tID\n";
+        let mut meta = b"\xEF\xBB\xBF".to_vec();
+        meta.extend_from_slice(&metadata(&[("unfoldingWord/en_tn", SHA)], tsv));
+        let zip = zip_of(
+            &[
+                ("en_tn/", FileMode::Regular, b""),
+                ("en_tn/metadata.json", FileMode::Regular, &meta),
+                ("en_tn/ingredients/TIT.tsv", FileMode::Regular, tsv),
+                ("__MACOSX/", FileMode::Regular, b""),
+                ("__MACOSX/en_tn/", FileMode::Regular, b""),
+                (
+                    "__MACOSX/en_tn/._metadata.json",
+                    FileMode::Regular,
+                    b"\0\x05\x16\x07",
+                ),
+                (
+                    "__MACOSX/en_tn/ingredients/._TIT.tsv",
+                    FileMode::Regular,
+                    b"\0\x05\x16\x07",
+                ),
+            ],
+            "",
+        );
+        let verified = verify_sb_export(&zip, &sha(SHA), 1 << 20).unwrap();
+        let metadata_file = verified
+            .files
+            .iter()
+            .find(|f| f.path == "metadata.json")
+            .unwrap();
+        assert_eq!(metadata_file.bytes, meta, "the BOM stays in the bytes");
+        assert!(verified.unlisted.is_empty(), "{:?}", verified.unlisted);
     }
 
     fn archive(comment: &str, readme: &[u8]) -> Vec<u8> {

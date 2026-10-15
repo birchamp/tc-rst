@@ -30,7 +30,8 @@ pub enum Door43Error {
     /// 409: a repository with this name exists already.
     #[error("{route}: the name is taken: {message}")]
     NameExists { route: String, message: String },
-    /// 429. `retry_after` is the server's `Retry-After`, when it sent one in seconds.
+    /// HTTP 429. `retry_after` is the server's `Retry-After`, sent in seconds or as an HTTP
+    /// date (then measured from now, and zero once it has passed).
     #[error("{route}: Door43 asked the app to slow down")]
     RateLimited {
         route: String,
@@ -119,6 +120,15 @@ pub enum VerificationError {
     EscapesRoot(String),
     #[error("two entries unpack to {0:?}")]
     DuplicateEntry(String),
+    /// The names differ, but a case-insensitive or normalization-insensitive file system
+    /// (the Windows and macOS defaults), or Windows' removal of trailing dots and spaces,
+    /// would make them one file or folder, and writing both would lose one.
+    #[error("entries {first:?} and {second:?} would be one file on Windows or macOS")]
+    CollidingNames { first: String, second: String },
+    #[error("entry {path:?} cannot be written on every platform: {reason}")]
+    NotPortable { path: String, reason: &'static str },
+    #[error("entry {0:?} is a symbolic link, which a burrito never holds")]
+    SymlinkInBurrito(String),
     #[error("the archive holds no files")]
     Empty,
     #[error("the archive does not hold its files in one top folder")]

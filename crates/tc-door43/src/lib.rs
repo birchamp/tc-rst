@@ -25,13 +25,21 @@
 //! `write:organization`, not the read scopes; repositories are created with
 //! `auto_init: false`; the notes subject is `TSV Translation Notes`.
 //!
-//! Downloads are verified before they are returned; [`verify`] explains how.
+//! Names Door43 reports are read by Gitea's rules, so any repository or tag it lists can be
+//! named; names the app creates follow tC4's stricter rule ([`NewRepoName`]). Account and
+//! repository names compare without regard to case, as Door43 resolves them. A listing
+//! (catalog search, tags, releases) sets aside an entry it cannot read in
+//! [`Listing::skipped`] instead of failing whole.
+//!
+//! Downloads are verified before they are returned; [`verify`] explains how. An error
+//! message never holds a secret the request carried, whole or in part.
 
 mod catalog;
 mod client;
 mod error;
 mod git_tree;
 mod internet;
+mod listing;
 mod names;
 mod repos;
 mod secret;
@@ -43,9 +51,10 @@ pub use client::{Door43Client, Limits};
 pub use error::{AuthStatus, Door43Error, UnreachableCause, VerificationError};
 pub use git_tree::ObjectId;
 pub use internet::{InternetSwitch, Offline};
+pub use listing::{Listing, Skipped};
 pub use names::{
-    AccountName, CommitSha, ParseError, RepoName, RepoRef, ServerUrl, TagName, TokenName,
-    TokenScope, Visibility,
+    AccountName, CommitSha, NewRepoName, ParseError, RepoName, RepoRef, ServerUrl, TagName,
+    TokenName, TokenScope, Visibility,
 };
 pub use repos::{
     CreatedRepo, NewRepoOwner, Organization, Release, ReleaseState, RepoInfo, StageRelease,

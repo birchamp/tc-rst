@@ -93,8 +93,31 @@ async fn secrets_stay_out_of_urls_logs_and_debug_output() {
         .unwrap_err();
     shown.push(format!("{echoed_basic} {echoed_basic:?}"));
 
+    // A proxy that echoes the header as text, putting the secret across the point where
+    // an error message is cut.
+    for filler in [150, 175, 180, 185, 190, 194, 195, 199, 200, 205] {
+        fake.inject(FaultRule::once(
+            "GET",
+            "/api/v1/user/orgs",
+            Fault::EchoAuthorizationAsText { filler },
+        ));
+        let echoed = client.list_orgs(&session).await.unwrap_err();
+        shown.push(format!("{echoed} {echoed:?}"));
+        fake.inject(FaultRule::once(
+            "GET",
+            "/api/v1/user",
+            Fault::EchoAuthorizationAsText { filler },
+        ));
+        let echoed = client
+            .mint_token(&credentials(), &token_name(), &TokenScope::FOR_SHARING)
+            .await
+            .unwrap_err();
+        assert!(format!("{echoed}").contains("xxxx"), "{echoed}");
+        shown.push(format!("{echoed} {echoed:?}"));
+    }
+
     let revoked = client
-        .session_for_token(Token::new("0000-revoked-token-0000".to_owned()))
+        .session_for_token(Token::new("0000-revoked-token-0000".to_owned()).unwrap())
         .await
         .unwrap_err();
     shown.push(format!("{revoked} {revoked:?}"));
@@ -135,6 +158,15 @@ async fn secrets_stay_out_of_urls_logs_and_debug_output() {
             !logged.contains(secret),
             "a secret reached the log:\n{logged}"
         );
+        // Not even the start of one: a cut base64 value still decodes to part of the
+        // password.
+        for (end, _) in secret.char_indices().skip(8) {
+            assert!(
+                !shown.contains(&secret[..end]),
+                "part of a secret ({}) reached Debug or Display:\n{shown}",
+                &secret[..end]
+            );
+        }
         assert!(
             !shown.contains(secret),
             "a secret reached Debug or Display:\n{shown}"
