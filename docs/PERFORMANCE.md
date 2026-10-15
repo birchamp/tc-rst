@@ -1,7 +1,7 @@
 # Performance at Bible scale
 
 A team works in one project for years. Psalms is the largest book: 150 chapters, 2,461
-verses, 8,212 translationNotes rows and 7,683 translationWords links (en_tn and en_twl v89),
+verses, 8,212 translationNotes rows and 7,683 translationWords links (en_tn and en_twl v91),
 and 21,600 alignment links in the ULT. A fully checked whole Bible holds about 620,000
 changes after three years (STORAGE.md §14). tC4 needed 9.3 s to fold a checked whole Bible
 and 41 s to read it on its open path (tC4 `docs/evidence/bench-fold-2026-08-25.md`). The
@@ -32,18 +32,21 @@ rebuild must stay quick at that size for the whole life of a project.
 
 ## Corpus
 
-- **Psalms, real data:** `fixtures/scale/psa/` (see its README). The ULT with its alignments
-  is the translation; the tN rows are the notes checks; the WEB Psalms is a second, unrelated
-  real text for edits and conflicts. Real data that is still missing (UHB Psalms, TWL Psalms)
-  is generated until it is added, and benchmark output labels every generated part.
-- **Whole Bible, generated from real data:** the corpus of STORAGE.md §14. 66 books with verse
-  counts from the versification files; check counts per book from
-  `fixtures/tc4/conformance-fixtures/check-density.json` (215,767 checks); verse text and
-  alignments sampled from the Psalms corpus; three devices editing for three years at the
-  §14 rates (about 620,000 changes), with concurrent edits of the same records at a realistic
-  rate so that conflicts exist. One deterministic generator, seeded, produces both the journal
-  changes and the plain inputs that domain crates take, so every crate measures the same
-  corpus.
+- **Psalms, real data:** `fixtures/scale/psa/` (see `fixtures/scale/README.md`). The ULT
+  with its alignments is the translation; the UHB 3.0.0 Psalms is the original-language
+  text; the tN v91 rows (8,212) and TWL v91 rows (7,683) are the checks; the tW v91 articles
+  are the linked articles; the WEB Psalms is a second, unrelated real text for edits and
+  conflicts.
+- **Whole Bible, real checks and generated history:** the corpus of STORAGE.md §14. 66 books
+  with verse counts from the versification files. Checks are the real tN and TWL v91 rows
+  for the 59 books those releases contain (173,337 rows) and generated rows at the v89
+  counts in `fixtures/tc4/conformance-fixtures/check-density.json` for the other seven. The
+  Hebrew of every Old Testament book is real (`fixtures/scale/resources/hbo_uhb-v3.0.0.zip`).
+  Translation text and alignments outside Psalms are sampled from the Psalms ULT. Three
+  devices edit for three years at the §14 rates (about 620,000 changes), with concurrent
+  edits of the same records at a realistic rate so that conflicts exist. One deterministic,
+  seeded generator produces both the journal changes and the plain inputs that domain crates
+  take, so every crate measures the same corpus, and its output labels every generated part.
 
 ## Budgets
 
