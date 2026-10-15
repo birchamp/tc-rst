@@ -174,10 +174,11 @@ impl<'a> Marker<'a> {
         self.raw.as_bytes().get(self.name_end) == Some(&b'*')
     }
 
-    /// The number written after `\c` or `\v`, such as `9-10`, exactly as written.
+    /// The number written after `\c` or `\v`, such as `9-10`, exactly as written. A
+    /// closing `\v*` or `\c*` has none.
     pub fn number(&self) -> Option<&'a str> {
         let (body, name_len) = self.body();
-        if self.is_nested() || !matches!(&body[..name_len], "c" | "v") {
+        if self.is_nested() || self.is_closing() || !matches!(&body[..name_len], "c" | "v") {
             return None;
         }
         let label = body[name_len..].trim_start_matches([' ', '\t']);
@@ -399,6 +400,13 @@ mod tests {
         assert!(!verse.is_closing());
         assert_eq!(verse.number(), Some("1*"));
         assert_eq!(doc.to_usfm(), "\\v 1* text");
+        let stray = Document::parse("\\v*\n");
+        let Node::Marker(closing) = &stray.nodes()[0] else {
+            panic!("expected a marker");
+        };
+        assert!(closing.is_closing());
+        assert_eq!(closing.number(), None);
+        assert!(!closing.is_verse());
     }
 
     #[test]

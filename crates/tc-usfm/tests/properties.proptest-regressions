@@ -9,3 +9,6 @@ cc 6da9d646774c1d55292afd1efdab8e096db86d71a4c36105bb4a16f416c2043b # shrinks to
 cc 8cb35809a57e04ca0470253bb5b448bce00543500790b21133a3afd9d37bb38c # shrinks to verse = "a {a", runs = [(2, 1)], split = false
 cc 4b32503835129e1631c4a3c14c729e090b9c926d3ae86655bb95902a8e4d29fb # shrinks to verse = ("\\zaln-s |x-strong=\"G00000\" x-occurrence=\"1\" x-occurrences=\"1\" x-content=\"λ0\"\\*\n\\zaln-e\\*\\w a|x-occurrence=\"1\" x-occurrences=\"1\"\\w*", "\na", {})
 cc 629dd6c8ba55cf841783a78f4ece46a25346189020931b74aa9328901e20c6bb # shrinks to src = "\\id TIT x\n\\h T\n\\c 1\n\\v 1-2 \n\\v 3 \n\\v 4 \\v 2\r\\v 3-4 \n", pick = Index(11068046444225730970), new_body = "\n"
+cc c86d108e2a2a4a2f1fb7212916df34c1ef703674db0ea40008729997bd7754a6 # shrinks to src = "\\id TIT x\n\\h T\n\\c 1\n\\v 1 \\v*\n"
+cc d79dad91cbe9602db3203c25ee9ff69b06536a25d7c48dcf3a6477c8f9b4fff9 # shrinks to src = "\\s1 \\fqa \\w \\fqa*"
+cc f46d34bdba2ab41abd77566f4f0986d4055c5ea13942ba7bc08531a830c03bd5 # shrinks to src = "\\id TIT x\n\\h T\n\\c 1\n\\v 1\u{c}\n"

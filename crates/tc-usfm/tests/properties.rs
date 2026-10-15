@@ -100,7 +100,8 @@ fn usfm_like() -> impl Strategy<Value = String> {
 
 #[derive(Debug, Clone)]
 enum Line {
-    Verse(bool, String),
+    /// A verse: whether it is a span, what separates the number from the body, the body.
+    Verse(bool, &'static str, String),
     Chapter,
     Other(&'static str),
 }
@@ -109,20 +110,25 @@ enum Line {
 /// Chapters and verses are numbered in order, so most keys are unique.
 fn book_like() -> impl Strategy<Value = String> {
     let line = prop_oneof![
-        3 => (any::<bool>(), prop_oneof![2 => "[a-z ,.;]{0,20}", 1 => usfm_like()]).prop_map(|(span, body)| Line::Verse(span, body)),
+        3 => (
+            any::<bool>(),
+            proptest::sample::select(&[" ", " ", " ", "", "\n", "\t", "\r\n"][..]),
+            prop_oneof![2 => "[a-z ,.;]{0,20}", 1 => usfm_like(), 1 => "\\\\(p|q1|w a|f \\+ |nd )[a-z ]{0,8}"],
+        )
+            .prop_map(|(span, separator, body)| Line::Verse(span, separator, body)),
         1 => Just(Line::Chapter),
         1 => proptest::sample::select(&["\\p\n", "\\q1\n", "\\s Head\n", "\\b\n", "\\ts\\*\n", "\\q2 more text\n", "\\d Title\n\\q1 ", "\\ca 2\\ca*\n", "\\cl Psalm\n"][..])
             .prop_map(Line::Other),
     ];
     proptest::collection::vec(line, 0..25).prop_map(|mut lines| {
         if !lines.iter().any(|l| matches!(l, Line::Verse(..))) {
-            lines.push(Line::Verse(false, "Last.".to_owned()));
+            lines.push(Line::Verse(false, " ", "Last.".to_owned()));
         }
         let mut out = String::from("\\id TIT x\n\\h T\n\\c 1\n");
         let (mut chapter, mut verse) = (1, 0);
         for line in lines {
             match line {
-                Line::Verse(span, body) => {
+                Line::Verse(span, separator, body) => {
                     verse += 1;
                     let label = if span {
                         verse += 1;
@@ -130,7 +136,7 @@ fn book_like() -> impl Strategy<Value = String> {
                     } else {
                         verse.to_string()
                     };
-                    out.push_str(&format!("\\v {label} {body}\n"));
+                    out.push_str(&format!("\\v {label}{separator}{body}\n"));
                 }
                 Line::Chapter => {
                     chapter += 1;
@@ -173,7 +179,16 @@ proptest! {
         prop_assert_eq!(tokens, src.clone());
         let text = plain_text(&src);
         prop_assert_eq!(normalize_whitespace(&text), text);
-        let _ = parse_aligned(&src);
+        // Any input either reads apart or is refused, and the same for weaving; neither
+        // panics, and a woven verse always reads back.
+        if let Ok(parsed) = parse_aligned(&src)
+            && let Ok(woven) = weave(&parsed.plain, &parsed.groups)
+        {
+            prop_assert!(parse_aligned(&woven).is_ok(), "{:?}", woven);
+        }
+        if let Ok(woven) = weave(&src, &[]) {
+            prop_assert!(parse_aligned(&woven).is_ok(), "{:?}", woven);
+        }
     }
 
     #[test]
@@ -192,6 +207,30 @@ proptest! {
                 prop_assert!(unit.marker().starts_with("\\v"));
             }
         }
+    }
+
+    #[test]
+    fn writing_back_every_body_changes_nothing(src in book_like()) {
+        let book = Book::parse(&src);
+        for (index, segment) in book.segments().iter().enumerate() {
+            let Some(unit) = segment.as_verse() else { continue };
+            prop_assert_eq!(book.replace_bodies(&[(index, unit.body())]), Ok(src.clone()));
+            prop_assert_eq!(book.replace_units(&[(index, segment.text())]), Ok(src.clone()));
+            if let (Some(chapter), Some(verses)) = (unit.chapter(), unit.verses()) {
+                match book.replace_body(chapter, verses, unit.body()) {
+                    Ok(same) => prop_assert_eq!(same, src.clone()),
+                    Err(e) => prop_assert_eq!(e, Error::AmbiguousVerse { chapter, verses }),
+                }
+            }
+        }
+        // All at once, read once.
+        let all: Vec<(usize, &str)> = book
+            .segments()
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| Some((i, s.as_verse()?.body())))
+            .collect();
+        prop_assert_eq!(book.replace_bodies(&all), Ok(src.clone()));
     }
 
     #[test]
@@ -388,6 +427,9 @@ fn plain_verse(line_breaks: bool) -> impl Strategy<Value = String> {
         "\\nd* ",
         "\r\n",
         " $ ",
+        "\r ",
+        ",\r ",
+        " \r ",
     ];
     if line_breaks {
         gaps.extend(["\n", ",\n", "  \n"]);

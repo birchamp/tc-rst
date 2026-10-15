@@ -3,9 +3,12 @@
 // Helpers outside `#[test]` functions read fixtures and may fail loudly.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod common;
+
+use common::links;
 use std::path::{Path, PathBuf};
 use tc_core::VerseSpan;
-use tc_usfm::{Book, Document, Error, SegmentKind, parse_aligned, weave};
+use tc_usfm::{Book, Document, Error, SegmentKind, TargetWord, parse_aligned, weave};
 
 fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures")
@@ -124,6 +127,80 @@ fn aligned_verses_weave_back_byte_for_byte() {
         }
         assert_eq!(verses, 46, "{file}");
     }
+}
+
+/// Every verse of every fixture reads apart. Each one without other word markup (such as
+/// UHB's `\w` words with `lemma`) weaves back into the same plain text and links, with
+/// the occurrence numbers the plain text gives.
+#[test]
+fn every_fixture_verse_reads_apart_and_weaves_back() {
+    let (mut woven, mut word_markup) = (0, 0);
+    for (path, text) in all_usfm() {
+        for unit in Book::parse(&text).verses() {
+            let at = format!("{} {:?}:{}", path.display(), unit.chapter(), unit.label());
+            let parsed = parse_aligned(unit.body()).unwrap_or_else(|e| panic!("{at}: {e}"));
+            if let Ok(counted) = tc_usfm::target_words(&parsed.plain) {
+                assert_eq!(counted, parsed.words, "{at}");
+            }
+            match weave(&parsed.plain, &parsed.groups) {
+                Ok(again) => {
+                    let again = parse_aligned(&again).unwrap();
+                    assert_eq!(
+                        again.plain.replace('\n', " "),
+                        parsed.plain.replace('\n', " "),
+                        "{at}"
+                    );
+                    assert_eq!(links(&again.groups), links(&parsed.groups), "{at}");
+                    assert_eq!(again.words, parsed.words, "{at}");
+                    assert!(again.renumbered.is_empty(), "{at}");
+                    woven += 1;
+                }
+                Err(Error::WordMarkup) => word_markup += 1,
+                Err(e) => panic!("{at}: {e}"),
+            }
+        }
+    }
+    assert!(woven > 500, "only {woven} verses woven");
+    // UHB Jonah's 48 verses, and the copies of it.
+    assert!(word_markup >= 48, "{word_markup}");
+}
+
+/// The exotic corpus aligns `a servant` but leaves a later `a` bare, so the written
+/// `x-occurrences="1"` is stale: the aligned `a` is the first of two.
+#[test]
+fn a_stale_occurrence_in_the_exotic_fixture_is_renumbered_and_weaves() {
+    let text = read("tc4/test-fixtures/usfm-corpus/exotic-poetry-footnotes.usfm");
+    let book = Book::parse(&text);
+    let word = |text: &str, occurrence, occurrences| TargetWord {
+        text: text.to_owned(),
+        occurrence,
+        occurrences,
+    };
+    let unit = book.verse(1, span("3")).unwrap();
+    let parsed = parse_aligned(unit.body()).unwrap();
+    assert_eq!(
+        parsed.plain,
+        "Paul a servant, with a footnote \\f + \\fr 1:3 \\ft An aligned verse can carry a footnote too. \\f* after the milestone.\n"
+    );
+    assert_eq!(parsed.renumbered, vec![(word("a", 1, 1), word("a", 1, 2))]);
+    let servant: Vec<&TargetWord> = parsed.groups[1].targets.iter().collect();
+    assert_eq!(servant, vec![&word("a", 1, 2), &word("servant", 1, 1)]);
+    let woven = weave(&parsed.plain, &parsed.groups).unwrap();
+    assert!(woven.contains("\\w a|x-occurrence=\"1\" x-occurrences=\"2\"\\w*"));
+    assert!(woven.contains("\\w a|x-occurrence=\"2\" x-occurrences=\"2\"\\w*"));
+    let again = parse_aligned(&woven).unwrap();
+    assert_eq!(again.plain, parsed.plain);
+    assert_eq!(again.groups, parsed.groups);
+    assert!(again.renumbered.is_empty());
+    // 1:2 holds a `\+w` with alignment attributes inside a footnote: note content, kept.
+    let v2 = book.verse(1, span("2")).unwrap();
+    let parsed = parse_aligned(v2.body()).unwrap();
+    assert_eq!(parsed.plain, v2.body());
+    assert!(parsed.groups.is_empty());
+    assert_eq!(
+        weave(&parsed.plain, &[]).unwrap().matches("\\+w").count(),
+        2
+    );
 }
 
 #[test]

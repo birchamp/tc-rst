@@ -15,6 +15,8 @@
 //! - whitespace-only text is skipped (it stays with the previous unit unless a leading
 //!   marker comes before it);
 //! - a paragraph-type marker, a `\ts` milestone or a `\ca` span is taken;
+//! - a sidebar (`\esb` … `\esbe`, with its headings and paragraphs) is taken whole, when
+//!   it starts after the previous verse or chapter marker;
 //! - text or inline markup is taken only together with the heading marker it belongs to;
 //!   if it belongs to a paragraph-type marker (`\q2 and the second line`) or to the
 //!   previous verse marker, it is verse text and the walk stops;
@@ -31,7 +33,9 @@
 //! start of the next unit. Adding a paragraph break before verse 5 edits verse 5's unit.
 //! A `\v` before the first `\c` is part of the header and has no key, and a unit whose
 //! label is not a verse or span (`\v 3a`) or whose chapter label is not a number has no
-//! key either: it keeps its bytes but cannot be looked up or replaced.
+//! key either: it keeps its bytes and cannot be looked up by key, but it can be replaced
+//! by its index in [`Book::segments`] ([`Book::replace_bodies`], [`Book::replace_units`]).
+//! So can each copy of a verse that a book holds twice.
 //!
 //! tC4's journal cuts the other way (`journal/skeleton.mjs`): a verse slot runs to the
 //! next `\v`, so the paragraph marker before verse 5 is the end of verse 4's slot. Here
@@ -204,7 +208,9 @@ impl<'a> Book<'a> {
     /// The book with the body of one unit replaced and every other byte unchanged.
     ///
     /// When the `\v` marker has no space after its number (`\v 3` at the end of the file),
-    /// one space is written before a non-empty body. Fails with
+    /// one space is written before a non-empty body, unless the body starts with a
+    /// backslash or a form feed, which end the number by themselves (`\v 3\p`). So
+    /// writing back a unit's own body gives the book unchanged. Fails with
     /// [`Error::StructureChanged`] when the new body would add or remove a unit, or would
     /// move a boundary between units: a body that contains `\v` or `\c`, that ends with
     /// markers that would lead into the next verse (`…\n\p\n`), or that starts with LF
@@ -218,24 +224,8 @@ impl<'a> Book<'a> {
         body: &str,
     ) -> Result<String, Error> {
         let index = self.unit_index(chapter, verses)?;
-        let segment = &self.segments[index];
-        let unit = segment
-            .as_verse()
-            .ok_or(Error::VerseNotFound { chapter, verses })?;
-        let body_start = segment.range.end - unit.body.len();
-        let needs_space = !body.is_empty() && !unit.marker.ends_with(char::is_whitespace);
-        let mut out = String::with_capacity(self.source.len() + body.len() + 1);
-        out.push_str(&self.source[..body_start]);
-        if needs_space {
-            out.push(' ');
-        }
-        out.push_str(body);
-        out.push_str(&self.source[segment.range.end..]);
-        self.check_only_unit_changed(&out, index, chapter, verses, |new| {
-            new.as_verse()
-                .is_some_and(|new| new.leading == unit.leading && new.body == body)
-        })?;
-        Ok(out)
+        self.rewrite(vec![(index, Replacement::Body(body))])
+            .map_err(|e| keyed(e, chapter, verses))
     }
 
     /// The book with one whole unit (leading markers, `\v` marker and body) replaced and
@@ -248,13 +238,39 @@ impl<'a> Book<'a> {
         unit: &str,
     ) -> Result<String, Error> {
         let index = self.unit_index(chapter, verses)?;
-        let range = self.segments[index].range.clone();
-        let mut out = String::with_capacity(self.source.len() + unit.len());
-        out.push_str(&self.source[..range.start]);
-        out.push_str(unit);
-        out.push_str(&self.source[range.end..]);
-        self.check_only_unit_changed(&out, index, chapter, verses, |new| new.text == unit)?;
-        Ok(out)
+        self.rewrite(vec![(index, Replacement::Unit(unit))])
+            .map_err(|e| keyed(e, chapter, verses))
+    }
+
+    /// The book with the bodies of several verse units replaced and every other byte
+    /// unchanged. Each edit names its unit by its index in [`Book::segments`], so a unit
+    /// without a key (`\v 3a`) or a verse the book holds twice can be edited too. The new
+    /// book is read once for all the edits.
+    ///
+    /// Each body is written as [`Book::replace_body`] writes it. Fails with
+    /// [`Error::NotAVerseUnit`] for an index that is not a verse unit,
+    /// [`Error::RepeatedEdit`] for an index named twice, and [`Error::SegmentChanged`] with
+    /// the index of the first segment that would not come out as asked.
+    pub fn replace_bodies(&self, edits: &[(usize, &str)]) -> Result<String, Error> {
+        self.rewrite(
+            edits
+                .iter()
+                .map(|&(index, body)| (index, Replacement::Body(body)))
+                .collect(),
+        )
+    }
+
+    /// The book with several whole verse units (leading markers, `\v` marker and body)
+    /// replaced, each named by its index in [`Book::segments`], and every other byte
+    /// unchanged. Each new text must be exactly one unit with the same chapter and verse
+    /// label (or the same verse span). Fails as [`Book::replace_bodies`] does.
+    pub fn replace_units(&self, edits: &[(usize, &str)]) -> Result<String, Error> {
+        self.rewrite(
+            edits
+                .iter()
+                .map(|&(index, unit)| (index, Replacement::Unit(unit)))
+                .collect(),
+        )
     }
 
     fn unit_index(&self, chapter: u16, verses: VerseSpan) -> Result<usize, Error> {
@@ -273,33 +289,119 @@ impl<'a> Book<'a> {
         Ok(first)
     }
 
-    /// Re-parse `new_source` and confirm that only segment `index` changed, that it is
-    /// still the same unit, and that `same_unit` accepts it.
-    fn check_only_unit_changed(
+    /// Apply `edits`, then re-read the new book and confirm that every edited unit is
+    /// still the same unit with the new text, and that every other segment is unchanged.
+    fn rewrite(&self, mut edits: Vec<(usize, Replacement<'_>)>) -> Result<String, Error> {
+        edits.sort_by_key(|&(index, _)| index);
+        if let Some(pair) = edits.windows(2).find(|pair| pair[0].0 == pair[1].0) {
+            return Err(Error::RepeatedEdit { segment: pair[0].0 });
+        }
+        let mut out = String::with_capacity(self.source.len());
+        let mut at = 0;
+        for &(index, replacement) in &edits {
+            let segment = self.segments.get(index);
+            let Some((segment, unit)) = segment.and_then(|s| Some((s, s.as_verse()?))) else {
+                return Err(Error::NotAVerseUnit { segment: index });
+            };
+            match replacement {
+                Replacement::Body(body) => {
+                    let body_start = segment.range.end - unit.body.len();
+                    out.push_str(&self.source[at..body_start]);
+                    if needs_space(unit.marker, body) {
+                        out.push(' ');
+                    }
+                    out.push_str(body);
+                }
+                Replacement::Unit(text) => {
+                    out.push_str(&self.source[at..segment.range.start]);
+                    out.push_str(text);
+                }
+            }
+            at = segment.range.end;
+        }
+        out.push_str(&self.source[at..]);
+        self.check_rewrite(&out, &edits)?;
+        Ok(out)
+    }
+
+    fn check_rewrite(
         &self,
         new_source: &str,
-        index: usize,
-        chapter: u16,
-        verses: VerseSpan,
-        same_unit: impl Fn(&Segment<'_>) -> bool,
+        edits: &[(usize, Replacement<'_>)],
     ) -> Result<(), Error> {
-        let changed = || Error::StructureChanged { chapter, verses };
         let new = Book::parse(new_source);
-        if new.segments.len() != self.segments.len() {
-            return Err(changed());
-        }
-        for (i, (old, new)) in self.segments.iter().zip(&new.segments).enumerate() {
-            let same = if i == index {
-                let key = |s: &Segment<'_>| s.as_verse().and_then(VerseUnit::key);
-                key(new).is_some() && key(old) == key(new) && same_unit(new)
-            } else {
-                old.text == new.text && old.kind == new.kind
-            };
+        let mut edits = edits.iter().peekable();
+        for (i, old) in self.segments.iter().enumerate() {
+            let edit = edits.next_if(|(index, _)| *index == i).map(|(_, r)| r);
+            let same = new.segments.get(i).is_some_and(|new| match edit {
+                None => old.text == new.text && old.kind == new.kind,
+                Some(replacement) => {
+                    same_place(old, new)
+                        && match replacement {
+                            Replacement::Body(body) => new.as_verse().is_some_and(|unit| {
+                                old.as_verse().map(|u| u.leading) == Some(unit.leading)
+                                    && unit.body == *body
+                            }),
+                            Replacement::Unit(text) => new.text == *text,
+                        }
+                }
+            });
             if !same {
-                return Err(changed());
+                return Err(Error::SegmentChanged { segment: i });
             }
         }
+        if new.segments.len() != self.segments.len() {
+            return Err(Error::SegmentChanged {
+                segment: self.segments.len(),
+            });
+        }
         Ok(())
+    }
+}
+
+/// What an edit puts in place of a unit.
+#[derive(Debug, Clone, Copy)]
+enum Replacement<'e> {
+    /// The body after the `\v` marker.
+    Body(&'e str),
+    /// Leading markers, `\v` marker and body.
+    Unit(&'e str),
+}
+
+/// A keyed edit reports a changed structure by the verse it edited.
+fn keyed(error: Error, chapter: u16, verses: VerseSpan) -> Error {
+    match error {
+        Error::SegmentChanged { .. } => Error::StructureChanged { chapter, verses },
+        other => other,
+    }
+}
+
+/// Whether a space must go between a `\v` marker without a separator and a new body, as
+/// the lexer reads them: the verse number runs to the first ASCII whitespace or
+/// backslash, and a space, tab, CR or LF right after it becomes the marker's separator.
+/// So a body that starts with a backslash or another whitespace (a form feed) needs no
+/// space, and every other body needs one to keep its first character.
+fn needs_space(marker: &str, body: &str) -> bool {
+    let Some(first) = body.bytes().next() else {
+        return false;
+    };
+    let ends_number = first == b'\\' || first.is_ascii_whitespace();
+    let becomes_separator = matches!(first, b' ' | b'\t' | b'\n' | b'\r');
+    !marker.ends_with(char::is_whitespace) && (!ends_number || becomes_separator)
+}
+
+/// Whether two segments are verse units with the same chapter and verse: the same span,
+/// or for a unit without one the same label.
+fn same_place(old: &Segment<'_>, new: &Segment<'_>) -> bool {
+    match (old.as_verse(), new.as_verse()) {
+        (Some(old), Some(new)) => {
+            old.chapter == new.chapter
+                && match old.verses {
+                    Some(verses) => new.verses == Some(verses),
+                    None => old.label == new.label,
+                }
+        }
+        _ => false,
     }
 }
 
@@ -312,6 +414,8 @@ enum Lead {
     Marker,
     /// A heading marker: it leads, together with its text.
     Heading,
+    /// `\esbe`: the sidebar it ends leads, whole.
+    SidebarEnd,
     /// Text or inline markup.
     Content,
     /// Never part of a leading run.
@@ -321,6 +425,9 @@ enum Lead {
 fn lead(node: &Node<'_>) -> Lead {
     match node {
         Node::Text(text) if text.chars().all(char::is_whitespace) => Lead::Space,
+        Node::Marker(m) if !m.is_closing() && !m.is_nested() && m.name() == "esbe" => {
+            Lead::SidebarEnd
+        }
         Node::Marker(m) if !m.is_closing() && !m.is_nested() => match m.class() {
             MarkerClass::Paragraph => Lead::Marker,
             MarkerClass::Heading => Lead::Heading,
@@ -349,6 +456,18 @@ fn leading_start(nodes: &[Node<'_>], anchor: usize, floor: usize) -> usize {
                 i -= 1;
                 start = i;
             }
+            Lead::SidebarEnd => {
+                let opener = (floor..i - 1)
+                    .rev()
+                    .find(|&k| sidebar_marker(&nodes[k]).is_some());
+                match opener {
+                    Some(k) if sidebar_marker(&nodes[k]) == Some("esb") => {
+                        i = k;
+                        start = i;
+                    }
+                    _ => break,
+                }
+            }
             Lead::Content => {
                 let mut k = i - 1;
                 while k > floor && matches!(lead(&nodes[k - 1]), Lead::Content | Lead::Space) {
@@ -365,6 +484,16 @@ fn leading_start(nodes: &[Node<'_>], anchor: usize, floor: usize) -> usize {
         }
     }
     start
+}
+
+/// `esb` or `esbe` for a marker that starts or ends a sidebar.
+fn sidebar_marker<'a>(node: &Node<'a>) -> Option<&'a str> {
+    match node {
+        Node::Marker(m) if !m.is_closing() && !m.is_nested() => {
+            Some(m.name()).filter(|name| matches!(*name, "esb" | "esbe"))
+        }
+        _ => None,
+    }
 }
 
 /// The end of what a chapter marker at `chapter` owns after itself: `\ca`, and `\cl`,
@@ -631,5 +760,98 @@ mod tests {
                 verses: span("1")
             })
         );
+    }
+
+    #[test]
+    fn writing_back_a_body_after_a_marker_without_separator_changes_nothing() {
+        for src in [
+            "\\c 1\n\\v 1\\p text\n\\v 2 b\n",
+            "\\c 1\n\\v 1\\w a\\w* b\n\\v 2 b\n",
+            "\\c 1\n\\v 1\\f + \\ft n\\f* a\n",
+            "\\c 1\n\\v 1\\\\ odd\n",
+            "\\c 1\n\\v 1\u{c}form feed\n",
+        ] {
+            let book = Book::parse(src);
+            let unit = book.verse(1, span("1")).unwrap();
+            assert!(!unit.marker().ends_with(char::is_whitespace), "{src:?}");
+            assert_eq!(
+                book.replace_body(1, span("1"), unit.body()).as_deref(),
+                Ok(src)
+            );
+        }
+        // A body that would run into the number still gets its space.
+        let book = Book::parse("\\c 1\n\\v 1\\p text\n");
+        assert_eq!(
+            book.replace_body(1, span("1"), "new").unwrap(),
+            "\\c 1\n\\v 1 new"
+        );
+    }
+
+    #[test]
+    fn a_sidebar_leads_whole_into_the_verse_after_it() {
+        let src = "\\c 1\n\\esb \\cat Theme\\cat*\n\\s1 Inside\n\\p Sidebar text.\n\\esbe\n\\s1 Title\n\\p\n\\v 1 One.\n\\v 2 Two.\n\\esb \\cat Note\\cat*\n\\ms Away\n\\p More sidebar.\n\\esbe\n\\p\n\\v 3 Three.\n";
+        let book = Book::parse(src);
+        let chapters: Vec<&str> = book
+            .segments()
+            .iter()
+            .filter(|s| matches!(s.kind(), SegmentKind::Chapter(_)))
+            .map(Segment::text)
+            .collect();
+        assert_eq!(chapters, vec!["\\c 1\n"]);
+        assert_eq!(
+            book.verse(1, span("1")).unwrap().leading(),
+            "\\esb \\cat Theme\\cat*\n\\s1 Inside\n\\p Sidebar text.\n\\esbe\n\\s1 Title\n\\p\n"
+        );
+        assert_eq!(book.verse(1, span("2")).unwrap().body(), "Two.\n");
+        assert_eq!(
+            book.verse(1, span("3")).unwrap().leading(),
+            "\\esb \\cat Note\\cat*\n\\ms Away\n\\p More sidebar.\n\\esbe\n\\p\n"
+        );
+        // A sidebar inside a body is not verse text.
+        let unit = "\\v 2 Two \\esb \\p Aside.\n\\esbe\n\\p again.\n";
+        assert_eq!(text::plain_text(&unit[5..]), "Two again.");
+    }
+
+    #[test]
+    fn units_without_a_unique_key_are_edited_by_index() {
+        let src = "\\c 1\n\\v 1 a\n\\v 1 b\n\\v 3a c\n\\v 4 d\n";
+        let book = Book::parse(src);
+        let index = |text: &str| {
+            book.segments()
+                .iter()
+                .position(|s| s.text() == text)
+                .unwrap()
+        };
+        let (first, second, letter) = (index("\\v 1 a\n"), index("\\v 1 b\n"), index("\\v 3a c\n"));
+        assert_eq!(
+            book.replace_bodies(&[(second, "B\n"), (letter, "C\n")])
+                .unwrap(),
+            "\\c 1\n\\v 1 a\n\\v 1 B\n\\v 3a C\n\\v 4 d\n"
+        );
+        assert_eq!(
+            book.replace_units(&[(first, "\\p\n\\v 1 A\n")]).unwrap(),
+            "\\c 1\n\\p\n\\v 1 A\n\\v 1 b\n\\v 3a c\n\\v 4 d\n"
+        );
+        assert_eq!(
+            book.replace_units(&[(letter, "\\v 3b c\n")]),
+            Err(Error::SegmentChanged { segment: letter })
+        );
+        assert_eq!(
+            book.replace_bodies(&[(second, "x\n\\v 9 y\n")]),
+            Err(Error::SegmentChanged { segment: second })
+        );
+        assert_eq!(
+            book.replace_bodies(&[(second, "x\n"), (second, "y\n")]),
+            Err(Error::RepeatedEdit { segment: second })
+        );
+        assert_eq!(
+            book.replace_bodies(&[(0, "x\n")]),
+            Err(Error::NotAVerseUnit { segment: 0 })
+        );
+        assert_eq!(
+            book.replace_bodies(&[(99, "x\n")]),
+            Err(Error::NotAVerseUnit { segment: 99 })
+        );
+        assert_eq!(book.replace_bodies(&[]).as_deref(), Ok(src));
     }
 }

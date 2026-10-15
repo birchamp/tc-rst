@@ -9,7 +9,8 @@
 //!   numbers (`\ca`, `\va`, `\vp`), `\cat` and `\rq` are left out with everything inside.
 //! - Milestones such as `\zaln-s`, `\zaln-e` and `\ts\*` carry no text.
 //! - A heading inside the body (`\s`, `\d`, `\r`, `\rem`…) is left out up to the next
-//!   paragraph marker. A paragraph marker, verse or chapter marker counts as a space.
+//!   paragraph marker. A sidebar (`\esb` to `\esbe`) is left out with everything inside.
+//!   A paragraph marker, verse or chapter marker counts as a space.
 //!
 //! Then the text is normalized: every run of whitespace becomes one U+0020 SPACE, and
 //! leading and trailing whitespace is removed. Whitespace here is Unicode `White_Space`
@@ -25,7 +26,9 @@
 //! doubled spaces, it hashes a heading that introduces the next verse into this one
 //! (its slot runs to the next `\v`), and it drops the text of `\li` list items and of
 //! `\w` words inside `\zaln` milestones. A record that tC4 stamped on such a verse does
-//! not match the md5 of this text.
+//! not match the md5 of this text: in particular every verse with a poetry or paragraph
+//! line break inside it. This crate does not yet reproduce usfm-js's text, so code that
+//! must check a stored `targetVerseMd5` cannot use this function for it.
 
 use crate::doc::{Document, Marker, Node};
 use crate::markers::{self, MarkerClass};
@@ -74,42 +77,68 @@ pub(crate) enum TextPiece<'a> {
 
 pub(crate) fn text_pieces<'a>(nodes: &[Node<'a>]) -> Vec<TextPiece<'a>> {
     let mut pieces = Vec::new();
-    let mut in_heading = false;
-    collect(nodes, &mut pieces, &mut in_heading);
+    let mut flow = Flow::default();
+    collect(nodes, &mut pieces, &mut flow);
     pieces
 }
 
-fn collect<'a>(nodes: &[Node<'a>], out: &mut Vec<TextPiece<'a>>, in_heading: &mut bool) {
+fn collect<'a>(nodes: &[Node<'a>], out: &mut Vec<TextPiece<'a>>, flow: &mut Flow) {
     for node in nodes {
         match node {
-            Node::Text(text) if !*in_heading => out.push(TextPiece::Text(text)),
+            Node::Text(text) if flow.is_verse_text() => out.push(TextPiece::Text(text)),
             Node::Marker(marker) => {
                 if !marker.is_closing() && marker.class().is_paragraph_level() {
                     out.push(TextPiece::Break);
                 }
-                *in_heading = heading_after(marker, *in_heading);
+                *flow = flow.after(marker);
             }
-            Node::Span(span) if !*in_heading && !markers::is_non_text_span(span.name()) => {
-                collect(&span.children, out, in_heading);
+            Node::Span(span) if flow.is_verse_text() && !markers::is_non_text_span(span.name()) => {
+                collect(&span.children, out, flow);
             }
             _ => {}
         }
     }
 }
 
-/// Whether the text after `marker` is a heading's text rather than verse text. Headings,
-/// titles and chapter labels start such text; paragraph, verse and chapter markers end it.
-pub(crate) fn heading_after(marker: &Marker<'_>, in_heading: bool) -> bool {
-    if marker.is_closing() {
-        return in_heading;
+/// Where a walk through USFM stands: in verse text, in the text of a heading, or in a
+/// sidebar. Only verse text is read as the verse, tokenized and aligned.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct Flow {
+    heading: bool,
+    sidebar: bool,
+}
+
+impl Flow {
+    /// The flow after `marker`. Headings, titles and chapter labels start a heading's text;
+    /// paragraph, verse and chapter markers end it. `\esb` starts a sidebar and only
+    /// `\esbe` ends it, because a sidebar holds headings and paragraphs of its own.
+    pub(crate) fn after(self, marker: &Marker<'_>) -> Self {
+        if marker.is_closing() || marker.is_nested() {
+            return self;
+        }
+        match marker.name() {
+            "esb" => {
+                return Self {
+                    heading: false,
+                    sidebar: true,
+                };
+            }
+            "esbe" => return Self::default(),
+            _ => {}
+        }
+        let heading = match marker.class() {
+            MarkerClass::Heading
+            | MarkerClass::Identification
+            | MarkerClass::Introduction
+            | MarkerClass::ChapterLevel => true,
+            MarkerClass::Paragraph | MarkerClass::Verse | MarkerClass::Chapter => false,
+            MarkerClass::Note | MarkerClass::NoteContent | MarkerClass::Character => self.heading,
+        };
+        Self { heading, ..self }
     }
-    match marker.class() {
-        MarkerClass::Heading
-        | MarkerClass::Identification
-        | MarkerClass::Introduction
-        | MarkerClass::ChapterLevel => true,
-        MarkerClass::Paragraph | MarkerClass::Verse | MarkerClass::Chapter => false,
-        MarkerClass::Note | MarkerClass::NoteContent | MarkerClass::Character => in_heading,
+
+    pub(crate) fn is_verse_text(self) -> bool {
+        !self.heading && !self.sidebar
     }
 }
 
