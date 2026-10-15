@@ -23,11 +23,7 @@ pub enum ParseError {
     AquiferLanguage(String),
     #[error("{0:?} is not a release asset name")]
     AssetName(String),
-    #[error("{0:?} is not a commit sha")]
-    CommitSha(String),
-    #[error("{0:?} is not a tag name")]
-    Tag(String),
-    #[error("{0:?} is not a pin slot name")]
+    #[error("{0:?} is not a pin slot name or pane id")]
     Slot(String),
     #[error("pins: {0}")]
     Pins(String),

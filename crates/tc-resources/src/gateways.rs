@@ -18,7 +18,7 @@ use std::fmt;
 
 use tc_door43::{AccountName, RepoName, RepoRef};
 
-use crate::pin::{RepoPath, ResourcePin};
+use crate::pin::ResourcePin;
 use crate::sets::{GatewayLanguage, LanguageSet, ProjectKind, SetSlot};
 use crate::suite;
 
@@ -364,11 +364,6 @@ pub fn gateway_bibles_from_installed(
         literal: first(gateway.literal_candidates()),
         simplified: first(gateway.simplified_candidates()),
     }
-}
-
-/// The repository path of a gateway repository on Door43 production.
-pub fn repo_path(repo: RepoRef) -> RepoPath {
-    RepoPath::door43(repo)
 }
 
 #[cfg(test)]

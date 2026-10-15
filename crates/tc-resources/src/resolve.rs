@@ -174,6 +174,55 @@ pub fn record_matches(stored: Option<&ResourceRef>, resolution: Option<&Resoluti
     }
 }
 
+/// What a decision is about: a Bible book, or Open Bible Stories.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CheckUnit {
+    Book(BookId),
+    Stories,
+}
+
+/// Resolves a tool for a book, or for the stories by presence.
+pub fn resolve_unit(
+    pins: &ProjectPins,
+    tool: Tool,
+    unit: CheckUnit,
+    local: &dyn LocalCoverage,
+) -> Option<Resolution> {
+    match unit {
+        CheckUnit::Book(book) => resolve_tool_book(pins, tool, book, local),
+        CheckUnit::Stories => resolve_obs_slot(pins, tool.obs_slot()),
+    }
+}
+
+/// STORAGE §7.7 `resource_ok`: whether a decision's `resource` is what its (tool, unit)
+/// resolves to over the pins alone, with recorded coverage and no installed input, so
+/// every device computes the same answer. A decision that fails it computes as
+/// invalidated and is kept (D36).
+pub fn resource_ok(
+    pins: &ProjectPins,
+    tool: Tool,
+    unit: CheckUnit,
+    resource: &ResourceRef,
+) -> bool {
+    record_matches(
+        Some(resource),
+        resolve_unit(pins, tool, unit, &RecordedOnly).as_ref(),
+    )
+}
+
+/// STORAGE §7.7's original-language clause of an alignment's validity: an alignment made
+/// against a pinned text (`AlignmentValue::source`) is valid only while the book's
+/// testament still pins that commit. An import with no recorded source passes.
+pub fn alignment_source_ok(pins: &ProjectPins, book: BookId, source: Option<&ResourceRef>) -> bool {
+    match source {
+        None => true,
+        Some(source) => pins
+            .original_language
+            .for_book(book)
+            .is_some_and(|pin| pin.sha == source.sha),
+    }
+}
+
 /// What a check session can do with one (tool, book) (tC4 `PreflightState`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PreflightState {
@@ -652,6 +701,87 @@ mod tests {
         let record = now.unwrap().record();
         assert_eq!(record.version.as_deref(), Some("v66"));
         assert_eq!(record.language_set, Rung::Primary);
+    }
+
+    #[test]
+    fn the_folds_rules_read_recorded_coverage_only() {
+        let mut r = resources();
+        let es_tn = r
+            .primary
+            .as_ref()
+            .unwrap()
+            .pin(SetSlot::TranslationNotes)
+            .unwrap()
+            .clone();
+        let en_tn = r
+            .fallback
+            .as_ref()
+            .unwrap()
+            .pin(SetSlot::TranslationNotes)
+            .unwrap()
+            .clone();
+        // Nothing records coverage: no rung answers, whatever is installed.
+        assert!(!resource_ok(
+            &r,
+            Tool::TranslationNotes,
+            CheckUnit::Book(BookId::Titus),
+            &ResourceRef::from(&es_tn)
+        ));
+        r.primary
+            .as_mut()
+            .unwrap()
+            .pins
+            .get_mut(&SetSlot::TranslationNotes)
+            .unwrap()
+            .books = Some(books(&["TIT"]));
+        r.fallback
+            .as_mut()
+            .unwrap()
+            .pins
+            .get_mut(&SetSlot::TranslationNotes)
+            .unwrap()
+            .books = Some(BookCoverage::WholeCollection);
+        let tit = CheckUnit::Book(BookId::Titus);
+        assert!(resource_ok(
+            &r,
+            Tool::TranslationNotes,
+            tit,
+            &ResourceRef::from(&es_tn)
+        ));
+        assert!(!resource_ok(
+            &r,
+            Tool::TranslationNotes,
+            tit,
+            &ResourceRef::from(&en_tn)
+        ));
+        assert!(resource_ok(
+            &r,
+            Tool::TranslationNotes,
+            CheckUnit::Book(BookId::Ruth),
+            &ResourceRef::from(&en_tn)
+        ));
+
+        let ugnt = pin("unfoldingWord/el-x-koine_ugnt", "v0.34");
+        r.original_language.nt = Some(ugnt.clone());
+        assert!(alignment_source_ok(
+            &r,
+            BookId::Titus,
+            Some(&ResourceRef::from(&ugnt))
+        ));
+        assert!(!alignment_source_ok(
+            &r,
+            BookId::Titus,
+            Some(&ResourceRef::from(&pin(
+                "unfoldingWord/el-x-koine_ugnt",
+                "v0.35"
+            )))
+        ));
+        assert!(!alignment_source_ok(
+            &r,
+            BookId::Jonah,
+            Some(&ResourceRef::from(&ugnt))
+        ));
+        assert!(alignment_source_ok(&r, BookId::Jonah, None));
     }
 
     #[test]

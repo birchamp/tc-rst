@@ -20,18 +20,9 @@ use tc_core::BookId;
 
 use crate::gateways::{self, Gateway, GatewayBibles};
 use crate::pin::ResourcePin;
-use crate::resolve::{
-    LocalCoverage, ResourceRef, covers, record_matches, resolve_obs_slot, resolve_tool_book,
-};
+use crate::resolve::{CheckUnit, LocalCoverage, ResourceRef, covers, record_matches, resolve_unit};
 use crate::sets::{LanguageSet, PaneId, ProjectKind, ProjectPins, ScripturePane, SetSlot, Tool};
 use crate::suite;
-
-/// What a decision is about: a Bible book, or Open Bible Stories.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum CheckUnit {
-    Book(BookId),
-    Stories,
-}
 
 /// The stored decisions of one (tool, unit), each by the resource it was made against.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,18 +66,6 @@ impl ChangeConsequences {
     }
 }
 
-fn resolution_after(
-    next: &ProjectPins,
-    tool: Tool,
-    unit: CheckUnit,
-    local: &dyn LocalCoverage,
-) -> Option<crate::resolve::Resolution> {
-    match unit {
-        CheckUnit::Book(book) => resolve_tool_book(next, tool, book, local),
-        CheckUnit::Stories => resolve_obs_slot(next, tool.obs_slot()),
-    }
-}
-
 /// What the change to `next` would cost (tC4 `consequencesOfGatewayChange` and
 /// `uncoveredByChange`). A unit is affected when a decision was made against a resource
 /// that is not what the unit resolves to after the change; membership in the new pins is
@@ -104,7 +83,7 @@ pub fn consequences_of_gateway_change(
         uncovered: Vec::new(),
     };
     for entry in stored.iter().filter(|e| !e.resources.is_empty()) {
-        let after = resolution_after(next, entry.tool, entry.unit, local);
+        let after = resolve_unit(next, entry.tool, entry.unit, local);
         let moved = entry
             .resources
             .iter()
