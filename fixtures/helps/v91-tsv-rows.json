@@ -1,0 +1,749 @@
+{
+ "generator": "crates/tc-check/tools/gen-psalms-vectors.cjs",
+ "tc4": {
+  "commit": "d494a9d6ba9f4cdcc09faff9038c93159106045b",
+  "version": "4.0.0-rc.1"
+ },
+ "libraries": {
+  "bible-reference-range": "1.1.1",
+  "proskomma-core": "0.11.3",
+  "usfm-js": "3.4.3",
+  "fflate": "0.8.2",
+  "esbuild": "0.25.12"
+ },
+ "inputs": {
+  "en_tn": {
+   "file": "bundle/en/en_tn_v91.sb.zip",
+   "sha256": "53943fdfa3d87f59b2810a61693f5df7703b89bc3a79879bd2fbb8c39075d92c"
+  },
+  "en_twl": {
+   "file": "bundle/en/en_twl_v91.sb.zip",
+   "sha256": "2fbd8e56ab64d412383af8ba3ff347f044e28305753a72d0a292133e4499ff5c"
+  },
+  "en_tq": {
+   "file": "bundle/en/en_tq_v91.sb.zip",
+   "sha256": "010096509ce29cf7658b0d68f1e94ac6e8168b2341b7d4509eac390241ad60eb"
+  },
+  "en_tw": {
+   "file": "bundle/en/en_tw_v91.sb.zip",
+   "sha256": "7e5fa483c5c9783b7f85d7107c8bec8f6ae9bd2cb7736287d5bfce409e0d6577"
+  }
+ },
+ "note": "rows: the length of deriveTnItems(keepPlain) / deriveTwlItems / deriveTqItems; skipped: the lines (from 1 at the header) tsvRows drops",
+ "rows": {
+  "en_tn": {
+   "1CO": {
+    "rows": 2524,
+    "skipped": [2526]
+   },
+   "1JN": {
+    "rows": 637,
+    "skipped": [639]
+   },
+   "1KI": {
+    "rows": 2364,
+    "skipped": [2366]
+   },
+   "1PE": {
+    "rows": 497,
+    "skipped": [499]
+   },
+   "1SA": {
+    "rows": 2656,
+    "skipped": [2658]
+   },
+   "1TH": {
+    "rows": 529,
+    "skipped": [531]
+   },
+   "1TI": {
+    "rows": 644,
+    "skipped": [646]
+   },
+   "2CO": {
+    "rows": 1518,
+    "skipped": [1520]
+   },
+   "2JN": {
+    "rows": 66,
+    "skipped": [68]
+   },
+   "2KI": {
+    "rows": 1810,
+    "skipped": [1812]
+   },
+   "2PE": {
+    "rows": 474,
+    "skipped": [476]
+   },
+   "2SA": {
+    "rows": 2121,
+    "skipped": [2123]
+   },
+   "2TH": {
+    "rows": 197,
+    "skipped": [199]
+   },
+   "2TI": {
+    "rows": 436,
+    "skipped": [438]
+   },
+   "3JN": {
+    "rows": 57,
+    "skipped": [59]
+   },
+   "ACT": {
+    "rows": 3516,
+    "skipped": [3518]
+   },
+   "AMO": {
+    "rows": 578,
+    "skipped": [580]
+   },
+   "COL": {
+    "rows": 579,
+    "skipped": [581]
+   },
+   "DAN": {
+    "rows": 1021,
+    "skipped": [1023]
+   },
+   "DEU": {
+    "rows": 3021,
+    "skipped": [3023]
+   },
+   "EPH": {
+    "rows": 454,
+    "skipped": [456]
+   },
+   "EST": {
+    "rows": 1071,
+    "skipped": [1073]
+   },
+   "EXO": {
+    "rows": 2545,
+    "skipped": [2547]
+   },
+   "EZR": {
+    "rows": 1328,
+    "skipped": [1330]
+   },
+   "GAL": {
+    "rows": 847,
+    "skipped": [849]
+   },
+   "GEN": {
+    "rows": 5760,
+    "skipped": [5762]
+   },
+   "HAB": {
+    "rows": 252,
+    "skipped": [254]
+   },
+   "HAG": {
+    "rows": 153,
+    "skipped": [155]
+   },
+   "HEB": {
+    "rows": 1781,
+    "skipped": [1783]
+   },
+   "HOS": {
+    "rows": 764,
+    "skipped": [766]
+   },
+   "JAS": {
+    "rows": 632,
+    "skipped": [634]
+   },
+   "JDG": {
+    "rows": 1660,
+    "skipped": [1662]
+   },
+   "JHN": {
+    "rows": 2645,
+    "skipped": [2647]
+   },
+   "JOB": {
+    "rows": 3320,
+    "skipped": [3322]
+   },
+   "JOL": {
+    "rows": 305,
+    "skipped": [307]
+   },
+   "JON": {
+    "rows": 196,
+    "skipped": [198]
+   },
+   "JOS": {
+    "rows": 1030,
+    "skipped": [1032]
+   },
+   "JUD": {
+    "rows": 160,
+    "skipped": [162]
+   },
+   "LAM": {
+    "rows": 400,
+    "skipped": [402]
+   },
+   "LEV": {
+    "rows": 2113,
+    "skipped": [2115]
+   },
+   "LUK": {
+    "rows": 4434,
+    "skipped": [4436]
+   },
+   "MAL": {
+    "rows": 252,
+    "skipped": [254]
+   },
+   "MAT": {
+    "rows": 5311,
+    "skipped": [5313]
+   },
+   "MIC": {
+    "rows": 491,
+    "skipped": [493]
+   },
+   "MRK": {
+    "rows": 3116,
+    "skipped": [3118]
+   },
+   "NAM": {
+    "rows": 200,
+    "skipped": [202]
+   },
+   "NEH": {
+    "rows": 1884,
+    "skipped": [1886]
+   },
+   "OBA": {
+    "rows": 153,
+    "skipped": [155]
+   },
+   "PHM": {
+    "rows": 93,
+    "skipped": [95]
+   },
+   "PHP": {
+    "rows": 450,
+    "skipped": [452]
+   },
+   "PRO": {
+    "rows": 4074,
+    "skipped": [4076]
+   },
+   "PSA": {
+    "rows": 8212,
+    "skipped": [8214]
+   },
+   "REV": {
+    "rows": 1333,
+    "skipped": [1335]
+   },
+   "ROM": {
+    "rows": 2740,
+    "skipped": [2742]
+   },
+   "RUT": {
+    "rows": 293,
+    "skipped": [295]
+   },
+   "SNG": {
+    "rows": 554,
+    "skipped": [556]
+   },
+   "TIT": {
+    "rows": 206,
+    "skipped": [208]
+   },
+   "ZEC": {
+    "rows": 826,
+    "skipped": [828]
+   },
+   "ZEP": {
+    "rows": 290,
+    "skipped": [292]
+   }
+  },
+  "en_twl": {
+   "1CO": {
+    "rows": 1366,
+    "skipped": [1368]
+   },
+   "1JN": {
+    "rows": 393,
+    "skipped": [395]
+   },
+   "1KI": {
+    "rows": 4245,
+    "skipped": [4247]
+   },
+   "1PE": {
+    "rows": 483,
+    "skipped": [485]
+   },
+   "1SA": {
+    "rows": 4017,
+    "skipped": [4019]
+   },
+   "1TH": {
+    "rows": 301,
+    "skipped": [303]
+   },
+   "1TI": {
+    "rows": 394,
+    "skipped": [396]
+   },
+   "2CO": {
+    "rows": 756,
+    "skipped": [758]
+   },
+   "2JN": {
+    "rows": 41,
+    "skipped": [43]
+   },
+   "2KI": {
+    "rows": 4260,
+    "skipped": [4262]
+   },
+   "2PE": {
+    "rows": 256,
+    "skipped": [258]
+   },
+   "2SA": {
+    "rows": 3316,
+    "skipped": [3318]
+   },
+   "2TH": {
+    "rows": 188,
+    "skipped": [190]
+   },
+   "2TI": {
+    "rows": 289,
+    "skipped": [291]
+   },
+   "3JN": {
+    "rows": 40,
+    "skipped": [42]
+   },
+   "ACT": {
+    "rows": 3251,
+    "skipped": [3253]
+   },
+   "AMO": {
+    "rows": 590,
+    "skipped": [592]
+   },
+   "COL": {
+    "rows": 340,
+    "skipped": [342]
+   },
+   "DAN": {
+    "rows": 1801,
+    "skipped": [1803]
+   },
+   "DEU": {
+    "rows": 3984,
+    "skipped": [3986]
+   },
+   "EPH": {
+    "rows": 524,
+    "skipped": [526]
+   },
+   "EST": {
+    "rows": 1044,
+    "skipped": [1046]
+   },
+   "EXO": {
+    "rows": 4284,
+    "skipped": [4286]
+   },
+   "EZR": {
+    "rows": 1212,
+    "skipped": [1214]
+   },
+   "GAL": {
+    "rows": 548,
+    "skipped": [550]
+   },
+   "GEN": {
+    "rows": 5640,
+    "skipped": [5642]
+   },
+   "HAB": {
+    "rows": 220,
+    "skipped": [222]
+   },
+   "HAG": {
+    "rows": 189,
+    "skipped": [191]
+   },
+   "HEB": {
+    "rows": 1046,
+    "skipped": [1048]
+   },
+   "HOS": {
+    "rows": 822,
+    "skipped": [824]
+   },
+   "JAS": {
+    "rows": 352,
+    "skipped": [354]
+   },
+   "JDG": {
+    "rows": 2605,
+    "skipped": [2607]
+   },
+   "JHN": {
+    "rows": 2621,
+    "skipped": [2623]
+   },
+   "JOB": {
+    "rows": 2065,
+    "skipped": [2067]
+   },
+   "JOL": {
+    "rows": 320,
+    "skipped": [322]
+   },
+   "JON": {
+    "rows": 200,
+    "skipped": [202]
+   },
+   "JOS": {
+    "rows": 2942,
+    "skipped": [2944]
+   },
+   "JUD": {
+    "rows": 124,
+    "skipped": [126]
+   },
+   "LAM": {
+    "rows": 426,
+    "skipped": [428]
+   },
+   "LEV": {
+    "rows": 1982,
+    "skipped": [1984]
+   },
+   "LUK": {
+    "rows": 2958,
+    "skipped": [2960]
+   },
+   "MAL": {
+    "rows": 280,
+    "skipped": [282]
+   },
+   "MAT": {
+    "rows": 3100,
+    "skipped": [3102]
+   },
+   "MIC": {
+    "rows": 446,
+    "skipped": [448]
+   },
+   "MRK": {
+    "rows": 1614,
+    "skipped": [1616]
+   },
+   "NAM": {
+    "rows": 189,
+    "skipped": [191]
+   },
+   "NEH": {
+    "rows": 1442,
+    "skipped": [1444]
+   },
+   "OBA": {
+    "rows": 106,
+    "skipped": [108]
+   },
+   "PHM": {
+    "rows": 74,
+    "skipped": [76]
+   },
+   "PHP": {
+    "rows": 363,
+    "skipped": [365]
+   },
+   "PRO": {
+    "rows": 2648,
+    "skipped": [2650]
+   },
+   "PSA": {
+    "rows": 7683,
+    "skipped": [7685]
+   },
+   "REV": {
+    "rows": 1734,
+    "skipped": [1736]
+   },
+   "ROM": {
+    "rows": 1665,
+    "skipped": [1667]
+   },
+   "RUT": {
+    "rows": 297,
+    "skipped": [299]
+   },
+   "SNG": {
+    "rows": 332,
+    "skipped": [334]
+   },
+   "TIT": {
+    "rows": 182,
+    "skipped": [184]
+   },
+   "ZEC": {
+    "rows": 874,
+    "skipped": [876]
+   },
+   "ZEP": {
+    "rows": 300,
+    "skipped": [302]
+   }
+  },
+  "en_tq": {
+   "1CO": {
+    "rows": 258,
+    "skipped": [260]
+   },
+   "1JN": {
+    "rows": 69,
+    "skipped": [71]
+   },
+   "1KI": {
+    "rows": 449,
+    "skipped": [451]
+   },
+   "1PE": {
+    "rows": 69,
+    "skipped": [71]
+   },
+   "1SA": {
+    "rows": 406,
+    "skipped": [408]
+   },
+   "1TH": {
+    "rows": 51,
+    "skipped": [53]
+   },
+   "1TI": {
+    "rows": 68,
+    "skipped": [70]
+   },
+   "2CO": {
+    "rows": 142,
+    "skipped": [144]
+   },
+   "2JN": {
+    "rows": 11,
+    "skipped": [13]
+   },
+   "2KI": {
+    "rows": 254,
+    "skipped": [256]
+   },
+   "2PE": {
+    "rows": 29,
+    "skipped": [31]
+   },
+   "2SA": {
+    "rows": 361,
+    "skipped": [363]
+   },
+   "2TH": {
+    "rows": 31,
+    "skipped": [33]
+   },
+   "2TI": {
+    "rows": 55,
+    "skipped": [57]
+   },
+   "3JN": {
+    "rows": 15,
+    "skipped": [17]
+   },
+   "ACT": {
+    "rows": 440,
+    "skipped": [442]
+   },
+   "AMO": {
+    "rows": 143,
+    "skipped": [145]
+   },
+   "COL": {
+    "rows": 67,
+    "skipped": [69]
+   },
+   "DAN": {
+    "rows": 339,
+    "skipped": [341]
+   },
+   "DEU": {
+    "rows": 482,
+    "skipped": [484]
+   },
+   "EPH": {
+    "rows": 94,
+    "skipped": [96]
+   },
+   "EST": {
+    "rows": 85,
+    "skipped": [87]
+   },
+   "EXO": {
+    "rows": 420,
+    "skipped": [422]
+   },
+   "EZR": {
+    "rows": 72,
+    "skipped": [74]
+   },
+   "GAL": {
+    "rows": 86,
+    "skipped": [88]
+   },
+   "GEN": {
+    "rows": 678,
+    "skipped": [680]
+   },
+   "HAB": {
+    "rows": 38,
+    "skipped": [40]
+   },
+   "HAG": {
+    "rows": 22,
+    "skipped": [24]
+   },
+   "HEB": {
+    "rows": 205,
+    "skipped": [207]
+   },
+   "HOS": {
+    "rows": 195,
+    "skipped": [197]
+   },
+   "JAS": {
+    "rows": 72,
+    "skipped": [74]
+   },
+   "JDG": {
+    "rows": 220,
+    "skipped": [222]
+   },
+   "JHN": {
+    "rows": 468,
+    "skipped": [470]
+   },
+   "JOB": {
+    "rows": 485,
+    "skipped": [487]
+   },
+   "JOL": {
+    "rows": 43,
+    "skipped": [45]
+   },
+   "JON": {
+    "rows": 34,
+    "skipped": [36]
+   },
+   "JOS": {
+    "rows": 183,
+    "skipped": [185]
+   },
+   "JUD": {
+    "rows": 26,
+    "skipped": [28]
+   },
+   "LAM": {
+    "rows": 91,
+    "skipped": [93]
+   },
+   "LEV": {
+    "rows": 232,
+    "skipped": [234]
+   },
+   "LUK": {
+    "rows": 413,
+    "skipped": [415]
+   },
+   "MAL": {
+    "rows": 30,
+    "skipped": [32]
+   },
+   "MAT": {
+    "rows": 484,
+    "skipped": [486]
+   },
+   "MIC": {
+    "rows": 104,
+    "skipped": [106]
+   },
+   "MRK": {
+    "rows": 314,
+    "skipped": [316]
+   },
+   "NAM": {
+    "rows": 28,
+    "skipped": [30]
+   },
+   "NEH": {
+    "rows": 131,
+    "skipped": [133]
+   },
+   "OBA": {
+    "rows": 12,
+    "skipped": [14]
+   },
+   "PHM": {
+    "rows": 18,
+    "skipped": [20]
+   },
+   "PHP": {
+    "rows": 57,
+    "skipped": [59]
+   },
+   "PRO": {
+    "rows": 421,
+    "skipped": [423]
+   },
+   "PSA": {
+    "rows": 1661,
+    "skipped": [1663]
+   },
+   "REV": {
+    "rows": 281,
+    "skipped": [283]
+   },
+   "ROM": {
+    "rows": 239,
+    "skipped": [241]
+   },
+   "RUT": {
+    "rows": 56,
+    "skipped": [58]
+   },
+   "SNG": {
+    "rows": 146,
+    "skipped": [148]
+   },
+   "TIT": {
+    "rows": 36,
+    "skipped": [38]
+   },
+   "ZEC": {
+    "rows": 195,
+    "skipped": [197]
+   },
+   "ZEP": {
+    "rows": 25,
+    "skipped": [27]
+   }
+  }
+ }
+}

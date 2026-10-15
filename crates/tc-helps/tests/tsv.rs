@@ -593,6 +593,7 @@ fn locus() -> impl Strategy<Value = String> {
     prop_oneof![
         Just("front:intro".to_owned()),
         (1u16..200).prop_map(|c| format!("{c}:intro")),
+        (1u16..200).prop_map(|c| format!("{c}:front")),
         (1u16..200, 1u16..200).prop_map(|(c, v)| format!("{c}:{v}")),
         (1u16..200, 1u16..100, 0u16..20).prop_map(|(c, v, n)| format!("{c}:{v}-{}", v + n + 1)),
         (1u16..100, 1u16..100, 1u16..50, 1u16..100)
@@ -642,12 +643,14 @@ fn tag_cell() -> impl Strategy<Value = String> {
     ]
 }
 
-/// A Reference cell, sometimes in a longer form than the writer's (`1:1-1:3`, `01:02`).
+/// A Reference cell, sometimes in a longer form than the writer's (`1:1-1:3`, `01:02`,
+/// `03:front`).
 fn reference_cell() -> impl Strategy<Value = String> {
     prop_oneof![
         3 => locus(),
         1 => (1u16..50, 1u16..50, 1u16..9).prop_map(|(c, v, n)| format!("{c}:{v}-{c}:{}", v + n)),
         1 => (1u16..9, 1u16..9).prop_map(|(c, v)| format!("0{c}:0{v}")),
+        1 => (1u16..9).prop_map(|c| format!("0{c}:front")),
     ]
 }
 

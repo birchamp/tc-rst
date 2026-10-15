@@ -722,6 +722,7 @@ fn legacy_place(locus: &BibleLocus) -> Option<(String, String)> {
     match locus {
         BibleLocus::BookIntro => Some(("front".into(), "intro".into())),
         BibleLocus::ChapterIntro(c) => Some((c.to_string(), "intro".into())),
+        BibleLocus::ChapterFront(c) => Some((c.to_string(), "front".into())),
         BibleLocus::Verses(list) => {
             let [range] = list.ranges() else { return None };
             if range.start().chapter != range.end().chapter {

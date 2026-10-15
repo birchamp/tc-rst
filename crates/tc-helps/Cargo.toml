@@ -17,6 +17,8 @@ yaml-rust2 = { version = "0.13", default-features = false }
 
 [dev-dependencies]
 proptest.workspace = true
+# The v91 tests read the burrito exports in bundle/en.
+zip.workspace = true
 
 [lints]
 workspace = true

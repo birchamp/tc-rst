@@ -589,7 +589,7 @@ fn gateway_quote(node: &Node) -> Option<String> {
 fn verse_order(r: &BibleRef, a: &AquiferArticle) -> (Bcv, u32) {
     let (chapter, verse) = match &r.locus {
         BibleLocus::BookIntro => (0, 0),
-        BibleLocus::ChapterIntro(c) => (*c, 0),
+        BibleLocus::ChapterIntro(c) | BibleLocus::ChapterFront(c) => (*c, 0),
         BibleLocus::Verses(list) => {
             let start = list.start();
             (start.chapter, start.verse)

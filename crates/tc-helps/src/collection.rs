@@ -274,6 +274,17 @@ impl Helps {
             .filter_map(|n| self.note(n))
     }
 
+    /// Notes on the front of `chapter`, before its first verse (the superscription in the
+    /// Psalms), in source order. No passage holds them, so [`Helps::notes_for`] leaves
+    /// them out; tC4 lists them with the chapter's helps when no verse has the focus
+    /// (`helpsFocus.js` `inFocus`).
+    pub fn front_notes(&self, book: BookId, chapter: u16) -> impl Iterator<Item = Found<'_, Note>> {
+        self.notes
+            .iter()
+            .filter(move |n| on_front(&n.reference, book, chapter))
+            .filter_map(|n| self.note(n))
+    }
+
     /// Notes on one Open Bible Stories frame, in source order.
     pub fn obs_notes_for(&self, frame: ObsRef) -> impl Iterator<Item = Found<'_, Note>> {
         self.notes
@@ -287,6 +298,18 @@ impl Helps {
         self.word_links
             .iter()
             .filter(move |l| on_passage(&l.reference, &passage))
+            .filter_map(|l| self.word_link(l))
+    }
+
+    /// Word links on the front of `chapter`, as [`Helps::front_notes`].
+    pub fn front_word_links(
+        &self,
+        book: BookId,
+        chapter: u16,
+    ) -> impl Iterator<Item = Found<'_, WordLink>> {
+        self.word_links
+            .iter()
+            .filter(move |l| on_front(&l.reference, book, chapter))
             .filter_map(|l| self.word_link(l))
     }
 
@@ -337,6 +360,18 @@ impl Helps {
             .filter_map(|q| self.question(q))
     }
 
+    /// Questions on the front of `chapter`, as [`Helps::front_notes`].
+    pub fn front_questions(
+        &self,
+        book: BookId,
+        chapter: u16,
+    ) -> impl Iterator<Item = Found<'_, Question>> {
+        self.questions
+            .iter()
+            .filter(move |q| on_front(&q.reference, book, chapter))
+            .filter_map(|q| self.question(q))
+    }
+
     /// Questions on one Open Bible Stories frame, in source order.
     pub fn obs_questions_for(&self, frame: ObsRef) -> impl Iterator<Item = Found<'_, Question>> {
         self.questions
@@ -373,6 +408,14 @@ impl Helps {
         }
         link.check_readiness(self.words.contains_key(&link.article))
     }
+}
+
+fn on_front(reference: &HelpRef, book: BookId, chapter: u16) -> bool {
+    matches!(
+        reference,
+        HelpRef::Bible(BibleRef { book: b, locus: BibleLocus::ChapterFront(c) })
+            if *b == book && *c == chapter
+    )
 }
 
 fn on_passage(reference: &HelpRef, passage: &Reference) -> bool {

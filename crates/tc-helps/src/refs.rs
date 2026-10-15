@@ -1,5 +1,5 @@
-//! Where a help item belongs: a Bible passage, a book or chapter introduction, or an Open
-//! Bible Stories frame.
+//! Where a help item belongs: a Bible passage, a book or chapter introduction, the front of
+//! a chapter, or an Open Bible Stories frame.
 
 use std::fmt;
 use tc_core::{BookId, Reference};
@@ -84,6 +84,11 @@ pub enum BibleLocus {
     BookIntro,
     /// `N:intro` in a TSV, `BBCCC000` in Aquifer.
     ChapterIntro(u16),
+    /// `N:front` in a TSV: what comes before the first verse of chapter N, which in the
+    /// Psalms is the superscription (`\d`). It is not verse 1: tC4 checks it as the verse
+    /// `front` of chapter N (`derive.ts` `refPart`, ruling D60), and its helps panel never
+    /// lists it under a verse (`helpsFocus.js`).
+    ChapterFront(u16),
     Verses(VerseList),
 }
 
@@ -101,7 +106,8 @@ impl BibleRef {
         }
     }
 
-    /// True when this item is about any verse of `passage`. Introductions overlap nothing.
+    /// True when this item is about any verse of `passage`. Introductions and chapter
+    /// fronts overlap nothing.
     pub fn overlaps(&self, passage: &Reference) -> bool {
         if self.book != passage.book {
             return false;
@@ -214,8 +220,8 @@ pub(crate) fn number(text: &str) -> Option<u16> {
     text.parse().ok()
 }
 
-/// Reads the TSV `Reference` column of a Bible table: `front:intro`, `N:intro`, `C:V`,
-/// `C:V-V`, `C:V-C:V`, and comma lists of those such as `1:3,5-6`.
+/// Reads the TSV `Reference` column of a Bible table: `front:intro`, `N:intro`, `N:front`,
+/// `C:V`, `C:V-V`, `C:V-C:V`, and comma lists of those such as `1:3,5-6`.
 pub(crate) fn parse_tsv_locus(text: &str) -> Option<BibleLocus> {
     if text == "front:intro" {
         return Some(BibleLocus::BookIntro);
@@ -223,6 +229,10 @@ pub(crate) fn parse_tsv_locus(text: &str) -> Option<BibleLocus> {
     if let Some(chapter) = text.strip_suffix(":intro") {
         let chapter = number(chapter)?;
         return (chapter >= 1).then_some(BibleLocus::ChapterIntro(chapter));
+    }
+    if let Some(chapter) = text.strip_suffix(":front") {
+        let chapter = number(chapter)?;
+        return (chapter >= 1).then_some(BibleLocus::ChapterFront(chapter));
     }
     let mut ranges = Vec::new();
     let mut chapter: Option<u16> = None;
@@ -258,6 +268,7 @@ impl fmt::Display for TsvLocus<'_> {
         match self.0 {
             BibleLocus::BookIntro => f.write_str("front:intro"),
             BibleLocus::ChapterIntro(c) => write!(f, "{c}:intro"),
+            BibleLocus::ChapterFront(c) => write!(f, "{c}:front"),
             BibleLocus::Verses(list) => {
                 let mut chapter = None;
                 for (i, r) in list.0.iter().enumerate() {
@@ -349,6 +360,7 @@ mod tests {
         for text in [
             "front:intro",
             "3:intro",
+            "3:front",
             "1:1",
             "1:1-3",
             "1:30-2:2",
@@ -359,7 +371,20 @@ mod tests {
             assert_eq!(TsvLocus(&locus).to_string(), text);
         }
         for bad in [
-            "", "0:1", "1:0", "1", "1:2-1", "front:1", "1:a", "1:1-", ":1", "1:1,",
+            "",
+            "0:1",
+            "1:0",
+            "1",
+            "1:2-1",
+            "front:1",
+            "1:a",
+            "1:1-",
+            ":1",
+            "1:1,",
+            "0:front",
+            "front:front",
+            ":front",
+            "1:front,2",
         ] {
             assert!(parse_tsv_locus(bad).is_none(), "{bad:?} should be refused");
         }

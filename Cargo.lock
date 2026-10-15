@@ -2862,6 +2862,7 @@ dependencies = [
  "unicode-general-category",
  "unicode-normalization",
  "yaml-rust2",
+ "zip",
 ]
 
 [[package]]
