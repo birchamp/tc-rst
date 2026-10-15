@@ -1,0 +1,19 @@
+[package]
+name = "tc-usfm"
+description = "Lossless USFM for the tC4 rebuild: parsing, verse units, plain text, word tokens and zaln alignment."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tc-core = { path = "../tc-core" }
+thiserror.workspace = true
+
+[dev-dependencies]
+md-5 = "0.10.6"
+proptest.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
