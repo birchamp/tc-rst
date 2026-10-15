@@ -120,6 +120,7 @@ pub(crate) fn carry(value: &AlignmentValue, verse: &TargetVerse) -> Reflowed {
         word_bank,
         ..value.clone()
     };
+    next.retain_word_extra();
     next.settle(verse);
     Reflowed {
         value: next,

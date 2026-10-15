@@ -8,6 +8,8 @@ Tests read these files read-only. Do not edit them by hand.
 | `bootstrap-vectors.json` | What tC4's `bootstrapVerse` makes for every verse of en_ult Titus against UGNT Titus, for UHB Jonah 1 against itself (a right-to-left target with word joiners), and for the sample burrito's Spanish span JON 2:9-10 against UHB 2:9 and 2:10. | `crates/tc-align/tools/gen-align-vectors.cjs` |
 | `extract-vectors.json` | word-aligner's `unmerge` of every aligned verse of en_ult and en_ust Titus with its UGNT verse, and of the 136 partly aligned verses that tC4's export wrote in `fixtures/usfm/weave-vectors.json`. | same |
 | `reflow-vectors.json` | tC4's `reflowAlignment` on every third en_ult Titus verse after seeded edits of its text (a word deleted, repeated or replaced, punctuation only, unchanged, no words, and a record marked invalid). | same |
+| `heading-source.usfm` | Ten synthetic original-language verses (Hebrew letters as words) with a heading, title or note inside the verse: a mid-verse `\s5`, `\r`, `\qa`, `\sp`, `\d`, `\ms`, `\s`, `\s1` or `\cl` followed by `\w` words, and a footnote holding a `\w`. | Written for `tc-align` (GPL-2.0-or-later, this repository). |
+| `heading-vectors.json` | What tC4's `bootstrapVerse` makes for each verse of `heading-source.usfm`: which original words get a card. | `crates/tc-align/tools/gen-align-vectors.cjs` (section `headings`) |
 | `suggest-vectors.json` | The suggestion benches' training verses for en_ult and en_ust Titus (`versesOfBook`); every link and confidence `predictLinks` gives from memory-only models and from boosted models trained with `Math.random` seeded as tC4's tests seed it (mulberry32, seed 0); and the growth bench's protocol (`test/align-suggest-growth-bench.test.ts`) on both Titus corpora. | same |
 
 The generator bundles tC4's own sources (`src/data/align/edit.ts`, `suggest.ts`,
@@ -22,8 +24,10 @@ repository root (the suggestion section takes about ten minutes):
 
 ```sh
 node crates/tc-align/tools/gen-align-vectors.cjs /path/to/translationcore4 fixtures/align
-node crates/tc-align/tools/gen-align-vectors.cjs /path/to/translationcore4 fixtures/align bootstrap extract reflow
+node crates/tc-align/tools/gen-align-vectors.cjs /path/to/translationcore4 fixtures/align bootstrap extract reflow headings
 ```
+
+`heading-vectors.json` was generated on 2026-10-15 from the same tC4 checkout.
 
 ## Licenses
 

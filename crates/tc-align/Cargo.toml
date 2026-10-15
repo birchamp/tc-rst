@@ -10,13 +10,14 @@ rust-version.workspace = true
 tc-core = { path = "../tc-core" }
 tc-usfm = { path = "../tc-usfm" }
 tc-versification = { path = "../tc-versification" }
-md-5 = "0.10.6"
+md-5.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [lints]
 workspace = true

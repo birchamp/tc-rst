@@ -15,12 +15,20 @@
 //! | `marked_invalid` | `marked_invalid` | `invalid` as tC3/tC4 stored it |
 //! | `dismissed` | `dismissed` | (none) |
 //! | `extra` | `extra` | any other field |
+//! | `word_extra` | each `TargetWord`'s `extra`, by the word's text and occurrence | a target word's other fields |
 //!
 //! Occurrences are integers (I-2). `invalid` is never stored: [`AlignmentValue::staleness`]
-//! computes it as STORAGE.md §7.7 does.
+//! computes it as STORAGE.md §7.7 does. `tc-journal`'s per-group `extra` is always empty
+//! for a value from here: [`crate::record`] refuses a field on an alignment, since a
+//! merge or split could not say which card it belongs to.
+//!
+//! A value keeps the rules every edit keeps ([`AlignmentValue::well_formed`]): each target
+//! word is held once, in the bank or on one card, and every occurrence lies between 1
+//! and its count. That is what lets `word_extra` be keyed by the word.
 
 use crate::Error;
-use crate::words::TargetVerse;
+use crate::words::{TargetVerse, WordId};
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::num::NonZeroU16;
 use std::str::FromStr;
@@ -111,6 +119,24 @@ pub struct AlignmentValue {
     pub dismissed: bool,
     /// Fields this version does not know, kept as they were.
     pub extra: serde_json::Map<String, serde_json::Value>,
+    /// Fields a target word carried besides `word`, `occurrence` and `occurrences`, by the
+    /// word they belong to: such as the `"type": "bottomWord"` that tC3 wrote on banked
+    /// words and tC4 keeps on import. They go wherever the word goes, bank or card, as
+    /// tC4 moves the whole word object.
+    pub word_extra: BTreeMap<WordId, serde_json::Map<String, serde_json::Value>>,
+}
+
+/// How a value breaks the rules every edit keeps. See the module documentation.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum Malformed {
+    #[error("the target word {:?} (occurrence {}) is held in more than one place", .0.text, .0.occurrence)]
+    TargetWordTwice(TargetWord),
+    #[error("the target word {:?} has occurrence {} of {}", .0.text, .0.occurrence, .0.occurrences)]
+    TargetOccurrence(TargetWord),
+    #[error("the original word {:?} has occurrence {} of {}", .0.content, .0.occurrence, .0.occurrences)]
+    SourceOccurrence(Box<SourceWord>),
+    #[error("fields are kept for the target word {:?} (occurrence {}), which the value does not hold", .0.text, .0.occurrence)]
+    ExtraOfNoWord(WordId),
 }
 
 /// What the projection holds now for the verse an alignment is placed at (STORAGE.md §7.7).
@@ -184,6 +210,37 @@ impl AlignmentValue {
         self.word_bank
             .iter()
             .chain(self.alignments.iter().flat_map(|g| g.targets.iter()))
+    }
+
+    /// The first rule the value breaks, if any. See the module documentation.
+    pub fn well_formed(&self) -> Result<(), Malformed> {
+        let mut held = HashSet::new();
+        for word in self.all_target_words() {
+            if !(1..=word.occurrences).contains(&word.occurrence) {
+                return Err(Malformed::TargetOccurrence(word.clone()));
+            }
+            if !held.insert(WordId::of(word)) {
+                return Err(Malformed::TargetWordTwice(word.clone()));
+            }
+        }
+        if let Some(word) = self
+            .alignments
+            .iter()
+            .flat_map(|g| &g.sources)
+            .find(|w| !(1..=w.occurrences).contains(&w.occurrence))
+        {
+            return Err(Malformed::SourceOccurrence(Box::new(word.clone())));
+        }
+        if let Some(id) = self.word_extra.keys().find(|id| !held.contains(*id)) {
+            return Err(Malformed::ExtraOfNoWord(id.clone()));
+        }
+        Ok(())
+    }
+
+    /// Forget the extra fields of words the value no longer holds.
+    pub(crate) fn retain_word_extra(&mut self) {
+        let held: HashSet<WordId> = self.all_target_words().map(WordId::of).collect();
+        self.word_extra.retain(|id, _| held.contains(id));
     }
 
     /// tC4's "fully aligned" (tC3's `areAlgnmentsComplete`): the bank is empty, some card

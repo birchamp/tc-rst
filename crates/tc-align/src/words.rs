@@ -8,8 +8,9 @@ use crate::Error;
 use md5::{Digest, Md5};
 use std::fmt;
 use std::str::FromStr;
+use tc_core::VerseSpan;
 use tc_usfm::markers::{self, MarkerClass};
-use tc_usfm::{Document, Node, SourceWord, TargetWord};
+use tc_usfm::{Book, Document, Node, Segment, SourceWord, TargetWord};
 
 /// The original-language words of one verse, in verse order, numbered by occurrence.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -18,20 +19,52 @@ pub struct SourceVerse {
 }
 
 impl SourceVerse {
-    /// The words of an original-language verse body such as UGNT or UHB writes it:
+    /// The original-language words of a verse or span of `book` (UGNT, UHB), read from
+    /// the text tC4 reads for a verse: from after its `\v` marker to the next `\v` or
+    /// `\c` marker (usfm-js's verse objects). That is the unit's body and the next unit's
+    /// leading markers: `tc-usfm` gives a heading that stands before the next `\v`, with
+    /// its words, to the next verse (an acrostic's `\qa`, a mid-verse `\s5`), and tC4
+    /// counts those words in this verse.
+    ///
+    /// A span is its member verses in order, numbered across the span
+    /// ([`SourceVerse::span`]). A member verse the book does not have adds no words, as
+    /// tC4's `verseObjectsFor` finds none for it.
+    pub fn from_book(book: &Book<'_>, chapter: u16, verses: VerseSpan) -> Result<Self, Error> {
+        let segments = book.segments();
+        let mut parts = Vec::new();
+        for verse in verses.verses() {
+            let Some(at) = segments.iter().position(|s| {
+                s.as_verse().is_some_and(|u| {
+                    u.chapter() == Some(chapter) && u.verses() == Some(VerseSpan::single(verse))
+                })
+            }) else {
+                continue;
+            };
+            let mut text = segments[at].as_verse().map_or("", |u| u.body()).to_owned();
+            if let Some(next) = segments.get(at + 1).and_then(Segment::as_verse) {
+                text.push_str(next.leading());
+            }
+            parts.push(Self::from_usfm(&text)?);
+        }
+        Ok(Self::span(parts))
+    }
+
+    /// The words of an original-language verse text such as UGNT or UHB writes it:
     /// `\w Παῦλος|lemma="Παῦλος" strong="G39720" x-morph="Gr,N,,,,,NMS,"\w*`.
     ///
-    /// Every `\w` in verse text counts, at any depth of character markup; notes, figures
-    /// and other non-text spans are skipped. `lemma`, `strong` (or `strongs`) and `morph`
-    /// are read with or without the `x-` prefix, and the default attribute is the lemma.
+    /// Every `\w` of the verse counts, at any depth of character markup and after any
+    /// heading, title or other paragraph-level marker inside the verse (a mid-verse
+    /// `\s5`, a Psalm's `\d`, an acrostic's `\qa`), as tC4's bootstrap counts them; only
+    /// notes, figures and other non-text spans are skipped. `lemma`, `strong` (or
+    /// `strongs`) and `morph` are read with or without the `x-` prefix, and the default
+    /// attribute is the lemma.
     /// Written occurrence attributes are ignored: occurrences are counted by text across
     /// the verse, as word-aligner's `getOrderedVerseObjects` counts them for tC4's
     /// bootstrap. Other attributes are kept in [`SourceWord::extra`] as written.
     pub fn from_usfm(body: &str) -> Result<Self, Error> {
         let doc = Document::parse(body);
         let mut found = Vec::new();
-        let mut in_heading = false;
-        collect_source_words(doc.nodes(), &mut found, &mut in_heading)?;
+        collect_source_words(doc.nodes(), &mut found)?;
         Ok(Self::new(found))
     }
 
@@ -67,36 +100,16 @@ fn is_non_text_span(name: &str) -> bool {
         || matches!(name, "fig" | "ca" | "va" | "vp" | "cat" | "rq")
 }
 
-fn collect_source_words(
-    nodes: &[Node<'_>],
-    out: &mut Vec<SourceWord>,
-    in_heading: &mut bool,
-) -> Result<(), Error> {
+fn collect_source_words(nodes: &[Node<'_>], out: &mut Vec<SourceWord>) -> Result<(), Error> {
     for node in nodes {
-        let span = match node {
-            Node::Marker(marker) if !marker.is_closing() && !marker.is_nested() => {
-                // A heading's words are not verse words; its text runs to the next
-                // paragraph, verse or chapter marker.
-                match marker.class() {
-                    MarkerClass::Heading
-                    | MarkerClass::Identification
-                    | MarkerClass::Introduction
-                    | MarkerClass::ChapterLevel => *in_heading = true,
-                    MarkerClass::Paragraph | MarkerClass::Verse | MarkerClass::Chapter => {
-                        *in_heading = false;
-                    }
-                    MarkerClass::Note | MarkerClass::NoteContent | MarkerClass::Character => {}
-                }
-                continue;
-            }
-            Node::Span(span) => span,
-            _ => continue,
+        let Node::Span(span) = node else {
+            continue;
         };
-        if *in_heading || is_non_text_span(span.name()) {
+        if is_non_text_span(span.name()) {
             continue;
         }
         if span.name() != "w" {
-            collect_source_words(&span.children, out, in_heading)?;
+            collect_source_words(&span.children, out)?;
             continue;
         }
         let mut content = String::new();
@@ -198,6 +211,22 @@ impl TargetVerse {
 /// Identity of a target word inside one verse: its text plus its occurrence.
 pub(crate) fn same_word(a: &TargetWord, b: &TargetWord) -> bool {
     a.text == b.text && a.occurrence == b.occurrence
+}
+
+/// A target word's identity inside one verse, as a key: its text and its occurrence.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct WordId {
+    pub text: String,
+    pub occurrence: u32,
+}
+
+impl WordId {
+    pub fn of(word: &TargetWord) -> Self {
+        Self {
+            text: word.text.clone(),
+            occurrence: word.occurrence,
+        }
+    }
 }
 
 /// Occurrence numbering by exact text: each word's 1-based index among equal texts, and

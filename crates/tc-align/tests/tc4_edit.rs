@@ -8,8 +8,8 @@ mod common;
 use common::{basis, show};
 use std::num::NonZeroU16;
 use tc_align::{
-    AlignmentValue, Current, EditError, SourceVerse, SourceWord, TargetVerse, TargetWord,
-    VerseState, verse_status,
+    AlignmentValue, CommitSha, Current, EditError, ResourceRef, SourceVerse, SourceWord, Stale,
+    TargetVerse, TargetWord, VerseState, verse_status,
 };
 
 fn greek(text: &str, strong: &str, lemma: &str, morph: &str) -> SourceWord {
@@ -423,4 +423,77 @@ fn the_rail_reads_valid_from_done_only_and_staleness_outranks_it() {
     assert_eq!(state(None, None), VerseState::Undrafted);
     let status = verse_status(Some(&half), Some(&now));
     assert_eq!((status.placed, status.total), (1, 2));
+}
+
+#[test]
+fn an_edit_clears_the_re_review_flag_tc3_or_tc4_set() {
+    let (mut flagged, verse) = half_aligned();
+    flagged.marked_invalid = true;
+    flagged.link(1, &bank_word(&flagged, "siervo", 1)).unwrap();
+    flagged.settle(&verse);
+    assert!(!flagged.marked_invalid);
+    assert_eq!(
+        verse_status(Some(&flagged), Some(&current(&verse))).state,
+        VerseState::Valid
+    );
+}
+
+#[test]
+fn staleness_names_each_reason_a_done_value_no_longer_vouches_for_the_verse() {
+    let (mut value, verse) = half_aligned();
+    value.mark_done(&verse);
+    let pin: CommitSha = "0123456789abcdef0123456789abcdef01234567".parse().unwrap();
+    let upgrade: CommitSha = "89abcdef0123456789abcdef0123456789abcdef".parse().unwrap();
+    value.source = Some(ResourceRef {
+        repo_path: "git.door43.org/unfoldingWord/el-x-koine_ugnt".to_owned(),
+        sha: pin,
+    });
+    let other = TargetVerse::new("Pablo siervo de Dios");
+    fn at<'a>(run_end: u16, text: &TargetVerse, sha: Option<&'a CommitSha>) -> Current<'a> {
+        Current {
+            run_end: NonZeroU16::new(run_end).unwrap(),
+            text_md5: text.md5(),
+            source_sha: sha,
+        }
+    }
+    let (pin, upgrade) = (&pin, &upgrade);
+    let cases = [
+        (at(1, &verse, Some(pin)), vec![]),
+        // Joined into the span 1-2 since.
+        (at(2, &verse, Some(pin)), vec![Stale::SpanChanged]),
+        (at(1, &other, Some(pin)), vec![Stale::TextChanged]),
+        // The original-language text was upgraded, or unpinned (STORAGE.md §5.8).
+        (at(1, &verse, Some(upgrade)), vec![Stale::SourceChanged]),
+        (at(1, &verse, None), vec![Stale::SourceChanged]),
+        (
+            at(2, &other, Some(upgrade)),
+            vec![Stale::SpanChanged, Stale::TextChanged, Stale::SourceChanged],
+        ),
+    ];
+    for (now, reasons) in &cases {
+        assert_eq!(&value.staleness(now), reasons, "{now:?}");
+        let state = verse_status(Some(&value), Some(now)).state;
+        let expected = if reasons.is_empty() {
+            VerseState::Valid
+        } else {
+            VerseState::Invalid
+        };
+        assert_eq!(state, expected, "{now:?}");
+    }
+    let mut flagged = value.clone();
+    flagged.marked_invalid = true;
+    assert_eq!(
+        flagged.staleness(&at(2, &other, None)),
+        [
+            Stale::SpanChanged,
+            Stale::TextChanged,
+            Stale::SourceChanged,
+            Stale::MarkedInvalid
+        ]
+    );
+    // A value with no pin (an import that could not resolve one) is not stale for its
+    // source, whatever the project pins now.
+    let mut unpinned = value;
+    unpinned.source = None;
+    assert!(unpinned.staleness(&at(1, &verse, Some(upgrade))).is_empty());
 }

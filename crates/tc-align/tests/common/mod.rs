@@ -64,11 +64,8 @@ pub fn verses(file: &str) -> Vec<(String, String)> {
 /// The original-language words behind a reference: a span's member verses in order.
 pub fn source_verse(file: &str, reference: &str) -> SourceVerse {
     let (chapter, verses) = parse_ref(reference);
-    SourceVerse::span(
-        verses
-            .verses()
-            .map(|v| SourceVerse::from_usfm(&verse_body(file, &format!("{chapter}:{v}"))).unwrap()),
-    )
+    let text = read(file);
+    SourceVerse::from_book(&Book::parse(&text), chapter, verses).unwrap()
 }
 
 pub fn basis(span_end: u16) -> Basis {

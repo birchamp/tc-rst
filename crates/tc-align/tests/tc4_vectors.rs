@@ -10,7 +10,9 @@ use common::*;
 use serde_json::Value;
 use std::num::NonZeroU16;
 use tc_align::usfm::{from_aligned, usfm_groups, weave_verse};
-use tc_align::{AlignmentValue, Current, Group, TargetVerse, VerseState, record, verse_status};
+use tc_align::{
+    AlignmentValue, Current, Group, Malformed, TargetVerse, VerseState, record, verse_status,
+};
 use tc_usfm::parse_aligned;
 
 #[test]
@@ -51,6 +53,25 @@ fn bootstrap_matches_tc4_for_greek_and_hebrew_verses_and_a_span() {
         }
     }
     assert_eq!(hebrew, 17);
+}
+
+#[test]
+fn bootstrap_gives_cards_to_original_words_after_a_heading_inside_the_verse_as_tc4_does() {
+    // A mid-verse `\s5`, `\r`, `\qa`, `\sp`, `\d`, `\ms`, `\s` or `\cl` and the words after
+    // it, and a footnote whose words are not verse words.
+    let cases = vectors("heading-vectors.json");
+    assert_eq!(cases.len(), 10);
+    for case in cases {
+        let reference = case["ref"].as_str().unwrap();
+        let source = source_verse(case["source"].as_str().unwrap(), reference);
+        let verse = TargetVerse::new(case["text"].as_str().unwrap());
+        let value = AlignmentValue::bootstrap(&source, &verse, basis(1));
+        assert_eq!(
+            cards(&value),
+            json_cards(&case["record"]["alignments"]),
+            "{reference}"
+        );
+    }
 }
 
 #[test]
@@ -232,25 +253,52 @@ fn the_sample_projects_record_reads_writes_back_byte_for_byte_and_is_valid() {
 }
 
 #[test]
-fn a_record_that_would_lose_data_is_refused() {
+fn a_record_that_breaks_the_rules_is_refused_and_nothing_it_holds_is_dropped() {
     let file: Value = serde_json::from_str(&read(
         "fixtures/tc4/sample-burrito/ingredients/checking/alignments/TIT.json",
     ))
     .unwrap();
-    let mut stored = file["chapters"]["1"]["1"].clone();
-    stored["wordBank"][0]["disabled"] = Value::Bool(true);
-    assert!(record::from_record(&stored, basis(1)).is_err());
-    let mut stored = file["chapters"]["1"]["1"].clone();
-    stored["alignments"][0]["bottomWords"][0]["occurrence"] = Value::from(0);
-    assert!(record::from_record(&stored, basis(1)).is_err());
-    let mut stored = file["chapters"]["1"]["1"].clone();
-    stored["targetVerseMd5"] = Value::from("F8AEE622DAFF1496BCCC7C2E3B358B43");
-    assert!(record::from_record(&stored, basis(1)).is_err());
-    // Strings of digits are occurrences, as tC4 normalizes them; unknown fields are kept.
-    let mut stored = file["chapters"]["1"]["1"].clone();
+    let original = file["chapters"]["1"]["1"].clone();
+    let refused = |edit: &dyn Fn(&mut Value)| {
+        let mut stored = original.clone();
+        edit(&mut stored);
+        record::from_record(&stored, basis(1)).unwrap_err()
+    };
+    refused(&|r| r["alignments"][0]["bottomWords"][0]["occurrence"] = Value::from(0));
+    refused(&|r| r["targetVerseMd5"] = Value::from("F8AEE622DAFF1496BCCC7C2E3B358B43"));
+    // A field on an alignment: a merge or split could not keep it with its card.
+    refused(&|r| r["alignments"][0]["note"] = Value::from("x"));
+    // A word placed and banked at once, or past its count.
+    assert!(matches!(
+        refused(&|r| {
+            let placed = r["alignments"][0]["bottomWords"][0].clone();
+            r["wordBank"].as_array_mut().unwrap().push(placed);
+        }),
+        tc_align::Error::Malformed(Malformed::TargetWordTwice(_))
+    ));
+    assert!(matches!(
+        refused(&|r| r["wordBank"][0]["occurrence"] = Value::from(9)),
+        tc_align::Error::Malformed(Malformed::TargetOccurrence(_))
+    ));
+    assert!(matches!(
+        refused(&|r| r["alignments"][0]["topWords"][0]["occurrence"] = Value::from(2)),
+        tc_align::Error::Malformed(Malformed::SourceOccurrence(_))
+    ));
+
+    // Strings of digits are occurrences, as tC4 normalizes them; unknown fields are kept,
+    // on the record and on a target word, and the word's go with it to a card.
+    let mut stored = original.clone();
     stored["alignments"][0]["topWords"][0]["occurrence"] = Value::from("1");
     stored["note"] = Value::from("kept");
-    let value = record::from_record(&stored, basis(1)).unwrap();
+    stored["wordBank"][0]["disabled"] = Value::Bool(true);
+    let mut value = record::from_record(&stored, basis(1)).unwrap();
     assert_eq!(value.alignments[0].sources[0].occurrence, 1);
-    assert_eq!(record::to_record(&value, true)["note"], "kept");
+    let back = record::to_record(&value, true);
+    assert_eq!(back["note"], "kept");
+    assert_eq!(back["wordBank"][0]["disabled"], true);
+    let word = value.word_bank[0].clone();
+    value.link(1, &word).unwrap();
+    let back = record::to_record(&value, true);
+    let placed = back["alignments"][1]["bottomWords"].as_array().unwrap();
+    assert_eq!(placed.last().unwrap()["disabled"], true);
 }

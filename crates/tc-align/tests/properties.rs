@@ -11,8 +11,8 @@ use proptest::prelude::*;
 use std::collections::BTreeMap;
 use tc_align::usfm::{from_aligned, weave_verse};
 use tc_align::{
-    Aligner, AlignmentValue, NoReflow, SourceVerse, SourceWord, TargetVerse, TargetWord, record,
-    reflow,
+    Aligner, AlignmentValue, NoReflow, SourceVerse, SourceWord, TargetVerse, TargetWord, WordId,
+    record, reflow,
 };
 
 const TARGET_WORDS: [&str; 7] = ["a", "b", "c", "de", "Dios", "λόγος", "וַ\u{2060}יְהִי"];
@@ -217,7 +217,7 @@ proptest! {
         let (mut stored, _) = edited(&source, &text, &ops);
         stored.marked_invalid = flagged;
         let new_verse = TargetVerse::new(&new_text);
-        let aligner = Aligner::open(Some(&stored), new_verse.clone(), &source, basis(1));
+        let aligner = Aligner::open(Some(&stored), new_verse.clone(), &source, basis(1)).unwrap();
         prop_assert_eq!(
             sorted(aligner.value().all_target_words().cloned()),
             sorted(new_verse.words().to_vec())
@@ -226,6 +226,32 @@ proptest! {
         if !aligner.dropped().is_empty() {
             prop_assert!(!aligner.is_changed(), "a lossy carry-over waits for the translator");
         }
+    }
+
+    #[test]
+    fn edits_after_a_carry_over_keep_every_word_once_and_clear_restores_the_bootstrap_bank(
+        source in source_strategy(),
+        text in text_strategy(),
+        new_text in text_strategy(),
+        ops in prop::collection::vec(op_strategy(), 0..40),
+        more in prop::collection::vec(op_strategy(), 0..40),
+    ) {
+        let (stored, _) = edited(&source, &text, &ops);
+        let verse = TargetVerse::new(&new_text);
+        let mut value = Aligner::open(Some(&stored), verse.clone(), &source, basis(1)).unwrap().into_value();
+        for op in &more {
+            if apply(&mut value, &verse, op) {
+                value.settle(&verse);
+            }
+            prop_assert_eq!(sorted(value.all_target_words().cloned()), sorted(verse.words().to_vec()));
+            prop_assert_eq!(value.well_formed(), Ok(()));
+            if matches!(op, Op::Clear) {
+                prop_assert_eq!(&value.word_bank, &verse.bank_order());
+            }
+        }
+        value.clear(&verse);
+        prop_assert_eq!(&value.word_bank, &verse.bank_order());
+        prop_assert_eq!(value.placed(), 0);
     }
 
     #[test]
@@ -252,8 +278,18 @@ proptest! {
         text in text_strategy(),
         ops in prop::collection::vec(op_strategy(), 0..40),
         invalid in prop::bool::ANY,
+        typed in prop::collection::vec(prop::bool::ANY, 1..8),
     ) {
-        let (value, _) = edited(&source, &text, &ops);
+        let (mut value, _) = edited(&source, &text, &ops);
+        // tC3's word type on some words, banked or placed.
+        let held: Vec<TargetWord> = value.all_target_words().cloned().collect();
+        for (i, word) in held.iter().enumerate() {
+            if typed[i % typed.len()] {
+                let mut extra = serde_json::Map::new();
+                extra.insert("type".into(), "bottomWord".into());
+                value.word_extra.insert(WordId::of(word), extra);
+            }
+        }
         let json = record::to_record(&value, invalid);
         prop_assert_eq!(json["invalid"].as_bool(), Some(invalid));
         let mut back = record::from_record(&json, basis(1)).unwrap();

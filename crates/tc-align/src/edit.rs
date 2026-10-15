@@ -12,8 +12,11 @@
 //!   single cards in place, and the placed target words stay on the first of them.
 //! - Placed words keep the order they were placed in, as tC4 records them.
 //!
-//! The bank's order is tC4's bootstrap order (see [`TargetVerse::bank_order`]): a word
-//! sent back to the bank goes where the bootstrap would have put it. tC4's own unlink
+//! The bank starts in tC4's bootstrap order (see [`TargetVerse::bank_order`]), and
+//! [`AlignmentValue::clear`] puts it back in that order. A carry-over to edited text
+//! leaves it in verse order instead, as tC4's reflow does ([`crate::reflow`]). A word
+//! sent back to the bank goes before the first banked word that the bootstrap puts after
+//! it: in a bank in bootstrap order, exactly where the bootstrap had it. tC4's own unlink
 //! instead re-sorts the whole bank by occurrence and then by the locale's collation, so
 //! the bank changes order under the translator's hand; this keeps every other word where
 //! it was.
@@ -61,6 +64,7 @@ impl AlignmentValue {
             marked_invalid: false,
             dismissed: false,
             extra: serde_json::Map::new(),
+            word_extra: Default::default(),
         }
     }
 
@@ -82,9 +86,10 @@ impl AlignmentValue {
         Ok(())
     }
 
-    /// Send a placed word back to the bank, where tC4's bootstrap would put it for
-    /// `verse`. A word the verse no longer has goes after the words of its occurrence.
-    /// tC4's `unlinkWord`, with the bank order described in the module documentation.
+    /// Send a placed word back to the bank, before the first banked word that tC4's
+    /// bootstrap puts after it for `verse`. A word the verse no longer has goes after the
+    /// words of its occurrence. tC4's `unlinkWord`, with the bank order described in the
+    /// module documentation.
     pub fn unlink(
         &mut self,
         card: usize,
@@ -162,19 +167,17 @@ impl AlignmentValue {
     }
 
     /// Start the verse over: every phrase split into single cards, every placed word back
-    /// in the bank, the bank in bootstrap order for `verse`. Banked words the verse no
-    /// longer has stay, after the words of their occurrence.
+    /// in the bank, and the whole bank in bootstrap order for `verse`, whatever order it
+    /// was in. Banked words the verse no longer has stay, after the words of their
+    /// occurrence.
     pub fn clear(&mut self, verse: &TargetVerse) {
         let groups = std::mem::take(&mut self.alignments);
-        let mut returned = Vec::new();
         for group in groups {
-            returned.extend(group.targets);
+            self.word_bank.extend(group.targets);
             self.alignments
                 .extend(group.sources.into_iter().map(Group::single));
         }
-        for word in returned {
-            bank_insert(&mut self.word_bank, word, verse);
-        }
+        self.word_bank.sort_by_key(|w| bootstrap_key(w, verse));
     }
 
     /// After an edit made against `verse`: the record now vouches for that text, tC3's
@@ -196,14 +199,18 @@ impl AlignmentValue {
     }
 }
 
-/// Insert `word` into a bank kept in bootstrap order for `verse`: before the first banked
-/// word that the bootstrap puts after it.
+/// Where tC4's bootstrap banks `word` for `verse`: by occurrence, then by place in the
+/// verse; a word the verse does not have goes after the words of its occurrence.
+fn bootstrap_key(word: &TargetWord, verse: &TargetVerse) -> (u32, usize) {
+    (word.occurrence, verse.position(word).unwrap_or(usize::MAX))
+}
+
+/// Insert `word` before the first banked word that the bootstrap puts after it.
 fn bank_insert(bank: &mut Vec<TargetWord>, word: TargetWord, verse: &TargetVerse) {
-    let key = |w: &TargetWord| (w.occurrence, verse.position(w).unwrap_or(usize::MAX));
-    let new_key = key(&word);
+    let new_key = bootstrap_key(&word, verse);
     let at = bank
         .iter()
-        .position(|w| key(w) > new_key)
+        .position(|w| bootstrap_key(w, verse) > new_key)
         .unwrap_or(bank.len());
     bank.insert(at, word);
 }

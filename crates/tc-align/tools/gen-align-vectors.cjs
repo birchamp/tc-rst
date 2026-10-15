@@ -14,6 +14,8 @@
 // - suggest-vectors.json: the suggestion benches' training verses for en_ult and en_ust
 //   Titus; `predictLinks` from memory-only models and from boosted models trained with
 //   `Math.random` seeded as tC4's tests seed it; and the growth bench's protocol on Titus.
+// - heading-vectors.json: `bootstrapVerse` against heading-source.usfm, original-language
+//   verses with headings, titles and notes inside them.
 //
 // Run from the repository root with a tC4 checkout at the commit fixtures/tc4 came from:
 //   node crates/tc-align/tools/gen-align-vectors.cjs /path/to/translationcore4 fixtures/align
@@ -22,7 +24,7 @@ const os = require("os");
 const path = require("path");
 
 const [tc4, outDir, ...only] = process.argv.slice(2);
-if (!tc4 || !outDir) throw new Error("usage: gen-align-vectors.cjs <tc4 checkout> <out dir> [bootstrap|extract|reflow|suggest ...]");
+if (!tc4 || !outDir) throw new Error("usage: gen-align-vectors.cjs <tc4 checkout> <out dir> [bootstrap|extract|reflow|headings|suggest ...]");
 const wanted = (section) => only.length === 0 || only.includes(section);
 const nm = path.join(tc4, "node_modules");
 const pinned = {
@@ -226,6 +228,20 @@ const unmerge = (content, original) => {
     });
   }
   if (wanted("reflow")) write("reflow-vectors.json", reflow);
+
+  // ---- headings ----
+  // A heading, title or note inside a verse of the original: which of its words tC4's
+  // bootstrap gives a card.
+  if (wanted("headings")) {
+    const HEADINGS = "fixtures/align/heading-source.usfm";
+    const headings = [];
+    verseObjectsFor(HEADINGS, 1, 1);
+    for (const v of Object.keys(bookJson.get(HEADINGS).chapters["1"]).filter((k) => /^\d+$/.test(k))) {
+      const text = "one two";
+      headings.push({ ref: `1:${v}`, source: HEADINGS, text, record: tc.bootstrapVerse(text, verseObjectsFor(HEADINGS, 1, v), SOURCE_OT) });
+    }
+    write("heading-vectors.json", headings);
+  }
 
   // ---- suggestions ----
   if (!wanted("suggest")) return;

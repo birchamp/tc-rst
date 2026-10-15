@@ -8,7 +8,7 @@ mod common;
 
 use common::*;
 use tc_align::{
-    AlignmentValue, NoReflow, SourceVerse, SourceWord, TargetVerse, TargetWord, reflow,
+    AlignmentValue, NoReflow, SourceVerse, SourceWord, TargetVerse, TargetWord, WordId, reflow,
 };
 
 fn greek(text: &str, strong: &str, lemma: &str) -> SourceWord {
@@ -228,4 +228,58 @@ fn reflow_matches_tc4_on_edited_en_ult_verses_and_drops_nothing_silently() {
     }
     assert_eq!((reflowed, refused), (16 * 4, 16 * 2 + 1));
     assert!(dropped > 0);
+}
+
+#[test]
+fn a_word_held_on_two_cards_is_kept_on_the_first_and_reported_dropped_from_the_second() {
+    // tC4 would keep both links; one word on two cards is one word aligned twice, which
+    // the aligned USFM cannot write, so the second link is reported, not kept.
+    let mut twice = linked();
+    let pablo = twice.alignments[0].targets[0].clone();
+    twice.alignments[2].targets.push(pablo.clone());
+    assert!(twice.well_formed().is_err());
+    let next = reflow(
+        &twice,
+        &TargetVerse::new("Pablo, siervo de Dios y apóstol de Dios"),
+    )
+    .unwrap();
+    assert_eq!(
+        next.value.alignments[0].targets,
+        std::slice::from_ref(&pablo)
+    );
+    assert!(!next.value.alignments[2].targets.contains(&pablo));
+    assert_eq!(next.dropped.len(), 1);
+    assert_eq!((next.dropped[0].card, &next.dropped[0].word), (2, &pablo));
+    assert_eq!(next.value.well_formed(), Ok(()));
+    assert_eq!(twice.placed(), next.value.placed() + next.dropped.len());
+}
+
+#[test]
+fn a_word_keeps_its_extra_fields_across_a_reflow_while_it_stays_in_the_verse() {
+    let mut before = linked();
+    let mut typed = serde_json::Map::new();
+    typed.insert("type".into(), "bottomWord".into());
+    for word in before.all_target_words().cloned().collect::<Vec<_>>() {
+        before.word_extra.insert(WordId::of(&word), typed.clone());
+    }
+    // "siervo" is gone: its link drops and its fields go with it.
+    let next = reflow(
+        &before,
+        &TargetVerse::new("Pablo, esclavo de Dios y de Dios"),
+    )
+    .unwrap();
+    let keys = |v: &AlignmentValue| -> Vec<String> {
+        v.word_extra
+            .keys()
+            .map(|k| format!("{}{}", k.text, k.occurrence))
+            .collect()
+    };
+    assert!(keys(&before).contains(&"siervo1".to_owned()));
+    assert!(!keys(&next.value).contains(&"siervo1".to_owned()));
+    assert!(keys(&next.value).contains(&"Pablo1".to_owned()));
+    assert!(
+        keys(&next.value).contains(&"de2".to_owned()),
+        "banked words keep theirs"
+    );
+    assert_eq!(next.value.well_formed(), Ok(()));
 }

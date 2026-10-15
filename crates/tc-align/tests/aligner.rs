@@ -19,6 +19,7 @@ fn open(stored: Option<&AlignmentValue>, text: &str) -> Aligner {
         &source_verse(UGNT, "1:1"),
         basis(1),
     )
+    .unwrap()
 }
 
 const TEXT: &str = "Paul, a servant of God and an apostle of Jesus Christ";
@@ -265,4 +266,124 @@ fn suggestions_from_a_model_trained_on_titus_are_proposals_for_bank_words_only()
         assert!(aligner.value().word_bank.contains(&p.word));
         assert_ne!(p.word.text, "Paul", "a placed word is never proposed");
     }
+}
+
+#[test]
+fn a_verse_with_no_original_words_or_no_target_words_does_not_open() {
+    use tc_align::{SourceVerse, Unavailable};
+    let refused = |verse: &str, source: &SourceVerse| {
+        Aligner::open(None, TargetVerse::new(verse), source, basis(1)).unwrap_err()
+    };
+    // tC4 shows its "missing" notice: no cards to place on, and no Mark valid that
+    // vouches for a verse nothing could be aligned in.
+    assert_eq!(
+        refused(TEXT, &SourceVerse::default()),
+        Unavailable::NoSource
+    );
+    assert_eq!(
+        refused("", &source_verse(UGNT, "1:1")),
+        Unavailable::NoWords
+    );
+    assert_eq!(
+        refused("— .", &source_verse(UGNT, "1:1")),
+        Unavailable::NoWords
+    );
+    let stored = paul_and_servant();
+    assert_eq!(
+        Aligner::open(
+            Some(&stored),
+            TargetVerse::new(TEXT),
+            &SourceVerse::default(),
+            basis(1)
+        )
+        .unwrap_err(),
+        Unavailable::NoSource
+    );
+}
+
+#[test]
+fn a_record_flagged_for_re_review_opens_as_it_is_and_the_first_edit_clears_the_flag() {
+    let mut flagged = paul_and_servant();
+    flagged.marked_invalid = true;
+    let mut aligner = open(Some(&flagged), TEXT);
+    assert_eq!(aligner.value(), &flagged);
+    aligner.place(2, &banked(&aligner, "God")).unwrap();
+    assert!(!aligner.value().marked_invalid);
+}
+
+#[test]
+fn a_stored_word_held_in_two_places_opens_in_one() {
+    // Placed on card 0 and also left in the bank: the bank copy goes, nothing is lost.
+    let mut both = paul_and_servant();
+    let paul = both.alignments[0].targets[0].clone();
+    both.word_bank.push(paul.clone());
+    let mut aligner = open(Some(&both), TEXT);
+    assert!(!aligner.value().word_bank.contains(&paul));
+    assert_eq!(
+        aligner.value().alignments[0].targets,
+        std::slice::from_ref(&paul)
+    );
+    assert!(aligner.dropped().is_empty());
+    assert!(
+        !aligner.is_changed(),
+        "the stored value is not rewritten unasked"
+    );
+    assert!(aligner.place(1, &paul).is_err(), "never on a second card");
+    assert_eq!(
+        aligner.value().total(),
+        TargetVerse::new(TEXT).words().len()
+    );
+    assert!(tc_align::usfm::weave_verse(TEXT, aligner.value()).is_ok());
+
+    // Placed on two cards: kept on the first, the second link reported.
+    let mut twice = paul_and_servant();
+    twice.alignments[2].targets.push(paul.clone());
+    let aligner = open(Some(&twice), TEXT);
+    assert_eq!(aligner.dropped().len(), 1);
+    assert_eq!(
+        (aligner.dropped()[0].card, &aligner.dropped()[0].word),
+        (2, &paul)
+    );
+    assert_eq!(aligner.value().well_formed(), Ok(()));
+}
+
+#[test]
+fn clear_after_a_carry_over_puts_the_bank_back_in_bootstrap_order() {
+    let mut first = open(None, "the cat saw the dog");
+    first.place(0, &banked(&first, "cat")).unwrap();
+    let stored = first.into_value();
+    let edited = "the cat saw the big dog";
+    let mut aligner = open(Some(&stored), edited);
+    assert_eq!(aligner.value().placed(), 1);
+    aligner.clear();
+    assert_eq!(
+        aligner.value().word_bank,
+        TargetVerse::new(edited).bank_order()
+    );
+    assert_eq!(aligner.value().placed(), 0);
+}
+
+#[test]
+fn accept_all_places_every_standing_proposal_as_clicks_would() {
+    let mut aligner = open(None, TEXT);
+    let input = aligner.session_input();
+    let at = |word: &str| input.target().iter().position(|t| t.text == word).unwrap();
+    let raw: Vec<RawLink> = [(0, "Paul"), (1, "servant"), (2, "God")]
+        .into_iter()
+        .map(|(source, word)| RawLink {
+            source: vec![source],
+            target: vec![at(word)],
+            confidence: 0.9,
+        })
+        .collect();
+    aligner.show_suggestions(&raw);
+    assert_eq!(aligner.proposals().len(), 3);
+    let mut by_hand = open(None, TEXT);
+    for (card, word) in [(0, "Paul"), (1, "servant"), (2, "God")] {
+        by_hand.place(card, &banked(&by_hand, word)).unwrap();
+    }
+    assert_eq!(aligner.accept_all(), 3);
+    assert_eq!(aligner.value(), by_hand.value());
+    assert!(aligner.proposals().is_empty());
+    aligner.mark_valid().unwrap();
 }

@@ -23,6 +23,21 @@ use tc_usfm::TargetWord;
 #[error("confirm or reject the suggested links first")]
 pub struct MarkValidRefused;
 
+/// Why a verse cannot open in the Align workspace: there is nothing to align, and tC4
+/// shows its "missing" notice instead of an aligner (`buildAlignmentSession`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum Unavailable {
+    /// The original-language verse is not available (not installed, or the source has
+    /// no words for this verse).
+    #[error("the original-language verse is not available")]
+    NoSource,
+    /// The verse has no words. tC4 refuses an empty verse; a verse of punctuation alone
+    /// is refused here too, since there is no word to place and Mark valid would vouch
+    /// for nothing.
+    #[error("the verse has no words to align")]
+    NoWords,
+}
+
 /// One open verse. See the module documentation.
 #[derive(Debug, Clone)]
 pub struct Aligner {
@@ -35,8 +50,9 @@ pub struct Aligner {
 }
 
 impl Aligner {
-    /// Open a verse.
+    /// Open a verse, or say why it cannot open.
     ///
+    /// - With no original-language words or no target words, it does not open.
     /// - With no stored value, or one with no cards (the removal form, or the empty
     ///   value a span change leaves in tC4), the verse starts from
     ///   [`AlignmentValue::bootstrap`].
@@ -44,9 +60,12 @@ impl Aligner {
     ///   joined into a span or split from one since) does not fit the original words
     ///   shown: the verse starts from the bootstrap, and the stored value is kept aside
     ///   in [`Aligner::earlier`] for the app to offer, as STORAGE.md §7.7 does.
-    /// - A stored value made against this text opens as it is.
-    /// - A stored value made against other text opens carried over to `verse` (see
-    ///   [`crate::reflow`]), so every word the aligner offers is a word of the verse.
+    /// - A stored value made against this text opens as it is, if it is
+    ///   [well formed](AlignmentValue::well_formed).
+    /// - A stored value made against other text, or one that holds a word twice, opens
+    ///   carried over to `verse` (see [`crate::reflow`]), so every word the aligner
+    ///   offers is a word of the verse, in one place: a bank copy of a placed word goes,
+    ///   and a word on a second card is dropped and reported.
     ///   If the carry-over dropped a link, the links are in [`Aligner::dropped`], and the
     ///   aligner counts as changed only after the translator edits the verse or calls
     ///   [`Aligner::keep_reflow`]; leaving without either keeps the stored value as it
@@ -58,7 +77,13 @@ impl Aligner {
         verse: TargetVerse,
         source: &SourceVerse,
         basis: Basis,
-    ) -> Self {
+    ) -> Result<Self, Unavailable> {
+        if source.is_empty() {
+            return Err(Unavailable::NoSource);
+        }
+        if verse.words().is_empty() {
+            return Err(Unavailable::NoWords);
+        }
         let mut aligner = Self {
             value: AlignmentValue::bootstrap(source, &verse, basis.clone()),
             verse,
@@ -68,22 +93,22 @@ impl Aligner {
             changed: false,
         };
         let Some(stored) = stored.filter(|s| !s.alignments.is_empty()) else {
-            return aligner;
+            return Ok(aligner);
         };
         if stored.span_end != basis.span_end {
             aligner.earlier = Some(stored.clone());
-            return aligner;
+            return Ok(aligner);
         }
-        if !stored.is_stale_against(&aligner.verse) {
+        if !stored.is_stale_against(&aligner.verse) && stored.well_formed().is_ok() {
             aligner.value = stored.clone();
-            return aligner;
+            return Ok(aligner);
         }
         let tc4_would_reflow = reflow::reflow(stored, &aligner.verse).is_ok();
         let carried = reflow::carry(stored, &aligner.verse);
         aligner.changed = tc4_would_reflow && carried.is_lossless();
         aligner.value = carried.value;
         aligner.dropped = carried.dropped;
-        aligner
+        Ok(aligner)
     }
 
     pub fn value(&self) -> &AlignmentValue {
@@ -209,17 +234,18 @@ impl Aligner {
         self.place(proposal.card, &proposal.word)
     }
 
-    /// Accept every proposal. Returns how many were placed.
+    /// Accept every proposal, each as a click would place it. Returns how many were
+    /// placed.
+    ///
+    /// Each standing proposal is for a different bank word and an existing card, and a
+    /// placement moves no card, so each one places; one that did not would be skipped
+    /// without holding back the others.
     pub fn accept_all(&mut self) -> usize {
-        let mut placed = 0;
-        while let Some(proposal) = self.proposals.first().cloned() {
-            if self.place(proposal.card, &proposal.word).is_ok() {
-                placed += 1;
-            } else {
-                self.proposals.remove(0);
-            }
-        }
-        placed
+        let standing = self.proposals.clone();
+        standing
+            .iter()
+            .filter(|p| self.place(p.card, &p.word).is_ok())
+            .count()
     }
 
     /// Reject every proposal. The value is not changed.

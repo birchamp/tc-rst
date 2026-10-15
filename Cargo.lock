@@ -1958,6 +1958,7 @@ dependencies = [
  "tc-usfm",
  "tc-versification",
  "thiserror",
+ "zip",
 ]
 
 [[package]]
