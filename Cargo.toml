@@ -25,6 +25,8 @@ serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"
 proptest = "1"
 tempfile = "3"
+md-5 = "0.10.6"
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # Full debug info made each agent worktree's target dir several GB and filled the disk.
 [profile.dev]

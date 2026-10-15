@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc bf06b2f9d119363481af3c2dca6c2844d05d428783167bbf38929c24503bf8ee # shrinks to source = SourceVerse { words: [SourceWord { content: "Α", strong: Some("G1"), lemma: Some("α"), morph: Some("Gr,N,,,,,NMS,"), occurrence: 1, occurrences: 1, extra: [] }] }, text = "a.", new_text = "a a.", ops = [], more = [Link(14, 6)]
+cc fcbaf28e461c2184751c5d2892b2712fe4e77fcfc912f8bd984b18da4133884a # shrinks to source = SourceVerse { words: [SourceWord { content: "Α", strong: Some("G1"), lemma: Some("α"), morph: Some("Gr,N,,,,,NMS,"), occurrence: 1, occurrences: 1, extra: [] }] }, text = "a a.", ops = [Link(14, 13), Link(2, 0), Clear]
