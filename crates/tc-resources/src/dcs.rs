@@ -90,6 +90,35 @@ pub async fn install_dcs_as(
     store.install(staged)
 }
 
+/// Installs a burrito export already at hand: a zip a person picked from a USB drive, or
+/// one an installer building the bundled store downloaded earlier (tC4 `verifySideload`).
+/// It is checked as a download is: its metadata must declare the pin's commit as its DCS
+/// revision, every ingredient must match its checksum, and it must name the pinned
+/// repository.
+pub fn install_dcs_zip(
+    store: &ResourceStore,
+    pin: &ResourcePin,
+    zip: &[u8],
+    max_unpacked: u64,
+) -> Result<Installed, InstallError> {
+    if let Some(installed) = store.dcs(pin)? {
+        return Ok(installed);
+    }
+    let export = tc_door43::verify_sb_export(zip, &pin.sha, max_unpacked).map_err(|e| {
+        InstallError::Refused {
+            what: pin.to_string(),
+            refusal: Refusal::Door43(e),
+        }
+    })?;
+    let staged = from_export(
+        pin,
+        export.files,
+        export.unlisted,
+        export.missing_ingredients,
+    )?;
+    store.install(staged)
+}
+
 /// Installs each pin in order, stopping at the first failure, which names its pin. A
 /// release moves a project's pins only after every resource of it is installed and
 /// verified (D72), so a failed download changes nothing.

@@ -4,9 +4,6 @@
 //! (`manifest.yaml`, `tn_TIT.tsv`, `57-TIT.usfm`, `bible/kt/god.md`). The TSV and USFM
 //! bytes are the same in both; only the paths differ.
 
-// The loader, the next step, reads books and articles through these.
-#![allow(dead_code)]
-
 use tc_core::BookId;
 use tc_helps::{Manual, Slug};
 

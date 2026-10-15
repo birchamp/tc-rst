@@ -200,3 +200,50 @@ pub async fn aquifer_rig() -> AquiferRig {
         store,
     }
 }
+
+/// The DCS burrito export of a fixture folder under `fixtures/tc4/test-fixtures/resources`,
+/// rebuilt as Door43 serves it: `<repo>/metadata.json` and each fixture file at its
+/// export path. The fixture files are byte-identical to the export's, so they match the
+/// checksums the unmodified metadata lists.
+pub fn fixture_export(dir: &str, files: &[(&str, &str)]) -> Vec<u8> {
+    let base = format!("tc4/test-fixtures/resources/{dir}");
+    let repo = dir.split('@').next().unwrap();
+    let mut entries = vec![(
+        format!("{repo}/metadata.json"),
+        fixture(&format!("{base}/metadata.json")),
+    )];
+    for (file, path) in files {
+        entries.push((format!("{repo}/{path}"), fixture(&format!("{base}/{file}"))));
+    }
+    let refs: Vec<(&str, &[u8])> = entries
+        .iter()
+        .map(|(n, b)| (n.as_str(), b.as_slice()))
+        .collect();
+    zip(&refs)
+}
+
+/// The pin of a fixture export: its declared revision, under the registry owner.
+pub fn fixture_pin(dir: &str, repo: &str, tag: &str) -> ResourcePin {
+    let metadata: serde_json::Value = serde_json::from_slice(&fixture(&format!(
+        "tc4/test-fixtures/resources/{dir}/metadata.json"
+    )))
+    .unwrap();
+    let dcs = metadata["identification"]["primary"]["dcs"]
+        .as_object()
+        .unwrap();
+    let revision = dcs.values().next().unwrap()["revision"].as_str().unwrap();
+    ResourcePin::new(repo_path(repo), revision.parse().unwrap()).with_version(tag.parse().unwrap())
+}
+
+/// Installs a fixture export through the sideload path, offline.
+pub fn install_fixture(
+    store: &ResourceStore,
+    dir: &str,
+    repo: &str,
+    tag: &str,
+    files: &[(&str, &str)],
+) -> ResourcePin {
+    let pin = fixture_pin(dir, repo, tag);
+    tc_resources::install_dcs_zip(store, &pin, &fixture_export(dir, files), 1 << 30).unwrap();
+    pin
+}

@@ -1,5 +1,8 @@
 //! Installing exact Door43 commits from the fake Door43 server.
 
+// Test helpers sit outside `#[test]` functions, where clippy.toml already allows these.
+#![allow(clippy::unwrap_used, clippy::panic)]
+
 mod common;
 
 use common::{commit_pin, nothing_installed, release, repo_path, rig, zip};
