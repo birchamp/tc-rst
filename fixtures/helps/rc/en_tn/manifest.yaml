@@ -1,0 +1,53 @@
+dublin_core:
+  conformsto: 'rc0.2'
+  contributor:
+    - 'unfoldingWord'
+  creator: 'unfoldingWord'
+  description: 'Open-licensed exegetical notes that provide historical, cultural, and linguistic information for translators.'
+  format: 'text/tsv'
+  identifier: 'tn'
+  issued: '2024-02-21'
+  language:
+    direction: 'ltr'
+    identifier: 'en'
+    title: 'English'
+  modified: '2024-02-21'
+  publisher: 'unfoldingWord'
+  relation:
+    - 'en/ta'
+    - 'en/tq'
+    - 'en/tw'
+    - 'en/ult'
+    - 'en/ust'
+    - 'el-x-koine/ugnt?v=0.34'
+    - 'hbo/uhb?v=2.1.30'
+  rights: 'CC BY-SA 4.0'
+  source:
+    - identifier: 'tn'
+      language: 'en'
+      version: '85'
+  subject: 'TSV Translation Notes'
+  title: 'unfoldingWord® Translation Notes'
+  type: 'help'
+  version: '86'
+
+checking:
+  checking_entity:
+    - 'unfoldingWord'
+  checking_level: '3'
+
+projects:
+  - title: 'Jonah'
+    versification: 'ufw'
+    identifier: 'jon'
+    sort: 32
+    path: './tn_JON.tsv'
+    categories:
+      - 'bible-ot'
+  - title: 'Titus'
+    versification: 'ufw'
+    identifier: 'tit'
+    sort: 57
+    path: './tn_TIT.tsv'
+    categories:
+      - 'bible-nt'

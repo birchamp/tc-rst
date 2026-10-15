@@ -1,0 +1,1546 @@
+[
+{
+"content_id": "580894",
+"reference_id": 133841,
+"version": "1.0.4",
+"title": "Tito 1.1",
+"media_type": "Text",
+"index_reference": "56001001",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Qual era o propósito de Paulo em seu serviço a Deus?</strong></p><p>Seu propósito era estabelecer a fé do povo escolhido de Deus e estabelecer o conhecimento da verdade.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001001",
+"start_ref_usfm": "TIT 1:1",
+"end_ref": "56001001",
+"end_ref_usfm": "TIT 1:1"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "person:Paul",
+"type": "person",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Paulo"
+},
+{
+"id": "keyterm:Truth",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Truth"
+},
+{
+"id": "keyterm:Chosen",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "escolhido"
+},
+{
+"id": "keyterm:Believe",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "crer"
+},
+{
+"id": "person:Jesus.2",
+"type": "person",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Jesus"
+},
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "SENHOR"
+}
+]
+}
+},
+{
+"content_id": "580895",
+"reference_id": 133842,
+"version": "1.0.4",
+"title": "Tito 1.2",
+"media_type": "Text",
+"index_reference": "56001002",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Quando Deus prometeu vida eterna ao seu povo escolhido?</strong></p><p>Ele prometeu isso a eles antes da criação do mundo.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001002",
+"start_ref_usfm": "TIT 1:2",
+"end_ref": "56001002",
+"end_ref_usfm": "TIT 1:2"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Life",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Life"
+},
+{
+"id": "keyterm:Promise",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "promessa"
+},
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "SENHOR"
+},
+{
+"id": "keyterm:Always",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "para a eternidade"
+},
+{
+"id": "keyterm:Hope",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "hope"
+}
+]
+}
+},
+{
+"content_id": "580896",
+"reference_id": 133843,
+"version": "1.0.4",
+"title": "Tito 1.2 (#2)",
+"media_type": "Text",
+"index_reference": "56001002",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Deus mente?</strong></p><p>Não.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001002",
+"start_ref_usfm": "TIT 1:2",
+"end_ref": "56001002",
+"end_ref_usfm": "TIT 1:2"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Life",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Life"
+},
+{
+"id": "keyterm:Promise",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "promessa"
+},
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "SENHOR"
+},
+{
+"id": "keyterm:Always",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "para a eternidade"
+},
+{
+"id": "keyterm:Hope",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "hope"
+}
+]
+}
+},
+{
+"content_id": "580897",
+"reference_id": 133844,
+"version": "1.0.4",
+"title": "Tito 1.3",
+"media_type": "Text",
+"index_reference": "56001003",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>A quem Deus confiou sua proclamação no momento certo?</strong></p><p>Deus confiou isso ao apóstolo Paulo.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001003",
+"start_ref_usfm": "TIT 1:3",
+"end_ref": "56001003",
+"end_ref_usfm": "TIT 1:3"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "SENHOR"
+},
+{
+"id": "keyterm:Savior",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "salvador"
+},
+{
+"id": "keyterm:Proclaim",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "proclamar"
+},
+{
+"id": "keyterm:Believe",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "crer"
+}
+]
+}
+},
+{
+"content_id": "580898",
+"reference_id": 133845,
+"version": "1.0.4",
+"title": "Tito 1.4",
+"media_type": "Text",
+"index_reference": "56001004",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Qual era o relacionamento entre Tito e Paulo?</strong></p><p>Tito era como um verdadeiro filho para Paulo por causa de sua fé comum.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001004",
+"start_ref_usfm": "TIT 1:4",
+"end_ref": "56001004",
+"end_ref_usfm": "TIT 1:4"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "person:Titus",
+"type": "person",
+"confidence": 0.8,
+"match_method": "canonical",
+"preferred_label": "Tito"
+},
+{
+"id": "keyterm:Favor",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "favor"
+},
+{
+"id": "keyterm:Believe",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "crer"
+},
+{
+"id": "keyterm:Peace",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "fazer a paz"
+},
+{
+"id": "person:Jesus.2",
+"type": "person",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Jesus"
+},
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "SENHOR"
+},
+{
+"id": "keyterm:InCommon",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "comum"
+},
+{
+"id": "keyterm:Savior",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "salvador"
+}
+]
+}
+},
+{
+"content_id": "580899",
+"reference_id": 133846,
+"version": "1.0.4",
+"title": "Tito 1.6",
+"media_type": "Text",
+"index_reference": "56001006",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Como devem ser a esposa e os filhos de um presbítero?</strong></p><p>Ele deve ser marido de uma só esposa e ter filhos fiéis que não sejam acusados de comportamento irresponsável ou rebeldia.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001006",
+"start_ref_usfm": "TIT 1:6",
+"end_ref": "56001006",
+"end_ref_usfm": "TIT 1:6"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:WithoutReproach",
+"type": "keyterm",
+"confidence": 0.8,
+"match_method": "canonical",
+"preferred_label": "irrepreensível"
+},
+{
+"id": "keyterm:Faithfulness",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Faithfulness"
+}
+]
+}
+},
+{
+"content_id": "580900",
+"reference_id": 133847,
+"version": "1.0.4",
+"title": "Tito 1.7",
+"media_type": "Text",
+"index_reference": "56001007",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Quais são algumas das características que um ancião deve evitar para ser irrepreensível?</strong></p><p>Ele não deve ser arrogante, facilmente irritado, viciado em vinho, briguento ou ganancioso.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001007",
+"start_ref_usfm": "TIT 1:7",
+"end_ref": "56001007",
+"end_ref_usfm": "TIT 1:7"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:WithoutReproach",
+"type": "keyterm",
+"confidence": 0.8,
+"match_method": "canonical",
+"preferred_label": "irrepreensível"
+},
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "SENHOR"
+}
+]
+}
+},
+{
+"content_id": "580901",
+"reference_id": 133848,
+"version": "1.0.4",
+"title": "Tito 1.7 (#2)",
+"media_type": "Text",
+"index_reference": "56001007",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Qual é a posição e responsabilidade de um supervisor na casa de Deus?</strong></p><p>Ele é como o administrador da casa de Deus.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001007",
+"start_ref_usfm": "TIT 1:7",
+"end_ref": "56001007",
+"end_ref_usfm": "TIT 1:7"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:WithoutReproach",
+"type": "keyterm",
+"confidence": 0.8,
+"match_method": "canonical",
+"preferred_label": "irrepreensível"
+},
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "SENHOR"
+}
+]
+}
+},
+{
+"content_id": "580902",
+"reference_id": 133849,
+"version": "1.0.4",
+"title": "Tito 1.8",
+"media_type": "Text",
+"index_reference": "56001008",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Quais boas qualidades um ancião deve ter?</strong></p><p>Um ancião deve ser hospitaleiro, amigo do que é bom, sensato, justo, santo e autocontrolado.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001008",
+"start_ref_usfm": "TIT 1:8",
+"end_ref": "56001008",
+"end_ref_usfm": "TIT 1:8"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Just",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "be (or show oneself) just"
+},
+{
+"id": "keyterm:LikingWhatIsGood",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "amigo do bem"
+},
+{
+"id": "keyterm:Holy",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "holy"
+}
+]
+}
+},
+{
+"content_id": "580903",
+"reference_id": 133850,
+"version": "1.0.4",
+"title": "Tito 1.9",
+"media_type": "Text",
+"index_reference": "56001009",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Qual deve ser a atitude de um ancião em relação à mensagem que lhe foi ensinada?</strong></p><p>Ele deve se apegar firmemente a isso e, assim, ser capaz de encorajar e repreender os outros.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001009",
+"start_ref_usfm": "TIT 1:9",
+"end_ref": "56001009",
+"end_ref_usfm": "TIT 1:9"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:AskFor",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "rogar"
+},
+{
+"id": "keyterm:Faithfulness",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Faithfulness"
+},
+{
+"id": "keyterm:Encourage",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "exortar"
+}
+]
+}
+},
+{
+"content_id": "580904",
+"reference_id": 133851,
+"version": "1.0.4",
+"title": "Tito 1.11",
+"media_type": "Text",
+"index_reference": "56001011",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>O que os falsos mestres estavam fazendo com seus ensinamentos?</strong></p><p>Eles estavam perturbando famílias inteiras.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001011",
+"start_ref_usfm": "TIT 1:11",
+"end_ref": "56001011",
+"end_ref_usfm": "TIT 1:11"
+}
+],
+"resource": [],
+"acai": []
+}
+},
+{
+"content_id": "580905",
+"reference_id": 133852,
+"version": "1.0.4",
+"title": "Tito 1.11 (#2)",
+"media_type": "Text",
+"index_reference": "56001011",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>O que os falsos mestres queriam?</strong></p><p>Eles queriam lucro vergonhoso.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001011",
+"start_ref_usfm": "TIT 1:11",
+"end_ref": "56001011",
+"end_ref_usfm": "TIT 1:11"
+}
+],
+"resource": [],
+"acai": []
+}
+},
+{
+"content_id": "580906",
+"reference_id": 133853,
+"version": "1.0.4",
+"title": "Tito 1.13",
+"media_type": "Text",
+"index_reference": "56001013",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Como um ancião deve tratar esses falsos mestres que prejudicam a igreja?</strong></p><p>Ele deve repreendê-los severamente para que sejam sãos na fé.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001013",
+"start_ref_usfm": "TIT 1:13",
+"end_ref": "56001013",
+"end_ref_usfm": "TIT 1:13"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:BearWitness",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "testemunhar"
+},
+{
+"id": "keyterm:Believe",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "crer"
+},
+{
+"id": "keyterm:True",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "verdadeiro"
+}
+]
+}
+},
+{
+"content_id": "580907",
+"reference_id": 133854,
+"version": "1.0.4",
+"title": "Tito 1.14",
+"media_type": "Text",
+"index_reference": "56001014",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>A que Paulo disse que eles não deveriam prestar atenção?</strong></p><p>Eles não devem prestar atenção a mitos judaicos e a mandamentos de homens.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001014",
+"start_ref_usfm": "TIT 1:14",
+"end_ref": "56001014",
+"end_ref_usfm": "TIT 1:14"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "group:Jews",
+"type": "group",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Jews"
+},
+{
+"id": "keyterm:Commandment",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Commandment"
+},
+{
+"id": "keyterm:Truth",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Truth"
+}
+]
+}
+},
+{
+"content_id": "580908",
+"reference_id": 133855,
+"version": "1.0.4",
+"title": "Tito 1.15",
+"media_type": "Text",
+"index_reference": "56001015",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Em um homem incrédulo, o que está corrompido?</strong></p><p>Tanto a mente quanto a consciência dele estão corrompidas.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001015",
+"start_ref_usfm": "TIT 1:15",
+"end_ref": "56001015",
+"end_ref_usfm": "TIT 1:15"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Clean",
+"type": "keyterm",
+"confidence": 0.8,
+"match_method": "canonical",
+"preferred_label": "limpo"
+},
+{
+"id": "keyterm:Defilement",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "defilement"
+},
+{
+"id": "keyterm:Conscience",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "consciência"
+},
+{
+"id": "keyterm:Unfaithful",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "be unfaithful"
+}
+]
+}
+},
+{
+"content_id": "580909",
+"reference_id": 133856,
+"version": "1.0.4",
+"title": "Tito 1.16",
+"media_type": "Text",
+"index_reference": "56001016",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Embora o homem corrompido professe conhecer a Deus, como ele o nega?</strong></p><p>Ele nega Deus através de suas ações.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001016",
+"start_ref_usfm": "TIT 1:16",
+"end_ref": "56001016",
+"end_ref_usfm": "TIT 1:16"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "SENHOR"
+},
+{
+"id": "keyterm:Good",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Good"
+}
+]
+}
+},
+{
+"content_id": "580910",
+"reference_id": 133857,
+"version": "1.0.4",
+"title": "Tito 2.2",
+"media_type": "Text",
+"index_reference": "56002002",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Quais são algumas características que os homens mais velhos na igreja devem ter?</strong></p><p>Devem ser moderados, sérios, prudentes e firmes na fé, no amor e na perseverança.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002002",
+"start_ref_usfm": "TIT 2:2",
+"end_ref": "56002002",
+"end_ref_usfm": "TIT 2:2"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Believe",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "crer"
+},
+{
+"id": "keyterm:Love",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "love"
+}
+]
+}
+},
+{
+"content_id": "580911",
+"reference_id": 133858,
+"version": "1.0.4",
+"title": "Tito 2.3",
+"media_type": "Text",
+"index_reference": "56002003",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Quais são algumas características que as mulheres mais velhas na igreja devem ter?</strong></p><p>Devem ser reverentes, sóbrias, não caluniadoras, ser exemplos do que é bom.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002003",
+"start_ref_usfm": "TIT 2:3",
+"end_ref": "56002003",
+"end_ref_usfm": "TIT 2:3"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "realia:Wine",
+"type": "realia",
+"confidence": 0.54,
+"match_method": "canonical",
+"preferred_label": "Wine"
+}
+]
+}
+},
+{
+"content_id": "580912",
+"reference_id": 133859,
+"version": "1.0.4",
+"title": "Tito 2.4",
+"media_type": "Text",
+"index_reference": "56002004",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>O que as mulheres mais velhas devem ensinar às mais jovens a fazer?</strong></p><p>Elas devem ser ensinadas a amar e obedecer aos seus maridos, e a amar seus filhos.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002004",
+"start_ref_usfm": "TIT 2:4",
+"end_ref": "56002004",
+"end_ref_usfm": "TIT 2:4"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:HavingLoveForOnesHusband",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "que ama seu marido"
+}
+]
+}
+},
+{
+"content_id": "580913",
+"reference_id": 133860,
+"version": "1.0.4",
+"title": "Tito 2.7",
+"media_type": "Text",
+"index_reference": "56002007",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Como Tito deve se apresentar como exemplo de boas obras?</strong></p><p>Em seu ensino, ele deve ser incorrupto, agir com dignidade e transmitir uma mensagem sólida que esteja acima de críticas.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002007",
+"start_ref_usfm": "TIT 2:7",
+"end_ref": "56002007",
+"end_ref_usfm": "TIT 2:7"
+}
+],
+"resource": [],
+"acai": []
+}
+},
+{
+"content_id": "580914",
+"reference_id": 133861,
+"version": "1.0.4",
+"title": "Tito 2.8",
+"media_type": "Text",
+"index_reference": "56002008",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>O que acontecerá com aqueles que se opõem a Tito se ele for um bom exemplo?</strong></p><p>Aqueles que se opõem a ele ficarão envergonhados porque não têm nada de ruim a dizer sobre ele.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002008",
+"start_ref_usfm": "TIT 2:8",
+"end_ref": "56002008",
+"end_ref_usfm": "TIT 2:8"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:BeyondReproach",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "irrepreensível"
+}
+]
+}
+},
+{
+"content_id": "580915",
+"reference_id": 133862,
+"version": "1.0.4",
+"title": "Tito 2.9",
+"media_type": "Text",
+"index_reference": "56002009",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Como devem se comportar os escravos que são crentes?</strong></p><p>Devem obedecer aos seus mestres, ser agradáveis e não discutir.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002009",
+"start_ref_usfm": "TIT 2:9",
+"end_ref": "56002009",
+"end_ref_usfm": "TIT 2:9"
+}
+],
+"resource": [],
+"acai": []
+}
+},
+{
+"content_id": "580916",
+"reference_id": 133863,
+"version": "1.0.4",
+"title": "Tito 2.10",
+"media_type": "Text",
+"index_reference": "56002010",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Quando os escravos cristãos se comportam conforme Paulo instruiu, que efeito isso terá sobre os outros?</strong></p><p>Isso trará crédito ao ensino sobre Deus, nosso Salvador.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002010",
+"start_ref_usfm": "TIT 2:10",
+"end_ref": "56002010",
+"end_ref_usfm": "TIT 2:10"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "SENHOR"
+},
+{
+"id": "keyterm:Good",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Good"
+},
+{
+"id": "keyterm:Savior",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "salvador"
+},
+{
+"id": "keyterm:Believe",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "crer"
+}
+]
+}
+},
+{
+"content_id": "580917",
+"reference_id": 133864,
+"version": "1.0.4",
+"title": "Tito 2.11",
+"media_type": "Text",
+"index_reference": "56002011",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Quem a graça de Deus pode salvar?</strong></p><p>A graça de Deus pode salvar a todos.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002011",
+"start_ref_usfm": "TIT 2:11",
+"end_ref": "56002011",
+"end_ref_usfm": "TIT 2:11"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "SENHOR"
+},
+{
+"id": "keyterm:Salvation",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "salvation"
+},
+{
+"id": "keyterm:Favor",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "favor"
+}
+]
+}
+},
+{
+"content_id": "580918",
+"reference_id": 133865,
+"version": "1.0.4",
+"title": "Tito 2.12",
+"media_type": "Text",
+"index_reference": "56002012",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>O que a graça de Deus nos ensina a rejeitar?</strong></p><p>A graça de Deus nos ensina a rejeitar a impiedade e as paixões mundanas.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002012",
+"start_ref_usfm": "TIT 2:12",
+"end_ref": "56002012",
+"end_ref_usfm": "TIT 2:12"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Life",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Life"
+},
+{
+"id": "keyterm:Always",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "para a eternidade"
+},
+{
+"id": "keyterm:Ability",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Ability"
+},
+{
+"id": "keyterm:Worldly",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "mundano"
+}
+]
+}
+},
+{
+"content_id": "580919",
+"reference_id": 133866,
+"version": "1.0.4",
+"title": "Tito 2.13",
+"media_type": "Text",
+"index_reference": "56002013",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Qual evento futuro os crentes aguardam receber?</strong></p><p>Os crentes aguardam ansiosamente receber a bendita esperança: a aparição da glória do nosso Grande Deus e Salvador Jesus Cristo.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002013",
+"start_ref_usfm": "TIT 2:13",
+"end_ref": "56002013",
+"end_ref_usfm": "TIT 2:13"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Savior",
+"type": "keyterm",
+"confidence": 0.8,
+"match_method": "canonical",
+"preferred_label": "salvador"
+},
+{
+"id": "keyterm:Happy",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "bem, aventurado"
+},
+{
+"id": "keyterm:Glory",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Glory"
+},
+{
+"id": "person:Jesus.2",
+"type": "person",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Jesus"
+},
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "SENHOR"
+},
+{
+"id": "keyterm:Hope",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "hope"
+}
+]
+}
+},
+{
+"content_id": "580920",
+"reference_id": 133867,
+"version": "1.0.4",
+"title": "Tito 2.14",
+"media_type": "Text",
+"index_reference": "56002014",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Por que Jesus se entregou por nós?</strong></p><p>Ele se entregou para nos redimir da iniquidade e purificar para si um povo zeloso de boas obras.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002014",
+"start_ref_usfm": "TIT 2:14",
+"end_ref": "56002014",
+"end_ref_usfm": "TIT 2:14"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Liberation",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "libertação"
+},
+{
+"id": "keyterm:Cleanse.2",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "To Cleanse"
+},
+{
+"id": "keyterm:Lawless",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "sem lei"
+}
+]
+}
+},
+{
+"content_id": "580921",
+"reference_id": 133868,
+"version": "1.0.4",
+"title": "Tito 3.1",
+"media_type": "Text",
+"index_reference": "56003001",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Qual deve ser a atitude do crente em relação aos governantes e autoridades?</strong></p><p>O crente deve submeter-se a eles e obedecê-los, e estar pronto para toda boa obra.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003001",
+"start_ref_usfm": "TIT 3:1",
+"end_ref": "56003001",
+"end_ref_usfm": "TIT 3:1"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Authority.2",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "autoridade"
+},
+{
+"id": "keyterm:Good",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Good"
+},
+{
+"id": "keyterm:Ability",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Ability"
+}
+]
+}
+},
+{
+"content_id": "580922",
+"reference_id": 133869,
+"version": "1.0.4",
+"title": "Tito 3.3",
+"media_type": "Text",
+"index_reference": "56003003",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>O que leva os incrédulos a se desviarem e os escraviza?</strong></p><p>Suas várias paixões e prazeres os desviam e os escravizam.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003003",
+"start_ref_usfm": "TIT 3:3",
+"end_ref": "56003003",
+"end_ref_usfm": "TIT 3:3"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Serve.2",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "servir como escravo"
+}
+]
+}
+},
+{
+"content_id": "580923",
+"reference_id": 133870,
+"version": "1.0.4",
+"title": "Tito 3.5",
+"media_type": "Text",
+"index_reference": "56003005",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Por quais meios Deus nos salvou?</strong></p><p>Ele nos salvou através da lavagem do novo nascimento e renovação pelo Espírito Santo.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003005",
+"start_ref_usfm": "TIT 3:5",
+"end_ref": "56003005",
+"end_ref_usfm": "TIT 3:5"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Just",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "be (or show oneself) just"
+},
+{
+"id": "keyterm:Salvation",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "salvation"
+},
+{
+"id": "keyterm:Mercy",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "misericórdia"
+},
+{
+"id": "deity:HolySpirit",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Holy Spirit"
+}
+]
+}
+},
+{
+"content_id": "580924",
+"reference_id": 133871,
+"version": "1.0.4",
+"title": "Tito 3.5 (#2)",
+"media_type": "Text",
+"index_reference": "56003005",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Somos salvos por causa das boas obras que fizemos ou por causa da misericórdia de Deus?</strong></p><p>Somos salvos apenas por causa da misericórdia de Deus.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003005",
+"start_ref_usfm": "TIT 3:5",
+"end_ref": "56003005",
+"end_ref_usfm": "TIT 3:5"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Just",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "be (or show oneself) just"
+},
+{
+"id": "keyterm:Salvation",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "salvation"
+},
+{
+"id": "keyterm:Mercy",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "misericórdia"
+},
+{
+"id": "deity:HolySpirit",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Holy Spirit"
+}
+]
+}
+},
+{
+"content_id": "580925",
+"reference_id": 133872,
+"version": "1.0.4",
+"title": "Tito 3.7",
+"media_type": "Text",
+"index_reference": "56003007",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Depois de nos justificar, o que Deus nos faz tornar?</strong></p><p>Deus nos faz tornar seus herdeiros.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003007",
+"start_ref_usfm": "TIT 3:7",
+"end_ref": "56003007",
+"end_ref_usfm": "TIT 3:7"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Life",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Life"
+},
+{
+"id": "keyterm:Favor",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "favor"
+},
+{
+"id": "keyterm:Just",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "be (or show oneself) just"
+},
+{
+"id": "keyterm:Always",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "para a eternidade"
+},
+{
+"id": "keyterm:Hope",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "hope"
+}
+]
+}
+},
+{
+"content_id": "580926",
+"reference_id": 133873,
+"version": "1.0.4",
+"title": "Tito 3.8",
+"media_type": "Text",
+"index_reference": "56003008",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>O que os crentes devem ter cuidado em fazer?</strong></p><p>Os crentes devem ter cuidado para fazer as boas obras.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003008",
+"start_ref_usfm": "TIT 3:8",
+"end_ref": "56003008",
+"end_ref_usfm": "TIT 3:8"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "SENHOR"
+},
+{
+"id": "keyterm:Believe",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "crer"
+},
+{
+"id": "keyterm:Faithfulness",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Faithfulness"
+}
+]
+}
+},
+{
+"content_id": "580927",
+"reference_id": 133874,
+"version": "1.0.4",
+"title": "Tito 3.9",
+"media_type": "Text",
+"index_reference": "56003009",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>O que os crentes devem evitar?</strong></p><p>Os crentes devem evitar debates tolos, genealogias, contendas e conflitos sobre a lei religiosa.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003009",
+"start_ref_usfm": "TIT 3:9",
+"end_ref": "56003009",
+"end_ref_usfm": "TIT 3:9"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Worthless",
+"type": "keyterm",
+"confidence": 0.8,
+"match_method": "canonical",
+"preferred_label": "inútil"
+}
+]
+}
+},
+{
+"content_id": "580928",
+"reference_id": 133875,
+"version": "1.0.4",
+"title": "Tito 3.10",
+"media_type": "Text",
+"index_reference": "56003010",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Quem devemos rejeitar após uma ou duas advertências?</strong></p><p>Devemos rejeitar uma pessoa que causa divisões.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003010",
+"start_ref_usfm": "TIT 3:10",
+"end_ref": "56003010",
+"end_ref_usfm": "TIT 3:10"
+}
+],
+"resource": [],
+"acai": []
+}
+},
+{
+"content_id": "580929",
+"reference_id": 133876,
+"version": "1.0.4",
+"title": "Tito 3.14",
+"media_type": "Text",
+"index_reference": "56003014",
+"language": "por",
+"review_level": "None",
+"content": "<p><strong>Em que os crentes devem se engajar para serem frutíferos?</strong></p><p>Os crentes devem aprender a se envolver em fazer boas obras que atendam às necessidades essenciais.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003014",
+"start_ref_usfm": "TIT 3:14",
+"end_ref": "56003014",
+"end_ref_usfm": "TIT 3:14"
+}
+],
+"resource": [],
+"acai": []
+}
+}
+]

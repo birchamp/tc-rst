@@ -1,0 +1,1546 @@
+[
+{
+"content_id": "179256",
+"reference_id": 133841,
+"version": "1.0.4",
+"title": "Titus 1:1 (#1)",
+"media_type": "Text",
+"index_reference": "56001001",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What was Paul’s purpose in his service to God?</strong></p><p>His purpose was to establish the faith of God’s chosen people and to establish the knowledge of the truth.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001001",
+"start_ref_usfm": "TIT 1:1",
+"end_ref": "56001001",
+"end_ref_usfm": "TIT 1:1"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "person:Paul",
+"type": "person",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Paul"
+},
+{
+"id": "keyterm:Truth",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Truth"
+},
+{
+"id": "keyterm:Chosen",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Chosen"
+},
+{
+"id": "keyterm:Believe",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Believe"
+},
+{
+"id": "person:Jesus.2",
+"type": "person",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Jesus"
+},
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "LORD"
+}
+]
+}
+},
+{
+"content_id": "179257",
+"reference_id": 133842,
+"version": "1.0.4",
+"title": "Titus 1:2 (#1)",
+"media_type": "Text",
+"index_reference": "56001002",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>When did God promise everlasting life to his chosen people?</strong></p><p>He promised it to them before all the ages of time.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001002",
+"start_ref_usfm": "TIT 1:2",
+"end_ref": "56001002",
+"end_ref_usfm": "TIT 1:2"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Life",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Life"
+},
+{
+"id": "keyterm:Promise",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Promise"
+},
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "LORD"
+},
+{
+"id": "keyterm:Always",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Always"
+},
+{
+"id": "keyterm:Hope",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Hope"
+}
+]
+}
+},
+{
+"content_id": "179258",
+"reference_id": 133843,
+"version": "1.0.4",
+"title": "Titus 1:2 (#2)",
+"media_type": "Text",
+"index_reference": "56001002",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>Does God lie?</strong></p><p>No.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001002",
+"start_ref_usfm": "TIT 1:2",
+"end_ref": "56001002",
+"end_ref_usfm": "TIT 1:2"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Life",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Life"
+},
+{
+"id": "keyterm:Promise",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Promise"
+},
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "LORD"
+},
+{
+"id": "keyterm:Always",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Always"
+},
+{
+"id": "keyterm:Hope",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Hope"
+}
+]
+}
+},
+{
+"content_id": "179259",
+"reference_id": 133844,
+"version": "1.0.4",
+"title": "Titus 1:3 (#1)",
+"media_type": "Text",
+"index_reference": "56001003",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>To whom did God entrust his proclamation at the right time?</strong></p><p>God entrusted it to the apostle Paul.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001003",
+"start_ref_usfm": "TIT 1:3",
+"end_ref": "56001003",
+"end_ref_usfm": "TIT 1:3"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "LORD"
+},
+{
+"id": "keyterm:Savior",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Savior"
+},
+{
+"id": "keyterm:Proclaim",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Proclaim"
+},
+{
+"id": "keyterm:Believe",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Believe"
+}
+]
+}
+},
+{
+"content_id": "179260",
+"reference_id": 133845,
+"version": "1.0.4",
+"title": "Titus 1:4 (#1)",
+"media_type": "Text",
+"index_reference": "56001004",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What was the relationship between Titus and Paul?</strong></p><p>Titus was like a true son to Paul because of their common faith.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001004",
+"start_ref_usfm": "TIT 1:4",
+"end_ref": "56001004",
+"end_ref_usfm": "TIT 1:4"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "person:Titus",
+"type": "person",
+"confidence": 0.8,
+"match_method": "canonical",
+"preferred_label": "Titus"
+},
+{
+"id": "keyterm:Favor",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Favor"
+},
+{
+"id": "keyterm:Believe",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Believe"
+},
+{
+"id": "keyterm:Peace",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Make Peace"
+},
+{
+"id": "person:Jesus.2",
+"type": "person",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Jesus"
+},
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "LORD"
+},
+{
+"id": "keyterm:InCommon",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "In Common"
+},
+{
+"id": "keyterm:Savior",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Savior"
+}
+]
+}
+},
+{
+"content_id": "179261",
+"reference_id": 133846,
+"version": "1.0.4",
+"title": "Titus 1:6 (#1)",
+"media_type": "Text",
+"index_reference": "56001006",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What must an elder’s wife and children be like?</strong></p><p>He must be the husband of one wife and have faithful children who are not accused of reckless behavior or rebellion.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001006",
+"start_ref_usfm": "TIT 1:6",
+"end_ref": "56001006",
+"end_ref_usfm": "TIT 1:6"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:WithoutReproach",
+"type": "keyterm",
+"confidence": 0.8,
+"match_method": "canonical",
+"preferred_label": "Without Reproach"
+},
+{
+"id": "keyterm:Faithfulness",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Faithfulness"
+}
+]
+}
+},
+{
+"content_id": "179263",
+"reference_id": 133848,
+"version": "1.0.4",
+"title": "Titus 1:7 (#2)",
+"media_type": "Text",
+"index_reference": "56001007",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What position and responsibility does an overseer have in God’s household?</strong></p><p>He is like God’s household manager.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001007",
+"start_ref_usfm": "TIT 1:7",
+"end_ref": "56001007",
+"end_ref_usfm": "TIT 1:7"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:WithoutReproach",
+"type": "keyterm",
+"confidence": 0.8,
+"match_method": "canonical",
+"preferred_label": "Without Reproach"
+},
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "LORD"
+}
+]
+}
+},
+{
+"content_id": "179262",
+"reference_id": 133847,
+"version": "1.0.4",
+"title": "Titus 1:7 (#1)",
+"media_type": "Text",
+"index_reference": "56001007",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What are some of the character traits that an elder must avoid in order to be blameless?</strong></p><p>He must not be arrogant or easily angered or addicted to wine or a brawler or greedy.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001007",
+"start_ref_usfm": "TIT 1:7",
+"end_ref": "56001007",
+"end_ref_usfm": "TIT 1:7"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:WithoutReproach",
+"type": "keyterm",
+"confidence": 0.8,
+"match_method": "canonical",
+"preferred_label": "Without Reproach"
+},
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "LORD"
+}
+]
+}
+},
+{
+"content_id": "179264",
+"reference_id": 133849,
+"version": "1.0.4",
+"title": "Titus 1:8 (#1)",
+"media_type": "Text",
+"index_reference": "56001008",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What good qualities should an elder have?</strong></p><p>An elder should be hospitable, a friend of what is good, sensible, righteous, holy, and self-controlled.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001008",
+"start_ref_usfm": "TIT 1:8",
+"end_ref": "56001008",
+"end_ref_usfm": "TIT 1:8"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Just",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Be (Or Show Oneself) Just"
+},
+{
+"id": "keyterm:LikingWhatIsGood",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Liking What Is Good"
+},
+{
+"id": "keyterm:Holy",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Holy"
+}
+]
+}
+},
+{
+"content_id": "179265",
+"reference_id": 133850,
+"version": "1.0.4",
+"title": "Titus 1:9 (#1)",
+"media_type": "Text",
+"index_reference": "56001009",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What must an elder’s attitude be toward the message that he was taught?</strong></p><p>He must hold tightly to it, and thus, be able to encourage and rebuke others.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001009",
+"start_ref_usfm": "TIT 1:9",
+"end_ref": "56001009",
+"end_ref_usfm": "TIT 1:9"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:AskFor",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Ask for"
+},
+{
+"id": "keyterm:Faithfulness",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Faithfulness"
+},
+{
+"id": "keyterm:Encourage",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Encourage"
+}
+]
+}
+},
+{
+"content_id": "179267",
+"reference_id": 133852,
+"version": "1.0.4",
+"title": "Titus 1:11 (#2)",
+"media_type": "Text",
+"index_reference": "56001011",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What did the false teachers want?</strong></p><p>They wanted shameful profit.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001011",
+"start_ref_usfm": "TIT 1:11",
+"end_ref": "56001011",
+"end_ref_usfm": "TIT 1:11"
+}
+],
+"resource": [],
+"acai": []
+}
+},
+{
+"content_id": "179266",
+"reference_id": 133851,
+"version": "1.0.4",
+"title": "Titus 1:11 (#1)",
+"media_type": "Text",
+"index_reference": "56001011",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What were the false teachers doing by their teaching?</strong></p><p>They were upsetting whole households.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001011",
+"start_ref_usfm": "TIT 1:11",
+"end_ref": "56001011",
+"end_ref_usfm": "TIT 1:11"
+}
+],
+"resource": [],
+"acai": []
+}
+},
+{
+"content_id": "179268",
+"reference_id": 133853,
+"version": "1.0.4",
+"title": "Titus 1:13 (#1)",
+"media_type": "Text",
+"index_reference": "56001013",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>How should an elder treat these false teachers who damage the church?</strong></p><p>He must rebuke them severely so they might be sound in the faith.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001013",
+"start_ref_usfm": "TIT 1:13",
+"end_ref": "56001013",
+"end_ref_usfm": "TIT 1:13"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:BearWitness",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Bear Witness"
+},
+{
+"id": "keyterm:Believe",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Believe"
+},
+{
+"id": "keyterm:True",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "True"
+}
+]
+}
+},
+{
+"content_id": "179269",
+"reference_id": 133854,
+"version": "1.0.4",
+"title": "Titus 1:14 (#1)",
+"media_type": "Text",
+"index_reference": "56001014",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>To what did Paul say they should not pay attention?</strong></p><p>They should not pay attention to Jewish myths and to commandments of men.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001014",
+"start_ref_usfm": "TIT 1:14",
+"end_ref": "56001014",
+"end_ref_usfm": "TIT 1:14"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "group:Jews",
+"type": "group",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Jews"
+},
+{
+"id": "keyterm:Commandment",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Commandment"
+},
+{
+"id": "keyterm:Truth",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Truth"
+}
+]
+}
+},
+{
+"content_id": "179270",
+"reference_id": 133855,
+"version": "1.0.4",
+"title": "Titus 1:15 (#1)",
+"media_type": "Text",
+"index_reference": "56001015",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>In an unbelieving man, what is corrupted?</strong></p><p>Both his mind and conscience are corrupted.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001015",
+"start_ref_usfm": "TIT 1:15",
+"end_ref": "56001015",
+"end_ref_usfm": "TIT 1:15"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Clean",
+"type": "keyterm",
+"confidence": 0.8,
+"match_method": "canonical",
+"preferred_label": "Clean"
+},
+{
+"id": "keyterm:Defilement",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Defilement"
+},
+{
+"id": "keyterm:Conscience",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Conscience"
+},
+{
+"id": "keyterm:Unfaithful",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Be Unfaithful"
+}
+]
+}
+},
+{
+"content_id": "179271",
+"reference_id": 133856,
+"version": "1.0.4",
+"title": "Titus 1:16 (#1)",
+"media_type": "Text",
+"index_reference": "56001016",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>Although the corrupted man professes to know God, how does he deny him?</strong></p><p>He denies God through his actions.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56001016",
+"start_ref_usfm": "TIT 1:16",
+"end_ref": "56001016",
+"end_ref_usfm": "TIT 1:16"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "LORD"
+},
+{
+"id": "keyterm:Good",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Good"
+}
+]
+}
+},
+{
+"content_id": "179272",
+"reference_id": 133857,
+"version": "1.0.4",
+"title": "Titus 2:2 (#1)",
+"media_type": "Text",
+"index_reference": "56002002",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What are some characteristics that older men in the church should have?</strong></p><p>They should be temperate, dignified, sensible, and sound in faith, in love, and in perseverance.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002002",
+"start_ref_usfm": "TIT 2:2",
+"end_ref": "56002002",
+"end_ref_usfm": "TIT 2:2"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Believe",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Believe"
+},
+{
+"id": "keyterm:Love",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Love"
+}
+]
+}
+},
+{
+"content_id": "179273",
+"reference_id": 133858,
+"version": "1.0.4",
+"title": "Titus 2:3 (#1)",
+"media_type": "Text",
+"index_reference": "56002003",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What are some characteristics that older women in the church should have?</strong></p><p>They should be reverent, sober, not be slanderers, be teachers of what is good.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002003",
+"start_ref_usfm": "TIT 2:3",
+"end_ref": "56002003",
+"end_ref_usfm": "TIT 2:3"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "realia:Wine",
+"type": "realia",
+"confidence": 0.54,
+"match_method": "canonical",
+"preferred_label": "Wine"
+}
+]
+}
+},
+{
+"content_id": "179274",
+"reference_id": 133859,
+"version": "1.0.4",
+"title": "Titus 2:4 (#1)",
+"media_type": "Text",
+"index_reference": "56002004",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What should the older women teach the younger women to do?</strong></p><p>They should teach them to love and obey their husbands, and to love their children.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002004",
+"start_ref_usfm": "TIT 2:4",
+"end_ref": "56002004",
+"end_ref_usfm": "TIT 2:4"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:HavingLoveForOnesHusband",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Having Love for One's Husband"
+}
+]
+}
+},
+{
+"content_id": "179275",
+"reference_id": 133860,
+"version": "1.0.4",
+"title": "Titus 2:7 (#1)",
+"media_type": "Text",
+"index_reference": "56002007",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>How should Titus present himself as an example of good works?</strong></p><p>In his teaching, he should be uncorrupted, act with dignity, and deliver a sound message that is above criticism.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002007",
+"start_ref_usfm": "TIT 2:7",
+"end_ref": "56002007",
+"end_ref_usfm": "TIT 2:7"
+}
+],
+"resource": [],
+"acai": []
+}
+},
+{
+"content_id": "179276",
+"reference_id": 133861,
+"version": "1.0.4",
+"title": "Titus 2:8 (#1)",
+"media_type": "Text",
+"index_reference": "56002008",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What will happen to those who oppose Titus if he is a good example?</strong></p><p>Those who oppose him will be ashamed because they have nothing bad to say about him.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002008",
+"start_ref_usfm": "TIT 2:8",
+"end_ref": "56002008",
+"end_ref_usfm": "TIT 2:8"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:BeyondReproach",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Beyond Reproach"
+}
+]
+}
+},
+{
+"content_id": "179277",
+"reference_id": 133862,
+"version": "1.0.4",
+"title": "Titus 2:9 (#1)",
+"media_type": "Text",
+"index_reference": "56002009",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>How are slaves who are believers to behave?</strong></p><p>They are to obey their masters, be pleasing, and should not argue.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002009",
+"start_ref_usfm": "TIT 2:9",
+"end_ref": "56002009",
+"end_ref_usfm": "TIT 2:9"
+}
+],
+"resource": [],
+"acai": []
+}
+},
+{
+"content_id": "179278",
+"reference_id": 133863,
+"version": "1.0.4",
+"title": "Titus 2:10 (#1)",
+"media_type": "Text",
+"index_reference": "56002010",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>When Christian slaves behave as Paul has instructed, what effect will that have on others?</strong></p><p>It will bring credit to the teaching about God our Savior.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002010",
+"start_ref_usfm": "TIT 2:10",
+"end_ref": "56002010",
+"end_ref_usfm": "TIT 2:10"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "LORD"
+},
+{
+"id": "keyterm:Good",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Good"
+},
+{
+"id": "keyterm:Savior",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Savior"
+},
+{
+"id": "keyterm:Believe",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Believe"
+}
+]
+}
+},
+{
+"content_id": "179279",
+"reference_id": 133864,
+"version": "1.0.4",
+"title": "Titus 2:11 (#1)",
+"media_type": "Text",
+"index_reference": "56002011",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>Who can the grace of God save?</strong></p><p>The grace of God can save everyone.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002011",
+"start_ref_usfm": "TIT 2:11",
+"end_ref": "56002011",
+"end_ref_usfm": "TIT 2:11"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "LORD"
+},
+{
+"id": "keyterm:Salvation",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Salvation"
+},
+{
+"id": "keyterm:Favor",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Favor"
+}
+]
+}
+},
+{
+"content_id": "179280",
+"reference_id": 133865,
+"version": "1.0.4",
+"title": "Titus 2:12 (#1)",
+"media_type": "Text",
+"index_reference": "56002012",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What does the grace of God train us to reject?</strong></p><p>The grace of God trains us to reject godlessness and worldly passions.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002012",
+"start_ref_usfm": "TIT 2:12",
+"end_ref": "56002012",
+"end_ref_usfm": "TIT 2:12"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Life",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Life"
+},
+{
+"id": "keyterm:Always",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Always"
+},
+{
+"id": "keyterm:Ability",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Ability"
+},
+{
+"id": "keyterm:Worldly",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Worldly"
+}
+]
+}
+},
+{
+"content_id": "179281",
+"reference_id": 133866,
+"version": "1.0.4",
+"title": "Titus 2:13 (#1)",
+"media_type": "Text",
+"index_reference": "56002013",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What future event do believers look forward to receiving?</strong></p><p>Believers look forward to receiving the blessed hope: the appearance of the glory of our great God and Savior Jesus Christ.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002013",
+"start_ref_usfm": "TIT 2:13",
+"end_ref": "56002013",
+"end_ref_usfm": "TIT 2:13"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Savior",
+"type": "keyterm",
+"confidence": 0.8,
+"match_method": "canonical",
+"preferred_label": "Savior"
+},
+{
+"id": "keyterm:Happy",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Happy"
+},
+{
+"id": "keyterm:Glory",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Glory"
+},
+{
+"id": "person:Jesus.2",
+"type": "person",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Jesus"
+},
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "LORD"
+},
+{
+"id": "keyterm:Hope",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Hope"
+}
+]
+}
+},
+{
+"content_id": "179282",
+"reference_id": 133867,
+"version": "1.0.4",
+"title": "Titus 2:14 (#1)",
+"media_type": "Text",
+"index_reference": "56002014",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>Why did Jesus give himself for us?</strong></p><p>He gave himself in order to redeem us from lawlessness and to purify for himself a people who are zealous to do good works.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56002014",
+"start_ref_usfm": "TIT 2:14",
+"end_ref": "56002014",
+"end_ref_usfm": "TIT 2:14"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Liberation",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Liberation"
+},
+{
+"id": "keyterm:Cleanse.2",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "To Cleanse"
+},
+{
+"id": "keyterm:Lawless",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Lawless"
+}
+]
+}
+},
+{
+"content_id": "179283",
+"reference_id": 133868,
+"version": "1.0.4",
+"title": "Titus 3:1 (#1)",
+"media_type": "Text",
+"index_reference": "56003001",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What should the believer’s attitude be toward rulers and authorities?</strong></p><p>The believer should submit to them and obey them, and be ready for every good work.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003001",
+"start_ref_usfm": "TIT 3:1",
+"end_ref": "56003001",
+"end_ref_usfm": "TIT 3:1"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Authority.2",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Authority"
+},
+{
+"id": "keyterm:Good",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Good"
+},
+{
+"id": "keyterm:Ability",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Ability"
+}
+]
+}
+},
+{
+"content_id": "179284",
+"reference_id": 133869,
+"version": "1.0.4",
+"title": "Titus 3:3 (#1)",
+"media_type": "Text",
+"index_reference": "56003003",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What leads unbelievers astray and enslaves them?</strong></p><p>Their various passions and pleasures lead them astray and enslave them.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003003",
+"start_ref_usfm": "TIT 3:3",
+"end_ref": "56003003",
+"end_ref_usfm": "TIT 3:3"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Serve.2",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Be Enslaved"
+}
+]
+}
+},
+{
+"content_id": "179285",
+"reference_id": 133870,
+"version": "1.0.4",
+"title": "Titus 3:5 (#1)",
+"media_type": "Text",
+"index_reference": "56003005",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>Through what means did God save us?</strong></p><p>He saved us through the washing of new birth and renewal by the Holy Spirit.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003005",
+"start_ref_usfm": "TIT 3:5",
+"end_ref": "56003005",
+"end_ref_usfm": "TIT 3:5"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Just",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Be (Or Show Oneself) Just"
+},
+{
+"id": "keyterm:Salvation",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Salvation"
+},
+{
+"id": "keyterm:Mercy",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Mercy"
+},
+{
+"id": "deity:HolySpirit",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Holy Spirit"
+}
+]
+}
+},
+{
+"content_id": "179286",
+"reference_id": 133871,
+"version": "1.0.4",
+"title": "Titus 3:5 (#2)",
+"media_type": "Text",
+"index_reference": "56003005",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>Are we saved because of good works which we have done or because of God’s mercy?</strong></p><p>We are saved only because of God’s mercy.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003005",
+"start_ref_usfm": "TIT 3:5",
+"end_ref": "56003005",
+"end_ref_usfm": "TIT 3:5"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Just",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Be (Or Show Oneself) Just"
+},
+{
+"id": "keyterm:Salvation",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Salvation"
+},
+{
+"id": "keyterm:Mercy",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Mercy"
+},
+{
+"id": "deity:HolySpirit",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Holy Spirit"
+}
+]
+}
+},
+{
+"content_id": "179287",
+"reference_id": 133872,
+"version": "1.0.4",
+"title": "Titus 3:7 (#1)",
+"media_type": "Text",
+"index_reference": "56003007",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>After he justifies us, what does God make us to become?</strong></p><p>God makes us become his heirs.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003007",
+"start_ref_usfm": "TIT 3:7",
+"end_ref": "56003007",
+"end_ref_usfm": "TIT 3:7"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Life",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Life"
+},
+{
+"id": "keyterm:Favor",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Favor"
+},
+{
+"id": "keyterm:Just",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Be (Or Show Oneself) Just"
+},
+{
+"id": "keyterm:Always",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Always"
+},
+{
+"id": "keyterm:Hope",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Hope"
+}
+]
+}
+},
+{
+"content_id": "179288",
+"reference_id": 133873,
+"version": "1.0.4",
+"title": "Titus 3:8 (#1)",
+"media_type": "Text",
+"index_reference": "56003008",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What should believers be careful to do?</strong></p><p>Believers should be careful to do the good works.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003008",
+"start_ref_usfm": "TIT 3:8",
+"end_ref": "56003008",
+"end_ref_usfm": "TIT 3:8"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "deity:Lord",
+"type": "deity",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "LORD"
+},
+{
+"id": "keyterm:Believe",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Believe"
+},
+{
+"id": "keyterm:Faithfulness",
+"type": "keyterm",
+"confidence": 0.6,
+"match_method": "canonical",
+"preferred_label": "Faithfulness"
+}
+]
+}
+},
+{
+"content_id": "179289",
+"reference_id": 133874,
+"version": "1.0.4",
+"title": "Titus 3:9 (#1)",
+"media_type": "Text",
+"index_reference": "56003009",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What should believers avoid?</strong></p><p>Believers should avoid foolish debates, genealogies, strife, and conflict about religious law.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003009",
+"start_ref_usfm": "TIT 3:9",
+"end_ref": "56003009",
+"end_ref_usfm": "TIT 3:9"
+}
+],
+"resource": [],
+"acai": [
+{
+"id": "keyterm:Worthless",
+"type": "keyterm",
+"confidence": 0.8,
+"match_method": "canonical",
+"preferred_label": "Worthless"
+}
+]
+}
+},
+{
+"content_id": "179290",
+"reference_id": 133875,
+"version": "1.0.4",
+"title": "Titus 3:10 (#1)",
+"media_type": "Text",
+"index_reference": "56003010",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>Who should we reject after one or two warnings?</strong></p><p>We should reject a divisive person.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003010",
+"start_ref_usfm": "TIT 3:10",
+"end_ref": "56003010",
+"end_ref_usfm": "TIT 3:10"
+}
+],
+"resource": [],
+"acai": []
+}
+},
+{
+"content_id": "179291",
+"reference_id": 133876,
+"version": "1.0.4",
+"title": "Titus 3:14 (#1)",
+"media_type": "Text",
+"index_reference": "56003014",
+"language": "eng",
+"review_level": "None",
+"content": "<p><strong>What must believers engage themselves in so that they will be fruitful?</strong></p><p>Believers must learn to engage themselves in doing good works that provide for essential needs.</p>",
+"associations": {
+"passage": [
+{
+"start_ref": "56003014",
+"start_ref_usfm": "TIT 3:14",
+"end_ref": "56003014",
+"end_ref_usfm": "TIT 3:14"
+}
+],
+"resource": [],
+"acai": []
+}
+}
+]

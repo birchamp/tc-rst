@@ -1,0 +1,201 @@
+{
+"resource_metadata": {
+"aquifer_type": "Guide",
+"resource_type": "Comprehension Testing",
+"title": "unfoldingWord® Translation Questions",
+"aquifer_name": "unfoldingWord® Translation Questions",
+"version": "1.1.2",
+"collection_title": "unfoldingWord® Translation Questions",
+"short_name": "UTQ",
+"license_info": {
+"title": "unfoldingWord® Translation Questions",
+"copyright": {
+"dates": "2022",
+"holder": {
+"name": "unfoldingWord",
+"url": "https://unfoldingword.org/utw"
+}
+},
+"licenses": [
+{
+"eng": {
+"name": "CC BY-SA 4.0 license",
+"url": "https://creativecommons.org/licenses/by-sa/4.0/legalcode.en"
+}
+}
+],
+"showAdaptationNoticeForEnglish": false,
+"showAdaptationNoticeForNonEnglish": true
+},
+"adaptation_notice": "<p><b>unfoldingWord® Translation Questions</b> © 2022 unfoldingWord. Released under CC BY-SA 4.0 license. <cite>unfoldingWord® Translation Questions</cite> has been adapted in the following languages: Tok Pisin, Arabic (عربي), French (Français), Hindi (हिंदी), Indonesian (Bahasa Indonesia), Portuguese (Português), Russian (Русский), Spanish (Español), Swahili (Kiswahili), and Simplified Chinese (简体中文) from <cite>unfoldingWord® Translation Questions</cite> © 2022 unfoldingWord. Released under CC BY-SA 4.0 license by Mission Mutual",
+"resource_code": "UWTranslationQuestions",
+"date_created": "2026-10-12",
+"language": "por",
+"localizations": [
+"eng",
+"arb",
+"fra",
+"hin",
+"zht",
+"nep",
+"guj",
+"ind"
+],
+"order": "canonical",
+"content_type": "Html"
+},
+"scripture_burrito": {
+"format": "scripture burrito",
+"meta": {
+"version": "1.0.0",
+"category": "source",
+"defaultLocale": "en",
+"dateCreated": "2026-10-12T14:09:51.897545"
+},
+"idAuthorities": {
+"aquifer": {
+"id": "https://aquifer.bible",
+"name": {
+"en": "Bible Aquifer"
+}
+}
+},
+"identification": {
+"primary": {
+"aquifer": {
+"UWTranslationQuestions": {
+"timestamp": "2026-10-12T14:09:51.897545"
+}
+}
+},
+"name": {
+"pt": "unfoldingWord® Translation Questions"
+},
+"abbreviation": {
+"pt": "UTQ"
+}
+},
+"languages": [
+{
+"tag": "pt",
+"name": {
+"pt": "Portuguese"
+}
+}
+],
+"type": {
+"flavorType": {
+"name": "parascriptural",
+"flavor": {
+"name": "textAquiferCanonical",
+"audience": "common"
+},
+"currentScope": {}
+}
+},
+"ingredients": {
+"json/56.content.json": {
+"mimeType": "text/json",
+"size": 18908,
+"scope": {
+"TIT": [
+"Tito 1.1",
+"Tito 1.2",
+"Tito 1.2 (#2)",
+"Tito 1.3",
+"Tito 1.4",
+"Tito 1.6",
+"Tito 1.7",
+"Tito 1.7 (#2)",
+"Tito 1.8",
+"Tito 1.9",
+"Tito 1.11",
+"Tito 1.11 (#2)",
+"Tito 1.13",
+"Tito 1.14",
+"Tito 1.15",
+"Tito 1.16",
+"Tito 2.2",
+"Tito 2.3",
+"Tito 2.4",
+"Tito 2.7",
+"Tito 2.8",
+"Tito 2.9",
+"Tito 2.10",
+"Tito 2.11",
+"Tito 2.12",
+"Tito 2.13",
+"Tito 2.14",
+"Tito 3.1",
+"Tito 3.3",
+"Tito 3.5",
+"Tito 3.5 (#2)",
+"Tito 3.7",
+"Tito 3.8",
+"Tito 3.9",
+"Tito 3.10",
+"Tito 3.14"
+]
+}
+}
+},
+"copyright": {
+"licenses": [
+{
+"url": "https://creativecommons.org/licenses/by-sa/4.0/legalcode.en"
+}
+],
+"shortStatements": [
+{
+"statement": "<p>unfoldingWord® Translation Questions © 2022 unfoldingWord.</p>",
+"mimetype": "text/html",
+"lang": "pt"
+}
+]
+}
+},
+"article_metadata": {
+"580894": {
+"content_id": "580894",
+"reference_id": 133841,
+"index_reference": "56001001",
+"localizations": {
+"eng": {
+"content_id": 179256,
+"language": "eng",
+"title": "Titus 1:1"
+},
+"arb": {
+"content_id": 366639,
+"language": "arb",
+"title": "تيطس 1: 1"
+},
+"fra": {
+"content_id": 356735,
+"language": "fra",
+"title": "Tite 1.1"
+},
+"hin": {
+"content_id": 811115,
+"language": "hin",
+"title": "तीतुस 1:1"
+},
+"ind": {
+"content_id": 675110,
+"language": "ind",
+"title": "Titus 1:1"
+},
+"zht": {
+"content_id": 473477,
+"language": "zht",
+"title": "提多書 1:1"
+},
+"nep": {
+"content_id": 677523,
+"language": "nep",
+"title": "तीतस 1:1"
+}
+}
+}
+}
+}

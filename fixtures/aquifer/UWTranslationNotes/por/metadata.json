@@ -1,0 +1,552 @@
+{
+"resource_metadata": {
+"aquifer_type": "Guide",
+"resource_type": "Translation Guide",
+"title": "unfoldingWord® Translation Notes",
+"aquifer_name": "unfoldingWord® Translation Notes",
+"version": "1.1.2",
+"collection_title": "unfoldingWord® Translation Notes",
+"short_name": "UTN",
+"license_info": {
+"title": "unfoldingWord® Translation Notes",
+"copyright": {
+"dates": "2022",
+"holder": {
+"name": "unfoldingWord",
+"url": "https://unfoldingword.org/utw"
+}
+},
+"licenses": [
+{
+"eng": {
+"name": "CC BY-SA 4.0 license",
+"url": "https://creativecommons.org/licenses/by-sa/4.0/legalcode.en"
+}
+}
+],
+"showAdaptationNoticeForEnglish": false,
+"showAdaptationNoticeForNonEnglish": true
+},
+"adaptation_notice": "<p><b>unfoldingWord® Translation Notes</b> © 2022 unfoldingWord. Released under CC BY-SA 4.0 license. <cite>unfoldingWord® Translation Notes</cite> has been adapted in the following languages: Tok Pisin, Arabic (عربي), French (Français), Hindi (हिंदी), Indonesian (Bahasa Indonesia), Portuguese (Português), Russian (Русский), Spanish (Español), Swahili (Kiswahili), and Simplified Chinese (简体中文) from <cite>unfoldingWord® Translation Notes</cite> © 2022 unfoldingWord. Released under CC BY-SA 4.0 license by Mission Mutual</p>",
+"resource_code": "UWTranslationNotes",
+"date_created": "2026-10-12",
+"language": "por",
+"localizations": [
+"eng",
+"arb",
+"fra",
+"hin",
+"ind",
+"spa",
+"zht",
+"apd",
+"guj"
+],
+"order": "canonical",
+"content_type": "Html"
+},
+"scripture_burrito": {
+"format": "scripture burrito",
+"meta": {
+"version": "1.0.0",
+"category": "source",
+"defaultLocale": "en",
+"dateCreated": "2026-10-12T13:07:22.676512"
+},
+"idAuthorities": {
+"aquifer": {
+"id": "https://aquifer.bible",
+"name": {
+"en": "Bible Aquifer"
+}
+}
+},
+"identification": {
+"primary": {
+"aquifer": {
+"UWTranslationNotes": {
+"timestamp": "2026-10-12T13:07:22.676512"
+}
+}
+},
+"name": {
+"pt": "unfoldingWord® Translation Notes"
+},
+"abbreviation": {
+"pt": "UTN"
+}
+},
+"languages": [
+{
+"tag": "pt",
+"name": {
+"pt": "Portuguese"
+}
+}
+],
+"type": {
+"flavorType": {
+"name": "parascriptural",
+"flavor": {
+"name": "textAquiferCanonical",
+"audience": "common"
+},
+"currentScope": {}
+}
+},
+"ingredients": {
+"json/56.content.json": {
+"mimeType": "text/json",
+"size": 261286,
+"scope": {
+"TIT": [
+"Tito - Introdução",
+"Tito - Introdução ao capítulo 1",
+"Tito 1.1 (#1)",
+"Tito 1.1 (#2)",
+"Tito 1.1 (#3)",
+"Tito 1.1 (#4)",
+"Tito 1.2 (#1)",
+"Tito 1.2 (#2)",
+"Tito 1.2 (#3)",
+"Tito 1.2 (#4)",
+"Tito 1.3 (#1)",
+"Tito 1.3 (#2)",
+"Tito 1.3 (#3)",
+"Tito 1.3 (#4)",
+"Tito 1.3 (#5)",
+"Tito 1.4 (#1)",
+"Tito 1.4 (#2)",
+"Tito 1.4 (#3)",
+"Tito 1.4 (#4)",
+"Tito 1.4 (#5)",
+"Tito 1.4 (#6)",
+"Tito 1.5 (#1)",
+"Tito 1.5 (#2)",
+"Tito 1.5 (#3)",
+"Tito 1.5 (#4)",
+"Tito 1.6 (#1)",
+"Tito 1.6 (#2)",
+"Tito 1.6 (#3)",
+"Tito 1.6 (#4)",
+"Tito 1.7 (#1)",
+"Tito 1.7 (#2)",
+"Tito 1.7 (#3)",
+"Tito 1.7 (#4)",
+"Tito 1.8 (#1)",
+"Tito 1.8 (#2)",
+"Tito 1.8 (#3)",
+"Tito 1.8 (#4)",
+"Tito 1.9 (#1)",
+"Tito 1.9 (#2)",
+"Tito 1.9 (#3)",
+"Tito 1.9 (#4)",
+"Tito 1.10 (#1)",
+"Tito 1.10 (#2)",
+"Tito 1.10 (#3)",
+"Tito 1.10 (#4)",
+"Tito 1.11 (#1)",
+"Tito 1.11 (#2)",
+"Tito 1.11 (#3)",
+"Tito 1.12 (#1)",
+"Tito 1.12 (#2)",
+"Tito 1.12 (#3)",
+"Tito 1.12 (#4)",
+"Tito 1.13 (#1)",
+"Tito 1.13 (#2)",
+"Tito 1.13 (#3)",
+"Tito 1.13 (#4)",
+"Tito 1.13 (#5)",
+"Tito 1.13 (#6)",
+"Tito 1.14 (#1)",
+"Tito 1.14 (#2)",
+"Tito 1.15 (#1)",
+"Tito 1.15 (#2)",
+"Tito 1.15 (#3)",
+"Tito 1.15 (#4)",
+"Tito 1.16 (#1)",
+"Tito 1.16 (#2)",
+"Tito - Introdução ao capítulo 2",
+"Tito 2.1 (#1)",
+"Tito 2.1 (#2)",
+"Tito 2.2 (#1)",
+"Tito 2.2 (#2)",
+"Tito 2.2 (#3)",
+"Tito 2.2 (#4)",
+"Tito 2.2 (#5)",
+"Tito 2.2 (#6)",
+"Tito 2.2 (#7)",
+"Tito 2.2 (#8)",
+"Tito 2.3 (#1)",
+"Tito 2.3 (#2)",
+"Tito 2.3 (#3)",
+"Tito 2.3 (#4)",
+"Tito 2.4 (#1)",
+"Tito 2.4 (#2)",
+"Tito 2.4 (#3)",
+"Tito 2.5 (#1)",
+"Tito 2.5 (#2)",
+"Tito 2.5 (#3)",
+"Tito 2.5 (#4)",
+"Tito 2.6 (#1)",
+"Tito 2.7 (#1)",
+"Tito 2.7 (#2)",
+"Tito 2.7 (#3)",
+"Tito 2.7 (#4)",
+"Tito 2.7 (#5)",
+"Tito 2.7 (#6)",
+"Tito 2.8 (#1)",
+"Tito 2.8 (#2)",
+"Tito 2.8 (#3)",
+"Tito 2.8 (#4)",
+"Tito 2.9 (#1)",
+"Tito 2.9 (#2)",
+"Tito 2.9 (#3)",
+"Tito 2.10 (#1)",
+"Tito 2.10 (#2)",
+"Tito 2.10 (#3)",
+"Tito 2.10 (#4)",
+"Tito 2.10 (#5)",
+"Tito 2.10 (#6)",
+"Tito 2.10 (#7)",
+"Tito 2.11 (#1)",
+"Tito 2.11 (#2)",
+"Tito 2.11 (#3)",
+"Tito 2.11 (#4)",
+"Tito 2.11 (#5)",
+"Tito 2.12 (#1)",
+"Tito 2.12 (#2)",
+"Tito 2.12 (#3)",
+"Tito 2.12 (#4)",
+"Tito 2.12 (#5)",
+"Tito 2.12 (#6)",
+"Tito 2.13 (#1)",
+"Tito 2.13 (#2)",
+"Tito 2.13 (#3)",
+"Tito 2.13 (#4)",
+"Tito 2.13 (#5)",
+"Tito 2.14 (#1)",
+"Tito 2.14 (#2)",
+"Tito 2.14 (#3)",
+"Tito 2.14 (#4)",
+"Tito 2.14 (#5)",
+"Tito 2.14 (#6)",
+"Tito 2.15 (#1)",
+"Tito 2.15 (#2)",
+"Tito 2.15 (#3)",
+"Tito 2.15 (#4)",
+"Tito 2.15 (#5)",
+"Tito 2.15 (#6)",
+"Tito 2.15 (#7)",
+"Tito - Introdução ao capítulo 3",
+"Tito 3.1 (#1)",
+"Tito 3.1 (#2)",
+"Tito 3.1 (#3)",
+"Tito 3.1 (#4)",
+"Tito 3.2 (#1)",
+"Tito 3.2 (#2)",
+"Tito 3.2 (#3)",
+"Tito 3.2 (#4)",
+"Tito 3.3 (#1)",
+"Tito 3.3 (#2)",
+"Tito 3.3 (#3)",
+"Tito 3.3 (#4)",
+"Tito 3.3 (#5)",
+"Tito 3.3 (#6)",
+"Tito 3.3 (#7)",
+"Tito 3.3 (#8)",
+"Tito 3.3 (#9)",
+"Tito 3.4 (#1)",
+"Tito 3.4 (#2)",
+"Tito 3.4 (#3)",
+"Tito 3.4 (#4)",
+"Tito 3.5 (#1)",
+"Tito 3.5 (#2)",
+"Tito 3.5 (#3)",
+"Tito 3.6 (#1)",
+"Tito 3.6 (#2)",
+"Tito 3.6 (#3)",
+"Tito 3.6 (#4)",
+"Tito 3.7 (#1)",
+"Tito 3.7 (#2)",
+"Tito 3.7 (#3)",
+"Tito 3.7 (#4)",
+"Tito 3.7 (#5)",
+"Tito 3.8 (#1)",
+"Tito 3.8 (#2)",
+"Tito 3.8 (#3)",
+"Tito 3.8 (#4)",
+"Tito 3.9 (#1)",
+"Tito 3.9 (#2)",
+"Tito 3.9 (#3)",
+"Tito 3.9 (#4)",
+"Tito 3.9 (#5)",
+"Tito 3.10 (#1)",
+"Tito 3.10 (#2)",
+"Tito 3.11 (#1)",
+"Tito 3.11 (#2)",
+"Tito 3.11 (#3)",
+"Tito 3.12 (#1)",
+"Tito 3.12 (#2)",
+"Tito 3.12 (#3)",
+"Tito 3.12 (#4)",
+"Tito 3.13 (#1)",
+"Tito 3.13 (#2)",
+"Tito 3.13 (#3)",
+"Tito 3.13 (#4)",
+"Tito 3.13 (#5)",
+"Tito 3.14 (#1)",
+"Tito 3.14 (#2)",
+"Tito 3.14 (#3)",
+"Tito 3.14 (#4)",
+"Tito 3.14 (#5)",
+"Tito 3.15 (#1)",
+"Tito 3.15 (#2)",
+"Tito 3.15 (#3)",
+"Tito 3.15 (#4)",
+"Tito 3.15 (#5)",
+"Tito 3.15 (#6)"
+]
+}
+}
+},
+"copyright": {
+"licenses": [
+{
+"url": "https://creativecommons.org/licenses/by-sa/4.0/legalcode.en"
+}
+],
+"shortStatements": [
+{
+"statement": "<p>unfoldingWord® Translation Notes © 2022 unfoldingWord.</p>",
+"mimetype": "text/html",
+"lang": "pt"
+}
+]
+}
+},
+"article_metadata": {
+"191432": {
+"content_id": "191432",
+"reference_id": 115526,
+"index_reference": "56001001",
+"localizations": {
+"eng": {
+"content_id": 140738,
+"language": "eng",
+"title": "Titus 1:1 (#1)"
+},
+"arb": {
+"content_id": 144261,
+"language": "arb",
+"title": "تيطس 1:1 (1#)"
+},
+"fra": {
+"content_id": 144037,
+"language": "fra",
+"title": "Tite 1.1 (#1)"
+},
+"hin": {
+"content_id": 400853,
+"language": "hin",
+"title": "तीतुस 1:1 (#1)"
+},
+"ind": {
+"content_id": 674027,
+"language": "ind",
+"title": "Titus 1:1 (#1)"
+},
+"spa": {
+"content_id": 336533,
+"language": "spa",
+"title": "Tito 1:1 (#1)"
+},
+"zht": {
+"content_id": 566425,
+"language": "zht",
+"title": "提多書 1:1 (#1)"
+}
+}
+},
+"191433": {
+"content_id": "191433",
+"reference_id": 115527,
+"index_reference": "56001001",
+"localizations": {
+"eng": {
+"content_id": 140739,
+"language": "eng",
+"title": "Titus 1:1 (#2)"
+},
+"arb": {
+"content_id": 144262,
+"language": "arb",
+"title": "تيطس 1:1 (2#)"
+},
+"fra": {
+"content_id": 144038,
+"language": "fra",
+"title": "Tite 1.1 (#2)"
+},
+"hin": {
+"content_id": 798628,
+"language": "hin",
+"title": "तीतुस 1:1 (#2)"
+},
+"ind": {
+"content_id": 674028,
+"language": "ind",
+"title": "Titus 1:1 (#2)"
+},
+"spa": {
+"content_id": 336534,
+"language": "spa",
+"title": "Tito 1:1 (#2)"
+},
+"zht": {
+"content_id": 566426,
+"language": "zht",
+"title": "提多書 1:1 (#2)"
+}
+}
+},
+"191434": {
+"content_id": "191434",
+"reference_id": 115528,
+"index_reference": "56001001",
+"localizations": {
+"eng": {
+"content_id": 140740,
+"language": "eng",
+"title": "Titus 1:1 (#3)"
+},
+"arb": {
+"content_id": 144263,
+"language": "arb",
+"title": "تيطس 1:1 (3#)"
+},
+"fra": {
+"content_id": 144039,
+"language": "fra",
+"title": "Tite 1.1 (#3)"
+},
+"hin": {
+"content_id": 798629,
+"language": "hin",
+"title": "तीतुस 1:1 (#3)"
+},
+"ind": {
+"content_id": 674029,
+"language": "ind",
+"title": "Titus 1:1 (#3)"
+},
+"spa": {
+"content_id": 336535,
+"language": "spa",
+"title": "Tito 1:1 (#3)"
+},
+"zht": {
+"content_id": 566427,
+"language": "zht",
+"title": "提多書 1:1 (#3)"
+}
+}
+},
+"191435": {
+"content_id": "191435",
+"reference_id": 115529,
+"index_reference": "56001001",
+"localizations": {
+"eng": {
+"content_id": 140741,
+"language": "eng",
+"title": "Titus 1:1 (#4)"
+},
+"arb": {
+"content_id": 144264,
+"language": "arb",
+"title": "تيطس 1:1 (4#)"
+},
+"fra": {
+"content_id": 144040,
+"language": "fra",
+"title": "Tite 1.1 (#4)"
+},
+"hin": {
+"content_id": 400854,
+"language": "hin",
+"title": "तीतुस 1:1 (#3)"
+},
+"ind": {
+"content_id": 674030,
+"language": "ind",
+"title": "Titus 1:1 (#4)"
+},
+"spa": {
+"content_id": 336536,
+"language": "spa",
+"title": "Tito 1:1 (#4)"
+},
+"zht": {
+"content_id": 566428,
+"language": "zht",
+"title": "提多書 1:1 (#4)"
+}
+}
+},
+"789817": {
+"content_id": "789817",
+"reference_id": 209517,
+"index_reference": "56000000",
+"localizations": {
+"eng": {
+"content_id": 700145,
+"language": "eng",
+"title": "Titus - Introduction"
+},
+"arb": {
+"content_id": 789976,
+"language": "arb",
+"title": "تيطس - مقدمة"
+},
+"hin": {
+"content_id": 792808,
+"language": "hin",
+"title": "तीतुस - परिचय"
+},
+"zht": {
+"content_id": 798445,
+"language": "zht",
+"title": "提多書 - 導論"
+}
+}
+},
+"789818": {
+"content_id": "789818",
+"reference_id": 209518,
+"index_reference": "56001000",
+"localizations": {
+"eng": {
+"content_id": 700146,
+"language": "eng",
+"title": "Titus - Chapter 1 Introduction"
+},
+"arb": {
+"content_id": 789977,
+"language": "arb",
+"title": "تيطس - مقدمة أصحاح 1"
+},
+"hin": {
+"content_id": 792809,
+"language": "hin",
+"title": "तीतुस - अध्याय 1 परिचय"
+},
+"zht": {
+"content_id": 798446,
+"language": "zht",
+"title": "提多書 - 第一章簡介"
+}
+}
+}
+}
+}

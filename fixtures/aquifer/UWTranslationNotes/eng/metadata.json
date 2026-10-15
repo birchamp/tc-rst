@@ -1,0 +1,576 @@
+{
+"resource_metadata": {
+"aquifer_type": "Guide",
+"resource_type": "Translation Guide",
+"title": "unfoldingWord® Translation Notes",
+"aquifer_name": "unfoldingWord® Translation Notes",
+"version": "1.1.2",
+"collection_title": "unfoldingWord® Translation Notes",
+"short_name": "UTN",
+"license_info": {
+"title": "unfoldingWord® Translation Notes",
+"copyright": {
+"dates": "2022",
+"holder": {
+"name": "unfoldingWord",
+"url": "https://unfoldingword.org/utw"
+}
+},
+"licenses": [
+{
+"eng": {
+"name": "CC BY-SA 4.0 license",
+"url": "https://creativecommons.org/licenses/by-sa/4.0/legalcode.en"
+}
+}
+],
+"showAdaptationNoticeForEnglish": false,
+"showAdaptationNoticeForNonEnglish": true
+},
+"adaptation_notice": "<p><b>unfoldingWord® Translation Notes</b> © 2022 unfoldingWord. Released under CC BY-SA 4.0 license. <cite>unfoldingWord® Translation Notes</cite> has been adapted in the following languages: Tok Pisin, Arabic (عربي), French (Français), Hindi (हिंदी), Indonesian (Bahasa Indonesia), Portuguese (Português), Russian (Русский), Spanish (Español), Swahili (Kiswahili), and Simplified Chinese (简体中文) from <cite>unfoldingWord® Translation Notes</cite> © 2022 unfoldingWord. Released under CC BY-SA 4.0 license by Mission Mutual</p>",
+"resource_code": "UWTranslationNotes",
+"date_created": "2026-10-12",
+"language": "eng",
+"localizations": [
+"arb",
+"fra",
+"guj",
+"hin",
+"ind",
+"por",
+"spa",
+"zht"
+],
+"order": "canonical",
+"content_type": "Html"
+},
+"scripture_burrito": {
+"format": "scripture burrito",
+"meta": {
+"version": "1.0.0",
+"category": "source",
+"defaultLocale": "en",
+"dateCreated": "2026-10-12T13:06:05.340911"
+},
+"idAuthorities": {
+"aquifer": {
+"id": "https://aquifer.bible",
+"name": {
+"en": "Bible Aquifer"
+}
+}
+},
+"identification": {
+"primary": {
+"aquifer": {
+"UWTranslationNotes": {
+"timestamp": "2026-10-12T13:06:05.340911"
+}
+}
+},
+"name": {
+"en": "unfoldingWord® Translation Notes"
+},
+"abbreviation": {
+"en": "UTN"
+}
+},
+"languages": [
+{
+"tag": "en",
+"name": {
+"en": "English"
+}
+}
+],
+"type": {
+"flavorType": {
+"name": "parascriptural",
+"flavor": {
+"name": "textAquiferCanonical",
+"audience": "common"
+},
+"currentScope": {}
+}
+},
+"ingredients": {
+"json/56.content.json": {
+"mimeType": "text/json",
+"size": 204826,
+"scope": {
+"TIT": [
+"Titus - Introduction",
+"Titus - Chapter 1 Introduction",
+"Titus 1:1 (#4)",
+"Titus 1:1 (#2)",
+"Titus 1:1 (#1)",
+"Titus 1:1 (#3)",
+"Titus 1:2 (#4)",
+"Titus 1:2 (#3)",
+"Titus 1:2 (#1)",
+"Titus 1:2 (#2)",
+"Titus 1:3 (#4)",
+"Titus 1:3 (#5)",
+"Titus 1:3 (#3)",
+"Titus 1:3 (#1)",
+"Titus 1:3 (#2)",
+"Titus 1:4 (#6)",
+"Titus 1:4 (#1)",
+"Titus 1:4 (#3)",
+"Titus 1:4 (#2)",
+"Titus 1:4 (#5)",
+"Titus 1:4 (#4)",
+"Titus 1:5 (#4)",
+"Titus 1:5 (#2)",
+"Titus 1:5 (#3)",
+"Titus 1:5 (#1)",
+"Titus 1:6 (#3)",
+"Titus 1:6 (#4)",
+"Titus 1:6 (#1)",
+"Titus 1:6 (#2)",
+"Titus 1:7 (#3)",
+"Titus 1:7 (#1)",
+"Titus 1:7 (#2)",
+"Titus 1:7 (#4)",
+"Titus 1:8 (#4)",
+"Titus 1:8 (#2)",
+"Titus 1:8 (#3)",
+"Titus 1:8 (#1)",
+"Titus 1:9 (#4)",
+"Titus 1:9 (#2)",
+"Titus 1:9 (#3)",
+"Titus 1:9 (#1)",
+"Titus 1:10 (#1)",
+"Titus 1:10 (#4)",
+"Titus 1:10 (#2)",
+"Titus 1:10 (#3)",
+"Titus 1:11 (#3)",
+"Titus 1:11 (#2)",
+"Titus 1:11 (#1)",
+"Titus 1:12 (#4)",
+"Titus 1:12 (#3)",
+"Titus 1:12 (#1)",
+"Titus 1:12 (#2)",
+"Titus 1:13 (#6)",
+"Titus 1:13 (#2)",
+"Titus 1:13 (#3)",
+"Titus 1:13 (#4)",
+"Titus 1:13 (#5)",
+"Titus 1:13 (#1)",
+"Titus 1:14 (#1)",
+"Titus 1:14 (#2)",
+"Titus 1:15 (#2)",
+"Titus 1:15 (#4)",
+"Titus 1:15 (#3)",
+"Titus 1:15 (#1)",
+"Titus 1:16 (#1)",
+"Titus 1:16 (#2)",
+"Titus - Chapter 2 Introduction",
+"Titus 2:1 (#2)",
+"Titus 2:1 (#1)",
+"Titus 2:2 (#1)",
+"Titus 2:2 (#8)",
+"Titus 2:2 (#6)",
+"Titus 2:2 (#2)",
+"Titus 2:2 (#5)",
+"Titus 2:2 (#7)",
+"Titus 2:2 (#3)",
+"Titus 2:2 (#4)",
+"Titus 2:3 (#1)",
+"Titus 2:3 (#2)",
+"Titus 2:3 (#3)",
+"Titus 2:3 (#4)",
+"Titus 2:4 (#3)",
+"Titus 2:4 (#1)",
+"Titus 2:4 (#2)",
+"Titus 2:5 (#2)",
+"Titus 2:5 (#4)",
+"Titus 2:5 (#3)",
+"Titus 2:5 (#1)",
+"Titus 2:6 (#1)",
+"Titus 2:7 (#5)",
+"Titus 2:7 (#2)",
+"Titus 2:7 (#1)",
+"Titus 2:7 (#4)",
+"Titus 2:7 (#3)",
+"Titus 2:7 (#6)",
+"Titus 2:8 (#4)",
+"Titus 2:8 (#1)",
+"Titus 2:8 (#3)",
+"Titus 2:8 (#2)",
+"Titus 2:9 (#1)",
+"Titus 2:9 (#3)",
+"Titus 2:9 (#2)",
+"Titus 2:10 (#2)",
+"Titus 2:10 (#5)",
+"Titus 2:10 (#1)",
+"Titus 2:10 (#3)",
+"Titus 2:10 (#4)",
+"Titus 2:10 (#7)",
+"Titus 2:10 (#6)",
+"Titus 2:11 (#4)",
+"Titus 2:11 (#2)",
+"Titus 2:11 (#3)",
+"Titus 2:11 (#1)",
+"Titus 2:11 (#5)",
+"Titus 2:12 (#2)",
+"Titus 2:12 (#3)",
+"Titus 2:12 (#4)",
+"Titus 2:12 (#5)",
+"Titus 2:12 (#1)",
+"Titus 2:12 (#6)",
+"Titus 2:13 (#5)",
+"Titus 2:13 (#2)",
+"Titus 2:13 (#4)",
+"Titus 2:13 (#1)",
+"Titus 2:13 (#3)",
+"Titus 2:14 (#2)",
+"Titus 2:14 (#4)",
+"Titus 2:14 (#1)",
+"Titus 2:14 (#5)",
+"Titus 2:14 (#6)",
+"Titus 2:14 (#3)",
+"Titus 2:15 (#3)",
+"Titus 2:15 (#6)",
+"Titus 2:15 (#7)",
+"Titus 2:15 (#5)",
+"Titus 2:15 (#4)",
+"Titus 2:15 (#2)",
+"Titus 2:15 (#1)",
+"Titus - Chapter 3 Introduction",
+"Titus 3:1 (#2)",
+"Titus 3:1 (#1)",
+"Titus 3:1 (#4)",
+"Titus 3:1 (#3)",
+"Titus 3:2 (#2)",
+"Titus 3:2 (#1)",
+"Titus 3:2 (#4)",
+"Titus 3:2 (#3)",
+"Titus 3:3 (#6)",
+"Titus 3:3 (#8)",
+"Titus 3:3 (#9)",
+"Titus 3:3 (#3)",
+"Titus 3:3 (#5)",
+"Titus 3:3 (#7)",
+"Titus 3:3 (#2)",
+"Titus 3:3 (#4)",
+"Titus 3:3 (#1)",
+"Titus 3:4 (#2)",
+"Titus 3:4 (#3)",
+"Titus 3:4 (#4)",
+"Titus 3:4 (#1)",
+"Titus 3:5 (#3)",
+"Titus 3:5 (#1)",
+"Titus 3:5 (#2)",
+"Titus 3:6 (#2)",
+"Titus 3:6 (#4)",
+"Titus 3:6 (#3)",
+"Titus 3:6 (#1)",
+"Titus 3:7 (#1)",
+"Titus 3:7 (#4)",
+"Titus 3:7 (#5)",
+"Titus 3:7 (#2)",
+"Titus 3:7 (#3)",
+"Titus 3:8 (#2)",
+"Titus 3:8 (#1)",
+"Titus 3:8 (#4)",
+"Titus 3:8 (#3)",
+"Titus 3:9 (#3)",
+"Titus 3:9 (#1)",
+"Titus 3:9 (#4)",
+"Titus 3:9 (#2)",
+"Titus 3:9 (#5)",
+"Titus 3:10 (#2)",
+"Titus 3:10 (#1)",
+"Titus 3:11 (#1)",
+"Titus 3:11 (#3)",
+"Titus 3:11 (#2)",
+"Titus 3:12 (#2)",
+"Titus 3:12 (#4)",
+"Titus 3:12 (#3)",
+"Titus 3:12 (#1)",
+"Titus 3:13 (#1)",
+"Titus 3:13 (#2)",
+"Titus 3:13 (#4)",
+"Titus 3:13 (#5)",
+"Titus 3:13 (#3)",
+"Titus 3:14 (#3)",
+"Titus 3:14 (#2)",
+"Titus 3:14 (#5)",
+"Titus 3:14 (#4)",
+"Titus 3:14 (#1)",
+"Titus 3:15 (#1)",
+"Titus 3:15 (#4)",
+"Titus 3:15 (#2)",
+"Titus 3:15 (#6)",
+"Titus 3:15 (#3)",
+"Titus 3:15 (#5)"
+]
+}
+}
+},
+"copyright": {
+"licenses": [
+{
+"url": "https://creativecommons.org/licenses/by-sa/4.0/legalcode.en"
+}
+],
+"shortStatements": [
+{
+"statement": "<p>unfoldingWord® Translation Notes © 2022 unfoldingWord.</p>",
+"mimetype": "text/html",
+"lang": "en"
+}
+]
+}
+},
+"article_metadata": {
+"140741": {
+"content_id": "140741",
+"reference_id": 115529,
+"index_reference": "56001001",
+"localizations": {
+"arb": {
+"content_id": 144264,
+"language": "arb",
+"title": "تيطس 1:1 (4#)"
+},
+"fra": {
+"content_id": 144040,
+"language": "fra",
+"title": "Tite 1.1 (#4)"
+},
+"guj": {
+"content_id": 899786,
+"language": "guj",
+"title": "તિતસને પાઉલ પ્રેરિતનો પત્ર 1:1 (#4)"
+},
+"hin": {
+"content_id": 400854,
+"language": "hin",
+"title": "तीतुस 1:1 (#3)"
+},
+"ind": {
+"content_id": 674030,
+"language": "ind",
+"title": "Titus 1:1 (#4)"
+},
+"por": {
+"content_id": 191435,
+"language": "por",
+"title": "Tito 1.1 (#4)"
+},
+"spa": {
+"content_id": 336536,
+"language": "spa",
+"title": "Tito 1:1 (#4)"
+},
+"zht": {
+"content_id": 566428,
+"language": "zht",
+"title": "提多書 1:1 (#4)"
+}
+}
+},
+"140739": {
+"content_id": "140739",
+"reference_id": 115527,
+"index_reference": "56001001",
+"localizations": {
+"arb": {
+"content_id": 144262,
+"language": "arb",
+"title": "تيطس 1:1 (2#)"
+},
+"fra": {
+"content_id": 144038,
+"language": "fra",
+"title": "Tite 1.1 (#2)"
+},
+"hin": {
+"content_id": 798628,
+"language": "hin",
+"title": "तीतुस 1:1 (#2)"
+},
+"ind": {
+"content_id": 674028,
+"language": "ind",
+"title": "Titus 1:1 (#2)"
+},
+"por": {
+"content_id": 191433,
+"language": "por",
+"title": "Tito 1.1 (#2)"
+},
+"spa": {
+"content_id": 336534,
+"language": "spa",
+"title": "Tito 1:1 (#2)"
+},
+"zht": {
+"content_id": 566426,
+"language": "zht",
+"title": "提多書 1:1 (#2)"
+}
+}
+},
+"140738": {
+"content_id": "140738",
+"reference_id": 115526,
+"index_reference": "56001001",
+"localizations": {
+"arb": {
+"content_id": 144261,
+"language": "arb",
+"title": "تيطس 1:1 (1#)"
+},
+"fra": {
+"content_id": 144037,
+"language": "fra",
+"title": "Tite 1.1 (#1)"
+},
+"guj": {
+"content_id": 899783,
+"language": "guj",
+"title": "તિતસને પાઉલ પ્રેરિતનો પત્ર 1:1 (#1)"
+},
+"hin": {
+"content_id": 400853,
+"language": "hin",
+"title": "तीतुस 1:1 (#1)"
+},
+"ind": {
+"content_id": 674027,
+"language": "ind",
+"title": "Titus 1:1 (#1)"
+},
+"por": {
+"content_id": 191432,
+"language": "por",
+"title": "Tito 1.1 (#1)"
+},
+"spa": {
+"content_id": 336533,
+"language": "spa",
+"title": "Tito 1:1 (#1)"
+},
+"zht": {
+"content_id": 566425,
+"language": "zht",
+"title": "提多書 1:1 (#1)"
+}
+}
+},
+"140740": {
+"content_id": "140740",
+"reference_id": 115528,
+"index_reference": "56001001",
+"localizations": {
+"arb": {
+"content_id": 144263,
+"language": "arb",
+"title": "تيطس 1:1 (3#)"
+},
+"fra": {
+"content_id": 144039,
+"language": "fra",
+"title": "Tite 1.1 (#3)"
+},
+"guj": {
+"content_id": 899785,
+"language": "guj",
+"title": "તિતસને પાઉલ પ્રેરિતનો પત્ર 1:1 (#3)"
+},
+"hin": {
+"content_id": 798629,
+"language": "hin",
+"title": "तीतुस 1:1 (#3)"
+},
+"ind": {
+"content_id": 674029,
+"language": "ind",
+"title": "Titus 1:1 (#3)"
+},
+"por": {
+"content_id": 191434,
+"language": "por",
+"title": "Tito 1.1 (#3)"
+},
+"spa": {
+"content_id": 336535,
+"language": "spa",
+"title": "Tito 1:1 (#3)"
+},
+"zht": {
+"content_id": 566427,
+"language": "zht",
+"title": "提多書 1:1 (#3)"
+}
+}
+},
+"700145": {
+"content_id": "700145",
+"reference_id": 209517,
+"index_reference": "56000000",
+"localizations": {
+"arb": {
+"content_id": 789976,
+"language": "arb",
+"title": "تيطس - مقدمة"
+},
+"guj": {
+"content_id": 899781,
+"language": "guj",
+"title": "તિતસને પાઉલ પ્રેરિતનો પત્ર - પ્રસ્તાવના"
+},
+"hin": {
+"content_id": 792808,
+"language": "hin",
+"title": "तीतुस - परिचय"
+},
+"por": {
+"content_id": 789817,
+"language": "por",
+"title": "Tito - Introdução"
+},
+"zht": {
+"content_id": 798445,
+"language": "zht",
+"title": "提多書 - 導論"
+}
+}
+},
+"700146": {
+"content_id": "700146",
+"reference_id": 209518,
+"index_reference": "56001000",
+"localizations": {
+"arb": {
+"content_id": 789977,
+"language": "arb",
+"title": "تيطس - مقدمة أصحاح 1"
+},
+"guj": {
+"content_id": 899782,
+"language": "guj",
+"title": "તિતસને પાઉલ પ્રેરિતનો પત્ર - અધ્યાય 1 પ્રસ્તાવના"
+},
+"hin": {
+"content_id": 792809,
+"language": "hin",
+"title": "तीतुस - अध्याय 1 परिचय"
+},
+"por": {
+"content_id": 789818,
+"language": "por",
+"title": "Tito - Introdução ao capítulo 1"
+},
+"zht": {
+"content_id": 798446,
+"language": "zht",
+"title": "提多書 - 第一章簡介"
+}
+}
+}
+}
+}

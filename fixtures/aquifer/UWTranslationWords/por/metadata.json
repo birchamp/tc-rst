@@ -1,0 +1,666 @@
+{
+"resource_metadata": {
+"aquifer_type": "Guide",
+"resource_type": "Translation Glossary",
+"title": "unfoldingWord® Translation Words",
+"aquifer_name": "unfoldingWord® Translation Words",
+"version": "1.1.2",
+"collection_title": "unfoldingWord® Translation Words",
+"short_name": "UTW",
+"license_info": {
+"title": "unfoldingWord® Translation Words",
+"copyright": {
+"dates": "2022",
+"holder": {
+"name": "unfoldingWord",
+"url": "https://unfoldingword.org/utw"
+}
+},
+"licenses": [
+{
+"eng": {
+"name": "CC BY-SA 4.0 license",
+"url": "https://creativecommons.org/licenses/by-sa/4.0/legalcode.en"
+}
+}
+],
+"showAdaptationNoticeForEnglish": false,
+"showAdaptationNoticeForNonEnglish": true
+},
+"adaptation_notice": "<p><b>unfoldingWord® Translation Words</b> © 2022 unfoldingWord. Released under CC BY-SA 4.0 license. <cite>unfoldingWord® Translation Words</cite> has been adapted in the following languages: Tok Pisin, Arabic (عربي), French (Français), Hindi (हिंदी), Indonesian (Bahasa Indonesia), Portuguese (Português), Russian (Русский), Spanish (Español), Swahili (Kiswahili), and Simplified Chinese (简体中文) from <cite>unfoldingWord® Translation Words</cite> © 2022 unfoldingWord. Released under CC BY-SA 4.0 license by Mission Mutual</p>",
+"resource_code": "UWTranslationWords",
+"date_created": "2026-10-12",
+"language": "por",
+"localizations": [
+"eng",
+"arb",
+"fra",
+"hin",
+"ind",
+"spa",
+"swh",
+"zht",
+"jpn"
+],
+"order": "alphabetical",
+"content_type": "Html"
+},
+"scripture_burrito": {
+"format": "scripture burrito",
+"meta": {
+"version": "1.0.0",
+"category": "source",
+"defaultLocale": "en",
+"dateCreated": "2026-10-12T14:02:52.816897"
+},
+"idAuthorities": {
+"aquifer": {
+"id": "https://aquifer.bible",
+"name": {
+"en": "Bible Aquifer"
+}
+}
+},
+"identification": {
+"primary": {
+"aquifer": {
+"UWTranslationWords": {
+"timestamp": "2026-10-12T14:02:52.816897"
+}
+}
+},
+"name": {
+"pt": "unfoldingWord® Translation Words"
+},
+"abbreviation": {
+"pt": "UTW"
+}
+},
+"languages": [
+{
+"tag": "pt",
+"name": {
+"pt": "Portuguese"
+}
+}
+],
+"type": {
+"flavorType": {
+"name": "peripheral",
+"flavor": {
+"name": "textAquiferAlphabetical",
+"audience": "common"
+},
+"currentScope": {}
+}
+},
+"ingredients": {
+"json/002.content.json": {
+"mimeType": "text/json",
+"size": 740400,
+"scope": {
+"a": [
+"Abandonado",
+"Abate",
+"Abel",
+"Abençoar",
+"Abeto",
+"Abias",
+"Abiatar",
+"Abimeleque",
+"Abismo",
+"Abner",
+"Abominação",
+"Abraão",
+"Absalão",
+"Acabe",
+"Acácia",
+"Acaz",
+"Acazias",
+"Acreditar",
+"Adão",
+"Adivinhação",
+"Admiração",
+"Admoestar",
+"Adoção",
+"Adonias",
+"Adorar",
+"Adultério",
+"Adversário",
+"Afligir",
+"Ageu",
+"Águia",
+"Ai",
+"Ai",
+"Aías",
+"Alarme",
+"Alaúde",
+"Alegria",
+"Aliança",
+"Alma",
+"Altar",
+"Altar de Incenso",
+"Altíssimo",
+"Altivo",
+"Amado",
+"Amalequita",
+"Amante",
+"Amazias",
+"Amém",
+"Amnom",
+"Amom",
+"Amor",
+"Amorreu",
+"Amós",
+"Amoz",
+"Ana",
+"Anaque",
+"Anás",
+"Ancião",
+"André",
+"Angústia",
+"Anjo",
+"Ano no período bíblico",
+"Anticristo",
+"Antioquia",
+"Ao Alto",
+"Apagar",
+"Apolo",
+"Apóstolo",
+"Áquila",
+"Arã",
+"Arabá",
+"Arábia",
+"Arado",
+"Arão",
+"Ararate",
+"Arca",
+"Arca da Aliança",
+"Arma de arco",
+"Armadilha",
+"Armadura",
+"Armadura de peito",
+"Armazém",
+"Arqueiro",
+"Arrebatado",
+"Arrepender",
+"Arrogante",
+"Arruinar",
+"Artaxerxes",
+"Asa",
+"Asafe",
+"Asdode",
+"Aser",
+"Aserim",
+"Ásia",
+"Asquelom",
+"Assassinado",
+"Assembleia",
+"Assíria",
+"Assuero",
+"Assunto-Tópico",
+"Astuto",
+"Atalia",
+"Atingir",
+"Atribuir",
+"Autocontrole",
+"Autoridade",
+"Azarias",
+"Azeitona"
+]
+}
+},
+"json/006.content.json": {
+"mimeType": "text/json",
+"size": 439649,
+"scope": {
+"e": [
+"Ecrom",
+"Éden",
+"Edom",
+"Éfeso",
+"Éfode",
+"Efraim",
+"Efrata",
+"Egito",
+"Ein-Gedi",
+"Elão",
+"Eleazar",
+"Eleito",
+"Eliaquim",
+"Elias",
+"Eliseu",
+"Em Cristo",
+"Encorajar",
+"Enganar",
+"Enoque",
+"Entender",
+"Enterrar",
+"Entregar ao dano",
+"Enxofre",
+"Errado",
+"Esaú",
+"Escabelo",
+"Escravizar",
+"Escriba",
+"Escudo",
+"Esdras",
+"Esmolas",
+"Espada",
+"Esperança",
+"Espinho",
+"Espírito",
+"Espírito Santo",
+"Esplendor",
+"Estatuto",
+"Estéril",
+"Estêvão",
+"Esther",
+"Estrangeiro",
+"Estrume",
+"Eternidade",
+"Etiópia",
+"Eufrates",
+"Eunuco",
+"Eva",
+"Evangelista",
+"Exaltar",
+"Exílio",
+"Exortar",
+"Expiação",
+"Expulsar",
+"Extinguir",
+"Exultar",
+"Ezequias",
+"Ezequiel"
+]
+}
+},
+"json/007.content.json": {
+"mimeType": "text/json",
+"size": 275455,
+"scope": {
+"f": [
+"Falsa testemunha",
+"Falso deus",
+"Falso profeta",
+"Família",
+"Faraó",
+"Fariseu",
+"Favor",
+"Fé",
+"Feitiçaria",
+"Fenícia",
+"Ferro",
+"Festa",
+"Festival",
+"Fidelidade aliança",
+"Fiel",
+"Figo",
+"Filha de Sião",
+"Filho de Deus",
+"Filho do Homem",
+"Filhos de Deus",
+"Filipe",
+"Filipe, o Apóstolo",
+"Filipos",
+"Filisteus",
+"Filístia",
+"Finéias",
+"Flauta",
+"Fofoca",
+"Fome",
+"Fonte",
+"Fornalha",
+"Fornicação",
+"Fortaleza",
+"Fruto",
+"Fundamento"
+]
+}
+},
+"json/016.content.json": {
+"mimeType": "text/json",
+"size": 690989,
+"scope": {
+"p": [
+"Paciente",
+"Padã-Arã",
+"Pagão",
+"Palácio",
+"Palavra de Deus",
+"Palha",
+"Palmeira",
+"Pano de saco",
+"Pão",
+"Pão sem fermento",
+"Parã",
+"Parábola",
+"Paraíso",
+"Parcial",
+"Parente",
+"Parto",
+"Páscoa",
+"Pastor",
+"Pátio",
+"Patriarcas",
+"Paulo",
+"Paz",
+"Pecado",
+"Pedra",
+"Pedra Angular",
+"Pedro",
+"Pendurar",
+"Pentecostes",
+"Peor",
+"Perdoar",
+"Perecer",
+"Perfeito",
+"Período de idade",
+"Perizeu",
+"Perseguir",
+"Perseverança",
+"Pérsia",
+"Perturbação",
+"Perverso",
+"Pescador",
+"Piedoso",
+"Pilar",
+"Pilatos",
+"Pilhagem",
+"Pisotear",
+"Poço",
+"Poço",
+"Poderoso",
+"Pomba",
+"Ponto",
+"Porco",
+"Portão",
+"Posição de Juiz",
+"Possuído por demônios",
+"Possuir",
+"Potifar",
+"Povo de Deus",
+"Praga",
+"Prata",
+"Predestinar",
+"Predestinar",
+"Pregar",
+"Prender",
+"Presa",
+"Primeiro Fruto",
+"Primogênito",
+"Príncipe",
+"Priscila",
+"Profanar",
+"Profano",
+"Profeta",
+"Promessa",
+"Propiciação",
+"Propiciatório",
+"Prosperar",
+"Prostituta",
+"Prostrado",
+"Provérbio",
+"Província",
+"Provocar",
+"Prudente",
+"Punir",
+"Purificar"
+]
+}
+}
+},
+"copyright": {
+"licenses": [
+{
+"url": "https://creativecommons.org/licenses/by-sa/4.0/legalcode.en"
+}
+],
+"shortStatements": [
+{
+"statement": "<p>unfoldingWord® Translation Words © 2022 unfoldingWord.</p>",
+"mimetype": "text/html",
+"lang": "pt"
+}
+]
+}
+},
+"article_metadata": {
+"237603": {
+"content_id": "237603",
+"reference_id": 25466,
+"index_reference": "apóstolo",
+"localizations": {
+"eng": {
+"content_id": 26324,
+"language": "eng",
+"title": "Apostle"
+},
+"arb": {
+"content_id": 195920,
+"language": "arb",
+"title": "رسول"
+},
+"fra": {
+"content_id": 466645,
+"language": "fra",
+"title": "Apôtre"
+},
+"hin": {
+"content_id": 179554,
+"language": "hin",
+"title": "प्रेरित"
+},
+"ind": {
+"content_id": 675613,
+"language": "ind",
+"title": "Rasul"
+},
+"spa": {
+"content_id": 335575,
+"language": "spa",
+"title": "Apóstol"
+},
+"swh": {
+"content_id": 575366,
+"language": "swh",
+"title": "mtume"
+},
+"zht": {
+"content_id": 390407,
+"language": "zht",
+"title": "使徒"
+}
+}
+},
+"237828": {
+"content_id": "237828",
+"reference_id": 25695,
+"index_reference": "eleito",
+"localizations": {
+"eng": {
+"content_id": 26553,
+"language": "eng",
+"title": "Elect"
+},
+"arb": {
+"content_id": 196115,
+"language": "arb",
+"title": "مُختار"
+},
+"fra": {
+"content_id": 466855,
+"language": "fra",
+"title": "Élu"
+},
+"hin": {
+"content_id": 179769,
+"language": "hin",
+"title": "चुना हुआ"
+},
+"ind": {
+"content_id": 675794,
+"language": "ind",
+"title": "Dipilih"
+},
+"spa": {
+"content_id": 335593,
+"language": "spa",
+"title": "Elegir"
+},
+"swh": {
+"content_id": 575459,
+"language": "swh",
+"title": "Chagua"
+},
+"zht": {
+"content_id": 390631,
+"language": "zht",
+"title": "選民"
+}
+}
+},
+"237858": {
+"content_id": "237858",
+"reference_id": 25725,
+"index_reference": "fé",
+"localizations": {
+"eng": {
+"content_id": 26583,
+"language": "eng",
+"title": "Faith"
+},
+"arb": {
+"content_id": 196143,
+"language": "arb",
+"title": "إيمان"
+},
+"fra": {
+"content_id": 466880,
+"language": "fra",
+"title": "La foi"
+},
+"hin": {
+"content_id": 179798,
+"language": "hin",
+"title": "विश्वास"
+},
+"ind": {
+"content_id": 675824,
+"language": "ind",
+"title": "Iman"
+},
+"spa": {
+"content_id": 335599,
+"language": "spa",
+"title": "Fe"
+},
+"swh": {
+"content_id": 575469,
+"language": "swh",
+"title": "Imani"
+},
+"zht": {
+"content_id": 390660,
+"language": "zht",
+"title": "信心"
+}
+}
+},
+"237922": {
+"content_id": "237922",
+"reference_id": 25789,
+"index_reference": "piedoso",
+"localizations": {
+"eng": {
+"content_id": 26647,
+"language": "eng",
+"title": "Godly"
+},
+"arb": {
+"content_id": 196203,
+"language": "arb",
+"title": "تقيّ"
+},
+"fra": {
+"content_id": 466938,
+"language": "fra",
+"title": "Pieux"
+},
+"hin": {
+"content_id": 179860,
+"language": "hin",
+"title": "धर्मी"
+},
+"ind": {
+"content_id": 675881,
+"language": "ind",
+"title": "Saleh"
+},
+"spa": {
+"content_id": 335605,
+"language": "spa",
+"title": "Divino"
+},
+"swh": {
+"content_id": 627073,
+"language": "swh",
+"title": "Uungu"
+},
+"zht": {
+"content_id": 390721,
+"language": "zht",
+"title": "敬虔"
+}
+}
+},
+"238209": {
+"content_id": "238209",
+"reference_id": 26079,
+"index_reference": "paulo",
+"localizations": {
+"eng": {
+"content_id": 26937,
+"language": "eng",
+"title": "Paul"
+},
+"arb": {
+"content_id": 196444,
+"language": "arb",
+"title": "بولس"
+},
+"fra": {
+"content_id": 467206,
+"language": "fra",
+"title": "Paul"
+},
+"hin": {
+"content_id": 180141,
+"language": "hin",
+"title": "पौलुस"
+},
+"ind": {
+"content_id": 676088,
+"language": "ind",
+"title": "Paulus"
+},
+"spa": {
+"content_id": 335631,
+"language": "spa",
+"title": "Pablo"
+},
+"swh": {
+"content_id": 627236,
+"language": "swh",
+"title": "Paulo"
+},
+"zht": {
+"content_id": 391005,
+"language": "zht",
+"title": "保羅"
+}
+}
+}
+}
+}

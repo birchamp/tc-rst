@@ -1,0 +1,18 @@
+figs-abstractnouns:
+  dependencies:
+    - figs-intro
+  recommended:
+    - figs-activepassive
+    - figs-metonymy
+figs-activepassive:
+  dependencies: []
+  recommended:
+    - figs-abstractnouns
+figs-metaphor:
+  dependencies:
+    - figs-intro
+    - figs-simile
+  recommended: []
+translate-names:
+  recommended:
+    - translate-transliterate
