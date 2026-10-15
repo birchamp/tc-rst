@@ -1669,6 +1669,32 @@ fn decode_record(j: &Json, cx: Cx) -> R<Record> {
     read().map_err(|e| e.within(kind))
 }
 
+/// Reads a record object leniently (unknown fields ignored): for values the fold builds by
+/// merging units of stored values, which every reader accepted already.
+pub(crate) fn decode_record_lenient(j: &Json) -> Option<Record> {
+    decode_record(j, Cx { lenient: true }).ok()
+}
+
+/// The wire form of a comment target (§2.8).
+pub(crate) fn comment_target_json(target: &CommentTarget) -> Option<Json> {
+    Some(target.to_json())
+}
+
+/// The wire form of a check key (§2.8).
+pub(crate) fn check_key_json(key: &CheckKey) -> Option<Json> {
+    Some(key.to_json())
+}
+
+/// Reads a check key from its wire form.
+pub(crate) fn check_key_from_json(j: &Json) -> Option<CheckKey> {
+    CheckKey::from_json(j, STRICT).ok()
+}
+
+/// The canonical JSON of a record (key and value), as a change stores it.
+pub fn encode_record_json(record: &Record) -> Result<Json, ChangeError> {
+    encode_record(record)
+}
+
 // ---------------------------------------------------------------------------------------
 // Causes
 // ---------------------------------------------------------------------------------------

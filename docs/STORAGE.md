@@ -570,24 +570,43 @@ Example (one line on disk, wrapped here):
 
 ### 2.6 Fold output
 
-```rust
-pub struct FoldState {                       // persistent maps (`im`), so a snapshot is O(1)
-    pub changes: ChangeIndex,                // id → change metadata, value byte range, packs holding it
-    pub keys: im::HashMap<RecordKey, KeyState>,
-    pub conflicts: Vec<Conflict>,            // sorted by key: canon book order, then numeric
-    pub anomalies: Vec<Anomaly>,             // sorted by kind, then key
-    pub detached: Vec<RecordKey>,            // heads with no place on any screen, listed under Detached (§7.7)
-    pub frontier: Frontier,                  // sha256 of the sorted set of all head ids: names this exact state
-}
+`FoldState` keeps its tables in shared, copy-on-write containers (append-only chunked vectors
+and sharded hash maps; persistent ordered maps for the lists), so a clone is a snapshot that
+costs a few hundred pointer copies, whatever the project's size. Its fields are private; screens,
+commands and projections read it through methods:
 
-pub struct KeyState { pub heads: SmallVec<[ChangeIdx; 1]>, pub state: Resolved }
+```rust
+impl FoldState {
+    pub fn fold(kind: ProjectKind, changes: impl IntoIterator<Item = FoldInput>) -> Self;  // §7.2
+    pub fn add(&mut self, changes: impl IntoIterator<Item = FoldInput>) -> Delta;            // §7.8
+    pub fn key_state(&self, key: &RecordKey) -> Option<KeyState>;
+    pub fn projected(&self, key: &RecordKey) -> Option<Record>;   // what projection shows
+    pub fn conflicts(&self) -> impl Iterator<Item = &Conflict>;    // sorted: canon book order, then key, then kind
+    pub fn conflict_counts(&self) -> &BTreeMap<(Option<BookId>, u8), u32>;  // kept by every step
+    pub fn anomalies(&self) -> impl Iterator<Item = &Anomaly>;     // sorted by kind, then key
+    pub fn detached(&self) -> impl Iterator<Item = &RecordKey>;    // heads with no place on any screen (§7.7)
+    pub fn frontier(&self) -> Frontier;                            // sha256 of the sorted set of all head ids
+    pub fn shown_heads(&self, key: &RecordKey, displayed: Option<ChangeId>) -> Vec<ChangeId>;  // the token rule, §2.7
+    // also: change, body, raw, history, book, books, placement, derived_files, render,
+    // book_usfm, chapter_usfm, carried_files, metadata_source, resolution and the choices of §8.3
+}
+/// A verified line and the pack holding it. `prepare()` reads what the fold keeps and drops
+/// the decoded value, so a loader does that on its reading threads.
+pub struct FoldInput { line: Verified, pack: Option<PackId> }
+/// What one `add` changed: the records, books and chapters to re-project (§5.0 B5), the
+/// conflicts that did not exist before (B6), and whether pins or paths changed.
+pub struct Delta { pub keys: Vec<RecordKey>, pub books: Vec<BookId>, pub chapters: Vec<(BookId, u16)>,
+                   pub new_conflicts: Vec<ConflictId>, pub pins: bool, pub paths: bool, pub everything: bool }
+
+pub struct KeyState { pub heads: Vec<ChangeId>, pub state: Resolved }
 
 pub enum Resolved {
-    Settled { head: ChangeIdx },
+    Settled { head: ChangeId },
     /// Several heads; the projection uses `head`, no conflict is listed (§7.3 stub rules).
-    SettledByRule { head: ChangeIdx, rule: AutoRule },
+    SettledByRule { head: ChangeId, rule: AutoRule },
     /// Several heads merged without disagreement. Computed, never stored.
-    Merged { merged: Record, how: MergeHow },   // EqualValues | Units(Vec<UnitName>)
+    Merged { merged: Box<Record>, how: MergeHow },  // EqualValues | Units(Vec<UnitName>) | Union (a grow-only BatchRelease)
+    /// The record is in this listed conflict: its own, or a grouped one (Passage).
     Conflict(ConflictId),
 }
 pub enum AutoRule { SeedStubs }
@@ -595,13 +614,13 @@ pub enum AutoRule { SeedStubs }
 pub struct Conflict {
     pub id: ConflictId,                      // sha256 of the sorted head ids: the same on every device
     pub key: RecordKey,
-    pub also_keys: Vec<RecordKey>,           // the other records of a grouped conflict (Passage, StructureIssue)
+    pub also_keys: Vec<RecordKey>,           // the other records of a grouped conflict (Passage, StructureIssue, PathCase)
     pub kind: ConflictKind,
     pub bases: Vec<ChangeId>,                // maximal common ancestors of the heads (§7.3)
-    pub candidates: Vec<Candidate>,          // one per distinct head value
-    pub agreed: Vec<(UnitName, UnitValue)>,  // units that merged cleanly
+    pub candidates: Vec<Candidate>,          // one per distinct head value (newest first); for a Passage, every head of its records
+    pub agreed: Vec<(UnitName, UnitValue)>,  // units that merged cleanly; `UnitValue(None)` = the fields are absent
     pub disputed: Vec<UnitName>,             // empty for whole-value kinds
-    pub provisional: ChangeId,               // head with the largest (rank, at, id), or the passage side (§7.2 F7)
+    pub provisional: ChangeId,               // head with the largest (rank, at, id), or the passage side's newest change (§7.2 F7)
     pub batches: Vec<BatchId>,               // batches of the heads, for grouping (§8.1)
     pub incomplete_history: bool,            // a head has a MissingParent link (§8.1)
 }
@@ -609,10 +628,11 @@ pub struct Candidate {
     pub head: ChangeId,
     pub also: Vec<ChangeId>,                 // other heads with an identical value
     pub device: DeviceId,
-    pub author: Option<Box<str>>,            // from DeviceProfile
+    pub author: Option<Box<str>>,            // from DeviceProfile: the Door43 username, else the display name
     pub at: WallTime,
     pub cause: Cause,
     pub value: Record,
+    pub side: Option<Side>,                  // for a Passage: Batch(id) of a passage batch, or Others (§7.3)
 }
 
 pub enum ConflictKind {
@@ -620,6 +640,8 @@ pub enum ConflictKind {
     BookRemovedWhileEdited { unseen: u32 }, LastBookRemoved,
     Alignment, Check, CheckMoved, Comment, Pins, Setting, ProjectMeta, Versification,
     StoryBase, Frame, StoryRef, CarriedFile, PathCase, Unknown,
+    BookLayout,      // two orders of an imported book
+    DeviceProfile,   // two versions of one device's profile (only a duplicated device makes this)
 }
 
 /// Change-level defects. A function of the change set, so every device with the same changes
@@ -673,7 +695,11 @@ pub enum RotationReason { FolderCopied, BackupRestored, DuplicateDevice }   // �
 ```
 
 `ConflictId` and `Frontier` are SHA-256 over the 32-byte head ids in ascending order,
-concatenated, without repeats.
+concatenated, without repeats. A conflict that is not one record's or one passage group's heads
+(`StructureIssue`, `BookRemovedWhileEdited`, `LastBookRemoved`, `PathCase`) takes its id over its
+kind tag and a NUL byte, then the head ids (for `StructureIssue`, the tag also holds its key's
+canonical JSON; for `PathCase`, the collision form), so a book's presence conflict and its
+removed-while-edited conflict over the same heads never share an id.
 
 ### 2.7 Shown tokens and commands
 
@@ -916,7 +942,11 @@ reader depends on a role: paths are authoritative (tC4 rule S-2).
 
 ### 3.4 `metadata.json`
 
-One function, `tc_burrito::build_metadata(&FoldState, &IngredientTable) -> Vec<u8>`, produces it.
+One function, `tc_burrito::build_metadata(&MetadataSource, &[IngredientEntry])`, produces it.
+`tc-burrito` cannot see the fold (`tc-journal` depends on it), so the fold hands it a plain
+`MetadataSource` (`FoldState::metadata_source`): every field value by its dotted path, the
+present books' scopes, the pins mirrored as relationships and whether the text is NFC; the
+caller adds the ingredient table (path, md5, size, role, scope of the bytes about to be on disk).
 Its bytes are a pure function of the fold and the bytes of the ingredients, so two devices with
 the same changes write identical files (I1, I12).
 
@@ -934,7 +964,8 @@ the same changes write identical files (I1, I12).
 | other top-level fields from an import (`agencies`, `targetAreas`, `progress`) | `ProjectMeta(Extra(name))`, written back verbatim |
 | `ingredients` | every listed file (§3.3), sorted by path: `checksum.md5` (lowercase), `size`, `mimeType`, `role`, `scope` |
 
-Byte form: two-space indentation, keys in the fixed order of the table, one trailing LF. Before
+Byte form: `tc_burrito`'s canonical writer: keys sorted at every level, two-space indentation,
+one trailing LF (the same rule as `format.json`, so equal documents are equal bytes). Before
 every write the document passes `tc_burrito::check` in memory: the vendored SB 1.0.0 schema
 (`jsonschema` 0.58.6, offline, draft-07, formats asserted), the checks the schema misses
 (`languages` present, RFC 3339 timestamps, declared authorities, the path grammar, md5 present
@@ -945,10 +976,11 @@ md5 and size check against the bytes about to be on disk.
 web editor, a text editor, a newer app), so a record value can be valid JSON but invalid in a
 burrito: a name with a trailing space, `copyright` as a string. Each value that feeds the
 document (every `ProjectMeta` field, the pins mirrored into `relationships`, every book `Scope`)
-is checked on its own against the schema fragment it projects into (`tc_burrito::check_field`).
+is checked on its own (`tc_burrito::check_field`, `check_relationship`, `check_scope`): the
+value is set in an otherwise valid document, which must pass every check.
 An invalid value is never projected: the field takes the newest value among the record's
-projected head and its ancestors that passes, else the creation value, else the field's
-default (omitted when optional), and the fold lists `InvalidForBurrito` in words ("The project
+projected head and its ancestors that passes (the creation value is among them), else the
+field's default (omitted when optional), and the fold lists `InvalidForBurrito` in words ("The project
 name jdoe set on Door43 is not valid in a Scripture Burrito: it ends with a space. The previous
 name is used until it is fixed. [Edit]"). The invalid value stays in History. A command that
 would write an invalid value (`SetMeta`, `SetBookScope`) is refused at B1 with the same words.
@@ -1822,7 +1854,8 @@ folded.
 ```
 fold(changes) -> FoldState
 F1  Index: id → change; key → changes; change → packs holding it.                     O(N)
-F2  Batches: group by batch id. A batch with fewer than `n` changes present, or with a
+F2  Batches: group by batch ref (id and `n` together, so changes that disagree on `n` are
+    judged as separate batches). A batch with fewer than `n` changes present, or with a
     quarantined change, is held: `IncompleteBatch`, none of its changes is folded, except the
     changes that some `BatchRelease` of that batch lists (the union over every release),
     which are folded (§7.4).                                                              O(N)
@@ -2140,14 +2173,18 @@ valid = run.end == value.span_end
 
 The record projects with `"invalid": !valid` under the label `label(v, value.span_end)`, with
 every stored field unchanged. A record placed by rules 2 to 4, or a second record placed at a run
-whose own anchor record exists, projects under its key's own label as invalid: kept, never
-dropped.
+whose own anchor record exists, projects under its key's own label as invalid. A JSON object
+holds one record per label, so a record whose own label another record already holds is left out
+of the sidecar; it stays in the journal, in History and in the Detached list.
 
 **Decisions** (`checking/<tool>/<BOOK>.json`, tC4 §5.2 shape):
 
 ```
 resolution(tool, book) = tC4's D30 ladder (primary, then fallback) over the projected pins only,
-                         using each pin's recorded `books` coverage; no installed-resource input
+                         using each pin's recorded `books` coverage (a pin without `books`,
+                         not yet backfilled, covers every book); no installed-resource input.
+                         The tool's slot: translationNotes, translationWordsLinks (for
+                         translationWords decisions), translationQuestions
 resource_ok   = record.resource == resolution(tool, book)   (repoPath case-insensitive, sha exact)
 verse_text    = plain_text_v1 of the projected verse or span the target names
 verse_changed = md5(verse_text) != judgement.verse_text_md5
@@ -2160,14 +2197,33 @@ comments      = the comment, or false;  reminders = bookmarked
 modifiedTimestamp = the newest head's `at` in RFC 3339
 ```
 
-The document's `resource` record is `resolution(tool, book)`. Decisions are sorted by the
-canonical JSON of `contextId` (tC4). `MovedTo` records project nothing at the old key. Restoring
-a verse's earlier text makes its decisions valid again; nothing was rewritten.
+The document's `resource` record is `resolution(tool, book)` with its `version` and
+`languageSet`. Decisions are sorted by the canonical JSON of `contextId` (tC4). `MovedTo` records
+project nothing at the old key. Restoring a verse's earlier text makes its decisions valid again;
+nothing was rewritten. A decision sidecar exists for a (tool, book) that has decisions; an
+alignment sidecar for a book that has alignments; a comments file for a book that has comments.
+
+**Fields kept for decoding.** Every decoder is complete (§11.1 X2), so each sidecar record also
+holds what the journal stores beyond tC4's shape, after tC4's fields: an alignment's `done`,
+its `source` pin, `markedInvalid` and `dismissed` when true, `anchor` (its key's chapter and
+verse) when it is placed at another verse, and `spanEnd` when the label does not say it; a
+decision's `userStatus` (the person's status, which `status` hides once invalidated),
+`verseTextMd5`, `pinnedResource` when its `resource` differs from the document's,
+`importedInvalid` and `dismissed` when true, and `checkKey` when its key is not the one its
+`contextId` names (check id, reference and occurrence). Unknown fields of a record follow. A
+decoder ignores the computed flags (`invalid`, `invalidated`, `verseEdits`, `userInvalid`,
+`modifiedTimestamp`) and reads `status` as the person's only when no `userStatus` is written
+and the record is not invalidated (§11.1 X3).
 
 **Other derived files.**
 
-- `checking/resources.json`: the `Pins` groups in tC4's fixed slot order (format-and-journeys
-  §6.3), two-space indentation.
+- `checking/resources.json`: `{"schemaVersion":2,"languageSets":{"primary","fallback"},
+  "resources":{"originalLanguage","lexicon"},"extraScripture":[…]}` from the `Pins` groups, slots
+  in tC4's order (`gatewayLanguage`, `translationNotes`, `translationWordsLinks`,
+  `translationWords`, `translationAcademy`, `translationQuestions`, `simplifiedText`, `nt`, `ot`,
+  then the rest by name) and each slot's members in tC4's order (`languageId`, `owner`,
+  `repoPath`, `version`, `sha`, `flavor`, `books`, `id`, then the rest by name), two-space
+  indentation.
 - `checking/settings.json`: `{"schemaVersion":1}` then the `Setting` records in key order,
   two-space indentation.
 - `vrs.json`: the `Versification` bytes.
@@ -2175,10 +2231,12 @@ a verse's earlier text makes its decisions valid again; nothing was rewritten.
   `{id, target, placed, text, author, at}`, where `placed` is the verse or check the comment is
   placed at by the anchor rules above (`null` when detached), sorted by (chapter, verse, at, id);
   comments on checks go with the check's book.
-- `tc/conflicts.json`: `{"schemaVersion":1,"conflicts":[…]}`, each `{id, key, kind,
-  provisional, candidates: [{change, device, author, at}]}`. It travels in commits and exports,
-  so open questions travel with the text.
-- `content/NN.md` (OBS): `StoryBase` with `Frame` and `StoryRef` spliced byte-strictly.
+- `tc/conflicts.json`: `{"schemaVersion":1,"conflicts":[…]}`, each `{id, key, alsoKeys?, kind,
+  provisional, candidates: [{change, device, author, at}]}`, one conflict per line in the
+  sidecar byte form. It travels in commits and exports, so open questions travel with the text.
+- `content/NN.md` (OBS): `StoryBase` with `Frame` and `StoryRef` spliced byte-strictly: the
+  template's first `# ` line is frame 0, the paragraph after its n-th image line is frame n, and
+  its last `_…_` line is the reference; a part with no record keeps the template's text.
 - Carried files: the provisional head's blob at the path; each other conflicting head's blob at
   `<stem>.conflict-<first 8 hex of its oid>.<ext>`. A carried path that collides with a derived
   path or another carried path (§3.3) is placed at `<stem>.case-<first 8 hex of its oid>.<ext>`

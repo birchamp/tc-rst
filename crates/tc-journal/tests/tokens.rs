@@ -7,7 +7,7 @@ mod common;
 
 use common::*;
 use proptest::prelude::*;
-use tc_journal::fold::{ChangeIndex, ConflictId};
+use tc_journal::fold::{ConflictId, FoldInput, FoldState, ProjectKind};
 use tc_journal::keys::UnknownKey;
 use tc_journal::token::TokenError;
 use tc_journal::{
@@ -146,22 +146,20 @@ fn a_tampered_token_is_refused() {
 }
 
 #[test]
-fn the_change_index_holds_each_change_once_with_every_pack() {
-    let mut index = ChangeIndex::default();
+fn the_fold_holds_each_change_once_with_every_pack() {
     let change = verse_change(local(1), 1, 1, "a");
-    let first = index.insert(change.clone(), Some(PackId::of(b"p1")));
-    let again = index.insert(change.clone(), Some(PackId::of(b"p2")));
-    let pending = index.insert(change.clone(), None);
-    assert_eq!((first, again, pending), (first, first, first));
-    assert_eq!(index.len(), 1);
-    let entry = index.get(first).unwrap();
-    assert_eq!(
-        entry.packs.as_slice(),
-        &[PackId::of(b"p1"), PackId::of(b"p2")]
-    );
-    assert_eq!(index.find(&change.id()), Some(first));
-    let snapshot = index.clone();
-    index.insert(verse_change(local(1), 2, 1, "b"), None);
-    assert_eq!((snapshot.len(), index.len()), (1, 2));
+    let line = |pack: Option<PackId>| FoldInput::new(change.clone().into(), pack);
+    let mut state = FoldState::new(ProjectKind::Bible);
+    state.add([
+        line(Some(PackId::of(b"p1"))),
+        line(Some(PackId::of(b"p2"))),
+        line(None),
+    ]);
+    assert_eq!(state.len(), 1);
+    let view = state.change(&change.id()).unwrap();
+    assert_eq!(view.packs, vec![PackId::of(b"p1"), PackId::of(b"p2")]);
+    let snapshot = state.clone();
+    state.add([FoldInput::from(verse_change(local(1), 2, 1, "b"))]);
+    assert_eq!((snapshot.len(), state.len()), (1, 2));
     assert_eq!(ConflictId::of(&[change.id()]).to_hex().len(), 64);
 }

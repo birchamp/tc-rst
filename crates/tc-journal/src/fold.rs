@@ -1,81 +1,46 @@
-//! The fold's output types (`docs/STORAGE.md` §2.6). The fold itself (§7) fills them.
+//! The fold (`docs/STORAGE.md` §7): the set of changes turned into the project state.
+//!
+//! [`FoldState::fold`] folds a set of changes from scratch and [`FoldState::add`] adds
+//! changes to a fold; both run the same stages (§7.2 F1 to F10) over what the changes
+//! touched, so an incremental step costs what it touches and equals a fold from scratch
+//! (§7.8). The state lives in shared containers, so a clone is a snapshot.
+//!
+//! The fold reads no clock, device or author to decide what survives (I3), never fails
+//! (I5), and lists every defect as an [`Anomaly`].
 
-use crate::change::{Cause, Change};
-use crate::ids::{BatchId, ChangeId, DeviceId, DeviceSeq, GitOid, PackId, RepoPath, WallTime};
+mod attach;
+mod books;
+mod cow;
+mod merge;
+mod meta;
+mod metadata;
+mod passage;
+mod project;
+mod reads;
+mod resolve;
+mod sidecar;
+mod state;
+
+pub use meta::ChangeIdx;
+pub use project::{CarriedPlacement, DerivedFile};
+pub use reads::{BookView, ChangeView, Placement};
+pub use resolve::ResolveError;
+pub use sidecar::{SidecarError, decode_alignments, decode_decisions, records_from_usfm};
+pub use state::{FoldInput, FoldState, MergeHow, ProjectKind};
+
+pub(crate) use merge::{record_of, value_of};
+
+use crate::change::Cause;
+use crate::ids::{BatchId, ChangeId, DeviceId, DeviceSeq, GitOid, RepoPath, WallTime};
 use crate::json::Json;
 use crate::keys::RecordKey;
 use crate::pack::PackError;
 use crate::record::Record;
 use crate::rules::RuleViolation;
 use crate::text::{hex, sha256};
-use smallvec::SmallVec;
 use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tc_core::BookId;
-
-/// A handle to a change in a [`ChangeIndex`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ChangeIdx(u32);
-
-impl ChangeIdx {
-    pub fn get(self) -> usize {
-        self.0 as usize
-    }
-}
-
-/// A folded change and the packs that hold it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IndexedChange {
-    pub change: Change,
-    /// Empty for a change that is only in a pending file.
-    pub packs: SmallVec<[PackId; 1]>,
-}
-
-/// Every folded change, by handle and by id. Persistent, so a snapshot is O(1).
-#[derive(Debug, Clone, Default)]
-pub struct ChangeIndex {
-    by_idx: im::Vector<IndexedChange>,
-    by_id: im::HashMap<ChangeId, ChangeIdx>,
-}
-
-impl ChangeIndex {
-    /// Adds a change, or notes one more pack holding a change already here (two lines with
-    /// one id have the same bytes, so nothing is lost).
-    pub fn insert(&mut self, change: Change, pack: Option<PackId>) -> ChangeIdx {
-        if let Some(idx) = self.by_id.get(&change.id()).copied() {
-            if let Some(pack) = pack
-                && let Some(entry) = self.by_idx.get_mut(idx.get())
-                && !entry.packs.contains(&pack)
-            {
-                entry.packs.push(pack);
-            }
-            return idx;
-        }
-        // A project holds far fewer than 2³² changes (§14 estimates 620,000 in three years).
-        let idx = ChangeIdx(u32::try_from(self.by_idx.len()).unwrap_or(u32::MAX));
-        self.by_id.insert(change.id(), idx);
-        self.by_idx.push_back(IndexedChange {
-            change,
-            packs: pack.into_iter().collect(),
-        });
-        idx
-    }
-
-    pub fn get(&self, idx: ChangeIdx) -> Option<&IndexedChange> {
-        self.by_idx.get(idx.get())
-    }
-
-    pub fn find(&self, id: &ChangeId) -> Option<ChangeIdx> {
-        self.by_id.get(id).copied()
-    }
-
-    pub fn len(&self) -> usize {
-        self.by_idx.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.by_idx.is_empty()
-    }
-}
 
 /// SHA-256 of a sorted set of head ids: the 32-byte ids, ascending, concatenated.
 fn digest_of(heads: &[ChangeId]) -> [u8; 32] {
@@ -139,34 +104,22 @@ impl fmt::Display for ConflictId {
     }
 }
 
-/// The result of folding.
-#[derive(Debug, Clone)]
-pub struct FoldState {
-    pub changes: ChangeIndex,
-    pub keys: im::HashMap<RecordKey, KeyState>,
-    /// Sorted by key: canon book order, then numeric.
-    pub conflicts: Vec<Conflict>,
-    /// Sorted by kind, then key.
-    pub anomalies: Vec<Anomaly>,
-    /// Heads with no place on any screen, listed under Detached (§7.7).
-    pub detached: Vec<RecordKey>,
-    pub frontier: Frontier,
-}
-
+/// A record's heads and how they resolve (§2.6).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyState {
-    pub heads: SmallVec<[ChangeIdx; 1]>,
+    /// Sorted.
+    pub heads: Vec<ChangeId>,
     pub state: Resolved,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Resolved {
     Settled {
-        head: ChangeIdx,
+        head: ChangeId,
     },
     /// Several heads; the projection uses `head`, no conflict is listed (§7.3 stub rules).
     SettledByRule {
-        head: ChangeIdx,
+        head: ChangeId,
         rule: AutoRule,
     },
     /// Several heads merged without disagreement. Computed, never stored.
@@ -174,6 +127,7 @@ pub enum Resolved {
         merged: Box<Record>,
         how: MergeHow,
     },
+    /// The record is in this listed conflict (its own, or a grouped one).
     Conflict(ConflictId),
 }
 
@@ -182,20 +136,15 @@ pub enum AutoRule {
     SeedStubs,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MergeHow {
-    EqualValues,
-    Units(Vec<UnitName>),
-}
-
 /// A merge unit (§7.3): a group of fields taken together, named by its JSON path in the
 /// record's value, such as `/words` or `/judgement`.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct UnitName(pub Box<str>);
 
-/// A unit's value as stored, unknown fields of a newer minor included.
+/// A unit's value as stored, unknown fields of a newer minor included; `None` when the
+/// unit's fields are absent.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UnitValue(pub Json);
+pub struct UnitValue(pub Option<Json>);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conflict {
@@ -231,6 +180,15 @@ pub struct Candidate {
     pub at: WallTime,
     pub cause: Cause,
     pub value: Record,
+    /// For a `Passage` conflict: the side this head belongs to (§7.3).
+    pub side: Option<Side>,
+}
+
+/// A side of a `Passage` conflict: a passage batch, or every other change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Side {
+    Batch(BatchId),
+    Others,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -242,7 +200,9 @@ pub enum ConflictKind {
     BookHeader,
     ChapterFront,
     BookPresence,
-    BookRemovedWhileEdited { unseen: u32 },
+    BookRemovedWhileEdited {
+        unseen: u32,
+    },
     LastBookRemoved,
     Alignment,
     Check,
@@ -258,6 +218,196 @@ pub enum ConflictKind {
     CarriedFile,
     PathCase,
     Unknown,
+    /// Two orders of an imported book's chapters and verses.
+    BookLayout,
+    /// Two versions of one device's profile (only one device writes it, so only a
+    /// duplicated device makes this).
+    DeviceProfile,
+}
+
+impl ConflictKind {
+    /// The order of kinds within one key in the conflict list.
+    pub fn order(&self) -> u8 {
+        match self {
+            Self::VerseText => 0,
+            Self::VerseStructure => 1,
+            Self::Passage => 2,
+            Self::StructureIssue => 3,
+            Self::BookHeader => 4,
+            Self::ChapterFront => 5,
+            Self::BookPresence => 6,
+            Self::BookRemovedWhileEdited { .. } => 7,
+            Self::LastBookRemoved => 8,
+            Self::Alignment => 9,
+            Self::Check => 10,
+            Self::CheckMoved => 11,
+            Self::Comment => 12,
+            Self::Pins => 13,
+            Self::Setting => 14,
+            Self::ProjectMeta => 15,
+            Self::Versification => 16,
+            Self::StoryBase => 17,
+            Self::Frame => 18,
+            Self::StoryRef => 19,
+            Self::CarriedFile => 20,
+            Self::PathCase => 21,
+            Self::Unknown => 22,
+            Self::BookLayout => 23,
+            Self::DeviceProfile => 24,
+        }
+    }
+
+    /// Kinds that are not one record's own heads take their id over a tag too, so two
+    /// conflicts over the same heads (a book's presence conflict and its
+    /// removed-while-edited conflict) never share an id.
+    pub(crate) fn tag(&self) -> Option<&'static str> {
+        match self {
+            Self::StructureIssue => Some("structureIssue"),
+            Self::BookRemovedWhileEdited { .. } => Some("bookRemovedWhileEdited"),
+            Self::LastBookRemoved => Some("lastBookRemoved"),
+            Self::PathCase => Some("pathCase"),
+            _ => None,
+        }
+    }
+}
+
+impl ConflictId {
+    /// The id of a derived conflict: SHA-256 of the tag and the sorted head ids.
+    pub(crate) fn tagged(tag: &str, heads: &[ChangeId]) -> Self {
+        let mut sorted: Vec<ChangeId> = heads.to_vec();
+        sorted.sort();
+        sorted.dedup();
+        let mut bytes = Vec::with_capacity(tag.len() + 1 + sorted.len() * 32);
+        bytes.extend_from_slice(tag.as_bytes());
+        bytes.push(0);
+        for id in &sorted {
+            bytes.extend_from_slice(id.as_bytes());
+        }
+        Self(sha256(&bytes))
+    }
+}
+
+/// What one call of [`FoldState::add`] changed: what `tc-store` marks dirty (§5.0 B5) and
+/// what the reply to a command says (B6).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Delta {
+    /// Records whose state or projected value may have changed, sorted.
+    pub keys: Vec<RecordKey>,
+    pub books: Vec<BookId>,
+    pub chapters: Vec<(BookId, u16)>,
+    /// Conflicts that did not exist before this step.
+    pub new_conflicts: Vec<ConflictId>,
+    /// A pin group changed: decision sidecars and `resources.json` change.
+    pub pins: bool,
+    /// Carried or derived paths may have moved.
+    pub paths: bool,
+    /// The fold was rebuilt from scratch: every derived file may have changed.
+    pub everything: bool,
+}
+
+impl Delta {
+    pub(crate) fn everything() -> Self {
+        Self {
+            everything: true,
+            ..Self::default()
+        }
+    }
+}
+
+/// Work counters for the operation-count tests (`docs/PERFORMANCE.md` rule 2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Counter {
+    ChangesIndexed,
+    KeysUpdated,
+    KeysRecomputed,
+    ChangesVisited,
+    ValuesDecoded,
+    GroupsBuilt,
+    BooksChecked,
+    ChaptersCohered,
+    VersesCohered,
+    AttachedPlaced,
+    ConflictsBuilt,
+    RecordsProjected,
+}
+
+const COUNTERS: usize = 12;
+
+#[derive(Debug, Default)]
+pub(crate) struct CounterCells([AtomicU64; COUNTERS]);
+
+impl CounterCells {
+    pub(crate) fn add(&self, counter: Counter, n: u64) {
+        self.0[counter as usize].fetch_add(n, Ordering::Relaxed);
+    }
+
+    pub(crate) fn read(&self) -> Counters {
+        let get = |c: Counter| self.0[c as usize].load(Ordering::Relaxed);
+        Counters {
+            changes_indexed: get(Counter::ChangesIndexed),
+            keys_updated: get(Counter::KeysUpdated),
+            keys_recomputed: get(Counter::KeysRecomputed),
+            changes_visited: get(Counter::ChangesVisited),
+            values_decoded: get(Counter::ValuesDecoded),
+            groups_built: get(Counter::GroupsBuilt),
+            books_checked: get(Counter::BooksChecked),
+            chapters_cohered: get(Counter::ChaptersCohered),
+            verses_cohered: get(Counter::VersesCohered),
+            attached_placed: get(Counter::AttachedPlaced),
+            conflicts_built: get(Counter::ConflictsBuilt),
+            records_projected: get(Counter::RecordsProjected),
+        }
+    }
+}
+
+/// How much work a fold has done since it was made. A snapshot shares its counters with
+/// the state it was taken from.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Counters {
+    /// Changes added to the index (F1).
+    pub changes_indexed: u64,
+    /// Keys whose heads were updated in O(1).
+    pub keys_updated: u64,
+    /// Keys whose links and heads were recomputed from their changes.
+    pub keys_recomputed: u64,
+    /// Changes visited by those recomputations and by ancestry walks.
+    pub changes_visited: u64,
+    /// Values decoded from stored bytes.
+    pub values_decoded: u64,
+    /// Passage groups built.
+    pub groups_built: u64,
+    /// Books whose presence and removal visibility were computed.
+    pub books_checked: u64,
+    /// Chapters whose coherence was computed.
+    pub chapters_cohered: u64,
+    /// Verse records those passes read.
+    pub verses_cohered: u64,
+    /// Alignments, comments and decisions placed (§7.7).
+    pub attached_placed: u64,
+    /// Conflicts built.
+    pub conflicts_built: u64,
+    /// Records read to project derived bytes.
+    pub records_projected: u64,
+}
+
+impl Counters {
+    /// The counters' change from `earlier` to `self`.
+    pub fn since(&self, earlier: &Self) -> Self {
+        Self {
+            changes_indexed: self.changes_indexed - earlier.changes_indexed,
+            keys_updated: self.keys_updated - earlier.keys_updated,
+            keys_recomputed: self.keys_recomputed - earlier.keys_recomputed,
+            changes_visited: self.changes_visited - earlier.changes_visited,
+            values_decoded: self.values_decoded - earlier.values_decoded,
+            groups_built: self.groups_built - earlier.groups_built,
+            books_checked: self.books_checked - earlier.books_checked,
+            chapters_cohered: self.chapters_cohered - earlier.chapters_cohered,
+            verses_cohered: self.verses_cohered - earlier.verses_cohered,
+            attached_placed: self.attached_placed - earlier.attached_placed,
+            conflicts_built: self.conflicts_built - earlier.conflicts_built,
+            records_projected: self.records_projected - earlier.records_projected,
+        }
+    }
 }
 
 /// Change-level defects. A function of the change set, so every device with the same
