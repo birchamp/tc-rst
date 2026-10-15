@@ -18,3 +18,8 @@ Copied from translationCore 4 at commit `d494a9d6ba9f4cdcc09faff9038c93159106045
 Licenses: the content licenses are in `tc4/LICENSE-CONTENT.md`. unfoldingWord resources
 (ULT, UST, UHB, UGNT, tN, tW, tA, tQ, TWL, OBS) are CC BY-SA 4.0, © unfoldingWord. The
 `.mjs` generator scripts are tC4 code under GPL-2.0-or-later, kept for provenance.
+
+## `scale/`
+
+Real Psalms data for the performance budgets in `docs/PERFORMANCE.md`: the aligned ULT, the
+translationNotes and the WEB text. Read `scale/README.md` for provenance and checksums.
