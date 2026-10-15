@@ -57,14 +57,32 @@ archives of the same commits: each zip comment is the commit. They are not shipp
 scale corpus generator (`tc-corpus`) reads them until it reads the exports instead, and then
 they are deleted.
 
-## Still missing
+## Shipped: the git archive of each commit-only pin
 
-The two lexicons have no tag, so they ship as the git archive of their commit, as in tC4.
+The two lexicons have no tag, so they ship as the Door43 git archive of their commit, as in
+tC4 (D71). Each zip comment is the pinned commit. The `en_ugl` archive's `metadata.json` and
+first entry are byte-identical to tC4's fixture of the same commit
+(`fixtures/tc4/test-fixtures/resources/en_ugl@d9d29e2d5892`), which tC4 fetched and verified
+on 2026-10-02. The project owner supplied both archives on 2026-10-15.
 
-| Pin | Repository | Commit |
-|---|---|---|
-| `lexicon.nt` | `uW/en_ugl` | `d9d29e2d589258ce27f92b59f753a3af03ab7a72` |
-| `lexicon.ot` | `uW/en_uhl` | `72df5ac25acf9d51e826b20e3ad883a5a657ef4e` |
+| Pin | Repository | Commit | File | Entries | sha256 |
+|---|---|---|---|---:|---|
+| `lexicon.nt` | `uW/en_ugl` | `d9d29e2d589258ce27f92b59f753a3af03ab7a72` | `en_ugl-d9d29e2d589258ce27f92b59f753a3af03ab7a72.zip` | 5,408 | `f2f9c3e8000ba1dce09b5e26e2f89ff0fff29056eadf66c9805ff57478f20f4f` |
+| `lexicon.ot` | `uW/en_uhl` | `72df5ac25acf9d51e826b20e3ad883a5a657ef4e` | `en_uhl-72df5ac25acf9d51e826b20e3ad883a5a657ef4e.zip` | 8,674 | `bbb8e3c4538528d37c352cd8fa5078aeed5e83c6ca2e10b0b462b1d6b1d09cd3` |
+
+These are Scripture Burritos (flavor `peripheral/x-lexicon`, made by Burrito Truck on
+2025-11-24), but their metadata cannot vouch for them:
+
+- The ingredient table lists only `README.md`, by an ingredient-relative path, and leaves
+  out every entry (`ingredients/content/<Strong's number>.json`, `{brief, long}`).
+- The metadata names revision `1` of `uWBurritos/TA`, not a DCS commit.
+- The `en_uhl` metadata has an invalid timestamp, `2025-11-24T55:20:15.878Z`. Readers must
+  accept the resource anyway.
+
+So the archive's whole file tree is what gets checked: `tc_door43::verify_archive` compares
+it with the commit's tree. That needs the commit's tree id from Door43 once. The release
+pipeline looks it up and records it in `fetched.lock`, and from then on the installer checks
+the tree offline.
 
 ## Fetched when the app is packaged
 
@@ -79,7 +97,7 @@ seeds it into the resource store like every file above.
 - The packaging step downloads the archive of exactly that commit. The release pipeline
   runs it, because this build environment cannot reach Door43.
 - The first download records the archive's sha256 and size in `fetched.lock` in this
-  directory, and that file is committed. Every later download must match it, or the build
+  directory (beside the lexicons' tree ids), and that file is committed. Every later download must match it, or the build
   fails. A changed pin means a new commit and a new lock entry, made on purpose.
 - A build whose installer lacks a pinned file fails. The app never falls back to
   downloading a bundled file.
