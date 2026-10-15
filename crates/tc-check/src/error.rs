@@ -12,9 +12,7 @@ pub enum Error {
     #[error("invalid md5 {0:?}: expected 32 hexadecimal digits")]
     Md5(String),
 
-    #[error(
-        "invalid pin {0}: a pin needs a repoPath, a 40-digit sha and, if any, a list of book codes"
-    )]
+    #[error("invalid pin {0}: a pin needs a repoPath and a 40-digit sha")]
     Pin(String),
 
     #[error("invalid repository path {0:?}")]

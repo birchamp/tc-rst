@@ -7,6 +7,7 @@ mod common;
 use common::{decision_of, file_resource, obs_notes, pin, sample, verse_text};
 use serde_json::Value;
 use tc_check::derive::notes_for_stories;
+use tc_check::rail::{Filter, counts};
 use tc_check::resolve::{LanguageSet, resolve};
 use tc_check::status::{Edit, Triage, apply, assess};
 use tc_check::{
@@ -136,13 +137,96 @@ fn an_imported_invalidation_holds_until_the_person_decides_again() {
     );
     let bookmarked = apply(Some(&d), Edit::Bookmark(true), VERSE, &resource());
     assert!(bookmarked.imported_invalid && bookmarked.bookmarked);
-    let decided = apply(Some(&d), Edit::Triage(Triage::Todo), VERSE, &resource());
-    assert!(!decided.imported_invalid);
+    // To do is not a judgement: the imported invalidation stays, and the words too.
+    let todo = apply(Some(&d), Edit::Triage(Triage::Todo), VERSE, &resource());
+    assert!(todo.imported_invalid);
     assert_eq!(
-        decided.judgement.selections,
+        todo.judgement.selections,
         Some(dios()),
         "To do keeps the words"
     );
+    let state = CheckState::of(Some(&todo), Some(&resource()), Some(VERSE));
+    assert!(!state.is_decided() && Filter::ToDo.matches(&state));
+    let decided = apply(
+        Some(&todo),
+        Edit::Triage(Triage::Valid(dios())),
+        VERSE,
+        &resource(),
+    );
+    assert!(!decided.imported_invalid);
+    assert!(CheckState::of(Some(&decided), Some(&resource()), Some(VERSE)).is_decided());
+}
+
+#[test]
+fn an_invalidated_check_put_back_to_do_stays_to_do() {
+    // tC4 `recordDecision({status: 'todo'})` keeps `invalidated: true`.
+    let d = valid_on(VERSE, dios());
+    let edited = VERSE.replace("Dios", "Señor");
+    let todo = apply(Some(&d), Edit::Triage(Triage::Todo), &edited, &resource());
+    assert_eq!(todo.judgement.verse_text_md5, TextMd5::of(VERSE));
+    let state = CheckState::of(Some(&todo), Some(&resource()), Some(&edited));
+    assert!(state.invalidation().is_some_and(|i| i.selections_lost));
+    assert_eq!(state.status(), Some(UserStatus::Todo));
+    assert!(!state.is_decided());
+    assert_eq!(counts(std::slice::from_ref(&state))[1], (Filter::ToDo, 1));
+    // The rail shows it red, and the Invalid chip, which reads the status, leaves it out.
+    assert_eq!(state.dot(), Dot::Invalid);
+    assert!(!Filter::Invalid.matches(&state));
+
+    // The same after an upgrade: the decision keeps the resource it was made against.
+    let upgraded = pin("Es-419_gl/es-419_tn", "v67", &[]).resource;
+    let todo = apply(Some(&d), Edit::Triage(Triage::Todo), VERSE, &upgraded);
+    assert_eq!(todo.resource, resource());
+    let state = CheckState::of(Some(&todo), Some(&upgraded), Some(VERSE));
+    assert!(state.invalidation().is_some_and(|i| i.resource_changed));
+    assert!(!state.is_decided() && Filter::ToDo.matches(&state));
+}
+
+#[test]
+fn deciding_again_judges_the_text_and_the_list_in_front_of_the_person() {
+    let d = valid_on(VERSE, dios());
+    let edited = VERSE.replace("Pablo", "Paulo y Dios");
+    let upgraded = pin("Es-419_gl/es-419_tn", "v67", &[]).resource;
+    let before = assess(&d, Some(&upgraded), Some(&edited));
+    let why = before.invalidation.unwrap();
+    assert!(why.selections_lost && why.resource_changed && before.verse_edits);
+
+    let words = selection::from_indices(&edited, &[2]).unwrap();
+    assert_eq!((words[0].text.as_str(), words[0].occurrences), ("Dios", 2));
+    let again = apply(
+        Some(&d),
+        Edit::Triage(Triage::Valid(words)),
+        &edited,
+        &upgraded,
+    );
+    assert_eq!(again.judgement.verse_text_md5, TextMd5::of(&edited));
+    assert_eq!(again.resource, upgraded);
+    let after = assess(&again, Some(&upgraded), Some(&edited));
+    assert_eq!(after.invalidation, None);
+    assert!(
+        !after.verse_edits,
+        "the decision is about the edited text now"
+    );
+    assert_eq!(after.status, Some(UserStatus::Valid));
+
+    let invalid = apply(Some(&d), Edit::Triage(Triage::Invalid), &edited, &upgraded);
+    let a = assess(&invalid, Some(&upgraded), Some(&edited));
+    assert_eq!(a.invalidation, None);
+    assert_eq!(a.status, Some(UserStatus::Invalid));
+    assert!(
+        !a.user_invalid,
+        "an Invalid that holds is not an invalidation"
+    );
+}
+
+#[test]
+fn an_empty_comment_is_no_comment() {
+    let mut d = valid_on(VERSE, dios());
+    d.comment = Some(String::new());
+    let state = CheckState::of(Some(&d), Some(&resource()), Some(VERSE));
+    assert!(!state.commented && !Filter::Commented.matches(&state));
+    d.comment = Some("¿Dios o Señor?".into());
+    assert!(CheckState::of(Some(&d), Some(&resource()), Some(VERSE)).commented);
 }
 
 #[test]
@@ -226,8 +310,16 @@ fn triage_buttons_record_what_tc4_records() {
 fn the_sample_project_s_decisions_compute_as_tc4_shows_them() {
     let pins_json: Value = serde_json::from_str(&sample("checking/resources.json")).unwrap();
     let pins = Pins {
-        primary: Some(LanguageSet::from_json(&pins_json["languageSets"]["primary"]).unwrap()),
-        fallback: Some(LanguageSet::from_json(&pins_json["languageSets"]["fallback"]).unwrap()),
+        primary: Some(
+            LanguageSet::from_json(&pins_json["languageSets"]["primary"])
+                .unwrap()
+                .set,
+        ),
+        fallback: Some(
+            LanguageSet::from_json(&pins_json["languageSets"]["fallback"])
+                .unwrap()
+                .set,
+        ),
     };
     let usfm = sample("TIT.usfm");
     let mut seen = Vec::new();
@@ -280,6 +372,28 @@ fn the_sample_project_s_decisions_compute_as_tc4_shows_them() {
             ("t1g7".into(), true, Dot::Valid, None, false, false),
         ]
     );
+}
+
+#[test]
+fn every_word_of_the_sample_titus_holds_through_an_edit_elsewhere_in_its_verse() {
+    // tC4 recorded "de" in a verse that also says "desde" with a word count its own
+    // validator reads as changed; a selection recorded here holds until its text changes.
+    let usfm = sample("TIT.usfm");
+    let book = tc_usfm::Book::parse(&usfm);
+    let mut words = 0;
+    for verse in book.verses() {
+        let text = verse.plain_text();
+        let edited = format!("{text}!");
+        for i in 0..selection::target_words(&text).len() {
+            let picked = selection::from_indices(&text, &[i]).unwrap();
+            let d = valid_on(&text, picked.clone());
+            let a = assess(&d, Some(&resource()), Some(&edited));
+            assert!(a.verse_edits);
+            assert_eq!(a.invalidation, None, "{picked:?} in {text:?}");
+            words += 1;
+        }
+    }
+    assert_eq!(words, 114, "the drafted words of the sample Titus");
 }
 
 #[test]

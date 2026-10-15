@@ -468,7 +468,9 @@ fn pins_read_from_tc4_json() {
             "books": ["BIBLE"]
         }
     });
-    let set = LanguageSet::from_json(&json).unwrap();
+    let read = LanguageSet::from_json(&json).unwrap();
+    assert!(read.refused.is_empty());
+    let set = read.set;
     assert_eq!(set.pins.len(), 2);
     let tn = set.get(Slot::TranslationNotes).unwrap();
     assert!(tn.coverage.covers(BookId::Jonah) && !tn.coverage.covers(BookId::Ruth));
@@ -479,5 +481,37 @@ fn pins_read_from_tc4_json() {
     assert!(
         Pin::from_json(&serde_json::json!({"repoPath": "git.door43.org/x/y", "version": "v1"}))
             .is_err()
+    );
+}
+
+#[test]
+fn one_unreadable_pin_leaves_the_rest_of_the_set_readable() {
+    let tn = serde_json::json!({
+        "repoPath": "git.door43.org/unfoldingWord/en_tn",
+        "version": "v91",
+        "sha": "e586762e330f482a60c52aedd1c7b3a2f155df8a",
+        "books": ["TIT", 3]
+    });
+    let json = serde_json::json!({
+        "translationNotes": tn,
+        "obs-images": {"repoPath": "git.door43.org/unfoldingWord/obs-images", "version": "v1"}
+    });
+    let read = LanguageSet::from_json(&json).unwrap();
+    // tC4 `coverageFor` reads a books list with a non-code in it as no record.
+    let pin = read.set.get(Slot::TranslationNotes).unwrap();
+    assert_eq!(pin.coverage, Coverage::Unrecorded);
+    assert_eq!(pin.version.as_deref(), Some("v91"));
+    let refused: Vec<Slot> = read.refused.iter().map(|(slot, _)| *slot).collect();
+    assert_eq!(refused, [Slot::ObsImages]);
+    assert!(read.set.get(Slot::ObsImages).is_none());
+    assert!(LanguageSet::from_json(&serde_json::json!(["not", "a", "set"])).is_err());
+    let books_not_a_list = serde_json::json!({
+        "repoPath": "git.door43.org/unfoldingWord/en_tn",
+        "sha": "e586762e330f482a60c52aedd1c7b3a2f155df8a",
+        "books": "TIT"
+    });
+    assert_eq!(
+        Pin::from_json(&books_not_a_list).unwrap().coverage,
+        Coverage::Unrecorded
     );
 }

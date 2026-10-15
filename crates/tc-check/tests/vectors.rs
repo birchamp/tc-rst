@@ -62,17 +62,36 @@ fn selections_record_restore_and_revalidate_as_tc4_does() {
     let cases = v["selections"].as_array().unwrap();
     assert!(cases.len() > 100);
     let mut checked = 0;
+    let mut recounted = 0;
     for case in cases {
         let verse = text(&case["text"]);
         let picked = selection::from_indices(verse, &indices(&case["indices"])).unwrap();
-        assert_eq!(picked, selections(&case["selections"]), "{verse:?}");
+        let tc4 = selections(&case["selections"]);
+        // The same words at the same occurrences as tC4 records, so the same words light
+        // up when the decision is opened again.
+        let words = |s: &[Selection]| -> Vec<(String, u32)> {
+            s.iter().map(|s| (s.text.clone(), s.occurrence)).collect()
+        };
+        assert_eq!(words(&picked), words(&tc4), "{verse:?}");
         assert_eq!(
             selection::indices(verse, &picked),
             indices(&case["restored"])
         );
+        // The count is the one `validateVerseSelections` reads. tC4's recorder counted
+        // words, which differs for a word that is also part of a longer one, and its own
+        // validator then reads that selection as changed on the verse it was made on.
+        for (ours, theirs) in picked.iter().zip(&tc4) {
+            if ours.occurrences != theirs.occurrences {
+                assert!(ours.occurrences > theirs.occurrences);
+                assert!(selection::validate(verse, std::slice::from_ref(theirs)).changed);
+                recounted += 1;
+            }
+        }
+        assert!(!selection::validate(verse, &picked).changed, "{verse:?}");
+        // The validator answers as the library does, on tC4's own records.
         for validation in case["validations"].as_array().unwrap() {
             let edited = text(&validation["text"]);
-            let got = selection::validate(edited, &picked);
+            let got = selection::validate(edited, &tc4);
             assert_eq!(
                 got.changed,
                 validation["changed"].as_bool().unwrap(),
@@ -90,6 +109,7 @@ fn selections_record_restore_and_revalidate_as_tc4_does() {
         checked += 1;
     }
     assert!(checked > 600);
+    assert!(recounted > 0);
 }
 
 #[test]

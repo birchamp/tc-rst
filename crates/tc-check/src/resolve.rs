@@ -241,43 +241,57 @@ impl LanguageSet {
     }
 
     /// Reads a tC4 language set (`languageSets.primary` of `resources.json`, or the slots
-    /// of a journal `Pins` group): every slot this crate knows, as a pin. Other keys,
-    /// such as `gatewayLanguage`, are not pins and are left out.
-    pub fn from_json(value: &Value) -> Result<Self, Error> {
+    /// of a journal `Pins` group) slot by slot: every slot this crate knows, as a pin.
+    /// Other keys, such as `gatewayLanguage`, are not pins and are left out. A slot whose
+    /// pin cannot be read (a pin with a tag and no commit) is refused on its own and
+    /// reported; it reads as unpinned, so the other slots still resolve. Only a
+    /// value that is not an object at all is refused whole.
+    pub fn from_json(value: &Value) -> Result<ReadSet, Error> {
         let object = value
             .as_object()
             .ok_or_else(|| Error::Pin(value.to_string()))?;
-        let mut pins = BTreeMap::new();
+        let mut read = ReadSet::default();
         for (name, pin) in object {
-            if let Some(slot) = Slot::parse(name) {
-                pins.insert(slot, Pin::from_json(pin)?);
+            let Some(slot) = Slot::parse(name) else {
+                continue;
+            };
+            match Pin::from_json(pin) {
+                Ok(pin) => {
+                    read.set.pins.insert(slot, pin);
+                }
+                Err(error) => read.refused.push((slot, error)),
             }
         }
-        Ok(Self { pins })
+        Ok(read)
     }
+}
+
+/// A language set as read, with the slots whose pins could not be read.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReadSet {
+    pub set: LanguageSet,
+    /// Each refused slot and why, in the order of the JSON object's keys. The screens
+    /// name these pins as unusable.
+    pub refused: Vec<(Slot, Error)>,
 }
 
 impl Pin {
     /// Reads a tC4 pin: `{"repoPath", "version"?, "sha", "books"?, ...}`. A pin without
-    /// a commit is refused: the commit is its identity (D58).
+    /// a commit is refused: the commit is its identity (D58). A `books` entry that is not
+    /// a list of codes records no coverage, as tC4's `coverageFor` reads it.
     pub fn from_json(value: &Value) -> Result<Self, Error> {
         let bad = || Error::Pin(value.to_string());
         let text = |key: &str| value.get(key).and_then(Value::as_str);
         let repo_path = RepoPath::parse(text("repoPath").ok_or_else(bad)?)?;
         let sha = CommitSha::parse(text("sha").ok_or_else(bad)?).map_err(|_| bad())?;
-        let books: Vec<&str> = match value.get("books") {
-            None => Vec::new(),
-            Some(books) => books
-                .as_array()
-                .ok_or_else(bad)?
-                .iter()
-                .map(|b| b.as_str().ok_or_else(bad))
-                .collect::<Result<_, _>>()?,
-        };
+        let books: Option<Vec<&str>> = value
+            .get("books")
+            .and_then(Value::as_array)
+            .and_then(|books| books.iter().map(Value::as_str).collect());
         Ok(Self {
             resource: ResourceRef { repo_path, sha },
             version: text("version").map(str::to_owned),
-            coverage: Coverage::from_codes(books),
+            coverage: books.map_or(Coverage::Unrecorded, Coverage::from_codes),
         })
     }
 }

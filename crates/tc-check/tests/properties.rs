@@ -27,16 +27,10 @@ proptest! {
         let joined: String = selection::pieces(&text, &picked).iter().map(|p| p.text).collect();
         prop_assert_eq!(joined, text.clone());
         prop_assert_eq!(selection::selected_text(&text, &picked).is_some(), !indices.is_empty());
-        // A word is kept on the same text unless it is also part of a longer word.
-        let revalidated = selection::validate(&text, &picked);
-        for s in &picked {
-            let inside_another = selection::target_words(&text)
-                .iter()
-                .any(|w| w.text != s.text && w.text.contains(s.text.as_str()));
-            if !inside_another {
-                prop_assert!(revalidated.valid.contains(s));
-            }
-        }
+        // Every word holds on the text it was picked on, and on an edit elsewhere.
+        prop_assert!(!selection::validate(&text, &picked).changed);
+        let edited = format!("{text}!");
+        prop_assert!(!selection::validate(&edited, &picked).changed);
     }
 
     #[test]

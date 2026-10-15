@@ -3,12 +3,19 @@
 //! The words are split with tC4's tokenizer ([`tc_usfm::words::words`]), the one the
 //! Check screen renders as tappable words, so an index on the screen and an index here
 //! are the same word. A selection records each word's text, which occurrence of that
-//! text it is, and how many the verse has (tC4 `selections.ts`).
+//! word it is among the verse's words, and how many times its text occurs in the verse
+//! (tC4 `selections.ts`).
 //!
 //! [`validate`] is the revalidation tC4 runs after a verse edit, `word-aligner-lib`
 //! 1.0.1 `validateVerseSelections` (STORAGE.md `selections_v1`). It counts a selection's
-//! text as a substring of the verse, not as a word, exactly as the library does: a
-//! selected `the` in "the theory" counts twice and reads as changed.
+//! text as a substring of the verse, not as a word, exactly as the library does: `the`
+//! occurs twice in "the theory". The count a selection records is that same substring
+//! count, as the library's own `generateSelection` records it, so a selection always
+//! holds on the text it was made on and on any edit that does not touch its text. tC4's
+//! recorder counted words instead, which its validator then read as changed whenever
+//! the word is also part of a longer one (`de` in "desde", אֵת in וְאֵת), even on the
+//! unchanged verse. The occurrence stays a count of words: highlighting matches on the
+//! text and the occurrence, as tC4 does, so the same words light up.
 
 use std::collections::BTreeSet;
 
@@ -20,9 +27,9 @@ use crate::Error;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Selection {
     pub text: String,
-    /// Which occurrence of `text` in the verse, from 1.
+    /// Which of the verse's words with this text, from 1.
     pub occurrence: u32,
-    /// How many times `text` occurs in the verse.
+    /// How many times `text` occurs in the verse, counted as [`validate`] counts it.
     pub occurrences: u32,
 }
 
@@ -48,7 +55,7 @@ pub fn from_indices(verse_text: &str, indices: &[usize]) -> Result<Vec<Selection
         .map(|i| Selection {
             text: tokens[i].text.to_owned(),
             occurrence: tokens[i].occurrence,
-            occurrences: tokens[i].occurrences,
+            occurrences: occurrences_in(verse_text, tokens[i].text),
         })
         .collect())
 }
@@ -83,10 +90,9 @@ pub struct Revalidation {
 /// text). `verse_text` is the verse's plain text; usfm-js drops its leading whitespace
 /// before counting, which changes no count but is done here too.
 pub fn validate(verse_text: &str, selections: &[Selection]) -> Revalidation {
-    let text = verse_text.trim_start_matches(crate::js::is_whitespace);
     let valid: Vec<Selection> = selections
         .iter()
-        .filter(|s| u32::try_from(substring_count(text, &s.text)).ok() == Some(s.occurrences))
+        .filter(|s| occurrences_in(verse_text, &s.text) == s.occurrences)
         .cloned()
         .collect();
     Revalidation {
@@ -95,13 +101,17 @@ pub fn validate(verse_text: &str, selections: &[Selection]) -> Revalidation {
     }
 }
 
-/// Non-overlapping occurrences of `needle`, left to right; none for empty text.
-fn substring_count(haystack: &str, needle: &str) -> usize {
-    if needle.is_empty() {
+/// How many times `text` occurs in the verse as `selections_v1` counts it:
+/// non-overlapping substrings, left to right, none for empty text.
+fn occurrences_in(verse_text: &str, text: &str) -> u32 {
+    let verse = verse_text.trim_start_matches(crate::js::is_whitespace);
+    let count = if text.is_empty() {
         0
     } else {
-        haystack.matches(needle).count()
-    }
+        verse.matches(text).count()
+    };
+    // No verse holds 2^32 matches; saturate rather than wrap if one ever did.
+    u32::try_from(count).unwrap_or(u32::MAX)
 }
 
 /// A piece of the verse text for display: a run of text, highlighted or not.
@@ -198,6 +208,31 @@ mod tests {
         }];
         assert!(validate("the theory", &the).changed);
         assert!(!validate("the word", &the).changed);
+    }
+
+    #[test]
+    fn a_selection_counts_its_text_as_the_validator_does() {
+        // The second "the" of four words; "theory" holds a third "the".
+        let verse = "the theory of the law";
+        let the = from_indices(verse, &[3]).unwrap();
+        assert_eq!(
+            the,
+            [Selection {
+                text: "the".into(),
+                occurrence: 2,
+                occurrences: 3
+            }]
+        );
+        assert_eq!(indices(verse, &the), [3]);
+        assert!(!validate(verse, &the).changed);
+        assert!(!validate("the theory of the law!", &the).changed);
+        assert!(validate("the theory of law", &the).changed);
+        // Genesis 1:1: אֵת is also the end of וְאֵת.
+        let verse = "בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ";
+        let et = from_indices(verse, &[3]).unwrap();
+        assert_eq!((et[0].occurrence, et[0].occurrences), (1, 2));
+        assert_eq!(indices(verse, &et), [3]);
+        assert!(!validate(verse, &et).changed);
     }
 
     #[test]

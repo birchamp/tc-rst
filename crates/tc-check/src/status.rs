@@ -8,10 +8,12 @@
 //! Two consequences differ from tC4, by design. tC4 wrote `invalidated` into the file and,
 //! when such a decision re-attached, set its status to To do unless the person had chosen
 //! Invalid; here a decision whose resource and words hold again is shown as the person
-//! left it. And tC4 revalidated selections on every open, so a selected word that is also
-//! part of a longer word (`the` in "the theory") read as changed although the verse was
-//! not edited; here the selections are revalidated only when the verse text differs from
-//! the text the decision was made against.
+//! left it. And tC4 revalidated selections on every open, so a selection tC4 recorded on
+//! a word that is also part of a longer word (`the` in "the theory") read as changed
+//! although the verse was not edited; here the selections are revalidated only when the
+//! verse text differs from the text the decision was made against. (Selections recorded
+//! here count their text as the validator does, so they hold on any edit that leaves
+//! their text alone; see [`crate::selection`].)
 //!
 //! [`Decision`] mirrors the journal's `DecisionRecord` (STORAGE.md §2.3) without the
 //! fields this crate does not read: `judgement` is `judgement` field for field,
@@ -39,7 +41,8 @@ impl TextMd5 {
     /// Reads 32 hexadecimal digits in either case.
     pub fn parse(hex: &str) -> Result<Self, Error> {
         let bad = || Error::Md5(hex.to_owned());
-        if hex.len() != 32 || !hex.is_ascii() {
+        // `from_str_radix` alone would also take a sign: "+0" reads as 0.
+        if hex.len() != 32 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err(bad());
         }
         let mut out = [0u8; 16];
@@ -288,11 +291,17 @@ pub enum Edit {
 
 /// The decision after the person's edit (tC4 `recordDecision`, STORAGE.md §5.4).
 ///
-/// A first decision starts from nothing selected. A triage records the judgement the
-/// way tC4's buttons do (Mark valid sets the words or nothing-to-select, Invalid clears
-/// the words, To do changes only the status), stamps the md5 of `verse_text`, the text
-/// the person was shown, takes `resource`, the pin of the list the check is on, and
-/// clears an imported invalidation. A bookmark or a comment changes nothing else.
+/// A first decision starts from nothing selected, stamped with the md5 of `verse_text`
+/// (the text the person was shown) and `resource` (the pin of the list the check is
+/// on). Mark valid and Invalid record the judgement the way tC4's buttons do (Mark
+/// valid sets the words or nothing-to-select, Invalid clears the words), stamp the
+/// md5 and the resource again, and clear an imported invalidation: the person has
+/// judged the check against what is in front of them.
+///
+/// To do changes only the status, as tC4's button does. It is not a judgement, so it
+/// stamps nothing and an invalidation stays: an invalidated check put back to do stays
+/// in To do, and its stale words are not taken as a decision on the new text. A
+/// bookmark or a comment changes nothing else either.
 pub fn apply(
     decision: Option<&Decision>,
     edit: Edit,
@@ -311,34 +320,31 @@ pub fn apply(
         resource: resource.clone(),
         imported_invalid: false,
     });
-    match edit {
-        Edit::Bookmark(on) => next.bookmarked = on,
-        Edit::Comment(text) => next.comment = (!text.is_empty()).then_some(text),
-        Edit::Triage(triage) => {
-            let j = &mut next.judgement;
-            match triage {
-                Triage::Valid(words) if words.is_empty() => {
-                    j.selections = None;
-                    j.nothing_to_select = true;
-                    j.status = Some(UserStatus::Valid);
-                }
-                Triage::Valid(words) => {
-                    j.selections = Some(words);
-                    j.nothing_to_select = false;
-                    j.status = Some(UserStatus::Valid);
-                }
-                Triage::Invalid => {
-                    j.selections = None;
-                    j.nothing_to_select = false;
-                    j.status = Some(UserStatus::Invalid);
-                }
-                Triage::Todo => j.status = Some(UserStatus::Todo),
-            }
-            j.verse_text_md5 = TextMd5::of(verse_text);
-            next.resource = resource.clone();
-            next.imported_invalid = false;
+    let (selections, nothing_to_select, status) = match edit {
+        Edit::Bookmark(on) => {
+            next.bookmarked = on;
+            return next;
         }
-    }
+        Edit::Comment(text) => {
+            next.comment = (!text.is_empty()).then_some(text);
+            return next;
+        }
+        Edit::Triage(Triage::Todo) => {
+            next.judgement.status = Some(UserStatus::Todo);
+            return next;
+        }
+        Edit::Triage(Triage::Valid(words)) if words.is_empty() => (None, true, UserStatus::Valid),
+        Edit::Triage(Triage::Valid(words)) => (Some(words), false, UserStatus::Valid),
+        Edit::Triage(Triage::Invalid) => (None, false, UserStatus::Invalid),
+    };
+    next.judgement = Judgement {
+        selections,
+        nothing_to_select,
+        status: Some(status),
+        verse_text_md5: TextMd5::of(verse_text),
+    };
+    next.resource = resource.clone();
+    next.imported_invalid = false;
     next
 }
 
@@ -356,5 +362,6 @@ mod tests {
         );
         assert!(TextMd5::parse("d41d").is_err());
         assert!(TextMd5::parse("g41d8cd98f00b204e9800998ecf8427e").is_err());
+        assert!(TextMd5::parse(&"+0".repeat(16)).is_err());
     }
 }

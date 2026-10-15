@@ -11,6 +11,7 @@ use tc_check::carry::{Match, Outcome, StoredDecision, Summary, plan, same_quote}
 use tc_check::change::{Unit, consequences};
 use tc_check::derive::{notes_for_book, word_links_for_book};
 use tc_check::resolve::LanguageSet;
+use tc_check::session::open;
 use tc_check::status::{CheckState, Edit, Triage, apply};
 use tc_check::{
     CheckItem, Collection, Decision, Pins, ResourceRef, Selection, Slot, TextMd5, ToolId,
@@ -91,7 +92,7 @@ fn a_finished_book_is_not_finished_when_the_new_resource_asks_new_questions() {
     ]);
     let stored: Vec<StoredDecision> = es.iter().map(|i| decided(i, &spanish())).collect();
     let p = plan(&en, &english(), &stored);
-    let summary = p.summary(&en, &stored, Some(&spanish()), no_text);
+    let summary = p.summary(Some(&spanish()), no_text);
     assert_eq!(
         (summary.carried, summary.invalidated, summary.undecided),
         (1, 1, 1)
@@ -114,7 +115,7 @@ fn a_cross_language_twin_carries_and_is_keyed_to_the_new_resource() {
     let en = titus(&[["1:1", "en99", "figs-metaphor", "δοῦλος", "1", "note"]]);
     let stored = vec![decided(&es[0], &spanish())];
     let p = plan(&en, &english(), &stored);
-    let summary = p.summary(&en, &stored, Some(&spanish()), no_text);
+    let summary = p.summary(Some(&spanish()), no_text);
     assert_eq!(
         (summary.carried, summary.invalidated, summary.undecided),
         (1, 0, 0)
@@ -218,7 +219,7 @@ fn real_carry_over_places_what_tc4_places_and_keeps_what_tc4_dropped() {
     for (from, to, expected) in [(&en, &es, (84, 2, 73, 29)), (&es, &en, (83, 1, 29, 74))] {
         let stored: Vec<StoredDecision> = from.iter().map(|i| decided(i, &english())).collect();
         let p = plan(to, &spanish(), &stored);
-        let s = p.summary(to, &stored, Some(&english()), no_text);
+        let s = p.summary(Some(&english()), no_text);
         assert_eq!(
             (s.carried, s.contested, s.invalidated, s.undecided),
             expected
@@ -265,7 +266,7 @@ fn a_decision_on_a_link_whose_article_left_is_kept_and_counted_as_to_check() {
     let stored = vec![decided(hidden, &old)];
     let p = plan(&gated, &new, &stored);
     assert_eq!(p.entries[0].outcome, Outcome::Unplaced);
-    let summary = p.summary(&gated, &stored, Some(&old), no_text);
+    let summary = p.summary(Some(&old), no_text);
     assert_eq!((summary.carried, summary.invalidated), (0, 1));
     assert_eq!(summary.undecided, 3315);
 }
@@ -283,10 +284,31 @@ fn decided_after_counts_what_the_check_screen_will_show() {
         Some(if t.locator() == "1:2" { "hum" } else { "ho" })
     };
     let p = plan(&items, &english(), &stored);
-    let summary = p.summary(&items, &stored, Some(&spanish()), verse);
+    let summary = p.summary(Some(&spanish()), verse);
     assert_eq!((summary.carried, summary.decided_after), (2, 1));
     let total = Summary::total([summary, summary]);
     assert_eq!((total.carried, total.decided_after), (4, 2));
+}
+
+#[test]
+fn decided_after_reads_the_verse_a_decision_moves_to() {
+    let es = titus(&[["1:1", "abc1", "figs-metaphor", "δοῦλος", "1", "nota"]]);
+    let en = titus(&[["1:2", "abc1", "figs-metaphor", "δοῦλος", "1", "note"]]);
+    let stored = vec![decided(&es[0], &spanish())];
+    let p = plan(&en, &english(), &stored);
+    assert!(matches!(
+        p.entries[0].outcome,
+        Outcome::Moves {
+            by: Match::CheckId,
+            ..
+        }
+    ));
+    // The words were selected on "ho", the text of the verse the check moves to.
+    let verse = |t: &tc_check::CheckTarget| -> Option<&'static str> {
+        Some(if t.locator() == "1:2" { "ho" } else { "hum" })
+    };
+    let summary = p.summary(Some(&spanish()), verse);
+    assert_eq!((summary.carried, summary.decided_after), (1, 1));
 }
 
 #[test]
@@ -295,8 +317,7 @@ fn a_decision_already_invalid_is_not_counted_again() {
     let gone = titus(&[["1:1", "aaaa", "figs-metaphor", "δοῦλος", "1", "n"]]);
     let older = pin("Es-419_gl/es-419_tn", "v60", &[]).resource;
     let stored = vec![decided(&gone[0], &older)];
-    let summary =
-        plan(&items, &english(), &stored).summary(&items, &stored, Some(&spanish()), no_text);
+    let summary = plan(&items, &english(), &stored).summary(Some(&spanish()), no_text);
     assert_eq!((summary.invalidated, summary.still_unplaced), (0, 1));
 }
 
@@ -326,8 +347,15 @@ fn two_decisions_arriving_at_one_check_are_both_kept_as_a_conflict() {
             "{entry:?}"
         );
     }
-    let summary = p.summary(&en, &stored, Some(&spanish()), no_text);
+    let summary = p.summary(Some(&spanish()), no_text);
     assert_eq!(summary.contested, 2);
+
+    // Opening the English list shows the later decision and keeps the other reachable.
+    let session = open(en.clone(), &stored, Some(&english()), no_text);
+    assert_eq!(session.placed, [vec![0, 1]]);
+    assert_eq!(session.shown(0), Some(1));
+    assert_eq!(session.contested().collect::<Vec<_>>(), [0]);
+    assert!(session.off_list.is_empty());
 }
 
 fn set(lang: &str, org: &str, v: &str, books: &[&str]) -> LanguageSet {
@@ -361,6 +389,8 @@ fn stored_against(book: BookId, against: &ResourceRef, n: usize) -> Vec<StoredDe
 
 #[test]
 fn a_gateway_change_counts_the_decisions_it_puts_at_risk() {
+    // tC4 test/gatewayChange.test.ts.
+    let es = || set("es-419", "Es-419_gl", "v66", &["TIT", "JON", "RUT"]);
     let fr = || set("fr", "Xenizo", "v2.0", &["TIT", "JON"]);
     let en = || {
         set(
@@ -370,7 +400,11 @@ fn a_gateway_change_counts_the_decisions_it_puts_at_risk() {
             &["TIT", "JON", "HEB", "PSA", "RUT"],
         )
     };
-    let es_tn = pin("Es-419_gl/es-419_tn", "v66", &[]).resource;
+    let pins = |primary: LanguageSet, fallback: LanguageSet| Pins {
+        primary: Some(primary),
+        fallback: Some(fallback),
+    };
+    let es_tn = es().pins[&Slot::TranslationNotes].resource.clone();
     let en_tn = en().pins[&Slot::TranslationNotes].resource.clone();
     let none = |_: &ResourceRef| None;
     let unit = |book, decisions| Unit {
@@ -381,10 +415,8 @@ fn a_gateway_change_counts_the_decisions_it_puts_at_risk() {
 
     let same = stored_against(BookId::Titus, &en_tn, 12);
     let harmless = consequences(
-        &Pins {
-            primary: Some(en()),
-            fallback: Some(en()),
-        },
+        &pins(en(), en()),
+        &pins(en(), en()),
         &[unit(BookId::Titus, &same)],
         none,
     );
@@ -393,23 +425,20 @@ fn a_gateway_change_counts_the_decisions_it_puts_at_risk() {
     let tit = stored_against(BookId::Titus, &es_tn, 30);
     let jon = stored_against(BookId::Jonah, &es_tn, 17);
     let c = consequences(
-        &Pins {
-            primary: Some(fr()),
-            fallback: Some(en()),
-        },
+        &pins(es(), en()),
+        &pins(fr(), en()),
         &[unit(BookId::Titus, &tit), unit(BookId::Jonah, &jon)],
         none,
     );
     assert_eq!(c.affected.len(), 2);
+    assert_eq!(c.affected[0].checked_against, es_tn);
     assert_eq!(c.at_risk(), 47);
     assert!(!c.blocked());
 
     let heb = stored_against(BookId::Hebrews, &en_tn, 25);
     let c = consequences(
-        &Pins {
-            primary: Some(fr()),
-            fallback: Some(en()),
-        },
+        &pins(es(), en()),
+        &pins(fr(), en()),
         &[unit(BookId::Hebrews, &heb), unit(BookId::Titus, &[])],
         none,
     );
@@ -419,10 +448,8 @@ fn a_gateway_change_counts_the_decisions_it_puts_at_risk() {
     let fr_tit = || set("fr", "Xenizo", "v2.0", &["TIT"]);
     let rut = stored_against(BookId::Ruth, &es_tn, 3);
     let c = consequences(
-        &Pins {
-            primary: Some(fr_tit()),
-            fallback: Some(fr_tit()),
-        },
+        &pins(es(), en()),
+        &pins(fr_tit(), fr_tit()),
         &[unit(BookId::Titus, &tit), unit(BookId::Ruth, &rut)],
         none,
     );
@@ -434,6 +461,44 @@ fn a_gateway_change_counts_the_decisions_it_puts_at_risk() {
         .collect();
     assert_eq!(blocked, [Collection::Book(BookId::Ruth)]);
     assert!(c.blocked());
+}
+
+#[test]
+fn a_decision_a_carry_over_left_behind_is_not_put_at_risk_again() {
+    // After a carry from Spanish to English, Titus holds decisions on en_tn and one
+    // es-419_tn decision no English check took. It keeps its old resource.
+    let es = || set("es-419", "Es-419_gl", "v66", &["TIT"]);
+    let en = || set("en", "unfoldingWord", "v89", &["TIT"]);
+    let fr = || set("fr", "Xenizo", "v2.0", &["TIT"]);
+    let pins = |primary: LanguageSet| Pins {
+        primary: Some(primary),
+        fallback: Some(en()),
+    };
+    let es_tn = es().pins[&Slot::TranslationNotes].resource.clone();
+    let en_tn = en().pins[&Slot::TranslationNotes].resource.clone();
+    let mut titus_decisions = stored_against(BookId::Titus, &en_tn, 12);
+    titus_decisions.extend(stored_against(BookId::Titus, &es_tn, 1));
+    let units = [Unit {
+        tool: ToolId::TranslationNotes,
+        collection: Collection::Book(BookId::Titus),
+        decisions: &titus_decisions,
+    }];
+    let none = |_: &ResourceRef| None;
+
+    // A change that leaves Titus on en_tn is harmless.
+    let c = consequences(&pins(en()), &pins(en()), &units, none);
+    assert!(c.harmless(), "{c:?}");
+    assert_eq!((c.unaffected, c.detached), (1, 1));
+
+    // A change that moves Titus puts at risk only what holds now.
+    let c = consequences(&pins(en()), &pins(fr()), &units, none);
+    assert_eq!(c.at_risk(), 12);
+    assert_eq!(c.affected[0].checked_against, en_tn);
+    assert_eq!(c.detached, 1);
+
+    // Pinning Spanish again moves the twelve; the left-behind one is not at risk.
+    let c = consequences(&pins(en()), &pins(es()), &units, none);
+    assert_eq!((c.at_risk(), c.detached), (12, 1));
 }
 
 // ---- properties ----------------------------------------------------------------------
@@ -523,6 +588,18 @@ proptest! {
             }
         }
         prop_assert_eq!(p.undecided, arrivals.iter().filter(|n| **n == 0).count());
+
+        // A session on the new list reaches every stored decision exactly once: placed
+        // on one check, or listed off the list.
+        let session = open(new.clone(), &stored, Some(&english()), no_text);
+        let mut reached: Vec<usize> = session.placed.iter().flatten().copied().collect();
+        reached.extend(&session.off_list);
+        reached.sort_unstable();
+        prop_assert_eq!(reached, (0..stored.len()).collect::<Vec<_>>());
+        for (item, on) in session.placed.iter().enumerate() {
+            prop_assert_eq!(on.len(), arrivals[item]);
+            prop_assert_eq!(session.shown(item), on.last().copied());
+        }
 
         // Writing the plan and planning again moves no carried decision a second time.
         let uncontested = p.entries.iter().all(|e| !matches!(e.outcome, Outcome::Moves { contested: true, .. }));

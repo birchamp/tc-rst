@@ -1,10 +1,15 @@
 //! What a change of pins would cost, counted before the person confirms it (tC4
 //! `consequencesOfGatewayChange` and `uncoveredByChange`, D23a and D30.2).
 //!
-//! Only the books whose decisions were made against a resource the change moves away
-//! from are affected: a book the new primary does not cover keeps resolving to the
-//! fallback it was checked against. A change that would leave an affected book with
-//! no resource at all is blocked, because its decisions would then match no rung.
+//! A decision is at risk when it holds against the resource its (tool, collection)
+//! resolves to now and the change moves that resolution elsewhere. A book the new
+//! primary does not cover keeps resolving to the fallback it was checked against, so it
+//! is not affected. A decision that already does not hold against the current
+//! resolution (one a carry-over could not place, which keeps its old resource) is not at
+//! risk again: tC4 rewrote such a decision's resource in the file, so it never counted
+//! it twice, and here it is counted apart as detached. A change that would leave an
+//! affected unit with no resource at all is blocked, because its decisions would then
+//! match no rung.
 
 use crate::carry::{StoredDecision, Summary};
 use crate::key::{Collection, ToolId};
@@ -23,10 +28,10 @@ pub struct Unit<'a> {
 pub struct Affected {
     pub tool: ToolId,
     pub collection: Collection,
-    /// The resources its decisions were made against, each once, in first-seen order.
-    pub checked_against: Vec<ResourceRef>,
-    /// How many of its decisions were made against another resource than the one it
-    /// resolves to after the change.
+    /// The resource it resolves to before the change, which its decisions at risk were
+    /// made against.
+    pub checked_against: ResourceRef,
+    /// How many of its decisions hold against `checked_against` and would no longer.
     pub decisions: usize,
     /// True when no rung covers it after the change: the change is refused while any
     /// affected unit is blocked.
@@ -36,19 +41,22 @@ pub struct Affected {
 /// The cost of a change of pins.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Consequences {
-    /// Units with decisions that keep resolving to what they were checked against.
+    /// Units with decisions, none of which the change puts at risk.
     pub unaffected: usize,
     pub affected: Vec<Affected>,
+    /// Decisions that already do not hold against their unit's current resolution. They
+    /// compute as invalidated before and after the change and are kept either way.
+    pub detached: usize,
 }
 
 impl Consequences {
-    /// Decisions made against a resource the change moves away from. Some carry over
-    /// by meaning; the rest come back as checks to do.
+    /// Decisions that hold now against a resource the change moves away from. Some
+    /// carry over by meaning; the rest come back as checks to do.
     pub fn at_risk(&self) -> usize {
         self.affected.iter().map(|a| a.decisions).sum()
     }
 
-    /// True when nothing anyone decided is disturbed.
+    /// True when nothing that holds now is disturbed.
     pub fn harmless(&self) -> bool {
         self.affected.is_empty()
     }
@@ -59,9 +67,10 @@ impl Consequences {
     }
 }
 
-/// Counts what changing the pins to `next` would cost. `local` gives the books an
-/// installed copy of a pin holds, for pins that record none.
+/// Counts what changing the pins from `current` to `next` would cost. `local` gives the
+/// books an installed copy of a pin holds, for pins that record none.
 pub fn consequences(
+    current: &Pins,
     next: &Pins,
     units: &[Unit<'_>],
     local: impl Fn(&ResourceRef) -> Option<Coverage>,
@@ -71,29 +80,26 @@ pub fn consequences(
         if unit.decisions.is_empty() {
             continue;
         }
+        let before =
+            resolve_with(current, unit.tool, unit.collection, &local).map(|r| r.pin.resource);
         let after = resolve_with(next, unit.tool, unit.collection, &local);
-        let moved: Vec<&StoredDecision> = unit
+        let holding = unit
             .decisions
             .iter()
-            .filter(|d| after.as_ref().map(|r| &r.pin.resource) != Some(&d.decision.resource))
-            .collect();
-        if moved.is_empty() {
-            out.unaffected += 1;
-            continue;
+            .filter(|d| before.as_ref() == Some(&d.decision.resource))
+            .count();
+        out.detached += unit.decisions.len() - holding;
+        let moves_away = after.as_ref().map(|r| &r.pin.resource) != before.as_ref();
+        match before {
+            Some(checked_against) if holding > 0 && moves_away => out.affected.push(Affected {
+                tool: unit.tool,
+                collection: unit.collection,
+                checked_against,
+                decisions: holding,
+                blocked: after.is_none(),
+            }),
+            _ => out.unaffected += 1,
         }
-        let mut checked_against: Vec<ResourceRef> = Vec::new();
-        for d in &moved {
-            if !checked_against.contains(&d.decision.resource) {
-                checked_against.push(d.decision.resource.clone());
-            }
-        }
-        out.affected.push(Affected {
-            tool: unit.tool,
-            collection: unit.collection,
-            checked_against,
-            decisions: moved.len(),
-            blocked: after.is_none(),
-        });
     }
     out
 }

@@ -317,6 +317,13 @@ fn an_unknown_project_frame_places_nothing() {
             .iter()
             .all(|d| d.reason == DropReason::UnknownFrame)
     );
+    // With a partial scope, an unknown frame gives no verse to attribute a check to the
+    // scope by, so nothing is reported and the scope is not shown as all dropped (tC4
+    // `deriveForProject`).
+    static CHAPTER_ONE: std::sync::LazyLock<Vec<ScopeRange>> =
+        std::sync::LazyLock::new(|| vec!["1".parse().unwrap()]);
+    let partial = jonah(None, &CHAPTER_ONE);
+    assert!(partial.items.is_empty() && partial.dropped.is_empty());
 }
 
 #[test]

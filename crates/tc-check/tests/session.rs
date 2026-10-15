@@ -43,12 +43,9 @@ fn the_sample_decisions_show_where_tc4_shows_them() {
 
     // tC4: swi9's decision (1:1, κατὰ πίστιν) shows on rtc9, and gr8c's (1:4, χάρις καὶ
     // εἰρήνη) on h93t, still invalidated; progress 1 of 112.
-    let shown: Vec<(String, String)> = session
-        .shown
-        .iter()
-        .enumerate()
-        .filter_map(|(i, s)| {
-            s.map(|s| {
+    let shown: Vec<(String, String)> = (0..session.items.len())
+        .filter_map(|i| {
+            session.shown(i).map(|s| {
                 (
                     session.items[i].key.check_id.to_string(),
                     stored[s].key.check_id.to_string(),
@@ -70,7 +67,7 @@ fn the_sample_decisions_show_where_tc4_shows_them() {
             total: 112
         }
     );
-    assert!(session.off_list.is_empty() && session.contested.is_empty());
+    assert!(session.off_list.is_empty() && session.contested().next().is_none());
     let at = |id: &str| {
         session
             .items
@@ -105,6 +102,6 @@ fn a_decision_no_check_carries_is_listed_not_lost() {
         .map(|&s| stored[s].key.check_id.to_string())
         .collect();
     assert_eq!(off, ["swi9"]);
-    let placed = session.shown.iter().flatten().count();
+    let placed: usize = session.placed.iter().map(Vec::len).sum();
     assert_eq!(placed + session.off_list.len(), stored.len());
 }

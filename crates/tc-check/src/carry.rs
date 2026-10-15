@@ -77,7 +77,21 @@ pub enum Outcome {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
     pub key: CheckKey,
+    /// The decision as stored, which a move writes whole at its new key.
+    pub decision: Decision,
     pub outcome: Outcome,
+}
+
+impl Entry {
+    /// The key of the check the decision is placed on: its own key when it stays, the
+    /// new key when it moves, `None` when it is not placed.
+    pub fn placed_at(&self) -> Option<&CheckKey> {
+        match &self.outcome {
+            Outcome::Stays { .. } => Some(&self.key),
+            Outcome::Moves { to, .. } => Some(to),
+            Outcome::Unplaced => None,
+        }
+    }
 }
 
 /// What a resource change does to one (tool, collection)'s decisions.
@@ -132,6 +146,7 @@ pub fn plan(items: &[CheckItem], resource: &ResourceRef, stored: &[StoredDecisio
             .zip(outcomes)
             .map(|(d, outcome)| Entry {
                 key: d.key.clone(),
+                decision: d.decision.clone(),
                 outcome,
             })
             .collect(),
@@ -303,8 +318,6 @@ impl Plan {
     /// `decided_after` counts what the check screen will show.
     pub fn summary<'t>(
         &self,
-        items: &[CheckItem],
-        stored: &[StoredDecision],
         current: Option<&ResourceRef>,
         verse_text: impl Fn(&CheckTarget) -> Option<&'t str>,
     ) -> Summary {
@@ -312,35 +325,32 @@ impl Plan {
             undecided: self.undecided,
             ..Summary::default()
         };
-        for (entry, d) in self.entries.iter().zip(stored) {
-            match &entry.outcome {
-                Outcome::Stays { item, .. } | Outcome::Moves { item, .. } => {
-                    out.carried += 1;
-                    if matches!(
-                        entry.outcome,
-                        Outcome::Moves {
-                            contested: true,
-                            ..
-                        }
-                    ) {
-                        out.contested += 1;
-                    }
-                    let mut after = d.decision.clone();
-                    after.resource = self.resource.clone();
-                    let target = &items[*item].key.target;
-                    let state =
-                        CheckState::of(Some(&after), Some(&self.resource), verse_text(target));
-                    if state.is_decided() {
-                        out.decided_after += 1;
-                    }
+        for entry in &self.entries {
+            let Some(at) = entry.placed_at() else {
+                if current == Some(&entry.decision.resource) {
+                    out.invalidated += 1;
+                } else {
+                    out.still_unplaced += 1;
                 }
-                Outcome::Unplaced => {
-                    if current == Some(&d.decision.resource) {
-                        out.invalidated += 1;
-                    } else {
-                        out.still_unplaced += 1;
-                    }
+                continue;
+            };
+            out.carried += 1;
+            if matches!(
+                entry.outcome,
+                Outcome::Moves {
+                    contested: true,
+                    ..
                 }
+            ) {
+                out.contested += 1;
+            }
+            let after = Decision {
+                resource: self.resource.clone(),
+                ..entry.decision.clone()
+            };
+            let state = CheckState::of(Some(&after), Some(&self.resource), verse_text(&at.target));
+            if state.is_decided() {
+                out.decided_after += 1;
             }
         }
         out
