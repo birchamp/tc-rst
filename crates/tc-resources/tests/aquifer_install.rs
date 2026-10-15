@@ -205,6 +205,38 @@ async fn an_interrupted_download_installs_nothing() {
         .unwrap();
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_redirect_off_the_server_is_not_followed() {
+    let rig = aquifer_rig().await;
+    let pin = aquifer_pin(
+        "UWTranslationNotes",
+        "por",
+        &aquifer_zip("UWTranslationNotes", "por"),
+    );
+    let other = aquifer_rig().await;
+    let elsewhere = format!(
+        "{}_assets/BibleAquifer/UWTranslationNotes/v2026-10-12/Portuguese-json.zip",
+        other.github.url()
+    );
+    rig.github
+        .fault_next_download(AssetFault::RedirectTo(elsewhere));
+    let err = install_aquifer(&rig.store, &rig.client, &pin)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(
+            err,
+            InstallError::Aquifer(AquiferError::UnexpectedResponse { .. })
+        ),
+        "{err}"
+    );
+    assert!(
+        other.github.requests().is_empty(),
+        "the other server is never asked"
+    );
+    nothing_installed(&rig.store);
+}
+
 #[test]
 fn an_asset_of_another_resource_or_language_is_refused() {
     let dir = tempfile::tempdir().unwrap();

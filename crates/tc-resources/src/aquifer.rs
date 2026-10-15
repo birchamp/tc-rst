@@ -191,14 +191,14 @@ impl AquiferClient {
         let origins = [web.origin(), api.origin()];
         let redirects = reqwest::redirect::Policy::custom(move |attempt| {
             let url = attempt.url();
-            let allowed = if loopback {
-                origins.contains(&url.origin())
-            } else {
-                url.scheme() == "https"
+            // The API redirects a renamed repository within itself; a download goes to
+            // GitHub's asset hosts. A test server's redirects stay on its own origin.
+            let allowed = origins.contains(&url.origin())
+                || (!loopback
+                    && url.scheme() == "https"
                     && url
                         .host_str()
-                        .is_some_and(|h| ASSET_HOSTS.iter().any(|a| h.eq_ignore_ascii_case(a)))
-            };
+                        .is_some_and(|h| ASSET_HOSTS.iter().any(|a| h.eq_ignore_ascii_case(a))));
             if attempt.previous().len() >= MAX_REDIRECTS {
                 attempt.error("too many redirects")
             } else if allowed {

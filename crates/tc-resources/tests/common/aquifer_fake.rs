@@ -38,6 +38,8 @@ pub enum AssetFault {
     Truncate,
     /// Serve these bytes, as after a maintainer re-uploaded the asset.
     Replace(Vec<u8>),
+    /// Redirect the release download to this address instead of the asset host.
+    RedirectTo(String),
 }
 
 #[derive(Default)]
@@ -146,9 +148,19 @@ async fn download(
     if find(&shared, &owner, &repo, &tag).is_none() {
         return not_found();
     }
+    let elsewhere = {
+        let mut inner = shared.lock().unwrap();
+        match inner.fault.take() {
+            Some(AssetFault::RedirectTo(url)) => Some(url),
+            other => {
+                inner.fault = other;
+                None
+            }
+        }
+    };
     let mut response = Response::new(Body::empty());
     *response.status_mut() = StatusCode::FOUND;
-    let location = format!("/_assets/{owner}/{repo}/{tag}/{asset}");
+    let location = elsewhere.unwrap_or_else(|| format!("/_assets/{owner}/{repo}/{tag}/{asset}"));
     response
         .headers_mut()
         .insert(header::LOCATION, HeaderValue::from_str(&location).unwrap());
@@ -173,6 +185,7 @@ async fn asset(
             let len = bytes.len();
             (bytes, len)
         }
+        Some(AssetFault::RedirectTo(_)) => (asset.bytes.clone(), asset.bytes.len()),
         Some(AssetFault::Truncate) => (
             asset.bytes[..asset.bytes.len() / 2].to_vec(),
             asset.bytes.len(),
