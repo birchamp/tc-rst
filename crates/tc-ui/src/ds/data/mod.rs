@@ -57,6 +57,13 @@ pub fn Accordion(
                     "background": if on.get() { "var(--surface-app)" } else { "transparent" },
                 }
             });
+            // The same chevron node turns, so its transform transition runs.
+            let chevron = Signal::derive(move || {
+                css! {
+                    "transform": if on.get() { "rotate(90deg)" } else { "none" },
+                    "transition": "transform var(--dur-hover) var(--ease-standard)",
+                }
+            });
             let attrs = Attrs::new().with("aria-controls", format!("{key}-p"));
             let title = it.title.clone();
             let meta = it.meta.clone().filter(|m| !m.is_empty());
@@ -74,13 +81,7 @@ pub fn Accordion(
                     >
                         <Text role=TextRole::Strong style=css! { "flex": 1 }>{title}</Text>
                         {meta.map(|m| view! { <Text role=TextRole::LabelNum>{m}</Text> })}
-                        {move || {
-                            let s = css! {
-                                "transform": if on.get() { "rotate(90deg)" } else { "none" },
-                                "transition": "transform var(--dur-hover) var(--ease-standard)",
-                            };
-                            view! { <Text role=TextRole::Caption attrs=Attrs::from([("aria-hidden", "true")]) style=s>"›"</Text> }
-                        }}
+                        <Text role=TextRole::Caption attrs=Attrs::from([("aria-hidden", "true")]) style=chevron>"›"</Text>
                     </Action>
                     {move || {
                         on.get().then(|| {

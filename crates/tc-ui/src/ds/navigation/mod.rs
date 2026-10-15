@@ -7,8 +7,8 @@ use leptos::prelude::*;
 
 use crate::ds::{
     Anchor, Attrs, Css, Direction, Dismiss, Fill, HeaderTone, Interactive, Justify, LayerAlign,
-    LayerPlacement, Level, Navigate, Orientation, Side, Slot, Stack, Status, StatusDot, Surface,
-    Text, TextRole, TextTone, Tone, Weight,
+    LayerPlacement, Level, Navigate, Orientation, Slot, Stack, Status, StatusDot, Surface, Text,
+    TextRole, TextTone, Tone, Weight,
 };
 use crate::tokens::{Align, Corner, Edge, Shadow};
 
@@ -68,33 +68,20 @@ pub fn AppHeader(
         let meta_style = css! { "text-transform": "none", "letter-spacing": "var(--track-11)" };
         crate::ds::Surface(crate::ds::SurfaceProps {
             tag: Some("button".into()),
-            tone: None,
             fill: Signal::from(Fill::Quiet),
             border: Some(Edge::Line.into()),
             radius: Some(Corner::Md.into()),
-            elevation: None,
-            pad: None,
             interactive: Some(Interactive::Quiet),
-            selected: Signal::from(false),
-            disabled: false,
-            on: None,
             on_click: on_project_click,
             style: css! { "padding": "5px 10px 5px 8px", "cursor": "pointer", "font": "inherit", "min-width": 0 },
             attrs: Attrs::new().with("title", title).with("data-testid", "project-switch"),
             children: Some(Box::new(move || {
                 let name_text = crate::ds::Text(crate::ds::TextProps {
-                    role: TextRole::Ui,
-                    tag: None,
                     tone: TextTone::Strong,
-                    script: None,
-                    align: None,
                     truncate: true,
-                    trim: None,
-                    measure: None,
                     dir,
-                    style: Css::new(),
-                    attrs: Attrs::new(),
                     children: Some(Box::new(move || name.into_any())),
+                    ..Default::default()
                 });
                 view! {
                     <Stack direction=Direction::Row gap=9 align=Align::Center>
@@ -109,6 +96,7 @@ pub fn AppHeader(
                 }
                 .into_any()
             })),
+            ..Default::default()
         })
     });
     let right = match right {
@@ -122,30 +110,15 @@ pub fn AppHeader(
         fill: Signal::from(if dark { Fill::Solid } else { Fill::Card }),
         border: Some(if dark { Edge::None } else { Edge::Hair }.into()),
         radius: Some(Corner::None.into()),
-        elevation: None,
         pad: Some("0 16px".into()),
-        interactive: None,
-        selected: Signal::from(false),
-        disabled: false,
-        on: None,
-        on_click: None,
         style: outer,
-        attrs: Attrs::new(),
         children: Some(Box::new(move || {
             let brand = crate::ds::Stack(crate::ds::StackProps {
                 direction: Direction::Row,
                 gap: Some(9.into()),
                 align: Some(Align::Center),
-                justify: None,
-                wrap: false,
-                inline: false,
-                columns: None,
-                flex: None,
-                grow: false,
-                tag: None,
                 on_click: on_brand_click,
                 style: brand_style,
-                attrs: Attrs::new(),
                 children: Some(Box::new(move || {
                     view! {
                         {logo}
@@ -156,6 +129,7 @@ pub fn AppHeader(
                     }
                     .into_any()
                 })),
+                ..Default::default()
             });
             view! {
                 <Stack direction=Direction::Row gap=14 align=Align::Center style=css! { "align-self": "stretch" }>
@@ -170,6 +144,7 @@ pub fn AppHeader(
             }
             .into_any()
         })),
+        ..Default::default()
     })
 }
 
@@ -216,17 +191,12 @@ pub fn Breadcrumb(
         direction: Direction::Row,
         gap: Some(7.into()),
         align: Some(Align::Center),
-        justify: None,
         wrap: true,
-        inline: false,
-        columns: None,
-        flex: None,
-        grow: false,
         tag: Some("nav".into()),
-        on_click: None,
         style,
         attrs: a,
         children: Some(Box::new(move || steps().into_any())),
+        ..Default::default()
     })
 }
 
@@ -280,20 +250,13 @@ pub fn Menu(
                     crate::ds::Action(crate::ds::ActionProps {
                         weight: Weight::Row,
                         tone: it.destructive.then_some(Tone::Invalid),
-                        size: Default::default(),
-                        shape: Default::default(),
-                        icon_only: false,
-                        title: None,
                         disabled: Signal::from(it.disabled),
-                        tag: None,
-                        href: None,
                         on_click: Some(Callback::new(move |_| {
                             set(false);
                             if let Some(cb) = on_click {
                                 cb.run(());
                             }
                         })),
-                        style: Signal::from(Css::new()),
                         attrs: Attrs::from([("role", "menuitem")]),
                         children: Some(Box::new(move || {
                             view! {
@@ -302,6 +265,7 @@ pub fn Menu(
                             }
                             .into_any()
                         })),
+                        ..Default::default()
                     })
                     .into_any()
                 })
@@ -322,27 +286,14 @@ pub fn Menu(
         {crate::ds::Layer(crate::ds::LayerProps {
             open: Some(is_open),
             level: Level::Popover,
-            scrim: None,
             placement: LayerPlacement::Anchor,
             anchor_to: Some(anchor_to),
-            offset: 6.0,
             align,
-            side: Side::Bottom,
             dismiss: Dismiss { scrim: false, escape: true, outside: true },
-            trap_focus: false,
-            lock_scroll: false,
-            restore_focus: true,
             on_dismiss: Some(Callback::new(move |_| set(false))),
             navigate: Some(Navigate::Vertical),
-            animate: true,
-            scrim_attrs: Attrs::new(),
             role: Some("menu".into()),
-            label: None,
-            labelled_by: None,
-            on_mouse_down: None,
-            style: Css::new(),
-            attrs: Attrs::new(),
-            children: content,
+            ..crate::ds::LayerProps::new(content)
         })}
     }
 }

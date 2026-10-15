@@ -1,6 +1,6 @@
 // components/primitives: Action, Choice, Field, FieldGroup, Input, Layer, Progress, Rule, Stack,
 // Surface, Switcher, Table, Text.
-import { el, noop, group, onDark, row, focus, hover, press, AR, T } from './lib.mjs';
+import { el, noop, cell, set, setTo, group, onDark, row, focus, hover, press, click, key, AR, T } from './lib.mjs';
 
 const WEIGHTS = ['fill', 'soft', 'outline', 'quiet', 'text', 'row'];
 const TONES = ['accent', 'ocean', 'cultivate', 'valid', 'warn', 'invalid', 'neutral'];
@@ -179,6 +179,11 @@ export default [
     ['ring-indeterminate-label', { shape: 'ring', label: 'Opening the project…' }, { frame: { height: 60 } }],
     ['ring-valid', { shape: 'ring', value: 100, tone: 'valid' }, { frame: { width: 64, height: 60 } }],
     ['bar-rtl', { value: 50 }, { document: AR }],
+    ['ring-stateful', { shape: 'ring', value: cell('p'), size: 32 }, {
+      frame: { width: 220, height: 72 }, cells: { p: 20 }, steps: [click('button')],
+      wrap: (n) => row([n, el('Button', { variant: 'secondary', size: 'sm', onClick: setTo('p', 80), children: 'Advance' })]),
+      note: 'The button moves the value from 20 to 80 on the same ring.',
+    }],
   ]),
 
   ...group('Rule', { frame: { width: 320, height: 52 } }, [
@@ -252,6 +257,8 @@ export default [
     ['empty', { columns: COLUMNS, rows: [], empty: el('Text', { role: 'caption', children: 'No books yet.' }) }, { frame: { height: 140 } }],
     ['wrap-column', { columns: [{ key: 'ref', header: 'Ref', width: 60 }, { key: 'note', header: 'Note', wrap: true }], rows: [{ id: 1, ref: '1:1', note: T.note }, { id: 2, ref: '1:2', note: 'Eternal life is life that never ends.' }] }, { frame: { height: 220 } }],
     ['rtl', { columns: [{ key: 'book', header: 'السفر' }, { key: 'verses', header: 'الآيات', align: 'numeric' }], rows: [{ id: 'tit', book: 'تيطس', verses: 46 }, { id: 'jon', book: 'يونان', verses: 48 }], selectedKey: 'tit' }, { document: AR, frame: { height: 160 } }],
+    ['stateful', { columns: COLUMNS, rows: ROWS, selectedKey: cell('sel'), onRowClick: set('sel', '0.id') },
+      { cells: { sel: 'tit' }, steps: [focus('tbody tr:nth-child(2)'), key('Enter')], note: 'Enter selects the focused row, which keeps the focus.' }],
   ]),
 
   ...group('Text', { frame: { width: 360, height: 60 } }, [

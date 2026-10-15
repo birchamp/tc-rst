@@ -1,6 +1,6 @@
 {
-  "same": 702,
-  "total": 702,
+  "same": 712,
+  "total": 712,
   "cases": [
     {
       "id": "Badge/accent-md",
@@ -1293,6 +1293,18 @@
       "diffs": []
     },
     {
+      "id": "OptionCard/element-slots",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "OptionCard/element-description",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
       "id": "Radio/unchecked",
       "same": true,
       "errors": [],
@@ -1372,6 +1384,12 @@
     },
     {
       "id": "RadioGroup/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "RadioGroup/stateful",
       "same": true,
       "errors": [],
       "diffs": []
@@ -1732,6 +1750,12 @@
     },
     {
       "id": "Toggle/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Toggle/stateful",
       "same": true,
       "errors": [],
       "diffs": []
@@ -2715,6 +2739,12 @@
       "diffs": []
     },
     {
+      "id": "Progress/ring-stateful",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
       "id": "Rule/hair",
       "same": true,
       "errors": [],
@@ -3273,6 +3303,12 @@
       "diffs": []
     },
     {
+      "id": "Table/stateful",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
       "id": "Text/role-display",
       "same": true,
       "errors": [],
@@ -3729,6 +3765,12 @@
       "diffs": []
     },
     {
+      "id": "Drawer/element-title",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
       "id": "HelpCard/note",
       "same": true,
       "errors": [],
@@ -3826,6 +3868,24 @@
     },
     {
       "id": "Modal/rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/element-subtitle",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/nested-select",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/nested-menu",
       "same": true,
       "errors": [],
       "diffs": []

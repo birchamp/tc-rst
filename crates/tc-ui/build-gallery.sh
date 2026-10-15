@@ -36,10 +36,18 @@ fi
 cargo build -j "${CARGO_JOBS:-2}" -p tc-ui --lib --target wasm32-unknown-unknown \
   --profile "$PROFILE" --features gallery --manifest-path "$ROOT/Cargo.toml"
 
+# Where cargo put the wasm: CARGO_TARGET_DIR or build.target-dir move it out of ./target.
+TARGET_DIR="$(cargo metadata --format-version 1 --no-deps --manifest-path "$ROOT/Cargo.toml" |
+  sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')"
+WASM="$TARGET_DIR/wasm32-unknown-unknown/$DIR/tc_ui.wasm"
+if [ ! -f "$WASM" ]; then
+  echo "cargo built no $WASM" >&2
+  exit 1
+fi
+
 rm -rf "$OUT"
 mkdir -p "$OUT"
-"$BINDGEN" --target web --no-typescript --out-dir "$OUT/pkg" \
-  "$ROOT/target/wasm32-unknown-unknown/$DIR/tc_ui.wasm"
+"$BINDGEN" --target web --no-typescript --out-dir "$OUT/pkg" "$WASM"
 cp "$HERE/gallery/index.html" "$OUT/index.html"
 cp -r "$HERE/assets" "$OUT/assets"
 cp "$ROOT/parity/ds-gallery/gallery-spec.json" "$OUT/gallery-spec.json"

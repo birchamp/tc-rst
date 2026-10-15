@@ -146,6 +146,69 @@ export function prune(dir, cases) {
   }
 }
 
+/**
+ * Runs in the page: the frame's subtree as lines, one per element or text run, with the sorted
+ * attributes, every longhand of the inline style as the browser parsed it, input values and
+ * checked states, and the focused element. With `ids`, each element also shows the id
+ * `tagNodes` gave it (or `new`), so a node drawn again shows even when it looks the same.
+ */
+export function domSnapshot(ids = false) {
+  const out = [];
+  const walk = (n, depth) => {
+    const pad = '  '.repeat(depth);
+    if (n.nodeType === Node.TEXT_NODE) {
+      if (n.data.length) out.push(`${pad}"${n.data}"`);
+      return;
+    }
+    if (n.nodeType !== Node.ELEMENT_NODE) return;
+    // An image's URL is the gallery's: Vite serves tC4's assets under hashed names.
+    const value = (a) => (a.name === 'src' ? a.value.replace(/^.*\//, '').replace(/-[\w-]{8}(\.\w+)$/, '$1') : a.value);
+    const attrs = Array.from(n.attributes)
+      .filter((a) => a.name !== 'style')
+      .map((a) => `${a.name}=${JSON.stringify(value(a))}`)
+      .sort();
+    // Longhands sorted by name. React writes a shorthand's longhand in place where a parsed
+    // style attribute appends it, which reorders cssText without changing any value.
+    const decls = n.style ? Array.from(n.style, (p) => `${p}: ${n.style.getPropertyValue(p)}`).sort() : [];
+    const style = decls.length ? ` style=${JSON.stringify(decls.join('; '))}` : '';
+    const props = [];
+    if (n instanceof HTMLInputElement || n instanceof HTMLTextAreaElement) {
+      props.push(`.value=${JSON.stringify(n.value)}`);
+      if (n.type === 'checkbox' || n.type === 'radio') props.push(`.checked=${n.checked}`, `.indeterminate=${n.indeterminate}`);
+    }
+    if (document.activeElement === n) props.push('.focused');
+    if (ids) props.push(`#${n.__sid ?? 'new'}`);
+    out.push(`${pad}<${n.tagName.toLowerCase()} ${attrs.join(' ')}${style}${props.length ? ' ' + props.join(' ') : ''}>`);
+    // Adjacent text nodes render as one run; compare their joined text. Comments (Leptos's
+    // markers for dynamic children) take no part in layout.
+    let text = '';
+    const flush = () => {
+      if (text) out.push(`${pad}  "${text}"`);
+      text = '';
+    };
+    for (const c of n.childNodes) {
+      if (c.nodeType === Node.TEXT_NODE) text += c.data;
+      else if (c.nodeType === Node.COMMENT_NODE) continue;
+      else {
+        flush();
+        walk(c, depth + 1);
+      }
+    }
+    flush();
+  };
+  walk(document.querySelector('[data-case]'), 0);
+  return out;
+}
+
+/** Runs in the page: numbers, in document order, the frame's elements that have no id yet. */
+export function tagNodes() {
+  let next = window.__nextSid ?? 0;
+  for (const el of document.querySelector('[data-case]').querySelectorAll('*')) {
+    if (el.__sid === undefined) el.__sid = next++;
+  }
+  window.__nextSid = next;
+}
+
 export const argValue = (name) => {
   const at = process.argv.indexOf(name);
   return at > 0 ? process.argv[at + 1] : undefined;

@@ -9,7 +9,9 @@
 //! Naming: a React prop `fooBar` is `foo_bar`; `as` is `tag`; `...rest` is `attrs` (extra
 //! attributes, placed on the element React spreads them onto); `style` is a [`Css`]. Props
 //! that change while a component is on screen (`checked`, `selected`, `value`, `open`, …) are
-//! `Signal`s, so a plain value or a signal both work.
+//! `Signal`s, so a plain value or a signal both work, and a change restyles the nodes already
+//! drawn rather than drawing new ones, as React does. A text slot that tC4's screens also fill
+//! with elements (a title, a subtitle, a description) takes [`Content`]: a string or a view.
 //!
 //! Layers render in place, as they do in tC4, where `window.ReactDOM` is unset and Layer's
 //! portal falls back to the component's own position (fixed positioning still escapes flow).
@@ -54,6 +56,99 @@ pub type Slot = Children;
 /// `trailing={value && onClear ? <Clear/> : null}`): `None` draws nothing, not even the slot's
 /// wrapper. Called inside a reactive scope.
 pub type MaybeView = std::sync::Arc<dyn Fn() -> Option<AnyView> + Send + Sync>;
+
+/// A slot React renders as a node that call sites mostly fill with text: a title, a subtitle,
+/// a description. tC4's screens also pass elements there (`title={<span dir="rtl">…</span>}`,
+/// `subtitle={<>To <strong>…</strong></>}`), so a closure that draws a view converts too, and
+/// `title="Settings"` still works.
+#[derive(Clone)]
+pub enum Content {
+    Text(String),
+    View(ViewFn),
+}
+
+impl Content {
+    /// React's truthiness: an empty string draws nothing, elements always draw.
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Content::Text(s) if s.is_empty())
+    }
+
+    /// The text, when the content is text (Drawer names its dialog by a text title only).
+    pub fn as_text(&self) -> Option<&str> {
+        match self {
+            Content::Text(s) => Some(s),
+            Content::View(_) => None,
+        }
+    }
+
+    pub fn view(&self) -> AnyView {
+        match self {
+            Content::Text(s) => s.clone().into_any(),
+            Content::View(f) => f.run(),
+        }
+    }
+}
+
+impl From<&str> for Content {
+    fn from(s: &str) -> Self {
+        Content::Text(s.to_string())
+    }
+}
+
+impl From<String> for Content {
+    fn from(s: String) -> Self {
+        Content::Text(s)
+    }
+}
+
+impl<F, V> From<F> for Content
+where
+    F: Fn() -> V + Send + Sync + 'static,
+    V: IntoView + 'static,
+{
+    fn from(f: F) -> Self {
+        Content::View(ViewFn::from(move || f().into_any()))
+    }
+}
+
+/// `{x ? <Wrap>{x}</Wrap> : null}`: the slot's content when it draws anything.
+pub(crate) fn present(c: Option<Content>) -> Option<Content> {
+    c.filter(|c| !c.is_empty())
+}
+
+/// `XProps::default()`: every prop at the component's own default (its `#[prop]`
+/// attributes, through the builder), so a shim that composes a primitive names only the props
+/// it sets and ends with `..XProps::default()`.
+macro_rules! props_default {
+    ($($props:ident),* $(,)?) => {
+        $(impl Default for $props {
+            fn default() -> Self {
+                Self::builder().build()
+            }
+        })*
+    };
+}
+
+props_default!(
+    ActionProps,
+    ChoiceProps,
+    FieldGroupProps,
+    FieldProps,
+    InputProps,
+    ProgressProps,
+    RuleProps,
+    SearchFieldProps,
+    StackProps,
+    SurfaceProps,
+    TextProps,
+);
+
+impl LayerProps {
+    /// A Layer of `children` with every other prop at its default.
+    pub fn new(children: ChildrenFn) -> Self {
+        Self::builder().children(children).build()
+    }
+}
 
 /// An HTML element whose tag is decided at run time.
 pub(crate) fn element(tag: impl Into<Tag>) -> HtmlElement<Custom<Tag>, (), ()> {

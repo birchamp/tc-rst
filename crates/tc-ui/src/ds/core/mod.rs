@@ -79,15 +79,13 @@ pub fn Button(
         tone: Some(tone),
         size,
         shape,
-        icon_only: false,
         title,
         disabled,
-        tag: None,
-        href: None,
         on_click,
         style: Signal::from(style),
         attrs,
         children,
+        ..Default::default()
     })
 }
 
@@ -106,9 +104,9 @@ pub fn Divider(
     crate::ds::Rule(crate::ds::RuleProps {
         orientation,
         label,
-        weight: Default::default(),
         style,
         attrs,
+        ..Default::default()
     })
 }
 
@@ -150,12 +148,11 @@ pub fn IconButton(
         icon_only: true,
         title,
         disabled,
-        tag: None,
-        href: None,
         on_click,
         style: Signal::from(s),
         attrs,
         children,
+        ..Default::default()
     })
 }
 
@@ -177,15 +174,10 @@ pub fn Overline(
         } else {
             TextTone::Muted
         },
-        script: None,
-        align: None,
-        truncate: false,
-        trim: None,
-        measure: None,
-        dir: None,
-        style: css! { "display": "block" }.merge(&style),
+        style: Signal::from(css! { "display": "block" }.merge(&style)),
         attrs,
         children,
+        ..Default::default()
     })
 }
 

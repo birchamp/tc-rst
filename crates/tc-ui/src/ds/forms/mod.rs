@@ -13,66 +13,11 @@ use leptos::ev::{FocusEvent, KeyboardEvent, MouseEvent};
 use leptos::prelude::*;
 
 use crate::ds::{
-    Attrs, Badge, BadgeSize, BadgeTone, Css, Direction, Fill, InputVariant, Interactive, Mark,
-    NativeInput, OptionControl, Placement, Size, Stack, Surface, Text, TextRole, TextTone, Tone,
-    Weight, fixed,
+    Attrs, Badge, BadgeSize, BadgeTone, Choice, ChoiceProps, Content, Css, Direction, Field,
+    FieldProps, Fill, InputVariant, Interactive, Mark, NativeInput, OptionControl, Placement, Size,
+    Stack, Surface, Text, TextRole, TextTone, Tone, Weight, fixed, present,
 };
 use crate::tokens::{Align, Corner, Edge};
-
-/// A Choice for the shims, with its change handler forwarded as is.
-#[allow(clippy::too_many_arguments)]
-fn choice(
-    mark: Mark,
-    checked: Signal<bool>,
-    indeterminate: Signal<bool>,
-    disabled: Option<bool>,
-    name: Option<String>,
-    value: Option<String>,
-    on_change: Option<Callback<web_sys::Event>>,
-) -> impl IntoView {
-    crate::ds::Choice(crate::ds::ChoiceProps {
-        mark,
-        size: Size::Md,
-        checked,
-        indeterminate,
-        disabled: MaybeProp::from(disabled),
-        tone: Tone::Accent,
-        value,
-        name,
-        on_change,
-        style: Css::new(),
-        attrs: Attrs::new(),
-    })
-}
-
-/// A Field with the label beside the control.
-#[allow(clippy::too_many_arguments)]
-fn labelled(
-    label: String,
-    hint: Option<String>,
-    disabled: Option<bool>,
-    placement: Placement,
-    id: Option<String>,
-    style: Css,
-    attrs: Attrs,
-    control: impl FnOnce() -> AnyView + Send + 'static,
-) -> impl IntoView {
-    crate::ds::Field(crate::ds::FieldProps {
-        label: Some(label),
-        hint,
-        error: None,
-        required: false,
-        optional: false,
-        disabled,
-        size: Size::Md,
-        placement,
-        id,
-        name: None,
-        style,
-        attrs,
-        children: Some(Box::new(control)),
-    })
-}
 
 /// Checkbox.jsx: a square check for independent options inside a form.
 #[component]
@@ -87,29 +32,28 @@ pub fn Checkbox(
     #[prop(optional)] attrs: Attrs,
 ) -> impl IntoView {
     let mark = move || {
-        choice(
-            Mark::Check,
+        Choice(ChoiceProps {
+            mark: Mark::Check,
             checked,
             indeterminate,
-            disabled,
-            None,
-            None,
+            disabled: disabled.into(),
             on_change,
-        )
+            ..Default::default()
+        })
         .into_any()
     };
     match label.filter(|l| !l.is_empty()) {
         None => bare(mark(), style, attrs).into_any(),
-        Some(label) => labelled(
-            label,
-            description,
+        Some(label) => Field(FieldProps {
+            label: Some(label),
+            hint: description,
             disabled,
-            Placement::End,
-            None,
+            placement: Placement::End,
             style,
             attrs,
-            mark,
-        )
+            children: Some(Box::new(mark)),
+            ..Default::default()
+        })
         .into_any(),
     }
 }
@@ -142,15 +86,9 @@ pub fn DropZone(
     crate::ds::Surface(crate::ds::SurfaceProps {
         tag: Some("button".into()),
         tone: Some(Tone::Accent),
-        fill: Signal::from(Fill::None),
         border: Some(Edge::DashedTone.into()),
         radius: Some(Corner::Xl.into()),
-        elevation: None,
-        pad: None,
         interactive: Some(Interactive::Choice),
-        selected: Signal::from(false),
-        disabled: false,
-        on: None,
         on_click,
         style: s,
         attrs,
@@ -164,6 +102,7 @@ pub fn DropZone(
             }
             .into_any()
         })),
+        ..Default::default()
     })
 }
 
@@ -210,16 +149,13 @@ pub fn FilterChip(
         fill: Signal::derive(move || if solid.get() { Fill::Solid } else { Fill::None }),
         border: Some(Edge::Choice.into()),
         radius: Some(Corner::Pill.into()),
-        elevation: None,
-        pad: None,
         interactive: Some(Interactive::Choice),
         selected,
-        disabled: false,
-        on: None,
         on_click,
         style: s,
         attrs,
         children: Some(Box::new(move || text.into_any())),
+        ..Default::default()
     })
 }
 
@@ -229,13 +165,13 @@ pub fn FilterChip(
 pub fn OptionCard(
     #[prop(optional, into)] selected: Signal<bool>,
     #[prop(optional)] control: OptionControl,
-    #[prop(optional, into)] icon: Option<String>,
-    #[prop(optional, into)] title: String,
-    #[prop(optional, into)] description: Option<String>,
-    #[prop(optional, into)] meta: Option<String>,
+    #[prop(optional, into)] icon: Option<Content>,
+    #[prop(optional, into)] title: Option<Content>,
+    #[prop(optional, into)] description: Option<Content>,
+    #[prop(optional, into)] meta: Option<Content>,
     #[prop(optional)] recommended: bool,
     #[prop(optional, into)] recommended_label: Option<String>,
-    #[prop(optional, into)] trailing: Option<String>,
+    #[prop(optional, into)] trailing: Option<Content>,
     #[prop(optional)] disabled: bool,
     #[prop(optional)] on_click: Option<Callback<web_sys::Event>>,
     #[prop(optional)] style: Css,
@@ -252,10 +188,10 @@ pub fn OptionCard(
     .merge(&style);
     let recommended_label = recommended_label.unwrap_or_else(|| "Recommended".into());
     let (icon, description, meta, trailing) = (
-        icon.filter(|s| !s.is_empty()),
-        description.filter(|s| !s.is_empty()),
-        meta.filter(|s| !s.is_empty()),
-        trailing.filter(|s| !s.is_empty()),
+        present(icon),
+        present(description),
+        present(meta),
+        present(trailing),
     );
     let body = move || {
         let icon_tile = icon.map(|icon| {
@@ -269,25 +205,25 @@ pub fn OptionCard(
             };
             view! {
                 <Surface fill=Fill::Soft radius=Corner::Md style=s>
-                    <Text role=TextRole::LabelMicro tone=TextTone::Accent>{icon}</Text>
+                    <Text role=TextRole::LabelMicro tone=TextTone::Accent>{icon.view()}</Text>
                 </Surface>
             }
         });
         view! {
             <Stack direction=Direction::Row gap=12 align=if radio { Align::Start } else { Align::Center }>
-                {radio.then(|| choice(Mark::Radio, selected, Signal::from(false), None, None, None, None))}
+                {radio.then(|| view! { <Choice mark=Mark::Radio checked=selected /> })}
                 {icon_tile}
                 <Stack direction=Direction::Column gap=3 grow=true>
                     <Stack direction=Direction::Row gap=8 align=Align::Center wrap=true>
-                        <Text role=TextRole::Strong>{title}</Text>
+                        <Text role=TextRole::Strong>{title.map(|t| t.view())}</Text>
                         {recommended.then(|| view! {
                             <Badge tone=BadgeTone::AccentSoft size=BadgeSize::Sm>{recommended_label}</Badge>
                         })}
                     </Stack>
-                    {description.map(|d| view! { <Text role=TextRole::Caption>{d}</Text> })}
-                    {meta.map(|m| view! { <Text role=TextRole::Meta>{m}</Text> })}
+                    {description.map(|d| view! { <Text role=TextRole::Caption>{d.view()}</Text> })}
+                    {meta.map(|m| view! { <Text role=TextRole::Meta>{m.view()}</Text> })}
                 </Stack>
-                {trailing.map(|t| view! { <Text role=TextRole::Ui tone=TextTone::Muted>{t}</Text> })}
+                {trailing.map(|t| view! { <Text role=TextRole::Ui tone=TextTone::Muted>{t.view()}</Text> })}
             </Stack>
         }
         .into_any()
@@ -295,19 +231,16 @@ pub fn OptionCard(
     crate::ds::Surface(crate::ds::SurfaceProps {
         tag: Some("button".into()),
         tone: Some(Tone::Accent),
-        fill: Signal::from(Fill::None),
         border: Some(Edge::Choice.into()),
         radius: Some(Corner::Md.into()),
-        elevation: None,
-        pad: None,
         interactive: Some(Interactive::Choice),
         selected,
         disabled,
-        on: None,
         on_click,
         style: s,
         attrs,
         children: Some(Box::new(body)),
+        ..Default::default()
     })
 }
 
@@ -325,29 +258,29 @@ pub fn Radio(
     #[prop(optional)] attrs: Attrs,
 ) -> impl IntoView {
     let mark = move || {
-        choice(
-            Mark::Radio,
+        Choice(ChoiceProps {
+            mark: Mark::Radio,
             checked,
-            Signal::from(false),
-            disabled,
+            disabled: disabled.into(),
             name,
             value,
             on_change,
-        )
+            ..Default::default()
+        })
         .into_any()
     };
     match label.filter(|l| !l.is_empty()) {
         None => bare(mark(), style, attrs).into_any(),
-        Some(label) => labelled(
-            label,
-            description,
+        Some(label) => Field(FieldProps {
+            label: Some(label),
+            hint: description,
             disabled,
-            Placement::End,
-            None,
+            placement: Placement::End,
             style,
             attrs,
-            mark,
-        )
+            children: Some(Box::new(mark)),
+            ..Default::default()
+        })
         .into_any(),
     }
 }
@@ -398,44 +331,34 @@ pub fn RadioGroup(
                 });
                 let id = format!("{name}-{v}");
                 let mark = move || {
-                    choice(
-                        Mark::Radio,
+                    Choice(ChoiceProps {
+                        mark: Mark::Radio,
                         checked,
-                        Signal::from(false),
-                        None,
-                        None,
-                        Some(v),
-                        change,
-                    )
+                        value: Some(v),
+                        on_change: change,
+                        ..Default::default()
+                    })
                     .into_any()
                 };
-                labelled(
-                    o.label,
-                    o.description,
-                    None,
-                    Placement::End,
-                    Some(id),
-                    Css::new(),
-                    Attrs::new(),
-                    mark,
-                )
+                Field(FieldProps {
+                    label: Some(o.label),
+                    hint: o.description,
+                    placement: Placement::End,
+                    id: Some(id),
+                    children: Some(Box::new(mark)),
+                    ..Default::default()
+                })
             })
             .collect_view()
     };
     crate::ds::FieldGroup(crate::ds::FieldGroupProps {
         legend,
-        hint: None,
-        error: None,
-        required: false,
-        disabled: None,
         name: Some(group_name),
         role: Some("radiogroup".into()),
-        direction: Direction::Column,
-        gap: None,
-        columns: None,
         style,
         attrs,
         children: Some(Box::new(move || items().into_any())),
+        ..Default::default()
     })
 }
 
@@ -500,9 +423,11 @@ pub fn SearchField(
     #[prop(optional)] live_attrs: Vec<(&'static str, Signal<Option<String>>)>,
 ) -> impl IntoView {
     let clear_label = clear_label.unwrap_or_else(|| "Clear".into());
+    // The clear button comes and goes with the value, and stays the same node while the
+    // translator types.
+    let has = Memo::new(move |_| value.is_some_and(|v| v.with(|v| !v.is_empty())));
     let trailing: crate::ds::MaybeView = Arc::new(move || {
-        let has = value.is_some_and(|v| !v.get().is_empty());
-        let cb = on_clear.filter(|_| has)?;
+        let cb = on_clear.filter(|_| has.get())?;
         Some(
             crate::ds::feedback::close_button(
                 clear_label.clone(),
@@ -515,13 +440,8 @@ pub fn SearchField(
         )
     });
     crate::ds::Input(crate::ds::InputProps {
-        tag: None,
-        variant: InputVariant::Ui,
-        size: None,
         leading: Some(Box::new(magnifier)),
         trailing: Some(trailing),
-        rows: 3,
-        invalid: MaybeProp::default(),
         disabled,
         // SearchField always hands `value` to the input, so react-dom writes its initial value
         // attribute even when there is none: an empty one.
@@ -529,13 +449,10 @@ pub fn SearchField(
         value,
         placeholder: Some(placeholder.unwrap_or_else(|| "Search…".into())),
         on_change,
-        on_key_down: None,
-        on_blur: None,
         style,
-        input_style: Css::new(),
         attrs,
         live_attrs,
-        children: None,
+        ..Default::default()
     })
 }
 
@@ -570,9 +487,6 @@ pub fn TextArea(
         crate::ds::Input(crate::ds::InputProps {
             tag: Some(NativeInput::Textarea),
             variant,
-            size: None,
-            leading: None,
-            trailing: None,
             rows,
             invalid,
             disabled,
@@ -580,13 +494,10 @@ pub fn TextArea(
             default_value,
             placeholder,
             on_change,
-            on_key_down: None,
             on_blur,
-            style: Css::new(),
             input_style,
             attrs: native,
-            live_attrs: Vec::new(),
-            children: None,
+            ..Default::default()
         })
         .into_any()
     };
@@ -604,17 +515,10 @@ fn field_around(
     crate::ds::Field(crate::ds::FieldProps {
         label,
         hint,
-        error: None,
-        required: false,
-        optional: false,
-        disabled: None,
-        size: Size::Md,
-        placement: Placement::Above,
         id,
-        name: None,
         style,
-        attrs: Attrs::new(),
         children: Some(Box::new(control)),
+        ..Default::default()
     })
 }
 
@@ -641,12 +545,7 @@ pub fn TextField(
 ) -> impl IntoView {
     let input = move || {
         crate::ds::Input(crate::ds::InputProps {
-            tag: None,
-            variant: InputVariant::Ui,
             size,
-            leading: None,
-            trailing: None,
-            rows: 3,
             invalid,
             disabled,
             value,
@@ -655,11 +554,8 @@ pub fn TextField(
             on_change,
             on_key_down,
             on_blur,
-            style: Css::new(),
-            input_style: Css::new(),
             attrs,
-            live_attrs: Vec::new(),
-            children: None,
+            ..Default::default()
         })
         .into_any()
     };
@@ -678,29 +574,26 @@ pub fn Toggle(
     #[prop(optional)] attrs: Attrs,
 ) -> impl IntoView {
     let mark = move || {
-        choice(
-            Mark::Switch,
+        Choice(ChoiceProps {
+            mark: Mark::Switch,
             checked,
-            Signal::from(false),
-            disabled,
-            None,
-            None,
+            disabled: disabled.into(),
             on_change,
-        )
+            ..Default::default()
+        })
         .into_any()
     };
     match label.filter(|l| !l.is_empty()) {
         None => bare(mark(), style, attrs).into_any(),
-        Some(label) => labelled(
-            label,
-            None,
+        Some(label) => Field(FieldProps {
+            label: Some(label),
             disabled,
-            Placement::Start,
-            None,
+            placement: Placement::Start,
             style,
             attrs,
-            mark,
-        )
+            children: Some(Box::new(mark)),
+            ..Default::default()
+        })
         .into_any(),
     }
 }

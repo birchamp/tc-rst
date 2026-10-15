@@ -32,6 +32,8 @@
     "callback": "{ \"$fn\": \"noop\" } — a callback that does nothing. Several components draw a control only when they are given a callback (Modal's ✕, Toast's action, Breadcrumb's links, a clickable Surface).",
     "asset": "{ \"$asset\": \"<path>\" } — a file of the tC4 checkout, by its path relative to the checkout, served as a URL.",
     "json": "Everything else is a plain JSON value. Style objects are React inline styles: camelCase properties, a bare number means px except on unitless properties (lineHeight, flex, opacity, fontWeight, zIndex). defaultValue is the initial value of an uncontrolled field.",
+    "cell": "{ \"$cell\": \"<name>\" } — the current value of a cell of the case's `cells`. A write draws the case again with the new value, as a parent's state would.",
+    "set": "{ \"$fn\": \"set\", \"cell\": \"<name>\", \"value\": <json> } or { \"$fn\": \"set\", \"cell\": \"<name>\", \"from\": \"<path>\" } — a callback that writes the cell: `value`, or the value at `from` in the callback's arguments (\"0\" is the first argument, \"0.target.checked\" the checked state of the first argument's target, \"0.id\" the id field of a table row).",
     "render": "When `render` is absent the case renders { \"$el\": component, \"props\": props }. When it is present it is the whole tree, and the component under test sits inside it with exactly `props`."
   },
   "components": [
@@ -133,7 +135,7 @@
     {
       "name": "OptionCard",
       "file": "components/forms/OptionCard.jsx",
-      "cases": 12
+      "cases": 14
     },
     {
       "name": "Radio",
@@ -143,7 +145,7 @@
     {
       "name": "RadioGroup",
       "file": "components/forms/Radio.jsx",
-      "cases": 6
+      "cases": 7
     },
     {
       "name": "SearchField",
@@ -173,7 +175,7 @@
     {
       "name": "Toggle",
       "file": "components/forms/Toggle.jsx",
-      "cases": 9
+      "cases": 10
     },
     {
       "name": "AppHeader",
@@ -223,7 +225,7 @@
     {
       "name": "Progress",
       "file": "components/primitives/Progress.jsx",
-      "cases": 18
+      "cases": 19
     },
     {
       "name": "Rule",
@@ -248,7 +250,7 @@
     {
       "name": "Table",
       "file": "components/primitives/Table.jsx",
-      "cases": 8
+      "cases": 9
     },
     {
       "name": "Text",
@@ -273,7 +275,7 @@
     {
       "name": "Drawer",
       "file": "components/surfaces/Drawer.jsx",
-      "cases": 7
+      "cases": 8
     },
     {
       "name": "HelpCard",
@@ -283,7 +285,7 @@
     {
       "name": "Modal",
       "file": "components/surfaces/Modal.jsx",
-      "cases": 7
+      "cases": 10
     },
     {
       "name": "ScripturePassage",
@@ -6163,6 +6165,94 @@
       "isolate": true
     },
     {
+      "id": "OptionCard/element-slots",
+      "component": "OptionCard",
+      "state": "element-slots",
+      "file": "components/forms/OptionCard.jsx",
+      "frame": {
+        "width": 460,
+        "height": 124,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "selected": true,
+        "title": {
+          "$el": "span",
+          "props": {
+            "dir": "rtl",
+            "children": "العربية"
+          }
+        },
+        "meta": "ar_gl",
+        "description": "unfoldingWord",
+        "trailing": {
+          "$el": "Badge",
+          "props": {
+            "tone": "accentSoft",
+            "size": "sm",
+            "children": "Current"
+          }
+        }
+      },
+      "needs": {
+        "elements": [
+          "title",
+          "trailing"
+        ]
+      },
+      "isolate": false,
+      "note": "Elements in the title and trailing slots, as tC4's ProjectSettings passes them."
+    },
+    {
+      "id": "OptionCard/element-description",
+      "component": "OptionCard",
+      "state": "element-description",
+      "file": "components/forms/OptionCard.jsx",
+      "frame": {
+        "width": 460,
+        "height": 124,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "title": "en_tn",
+        "meta": "Installed",
+        "description": {
+          "$el": "span",
+          "props": {
+            "style": {
+              "fontFamily": "var(--font-mono)",
+              "fontSize": "var(--fs-meta)"
+            },
+            "children": "3f9c2a7e41b0d58c6e2f"
+          }
+        },
+        "trailing": "→",
+        "onClick": {
+          "$fn": "noop"
+        }
+      },
+      "needs": {
+        "callbacks": [
+          "onClick"
+        ],
+        "elements": [
+          "description"
+        ]
+      },
+      "isolate": false,
+      "note": "An element in the description slot, as tC4's GuidedFix passes it."
+    },
+    {
       "id": "Radio/unchecked",
       "component": "Radio",
       "state": "unchecked",
@@ -6569,6 +6659,59 @@
         ]
       },
       "isolate": true
+    },
+    {
+      "id": "RadioGroup/stateful",
+      "component": "RadioGroup",
+      "state": "stateful",
+      "file": "components/forms/Radio.jsx",
+      "frame": {
+        "width": 380,
+        "height": 120,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "legend": "Text direction",
+        "options": [
+          {
+            "value": "ltr",
+            "label": "Left to right"
+          },
+          {
+            "value": "rtl",
+            "label": "Right to left"
+          }
+        ],
+        "value": {
+          "$cell": "dir"
+        },
+        "onChange": {
+          "$fn": "set",
+          "cell": "dir",
+          "from": "0"
+        }
+      },
+      "cells": {
+        "dir": "ltr"
+      },
+      "steps": [
+        {
+          "do": "click",
+          "target": "input[value=\"rtl\"]"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onChange"
+        ]
+      },
+      "isolate": true,
+      "note": "The owner keeps the value, so the click selects the other option."
     },
     {
       "id": "SearchField/placeholder",
@@ -8666,6 +8809,49 @@
         "checked": true
       },
       "isolate": true
+    },
+    {
+      "id": "Toggle/stateful",
+      "component": "Toggle",
+      "state": "stateful",
+      "file": "components/forms/Toggle.jsx",
+      "frame": {
+        "width": 280,
+        "height": 60,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "label": "Verse numbers",
+        "checked": {
+          "$cell": "on"
+        },
+        "onChange": {
+          "$fn": "set",
+          "cell": "on",
+          "from": "0.target.checked"
+        }
+      },
+      "cells": {
+        "on": false
+      },
+      "steps": [
+        {
+          "do": "click",
+          "target": "input"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onChange"
+        ]
+      },
+      "isolate": true,
+      "note": "The owner keeps the state, so the click turns the switch on."
     },
     {
       "id": "AppHeader/home",
@@ -14488,6 +14674,75 @@
       "isolate": true
     },
     {
+      "id": "Progress/ring-stateful",
+      "component": "Progress",
+      "state": "ring-stateful",
+      "file": "components/primitives/Progress.jsx",
+      "frame": {
+        "width": 220,
+        "height": 72,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "shape": "ring",
+        "value": {
+          "$cell": "p"
+        },
+        "size": 32
+      },
+      "render": {
+        "$el": "div",
+        "props": {
+          "style": {
+            "display": "flex",
+            "alignItems": "center",
+            "gap": 12
+          },
+          "children": [
+            {
+              "$el": "Progress",
+              "props": {
+                "shape": "ring",
+                "value": {
+                  "$cell": "p"
+                },
+                "size": 32
+              }
+            },
+            {
+              "$el": "Button",
+              "props": {
+                "variant": "secondary",
+                "size": "sm",
+                "onClick": {
+                  "$fn": "set",
+                  "cell": "p",
+                  "value": 80
+                },
+                "children": "Advance"
+              }
+            }
+          ]
+        }
+      },
+      "cells": {
+        "p": 20
+      },
+      "steps": [
+        {
+          "do": "click",
+          "target": "button"
+        }
+      ],
+      "isolate": true,
+      "note": "The button moves the value from 20 to 80 on the same ring."
+    },
+    {
       "id": "Rule/hair",
       "component": "Rule",
       "state": "hair",
@@ -18563,6 +18818,95 @@
       "isolate": true
     },
     {
+      "id": "Table/stateful",
+      "component": "Table",
+      "state": "stateful",
+      "file": "components/primitives/Table.jsx",
+      "frame": {
+        "width": 520,
+        "height": 200,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "columns": [
+          {
+            "key": "book",
+            "header": "Book"
+          },
+          {
+            "key": "code",
+            "header": "Code"
+          },
+          {
+            "key": "verses",
+            "header": "Verses",
+            "align": "numeric"
+          },
+          {
+            "key": "drafted",
+            "header": "Drafted",
+            "align": "numeric"
+          }
+        ],
+        "rows": [
+          {
+            "id": "tit",
+            "book": "Titus",
+            "code": "TIT",
+            "verses": 46,
+            "drafted": "12%"
+          },
+          {
+            "id": "jon",
+            "book": "Jonah",
+            "code": "JON",
+            "verses": 48,
+            "drafted": "4%"
+          },
+          {
+            "id": "rut",
+            "book": "Ruth",
+            "code": "RUT",
+            "verses": 85,
+            "drafted": "0%"
+          }
+        ],
+        "selectedKey": {
+          "$cell": "sel"
+        },
+        "onRowClick": {
+          "$fn": "set",
+          "cell": "sel",
+          "from": "0.id"
+        }
+      },
+      "cells": {
+        "sel": "tit"
+      },
+      "steps": [
+        {
+          "do": "focus",
+          "target": "tbody tr:nth-child(2)"
+        },
+        {
+          "do": "key",
+          "key": "Enter"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onRowClick"
+        ]
+      },
+      "isolate": true,
+      "note": "Enter selects the focused row, which keeps the focus."
+    },
+    {
       "id": "Text/role-display",
       "component": "Text",
       "state": "role-display",
@@ -20756,6 +21100,62 @@
       "isolate": true
     },
     {
+      "id": "Drawer/element-title",
+      "component": "Drawer",
+      "state": "element-title",
+      "file": "components/surfaces/Drawer.jsx",
+      "frame": {
+        "width": 720,
+        "height": 480,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "eyebrow": "Translation Academy",
+        "title": {
+          "$el": "span",
+          "props": {
+            "dir": "rtl",
+            "children": "الأسماء المجردة"
+          }
+        },
+        "onClose": {
+          "$fn": "noop"
+        },
+        "children": [
+          {
+            "$el": "Text",
+            "props": {
+              "role": "body",
+              "children": "An abstract noun refers to an attitude, quality, event or situation. These are things that cannot be seen or touched in a physical sense, such as happiness, weight, unity, friendship, health and reason."
+            }
+          },
+          {
+            "$el": "Text",
+            "props": {
+              "role": "body",
+              "children": "Some languages may express an idea with an abstract noun, and others would need a different way to express it."
+            }
+          }
+        ]
+      },
+      "needs": {
+        "callbacks": [
+          "onClose"
+        ],
+        "elements": [
+          "title",
+          "children"
+        ]
+      },
+      "isolate": true,
+      "note": "A title that is an element: the dialog is labelled \"Panel\"."
+    },
+    {
       "id": "HelpCard/note",
       "component": "HelpCard",
       "state": "note",
@@ -21528,6 +21928,276 @@
         ]
       },
       "isolate": true
+    },
+    {
+      "id": "Modal/element-subtitle",
+      "component": "Modal",
+      "state": "element-subtitle",
+      "file": "components/surfaces/Modal.jsx",
+      "frame": {
+        "width": 720,
+        "height": 520,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "title": "Add a book",
+        "subtitle": [
+          "To ",
+          {
+            "$el": "strong",
+            "props": {
+              "style": {
+                "color": "var(--uw-ocean)"
+              },
+              "children": "Equipo Ejemplo — Tito y Jonás"
+            }
+          }
+        ],
+        "closeLabel": "Close",
+        "onClose": {
+          "$fn": "noop"
+        },
+        "children": [
+          {
+            "$el": "TextField",
+            "props": {
+              "label": "Bible name",
+              "defaultValue": "Equipo Ejemplo — Tito y Jonás"
+            }
+          },
+          {
+            "$el": "Callout",
+            "props": {
+              "tone": "info",
+              "children": "Renaming arrives with a later increment."
+            }
+          }
+        ],
+        "footer": [
+          {
+            "$el": "Button",
+            "props": {
+              "variant": "secondary",
+              "children": "Cancel"
+            }
+          },
+          {
+            "$el": "Button",
+            "props": {
+              "variant": "primary",
+              "children": "Save changes"
+            }
+          }
+        ]
+      },
+      "needs": {
+        "callbacks": [
+          "onClose"
+        ],
+        "elements": [
+          "subtitle",
+          "children",
+          "footer"
+        ]
+      },
+      "isolate": true,
+      "note": "A subtitle of text and an element, as tC4's AddBook passes it."
+    },
+    {
+      "id": "Modal/nested-select",
+      "component": "Modal",
+      "state": "nested-select",
+      "file": "components/surfaces/Modal.jsx",
+      "frame": {
+        "width": 720,
+        "height": 520,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "title": "Project settings",
+        "subtitle": "Equipo Ejemplo — Tito y Jonás · 2 books",
+        "closeLabel": "Close",
+        "onClose": {
+          "$fn": "set",
+          "cell": "open",
+          "value": false
+        },
+        "children": [
+          {
+            "$el": "Select",
+            "props": {
+              "label": "Script font",
+              "options": [
+                "Noto Sans (default)",
+                "Charis SIL",
+                "Scheherazade New"
+              ],
+              "value": {
+                "$cell": "font"
+              },
+              "onChange": {
+                "$fn": "set",
+                "cell": "font",
+                "from": "0.target.value"
+              }
+            }
+          },
+          {
+            "$el": "Callout",
+            "props": {
+              "tone": "info",
+              "children": "The font applies to every book of the project."
+            }
+          }
+        ],
+        "footer": [
+          {
+            "$el": "Button",
+            "props": {
+              "variant": "secondary",
+              "children": "Cancel"
+            }
+          },
+          {
+            "$el": "Button",
+            "props": {
+              "variant": "primary",
+              "children": "Save changes"
+            }
+          }
+        ],
+        "open": {
+          "$cell": "open"
+        }
+      },
+      "cells": {
+        "open": true,
+        "font": "Charis SIL"
+      },
+      "steps": [
+        {
+          "do": "click",
+          "target": "[role=\"combobox\"]"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onClose"
+        ],
+        "elements": [
+          "children",
+          "footer"
+        ]
+      },
+      "isolate": true,
+      "note": "A Select open inside a dialog: its list is a layer one level deeper."
+    },
+    {
+      "id": "Modal/nested-menu",
+      "component": "Modal",
+      "state": "nested-menu",
+      "file": "components/surfaces/Modal.jsx",
+      "frame": {
+        "width": 720,
+        "height": 520,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "title": "Project settings",
+        "subtitle": "Equipo Ejemplo — Tito y Jonás · 2 books",
+        "closeLabel": "Close",
+        "onClose": {
+          "$fn": "set",
+          "cell": "open",
+          "value": false
+        },
+        "children": [
+          {
+            "$el": "Menu",
+            "props": {
+              "trigger": {
+                "$el": "Button",
+                "props": {
+                  "variant": "secondary",
+                  "size": "sm",
+                  "data-testid": "export",
+                  "children": "Export ▾"
+                }
+              },
+              "items": [
+                {
+                  "label": "USFM",
+                  "meta": ".usfm",
+                  "onClick": {
+                    "$fn": "noop"
+                  }
+                },
+                {
+                  "label": "Scripture Burrito",
+                  "meta": ".zip",
+                  "onClick": {
+                    "$fn": "noop"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "footer": [
+          {
+            "$el": "Button",
+            "props": {
+              "variant": "secondary",
+              "children": "Cancel"
+            }
+          },
+          {
+            "$el": "Button",
+            "props": {
+              "variant": "primary",
+              "children": "Save changes"
+            }
+          }
+        ],
+        "open": {
+          "$cell": "open"
+        }
+      },
+      "cells": {
+        "open": true
+      },
+      "steps": [
+        {
+          "do": "click",
+          "target": "[data-testid=\"export\"]"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onClose"
+        ],
+        "elements": [
+          "children",
+          "footer"
+        ]
+      },
+      "isolate": true,
+      "note": "A Menu open inside a dialog: its layer sits one level deeper."
     },
     {
       "id": "ScripturePassage/latin-lg",

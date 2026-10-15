@@ -7,7 +7,7 @@ use std::sync::Arc;
 use leptos::prelude::*;
 use serde_json::{Map, Value};
 
-use super::props::{Props, warn};
+use super::props::{Arg, Props, warn};
 use super::render::{asset_url, node};
 use crate::css::{CssValue, js_number};
 use crate::ds::*;
@@ -84,8 +84,8 @@ pub fn render(name: &str, p: Props) -> AnyView {
 
 // ---------------------------------------------------------------- reading values
 
-fn noop<T: 'static>(p: &Props, key: &str) -> Option<Callback<T>> {
-    p.callback(key).then(|| Callback::new(|_| {}))
+fn handler<T: Arg>(p: &Props, key: &str) -> Option<Callback<T>> {
+    p.handler(key)
 }
 
 fn css_value(v: Option<Value>) -> Option<CssValue> {
@@ -215,9 +215,18 @@ fn strings(p: &Props, key: &str) -> Vec<String> {
     list(p, key).iter().filter_map(text_of).collect()
 }
 
+/// A number the component takes as a signal, with React's default when absent.
+fn num_or(p: &Props, key: &str, default: f64) -> Signal<f64> {
+    let v = p.num_signal(key);
+    Signal::derive(move || v.get().unwrap_or(default))
+}
+
 /// A controlled text value: present means controlled.
 fn controlled(p: &Props, key: &str) -> Option<Signal<String>> {
-    p.str(key).map(Signal::from)
+    p.has(key).then(|| {
+        let v = p.str_signal(key);
+        Signal::derive(move || v.get().unwrap_or_default())
+    })
 }
 
 // ---------------------------------------------------------------- primitives
@@ -233,7 +242,7 @@ fn text(p: Props) -> AnyView {
         trim: p.bool("trim"),
         measure: measure(&p, "measure"),
         dir: p.str("dir"),
-        style: p.css("style"),
+        style: Signal::from(p.css("style")),
         children: p.children("children"),
         attrs: p.rest(),
     })
@@ -252,7 +261,7 @@ fn stack(p: Props) -> AnyView {
         flex: css_value(p.value("flex")),
         grow: p.flag("grow"),
         tag: p.str("as").map(Into::into),
-        on_click: noop(&p, "onClick"),
+        on_click: handler(&p, "onClick"),
         style: p.css("style"),
         children: p.children("children"),
         attrs: p.rest(),
@@ -270,10 +279,10 @@ fn surface(p: Props) -> AnyView {
         elevation: p.str("elevation").map(|e| Elevation::parse(&e)),
         pad: pad(&p, "pad"),
         interactive: p.keyword("interactive"),
-        selected: Signal::from(p.flag("selected")),
+        selected: p.flag_signal("selected"),
         disabled: p.flag("disabled"),
         on: p.keyword("on"),
-        on_click: noop(&p, "onClick"),
+        on_click: handler(&p, "onClick"),
         style: p.css("style"),
         children: p.children("children"),
         attrs: p.rest(),
@@ -289,10 +298,10 @@ fn action(p: Props) -> AnyView {
         shape: p.keyword("shape").unwrap_or_default(),
         icon_only: p.flag("iconOnly"),
         title: p.str("title"),
-        disabled: Signal::from(p.flag("disabled")),
+        disabled: p.flag_signal("disabled"),
         tag: p.str("as").map(Into::into),
         href: p.str("href"),
-        on_click: noop(&p, "onClick"),
+        on_click: handler(&p, "onClick"),
         style: Signal::from(p.css("style")),
         children: p.children("children"),
         attrs: p.rest(),
@@ -313,7 +322,7 @@ fn rule(p: Props) -> AnyView {
 
 fn progress(p: Props) -> AnyView {
     Progress(ProgressProps {
-        value: Signal::from(p.num("value")),
+        value: p.num_signal("value"),
         shape: p.keyword("shape").unwrap_or_default(),
         tone: p.keyword("tone").unwrap_or_default(),
         height: p.num("height").unwrap_or(5.0),
@@ -329,13 +338,13 @@ fn choice(p: Props) -> AnyView {
     Choice(ChoiceProps {
         mark: p.keyword("mark").unwrap_or_default(),
         size: p.keyword("size").unwrap_or_default(),
-        checked: Signal::from(p.flag("checked")),
-        indeterminate: Signal::from(p.flag("indeterminate")),
+        checked: p.flag_signal("checked"),
+        indeterminate: p.flag_signal("indeterminate"),
         disabled: MaybeProp::from(p.bool("disabled")),
         tone: p.keyword("tone").unwrap_or_default(),
         value: p.str("value"),
         name: p.str("name"),
-        on_change: noop(&p, "onChange"),
+        on_change: handler(&p, "onChange"),
         style: p.css("style"),
         attrs: p.rest(),
     })
@@ -393,9 +402,9 @@ fn input(p: Props) -> AnyView {
         value: controlled(&p, "value"),
         default_value: p.str("defaultValue"),
         placeholder: p.str("placeholder"),
-        on_change: noop(&p, "onChange"),
-        on_key_down: noop(&p, "onKeyDown"),
-        on_blur: noop(&p, "onBlur"),
+        on_change: handler(&p, "onChange"),
+        on_key_down: handler(&p, "onKeyDown"),
+        on_blur: handler(&p, "onBlur"),
         style: p.css("style"),
         input_style: p.css("inputStyle"),
         children: p.children("children"),
@@ -411,7 +420,11 @@ fn layer(p: Props) -> AnyView {
         return ().into_any();
     };
     Layer(LayerProps {
-        open: Some(Signal::from(p.bool("open").unwrap_or(true))),
+        open: Some(if p.has("open") {
+            p.flag_signal("open")
+        } else {
+            Signal::from(true)
+        }),
         level: p.keyword("level").unwrap_or_default(),
         scrim: p.str("scrim").map(|s| Scrim::parse(&s)),
         placement: p.keyword("placement").unwrap_or_default(),
@@ -425,14 +438,14 @@ fn layer(p: Props) -> AnyView {
         trap_focus: p.flag("trapFocus"),
         lock_scroll: p.flag("lockScroll"),
         restore_focus: p.bool("restoreFocus").unwrap_or(true),
-        on_dismiss: noop(&p, "onDismiss"),
+        on_dismiss: handler(&p, "onDismiss"),
         navigate: p.keyword("navigate"),
         animate: p.bool("animate").unwrap_or(true),
         scrim_attrs: Attrs::new(),
         role: p.str("role"),
         label: p.str("label"),
         labelled_by: p.str("labelledBy"),
-        on_mouse_down: noop(&p, "onMouseDown"),
+        on_mouse_down: handler(&p, "onMouseDown"),
         style: p.css("style"),
         children,
         attrs: p.rest(),
@@ -453,8 +466,8 @@ fn switcher(p: Props) -> AnyView {
         .collect();
     Switcher(SwitcherProps {
         options,
-        value: Signal::from(p.str("value")),
-        on_change: noop(&p, "onChange"),
+        value: p.str_signal("value"),
+        on_change: handler(&p, "onChange"),
         indicator: p.keyword("indicator").unwrap_or_default(),
         tone: p.keyword("tone").unwrap_or_default(),
         size: p.keyword("size").unwrap_or_default(),
@@ -468,7 +481,7 @@ fn switcher(p: Props) -> AnyView {
 }
 
 /// A table row from the case: an object of fields.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct JsonRow(Map<String, Value>);
 
 impl Record for JsonRow {
@@ -506,8 +519,8 @@ fn table(p: Props) -> AnyView {
         caption: p.str("caption"),
         caption_visible: p.flag("captionVisible"),
         row_key: None,
-        on_row_click: noop(&p, "onRowClick"),
-        selected_key: Signal::from(p.str("selectedKey")),
+        on_row_click: handler(&p, "onRowClick"),
+        selected_key: p.str_signal("selectedKey"),
         empty,
         style: p.css("style"),
         attrs: p.rest(),
@@ -533,9 +546,9 @@ fn button(p: Props) -> AnyView {
         variant: p.keyword("variant").unwrap_or_default(),
         size: p.keyword("size").unwrap_or_default(),
         shape: p.keyword("shape").unwrap_or_default(),
-        disabled: Signal::from(p.flag("disabled")),
+        disabled: p.flag_signal("disabled"),
         title: p.str("title"),
-        on_click: noop(&p, "onClick"),
+        on_click: handler(&p, "onClick"),
         style: p.css("style"),
         children: p.children("children"),
         attrs: p.rest(),
@@ -559,8 +572,8 @@ fn icon_button(p: Props) -> AnyView {
         variant: p.keyword("variant").unwrap_or_default(),
         size: p.num("size"),
         title: p.str("title"),
-        disabled: Signal::from(p.flag("disabled")),
-        on_click: noop(&p, "onClick"),
+        disabled: p.flag_signal("disabled"),
+        on_click: handler(&p, "onClick"),
         style: p.css("style"),
         children: p.children("children"),
         attrs: p.rest(),
@@ -581,7 +594,7 @@ fn overline(p: Props) -> AnyView {
 
 fn progress_bar(p: Props) -> AnyView {
     ProgressBar(ProgressBarProps {
-        value: Signal::from(p.num("value").unwrap_or(0.0)),
+        value: num_or(&p, "value", 0.0),
         tone: p.keyword("tone").unwrap_or_default(),
         height: p.num("height").unwrap_or(5.0),
         style: p.css("style"),
@@ -658,15 +671,15 @@ fn key_value_grid(p: Props) -> AnyView {
 
 fn confirm_dialog(p: Props) -> AnyView {
     let props = ConfirmDialogProps {
-        open: Signal::from(p.flag("open")),
+        open: p.flag_signal("open"),
         title: p.str("title").unwrap_or_default(),
         description: p.str("description"),
         consequence: p.str("consequence"),
         confirm_label: p.str("confirmLabel"),
         cancel_label: p.str("cancelLabel"),
         destructive: p.flag("destructive"),
-        on_confirm: noop(&p, "onConfirm"),
-        on_cancel: noop(&p, "onCancel"),
+        on_confirm: handler(&p, "onConfirm"),
+        on_cancel: handler(&p, "onCancel"),
     };
     unread(&p);
     ConfirmDialog(props).into_any()
@@ -723,9 +736,9 @@ fn toast(p: Props) -> AnyView {
     Toast(ToastProps {
         tone: p.keyword("tone").unwrap_or_default(),
         message: p.str("message").unwrap_or_default(),
-        action: noop(&p, "action"),
+        action: handler(&p, "action"),
         action_label: p.str("actionLabel"),
-        on_dismiss: noop(&p, "onDismiss"),
+        on_dismiss: handler(&p, "onDismiss"),
         dismiss_label: p.str("dismissLabel"),
         style: p.css("style"),
         attrs: p.rest(),
@@ -751,12 +764,12 @@ fn tooltip(p: Props) -> AnyView {
 
 fn checkbox(p: Props) -> AnyView {
     Checkbox(CheckboxProps {
-        checked: Signal::from(p.flag("checked")),
-        indeterminate: Signal::from(p.flag("indeterminate")),
+        checked: p.flag_signal("checked"),
+        indeterminate: p.flag_signal("indeterminate"),
         disabled: p.bool("disabled"),
         label: p.str("label"),
         description: p.str("description"),
-        on_change: noop(&p, "onChange"),
+        on_change: handler(&p, "onChange"),
         style: p.css("style"),
         attrs: p.rest(),
     })
@@ -767,7 +780,7 @@ fn drop_zone(p: Props) -> AnyView {
     DropZone(DropZoneProps {
         title: p.str("title"),
         hint: p.str("hint"),
-        on_click: noop(&p, "onClick"),
+        on_click: handler(&p, "onClick"),
         style: p.css("style"),
         attrs: p.rest(),
     })
@@ -776,10 +789,10 @@ fn drop_zone(p: Props) -> AnyView {
 
 fn filter_chip(p: Props) -> AnyView {
     FilterChip(FilterChipProps {
-        selected: Signal::from(p.flag("selected")),
+        selected: p.flag_signal("selected"),
         mark: p.str("mark"),
         tone: p.keyword("tone").unwrap_or_default(),
-        on_click: noop(&p, "onClick"),
+        on_click: handler(&p, "onClick"),
         style: p.css("style"),
         children: children_fn(&p, "children"),
         attrs: p.rest(),
@@ -789,17 +802,17 @@ fn filter_chip(p: Props) -> AnyView {
 
 fn option_card(p: Props) -> AnyView {
     OptionCard(OptionCardProps {
-        selected: Signal::from(p.flag("selected")),
+        selected: p.flag_signal("selected"),
         control: p.keyword("control").unwrap_or_default(),
-        icon: p.str("icon"),
-        title: p.str("title").unwrap_or_default(),
-        description: p.str("description"),
-        meta: p.str("meta"),
+        icon: p.content("icon"),
+        title: p.content("title"),
+        description: p.content("description"),
+        meta: p.content("meta"),
         recommended: p.flag("recommended"),
         recommended_label: p.str("recommendedLabel"),
-        trailing: p.str("trailing"),
+        trailing: p.content("trailing"),
         disabled: p.flag("disabled"),
-        on_click: noop(&p, "onClick"),
+        on_click: handler(&p, "onClick"),
         style: p.css("style"),
         attrs: p.rest(),
     })
@@ -808,11 +821,11 @@ fn option_card(p: Props) -> AnyView {
 
 fn radio(p: Props) -> AnyView {
     Radio(RadioProps {
-        checked: Signal::from(p.flag("checked")),
+        checked: p.flag_signal("checked"),
         disabled: p.bool("disabled"),
         label: p.str("label"),
         description: p.str("description"),
-        on_change: noop(&p, "onChange"),
+        on_change: handler(&p, "onChange"),
         name: p.str("name"),
         value: p.str("value"),
         style: p.css("style"),
@@ -836,8 +849,8 @@ fn radio_group(p: Props) -> AnyView {
         .collect();
     RadioGroup(RadioGroupProps {
         options,
-        value: Signal::from(p.str("value")),
-        on_change: noop(&p, "onChange"),
+        value: p.str_signal("value"),
+        on_change: handler(&p, "onChange"),
         legend: p.str("legend"),
         style: p.css("style"),
         attrs: p.rest(),
@@ -848,8 +861,8 @@ fn radio_group(p: Props) -> AnyView {
 fn search_field(p: Props) -> AnyView {
     SearchField(SearchFieldProps {
         value: controlled(&p, "value"),
-        on_change: noop(&p, "onChange"),
-        on_clear: noop(&p, "onClear"),
+        on_change: handler(&p, "onChange"),
+        on_clear: handler(&p, "onClear"),
         placeholder: p.str("placeholder"),
         clear_label: p.str("clearLabel"),
         disabled: MaybeProp::from(p.bool("disabled")),
@@ -866,8 +879,8 @@ fn select(p: Props) -> AnyView {
         options: select_options(&p, "options"),
         hint: p.str("hint"),
         id: p.str("id"),
-        value: Signal::from(p.str("value")),
-        on_change: noop(&p, "onChange"),
+        value: p.str_signal("value"),
+        on_change: handler(&p, "onChange"),
         disabled: MaybeProp::from(p.bool("disabled")),
         search_placeholder: p.str("searchPlaceholder"),
         no_matches_label: p.str("noMatchesLabel"),
@@ -885,8 +898,8 @@ fn suggest_field(p: Props) -> AnyView {
         id: p.str("id"),
         suggestions: Signal::from(select_options(&p, "suggestions")),
         value: controlled(&p, "value"),
-        on_change: noop(&p, "onChange"),
-        on_choose: noop(&p, "onChoose"),
+        on_change: handler(&p, "onChange"),
+        on_choose: handler(&p, "onChoose"),
         placeholder: p.str("placeholder"),
         style: p.css("style"),
         attrs: p.rest(),
@@ -906,8 +919,8 @@ fn text_area(p: Props) -> AnyView {
         value: controlled(&p, "value"),
         default_value: p.str("defaultValue"),
         placeholder: p.str("placeholder"),
-        on_change: noop(&p, "onChange"),
-        on_blur: noop(&p, "onBlur"),
+        on_change: handler(&p, "onChange"),
+        on_blur: handler(&p, "onBlur"),
         input_style: p.css("inputStyle"),
         style: p.css("style"),
         attrs: p.rest(),
@@ -926,9 +939,9 @@ fn text_field(p: Props) -> AnyView {
         value: controlled(&p, "value"),
         default_value: p.str("defaultValue"),
         placeholder: p.str("placeholder"),
-        on_change: noop(&p, "onChange"),
-        on_key_down: noop(&p, "onKeyDown"),
-        on_blur: noop(&p, "onBlur"),
+        on_change: handler(&p, "onChange"),
+        on_key_down: handler(&p, "onKeyDown"),
+        on_blur: handler(&p, "onBlur"),
         style: p.css("style"),
         attrs: p.rest(),
     })
@@ -937,8 +950,8 @@ fn text_field(p: Props) -> AnyView {
 
 fn toggle(p: Props) -> AnyView {
     Toggle(ToggleProps {
-        checked: Signal::from(p.flag("checked")),
-        on_change: noop(&p, "onChange"),
+        checked: p.flag_signal("checked"),
+        on_change: handler(&p, "onChange"),
         label: p.str("label"),
         disabled: p.bool("disabled"),
         style: p.css("style"),
@@ -960,8 +973,8 @@ fn app_header(p: Props) -> AnyView {
         switch_title: p.str("switchTitle"),
         center: p.children("center"),
         right: p.children("right"),
-        on_brand_click: noop(&p, "onBrandClick"),
-        on_project_click: noop(&p, "onProjectClick"),
+        on_brand_click: handler(&p, "onBrandClick"),
+        on_project_click: handler(&p, "onProjectClick"),
     };
     unread(&p);
     AppHeader(props).into_any()
@@ -1011,8 +1024,8 @@ fn menu(p: Props) -> AnyView {
         trigger,
         items,
         align: p.keyword("align").unwrap_or_default(),
-        open: p.bool("open").map(Signal::from),
-        on_open_change: noop(&p, "onOpenChange"),
+        open: p.has("open").then(|| p.flag_signal("open")),
+        on_open_change: handler(&p, "onOpenChange"),
         style: p.css("style"),
     };
     unread(&p);
@@ -1024,12 +1037,12 @@ fn menu(p: Props) -> AnyView {
 fn book_tile(p: Props) -> AnyView {
     BookTile(BookTileProps {
         name: p.str("name").unwrap_or_default(),
-        percent: Signal::from(p.num("percent").unwrap_or(0.0)),
+        percent: num_or(&p, "percent", 0.0),
         meta: p.str("meta"),
         meta_title: p.str("metaTitle"),
         layout: p.keyword("layout").unwrap_or_default(),
-        active: Signal::from(p.flag("active")),
-        on_click: noop(&p, "onClick"),
+        active: p.flag_signal("active"),
+        on_click: handler(&p, "onClick"),
         style: p.css("style"),
         children: p.children("children"),
         attrs: p.rest(),
@@ -1052,7 +1065,7 @@ fn card(p: Props) -> AnyView {
         variant: p.keyword("variant").unwrap_or_default(),
         interactive: p.flag("interactive"),
         padding: pad(&p, "padding"),
-        on_click: noop(&p, "onClick"),
+        on_click: handler(&p, "onClick"),
         style: p.css("style"),
         children: p.children("children"),
         attrs: p.rest(),
@@ -1062,12 +1075,12 @@ fn card(p: Props) -> AnyView {
 
 fn drawer(p: Props) -> AnyView {
     Drawer(DrawerProps {
-        open: p.bool("open").map(Signal::from),
-        eyebrow: p.str("eyebrow"),
-        title: p.str("title"),
+        open: p.has("open").then(|| p.flag_signal("open")),
+        eyebrow: p.content("eyebrow"),
+        title: p.content("title"),
         title_dir: p.str("titleDir"),
         width: css_value(p.value("width")),
-        on_close: noop(&p, "onClose"),
+        on_close: handler(&p, "onClose"),
         close_label: p.str("closeLabel"),
         children: children_fn(&p, "children"),
         attrs: p.rest(),
@@ -1081,10 +1094,10 @@ fn help_card(p: Props) -> AnyView {
         verse: p.str("verse"),
         title: p.str("title"),
         body: p.children("body"),
-        active: Signal::from(p.flag("active")),
+        active: p.flag_signal("active"),
         action_label: p.str("actionLabel"),
-        on_action: noop(&p, "onAction"),
-        on_click: noop(&p, "onClick"),
+        on_action: handler(&p, "onAction"),
+        on_click: handler(&p, "onClick"),
         style: p.css("style"),
         attrs: p.rest(),
     })
@@ -1095,12 +1108,12 @@ fn modal(p: Props) -> AnyView {
     // `zIndex` is accepted for old call sites and ignored, as in tC4.
     let _ = p.value("zIndex");
     Modal(ModalProps {
-        open: p.bool("open").map(Signal::from),
-        title: p.str("title"),
-        subtitle: p.str("subtitle"),
+        open: p.has("open").then(|| p.flag_signal("open")),
+        title: p.content("title"),
+        subtitle: p.content("subtitle"),
         width: css_value(p.value("width")),
         close_label: p.str("closeLabel"),
-        on_close: noop(&p, "onClose"),
+        on_close: handler(&p, "onClose"),
         footer: children_fn(&p, "footer"),
         children: children_fn(&p, "children"),
         attrs: p.rest(),
@@ -1137,7 +1150,7 @@ fn verse_marker(p: Props) -> AnyView {
         n: p.num("n").map_or(0, |n| n as u32),
         size: p.num("size").unwrap_or(32.0),
         state: p.keyword("state").unwrap_or_default(),
-        on_pick_up: noop(&p, "onPickUp"),
+        on_pick_up: handler(&p, "onPickUp"),
         label: p.str("label"),
         style: p.css("style"),
         attrs: p.rest(),

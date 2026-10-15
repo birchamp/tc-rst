@@ -44,8 +44,11 @@ pub fn Progress(
         let circ = 2.0 * std::f64::consts::PI * r;
         let outer =
             css! { "display": "inline-flex", "align-items": "center", "gap": 9 }.merge(&style);
-        let mark = move || match pct() {
-            None => {
+        // Only the switch between a known and an unknown end draws a new node; a new value
+        // moves the arc on the same circle, so its stroke-dashoffset transition runs.
+        let known = Memo::new(move |_| pct().is_some());
+        let mark = move || match known.get() {
+            false => {
                 let s = css! {
                     "width": size,
                     "height": size,
@@ -58,8 +61,9 @@ pub fn Progress(
                 };
                 view! { <span {..aria()} style=s.to_style()></span> }.into_any()
             }
-            Some(p) => {
+            true => {
                 let c = js_number(size / 2.0);
+                let offset = move || js_number(circ * (1.0 - pct().unwrap_or(0.0) / 100.0));
                 view! {
                     <svg
                         {..aria()}
@@ -85,7 +89,7 @@ pub fn Progress(
                             stroke-width=js_number(stroke)
                             stroke-linecap="round"
                             stroke-dasharray=js_number(circ)
-                            stroke-dashoffset=js_number(circ * (1.0 - p / 100.0))
+                            stroke-dashoffset=offset
                             style="transition: stroke-dashoffset var(--dur-enter) var(--ease-standard);"
                         ></circle>
                     </svg>

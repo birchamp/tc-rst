@@ -65,13 +65,7 @@ pub fn ConfirmDialog(
     });
     crate::ds::Layer(crate::ds::LayerProps {
         open: Some(open),
-        level: Level::Overlay,
         scrim: Some(Scrim::Token(ScrimToken::Modal)),
-        placement: LayerPlacement::Center,
-        anchor_to: None,
-        offset: 6.0,
-        align: LayerAlign::Start,
-        side: Side::Bottom,
         dismiss: Dismiss {
             scrim: false,
             escape: true,
@@ -79,18 +73,10 @@ pub fn ConfirmDialog(
         },
         trap_focus: true,
         lock_scroll: true,
-        restore_focus: true,
         on_dismiss: dismiss,
-        navigate: None,
-        animate: true,
-        scrim_attrs: Attrs::new(),
         role: Some("alertdialog".into()),
-        label: None,
         labelled_by: Some(label_id),
-        on_mouse_down: None,
-        style: Css::new(),
-        attrs: Attrs::new(),
-        children,
+        ..crate::ds::LayerProps::new(children)
     })
 }
 
@@ -105,17 +91,9 @@ pub(crate) fn action(
     crate::ds::Action(crate::ds::ActionProps {
         weight,
         tone: Some(tone),
-        size: Size::Md,
-        shape: Default::default(),
-        icon_only: false,
-        title: None,
-        disabled: Signal::from(false),
-        tag: None,
-        href: None,
         on_click,
-        style: Signal::from(Css::new()),
-        attrs: Attrs::new(),
         children: Some(Box::new(move || label.into_any())),
+        ..Default::default()
     })
 }
 
@@ -188,11 +166,11 @@ pub fn Spinner(
         value: Signal::from(None),
         shape: ProgressShape::Ring,
         tone,
-        height: 5.0,
         size,
         label,
         style,
         attrs,
+        ..Default::default()
     })
 }
 
@@ -220,16 +198,9 @@ pub fn Toast(
             weight: Weight::Text,
             tone: Some(t),
             size: Size::Sm,
-            shape: Default::default(),
-            icon_only: false,
-            title: None,
-            disabled: Signal::from(false),
-            tag: None,
-            href: None,
             on_click: Some(cb),
-            style: Signal::from(Css::new()),
-            attrs: Attrs::new(),
             children: action_label.map(|l| Box::new(move || l.into_any()) as Children),
+            ..Default::default()
         })
     });
     let dismiss_view = on_dismiss.map(|cb| {
@@ -275,13 +246,10 @@ pub(crate) fn close_button(
         shape,
         icon_only: true,
         title: Some(title),
-        disabled: Signal::from(false),
-        tag: None,
-        href: None,
         on_click: Some(on_click),
         style: Signal::from(style),
-        attrs: Attrs::new(),
         children: Some(Box::new(|| "✕".into_any())),
+        ..Default::default()
     })
 }
 
@@ -325,27 +293,15 @@ pub fn Tooltip(
         {crate::ds::Layer(crate::ds::LayerProps {
             open: Some(on.into()),
             level: Level::Tooltip,
-            scrim: None,
             placement: LayerPlacement::Anchor,
             anchor_to: Some(anchor_to),
             offset: 7.0,
             align: LayerAlign::Center,
             side: placement,
             dismiss: Dismiss::NONE,
-            trap_focus: false,
-            lock_scroll: false,
             restore_focus: false,
-            on_dismiss: None,
-            navigate: None,
-            animate: true,
-            scrim_attrs: Attrs::new(),
             role: Some("tooltip".into()),
-            label: None,
-            labelled_by: None,
-            on_mouse_down: None,
-            style: Css::new(),
-            attrs: Attrs::new(),
-            children: content,
+            ..crate::ds::LayerProps::new(content)
         })}
     }
 }

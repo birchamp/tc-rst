@@ -8,10 +8,7 @@ use leptos::ev::{KeyboardEvent, MouseEvent};
 use leptos::prelude::*;
 
 use super::select::{SelectOption, row};
-use crate::ds::{
-    Anchor, Attrs, Css, Dismiss, LayerAlign, LayerPlacement, Level, Placement, Side, Size,
-    use_field,
-};
+use crate::ds::{Anchor, Attrs, Css, Dismiss, LayerPlacement, Level, use_field};
 use crate::tokens::{Corner, Edge, Fill, Shadow};
 
 /// Labelled text input with a list of suggestions under it. `suggestions` are rows for the
@@ -39,17 +36,10 @@ pub fn SuggestField(
     crate::ds::Field(crate::ds::FieldProps {
         label,
         hint,
-        error: None,
-        required: false,
-        optional: false,
-        disabled: None,
-        size: Size::Md,
-        placement: Placement::Above,
         id,
-        name: None,
         style,
-        attrs: Attrs::new(),
         children: Some(Box::new(suggest)),
+        ..Default::default()
     })
 }
 
@@ -171,16 +161,7 @@ fn suggest(
         ]
     };
     let input = crate::ds::Input(crate::ds::InputProps {
-        tag: None,
-        variant: Default::default(),
-        size: None,
-        leading: None,
-        trailing: None,
-        rows: 3,
-        invalid: MaybeProp::default(),
-        disabled: MaybeProp::default(),
         value,
-        default_value: None,
         placeholder,
         on_change: Some(Callback::new(move |e: web_sys::Event| {
             if let Some(cb) = on_change {
@@ -191,34 +172,36 @@ fn suggest(
         })),
         on_key_down: Some(Callback::new(on_key_down)),
         on_blur: Some(Callback::new(move |_| close())),
-        style: Css::new(),
-        input_style: Css::new(),
         attrs: native,
         live_attrs: live,
-        children: None,
+        ..Default::default()
     });
 
     let anchor: Anchor = Callback::new(move |_| boxed.get_untracked().map(Into::into));
+    // Rows keyed by value, as React keys them: a row stays the same node while the list
+    // around it changes.
     let rows = {
         let opt_id = opt_id.clone();
         move || {
-            let h = hi.get();
-            suggestions
-                .get()
-                .into_iter()
-                .enumerate()
-                .map(|(i, o)| {
-                    let chosen = o.clone();
-                    row(
-                        o,
-                        opt_id(i),
-                        false,
-                        i as i64 == h,
-                        move || choose(chosen.clone()),
-                        None,
-                    )
-                })
-                .collect_view()
+            let opt_id = opt_id.clone();
+            view! {
+                <For
+                    each=move || suggestions.get()
+                    key=|o| o.value.clone()
+                    children=move |o| {
+                        let v = o.value.clone();
+                        let pos = Memo::new(move |_| {
+                            suggestions.with(|s| s.iter().position(|x| x.value == v))
+                        });
+                        let opt_id = opt_id.clone();
+                        let id = Signal::derive(move || opt_id(pos.get().unwrap_or(0)));
+                        let highlighted =
+                            Signal::derive(move || pos.get().is_some_and(|p| p as i64 == hi.get()));
+                        let chosen = o.clone();
+                        row(o, id, Signal::from(false), highlighted, move || choose(chosen.clone()), None)
+                    }
+                />
+            }
         }
     };
     let rows: Arc<dyn Fn() -> AnyView + Send + Sync> = Arc::new(move || rows().into_any());
@@ -274,32 +257,19 @@ fn suggest(
             crate::ds::Layer(crate::ds::LayerProps {
                 open: Some(Signal::from(true)),
                 level: Level::Popover,
-                scrim: None,
                 placement: LayerPlacement::Anchor,
                 anchor_to: Some(anchor),
-                offset: 6.0,
-                align: LayerAlign::Start,
-                side: Side::Bottom,
                 dismiss: Dismiss {
                     scrim: false,
                     escape: true,
                     outside: true,
                 },
-                trap_focus: false,
-                lock_scroll: false,
                 restore_focus: false,
                 on_dismiss: Some(Callback::new(move |_| close())),
-                navigate: None,
                 animate: false,
-                scrim_attrs: Attrs::new(),
-                role: None,
-                label: None,
-                labelled_by: None,
                 // A press in the list keeps the focus in the field.
                 on_mouse_down: Some(Callback::new(|e: MouseEvent| e.prevent_default())),
-                style: Css::new(),
-                attrs: Attrs::new(),
-                children: panel_children.clone(),
+                ..crate::ds::LayerProps::new(panel_children.clone())
             })
         })
     };

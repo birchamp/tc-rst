@@ -153,7 +153,6 @@ pub const GUTTER: f64 = 8.0;
 /// `place()` in Layer.jsx: the panel's position beside its anchor, flipped to the opposite
 /// side when it does not fit and the other side does, then kept on screen. `side` and `align`
 /// are logical and resolved against the anchor's direction.
-#[allow(clippy::too_many_arguments)]
 pub fn place(
     rect: Rect,
     panel: (f64, f64),

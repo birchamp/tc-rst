@@ -10,8 +10,9 @@ use leptos::prelude::*;
 use crate::css::CssValue;
 use crate::ds::{Attrs, ColumnAlign, Css, Text, TextRole, spread};
 
-/// A row of a Table: its fields by column key, and its identity.
-pub trait Record: Clone + Send + Sync + 'static {
+/// A row of a Table: its fields by column key, and its identity. Equality tells a row whose
+/// data changed from one that only moved.
+pub trait Record: Clone + PartialEq + Send + Sync + 'static {
     /// The text of the field `key`, for the default cell.
     fn field(&self, key: &str) -> Option<String>;
     /// The row's key when the table has no `row_key`: its `id` field.
@@ -146,83 +147,110 @@ pub fn Table<R: Record>(
         })
         .collect_view();
     let columns = StoredValue::new(columns);
-    let row_key = StoredValue::new(row_key);
-    let body = move || {
-        let rows = rows.get();
-        let ncols = columns.with_value(Vec::len);
-        if rows.is_empty()
-            && let Some(empty) = empty.clone()
-        {
-            return view! {
-                    <tr>
-                        <td colspan=ncols.to_string() style="padding: 22px 12px; text-align: center;">{empty.run()}</td>
-                    </tr>
-                }
-                .into_any();
-        }
-        let selected = selected_key.get();
-        rows.into_iter()
-            .enumerate()
-            .map(|(i, r)| {
-                let k = row_key
-                    .with_value(|f| f.as_ref().map(|f| f(&r, i)))
-                    .or_else(|| r.id())
-                    .unwrap_or_else(|| i.to_string());
-                let on = selected.as_ref() == Some(&k);
-                let clickable = on_row_click.is_some();
-                let mut s = Css::new();
-                s.set_opt("cursor", clickable.then_some("pointer"));
-                s.set_opt("background", on.then_some("var(--tone-soft)"));
-                let cells = columns.with_value(|cols| {
-                    cols.iter()
-                        .enumerate()
-                        .map(|(ci, c)| {
-                            let content = match &c.cell {
-                                Some(cell) => cell(&r, i),
+    // Each row as drawn: its key, its index and its record. Rows are keyed as React keys them,
+    // so a row whose key stays keeps its `<tr>` (and the keyboard focus on it) while the
+    // selection or the data around it changes.
+    let keyed = Memo::new(move |_| {
+        rows.with(|rows| {
+            rows.iter()
+                .enumerate()
+                .map(|(i, r)| {
+                    let k = row_key
+                        .as_ref()
+                        .map(|f| f(r, i))
+                        .or_else(|| r.id())
+                        .unwrap_or_else(|| i.to_string());
+                    (k, i, r.clone())
+                })
+                .collect::<Vec<_>>()
+        })
+    });
+    let has_empty = empty.is_some();
+    let show_empty = Memo::new(move |_| has_empty && keyed.with(Vec::is_empty));
+    let row = move |k: String| {
+        let current = {
+            let k = k.clone();
+            Memo::new(move |_| {
+                keyed.with(|rows| {
+                    rows.iter()
+                        .find(|(rk, _, _)| *rk == k)
+                        .map(|(_, i, r)| (*i, r.clone()))
+                })
+            })
+        };
+        let on = Memo::new(move |_| selected_key.with(|s| s.as_ref() == Some(&k)));
+        let clickable = on_row_click.is_some();
+        let style = move || {
+            let mut s = Css::new();
+            s.set_opt("cursor", clickable.then_some("pointer"));
+            s.set_opt("background", on.get().then_some("var(--tone-soft)"));
+            s.to_style()
+        };
+        let activate = move || {
+            if let (Some(cb), Some((i, r))) = (on_row_click, current.get_untracked()) {
+                cb.run((r, i));
+            }
+        };
+        let cells = columns.with_value(|cols| {
+            cols.iter()
+                .enumerate()
+                .map(|(ci, c)| {
+                    let col = c.clone();
+                    let content = move || {
+                        current.with(|cur| {
+                            cur.as_ref().map(|(i, r)| match &col.cell {
+                                Some(cell) => cell(r, *i),
                                 None => {
-                                    let text = r.field(&c.key);
+                                    let text = r.field(&col.key);
                                     view! { <Text role=TextRole::Ui>{text}</Text> }.into_any()
                                 }
-                            };
-                            if ci == 0 && c.row_header {
-                                let s =
-                                    cell_css(c, false).merge(&css! { "font-weight": "inherit" });
-                                view! { <th scope="row" style=s.to_style()>{content}</th> }
-                                    .into_any()
-                            } else {
-                                view! { <td style=cell_css(c, false).to_style()>{content}</td> }
-                                    .into_any()
-                            }
+                            })
                         })
-                        .collect_view()
-                });
-                let (rc, rk) = (r.clone(), r);
-                view! {
-                    <tr
-                        data-i=clickable.then_some("row")
-                        data-selected=on.then_some("true")
-                        aria-selected=selected.as_ref().map(|_| if on { "true" } else { "false" })
-                        tabindex=clickable.then_some("0")
-                        on:click=move |_| {
-                            if let Some(cb) = on_row_click {
-                                cb.run((rc.clone(), i));
-                            }
-                        }
-                        on:keydown=move |e: KeyboardEvent| {
-                            if let Some(cb) = on_row_click
-                                && (e.key() == "Enter" || e.key() == " ") {
-                                    e.prevent_default();
-                                    cb.run((rk.clone(), i));
-                                }
-                        }
-                        style=s.to_style()
-                    >
-                        {cells}
-                    </tr>
+                    };
+                    if ci == 0 && c.row_header {
+                        let s = cell_css(c, false).merge(&css! { "font-weight": "inherit" });
+                        view! { <th scope="row" style=s.to_style()>{content}</th> }.into_any()
+                    } else {
+                        view! { <td style=cell_css(c, false).to_style()>{content}</td> }.into_any()
+                    }
+                })
+                .collect_view()
+        });
+        view! {
+            <tr
+                data-i=clickable.then_some("row")
+                data-selected=move || on.get().then_some("true")
+                aria-selected=move || {
+                    selected_key.with(|s| s.as_ref().map(|_| if on.get() { "true" } else { "false" }))
                 }
-            })
-            .collect_view()
+                tabindex=clickable.then_some("0")
+                on:click=move |_| activate()
+                on:keydown=move |e: KeyboardEvent| {
+                    if clickable && (e.key() == "Enter" || e.key() == " ") {
+                        e.prevent_default();
+                        activate();
+                    }
+                }
+                style=style
+            >
+                {cells}
+            </tr>
+        }
+    };
+    let body = move || {
+        if show_empty.get() {
+            let ncols = columns.with_value(Vec::len);
+            let empty = empty.clone().map(|e| e.run());
+            view! {
+                <tr>
+                    <td colspan=ncols.to_string() style="padding: 22px 12px; text-align: center;">{empty}</td>
+                </tr>
+            }
             .into_any()
+        } else {
+            view! { <For each=move || keyed.get() key=|(k, _, _)| k.clone() children=move |(k, _, _)| row(k) /> }
+                .into_any()
+        }
     };
     view! {
         <table style=table_style.to_style() {..spread(&attrs)}>

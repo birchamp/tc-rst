@@ -4,6 +4,12 @@
 export const el = (name, props = {}) => ({ $el: name, props });
 /** A callback that does nothing. Some components draw a control only when one is passed. */
 export const noop = { $fn: 'noop' };
+/** The current value of the case's cell `name` (the case option `cells` holds the first). */
+export const cell = (name) => ({ $cell: name });
+/** A callback that writes cell `name`: the value at `from` in its arguments ("0" is the first). */
+export const set = (name, from) => ({ $fn: 'set', cell: name, from });
+/** A callback that writes `value` into cell `name`. */
+export const setTo = (name, value) => ({ $fn: 'set', cell: name, value });
 /** A file of the tC4 checkout, by its path there. */
 export const asset = (path) => ({ $asset: path });
 
@@ -30,7 +36,8 @@ export const row = (children, gap = 12) => el('div', {
 /**
  * Cases of one component. `defaults` holds `frame` ({ width, height }) and any other case
  * option; each entry is [state, props, options?]. Options: frame, document, steps, wrap (a
- * function from the component's node to the rendered tree), note.
+ * function from the component's node to the rendered tree), cells (the first value of each
+ * cell that `cell` reads and `set` writes, which is how a case owns state), note.
  */
 export function group(component, defaults, entries) {
   return entries.map(([state, props, opts = {}]) => ({

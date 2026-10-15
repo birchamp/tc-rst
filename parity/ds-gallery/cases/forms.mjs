@@ -1,6 +1,6 @@
 // components/forms: Checkbox, DropZone, FilterChip, OptionCard, Radio + RadioGroup, SearchField,
 // Select, SuggestField, TextArea, TextField, Toggle.
-import { noop, group, focus, hover, click, key, AR, T } from './lib.mjs';
+import { el, noop, cell, set, group, focus, hover, click, key, AR, T } from './lib.mjs';
 
 const FONTS = ['Noto Sans (default)', 'Charis SIL', 'Scheherazade New', 'Padauk — Myanmar', 'Awami Nastaliq'];
 const BOOKS = [
@@ -85,6 +85,10 @@ export default [
     ['focus-visible', { title: 'English', description: 'unfoldingWord', onClick: noop }, { steps: [focus('button')] }],
     ['long-text', { control: 'radio', title: 'Create the project from a translationCore 3 backup with its check decisions', description: 'Every alignment and check decision is carried over. Comments and bookmarks come too, and invalidated checks stay marked for review.', recommended: true }, { frame: { width: 380, height: 192 } }],
     ['rtl', { control: 'radio', title: 'العربية', description: 'unfoldingWord · ar_gl', selected: true, recommended: true, recommendedLabel: 'موصى به' }, { document: AR }],
+    ['element-slots', { selected: true, title: el('span', { dir: 'rtl', children: 'العربية' }), meta: 'ar_gl', description: 'unfoldingWord', trailing: el('Badge', { tone: 'accentSoft', size: 'sm', children: 'Current' }) },
+      { note: 'Elements in the title and trailing slots, as tC4\'s ProjectSettings passes them.' }],
+    ['element-description', { title: 'en_tn', meta: 'Installed', description: el('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-meta)' }, children: '3f9c2a7e41b0d58c6e2f' }), trailing: '→', onClick: noop },
+      { note: 'An element in the description slot, as tC4\'s GuidedFix passes it.' }],
   ]),
 
   ...group('Radio', { frame: { width: 64, height: 56 } }, [
@@ -105,6 +109,8 @@ export default [
     ['no-legend', { 'aria-label': 'Paper', options: ['A4', 'Letter'], value: 'Letter', onChange: noop }, { frame: { height: 96 } }],
     ['focus-visible', { legend: 'Text direction', options: DIRECTIONS.map(({ value, label }) => ({ value, label })), value: 'ltr', onChange: noop }, { frame: { height: 120 }, steps: [focus('input[value="ltr"]')] }],
     ['rtl', { legend: 'اتجاه النص', options: [{ value: 'ltr', label: 'من اليسار إلى اليمين' }, { value: 'rtl', label: 'من اليمين إلى اليسار' }], value: 'rtl', onChange: noop }, { document: AR, frame: { height: 120 } }],
+    ['stateful', { legend: 'Text direction', options: DIRECTIONS.map(({ value, label }) => ({ value, label })), value: cell('dir'), onChange: set('dir', '0') },
+      { frame: { height: 120 }, cells: { dir: 'ltr' }, steps: [click('input[value="rtl"]')], note: 'The owner keeps the value, so the click selects the other option.' }],
   ]),
 
   ...group('SearchField', { frame: { width: 320, height: 68 } }, [
@@ -183,5 +189,7 @@ export default [
     ['label-disabled', { label: 'Verse numbers', disabled: true, checked: true }, { frame: { width: 280 } }],
     ['focus-visible', { label: 'Verse numbers', onChange: noop }, { frame: { width: 280 }, steps: [focus('input')] }],
     ['rtl', { label: 'أرقام الآيات', checked: true }, { document: AR, frame: { width: 280 } }],
+    ['stateful', { label: 'Verse numbers', checked: cell('on'), onChange: set('on', '0.target.checked') },
+      { frame: { width: 280 }, cells: { on: false }, steps: [click('input')], note: 'The owner keeps the state, so the click turns the switch on.' }],
   ]),
 ];

@@ -1,8 +1,13 @@
 //! Reading a case's JSON props into the components' typed props. This is the gallery's
 //! boundary: a value of the wrong type is ignored with a console warning, as an unknown
 //! keyword is in tC4.
+//!
+//! A case can own state, as a screen does: its `cells` are signals, `{ "$cell": name }` reads
+//! one and `{ "$fn": "set", … }` writes one, so a prop the component takes as a signal follows
+//! the write on the nodes already drawn.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 use leptos::prelude::*;
 use serde_json::{Map, Value};
@@ -25,6 +30,95 @@ pub fn warn(msg: &str) {
     web_sys::console::warn_1(&msg.into());
 }
 
+thread_local! {
+    /// The cells of the case on the page.
+    static CELLS: RefCell<HashMap<String, RwSignal<Value>>> = RefCell::new(HashMap::new());
+}
+
+/// Makes the case's `cells` (an object of first values) the cells the tree reads and writes.
+pub fn init_cells(cells: &Value) {
+    let map = cells
+        .as_object()
+        .map(|m| {
+            m.iter()
+                .map(|(k, v)| (k.clone(), RwSignal::new(v.clone())))
+                .collect()
+        })
+        .unwrap_or_default();
+    CELLS.with(|c| *c.borrow_mut() = map);
+}
+
+fn cell_named(name: &str) -> Option<RwSignal<Value>> {
+    let cell = CELLS.with(|c| c.borrow().get(name).copied());
+    if cell.is_none() {
+        warn(&format!("gallery: no cell {name}"));
+    }
+    cell
+}
+
+/// The cell a `{ "$cell": name }` names.
+fn cell_of(v: &Value) -> Option<RwSignal<Value>> {
+    cell_named(v.get("$cell")?.as_str()?)
+}
+
+/// A callback's argument, as the value a `{ "$fn": "set", "from": path }` takes from it. The
+/// path starts with the argument's position ("0", "0.target.checked", "0.id", "1").
+pub trait Arg: 'static {
+    fn pick(&self, path: &str) -> Option<Value> {
+        let _ = path;
+        None
+    }
+}
+
+impl Arg for () {}
+impl Arg for leptos::ev::MouseEvent {}
+impl Arg for leptos::ev::KeyboardEvent {}
+impl Arg for leptos::ev::FocusEvent {}
+impl Arg for crate::ds::DismissReason {}
+impl Arg for crate::ds::SelectOption {
+    fn pick(&self, path: &str) -> Option<Value> {
+        (path == "0.value").then(|| Value::String(self.value.clone()))
+    }
+}
+
+/// The value a RadioGroup or a Select hands over. Select hands React `{ target: { value } }`,
+/// as the native shim did, and the port the value itself.
+impl Arg for String {
+    fn pick(&self, path: &str) -> Option<Value> {
+        matches!(path, "0" | "0.target.value").then(|| Value::String(self.clone()))
+    }
+}
+
+impl Arg for bool {
+    fn pick(&self, path: &str) -> Option<Value> {
+        (path == "0").then_some(Value::Bool(*self))
+    }
+}
+
+impl Arg for web_sys::Event {
+    fn pick(&self, path: &str) -> Option<Value> {
+        use wasm_bindgen::JsCast;
+        let input = self
+            .target()?
+            .dyn_into::<web_sys::HtmlInputElement>()
+            .ok()?;
+        match path {
+            "0.target.checked" => Some(Value::Bool(input.checked())),
+            "0.target.value" => Some(Value::String(input.value())),
+            _ => None,
+        }
+    }
+}
+
+impl<R: crate::ds::Record> Arg for (R, usize) {
+    fn pick(&self, path: &str) -> Option<Value> {
+        match path.strip_prefix("0.") {
+            Some(field) => self.0.field(field).map(Value::String),
+            None => (path == "1").then(|| Value::from(self.1)),
+        }
+    }
+}
+
 impl Props {
     pub fn new(name: &str, map: Map<String, Value>) -> Self {
         Self {
@@ -34,14 +128,87 @@ impl Props {
         }
     }
 
-    fn take(&self, key: &str) -> Option<&Value> {
+    /// The prop as written in the tree, `$cell` and all.
+    fn raw(&self, key: &str) -> Option<&Value> {
         self.read.borrow_mut().push(key.to_string());
         self.map.get(key).filter(|v| !v.is_null())
     }
 
+    /// The prop's value now: a cell reads as its current value.
+    fn take(&self, key: &str) -> Option<Value> {
+        let v = self.raw(key)?;
+        match cell_of(v) {
+            Some(cell) => Some(cell.get_untracked()).filter(|v| !v.is_null()),
+            None => Some(v.clone()),
+        }
+    }
+
+    /// A prop the component takes as a signal: a cell follows its writes, anything else stays.
+    fn live<T: Send + Sync + Clone + 'static>(
+        &self,
+        key: &str,
+        read: impl Fn(&Value) -> Option<T> + Send + Sync + 'static,
+    ) -> Signal<Option<T>> {
+        match self.raw(key) {
+            Some(v) => match cell_of(v) {
+                Some(cell) => Signal::derive(move || cell.with(&read)),
+                None => Signal::from(read(v)),
+            },
+            None => Signal::from(None),
+        }
+    }
+
+    /// A boolean the component takes as a signal; absent is false.
+    pub fn flag_signal(&self, key: &str) -> Signal<bool> {
+        let s = self.live(key, Value::as_bool);
+        Signal::derive(move || s.get().unwrap_or(false))
+    }
+
+    /// A string the component takes as a signal.
+    pub fn str_signal(&self, key: &str) -> Signal<Option<String>> {
+        self.live(key, |v| match v {
+            Value::String(s) => Some(s.clone()),
+            Value::Number(n) => n.as_f64().map(js_number),
+            _ => None,
+        })
+    }
+
+    /// A number the component takes as a signal.
+    pub fn num_signal(&self, key: &str) -> Signal<Option<f64>> {
+        self.live(key, Value::as_f64)
+    }
+
+    /// Whether the prop is present, as a cell or a value.
+    pub fn has(&self, key: &str) -> bool {
+        self.map.get(key).is_some_and(|v| !v.is_null())
+    }
+
+    /// A callback prop: `{ "$fn": "noop" }` does nothing, `{ "$fn": "set", … }` writes a cell.
+    pub fn handler<T: Arg>(&self, key: &str) -> Option<Callback<T>> {
+        let v = self.raw(key)?;
+        let f = v.get("$fn")?.as_str()?;
+        if f != "set" {
+            return Some(Callback::new(|_| {}));
+        }
+        let Some(cell) = v.get("cell").and_then(Value::as_str).and_then(cell_named) else {
+            return Some(Callback::new(|_| {}));
+        };
+        let fixed = v.get("value").cloned();
+        let from = v.get("from").and_then(Value::as_str).map(String::from);
+        Some(Callback::new(move |arg: T| {
+            let next = fixed
+                .clone()
+                .or_else(|| from.as_deref().and_then(|p| arg.pick(p)));
+            match next {
+                Some(next) => cell.set(next),
+                None => warn("gallery: a set callback found no value in its arguments"),
+            }
+        }))
+    }
+
     pub fn str(&self, key: &str) -> Option<String> {
         match self.take(key)? {
-            Value::String(s) => Some(s.clone()),
+            Value::String(s) => Some(s),
             Value::Number(n) => n.as_f64().map(js_number),
             other => {
                 warn(&format!("{}: {key} is not a string: {other}", self.name));
@@ -63,7 +230,7 @@ impl Props {
     /// A boolean prop. JSON `true`/`false`; anything else counts as absent.
     pub fn bool(&self, key: &str) -> Option<bool> {
         match self.take(key)? {
-            Value::Bool(b) => Some(*b),
+            Value::Bool(b) => Some(b),
             other => {
                 warn(&format!("{}: {key} is not a boolean: {other}", self.name));
                 None
@@ -86,22 +253,26 @@ impl Props {
     }
 
     pub fn value(&self, key: &str) -> Option<Value> {
-        self.take(key).cloned()
-    }
-
-    /// Whether the prop holds a callback (`{ "$fn": … }`).
-    pub fn callback(&self, key: &str) -> bool {
-        self.take(key).is_some_and(|v| v.get("$fn").is_some())
+        self.take(key)
     }
 
     /// A React style object.
     pub fn css(&self, key: &str) -> Css {
-        self.take(key).map(style_object).unwrap_or_default()
+        self.take(key).map(|v| style_object(&v)).unwrap_or_default()
+    }
+
+    /// A slot of text or elements: a string or a number is text, anything else is drawn.
+    pub fn content(&self, key: &str) -> Option<crate::ds::Content> {
+        match self.take(key)? {
+            Value::String(s) => Some(s.into()),
+            Value::Number(n) => Some(js_number(n.as_f64().unwrap_or(0.0)).into()),
+            v => Some((move || node(&v)).into()),
+        }
     }
 
     /// Elements, rendered when the component calls for them.
     pub fn children(&self, key: &str) -> Option<Children> {
-        let v = self.take(key)?.clone();
+        let v = self.take(key)?;
         Some(Box::new(move || node(&v)))
     }
 

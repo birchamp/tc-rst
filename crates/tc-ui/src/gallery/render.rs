@@ -37,6 +37,7 @@ pub fn frame(case: Value, mounted: RwSignal<bool>, inline: bool) -> impl IntoVie
         "box-sizing": "border-box",
     }
     .to_style();
+    super::props::init_cells(&case["cells"]);
     let tree = case.get("render").cloned().unwrap_or_else(|| {
         let mut m = Map::new();
         m.insert("$el".into(), case["component"].clone());

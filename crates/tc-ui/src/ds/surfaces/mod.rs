@@ -8,9 +8,9 @@ use leptos::prelude::*;
 use crate::css::{CssValue, js_number};
 use crate::ds::feedback::close_button;
 use crate::ds::{
-    Attrs, CalloutTone, CardVariant, Css, Direction, Dismiss, Fill, HelpKind, Interactive, Justify,
-    LayerAlign, LayerPlacement, Level, Pad, Progress, Scrim, ScrimToken, Shape, Side, Slot, Stack,
-    Surface, Text, TextRole, TextTone, TileLayout, Tone, Weight,
+    Attrs, CalloutTone, CardVariant, Content, Css, Direction, Fill, HelpKind, Interactive, Justify,
+    Layer, LayerPlacement, LayerProps, Pad, Progress, Scrim, ScrimToken, Shape, Slot, Stack,
+    Surface, Text, TextRole, TextTone, TileLayout, Tone, Weight, present,
 };
 use crate::tokens::{Align, Border, Corner, Edge, Elevation, Inset, Radius, Shadow};
 
@@ -49,16 +49,12 @@ pub fn BookTile(
         fill: Signal::from(if row { Fill::None } else { Fill::App }),
         border: Some(if row { Edge::None } else { Edge::Line }.into()),
         radius: Some(Corner::Md.into()),
-        elevation: None,
-        pad: None,
         interactive: Some(if row {
             Interactive::Row
         } else {
             Interactive::Choice
         }),
         selected: active,
-        disabled: false,
-        on: None,
         on_click,
         style: s,
         attrs,
@@ -81,6 +77,7 @@ pub fn BookTile(
             }
             .into_any()
         })),
+        ..Default::default()
     })
 }
 
@@ -100,18 +97,11 @@ pub fn Callout(
         CalloutTone::Info => (None, Fill::App, Some(Edge::Line)),
     };
     crate::ds::Surface(crate::ds::SurfaceProps {
-        tag: None,
         tone: t,
         fill: Signal::from(fill),
         border: border.map(Border::from),
         radius: Some(Corner::Lg.into()),
-        elevation: None,
         pad: Some(Inset::Sm.into()),
-        interactive: None,
-        selected: Signal::from(false),
-        disabled: false,
-        on: None,
-        on_click: None,
         style,
         attrs,
         children: Some(Box::new(move || {
@@ -127,6 +117,7 @@ pub fn Callout(
             }
             .into_any()
         })),
+        ..Default::default()
     })
 }
 
@@ -164,7 +155,6 @@ pub fn Card(
         CardVariant::Paper => (None, Fill::Paper, None, Corner::Xs, Some(Shadow::Page)),
     };
     crate::ds::Surface(crate::ds::SurfaceProps {
-        tag: None,
         tone,
         fill: Signal::from(fill),
         border: border.map(Border::from),
@@ -172,57 +162,29 @@ pub fn Card(
         elevation: elevation.map(Elevation::from),
         pad: Some(padding.unwrap_or(Pad::Inset(Inset::Lg))),
         interactive: interactive.then_some(Interactive::Card),
-        selected: Signal::from(false),
-        disabled: false,
-        on: None,
         on_click,
         style,
         attrs,
         children,
+        ..Default::default()
     })
 }
 
-/// A Layer over the frame with a scrim, trapping focus: what Modal and Drawer share.
-#[allow(clippy::too_many_arguments)]
+/// What Modal and Drawer share: a dialog Layer with a scrim that traps the focus, locks the
+/// page's scroll and closes on Escape or a press on the scrim.
 fn dialog_layer(
-    open: Signal<bool>,
-    scrim: ScrimToken,
-    placement: LayerPlacement,
-    label: Option<String>,
-    labelled_by: Option<String>,
-    scrim_attrs: Attrs,
+    open: Option<Signal<bool>>,
     on_close: Option<Callback<()>>,
     children: ChildrenFn,
-) -> impl IntoView {
-    crate::ds::Layer(crate::ds::LayerProps {
-        open: Some(open),
-        level: Level::Overlay,
-        scrim: Some(Scrim::Token(scrim)),
-        placement,
-        anchor_to: None,
-        offset: 6.0,
-        align: LayerAlign::Start,
-        side: Side::Bottom,
-        dismiss: Dismiss {
-            scrim: true,
-            escape: true,
-            outside: false,
-        },
+) -> LayerProps {
+    LayerProps {
+        open: Some(open.unwrap_or_else(|| Signal::from(true))),
         trap_focus: true,
         lock_scroll: true,
-        restore_focus: true,
         on_dismiss: on_close.map(|cb| Callback::new(move |_| cb.run(()))),
-        navigate: None,
-        animate: true,
-        scrim_attrs,
         role: Some("dialog".into()),
-        label,
-        labelled_by,
-        on_mouse_down: None,
-        style: Css::new(),
-        attrs: Attrs::new(),
-        children,
-    })
+        ..LayerProps::new(children)
+    }
 }
 
 /// The round ✕ at the top of a dialog or a drawer.
@@ -243,8 +205,10 @@ pub fn Drawer(
     /// Open unless given: the app mounts a drawer only while it is open.
     #[prop(optional, into)]
     open: Option<Signal<bool>>,
-    #[prop(optional, into)] eyebrow: Option<String>,
-    #[prop(optional, into)] title: Option<String>,
+    #[prop(optional, into)] eyebrow: Option<Content>,
+    /// Names the dialog when it is text; a dialog with an element title is "Panel".
+    #[prop(optional, into)]
+    title: Option<Content>,
     /// The direction of a title that is content, not interface text.
     #[prop(optional, into)]
     title_dir: Option<String>,
@@ -257,7 +221,13 @@ pub fn Drawer(
     #[prop(optional)] children: Option<ChildrenFn>,
 ) -> impl IntoView {
     let close_label = close_label.unwrap_or_else(|| "Close".into());
-    let label = Some(title.clone().unwrap_or_else(|| "Panel".into()));
+    let label = Some(
+        title
+            .as_ref()
+            .and_then(Content::as_text)
+            .unwrap_or("Panel")
+            .to_string(),
+    );
     let content: ChildrenFn = Arc::new(move || {
         let mut s = Css::new();
         s.set(
@@ -287,8 +257,8 @@ pub fn Drawer(
                     style=css! { "padding": "20px 24px", "border-bottom": "var(--stroke-hair) solid var(--border-hair)" }
                 >
                     <Stack direction=Direction::Column gap=6>
-                        {eyebrow.filter(|e| !e.is_empty()).map(|e| view! { <Text role=TextRole::Overline tone=TextTone::Accent>{e}</Text> })}
-                        <Text role=TextRole::H2 attrs=title_attrs>{title}</Text>
+                        {present(eyebrow).map(|e| view! { <Text role=TextRole::Overline tone=TextTone::Accent>{e.view()}</Text> })}
+                        <Text role=TextRole::H2 attrs=title_attrs>{title.map(|t| t.view())}</Text>
                     </Stack>
                     {on_close.map(|cb| dialog_close(close_label, cb))}
                 </Stack>
@@ -299,16 +269,13 @@ pub fn Drawer(
         }
         .into_any()
     });
-    dialog_layer(
-        open.unwrap_or_else(|| Signal::from(true)),
-        ScrimToken::Drawer,
-        LayerPlacement::End,
+    Layer(LayerProps {
+        scrim: Some(Scrim::Token(ScrimToken::Drawer)),
+        placement: LayerPlacement::End,
         label,
-        None,
-        attrs,
-        on_close,
-        content,
-    )
+        scrim_attrs: attrs,
+        ..dialog_layer(open, on_close, content)
+    })
 }
 
 /// HelpCard.jsx: a helps-panel card carrying one translation note or key word. A key word is
@@ -330,17 +297,13 @@ pub fn HelpCard(
     let word = kind == HelpKind::Word;
     let action_label = action_label.unwrap_or_else(|| "Translation Academy →".into());
     crate::ds::Surface(crate::ds::SurfaceProps {
-        tag: None,
         tone: Some(if word { Tone::Cultivate } else { Tone::Accent }),
         fill: Signal::from(Fill::Card),
         border: Some(Edge::Line.into()),
         radius: Some(Corner::Lg.into()),
-        elevation: None,
         pad: Some(Inset::Md.into()),
         interactive: Some(Interactive::Choice),
         selected: active,
-        disabled: false,
-        on: None,
         on_click,
         style,
         attrs,
@@ -353,21 +316,14 @@ pub fn HelpCard(
             let action = on_action.map(|cb| {
                 crate::ds::Action(crate::ds::ActionProps {
                     weight: Weight::Text,
-                    tone: None,
                     size: crate::ds::Size::Sm,
-                    shape: Default::default(),
-                    icon_only: false,
-                    title: None,
-                    disabled: Signal::from(false),
-                    tag: None,
-                    href: None,
                     on_click: Some(Callback::new(move |e: MouseEvent| {
                         e.stop_propagation();
                         cb.run(());
                     })),
                     style: Signal::from(css! { "margin-top": 9 }),
-                    attrs: Attrs::new(),
                     children: Some(Box::new(move || action_label.into_any())),
+                    ..Default::default()
                 })
             });
             view! {
@@ -385,6 +341,7 @@ pub fn HelpCard(
             }
             .into_any()
         })),
+        ..Default::default()
     })
 }
 
@@ -395,8 +352,8 @@ pub fn Modal(
     /// Open unless given: the app mounts a modal only while it is open.
     #[prop(optional, into)]
     open: Option<Signal<bool>>,
-    #[prop(optional, into)] title: Option<String>,
-    #[prop(optional, into)] subtitle: Option<String>,
+    #[prop(optional, into)] title: Option<Content>,
+    #[prop(optional, into)] subtitle: Option<Content>,
     #[prop(optional, into)] width: Option<CssValue>,
     #[prop(optional, into)] close_label: Option<String>,
     #[prop(optional)] on_close: Option<Callback<()>>,
@@ -423,8 +380,8 @@ pub fn Modal(
             <Surface fill=Fill::Card radius=Corner::X2l elevation=Shadow::Modal style=s>
                 <Stack direction=Direction::Row gap=12 align=Align::Start style=css! { "padding": "22px 24px 0" }>
                     <Stack direction=Direction::Column gap=4 grow=true>
-                        <Text attrs=Attrs::from([("id", id.as_str())]) role=TextRole::H3>{title}</Text>
-                        {subtitle.filter(|s| !s.is_empty()).map(|s| view! { <Text role=TextRole::Caption>{s}</Text> })}
+                        <Text attrs=Attrs::from([("id", id.as_str())]) role=TextRole::H3>{title.map(|t| t.view())}</Text>
+                        {present(subtitle).map(|s| view! { <Text role=TextRole::Caption>{s.view()}</Text> })}
                     </Stack>
                     {on_close.map(|cb| dialog_close(close_label, cb))}
                 </Stack>
@@ -440,14 +397,11 @@ pub fn Modal(
         }
         .into_any()
     });
-    dialog_layer(
-        open.unwrap_or_else(|| Signal::from(true)),
-        ScrimToken::Modal,
-        LayerPlacement::Center,
-        None,
+    Layer(LayerProps {
+        scrim: Some(Scrim::Token(ScrimToken::Modal)),
+        placement: LayerPlacement::Center,
         labelled_by,
-        attrs,
-        on_close,
-        content,
-    )
+        scrim_attrs: attrs,
+        ..dialog_layer(open, on_close, content)
+    })
 }

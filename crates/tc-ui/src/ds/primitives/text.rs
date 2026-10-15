@@ -159,7 +159,9 @@ pub fn Text(
     #[prop(optional)] trim: Option<bool>,
     #[prop(optional)] measure: Option<Measure>,
     #[prop(optional, into)] dir: Option<String>,
-    #[prop(optional)] style: Css,
+    /// May follow state (an Accordion's chevron turns), on the same node.
+    #[prop(optional, into)]
+    style: Signal<Css>,
     #[prop(optional)] attrs: Attrs,
     #[prop(optional)] children: Option<Children>,
 ) -> impl IntoView {
@@ -170,21 +172,26 @@ pub fn Text(
             "span".into()
         }
     });
-    let (s, role_trim) = text_css(
-        role,
-        tone,
-        script,
-        align.as_deref(),
-        measure.as_ref(),
-        truncate,
-        &style,
-    );
-    let cap = trim.unwrap_or(role_trim);
+    let cap = trim.unwrap_or(role_css(role).1);
     let dir = dir.or_else(|| script.filter(|s| s.is_rtl()).map(|_| "rtl".to_string()));
+    let s = move || {
+        style.with(|st| {
+            let (s, _) = text_css(
+                role,
+                tone,
+                script,
+                align.as_deref(),
+                measure.as_ref(),
+                truncate,
+                st,
+            );
+            s.to_style()
+        })
+    };
     element(tag)
         .attr("data-trim", cap.then_some("cap"))
         .attr("dir", dir)
-        .attr("style", s.to_style())
+        .attr("style", s)
         .add_any_attr(spread(&attrs))
         .child(children.map(|c| c()))
 }

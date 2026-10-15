@@ -91,18 +91,9 @@ pub fn FieldGroup(
         Stack(crate::ds::StackProps {
             direction,
             gap: Some(gap),
-            align: None,
-            justify: None,
-            wrap: false,
-            inline: false,
             columns,
-            flex: None,
-            grow: false,
-            tag: None,
-            on_click: None,
-            style: Css::new(),
-            attrs: Attrs::new(),
             children,
+            ..Default::default()
         })
     });
     let legend_style = css! { "padding": 0, "float": "none" }.to_style();

@@ -1,7 +1,7 @@
 {
   "about": "Pixels that differ between tC4 (screens/) and the Leptos port (screens-rust/), per case. pixelmatch threshold 0 with anti-aliased pixels counted: any difference in any channel counts.",
-  "total": 702,
-  "zero": 702,
+  "total": 712,
+  "zero": 712,
   "nonzero": 0,
   "unexplained": [],
   "worst": [],
@@ -1082,6 +1082,16 @@
       "mismatched": 0
     },
     {
+      "id": "OptionCard/element-slots",
+      "frame": "460x124",
+      "mismatched": 0
+    },
+    {
+      "id": "OptionCard/element-description",
+      "frame": "460x124",
+      "mismatched": 0
+    },
+    {
       "id": "Radio/unchecked",
       "frame": "64x56",
       "mismatched": 0
@@ -1148,6 +1158,11 @@
     },
     {
       "id": "RadioGroup/rtl",
+      "frame": "380x120",
+      "mismatched": 0
+    },
+    {
+      "id": "RadioGroup/stateful",
       "frame": "380x120",
       "mismatched": 0
     },
@@ -1448,6 +1463,11 @@
     },
     {
       "id": "Toggle/rtl",
+      "frame": "280x60",
+      "mismatched": 0
+    },
+    {
+      "id": "Toggle/stateful",
       "frame": "280x60",
       "mismatched": 0
     },
@@ -2267,6 +2287,11 @@
       "mismatched": 0
     },
     {
+      "id": "Progress/ring-stateful",
+      "frame": "220x72",
+      "mismatched": 0
+    },
+    {
       "id": "Rule/hair",
       "frame": "320x52",
       "mismatched": 0
@@ -2732,6 +2757,11 @@
       "mismatched": 0
     },
     {
+      "id": "Table/stateful",
+      "frame": "520x200",
+      "mismatched": 0
+    },
+    {
       "id": "Text/role-display",
       "frame": "520x80",
       "mismatched": 0
@@ -3112,6 +3142,11 @@
       "mismatched": 0
     },
     {
+      "id": "Drawer/element-title",
+      "frame": "720x480",
+      "mismatched": 0
+    },
+    {
       "id": "HelpCard/note",
       "frame": "380x208",
       "mismatched": 0
@@ -3193,6 +3228,21 @@
     },
     {
       "id": "Modal/rtl",
+      "frame": "720x520",
+      "mismatched": 0
+    },
+    {
+      "id": "Modal/element-subtitle",
+      "frame": "720x520",
+      "mismatched": 0
+    },
+    {
+      "id": "Modal/nested-select",
+      "frame": "720x520",
+      "mismatched": 0
+    },
+    {
+      "id": "Modal/nested-menu",
       "frame": "720x520",
       "mismatched": 0
     },

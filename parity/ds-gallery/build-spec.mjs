@@ -49,6 +49,8 @@ const NODES = {
   callback: '{ "$fn": "noop" } — a callback that does nothing. Several components draw a control only when they are given a callback (Modal\'s ✕, Toast\'s action, Breadcrumb\'s links, a clickable Surface).',
   asset: '{ "$asset": "<path>" } — a file of the tC4 checkout, by its path relative to the checkout, served as a URL.',
   json: 'Everything else is a plain JSON value. Style objects are React inline styles: camelCase properties, a bare number means px except on unitless properties (lineHeight, flex, opacity, fontWeight, zIndex). defaultValue is the initial value of an uncontrolled field.',
+  cell: '{ "$cell": "<name>" } — the current value of a cell of the case\'s `cells`. A write draws the case again with the new value, as a parent\'s state would.',
+  set: '{ "$fn": "set", "cell": "<name>", "value": <json> } or { "$fn": "set", "cell": "<name>", "from": "<path>" } — a callback that writes the cell: `value`, or the value at `from` in the callback\'s arguments ("0" is the first argument, "0.target.checked" the checked state of the first argument\'s target, "0.id" the id field of a table row).',
   render: 'When `render` is absent the case renders { "$el": component, "props": props }. When it is present it is the whole tree, and the component under test sits inside it with exactly `props`.',
 };
 
@@ -133,6 +135,7 @@ function main() {
       document,
       props,
       ...(render ? { render } : null),
+      ...(r.cells ? { cells: plain(r.cells) } : null),
       ...(steps.length ? { steps } : null),
       ...(Object.keys(needs).length ? { needs } : null),
       isolate: layered || steps.length > 0 || document.lang !== DOCUMENT.lang || document.dir !== DOCUMENT.dir,

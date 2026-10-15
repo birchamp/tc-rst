@@ -9,9 +9,8 @@ use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
 use crate::ds::{
-    Anchor, Attrs, Badge, BadgeSize, BadgeTone, Css, Dismiss, FieldContext, LayerAlign,
-    LayerPlacement, Level, Placement, Side, Size, Text, TextRole, TextTone, provide, spread,
-    use_field,
+    Anchor, Attrs, Badge, BadgeSize, BadgeTone, Css, Dismiss, FieldContext, LayerPlacement, Level,
+    Text, TextRole, TextTone, provide, spread, use_field,
 };
 use crate::text::option_matches;
 use crate::tokens::{Corner, Edge, Fill, Shadow};
@@ -45,38 +44,43 @@ impl From<&str> for SelectOption {
     }
 }
 
-/// `Row` in Select.jsx: one row look for every list.
+/// `Row` in Select.jsx: one row look for every list. A row is keyed by its option's value, so
+/// it stays the same node while the highlight, the selection and the filter change.
 pub(crate) fn row(
     opt: SelectOption,
-    id: String,
-    selected: bool,
-    highlighted: bool,
+    id: Signal<String>,
+    selected: Signal<bool>,
+    highlighted: Signal<bool>,
     on_choose: impl Fn() + 'static,
     on_highlight: Option<Arc<dyn Fn() + Send + Sync>>,
 ) -> impl IntoView {
     let disabled = opt.disabled;
-    let mut s = css! {
-        "box-sizing": "border-box",
-        "height": 36,
-        "display": "flex",
-        "align-items": "center",
-        "gap": 10,
-        "padding": "8px 10px",
-        "border-radius": "var(--radius-sm)",
+    let s = move || {
+        let (selected, highlighted) = (selected.get(), highlighted.get());
+        let mut s = css! {
+            "box-sizing": "border-box",
+            "height": 36,
+            "display": "flex",
+            "align-items": "center",
+            "gap": 10,
+            "padding": "8px 10px",
+            "border-radius": "var(--radius-sm)",
+        };
+        s.set_opt(
+            "background",
+            if selected && highlighted {
+                Some("var(--uw-inspire-100)")
+            } else if selected {
+                Some("var(--surface-accent-soft)")
+            } else if highlighted {
+                Some("var(--uw-frost)")
+            } else {
+                None
+            },
+        );
+        s.set("cursor", if disabled { "default" } else { "pointer" });
+        s.to_style()
     };
-    s.set_opt(
-        "background",
-        if selected && highlighted {
-            Some("var(--uw-inspire-100)")
-        } else if selected {
-            Some("var(--surface-accent-soft)")
-        } else if highlighted {
-            Some("var(--uw-frost)")
-        } else {
-            None
-        },
-    );
-    s.set("cursor", if disabled { "default" } else { "pointer" });
     let check = css! {
         "width": 14,
         "flex": "none",
@@ -84,16 +88,19 @@ pub(crate) fn row(
         "font-weight": 900,
         "font-size": "var(--fs-ui-sm)",
     };
-    let label = css! {
-        "flex": "1 1 auto",
-        "min-width": 0,
-        "white-space": "nowrap",
-        "overflow": "hidden",
-        "text-overflow": "ellipsis",
-        "font-size": "var(--fs-ui-sm)",
-        "letter-spacing": "var(--track-13)",
-        "font-weight": "var(--fw-heavy)",
-        "color": if disabled { "var(--disabled-fg)" } else if selected { "var(--text-heading)" } else { "var(--text-body)" },
+    let label = move || {
+        css! {
+            "flex": "1 1 auto",
+            "min-width": 0,
+            "white-space": "nowrap",
+            "overflow": "hidden",
+            "text-overflow": "ellipsis",
+            "font-size": "var(--fs-ui-sm)",
+            "letter-spacing": "var(--track-13)",
+            "font-weight": "var(--fw-heavy)",
+            "color": if disabled { "var(--disabled-fg)" } else if selected.get() { "var(--text-heading)" } else { "var(--text-body)" },
+        }
+        .to_style()
     };
     // A long meta gives way to the label: its shrink factor is large enough that the label's
     // own share of the shrink stays under the layout unit.
@@ -123,7 +130,7 @@ pub(crate) fn row(
         <div
             role="option"
             id=id
-            aria-selected=if selected { "true" } else { "false" }
+            aria-selected=move || if selected.get() { "true" } else { "false" }
             aria-disabled=disabled.then_some("true")
             on:mouseenter=move |_| {
                 if let Some(h) = &on_highlight {
@@ -135,10 +142,10 @@ pub(crate) fn row(
                     on_choose();
                 }
             }
-            style=s.to_style()
+            style=s
         >
-            <span aria-hidden="true" style=check.to_style()>{if selected { "✓" } else { "" }}</span>
-            <span style=label.to_style()>{opt.label.clone()}</span>
+            <span aria-hidden="true" style=check.to_style()>{move || if selected.get() { "✓" } else { "" }}</span>
+            <span style=label>{opt.label.clone()}</span>
             {badge}
             {meta_view}
             {code_view}
@@ -146,11 +153,13 @@ pub(crate) fn row(
     }
 }
 
-/// Listed options under one group header, or under none: each row's position in the visible
-/// list and its index into the options.
+/// Listed options under one group header, or under none, as React keys them: by the group's
+/// name, or by the run's position for a run without one. `rows` are indexes into the options.
+#[derive(Debug, Clone, PartialEq)]
 struct Section {
+    key: String,
     name: Option<String>,
-    rows: Vec<(usize, usize)>,
+    rows: Vec<usize>,
 }
 
 /// The small tracked code after a label ("TIT").
@@ -191,7 +200,7 @@ pub fn Select(
     attrs: Attrs,
 ) -> impl IntoView {
     let dropdown = move || {
-        dropdown(
+        Dropdown(DropdownProps {
             options,
             value,
             on_change,
@@ -200,28 +209,22 @@ pub fn Select(
             no_matches_label,
             clear_label,
             attrs,
-        )
+        })
         .into_any()
     };
     crate::ds::Field(crate::ds::FieldProps {
         label,
         hint,
-        error: None,
-        required: false,
-        optional: false,
-        disabled: None,
-        size: Size::Md,
-        placement: Placement::Above,
         id,
-        name: None,
         style,
-        attrs: Attrs::new(),
         children: Some(Box::new(dropdown)),
+        ..Default::default()
     })
 }
 
-#[allow(clippy::too_many_arguments)]
-fn dropdown(
+/// The combobox and its list: everything of Select inside its Field.
+#[component]
+fn Dropdown(
     options: Vec<SelectOption>,
     value: Signal<Option<String>>,
     on_change: Option<Callback<String>>,
@@ -520,11 +523,89 @@ fn dropdown(
     let (list_id_panel, list_id_button) = (list_id.clone(), list_id.clone());
     let opt_id = StoredValue::new(opt_id);
 
+    // Sections in option order; options without a group form one headerless run.
+    let sections = Memo::new(move |_| {
+        let mut sections: Vec<Section> = Vec::new();
+        for &i in visible.get().iter() {
+            let g = opts.with_value(|o| o[i].group.clone());
+            match sections.last_mut() {
+                Some(s) if s.name == g => s.rows.push(i),
+                _ => sections.push(Section {
+                    key: g.clone().unwrap_or_else(|| format!("s{}", sections.len())),
+                    name: g,
+                    rows: vec![i],
+                }),
+            }
+        }
+        sections
+    });
+    let option_row = move |i: usize| {
+        let o = opts.with_value(|o| o[i].clone());
+        let v = o.value.clone();
+        let pos = Memo::new(move |_| visible.with(|vis| vis.iter().position(|&j| j == i)));
+        let selected = Signal::derive(move || value.with(|s| s.as_ref() == Some(&v)));
+        let highlighted = Signal::derive(move || pos.get() == Some(hi.get()));
+        let highlight: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+            if let Some(p) = pos.get_untracked() {
+                hi.set(p);
+            }
+        });
+        let id = Signal::from(opt_id.with_value(|f| f(i)));
+        row(
+            o,
+            id,
+            selected,
+            highlighted,
+            move || choose(i),
+            Some(highlight),
+        )
+    };
+    let section = move |key: String| {
+        let this = {
+            let key = key.clone();
+            Memo::new(move |_| sections.with(|s| s.iter().find(|x| x.key == key).cloned()))
+        };
+        let rows = view! {
+            <For
+                each=move || this.with(|s| s.as_ref().map(|s| s.rows.clone()).unwrap_or_default())
+                key=move |i| opts.with_value(|o| o[*i].value.clone())
+                children=option_row
+            />
+        };
+        match this.with_untracked(|s| s.as_ref().and_then(|s| s.name.clone())) {
+            Some(name) => {
+                let head = css! {
+                    "position": "sticky",
+                    "top": 0,
+                    "z-index": 1,
+                    "background": "var(--surface-card)",
+                    "padding": "10px 10px 6px",
+                    "display": "flex",
+                    "gap": 6,
+                    "align-items": "baseline",
+                };
+                let count = move || {
+                    this.with(|s| s.as_ref().map_or(0, |s| s.rows.len()))
+                        .to_string()
+                };
+                let group_label = name.clone();
+                view! {
+                    <div role="group" aria-label=group_label>
+                        <div style=head.to_style()>
+                            <Text role=TextRole::Overline tone=TextTone::Muted style=css! { "display": "inline" }>{name}</Text>
+                            <Text role=TextRole::LabelNum>{count}</Text>
+                        </div>
+                        {rows}
+                    </div>
+                }
+                .into_any()
+            }
+            None => rows.into_any(),
+        }
+    };
+    let empty = Memo::new(move |_| visible.with(Vec::is_empty));
     let listbox = move || {
-        let vis = visible.get();
-        let h = hi.get();
-        let sel = value.get();
-        if vis.is_empty() {
+        if empty.get() {
             let no_matches = no_matches.clone();
             return view! {
                 <div style="padding: 12px 10px;">
@@ -533,59 +614,7 @@ fn dropdown(
             }
             .into_any();
         }
-        // Sections in option order; options without a group form one headerless run.
-        let mut sections: Vec<Section> = Vec::new();
-        for (pos, &i) in vis.iter().enumerate() {
-            let g = opts.with_value(|o| o[i].group.clone());
-            match sections.last_mut() {
-                Some(s) if s.name == g => s.rows.push((pos, i)),
-                _ => sections.push(Section {
-                    name: g,
-                    rows: vec![(pos, i)],
-                }),
-            }
-        }
-        sections
-            .into_iter()
-            .map(|Section { name, rows: items }| {
-                let count = items.len();
-                let rows = items
-                    .into_iter()
-                    .map(|(pos, i)| {
-                        let o = opts.with_value(|o| o[i].clone());
-                        let selected = sel.as_ref() == Some(&o.value);
-                        let highlight: Arc<dyn Fn() + Send + Sync> = Arc::new(move || hi.set(pos));
-                        row(o, opt_id.with_value(|f| f(i)), selected, pos == h, move || choose(i), Some(highlight))
-                    })
-                    .collect_view();
-                match name {
-                    Some(name) => {
-                        let head = css! {
-                            "position": "sticky",
-                            "top": 0,
-                            "z-index": 1,
-                            "background": "var(--surface-card)",
-                            "padding": "10px 10px 6px",
-                            "display": "flex",
-                            "gap": 6,
-                            "align-items": "baseline",
-                        };
-                        let group_label = name.clone();
-                        view! {
-                            <div role="group" aria-label=group_label>
-                                <div style=head.to_style()>
-                                    <Text role=TextRole::Overline tone=TextTone::Muted style=css! { "display": "inline" }>{name}</Text>
-                                    <Text role=TextRole::LabelNum>{count.to_string()}</Text>
-                                </div>
-                                {rows}
-                            </div>
-                        }
-                        .into_any()
-                    }
-                    None => rows.into_any(),
-                }
-            })
-            .collect_view()
+        view! { <For each=move || sections.get() key=|s| s.key.clone() children=move |s| section(s.key) /> }
             .into_any()
     };
     let listbox = ViewFn::from(listbox);
@@ -632,10 +661,9 @@ fn dropdown(
                     })),
                     placeholder,
                     clear_label: clear_label.get_value(),
-                    disabled: MaybeProp::default(),
-                    style: Css::new(),
                     attrs: a,
                     live_attrs: vec![("aria-activedescendant", active)],
+                    ..Default::default()
                 })
             });
             view! { <div style="padding: 8px 8px 6px;" on:keydown=on_key_down>{field}</div> }
@@ -660,29 +688,18 @@ fn dropdown(
             crate::ds::Layer(crate::ds::LayerProps {
                 open: Some(Signal::from(true)),
                 level: Level::Popover,
-                scrim: None,
                 placement: LayerPlacement::Anchor,
                 anchor_to: Some(anchor),
-                offset: 6.0,
-                align: LayerAlign::Start,
-                side: Side::Bottom,
                 dismiss: Dismiss {
                     scrim: false,
                     escape: true,
                     outside: true,
                 },
-                trap_focus: false,
-                lock_scroll: false,
                 restore_focus: false,
                 on_dismiss: Some(Callback::new(move |_| close())),
-                navigate: None,
                 // Drawn only while open, with no exit animation: a closed list leaves the page
                 // in the same update that closes it.
                 animate: false,
-                scrim_attrs: Attrs::new(),
-                role: None,
-                label: None,
-                labelled_by: None,
                 // A press in the popover keeps the focus where it is (the field or the search).
                 on_mouse_down: Some(Callback::new(|e: MouseEvent| {
                     let on_control = html(e.target())
@@ -692,9 +709,7 @@ fn dropdown(
                         e.prevent_default();
                     }
                 })),
-                style: Css::new(),
-                attrs: Attrs::new(),
-                children: panel_children.clone(),
+                ..crate::ds::LayerProps::new(panel_children.clone())
             })
         })
     };
