@@ -47,7 +47,7 @@ pub use model::{
     TargetArea, TextStories, TextTranslation, TranslationType,
 };
 pub use open_enum::UnknownValue;
-pub use path::{IngredientPath, PathRule};
+pub use path::{IngredientPath, PathRule, collision_form};
 pub use schema::{SchemaLoadError, schema_ready};
 pub use scope::{Scope, ScopeBook, ScopeRange};
 pub use time::{Timestamp, TimestampError};

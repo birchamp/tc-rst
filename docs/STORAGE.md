@@ -404,12 +404,17 @@ never invisible, and projection ignores them (§12.2 rule 7 makes that safe).
 The tC4 verse content of verse `v` is every byte after its marker up to the next `\v` or `\c`
 marker anywhere, or the end of the file (tC4 R-8.4.1). It is split into `words` and `layout`:
 
-- Split the content into lines, each keeping its terminator (`\n` or `\r\n`).
+- Split the content into lines, each keeping its terminator (`\n` or `\r\n`; a lone `\r` is
+  not a terminator).
 - A line is **layout-only** if, after removing its terminator, it is empty or consists only of
   spaces, tabs and paragraph-level markers from the closed set `PARA_MARKERS`: tC4's
   `BODY_ENDING_TAGS` (`src/data/usfm/indexer.ts`) with optional digit suffixes, for example `\p`,
   `\m`, `\q1`, `\pi2`, `\li1`, `\b`, `\nb`, `\ts\*`. A line that holds any word, heading text
-  (`\s1 Heading`) or character marker is not layout-only.
+  (`\s1 Heading`) or character marker is not layout-only. Precisely, as tC4 matches them: a
+  marker is `\` and a name (an ASCII letter, then ASCII letters, digits and `-`), optionally
+  closed at once by `\*`; it is paragraph-level when its name, lower-cased and with trailing
+  digits removed unless it holds a `-`, is in the set; after it comes a space, a tab, another
+  marker or the end of the line.
 - If every line is layout-only, `words` is empty and `layout` is the whole content.
 - Otherwise let L be the last line that is not layout-only. `words` is the content up to L's
   terminator; `layout` is L's terminator and everything after it (empty when L has no
@@ -418,6 +423,10 @@ marker anywhere, or the end of the file (tC4 R-8.4.1). It is split into `words` 
 So a poetry verse `\v 1 line one\n\q2 line two\n\q1\n` has `words = "line one\n\q2 line two"` and
 `layout = "\n\q1\n"`. Words of a verse are never split into parts. `split_verse` and
 `join_verse` live in `tc-usfm` and are property-tested for `join(split(x)) == x`.
+
+A stored value's `layout` passes the **layout rule** (V3) when it is empty, or when every line of
+it is layout-only and, if `words` is not empty, it starts with a line terminator. Every split
+passes it; a command that edits `words` or `layout` alone keeps the pair passing it.
 
 ### 2.5 Changes and canonical bytes
 
@@ -2922,15 +2931,22 @@ existing one (tC4 D53). The parser follows tC4's `tc3.ts`:
 The codec (`tc-usfm`) decomposes a book into records and recomposes it:
 
 - Verse marker: `\v[ \t]+(\d+)(?:-(\d+))?` followed by one terminator (space, tab, CR or LF).
-  Chapter marker: `\c[ \t]+\d+` followed by whitespace. A verse's content runs to the next
-  verse or chapter marker anywhere, or the end of the file (tC4 R-8.4.1).
+  Chapter marker: `\c[ \t]+\d+` followed by whitespace or the end of the file. Digits are
+  ASCII. Every `\v` or `\c` followed by a space, a tab, a line break or the end of the file
+  (the pattern of V3) must be one of these markers, except that verse markers before the first
+  chapter marker are header bytes, kept as written. A verse's content runs to the next verse or
+  chapter marker anywhere, or the end of the file (tC4 R-8.4.1).
 - `BookHeader` is every byte before the first `\c`, verbatim. `ChapterFront` runs from `\c N` to
   the byte before that chapter's first verse marker.
-- Out-of-order verses or chapters are kept in a `BookLayout` record.
+- Out-of-order verses or chapters are kept in a `BookLayout` record that lists every chapter
+  and verse marker in file order.
 - Refused, with the line and tC4's `import.damaged.usfm-parse` code: a verse number twice in a
   chapter ("TIT 1:3 appears twice; fix the file and import again"), a chapter twice, a span
   whose end is not after its start, a letter-part label such as `\v 2a` (as tC4 4.0), invalid
-  UTF-8, U+0000.
+  UTF-8, U+0000; also a verse label with a leading zero (`\v 01`: the label is computed from
+  the verse numbers, so it could not be given back; a chapter number keeps its zeros in the
+  chapter front), verse or chapter 0, a number above 65,535, a verse marker at the end of the
+  file with no terminator, and any other `\v` or `\c` marker that is not well formed.
 - `recompose(decompose(x)) == x` for every accepted input, property-tested and checked on tC4's
   USFM identity corpus.
 
@@ -3264,8 +3280,8 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | Crate | Owns in this design |
 |---|---|
 | `tc-core` | `BookId`, references (exists) |
-| `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1`, the OBS story splice |
-| `tc-burrito` | `build_metadata`, `check`, the vendored SB 1.0.0 schema, the extension table |
+| `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`, `PARA_MARKERS` and the layout rule), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1`, the OBS story splice |
+| `tc-burrito` | `build_metadata`, `check`, the vendored SB 1.0.0 schema, the extension table, `collision_form` (§3.3) |
 | `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking. No I/O. |
 | `tc-store` | `Vfs`, `FaultFs`, `atomic_write`, the project lock, `ProjectActor` and commands, open and recovery, materialize, seal, consolidate, outside-edit detection and recording, drafts, identity, local git (tree build, commit, index, repack, object database access) |
 | `tc-door43` | the internet switch, the Gitea REST client, and git2 network calls (`fetch`, `push`, `list`) on a repository `tc-store` opened |

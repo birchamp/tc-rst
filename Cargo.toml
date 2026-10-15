@@ -25,6 +25,7 @@ serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"
 proptest = "1"
 tempfile = "3"
+unicode-normalization = "0.1.25"
 
 # Full debug info made each agent worktree's target dir several GB and filled the disk.
 [profile.dev]

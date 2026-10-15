@@ -12,10 +12,13 @@
 //! - [`words`] splits text into words exactly as tC4 does, with occurrence numbers.
 //! - [`align`] reads, strips and weaves `\zaln` word alignment the way en_ult and tC4's
 //!   export write it.
+//! - [`codec`] cuts a book into the journal's records (header, chapter fronts, verse words
+//!   and layout) and writes it back byte for byte.
 
 pub mod align;
 mod attributes;
 pub mod book;
+pub mod codec;
 mod doc;
 mod lex;
 pub mod markers;
