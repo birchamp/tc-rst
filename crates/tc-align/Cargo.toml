@@ -1,0 +1,22 @@
+[package]
+name = "tc-align"
+description = "Word alignment for the tC4 rebuild: the alignment model and its edits, aligned USFM, reflow after text edits, and suggestions learned from the project's own alignments."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tc-core = { path = "../tc-core" }
+tc-usfm = { path = "../tc-usfm" }
+tc-versification = { path = "../tc-versification" }
+md-5 = "0.10.6"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
