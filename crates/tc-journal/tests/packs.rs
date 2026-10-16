@@ -71,7 +71,7 @@ fn a_sealed_pack_reads_back_whole_and_sorted() {
     assert_eq!(pack.path.sealer, local(9));
     assert_eq!(pack.path.month.to_string(), "2026-10");
     assert_eq!(pack.path.name, pack.id.name());
-    assert_eq!(pack.id, PackId::of(&pack.bytes));
+    assert_eq!(pack.id, pack_id_of(&pack.bytes));
     assert_eq!(
         pack.path.to_string(),
         format!(
@@ -209,7 +209,7 @@ fn hand_pack(header: &str, lines: &[&Change], trailing: &[u8]) -> (String, Vec<u
         bytes.extend_from_slice(&encode_line(change.id(), change.raw()));
     }
     bytes.extend_from_slice(trailing);
-    let name = PackId::of(&bytes).name();
+    let name = pack_id_of(&bytes).name();
     (
         format!("ingredients/tc/changes/{}/2026-10/{name}.ndjson", local(9)),
         bytes,
@@ -303,7 +303,10 @@ fn a_truncated_pack_salvages_every_whole_line() {
     let pack = &seal(&spec(local(9)), &changes(5)).unwrap().packs[0];
     let cut = pack.bytes.len() - 10;
     let read = read_pack(&pack.path.to_string(), &pack.bytes[..cut], project());
-    assert_eq!(read.status, PackStatus::Damaged(PackError::NameMismatch));
+    assert_eq!(
+        read.status,
+        PackStatus::Damaged(PackError::LineUnverified { line: 5 })
+    );
     assert_eq!(read.entries.len(), 4);
 }
 
@@ -328,7 +331,10 @@ fn a_file_with_crlf_line_endings_salvages_every_change() {
     let pack = &seal(&spec(local(9)), &lines).unwrap().packs[0];
     let path = pack.path.to_string();
     let read = read_pack(&path, &crlf(&pack.bytes), project());
-    assert_eq!(read.status, PackStatus::Damaged(PackError::NameMismatch));
+    assert_eq!(
+        read.status,
+        PackStatus::Damaged(PackError::HeaderUnverified)
+    );
     assert_eq!(read.entries, reread(pack).entries);
     let file = encode_pending(&pending_header(Purpose::Save), &lines).unwrap();
     let read = read_pending(&crlf(&file.bytes), project());
@@ -765,7 +771,8 @@ fn a_pending_file_reads_back_with_its_lines_in_order() {
     let lines = changes(4);
     let reversed: Vec<Verified> = lines.iter().rev().cloned().collect();
     let file = encode_pending(&pending_header(Purpose::Save), &reversed).unwrap();
-    let hash = tc_journal::PackId::of(&file.bytes).to_hex();
+    // The name hashes the header line and the line ids (§4.2), as a pack's id does.
+    let hash = pack_id_of(&file.bytes).to_hex();
     assert_eq!(file.name, format!("{}-{}.batch", local(1), &hash[..32]));
     let read = read_pending(&file.bytes, project());
     assert_eq!(read.status, PendingStatus::Valid);
@@ -972,4 +979,131 @@ fn the_redundancy_rule_is_a_function_of_the_file_set() {
     broken_ab.status = PackStatus::Damaged(PackError::NameMismatch);
     assert!(redundancy(&[a.clone(), broken_ab]).redundant.is_empty());
     assert!(redundancy(&[ab]).redundant.is_empty());
+}
+
+/// What can happen to a pack's lines without damaging any byte of them.
+#[derive(Debug, Clone)]
+enum LineEdit {
+    Drop(prop::sample::Index),
+    Duplicate(prop::sample::Index),
+    Swap(prop::sample::Index, prop::sample::Index),
+    /// Another valid change line in place of one.
+    Replace(prop::sample::Index),
+    /// A header that verifies but says other things (another `sealed` time, same count).
+    OtherHeader,
+    /// A flipped bit in the header line.
+    DamagedHeader(prop::sample::Index, u8),
+}
+
+fn line_edit() -> impl Strategy<Value = LineEdit> {
+    prop_oneof![
+        any::<prop::sample::Index>().prop_map(LineEdit::Drop),
+        any::<prop::sample::Index>().prop_map(LineEdit::Duplicate),
+        (any::<prop::sample::Index>(), any::<prop::sample::Index>())
+            .prop_map(|(a, b)| LineEdit::Swap(a, b)),
+        any::<prop::sample::Index>().prop_map(LineEdit::Replace),
+        Just(LineEdit::OtherHeader),
+        (any::<prop::sample::Index>(), 0u8..8)
+            .prop_map(|(at, bit)| LineEdit::DamagedHeader(at, bit)),
+    ]
+}
+
+/// The pack's name covers every byte though no pass hashes the whole file (§4.3): a pack
+/// whose lines were dropped, duplicated, reordered or replaced by other valid lines, or
+/// whose header was replaced or damaged, never reads as valid at its path, and salvage
+/// takes exactly the change lines the file still holds intact.
+#[test]
+fn a_pack_with_lines_moved_or_replaced_is_damaged() {
+    run_with_census(
+        256,
+        (prop::collection::vec(arb_body(), 2..8), line_edit()),
+        &[
+            "dropped",
+            "duplicated",
+            "swapped",
+            "replaced",
+            "other header",
+            "damaged header",
+        ],
+        |(bodies, edit), census| {
+            let lines: Vec<Verified> = bodies
+                .into_iter()
+                .map(|b| Change::new(b).unwrap().into())
+                .collect();
+            let pack = seal(&spec(local(9)), &lines).unwrap().packs.remove(0);
+            let text = pack.bytes.clone();
+            let header_end = text.iter().position(|b| *b == b'\n').unwrap() + 1;
+            let mut header = text[..header_end].to_vec();
+            let mut body: Vec<Vec<u8>> = text[header_end..]
+                .split_inclusive(|b| *b == b'\n')
+                .map(<[u8]>::to_vec)
+                .collect();
+            let n = body.len();
+            match &edit {
+                LineEdit::Drop(at) => {
+                    body.remove(at.index(n));
+                    census.saw("dropped");
+                }
+                LineEdit::Duplicate(at) => {
+                    let line = body[at.index(n)].clone();
+                    body.insert(at.index(n), line);
+                    census.saw("duplicated");
+                }
+                LineEdit::Swap(a, b) => {
+                    let (a, b) = (a.index(n), b.index(n));
+                    if a == b {
+                        return Ok(());
+                    }
+                    body.swap(a, b);
+                    census.saw("swapped");
+                }
+                LineEdit::Replace(at) => {
+                    let other = verse_change(local(3), 99, 1, "another line");
+                    body[at.index(n)] = encode_line(other.id(), other.raw());
+                    census.saw("replaced");
+                }
+                LineEdit::OtherHeader => {
+                    let other = seal(
+                        &PackSpec {
+                            sealed: WallTime(OCT_2026 + 1),
+                            ..spec(local(9))
+                        },
+                        &lines,
+                    )
+                    .unwrap()
+                    .packs
+                    .remove(0);
+                    let end = other.bytes.iter().position(|b| *b == b'\n').unwrap() + 1;
+                    header = other.bytes[..end].to_vec();
+                    census.saw("other header");
+                }
+                LineEdit::DamagedHeader(at, bit) => {
+                    let at = at.index(header.len() - 1);
+                    header[at] ^= 1 << bit;
+                    census.saw("damaged header");
+                }
+            }
+            let mut edited = header.clone();
+            for line in &body {
+                edited.extend_from_slice(line);
+            }
+            prop_assert_ne!(&edited, &pack.bytes);
+            let read = read_pack(&pack.path.to_string(), &edited, project());
+            prop_assert!(
+                matches!(read.status, PackStatus::Damaged(_)),
+                "{:?} read as {:?}",
+                edit,
+                read.status
+            );
+            // Salvage takes every change line still intact, as written, and nothing else.
+            let intact: BTreeSet<ChangeId> = body
+                .iter()
+                .filter_map(|line| tc_journal::line::verify_line(line.strip_suffix(b"\n")?))
+                .map(|(id, _)| id)
+                .collect();
+            let salvaged: BTreeSet<ChangeId> = read.entries.iter().map(Verified::id).collect();
+            prop_assert_eq!(salvaged, intact);
+            Ok(())
+        },
+    );
 }

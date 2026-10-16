@@ -10,7 +10,8 @@
 //! where each value lies. Then the full fold, one incremental step after a verse save, a
 //! decision, an alignment and a resolution, the conflict list from scratch, and the Psalms
 //! projection, whose values are read from the files on demand. Times are medians and p95
-//! over repeated runs. `FOLDBENCH_RUNS` sets the runs of the open, `FOLDBENCH_CACHED_ONLY`
+//! over repeated runs. `FOLDBENCH_RUNS` sets the runs of the open, `FOLDBENCH_FIRST_ONLY`
+//! stops after the first open when there is no cache yet, `FOLDBENCH_CACHED_ONLY`
 //! stops after the opens with the cache, `FOLDBENCH_STREAM_ONLY` after the opens without
 //! it too (for a heap profile), and `FOLDBENCH_FOLD_ONLY` after the open's parts.
 
@@ -447,6 +448,17 @@ impl Writer {
 fn run(args: &[String]) {
     let dir = PathBuf::from(&args[0]);
     let threads: usize = args.get(1).and_then(|t| t.parse().ok()).unwrap_or(4);
+    #[cfg(target_arch = "x86_64")]
+    println!(
+        "cpu: sha {}, avx2 {}, avx512f {}; {} threads; load {}",
+        std::is_x86_feature_detected!("sha"),
+        std::is_x86_feature_detected!("avx2"),
+        std::is_x86_feature_detected!("avx512f"),
+        threads,
+        std::fs::read_to_string("/proc/loadavg")
+            .unwrap_or_default()
+            .trim()
+    );
     // The schema validator is compiled once per process; not part of any action.
     let _ = tc_burrito::check_field(
         tc_burrito::ProjectKind::BibleText,
@@ -461,17 +473,28 @@ fn run(args: &[String]) {
     // The first open of a project, or the first after an update that changed the cache's
     // encoding, has no cache: it reads every file and writes the cache for the next.
     if read_index(&dir).is_none() {
+        reset_peak_rss();
         let started = Instant::now();
-        let (folded, _, read) = open_streamed(&dir, threads, None);
+        let cpu = process_cpu_ms();
+        let (folded, tail, read) = open_streamed(&dir, threads, None);
         let opened = started.elapsed();
+        let cpu = process_cpu_ms() - cpu;
+        let peak = peak_rss_mib();
         let t = Instant::now();
         let size = write_index(&dir, &read, None);
-        eprintln!(
-            "first open {opened:?}; the cache of {} files written in {:?}, {size} bytes",
+        println!(
+            "first open without a cache {:.0} ms, the fold after the last file {:.0} ms, cpu over \
+             all threads {cpu} ms, peak RSS {peak:.0} MiB; the cache of {} files written in {:?}, \
+             {size} bytes",
+            opened.as_secs_f64() * 1e3,
+            tail.as_secs_f64() * 1e3,
             read.len(),
             t.elapsed()
         );
         drop(folded);
+        if std::env::var("FOLDBENCH_FIRST_ONLY").is_ok() {
+            return;
+        }
     }
     let index_bytes = std::fs::metadata(index_path(&dir)).map_or(0, |m| m.len());
     let mut cached = Stats::new(

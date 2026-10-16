@@ -10,7 +10,7 @@
 
 use crate::change::{Verified, parse_change};
 use crate::ids::ChangeId;
-use crate::text::{hex, sha256, unhex};
+use crate::text::{Sha256Stream, hex, sha256, unhex};
 use std::sync::Arc;
 
 /// The bytes a line adds to its JSON: a tab, 64 hex digits and a line feed.
@@ -34,6 +34,20 @@ pub(crate) fn frame(json: &[u8]) -> Vec<u8> {
     out.extend_from_slice(hex(&sha256(json)).as_bytes());
     out.push(b'\n');
     out
+}
+
+/// The hash that names a pack or a pending file (§4.2, §4.3): SHA-256 of its header line,
+/// line feed included, then the 32 bytes of each change line's id in file order. It covers
+/// every byte of a file whose lines verify: each change line's JSON is fixed by its id, its
+/// hash field is that id in lowercase hex, and the header line is hashed whole. So reading a
+/// file hashes each byte once, in its line's own hash, and this adds 32 bytes a line.
+pub(crate) fn file_hash(header_line: &[u8], ids: impl IntoIterator<Item = ChangeId>) -> [u8; 32] {
+    let mut hash = Sha256Stream::new();
+    hash.update(header_line);
+    for id in ids {
+        hash.update(id.as_bytes());
+    }
+    hash.finish()
 }
 
 /// Splits a line (without its line feed) at its last tab and checks the hash. Returns the

@@ -279,7 +279,7 @@ fn pack_path(place: &PackPlace, bytes: &[u8]) -> String {
         format!(
             "ingredients/tc/changes/{}/2026-10/{}.ndjson",
             local(9),
-            PackId::of(bytes).name()
+            pack_id_of(bytes).name()
         )
     };
     match place {
@@ -362,7 +362,13 @@ fn fold_never_panics_on_arbitrary_packs() {
         |(place, bytes), census| {
             let path = pack_path(&place, &bytes);
             let read = read_pack(&path, &bytes, project());
-            prop_assert_eq!(read.id, PackId::of(&bytes));
+            // A file that frames a pack has the id §4.3 gives it; any other, the SHA-256 of
+            // its bytes.
+            if read.status == PackStatus::Valid {
+                prop_assert_eq!(read.id, pack_id_of(&bytes));
+            } else {
+                prop_assert!(read.id == PackId::of(&bytes) || read.id == pack_id_of(&bytes));
+            }
             match &read.status {
                 PackStatus::Valid => census.saw("valid"),
                 PackStatus::Newer { .. } => census.saw("newer"),
@@ -461,7 +467,9 @@ fn cut(bytes: &mut Vec<u8>, cut: &Cut) {
 
 /// Mutations of valid files: every outcome is a status, never a panic, and a valid file
 /// whose bytes were changed is never read as valid. Each mutated pack is also read at the
-/// path its new bytes name, so validation goes past P2 to the header and the lines.
+/// path its new bytes would name. A changed byte breaks the header (P3) or a line (P4) before
+/// the name is checked (P2), so no mutation here reaches P2; lines moved or replaced whole
+/// are `a_pack_with_lines_moved_or_replaced_is_damaged` (tests/packs.rs).
 #[test]
 fn mutated_files_are_never_read_as_valid() {
     let cuts = prop_oneof![
@@ -482,7 +490,6 @@ fn mutated_files_are_never_read_as_valid() {
         1024,
         strategy,
         &[
-            "pack name mismatch",
             "pack header unverified",
             "pack line unverified",
             "pack truncated",
@@ -533,7 +540,6 @@ fn mutated_files_are_never_read_as_valid() {
                         && let PackStatus::Damaged(error) = &read.status
                     {
                         census.saw(match damage(error) {
-                            "name mismatch" => "pack name mismatch",
                             "header unverified" => "pack header unverified",
                             "line unverified" => "pack line unverified",
                             "truncated" => "pack truncated",

@@ -14,9 +14,9 @@ use crate::canon::{HeaderReader, header_object, to_json};
 use crate::change::Verified;
 use crate::ids::{DeviceId, DeviceKind, Md5, ProjectId, RepoPath};
 use crate::json::{self, Json};
-use crate::line::{RawLine, Span, encode_line, frame, split_lines, verify_line};
+use crate::line::{RawLine, Span, encode_line, file_hash, frame, split_lines, verify_line};
 use crate::pack::{NotOurs, PackError, not_ours, parse_entries, salvage, verified_lines};
-use crate::text::{hex, sha256};
+use crate::text::hex;
 
 /// The pending-file framing version this app reads and writes.
 pub const PENDING_FORMAT: u64 = 1;
@@ -164,8 +164,9 @@ fn parse_header(line: &RawLine<'_>) -> Result<PendingHeader, PackError> {
 /// A pending file ready to be written.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EncodedPending {
-    /// `<device>-<hash32>.batch`: the writer and the first 32 hex digits of the SHA-256 of
-    /// the whole file, so no other file can ever have this name.
+    /// `<device>-<hash32>.batch`: the writer and the first 32 hex digits of the hash of the
+    /// header line and the line ids (§4.2), which covers every byte of the file, so no other
+    /// file can ever have this name.
     pub name: String,
     pub bytes: Vec<u8>,
 }
@@ -206,10 +207,10 @@ pub fn encode_pending(
         ));
     }
     let mut bytes = frame(&header_object(fields).to_canonical());
+    let hash = file_hash(&bytes, lines.iter().map(Verified::id));
     for line in lines {
         bytes.extend_from_slice(&encode_line(line.id(), line.raw()));
     }
-    let hash = sha256(&bytes);
     Ok(EncodedPending {
         name: format!("{}-{}.batch", header.device, &hex(&hash)[..32]),
         bytes,

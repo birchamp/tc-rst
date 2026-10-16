@@ -101,7 +101,16 @@ impl ChangeId {
 }
 
 impl PackId {
-    /// The id of a pack whose bytes are `bytes`.
+    /// The id of a pack (§4.3) whose header line, line feed included, is `header_line` and
+    /// whose change lines carry `ids`, in file order. A pack's file name is its first 32 hex
+    /// digits.
+    pub fn of_pack(header_line: &[u8], ids: impl IntoIterator<Item = ChangeId>) -> Self {
+        Self(crate::line::file_hash(header_line, ids))
+    }
+
+    /// SHA-256 of `bytes`: the id [`crate::pack::read_pack`] gives a file that does not frame
+    /// a pack (a header and lines that all verify), so two different such files never share
+    /// one.
     pub fn of(bytes: &[u8]) -> Self {
         Self(sha256(bytes))
     }

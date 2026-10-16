@@ -850,3 +850,25 @@ pub fn run_with_census<S: Strategy>(
     }
     census.check();
 }
+
+/// The id `read_pack` gives `bytes`: when they frame a pack (a header line with its line feed,
+/// then lines that each verify and end with a line feed), its id (§4.3), computed here from
+/// the hash fields of the lines; otherwise the SHA-256 of all of them. A pack named by its
+/// first 32 hex digits passes P2.
+pub fn pack_id_of(bytes: &[u8]) -> tc_journal::PackId {
+    let framed = || {
+        let header_end = bytes.iter().position(|b| *b == b'\n')? + 1;
+        let body = bytes.get(header_end..)?;
+        let ids = match body.strip_suffix(b"\n") {
+            None if body.is_empty() => Vec::new(),
+            None => return None,
+            Some(lines) => lines
+                .split(|b| *b == b'\n')
+                .map(|line| tc_journal::line::verify_line(line).map(|(id, _)| id))
+                .collect::<Option<Vec<ChangeId>>>()?,
+        };
+        tc_journal::line::verify_line(&bytes[..header_end - 1])?;
+        Some(tc_journal::PackId::of_pack(&bytes[..header_end], ids))
+    };
+    framed().unwrap_or_else(|| tc_journal::PackId::of(bytes))
+}

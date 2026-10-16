@@ -101,7 +101,8 @@ pub struct ChangeId([u8; 32]);
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ShortId([u8; 16]);
 
-/// SHA-256 of a pack file's bytes. The file name is the first 32 hex digits.
+/// A pack's id: SHA-256 of its header line, then the ids of its change lines (§4.3). The
+/// file name is the first 32 hex digits.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PackId([u8; 32]);
 
@@ -1107,8 +1108,8 @@ breaks the equality. The same format is used in pending files and in packs.
 ### 4.2 Pending batch files
 
 `.tc/pending/<device>-<hash32>.batch`: `device` is the Local device that wrote the file and
-`hash32` the first 32 hex digits of the SHA-256 of the whole file. A name is never reused by
-another file: two writers have different devices, and one writer's two files have different
+`hash32` the first 32 hex digits of the file's hash, computed as a pack's id is (§4.3): SHA-256
+of the header line, then the ids of the change lines. A name is never reused by another file: two writers have different devices, and one writer's two files have different
 bytes. So even when two installations share a folder (a cloud-synced folder that slipped past
 the gate of §5.0), a rename can only replace a file with identical bytes. Nothing reads write
 order from the names; the fold is order-independent. Content:
@@ -1138,12 +1139,21 @@ Path: `ingredients/tc/changes/<sealer>/<yyyy-mm>/<pack32>.ndjson`. `sealer` is t
 that wrote the pack; only that device ever seals a new pack in that directory (others only write
 byte-identical copies of its packs, by intake or restore), so no two devices can produce one
 path with different bytes. `yyyy-mm` is the UTC month of `sealed`. `pack32` is the first 32 hex
-digits of the SHA-256 of the whole file. Content:
+digits of the pack's id. Content:
 
 ```
 {"count":N,"project":"6f1c…","replaces":[],"sealed":1760520000000,"sealer":"dk3q…","tcpack":1}<TAB><sha256>
 <change line>                                             N lines, sorted by (device, seq, id)
 ```
+
+**The pack's id** is the SHA-256 of the header line as stored, its line feed included,
+followed by the 32 raw bytes of each change line's id, in file order. It covers every byte of
+the file, as the SHA-256 of the whole file would: the header line is hashed whole, and each
+change line's JSON is fixed by its id, which its hash field states in lowercase hex and P4
+verifies. Reading a pack therefore hashes each byte once, in its line's own hash, plus 32 bytes
+a line; hashing the whole file for the name as well cost a second pass over every byte (§14).
+A file whose header or lines do not verify has no such id; `read_pack` gives it the SHA-256 of
+all its bytes, so two different damaged files never share an id.
 
 `sealer` is a Local device. `replaces` lists the names (32 hex digits) of the packs a
 consolidation absorbed, sorted, no repeats. A clock before the year 0 or after 9999 seals into
@@ -1155,7 +1165,8 @@ fold does not care which pack holds a change; the same change in two packs is on
 
 ### 4.4 Validation, quarantine and salvage
 
-Pack validation, in order:
+Pack validation, in this order (P2 comes last, because the name is computed from the ids that
+P4 verifies):
 
 0. **Newer format, other project.** A file whose first line verifies (a CR before its line feed
    allowed, as in salvage) and declares `tcpack` above 1 is from a newer format, whatever else
@@ -1167,14 +1178,17 @@ Pack validation, in order:
 1. **P1 path.** The path matches `tc/changes/<DeviceId>/<\d{4}-\d{2}>/<32 hex>.ndjson`, the
    device is a Local device and the month is `01` to `12`. If not, the file is damaged: go to
    salvage.
-2. **P2 whole file.** `sha256(file)` starts with the name. If not, the file is damaged: go to
-   salvage.
-3. **P3 header.** The first line verifies and parses, with `tcpack` 1 and `project` this
+2. **P3 header.** The first line verifies and parses, with `tcpack` 1 and `project` this
    project (step 0 has set aside every other value). `sealer` must equal the directory;
    otherwise the file is damaged: go to salvage.
-4. **P4 lines.** Exactly `count` lines follow, each verifies, and the file ends with a line
+3. **P4 lines.** Exactly `count` lines follow, each verifies, and the file ends with a line
    feed; otherwise the file is damaged. A line that verifies but fails the per-change rules of
    §4.5 (its JSON may not even parse) is a quarantined change; the rest of the pack is used.
+4. **P2 name.** The pack's id (§4.3), from the header line and the ids P4 verified, starts with
+   the name. If not, the file is damaged: its lines all verified, so salvage takes every one.
+   Because a damaged byte in a line breaks that line in P4 before P2 is reached, "passes P2"
+   alone says nothing about the lines: every rule below that needs an undamaged pack asks for
+   P2 to P4.
 
 **Salvage.** In a damaged pack, every line that verifies and parses is a genuine change, and
 every line that verifies but breaks a per-change rule (§4.5) is a quarantined one: its id is the
@@ -1195,8 +1209,9 @@ person freeing space can remove a pack without anyone deciding anything. The **e
 the non-redundant packs (§4.7) of HEAD's tree, of the tree of the commit confirmed in
 `.tc/sync.json`, and of every pack the fold has read since open. At open (§6.1 O7) and before
 every tree build (§5.13 C3), each expected pack that is missing from the working tree or fails
-P2 there (at open, a pack whose bytes equal a section of the fold cache passes: they passed P2
-at that path when the section was made, §6.1 O8) is written back from a blob at the same path that passes P2 (HEAD, the confirmed
+P2 to P4 there (at open, a pack whose bytes equal a section of the fold cache passes: they
+passed P1 to P4 at that path when the section was made, §6.1 O8) is written back from a blob at
+the same path that passes P2 to P4 (HEAD, the confirmed
 commit, R, or the blob stored when the pack was first read or written, §9.4), its changes are
 folded, and the person
 sees `PackRestored` ("A file of changes from March was missing and was restored"). This applies
@@ -1757,7 +1772,7 @@ O1  Take .tc/lock (exclusive, non-blocking). Held → open read-only: "This proj
     be open on that computer (§5.0, second writer); otherwise write {host, pid, device, at}
     into it, and clear it at close.
 O2  Finish or remove temporary files. A `.tc/pending/` or `ingredients/tc/changes/` temp file
-    whose bytes verify (every line; for a pack, P2 against the name in the temp name) is
+    whose bytes verify (every line; for a pack, P2 to P4 with the name in the temp name) is
     complete: rename it into place durably (§5.0 step 4), never delete it (on Windows a power
     cut can keep the temp file and lose the rename after "Saved" was shown). Remove every other
     `.~*.tmp` outside .git, every `*.lock` file under `.git` (index, refs, HEAD, config,
@@ -1777,7 +1792,8 @@ O7  Finish interrupted work:
     - every pending file all of whose change ids are in a pack that passes P2–P4 → remove it
       (a seal that stopped after K3);
     - every pack made redundant by a valid pack's `replaces` (§4.7) → remove it;
-    - every expected pack (§4.4) missing from the working tree or failing P2 there → restore it
+    - every expected pack (§4.4) missing from the working tree or failing P2 to P4 there →
+      restore it
       from a valid blob, with `PackRestored`;
     - materialize.intent.json → kept for O9's classification.
 O8  Load: read the fold cache `.tc/index.bin` (§3.6; missing, damaged, of another project,
@@ -2589,7 +2605,7 @@ N3  Packs. For each file under ingredients/tc/changes/ in R's tree:
       - same path, different blob → at least one copy is damaged (two valid packs with one name
         have the same bytes). The copy that passes P2–P4 is kept, whatever the sealer
         directory, so the owner's next sync repairs a damaged copy on Door43 and Door43 (or
-        HEAD, or the confirmed commit) repairs a damaged local copy. A pack that fails P2 never
+        HEAD, or the confirmed commit) repairs a damaged local copy. A pack that fails P2–P4 never
         enters a tree while a valid blob for its path exists anywhere in the object database.
         If every copy fails: the lower blob id stays in the tree, and the union of the lines
         salvaged from all copies is sealed through a `salvage` batch (§4.4).
@@ -2632,7 +2648,7 @@ immutable files, add one pending batch, commit".
 | derived files | the fold's projection (not the disk, so a file held open by another program does not leak stale bytes into a commit) |
 | carried files and their conflict copies | blob ids from the `CarriedFile` projection; a head whose blob is not in the object database keeps the first parent's blob at that path (unchanged, so no reader sees a change), or is left out when the first parent has none, with `CarriedBytesMissing`; the commit is never refused for it |
 | `ingredients/tc/project.json` | the local file |
-| packs | the expected pack set (§4.4), minus redundant packs: every pack of the working tree and every non-redundant pack of HEAD's tree, valid, damaged and newer packs alike, except that a pack failing P2 is replaced by a valid blob of the same path when one exists. A local loss can therefore never reach Door43 by fast-forward |
+| packs | the expected pack set (§4.4), minus redundant packs: every pack of the working tree and every non-redundant pack of HEAD's tree, valid, damaged and newer packs alike, except that a pack failing P2–P4 is replaced by a valid blob of the same path when one exists. A local loss can therefore never reach Door43 by fast-forward |
 | newer-format derived paths | the working-tree file, verbatim (or the blob, for a path kept out of the working tree, §3.3) |
 | foreign entries | verbatim, by raw git path, mode and blob (below) |
 | `metadata.json` | built from the fold and the entries above, checked |
@@ -3458,7 +3474,7 @@ and the on-disk end state, not only what the fold returns.
 |---|---|---|---|
 | L64 | Two installations write into one cloud-synced folder; both name a pending file `…07.batch`, one save replaces the other, or a renamed `…07-DESKTOP.batch` is never read | pending files are named `<device>-<hash32>`, so no other save can replace one; every file in `.tc/pending/` is read whatever its name; cloud-synced folders open read-only with a copy offer; a second writer is detected and stops writing (§4.2, §5.0) | `loss_pending_names_never_collide_two_writers`, `open_cloud_synced_folder_read_only`, `second_writer_detected_read_only` |
 | L65 | A pack is deleted outside the app (antivirus, cloud client, a copy that skipped long paths); the fold silently loses a month, and a checkpoint fast-forwards the loss to Door43 | the expected pack set is state: missing or damaged packs are restored from HEAD, the confirmed commit, R or the stored blob at open and before every tree; trees hold the expected set; no tree is built while an expected pack is unreadable (§4.4, §5.13 C3, §9.4) | `loss_pack_deleted_outside_app_restored`, `loss_pack_deleted_while_open_never_pushed`, `loss_pack_cloud_placeholder_unreadable_not_damaged` |
-| L66 | A damaged local copy of a teammate's pack is committed over Door43's good copy | restore from any valid blob, in every sealer directory; a pack failing P2 never enters a tree while a valid blob exists; when every copy is damaged, the union of their salvaged lines is sealed (§4.4, §9.2 N3) | `loss_damaged_teammate_pack_restored_from_head`, `loss_all_copies_damaged_union_salvaged` |
+| L66 | A damaged local copy of a teammate's pack is committed over Door43's good copy | restore from any valid blob, in every sealer directory; a pack failing P2–P4 never enters a tree while a valid blob exists; when every copy is damaged, the union of their salvaged lines is sealed (§4.4, §9.2 N3) | `loss_damaged_teammate_pack_restored_from_head`, `loss_all_copies_damaged_union_salvaged` |
 | L67 | A book file uploaded on Door43 or copied into `ingredients/` becomes records that project nowhere, and the merge commit deletes it from the tip | decoding a book file of a book that is not present adds the book (`Present`, how: Added), a visible conflict against a removal; no entry of R is dropped silently (§7.6, §9.4) | `loss_web_added_book_projects`, `loss_local_book_file_added_projects`, `loss_web_added_book_after_removal_conflict` |
 | L68 | A renumber that shifts verses against an edit by verse number shows one verse twice and drops another, and alignments and comments stay on the old numbers | a renumber is a passage batch: one `Passage` conflict, the provisional text takes one side whole, *Combine* applies the edit where the text now is; `from` anchors move alignments and comments with the text (§7.3, §7.7) | `loss_renumber_shift_vs_edit_by_number`, `loss_renumber_alignment_and_comments_follow_text` |
 | L69 | A section save that moves a word from verse 5 to 4 against an edit of verse 4 drops the word from the projection; a per-verse choice makes it permanent; a concurrent paragraph break merges onto the wrong words | the save is a passage batch; no unit merge inside a passage; one grouped conflict described in words; provisional text from one side (§7.3, §8.3) | `loss_section_move_vs_verse_edit`, `loss_section_move_vs_paragraph_break_not_merged` |
@@ -3549,6 +3565,7 @@ and are covered by the projection tests.
 | `codec_round_trip` | the tC4 USFM identity corpus plus generated USFM (spans, poetry, headings, CRLF, tabs, odd marker whitespace, out-of-order verses) | `recompose(decompose(x)) == x`; `join_verse(split_verse(c)) == c` | a byte is normalized |
 | `canonical_change_round_trip` | arbitrary `ChangeBody` values | canonical bytes parse back to the same value and re-hash to the same id; the line verifies | the encoder and parser disagree |
 | `pack_round_trip_and_salvage` | packs with random bit flips | an intact pack passes P2–P4; a damaged one salvages exactly the lines whose bytes are intact; no salvaged change differs from what its author wrote | a damaged line is accepted |
+| `a_pack_with_lines_moved_or_replaced_is_damaged` | packs with a line dropped, duplicated, swapped with another or replaced by another valid line, or with a header replaced by another valid one or damaged | the pack is damaged at its path (no byte of a line is changed, so only the name of §4.3 can tell); salvage takes exactly the change lines the file holds intact | the name leaves out the header, a line, or the order of the lines |
 | `any_changes_come_back_from_the_cache_unchanged` | arbitrary `ChangeBody` values in packs and pending files, cached at one file number and read back at another | every prepared change from the fold cache equals the one reading the file gives | the cache drops or alters a field of what the fold keeps |
 | `a_damaged_index_never_gives_other_changes` | every single-bit flip and every truncation of a fold cache; arbitrary bytes after a valid header | the cache is unreadable or the section unused, never a section that gives other changes; no panic | a section is used without its fingerprint, or the decoder trusts a length |
 | `a_changed_byte_in_the_corpus_opens_as_without_the_cache` | a fold cache of the operation-count corpus, then any byte of any of its files changed (the deterministic tests beside it: every byte and every length of every file of a small project, a file replaced by one of the same size, files added, removed, renamed and grown, a consolidation, a damaged, truncated, foreign, older or newer cache) | the open with the cache gives the full fold output (heads, conflicts, anomalies, Detached, every derived file) and the per-file reports of the open without it; the changed file is read | a section stands for bytes other than those it was made from, or hides a damaged file |

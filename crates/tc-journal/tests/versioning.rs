@@ -255,7 +255,7 @@ fn headers_ignore_fields_a_newer_minor_adds() {
     );
     let mut bytes = line_of(&header);
     bytes.extend_from_slice(&encode_line(change.id(), change.raw()));
-    let id = tc_journal::PackId::of(&bytes);
+    let id = pack_id_of(&bytes);
     let path = format!(
         "ingredients/tc/changes/{}/1970-01/{}.ndjson",
         local(1),

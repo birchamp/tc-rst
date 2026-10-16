@@ -7,6 +7,23 @@ pub(crate) fn sha256(bytes: &[u8]) -> [u8; 32] {
     Sha256::digest(bytes).into()
 }
 
+/// SHA-256 of bytes given in pieces.
+pub(crate) struct Sha256Stream(Sha256);
+
+impl Sha256Stream {
+    pub(crate) fn new() -> Self {
+        Self(Sha256::new())
+    }
+
+    pub(crate) fn update(&mut self, bytes: &[u8]) {
+        self.0.update(bytes);
+    }
+
+    pub(crate) fn finish(self) -> [u8; 32] {
+        self.0.finalize().into()
+    }
+}
+
 const HEX: &[u8; 16] = b"0123456789abcdef";
 
 pub(crate) fn hex(bytes: &[u8]) -> String {

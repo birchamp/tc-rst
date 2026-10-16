@@ -180,7 +180,7 @@ fn every_kind_from_the_cache_is_what_parsing_gives() {
     assert_eq!(index.len(), files.len());
     for (n, file) in files.iter().enumerate() {
         let section = index.section(&file.key()).expect("a section for the file");
-        let pack = (file.kind == FileKind::Pack).then(|| PackId::of(&file.bytes));
+        let pack = (file.kind == FileKind::Pack).then(|| common::pack_id_of(&file.bytes));
         assert_eq!(section.pack(), pack);
         // The loader numbers files anew at every open.
         assert_same_inputs(file, section, n as u32 + 7);
@@ -541,8 +541,8 @@ fn the_encoding_is_pinned() {
     assert_eq!(
         (INDEX_VERSION, digest.as_str()),
         (
-            2,
-            "5cf37724ff5a80e1ec69a421ef6a8c2ceb5acc7b14c81613dd0245534427f817"
+            3,
+            "c0643c4428a408c4bda41255f1a6135f3cc6f6f4ebd1de8df46b41dc67b36ac0"
         ),
         "the cache's bytes changed: raise INDEX_VERSION and pin the new digest"
     );

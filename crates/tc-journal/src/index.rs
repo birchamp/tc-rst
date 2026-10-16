@@ -87,7 +87,7 @@ use tc_core::BookId;
 /// written here, what [`FoldInput::prepare_at`] keeps of a change, or what the per-change
 /// rules decide for any bytes changes, a bug fix included. The test `the_encoding_is_pinned`
 /// fails until it is raised for the first two.
-pub const INDEX_VERSION: u32 = 2;
+pub const INDEX_VERSION: u32 = 3;
 
 const MAGIC: &[u8; 8] = b"tc-index";
 

@@ -194,7 +194,8 @@ pub enum PackStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackRead {
-    /// SHA-256 of the file.
+    /// The pack's id (§4.3) when its header and every line verify (P3, P4), wherever the
+    /// file lies; otherwise SHA-256 of all its bytes.
     pub id: PackId,
     /// `None` when the path breaks P1.
     pub path: Option<PackPath>,
@@ -250,13 +251,14 @@ pub(crate) fn not_ours(
 }
 
 /// Reads and validates a pack at repository path `path` (§4.4). Never fails: whatever is
-/// wrong comes back in [`PackRead::status`].
+/// wrong comes back in [`PackRead::status`]. Each byte of a valid pack is hashed once: P2
+/// compares the name with the hash of the header line and the ids P4 verified.
 pub fn read_pack(path: &str, bytes: &[u8], project: ProjectId) -> PackRead {
-    let id = PackId::of(bytes);
     let parsed_path = PackPath::parse(path);
     let lines = split_lines(bytes);
     let mut read = PackRead {
-        id,
+        // Set below, once it is known whether the file frames a pack.
+        id: PackId::of(&[]),
         path: parsed_path,
         header: None,
         status: PackStatus::Valid,
@@ -265,10 +267,12 @@ pub fn read_pack(path: &str, bytes: &[u8], project: ProjectId) -> PackRead {
     };
     match not_ours(lines.first(), "tcpack", PACK_FORMAT, project) {
         Some(NotOurs::Newer(tcpack)) => {
+            read.id = PackId::of(bytes);
             read.status = PackStatus::Newer { tcpack };
             return read;
         }
         Some(NotOurs::Foreign(owner)) => {
+            read.id = PackId::of(bytes);
             read.status = PackStatus::Foreign { project: owner };
             return read;
         }
@@ -278,23 +282,45 @@ pub fn read_pack(path: &str, bytes: &[u8], project: ProjectId) -> PackRead {
     if let Some(Ok(header)) = &header {
         read.header = Some(header.clone());
     }
-    let body = match (&parsed_path, &header) {
-        (None, _) => Err(PackError::BadPath),
-        (Some(p), _) if id.name() != p.name => Err(PackError::NameMismatch),
-        (_, None) => Err(PackError::Empty),
-        (_, Some(Err(error))) => Err(error.clone()),
-        (Some(p), Some(Ok(header))) if header.sealer != p.sealer => {
-            Err(PackError::SealerMismatch {
+    // P3's header and P4's lines; when both verify, the pack's id follows from them.
+    let framed = match &header {
+        Some(Ok(header)) => Some(verified_body(header.count, &lines[1..])),
+        _ => None,
+    };
+    // The header verified with its line feed, so the header line is a prefix of the file.
+    let header_line = lines
+        .first()
+        .and_then(|first| bytes.get(..first.bytes.len() + 1));
+    read.id = match (&framed, header_line) {
+        (Some(Ok(verified)), Some(header_line)) => {
+            PackId::of_pack(header_line, verified.iter().map(|line| line.0))
+        }
+        _ => PackId::of(bytes),
+    };
+    let problem = match (&parsed_path, &header, &framed) {
+        (None, _, _) => Some(PackError::BadPath),
+        (_, None, _) => Some(PackError::Empty),
+        (_, Some(Err(error)), _) => Some(error.clone()),
+        (Some(p), Some(Ok(header)), _) if header.sealer != p.sealer => {
+            Some(PackError::SealerMismatch {
                 header: header.sealer,
                 folder: p.sealer,
             })
         }
-        (Some(_), Some(Ok(header))) => verified_body(header.count, &lines[1..]),
+        (_, _, Some(Err(error))) => Some(error.clone()),
+        (Some(p), _, _) if read.id.name() != p.name => Some(PackError::NameMismatch),
+        _ => None,
     };
-    let entries = match body {
-        Ok(entries) => entries,
-        Err(error) => {
-            read.status = PackStatus::Damaged(error);
+    let entries = match framed {
+        // Every line verified strictly, so salvage would find the same lines again.
+        Some(Ok(verified)) => {
+            if let Some(problem) = problem {
+                read.status = PackStatus::Damaged(problem);
+            }
+            verified
+        }
+        _ => {
+            read.status = PackStatus::Damaged(problem.unwrap_or(PackError::Empty));
             salvage(&lines)
         }
     };
@@ -474,13 +500,13 @@ pub fn encode_pack(
     replaces.sort();
     replaces.dedup();
     let mut bytes = header_line(spec, sorted.len(), &replaces);
+    let id = PackId::of_pack(&bytes, sorted.iter().map(|line| line.id()));
     for line in &sorted {
         bytes.extend_from_slice(&encode_line(line.id(), line.raw()));
     }
     if bytes.len() > MAX_PACK_BYTES {
         return Err(PackWriteError::TooLarge { bytes: bytes.len() });
     }
-    let id = PackId::of(&bytes);
     Ok(EncodedPack {
         path: PackPath {
             sealer: spec.sealer,
