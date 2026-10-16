@@ -353,6 +353,33 @@ fn run(args: &[String]) {
     println!("| Action | Runs | Median | p95 |");
     println!("|---|---:|---:|---:|");
     load_only.report();
+    // What SHA-256 alone costs: one pass over every file's bytes on the same threads (P2
+    // hashes each file once and P4 each line once, so a load hashes every byte twice).
+    let mut sha = Stats::new("SHA-256 of every file once (one of the load's two passes)");
+    let all: Vec<PathBuf> = files(&dir.join("packs"))
+        .into_iter()
+        .chain(files(&dir.join("pending")))
+        .collect();
+    let bytes: Vec<Vec<u8>> = all
+        .iter()
+        .map(|p| std::fs::read(p).expect("read"))
+        .collect();
+    for _ in 0..3 {
+        let t = Instant::now();
+        std::thread::scope(|scope| {
+            for t in 0..threads {
+                let bytes = &bytes;
+                scope.spawn(move || {
+                    for b in bytes.iter().skip(t).step_by(threads) {
+                        std::hint::black_box(tc_journal::PackId::of(b));
+                    }
+                });
+            }
+        });
+        sha.times.push(t.elapsed());
+    }
+    drop(bytes);
+    sha.report();
     fold_only.report();
     open.report();
 

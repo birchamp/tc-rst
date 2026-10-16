@@ -178,7 +178,8 @@ fn assert_no_growth(action: &str, small: Counters, big: Counters) {
         ),
         ("values read", small.values_read, big.values_read),
     ];
-    eprintln!("{action}: {small:?}");
+    eprintln!("{action}, Psalms: {small:?}");
+    eprintln!("{action}, ten times larger: {big:?}");
     for (name, s, b) in rows {
         assert!(
             b <= s,
