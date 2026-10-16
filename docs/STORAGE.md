@@ -1047,7 +1047,7 @@ None of these files is project data that another device needs. Each is written w
 | `lock` | `{host, pid, device, at}` | exclusive advisory lock (`fd-lock`) while the project is open; the content only names the holder in messages |
 | `device.json` | `{device, fingerprint, created}` | this folder's Local device (§6.3) |
 | `pending/<device>-<hash32>.batch` | header + change lines (§4.2) | saves not yet sealed: the commit point of every save |
-| `materialized.json` | per derived or carried path: `{md5, size, mtimeNs, oid}` | the manifest: what the app last wrote (§5.10) |
+| `materialized.json` | `{minor, derivations, paths: {<path>: {md5, size, mtimeNs, oid}}, packs: {<path>: {md5, size, fingerprint}}}`: the format minor and derivation versions (§12.1) the files were projected with, per derived or carried path what was written, and per pack the md5 that `metadata.json` lists | the manifest: what the app last wrote (§5.10). Its own mtime, which the filesystem sets when it is written, is the reference of the racy-clean rule (§6.2) |
 | `heads/<escaped path>.bin` | postcard `HeadsFile`: for every record the file was built from, the heads the written bytes stand for, by the token rule of §2.7 (every head of a settled or merged record; only the provisional candidate and its equal heads for a conflict) | the base of an outside edit (§11.1); an outside editor saw only the provisional text, so its edit never resolves a conflict |
 | `materialize.intent.json` | `{writes: [{path, oldMd5, newMd5}], removes: [path]}` | present only during a materialization |
 | `quarantine/…` | damaged pending files, byte copies; change lines too long for any pack (§5.11 K1) | kept until the person dismisses the notice |
@@ -1634,11 +1634,13 @@ M0  D = dirty derived and carried paths, with their new bytes computed in memory
     file on disk as it is and reports CarriedBytesMissing); X = derived or carried paths to
     remove (a removed book, a removed carried file). Nothing in X is removed while an expected
     pack is missing or unreadable (§4.4).
-M1  Compare-and-swap check. For each p in D ∪ X present on disk: if its size and mtime equal the
-    manifest entry, it is unchanged; else d = md5(disk). If d is neither the manifest md5 nor the
-    new md5, p was changed outside the app: record it first (§11.1), which commits a batch and
-    changes the fold, then start again at M0. Recording always ends: a file no decoder reads
-    (§11.1 X2) is kept as a byte copy with a notice, and the write proceeds.
+M1  Compare-and-swap check. For each p in D ∪ X present on disk: d = md5(disk). The bytes are
+    always read: size and mtime never stand for them here, because an open may have taken p as
+    converged by its size and mtime alone (§6.2), and a program can change a file and put its
+    old mtime back. If d is neither the manifest md5 nor the new md5, p was changed outside the
+    app: record it first (§11.1), which commits a batch and changes the fold, then start again
+    at M0. Recording always ends: a file no decoder reads (§11.1 X2) is kept as a byte copy with
+    a notice, and the write proceeds.
 M2  Build metadata.json for the planned result (total, §3.4) and run tc_burrito::check on it in
     memory. A failure is a bug report; nothing is written.
 M3  atomic_write(.tc, "materialize.intent.json", {writes: [{path, oldMd5, newMd5}], removes: X})
@@ -1655,7 +1657,7 @@ The burrito is valid before M4 and after M6; in between, `metadata.json` lags by
 crash there is repaired at open (§6.4, rows M1 to M6). If a rename in M4 fails because another
 program holds the file open (Windows: Paratext, an indexer), a program is probably writing that
 file right now. The actor retries for 2 s, and **before each retry it repeats M1 for that path**
-(stat, and md5 if size or mtime moved): if `d` is neither the manifest md5 nor the new md5, the
+(the md5 of its bytes): if `d` is neither the manifest md5 nor the new md5, the
 write of that path is abandoned, the file is recorded (§11.1), and the materialization restarts
 at M0. After 2 s the path stays dirty and the person sees "translationCore can't update TIT.usfm
 because another program has it open. Your work is saved." While a path waits for a retry, the
@@ -1811,35 +1813,93 @@ O8  Load: read the fold cache `.tc/index.bin` (§3.6; missing, damaged, of anoth
     fails. When the sections differ from the cache's (a new, changed or gone file), write the
     cache again in the background with `atomic_write`; a crash before that costs the next
     open the parse of those files only.
-O9  Classify every derived and carried path (§6.2). Edits made outside the app are recorded
-    as changes (§11.1) before anything is rewritten.
+O9  Classify every derived and carried path (§6.2), reading and projecting only what may have
+    changed. A path is converged without being read or projected when it is clean by stat (its
+    size and mtime equal its manifest entry, and the entry is not racy), the heads the fold
+    holds for every record in its scope equal its heads file (by the token rule of §2.7), and
+    the format minor and derivation versions in the manifest are this app's. Every other path
+    is read; it is projected only when its heads or versions differ, or its bytes are not its
+    manifest md5. Edits made outside the app are recorded as changes (§11.1) before anything
+    is rewritten. An open after no change projects no file, and reads none once the files the
+    last materialization wrote are past the racy window (§6.2).
 O10 Materialize every path whose disk bytes differ from the projection, and metadata.json if it
-    is missing, damaged or stale. Remove materialize.intent.json.
+    is missing, damaged or stale. Remove materialize.intent.json. If O9 found racy entries
+    converged, write the manifest again, so the next open takes them by stat.
 O11 Schedule pin coverage backfill (§5.6) if a group needs it.
 O12 Offer drafts (§5.14).
 O13 Report: conflicts, anomalies, recorded outside edits, identity notices. The project is usable.
+O14 The storage check, in the background (PERFORMANCE.md rule 4): read every path O9 took as
+    converged without reading it, and compare its md5 with its manifest entry (§6.2). Saves and
+    every screen go on meanwhile; a path a command must rewrite first is read by M1 (§5.10)
+    anyway.
 ```
 
 Open refuses only for: the lock is held (read-only instead), the folder cannot be read, the
 format major is newer, or the folder is not a project. It never refuses because of content.
 
 **A read-only open only reads.** When O1, O4 or O5 makes the open read-only, the app skips O2,
-the rebuild in O3, every restore in O4 and O7, the blob and cache writes of O8, and O9 to O12:
+the rebuild in O3, every restore in O4 and O7, the blob and cache writes of O8, O9 to O12, and
+every write of O14 (it still reports what it finds):
 it loads (taking what it can from the fold cache),
 folds in memory and shows the project. It writes nothing in the folder, so it can never delete
 another writer's temporary files or lock files, or rename a `.git` that another process is using.
 
 ### 6.2 Telling the app's interrupted writes from someone else's edits
 
-For each derived or carried path `p`, with `d` = md5 of the disk bytes, `m` = the manifest md5,
+An open must not read and project every derived file: for a whole Bible that is about 210 MiB
+to read and about 10 s of projection (`docs/JOURNAL-DECISION-2026-10-16.md` §2). So each path
+is first tested by what costs nothing, and read only when that test fails.
+
+**Clean by stat.** A path is clean by stat when it exists, its size and mtime equal its
+manifest entry, and the entry is not racy. An entry is **racy** (git's racy-clean rule) when the
+file's mtime is not at least 2 s older than the manifest's own mtime: a file written in the same
+timestamp tick as the manifest could have been changed again in that tick without its mtime
+moving. 2 s is the coarsest timestamp a filesystem the app may read keeps (FAT32; exFAT keeps
+10 ms, HFS+ and ext3 1 s, NTFS 100 ns, APFS and ext4 1 ns). The manifest's mtime, not this
+computer's clock, is the reference, because the filesystem stamps both: on a network drive the
+server's clock does. A network drive (SMB, NFS, AFP, WebDAV, from `sysinfo::Disks`) can also
+answer sizes and times from a client cache, so there no path is clean by stat: each is read.
+
+**Converged without reading** (O9): clean by stat, named by no `materialize.intent.json`, the
+heads the fold holds for every record in its scope equal to its heads file by the token rule of
+§2.7 (the scope is every record the projection of `p` reads, which is what the heads file lists,
+so a record that entered the scope since makes them differ), and the manifest's `minor` and
+`derivations` this app's. The projection of `p` is a function of exactly those heads and
+versions (I1), so it is the manifest md5, and the file, by its stat, still holds it.
+`metadata.json` is converged in the same way when, in addition, the ingredients and md5s it
+lists are those the manifest and the pack set now give (the manifest keeps each pack's md5 with
+the size and fingerprint it was computed for: packs are immutable, and O8 takes every pack's
+fingerprint anyway).
+
+**Read, but not projected:** a path whose heads and versions are unchanged but which is not
+clean by stat (racy, a moved mtime, a network drive) is read: `d == m` means converged, and the
+entry's size and mtime are taken again. Only a path whose heads or versions changed, or whose
+bytes are not `m`, is projected and classified by the table below.
+
+**What a skipped read cannot cause.** A program that changes a file and puts its old mtime
+back within the same size (some sync clients, `rsync -t`, `cp -p`, archive extractors) leaves a
+path that is clean by stat. O9 takes it as converged, but nothing is overwritten: M1 (§5.10)
+reads every path's bytes before it replaces or removes it, and the storage check (O14) reads it
+within seconds of the open. Either one classifies it by the table below, so I8 holds.
+
+**The storage check** (O14) reads, in the background after the project is usable, every path O9
+took as converged without reading it, and compares `d` with `m`. Equal: nothing happens. Not
+equal: the table's row "clean by stat, `d ≠ m`" applies, and the person sees in the notice
+list: "TIT.usfm does not hold what translationCore last wrote, although its size and time did
+not change. The disk may be failing, or a program put back an older file time. Your copy is
+kept in .tc/external/…; the file was rebuilt from your project. [Take in the copy as an edit]
+[Dismiss]". *Take in the copy as an edit* records the copy as an outside edit (§11.1, with the
+heads file as its base), so a person's edit made through such a program is never hidden.
+
+For each path `p` that is read, with `d` = md5 of the disk bytes, `m` = the manifest md5,
 `o`/`n` = the intent's old and new md5 when `materialize.intent.json` exists, and `e` = the md5 of
-the projection:
+the projection (computed when the rules above call for it):
 
 | Disk | Condition | Meaning | Action |
 |---|---|---|---|
 | present | `d == e` | converged | refresh the manifest entry |
 | present | `d == m` or `d ∈ {o, n}` | written by this app; stale (a crash after a save, before its materialization) or interrupted | rewrite from the fold, or remove it if the projection no longer has `p` |
-| present | size and mtime equal the manifest entry, `d ≠ m` | storage damage (bit rot, a failed write-back): no program changes bytes and keeps size and mtime to the nanosecond | copy to `.tc/external/`, rebuild from the fold or the object database, `StorageDamage` notice; never recorded as an edit |
+| present | clean by stat (size and mtime equal the manifest entry, the entry not racy, not a network drive), `d ≠ m` | storage damage (bit rot, a failed write-back), or a program that put an older mtime back | copy to `.tc/external/`, rebuild from the fold or the object database, `StorageDamage` notice with *Take in the copy as an edit* (above); recorded as an edit only when the person chooses |
 | missing | `p` is in the projection | deleted outside the app, or a crash inside a write | rewrite; notice "TIT.usfm was missing and was rebuilt". Never read as a deletion (I11) |
 | missing | `p` is only in the manifest | a removal by this app (a removed book) that stopped before the manifest was written | drop the manifest entry |
 | present | none of the above, manifest entry exists | edited outside the app | §11.1, base = the heads file |
@@ -1848,7 +1908,8 @@ the projection:
 | present | not a path the app derives | carried | §11.4 |
 
 Because the manifest records what this app wrote, the app never records its own stale file as a
-person's edit, and never overwrites a person's edit as if it were stale.
+person's edit, and never overwrites a person's edit as if it were stale. A racy entry, or one on
+a network drive, whose `d ≠ m` is never storage damage: it falls to the rows below it.
 
 ### 6.3 Device identity
 
@@ -2915,8 +2976,9 @@ watcher (`notify`, on `ingredients/` except `tc/changes/`, 1 s debounce; the app
 recognized because their md5 is the manifest's or the intent's), and on window focus (a stat of
 size and mtime against the manifest, md5 only for files that look changed).
 
-**Recording** a changed file `p` with disk bytes `b` (storage damage, where size and mtime still
-equal the manifest, is not an edit and is never recorded, §6.2):
+**Recording** a changed file `p` with disk bytes `b` (storage damage, where the file is clean by
+stat but its bytes differ, is not recorded as an edit unless the person takes the copy in,
+§6.2):
 
 ```
 X1  atomic_write(.tc/external, "<utc>-<escaped p>", b): the person's bytes, kept until they
@@ -3657,6 +3719,19 @@ Playwright drives the real UI against the real server for:
    platform, and the second-writer detection with two machines sharing one OneDrive folder.
 8. **Export verify.** That the E5 read bypasses the cache on each platform, checked with a
    stick whose contents are changed behind the cache.
+
+### 16.5a Operation counts of the open (PERFORMANCE.md rule 2)
+
+`tc-store` (units S1 and S2) counts, in its tests, the derived files read and their bytes, the
+files projected, the heads files read and the packs read at each open, on the Psalms corpus and
+on the corpus ten times larger:
+
+| Test | Asserts |
+|---|---|
+| `an_open_after_no_change_projects_no_file_and_reads_no_derived_file` | open, close, open, close, open: the second open reads at most the files the first session's last materialization wrote (their entries are racy), projects none of them, and writes the manifest again; the third open projects 0 files and reads 0 bytes of derived files, on both corpora; its storage check (O14) then reads each derived file once |
+| `an_open_after_one_save_projects_only_that_books_files` | a verse saved and materialized before close: the next open projects nothing; a verse saved but not materialized (a crash after B3): the next open projects only that book's files and `metadata.json`, the same count on both corpora |
+| `a_racy_or_mtime_restored_file_is_never_overwritten` | a file changed within the manifest's timestamp tick, and a file changed with its old mtime put back: the first is read at open, the second by the storage check, and each is recorded as an outside edit or listed as `StorageDamage` with its copy, never overwritten |
+| `an_open_reads_each_pack_once` | every pack and pending file is read once per open, with or without the fold cache |
 
 ### 16.6 Burrito validity everywhere (P5)
 
