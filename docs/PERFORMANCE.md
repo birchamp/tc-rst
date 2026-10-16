@@ -70,6 +70,7 @@ inside the whole-Bible project, so project size is always present.
 | Checking | Plan the carry-over for an upgrade or gateway change | whole Bible | 5 s in the background; 300 ms per book |
 | Aligning | Open the aligner on a verse | the longest verse in Psalms | 30 ms |
 | Aligning | Suggestions for one verse | model trained on the NT + GEN + PSA alignments of ULT v91 (tC4's responsiveness fixture used v89) | 50 ms; training in the background; after an alignment save the model updates in the background |
+| Aligning | Any aligner edit, including the verse-order sort of the bank and of every card | the longest verse in Psalms | inside the 30 ms open budget; the sort touches only the words of that verse |
 | Aligning | Reflow alignments after a verse edit | one verse | 2 ms |
 | Resources | Load one book's resources from the installed store (original language, ULT, UST, tN, TWL, linked tW articles) | Psalms | 300 ms the first time, then cached; 60 MiB per open book |
 | Resources | Load a lexicon (one JSON file per lexicon) and look up an entry | the Hebrew lexicon, 8,674 entries | 100 ms to load once per session; lookups in memory, under 1 ms |
@@ -82,11 +83,52 @@ inside the whole-Bible project, so project size is always present.
 | Project | Memory | whole Bible open, Psalms in use | 350 MiB peak; 150 MiB steady |
 | UI | Long lists (the Psalms check rail, chapter views) | Psalms | virtualized; 16 ms per frame while scrolling |
 | UI | Typing in a verse, input to paint | Psalms | 16 ms |
+| App | First launch: from the shortcut click to a visible, usable Home | a signed, installed Windows build with Defender on; an empty profile, and the first launch after an upgrade, measured apart | under 60 s each, with determinate progress (rule 4); see "Start-up" |
+| App | Repeat launch | the installed bundle | no read and no write of a resource content file (a count test); proposed: a usable Home in 3 s |
+
+## Start-up
+
+The first-launch budget of 60 s is a hard gate now (owner ruling Q24 in
+`docs/TC4-DELTA-2026-10-16.md`). It is tC4's own release gate. The first measurement of the
+rebuild on Windows sets a tighter target. That measurement must come before the target is
+fixed, because `tc-resources` fsyncs every file it installs (`write_synced` in
+`crates/tc-resources/src/store.rs`, lines 732-737). At a first launch, tC4 writes 3,792 files
+into its store and does not fsync each one.
+
+Why tC4 has the gate: before tC4 #740, every tC4 start opened every bundled and installed
+resource file. That was 35,823 opens and 613 MB. It took about 8 minutes on a Windows laptop
+with Defender real-time protection on (tC4 `docs/PACKAGING.md`, "Bundled English suite", at
+`d310bf3`).
+
+tC4's measurements are the reference (tC4 `docs/evidence/startup-740.md` at `d310bf3`). They
+were taken on a Mac (arm64). tC4 has not measured the Windows gate yet either.
+
+| tC4 launch | Usable Home |
+|---|---:|
+| Empty profile | 5,143 ms |
+| Repeat launch | 2,186 ms |
+| First launch after an upgrade | 2,518 ms |
+
+| tC4 resource preparation only | Archive reads | Resource file reads | Resource file writes | Time |
+|---|---:|---:|---:|---:|
+| Empty profile | 16 | 0 | 3,739 | 2,795 ms |
+| Repeat start | 0 | 0 | 0 | 41 ms |
+
+A resource file here is a resource content file, which tC4 calls an ingredient. The 3,739
+resource file writes are part of the 3,792 files that a first launch writes.
+
+The count tests take these counts as their targets:
+
+- A first launch reads each shipped archive once. It writes each installed file once and
+  reads none of them back. tC4 ships 16 archives and writes 3,739 resource files (3,792 files
+  in all).
+- A repeat launch reads no archive and reads or writes no resource content file.
 
 ## Background work
 
 Cold open, materialize, checkpoint, sync, export, import, carry-over plans, resource installs
-and suggestion training. Each follows rule 4 and has its budget above.
+and suggestion training. Each follows rule 4 and has its budget above. First-launch seeding
+also follows rule 4: it shows "Preparing resources: n of total", and Close cancels it.
 
 ## Owners
 
@@ -98,5 +140,6 @@ and suggestion training. Each follows rule 4 and has its budget above.
 | `tc-import` | tC4 import |
 | `tc-check` | Check screen, rail, decisions, re-assessment, carry-over |
 | `tc-align` | aligner, suggestions, reflow |
-| `tc-resources` | loading installed resources |
+| `tc-resources` | loading installed resources, first-launch seeding, the repeat-launch count test |
 | `tc-ui`, `tc-app` | lists, typing, never blocking the UI thread |
+| `tc4` (the desktop shell) | first launch and repeat launch to a usable Home |
