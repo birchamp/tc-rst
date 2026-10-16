@@ -1,5 +1,6 @@
-//! tC4's alignment editing tests, ported: `test/align-edit.test.ts` (C2.11, C2.12, #129)
-//! and `test/align-done.test.ts` (#271, D73). The verses and words are tC4's.
+//! tC4's alignment editing tests, ported: `test/align-edit.test.ts` (C2.11, C2.12, #734,
+//! #129) and `test/align-done.test.ts` (#271, D73), at d310bf3. The verses and words are
+//! tC4's.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -185,20 +186,106 @@ fn unlinking_a_word_that_is_not_there_is_refused() {
     assert_eq!(value, before);
 }
 
+// ---- #734 unlink: the bank follows the verse order (align-edit.test.ts:103-137) ----
+
+fn keys(words: &[TargetWord]) -> Vec<String> {
+    words
+        .iter()
+        .map(|w| format!("{}/{}", w.text, w.occurrence))
+        .collect()
+}
+
+/// The verse's words that `bank` holds, in verse order.
+fn verse_order(verse: &TargetVerse, bank: &[TargetWord]) -> Vec<String> {
+    let banked = keys(bank);
+    keys(verse.words())
+        .into_iter()
+        .filter(|k| banked.contains(k))
+        .collect()
+}
+
 #[test]
-fn unlinking_puts_the_word_back_where_the_bootstrap_had_it() {
+fn a_repeated_word_returns_to_its_own_occurrence_slot() {
     let (mut value, verse) = boot();
-    let bootstrap_bank = value.word_bank.clone();
-    for (card, text, occurrence) in [(0, "Pablo", 1), (1, "de", 2), (0, "y", 1)] {
-        value
-            .link(card, &bank_word(&value, text, occurrence))
-            .unwrap();
-    }
-    for (card, text, occurrence) in [(1, "de", 2), (0, "Pablo", 1), (0, "y", 1)] {
-        let w = word(text, occurrence, if text == "de" { 2 } else { 1 });
-        value.unlink(card, &w, &verse).unwrap();
-    }
-    assert_eq!(value.word_bank, bootstrap_bank);
+    value.link(0, &bank_word(&value, "de", 2)).unwrap();
+    value.link(1, &bank_word(&value, "Dios", 1)).unwrap();
+    value.unlink(0, &word("de", 2, 2), &verse).unwrap();
+    assert_eq!(
+        keys(&value.word_bank),
+        verse_order(&verse, &value.word_bank)
+    );
+    value.unlink(1, &word("Dios", 1, 2), &verse).unwrap();
+    assert_eq!(keys(&value.word_bank), keys(verse.words()));
+}
+
+#[test]
+fn a_bank_stored_out_of_verse_order_comes_back_in_verse_order() {
+    let (mut value, verse) = boot();
+    value.link(0, &bank_word(&value, "siervo", 1)).unwrap();
+    value.word_bank.reverse();
+    value.unlink(0, &word("siervo", 1, 1), &verse).unwrap();
+    assert_eq!(keys(&value.word_bank), keys(verse.words()));
+}
+
+#[test]
+fn a_word_the_text_no_longer_has_goes_last_the_others_in_verse_order() {
+    let (mut value, _) = boot();
+    value.link(0, &bank_word(&value, "Pablo", 1)).unwrap();
+    let edited = TargetVerse::new(&TARGET.replace("Pablo", "Saulo"));
+    value.unlink(0, &word("Pablo", 1, 1), &edited).unwrap();
+    let mut expected: Vec<String> = keys(edited.words())
+        .into_iter()
+        .filter(|k| k != "Saulo/1")
+        .collect();
+    expected.push("Pablo/1".to_owned());
+    assert_eq!(keys(&value.word_bank), expected);
+}
+
+#[test]
+fn an_unlink_puts_a_bank_in_bootstrap_order_into_verse_order() {
+    // tC4's bootstrap banks every first occurrence before every second one; the first
+    // unlink puts the whole bank in verse order, as tC4's `unlinkWord` does.
+    let (mut value, verse) = boot_with(&orig(), "de Dios y de Pablo");
+    assert_eq!(
+        keys(&value.word_bank),
+        ["de/1", "Dios/1", "y/1", "Pablo/1", "de/2"]
+    );
+    value.link(0, &bank_word(&value, "y", 1)).unwrap();
+    value.unlink(0, &word("y", 1, 1), &verse).unwrap();
+    assert_eq!(
+        keys(&value.word_bank),
+        ["de/1", "Dios/1", "y/1", "de/2", "Pablo/1"]
+    );
+}
+
+// ---- #736 several words placed on one card in one edit ----
+
+#[test]
+fn link_many_places_the_banked_words_and_skips_the_rest() {
+    let (mut value, _) = boot();
+    value.link(1, &bank_word(&value, "y", 1)).unwrap();
+    let words = [word("Dios", 2, 2), word("y", 1, 1), word("Pablo", 1, 1)];
+    assert_eq!(value.link_many(0, &words), Ok(2), "y is on card 1 already");
+    assert_eq!(targets(&value, 0), ["Dios", "Pablo"], "in the order given");
+    assert_eq!(targets(&value, 1), ["y"]);
+    assert_eq!(value.total(), 7);
+}
+
+#[test]
+fn link_many_with_nothing_to_place_or_no_such_card_changes_nothing() {
+    let (mut value, _) = boot();
+    value.link(0, &bank_word(&value, "Pablo", 1)).unwrap();
+    let before = value.clone();
+    assert_eq!(
+        value.link_many(1, &[word("Pablo", 1, 1)]),
+        Err(EditError::NothingToPlace)
+    );
+    assert_eq!(value.link_many(1, &[]), Err(EditError::NothingToPlace));
+    assert_eq!(
+        value.link_many(99, &[word("Dios", 1, 2)]),
+        Err(EditError::NoSuchCard(99))
+    );
+    assert_eq!(value, before);
 }
 
 // ---- #129 merge / split: phrase alignments stay original-anchored ----
@@ -306,15 +393,21 @@ fn move_word_of_a_word_not_on_the_from_card_changes_nothing() {
 }
 
 #[test]
-fn clear_starts_the_verse_over() {
-    let (fresh, verse) = boot_with(&orig3(), TARGET);
+fn clear_starts_the_verse_over_with_the_bank_in_verse_order() {
+    let text = "de Dios y de Pablo";
+    let (fresh, verse) = boot_with(&orig3(), text);
     let mut value = fresh.clone();
-    value.link(2, &bank_word(&value, "Dios", 2)).unwrap();
+    value.link(2, &bank_word(&value, "de", 2)).unwrap();
     value.link(0, &bank_word(&value, "Pablo", 1)).unwrap();
     value.merge(0, 1).unwrap();
     value.clear(&verse);
     assert_eq!(value.alignments, fresh.alignments);
-    assert_eq!(value.word_bank, fresh.word_bank);
+    assert_eq!(
+        value.word_bank,
+        verse.words(),
+        "verse order, not tC4's bootstrap order"
+    );
+    assert_ne!(fresh.word_bank, verse.words());
 }
 
 // ---- #271 (D73): all aligned is done; Mark valid; any edit takes it back ----

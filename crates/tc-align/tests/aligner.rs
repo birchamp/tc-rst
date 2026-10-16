@@ -348,7 +348,7 @@ fn a_stored_word_held_in_two_places_opens_in_one() {
 }
 
 #[test]
-fn clear_after_a_carry_over_puts_the_bank_back_in_bootstrap_order() {
+fn clear_after_a_carry_over_puts_the_bank_back_in_verse_order() {
     let mut first = open(None, "the cat saw the dog");
     first.place(0, &banked(&first, "cat")).unwrap();
     let stored = first.into_value();
@@ -356,11 +356,20 @@ fn clear_after_a_carry_over_puts_the_bank_back_in_bootstrap_order() {
     let mut aligner = open(Some(&stored), edited);
     assert_eq!(aligner.value().placed(), 1);
     aligner.clear();
-    assert_eq!(
-        aligner.value().word_bank,
-        TargetVerse::new(edited).bank_order()
-    );
+    assert_eq!(aligner.value().word_bank, TargetVerse::new(edited).words());
     assert_eq!(aligner.value().placed(), 0);
+}
+
+#[test]
+fn a_verse_with_no_alignment_shows_its_bank_in_verse_order_from_the_first_view() {
+    // tC4's record of an unaligned verse banks every first occurrence before every
+    // second one; the owner's Q15 ruling shows the bank in verse order from the start.
+    let text = "the cat saw the dog";
+    let verse = TargetVerse::new(text);
+    let aligner = open(None, text);
+    assert_eq!(aligner.value().word_bank, verse.words());
+    assert_ne!(verse.bank_order(), verse.words());
+    assert!(!aligner.is_changed(), "the order alone is not saved");
 }
 
 #[test]
