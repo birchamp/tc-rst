@@ -12,6 +12,25 @@ testing on that." This memo answers that suggestion. It compares three options, 
 at d310bf3, tC4's own speed records, the rebuild's J1 and J2 work, and benchmarks of both systems
 run on one machine today.
 
+## Decisions (owner, 2026-10-16)
+
+- **Option B.** Moving a team from tC4 4.0 to the rebuild is one way (§13.3). Rebuild users and
+  tC4 4.0 users do not share a Door43 project. Option A is not taken.
+- **No way back.** Plan step 8 (an export to tC4 4.0 without history) is dropped. A tC4 4.x
+  straggler's sync still refuses without overwriting, and the §13.3 bridge still converts
+  segments pushed after a move, so no straggler's work is lost.
+- **A first open may take up to 10 s, with progress.** This covers a project with no usable
+  fold cache (received from a teammate, imported, or after the cache encoding changes) and the
+  first open after a restart with a cold disk cache. An ordinary open keeps the 3 s budget.
+- **The reference machine is a five-year-old Windows laptop.** Many such laptops (for example
+  Intel 10th-generation Core U-series) have no SHA instructions, so budgets must hold without
+  them. The owner's quiet Ice Lake run (`docs/LOCAL-BENCH-FINDINGS-2026-10-16.md`) shows what
+  SHA instructions change: hashing 6.5 times faster, a first open without a cache in 3.8 s.
+- **Question 3 is settled by AGENTS.md:** when two people judge a check or an alignment
+  differently, both are kept and shown (P3). tC4's newest-wins rule does not apply.
+- **Question 6 is open** and optional: B is safe without a tC4 4.0.x "project moved" message.
+- **Units C, S1, S2, P, X and I go ahead** under B, with plan steps 1 to 7 and 9.
+
 ## The answer in short
 
 - **Do not adopt tC4's journal format as the rebuild's storage format (option A).** It brings
