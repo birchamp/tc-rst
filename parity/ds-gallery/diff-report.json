@@ -1,7 +1,7 @@
 {
   "about": "Pixels that differ between tC4 (screens/) and the Leptos port (screens-rust/), per case. pixelmatch threshold 0 with anti-aliased pixels counted: any difference in any channel counts.",
-  "total": 744,
-  "zero": 744,
+  "total": 751,
+  "zero": 751,
   "nonzero": 0,
   "unexplained": [],
   "worst": [],
@@ -3394,6 +3394,41 @@
     {
       "id": "Modal/busy-later",
       "frame": "720x520",
+      "mismatched": 0
+    },
+    {
+      "id": "Modal/open-door43-empty",
+      "frame": "720x720",
+      "mismatched": 0
+    },
+    {
+      "id": "Modal/open-door43-filled",
+      "frame": "720x720",
+      "mismatched": 0
+    },
+    {
+      "id": "Modal/open-door43-name-error",
+      "frame": "720x760",
+      "mismatched": 0
+    },
+    {
+      "id": "Modal/open-door43-refused",
+      "frame": "720x800",
+      "mismatched": 0
+    },
+    {
+      "id": "Modal/open-door43-refused-rtl",
+      "frame": "720x800",
+      "mismatched": 0
+    },
+    {
+      "id": "Modal/open-door43-busy",
+      "frame": "720x720",
+      "mismatched": 0
+    },
+    {
+      "id": "Modal/add-project",
+      "frame": "720x640",
       "mismatched": 0
     },
     {

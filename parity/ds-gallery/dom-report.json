@@ -1,6 +1,6 @@
 {
-  "same": 744,
-  "total": 744,
+  "same": 751,
+  "total": 751,
   "cases": [
     {
       "id": "Badge/accent-md",
@@ -4066,6 +4066,48 @@
     },
     {
       "id": "Modal/busy-later",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/open-door43-empty",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/open-door43-filled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/open-door43-name-error",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/open-door43-refused",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/open-door43-refused-rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/open-door43-busy",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/add-project",
       "same": true,
       "errors": [],
       "diffs": []

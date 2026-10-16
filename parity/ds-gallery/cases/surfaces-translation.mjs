@@ -41,6 +41,74 @@ const openDoor43 = {
   ],
 };
 
+/* Open from Door43 as tC4 draws it (src/views/modals/OpenFromDoor43.jsx:36-104, #677): the
+   two fields, then the checks line or the refusal. `od` holds the dialog's state; the text is
+   en.json's or ar.json's, with {host} from tC4's production Door43 server. */
+const OD = {
+  en: {
+    title: 'Open a project from Door43', subtitle: 'Get a full copy of a project your team shares on Door43.', close: 'Close',
+    where: 'The project opens from git.door43.org. Only public repositories can be opened.',
+    repo: 'Door43 repository', repoHint: 'Type owner/repository, or paste the link to the repository.',
+    name: 'Project name', nameHint: 'The repository name is the default. Each project on this computer needs its own name.',
+    nameBad: 'Use letters, numbers, hyphens and underscores only. Do not use spaces.',
+    checks: 'tC4 checks every file before it adds the project to this computer. After the project opens, use Sync with Door43 to get your team’s work and send yours.',
+    cancel: 'Cancel', open: 'Open project', opening: 'Opening…',
+    refusedTitle: 'This project cannot be opened.', offline: 'The internet is off. Turn on the internet, then try again. No project was added to this computer.',
+    nothingWritten: 'No project was added.', ask: 'Ask for help',
+  },
+  ar: {
+    title: 'فتح مشروع من Door43', subtitle: 'احصل على نسخة كاملة من مشروع يشاركه فريقك على Door43.', close: 'إغلاق',
+    where: 'يُفتح المشروع من git.door43.org. يمكن فتح المستودعات العامة فقط.',
+    repo: 'مستودع Door43', repoHint: 'اكتب owner/repository، أو الصق رابط المستودع.',
+    name: 'اسم المشروع', nameHint: 'اسم المستودع هو الاسم الافتراضي. يحتاج كل مشروع على هذا الكمبيوتر إلى اسم خاص به.',
+    nameBad: 'استخدم الحروف والأرقام والشرطات والشرطات السفلية فقط. لا تستخدم المسافات.',
+    checks: 'يفحص tC4 كل ملف قبل أن يضيف المشروع إلى هذا الكمبيوتر. بعد فتح المشروع، استخدم مزامنة مع Door43 للحصول على عمل فريقك وإرسال عملك.',
+    cancel: 'إلغاء', open: 'فتح المشروع', opening: 'جارٍ الفتح…',
+    refusedTitle: 'لا يمكن فتح هذا المشروع.', offline: 'الإنترنت متوقف. شغّل الإنترنت، ثم حاول مرة أخرى. لم تتم إضافة أي مشروع إلى هذا الكمبيوتر.',
+    nothingWritten: 'لم تتم إضافة أي مشروع.', ask: 'طلب المساعدة',
+  },
+};
+const openFromDoor43 = ({ repo = '', name = '', nameBad = false, refusal = null, busy = false, lang = 'en' }) => {
+  const t = OD[lang];
+  const cantOpen = !repo || !name || nameBad || busy;
+  return {
+    title: t.title, subtitle: t.subtitle, 'data-testid': 'open-door43-modal', width: 520, closeLabel: t.close, onClose: busy ? undefined : noop,
+    footer: [
+      el('Button', { variant: 'secondary', disabled: busy, onClick: noop, 'data-testid': 'open-door43-cancel', children: t.cancel }),
+      el('Button', { disabled: cantOpen, 'aria-busy': busy || undefined, onClick: noop, 'data-testid': 'open-door43-submit', children: busy ? t.opening : t.open }),
+    ],
+    children: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 6 }, children: [
+      el('Callout', { tone: 'info', children: t.where }),
+      el('Field', { label: t.repo, hint: t.repoHint, children: el('Input', { value: repo, 'data-testid': 'open-door43-repo', disabled: busy, onChange: noop }) }),
+      el('Field', { label: t.name, hint: t.nameHint, error: nameBad ? t.nameBad : undefined, 'data-testid': 'open-door43-name-field',
+        children: el('Input', { value: name, 'data-testid': 'open-door43-name', disabled: busy, onChange: noop }) }),
+      refusal
+        ? el('Callout', { tone: 'warn', 'data-testid': 'open-door43-refused', 'data-code': refusal, role: 'alert', children: el('div', {
+          style: { display: 'flex', flexDirection: 'column', gap: 6 }, children: [
+            el('Text', { role: 'strong', children: t.refusedTitle }),
+            el('span', { children: t.offline }),
+            el('span', { children: [el('code', { children: refusal }), ' · ', t.nothingWritten] }),
+            el('div', { children: el('Button', { size: 'sm', variant: 'outline', 'data-testid': 'open-door43-help', onClick: noop, children: t.ask }) }),
+          ] }) })
+        : el('Text', { role: 'caption', tone: 'muted', children: t.checks }),
+    ] }),
+  };
+};
+/* Add a project (src/views/modals/AddProject.jsx, #431, #677): four cards, the fourth with
+   the mockup's download icon. */
+const download = el('svg', { 'aria-hidden': 'true', width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round',
+  children: [el('path', { d: 'M12 4v11' }), el('path', { d: 'M7 10l5 5 5-5' }), el('path', { d: 'M5 20h14' })] });
+const addProject = {
+  title: 'Add a project', subtitle: 'Start a new translation or bring in one you have already started.', 'data-testid': 'add-project-modal', closeLabel: 'Close', onClose: noop,
+  children: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 18 }, children: [
+    ['bible', '+', 'New Bible', 'Translate books of the Bible, verse by verse.'],
+    ['obs', 'OBS', 'New Open Bible Stories', 'Translate the 50 Open Bible Stories, frame by frame.'],
+    ['import', '↪', 'Import a project', 'From translationCore 3, USFM files or a Scripture Burrito.'],
+    ['door43', download, 'Open a project from Door43', 'Work on a Bible your team shares on Door43. Every teammate opens the same project.'],
+  ].map(([id, icon, title, description]) => el('OptionCard', { 'data-testid': `add-project-${id}`, icon, title, description, trailing: '→', onClick: noop })) }),
+};
+const filled = { repo: 'equipo/es-419_tit', name: 'es-419_tit' };
+
 export default [
   ...group('BookTile', { frame: { width: 200, height: 92 } }, [
     ['tile-0', { name: 'Ruth', percent: 0 }],
@@ -140,6 +208,13 @@ export default [
     ['busy', openDoor43, { cells: { busy: true } }],
     ['busy-later', { ...openDoor43, open: cell('open'), onClose: when('busy', undefined, setTo('open', false)) },
       { cells: { busy: false, open: true }, steps: [click('[data-testid="open-door43-submit"]')], note: 'The open starts: the ✕ goes, Cancel and Open turn off, Open is busy. Until then the ✕, Escape and the scrim close the dialog.' }],
+    ['open-door43-empty', openFromDoor43({}), { frame: { height: 720 }, note: 'Nothing typed: Open stays off.' }],
+    ['open-door43-filled', openFromDoor43(filled), { frame: { height: 720 }, note: 'A repository and the name it gives: Open is on.' }],
+    ['open-door43-name-error', openFromDoor43({ ...filled, name: 'es-419 tit', nameBad: true }), { frame: { height: 760 }, note: 'A name that is not a folder name: the error under it, Open off.' }],
+    ['open-door43-refused', openFromDoor43({ ...filled, refusal: 'sync.offline' }), { frame: { height: 800 }, note: 'A refusal: its sentence, its code, "No project was added" and Ask for help.' }],
+    ['open-door43-refused-rtl', openFromDoor43({ ...filled, refusal: 'sync.offline', lang: 'ar' }), { frame: { height: 800 }, document: AR }],
+    ['open-door43-busy', openFromDoor43({ ...filled, busy: true }), { frame: { height: 720 }, note: 'The open runs: no ✕, the fields and Cancel off, Open busy.' }],
+    ['add-project', addProject, { frame: { height: 640 } }],
   ]),
 
   ...group('ScripturePassage', { frame: { width: 560, height: 212 } }, [
