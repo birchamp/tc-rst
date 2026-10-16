@@ -95,7 +95,7 @@ impl AlignmentValue {
 
     /// Place several banked words on one card, in the order given, and return how many
     /// were placed. A word that is no longer in the bank is skipped, as tC4's reduce over
-    /// `linkWord` skips it (`src/state.jsx:5250-5262` at d310bf3); the edit is refused,
+    /// `linkWord` skips it (`src/state.jsx:5249-5261` at d310bf3); the edit is refused,
     /// changing nothing, only when no word could be placed.
     pub fn link_many(&mut self, card: usize, words: &[TargetWord]) -> Result<usize, EditError> {
         self.card(card)?;

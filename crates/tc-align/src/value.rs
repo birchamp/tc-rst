@@ -41,7 +41,9 @@ use tc_usfm::{SourceWord, TargetWord};
 pub struct Group {
     /// `topWords`: one source word, or several for a phrase.
     pub sources: Vec<SourceWord>,
-    /// `bottomWords`: the placed target words, in the order they were placed.
+    /// `bottomWords`: the placed target words. The aligner shows them in verse order; a
+    /// value saved by an older tC4 or imported keeps the order it came in until the verse
+    /// is edited or marked valid (Q19).
     pub targets: Vec<TargetWord>,
 }
 

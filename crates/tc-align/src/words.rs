@@ -416,7 +416,7 @@ pub(crate) fn same_word(a: &TargetWord, b: &TargetWord) -> bool {
 }
 
 /// How the Align workspace tells a repeated word apart (tC4 #735, as tC3's
-/// `WordOccurrence` did, `src/views/Align.jsx:36-48` at d310bf3): a word that occurs more
+/// `WordOccurrence` did, `src/views/Align.jsx:37-48` at d310bf3): a word that occurs more
 /// than once in its verse shows its occurrence number after it, raised, and is named
 /// "word n"; a word that occurs once shows no number.
 pub trait Occurrence {

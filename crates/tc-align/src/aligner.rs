@@ -2,7 +2,7 @@
 //!
 //! The aligner holds the verse's alignment, the verse text it is shown against, the
 //! standing suggestions and the selected bank words. Every edit goes through one path, as
-//! in tC4's `applyAlignEdit` (`src/state.jsx:5225-5246` at d310bf3): the edit, then the
+//! in tC4's `applyAlignEdit` (`src/state.jsx:5225-5247` at d310bf3): the edit, then the
 //! bank and every card in verse order ([`AlignmentValue::bank_in_verse_order`],
 //! [`AlignmentValue::cards_in_verse_order`]), then [`AlignmentValue::settle`] against the
 //! shown text, then the suggestions are bound again to the edited cards
@@ -12,7 +12,7 @@
 //!
 //! The bank and the cards are in verse order from the first view of a verse, whatever
 //! order the stored value has (the owner's Q15 ruling; tC4 sorts a stored value on open,
-//! `src/state.jsx:1186-1198`, but not its bootstrap). Order alone never makes the value
+//! `src/state.jsx:1193-1198`, but not its bootstrap). Order alone never makes the value
 //! count as changed: a value stored in another order, such as an import, stays as it was
 //! until the translator edits the verse or marks it valid (Q19).
 //!
@@ -185,13 +185,13 @@ impl Aligner {
         &mut self,
         f: impl FnOnce(&mut AlignmentValue, &TargetVerse) -> Result<T, EditError>,
     ) -> Result<T, EditError> {
-        let done = f(&mut self.value, &self.verse)?;
+        let out = f(&mut self.value, &self.verse)?;
         self.value.bank_in_verse_order(&self.verse);
         self.value.cards_in_verse_order(&self.verse);
         self.value.settle(&self.verse);
         self.proposals = suggest::rebind(&self.value, &self.proposals);
         self.changed = true;
-        Ok(done)
+        Ok(out)
     }
 
     /// An edit that places words: on success it also clears the selection, as tC4's
@@ -200,9 +200,9 @@ impl Aligner {
         &mut self,
         f: impl FnOnce(&mut AlignmentValue, &TargetVerse) -> Result<T, EditError>,
     ) -> Result<T, EditError> {
-        let done = self.edit(f)?;
+        let out = self.edit(f)?;
         self.armed.clear();
-        Ok(done)
+        Ok(out)
     }
 
     /// Place a banked word on a card.

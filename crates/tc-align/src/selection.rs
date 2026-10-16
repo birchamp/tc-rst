@@ -1,5 +1,5 @@
 //! Which bank words a click selects, for placing several on one card in one edit (tC4
-//! #736, `shownSelection` and `nextSelection` in `src/views/Align.jsx:480-505` at
+//! #736, `shownSelection` and `nextSelection` in `src/views/Align.jsx:482-506` at
 //! d310bf3, as tC3 had it).
 //!
 //! The rule works on the shown bank: the banked words without a standing suggestion,

@@ -80,7 +80,6 @@ fn shown_in_verse_order(aligner: &Aligner) -> bool {
 fn every_aligned_ult_verse_opens_in_verse_order_with_nothing_to_save() {
     let verses = psalms(ULT_PSA);
     assert_eq!(verses.len(), 2461);
-    let mut opened = 0;
     for verse in &verses {
         let at = &verse.reference;
         let (stored, target) = stored(verse);
@@ -93,9 +92,7 @@ fn every_aligned_ult_verse_opens_in_verse_order_with_nothing_to_save() {
         expected.bank_in_verse_order(aligner.verse());
         expected.cards_in_verse_order(aligner.verse());
         assert_eq!(aligner.value(), &expected, "{at}: only the order differs");
-        opened += 1;
     }
-    assert_eq!(opened, 2461);
 }
 
 #[test]
