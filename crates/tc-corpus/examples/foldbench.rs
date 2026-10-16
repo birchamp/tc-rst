@@ -184,19 +184,25 @@ fn load(dir: &Path, threads: usize) -> (Vec<FoldInput>, Arc<dyn ValueSource>) {
         .enumerate()
         .map(|(n, (is_pack, path))| (n as u32, *is_pack, path.clone()))
         .collect();
-    let chunks: Vec<Vec<(u32, bool, PathBuf)>> = (0..threads)
-        .map(|t| numbered.iter().skip(t).step_by(threads).cloned().collect())
-        .collect();
-    let inputs = std::thread::scope(|scope| {
-        let handles: Vec<_> = chunks
-            .into_iter()
-            .map(|chunk| {
+    // Largest files first, each to the next free thread, as a work-stealing pool would;
+    // the inputs keep the files' order.
+    let mut queue = numbered;
+    queue.sort_by_key(|(_, _, path)| {
+        std::cmp::Reverse(std::fs::metadata(path).map_or(0, |m| m.len()))
+    });
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let (queue, next) = (&queue, &next);
+    let mut read: Vec<(u32, Vec<FoldInput>)> = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..threads)
+            .map(|_| {
                 scope.spawn(move || {
                     let mut out = Vec::new();
-                    for (file, is_pack, path) in chunk {
-                        let bytes = std::fs::read(&path).expect("read");
-                        let (pack, entries, spans) = if is_pack {
-                            let name = pack_path(&path);
+                    while let Some((file, is_pack, path)) =
+                        queue.get(next.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+                    {
+                        let bytes = std::fs::read(path).expect("read");
+                        let (pack, entries, spans) = if *is_pack {
+                            let name = pack_path(path);
                             let read = tc_journal::pack::read_pack(&name, &bytes, project);
                             assert!(read.is_valid(), "{name}: {:?}", read.status);
                             (Some(read.id), read.entries, read.spans)
@@ -204,9 +210,14 @@ fn load(dir: &Path, threads: usize) -> (Vec<FoldInput>, Arc<dyn ValueSource>) {
                             let read = tc_journal::pending::read_pending(&bytes, project);
                             (None, read.entries, read.spans)
                         };
-                        out.extend(entries.into_iter().zip(spans).map(|(entry, span)| {
-                            FoldInput::new(entry, pack).prepare_at(ValueAt::new(file, span))
-                        }));
+                        let inputs = entries
+                            .into_iter()
+                            .zip(spans)
+                            .map(|(entry, span)| {
+                                FoldInput::new(entry, pack).prepare_at(ValueAt::new(*file, span))
+                            })
+                            .collect();
+                        out.push((*file, inputs));
                     }
                     out
                 })
@@ -217,6 +228,8 @@ fn load(dir: &Path, threads: usize) -> (Vec<FoldInput>, Arc<dyn ValueSource>) {
             .flat_map(|h| h.join().expect("thread"))
             .collect()
     });
+    read.sort_by_key(|(file, _)| *file);
+    let inputs: Vec<FoldInput> = read.into_iter().flat_map(|(_, inputs)| inputs).collect();
     let opened: Vec<File> = work
         .iter()
         .map(|(_, path)| File::open(path).expect("open"))
@@ -316,8 +329,13 @@ fn run(args: &[String]) {
     for _ in 0..runs {
         drop(state.take());
         let started = Instant::now();
+        let load_cpu = process_cpu_ms();
         let (inputs, source) = load(&dir, threads);
         let loaded = started.elapsed();
+        eprintln!(
+            "load {loaded:?}, cpu over all threads {} ms",
+            process_cpu_ms() - load_cpu
+        );
         changes = inputs.len();
         let t = Instant::now();
         let f0 = minflt();
