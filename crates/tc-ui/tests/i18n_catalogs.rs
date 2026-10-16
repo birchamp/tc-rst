@@ -11,6 +11,7 @@ use std::path::PathBuf;
 
 use serde_json::{Map, Value};
 use tc_ui::i18n::{DEFAULT_LOCALE, LOCALES, TextDir, locale, placeholders};
+use unicode_general_category::{GeneralCategory as G, get_general_category};
 
 fn catalog_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/i18n")
@@ -43,16 +44,33 @@ fn targets() -> impl Iterator<Item = &'static str> {
         .filter(|id| *id != DEFAULT_LOCALE)
 }
 
+/// A character of a word as tC4's `/[\p{L}\p{N}]+/gu` counts it: a letter or a number by its
+/// general category. `char::is_alphabetic` would also take the vowel signs and other combining
+/// marks (Other_Alphabetic), which split a word in tC4.
+fn letter_or_number(c: char) -> bool {
+    matches!(
+        get_general_category(c),
+        G::UppercaseLetter
+            | G::LowercaseLetter
+            | G::TitlecaseLetter
+            | G::ModifierLetter
+            | G::OtherLetter
+            | G::DecimalNumber
+            | G::LetterNumber
+            | G::OtherNumber
+    )
+}
+
 /// English messages a translation may equal: product names, codes, symbols, numbers, and a
 /// single word (a cognate such as "Format", with its placeholders). Never a sentence of two
-/// or more words.
+/// or more words. tC4's `SHARED` rule.
 fn may_equal_english(message: &str) -> bool {
     let mut text = message.to_string();
     for p in placeholders(message) {
         text = text.replace(p, " ");
     }
     let words = text
-        .split(|c: char| !(c.is_alphabetic() || c.is_numeric()))
+        .split(|c: char| !letter_or_number(c))
         .filter(|w| !w.is_empty())
         .count();
     words <= 1
@@ -192,4 +210,19 @@ fn the_exemption_from_translation_is_for_names_and_single_words_only() {
     assert!(may_equal_english("translationCore 4"));
     assert!(!may_equal_english("Sync with Door43"));
     assert!(!may_equal_english("Open Bible Stories now"));
+}
+
+#[test]
+fn the_exemption_counts_words_as_tc4_does_where_combining_marks_split_them() {
+    // tC4 counts runs of letters and numbers (general categories L and N), so a vowel sign
+    // (Mc) or a combining mark (Mn) ends a word: "भाषा" is two words there, as are these.
+    assert!(!may_equal_english("भाषा"));
+    assert!(!may_equal_english("{n}% मसौदा"));
+    assert!(!may_equal_english("كِتَاب"));
+    assert!(!may_equal_english("nai\u{308}ve"));
+    // A precomposed letter is one letter; a letter number and an other number count as numbers.
+    assert!(may_equal_english("Tiếng"));
+    assert!(may_equal_english("Ⅻ²"));
+    // A circled letter is a symbol (So) with the Alphabetic property: no word in tC4.
+    assert!(may_equal_english("Ⓐ Ⓑ"));
 }
