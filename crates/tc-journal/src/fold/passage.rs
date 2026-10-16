@@ -216,6 +216,7 @@ fn build_group(state: &mut FoldState, mut records: Vec<KeyIdx>, dirty: &mut Dirt
     let mut candidates: Vec<Candidate> = Vec::new();
     let mut batches: BTreeSet<BatchId> = BTreeSet::new();
     let mut incomplete = false;
+    let mut unreadable: Vec<ChangeId> = Vec::new();
     for &r in &records {
         let heads = state.entry(r).heads.to_vec();
         let projected = provisional_after_rewind(state, r, &heads, &losing, w);
@@ -248,8 +249,9 @@ fn build_group(state: &mut FoldState, mut records: Vec<KeyIdx>, dirty: &mut Dirt
                         .min()
                 })
                 .unwrap_or(Side::Others);
-            if let Some(candidate) = super::attach::candidate(state, *h, Vec::new(), Some(side)) {
-                candidates.push(candidate);
+            match super::attach::candidate(state, *h, Vec::new(), Some(side)) {
+                Some(candidate) => candidates.push(candidate),
+                None => unreadable.push(meta.id),
             }
         }
     }
@@ -276,6 +278,10 @@ fn build_group(state: &mut FoldState, mut records: Vec<KeyIdx>, dirty: &mut Dirt
         provisional: w_time.2,
         batches: batches.into_iter().collect(),
         incomplete_history: incomplete,
+        unreadable: {
+            unreadable.sort();
+            unreadable
+        },
     };
     let shared = std::sync::Arc::new(conflict.clone());
     state.groups.insert(

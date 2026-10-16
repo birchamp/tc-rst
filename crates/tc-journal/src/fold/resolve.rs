@@ -3,7 +3,7 @@
 //! its record as parents (§5.9). A resolution needs no ancestry condition, so every
 //! conflict can always be resolved (§8.4).
 
-use super::merge::{Unit, ancestors_or_self, record_of, units_for, value_of};
+use super::merge::{ancestors_or_self, record_of, units_for, value_of};
 use super::meta::{ChangeIdx, KeyIdx, VerseShape};
 use super::passage::rewind;
 use super::state::FoldState;
@@ -40,8 +40,14 @@ pub enum ResolveError {
 }
 
 impl FoldState {
+    /// A listed conflict whose every version this computer can read: a version the
+    /// person could not see is never replaced by a choice (§2.6).
     fn listed(&self, id: &ConflictId) -> Result<&Conflict, ResolveError> {
-        self.conflict(id).ok_or(ResolveError::UnknownConflict)
+        let conflict = self.conflict(id).ok_or(ResolveError::UnknownConflict)?;
+        if !conflict.unreadable.is_empty() {
+            return Err(ResolveError::Unreadable(conflict.key.clone()));
+        }
+        Ok(conflict)
     }
 
     fn idx_of(&self, key: &RecordKey) -> Option<KeyIdx> {
@@ -823,38 +829,59 @@ impl FoldState {
         )
     }
 
-    /// *Choose per line* (§8.3): the record with every agreed unit and, for each disputed
-    /// unit, the value of the head the person picked.
+    /// *Choose per line* (§8.3): the record with every unit that merged cleanly, and, for
+    /// each disputed unit, the value of the head the person picked. Offered only for a
+    /// record's own conflict that lists disputed units.
     pub fn per_unit(
         &self,
         id: &ConflictId,
         picks: &BTreeMap<UnitName, ChangeId>,
     ) -> Result<Record, ResolveError> {
         let conflict = self.listed(id)?;
-        let k = self
-            .idx_of(&conflict.key)
-            .ok_or(ResolveError::UnknownConflict)?;
+        if conflict.disputed.is_empty() {
+            return Err(ResolveError::NotOffered);
+        }
+        let key = conflict.key.clone();
+        let k = self.idx_of(&key).ok_or(ResolveError::UnknownConflict)?;
         let heads: Vec<ChangeIdx> = self.entry(k).heads.to_vec();
-        let values: Vec<Option<Json>> = heads.iter().map(|h| value_of(self, *h)).collect();
-        let versions: Vec<Option<&Json>> = values.iter().map(Option::as_ref).collect();
-        let units: Vec<Unit> = units_for(&conflict.key, &versions);
+        let Some(&template) = heads.first() else {
+            return Err(ResolveError::NotOffered);
+        };
+        let read =
+            |c: &ChangeIdx| value_of(self, *c).map_err(|_| ResolveError::Unreadable(key.clone()));
+        let values: Vec<Option<Json>> = heads.iter().map(read).collect::<Result<_, _>>()?;
+        let bases = super::merge::ancestry(self, &heads).bases;
+        let base_values: Vec<Option<Json>> = bases.iter().map(read).collect::<Result<_, _>>()?;
+        // The agreed units' merged values, as the merge rule takes them (§7.3).
+        let outcome = super::merge::merge_units(&key, &values, &base_values);
+        let versions: Vec<Option<&Json>> = values
+            .iter()
+            .chain(base_values.iter())
+            .map(Option::as_ref)
+            .collect();
         let mut value = values.first().cloned().flatten();
-        for unit in &units {
-            let from = match picks.get(&unit.name) {
-                Some(pick) => self
-                    .change_idx(pick)
-                    .filter(|c| heads.contains(c))
-                    .ok_or(ResolveError::NotACandidate)?,
-                None if conflict.disputed.contains(&unit.name) => {
-                    return Err(ResolveError::MissingValue(conflict.key.clone()));
+        for unit in units_for(&key, &versions) {
+            let unit_value = match outcome.agreed.iter().find(|(name, _)| *name == unit.name) {
+                Some((_, agreed)) => agreed.0.clone(),
+                None => {
+                    let pick = picks
+                        .get(&unit.name)
+                        .ok_or_else(|| ResolveError::MissingValue(key.clone()))?;
+                    let at = self
+                        .change_idx(pick)
+                        .and_then(|c| heads.iter().position(|h| *h == c))
+                        .ok_or(ResolveError::NotACandidate)?;
+                    unit.read(values[at].as_ref())
                 }
-                None => continue,
             };
-            let unit_value = unit.read(value_of(self, from).as_ref());
             unit.write(&mut value, unit_value);
         }
-        super::merge::rebuild_record(self, heads[0], value)
-            .ok_or(ResolveError::MissingValue(conflict.key.clone()))
+        if let Some(root) = value.as_mut() {
+            let heads: Vec<Option<&Json>> = values.iter().map(Option::as_ref).collect();
+            super::merge::prune_emptied(root, &mut Vec::new(), &heads);
+        }
+        super::merge::rebuild_record(self, template, value)
+            .ok_or_else(|| ResolveError::MissingValue(key.clone()))
     }
 
     /// *Keep both* for two check comments (§8.3): the texts joined with their authors'

@@ -346,10 +346,7 @@ fn issue_conflict(
             .map(|j| j.to_canonical_string())
             .unwrap_or_default()
     );
-    let candidates = heads
-        .iter()
-        .filter_map(|h| candidate(state, *h, Vec::new(), None))
-        .collect();
+    let (candidates, unreadable) = candidates_of(state, &heads, |_| None);
     let mut also_keys: Vec<RecordKey> = keys
         .iter()
         .map(|k| state.entry(*k).key.clone())
@@ -376,7 +373,27 @@ fn issue_conflict(
             .map_or(ChangeId::from_bytes([0; 32]), |h| state.meta(h).id),
         batches: batches.into_iter().collect(),
         incomplete_history: false,
+        unreadable,
     })
+}
+
+/// The candidates of `heads`, one each, and the heads whose values cannot be read, which
+/// are listed apart (§2.6).
+pub(crate) fn candidates_of(
+    state: &FoldState,
+    heads: &[ChangeIdx],
+    side: impl Fn(ChangeIdx) -> Option<Side>,
+) -> (Vec<Candidate>, Vec<ChangeId>) {
+    let mut candidates = Vec::new();
+    let mut unreadable = Vec::new();
+    for h in heads {
+        match candidate(state, *h, Vec::new(), side(*h)) {
+            Some(c) => candidates.push(c),
+            None => unreadable.push(state.meta(*h).id),
+        }
+    }
+    unreadable.sort();
+    (candidates, unreadable)
 }
 
 // ---------------------------------------------------------------------------------------
@@ -403,7 +420,7 @@ pub(crate) fn stage_local(state: &mut FoldState, dirty: &mut Dirty) {
         let projected = local_projection(state, k);
         state.entry_mut(k).projected = projected;
         let conflict = match &state.entry(k).local {
-            Local::Conflict(c) => Some(local_conflict(state, k, c.id, c.provisional)),
+            Local::Conflict(c) => Some(local_conflict(state, k, c)),
             _ => None,
         };
         state.set_conflicts(Owner::Key(k), conflict.into_iter().collect(), dirty);
@@ -423,7 +440,7 @@ impl FoldState {
         let mut out: Vec<Conflict> = Vec::new();
         for (i, entry) in self.keys.iter().enumerate() {
             if let (Local::Conflict(c), None) = (&entry.local, entry.group) {
-                out.push(local_conflict(self, KeyIdx(i as u32), c.id, c.provisional));
+                out.push(local_conflict(self, KeyIdx(i as u32), c));
             }
         }
         for (owner, sorts) in self.owned.iter() {
@@ -448,18 +465,16 @@ impl FoldState {
     }
 }
 
-fn local_conflict(
-    state: &FoldState,
-    k: KeyIdx,
-    id: ConflictId,
-    provisional: ChangeIdx,
-) -> Conflict {
+fn local_conflict(state: &FoldState, k: KeyIdx, local: &super::state::LocalConflict) -> Conflict {
     let entry = state.entry(k);
     let heads: Vec<ChangeIdx> = entry.heads.to_vec();
     let anc = ancestry(state, &heads);
     let (agreed, disputed) = units_of_conflict(state, &entry.key, &heads, &anc.bases);
     let mut candidates: Vec<Candidate> = Vec::new();
-    for group in group_by_value(state, &heads) {
+    let (groups, unreadable_heads) = group_by_value(state, &heads);
+    let mut unreadable: Vec<ChangeId> =
+        unreadable_heads.iter().map(|h| state.meta(*h).id).collect();
+    for group in groups {
         let Some(&best) = group.iter().max_by_key(|h| state.meta(**h).order()) else {
             continue;
         };
@@ -469,10 +484,23 @@ fn local_conflict(
             .map(|h| state.meta(*h).id)
             .collect();
         also.sort();
-        if let Some(c) = candidate(state, best, also, None) {
-            candidates.push(c);
+        match candidate(state, best, also, None) {
+            Some(c) => candidates.push(c),
+            None => unreadable.extend(group.iter().map(|h| state.meta(*h).id)),
         }
     }
+    if local.unreadable {
+        // A base the merge needed and could not read.
+        unreadable.extend(
+            anc.bases
+                .iter()
+                .filter(|b| state.bytes(**b).is_none())
+                .map(|b| state.meta(*b).id),
+        );
+    }
+    unreadable.sort();
+    unreadable.dedup();
+    let (id, provisional) = (local.id, local.provisional);
     candidates.sort_by_key(|c| std::cmp::Reverse((c.at, c.head)));
     let batches: BTreeSet<crate::ids::BatchId> = heads
         .iter()
@@ -494,6 +522,7 @@ fn local_conflict(
         provisional: state.meta(provisional).id,
         batches: batches.into_iter().collect(),
         incomplete_history,
+        unreadable,
     }
 }
 
@@ -1052,16 +1081,14 @@ pub(crate) fn stage_paths(state: &mut FoldState, dirty: &mut Dirty) {
             .collect();
         also_keys.sort();
         let tag = format!("pathCase\0{form}");
+        let (candidates, unreadable) = candidates_of(state, &heads, |_| None);
         conflicts.push(Conflict {
             id: ConflictId::tagged(&tag, &ids),
             key,
             also_keys,
             kind: ConflictKind::PathCase,
             bases: Vec::new(),
-            candidates: heads
-                .iter()
-                .filter_map(|h| candidate(state, *h, Vec::new(), None))
-                .collect(),
+            candidates,
             agreed: Vec::new(),
             disputed: Vec::new(),
             provisional: heads
@@ -1076,6 +1103,7 @@ pub(crate) fn stage_paths(state: &mut FoldState, dirty: &mut Dirty) {
                 .into_iter()
                 .collect(),
             incomplete_history: false,
+            unreadable,
         });
     }
     state.case_moves = Arc::new(moves);

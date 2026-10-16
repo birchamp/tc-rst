@@ -589,6 +589,8 @@ impl FoldState {
     pub fn detached(&self) -> impl Iterator<Item = &RecordKey>;    // heads with no place on any screen (§7.7)
     pub fn frontier(&self) -> Frontier;                            // sha256 of the sorted set of all head ids
     pub fn shown_heads(&self, key: &RecordKey, displayed: Option<ChangeId>) -> Vec<ChangeId>;  // the token rule, §2.7
+    pub fn unreadable_records(&self) -> Vec<RecordKey>;   // versions the source cannot read, below
+    pub fn retry_unreadable(&mut self) -> Delta;          // judges those records again
     // also: change, body, raw, history, book, books, placement, derived_files, render,
     // book_usfm, chapter_usfm, carried_files, metadata_source, resolution and the choices of §8.3
 }
@@ -607,6 +609,14 @@ pub struct ValueAt { pub offset: u64, pub file: u32, pub len: u32 }
 /// word never does (each step of the fingerprint is one to one), any other with a chance of
 /// about 2⁻⁶⁴. (Computing SHA-256 again was a third of a book's projection without SHA
 /// instructions, §14; the id was proved when the bytes were read.)
+///
+/// A value the source cannot read is unknown, never absent and never equal to another: a
+/// record with several heads and such a head or base is not merged or settled but listed as
+/// a conflict whose `unreadable` names the versions, a token never names an unreadable
+/// version (the screen did not show it), and no choice is made into changes while a version
+/// of the conflict is unreadable (`ResolveError::Unreadable`). `retry_unreadable` judges
+/// those records again, for example at the next checkpoint. Because such a state depends on
+/// this machine, `tc-store` writes no derived file while `unreadable_records` is not empty.
 pub trait ValueSource: Send + Sync { fn read(&self, at: ValueAt) -> Option<Vec<u8>>; }
 /// What one `add` changed: the records, books and chapters to re-project (§5.0 B5), the
 /// conflicts that did not exist before (B6), and whether pins or paths changed.
@@ -638,6 +648,7 @@ pub struct Conflict {
     pub provisional: ChangeId,               // head with the largest (rank, at, id), or the passage side's newest change (§7.2 F7)
     pub batches: Vec<BatchId>,               // batches of the heads, for grouping (§8.1)
     pub incomplete_history: bool,            // a head has a MissingParent link (§8.1)
+    pub unreadable: Vec<ChangeId>,           // versions this computer cannot read yet (§2.6); not candidates
 }
 pub struct Candidate {
     pub head: ChangeId,
@@ -2388,8 +2399,9 @@ Every choice is one `Resolve` batch whose changes name every current head as par
 - **Alignment:** *Use this alignment*; *Open in the aligner starting from this one* (its save is
   the resolution); bulk *Dismiss alignments made for text that was not kept*. Each card says
   whether it was made for the current text (§7.7).
-- **Check:** *Keep mine*, *Keep Ana's*, *Choose per line* (one value per disputed unit); for a
-  check comment, *Keep both* joins the texts with the authors' names.
+- **Check:** *Keep mine*, *Keep Ana's*, *Choose per line* (one value per disputed unit; every
+  unit that merged cleanly keeps its merged value, whichever head it came from); for a check
+  comment, *Keep both* joins the texts with the authors' names.
 - **Check moved:** "Ana's upgrade moved this check to the new note; Pedro changed the old one
   (status Invalid, comment '…')". *Apply Pedro's change to the moved check* writes, in one
   batch, the new key with Pedro's changed units (his values for the units he changed relative to
@@ -3422,6 +3434,8 @@ and the on-disk end state, not only what the fold returns.
 | # | Case | What prevents it | Test |
 |---|---|---|---|
 | L97 | Keeping one candidate of a passage conflict writes another person's version of the same record, the one a later clock prefers, and supersedes the chosen one; *Keep separate* picks between two concurrent texts of a verse by clock | a choice writes exactly the version picked; where a side, or a verse's own history, holds two different versions the person did not pick between, the choice asks (§8.3) | `loss_passage_keeps_the_picked_version`, `loss_passage_side_with_two_versions_asks`, `loss_keep_separate_never_picks_by_clock`, `loss_keep_joined_keeps_the_picked_span`; property `resolution_always_possible` |
+| L98 | A version the fold's source cannot read (a locked file, a cloud placeholder) is taken as absent: two unread versions settle as equal, or an unread base lets the one readable head merge over a version nobody saw, and the next edit's token supersedes it | an unreadable value is unknown, never absent or equal: the record is listed as a conflict marked unreadable, no token names an unread version, no choice is made while one is unread, and `retry_unreadable` judges it again (§2.6) | `unreadable_versions_are_listed_never_settled`, `unreadable_equal_versions_wait_to_be_read`, `unreadable_base_never_merges_away_a_version`, `unreadable_settled_version_is_not_in_a_token` |
+| L100 | *Choose per line* starts from one head's value and skips the units that merged cleanly, so the other person's agreed change (a comment) is lost; with no folded head it panics | the record starts from the merged agreed units and takes only the disputed units from the picks; it is offered only for a record's own conflict with disputed units (§8.3) | `loss_choose_per_line_keeps_agreed_units`, `per_unit_not_offered_without_units` |
 
 ---
 

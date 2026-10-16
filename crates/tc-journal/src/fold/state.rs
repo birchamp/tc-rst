@@ -141,6 +141,8 @@ pub(crate) struct LocalConflict {
     pub id: ConflictId,
     /// The head projection shows (F7).
     pub provisional: ChangeIdx,
+    /// A head's or base's value could not be read (§2.6): listed until it can.
+    pub unreadable: bool,
 }
 
 /// What projection shows for a record.
@@ -374,6 +376,9 @@ pub struct FoldState {
     pub(crate) profile_keys: CowMap<DeviceId, KeyIdx>,
     pub(crate) story_keys: Arc<BTreeSet<KeyIdx>>,
     pub(crate) setting_keys: Arc<BTreeSet<KeyIdx>>,
+    /// Keys whose resolution met a value the source could not read (§2.6); judged again
+    /// by [`FoldState::retry_unreadable`].
+    pub(crate) unreadable: CowMap<KeyIdx, ()>,
     pub(crate) conflicts: im::OrdMap<ConflictSort, Arc<Conflict>>,
     pub(crate) conflict_ids: im::HashMap<ConflictId, ConflictSort>,
     pub(crate) owned: CowMap<Owner, SmallVec<[ConflictSort; 1]>>,
@@ -432,6 +437,7 @@ impl FoldState {
             profile_keys: CowMap::default(),
             story_keys: Arc::new(BTreeSet::new()),
             setting_keys: Arc::new(BTreeSet::new()),
+            unreadable: CowMap::default(),
             conflicts: im::OrdMap::new(),
             conflict_ids: im::HashMap::new(),
             owned: CowMap::default(),
@@ -1503,6 +1509,11 @@ impl FoldState {
     /// F6 for a key whose heads may have changed.
     fn after_heads(&mut self, k: KeyIdx, dirty: &mut Dirty) {
         let (local, div) = super::merge::resolve_local(self, k);
+        if matches!(&local, Local::Conflict(c) if c.unreadable) {
+            self.unreadable.insert(k, ());
+        } else {
+            self.unreadable.remove(&k);
+        }
         self.entry_mut(k).local = local;
         if div.is_empty() {
             self.divs.remove(&k);
@@ -1670,6 +1681,52 @@ impl FoldState {
     /// Reads values on demand from `source` from now on (§14).
     pub fn set_source(&mut self, source: Arc<dyn ValueSource>) {
         self.source = Some(source);
+    }
+
+    /// The records whose versions could not all be read on this computer (§2.6): each is
+    /// listed as a conflict marked unreadable, or holds a conflict candidate that is.
+    /// `tc-store` reports them, and derived files are not written while there are any.
+    pub fn unreadable_records(&self) -> Vec<RecordKey> {
+        let mut keys: BTreeSet<RecordKey> = self
+            .unreadable
+            .iter()
+            .map(|(k, _)| self.entry(*k).key.clone())
+            .collect();
+        for conflict in self.conflicts() {
+            if !conflict.unreadable.is_empty() {
+                keys.insert(conflict.key.clone());
+                keys.extend(conflict.also_keys.iter().cloned());
+            }
+        }
+        keys.into_iter().collect()
+    }
+
+    /// Judges again every record whose versions could not all be read (§2.6), for when
+    /// the source can read them again (a file that was locked, a cloud placeholder that
+    /// arrived). Costs what those records touch.
+    pub fn retry_unreadable(&mut self) -> super::Delta {
+        let mut dirty = Dirty::default();
+        for key in self.unreadable_records() {
+            if let Some(k) = self.key_idx(&key) {
+                dirty.keys.insert(k);
+            }
+        }
+        if dirty.keys.is_empty() {
+            return super::Delta::default();
+        }
+        self.run(&mut dirty);
+        if dirty.rebuild {
+            return self.rebuild();
+        }
+        self.delta(&dirty)
+    }
+
+    /// Whether change `c`'s bytes can be read: kept in memory, or read from the source.
+    pub(crate) fn readable(&self, c: ChangeIdx) -> bool {
+        match &self.meta(c).value {
+            Stored::Bytes(_) => true,
+            Stored::At { .. } => self.bytes(c).is_some(),
+        }
     }
 
     /// The canonical bytes of change `c`: kept in memory, or read from the source and

@@ -270,6 +270,9 @@ impl FoldState {
     /// the screen shows an earlier version (a passage side rewound for the provisional
     /// text, §7.3, or a *Start empty* rewound after *Restore the text*, §7.6), the token
     /// names that version, so an edit continues what was shown and every head stays.
+    ///
+    /// A version whose value cannot be read on this computer was not displayed (§2.6): a
+    /// token never names it, so an edit made meanwhile never replaces it.
     pub fn shown_heads(&self, key: &RecordKey, displayed: Option<ChangeId>) -> Vec<ChangeId> {
         let Some(k) = self.key_idx(key) else {
             return Vec::new();
@@ -279,7 +282,8 @@ impl FoldState {
             && let Some(shown) = self.shown_after_restore(k)
         {
             return match shown {
-                attach::ShownVerse::Change(_, c) => vec![self.meta(c).id],
+                attach::ShownVerse::Change(_, c) if self.readable(c) => vec![self.meta(c).id],
+                attach::ShownVerse::Change(..) => Vec::new(),
                 attach::ShownVerse::Merged(..) => {
                     entry.heads.iter().map(|h| self.meta(*h).id).collect()
                 }
@@ -288,6 +292,15 @@ impl FoldState {
         let in_conflict =
             entry.group.is_some() || matches!(entry.local, Local::Conflict(_) | Local::Passage);
         if !in_conflict {
+            // A settled record shows its head's value; a merged one shows a value kept in
+            // memory that stands for every head.
+            let shown = match &entry.local {
+                Local::Settled(c) | Local::ByRule(c) => Some(*c),
+                _ => None,
+            };
+            if shown.is_some_and(|c| !self.readable(c)) {
+                return Vec::new();
+            }
             return entry.heads.iter().map(|h| self.meta(*h).id).collect();
         }
         let chosen = displayed
@@ -310,15 +323,17 @@ impl FoldState {
                 }
             }
         };
+        let Ok(value) = super::value_of(self, shown) else {
+            return Vec::new();
+        };
         if !entry.heads.contains(&shown) {
             return vec![self.meta(shown).id];
         }
-        let value = super::value_of(self, shown);
         let mut out: Vec<ChangeId> = entry
             .heads
             .iter()
             .copied()
-            .filter(|h| *h == shown || super::value_of(self, *h) == value)
+            .filter(|h| *h == shown || super::value_of(self, *h).as_ref() == Ok(&value))
             .map(|h| self.meta(h).id)
             .collect();
         out.sort();

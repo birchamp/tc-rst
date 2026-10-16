@@ -2232,3 +2232,93 @@ fn loss_keep_joined_keeps_the_picked_span() {
         "{planned:#?}"
     );
 }
+
+/// L100: *Choose per line* keeps every unit that merged cleanly, whichever head has the
+/// smallest id, and takes the picked head's value only for the disputed units.
+#[test]
+fn loss_choose_per_line_keeps_agreed_units() {
+    let key = check_key("abcd", 1, 1);
+    let mut orders = BTreeSet::new();
+    for attempt in 0..32 {
+        let mut ana = Dev::new(1);
+        let mut pedro = Dev::new(2);
+        let mut juan = Dev::new(3);
+        pedro.at += attempt * 1_000;
+        let book = imported_book(&mut ana, &[1]);
+        let base = ana.one(
+            check(&key, decision(Some(UserStatus::Todo), false, Some("base"))),
+            vec![],
+        );
+        // Pedro changes the status; Juan the status and the comment.
+        let p = pedro.one(
+            check(
+                &key,
+                decision(Some(UserStatus::Invalid), false, Some("base")),
+            ),
+            vec![base.id()],
+        );
+        let j = juan.one(
+            check(
+                &key,
+                decision(Some(UserStatus::Valid), false, Some("Juan's note")),
+            ),
+            vec![base.id()],
+        );
+        let pedro_first = p.id() < j.id();
+        if !orders.insert(pedro_first) {
+            continue;
+        }
+        let state = assert_converges(&all_of(&[&book, &[base, p.clone(), j]]));
+        let conflict = the_conflict(&state);
+        assert_eq!(
+            conflict.disputed,
+            vec![tc_journal::fold::UnitName("/decision/judgement".into())]
+        );
+        let picks = BTreeMap::from([(
+            tc_journal::fold::UnitName("/decision/judgement".into()),
+            p.id(),
+        )]);
+        let record = state.per_unit(&conflict.id, &picks).expect("offered");
+        assert_eq!(
+            record,
+            check(
+                &key,
+                decision(Some(UserStatus::Invalid), false, Some("Juan's note"))
+            ),
+            "Pedro's head has the smaller id: {pedro_first}"
+        );
+        if orders.len() == 2 {
+            return;
+        }
+    }
+    panic!("both orders of the heads' ids were not reached: {orders:?}");
+}
+
+/// L100: *Choose per line* is not offered for a conflict that lists no units, such as a
+/// chapter with verses but no chapter marker, whose front has no folded version.
+#[test]
+fn per_unit_not_offered_without_units() {
+    let mut maria = Dev::new(1);
+    let mut juan = Dev::new(2);
+    let book = imported_book(&mut maria, &[1]);
+    // Chapter 2's front came in a batch of two whose other change never arrived.
+    let held = maria.batch(
+        vec![
+            (front(2), vec![]),
+            (verse(2, 2, text("Maria's 2:2", 2)), vec![]),
+        ],
+        Cause::Edit,
+    );
+    let verse_two = juan.one(verse(2, 1, text("Juan's 2:1", 1)), vec![]);
+    let state = assert_converges(&all_of(&[&book, &held[..1], &[verse_two]]));
+    let conflict = state
+        .conflicts()
+        .find(|c| c.key == RecordKey::ChapterFront(BOOK, ch(2)))
+        .cloned()
+        .expect("chapter 2 has no marker");
+    assert_eq!(conflict.kind, ConflictKind::StructureIssue);
+    assert_eq!(
+        state.per_unit(&conflict.id, &BTreeMap::new()),
+        Err(tc_journal::fold::ResolveError::NotOffered)
+    );
+}

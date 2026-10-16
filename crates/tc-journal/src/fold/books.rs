@@ -192,12 +192,7 @@ fn book_conflict(
     ids: &[ChangeId],
 ) -> Conflict {
     let tag = kind.tag().unwrap_or("book");
-    let mut candidates = Vec::new();
-    for h in heads {
-        if let Some(c) = super::attach::candidate(state, *h, Vec::new(), None) {
-            candidates.push(c);
-        }
-    }
+    let (candidates, unreadable) = super::attach::candidates_of(state, heads, |_| None);
     let provisional = heads
         .iter()
         .copied()
@@ -220,6 +215,7 @@ fn book_conflict(
         provisional,
         batches: batches.into_iter().collect(),
         incomplete_history: false,
+        unreadable,
     }
 }
 

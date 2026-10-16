@@ -84,10 +84,16 @@ pub(crate) fn div(ancestry: &Ancestry) -> BTreeSet<ChangeIdx> {
     out
 }
 
-/// The record value of a change as JSON (`None` when the record has no value member).
-pub(crate) fn value_of(state: &FoldState, c: ChangeIdx) -> Option<Json> {
+/// A change whose bytes the fold's source cannot read on this computer (§2.6): its value
+/// is unknown, which is never the same as a value that is absent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Unreadable;
+
+/// The record value of a change as JSON (`Ok(None)` when the record has no value member).
+pub(crate) fn value_of(state: &FoldState, c: ChangeIdx) -> Result<Option<Json>, Unreadable> {
     state.count(super::Counter::ValuesDecoded, 1);
-    super::meta::value_json(&state.bytes(c)?)
+    let bytes = state.bytes(c).ok_or(Unreadable)?;
+    Ok(super::meta::value_json(&bytes))
 }
 
 /// The record of a change, decoded from its stored bytes.
@@ -122,6 +128,11 @@ fn seed_stub_kind(key: &RecordKey) -> bool {
 }
 
 /// F6 for key `k`: its own resolution and the passage batches it diverges from.
+///
+/// A head or base whose value cannot be read (§2.6) is never taken as equal to another or
+/// as absent: the record is not merged and not settled by equal values, but listed as a
+/// conflict marked unreadable until its values can be read and it is judged again. Rules
+/// that read no value (the stub rules, divergence from a passage batch) still apply.
 pub(crate) fn resolve_local(state: &FoldState, k: KeyIdx) -> (Local, SmallVec<[BatchIdx; 1]>) {
     let entry = state.entry(k);
     let heads: Vec<ChangeIdx> = entry.heads.to_vec();
@@ -150,15 +161,11 @@ pub(crate) fn resolve_local(state: &FoldState, k: KeyIdx) -> (Local, SmallVec<[B
             SmallVec::new(),
         );
     }
-    let values: Vec<Option<Json>> = heads.iter().map(|h| value_of(state, *h)).collect();
-    if values.iter().all(|v| *v == values[0]) {
-        return match record_of(state, heads[0]) {
-            Some(record) => (
-                Local::Merged(Box::new((Arc::new(record), MergeHow::EqualValues))),
-                SmallVec::new(),
-            ),
-            None => (Local::Settled(heads[0]), SmallVec::new()),
-        };
+    let values: Vec<Result<Option<Json>, Unreadable>> =
+        heads.iter().map(|h| value_of(state, *h)).collect();
+    let mut unreadable = values.iter().any(Result::is_err);
+    if !unreadable && values.iter().all(|v| *v == values[0]) {
+        return equal_values(state, &heads);
     }
     // Stub rules: a seed stub is absorbed by any head that is not one; if every head is a
     // stub, the smallest id stays.
@@ -170,7 +177,7 @@ pub(crate) fn resolve_local(state: &FoldState, k: KeyIdx) -> (Local, SmallVec<[B
             return (Local::ByRule(heads[0]), SmallVec::new());
         }
         if stubs.iter().any(|s| *s) {
-            let kept: Vec<(ChangeIdx, Option<Json>)> = heads
+            let kept: Vec<(ChangeIdx, Result<Option<Json>, Unreadable>)> = heads
                 .iter()
                 .zip(values)
                 .zip(&stubs)
@@ -182,14 +189,9 @@ pub(crate) fn resolve_local(state: &FoldState, k: KeyIdx) -> (Local, SmallVec<[B
             }
             heads = kept.iter().map(|(h, _)| *h).collect();
             values = kept.into_iter().map(|(_, v)| v).collect();
-            if values.iter().all(|v| *v == values[0]) {
-                return match record_of(state, heads[0]) {
-                    Some(record) => (
-                        Local::Merged(Box::new((Arc::new(record), MergeHow::EqualValues))),
-                        SmallVec::new(),
-                    ),
-                    None => (Local::Settled(heads[0]), SmallVec::new()),
-                };
+            unreadable = values.iter().any(Result::is_err);
+            if !unreadable && values.iter().all(|v| *v == values[0]) {
+                return equal_values(state, &heads);
             }
         }
     }
@@ -207,31 +209,46 @@ pub(crate) fn resolve_local(state: &FoldState, k: KeyIdx) -> (Local, SmallVec<[B
             return (Local::Passage, diverges);
         }
     }
-    let base_values: Vec<Option<Json>> =
+    let base_values: Result<Vec<Option<Json>>, Unreadable> =
         ancestry.bases.iter().map(|b| value_of(state, *b)).collect();
+    let values: Result<Vec<Option<Json>>, Unreadable> = values.into_iter().collect();
+    let (Ok(values), Ok(base_values)) = (values, base_values) else {
+        return conflict(state, &heads, true);
+    };
     let outcome = merge_units(&key, &values, &base_values);
     match outcome.merged {
-        Some(merged) => {
-            let record = rebuild_record(state, heads[0], merged);
-            match record {
-                Some(record) => (
-                    Local::Merged(Box::new((
-                        Arc::new(record),
-                        MergeHow::Units(outcome.changed),
-                    ))),
-                    SmallVec::new(),
-                ),
-                None => conflict(state, k, &heads),
-            }
-        }
-        None => conflict(state, k, &heads),
+        Some(merged) => match rebuild_record(state, heads[0], merged) {
+            Some(record) => (
+                Local::Merged(Box::new((
+                    Arc::new(record),
+                    MergeHow::Units(outcome.changed),
+                ))),
+                SmallVec::new(),
+            ),
+            // A merged value that does not decode is a conflict; so is a template whose
+            // bytes could not be read again, until they can.
+            None => conflict(state, &heads, state.bytes(heads[0]).is_none()),
+        },
+        None => conflict(state, &heads, false),
+    }
+}
+
+/// Several heads with equal values: merged, standing for all of them.
+fn equal_values(state: &FoldState, heads: &[ChangeIdx]) -> (Local, SmallVec<[BatchIdx; 1]>) {
+    match record_of(state, heads[0]) {
+        Some(record) => (
+            Local::Merged(Box::new((Arc::new(record), MergeHow::EqualValues))),
+            SmallVec::new(),
+        ),
+        // Read a moment ago, unreadable now: judged again when it can be read.
+        None => conflict(state, heads, true),
     }
 }
 
 fn conflict(
     state: &FoldState,
-    _k: KeyIdx,
     heads: &[ChangeIdx],
+    unreadable: bool,
 ) -> (Local, SmallVec<[BatchIdx; 1]>) {
     let provisional = provisional(state, heads);
     let ids: Vec<crate::ids::ChangeId> = heads.iter().map(|h| state.meta(*h).id).collect();
@@ -239,6 +256,7 @@ fn conflict(
         Local::Conflict(Box::new(super::state::LocalConflict {
             id: super::ConflictId::of(&ids),
             provisional,
+            unreadable,
         })),
         SmallVec::new(),
     )
@@ -632,7 +650,7 @@ pub(crate) fn merge_units(
 /// Removes the objects that unit writes emptied and no head has empty: when one head
 /// removed a whole object and another kept it unchanged, the merge removes it, rather than
 /// leaving an empty object nobody wrote.
-fn prune_emptied(value: &mut Json, path: &mut Vec<String>, heads: &[Option<&Json>]) {
+pub(crate) fn prune_emptied(value: &mut Json, path: &mut Vec<String>, heads: &[Option<&Json>]) {
     let Json::Obj(map) = value else {
         return;
     };
@@ -709,15 +727,21 @@ pub(crate) fn conflict_kind(
     }
 }
 
-/// The agreed and disputed units of a record's own conflict, for the review (§8.3).
+/// The agreed and disputed units of a record's own conflict, for the review (§8.3); none
+/// while a value cannot be read.
 pub(crate) fn units_of_conflict(
     state: &FoldState,
     key: &RecordKey,
     heads: &[ChangeIdx],
     bases: &[ChangeIdx],
 ) -> (Vec<(UnitName, UnitValue)>, Vec<UnitName>) {
-    let values: Vec<Option<Json>> = heads.iter().map(|h| value_of(state, *h)).collect();
-    let base_values: Vec<Option<Json>> = bases.iter().map(|b| value_of(state, *b)).collect();
+    let values: Result<Vec<Option<Json>>, Unreadable> =
+        heads.iter().map(|h| value_of(state, *h)).collect();
+    let base_values: Result<Vec<Option<Json>>, Unreadable> =
+        bases.iter().map(|b| value_of(state, *b)).collect();
+    let (Ok(values), Ok(base_values)) = (values, base_values) else {
+        return (Vec::new(), Vec::new());
+    };
     let outcome = merge_units(key, &values, &base_values);
     let whole = outcome.disputed.len() == 1 && outcome.disputed[0].0.is_empty();
     if whole {
@@ -727,14 +751,22 @@ pub(crate) fn units_of_conflict(
     (outcome.agreed, outcome.disputed)
 }
 
-/// Values of distinct heads, grouped: (value bytes → heads), for candidates.
-pub(crate) fn group_by_value(state: &FoldState, heads: &[ChangeIdx]) -> Vec<Vec<ChangeIdx>> {
-    let mut groups: BTreeMap<Vec<u8>, Vec<ChangeIdx>> = BTreeMap::new();
+/// Values of distinct heads, grouped: (value bytes → heads), for candidates; and the heads
+/// whose values cannot be read, which group with nothing.
+pub(crate) fn group_by_value(
+    state: &FoldState,
+    heads: &[ChangeIdx],
+) -> (Vec<Vec<ChangeIdx>>, Vec<ChangeIdx>) {
+    let mut groups: BTreeMap<Option<Vec<u8>>, Vec<ChangeIdx>> = BTreeMap::new();
+    let mut unreadable = Vec::new();
     for h in heads {
-        let bytes = value_of(state, *h)
-            .map(|v| v.to_canonical())
-            .unwrap_or_default();
-        groups.entry(bytes).or_default().push(*h);
+        match value_of(state, *h) {
+            Ok(value) => groups
+                .entry(value.map(|v| v.to_canonical()))
+                .or_default()
+                .push(*h),
+            Err(Unreadable) => unreadable.push(*h),
+        }
     }
-    groups.into_values().collect()
+    (groups.into_values().collect(), unreadable)
 }

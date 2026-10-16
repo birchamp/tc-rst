@@ -173,6 +173,10 @@ pub struct Conflict {
     pub batches: Vec<BatchId>,
     /// A head has a MissingParent link (§8.1).
     pub incomplete_history: bool,
+    /// Versions (heads, or the bases a merge needs) whose values this computer could not
+    /// read (§2.6). They are kept, and no choice may replace them until they can be read;
+    /// an unreadable head is listed here, not as a candidate.
+    pub unreadable: Vec<ChangeId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

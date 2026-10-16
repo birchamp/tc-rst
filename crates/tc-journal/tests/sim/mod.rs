@@ -2075,6 +2075,21 @@ pub fn choose(state: &FoldState, conflict: &Conflict, pick: u8, how: u8) -> Opti
             3,
         ) => with_picks(Vec::new(), Kept::Words, &joined).or_else(by_candidate),
         (ConflictKind::CheckMoved, 1 | 3) => values(state.apply_to_moved_check(id).ok()),
+        // *Choose per line*: each disputed unit from a candidate.
+        (_, 2) if !conflict.disputed.is_empty() => {
+            let n = conflict.candidates.len().max(1);
+            let picks: BTreeMap<tc_journal::fold::UnitName, ChangeId> = conflict
+                .disputed
+                .iter()
+                .enumerate()
+                .filter_map(|(i, unit)| {
+                    let c = conflict.candidates.get((usize::from(pick) + i) % n)?;
+                    Some((unit.clone(), c.head))
+                })
+                .collect();
+            let record = state.per_unit(id, &picks).ok()?;
+            values(state.resolution(id, &Choice::Values(vec![record])).ok())
+        }
         (ConflictKind::BookRemovedWhileEdited { .. }, 1) => match &conflict.key {
             RecordKey::BookPresence(book) => values(Some(vec![state.keep_removed(*book)])),
             _ => None,
