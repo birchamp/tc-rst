@@ -12,7 +12,7 @@ mod attach;
 mod books;
 mod cow;
 mod merge;
-mod meta;
+pub(crate) mod meta;
 mod metadata;
 mod passage;
 mod project;
@@ -20,7 +20,7 @@ mod reads;
 mod resolve;
 mod sidecar;
 mod state;
-mod value;
+pub(crate) mod value;
 
 pub use meta::ChangeIdx;
 pub use project::{CarriedPlacement, DerivedFile};

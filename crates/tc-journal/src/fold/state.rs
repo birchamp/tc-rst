@@ -82,6 +82,32 @@ impl FoldInput {
         })
     }
 
+    /// The parts of a prepared change: its id, where its value is, and its summary.
+    pub(crate) fn prepared(&self) -> Option<(ChangeId, &Stored, &meta::Summary)> {
+        match &self.line {
+            Line::Prepared { id, value, summary } => Some((*id, value, summary)),
+            Line::Verified(_) => None,
+        }
+    }
+
+    /// A prepared change read back from where it was kept ([`crate::index`]).
+    pub(crate) fn from_prepared(
+        id: ChangeId,
+        value: Stored,
+        summary: meta::Summary,
+        pack: Option<PackId>,
+    ) -> Self {
+        Self {
+            line: Line::Prepared { id, value, summary },
+            pack,
+        }
+    }
+
+    /// The pack that holds the line, if any.
+    pub(crate) fn pack(&self) -> Option<PackId> {
+        self.pack
+    }
+
     fn prepare_with(self, store: impl FnOnce(&crate::change::Change) -> Stored) -> Self {
         match self.line {
             Line::Verified(Verified::Change(change)) => {

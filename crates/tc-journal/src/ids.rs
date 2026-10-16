@@ -188,6 +188,12 @@ impl DeviceId {
         &self.0
     }
 
+    /// The device whose bytes are `bytes`, when byte 0 is a known kind.
+    pub fn from_bytes(bytes: [u8; 16]) -> Option<Self> {
+        DeviceKind::from_byte(bytes[0])?;
+        Some(Self(bytes))
+    }
+
     /// Exactly the text [`fmt::Display`] writes, with a known kind.
     pub fn parse(text: &str) -> Option<Self> {
         let bytes = unbase32::<16>(text.strip_prefix('d')?)?;

@@ -1055,7 +1055,7 @@ None of these files is project data that another device needs. Each is written w
 | `external/<utc>-<escaped path>` | byte copies of files changed outside the app, and files moved out of `ingredients/` | kept until the person dismisses the notice |
 | `sync.json` | `{remoteUrl, branch, confirmed: {commit, at}}` | last confirmed Door43 state; rebuilds `.git` config after git damage (§6.4 G4) |
 | `drafts.json` | `[{shown, field, text, at}]` | unsaved editor text, written at most every second while text is unsaved (§5.14) |
-| `index.bin` | optional fold cache keyed by the pack and pending file set | only if the open benchmark misses its target (§14) |
+| `index.bin` | the fold cache (`tc_journal::index`): for each valid pack and pending file an open read in full, a section keyed by the file's path, size and 64-bit fingerprint, holding the prepared changes the fold takes from it (each change's id, where its JSON lies in the file, the fingerprint of those bytes and its summary); stamped with the cache version, the format minor, the project and the app build that wrote it | a cold open takes each unchanged file's changes from it instead of verifying and parsing the file again (§6.1 O8, §14). It never decides what exists: a missing, damaged or other build's cache, or a file it holds no section for, only means that file is read |
 
 ### 3.7 Application data (per installation, never in a project)
 
@@ -1174,7 +1174,8 @@ person freeing space can remove a pack without anyone deciding anything. The **e
 the non-redundant packs (§4.7) of HEAD's tree, of the tree of the commit confirmed in
 `.tc/sync.json`, and of every pack the fold has read since open. At open (§6.1 O7) and before
 every tree build (§5.13 C3), each expected pack that is missing from the working tree or fails
-P2 there is written back from a blob at the same path that passes P2 (HEAD, the confirmed
+P2 there (at open, a pack whose bytes equal a section of the fold cache passes: they passed P2
+at that path when the section was made, §6.1 O8) is written back from a blob at the same path that passes P2 (HEAD, the confirmed
 commit, R, or the blob stored when the pack was first read or written, §9.4), its changes are
 folded, and the person
 sees `PackRestored` ("A file of changes from March was missing and was restored"). This applies
@@ -1758,10 +1759,20 @@ O7  Finish interrupted work:
     - every expected pack (§4.4) missing from the working tree or failing P2 there → restore it
       from a valid blob, with `PackRestored`;
     - materialize.intent.json → kept for O9's classification.
-O8  Load: read every pack and pending file in parallel (rayon), verify (§4.4; each line is
-    hashed once), salvage. Store as a blob every pack HEAD's tree does not hold. Then fold (§7),
-    keeping where each change's JSON lies, not its bytes: the fold reads values on demand
-    through the store's `ValueSource` (§2.6, §14). The fold never fails.
+O8  Load: read the fold cache `.tc/index.bin` (§3.6; missing, damaged, or written by another
+    build or cache version: no cache). Read every pack and pending file in parallel (rayon)
+    and take its fingerprint. A file whose path, size and fingerprint equal a cache section's
+    takes that section's prepared changes: those bytes passed P1 to P4 at that path when the
+    section was made and give the same changes again, so they are not hashed, verified or
+    parsed again. Every other file is verified (§4.4; each line is hashed once) and salvaged,
+    and a section is made of each valid file whose every line is a change that parsed (a
+    damaged, newer or foreign file, or one with a quarantined line, is read and reported at
+    every open). Store as a blob every pack HEAD's tree does not hold. The fold indexes each
+    file's changes as they arrive (§7), keeping where each change's JSON lies, not its bytes:
+    it reads values on demand through the store's `ValueSource` (§2.6, §14). The fold never
+    fails. When the sections differ from the cache's (a new, changed or gone file), write the
+    cache again in the background with `atomic_write`; a crash before that costs the next
+    open the parse of those files only.
 O9  Classify every derived and carried path (§6.2). Edits made outside the app are recorded
     as changes (§11.1) before anything is rewritten.
 O10 Materialize every path whose disk bytes differ from the projection, and metadata.json if it
@@ -1775,7 +1786,8 @@ Open refuses only for: the lock is held (read-only instead), the folder cannot b
 format major is newer, or the folder is not a project. It never refuses because of content.
 
 **A read-only open only reads.** When O1, O4 or O5 makes the open read-only, the app skips O2,
-the rebuild in O3, every restore in O4 and O7, the blob writes of O8, and O9 to O12: it loads,
+the rebuild in O3, every restore in O4 and O7, the blob and cache writes of O8, and O9 to O12:
+it loads (taking what it can from the fold cache),
 folds in memory and shows the project. It writes nothing in the folder, so it can never delete
 another writer's temporary files or lock files, or rename a `.git` that another process is using.
 
@@ -3052,6 +3064,7 @@ paths break the grammar or have a dot segment are foreign entries (§9.4), kept 
 | Pack | header `tcpack` | the pack framing changes (never so far) |
 | Exchange file | zip comment `tc-exchange <n>` | the comment changes |
 | tC4-shaped sidecars | their `schemaVersion` (1, and 2 for `resources.json`) | their shape changes |
+| Fold cache (`.tc/index.bin`, local) | `INDEX_VERSION`, the format minor and the app build that wrote it; any other value makes it no cache | its encoding, or what the fold keeps of a change, changes (the test `the_encoding_is_pinned` fails until `INDEX_VERSION` is raised) |
 
 ```json
 {"format":"tc-project","major":1,"minor":0,"minReaderMinor":0,
@@ -3316,7 +3329,7 @@ days a year.
 | `metadata.json` | ≈ 120 KB | 600 entries × ≈ 200 B, pretty-printed |
 | Working tree | ≈ 880 MiB | packs 674 MiB (measured) + derived ≈ 210 MiB (compact sidecars: alignments ≈ 90 MiB, decisions ≈ 110 MiB, USFM ≈ 5 MiB) |
 | `.git` after 3 years | ≈ 250–400 MiB | packs ≈ 70 MiB zlib, stored two to three times because consolidation writes new blobs; derived file history ≈ 110 MiB as deltas; ≈ 7,500 commits of ≈ 15 KB trees |
-| Cold open, 4 cores, SSD | target ≤ 3 s; measured 7.8 s on a shared 4-vCPU VM without SHA extensions, 11.6 s when other jobs shared it: **missed** | the fold indexes each file's changes as it is read, and its work after the last file is 0.68 s (0.40 s for the 277,880-change corpus); reading, verifying (two SHA-256 passes over every byte, P2 and P4) and decoding every change 5.8 s on 4 threads on the quieter VM, about 16.8 s of single-thread work of which SHA-256 is about 10 s and parsing and checking 6.2 s; the full fold alone 2.0 s on one thread (1.47 s earlier the same day, when the VM was faster); `docs/evidence/storage-fold-2026-10-16.md`. A corpus of 277,880 changes (the size of the probe's 278,041 actions, which it folded in 1.13 s) folds in 0.92 s (0.59 s on the faster VM) |
+| Cold open, 4 cores, SSD | target ≤ 3 s; measured with the fold cache 2.6 s (median of 5, p95 2.9 s) on a shared 4-vCPU VM without SHA extensions while other jobs kept its load average near 9, 2.5 s of CPU over all threads; the first open without a cache (§18 item 15) 10 to 14 s there, 27 s of CPU | with the fold cache (§3.6, §6.1 O8) the open reads and fingerprints every file (664 MB, a few tenths of a second of CPU) and takes each file's prepared changes from its section instead of hashing and parsing its lines; the fold indexes them as they arrive, about 2 s on one thread, and its work after the last file is 0.7 s. Without the cache, reading, verifying (two SHA-256 passes over every byte, P2 and P4) and decoding every change is about 16.8 s of single-thread work, of which SHA-256 is about 10 s and parsing and checking 6.2 s, 5.8 s on 4 threads on a quiet VM; `docs/evidence/storage-fold-2026-10-16.md`. A corpus of 277,880 changes (the size of the probe's 278,041 actions, which it folded in 1.13 s) folds in 0.92 s (0.59 s on a faster VM) |
 | Cold open, 2-core laptop, HDD | ≈ 6–10 s | disk-bound; determinate progress per phase |
 | Save one verse | 1–10 ms | one `atomic_write` of ≈ 1 KB (measured 0.41 ms on the VM, fsyncbench) |
 | Materialize one book | 20–60 ms estimated; measured projection of Psalms 358 ms (488 ms when other jobs shared the VM): **missed** against the 300 ms budget | projecting every Psalms file (USFM, alignments, tN and TWL decisions, comments; 18.7 MB) with values read from disk and checked against their fingerprints (§2.6), on 4 threads, 0.9 s of CPU, about half of it decoding the book's 25,132 records and a third writing the decisions; the USFM alone 14 ms, one chapter 0.11 ms; the write and `metadata.json` are `tc-store`'s |
@@ -3324,14 +3337,17 @@ days a year.
 | Daily sync | 1–3 s + network | incremental fetch of a few hundred KB; push ≈ 0.3–1 MB (non-thin, §9.5) |
 | Join | ≈ 250–400 MiB full clone, or ≈ 120 MiB exchange file | packs deflate ≈ 5x in the zip |
 | USB export | ≈ 120 MiB, 5–15 s on USB 2 | |
-| Memory | ≈ 100 MiB typical, ≈ 350 MiB peak; measured folded state 205–214 MB, 233 MB heap peak during the open; RSS after the open 256 MiB with jemalloc (peak 345 MiB), 374 MiB with glibc malloc | ≈ 340 B of tables per change (each change's entry 130 B, of which 8 B is the value's fingerprint; record keys, batches, position indexes); values are byte ranges read on demand and dropped when a book is idle; the open folds each file as it arrives, so its peak holds the tables and a few files' inputs; glibc keeps what reading threads free in their arenas |
+| Memory | ≈ 100 MiB typical, ≈ 350 MiB peak; measured folded state 205–214 MB, 233 MB heap peak during the open; an open with the fold cache peaks at 334 MiB RSS with glibc malloc (395–403 MiB when one process opens the project again and again), 269–281 MiB with the fold open; without the cache, RSS after the open 256 MiB with jemalloc (peak 345 MiB), 374 MiB with glibc malloc | ≈ 340 B of tables per change (each change's entry 130 B, of which 8 B is the value's fingerprint; record keys, batches, position indexes); values are byte ranges read on demand and dropped when a book is idle; the open folds each file as it arrives, so its peak holds the tables and a few files' inputs; glibc keeps what reading threads free in their arenas |
 
 An aligned NT project is about a quarter of these figures. Rows that say "measured" were
 measured on this format with the `tc-corpus` whole-Bible corpus, release builds
 (`docs/evidence/storage-fold-2026-10-16.md`); the other rows are still estimates from probes,
-until `tc-store` and `tc-sync` measure save, checkpoint, sync and export (§16.5). If cold open
-misses 3 s on the reference laptop, `.tc/index.bin` (heads and value locations, keyed by the hash of the pack and
-pending file set) is added as a cache; it is rebuilt whenever that hash differs.
+until `tc-store` and `tc-sync` measure save, checkpoint, sync and export (§16.5). The cold open
+meets 3 s through the fold cache `.tc/index.bin` (§3.6, §6.1 O8). It holds a section per file,
+keyed by the file's path, size and fingerprint, not one key for the whole set of files: a save,
+a seal, a consolidation or a sync costs the next open only the parse of the files it added, a
+file another program changed is read again, and a file that is gone is never asked for. The
+first open without a cache verifies and parses every change (§18 item 15).
 
 ---
 
@@ -3511,6 +3527,8 @@ and are covered by the projection tests.
 | `codec_round_trip` | the tC4 USFM identity corpus plus generated USFM (spans, poetry, headings, CRLF, tabs, odd marker whitespace, out-of-order verses) | `recompose(decompose(x)) == x`; `join_verse(split_verse(c)) == c` | a byte is normalized |
 | `canonical_change_round_trip` | arbitrary `ChangeBody` values | canonical bytes parse back to the same value and re-hash to the same id; the line verifies | the encoder and parser disagree |
 | `pack_round_trip_and_salvage` | packs with random bit flips | an intact pack passes P2–P4; a damaged one salvages exactly the lines whose bytes are intact; no salvaged change differs from what its author wrote | a damaged line is accepted |
+| `any_changes_come_back_from_the_cache_unchanged` | arbitrary `ChangeBody` values in packs and pending files, cached at one file number and read back at another | every prepared change from the fold cache equals the one reading the file gives | the cache drops or alters a field of what the fold keeps |
+| `a_damaged_index_never_gives_other_changes` | every single-bit flip and every truncation of a fold cache; arbitrary bytes after a valid header | the cache is unreadable or the section unused, never a section that gives other changes; no panic | a section is used without its fingerprint, or the decoder trusts a length |
 | `sidecar_decode_render` | random decisions and alignments | decoding a rendered sidecar gives the same records | an outside-edit decode would invent a change |
 | `every_written_state_is_a_valid_burrito` | every state any test writes (§16.6) | `tc_burrito::check` passes | a writer skips the check or lists a wrong md5 |
 
@@ -3635,6 +3653,8 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | anchors and Detached (place attached records by number) | `every_head_reachable_from_a_screen` |
 | foreign entries (build merge trees from owned paths only) | `loss_foreign_entries_kept_on_tip` |
 | `commit_received` (stamp received changes) | `door43_ingest_written_verbatim` |
+| the fold cache's key (take a section by path alone) | `a_section_stands_only_for_the_bytes_it_was_made_from`, `an_open_from_the_cache_is_the_open_from_the_files` |
+| the fold cache's section fingerprint | `a_damaged_index_never_gives_other_changes` |
 
 ---
 
@@ -3645,8 +3665,8 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | `tc-core` | `BookId`, references (exists) |
 | `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`, `PARA_MARKERS` and the layout rule), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1`, the OBS story splice |
 | `tc-burrito` | `build_metadata`, `check`, the vendored SB 1.0.0 schema, the extension table, `collision_form` (§3.3) |
-| `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking, the command types. No I/O. |
-| `tc-store` | `Vfs`, `FaultFs`, `atomic_write`, the project lock, `ProjectActor` and commands, open and recovery, the fold's `ValueSource` over pack and pending files and their blobs, materialize, seal, consolidate, outside-edit detection and recording, drafts, identity, local git (tree build, commit, index, repack, object database access) |
+| `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the fold cache's codec (`index`: sections of prepared changes keyed by path, size and fingerprint), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking, the command types. No I/O. |
+| `tc-store` | `Vfs`, `FaultFs`, `atomic_write`, the project lock, `ProjectActor` and commands, open and recovery, reading and writing the fold cache `.tc/index.bin` (§6.1 O8), the fold's `ValueSource` over pack and pending files and their blobs, materialize, seal, consolidate, outside-edit detection and recording, drafts, identity, local git (tree build, commit, index, repack, object database access) |
 | `tc-door43` | the internet switch, the Gitea REST client, and git2 network calls (`fetch`, `push`, `list`) on a repository `tc-store` opened |
 | `tc-sync` | the Door43 sync (§9), the exchange file export and import (§10), the Door43 edit walk (§11.2), `ExchangeReport` |
 | `tc-import` | the tC4 4.0 converter and oracle check, the tC4 seed, tC3, raw USFM, foreign burritos |
@@ -3698,6 +3718,11 @@ go in `[workspace.dependencies]`. No CRDT library and no git content merge (`.au
     another computer) is in History everywhere but its bytes only on that computer.
 14. **Whitespace at line ends and line endings** changed by an outside editor are not recorded
     (§11.1 X3); the app keeps the file's previous line endings.
+15. **The first open without a fold cache** (a project just received, or the first open after
+    the app is updated, since a cache is read only by the build that wrote it) verifies and
+    parses every change: about 17 s of single-thread work for a whole Bible on a processor
+    without SHA instructions, 5.8 s on four threads (§14). It shows determinate progress and
+    writes the cache, so the next open takes about 2 s.
 
 ---
 
@@ -3916,11 +3941,16 @@ with a test that failed before the change. The regression tests are rows L97 to 
    and conflicts of other kinds that did not say a head continues a missing change. It also
    showed that a `Comment` conflict could never be resolved under V6, which now lets a
    resolution name parents.
-7. **Budgets missed: cold open, Psalms projection, memory.** Real. Partly changed: changes are
+7. **Budgets missed: cold open, Psalms projection, memory.** Real. Changed: changes are
    folded as the reading threads hand them over, so the fold's own work after the last file is
-   about 0.7 s and the open's heap peak fell from 413 MB to 233 MB. Still missed, with the
-   evidence and the remaining work in `docs/evidence/storage-fold-2026-10-16.md`: the cold
-   open's read (hashing and parsing every change; `.tc/index.bin`, §14), the Psalms projection
+   about 0.7 s and the open's heap peak fell from 413 MB to 233 MB. The cold open's read
+   (hashing and parsing every change, 16.8 s of single-thread work) is now done once per file:
+   the fold cache `.tc/index.bin` (§3.6, §6.1 O8, §14) keeps each file's prepared changes,
+   keyed by the file's path, size and fingerprint, and the open takes them from it (2.6 s on
+   the shared VM, against 9.9 to 25.7 s). This replaces the cache §14 sketched, one key for
+   the whole set of files holding heads and value locations: any save would have invalidated
+   it, and heads alone cannot fold later changes. Still missed, with the evidence and the
+   remaining work in `docs/evidence/storage-fold-2026-10-16.md`: the Psalms projection
    (decoding and writing out again every decision's context), and the steady memory (the
    resident history is about 200 MiB). The budgets are unchanged.
 8. **A comment's book depends on which change arrived first.** Real. Changed: a comment id

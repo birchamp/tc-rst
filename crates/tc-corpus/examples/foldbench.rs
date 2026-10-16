@@ -3,13 +3,16 @@
 //! `cargo run --release -p tc-corpus --example foldbench -- save bible DIR` generates a
 //! corpus (`psalms`, `scaled <factor>`, `bible`, or `bible-share <share>` for less history)
 //! and saves its packs and pending files under DIR; `... -- run DIR [threads]` reads them
-//! back the way an open does (verify and prepare on `threads` threads, keeping only where
-//! each value lies, then fold) and times the actions the fold owns: the full fold, one
-//! incremental step after a verse save, a decision, an alignment and a resolution, the
-//! conflict list from scratch, and the Psalms projection, whose values are read from the
-//! files on demand. Times are medians and p95 over repeated runs. `FOLDBENCH_RUNS` sets the
-//! runs of the open, `FOLDBENCH_FOLD_ONLY` stops after the open and its parts, and
-//! `FOLDBENCH_STREAM_ONLY` after the open alone (for a heap profile of it).
+//! back the way an open does and times the actions the fold owns. The cold open is timed
+//! with the fold cache (`DIR/index.bin`, `.tc/index.bin` in a project; the first run writes
+//! it): each file is read and hashed, and its prepared changes taken from the cache; and
+//! without it: every line verified, parsed and prepared on `threads` threads, keeping only
+//! where each value lies. Then the full fold, one incremental step after a verse save, a
+//! decision, an alignment and a resolution, the conflict list from scratch, and the Psalms
+//! projection, whose values are read from the files on demand. Times are medians and p95
+//! over repeated runs. `FOLDBENCH_RUNS` sets the runs of the open, `FOLDBENCH_CACHED_ONLY`
+//! stops after the opens with the cache, `FOLDBENCH_STREAM_ONLY` after the opens without
+//! it too (for a heap profile), and `FOLDBENCH_FOLD_ONLY` after the open's parts.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
@@ -19,6 +22,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tc_corpus::{Corpus, Spec};
 use tc_journal::fold::{DerivedFile, FoldInput, FoldState, ProjectKind, ValueAt, ValueSource};
+use tc_journal::index::{FileKey, Fingerprinter, Index, Section};
 use tc_journal::record::{CheckValue, VerseValue};
 use tc_journal::{
     BatchId, BatchRef, BookId, Cause, Change, ChangeBody, DeviceId, DeviceSeq, ProjectId, Record,
@@ -123,6 +127,12 @@ fn peak_rss_mib() -> f64 {
     status_mib("VmHWM:")
 }
 
+/// Starts the peak resident size again from the current one (Linux 4.0 and later), so each
+/// open's own peak can be read.
+fn reset_peak_rss() {
+    let _ = std::fs::write("/proc/self/clear_refs", "5");
+}
+
 fn rss_mib() -> f64 {
     status_mib("VmRSS:")
 }
@@ -167,22 +177,61 @@ fn files(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// Reads, verifies and prepares every line on `threads` threads, as an open does, keeping
-/// only where each value lies, and hands each file's changes over as soon as they are
-/// prepared, so the fold indexes them while the threads read the rest.
-fn load_streamed(
-    dir: &Path,
-    threads: usize,
-) -> (
-    std::sync::mpsc::Receiver<Vec<FoldInput>>,
-    Arc<dyn ValueSource>,
-) {
-    let project = ProjectId::parse(
+/// The app build the benchmark's cache is written by (`tc-store` passes the app's own).
+const BUILD: &str = concat!("foldbench ", env!("CARGO_PKG_VERSION"));
+
+/// Where the saved corpus keeps its fold cache: `.tc/index.bin` in a project folder.
+fn index_path(dir: &Path) -> PathBuf {
+    dir.join("index.bin")
+}
+
+fn project_of(dir: &Path) -> ProjectId {
+    ProjectId::parse(
         std::fs::read_to_string(dir.join("project"))
             .expect("project")
             .trim(),
     )
-    .expect("project id");
+    .expect("project id")
+}
+
+/// What a streamed open hands over: each file's prepared changes as soon as a reading
+/// thread has them, the source the fold reads values from, and, once every file is read,
+/// each file's key with the section made of it when the cache did not hold it.
+struct Streamed {
+    inputs: std::sync::mpsc::Receiver<Vec<FoldInput>>,
+    source: Arc<dyn ValueSource>,
+    sections: std::sync::mpsc::Receiver<(FileKey, Option<Section>)>,
+}
+
+/// The key of the file at `path` in the project folder, taken a chunk at a time, so a file
+/// the cache holds is never in memory whole.
+fn key_of(cache_path: &str, path: &Path, buffer: &mut [u8]) -> FileKey {
+    use std::io::Read;
+    let mut file = File::open(path).expect("open");
+    let mut fingerprint = Fingerprinter::new();
+    let mut size = 0;
+    loop {
+        let n = file.read(buffer).expect("read");
+        if n == 0 {
+            break;
+        }
+        fingerprint.update(&buffer[..n]);
+        size += n as u64;
+    }
+    FileKey {
+        path: cache_path.into(),
+        size,
+        fingerprint: fingerprint.finish(),
+    }
+}
+
+/// Reads every pack and pending file on `threads` threads, as an open does, keeping only
+/// where each value lies, and hands each file's changes over as soon as they are prepared,
+/// so the fold indexes them while the threads read the rest. With a fold cache, a file
+/// whose path, size and fingerprint equal a section's takes that section's changes; every
+/// other file is verified and parsed (P1 to P4), and its section is made.
+fn load_streamed(dir: &Path, threads: usize, index: Option<Arc<Index>>) -> Streamed {
+    let project = project_of(dir);
     let mut work: Vec<(bool, PathBuf)> = files(&dir.join("packs"))
         .into_iter()
         .map(|p| (true, p))
@@ -206,43 +255,125 @@ fn load_streamed(
     // A few files in flight per thread at most: memory holds what is being folded, not
     // the whole project's prepared changes.
     let (send, receive) = std::sync::mpsc::sync_channel::<Vec<FoldInput>>(threads * 2);
+    let (send_section, sections) = std::sync::mpsc::channel::<(FileKey, Option<Section>)>();
     for _ in 0..threads {
         let (queue, next, send) = (queue.clone(), next.clone(), send.clone());
+        let (send_section, index) = (send_section.clone(), index.clone());
         std::thread::spawn(move || {
+            let mut buffer = vec![0u8; 1 << 20];
             while let Some((file, is_pack, path)) =
                 queue.get(next.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
             {
-                let bytes = std::fs::read(path).expect("read");
-                let (pack, entries, spans) = if *is_pack {
-                    let name = pack_path(path);
-                    let read = tc_journal::pack::read_pack(&name, &bytes, project);
-                    assert!(read.is_valid(), "{name}: {:?}", read.status);
-                    (Some(read.id), read.entries, read.spans)
+                let cache_path = if *is_pack {
+                    pack_path(path)
                 } else {
-                    let read = tc_journal::pending::read_pending(&bytes, project);
-                    (None, read.entries, read.spans)
+                    let name = path.file_name().unwrap().to_string_lossy();
+                    format!(".tc/pending/{name}")
                 };
-                drop(bytes);
-                let inputs: Vec<FoldInput> = entries
-                    .into_iter()
-                    .zip(spans)
-                    .map(|(entry, span)| {
-                        FoldInput::new(entry, pack).prepare_at(ValueAt::new(*file, span))
-                    })
-                    .collect();
+                let cached = index.as_ref().and_then(|index| {
+                    let key = key_of(&cache_path, path, &mut buffer);
+                    let inputs = index.section(&key)?.inputs(*file).ok()?;
+                    Some((key, inputs))
+                });
+                let (key, inputs, section) = match cached {
+                    Some((key, inputs)) => (key, inputs, None),
+                    None => {
+                        // Read whole, and keyed by the bytes read, which may differ from
+                        // those fingerprinted if another program replaced the file since.
+                        let bytes = std::fs::read(path).expect("read");
+                        let loaded = if *is_pack {
+                            let (read, loaded) =
+                                tc_journal::index::load_pack(&cache_path, &bytes, project, *file);
+                            assert!(read.is_valid(), "{cache_path}: {:?}", read.status);
+                            loaded
+                        } else {
+                            tc_journal::index::load_pending(&cache_path, &bytes, project, *file).1
+                        };
+                        (loaded.key, loaded.inputs, loaded.section)
+                    }
+                };
+                let _ = send_section.send((key, section));
                 if send.send(inputs).is_err() {
                     return;
                 }
             }
         });
     }
-    (receive, Arc::new(Files(opened)))
+    Streamed {
+        inputs: receive,
+        source: Arc::new(Files(opened)),
+        sections,
+    }
 }
 
-/// [`load_streamed`] collected: every prepared change, for a fold timed on its own.
+/// [`load_streamed`] without a cache, collected: every prepared change, for a fold timed
+/// on its own.
 fn load(dir: &Path, threads: usize) -> (Vec<FoldInput>, Arc<dyn ValueSource>) {
-    let (receive, source) = load_streamed(dir, threads);
-    (receive.into_iter().flatten().collect(), source)
+    let streamed = load_streamed(dir, threads, None);
+    (
+        streamed.inputs.into_iter().flatten().collect(),
+        streamed.source,
+    )
+}
+
+/// The files an open read: each one's key, with the section made of it when the cache did
+/// not hold it.
+type Read = Vec<(FileKey, Option<Section>)>;
+
+/// One streamed open: the fold indexes each file's changes as they arrive. Returns the
+/// fold, the time after the last file was read, and the files read.
+fn open_streamed(
+    dir: &Path,
+    threads: usize,
+    index: Option<Arc<Index>>,
+) -> (FoldState, Duration, Read) {
+    let streamed = load_streamed(dir, threads, index);
+    let last_read = std::cell::Cell::new(None);
+    let inputs = streamed
+        .inputs
+        .into_iter()
+        .flatten()
+        .chain(std::iter::from_fn(|| {
+            last_read.set(Some(Instant::now()));
+            None
+        }));
+    let folded = FoldState::fold_from(ProjectKind::Bible, Some(streamed.source), inputs);
+    let tail = last_read.get().map(|t| t.elapsed()).unwrap_or_default();
+    (folded, tail, streamed.sections.into_iter().collect())
+}
+
+/// Whether the cache an open used still stands for every file it read: no file was read
+/// in full, and no file the cache holds is gone. Otherwise `tc-store` writes it again.
+fn cache_unchanged(held: usize, read: &Read) -> bool {
+    read.iter().all(|(_, section)| section.is_none()) && read.len() == held
+}
+
+/// Reads the fold cache of a saved corpus, as an open reads `.tc/index.bin` before the
+/// files; `None` when there is none or it is not this build's.
+fn read_index(dir: &Path) -> Option<Arc<Index>> {
+    let bytes = std::fs::read(index_path(dir)).ok()?;
+    match Index::parse(bytes, project_of(dir), BUILD) {
+        Ok(index) => Some(Arc::new(index)),
+        Err(error) => {
+            eprintln!("the fold cache is not used: {error}");
+            None
+        }
+    }
+}
+
+/// Writes the fold cache as `tc-store` does after an open whose files changed: the sections
+/// made of the files read in full, and those of `old` for the files it held, to a temporary
+/// file in the same directory, renamed over the old one.
+fn write_index(dir: &Path, read: &Read, old: Option<&Index>) -> usize {
+    let sections: Vec<&Section> = read
+        .iter()
+        .filter_map(|(key, made)| made.as_ref().or_else(|| old?.section(key)))
+        .collect();
+    let bytes = Index::encode(project_of(dir), BUILD, sections);
+    let temp = dir.join(".~index.bin.tmp");
+    std::fs::write(&temp, &bytes).expect("write the cache");
+    std::fs::rename(&temp, index_path(dir)).expect("rename the cache");
+    bytes.len()
 }
 
 /// The repository path of a saved pack, which names its sealer and month.
@@ -325,34 +456,91 @@ fn run(args: &[String]) {
         "identification.name",
         &serde_json::json!({"en": "x"}),
     );
-    let mut open = Stats::new(
-        "Cold open: read, verify, prepare and fold, the fold indexing as files are read",
-    );
-    let mut fold_only = Stats::new("Full fold of the prepared changes");
-    let mut after_read =
-        Stats::new("Cold open: the fold's work after the last file is read (stages F2 to F10)");
-    let mut load_only = Stats::new("Read, verify and prepare");
-    let mut state = None;
-    let mut changes = 0;
     let runs: usize = std::env::var("FOLDBENCH_RUNS")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(5);
+    let file_count = files(&dir.join("packs")).len() + files(&dir.join("pending")).len();
+    // The first open of a project, or the first after an update of the app, has no cache:
+    // it reads every file and writes the cache for the next.
+    if read_index(&dir).is_none() {
+        let started = Instant::now();
+        let (folded, _, read) = open_streamed(&dir, threads, None);
+        let opened = started.elapsed();
+        let t = Instant::now();
+        let size = write_index(&dir, &read, None);
+        eprintln!(
+            "first open {opened:?}; the cache of {} files written in {:?}, {size} bytes",
+            read.len(),
+            t.elapsed()
+        );
+        drop(folded);
+    }
+    let index_bytes = std::fs::metadata(index_path(&dir)).map_or(0, |m| m.len());
+    let mut cached = Stats::new(
+        "Cold open with the fold cache: read the cache, read and fingerprint every file, take \
+         each file's changes from the cache, fold as they arrive",
+    );
+    let mut cached_tail =
+        Stats::new("Cold open with the fold cache: the fold's work after the last file");
+    let mut state = None;
+    let mut changes = 0;
+    let mut peaks = Vec::new();
+    for _ in 0..runs {
+        drop(state.take());
+        reset_peak_rss();
+        let started = Instant::now();
+        let cpu = process_cpu_ms();
+        let index = read_index(&dir).expect("the fold cache");
+        let held = index.len();
+        // The reading threads hold the cache, so it is freed once the last file is read.
+        let (folded, tail, read) = open_streamed(&dir, threads, Some(index));
+        cached.times.push(started.elapsed());
+        cached_tail.times.push(tail);
+        assert_eq!(read.len(), file_count);
+        assert!(
+            cache_unchanged(held, &read),
+            "every file is taken from the cache"
+        );
+        eprintln!(
+            "cold open with the cache {:?}, the fold after the last file {tail:?}, cpu over all \
+             threads {} ms",
+            started.elapsed(),
+            process_cpu_ms() - cpu
+        );
+        changes = folded.len();
+        state = Some(folded);
+        peaks.push(peak_rss_mib());
+    }
+    println!(
+        "fold cache: {index_bytes} bytes for {file_count} files; peak RSS of each cold open with \
+         the cache {:?} MiB, RSS with the fold open {:.0} MiB",
+        peaks.iter().map(|p| p.round() as u64).collect::<Vec<_>>(),
+        rss_mib()
+    );
+    if std::env::var("FOLDBENCH_CACHED_ONLY").is_ok() {
+        cached.report();
+        cached_tail.report();
+        return;
+    }
+    let mut open = Stats::new(
+        "Cold open without a cache: read, verify, prepare and fold, the fold indexing as files \
+         are read",
+    );
+    let mut fold_only = Stats::new("Full fold of the prepared changes");
+    let mut after_read = Stats::new(
+        "Cold open without a cache: the fold's work after the last file is read (stages F2 to \
+         F10)",
+    );
+    let mut load_only = Stats::new("Read, verify and prepare");
     // The cold open: the fold indexes each file's changes as the reading threads hand
     // them over, then runs its stages once the last arrives.
     for _ in 0..runs {
         drop(state.take());
         let started = Instant::now();
         let cpu = process_cpu_ms();
-        let (receive, source) = load_streamed(&dir, threads);
-        let last_read = std::cell::Cell::new(None);
-        let inputs = receive.into_iter().flatten().chain(std::iter::from_fn(|| {
-            last_read.set(Some(Instant::now()));
-            None
-        }));
-        let folded = FoldState::fold_from(ProjectKind::Bible, Some(source), inputs);
+        let (folded, tail, _) = open_streamed(&dir, threads, None);
         open.times.push(started.elapsed());
-        let tail = last_read.get().map(|t| t.elapsed()).unwrap_or_default();
         after_read.times.push(tail);
         eprintln!(
             "cold open {:?}, the fold after the last file {tail:?}, cpu over all threads {} ms",
@@ -364,6 +552,8 @@ fn run(args: &[String]) {
     }
     let open_peak = peak_rss_mib();
     if std::env::var("FOLDBENCH_STREAM_ONLY").is_ok() {
+        cached.report();
+        cached_tail.report();
         open.report();
         after_read.report();
         println!(
@@ -403,6 +593,8 @@ fn run(args: &[String]) {
     if std::env::var("FOLDBENCH_FOLD_ONLY").is_ok() {
         load_only.report();
         fold_only.report();
+        cached.report();
+        cached_tail.report();
         open.report();
         after_read.report();
         println!("peak RSS {:.0} MiB", peak_rss_mib());
@@ -449,6 +641,8 @@ fn run(args: &[String]) {
     drop(bytes);
     sha.report();
     fold_only.report();
+    cached.report();
+    cached_tail.report();
     open.report();
     after_read.report();
 

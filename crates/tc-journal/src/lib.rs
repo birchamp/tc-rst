@@ -12,6 +12,8 @@
 //! - [`rules`] holds the per-change rules of §4.5; a change that breaks one is a
 //!   [`QuarantinedChange`].
 //! - [`consolidate`] decides which packs to merge and which packs are redundant.
+//! - [`index`] is the fold cache, `.tc/index.bin`: each file's prepared changes, so an open
+//!   with the same file takes them instead of verifying and parsing its lines again.
 //! - [`format`] is §12: the format version, `format.json`, the open gate and the paths each
 //!   minor derives.
 //! - [`fold`] holds the fold's output types, [`token`] the shown tokens and [`command`] the
@@ -24,6 +26,7 @@ pub mod consolidate;
 pub mod fold;
 pub mod format;
 pub mod ids;
+pub mod index;
 pub mod json;
 pub mod keys;
 pub mod line;
