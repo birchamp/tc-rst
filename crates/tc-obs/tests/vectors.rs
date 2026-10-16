@@ -25,7 +25,7 @@ use tc_obs::story::{
     StoryState, apply_story_state, frame_text_problem, parse_story, reference_text_problem,
     seed_story, title_text_problem, write_frame, write_reference, write_title,
 };
-use tc_obs::template::with_localized_names;
+use tc_obs::template::{FormRefusal, NewObsForm, with_localized_names};
 use tc_obs::{FrameNo, StoryError, StoryNo, TextProblem, WriteError};
 
 fn vectors() -> &'static Value {
@@ -639,6 +639,33 @@ fn story_questions_keep_the_rows_tc4_derives() {
             "{} (story {})",
             case["name"],
             case["story"]
+        );
+    }
+}
+
+#[test]
+fn the_new_project_form_is_checked_as_tc4_checks_it() {
+    let cases = vectors()["newProjectForms"].as_array().unwrap();
+    assert!(cases.len() >= 29);
+    for case in cases {
+        let form = NewObsForm {
+            name: case["name"].as_str().unwrap(),
+            language_name: "",
+            language_code: case["code"].as_str().unwrap(),
+        };
+        let ours = match form.project([]) {
+            Ok(project) => json!({"abbr": project.abbreviation}),
+            Err(refusal) => json!({"error": match refusal {
+                FormRefusal::NameRequired => "wizard.nameRequired",
+                FormRefusal::CodeRequired => "wizard.codeRequired",
+                FormRefusal::AbbrRequired => "wizard.abbrRequired",
+                FormRefusal::NameInUse { .. } => "wizard.nameInUse",
+            }}),
+        };
+        assert_eq!(
+            ours, case["result"],
+            "{:?} {:?}",
+            form.name, form.language_code
         );
     }
 }

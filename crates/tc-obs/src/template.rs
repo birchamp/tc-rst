@@ -1,4 +1,5 @@
-//! The OBS project template and the new-project rules (J20, #287; D74).
+//! The OBS project template, the New Open Bible Stories dialog's rules and the new-project
+//! rules (J20, #287; D74).
 //!
 //! A new OBS project is the platform's `text_stories` content template — pankosmia
 //! `resource-core` 54802be, which tC4 vendors byte for byte as
@@ -14,6 +15,7 @@ use serde_json::Value;
 
 use crate::error::{NewProjectError, TemplateError, WriteError};
 use crate::ids::{STORY_COUNT, StoryNo};
+use crate::js::trim;
 use crate::story::seed_story;
 
 macro_rules! template_file {
@@ -226,21 +228,111 @@ pub fn validate_template(
     Ok(names.len())
 }
 
-/// What a person enters in the New Open Bible Stories dialog that the project itself
-/// records (`NewObs.jsx`; `NewObsResourceParams`, `src/data/serverApi.ts:119-128`). The
-/// direction, checking language and font are the project's settings and pins, not the
-/// template's.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NewObsProject<'a> {
+/// What a person types in the New Open Bible Stories dialog that the project itself
+/// records, as typed (`NewObs.jsx`; the `np` form of `src/state.jsx`). The direction,
+/// checking language and font are the project's settings and pins, not the template's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NewObsForm<'a> {
     pub name: &'a str,
-    /// The project's folder name, so one path segment.
-    pub abbreviation: &'a str,
+    pub language_name: &'a str,
     pub language_code: &'a str,
-    /// Required for a private-use code (`x-…`).
-    pub language_name: Option<&'a str>,
 }
 
-impl NewObsProject<'_> {
+/// Why the dialog's Create button refuses its form, before anything is made
+/// (`validateNewBible`, `src/state.jsx:1631-1637`; `createObs`, `:6491-6506`). The
+/// messages are tC4's English ones (`src/i18n/en.json`, `wizard.*`).
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum FormRefusal {
+    /// `wizard.nameRequired`
+    #[error("Give the project a name.")]
+    NameRequired,
+    /// `wizard.codeRequired`
+    #[error("Give the project a language code.")]
+    CodeRequired,
+    /// Neither the name nor the code holds a Latin letter or a digit (`wizard.abbrRequired`).
+    #[error("Add a short name in Latin letters or digits — it names the project folder.")]
+    AbbrRequired,
+    /// `wizard.nameInUse`
+    #[error("A project folder named “{abbreviation}” already exists.")]
+    NameInUse { abbreviation: String },
+}
+
+/// tC4's folder name of a project name: lower case, each run of anything but `a-z` and
+/// `0-9` one `_`, no `_` at either end (`slug`, `src/state.jsx:1634`).
+pub fn slug(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for c in value.to_lowercase().chars() {
+        if c.is_ascii_lowercase() || c.is_ascii_digit() {
+            out.push(c);
+        } else if !out.is_empty() && !out.ends_with('_') {
+            out.push('_');
+        }
+    }
+    let kept = out.trim_end_matches('_').len();
+    out.truncate(kept);
+    out
+}
+
+/// The path of an app-made project on this computer (`_local_/_local_/<folder>`).
+const LOCAL_PROJECTS: &str = "_local_/_local_/";
+
+impl NewObsForm<'_> {
+    /// The project the Create button asks the platform for, or why it refuses the form
+    /// (`validateNewBible`, `src/state.jsx:1631-1637`; `createObs`, `:6491-6517`): a name
+    /// and a code are required; the folder is the name's slug, else the code's; a folder
+    /// already among `existing` (the projects on this computer, as `listLocalRepos`
+    /// lists them) is in use. The name and the code are sent trimmed, and a private-use
+    /// code (`x-…`) takes the language name, or the project name when that is empty.
+    pub fn project<'e>(
+        &self,
+        existing: impl IntoIterator<Item = &'e str>,
+    ) -> Result<NewObsProject, FormRefusal> {
+        let name = trim(self.name);
+        let code = trim(self.language_code);
+        if name.is_empty() {
+            return Err(FormRefusal::NameRequired);
+        }
+        if code.is_empty() {
+            return Err(FormRefusal::CodeRequired);
+        }
+        let abbreviation = Some(slug(name))
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| slug(code));
+        if abbreviation.is_empty() {
+            return Err(FormRefusal::AbbrRequired);
+        }
+        if existing
+            .into_iter()
+            .any(|path| path.strip_prefix(LOCAL_PROJECTS) == Some(abbreviation.as_str()))
+        {
+            return Err(FormRefusal::NameInUse { abbreviation });
+        }
+        let language_name = code.starts_with("x-").then(|| {
+            let typed = trim(self.language_name);
+            if typed.is_empty() { name } else { typed }.to_owned()
+        });
+        Ok(NewObsProject {
+            name: name.to_owned(),
+            abbreviation,
+            language_code: code.to_owned(),
+            language_name,
+        })
+    }
+}
+
+/// The new project the platform is asked for (`NewObsResourceParams`,
+/// `src/data/serverApi.ts:119-128`), as [`NewObsForm::project`] makes it from the dialog.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewObsProject {
+    pub name: String,
+    /// The project's folder name, so one path segment.
+    pub abbreviation: String,
+    pub language_code: String,
+    /// Required for a private-use code (`x-…`).
+    pub language_name: Option<String>,
+}
+
+impl NewObsProject {
     /// Refuses, before anything exists, a name the template's JSON cannot hold as written
     /// (it is spliced in unescaped), a folder name that is not one safe path segment, and a
     /// private-use language code without a name (`assertJsonSafeText`,
@@ -251,17 +343,19 @@ impl NewObsProject<'_> {
             .chars()
             .any(|c| c == '"' || c == '\\' || c < '\u{20}')
         {
-            return Err(NewProjectError::UnsafeName(self.name.to_owned()));
+            return Err(NewProjectError::UnsafeName(self.name.clone()));
         }
-        let a = self.abbreviation;
+        let a = &self.abbreviation;
         if a.is_empty()
             || a.starts_with('.')
             || a.chars()
                 .any(|c| crate::js::is_space(c) || "&?:#%\\*\"'<>|".contains(c))
         {
-            return Err(NewProjectError::UnsafeAbbreviation(a.to_owned()));
+            return Err(NewProjectError::UnsafeAbbreviation(a.clone()));
         }
-        if self.language_code.starts_with("x-") && self.language_name.is_none_or(str::is_empty) {
+        if self.language_code.starts_with("x-")
+            && self.language_name.as_deref().is_none_or(str::is_empty)
+        {
             return Err(NewProjectError::PrivateLanguageNeedsName);
         }
         Ok(())
@@ -287,14 +381,14 @@ pub struct CreatedObs {
 /// PLATFORM-NOTES #36, #43). `language` is the language object the platform writes,
 /// such as `{"tag": "es-419", "name": {"en": "Spanish (419)"}}`.
 pub fn stamp_metadata(
-    project: &NewObsProject<'_>,
+    project: &NewObsProject,
     created: &str,
     language: &Value,
 ) -> Result<String, crate::Error> {
     project.check()?;
     let text = with_localized_names(template_metadata())?
-        .replace("%%ABBR%%", project.abbreviation)
-        .replace("%%CONTENT_NAME%%", project.name)
+        .replace("%%ABBR%%", &project.abbreviation)
+        .replace("%%CONTENT_NAME%%", &project.name)
         .replace("%%CREATED_TIMESTAMP%%", created)
         .replacen("%%LANGUAGE%%", &language.to_string(), 1);
     Ok(text)
@@ -304,7 +398,7 @@ pub fn stamp_metadata(
 /// `src/data/journal/journalingStore.ts:1213-1236`): the platform's copy of the template,
 /// then each story reduced to its seed form.
 pub fn create_obs_project(
-    project: &NewObsProject<'_>,
+    project: &NewObsProject,
     created: &str,
     language: &Value,
 ) -> Result<CreatedObs, crate::Error> {

@@ -12,7 +12,8 @@
 //! - [`images`] finds the picture of each frame; [`presentation`] puts a story, its
 //!   gateway story and its pictures together for the story screen.
 //! - [`frame_set`] checks that a gateway source has the project's stories and frames.
-//! - [`template`] holds the platform's OBS template and makes a new project from it.
+//! - [`template`] holds the platform's OBS template, checks the New Open Bible Stories
+//!   dialog's form and makes a new project from it.
 //! - [`progress`] computes draft percentages and the story a project opens on;
 //!   [`recency`] keeps the stories edited last; [`print`] is the print model.
 //! - [`questions`] keeps the OBS Translation Questions of a story.

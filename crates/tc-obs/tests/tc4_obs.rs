@@ -33,9 +33,9 @@ use tc_obs::{FrameNo, StoryNo};
 /// The fifty stories of a new project, in their seed form.
 fn new_project() -> Vec<String> {
     let project = NewObsProject {
-        name: "Historias con fotos",
-        abbreviation: "fotos",
-        language_code: "es",
+        name: "Historias con fotos".into(),
+        abbreviation: "fotos".into(),
+        language_code: "es".into(),
         language_name: None,
     };
     create_obs_project(&project, "2026-09-16T09:00:00.000Z", &json!({"tag": "es"}))

@@ -12,8 +12,8 @@ use serde_json::{Value, json};
 use tc_obs::ids::is_obs_metadata;
 use tc_obs::story::parse_story;
 use tc_obs::template::{
-    NewObsProject, TEMPLATE_FILES, create_obs_project, template_current_scope, template_metadata,
-    validate_template, with_localized_names,
+    FormRefusal, NewObsForm, NewObsProject, TEMPLATE_FILES, create_obs_project,
+    template_current_scope, template_metadata, validate_template, with_localized_names,
 };
 use tc_obs::{Error, NewProjectError, StoryNo, TemplateError};
 
@@ -148,13 +148,88 @@ fn a_prepared_template_with_crlf_a_lone_cr_a_changed_byte_or_another_story_is_re
 
 const LANGUAGE: fn() -> Value = || json!({"tag": "es", "name": {"en": "Spanish"}});
 
-fn params(name: &str) -> NewObsProject<'_> {
+fn params(name: &str) -> NewObsProject {
     NewObsProject {
-        name,
-        abbreviation: "historias",
-        language_code: "es",
+        name: name.into(),
+        abbreviation: "historias".into(),
+        language_code: "es".into(),
         language_name: None,
     }
+}
+
+fn form<'a>(name: &'a str, language_name: &'a str, language_code: &'a str) -> NewObsForm<'a> {
+    NewObsForm {
+        name,
+        language_name,
+        language_code,
+    }
+}
+
+/// `createObs` (`src/state.jsx:6491-6517`): what the dialog sends for what a person typed.
+#[test]
+fn the_dialog_sends_the_trimmed_name_and_code_and_the_folder_its_slug() {
+    let project = form("  Mis Historias ", "", " es ").project([]).unwrap();
+    assert_eq!(
+        project,
+        NewObsProject {
+            name: "Mis Historias".into(),
+            abbreviation: "mis_historias".into(),
+            language_code: "es".into(),
+            language_name: None,
+        }
+    );
+    // A language name goes only with a private-use code.
+    let named = form("Historias", "Español", "es").project([]).unwrap();
+    assert_eq!(named.language_name, None);
+    let private = form("Historias", "  Abc  ", "x-abc").project([]).unwrap();
+    assert_eq!(private.language_name.as_deref(), Some("Abc"));
+    // With none typed, the project name stands in for it, so the project can be made.
+    let unnamed = form("Historias", "", "x-abc").project([]).unwrap();
+    assert_eq!(unnamed.language_name.as_deref(), Some("Historias"));
+    assert_eq!(unnamed.check(), Ok(()));
+    let created = create_obs_project(&unnamed, "2026-09-16T09:00:00.000Z", &LANGUAGE()).unwrap();
+    assert_eq!(created.stories.len(), 50);
+    // A name with no Latin letter or digit takes the code's slug; with neither, no folder.
+    assert_eq!(
+        form("日本語", "", "ja").project([]).unwrap().abbreviation,
+        "ja"
+    );
+    assert_eq!(
+        form("!!!", "", "???").project([]),
+        Err(FormRefusal::AbbrRequired)
+    );
+    assert_eq!(
+        form(" ", "", "es").project([]),
+        Err(FormRefusal::NameRequired)
+    );
+    assert_eq!(
+        form("Historias", "", "\t").project([]),
+        Err(FormRefusal::CodeRequired)
+    );
+}
+
+#[test]
+fn a_folder_already_on_this_computer_is_in_use() {
+    let existing = ["_local_/_local_/otras", "_local_/_local_/historias"];
+    assert_eq!(
+        form("Historias", "", "es").project(existing),
+        Err(FormRefusal::NameInUse {
+            abbreviation: "historias".into()
+        })
+    );
+    assert_eq!(
+        FormRefusal::NameInUse {
+            abbreviation: "historias".into()
+        }
+        .to_string(),
+        "A project folder named “historias” already exists."
+    );
+    // Only the app's own folder of that name counts.
+    let elsewhere = [
+        "git.door43.org/someone/historias",
+        "_local_/_local_/historias2",
+    ];
+    assert!(form("Historias", "", "es").project(elsewhere).is_ok());
 }
 
 #[test]
@@ -180,7 +255,7 @@ fn a_name_the_template_would_splice_unescaped_is_refused_before_anything_is_made
         "", ".hidden", "a b", "a:b", "a/b?", "a#b", "a%b", "a*b", "a|b",
     ] {
         let p = NewObsProject {
-            abbreviation,
+            abbreviation: abbreviation.into(),
             ..params("Historias")
         };
         assert!(
@@ -189,7 +264,7 @@ fn a_name_the_template_would_splice_unescaped_is_refused_before_anything_is_made
         );
     }
     let private = NewObsProject {
-        language_code: "x-abc",
+        language_code: "x-abc".into(),
         ..params("Historias")
     };
     assert_eq!(
@@ -197,7 +272,7 @@ fn a_name_the_template_would_splice_unescaped_is_refused_before_anything_is_made
         Err(NewProjectError::PrivateLanguageNeedsName)
     );
     let named = NewObsProject {
-        language_name: Some("Abc Language"),
+        language_name: Some("Abc Language".into()),
         ..private
     };
     assert_eq!(named.check(), Ok(()));

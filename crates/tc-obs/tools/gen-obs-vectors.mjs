@@ -17,6 +17,9 @@
 // - `localizedNames`: `withLocalizedNames` (scripts/fix-obs-template.mjs).
 // - `questions`: `deriveObsItems(tsv, 'translationQuestions', story)` (src/data/derive.ts,
 //   bundled with its imports) on small OBS Translation Questions tables.
+// - `newProjectForms`: `validateNewBible` (src/state.jsx), which the New Open Bible
+//   Stories dialog runs on its name and code before it creates a project. The function is
+//   taken from state.jsx's source as it stands and run with `t` returning the i18n key.
 // - `draft`: the drafted story 1 of conformance/generate-obs.mjs, from its
 //   conformance/fixtures/obs-draft.mjs.
 //
@@ -490,6 +493,21 @@ const questions = QUESTION_TABLES.flatMap(({ name, tsv }) => [null, 1, 2].map((s
   })),
 })));
 
+// ---------- the New OBS dialog's form (state.jsx) ----------
+const stateSource = fs.readFileSync(path.join(tc4, 'src/state.jsx'), 'utf8');
+const validateSource = stateSource.match(/^function validateNewBible\(form\) \{\n[\s\S]*?\n\}\n/m);
+if (!validateSource) throw new Error('validateNewBible is not in src/state.jsx');
+const validateNewBible = new Function('t', `${validateSource[0]}return validateNewBible;`)((key) => key);
+const FORMS = [
+  ['', 'es'], ['   ', 'es'], ['Historias', ''], ['Historias', '  '], ['Historias', 'es'],
+  ['  Mis Historias ', 'es'], ['Historias Bíblicas', 'es'], ['Історії', 'uk'], ['日本語', 'ja'],
+  ['日本語', 'x-日本'], ['!!!', '???'], ['İstanbul', 'tr'], ['\u212Aelvin', 'en'], ['a--b__c', 'es'],
+  ['___x___', 'es'], ['123', 'es'], ['Ünïcödé Ünïcödé', 'de'], ['ΣΟΦΟΣ', 'el'], ['\u00a0Name\u00a0', 'es'],
+  ['Name', '\u00a0'], ['\ufeffName', 'es'], ['\u0085', 'es'], ['\u0085', '\u0085'], ['x', 'x-abc'],
+  ['😀 emoji 😀', 'es'], ['ß', 'de'], ['ǅ', 'hr'], ['Tab\there', 'es'], ['Historias "de" Prueba', 'es'],
+];
+const newProjectForms = FORMS.map(([name, code]) => ({ name, code, result: validateNewBible({ name, code }) }));
+
 // ---------- the drafted sample story (generate-obs.mjs) ----------
 let drafted = story.seedStory(sets.template(1));
 drafted = story.writeFrame(drafted, 0, DRAFT.title);
@@ -514,6 +532,7 @@ const out = {
   toNumber,
   localizedNames,
   questions,
+  newProjectForms,
   draft: { draft: DRAFT, story1Md5: md5(drafted) },
 };
 process.stdout.write(`${JSON.stringify(out)}\n`);
