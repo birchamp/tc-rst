@@ -122,8 +122,8 @@ pub enum WriteError {
 }
 
 /// A prepared OBS template that is not the pinned one (`validateObsTemplate`,
-/// `scripts/fix-obs-template.mjs:246-291`), or template metadata the `localizedNames` fix
-/// cannot place (`withLocalizedNames`, `:233-239`).
+/// `scripts/fix-obs-template.mjs:43-88`), or template metadata the `localizedNames` fix
+/// cannot place (`withLocalizedNames`, `:30-36`).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum TemplateError {
     #[error("OBS template metadata has no \"ingredients\" key")]
@@ -140,7 +140,8 @@ pub enum TemplateError {
     },
     #[error("OBS reference story is missing: {0}")]
     ReferenceMissing(String),
-    /// `what` is `story` for a story file, `content` for the front and back matter.
+    /// `what` is `story` for a story file, `content` for the front and back matter
+    /// (`scripts/fix-obs-template.mjs:69`, `:77`).
     #[error("OBS {what} contains carriage return: {path}")]
     CarriageReturn { what: &'static str, path: String },
     #[error("OBS {what} bytes differ from the pinned fixture: {path}")]

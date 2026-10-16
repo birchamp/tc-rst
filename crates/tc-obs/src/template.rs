@@ -122,7 +122,7 @@ const MARKER: &str = "\"localizedNames\"";
 /// The template metadata with `"localizedNames": {}` before `"ingredients"`, indented as
 /// that line is; unchanged when it carries the key. The platform's own metadata reader
 /// requires the key, which resource-core's OBS template lacks (`withLocalizedNames`,
-/// `scripts/fix-obs-template.mjs:233-239`; PLATFORM-NOTES #36).
+/// `scripts/fix-obs-template.mjs:30-36`; PLATFORM-NOTES #36).
 pub fn with_localized_names(text: &str) -> Result<String, TemplateError> {
     if text.contains(MARKER) {
         return Ok(text.to_owned());
@@ -161,8 +161,9 @@ fn entries<'a>(files: impl Iterator<Item = &'a str>, dir: &str) -> Vec<String> {
 /// byte for byte: the metadata carries `localizedNames`, the story directory holds
 /// exactly the fifty stories, `front` and `back`, no story or matter file holds a carriage
 /// return, and each equals the reference's (`validateObsTemplate`,
-/// `scripts/fix-obs-template.mjs:246-291`). Returns the number of stories. Nothing is
-/// rewritten: a converted, truncated, added or removed file is refused.
+/// `scripts/fix-obs-template.mjs:43-88`, the carriage returns at `:69` and `:77`). Returns
+/// the number of stories. Nothing is rewritten: a converted, truncated, added or removed
+/// file is refused.
 pub fn validate_template(
     files: &BTreeMap<String, Vec<u8>>,
     reference: &BTreeMap<String, Vec<u8>>,
