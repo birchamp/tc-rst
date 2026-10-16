@@ -10,7 +10,8 @@
 
 use crate::change::{Verified, parse_change};
 use crate::ids::ChangeId;
-use crate::text::{Sha256Stream, hex, sha256, unhex};
+use crate::sha::{Sha256Stream, sha256};
+use crate::text::{hex, unhex};
 use std::sync::Arc;
 
 /// The bytes a line adds to its JSON: a tab, 64 hex digits and a line feed.

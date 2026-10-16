@@ -26,6 +26,8 @@ thiserror = "2"
 proptest = "1"
 tempfile = "3"
 sha2 = "0.11.1"
+# Already in Cargo.lock through rustls-webpki and quinn-proto; the version locked there.
+ring = "0.17.14"
 unicode-normalization = "0.1.25"
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 

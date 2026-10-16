@@ -1,7 +1,8 @@
 //! Identifiers (`docs/STORAGE.md` §2.1). Each one parses its text form strictly, so a value
 //! has exactly one text and the canonical bytes of a change are unique.
 
-use crate::text::{base32, hex, sha256, unbase32, unhex};
+use crate::sha::sha256;
+use crate::text::{base32, hex, unbase32, unhex};
 use std::fmt;
 use std::num::NonZeroU16;
 use unicode_normalization::is_nfc;

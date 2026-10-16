@@ -34,6 +34,7 @@ pub mod pack;
 pub mod pending;
 pub mod record;
 pub mod rules;
+mod sha;
 mod text;
 pub mod token;
 

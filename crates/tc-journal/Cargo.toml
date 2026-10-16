@@ -19,6 +19,11 @@ uuid = "1.28.0"
 smallvec = "1.16.3"
 im = "15.1.0"
 
+# SHA-256 of every change and file name (src/sha.rs). ring needs a random source that
+# wasm32-unknown-unknown lacks, so a wasm32 build hashes with sha2 instead.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ring.workspace = true
+
 [dev-dependencies]
 proptest.workspace = true
 # The scale corpus of docs/PERFORMANCE.md, for the operation-count tests. It depends on

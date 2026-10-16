@@ -17,5 +17,10 @@ serde_json.workspace = true
 thiserror.workspace = true
 zip.workspace = true
 
+[dev-dependencies]
+# shabench compares the two SHA-256 implementations on the corpus.
+ring.workspace = true
+sha2.workspace = true
+
 [lints]
 workspace = true
