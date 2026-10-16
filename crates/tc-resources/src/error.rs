@@ -27,6 +27,8 @@ pub enum ParseError {
     Slot(String),
     #[error("pins: {0}")]
     Pins(String),
+    #[error("fetched.lock: {0}")]
+    FetchedLock(String),
 }
 
 /// A pin tC4's §5.3 grammar refuses, found while writing pins: nothing is written. tC4
@@ -87,6 +89,8 @@ pub enum Refusal {
     Door43(#[from] VerificationError),
     #[error("the asset's SHA-256 is {found}, but the pin expects {expected}")]
     Sha256Mismatch { expected: Sha256, found: Sha256 },
+    #[error("the archive is {found} bytes, but the pin expects {expected}")]
+    SizeMismatch { expected: u64, found: u64 },
     #[error("the export names repository {found:?}, but the pin is {expected:?}")]
     WrongRepository { expected: String, found: String },
     #[error("the resource is in language {found:?}, but the pin expects {expected:?}")]

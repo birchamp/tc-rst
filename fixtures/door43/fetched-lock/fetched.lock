@@ -1,0 +1,26 @@
+{
+  "format": "tc-fetched-lock",
+  "version": 1,
+  "entries": [
+    {
+      "repo": "fixture/demo",
+      "commit": "e8c6503832022a8fd38bb426781d6b6127dde664",
+      "tree": "6e5802a33cc85441708e9d4dc17c71c2b25b6cc0",
+      "file": "demo-e8c6503832022a8fd38bb426781d6b6127dde664.zip",
+      "sha256": "ed0c325b58e18976d29b70151f704548df297f285ca0710704cbe1def4f4de51",
+      "size": 748,
+      "checked": "2026-10-16",
+      "how": "git rev-parse HEAD^{tree} in the repository that made the archive with git archive (fixtures/door43/README.md)"
+    },
+    {
+      "repo": "fixture/images",
+      "commit": "0123456789abcdef0123456789abcdef01234567",
+      "tree": "89abcdef0123456789abcdef0123456789abcdef",
+      "file": null,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 1,
+      "checked": "2026-10-16",
+      "how": "invented: an entry for an archive the packaging step downloads, whose tree and digest no test checks"
+    }
+  ]
+}

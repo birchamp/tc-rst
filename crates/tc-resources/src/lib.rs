@@ -18,7 +18,8 @@
 //! - **Installs.** [`install_dcs`] downloads an exact commit through tc-door43 and
 //!   [`install_aquifer`] an exact release asset from GitHub; nothing is kept unless it is
 //!   the pinned bytes. Zips at hand install with [`install_dcs_zip`] and
-//!   [`install_aquifer_zip`].
+//!   [`install_aquifer_zip`]. [`FetchedLock`] holds the Door43 facts recorded once for the
+//!   bundled and packaged archives, so they are checked offline.
 //! - **Loading.** [`load_book`] and [`load_obs`] open what is installed as tc-helps
 //!   [`tc_helps::Helps`] and USFM texts, and say why each missing part is missing.
 //!   [`HelpsChoice`] picks Door43 or Aquifer for the helps tabs; [`check_sources`] says
@@ -34,6 +35,7 @@ mod aquifer;
 mod choice;
 mod dcs;
 mod error;
+mod fetched;
 pub mod gateway_change;
 pub mod gateways;
 mod layout;
@@ -54,6 +56,7 @@ pub use choice::{
 };
 pub use dcs::{install_all, install_dcs, install_dcs_as, install_dcs_zip, pin_release};
 pub use error::{AquiferError, InstallError, ParseError, Refusal, StoreError, UnwritablePin};
+pub use fetched::{FetchedLock, LOCK_FORMAT, LOCK_VERSION, LockEntry};
 pub use load::{
     BookResources, Missing, ObsResources, PartStatus, SourceText, TextRole, TextStatus, load_book,
     load_obs,

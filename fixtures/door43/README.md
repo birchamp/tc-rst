@@ -28,3 +28,18 @@ The values in the specification are examples, not Door43 data. No recorded live 
 answers exist yet; `git.door43.org` is blocked from the build environment. Record them
 from `qa.door43.org` when a machine has access, and add them here with their own
 provenance.
+
+## `fetched-lock/`
+
+A `fetched.lock` in the format of `bundle/en/fetched.lock`, beside the one archive it names,
+for the tests of `tc_resources::FetchedLock`. Nothing in it came from Door43.
+
+- `demo-e8c6503832022a8fd38bb426781d6b6127dde664.zip` is the `git archive` of a three-file
+  repository made for this fixture with git 2.43.0: `README.md`, `content/1.json` and the
+  executable `run.sh`, committed as `fixture <fixture@example.org>` at
+  `2026-10-16T00:00:00Z`, then `git archive --format=zip --prefix=demo/` of that commit. Its
+  commit is `e8c6503832022a8fd38bb426781d6b6127dde664` and its tree, from
+  `git rev-parse HEAD^{tree}`, is `6e5802a33cc85441708e9d4dc17c71c2b25b6cc0`. The zip is 748
+  bytes, sha256 `ed0c325b58e18976d29b70151f704548df297f285ca0710704cbe1def4f4de51`.
+- The lock's second entry, `fixture/images`, is invented. It stands for an archive the
+  packaging step downloads (`"file": null`), so no test checks its tree or digest.
