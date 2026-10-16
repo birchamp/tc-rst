@@ -10,7 +10,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '@ds/styles.css';
 import spec from '../gallery-spec.json';
-import { value } from './render.jsx';
+import { Tree } from './render.jsx';
 
 function Frame({ c, mounted = true, inline = false }) {
   const { width, height, padding, background } = c.frame;
@@ -18,7 +18,7 @@ function Frame({ c, mounted = true, inline = false }) {
     <div data-case={c.id} tabIndex={inline ? undefined : -1}
       lang={inline ? c.document.lang : undefined} dir={inline ? c.document.dir : undefined}
       style={{ width, height, padding, background, overflow: 'hidden', boxSizing: 'border-box' }}>
-      {mounted ? value(c.render ?? { $el: c.component, props: c.props }) : null}
+      {mounted ? <Tree tree={c.render ?? { $el: c.component, props: c.props }} initial={c.cells} /> : null}
     </div>
   );
 }

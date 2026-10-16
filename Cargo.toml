@@ -19,12 +19,31 @@ panic = "warn"
 dbg_macro = "warn"
 todo = "warn"
 
+# The UI's WebAssembly: smallest code, one unit, link-time optimisation.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"
 proptest = "1"
 tempfile = "3"
+axum = { version = "0.8.9", default-features = false }
+base64 = "0.22.1"
+md-5 = "0.10.6"
+reqwest = { version = "0.13.5", default-features = false }
+sha1 = "0.10.7"
+tokio = "1.53.3"
+unicode-general-category = "1.1.0"
+unicode-normalization = "0.1.25"
+url = "2.5.8"
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # Full debug info made each agent worktree's target dir several GB and filled the disk.
 [profile.dev]

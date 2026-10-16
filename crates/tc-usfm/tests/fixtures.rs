@@ -132,13 +132,28 @@ fn aligned_verses_weave_back_byte_for_byte() {
 /// Every verse of every fixture reads apart. Each one without other word markup (such as
 /// UHB's `\w` words with `lemma`) weaves back into the same plain text and links, with
 /// the occurrence numbers the plain text gives.
+///
+/// One verse is broken alignment markup on purpose: `align/span-source.usfm` wraps a word
+/// in each span usfm-js knows, and its `zaln` span is a `\zaln-s` with only `x-content`.
+/// That verse is refused, never read as alignment.
 #[test]
 fn every_fixture_verse_reads_apart_and_weaves_back() {
-    let (mut woven, mut word_markup) = (0, 0);
+    let (mut woven, mut word_markup, mut refused) = (0, 0, 0);
     for (path, text) in all_usfm() {
         for unit in Book::parse(&text).verses() {
             let at = format!("{} {:?}:{}", path.display(), unit.chapter(), unit.label());
-            let parsed = parse_aligned(unit.body()).unwrap_or_else(|e| panic!("{at}: {e}"));
+            let parsed = match parse_aligned(unit.body()) {
+                Ok(parsed) => parsed,
+                Err(Error::InvalidSourceWord(_))
+                    if path.ends_with("align/span-source.usfm")
+                        && unit.chapter() == Some(1)
+                        && unit.label() == "96" =>
+                {
+                    refused += 1;
+                    continue;
+                }
+                Err(e) => panic!("{at}: {e}"),
+            };
             if let Ok(counted) = tc_usfm::target_words(&parsed.plain) {
                 assert_eq!(counted, parsed.words, "{at}");
             }
@@ -160,6 +175,10 @@ fn every_fixture_verse_reads_apart_and_weaves_back() {
             }
         }
     }
+    assert_eq!(
+        refused, 1,
+        "the broken \\zaln-s in align/span-source.usfm 1:96"
+    );
     assert!(woven > 500, "only {woven} verses woven");
     // UHB Jonah's 48 verses, and the copies of it.
     assert!(word_markup >= 48, "{word_markup}");

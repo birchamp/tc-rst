@@ -1,6 +1,6 @@
 // components/surfaces and components/translation: BookTile, Callout, Card, Drawer, HelpCard,
 // Modal, ScripturePassage, VerseMarker, WordChip.
-import { el, noop, group, focus, hover, AR, T } from './lib.mjs';
+import { el, noop, cell, set, setTo, group, focus, hover, click, AR, T } from './lib.mjs';
 
 const conflicts = el('Text', { role: 'labelNum', tone: 'tone', 'data-tone': 'warn', as: 'div', style: { marginTop: 7 }, children: '2 conflicts' });
 const cardBody = [
@@ -69,6 +69,8 @@ export default [
     ['long-content', { eyebrow: 'Translation Academy', title: 'Abstract Nouns', onClose: noop, children: [...drawerBody, ...drawerBody, ...drawerBody] }],
     ['title-rtl', { eyebrow: 'Translation Academy', title: 'الأسماء المجردة', titleDir: 'rtl', onClose: noop, children: drawerBody }, { note: 'A content title in a gateway language written right to left, under an English interface (#650).' }],
     ['rtl', { eyebrow: 'أكاديمية الترجمة', title: 'الأسماء المجردة', onClose: noop, closeLabel: 'إغلاق', children: [el('Text', { role: 'body', children: T.noteAr })] }, { document: AR }],
+    ['element-title', { eyebrow: 'Translation Academy', title: el('span', { dir: 'rtl', children: 'الأسماء المجردة' }), onClose: noop, children: drawerBody },
+      { note: 'A title that is an element: the dialog is labelled "Panel".' }],
   ]),
 
   ...group('HelpCard', { frame: { width: 380, height: 208 } }, [
@@ -94,6 +96,15 @@ export default [
     ['rtl', { title: 'إعدادات المشروع', subtitle: `${T.projectAr} · سفران`, closeLabel: 'إغلاق', onClose: noop,
       children: [el('TextField', { label: 'اسم الكتاب المقدس', defaultValue: T.projectAr }), el('Callout', { tone: 'info', children: 'ستتوفر إعادة التسمية في تحديث لاحق.' })],
       footer: [el('Button', { variant: 'secondary', children: T.cancelAr }), el('Button', { variant: 'primary', children: T.saveAr })] }, { document: AR }],
+    ['element-subtitle', { ...modal, title: 'Add a book', subtitle: ['To ', el('strong', { style: { color: 'var(--uw-ocean)' }, children: T.project })] },
+      { note: 'A subtitle of text and an element, as tC4\'s AddBook passes it.' }],
+    ['nested-select', { ...modal, open: cell('open'), onClose: setTo('open', false), children: [
+      el('Select', { label: 'Script font', options: ['Noto Sans (default)', 'Charis SIL', 'Scheherazade New'], value: cell('font'), onChange: set('font', '0.target.value') }),
+      el('Callout', { tone: 'info', children: 'The font applies to every book of the project.' }),
+    ] }, { cells: { open: true, font: 'Charis SIL' }, steps: [click('[role="combobox"]')], note: 'A Select open inside a dialog: its list is a layer one level deeper.' }],
+    ['nested-menu', { ...modal, open: cell('open'), onClose: setTo('open', false), children: [
+      el('Menu', { trigger: el('Button', { variant: 'secondary', size: 'sm', 'data-testid': 'export', children: 'Export ▾' }), items: [{ label: 'USFM', meta: '.usfm', onClick: noop }, { label: 'Scripture Burrito', meta: '.zip', onClick: noop }] }),
+    ] }, { cells: { open: true }, steps: [click('[data-testid="export"]')], note: 'A Menu open inside a dialog: its layer sits one level deeper.' }],
   ]),
 
   ...group('ScripturePassage', { frame: { width: 560, height: 212 } }, [

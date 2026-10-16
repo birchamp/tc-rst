@@ -1,0 +1,51 @@
+/* RANGE — the one control the primitives cannot draw.
+
+   ::-webkit-slider-thumb and ::-moz-range-thumb are pseudo-elements, and inline
+   styles cannot address a pseudo-element at all. No primitive built on inline
+   styles can ever style a range thumb, so the fix is a stylesheet rather than a
+   component — which is why this file exists beside states.css instead of a
+   Slider.jsx existing beside Input.jsx. AUDIT.md CANNOT-EXPRESS #16.
+
+   With the thumb styled once here, a slider is a composition:
+
+       <Field label="Font size" hint="18px">
+         <input type="range" data-range min="12" max="32" value={v}
+           onChange={e => set(+e.target.value)}
+           style={{ '--range-pct': pct + '%' }} />
+       </Field>
+
+   --range-pct is the one inline value the caller must supply: WebKit has no
+   ::-moz-range-progress equivalent, so the filled portion of the track is a
+   hard-stop gradient and the stop has to be a live number. Firefox ignores it
+   and uses ::-moz-range-progress. Both read --tone, so the tone axis reaches
+   the control the same way it reaches everything else.
+
+   TWO THINGS TO KNOW. A range with no data-tone ancestor resolves --tone to
+   NEUTRAL (:root maps the neutral set), which paints mist on frost and reads as
+   an empty track — so give a range a tone, either on the Field or on a wrapper.
+   And vendor pseudo-elements do not survive DOM-serialising screenshot tools,
+   so a range looks unstyled in a captured preview and correct in a browser;
+   judge it in a real one. */
+
+[data-range]{-webkit-appearance:none;appearance:none;display:block;width:100%;height:var(--range-h,20px);margin:0;padding:0;background:transparent;cursor:pointer;font:inherit}
+[data-range="lg"]{--range-h:44px;--range-thumb:22px}
+[data-range]:disabled{cursor:default;opacity:.55}
+[data-range]:focus{outline:none}
+
+/* Track — WebKit/Blink. The fill is a hard-stop gradient at --range-pct. */
+[data-range]::-webkit-slider-runnable-track{height:var(--range-track,5px);border-radius:var(--radius-pill);background:linear-gradient(to right,var(--tone) 0 var(--range-pct,0%),var(--surface-muted) var(--range-pct,0%) 100%)}
+[data-range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:var(--range-thumb,16px);height:var(--range-thumb,16px);margin-top:calc((var(--range-track,5px) - var(--range-thumb,16px)) / 2);border-radius:var(--radius-pill);background:#fff;border:var(--stroke-control) solid var(--tone-border);box-shadow:var(--shadow-raised);transition:box-shadow var(--dur-hover) var(--ease-standard),border-color var(--dur-hover) var(--ease-standard)}
+[data-range]:hover::-webkit-slider-thumb{border-color:var(--tone)}
+[data-range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 3px var(--accent-ring)}
+[data-range]:active::-webkit-slider-thumb{background:var(--surface-app)}
+
+/* Track — Gecko. ::-moz-range-progress does the fill natively. */
+[data-range]::-moz-range-track{height:var(--range-track,5px);border-radius:var(--radius-pill);background:var(--surface-muted)}
+[data-range]::-moz-range-progress{height:var(--range-track,5px);border-radius:var(--radius-pill);background:var(--tone)}
+[data-range]::-moz-range-thumb{width:var(--range-thumb,16px);height:var(--range-thumb,16px);border-radius:var(--radius-pill);background:#fff;border:var(--stroke-control) solid var(--tone-border);box-shadow:var(--shadow-raised)}
+[data-range]:hover::-moz-range-thumb{border-color:var(--tone)}
+[data-range]:focus-visible::-moz-range-thumb{box-shadow:0 0 0 3px var(--accent-ring)}
+
+/* On a dark ground the white thumb and the frost track both need restating. */
+[data-on="dark"] [data-range]::-webkit-slider-runnable-track{background:linear-gradient(to right,var(--tone) 0 var(--range-pct,0%),rgba(255,255,255,.20) var(--range-pct,0%) 100%)}
+[data-on="dark"] [data-range]::-moz-range-track{background:rgba(255,255,255,.20)}

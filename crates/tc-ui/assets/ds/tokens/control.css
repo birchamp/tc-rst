@@ -1,0 +1,34 @@
+/* CONTROL METRICS — the size axis.
+
+   One height ladder shared by every control that can sit in a row with
+   another: buttons, fields, selects, search, chips. Inline padding differs
+   by role (an action is roomier than a field), but the box height does not,
+   so a button beside an input always aligns without either being told about
+   the other.
+
+   --control-h-lg is 44px because that is the WCAG 2.5.8 AA target minimum;
+   it is the size to reach for on anything a translator taps rather than clicks. */
+
+:root {
+  --control-h-sm: 30px;
+  --control-h-md: 36px;
+  --control-h-lg: 44px;
+
+  /* Action (pill buttons): generous inline padding. */
+  --action-px-sm: 18px;
+  --action-px-md: 20px;
+  --action-px-lg: 22px;
+
+  /* Field (inputs, selects, search): tight inline padding. */
+  --field-px-sm: 10px;
+  --field-px-md: 12px;
+  --field-px-lg: 14px;
+
+  /* Shared type step. */
+  --control-fs-sm: var(--fs-caption-lg);
+  --control-fs-md: var(--fs-ui);
+  --control-fs-lg: var(--fs-ui-md);
+
+  /* Square controls (icon buttons) use the height ladder as both dimensions. */
+  --control-gap: 7px;   /* glyph-to-label inside a control */
+}

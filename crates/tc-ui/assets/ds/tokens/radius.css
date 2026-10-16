@@ -1,0 +1,51 @@
+:root {
+  --radius-xs:    4px;  /* inline token highlight */
+  --radius-chip:  7px;  /* aligned word chip */
+  --radius-sm:    8px;  /* icon button, chapter cell, small pill button */
+  --radius-input: 9px;  /* text field, select */
+  --radius-md:    10px; /* list rows, option cards, primary action blocks */
+  --radius-lg:    12px; /* help cards, callouts */
+  --radius-xl:    14px; /* feature panels, alignment editor */
+  --radius-2xl:   16px; /* project cards, modals, tool cards */
+  --radius-pill:  999px;
+}
+
+/* ---- Concentric corners ----
+   Radii follow the element, never its size — but a rounded box INSIDE a rounded box
+   is not a free choice. Two nested rounded rectangles share a corner-arc centre
+   only when
+
+       r = R - b - d
+
+   R the outer border-box radius, b the outer BORDER WIDTH, d the inset from the
+   outer padding box to the child's border box. The outer arc centre sits at (R, R)
+   from the corner and the child's at (b + d + r, b + d + r); concentric means the
+   two coincide. Get it wrong and the gap between the arcs is not constant — it
+   pinches at the 45 degree line, which is how you spot it.
+
+   Three things this rule is strict about:
+
+   - The border counts. CSS draws the outer element's padding-box corner at R - b,
+     so the child measures from there. A 16px radius with a 1px edge and 8px of
+     padding wants 7px, not 8px.
+   - There is no floor. If r <= 0 the child's corner is clear of the outer arc and
+     its radius is a free choice; a "close enough" minimum would invent a
+     non-concentric value and call it concentric.
+   - Per-axis insets give an ELLIPSE, not a circle: rx = R - b - d_inline,
+     ry = R - b - d_block, written CSS's own way as "rx / ry". A card padded
+     22px 24px has a genuinely elliptical inner corner.
+
+   Surface computes this and publishes --radius-inner, only when the rule binds. The
+   value it emits is a calc() over the radius and stroke tokens themselves — retune
+   --radius-2xl or --stroke and every concentric corner follows. Only the "does it
+   bind" test is a number in JS, because CSS cannot branch on a calc result.
+   A pill stays a pill.
+
+   Surface does this arithmetic and publishes the answer as --radius-inner, so a
+   rounded child asks for radius="inner" rather than the caller working it out:
+
+       <Surface radius="2xl" pad="md">        (16px box, 14px inset)
+         <Surface radius="inner" …>           (resolves to 4px)
+
+   Hand-written CSS inside a Surface can read var(--radius-inner) directly.
+   Specimen card under Type › Optical corrections. */

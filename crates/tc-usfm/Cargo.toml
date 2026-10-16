@@ -11,9 +11,10 @@ tc-core = { path = "../tc-core" }
 thiserror.workspace = true
 
 [dev-dependencies]
-md-5 = "0.10.6"
+md-5.workspace = true
 proptest.workspace = true
 serde_json.workspace = true
+zip.workspace = true
 
 [lints]
 workspace = true

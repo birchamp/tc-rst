@@ -1,0 +1,16 @@
+/* LAYER — the stacking axis.
+
+   Six named levels. Nothing in the system writes a raw z-index; the Layer
+   primitive resolves --z-<level> and adds +10 per nesting depth, so a menu
+   opened inside a drawer sits above that drawer without either knowing about
+   the other. Depth is what a fixed ladder cannot express. */
+
+:root {
+  --z-base: 0; /* @kind other */    /* in-flow content */
+  --z-raised: 10; /* @kind other */   /* sticky column headers, pinned rows */
+  --z-header: 30; /* @kind other */   /* the application title bar */
+  --z-overlay: 50; /* @kind other */   /* modal + drawer scrims and their panels */
+  --z-popover: 60; /* @kind other */   /* menus, comboboxes, anything anchored to a trigger */
+  --z-toast: 90; /* @kind other */   /* transient confirmations */
+  --z-tooltip: 100; /* @kind other */  /* always last: never obscured, never obscures a choice */
+}

@@ -1,0 +1,66 @@
+[package]
+name = "tc-ui"
+description = "The Leptos UI of the tC4 rebuild: tC4's design system with its CSS, fonts and DOM."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# The design-system gallery: renders every case of parity/ds-gallery/gallery-spec.json.
+gallery = ["dep:serde_json", "dep:wasm-bindgen-futures", "dep:console_error_panic_hook"]
+
+# The UI only runs in a browser. On the host the crate compiles its pure parts (the style
+# builder, the token enums, the layout arithmetic), so `cargo test --workspace` stays fast and
+# still tests them.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+leptos = { version = "=0.8.22", features = ["csr"] }
+wasm-bindgen = "=0.2.129"
+js-sys = "0.3.106"
+send_wrapper = "0.6.0"
+web-sys = { version = "0.3.106", features = [
+  "AddEventListenerOptions",
+  "console",
+  "CssStyleDeclaration",
+  "Document",
+  "DomRect",
+  "Element",
+  "Event",
+  "EventTarget",
+  "FocusEvent",
+  "FocusOptions",
+  "FontFace",
+  "FontFaceSet",
+  "HtmlElement",
+  "HtmlFormElement",
+  "HtmlInputElement",
+  "HtmlTextAreaElement",
+  "KeyboardEvent",
+  "Location",
+  "MediaQueryList",
+  "MouseEvent",
+  "MutationObserver",
+  "MutationObserverInit",
+  "MutationRecord",
+  "Node",
+  "NodeList",
+  "PointerEvent",
+  "Response",
+  "ScrollIntoViewOptions",
+  "ScrollLogicalPosition",
+  "UrlSearchParams",
+  "Window",
+] }
+serde_json = { workspace = true, optional = true }
+wasm-bindgen-futures = { version = "0.4.79", optional = true }
+console_error_panic_hook = { version = "0.1.7", optional = true }
+
+# proptest does not build for wasm32-unknown-unknown, where clippy --all-targets also runs.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+proptest = { workspace = true }
+
+[lints]
+workspace = true
