@@ -794,7 +794,7 @@ impl Parser<'_> {
 }
 
 /// The end of the run of string bytes from `at` that need no attention: the index of the
-/// first `"`, `\` or control byte, or the end. Eight bytes at a time while none is near.
+/// first `"`, `\` or control byte, or the end. Eight bytes at a time.
 fn plain_run(bytes: &[u8], mut at: usize) -> usize {
     const ONES: u64 = u64::from_le_bytes([1; 8]);
     const HIGH: u64 = u64::from_le_bytes([0x80; 8]);
@@ -803,11 +803,13 @@ fn plain_run(bytes: &[u8], mut at: usize) -> usize {
         let mut word = [0; 8];
         word.copy_from_slice(chunk);
         let w = u64::from_le_bytes(word);
+        // Each test may also flag bytes above a byte it rightly flags (a borrow carries
+        // up), never below one, so the lowest flag is the first byte that stops the run.
         let stop = has_zero(w ^ (ONES * u64::from(b'"')))
             | has_zero(w ^ (ONES * u64::from(b'\\')))
             | (w.wrapping_sub(ONES * 0x20) & !w & HIGH);
         if stop != 0 {
-            break;
+            return at + (stop.trailing_zeros() / 8) as usize;
         }
         at += 8;
     }
@@ -1218,6 +1220,33 @@ mod tests {
             parse(b"\"\xff\"").unwrap_err().problem,
             JsonProblem::NotUtf8
         );
+    }
+
+    proptest::proptest! {
+        /// The word-at-a-time scan stops where a byte-at-a-time scan does, for bytes on both
+        /// sides of every boundary it tests (control bytes, quote, backslash, high bytes).
+        #[test]
+        fn plain_run_stops_at_the_first_byte_that_needs_attention(
+            bytes in proptest::collection::vec(
+                proptest::prop_oneof![
+                    proptest::sample::select(vec![
+                        0x00u8, 0x01, 0x1f, 0x20, 0x21, 0x22, 0x23, 0x5b, 0x5c, 0x5d, 0x7f,
+                        0x80, 0xa2, 0xdc, 0xff,
+                    ]),
+                    proptest::prelude::any::<u8>(),
+                    proptest::prelude::Just(b'a'),
+                ],
+                0..40,
+            ),
+            from in 0usize..40,
+        ) {
+            let from = from.min(bytes.len());
+            let expected = bytes[from..]
+                .iter()
+                .position(|&b| b == b'"' || b == b'\\' || b < 0x20)
+                .map_or(bytes.len(), |i| from + i);
+            proptest::prop_assert_eq!(plain_run(&bytes, from), expected);
+        }
     }
 
     #[test]

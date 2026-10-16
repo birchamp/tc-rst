@@ -193,6 +193,9 @@ struct In<'a> {
     /// The members after the last one read: the decoders read fields in key order, so
     /// each lookup usually continues from here.
     rest: ObjIter<'a>,
+    /// The key of the member just before `rest`: every member before `rest` has a key no
+    /// greater than it.
+    last: Option<&'static str>,
     taken: SmallVec<[&'static str; 12]>,
     cx: Cx,
 }
@@ -203,6 +206,7 @@ impl<'a> In<'a> {
             Some(map) => Ok(Self {
                 map,
                 rest: map.iter(),
+                last: None,
                 taken: SmallVec::new(),
                 cx,
             }),
@@ -214,7 +218,15 @@ impl<'a> In<'a> {
         let value = match json::find_member(self.rest.clone(), key) {
             Some((value, rest)) => {
                 self.rest = rest;
+                self.last = Some(key);
                 Some(value)
+            }
+            // Keys are sorted: a key past `last` that is not after `rest` is absent.
+            None if self
+                .last
+                .is_none_or(|last| last.as_bytes() < key.as_bytes()) =>
+            {
+                None
             }
             None => self.map.get(key),
         };
