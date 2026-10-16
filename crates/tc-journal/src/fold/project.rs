@@ -501,44 +501,8 @@ impl FoldState {
     /// Every derived file the projection holds now, in path order.
     pub fn derived_files(&self) -> Vec<DerivedFile> {
         let mut out: BTreeSet<DerivedFile> = BTreeSet::new();
-        for (book, entry) in self.books.iter() {
-            if !entry.status.projects() {
-                continue;
-            }
-            out.insert(DerivedFile::Usfm(*book));
-            for k in &entry.keys {
-                let e = self.entry(*k);
-                if matches!(e.projected, Projected::Nothing) {
-                    continue;
-                }
-                match &e.key {
-                    RecordKey::Alignment(..) => {
-                        out.insert(DerivedFile::Alignments(*book));
-                    }
-                    RecordKey::Check(check) => {
-                        let decision = match &e.projected {
-                            Projected::Change(c) => {
-                                matches!(self.meta(*c).shape, Shape::Decision { .. })
-                            }
-                            Projected::Merged(r) => matches!(
-                                &**r,
-                                Record::Check {
-                                    value: CheckValue::Decision(_),
-                                    ..
-                                }
-                            ),
-                            Projected::Nothing => false,
-                        };
-                        if decision {
-                            out.insert(DerivedFile::Decisions(check.tool, *book));
-                        }
-                    }
-                    RecordKey::Comment(_) => {
-                        out.insert(DerivedFile::Comments(*book));
-                    }
-                    _ => {}
-                }
-            }
+        for book in self.books.keys() {
+            self.book_files_into(*book, &mut out);
         }
         if !self.pin_keys.is_empty() {
             out.insert(DerivedFile::Resources);
@@ -566,6 +530,60 @@ impl FoldState {
         files
     }
 
+    /// The derived files of one book: [`Self::derived_files`] of that book, found from its
+    /// own records only, so listing them costs what the book holds.
+    pub fn book_files(&self, book: BookId) -> Vec<DerivedFile> {
+        let mut out: BTreeSet<DerivedFile> = BTreeSet::new();
+        self.book_files_into(book, &mut out);
+        let mut files: Vec<DerivedFile> = out.into_iter().collect();
+        files.sort_by_key(DerivedFile::path);
+        files
+    }
+
+    fn book_files_into(&self, book: BookId, out: &mut BTreeSet<DerivedFile>) {
+        let Some(entry) = self.books.get(&book) else {
+            return;
+        };
+        if !entry.status.projects() {
+            return;
+        }
+        out.insert(DerivedFile::Usfm(book));
+        self.count(Counter::RecordsListed, entry.keys.len() as u64);
+        for k in &entry.keys {
+            let e = self.entry(*k);
+            if matches!(e.projected, Projected::Nothing) {
+                continue;
+            }
+            match &e.key {
+                RecordKey::Alignment(..) => {
+                    out.insert(DerivedFile::Alignments(book));
+                }
+                RecordKey::Check(check) => {
+                    let decision = match &e.projected {
+                        Projected::Change(c) => {
+                            matches!(self.meta(*c).shape, Shape::Decision { .. })
+                        }
+                        Projected::Merged(r) => matches!(
+                            &**r,
+                            Record::Check {
+                                value: CheckValue::Decision(_),
+                                ..
+                            }
+                        ),
+                        Projected::Nothing => false,
+                    };
+                    if decision {
+                        out.insert(DerivedFile::Decisions(check.tool, book));
+                    }
+                }
+                RecordKey::Comment(_) => {
+                    out.insert(DerivedFile::Comments(book));
+                }
+                _ => {}
+            }
+        }
+    }
+
     /// The bytes of a derived file, or `None` when the projection does not hold it.
     pub fn render(&self, file: &DerivedFile) -> Option<Vec<u8>> {
         self.render_with(file, &std::sync::OnceLock::new())
@@ -576,11 +594,7 @@ impl FoldState {
     /// on up to four threads, and its files share the book's text and render on up to four
     /// threads.
     pub fn render_book(&self, book: BookId) -> Vec<(DerivedFile, Vec<u8>)> {
-        let files: Vec<DerivedFile> = self
-            .derived_files()
-            .into_iter()
-            .filter(|f| f.book() == Some(book))
-            .collect();
+        let files = self.book_files(book);
         if files.is_empty() {
             return Vec::new();
         }
@@ -603,8 +617,11 @@ impl FoldState {
         out
     }
 
-    /// A snapshot of this state holding every projected record of `book` decoded, so the
-    /// files of the book read each value once, and the decoded records in chunks.
+    /// A snapshot of this state holding the projected records of `book` that several of its
+    /// files read (verses, chapter fronts, the header and layout) decoded, so those files
+    /// read each value once, and the decoded records in chunks. Alignments, checks and
+    /// comments are each read by one file, which decodes them in its own chunks and frees
+    /// them as it goes.
     fn with_records_of(&self, book: BookId) -> (FoldState, Vec<DecodedChunk>) {
         let changes: Vec<ChangeIdx> = self
             .books
@@ -612,6 +629,12 @@ impl FoldState {
             .map(|b| {
                 b.keys
                     .iter()
+                    .filter(|k| {
+                        !matches!(
+                            self.entry(**k).key,
+                            RecordKey::Alignment(..) | RecordKey::Check(_) | RecordKey::Comment(_)
+                        )
+                    })
                     .filter_map(|k| match &self.entry(*k).projected {
                         Projected::Change(c) => Some(*c),
                         _ => None,
@@ -688,15 +711,27 @@ impl FoldState {
         let mut first_at_run: BTreeSet<(u16, u16)> = BTreeSet::new();
         let mut sorted = keys;
         sorted.sort_by_key(|k| self.entry(*k).key.clone());
-        for k in sorted {
-            let RecordKey::Alignment(_, c, v) = &self.entry(k).key else {
-                continue;
-            };
-            let (c, v) = (c.get(), v.get());
-            let Some(record) = self.projected_arc(k) else {
-                continue;
-            };
-            let Record::Alignment { value, .. } = &*record else {
+        let key_chunks: Vec<&[KeyIdx]> = sorted.chunks(128).collect();
+        let records: Vec<((u16, u16), Arc<Record>)> = on_threads(&key_chunks, |chunk| {
+            chunk
+                .iter()
+                .filter_map(|k| {
+                    let RecordKey::Alignment(_, c, v) = &self.entry(*k).key else {
+                        return None;
+                    };
+                    Some(((c.get(), v.get()), self.projected_arc(*k)?))
+                })
+                .collect::<Vec<_>>()
+        })
+        .into_iter()
+        .flatten()
+        .collect();
+        // Where each record goes is decided in key order; the records, kilobytes each, are
+        // then written on several threads.
+        let mut plan: Vec<(&AlignmentValue, AlignmentSlot)> = Vec::with_capacity(records.len());
+        for ((c, v), record) in &records {
+            let (c, v) = (*c, *v);
+            let Record::Alignment { value, .. } = &**record else {
                 continue;
             };
             let (place, _) = attach::place(self, book, (c, v));
@@ -720,22 +755,57 @@ impl FoldState {
                         && value.source.as_ref().is_none_or(|s| Some(s.sha) == ol_sha)
                         && !value.marked_invalid;
                     taken.insert((rc, rv));
-                    let mut record = alignment_record(value, !valid);
-                    if (rc, rv) != (c, v) {
+                    plan.push((
+                        value,
+                        AlignmentSlot::Placed {
+                            at: (rc, rv, label_end),
+                            invalid: !valid,
+                            anchor: ((rc, rv) != (c, v)).then_some((c, v)),
+                            span_end: (value.span_end.get() != label_end)
+                                .then_some(value.span_end.get()),
+                        },
+                    ));
+                }
+                _ => plan.push((
+                    value,
+                    AlignmentSlot::Fallback {
+                        at: (c, v),
+                        span_end: (value.span_end.get() != v).then_some(value.span_end.get()),
+                    },
+                )),
+            }
+        }
+        let chunks: Vec<&[(&AlignmentValue, AlignmentSlot)]> = plan.chunks(128).collect();
+        let written = on_threads(&chunks, |chunk| {
+            chunk
+                .iter()
+                .map(|(value, slot)| {
+                    let (invalid, anchor, span_end) = match slot {
+                        AlignmentSlot::Placed {
+                            invalid,
+                            anchor,
+                            span_end,
+                            ..
+                        } => (*invalid, *anchor, *span_end),
+                        AlignmentSlot::Fallback { span_end, .. } => (true, None, *span_end),
+                    };
+                    let mut record = alignment_record(value, invalid);
+                    if let Some((c, v)) = anchor {
                         add_anchor(&mut record, c, v);
                     }
-                    if value.span_end.get() != label_end {
-                        add_span_end(&mut record, value.span_end.get());
+                    if let Some(end) = span_end {
+                        add_span_end(&mut record, end);
                     }
-                    placed.insert((rc, rv, label_end), record.finish());
+                    (*slot, record.finish())
+                })
+                .collect::<Vec<_>>()
+        });
+        for (slot, record) in written.into_iter().flatten() {
+            match slot {
+                AlignmentSlot::Placed { at, .. } => {
+                    placed.insert(at, record);
                 }
-                _ => {
-                    let mut record = alignment_record(value, true);
-                    if value.span_end.get() != v {
-                        add_span_end(&mut record, value.span_end.get());
-                    }
-                    fallback.push(((c, v), record.finish()));
-                }
+                AlignmentSlot::Fallback { at, .. } => fallback.push((at, record)),
             }
         }
         let mut chapters: BTreeMap<u16, Vec<(u16, String)>> = BTreeMap::new();
@@ -810,26 +880,26 @@ impl FoldState {
             if check.tool != tool {
                 continue;
             }
-            let Some(record) = self.projected_arc(k) else {
-                continue;
-            };
             let target = match &check.target {
                 CheckTarget::Verse { chapter, verse, .. } => (chapter.as_str(), verse.as_str()),
                 CheckTarget::Frame { .. } => ("", ""),
             };
-            decisions.push((target, k, record));
+            decisions.push((target, k));
         }
-        decisions.sort_by_key(|(target, k, _)| (*target, *k));
+        decisions.sort_by_key(|(target, k)| (*target, *k));
         // Rendered in chunks on several threads: a book holds thousands of decisions.
         let chunks: Vec<&[Targeted<'_>]> = decisions.chunks(512).collect();
         let rendered = on_threads(&chunks, |chunk| {
             let mut out: Vec<(String, String)> = Vec::with_capacity(chunk.len());
             let mut verse: Option<((&str, &str), Arc<VerseFacts>)> = None;
-            for (target, k, record) in chunk.iter() {
+            for (target, k) in chunk.iter() {
+                let Some(record) = self.projected_arc(*k) else {
+                    continue;
+                };
                 let Record::Check {
                     key: check,
                     value: CheckValue::Decision(decision),
-                } = &**record
+                } = &*record
                 else {
                     continue;
                 };
@@ -846,9 +916,10 @@ impl FoldState {
                 let Some((_, facts)) = &verse else {
                     continue;
                 };
-                let record = decision_record(decision, check, resolved.as_ref(), facts, newest);
                 let mut context = String::new();
                 write_map(&decision.context, &mut context);
+                let record =
+                    decision_record(decision, &context, check, resolved.as_ref(), facts, newest);
                 out.push((context, record.finish()));
             }
             out
@@ -1166,8 +1237,8 @@ fn check_verse(check: &CheckKey) -> Option<(u16, u16)> {
     }
 }
 
-/// A decision's record with its key and the (chapter, verse) its target names.
-type Targeted<'a> = ((&'a str, &'a str), KeyIdx, Arc<Record>);
+/// A decision's key and the (chapter, verse) its target names.
+type Targeted<'a> = ((&'a str, &'a str), KeyIdx);
 
 /// What the decisions of one check target read of its verse text (§7.7).
 pub(crate) struct VerseFacts {
@@ -1346,6 +1417,24 @@ fn group(g: &AlignmentGroup, out: &mut String) {
     m.write(out);
 }
 
+/// Where one record of a book's alignment sidecar goes, and what is written beside it.
+#[derive(Debug, Clone, Copy)]
+enum AlignmentSlot {
+    /// At the label of its run, `(chapter, verse, end)`.
+    Placed {
+        at: (u16, u16, u16),
+        invalid: bool,
+        anchor: Option<(u16, u16)>,
+        span_end: Option<u16>,
+    },
+    /// At its own label `(chapter, verse)`, written invalid: it has no run to stand at, or
+    /// an earlier record holds its run.
+    Fallback {
+        at: (u16, u16),
+        span_end: Option<u16>,
+    },
+}
+
 /// A tC4 §5.1 alignment record with `invalid` computed and every stored field kept.
 pub(crate) fn alignment_record(a: &AlignmentValue, invalid: bool) -> Obj<'_> {
     let mut m = Obj::new();
@@ -1397,9 +1486,11 @@ fn status_name(s: UserStatus) -> &'static str {
     }
 }
 
-/// A tC4 §5.2 decision record with its flags computed (§7.7).
+/// A tC4 §5.2 decision record with its flags computed (§7.7). `context` is the decision's
+/// context as JSON, written once by the caller, which also sorts the file by it.
 pub(crate) fn decision_record<'a>(
     d: &'a DecisionRecord,
+    context: &str,
     check: &CheckKey,
     resolved: Option<&crate::record::ResourceRef>,
     verse: &VerseFacts,
@@ -1423,7 +1514,7 @@ pub(crate) fn decision_record<'a>(
         });
     let invalidated = !resource_ok || !selections_ok || d.imported_invalid;
     let mut m = Obj::new();
-    m.raw("contextId", |o| write_map(&d.context, o));
+    m.raw("contextId", |o| o.push_str(context));
     if let Some(category) = &d.category {
         m.str("category", category.as_ref());
     }

@@ -342,9 +342,10 @@ pub(crate) enum Counter {
     RecordsProjected,
     ValuesRead,
     AnomaliesTouched,
+    RecordsListed,
 }
 
-const COUNTERS: usize = 14;
+const COUNTERS: usize = 15;
 
 #[derive(Debug, Default)]
 pub(crate) struct CounterCells([AtomicU64; COUNTERS]);
@@ -371,6 +372,7 @@ impl CounterCells {
             records_projected: get(Counter::RecordsProjected),
             values_read: get(Counter::ValuesRead),
             anomalies_touched: get(Counter::AnomaliesTouched),
+            records_listed: get(Counter::RecordsListed),
         }
     }
 }
@@ -407,6 +409,8 @@ pub struct Counters {
     pub values_read: u64,
     /// Anomalies listed or unlisted.
     pub anomalies_touched: u64,
+    /// Records visited to list derived files.
+    pub records_listed: u64,
 }
 
 impl Counters {
@@ -427,6 +431,7 @@ impl Counters {
             records_projected: self.records_projected - earlier.records_projected,
             values_read: self.values_read - earlier.values_read,
             anomalies_touched: self.anomalies_touched - earlier.anomalies_touched,
+            records_listed: self.records_listed - earlier.records_listed,
         }
     }
 }

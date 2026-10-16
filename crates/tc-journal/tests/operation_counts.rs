@@ -401,3 +401,27 @@ fn a_book_renders_as_its_files_do() {
         assert_eq!(state.render(file).as_ref(), Some(bytes), "{}", file.path());
     }
 }
+
+/// Materializing a book lists the book's files from its own records, never from the rest of
+/// the project: on the corpus ten times larger, the listing visits no more than the records
+/// that belong to Psalms (and the comments, which are placed by their target).
+#[test]
+fn a_book_lists_its_files_from_its_own_records() {
+    for (corpus, state) in [("Psalms", psalms()), ("ten times larger", larger())] {
+        let state = fork(state);
+        let before = state.counters();
+        let files = state.render_book(PSALMS);
+        let counts = state.counters().since(&before);
+        assert!(files.len() >= 4, "{corpus}: {files:?}");
+        let book_records = state
+            .record_keys()
+            .iter()
+            .filter(|k| k.book() == Some(PSALMS) || matches!(k, RecordKey::Comment(_)))
+            .count() as u64;
+        assert!(
+            counts.records_listed > 0 && counts.records_listed <= book_records,
+            "{corpus}: listing Psalms' files visited {} records; Psalms holds {book_records}",
+            counts.records_listed
+        );
+    }
+}
