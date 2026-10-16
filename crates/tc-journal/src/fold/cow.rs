@@ -66,7 +66,10 @@ impl Hasher for FxHasher {
 pub(crate) type FxBuild = BuildHasherDefault<FxHasher>;
 pub(crate) type FxMap<K, V> = HashMap<K, V, FxBuild>;
 
-const CHUNK: usize = 4096;
+/// Elements per shared chunk. The first write to a chunk after a snapshot copies it, so a
+/// step taken while a snapshot is alive copies a few chunks: small enough to cost far less
+/// than a step's budget, large enough that a snapshot copies a few thousand pointers.
+const CHUNK: usize = 256;
 
 /// An append-only vector in shared chunks.
 #[derive(Debug)]
@@ -267,7 +270,9 @@ fn spread(hash: u64) -> u64 {
 impl Default for PosIndex {
     fn default() -> Self {
         Self {
-            shards: (0..SHARDS).map(|_| Arc::new(PosShard::default())).collect(),
+            shards: (0..POS_SHARDS)
+                .map(|_| Arc::new(PosShard::default()))
+                .collect(),
         }
     }
 }
@@ -302,10 +307,14 @@ impl PosShard {
     }
 }
 
+/// Shards of a [`PosIndex`]: its tables are the largest the fold keeps (one slot per change),
+/// so a shard copied by a first write after a snapshot is a 256th of one.
+const POS_SHARDS: usize = 256;
+
 impl PosIndex {
     fn split(hash: u64) -> (usize, u32) {
         let h = spread(hash);
-        ((h >> 58) as usize % SHARDS, h as u32)
+        ((h >> 56) as usize % POS_SHARDS, h as u32)
     }
 
     /// The first position whose item `is` the key hashed to `hash`.
@@ -353,7 +362,7 @@ impl PosIndex {
 
     /// Makes room for about `additional` more positions, spread over the shards.
     pub(crate) fn reserve(&mut self, additional: usize) {
-        let per_shard = additional / SHARDS + additional / (SHARDS * 8) + 1;
+        let per_shard = additional / POS_SHARDS + additional / (POS_SHARDS * 8) + 1;
         for shard in &mut self.shards {
             Arc::make_mut(shard).make_room(per_shard);
         }

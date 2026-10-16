@@ -992,7 +992,7 @@ fn set_chained(state: &mut FoldState, book: BookId, k: KeyIdx, chained: bool) {
         .get(&book)
         .is_some_and(|b| b.chained.contains(&k));
     if has != chained
-        && let Some(entry) = Arc::make_mut(&mut state.books).get_mut(&book)
+        && let Some(entry) = state.book_mut(book)
     {
         if chained {
             entry.chained.insert(k);

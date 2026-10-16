@@ -8,7 +8,6 @@ use super::{Anomaly, Conflict, ConflictId, ConflictKind, Counter};
 use crate::ids::{ChangeId, ShortId};
 use crate::record::{BookPresence, PresentHow, Record};
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
 use tc_core::BookId;
 
 pub(crate) fn stage_books(state: &mut FoldState, dirty: &mut Dirty) {
@@ -33,7 +32,7 @@ pub(crate) fn stage_books(state: &mut FoldState, dirty: &mut Dirty) {
             .is_some_and(|p| dirty.changed.contains(&p));
         if after != before || presence_changed {
             changed = true;
-            if let Some(entry) = Arc::make_mut(&mut state.books).get_mut(&book) {
+            if let Some(entry) = state.book_mut(book) {
                 entry.status = after;
             }
             mark_book(state, book, dirty);
@@ -276,7 +275,7 @@ fn last_book(state: &mut FoldState, dirty: &mut Dirty) {
         .map(|(id, _)| *id)
         .collect();
     for book in kept {
-        if let Some(entry) = Arc::make_mut(&mut state.books).get_mut(&book) {
+        if let Some(entry) = state.book_mut(book) {
             entry.status = BookStatus::Removed;
         }
         state.set_conflicts(Owner::Book(book), Vec::new(), dirty);
@@ -315,7 +314,7 @@ fn last_book(state: &mut FoldState, dirty: &mut Dirty) {
     let ids: Vec<ChangeId> = heads.iter().map(|h| state.meta(*h).id).collect();
     let conflict = book_conflict(state, presence, &heads, ConflictKind::LastBookRemoved, &ids);
     state.set_conflicts(Owner::Book(book), vec![conflict], dirty);
-    if let Some(entry) = Arc::make_mut(&mut state.books).get_mut(&book) {
+    if let Some(entry) = state.book_mut(book) {
         entry.status = BookStatus::KeptAsLast { scope };
     }
     mark_book(state, book, dirty);

@@ -367,7 +367,9 @@ pub struct FoldState {
     pub(crate) seqs: PosIndex,
     /// Every change of a Local device and seq that more than one change claims.
     pub(crate) duplicate_seqs: CowMap<(DeviceId, DeviceSeq), SmallVec<[ChangeIdx; 2]>>,
-    pub(crate) books: Arc<BTreeMap<BookId, BookEntry>>,
+    /// Each book's entry shared on its own, so the first write to a book after a
+    /// snapshot copies that book's entry, not every book's.
+    pub(crate) books: Arc<BTreeMap<BookId, Arc<BookEntry>>>,
     pub(crate) chapters: CowMap<(BookId, u16), ChapterEntry>,
     pub(crate) groups: CowMap<KeyIdx, Group>,
     pub(crate) unknown_keys: Arc<BTreeSet<KeyIdx>>,
@@ -636,8 +638,7 @@ impl FoldState {
         let Some(book) = book else {
             return;
         };
-        let books = Arc::make_mut(&mut self.books);
-        let entry = books.entry(book).or_insert_with(BookEntry::new);
+        let entry = self.book_or_new(book);
         entry.keys.push(k);
         match key {
             RecordKey::BookPresence(_) => entry.presence = Some(k),
@@ -702,6 +703,22 @@ impl FoldState {
             held: false,
         });
         b
+    }
+
+    /// Book `book`'s entry, to change.
+    pub(crate) fn book_mut(&mut self, book: BookId) -> Option<&mut BookEntry> {
+        Arc::make_mut(&mut self.books)
+            .get_mut(&book)
+            .map(Arc::make_mut)
+    }
+
+    /// Book `book`'s entry, to change; a new one if the book has none.
+    pub(crate) fn book_or_new(&mut self, book: BookId) -> &mut BookEntry {
+        Arc::make_mut(
+            Arc::make_mut(&mut self.books)
+                .entry(book)
+                .or_insert_with(|| Arc::new(BookEntry::new())),
+        )
     }
 
     // The index types are made only by `insert`, `intern_key` and `intern_batch`, which
@@ -1104,9 +1121,7 @@ impl FoldState {
         let book = meta::book_of(&self.entry(k).key, &shape);
         let active = self.entry(k).active > 0;
         if let Some(book) = book {
-            let entry = Arc::make_mut(&mut self.books)
-                .entry(book)
-                .or_insert_with(BookEntry::new);
+            let entry = self.book_or_new(book);
             if !entry.keys.contains(&k) {
                 entry.keys.push(k);
                 if active {
@@ -1289,7 +1304,7 @@ impl FoldState {
         entry.active += 1;
         if entry.active == 1 {
             for book in self.books_of(k) {
-                if let Some(be) = Arc::make_mut(&mut self.books).get_mut(&book) {
+                if let Some(be) = self.book_mut(book) {
                     be.records += 1;
                 }
                 if !dirty.all {
