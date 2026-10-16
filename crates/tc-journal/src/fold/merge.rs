@@ -16,7 +16,7 @@ pub(crate) fn key_parents(state: &FoldState, c: ChangeIdx) -> SmallVec<[ChangeId
     let meta = state.meta(c);
     meta.parents
         .iter()
-        .filter_map(|p| state.change_idx(p))
+        .filter_map(|p| state.parent_idx(p))
         .filter(|p| {
             let pm = state.meta(*p);
             pm.active && pm.key == meta.key

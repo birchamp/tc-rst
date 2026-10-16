@@ -36,6 +36,73 @@ impl KeyIdx {
     }
 }
 
+/// A parent a change names: that change's place in the change table, or, when the fold
+/// did not hold it as the child arrived, the place of its id in the fold's table of absent
+/// parents (it may arrive later: [`super::FoldState`] looks such an id up again).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ParentRef(u32);
+
+const ABSENT: u32 = 1 << 31;
+const NO_PARENT: u32 = u32::MAX;
+
+impl ParentRef {
+    pub(crate) fn known(c: ChangeIdx) -> Self {
+        Self(c.0)
+    }
+
+    pub(crate) fn absent(at: usize) -> Self {
+        Self(at as u32 | ABSENT)
+    }
+
+    /// The change, or the place of the absent id.
+    pub(crate) fn get(self) -> Result<ChangeIdx, usize> {
+        if self.0 & ABSENT == 0 {
+            Ok(ChangeIdx(self.0))
+        } else {
+            Err((self.0 & !ABSENT) as usize)
+        }
+    }
+}
+
+/// The parents a change names, in its own order: most changes name one, so it is kept
+/// inline and the rest behind one pointer (16 bytes, where a list of ids took 48).
+#[derive(Debug, Clone)]
+pub(crate) struct Parents {
+    first: u32,
+    // A boxed Vec is a thin pointer (8 bytes, where a boxed slice takes 16): every change
+    // holds one, and only the few with a second parent pay the extra allocation.
+    #[allow(clippy::box_collection)]
+    more: Option<Box<Vec<ParentRef>>>,
+}
+
+impl Parents {
+    pub(crate) fn of(refs: impl IntoIterator<Item = ParentRef>) -> Self {
+        let mut refs = refs.into_iter();
+        let Some(first) = refs.next() else {
+            return Self {
+                first: NO_PARENT,
+                more: None,
+            };
+        };
+        let more: Vec<ParentRef> = refs.collect();
+        Self {
+            first: first.0,
+            more: (!more.is_empty()).then(|| Box::new(more)),
+        }
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.first == NO_PARENT
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = ParentRef> + '_ {
+        (self.first != NO_PARENT)
+            .then_some(ParentRef(self.first))
+            .into_iter()
+            .chain(self.more.iter().flat_map(|m| m.iter().copied()))
+    }
+}
+
 /// A device's place in the fold's device table: a project has a handful of devices, and
 /// every change names one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -136,7 +203,7 @@ pub(crate) struct Meta {
     pub id: ChangeId,
     pub key: KeyIdx,
     pub batch: BatchIdx,
-    pub parents: SmallVec<[ChangeId; 1]>,
+    pub parents: Parents,
     /// In [`super::FoldState`]'s device table.
     pub device: DeviceIdx,
     pub seq: DeviceSeq,

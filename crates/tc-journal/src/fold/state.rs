@@ -6,8 +6,8 @@
 
 use super::cow::{ChunkVec, CowMap, PosIndex};
 use super::meta::{
-    self, BatchIdx, CauseClass, ChangeIdx, DeviceIdx, KeyIdx, Meta, PackSlot, Quarantined,
-    Resources, Shape,
+    self, BatchIdx, CauseClass, ChangeIdx, DeviceIdx, KeyIdx, Meta, PackSlot, ParentRef, Parents,
+    Quarantined, Resources, Shape,
 };
 use super::value::{Stored, ValueAt, ValueSource};
 use super::{Anomaly, Conflict, ConflictId, Counter, CounterCells, Counters, Frontier};
@@ -331,6 +331,8 @@ pub(crate) struct Dirty {
 pub struct FoldState {
     pub(crate) kind: ProjectKind,
     pub(crate) metas: ChunkVec<Meta>,
+    /// The ids of parents the fold did not hold when a change named them (`ParentRef`).
+    pub(crate) absent: ChunkVec<ChangeId>,
     /// The devices changes name, by [`DeviceIdx`].
     pub(crate) devices: Arc<Vec<DeviceId>>,
     pub(crate) device_index: CowMap<DeviceId, DeviceIdx>,
@@ -401,6 +403,7 @@ impl FoldState {
         Self {
             kind,
             metas: ChunkVec::default(),
+            absent: ChunkVec::default(),
             devices: Arc::new(Vec::new()),
             device_index: CowMap::default(),
             ids: PosIndex::default(),
@@ -499,7 +502,7 @@ impl FoldState {
             let batch = self.batch(meta.batch);
             let summary = meta::Summary {
                 key: entry.key.clone(),
-                parents: meta.parents.clone(),
+                parents: self.parent_ids(meta),
                 device: self.device_of(meta),
                 seq: meta.seq,
                 at: meta.at,
@@ -833,11 +836,28 @@ impl FoldState {
             batches.push(summary.batch);
             let pack = pack.map_or(PackSlot::NONE, |p| self.intern_pack(p));
             let device = self.intern_device(summary.device);
+            let parents: SmallVec<[ParentRef; 2]> = summary
+                .parents
+                .iter()
+                .map(|p| {
+                    let found = self.ids.find(id_hash(p), |c| {
+                        let c = c as usize;
+                        match c.checked_sub(base) {
+                            Some(new) => numbered[new] == *p,
+                            None => self.metas[c].id == *p,
+                        }
+                    });
+                    match found {
+                        Some(c) => ParentRef::known(ChangeIdx(c)),
+                        None => ParentRef::absent(self.absent.push(*p)),
+                    }
+                })
+                .collect();
             self.metas.push(Meta {
                 id,
                 key: KeyIdx(u32::MAX),
                 batch: BatchIdx(u32::MAX),
-                parents: summary.parents,
+                parents: Parents::of(parents),
                 device,
                 seq: summary.seq,
                 at: summary.at,
@@ -979,11 +999,19 @@ impl FoldState {
                 }
                 let pack = input.pack.map_or(PackSlot::NONE, |p| self.intern_pack(p));
                 let device = self.intern_device(summary.device);
+                let parents: SmallVec<[ParentRef; 2]> = summary
+                    .parents
+                    .iter()
+                    .map(|p| match self.change_idx(p) {
+                        Some(pc) => ParentRef::known(pc),
+                        None => ParentRef::absent(self.absent.push(*p)),
+                    })
+                    .collect();
                 self.metas.push(Meta {
                     id,
                     key: k,
                     batch: b,
-                    parents: summary.parents,
+                    parents: Parents::of(parents),
                     device,
                     seq: summary.seq,
                     at: summary.at,
@@ -1198,11 +1226,12 @@ impl FoldState {
                 }
             }
             // Links to parents that are not folded yet wait for them.
-            let parents = self.meta(c).parents.clone();
+            let parents: SmallVec<[ParentRef; 2]> = self.meta(c).parents.iter().collect();
             for p in parents {
-                let known_active = self.change_idx(&p).is_some_and(|pi| self.meta(pi).active);
+                let known_active = self.parent_idx(p).is_some_and(|pi| self.meta(pi).active);
                 if !known_active {
-                    self.waiting.entry_or(p, SmallVec::new).push(c);
+                    let id = self.parent_id(p);
+                    self.waiting.entry_or(id, SmallVec::new).push(c);
                 }
             }
         }
@@ -1233,7 +1262,7 @@ impl FoldState {
             return false;
         }
         meta.parents.iter().all(|p| {
-            self.change_idx(p)
+            self.parent_idx(p)
                 .is_some_and(|pi| self.meta(pi).active && self.meta(pi).key == meta.key)
         })
     }
@@ -1319,7 +1348,7 @@ impl FoldState {
                 .meta(c)
                 .parents
                 .iter()
-                .filter_map(|p| self.change_idx(p))
+                .filter_map(|p| self.parent_idx(p))
                 .collect();
             let mut heads: SmallVec<[ChangeIdx; 1]> = self
                 .entry(k)
@@ -1376,30 +1405,17 @@ impl FoldState {
             .filter(|c| self.meta(*c).active)
             .collect();
         self.count(Counter::ChangesVisited, active.len() as u64);
-        // Parents are nearly always changes of the same record: look there first, so F3
-        // reads this record's changes instead of the whole index.
-        let mut own: SmallVec<[(ChangeId, ChangeIdx); 8]> = self
-            .entry(k)
-            .changes
-            .iter()
-            .map(|c| (self.meta(*c).id, *c))
-            .collect();
-        own.sort_unstable();
         for &c in &active {
             for p in self.meta(c).parents.iter() {
-                let found = match own.binary_search_by(|(id, _)| id.cmp(p)) {
-                    Ok(at) => Some(own[at].1),
-                    Err(_) => self.change_idx(p),
-                };
-                match found {
+                match self.parent_idx(p) {
                     Some(pi) if self.meta(pi).active => {
                         if self.meta(pi).key == k {
                             has_child.push(pi);
                         } else {
-                            faults.push((c, *p, Fault::OtherRecord));
+                            faults.push((c, self.parent_id(p), Fault::OtherRecord));
                         }
                     }
-                    _ => faults.push((c, *p, Fault::Missing)),
+                    _ => faults.push((c, self.parent_id(p), Fault::Missing)),
                 }
             }
         }
@@ -1422,6 +1438,28 @@ impl FoldState {
         if !faults.is_empty() {
             self.faults.insert(k, faults);
         }
+    }
+
+    /// The change a parent names, if the fold holds it (a parent absent when its child
+    /// arrived may have arrived since).
+    pub(crate) fn parent_idx(&self, p: ParentRef) -> Option<ChangeIdx> {
+        match p.get() {
+            Ok(c) => Some(c),
+            Err(at) => self.change_idx(&self.absent[at]),
+        }
+    }
+
+    /// The id of a parent.
+    pub(crate) fn parent_id(&self, p: ParentRef) -> ChangeId {
+        match p.get() {
+            Ok(c) => self.meta(c).id,
+            Err(at) => self.absent[at],
+        }
+    }
+
+    /// The ids of a change's parents, in the order it names them.
+    pub(crate) fn parent_ids(&self, meta: &Meta) -> SmallVec<[ChangeId; 1]> {
+        meta.parents.iter().map(|p| self.parent_id(p)).collect()
     }
 
     fn intern_device(&mut self, device: DeviceId) -> DeviceIdx {

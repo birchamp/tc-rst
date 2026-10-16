@@ -226,7 +226,7 @@ impl FoldState {
         ChangeView {
             id: meta.id,
             key: self.entry(meta.key).key.clone(),
-            parents: meta.parents.to_vec(),
+            parents: self.parent_ids(meta).to_vec(),
             device: self.device_of(meta),
             seq: meta.seq,
             at: meta.at,
