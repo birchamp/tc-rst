@@ -324,7 +324,7 @@ fn source_word(span: &Span<'_>) -> Result<SourceWord, Error> {
 /// (`plain_text_v1` of the verse content, tC4's `verseTextMd5` input). Both the words and
 /// the hash come from that one text, exactly as tC4's aligner tokenizes and hashes its
 /// `targetText`, so the words a record names and the hash it carries always agree.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct TargetVerse {
     text: String,
     md5: TextMd5,
@@ -395,6 +395,18 @@ impl TargetVerse {
         let mut words = self.words.clone();
         words.sort_by_key(|w| w.occurrence);
         words
+    }
+}
+
+// `places` is left out: it is only an index of `words`, and a hash map prints its entries
+// in a different order in each value, so two equal verses would print differently.
+impl fmt::Debug for TargetVerse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TargetVerse")
+            .field("text", &self.text)
+            .field("md5", &self.md5)
+            .field("words", &self.words)
+            .finish_non_exhaustive()
     }
 }
 

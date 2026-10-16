@@ -15,8 +15,9 @@
 //! The word bank and each card's target words are in the order the words stand in the
 //! verse ([`AlignmentValue::bank_in_verse_order`], [`AlignmentValue::cards_in_verse_order`]):
 //! a repeated word by its occurrence, and a word the verse no longer has last. A word sent
-//! back to the bank returns to its place in the verse and no other bank word moves
-//! ([`AlignmentValue::unlink`]), and [`AlignmentValue::clear`] leaves the whole bank in
+//! back to the bank returns to its place in the verse and the whole bank is put in verse
+//! order, so in a bank already in verse order no other word moves
+//! ([`AlignmentValue::unlink`]); [`AlignmentValue::clear`] also leaves the whole bank in
 //! verse order. tC4 brought this in with 3d43f7c and 91131d9 (#734, the bank) and 26aded2
 //! (#754, the cards), as tC3 kept them. The aligner ([`crate::Aligner`]) puts the bank and
 //! every card in verse order after each edit and when a verse opens; the operations here

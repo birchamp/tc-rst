@@ -258,6 +258,32 @@ fn an_unlink_puts_a_bank_in_bootstrap_order_into_verse_order() {
     );
 }
 
+#[test]
+fn an_unlink_from_a_bank_in_verse_order_moves_no_other_bank_word() {
+    // The bank as the aligner keeps it: in verse order. A word sent back takes its own
+    // place and every other bank word keeps its place relative to the rest.
+    let (mut value, verse) = boot();
+    value.bank_in_verse_order(&verse);
+    let placed = [
+        (0, word("de", 2, 2)),
+        (1, word("siervo", 1, 1)),
+        (0, word("Dios", 2, 2)),
+    ];
+    for (card, w) in &placed {
+        value.link(*card, w).unwrap();
+    }
+    for (card, w) in [&placed[1], &placed[2], &placed[0]] {
+        let before = keys(&value.word_bank);
+        value.unlink(*card, w, &verse).unwrap();
+        let after = keys(&value.word_bank);
+        let key = format!("{}/{}", w.text, w.occurrence);
+        let others: Vec<String> = after.iter().filter(|k| **k != key).cloned().collect();
+        assert_eq!(others, before, "unlinking {key} moved another bank word");
+        assert_eq!(after, verse_order(&verse, &value.word_bank), "{key}");
+    }
+    assert_eq!(keys(&value.word_bank), keys(verse.words()));
+}
+
 // ---- #736 several words placed on one card in one edit ----
 
 #[test]

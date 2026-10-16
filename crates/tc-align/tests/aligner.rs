@@ -396,3 +396,21 @@ fn accept_all_places_every_standing_proposal_as_clicks_would() {
     assert!(aligner.proposals().is_empty());
     aligner.mark_valid().unwrap();
 }
+
+#[test]
+fn equal_verses_and_aligners_print_alike() {
+    // A verse indexes where its words stand, for the verse-order sort after each edit.
+    // That index is not part of the verse: two equal verses, and two aligners opened on
+    // the same verse, print the same in an assertion message on every run.
+    let text = "a b c d e f g h i j k l m n o p";
+    let verse = TargetVerse::new(text);
+    for _ in 0..4 {
+        let again = TargetVerse::new(text);
+        assert_eq!(again, verse);
+        assert_eq!(format!("{again:?}"), format!("{verse:?}"));
+    }
+    assert_eq!(
+        format!("{:?}", open(None, TEXT)),
+        format!("{:?}", open(None, TEXT))
+    );
+}
