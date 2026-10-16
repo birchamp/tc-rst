@@ -45,13 +45,19 @@
 //!
 //! Where alignment markup may stand:
 //!
-//! - In verse text it is read and stripped.
+//! - In verse text it is read and stripped. That includes the text of the headings
+//!   usfm-js shows as verse text, `\d`, `\sp`, `\qa` and `\lit`
+//!   ([`crate::markers::shows_as_verse_text`]): en_ult and en_ust write a Psalm's
+//!   superscription inside verse 1 as `\v 1 \d \zaln-s …`, tC4 counts and aligns its words
+//!   with the verse's, and its export writes them back the same way.
+//!   `tests/superscriptions.rs` checks this heading rule against tC4's export.
 //! - A note, figure or other non-text span (`\f`, `\x`, `\fig`, `\ca`…) is a text of its
 //!   own: it is kept whole, as tC4 keeps it, and [`weave`] copies it whole. So a
 //!   `\+w covenant|x-occurrence="1" x-occurrences="1"\+w*` inside a footnote stays there.
-//! - In a heading or sidebar inside the body it is refused with
-//!   [`Error::AlignmentOutsideVerseText`], because weave aligns only verse text and could
-//!   not write it back.
+//! - In any other heading (`\s`, `\ms`, `\r`, `\rem`…) or in a sidebar inside the body it
+//!   is refused with [`Error::AlignmentOutsideVerseText`]: usfm-js does not show that text
+//!   as verse text, tC4's export cannot merge an alignment into it, and weave could not
+//!   write it back.
 //! - Broken word markup outside notes (a `\w` without `\w*`, a `\w*` that closes nothing,
 //!   a `\zaln-s` or `\zaln-e` without its `\*`) is refused with
 //!   [`Error::BrokenWordMarkup`], and an aligned word written as a nested `\+w` with
@@ -65,17 +71,35 @@
 //! exactly one word of the plain verse (`\w a-b\w*`, or two `\w` with nothing between
 //! them) cannot be placed and fails with [`Error::NotOneWord`].
 //!
+//! A `\zaln-s` is read as written. One whose `x-occurrence` is greater than its
+//! `x-occurrences` names an occurrence that no original-language verse holds: en_ult
+//! MIC 5:7 aligns occurrence 2 of a word that UHB 3.0.0 MIC 5:7 holds once. tC4 reads it
+//! as written (word-aligner marks it `unmatched` when it meets the original verse) and its
+//! export writes it back, so here it stays in its group, [`weave`] writes it back, and
+//! [`AlignedVerse::sources_beyond_count`] reports it for the caller to place or drop.
+//!
 //! # How exact the round trip is
 //!
 //! - `weave(&parse_aligned(x)?.plain, &parse_aligned(x)?.groups) == x` byte for byte for
-//!   every verse of en_ult and en_ust Titus (the tests check all 92), and in general for
-//!   aligned text in the layout above.
+//!   every verse of en_ult and en_ust Titus (the tests check all 92), for every Psalm
+//!   superscription verse of the ULT and UST v91, and in general for aligned text in the
+//!   layout above. Cut into verses as tC4 cuts a book to align and export it, every verse
+//!   of the ULT v91 and UST v91 that does not come back byte for byte is one that tC4's own
+//!   export does not write back either (`tests/resources.rs` checks each verse against
+//!   tC4's export and says how the others come out).
+//! - In tC4's cut a verse of Lamentations ends with the acrostic letter of the next one
+//!   (`\qa BETH` before `\v 2`). usfm-js shows it as this verse's text, so it is a word of
+//!   this verse. The ULT and UST write it bare, and weave writes it as a `\w` word, as
+//!   tC4's export does once the verse's record banks it (`tests/superscriptions.rs`).
+//!   tC4's own export writes the published verse without its alignment: word-aligner
+//!   banks only `\w` words, so the record it reads leaves the letter out and cannot be
+//!   merged. In [`crate::Book`]'s cut the letter leads into the next verse instead.
 //! - For other aligned text the groups survive but bytes may differ: attributes in
-//!   another order, a run that tC4 would have cut, other whitespace before a `\w`, a
-//!   `\zaln-s` that closes before the `\zaln-s` nested in it, renumbered occurrences,
-//!   words that were bare and are now wrapped in `\w`, or an empty
-//!   `\zaln-s…\*\zaln-e\*` pair (reported as a group without targets, which weave does
-//!   not write, as tC4 does not).
+//!   another order, a run that tC4 would have cut, a `\zaln-e` after the punctuation that
+//!   follows its last word, other whitespace before a `\w`, a `\zaln-s` that closes
+//!   before the `\zaln-s` nested in it, renumbered occurrences, words that were bare and
+//!   are now wrapped in `\w`, or an empty `\zaln-s…\*\zaln-e\*` pair (reported as a group
+//!   without targets, which weave does not write, as tC4 does not).
 //! - A verse that also holds non-alignment `\w` markup (a glossary or Strong's word)
 //!   outside notes reads apart, but cannot be woven: see [`weave`].
 //! - From the plain side, `parse_aligned(&weave(p, groups)?)?.plain == p` unless `p` has
@@ -145,16 +169,20 @@ pub struct AlignedVerse {
     /// count in `plain`, as (written, counted), in verse order. Empty for text that tC4 or
     /// [`weave`] wrote and nobody edited since.
     pub renumbered: Vec<(TargetWord, TargetWord)>,
+    /// The source word of each `\zaln-s` whose `x-occurrence` is greater than its
+    /// `x-occurrences`, in verse order. It is kept in its groups as written, but no
+    /// original-language verse holds it. See the module documentation.
+    pub sources_beyond_count: Vec<SourceWord>,
 }
 
 /// Take an aligned verse body apart into plain USFM, its words and its groups.
 ///
 /// Fails rather than drop or misread anything when the alignment markup is malformed:
-/// an unbalanced milestone, a `\zaln-s` without `x-content`, `x-occurrence` or
-/// `x-occurrences` or with an attribute twice, a target `\w` whose content is not plain
-/// text or whose attributes are not exactly `x-occurrence` and `x-occurrences`, broken
-/// `\w` or `\zaln` markup, alignment in a heading or sidebar, or an aligned word that is
-/// not one word of the plain verse. See the module documentation.
+/// an unbalanced milestone, a `\zaln-s` without `x-content`, without an `x-occurrence` and
+/// `x-occurrences` of at least 1, or with an attribute twice, a target `\w` whose content
+/// is not plain text or whose attributes are not exactly `x-occurrence` and
+/// `x-occurrences`, broken `\w` or `\zaln` markup, alignment in a heading or sidebar, or an
+/// aligned word that is not one word of the plain verse. See the module documentation.
 pub fn parse_aligned(body: &str) -> Result<AlignedVerse, Error> {
     let doc = Document::parse(body);
     let mut strip = Strip::default();
@@ -185,7 +213,8 @@ pub fn target_words(plain: &str) -> Result<Vec<TargetWord>, Error> {
 /// same occurrence and occurrence count, and no word may belong to two groups that have
 /// sources. A group without sources aligns nothing, so its words stay bare; a group
 /// without targets writes nothing. Each source word that is written needs an occurrence
-/// from 1 to its count and attributes that read back the same.
+/// and a count of at least 1 and attributes that read back the same. An occurrence
+/// greater than the count is written as it stands, as [`parse_aligned`] reads it.
 ///
 /// A verse with any `\w` or `\zaln` markup outside notes fails with
 /// [`Error::WordMarkup`]: already aligned text, and also glossary or Strong's words such
@@ -271,7 +300,7 @@ const KNOWN_KEYS: [&str; 6] = [
 /// The `\zaln-s` for `source`. It refuses what [`parse_aligned`] would refuse or read
 /// differently, so that every milestone weave writes reads back as the same source word.
 fn milestone_start(source: &SourceWord) -> Result<String, Error> {
-    if source.occurrence == 0 || source.occurrence > source.occurrences {
+    if source.occurrence == 0 || source.occurrences == 0 {
         return Err(Error::InvalidOccurrence {
             content: source.content.clone(),
             occurrence: source.occurrence,
@@ -550,6 +579,7 @@ struct Strip {
     groups: Vec<(Vec<SourceWord>, Vec<usize>)>,
     /// The milestone ids above the last word, and the group that word went into.
     current: Option<(Vec<usize>, usize)>,
+    sources_beyond_count: Vec<SourceWord>,
 }
 
 impl Strip {
@@ -576,6 +606,9 @@ impl Strip {
                     if m.name() == "zaln-s" {
                         self.item_start();
                         let source = source_word(m)?;
+                        if source.occurrence > source.occurrences {
+                            self.sources_beyond_count.push(source.clone());
+                        }
                         self.open.push((self.next_id, source, false));
                         self.next_id += 1;
                     } else {
@@ -710,6 +743,7 @@ impl Strip {
             words,
             groups,
             renumbered,
+            sources_beyond_count: self.sources_beyond_count,
         })
     }
 }
@@ -782,7 +816,8 @@ fn source_word(m: &Milestone<'_>) -> Result<SourceWord, Error> {
         }
     }
     word.content = content.ok_or_else(bad)?;
-    if word.occurrence == 0 || word.occurrence > word.occurrences {
+    // 0 stands for a missing number: `count` reads no 0.
+    if word.occurrence == 0 || word.occurrences == 0 {
         return Err(bad());
     }
     Ok(word)
@@ -970,10 +1005,20 @@ mod tests {
             parse_aligned("\\zaln-s |x-content=\"α\" x-occurrence=\"1\" x-occurrences=\"1\"\\*"),
             Err(Error::UnclosedMilestone)
         );
-        assert!(matches!(
-            parse_aligned("\\zaln-s |x-occurrence=\"1\" x-occurrences=\"1\"\\*\\zaln-e\\*"),
-            Err(Error::InvalidSourceWord(_))
-        ));
+        for milestone in [
+            "\\zaln-s |x-occurrence=\"1\" x-occurrences=\"1\"\\*",
+            "\\zaln-s |x-occurrence=\"0\" x-occurrences=\"1\" x-content=\"α\"\\*",
+            "\\zaln-s |x-occurrence=\"1\" x-content=\"α\"\\*",
+            "\\zaln-s |x-occurrences=\"1\" x-content=\"α\"\\*",
+        ] {
+            assert!(
+                matches!(
+                    parse_aligned(&format!("{milestone}\\zaln-e\\*")),
+                    Err(Error::InvalidSourceWord(_))
+                ),
+                "{milestone}"
+            );
+        }
         assert!(matches!(
             parse_aligned("\\w a|x-occurrence=\"2\" x-occurrences=\"1\"\\w*"),
             Err(Error::InvalidAlignedWord(_))
@@ -1110,7 +1155,7 @@ mod tests {
             }],
             targets: vec![target("a", 1, 1)],
         };
-        for (occurrence, occurrences) in [(0, 0), (0, 1), (2, 1)] {
+        for (occurrence, occurrences) in [(0, 0), (0, 1), (1, 0)] {
             assert_eq!(
                 weave("a", &[with(occurrence, occurrences, vec![])]),
                 Err(Error::InvalidOccurrence {
@@ -1151,9 +1196,46 @@ mod tests {
                 value: "λόγος".to_owned()
             })
         );
-        let fine = with(1, 2, vec![("x-tw", "rc://*/tw/dict/bible/kt/god")]);
-        let woven = weave("a", std::slice::from_ref(&fine)).unwrap();
-        assert_eq!(parse_aligned(&woven).unwrap().groups, vec![fine]);
+        for fine in [
+            with(1, 2, vec![("x-tw", "rc://*/tw/dict/bible/kt/god")]),
+            with(2, 1, vec![]),
+        ] {
+            let woven = weave("a", std::slice::from_ref(&fine)).unwrap();
+            assert_eq!(parse_aligned(&woven).unwrap().groups, vec![fine]);
+        }
+    }
+
+    /// en_ult MIC 5:7 aligns occurrence 2 of a source word its milestone counts once. tC4
+    /// reads and exports it as written, so it is read, reported and woven back as written.
+    #[test]
+    fn a_source_word_beyond_its_count_is_read_as_written_and_reported() {
+        let beyond = "\\zaln-s |x-strong=\"G0001\" x-occurrence=\"2\" x-occurrences=\"1\" x-content=\"α\"\\*";
+        let verse = format!(
+            "{ZALN}{A}\\zaln-e\\*\n{beyond}\\w b|x-occurrence=\"1\" x-occurrences=\"1\"\\w*\\zaln-e\\*."
+        );
+        let parsed = parse_aligned(&verse).unwrap();
+        let counted_once_twice = SourceWord {
+            occurrence: 2,
+            ..source("α", 1)
+        };
+        assert_eq!(
+            parsed.groups,
+            vec![
+                one(&["α"], &[("a", 1, 1)]),
+                AlignmentGroup {
+                    sources: vec![counted_once_twice.clone()],
+                    targets: vec![target("b", 1, 1)],
+                },
+            ]
+        );
+        assert_eq!(parsed.sources_beyond_count, vec![counted_once_twice]);
+        assert_eq!(weave(&parsed.plain, &parsed.groups).unwrap(), verse);
+        assert!(
+            parse_aligned(&format!("{ZALN}{A}\\zaln-e\\*"))
+                .unwrap()
+                .sources_beyond_count
+                .is_empty()
+        );
     }
 
     #[test]
@@ -1179,8 +1261,12 @@ mod tests {
     fn alignment_in_a_heading_or_sidebar_is_refused() {
         let heading = format!("{ZALN}\\w A|x-occurrence=\"1\" x-occurrences=\"1\"\\w*\\zaln-e\\*");
         for body in [
-            format!("\\d {heading}\n\\q1 line"),
+            format!("\\s {heading}\n\\q1 line"),
             format!("text\n\\s {heading}\n\\p more"),
+            format!("text\n\\ms1 {heading}\n\\p more"),
+            format!("text\n\\r {heading}\n\\p more"),
+            // usfm-js knows `\d` by that name only.
+            format!("\\d1 {heading}\n\\q1 line"),
             "text\n\\s Title \\w A|x-occurrence=\"1\" x-occurrences=\"1\"\\w*\n\\p more".to_owned(),
             format!("text\n\\esb \\p {heading}\n\\esbe\n\\p more"),
             // A milestone opened in a heading would move onto the verse text after it.
@@ -1199,6 +1285,62 @@ mod tests {
         let parsed = parse_aligned(&after).unwrap();
         assert_eq!(parsed.plain, "\\s Title\n\\q1 A");
         assert_eq!(parsed.groups.len(), 1);
+    }
+
+    /// A superscription written inside verse 1, as en_ult writes PSA 11:1, in short: it is
+    /// verse text, its words are numbered with the verse's, and the verse weaves back into
+    /// the same bytes.
+    #[test]
+    fn a_superscription_inside_a_verse_is_verse_text() {
+        let zaln = |content: &str| {
+            format!(
+                "\\zaln-s |x-strong=\"G0001\" x-occurrence=\"1\" x-occurrences=\"1\" x-content=\"{content}\"\\*"
+            )
+        };
+        let w = |text: &str, n: u32, m: u32| {
+            format!("\\w {text}|x-occurrence=\"{n}\" x-occurrences=\"{m}\"\\w*")
+        };
+        let verse = format!(
+            "\\d {}{}\n{}\\zaln-e\\*.\n\\q1 {}{}\n{}\\zaln-e\\*.\n",
+            zaln("לְ\u{2060}דָוִד"),
+            w("Of", 1, 1),
+            w("David", 1, 2),
+            zaln("דָּוִד"),
+            w("David", 2, 2),
+            w("sang", 1, 1),
+        );
+        let parsed = parse_aligned(&verse).unwrap();
+        assert_eq!(parsed.plain, "\\d Of David.\n\\q1 David sang.\n");
+        assert!(parsed.renumbered.is_empty());
+        assert_eq!(
+            parsed.groups,
+            vec![
+                one(&["לְ\u{2060}דָוִד"], &[("Of", 1, 1), ("David", 1, 2)]),
+                one(&["דָּוִד"], &[("David", 2, 2), ("sang", 1, 1)]),
+            ]
+        );
+        assert_eq!(weave(&parsed.plain, &parsed.groups).unwrap(), verse);
+        assert_eq!(target_words(&parsed.plain).unwrap(), parsed.words);
+    }
+
+    /// usfm-js shows the text of `\d`, `\sp`, `\qa` and `\lit` as verse text wherever it
+    /// stands in a verse, and tC4's export aligns it there.
+    #[test]
+    fn headings_shown_as_verse_text_are_aligned_wherever_they_stand() {
+        for marker in ["d", "sp", "qa", "lit"] {
+            let plain = format!("a\n\\{marker} b\n\\q1 a b\n");
+            let words: Vec<(&str, u32, u32)> =
+                vec![("a", 1, 2), ("b", 1, 2), ("a", 2, 2), ("b", 2, 2)];
+            let groups: Vec<AlignmentGroup> = words.iter().map(|&w| one(&["α"], &[w])).collect();
+            let woven = weave(&plain, &groups).unwrap();
+            assert_eq!(
+                shape(&woven),
+                format!("<α>[a]</>\n\\{marker} <α>[b]</>\n\\q1 <α>[a]</>\n<α>[b]</>\n")
+            );
+            let parsed = parse_aligned(&woven).unwrap();
+            assert_eq!(parsed.plain, plain);
+            assert_eq!(parsed.groups, groups);
+        }
     }
 
     #[test]
