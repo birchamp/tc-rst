@@ -152,7 +152,7 @@ fn compact(v: &Value) -> String {
 }
 
 /// `work` applied to every item on up to four threads, the results in item order.
-fn on_threads<T: Sync, R: Send>(items: &[T], work: impl Fn(&T) -> R + Sync) -> Vec<R> {
+pub(crate) fn on_threads<T: Sync, R: Send>(items: &[T], work: impl Fn(&T) -> R + Sync) -> Vec<R> {
     let threads = 4.min(items.len()).max(1);
     if threads == 1 {
         return items.iter().map(&work).collect();

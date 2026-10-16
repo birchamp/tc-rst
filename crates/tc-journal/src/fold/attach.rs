@@ -898,9 +898,28 @@ pub(crate) fn stage_attached(state: &mut FoldState, dirty: &mut Dirty) {
     } else {
         dirty.attached.iter().copied().collect()
     };
-    for k in keys {
-        let detached = detached(state, k);
-        if detached {
+    // Placing reads the state alone: a fold from scratch places its hundreds of thousands
+    // of attached records on several threads, then files what they found.
+    let found: Vec<(KeyIdx, Attached)> = if dirty.all {
+        let state: &FoldState = state;
+        let chunks: Vec<&[KeyIdx]> = keys.chunks(4096).collect();
+        super::project::on_threads(&chunks, |chunk| {
+            chunk
+                .iter()
+                .map(|k| (*k, attached(state, *k)))
+                .collect::<Vec<_>>()
+        })
+        .into_iter()
+        .flatten()
+        .collect()
+    } else {
+        keys.iter().map(|k| (*k, attached(state, *k))).collect()
+    };
+    for (k, found) in found {
+        if let Some((book, chained)) = found.chained {
+            set_chained(state, book, k, chained);
+        }
+        if found.detached {
             let key = state.entry(k).key.clone();
             state.detached.insert(key);
         } else if !dirty.all {
@@ -910,13 +929,27 @@ pub(crate) fn stage_attached(state: &mut FoldState, dirty: &mut Dirty) {
     }
 }
 
+/// What placing an attached record found (§7.7).
+struct Attached {
+    /// Listed under Detached.
+    detached: bool,
+    /// The book whose `moved_to` chains it was placed through, and whether it was.
+    chained: Option<(BookId, bool)>,
+}
+
 fn projects(state: &FoldState, book: Option<BookId>) -> bool {
     book.is_some_and(|b| state.books.get(&b).is_some_and(|e| e.status.projects()))
 }
 
 /// Whether record `k` is listed under Detached: an alignment, comment or decision of a
 /// projected book that has no place on any screen and was not dismissed.
-fn detached(state: &mut FoldState, k: KeyIdx) -> bool {
+fn attached(state: &FoldState, k: KeyIdx) -> Attached {
+    let mut chained = None;
+    let detached = detached(state, k, &mut chained);
+    Attached { detached, chained }
+}
+
+fn detached(state: &FoldState, k: KeyIdx, chained_in: &mut Option<(BookId, bool)>) -> bool {
     state.count(Counter::AttachedPlaced, 1);
     let entry = state.entry(k);
     let shape = match &entry.projected {
@@ -933,7 +966,7 @@ fn detached(state: &mut FoldState, k: KeyIdx) -> bool {
                 return false;
             }
             let (place, chained) = place(state, *book, (c.get(), v.get()));
-            set_chained(state, *book, k, chained);
+            *chained_in = Some((*book, chained));
             place == Place::Nowhere
         }
         RecordKey::Check(check) => {
@@ -967,7 +1000,7 @@ fn detached(state: &mut FoldState, k: KeyIdx) -> bool {
                         return false;
                     }
                     let (place, chained) = place(state, *book, (chapter.get(), verse.get()));
-                    set_chained(state, *book, k, chained);
+                    *chained_in = Some((*book, chained));
                     place == Place::Nowhere
                 }
                 CommentTarget::Check(check) => {

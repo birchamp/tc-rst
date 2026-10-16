@@ -340,3 +340,48 @@ fn unreadable_settled_version_is_not_in_a_token() {
     flaky.blocked.lock().unwrap().clear();
     assert_eq!(state.shown_heads(&verse_key(1, 1), None), vec![base]);
 }
+
+/// A fold from scratch indexes its input a chunk at a time as a loader hands it over
+/// (§14): a change that arrives before its parent's chunk is linked to it as if they had
+/// come together, whatever the order.
+#[test]
+fn a_fold_indexed_as_it_arrives_is_the_fold_of_the_set() {
+    let corpus = Corpus::generate(&Spec::psalms(1)).expect("the corpus builds");
+    let lines = corpus.journal.lines();
+    assert!(lines.len() > 40_000, "more than one chunk: {}", lines.len());
+    let forward = FoldState::fold(
+        ProjectKind::Bible,
+        lines.iter().cloned().map(|l| FoldInput::from(l).prepare()),
+    );
+    let reversed = FoldState::fold(
+        ProjectKind::Bible,
+        lines
+            .iter()
+            .rev()
+            .cloned()
+            .map(|l| FoldInput::from(l).prepare()),
+    );
+    assert_eq!(forward.frontier(), reversed.frontier());
+    assert_eq!(
+        forward.conflicts().collect::<Vec<_>>(),
+        reversed.conflicts().collect::<Vec<_>>()
+    );
+    assert_eq!(
+        forward.anomalies().collect::<Vec<_>>(),
+        reversed.anomalies().collect::<Vec<_>>(),
+        "no parent is missing because it came in a later chunk"
+    );
+    for file in forward.derived_files() {
+        if file.book() == Some(tc_journal::BookId::Psalms) {
+            continue;
+        }
+        assert_eq!(
+            forward.render(&file),
+            reversed.render(&file),
+            "{}",
+            file.path()
+        );
+    }
+    let psalms = tc_journal::fold::DerivedFile::Usfm(tc_journal::BookId::Psalms);
+    assert_eq!(forward.render(&psalms), reversed.render(&psalms));
+}

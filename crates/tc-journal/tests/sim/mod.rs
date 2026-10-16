@@ -234,7 +234,7 @@ pub fn arb_script() -> impl Strategy<Value = Script> {
     (
         3u8..=5,
         prop::collection::vec(arb_op(), 20..70),
-        prop::bool::weighted(0.2),
+        prop::bool::weighted(0.3),
     )
         .prop_map(|(devices, ops, last_books_removed)| Script {
             devices,
@@ -1033,7 +1033,7 @@ impl Sim {
         self.exchange(a, b, 0, 0);
         self.exchange(b, a, 0, 0);
         // The rarer outcomes (merges by unit, moved checks, newer kinds) come twice.
-        let what = match what % 22 {
+        let what = match what % 23 {
             14 => 2,
             15 => 6,
             16 => 3,
@@ -1112,6 +1112,12 @@ impl Sim {
                 // The last two books removed at the same time (§7.6).
                 self.remove(a, BookId::Titus);
                 self.remove(b, BookId::Ruth);
+            }
+            22 => {
+                // A foreign tool rewrites one verse's structure while a person edits it: a
+                // structure conflict of one record (§8.1).
+                self.stray(a, at, at.is_multiple_of(2));
+                self.edit(b, at, false, false, None);
             }
             21 => {
                 // Two comments under one id: a broken random source (§8.1), on two verses.

@@ -7,7 +7,9 @@
 //! each value lies, then fold) and times the actions the fold owns: the full fold, one
 //! incremental step after a verse save, a decision, an alignment and a resolution, the
 //! conflict list from scratch, and the Psalms projection, whose values are read from the
-//! files on demand. Times are medians and p95 over repeated runs.
+//! files on demand. Times are medians and p95 over repeated runs. `FOLDBENCH_RUNS` sets the
+//! runs of the open, `FOLDBENCH_FOLD_ONLY` stops after the open and its parts, and
+//! `FOLDBENCH_STREAM_ONLY` after the open alone (for a heap profile of it).
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
@@ -166,8 +168,15 @@ fn files(dir: &Path) -> Vec<PathBuf> {
 }
 
 /// Reads, verifies and prepares every line on `threads` threads, as an open does, keeping
-/// only where each value lies.
-fn load(dir: &Path, threads: usize) -> (Vec<FoldInput>, Arc<dyn ValueSource>) {
+/// only where each value lies, and hands each file's changes over as soon as they are
+/// prepared, so the fold indexes them while the threads read the rest.
+fn load_streamed(
+    dir: &Path,
+    threads: usize,
+) -> (
+    std::sync::mpsc::Receiver<Vec<FoldInput>>,
+    Arc<dyn ValueSource>,
+) {
     let project = ProjectId::parse(
         std::fs::read_to_string(dir.join("project"))
             .expect("project")
@@ -179,62 +188,61 @@ fn load(dir: &Path, threads: usize) -> (Vec<FoldInput>, Arc<dyn ValueSource>) {
         .map(|p| (true, p))
         .collect();
     work.extend(files(&dir.join("pending")).into_iter().map(|p| (false, p)));
-    let numbered: Vec<(u32, bool, PathBuf)> = work
-        .iter()
-        .enumerate()
-        .map(|(n, (is_pack, path))| (n as u32, *is_pack, path.clone()))
-        .collect();
-    // Largest files first, each to the next free thread, as a work-stealing pool would;
-    // the inputs keep the files' order.
-    let mut queue = numbered;
-    queue.sort_by_key(|(_, _, path)| {
-        std::cmp::Reverse(std::fs::metadata(path).map_or(0, |m| m.len()))
-    });
-    let next = std::sync::atomic::AtomicUsize::new(0);
-    let (queue, next) = (&queue, &next);
-    let mut read: Vec<(u32, Vec<FoldInput>)> = std::thread::scope(|scope| {
-        let handles: Vec<_> = (0..threads)
-            .map(|_| {
-                scope.spawn(move || {
-                    let mut out = Vec::new();
-                    while let Some((file, is_pack, path)) =
-                        queue.get(next.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
-                    {
-                        let bytes = std::fs::read(path).expect("read");
-                        let (pack, entries, spans) = if *is_pack {
-                            let name = pack_path(path);
-                            let read = tc_journal::pack::read_pack(&name, &bytes, project);
-                            assert!(read.is_valid(), "{name}: {:?}", read.status);
-                            (Some(read.id), read.entries, read.spans)
-                        } else {
-                            let read = tc_journal::pending::read_pending(&bytes, project);
-                            (None, read.entries, read.spans)
-                        };
-                        let inputs = entries
-                            .into_iter()
-                            .zip(spans)
-                            .map(|(entry, span)| {
-                                FoldInput::new(entry, pack).prepare_at(ValueAt::new(*file, span))
-                            })
-                            .collect();
-                        out.push((*file, inputs));
-                    }
-                    out
-                })
-            })
-            .collect();
-        handles
-            .into_iter()
-            .flat_map(|h| h.join().expect("thread"))
-            .collect()
-    });
-    read.sort_by_key(|(file, _)| *file);
-    let inputs: Vec<FoldInput> = read.into_iter().flat_map(|(_, inputs)| inputs).collect();
     let opened: Vec<File> = work
         .iter()
         .map(|(_, path)| File::open(path).expect("open"))
         .collect();
-    (inputs, Arc::new(Files(opened)))
+    let mut queue: Vec<(u32, bool, PathBuf)> = work
+        .into_iter()
+        .enumerate()
+        .map(|(n, (is_pack, path))| (n as u32, is_pack, path))
+        .collect();
+    // Largest files first, each to the next free thread, as a work-stealing pool would.
+    queue.sort_by_key(|(_, _, path)| {
+        std::cmp::Reverse(std::fs::metadata(path).map_or(0, |m| m.len()))
+    });
+    let queue = Arc::new(queue);
+    let next = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    // A few files in flight per thread at most: memory holds what is being folded, not
+    // the whole project's prepared changes.
+    let (send, receive) = std::sync::mpsc::sync_channel::<Vec<FoldInput>>(threads * 2);
+    for _ in 0..threads {
+        let (queue, next, send) = (queue.clone(), next.clone(), send.clone());
+        std::thread::spawn(move || {
+            while let Some((file, is_pack, path)) =
+                queue.get(next.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+            {
+                let bytes = std::fs::read(path).expect("read");
+                let (pack, entries, spans) = if *is_pack {
+                    let name = pack_path(path);
+                    let read = tc_journal::pack::read_pack(&name, &bytes, project);
+                    assert!(read.is_valid(), "{name}: {:?}", read.status);
+                    (Some(read.id), read.entries, read.spans)
+                } else {
+                    let read = tc_journal::pending::read_pending(&bytes, project);
+                    (None, read.entries, read.spans)
+                };
+                drop(bytes);
+                let inputs: Vec<FoldInput> = entries
+                    .into_iter()
+                    .zip(spans)
+                    .map(|(entry, span)| {
+                        FoldInput::new(entry, pack).prepare_at(ValueAt::new(*file, span))
+                    })
+                    .collect();
+                if send.send(inputs).is_err() {
+                    return;
+                }
+            }
+        });
+    }
+    (receive, Arc::new(Files(opened)))
+}
+
+/// [`load_streamed`] collected: every prepared change, for a fold timed on its own.
+fn load(dir: &Path, threads: usize) -> (Vec<FoldInput>, Arc<dyn ValueSource>) {
+    let (receive, source) = load_streamed(dir, threads);
+    (receive.into_iter().flatten().collect(), source)
 }
 
 /// The repository path of a saved pack, which names its sealer and month.
@@ -317,8 +325,12 @@ fn run(args: &[String]) {
         "identification.name",
         &serde_json::json!({"en": "x"}),
     );
-    let mut open = Stats::new("Cold open: read, verify, prepare, fold (whole corpus)");
+    let mut open = Stats::new(
+        "Cold open: read, verify, prepare and fold, the fold indexing as files are read",
+    );
     let mut fold_only = Stats::new("Full fold of the prepared changes");
+    let mut after_read =
+        Stats::new("Cold open: the fold's work after the last file is read (stages F2 to F10)");
     let mut load_only = Stats::new("Read, verify and prepare");
     let mut state = None;
     let mut changes = 0;
@@ -326,6 +338,38 @@ fn run(args: &[String]) {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(5);
+    // The cold open: the fold indexes each file's changes as the reading threads hand
+    // them over, then runs its stages once the last arrives.
+    for _ in 0..runs {
+        drop(state.take());
+        let started = Instant::now();
+        let cpu = process_cpu_ms();
+        let (receive, source) = load_streamed(&dir, threads);
+        let last_read = std::cell::Cell::new(None);
+        let inputs = receive.into_iter().flatten().chain(std::iter::from_fn(|| {
+            last_read.set(Some(Instant::now()));
+            None
+        }));
+        let folded = FoldState::fold_from(ProjectKind::Bible, Some(source), inputs);
+        open.times.push(started.elapsed());
+        let tail = last_read.get().map(|t| t.elapsed()).unwrap_or_default();
+        after_read.times.push(tail);
+        eprintln!(
+            "cold open {:?}, the fold after the last file {tail:?}, cpu over all threads {} ms",
+            started.elapsed(),
+            process_cpu_ms() - cpu
+        );
+        changes = folded.len();
+        state = Some(folded);
+    }
+    let open_peak = peak_rss_mib();
+    if std::env::var("FOLDBENCH_STREAM_ONLY").is_ok() {
+        open.report();
+        after_read.report();
+        println!("peak RSS during the streamed cold opens {open_peak:.0} MiB");
+        return;
+    }
+    // The parts on their own: reading every file, then folding what was read.
     for _ in 0..runs {
         drop(state.take());
         let started = Instant::now();
@@ -336,7 +380,6 @@ fn run(args: &[String]) {
             "load {loaded:?}, cpu over all threads {} ms",
             process_cpu_ms() - load_cpu
         );
-        changes = inputs.len();
         let t = Instant::now();
         let f0 = minflt();
         let c0 = cpu_ns();
@@ -349,14 +392,15 @@ fn run(args: &[String]) {
             minflt() - f0
         );
         load_only.times.push(loaded);
-        open.times.push(started.elapsed());
         state = Some(folded);
     }
+    println!("peak RSS during the streamed cold opens {open_peak:.0} MiB");
     let mut state = state.expect("folded");
     if std::env::var("FOLDBENCH_FOLD_ONLY").is_ok() {
         load_only.report();
         fold_only.report();
         open.report();
+        after_read.report();
         println!("peak RSS {:.0} MiB", peak_rss_mib());
         return;
     }
@@ -402,6 +446,7 @@ fn run(args: &[String]) {
     sha.report();
     fold_only.report();
     open.report();
+    after_read.report();
 
     let keys = state.record_keys();
     let psalms_verses: Vec<RecordKey> = keys

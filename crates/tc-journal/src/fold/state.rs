@@ -20,6 +20,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use tc_core::BookId;
 
+/// Changes indexed together by a fold from scratch: large enough that each pass's lookups
+/// overlap, small enough that a chunk's prepared inputs are a few megabytes.
+const INDEX_CHUNK: usize = 1 << 15;
+
 /// A Bible project keeps one book present (§7.6, the last-book rule); an OBS project has no
 /// books.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -481,12 +485,48 @@ impl FoldState {
             all: true,
             ..Dirty::default()
         };
-        state.index_all(changes.into_iter().collect(), &mut dirty);
+        // Indexed as they come, a chunk at a time: a loader that reads packs on other
+        // threads hands changes over while it reads the rest, and the prepared inputs of a
+        // whole project are never all alive at once.
+        let mut chunk: Vec<FoldInput> = Vec::with_capacity(INDEX_CHUNK);
+        for input in changes {
+            chunk.push(input);
+            if chunk.len() == INDEX_CHUNK {
+                state.index_all(std::mem::take(&mut chunk), &mut dirty);
+                chunk.reserve(INDEX_CHUNK);
+            }
+        }
+        state.index_all(chunk, &mut dirty);
+        state.resolve_absent_parents();
         state.run(&mut dirty);
         if dirty.rebuild {
             state.rebuild();
         }
         state
+    }
+
+    /// After indexing in chunks: a parent a change named before the parent's own chunk
+    /// arrived becomes a link to it, as if the changes had come together.
+    fn resolve_absent_parents(&mut self) {
+        if self.absent.len() == 0 {
+            return;
+        }
+        for c in 0..self.metas.len() {
+            let parents = &self.metas[c].parents;
+            if parents.iter().all(|p| p.get().is_ok()) {
+                continue;
+            }
+            let refs: SmallVec<[ParentRef; 2]> = parents
+                .iter()
+                .map(|p| match p.get() {
+                    Ok(_) => p,
+                    Err(at) => self
+                        .change_idx(&self.absent[at])
+                        .map_or(p, ParentRef::known),
+                })
+                .collect();
+            self.metas[c].parents = Parents::of(refs);
+        }
     }
 
     /// Adds changes to the fold and updates what they touch (§7.8). Changes already held
