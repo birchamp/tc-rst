@@ -336,7 +336,9 @@ fn run(args: &[String]) {
     }
     let mut state = state.expect("folded");
     if std::env::var("FOLDBENCH_FOLD_ONLY").is_ok() {
+        load_only.report();
         fold_only.report();
+        open.report();
         println!("peak RSS {:.0} MiB", peak_rss_mib());
         return;
     }

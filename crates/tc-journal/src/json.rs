@@ -135,20 +135,6 @@ impl JsonMap {
     pub fn retain(&mut self, mut keep: impl FnMut(&String, &mut Json) -> bool) {
         self.0.retain_mut(|(k, v)| keep(k, v));
     }
-
-    /// Appends a member whose key sorts after every key already present; `false`, and
-    /// nothing changes, when it does not.
-    fn push_sorted(&mut self, key: String, value: Json) -> Result<(), (String, Json)> {
-        if self
-            .0
-            .last()
-            .is_some_and(|(last, _)| last.as_bytes() >= key.as_bytes())
-        {
-            return Err((key, value));
-        }
-        self.0.push((key, value));
-        Ok(())
-    }
 }
 
 impl fmt::Debug for JsonMap {
@@ -406,25 +392,117 @@ pub enum JsonProblem {
     KeyOrder,
     #[error("nested deeper than {MAX_DEPTH} levels")]
     TooDeep,
+    #[error("longer than 4 GiB")]
+    TooLong,
 }
 
 /// Parses canonical JSON. Anything [`Json::to_canonical`] would not write is refused.
 pub fn parse(bytes: &[u8]) -> Result<Json, JsonError> {
+    parse_tape(bytes).map(|tape| tape.root().to_json())
+}
+
+/// Parses canonical JSON into a [`Tape`] that borrows its strings from `bytes`. It accepts
+/// and refuses exactly what [`parse`] does, with the same errors.
+pub(crate) fn parse_tape(bytes: &[u8]) -> Result<Tape<'_>, JsonError> {
     let text = std::str::from_utf8(bytes).map_err(|e| JsonError {
         at: e.valid_up_to(),
         problem: JsonProblem::NotUtf8,
     })?;
-    let mut parser = Parser { text, at: 0 };
-    let value = parser.value(0)?;
+    if u32::try_from(text.len()).is_err() {
+        return Err(JsonError {
+            at: 0,
+            problem: JsonProblem::TooLong,
+        });
+    }
+    let mut parser = Parser {
+        bytes: text.as_bytes(),
+        at: 0,
+        tape: Tape {
+            text,
+            // About one node for every eight bytes of a change's JSON.
+            nodes: Vec::with_capacity(text.len() / 6 + 4),
+            escaped: Vec::new(),
+        },
+    };
+    parser.value(0)?;
     if parser.at != text.len() {
         return Err(parser.error(JsonProblem::TrailingText));
     }
-    Ok(value)
+    Ok(parser.tape)
+}
+
+/// A parsed canonical JSON text as a flat list of nodes in document order. Strings without
+/// escapes stay in the text, so reading a change allocates the list and nothing per value.
+#[derive(Debug, Clone)]
+pub(crate) struct Tape<'a> {
+    text: &'a str,
+    nodes: Vec<Node>,
+    /// Strings that held escapes, decoded.
+    escaped: Vec<String>,
+}
+
+/// One value of a [`Tape`]. A container records how many items it holds and the index just
+/// past its last node, so a reader skips a value in one step. An object's members are a
+/// key node followed by the value's nodes.
+#[derive(Debug, Clone, Copy)]
+enum Node {
+    Null,
+    Bool(bool),
+    /// An integer: its magnitude, and its sign.
+    Int {
+        negative: bool,
+        magnitude: u64,
+    },
+    /// A string without escapes: where its bytes lie in the text, quotes left out.
+    Str {
+        start: u32,
+        len: u32,
+    },
+    /// A string with escapes: its place in [`Tape::escaped`].
+    Escaped(u32),
+    Arr {
+        len: u32,
+        end: u32,
+    },
+    Obj {
+        len: u32,
+        end: u32,
+    },
+}
+
+impl<'a> Tape<'a> {
+    /// The value the text holds.
+    pub(crate) fn root(&self) -> View<'_> {
+        View::Tape(self, 0)
+    }
+
+    fn node(&self, at: u32) -> Node {
+        self.nodes.get(at as usize).copied().unwrap_or(Node::Null)
+    }
+
+    /// The index just past the value at `at`.
+    fn skip(&self, at: u32) -> u32 {
+        match self.node(at) {
+            Node::Arr { end, .. } | Node::Obj { end, .. } => end,
+            _ => at + 1,
+        }
+    }
+
+    fn str_of(&self, node: Node) -> Option<&str> {
+        match node {
+            Node::Str { start, len } => {
+                self.text.get(start as usize..start as usize + len as usize)
+            }
+            Node::Escaped(i) => self.escaped.get(i as usize).map(String::as_str),
+            _ => None,
+        }
+    }
 }
 
 struct Parser<'a> {
-    text: &'a str,
+    bytes: &'a [u8],
     at: usize,
+    tape: Tape<'a>,
 }
 
 impl Parser<'_> {
@@ -436,11 +514,16 @@ impl Parser<'_> {
     }
 
     fn peek(&self) -> Option<u8> {
-        self.text.as_bytes().get(self.at).copied()
+        self.bytes.get(self.at).copied()
     }
 
     fn unexpected(&self) -> JsonError {
-        match self.text[self.at..].chars().next() {
+        match self
+            .tape
+            .text
+            .get(self.at..)
+            .and_then(|rest| rest.chars().next())
+        {
             Some(c) => self.error(JsonProblem::Unexpected(c)),
             None => self.error(JsonProblem::UnexpectedEnd),
         }
@@ -455,119 +538,154 @@ impl Parser<'_> {
         }
     }
 
-    fn literal(&mut self, word: &str, value: Json) -> Result<Json, JsonError> {
-        if self.text[self.at..].starts_with(word) {
+    fn literal(&mut self, word: &str, node: Node) -> Result<(), JsonError> {
+        if self.bytes[self.at..].starts_with(word.as_bytes()) {
             self.at += word.len();
-            Ok(value)
+            self.tape.nodes.push(node);
+            Ok(())
         } else {
             Err(self.unexpected())
         }
     }
 
-    fn value(&mut self, depth: usize) -> Result<Json, JsonError> {
+    /// The tape's length as a node index. The text is under 4 GiB and every node starts at
+    /// a different byte, so it fits.
+    fn here(&self) -> u32 {
+        self.tape.nodes.len() as u32
+    }
+
+    fn value(&mut self, depth: usize) -> Result<(), JsonError> {
         match self.peek() {
             Some(b'{') => self.object(depth + 1),
             Some(b'[') => self.array(depth + 1),
-            Some(b'"') => self.string().map(Json::Str),
+            Some(b'"') => {
+                let node = self.string()?;
+                self.tape.nodes.push(node);
+                Ok(())
+            }
             Some(b'-' | b'0'..=b'9') => self.integer(),
-            Some(b't') => self.literal("true", Json::Bool(true)),
-            Some(b'f') => self.literal("false", Json::Bool(false)),
-            Some(b'n') => self.literal("null", Json::Null),
+            Some(b't') => self.literal("true", Node::Bool(true)),
+            Some(b'f') => self.literal("false", Node::Bool(false)),
+            Some(b'n') => self.literal("null", Node::Null),
             _ => Err(self.unexpected()),
         }
     }
 
-    fn object(&mut self, depth: usize) -> Result<Json, JsonError> {
+    fn object(&mut self, depth: usize) -> Result<(), JsonError> {
         if depth > MAX_DEPTH {
             return Err(self.error(JsonProblem::TooDeep));
         }
         self.expect(b'{')?;
-        let mut map = JsonMap::new();
+        let slot = self.tape.nodes.len();
+        self.tape.nodes.push(Node::Obj { len: 0, end: 0 });
+        let mut len = 0;
         if self.peek() == Some(b'}') {
             self.at += 1;
-            return Ok(Json::Obj(map));
-        }
-        loop {
-            let key_at = self.at;
-            let key = self.string()?;
-            let key_order = JsonError {
-                at: key_at,
-                problem: JsonProblem::KeyOrder,
-            };
-            if map
-                .last_key_value()
-                .is_some_and(|(p, _)| p.as_bytes() >= key.as_bytes())
-            {
-                return Err(key_order);
-            }
-            self.expect(b':')?;
-            let value = self.value(depth)?;
-            if map.push_sorted(key, value).is_err() {
-                return Err(key_order);
-            }
-            match self.peek() {
-                Some(b',') => self.at += 1,
-                Some(b'}') => {
-                    self.at += 1;
-                    return Ok(Json::Obj(map));
+        } else {
+            let mut previous: Option<Node> = None;
+            loop {
+                let key_at = self.at;
+                let key = self.string()?;
+                if let Some(previous) = previous {
+                    let before = self.tape.str_of(previous).unwrap_or("");
+                    let this = self.tape.str_of(key).unwrap_or("");
+                    if before.as_bytes() >= this.as_bytes() {
+                        return Err(JsonError {
+                            at: key_at,
+                            problem: JsonProblem::KeyOrder,
+                        });
+                    }
                 }
-                _ => return Err(self.unexpected()),
+                self.tape.nodes.push(key);
+                self.expect(b':')?;
+                self.value(depth)?;
+                len += 1;
+                previous = Some(key);
+                match self.peek() {
+                    Some(b',') => self.at += 1,
+                    Some(b'}') => {
+                        self.at += 1;
+                        break;
+                    }
+                    _ => return Err(self.unexpected()),
+                }
             }
         }
+        let end = self.here();
+        self.tape.nodes[slot] = Node::Obj { len, end };
+        Ok(())
     }
 
-    fn array(&mut self, depth: usize) -> Result<Json, JsonError> {
+    fn array(&mut self, depth: usize) -> Result<(), JsonError> {
         if depth > MAX_DEPTH {
             return Err(self.error(JsonProblem::TooDeep));
         }
         self.expect(b'[')?;
-        let mut items = Vec::new();
+        let slot = self.tape.nodes.len();
+        self.tape.nodes.push(Node::Arr { len: 0, end: 0 });
+        let mut len = 0;
         if self.peek() == Some(b']') {
             self.at += 1;
-            return Ok(Json::Arr(items));
-        }
-        loop {
-            items.push(self.value(depth)?);
-            match self.peek() {
-                Some(b',') => self.at += 1,
-                Some(b']') => {
-                    self.at += 1;
-                    return Ok(Json::Arr(items));
+        } else {
+            loop {
+                self.value(depth)?;
+                len += 1;
+                match self.peek() {
+                    Some(b',') => self.at += 1,
+                    Some(b']') => {
+                        self.at += 1;
+                        break;
+                    }
+                    _ => return Err(self.unexpected()),
                 }
-                _ => return Err(self.unexpected()),
             }
         }
+        let end = self.here();
+        self.tape.nodes[slot] = Node::Arr { len, end };
+        Ok(())
     }
 
-    fn string(&mut self) -> Result<String, JsonError> {
+    /// A string: its node, with any escaped text decoded into [`Tape::escaped`].
+    fn string(&mut self) -> Result<Node, JsonError> {
         self.expect(b'"')?;
-        let mut out = String::new();
+        let start = self.at;
+        self.at = plain_run(self.bytes, self.at);
+        match self.peek() {
+            Some(b'"') => {
+                self.at += 1;
+                // Offsets fit: the text is under 4 GiB.
+                return Ok(Node::Str {
+                    start: start as u32,
+                    len: (self.at - 1 - start) as u32,
+                });
+            }
+            Some(b'\\') => {}
+            Some(_) => return Err(self.error(JsonProblem::RawControl)),
+            None => return Err(self.error(JsonProblem::UnexpectedEnd)),
+        }
+        let mut out = String::from(&self.tape.text[start..self.at]);
         loop {
-            let rest = &self.text[self.at..];
-            // The bytes it stops at are ASCII, so `stop` is a character boundary.
-            let Some(stop) = rest
-                .bytes()
-                .position(|b| b == b'"' || b == b'\\' || b < 0x20)
-            else {
-                self.at = self.text.len();
-                return Err(self.error(JsonProblem::UnexpectedEnd));
-            };
-            out.push_str(&rest[..stop]);
-            self.at += stop;
             match self.peek() {
                 Some(b'"') => {
                     self.at += 1;
-                    return Ok(out);
+                    let index = self.tape.escaped.len() as u32;
+                    self.tape.escaped.push(out);
+                    return Ok(Node::Escaped(index));
                 }
                 Some(b'\\') => out.push(self.escape()?),
-                _ => return Err(self.error(JsonProblem::RawControl)),
+                Some(_) => return Err(self.error(JsonProblem::RawControl)),
+                None => return Err(self.error(JsonProblem::UnexpectedEnd)),
             }
+            let from = self.at;
+            self.at = plain_run(self.bytes, self.at);
+            // `plain_run` stops only at ASCII bytes, so both ends are character boundaries.
+            out.push_str(&self.tape.text[from..self.at]);
         }
     }
 
     fn escape(&mut self) -> Result<char, JsonError> {
         let start = self.at;
-        let bytes = self.text.as_bytes();
+        let bytes = self.bytes;
         let fail = || JsonError {
             at: start,
             problem: JsonProblem::Escape,
@@ -605,9 +723,9 @@ impl Parser<'_> {
         Ok(c)
     }
 
-    fn integer(&mut self) -> Result<Json, JsonError> {
+    fn integer(&mut self) -> Result<(), JsonError> {
         let start = self.at;
-        let bytes = self.text.as_bytes();
+        let bytes = self.bytes;
         let negative = bytes[start] == b'-';
         let digits_start = start + usize::from(negative);
         let mut end = digits_start;
@@ -618,8 +736,8 @@ impl Parser<'_> {
         if matches!(bytes.get(end), Some(b'.' | b'e' | b'E')) {
             return Err(fail(JsonProblem::Float));
         }
-        let digits = &self.text[digits_start..end];
-        let canonical = match digits.as_bytes() {
+        let digits = &bytes[digits_start..end];
+        let canonical = match digits {
             [] => false,
             [b'0'] => !negative,
             [b'0', ..] => false,
@@ -628,11 +746,323 @@ impl Parser<'_> {
         if !canonical || digits.len() > 20 {
             return Err(fail(JsonProblem::Integer));
         }
-        let magnitude: i128 = digits.parse().map_err(|_| fail(JsonProblem::Integer))?;
-        let value = if negative { -magnitude } else { magnitude };
-        let value = JsonInt::new(value).ok_or_else(|| fail(JsonProblem::Integer))?;
+        let mut magnitude: u64 = 0;
+        for &d in digits {
+            magnitude = magnitude
+                .checked_mul(10)
+                .and_then(|m| m.checked_add(u64::from(d - b'0')))
+                .ok_or_else(|| fail(JsonProblem::Integer))?;
+        }
+        if negative && magnitude > 1 << 63 {
+            return Err(fail(JsonProblem::Integer));
+        }
         self.at = end;
-        Ok(Json::Int(value))
+        self.tape.nodes.push(Node::Int {
+            negative,
+            magnitude,
+        });
+        Ok(())
+    }
+}
+
+/// The end of the run of string bytes from `at` that need no attention: the index of the
+/// first `"`, `\` or control byte, or the end. Eight bytes at a time while none is near.
+fn plain_run(bytes: &[u8], mut at: usize) -> usize {
+    const ONES: u64 = u64::from_le_bytes([1; 8]);
+    const HIGH: u64 = u64::from_le_bytes([0x80; 8]);
+    let has_zero = |w: u64| w.wrapping_sub(ONES) & !w & HIGH;
+    while let Some(chunk) = bytes.get(at..at + 8) {
+        let mut word = [0; 8];
+        word.copy_from_slice(chunk);
+        let w = u64::from_le_bytes(word);
+        let stop = has_zero(w ^ (ONES * u64::from(b'"')))
+            | has_zero(w ^ (ONES * u64::from(b'\\')))
+            | (w.wrapping_sub(ONES * 0x20) & !w & HIGH);
+        if stop != 0 {
+            break;
+        }
+        at += 8;
+    }
+    while bytes
+        .get(at)
+        .is_some_and(|&b| b != b'"' && b != b'\\' && b >= 0x20)
+    {
+        at += 1;
+    }
+    at
+}
+
+// ---------------------------------------------------------------------------------------
+// Reading parsed values
+// ---------------------------------------------------------------------------------------
+
+/// A value to read: inside a [`Tape`], or an owned [`Json`]. The decoders of `canon` read
+/// both the same way.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum View<'a> {
+    Tape(&'a Tape<'a>, u32),
+    Owned(&'a Json),
+}
+
+impl<'a> View<'a> {
+    pub(crate) fn as_str(self) -> Option<&'a str> {
+        match self {
+            View::Tape(tape, at) => tape.str_of(tape.node(at)),
+            View::Owned(j) => j.as_str(),
+        }
+    }
+
+    pub(crate) fn as_int(self) -> Option<i128> {
+        match self {
+            View::Tape(tape, at) => match tape.node(at) {
+                Node::Int {
+                    negative,
+                    magnitude,
+                } => {
+                    let m = i128::from(magnitude);
+                    Some(if negative { -m } else { m })
+                }
+                _ => None,
+            },
+            View::Owned(Json::Int(n)) => Some(n.get()),
+            View::Owned(_) => None,
+        }
+    }
+
+    pub(crate) fn as_bool(self) -> Option<bool> {
+        match self {
+            View::Tape(tape, at) => match tape.node(at) {
+                Node::Bool(b) => Some(b),
+                _ => None,
+            },
+            View::Owned(Json::Bool(b)) => Some(*b),
+            View::Owned(_) => None,
+        }
+    }
+
+    pub(crate) fn as_obj(self) -> Option<ObjView<'a>> {
+        match self {
+            View::Tape(tape, at) => match tape.node(at) {
+                Node::Obj { len, .. } => Some(ObjView::Tape(tape, at, len)),
+                _ => None,
+            },
+            View::Owned(Json::Obj(map)) => Some(ObjView::Owned(map)),
+            View::Owned(_) => None,
+        }
+    }
+
+    pub(crate) fn as_arr(self) -> Option<ArrView<'a>> {
+        match self {
+            View::Tape(tape, at) => match tape.node(at) {
+                Node::Arr { len, .. } => Some(ArrView::Tape(tape, at, len)),
+                _ => None,
+            },
+            View::Owned(Json::Arr(items)) => Some(ArrView::Owned(items)),
+            View::Owned(_) => None,
+        }
+    }
+
+    pub(crate) fn kind_name(self) -> &'static str {
+        match self {
+            View::Tape(tape, at) => match tape.node(at) {
+                Node::Null => "null",
+                Node::Bool(_) => "a boolean",
+                Node::Int { .. } => "an integer",
+                Node::Str { .. } | Node::Escaped(_) => "a string",
+                Node::Arr { .. } => "an array",
+                Node::Obj { .. } => "an object",
+            },
+            View::Owned(j) => j.kind_name(),
+        }
+    }
+
+    /// The value as an owned [`Json`].
+    pub(crate) fn to_json(self) -> Json {
+        match self {
+            View::Owned(j) => j.clone(),
+            View::Tape(tape, at) => match tape.node(at) {
+                Node::Null => Json::Null,
+                Node::Bool(b) => Json::Bool(b),
+                Node::Int { .. } => self
+                    .as_int()
+                    .and_then(JsonInt::new)
+                    .map_or(Json::Null, Json::Int),
+                node @ (Node::Str { .. } | Node::Escaped(_)) => {
+                    Json::Str(tape.str_of(node).unwrap_or("").to_owned())
+                }
+                Node::Arr { len, .. } => Json::Arr(
+                    ArrView::Tape(tape, at, len)
+                        .iter()
+                        .map(View::to_json)
+                        .collect(),
+                ),
+                Node::Obj { len, .. } => Json::Obj(ObjView::Tape(tape, at, len).to_map()),
+            },
+        }
+    }
+}
+
+/// An object to read.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ObjView<'a> {
+    /// The tape, the object's node and its member count.
+    Tape(&'a Tape<'a>, u32, u32),
+    Owned(&'a JsonMap),
+}
+
+impl<'a> ObjView<'a> {
+    pub(crate) fn len(self) -> usize {
+        match self {
+            ObjView::Tape(_, _, len) => len as usize,
+            ObjView::Owned(map) => map.len(),
+        }
+    }
+
+    pub(crate) fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+
+    /// The members in key order.
+    pub(crate) fn iter(self) -> ObjIter<'a> {
+        match self {
+            ObjView::Tape(tape, at, len) => ObjIter::Tape {
+                tape,
+                next: at + 1,
+                left: len,
+            },
+            ObjView::Owned(map) => ObjIter::Owned(map.0.iter()),
+        }
+    }
+
+    pub(crate) fn get(self, key: &str) -> Option<View<'a>> {
+        match self {
+            ObjView::Owned(map) => map.get(key).map(View::Owned),
+            ObjView::Tape(..) => find_member(self.iter(), key).map(|(value, _)| value),
+        }
+    }
+
+    pub(crate) fn contains_key(self, key: &str) -> bool {
+        self.get(key).is_some()
+    }
+
+    /// The object as an owned map.
+    pub(crate) fn to_map(self) -> JsonMap {
+        match self {
+            ObjView::Owned(map) => map.clone(),
+            // The tape's members are in canonical order already.
+            ObjView::Tape(..) => JsonMap(
+                self.iter()
+                    .map(|(key, value)| (key.to_owned(), value.to_json()))
+                    .collect(),
+            ),
+        }
+    }
+}
+
+/// The member named `key` among the members `members` still holds, and the members after
+/// it. Keys are sorted, so the search stops at the first key past `key`.
+pub(crate) fn find_member<'a>(
+    mut members: ObjIter<'a>,
+    key: &str,
+) -> Option<(View<'a>, ObjIter<'a>)> {
+    loop {
+        let (name, value) = members.next()?;
+        match name.as_bytes().cmp(key.as_bytes()) {
+            std::cmp::Ordering::Less => {}
+            std::cmp::Ordering::Equal => return Some((value, members)),
+            std::cmp::Ordering::Greater => return None,
+        }
+    }
+}
+
+/// The members of an [`ObjView`], in key order.
+#[derive(Debug, Clone)]
+pub(crate) enum ObjIter<'a> {
+    Tape {
+        tape: &'a Tape<'a>,
+        next: u32,
+        left: u32,
+    },
+    Owned(std::slice::Iter<'a, Member>),
+}
+
+impl<'a> Iterator for ObjIter<'a> {
+    type Item = (&'a str, View<'a>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            ObjIter::Tape { tape, next, left } => {
+                if *left == 0 {
+                    return None;
+                }
+                let key = tape.str_of(tape.node(*next))?;
+                let value = *next + 1;
+                *next = tape.skip(value);
+                *left -= 1;
+                Some((key, View::Tape(tape, value)))
+            }
+            ObjIter::Owned(members) => members
+                .next()
+                .map(|(key, value)| (key.as_str(), View::Owned(value))),
+        }
+    }
+}
+
+/// An array to read.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ArrView<'a> {
+    /// The tape, the array's node and its item count.
+    Tape(&'a Tape<'a>, u32, u32),
+    Owned(&'a [Json]),
+}
+
+impl<'a> ArrView<'a> {
+    pub(crate) fn len(self) -> usize {
+        match self {
+            ArrView::Tape(_, _, len) => len as usize,
+            ArrView::Owned(items) => items.len(),
+        }
+    }
+
+    pub(crate) fn iter(self) -> ArrIter<'a> {
+        match self {
+            ArrView::Tape(tape, at, len) => ArrIter::Tape {
+                tape,
+                next: at + 1,
+                left: len,
+            },
+            ArrView::Owned(items) => ArrIter::Owned(items.iter()),
+        }
+    }
+}
+
+/// The items of an [`ArrView`].
+#[derive(Debug, Clone)]
+pub(crate) enum ArrIter<'a> {
+    Tape {
+        tape: &'a Tape<'a>,
+        next: u32,
+        left: u32,
+    },
+    Owned(std::slice::Iter<'a, Json>),
+}
+
+impl<'a> Iterator for ArrIter<'a> {
+    type Item = View<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            ArrIter::Tape { tape, next, left } => {
+                if *left == 0 {
+                    return None;
+                }
+                let value = *next;
+                *next = tape.skip(value);
+                *left -= 1;
+                Some(View::Tape(tape, value))
+            }
+            ArrIter::Owned(items) => items.next().map(View::Owned),
+        }
     }
 }
 

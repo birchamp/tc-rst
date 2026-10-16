@@ -8,7 +8,7 @@ use common::*;
 use proptest::prelude::*;
 use proptest::strategy::ValueTree;
 use std::sync::Arc;
-use tc_journal::json;
+use tc_journal::json::{self, Json};
 use tc_journal::line::{encode_line, read_line, verify_line};
 use tc_journal::record::{MarkerTerm, MarkerWs, UnknownRecord, VerseValue};
 use tc_journal::{
@@ -103,6 +103,82 @@ fn canonical_change_round_trip() {
         prop_assert_eq!(again.as_change().map(Change::body), Some(&body));
         Ok(())
     });
+}
+
+/// The parser accepts exactly the texts `to_canonical` writes: a value's text reads back as
+/// that value, and a text with bytes inserted, removed or replaced is either refused or the
+/// canonical text of the value it reads as. Edits aim at the bytes the parser decides on
+/// (quotes, escapes, separators, digits), so key order, duplicate keys, escapes and number
+/// forms are all reached.
+#[test]
+fn the_json_parser_accepts_exactly_canonical_text() {
+    const BYTES: &[u8] = b"\"\\{}[],:-0123456789 \n\tanue/x\x7f\xc3\xa9";
+    let edits = |bytes: &'static [u8]| {
+        let edit = (
+            any::<prop::sample::Index>(),
+            0u8..3,
+            prop::sample::select(bytes),
+        );
+        prop::collection::vec(edit, 1..3)
+    };
+    // Objects with one-letter keys and short values, edited in their key letters, so that
+    // an edit repeats a key or puts two out of order.
+    let short_leaf = prop_oneof![Just(Json::Null), (0u8..10).prop_map(Json::from)];
+    let short_keys = short_leaf.prop_recursive(3, 12, 3, |inner| {
+        prop::collection::btree_map(prop::sample::select(vec!["a", "b", "c"]), inner, 0..4)
+            .prop_map(|map| Json::Obj(map.into_iter().map(|(k, v)| (k.to_owned(), v)).collect()))
+    });
+    let strategy = prop_oneof![(arb_json(), edits(BYTES)), (short_keys, edits(b"abc")),];
+    let states = &[
+        "read back",
+        "edit refused",
+        "edit refused for key order",
+        "edit read as canonical",
+    ];
+    run_with_census(2048, strategy, states, |(value, edits), census| {
+        let text = value.to_canonical();
+        let read = json::parse(&text);
+        prop_assert_eq!(read.as_ref(), Ok(&value));
+        census.saw("read back");
+        let mut edited = text.clone();
+        for (at, how, byte) in edits {
+            let at = at.index(edited.len() + 1);
+            match how {
+                0 => edited.insert(at, byte),
+                1 if at < edited.len() => {
+                    edited.remove(at);
+                }
+                _ if at < edited.len() => edited[at] = byte,
+                _ => edited.push(byte),
+            }
+        }
+        match json::parse(&edited) {
+            Ok(read) => {
+                prop_assert!(keys_ascend(&read), "{read:?}");
+                prop_assert_eq!(read.to_canonical(), edited);
+                census.saw("edit read as canonical");
+            }
+            Err(error) if error.problem == json::JsonProblem::KeyOrder => {
+                census.saw("edit refused for key order");
+            }
+            Err(_) => census.saw("edit refused"),
+        }
+        Ok(())
+    });
+}
+
+/// Every object's keys are in strictly ascending byte order: none repeats.
+fn keys_ascend(value: &Json) -> bool {
+    match value {
+        Json::Arr(items) => items.iter().all(keys_ascend),
+        Json::Obj(map) => {
+            let keys: Vec<&String> = map.keys().collect();
+            keys.windows(2)
+                .all(|pair| pair[0].as_bytes() < pair[1].as_bytes())
+                && map.iter().all(|(_, v)| keys_ascend(v))
+        }
+        _ => true,
+    }
 }
 
 /// One flipped bit anywhere in a line, in its JSON, its tab or its hash, is never read as a

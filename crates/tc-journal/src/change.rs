@@ -216,50 +216,50 @@ impl From<Change> for Verified {
 /// Reads the canonical JSON of a change whose id has been verified, and applies the rules
 /// of §4.5. Never fails: a change that breaks a rule comes back quarantined.
 pub fn parse_change(id: ChangeId, raw: Arc<[u8]>) -> Verified {
-    let quarantine = |rule, value: Option<&json::Json>| {
-        let (batch, device, seq) = value.map_or((None, None, None), canon::best_effort_origin);
-        Verified::Quarantined(QuarantinedChange {
+    let verdict = check_change(&raw);
+    match verdict {
+        Ok(body) => Verified::Change(Change {
             id,
-            raw: raw.clone(),
+            raw,
+            body: Arc::new(body),
+        }),
+        Err((rule, (batch, device, seq))) => Verified::Quarantined(QuarantinedChange {
+            id,
+            raw,
             rule,
             batch,
             device,
             seq,
-        })
-    };
+        }),
+    }
+}
+
+type Origin = (Option<BatchRef>, Option<DeviceId>, Option<DeviceSeq>);
+
+/// The body of a change's canonical JSON, or the rule it breaks and what could be read of
+/// its origin.
+fn check_change(raw: &[u8]) -> Result<ChangeBody, (RuleViolation, Origin)> {
     let line_bytes = raw.len() + crate::line::LINE_OVERHEAD;
     if line_bytes > MAX_LINE_BYTES {
-        return quarantine(
-            RuleViolation::LineTooLong {
-                bytes: line_bytes as u64,
-            },
-            None,
-        );
+        let rule = RuleViolation::LineTooLong {
+            bytes: line_bytes as u64,
+        };
+        return Err((rule, (None, None, None)));
     }
-    let value = match json::parse(&raw) {
-        Ok(value) => value,
-        Err(error) => {
-            let rule = if error.problem == json::JsonProblem::TooDeep {
-                RuleViolation::TooDeep
-            } else {
-                RuleViolation::Shape {
-                    at: format!("byte {}", error.at).into(),
-                    problem: error.problem.to_string().into(),
-                }
-            };
-            return quarantine(rule, None);
-        }
-    };
-    let body = match canon::decode_body(&value) {
-        Ok(body) => body,
-        Err(error) => return quarantine(error, Some(&value)),
-    };
-    if let Err(rule) = rules::check(&body) {
-        return quarantine(rule, Some(&value));
-    }
-    Verified::Change(Change {
-        id,
-        raw,
-        body: Arc::new(body),
-    })
+    let tape = json::parse_tape(raw).map_err(|error| {
+        let rule = if error.problem == json::JsonProblem::TooDeep {
+            RuleViolation::TooDeep
+        } else {
+            RuleViolation::Shape {
+                at: format!("byte {}", error.at).into(),
+                problem: error.problem.to_string().into(),
+            }
+        };
+        (rule, (None, None, None))
+    })?;
+    let value = tape.root();
+    let body =
+        canon::decode_body_view(value).map_err(|rule| (rule, canon::best_effort_origin(value)))?;
+    rules::check(&body).map_err(|rule| (rule, canon::best_effort_origin(value)))?;
+    Ok(body)
 }

@@ -19,7 +19,7 @@ use crate::ids::{
     BatchId, BatchRef, ChangeId, ChapterNo, CommentId, DeviceId, DeviceSeq, FrameNo, GitOid, Md5,
     PackName, ProjectId, RepoPath, ShortId, StoryNo, VerseNo, WallTime,
 };
-use crate::json::{self, Json, JsonInt, JsonMap};
+use crate::json::{self, Json, JsonInt, JsonMap, ObjIter, ObjView, View};
 use crate::keys::{
     CheckId, CheckKey, CheckTarget, KNOWN_KINDS, MetaField, MetaPath, PinGroup, RecordKey, RefPart,
     SettingKey, SlotName, ToolId, UnknownKey,
@@ -127,7 +127,7 @@ fn unknown(cx: Cx, what: &str, name: &str) -> DecodeError {
     }
 }
 
-fn expected(what: &str, found: &Json) -> DecodeError {
+fn expected(what: &str, found: View<'_>) -> DecodeError {
     DecodeError::shape(format!("expected {what}, found {}", found.kind_name()))
 }
 
@@ -137,7 +137,7 @@ fn expected(what: &str, found: &Json) -> DecodeError {
 
 pub(crate) trait Wire: Sized {
     fn to_json(&self) -> Json;
-    fn from_json(j: &Json, cx: Cx) -> R<Self>;
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self>;
 }
 
 /// Builds an object.
@@ -189,25 +189,35 @@ fn unit(name: &str) -> Json {
 
 /// Reads an object's fields, then checks that no field is left over.
 struct In<'a> {
-    map: &'a JsonMap,
+    map: ObjView<'a>,
+    /// The members after the last one read: the decoders read fields in key order, so
+    /// each lookup usually continues from here.
+    rest: ObjIter<'a>,
     taken: SmallVec<[&'static str; 12]>,
     cx: Cx,
 }
 
 impl<'a> In<'a> {
-    fn new(j: &'a Json, cx: Cx) -> R<Self> {
-        match j {
-            Json::Obj(map) => Ok(Self {
+    fn new(j: View<'a>, cx: Cx) -> R<Self> {
+        match j.as_obj() {
+            Some(map) => Ok(Self {
                 map,
+                rest: map.iter(),
                 taken: SmallVec::new(),
                 cx,
             }),
-            other => Err(expected("an object", other)),
+            None => Err(expected("an object", j)),
         }
     }
 
-    fn get(&mut self, key: &'static str) -> Option<&'a Json> {
-        let value = self.map.get(key);
+    fn get(&mut self, key: &'static str) -> Option<View<'a>> {
+        let value = match json::find_member(self.rest.clone(), key) {
+            Some((value, rest)) => {
+                self.rest = rest;
+                Some(value)
+            }
+            None => self.map.get(key),
+        };
         if value.is_some() {
             self.taken.push(key);
         }
@@ -219,7 +229,7 @@ impl<'a> In<'a> {
         self.req_with(key, |j| T::from_json(j, cx))
     }
 
-    fn req_with<T>(&mut self, key: &'static str, read: impl FnOnce(&'a Json) -> R<T>) -> R<T> {
+    fn req_with<T>(&mut self, key: &'static str, read: impl FnOnce(View<'a>) -> R<T>) -> R<T> {
         match self.get(key) {
             Some(j) => read(j).map_err(|e| e.within(key)),
             None => Err(DecodeError::shape(format!("missing {key}"))),
@@ -237,11 +247,13 @@ impl<'a> In<'a> {
     fn extra(&mut self, key: &'static str) -> R<JsonMap> {
         match self.get(key) {
             None => Ok(JsonMap::new()),
-            Some(Json::Obj(map)) if map.is_empty() => {
-                Err(DecodeError::shape("an empty extra map is left out").within(key))
-            }
-            Some(Json::Obj(map)) => Ok(map.clone()),
-            Some(other) => Err(expected("an object", other).within(key)),
+            Some(j) => match j.as_obj() {
+                Some(map) if map.is_empty() => {
+                    Err(DecodeError::shape("an empty extra map is left out").within(key))
+                }
+                Some(map) => Ok(map.to_map()),
+                None => Err(expected("an object", j).within(key)),
+            },
         }
     }
 
@@ -251,30 +263,28 @@ impl<'a> In<'a> {
         }
         let unknown = self
             .map
-            .keys()
-            .find(|k| !self.taken.contains(&k.as_str()))
-            .map_or("", String::as_str);
+            .iter()
+            .map(|(k, _)| k)
+            .find(|k| !self.taken.contains(k))
+            .unwrap_or("");
         Err(DecodeError::shape(format!("unknown field {unknown:?}")))
     }
 }
 
 /// The one member of a variant object.
-fn one_member(j: &Json) -> R<(&str, &Json)> {
-    match j {
-        Json::Obj(map) if map.len() == 1 => {
-            let (name, inner) = map.iter().next().ok_or_else(|| DecodeError::shape(""))?;
-            Ok((name.as_str(), inner))
-        }
-        Json::Obj(_) => Err(DecodeError::shape(
+fn one_member(j: View<'_>) -> R<(&str, View<'_>)> {
+    match j.as_obj() {
+        Some(map) if map.len() == 1 => map.iter().next().ok_or_else(|| DecodeError::shape("")),
+        Some(_) => Err(DecodeError::shape(
             "expected an object with exactly one member",
         )),
-        other => Err(expected("an object", other)),
+        None => Err(expected("an object", j)),
     }
 }
 
 /// The one member of an enum's object, when it names a known variant. An unknown variant
 /// is reported at the enum's own path.
-fn known_member<'a>(j: &'a Json, cx: Cx, what: &str, names: &[&str]) -> R<(&'a str, &'a Json)> {
+fn known_member<'a>(j: View<'a>, cx: Cx, what: &str, names: &[&str]) -> R<(&'a str, View<'a>)> {
     let (name, inner) = one_member(j)?;
     if names.contains(&name) {
         Ok((name, inner))
@@ -284,11 +294,11 @@ fn known_member<'a>(j: &'a Json, cx: Cx, what: &str, names: &[&str]) -> R<(&'a s
 }
 
 /// A variant without fields: `{}`, or any object from a newer minor.
-fn no_fields(j: &Json, cx: Cx) -> R<()> {
+fn no_fields(j: View<'_>, cx: Cx) -> R<()> {
     In::new(j, cx)?.finish()
 }
 
-fn string(j: &Json) -> R<&str> {
+fn string(j: View<'_>) -> R<&str> {
     j.as_str().ok_or_else(|| expected("a string", j))
 }
 
@@ -301,22 +311,16 @@ impl Wire for bool {
         Json::Bool(*self)
     }
 
-    fn from_json(j: &Json, _: Cx) -> R<Self> {
-        match j {
-            Json::Bool(b) => Ok(*b),
-            other => Err(expected("a boolean", other)),
-        }
+    fn from_json(j: View<'_>, _: Cx) -> R<Self> {
+        j.as_bool().ok_or_else(|| expected("a boolean", j))
     }
 }
 
-fn int_in(j: &Json, min: i128, max: i128) -> R<i128> {
-    match j {
-        Json::Int(n) if (min..=max).contains(&n.get()) => Ok(n.get()),
-        Json::Int(n) => Err(DecodeError::shape(format!(
-            "{} is outside {min} to {max}",
-            n.get()
-        ))),
-        other => Err(expected("an integer", other)),
+fn int_in(j: View<'_>, min: i128, max: i128) -> R<i128> {
+    match j.as_int() {
+        Some(n) if (min..=max).contains(&n) => Ok(n),
+        Some(n) => Err(DecodeError::shape(format!("{n} is outside {min} to {max}"))),
+        None => Err(expected("an integer", j)),
     }
 }
 
@@ -327,7 +331,7 @@ macro_rules! wire_int {
                 Json::Int(JsonInt::from(*self))
             }
 
-            fn from_json(j: &Json, _: Cx) -> R<Self> {
+            fn from_json(j: View<'_>, _: Cx) -> R<Self> {
                 let n = int_in(j, i128::from(<$t>::MIN), i128::from(<$t>::MAX))?;
                 <$t>::try_from(n).map_err(|_| DecodeError::shape("integer out of range"))
             }
@@ -341,7 +345,7 @@ impl Wire for String {
         Json::Str(self.clone())
     }
 
-    fn from_json(j: &Json, _: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, _: Cx) -> R<Self> {
         string(j).map(str::to_owned)
     }
 }
@@ -351,7 +355,7 @@ impl Wire for Box<str> {
         Json::Str(self.to_string())
     }
 
-    fn from_json(j: &Json, _: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, _: Cx) -> R<Self> {
         string(j).map(Into::into)
     }
 }
@@ -361,8 +365,8 @@ impl Wire for Json {
         self.clone()
     }
 
-    fn from_json(j: &Json, _: Cx) -> R<Self> {
-        Ok(j.clone())
+    fn from_json(j: View<'_>, _: Cx) -> R<Self> {
+        Ok(j.to_json())
     }
 }
 
@@ -371,8 +375,10 @@ impl Wire for JsonMap {
         Json::Obj(self.clone())
     }
 
-    fn from_json(j: &Json, _: Cx) -> R<Self> {
-        j.as_obj().cloned().ok_or_else(|| expected("an object", j))
+    fn from_json(j: View<'_>, _: Cx) -> R<Self> {
+        j.as_obj()
+            .map(ObjView::to_map)
+            .ok_or_else(|| expected("an object", j))
     }
 }
 
@@ -381,14 +387,16 @@ impl<T: Wire> Wire for Vec<T> {
         Json::Arr(self.iter().map(Wire::to_json).collect())
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
-        match j {
-            Json::Arr(items) => items
-                .iter()
-                .enumerate()
-                .map(|(i, item)| T::from_json(item, cx).map_err(|e| e.within(&i.to_string())))
-                .collect(),
-            other => Err(expected("an array", other)),
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
+        match j.as_arr() {
+            Some(items) => {
+                let mut out = Vec::with_capacity(items.len());
+                for (i, item) in items.iter().enumerate() {
+                    out.push(T::from_json(item, cx).map_err(|e| e.within(&i.to_string()))?);
+                }
+                Ok(out)
+            }
+            None => Err(expected("an array", j)),
         }
     }
 }
@@ -400,7 +408,7 @@ macro_rules! wire_hex {
                 Json::Str(self.to_hex())
             }
 
-            fn from_json(j: &Json, _: Cx) -> R<Self> {
+            fn from_json(j: View<'_>, _: Cx) -> R<Self> {
                 let text = string(j)?;
                 <$t>::parse(text).ok_or_else(|| {
                     DecodeError::shape(format!("{text:?} is not a {}", stringify!($t)))
@@ -416,7 +424,7 @@ impl Wire for DeviceId {
         Json::Str(self.to_string())
     }
 
-    fn from_json(j: &Json, _: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, _: Cx) -> R<Self> {
         let text = string(j)?;
         DeviceId::parse(text)
             .ok_or_else(|| DecodeError::shape(format!("{text:?} is not a device id")))
@@ -428,7 +436,7 @@ impl Wire for ProjectId {
         Json::Str(self.to_string())
     }
 
-    fn from_json(j: &Json, _: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, _: Cx) -> R<Self> {
         let text = string(j)?;
         ProjectId::parse(text)
             .ok_or_else(|| DecodeError::shape(format!("{text:?} is not a project id")))
@@ -440,7 +448,7 @@ impl Wire for BookId {
         Json::Str(self.code().to_owned())
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let text = string(j)?;
         match text.parse::<BookId>() {
             Ok(book) if book.code() == text => Ok(book),
@@ -454,7 +462,7 @@ impl Wire for ChapterNo {
         Json::from(self.get())
     }
 
-    fn from_json(j: &Json, _: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, _: Cx) -> R<Self> {
         let n = int_in(j, 1, i128::from(u16::MAX))?;
         u16::try_from(n)
             .ok()
@@ -468,7 +476,7 @@ impl Wire for VerseNo {
         Json::from(self.get())
     }
 
-    fn from_json(j: &Json, _: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, _: Cx) -> R<Self> {
         let n = int_in(j, 1, i128::from(u16::MAX))?;
         u16::try_from(n)
             .ok()
@@ -482,7 +490,7 @@ impl Wire for StoryNo {
         Json::from(self.get())
     }
 
-    fn from_json(j: &Json, _: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, _: Cx) -> R<Self> {
         let n = int_in(j, 1, 50)?;
         u8::try_from(n)
             .ok()
@@ -496,7 +504,7 @@ impl Wire for FrameNo {
         Json::from(self.0)
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         u16::from_json(j, cx).map(FrameNo)
     }
 }
@@ -506,7 +514,7 @@ impl Wire for RepoPath {
         Json::Str(self.as_str().to_owned())
     }
 
-    fn from_json(j: &Json, _: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, _: Cx) -> R<Self> {
         RepoPath::parse(string(j)?).map_err(DecodeError::identity)
     }
 }
@@ -518,7 +526,7 @@ macro_rules! wire_identity {
                 Json::Str(self.as_str().to_owned())
             }
 
-            fn from_json(j: &Json, _: Cx) -> R<Self> {
+            fn from_json(j: View<'_>, _: Cx) -> R<Self> {
                 <$t>::parse(string(j)?).map_err(DecodeError::identity)
             }
         }
@@ -534,7 +542,7 @@ macro_rules! wire_names {
                 Json::Str(match self { $(Self::$variant => $name,)* }.to_owned())
             }
 
-            fn from_json(j: &Json, cx: Cx) -> R<Self> {
+            fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
                 match string(j)? {
                     $($name => Ok(Self::$variant),)*
                     other => Err(unknown(cx, $what, other)),
@@ -596,7 +604,7 @@ impl Wire for BatchRef {
         Out::new().f("id", &self.id).f("n", &self.n()).done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let id = o.req("id")?;
         let n = o.req("n")?;
@@ -614,7 +622,7 @@ impl Wire for ChapterVerse {
             .done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let value = ChapterVerse {
             chapter: o.req("chapter")?,
@@ -633,7 +641,7 @@ impl Wire for MarkerWs {
             .done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let lead: String = o.req("lead")?;
         let term = o.req("term")?;
@@ -651,7 +659,7 @@ impl Wire for ResourceRef {
             .done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let repo_path: Box<str> = o.req("repoPath")?;
         let sha = o.req("sha")?;
@@ -664,7 +672,7 @@ impl Wire for ResourceRef {
 }
 
 /// A list that must be sorted with no repeats (`seen`, a release's `changes`).
-fn sorted_unique<T: Wire + Ord>(j: &Json, cx: Cx) -> R<Vec<T>> {
+fn sorted_unique<T: Wire + Ord>(j: View<'_>, cx: Cx) -> R<Vec<T>> {
     let items = Vec::<T>::from_json(j, cx)?;
     if items.windows(2).any(|pair| pair[0] >= pair[1]) {
         return Err(DecodeError::shape("not sorted, or an item is repeated"));
@@ -698,7 +706,7 @@ impl Wire for CheckTarget {
         }
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let (name, inner) = known_member(j, cx, "check target", &["verse", "frame"])?;
         let read = || -> R<Self> {
             let mut o = In::new(inner, cx)?;
@@ -731,7 +739,7 @@ impl Wire for CheckKey {
             .done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let key = CheckKey {
             check_id: o.req("checkId")?,
@@ -756,7 +764,7 @@ impl Wire for MetaField {
         }
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let (name, inner) = known_member(
             j,
             cx,
@@ -844,15 +852,15 @@ pub fn encode_key(key: &RecordKey) -> Result<Json, ChangeError> {
 
 /// Reads a key written by [`encode_key`].
 pub fn decode_key(j: &Json) -> Result<RecordKey, RuleViolation> {
-    read_key(j).map_err(DecodeError::into_violation)
+    read_key(View::Owned(j)).map_err(DecodeError::into_violation)
 }
 
-fn read_key(j: &Json) -> R<RecordKey> {
+fn read_key(j: View<'_>) -> R<RecordKey> {
     let cx = STRICT;
     let (kind, inner) = one_member(j)?;
     let read = || -> R<RecordKey> {
         if !KNOWN_KINDS.contains(&kind) {
-            let Json::Obj(map) = inner else {
+            let Some(map) = inner.as_obj() else {
                 return Err(expected("an object", inner));
             };
             if map.contains_key("value") {
@@ -860,7 +868,7 @@ fn read_key(j: &Json) -> R<RecordKey> {
             }
             return Ok(RecordKey::Unknown(UnknownKey {
                 kind: kind.into(),
-                key_json: inner.to_canonical_string().into(),
+                key_json: inner.to_json().to_canonical_string().into(),
             }));
         }
         let mut o = In::new(inner, cx)?;
@@ -911,7 +919,7 @@ impl Wire for Scope {
         }
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let (name, inner) = known_member(j, cx, "scope", &["whole", "ranges"])?;
         let read = || -> R<Self> {
             match name {
@@ -950,7 +958,7 @@ impl Wire for BookPresence {
         }
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let (name, inner) = known_member(j, cx, "book presence", &["present", "removed"])?;
         let read = || -> R<Self> {
             let mut o = In::new(inner, cx)?;
@@ -976,7 +984,7 @@ impl Wire for UsfmBytes {
         Json::Str(self.0.clone())
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         String::from_json(j, cx).map(UsfmBytes)
     }
 }
@@ -989,7 +997,7 @@ impl Wire for ChapterFront {
         }
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let (name, inner) = known_member(j, cx, "chapter front", &["present", "absent"])?;
         let read = || -> R<Self> {
             match name {
@@ -1028,7 +1036,7 @@ impl Wire for VerseValue {
         }
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let (name, inner) = known_member(j, cx, "verse value", &["text", "covered", "absent"])?;
         let read = || -> R<Self> {
             let mut o = In::new(inner, cx)?;
@@ -1064,7 +1072,7 @@ impl Wire for LayoutItem {
         }
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let (name, inner) = known_member(j, cx, "layout item", &["chapter", "verse"])?;
         let read = || -> R<Self> {
             let mut o = In::new(inner, cx)?;
@@ -1093,7 +1101,7 @@ impl Wire for SourceWord {
             .done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let value = Self {
             extra: o.extra("extra")?,
@@ -1119,7 +1127,7 @@ impl Wire for TargetWord {
             .done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let value = Self {
             extra: o.extra("extra")?,
@@ -1141,7 +1149,7 @@ impl Wire for AlignmentGroup {
             .done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let value = Self {
             bottom_words: o.req("bottomWords")?,
@@ -1169,7 +1177,7 @@ impl Wire for AlignmentValue {
             .done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let value = Self {
             alignments: o.req("alignments")?,
@@ -1198,7 +1206,7 @@ impl Wire for Selection {
             .done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let value = Self {
             extra: o.extra("extra")?,
@@ -1221,7 +1229,7 @@ impl Wire for Judgement {
             .done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let value = Self {
             nothing_to_select: o.req("nothingToSelect")?,
@@ -1249,7 +1257,7 @@ impl Wire for DecisionRecord {
             .done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let value = Self {
             bookmarked: o.req("bookmarked")?,
@@ -1275,7 +1283,7 @@ impl Wire for CheckValue {
         }
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let (name, inner) = known_member(j, cx, "check value", &["decision", "movedTo"])?;
         let read = || -> R<Self> {
             match name {
@@ -1316,7 +1324,7 @@ impl Wire for CommentTarget {
         }
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let (name, inner) = known_member(j, cx, "comment target", &["verse", "check", "frame"])?;
         let read = || -> R<Self> {
             if name == "check" {
@@ -1350,7 +1358,7 @@ impl Wire for CommentValue {
             .done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let value = Self {
             target: o.req("target")?,
@@ -1371,13 +1379,13 @@ impl Wire for PinGroupValue {
         )
     }
 
-    fn from_json(j: &Json, _: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, _: Cx) -> R<Self> {
         let map = j.as_obj().ok_or_else(|| expected("an object", j))?;
         map.iter()
             .map(|(slot, value)| {
                 let name =
                     SlotName::parse(slot).map_err(|e| DecodeError::identity(e).within(slot))?;
-                Ok((name, SlotValue(value.clone())))
+                Ok((name, SlotValue(value.to_json())))
             })
             .collect::<R<_>>()
             .map(PinGroupValue)
@@ -1392,7 +1400,7 @@ impl Wire for VersificationValue {
             .done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let value = Self {
             bytes: o.req("bytes")?,
@@ -1408,7 +1416,7 @@ impl Wire for Door43Username {
         Json::Str(self.0.to_string())
     }
 
-    fn from_json(j: &Json, _: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, _: Cx) -> R<Self> {
         let text = string(j)?;
         if text.is_empty() {
             return Err(DecodeError::shape("a Door43 user name is not empty"));
@@ -1425,7 +1433,7 @@ impl Wire for LegacyIdentity {
         }
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let (name, inner) = known_member(j, cx, "legacy identity", &["tc4Actor", "tc3User"])?;
         let read = || -> R<Self> {
             let mut o = In::new(inner, cx)?;
@@ -1454,7 +1462,7 @@ impl Wire for DeviceProfileValue {
             .done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let value = Self {
             display_name: o.opt("displayName")?,
@@ -1481,7 +1489,7 @@ impl Wire for CarriedValue {
         }
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let (name, inner) = known_member(j, cx, "carried file value", &["present", "removed"])?;
         let read = || -> R<Self> {
             match name {
@@ -1508,7 +1516,7 @@ impl Wire for BatchReleaseValue {
         Out::new().f("changes", &self.changes).done()
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let mut o = In::new(j, cx)?;
         let changes = o.req_with("changes", |j| sorted_unique(j, cx))?;
         o.finish()?;
@@ -1565,17 +1573,17 @@ fn encode_record(record: &Record) -> Result<Json, ChangeError> {
     Ok(variant(&kind, Json::Obj(map)))
 }
 
-fn decode_record(j: &Json, cx: Cx) -> R<Record> {
+fn decode_record(j: View<'_>, cx: Cx) -> R<Record> {
     let (kind, inner) = one_member(j)?;
     if !cx.lenient && !KNOWN_KINDS.contains(&kind) {
         return Err(DecodeError::shape(format!("unknown record kind {kind:?}")));
     }
     let read = || -> R<Record> {
         if !KNOWN_KINDS.contains(&kind) {
-            let Json::Obj(map) = inner else {
+            let Some(map) = inner.as_obj() else {
                 return Err(expected("an object", inner));
             };
-            let mut key = map.clone();
+            let mut key = map.to_map();
             let value = key.remove("value");
             return Ok(Record::Unknown(UnknownRecord {
                 kind: kind.into(),
@@ -1672,7 +1680,7 @@ fn decode_record(j: &Json, cx: Cx) -> R<Record> {
 /// Reads a record object leniently (unknown fields ignored): for values the fold builds by
 /// merging units of stored values, which every reader accepted already.
 pub(crate) fn decode_record_lenient(j: &Json) -> Option<Record> {
-    decode_record(j, Cx { lenient: true }).ok()
+    decode_record(View::Owned(j), Cx { lenient: true }).ok()
 }
 
 /// The wire form of a comment target (§2.8).
@@ -1687,7 +1695,7 @@ pub(crate) fn check_key_json(key: &CheckKey) -> Option<Json> {
 
 /// Reads a check key from its wire form.
 pub(crate) fn check_key_from_json(j: &Json) -> Option<CheckKey> {
-    CheckKey::from_json(j, STRICT).ok()
+    CheckKey::from_json(View::Owned(j), STRICT).ok()
 }
 
 /// The canonical JSON of a record (key and value), as a change stores it.
@@ -1728,7 +1736,7 @@ impl Wire for ExternalSource {
         }
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let (name, inner) = known_member(
             j,
             cx,
@@ -1776,7 +1784,7 @@ impl Wire for ImportSource {
         }
     }
 
-    fn from_json(j: &Json, cx: Cx) -> R<Self> {
+    fn from_json(j: View<'_>, cx: Cx) -> R<Self> {
         let (name, inner) = known_member(
             j,
             cx,
@@ -1846,7 +1854,7 @@ const CAUSES: &[&str] = &[
     "system",
 ];
 
-fn decode_cause(j: &Json, cx: Cx) -> R<Cause> {
+fn decode_cause(j: View<'_>, cx: Cx) -> R<Cause> {
     let (name, inner) = one_member(j)?;
     if !CAUSES.contains(&name) {
         return if cx.lenient {
@@ -1916,10 +1924,15 @@ pub fn encode_body(body: &ChangeBody) -> Result<Vec<u8>, ChangeError> {
 
 /// Reads a change body from parsed canonical JSON (rules V1 and V2).
 pub fn decode_body(j: &Json) -> Result<ChangeBody, RuleViolation> {
+    read_body(View::Owned(j)).map_err(DecodeError::into_violation)
+}
+
+/// [`decode_body`] of a parsed text.
+pub(crate) fn decode_body_view(j: View<'_>) -> Result<ChangeBody, RuleViolation> {
     read_body(j).map_err(DecodeError::into_violation)
 }
 
-fn read_body(j: &Json) -> R<ChangeBody> {
+fn read_body(j: View<'_>) -> R<ChangeBody> {
     let v = match j.as_obj().and_then(|map| map.get("v")) {
         Some(v) => u16::from_json(v, STRICT).map_err(|e| e.within("v"))?,
         None if j.as_obj().is_none() => return Err(expected("an object", j)),
@@ -1946,7 +1959,7 @@ fn read_body(j: &Json) -> R<ChangeBody> {
 /// The batch, device and seq of a change that does not decode, when those fields still
 /// read, so the fold can hold its batch.
 pub(crate) fn best_effort_origin(
-    j: &Json,
+    j: View<'_>,
 ) -> (Option<BatchRef>, Option<DeviceId>, Option<DeviceSeq>) {
     let lenient = Cx { lenient: true };
     let Some(map) = j.as_obj() else {
@@ -1975,7 +1988,7 @@ pub(crate) struct HeaderReader<'a>(In<'a>);
 
 impl<'a> HeaderReader<'a> {
     pub(crate) fn new(j: &'a Json) -> Result<Self, String> {
-        In::new(j, Cx { lenient: true })
+        In::new(View::Owned(j), Cx { lenient: true })
             .map(Self)
             .map_err(|e| e.into_violation().to_string())
     }

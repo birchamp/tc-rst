@@ -383,17 +383,17 @@ pub(crate) fn summarize(body: &ChangeBody, resources: &mut Resources) -> Summary
 /// Decodes the change body of stored canonical bytes that passed the per-change rules when
 /// they were read. `None` only if the bytes changed since, which a fold never does.
 pub(crate) fn decode(raw: &[u8]) -> Option<ChangeBody> {
-    let value = json::parse(raw).ok()?;
-    canon::decode_body(&value).ok()
+    let tape = json::parse_tape(raw).ok()?;
+    canon::decode_body_view(tape.root()).ok()
 }
 
 /// The JSON of a change's record value (`record.<kind>.value`), `None` when the record has
 /// no value member (a `None` setting, project detail, layout or story reference).
 pub(crate) fn value_json(raw: &[u8]) -> Option<json::Json> {
-    let value = json::parse(raw).ok()?;
-    let record = value.as_obj()?.get("record")?.as_obj()?;
+    let tape = json::parse_tape(raw).ok()?;
+    let record = tape.root().as_obj()?.get("record")?.as_obj()?;
     let (_, inner) = record.iter().next()?;
-    inner.as_obj()?.get("value").cloned()
+    inner.as_obj()?.get("value").map(json::View::to_json)
 }
 
 /// Why a quarantined change was set aside, with what could be read of its origin, and the
