@@ -1,7 +1,7 @@
 {
   "about": "Pixels that differ between tC4 (screens/) and the Leptos port (screens-rust/), per case. pixelmatch threshold 0 with anti-aliased pixels counted: any difference in any channel counts.",
-  "total": 719,
-  "zero": 719,
+  "total": 742,
+  "zero": 742,
   "nonzero": 0,
   "unexplained": [],
   "worst": [],
@@ -299,6 +299,61 @@
     {
       "id": "Button/rtl-pair",
       "frame": "280x80",
+      "mismatched": 0
+    },
+    {
+      "id": "Button/sync-busy",
+      "frame": "240x80",
+      "mismatched": 0
+    },
+    {
+      "id": "Button/sync-press",
+      "frame": "240x80",
+      "mismatched": 0
+    },
+    {
+      "id": "Button/nav-next",
+      "frame": "240x80",
+      "mismatched": 0
+    },
+    {
+      "id": "Button/nav-prev-rtl",
+      "frame": "240x80",
+      "mismatched": 0
+    },
+    {
+      "id": "Button/nav-next-hover",
+      "frame": "240x80",
+      "mismatched": 0
+    },
+    {
+      "id": "Button/nav-next-end",
+      "frame": "240x80",
+      "mismatched": 0
+    },
+    {
+      "id": "Button/nav-to-end",
+      "frame": "240x80",
+      "mismatched": 0
+    },
+    {
+      "id": "Button/draft-section",
+      "frame": "240x80",
+      "mismatched": 0
+    },
+    {
+      "id": "Button/draft-section-hover",
+      "frame": "240x80",
+      "mismatched": 0
+    },
+    {
+      "id": "Button/draft-section-focus-visible",
+      "frame": "240x80",
+      "mismatched": 0
+    },
+    {
+      "id": "Button/draft-section-off",
+      "frame": "280x112",
       "mismatched": 0
     },
     {
@@ -1537,6 +1592,16 @@
       "mismatched": 0
     },
     {
+      "id": "AppHeader/project-editing",
+      "frame": "1040x88",
+      "mismatched": 0
+    },
+    {
+      "id": "AppHeader/project-editing-later",
+      "frame": "1040x88",
+      "mismatched": 0
+    },
+    {
       "id": "Breadcrumb/default",
       "frame": "440x52",
       "mismatched": 0
@@ -2732,6 +2797,16 @@
       "mismatched": 0
     },
     {
+      "id": "Switcher/pill-editing",
+      "frame": "420x84",
+      "mismatched": 0
+    },
+    {
+      "id": "Switcher/options-turn-off",
+      "frame": "420x120",
+      "mismatched": 0
+    },
+    {
       "id": "Table/default",
       "frame": "520x200",
       "mismatched": 0
@@ -3062,6 +3137,31 @@
       "mismatched": 0
     },
     {
+      "id": "BookTile/tile-disabled",
+      "frame": "200x92",
+      "mismatched": 0
+    },
+    {
+      "id": "BookTile/row-disabled",
+      "frame": "280x88",
+      "mismatched": 0
+    },
+    {
+      "id": "BookTile/row-active-disabled",
+      "frame": "280x88",
+      "mismatched": 0
+    },
+    {
+      "id": "BookTile/row-disabled-hover",
+      "frame": "280x88",
+      "mismatched": 0
+    },
+    {
+      "id": "BookTile/row-editing",
+      "frame": "280x176",
+      "mismatched": 0
+    },
+    {
       "id": "Callout/info",
       "frame": "420x104",
       "mismatched": 0
@@ -3282,6 +3382,16 @@
       "mismatched": 0
     },
     {
+      "id": "Modal/busy",
+      "frame": "720x520",
+      "mismatched": 0
+    },
+    {
+      "id": "Modal/busy-later",
+      "frame": "720x520",
+      "mismatched": 0
+    },
+    {
       "id": "ScripturePassage/latin-lg",
       "frame": "560x236",
       "mismatched": 0
@@ -3419,6 +3529,11 @@
     {
       "id": "WordChip/bank-row",
       "frame": "420x72",
+      "mismatched": 0
+    },
+    {
+      "id": "WordChip/suggested-occurrence",
+      "frame": "240x72",
       "mismatched": 0
     },
     {

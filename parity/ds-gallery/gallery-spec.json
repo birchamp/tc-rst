@@ -2,7 +2,7 @@
   "about": "translationCore 4 design-system baseline. Each case is one component in one state inside a fixed-size frame; screens/<component>/<state>.png is how tC4 draws it. A port renders the same case by the same protocol and compares images.",
   "source": {
     "repo": "/home/user/unfoldingword/translationcore4",
-    "commit": "d494a9d6ba9f4cdcc09faff9038c93159106045b",
+    "commit": "d310bf304cfee784f4ca45dee474a3faf0d5616e",
     "version": "4.0.0-rc.1",
     "ds": "src/ds",
     "index": "src/ds/index.js",
@@ -34,6 +34,8 @@
     "json": "Everything else is a plain JSON value. Style objects are React inline styles: camelCase properties, a bare number means px except on unitless properties (lineHeight, flex, opacity, fontWeight, zIndex). defaultValue is the initial value of an uncontrolled field.",
     "cell": "{ \"$cell\": \"<name>\" } — the current value of a cell of the case's `cells`. A write draws the case again with the new value, as a parent's state would.",
     "set": "{ \"$fn\": \"set\", \"cell\": \"<name>\", \"value\": <json> } or { \"$fn\": \"set\", \"cell\": \"<name>\", \"from\": \"<path>\" } — a callback that writes the cell: `value`, or the value at `from` in the callback's arguments (\"0\" is the first argument, \"0.target.checked\" the checked state of the first argument's target, \"0.id\" the id field of a table row).",
+    "if": "{ \"$if\": \"<name>\", \"then\": <node>, \"else\": <node> } — `then` while the cell is truthy, else `else`; an absent branch is undefined. A screen's `onClose={busy ? undefined : close}` or `title={busy ? a : b}`: the component on screen gets the new value, as from a parent's state.",
+    "preventDefault": "{ \"$fn\": \"preventDefault\" } — a callback that calls preventDefault on its event (tC4's `onPointerDownCapture={(e) => e.preventDefault()}`, which keeps the focus where it is).",
     "render": "When `render` is absent the case renders { \"$el\": component, \"props\": props }. When it is present it is the whole tree, and the component under test sits inside it with exactly `props`."
   },
   "components": [
@@ -45,7 +47,7 @@
     {
       "name": "Button",
       "file": "components/core/Button.jsx",
-      "cases": 43
+      "cases": 54
     },
     {
       "name": "Divider",
@@ -180,7 +182,7 @@
     {
       "name": "AppHeader",
       "file": "components/navigation/AppHeader.jsx",
-      "cases": 10
+      "cases": 12
     },
     {
       "name": "Breadcrumb",
@@ -245,7 +247,7 @@
     {
       "name": "Switcher",
       "file": "components/primitives/Switcher.jsx",
-      "cases": 17
+      "cases": 19
     },
     {
       "name": "Table",
@@ -260,7 +262,7 @@
     {
       "name": "BookTile",
       "file": "components/surfaces/BookTile.jsx",
-      "cases": 13
+      "cases": 18
     },
     {
       "name": "Callout",
@@ -285,7 +287,7 @@
     {
       "name": "Modal",
       "file": "components/surfaces/Modal.jsx",
-      "cases": 10
+      "cases": 12
     },
     {
       "name": "ScripturePassage",
@@ -300,7 +302,7 @@
     {
       "name": "WordChip",
       "file": "components/translation/WordChip.jsx",
-      "cases": 6
+      "cases": 7
     },
     {
       "name": "Tokens",
@@ -1917,6 +1919,475 @@
         }
       },
       "isolate": true
+    },
+    {
+      "id": "Button/sync-busy",
+      "component": "Button",
+      "state": "sync-busy",
+      "file": "components/core/Button.jsx",
+      "frame": {
+        "width": 240,
+        "height": 80,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "variant": "outline",
+        "size": "sm",
+        "data-testid": "share-p1",
+        "title": "Syncing…",
+        "aria-busy": true,
+        "disabled": true,
+        "children": "Syncing…"
+      },
+      "isolate": false
+    },
+    {
+      "id": "Button/sync-press",
+      "component": "Button",
+      "state": "sync-press",
+      "file": "components/core/Button.jsx",
+      "frame": {
+        "width": 240,
+        "height": 80,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "variant": "outline",
+        "size": "sm",
+        "data-testid": "share-p1",
+        "title": {
+          "$if": "busy",
+          "then": "Syncing…",
+          "else": "Sync with Door43"
+        },
+        "aria-busy": {
+          "$if": "busy",
+          "then": true
+        },
+        "disabled": {
+          "$cell": "busy"
+        },
+        "onClick": {
+          "$fn": "set",
+          "cell": "busy",
+          "value": true
+        },
+        "children": {
+          "$if": "busy",
+          "then": "Syncing…",
+          "else": "Sync with Door43"
+        }
+      },
+      "cells": {
+        "busy": false
+      },
+      "steps": [
+        {
+          "do": "click",
+          "target": "button"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onClick"
+        ]
+      },
+      "isolate": true,
+      "note": "The press starts a sync: the same button takes the busy title, label and aria-busy."
+    },
+    {
+      "id": "Button/nav-next",
+      "component": "Button",
+      "state": "nav-next",
+      "file": "components/core/Button.jsx",
+      "frame": {
+        "width": 240,
+        "height": 80,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "variant": "secondary",
+        "size": "sm",
+        "title": "Next item",
+        "children": "Next →",
+        "onClick": {
+          "$fn": "noop"
+        },
+        "style": {
+          "marginInlineStart": 4,
+          "color": "var(--accent)"
+        }
+      },
+      "needs": {
+        "callbacks": [
+          "onClick"
+        ]
+      },
+      "isolate": false
+    },
+    {
+      "id": "Button/nav-prev-rtl",
+      "component": "Button",
+      "state": "nav-prev-rtl",
+      "file": "components/core/Button.jsx",
+      "frame": {
+        "width": 240,
+        "height": 80,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "ar",
+        "dir": "rtl"
+      },
+      "props": {
+        "variant": "secondary",
+        "size": "sm",
+        "title": "العنصر السابق",
+        "children": "→ السابق",
+        "onClick": {
+          "$fn": "noop"
+        },
+        "style": {
+          "marginInlineEnd": 4,
+          "color": "var(--accent)"
+        }
+      },
+      "needs": {
+        "callbacks": [
+          "onClick"
+        ]
+      },
+      "isolate": true
+    },
+    {
+      "id": "Button/nav-next-hover",
+      "component": "Button",
+      "state": "nav-next-hover",
+      "file": "components/core/Button.jsx",
+      "frame": {
+        "width": 240,
+        "height": 80,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "variant": "secondary",
+        "size": "sm",
+        "title": "Next item",
+        "children": "Next →",
+        "onClick": {
+          "$fn": "noop"
+        },
+        "style": {
+          "marginInlineStart": 4,
+          "color": "var(--accent)"
+        }
+      },
+      "steps": [
+        {
+          "do": "hover",
+          "target": "button"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onClick"
+        ]
+      },
+      "isolate": true
+    },
+    {
+      "id": "Button/nav-next-end",
+      "component": "Button",
+      "state": "nav-next-end",
+      "file": "components/core/Button.jsx",
+      "frame": {
+        "width": 240,
+        "height": 80,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "variant": "secondary",
+        "size": "sm",
+        "title": "Next item",
+        "children": "Next →",
+        "disabled": true,
+        "onClick": {
+          "$fn": "noop"
+        },
+        "style": {
+          "marginInlineStart": 4
+        }
+      },
+      "needs": {
+        "callbacks": [
+          "onClick"
+        ]
+      },
+      "isolate": false
+    },
+    {
+      "id": "Button/nav-to-end",
+      "component": "Button",
+      "state": "nav-to-end",
+      "file": "components/core/Button.jsx",
+      "frame": {
+        "width": 240,
+        "height": 80,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "variant": "secondary",
+        "size": "sm",
+        "title": "Next item",
+        "children": "Next →",
+        "disabled": {
+          "$cell": "end"
+        },
+        "onClick": {
+          "$fn": "set",
+          "cell": "end",
+          "value": true
+        },
+        "style": {
+          "$if": "end",
+          "then": {
+            "marginInlineStart": 4
+          },
+          "else": {
+            "marginInlineStart": 4,
+            "color": "var(--accent)"
+          }
+        }
+      },
+      "cells": {
+        "end": false
+      },
+      "steps": [
+        {
+          "do": "click",
+          "target": "button"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onClick"
+        ]
+      },
+      "isolate": true,
+      "note": "The press reaches the last item: the same button turns off and drops the accent colour."
+    },
+    {
+      "id": "Button/draft-section",
+      "component": "Button",
+      "state": "draft-section",
+      "file": "components/core/Button.jsx",
+      "frame": {
+        "width": 240,
+        "height": 80,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "variant": "secondary",
+        "size": "sm",
+        "children": "Draft section 1–3",
+        "onClick": {
+          "$fn": "noop"
+        },
+        "style": {
+          "color": "var(--accent)"
+        }
+      },
+      "needs": {
+        "callbacks": [
+          "onClick"
+        ]
+      },
+      "isolate": false
+    },
+    {
+      "id": "Button/draft-section-hover",
+      "component": "Button",
+      "state": "draft-section-hover",
+      "file": "components/core/Button.jsx",
+      "frame": {
+        "width": 240,
+        "height": 80,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "variant": "secondary",
+        "size": "sm",
+        "children": "Draft section 1–3",
+        "onClick": {
+          "$fn": "noop"
+        },
+        "style": {
+          "color": "var(--accent)"
+        }
+      },
+      "steps": [
+        {
+          "do": "hover",
+          "target": "button"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onClick"
+        ]
+      },
+      "isolate": true
+    },
+    {
+      "id": "Button/draft-section-focus-visible",
+      "component": "Button",
+      "state": "draft-section-focus-visible",
+      "file": "components/core/Button.jsx",
+      "frame": {
+        "width": 240,
+        "height": 80,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "variant": "secondary",
+        "size": "sm",
+        "children": "Draft section 1–3",
+        "onClick": {
+          "$fn": "noop"
+        },
+        "style": {
+          "color": "var(--accent)"
+        }
+      },
+      "steps": [
+        {
+          "do": "focus",
+          "target": "button"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onClick"
+        ]
+      },
+      "isolate": true
+    },
+    {
+      "id": "Button/draft-section-off",
+      "component": "Button",
+      "state": "draft-section-off",
+      "file": "components/core/Button.jsx",
+      "frame": {
+        "width": 280,
+        "height": 112,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "variant": "secondary",
+        "size": "sm",
+        "children": "Draft section 1–3",
+        "onClick": {
+          "$fn": "noop"
+        },
+        "disabled": true,
+        "onPointerDownCapture": {
+          "$fn": "preventDefault"
+        }
+      },
+      "render": {
+        "$el": "div",
+        "props": {
+          "style": {
+            "display": "flex",
+            "flexDirection": "column",
+            "alignItems": "flex-start",
+            "gap": 10
+          },
+          "children": [
+            {
+              "$el": "Input",
+              "props": {
+                "defaultValue": "In the beginning God created",
+                "aria-label": "Verse 1"
+              }
+            },
+            {
+              "$el": "Button",
+              "props": {
+                "variant": "secondary",
+                "size": "sm",
+                "children": "Draft section 1–3",
+                "onClick": {
+                  "$fn": "noop"
+                },
+                "disabled": true,
+                "onPointerDownCapture": {
+                  "$fn": "preventDefault"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "needs": {
+        "callbacks": [
+          "onClick",
+          "onPointerDownCapture"
+        ]
+      },
+      "isolate": false,
+      "note": "Off while an editing card is open; a press on it keeps the focus in the card (scenarios.mjs, button-press-guard)."
     },
     {
       "id": "Divider/horizontal",
@@ -9797,6 +10268,174 @@
         ]
       },
       "isolate": true
+    },
+    {
+      "id": "AppHeader/project-editing",
+      "component": "AppHeader",
+      "state": "project-editing",
+      "file": "components/navigation/AppHeader.jsx",
+      "frame": {
+        "width": 1040,
+        "height": 88,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "logoSrc": {
+          "$asset": "public/assets/translationcore-logo.png"
+        },
+        "projectInitials": "EE",
+        "projectName": "Equipo Ejemplo — Tito y Jonás",
+        "projectMeta": "es-419",
+        "switchTitle": "Switch project",
+        "center": {
+          "$el": "Switcher",
+          "props": {
+            "indicator": "pill",
+            "value": "draft",
+            "onChange": {
+              "$fn": "noop"
+            },
+            "options": [
+              {
+                "value": "read",
+                "label": "Understand",
+                "disabled": true
+              },
+              {
+                "value": "draft",
+                "label": "Translate"
+              },
+              {
+                "value": "check",
+                "label": "Check",
+                "disabled": true
+              }
+            ]
+          }
+        },
+        "right": {
+          "$el": "StatusDot",
+          "props": {
+            "status": "valid",
+            "size": 8,
+            "label": "Saved"
+          }
+        }
+      },
+      "needs": {
+        "elements": [
+          "center",
+          "right"
+        ]
+      },
+      "isolate": false
+    },
+    {
+      "id": "AppHeader/project-editing-later",
+      "component": "AppHeader",
+      "state": "project-editing-later",
+      "file": "components/navigation/AppHeader.jsx",
+      "frame": {
+        "width": 1040,
+        "height": 88,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "logoSrc": {
+          "$asset": "public/assets/translationcore-logo.png"
+        },
+        "projectInitials": "EE",
+        "projectName": "Equipo Ejemplo — Tito y Jonás",
+        "projectMeta": "es-419",
+        "switchTitle": "Switch project",
+        "onBrandClick": {
+          "$if": "editing",
+          "else": {
+            "$fn": "noop"
+          }
+        },
+        "onProjectClick": {
+          "$if": "editing",
+          "else": {
+            "$fn": "noop"
+          }
+        },
+        "center": {
+          "$el": "Switcher",
+          "props": {
+            "indicator": "pill",
+            "value": "draft",
+            "onChange": {
+              "$fn": "noop"
+            },
+            "options": [
+              {
+                "value": "read",
+                "label": "Understand",
+                "disabled": {
+                  "$cell": "editing"
+                }
+              },
+              {
+                "value": "draft",
+                "label": "Translate"
+              },
+              {
+                "value": "check",
+                "label": "Check",
+                "disabled": {
+                  "$cell": "editing"
+                }
+              }
+            ]
+          }
+        },
+        "right": {
+          "$el": "Button",
+          "props": {
+            "variant": "secondary",
+            "size": "sm",
+            "data-testid": "edit",
+            "onClick": {
+              "$fn": "set",
+              "cell": "editing",
+              "value": true
+            },
+            "children": "Edit this verse"
+          }
+        }
+      },
+      "cells": {
+        "editing": false
+      },
+      "steps": [
+        {
+          "do": "click",
+          "target": "[data-testid=\"edit\"]"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onBrandClick.else",
+          "onProjectClick.else"
+        ],
+        "elements": [
+          "center",
+          "right"
+        ]
+      },
+      "isolate": true,
+      "note": "Opening an editing card takes the exits away: the brand loses its pointer, two tabs turn off."
     },
     {
       "id": "Breadcrumb/default",
@@ -18584,6 +19223,167 @@
       "isolate": true
     },
     {
+      "id": "Switcher/pill-editing",
+      "component": "Switcher",
+      "state": "pill-editing",
+      "file": "components/primitives/Switcher.jsx",
+      "frame": {
+        "width": 420,
+        "height": 84,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "options": [
+          {
+            "value": "read",
+            "label": "Understand",
+            "disabled": true
+          },
+          {
+            "value": "draft",
+            "label": "Translate"
+          },
+          {
+            "value": "check",
+            "label": "Check",
+            "disabled": true
+          }
+        ],
+        "value": "draft",
+        "indicator": "pill",
+        "onChange": {
+          "$fn": "noop"
+        }
+      },
+      "needs": {
+        "callbacks": [
+          "onChange"
+        ]
+      },
+      "isolate": false
+    },
+    {
+      "id": "Switcher/options-turn-off",
+      "component": "Switcher",
+      "state": "options-turn-off",
+      "file": "components/primitives/Switcher.jsx",
+      "frame": {
+        "width": 420,
+        "height": 120,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "options": [
+          {
+            "value": "read",
+            "label": "Understand",
+            "disabled": {
+              "$cell": "editing"
+            }
+          },
+          {
+            "value": "draft",
+            "label": "Translate"
+          },
+          {
+            "value": "check",
+            "label": "Check",
+            "disabled": {
+              "$cell": "editing"
+            }
+          }
+        ],
+        "value": "draft",
+        "indicator": "pill",
+        "onChange": {
+          "$fn": "noop"
+        }
+      },
+      "render": {
+        "$el": "div",
+        "props": {
+          "style": {
+            "display": "flex",
+            "flexDirection": "column",
+            "alignItems": "flex-start",
+            "gap": 12
+          },
+          "children": [
+            {
+              "$el": "Switcher",
+              "props": {
+                "options": [
+                  {
+                    "value": "read",
+                    "label": "Understand",
+                    "disabled": {
+                      "$cell": "editing"
+                    }
+                  },
+                  {
+                    "value": "draft",
+                    "label": "Translate"
+                  },
+                  {
+                    "value": "check",
+                    "label": "Check",
+                    "disabled": {
+                      "$cell": "editing"
+                    }
+                  }
+                ],
+                "value": "draft",
+                "indicator": "pill",
+                "onChange": {
+                  "$fn": "noop"
+                }
+              }
+            },
+            {
+              "$el": "Button",
+              "props": {
+                "variant": "secondary",
+                "size": "sm",
+                "data-testid": "edit",
+                "onClick": {
+                  "$fn": "set",
+                  "cell": "editing",
+                  "value": true
+                },
+                "children": "Edit this verse"
+              }
+            }
+          ]
+        }
+      },
+      "cells": {
+        "editing": false
+      },
+      "steps": [
+        {
+          "do": "click",
+          "target": "[data-testid=\"edit\"]"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onChange"
+        ]
+      },
+      "isolate": true,
+      "note": "Opening an editing card turns two options off: the same tabs take the disabled state."
+    },
+    {
       "id": "Table/default",
       "component": "Table",
       "state": "default",
@@ -20887,6 +21687,283 @@
       "isolate": true
     },
     {
+      "id": "BookTile/tile-disabled",
+      "component": "BookTile",
+      "state": "tile-disabled",
+      "file": "components/surfaces/BookTile.jsx",
+      "frame": {
+        "width": 200,
+        "height": 92,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "name": "Titus",
+        "percent": 45,
+        "onClick": {
+          "$fn": "noop"
+        },
+        "disabled": true
+      },
+      "needs": {
+        "callbacks": [
+          "onClick"
+        ]
+      },
+      "isolate": false
+    },
+    {
+      "id": "BookTile/row-disabled",
+      "component": "BookTile",
+      "state": "row-disabled",
+      "file": "components/surfaces/BookTile.jsx",
+      "frame": {
+        "width": 280,
+        "height": 88,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "name": "Titus",
+        "percent": 45,
+        "meta": "45%",
+        "metaTitle": "45% of this book's verses are drafted",
+        "layout": "row",
+        "onClick": {
+          "$fn": "noop"
+        },
+        "disabled": true,
+        "onPointerDownCapture": {
+          "$fn": "preventDefault"
+        },
+        "style": {
+          "cursor": "default"
+        }
+      },
+      "needs": {
+        "callbacks": [
+          "onClick",
+          "onPointerDownCapture"
+        ]
+      },
+      "isolate": false
+    },
+    {
+      "id": "BookTile/row-active-disabled",
+      "component": "BookTile",
+      "state": "row-active-disabled",
+      "file": "components/surfaces/BookTile.jsx",
+      "frame": {
+        "width": 280,
+        "height": 88,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "name": "Titus",
+        "percent": 45,
+        "meta": "45%",
+        "metaTitle": "45% of this book's verses are drafted",
+        "layout": "row",
+        "onClick": {
+          "$fn": "noop"
+        },
+        "active": true,
+        "disabled": true,
+        "onPointerDownCapture": {
+          "$fn": "preventDefault"
+        },
+        "style": {
+          "cursor": "default"
+        }
+      },
+      "needs": {
+        "callbacks": [
+          "onClick",
+          "onPointerDownCapture"
+        ]
+      },
+      "isolate": false
+    },
+    {
+      "id": "BookTile/row-disabled-hover",
+      "component": "BookTile",
+      "state": "row-disabled-hover",
+      "file": "components/surfaces/BookTile.jsx",
+      "frame": {
+        "width": 280,
+        "height": 88,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "name": "Titus",
+        "percent": 45,
+        "meta": "45%",
+        "metaTitle": "45% of this book's verses are drafted",
+        "layout": "row",
+        "onClick": {
+          "$fn": "noop"
+        },
+        "disabled": true,
+        "onPointerDownCapture": {
+          "$fn": "preventDefault"
+        },
+        "style": {
+          "cursor": "default"
+        }
+      },
+      "steps": [
+        {
+          "do": "hover",
+          "target": "button"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onClick",
+          "onPointerDownCapture"
+        ]
+      },
+      "isolate": true
+    },
+    {
+      "id": "BookTile/row-editing",
+      "component": "BookTile",
+      "state": "row-editing",
+      "file": "components/surfaces/BookTile.jsx",
+      "frame": {
+        "width": 280,
+        "height": 176,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "name": "Titus",
+        "percent": 45,
+        "meta": "45%",
+        "metaTitle": "45% of this book's verses are drafted",
+        "layout": "row",
+        "onClick": {
+          "$fn": "noop"
+        },
+        "disabled": {
+          "$cell": "editing"
+        },
+        "onPointerDownCapture": {
+          "$if": "editing",
+          "then": {
+            "$fn": "preventDefault"
+          }
+        },
+        "style": {
+          "$if": "editing",
+          "then": {
+            "cursor": "default"
+          }
+        }
+      },
+      "render": {
+        "$el": "div",
+        "props": {
+          "style": {
+            "display": "flex",
+            "flexDirection": "column",
+            "alignItems": "flex-start",
+            "gap": 10
+          },
+          "children": [
+            {
+              "$el": "BookTile",
+              "props": {
+                "name": "Titus",
+                "percent": 45,
+                "meta": "45%",
+                "metaTitle": "45% of this book's verses are drafted",
+                "layout": "row",
+                "onClick": {
+                  "$fn": "noop"
+                },
+                "disabled": {
+                  "$cell": "editing"
+                },
+                "onPointerDownCapture": {
+                  "$if": "editing",
+                  "then": {
+                    "$fn": "preventDefault"
+                  }
+                },
+                "style": {
+                  "$if": "editing",
+                  "then": {
+                    "cursor": "default"
+                  }
+                }
+              }
+            },
+            {
+              "$el": "Input",
+              "props": {
+                "defaultValue": "In the beginning God created",
+                "aria-label": "Verse 1"
+              }
+            },
+            {
+              "$el": "Button",
+              "props": {
+                "variant": "secondary",
+                "size": "sm",
+                "data-testid": "edit",
+                "onClick": {
+                  "$fn": "set",
+                  "cell": "editing",
+                  "value": true
+                },
+                "children": "Edit this verse"
+              }
+            }
+          ]
+        }
+      },
+      "cells": {
+        "editing": false
+      },
+      "steps": [
+        {
+          "do": "click",
+          "target": "[data-testid=\"edit\"]"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onClick",
+          "onPointerDownCapture.then"
+        ]
+      },
+      "isolate": true,
+      "note": "Opening an editing card turns the tile off: the same button takes disabled, the press guard and the default cursor."
+    },
+    {
       "id": "Callout/info",
       "component": "Callout",
       "state": "info",
@@ -22943,6 +24020,213 @@
       "note": "A Menu open inside a dialog: its layer sits one level deeper."
     },
     {
+      "id": "Modal/busy",
+      "component": "Modal",
+      "state": "busy",
+      "file": "components/surfaces/Modal.jsx",
+      "frame": {
+        "width": 720,
+        "height": 520,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "title": "Open a project from Door43",
+        "subtitle": "Get a full copy of a project your team shares on Door43.",
+        "width": 520,
+        "closeLabel": "Close",
+        "onClose": {
+          "$if": "busy",
+          "else": {
+            "$fn": "noop"
+          }
+        },
+        "data-testid": "open-door43-modal",
+        "children": [
+          {
+            "$el": "Callout",
+            "props": {
+              "tone": "info",
+              "children": "Paste the address of a project on git.door43.org."
+            }
+          },
+          {
+            "$el": "TextField",
+            "props": {
+              "label": "Door43 repository",
+              "defaultValue": "https://git.door43.org/equipo/es-419_tit"
+            }
+          }
+        ],
+        "footer": [
+          {
+            "$el": "Button",
+            "props": {
+              "variant": "secondary",
+              "disabled": {
+                "$cell": "busy"
+              },
+              "onClick": {
+                "$fn": "noop"
+              },
+              "data-testid": "open-door43-cancel",
+              "children": "Cancel"
+            }
+          },
+          {
+            "$el": "Button",
+            "props": {
+              "disabled": {
+                "$cell": "busy"
+              },
+              "aria-busy": {
+                "$if": "busy",
+                "then": true
+              },
+              "onClick": {
+                "$fn": "set",
+                "cell": "busy",
+                "value": true
+              },
+              "data-testid": "open-door43-submit",
+              "children": {
+                "$if": "busy",
+                "then": "Opening…",
+                "else": "Open project"
+              }
+            }
+          }
+        ]
+      },
+      "cells": {
+        "busy": true
+      },
+      "needs": {
+        "callbacks": [
+          "onClose.else"
+        ],
+        "elements": [
+          "children",
+          "footer"
+        ]
+      },
+      "isolate": true
+    },
+    {
+      "id": "Modal/busy-later",
+      "component": "Modal",
+      "state": "busy-later",
+      "file": "components/surfaces/Modal.jsx",
+      "frame": {
+        "width": 720,
+        "height": 520,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "title": "Open a project from Door43",
+        "subtitle": "Get a full copy of a project your team shares on Door43.",
+        "width": 520,
+        "closeLabel": "Close",
+        "onClose": {
+          "$if": "busy",
+          "else": {
+            "$fn": "set",
+            "cell": "open",
+            "value": false
+          }
+        },
+        "data-testid": "open-door43-modal",
+        "children": [
+          {
+            "$el": "Callout",
+            "props": {
+              "tone": "info",
+              "children": "Paste the address of a project on git.door43.org."
+            }
+          },
+          {
+            "$el": "TextField",
+            "props": {
+              "label": "Door43 repository",
+              "defaultValue": "https://git.door43.org/equipo/es-419_tit"
+            }
+          }
+        ],
+        "footer": [
+          {
+            "$el": "Button",
+            "props": {
+              "variant": "secondary",
+              "disabled": {
+                "$cell": "busy"
+              },
+              "onClick": {
+                "$fn": "noop"
+              },
+              "data-testid": "open-door43-cancel",
+              "children": "Cancel"
+            }
+          },
+          {
+            "$el": "Button",
+            "props": {
+              "disabled": {
+                "$cell": "busy"
+              },
+              "aria-busy": {
+                "$if": "busy",
+                "then": true
+              },
+              "onClick": {
+                "$fn": "set",
+                "cell": "busy",
+                "value": true
+              },
+              "data-testid": "open-door43-submit",
+              "children": {
+                "$if": "busy",
+                "then": "Opening…",
+                "else": "Open project"
+              }
+            }
+          }
+        ],
+        "open": {
+          "$cell": "open"
+        }
+      },
+      "cells": {
+        "busy": false,
+        "open": true
+      },
+      "steps": [
+        {
+          "do": "click",
+          "target": "[data-testid=\"open-door43-submit\"]"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onClose.else"
+        ],
+        "elements": [
+          "children",
+          "footer"
+        ]
+      },
+      "isolate": true,
+      "note": "The open starts: the ✕ goes, Cancel and Open turn off, Open is busy. Until then the ✕, Escape and the scrim close the dialog."
+    },
+    {
       "id": "ScripturePassage/latin-lg",
       "component": "ScripturePassage",
       "state": "latin-lg",
@@ -23717,6 +25001,123 @@
             }
           ]
         }
+      },
+      "isolate": false
+    },
+    {
+      "id": "WordChip/suggested-occurrence",
+      "component": "WordChip",
+      "state": "suggested-occurrence",
+      "file": "components/translation/WordChip.jsx",
+      "frame": {
+        "width": 240,
+        "height": 72,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "state": "suggested",
+        "draggable": false,
+        "title": "Confirm this link",
+        "aria-label": "de 2",
+        "data-word": "de",
+        "children": [
+          "de",
+          {
+            "$el": "sup",
+            "props": {
+              "style": {
+                "lineHeight": 0
+              },
+              "children": 2
+            }
+          },
+          {
+            "$el": "span",
+            "props": {
+              "aria-hidden": "true",
+              "style": {
+                "fontWeight": "var(--fw-heavy)"
+              },
+              "children": "✓"
+            }
+          }
+        ]
+      },
+      "render": {
+        "$el": "div",
+        "props": {
+          "style": {
+            "display": "flex",
+            "alignItems": "flex-start",
+            "gap": 8
+          },
+          "children": [
+            {
+              "$el": "WordChip",
+              "props": {
+                "state": "suggested",
+                "draggable": false,
+                "title": "Confirm this link",
+                "data-word": "Dios",
+                "children": [
+                  "Dios",
+                  {
+                    "$el": "span",
+                    "props": {
+                      "aria-hidden": "true",
+                      "style": {
+                        "fontWeight": "var(--fw-heavy)"
+                      },
+                      "children": "✓"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "$el": "WordChip",
+              "props": {
+                "state": "suggested",
+                "draggable": false,
+                "title": "Confirm this link",
+                "aria-label": "de 2",
+                "data-word": "de",
+                "children": [
+                  "de",
+                  {
+                    "$el": "sup",
+                    "props": {
+                      "style": {
+                        "lineHeight": 0
+                      },
+                      "children": 2
+                    }
+                  },
+                  {
+                    "$el": "span",
+                    "props": {
+                      "aria-hidden": "true",
+                      "style": {
+                        "fontWeight": "var(--fw-heavy)"
+                      },
+                      "children": "✓"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "needs": {
+        "elements": [
+          "children"
+        ]
       },
       "isolate": false
     },

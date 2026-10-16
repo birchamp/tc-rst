@@ -7,7 +7,7 @@ use std::sync::Arc;
 use leptos::prelude::*;
 use serde_json::{Map, Value};
 
-use super::props::{Arg, Props, warn};
+use super::props::{Arg, Props, flag_in, warn};
 use super::render::{asset_url, node};
 use crate::css::{CssValue, js_number};
 use crate::ds::*;
@@ -86,6 +86,13 @@ pub fn render(name: &str, p: Props) -> AnyView {
 
 fn handler<T: Arg>(p: &Props, key: &str) -> Option<Callback<T>> {
     p.handler(key)
+}
+
+/// A callback the component takes as a signal: the callback while it is in force.
+fn live_handler<T: Arg>(p: &Props, key: &str) -> Signal<Option<Callback<T>>> {
+    let cb = p.handler(key);
+    let on = p.handler_on(key);
+    Signal::derive(move || cb.filter(|_| on.get()))
 }
 
 fn css_value(v: Option<Value>) -> Option<CssValue> {
@@ -263,7 +270,7 @@ fn stack(p: Props) -> AnyView {
         grow: p.flag("grow"),
         tag: p.str("as").map(Into::into),
         on_click: handler(&p, "onClick"),
-        style: p.css("style"),
+        style: p.css_signal("style"),
         children: p.children("children"),
         attrs: p.rest(),
     })
@@ -281,10 +288,11 @@ fn surface(p: Props) -> AnyView {
         pad: pad(&p, "pad"),
         interactive: p.keyword("interactive"),
         selected: p.flag_signal("selected"),
-        disabled: p.flag("disabled"),
+        disabled: p.flag_signal("disabled"),
         on: p.keyword("on"),
         on_click: handler(&p, "onClick"),
-        style: p.css("style"),
+        on_pointer_down_capture: handler(&p, "onPointerDownCapture"),
+        style: p.css_signal("style"),
         children: p.children("children"),
         attrs: p.rest(),
     })
@@ -298,12 +306,14 @@ fn action(p: Props) -> AnyView {
         size: p.keyword("size").unwrap_or_default(),
         shape: p.keyword("shape").unwrap_or_default(),
         icon_only: p.flag("iconOnly"),
-        title: p.str("title"),
+        title: p.str_signal("title"),
         disabled: p.flag_signal("disabled"),
+        aria_busy: p.flag_signal("aria-busy"),
         tag: p.str("as").map(Into::into),
         href: p.str("href"),
         on_click: handler(&p, "onClick"),
-        style: Signal::from(p.css("style")),
+        on_pointer_down_capture: handler(&p, "onPointerDownCapture"),
+        style: p.css_signal("style"),
         children: p.children("children"),
         attrs: p.rest(),
     })
@@ -440,7 +450,7 @@ fn layer(p: Props) -> AnyView {
         trap_focus: p.flag("trapFocus"),
         lock_scroll: p.flag("lockScroll"),
         restore_focus: p.bool("restoreFocus").unwrap_or(d.restore_focus),
-        on_dismiss: handler(&p, "onDismiss"),
+        on_dismiss: live_handler(&p, "onDismiss"),
         navigate: p.keyword("navigate"),
         animate: p.bool("animate").unwrap_or(d.animate),
         scrim_attrs: Attrs::new(),
@@ -463,7 +473,7 @@ fn switcher(p: Props) -> AnyView {
             value: field_of(o, "value").unwrap_or_default(),
             label: field_of(o, "label").unwrap_or_default(),
             count: field_of(o, "count"),
-            disabled: flag_of(o, "disabled"),
+            disabled: flag_in(o.get("disabled")),
         })
         .collect();
     Switcher(SwitcherProps {
@@ -545,9 +555,11 @@ fn button(p: Props) -> AnyView {
         size: p.keyword("size").unwrap_or_default(),
         shape: p.keyword("shape").unwrap_or_default(),
         disabled: p.flag_signal("disabled"),
-        title: p.str("title"),
+        title: p.str_signal("title"),
+        aria_busy: p.flag_signal("aria-busy"),
         on_click: handler(&p, "onClick"),
-        style: p.css("style"),
+        on_pointer_down_capture: handler(&p, "onPointerDownCapture"),
+        style: p.css_signal("style"),
         children: p.children("children"),
         attrs: p.rest(),
     })
@@ -979,6 +991,13 @@ fn app_header(p: Props) -> AnyView {
         right: p.children("right"),
         on_brand_click: handler(&p, "onBrandClick"),
         on_project_click: handler(&p, "onProjectClick"),
+        // tC4 takes the handlers away (`onBrandClick={editing ? undefined : exit}`); the port
+        // keeps them and turns them off.
+        exits_off: {
+            let (brand, project) = (p.handler_on("onBrandClick"), p.handler_on("onProjectClick"));
+            let conditional = p.is_if("onBrandClick") || p.is_if("onProjectClick");
+            Signal::derive(move || conditional && !(brand.get() && project.get()))
+        },
     };
     unread(&p);
     AppHeader(props).into_any()
@@ -1046,8 +1065,10 @@ fn book_tile(p: Props) -> AnyView {
         meta_title: p.str("metaTitle"),
         layout: p.keyword("layout").unwrap_or_default(),
         active: p.flag_signal("active"),
+        disabled: p.flag_signal("disabled"),
         on_click: handler(&p, "onClick"),
-        style: p.css("style"),
+        on_pointer_down_capture: handler(&p, "onPointerDownCapture"),
+        style: p.css_signal("style"),
         children: p.children("children"),
         attrs: p.rest(),
     })
@@ -1118,6 +1139,7 @@ fn modal(p: Props) -> AnyView {
         width: css_value(p.value("width")),
         close_label: p.str("closeLabel"),
         on_close: handler(&p, "onClose"),
+        closable: p.handler_on("onClose"),
         footer: children_fn(&p, "footer"),
         children: children_fn(&p, "children"),
         attrs: p.rest(),

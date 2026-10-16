@@ -1,6 +1,6 @@
 // components/surfaces and components/translation: BookTile, Callout, Card, Drawer, HelpCard,
 // Modal, ScripturePassage, VerseMarker, WordChip.
-import { el, noop, cell, set, setTo, group, focus, hover, click, AR, T } from './lib.mjs';
+import { el, noop, cell, set, setTo, when, prevent, group, focus, hover, click, AR, T } from './lib.mjs';
 
 const conflicts = el('Text', { role: 'labelNum', tone: 'tone', 'data-tone': 'warn', as: 'div', style: { marginTop: 7 }, children: '2 conflicts' });
 const cardBody = [
@@ -21,6 +21,25 @@ const modalFooter = [
 ];
 const modal = { title: 'Project settings', subtitle: `${T.project} · 2 books`, closeLabel: 'Close', onClose: noop, children: modalBody, footer: modalFooter };
 const verses = [{ n: 1, text: T.en1 }, { n: 2, text: T.en2 }];
+/* #698: tC4's book rail turns every tile off while an editing card is open
+   (src/views/BookRail.jsx:19, 28-31). */
+const railRow = { name: 'Titus', percent: 45, meta: '45%', metaTitle: '45% of this book\'s verses are drafted', layout: 'row', onClick: noop };
+const railOff = { disabled: true, onPointerDownCapture: prevent, style: { cursor: 'default' } };
+const ROW = { width: 280, height: 88 };
+/* Open from Door43 (src/views/modals/OpenFromDoor43.jsx:71-78, #692): no ✕, Escape or scrim
+   while the open runs. */
+const openDoor43 = {
+  title: 'Open a project from Door43', subtitle: 'Get a full copy of a project your team shares on Door43.', width: 520,
+  closeLabel: 'Close', onClose: when('busy', undefined, noop), 'data-testid': 'open-door43-modal',
+  children: [
+    el('Callout', { tone: 'info', children: 'Paste the address of a project on git.door43.org.' }),
+    el('TextField', { label: 'Door43 repository', defaultValue: 'https://git.door43.org/equipo/es-419_tit' }),
+  ],
+  footer: [
+    el('Button', { variant: 'secondary', disabled: cell('busy'), onClick: noop, 'data-testid': 'open-door43-cancel', children: 'Cancel' }),
+    el('Button', { disabled: cell('busy'), 'aria-busy': when('busy', true), onClick: setTo('busy', true), 'data-testid': 'open-door43-submit', children: when('busy', 'Opening…', 'Open project') }),
+  ],
+};
 
 export default [
   ...group('BookTile', { frame: { width: 200, height: 92 } }, [
@@ -37,6 +56,19 @@ export default [
     ['row-active', { name: 'Titus', percent: 45, layout: 'row', active: true }, { frame: { width: 280, height: 88 } }],
     ['row-hover', { name: 'Titus', percent: 45, layout: 'row', onClick: noop }, { frame: { width: 280, height: 88 }, steps: [hover('button')] }],
     ['tile-rtl', { name: 'تيطس', percent: 45 }, { document: AR }],
+    ['tile-disabled', { name: 'Titus', percent: 45, onClick: noop, disabled: true }],
+    ['row-disabled', { ...railRow, ...railOff }, { frame: ROW }],
+    ['row-active-disabled', { ...railRow, active: true, ...railOff }, { frame: ROW }],
+    ['row-disabled-hover', { ...railRow, ...railOff }, { frame: ROW, steps: [hover('button')] }],
+    ['row-editing', { ...railRow, disabled: cell('editing'), onPointerDownCapture: when('editing', prevent), style: when('editing', { cursor: 'default' }) }, {
+      frame: { width: 280, height: 176 }, cells: { editing: false },
+      wrap: (node) => el('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10 }, children: [
+        node,
+        el('Input', { defaultValue: 'In the beginning God created', 'aria-label': 'Verse 1' }),
+        el('Button', { variant: 'secondary', size: 'sm', 'data-testid': 'edit', onClick: setTo('editing', true), children: 'Edit this verse' })] }),
+      steps: [click('[data-testid="edit"]')],
+      note: 'Opening an editing card turns the tile off: the same button takes disabled, the press guard and the default cursor.',
+    }],
   ]),
 
   ...group('Callout', { frame: { width: 420, height: 104 } }, [
@@ -105,6 +137,9 @@ export default [
     ['nested-menu', { ...modal, open: cell('open'), onClose: setTo('open', false), children: [
       el('Menu', { trigger: el('Button', { variant: 'secondary', size: 'sm', 'data-testid': 'export', children: 'Export ▾' }), items: [{ label: 'USFM', meta: '.usfm', onClick: noop }, { label: 'Scripture Burrito', meta: '.zip', onClick: noop }] }),
     ] }, { cells: { open: true }, steps: [click('[data-testid="export"]')], note: 'A Menu open inside a dialog: its layer sits one level deeper.' }],
+    ['busy', openDoor43, { cells: { busy: true } }],
+    ['busy-later', { ...openDoor43, open: cell('open'), onClose: when('busy', undefined, setTo('open', false)) },
+      { cells: { busy: false, open: true }, steps: [click('[data-testid="open-door43-submit"]')], note: 'The open starts: the ✕ goes, Cancel and Open turn off, Open is busy. Until then the ✕, Escape and the scrim close the dialog.' }],
   ]),
 
   ...group('ScripturePassage', { frame: { width: 560, height: 212 } }, [
@@ -144,6 +179,16 @@ export default [
     ['bank-row', { children: 'servant' }, {
       frame: { width: 420, height: 72 },
       wrap: (n) => el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 8 }, children: [n, el('WordChip', { state: 'selected', children: 'of' }), el('WordChip', { state: 'suggested', children: 'God' }), el('WordChip', { state: 'placed', children: 'Paul' })] }),
+    }],
+    /* #735 (#750): a word that occurs more than once carries its occurrence number in a
+       <sup> with line-height 0, so the chip keeps the height of a plain one
+       (src/views/Align.jsx:45-47, 143-149). Top-aligned, so a taller chip would show. */
+    ['suggested-occurrence', { state: 'suggested', draggable: false, title: 'Confirm this link', 'aria-label': 'de 2', 'data-word': 'de',
+      children: ['de', el('sup', { style: { lineHeight: 0 }, children: 2 }), el('span', { 'aria-hidden': 'true', style: { fontWeight: 'var(--fw-heavy)' }, children: '✓' })] }, {
+      frame: { width: 240, height: 72 },
+      wrap: (n) => el('div', { style: { display: 'flex', alignItems: 'flex-start', gap: 8 }, children: [
+        el('WordChip', { state: 'suggested', draggable: false, title: 'Confirm this link', 'data-word': 'Dios',
+          children: ['Dios', el('span', { 'aria-hidden': 'true', style: { fontWeight: 'var(--fw-heavy)' }, children: '✓' })] }), n] }),
     }],
   ]),
 ];

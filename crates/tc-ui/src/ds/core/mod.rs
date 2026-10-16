@@ -1,7 +1,7 @@
 //! tC4's `components/core`: shims that keep the old names and props and compose the
 //! primitives.
 
-use leptos::ev::MouseEvent;
+use leptos::ev::{MouseEvent, PointerEvent};
 use leptos::prelude::*;
 
 use crate::ds::{
@@ -52,16 +52,23 @@ pub fn Badge(
     }
 }
 
-/// Button.jsx: the old variant enum over Action's weight and tone.
+/// Button.jsx: the old variant enum over Action's weight and tone. `disabled`, `title`,
+/// `aria_busy` and `style` may change while the button is on screen (see [`Action`]).
 #[component]
 pub fn Button(
     #[prop(optional)] variant: ButtonVariant,
     #[prop(optional)] size: Size,
     #[prop(optional)] shape: Shape,
     #[prop(optional, into)] disabled: Signal<bool>,
-    #[prop(optional, into)] title: Option<String>,
+    #[prop(optional, into)] title: Signal<Option<String>>,
+    /// `aria-busy="true"` while true.
+    #[prop(optional, into)]
+    aria_busy: Signal<bool>,
     #[prop(optional)] on_click: Option<Callback<MouseEvent>>,
-    #[prop(optional)] style: Css,
+    /// React's `onPointerDownCapture`, passed through to the button.
+    #[prop(optional)]
+    on_pointer_down_capture: Option<Callback<PointerEvent>>,
+    #[prop(optional, into)] style: Signal<Css>,
     #[prop(optional)] attrs: Attrs,
     #[prop(optional)] children: Option<Children>,
 ) -> impl IntoView {
@@ -81,8 +88,10 @@ pub fn Button(
         shape,
         title,
         disabled,
+        aria_busy,
         on_click,
-        style: Signal::from(style),
+        on_pointer_down_capture,
+        style,
         attrs,
         children,
         ..Default::default()
@@ -146,7 +155,7 @@ pub fn IconButton(
         },
         shape: Shape::Square,
         icon_only: true,
-        title,
+        title: title.into(),
         disabled,
         on_click,
         style: Signal::from(s),

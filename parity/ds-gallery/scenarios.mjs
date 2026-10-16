@@ -107,6 +107,24 @@ const SCENARIOS = [
   { name: 'search-field', case: 'SearchField/value-no-clear', steps: [{ click: 'input' }, { type: 'xyz' }, { key: 'Backspace' }] },
   { name: 'search-clear', case: 'SearchField/value-clear', steps: [{ click: 'button' }] },
   { name: 'card-keys', case: 'Card/interactive-hover', steps: [{ key: 'Tab' }, { key: 'Enter' }, { key: ' ' }] },
+  // Props tC4's d310bf3 screens change while the component is on screen (#690, #692, #698,
+  // #745): the element stays, keeps the focus it has, and takes the new title, label, style,
+  // disabled state or close control.
+  { name: 'button-busy', case: 'Button/sync-press', steps: [{ key: 'Tab' }, { key: 'Enter' }, { key: 'Enter' }, { key: 'Shift+Tab' }] },
+  { name: 'button-nav-end', case: 'Button/nav-to-end', steps: [{ key: 'Tab' }, { key: ' ' }, { key: ' ' }] },
+  // A press on an off control keeps the focus in the field (the press guard); typing goes on there.
+  { name: 'button-press-guard', case: 'Button/draft-section-off', steps: [{ click: 'input' }, { mouse: [60, 79] }, { type: 'x' }] },
+  { name: 'modal-busy', case: 'Modal/busy-later', steps: [
+    { key: 'Tab' }, { click: '[data-testid="open-door43-submit"]' }, { key: 'Escape' }, { mouse: [5, 5] }, { key: 'Tab' }, { key: 'Escape' }] },
+  { name: 'modal-not-busy-escape', case: 'Modal/busy-later', steps: [{ key: 'Tab' }, { key: 'Escape' }] },
+  { name: 'modal-not-busy-scrim', case: 'Modal/busy-later', steps: [{ mouse: [5, 5] }] },
+  { name: 'switcher-turn-off', case: 'Switcher/options-turn-off', steps: [
+    { click: '[role="tab"][aria-selected="true"]' }, { click: '[data-testid="edit"]' }, { click: '[role="tab"][aria-selected="true"]' },
+    { key: 'ArrowRight' }, { key: 'ArrowLeft' }, { key: 'Home' }, { key: 'End' }] },
+  { name: 'app-header-exits', case: 'AppHeader/project-editing-later', steps: [
+    { hover: '[data-testid="project-switch"]' }, { click: '[data-testid="edit"]' }, { click: '[data-testid="project-switch"]' }, { key: 'Tab' }, { key: 'ArrowRight' }] },
+  { name: 'book-tile-editing', case: 'BookTile/row-editing', steps: [
+    { click: 'button[data-tone="accent"]' }, { click: '[data-testid="edit"]' }, { click: 'input' }, { mouse: [100, 35] }, { type: 'x' }] },
 ];
 
 /** Runs in the page: what the DOM snapshot leaves out. */

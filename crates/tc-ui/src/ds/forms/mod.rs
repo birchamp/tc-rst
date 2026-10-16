@@ -90,7 +90,7 @@ pub fn DropZone(
         radius: Some(Corner::Xl.into()),
         interactive: Some(Interactive::Choice),
         on_click,
-        style: s,
+        style: s.into(),
         attrs,
         children: Some(Box::new(move || {
             view! {
@@ -152,7 +152,7 @@ pub fn FilterChip(
         interactive: Some(Interactive::Choice),
         selected,
         on_click,
-        style: s,
+        style: s.into(),
         attrs,
         children: Some(Box::new(move || text.into_any())),
         ..Default::default()
@@ -235,9 +235,9 @@ pub fn OptionCard(
         radius: Some(Corner::Md.into()),
         interactive: Some(Interactive::Choice),
         selected,
-        disabled,
+        disabled: disabled.into(),
         on_click,
-        style: s,
+        style: s.into(),
         attrs,
         children: Some(Box::new(body)),
         ..Default::default()

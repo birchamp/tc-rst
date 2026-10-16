@@ -1,11 +1,17 @@
 // components/navigation: AppHeader, Breadcrumb, Menu.
-import { el, noop, asset, group, focus, hover, AR, T } from './lib.mjs';
+import { el, noop, cell, setTo, when, asset, group, focus, hover, click, AR, T } from './lib.mjs';
 
 const modeSwitch = (labels, value = 'draft') => el('Switcher', {
   indicator: 'pill', value, onChange: noop,
   options: [{ value: 'read', label: labels[0] }, { value: 'draft', label: labels[1] }, { value: 'check', label: labels[2] }],
 });
 const saved = (label) => el('StatusDot', { status: 'valid', size: 8, label });
+/* #698: while an editing card is open, tC4 passes no brand or project handler and turns
+   Understand and Check off (src/App.jsx:90-118). */
+const editingSwitch = (off) => el('Switcher', {
+  indicator: 'pill', value: 'draft', onChange: noop,
+  options: [{ value: 'read', label: 'Understand', disabled: off }, { value: 'draft', label: 'Translate' }, { value: 'check', label: 'Check', disabled: off }],
+});
 const project = {
   logoSrc: asset('public/assets/translationcore-logo.png'),
   projectInitials: 'EE', projectName: T.project, projectMeta: 'es-419', switchTitle: 'Switch project',
@@ -39,6 +45,10 @@ export default [
     ['project-focus-visible', project, { steps: [focus('[data-testid="project-switch"]')] }],
     ['project-name-rtl', { ...project, projectInitials: 'مك', projectName: T.projectAr, projectNameDir: 'rtl', projectMeta: 'ar' }],
     ['rtl', { ...project, projectInitials: 'مك', projectName: T.projectAr, projectNameDir: 'rtl', projectMeta: 'ar', switchTitle: 'تبديل المشروع', center: modeSwitch(['فهم', 'ترجمة', 'مراجعة']), right: saved('تم الحفظ') }, { document: AR }],
+    ['project-editing', { ...project, onBrandClick: undefined, onProjectClick: undefined, center: editingSwitch(true) }],
+    ['project-editing-later', { ...project, onBrandClick: when('editing', undefined, noop), onProjectClick: when('editing', undefined, noop), center: editingSwitch(cell('editing')),
+      right: el('Button', { variant: 'secondary', size: 'sm', 'data-testid': 'edit', onClick: setTo('editing', true), children: 'Edit this verse' }) },
+      { cells: { editing: false }, steps: [click('[data-testid="edit"]')], note: 'Opening an editing card takes the exits away: the brand loses its pointer, two tabs turn off.' }],
   ]),
 
   ...group('Breadcrumb', { frame: { width: 440, height: 52 } }, [

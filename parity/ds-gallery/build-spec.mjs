@@ -51,6 +51,8 @@ const NODES = {
   json: 'Everything else is a plain JSON value. Style objects are React inline styles: camelCase properties, a bare number means px except on unitless properties (lineHeight, flex, opacity, fontWeight, zIndex). defaultValue is the initial value of an uncontrolled field.',
   cell: '{ "$cell": "<name>" } — the current value of a cell of the case\'s `cells`. A write draws the case again with the new value, as a parent\'s state would.',
   set: '{ "$fn": "set", "cell": "<name>", "value": <json> } or { "$fn": "set", "cell": "<name>", "from": "<path>" } — a callback that writes the cell: `value`, or the value at `from` in the callback\'s arguments ("0" is the first argument, "0.target.checked" the checked state of the first argument\'s target, "0.id" the id field of a table row).',
+  if: '{ "$if": "<name>", "then": <node>, "else": <node> } — `then` while the cell is truthy, else `else`; an absent branch is undefined. A screen\'s `onClose={busy ? undefined : close}` or `title={busy ? a : b}`: the component on screen gets the new value, as from a parent\'s state.',
+  preventDefault: '{ "$fn": "preventDefault" } — a callback that calls preventDefault on its event (tC4\'s `onPointerDownCapture={(e) => e.preventDefault()}`, which keeps the focus where it is).',
   render: 'When `render` is absent the case renders { "$el": component, "props": props }. When it is present it is the whole tree, and the component under test sits inside it with exactly `props`.',
 };
 

@@ -1,6 +1,6 @@
 //! Surface.jsx: a bounded region of the interface: a fill, an edge, a corner, a shadow, a tone.
 
-use leptos::ev::{self, KeyboardEvent};
+use leptos::ev::{self, KeyboardEvent, PointerEvent};
 use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
@@ -79,12 +79,11 @@ pub(crate) struct SurfaceLook {
     pub elevation: Elevation,
     pub pad: Option<Pad>,
     pub clickable: bool,
-    pub disabled: bool,
 }
 
 impl SurfaceLook {
     /// The inline style Surface.jsx writes, before the caller's `style`.
-    pub(crate) fn css(&self, fill: Fill, selected: bool) -> Css {
+    pub(crate) fn css(&self, fill: Fill, selected: bool, disabled: bool) -> Css {
         let mut s = css! { "box-sizing": "border-box" };
         s.set_opt(
             "--radius-inner",
@@ -116,11 +115,8 @@ impl SurfaceLook {
             Pad::Css(c) => c.clone().into(),
         });
         s.set_opt("padding", padding);
-        s.set_opt(
-            "cursor",
-            (self.clickable && !self.disabled).then_some("pointer"),
-        );
-        s.set_opt("opacity", self.disabled.then_some(0.6));
+        s.set_opt("cursor", (self.clickable && !disabled).then_some("pointer"));
+        s.set_opt("opacity", disabled.then_some(0.6));
         s
     }
 }
@@ -128,7 +124,8 @@ impl SurfaceLook {
 /// A bounded region of the interface: every panel, card, pill, notice, sheet, row and bubble
 /// in the product is one of these, and the differences between them are values. A Surface
 /// with `on_click` that is not a button or a link is a control: it takes focus and answers
-/// Enter and Space.
+/// Enter and Space. `disabled`, `selected`, `fill` and `style` may change while it is on
+/// screen: the element stays and only its attributes change.
 #[component]
 pub fn Surface(
     #[prop(optional, into)] tag: Option<Tag>,
@@ -140,10 +137,13 @@ pub fn Surface(
     #[prop(optional, into)] pad: Option<Pad>,
     #[prop(optional)] interactive: Option<Interactive>,
     #[prop(optional, into)] selected: Signal<bool>,
-    #[prop(optional)] disabled: bool,
+    #[prop(optional, into)] disabled: Signal<bool>,
     #[prop(optional)] on: Option<Ground>,
     #[prop(optional)] on_click: Option<Callback<web_sys::Event>>,
-    #[prop(optional)] style: Css,
+    /// React's `onPointerDownCapture`, which tC4's screens pass through `...rest`.
+    #[prop(optional)]
+    on_pointer_down_capture: Option<Callback<PointerEvent>>,
+    #[prop(optional, into)] style: Signal<Css>,
     #[prop(optional)] attrs: Attrs,
     #[prop(optional)] children: Option<Children>,
 ) -> impl IntoView {
@@ -165,37 +165,44 @@ pub fn Surface(
         elevation: elevation.unwrap_or_default(),
         pad,
         clickable: on_click.is_some(),
-        disabled,
     };
-    let click = (!disabled).then_some(on_click).flatten();
     element(tag)
         .attr("data-tone", tone.map(Tone::as_str))
         .attr("data-on", ground)
-        .attr(
-            "data-i",
-            if disabled {
+        .attr("data-i", move || {
+            if disabled.get() {
                 None
             } else {
                 interactive.map(Interactive::as_str)
-            },
-        )
+            }
+        })
         .attr("data-selected", move || selected.get().then_some("true"))
-        .attr("disabled", disabled && is_button)
-        .attr("aria-disabled", (disabled && !is_button).then_some("true"))
+        .attr("disabled", move || disabled.get() && is_button)
+        .attr("aria-disabled", move || {
+            (disabled.get() && !is_button).then_some("true")
+        })
         .attr("role", control.then_some("button"))
-        .attr(
-            "tabindex",
-            control.then_some(if disabled { "-1" } else { "0" }),
-        )
+        .attr("tabindex", move || {
+            control.then_some(if disabled.get() { "-1" } else { "0" })
+        })
         .attr("style", move || {
-            look.css(fill.get(), selected.get())
-                .merge(&style)
-                .to_style()
+            style.with(|st| {
+                look.css(fill.get(), selected.get(), disabled.get())
+                    .merge(st)
+                    .to_style()
+            })
         })
         .add_any_attr(spread(&attrs))
         .on(ev::click, move |e| {
-            if let Some(cb) = click {
+            if let Some(cb) = on_click
+                && !disabled.get_untracked()
+            {
                 cb.run(e.unchecked_into());
+            }
+        })
+        .on(ev::capture(ev::pointerdown), move |e| {
+            if let Some(cb) = on_pointer_down_capture {
+                cb.run(e);
             }
         })
         .on(ev::keydown, move |e: KeyboardEvent| {

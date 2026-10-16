@@ -199,7 +199,11 @@ pub fn Layer(
     #[prop(optional)] trap_focus: bool,
     #[prop(optional)] lock_scroll: bool,
     #[prop(default = true)] restore_focus: bool,
-    #[prop(optional)] on_dismiss: Option<Callback<DismissReason>>,
+    /// The handler in force now. tC4's dialogs pass none while an action runs
+    /// (`onClose={busy ? undefined : close}`): Escape then passes through and a press on the
+    /// scrim does nothing.
+    #[prop(optional, into)]
+    on_dismiss: Signal<Option<Callback<DismissReason>>>,
     #[prop(optional)] navigate: Option<Navigate>,
     #[prop(default = true)] animate: bool,
     /// Extra attributes of the scrim (React's `scrimProps`).
@@ -280,14 +284,15 @@ pub fn Layer(
                     return;
                 };
                 // No handler means nothing to dismiss: never swallow the key.
-                if e.key() != "Escape" || on_dismiss.is_none() || !is_innermost(t) {
+                let Some(cb) = on_dismiss.get_untracked() else {
+                    return;
+                };
+                if e.key() != "Escape" || !is_innermost(t) {
                     return;
                 }
                 e.stop_immediate_propagation();
                 e.prevent_default();
-                if let Some(cb) = on_dismiss {
-                    cb.run(DismissReason::Escape);
-                }
+                cb.run(DismissReason::Escape);
             });
             on_cleanup(move || ESCAPE.with(|s| s.borrow_mut().retain(|(x, _)| *x != t)));
         }
@@ -299,7 +304,7 @@ pub fn Layer(
                 let target = e.target().and_then(|t| t.dyn_into::<web_sys::Node>().ok());
                 if let Some(p) = panel.get_untracked()
                     && !p.contains(target.as_ref())
-                    && let Some(cb) = on_dismiss
+                    && let Some(cb) = on_dismiss.get_untracked()
                 {
                     cb.run(DismissReason::Outside);
                 }
@@ -646,7 +651,6 @@ pub fn Layer(
         s.to_style()
     };
     let scrim_attrs = StoredValue::new(scrim_attrs);
-    let dismissible = dismiss.scrim && on_dismiss.is_some();
     (move || {
         mounted.get().then(|| {
             view! {
@@ -667,13 +671,14 @@ pub fn Layer(
                         }
                     }
                     on:click=move |_| {
-                        if dismissible {
+                        if dismiss.scrim
+                            && let Some(cb) = on_dismiss.get_untracked()
+                        {
                             let press = scrim_press.get_value();
                             scrim_press.set_value(true);
-                            if press
-                                && let Some(cb) = on_dismiss {
-                                    cb.run(DismissReason::Scrim);
-                                }
+                            if press {
+                                cb.run(DismissReason::Scrim);
+                            }
                         }
                     }
                     style=scrim_style.clone()

@@ -1,6 +1,6 @@
 {
-  "same": 719,
-  "total": 719,
+  "same": 742,
+  "total": 742,
   "cases": [
     {
       "id": "Badge/accent-md",
@@ -352,6 +352,72 @@
     },
     {
       "id": "Button/rtl-pair",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/sync-busy",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/sync-press",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/nav-next",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/nav-prev-rtl",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/nav-next-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/nav-next-end",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/nav-to-end",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/draft-section",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/draft-section-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/draft-section-focus-visible",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Button/draft-section-off",
       "same": true,
       "errors": [],
       "diffs": []
@@ -1839,6 +1905,18 @@
       "diffs": []
     },
     {
+      "id": "AppHeader/project-editing",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "AppHeader/project-editing-later",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
       "id": "Breadcrumb/default",
       "same": true,
       "errors": [],
@@ -3273,6 +3351,18 @@
       "diffs": []
     },
     {
+      "id": "Switcher/pill-editing",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Switcher/options-turn-off",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
       "id": "Table/default",
       "same": true,
       "errors": [],
@@ -3669,6 +3759,36 @@
       "diffs": []
     },
     {
+      "id": "BookTile/tile-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/row-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/row-active-disabled",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/row-disabled-hover",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "BookTile/row-editing",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
       "id": "Callout/info",
       "same": true,
       "errors": [],
@@ -3933,6 +4053,18 @@
       "diffs": []
     },
     {
+      "id": "Modal/busy",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Modal/busy-later",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
       "id": "ScripturePassage/latin-lg",
       "same": true,
       "errors": [],
@@ -4096,6 +4228,12 @@
     },
     {
       "id": "WordChip/bank-row",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "WordChip/suggested-occurrence",
       "same": true,
       "errors": [],
       "diffs": []
