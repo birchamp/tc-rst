@@ -151,12 +151,20 @@ fn unseen(
         if k == presence {
             continue;
         }
+        // A comment id held by changes that target several books (§8.1) is a record of
+        // each, by the changes that target it.
+        let comment = matches!(state.entry(k).key, crate::keys::RecordKey::Comment(_));
         let changes: Vec<ChangeIdx> = state
             .entry(k)
             .changes
             .iter()
             .copied()
             .filter(|c| state.meta(*c).active)
+            .filter(|c| {
+                !comment
+                    || super::meta::book_of(&state.entry(k).key, &state.meta(*c).shape)
+                        == Some(book)
+            })
             .collect();
         if changes.is_empty() {
             continue;
@@ -214,7 +222,7 @@ fn book_conflict(
         disputed: Vec::new(),
         provisional,
         batches: batches.into_iter().collect(),
-        incomplete_history: false,
+        incomplete_history: super::attach::continues_missing(state, heads),
         unreadable,
     }
 }

@@ -108,41 +108,80 @@ fn kind_name(kind: &ConflictKind) -> &'static str {
     }
 }
 
-/// What the team scripts reach, over a run.
-const TEAM_STATES: &[&str] = &[
+/// What the team scripts reach at the end of a run, once every device holds everything.
+const SYNCED_STATES: &[&str] = &[
     "VerseText",
+    "VerseStructure",
     "Passage",
+    "StructureIssue",
     "BookHeader",
     "ChapterFront",
     "BookPresence",
     "BookRemovedWhileEdited",
+    "LastBookRemoved",
     "Alignment",
     "Check",
     "CheckMoved",
+    "Comment",
     "Pins",
     "Setting",
     "ProjectMeta",
+    "Versification",
     "CarriedFile",
     "PathCase",
     "Unknown",
     "BookLayout",
+    "DeviceProfile",
     "criss-cross bases",
     "incomplete batch",
-    "missing parent",
     "duplicate device",
     "quarantined",
     "invalid for burrito",
     "detached",
     "release",
     "settled by rule",
+    "all stubs",
     "merged by units",
     "newer minor",
+    "decision placed",
+    "decision detached",
+    "check comment placed",
 ];
 
-fn census_of(sim: &Sim, state: &FoldState, census: &Census) {
+/// What one device's view reaches before the last exchange, besides: a change whose
+/// parent has not arrived.
+const VIEW_STATES: &[&str] = &["missing parent"];
+
+/// What a team property asserts on: one device's fold and the labels it holds.
+pub struct View<'a> {
+    pub sim: &'a Sim,
+    pub state: &'a FoldState,
+    pub held: BTreeSet<usize>,
+}
+
+impl<'a> View<'a> {
+    fn of(sim: &'a Sim, device: usize) -> Self {
+        Self {
+            sim,
+            state: &sim.devices[device].state,
+            held: sim.devices[device].held.iter().copied().collect(),
+        }
+    }
+
+    /// The held lines, with their labels.
+    fn lines(&self) -> impl Iterator<Item = (usize, &'a Verified)> + '_ {
+        self.held
+            .iter()
+            .filter_map(|l| self.sim.items[*l].as_ref().map(|line| (*l, line)))
+    }
+}
+
+/// Counts the states the asserted state holds; never a state seen only on the way.
+fn census_of(view: &View, census: &Census) {
+    let state = view.state;
     for conflict in state.conflicts() {
         let name = kind_name(&conflict.kind);
-        if TEAM_STATES.contains(&name) {
+        if SYNCED_STATES.contains(&name) {
             census.saw(name);
         }
         if conflict.bases.len() >= 2 {
@@ -159,58 +198,129 @@ fn census_of(sim: &Sim, state: &FoldState, census: &Census) {
             _ => {}
         }
     }
-    for reached in &sim.reached {
-        match *reached {
-            "incomplete batch" => census.saw("incomplete batch"),
-            "missing parent" => census.saw("missing parent"),
-            "release" => census.saw("release"),
-            _ => {}
-        }
-    }
     if state.detached().next().is_some() {
         census.saw("detached");
     }
-    if sim.recipes.iter().any(|r| r.forge == Forge::Newer) {
+    if view
+        .held
+        .iter()
+        .any(|l| view.sim.recipes[*l].forge == Forge::Newer)
+    {
         census.saw("newer minor");
     }
+    let detached: BTreeSet<RecordKey> = state.detached().cloned().collect();
     for key in state.record_keys() {
-        match state.key_state(&key).map(|k| k.state) {
-            Some(Resolved::SettledByRule { .. }) => census.saw("settled by rule"),
-            Some(Resolved::Merged {
-                how: MergeHow::Units(_),
-                ..
-            }) => census.saw("merged by units"),
+        if let Some(k) = state.key_state(&key) {
+            match k.state {
+                Resolved::SettledByRule { .. } => {
+                    census.saw("settled by rule");
+                    if k.heads.iter().all(|h| is_seed_stub(state, h)) {
+                        census.saw("all stubs");
+                    }
+                }
+                Resolved::Merged {
+                    how: MergeHow::Units(_),
+                    ..
+                } => census.saw("merged by units"),
+                _ => {}
+            }
+        }
+        match &key {
+            RecordKey::BatchRelease(_) => census.saw("release"),
+            RecordKey::Check(check) => {
+                let decided = matches!(
+                    state.projected(&key),
+                    Some(Record::Check {
+                        value: CheckValue::Decision(_),
+                        ..
+                    })
+                );
+                if decided && check.book().is_some_and(|b| state.book(b).projects()) {
+                    census.saw(if detached.contains(&key) {
+                        "decision detached"
+                    } else {
+                        "decision placed"
+                    });
+                }
+            }
+            RecordKey::Comment(_) => {
+                if let Some(Record::Comment { value, .. }) = state.projected(&key)
+                    && let CommentTarget::Check(check) = &value.target
+                    && check.book().is_some_and(|b| state.book(b).projects())
+                    && !detached.contains(&key)
+                {
+                    census.saw("check comment placed");
+                }
+            }
             _ => {}
         }
     }
 }
 
+/// The device whose view before the last exchange holds the most defects (held batches,
+/// missing parents): the view a property asserts on besides the synced one.
+fn most_defects(sim: &Sim) -> usize {
+    (0..sim.devices.len())
+        .max_by_key(|d| {
+            (
+                sim.devices[*d].state.anomalies().count(),
+                std::cmp::Reverse(*d),
+            )
+        })
+        .unwrap_or(0)
+}
+
+fn states(extra: &'static [&'static str], view: bool) -> &'static [&'static str] {
+    let more: &[&str] = if view { VIEW_STATES } else { &[] };
+    Box::leak(
+        SYNCED_STATES
+            .iter()
+            .chain(more.iter())
+            .chain(extra.iter())
+            .copied()
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+    )
+}
+
+/// A property of one device's view, asserted on the view before the last exchange of the
+/// device with the most defects, and on a device's view once everyone holds everything.
 fn team(
+    cases: u32,
+    extra: &'static [&'static str],
+    test: impl Fn(&View, &Census) -> Result<(), TestCaseError>,
+) {
+    run_with_census(
+        cases.max(self::cases()),
+        arb_script(),
+        states(extra, true),
+        |script, census| {
+            let mut sim = Sim::run(&script, false);
+            let view = View::of(&sim, most_defects(&sim));
+            census_of(&view, census);
+            test(&view, census)?;
+            sim.sync_all();
+            let view = View::of(&sim, 0);
+            census_of(&view, census);
+            test(&view, census)
+        },
+    );
+}
+
+/// A property of the whole team once everyone holds everything.
+fn team_synced(
     cases: u32,
     extra: &'static [&'static str],
     test: impl Fn(Sim, &Census) -> Result<(), TestCaseError>,
 ) {
-    let states: &'static [&'static str] = if extra.is_empty() {
-        TEAM_STATES
-    } else {
-        Box::leak(
-            TEAM_STATES
-                .iter()
-                .chain(extra.iter())
-                .copied()
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
-        )
-    };
     run_with_census(
         cases.max(self::cases()),
         arb_script(),
-        states,
+        states(extra, false),
         |script, census| {
             let mut sim = Sim::run(&script, false);
             sim.sync_all();
-            let state = sim.devices[0].state.clone();
-            census_of(&sim, &state, census);
+            census_of(&View::of(&sim, 0), census);
             test(sim, census)
         },
     );
@@ -229,7 +339,7 @@ fn body_of(state: &FoldState, id: &ChangeId) -> Option<tc_journal::ChangeBody> {
 /// grouping and duplication of the union.
 #[test]
 fn fold_converges_under_any_union() {
-    team(CASES, &[], |sim, _| {
+    team_synced(CASES, &[], |sim, _| {
         let expected = &sim.devices[0].state;
         for device in &sim.devices[1..] {
             same_fold(expected, &device.state, "two devices");
@@ -262,8 +372,8 @@ fn fold_converges_under_any_union() {
 /// Fails if a change disappears, or an automated writer names a parent it did not hold.
 #[test]
 fn conservation() {
-    team(CASES, &[], |sim, _| {
-        let state = &sim.devices[0].state;
+    team(CASES, &[], |view, _| {
+        let (sim, state) = (view.sim, view.state);
         let candidates: BTreeSet<ChangeId> = state
             .conflicts()
             .flat_map(|c| {
@@ -294,8 +404,7 @@ fn conservation() {
             })
             .collect();
         let detached: BTreeSet<RecordKey> = state.detached().cloned().collect();
-        for (label, line) in sim.items.iter().enumerate() {
-            let Some(line) = line else { continue };
+        for (label, line) in view.lines() {
             let recipe = &sim.recipes[label];
             prop_assert!(
                 recipe.parents_held,
@@ -346,12 +455,19 @@ fn conservation() {
                     );
                 }
                 Some(_) => {
-                    // (a): projected, and an attached record is placed or detached.
+                    // (a): projected, and an attached record is placed, or listed under
+                    // Detached (a dismissed one stays in History).
                     if matches!(key, RecordKey::Alignment(..)) {
                         let placed = state.placement(&key);
+                        let dismissed = matches!(
+                            &change.body().record,
+                            Record::Alignment { value, .. } if value.dismissed
+                        );
                         prop_assert!(
-                            placed != Placement::NotAttached || detached.contains(&key),
-                            "alignment {label} is on no screen"
+                            matches!(placed, Placement::Run { .. })
+                                || (placed == Placement::Detached
+                                    && (detached.contains(&key) || dismissed)),
+                            "alignment {label} is on no screen: {placed:?}"
                         );
                     }
                 }
@@ -400,11 +516,37 @@ fn is_seed_stub(state: &FoldState, id: &ChangeId) -> bool {
     matches!(body.cause, Cause::Seed)
 }
 
-/// Fails if a merge rule picks between two different changes silently.
+/// Fails if a merge rule picks between two different changes silently, or a conflict
+/// hides that a version continues a change that has not arrived (§7.4).
 #[test]
 fn concurrent_differences_are_visible() {
-    team(CASES, &[], |sim, _| {
-        let state = &sim.devices[0].state;
+    team(CASES, &["incomplete history"], |view, census| {
+        let state = view.state;
+        let continuing: BTreeSet<ChangeId> = state
+            .anomalies()
+            .filter_map(|a| match a {
+                Anomaly::MissingParent { change, .. } => Some(*change),
+                _ => None,
+            })
+            .collect();
+        for conflict in state.conflicts() {
+            let continues = conflict
+                .candidates
+                .iter()
+                .flat_map(|x| std::iter::once(x.head).chain(x.also.iter().copied()))
+                .chain(conflict.unreadable.iter().copied())
+                .any(|h| continuing.contains(&h));
+            if continues {
+                census.saw("incomplete history");
+            }
+            prop_assert_eq!(
+                conflict.incomplete_history,
+                continues,
+                "{:?} at {:?}",
+                conflict.kind,
+                conflict.key
+            );
+        }
         for key in state.record_keys() {
             let heads = state.heads(&key);
             if heads.len() < 2 {
@@ -522,8 +664,8 @@ fn leaves(json: Option<&Json>, path: &mut Vec<String>, out: &mut BTreeMap<String
 /// is the value every head that changed it (relative to every base) wrote.
 #[test]
 fn merge_units_sound() {
-    team(CASES, &[], |sim, census| {
-        let state = &sim.devices[0].state;
+    team(CASES, &[], |view, census| {
+        let state = view.state;
         for key in state.record_keys() {
             let Some(Resolved::Merged {
                 merged,
@@ -610,10 +752,26 @@ fn paths_shadowed(
     heads: &[BTreeMap<String, Option<Json>>],
     bases: &[BTreeMap<String, Option<Json>>],
 ) -> bool {
-    let all = heads.iter().chain(bases.iter());
     let parts: Vec<&str> = path.split('/').collect();
-    all.into_iter()
-        .any(|m| (1..parts.len()).any(|n| m.contains_key(&parts[..n].join("/"))))
+    let shadowed = heads
+        .iter()
+        .chain(bases.iter())
+        .any(|m| (1..parts.len()).any(|n| m.contains_key(&parts[..n].join("/"))));
+    // An empty object where another version has fields is the absence of those fields
+    // (§7.3: each leaf path), not a leaf of its own.
+    let inner = |m: &BTreeMap<String, Option<Json>>| {
+        m.keys().any(|k| {
+            k.len() > path.len()
+                && k.starts_with(path)
+                && (path.is_empty() || k.as_bytes()[path.len()] == b'/')
+        })
+    };
+    let emptied = heads
+        .iter()
+        .chain(bases.iter())
+        .any(|m| matches!(m.get(path), Some(Some(Json::Obj(o))) if o.is_empty()))
+        && heads.iter().chain(bases.iter()).any(inner);
+    shadowed || emptied
 }
 
 // ---------------------------------------------------------------------------------------
@@ -624,7 +782,7 @@ fn paths_shadowed(
 /// exactly what the screen displayed, so no head it did not display loses its place.
 #[test]
 fn stale_tokens_never_supersede_unseen() {
-    team(
+    team_synced(
         CASES,
         &["stale screen", "conflicted screen"],
         |sim, census| {
@@ -674,14 +832,24 @@ fn stale_tokens_never_supersede_unseen() {
 /// every device's state equals a fold of what it holds from scratch.
 #[test]
 fn incremental_equals_full() {
-    run_with_census(cases(), arb_script(), TEAM_STATES, |script, census| {
-        let mut sim = Sim::run(&script, true);
-        sim.sync_all();
-        let full = sim.union_state();
-        same_fold(&full, &sim.devices[0].state, "incremental after sync");
-        census_of(&sim, &full, census);
-        Ok(())
-    });
+    run_with_census(
+        cases(),
+        arb_script(),
+        states(&[], false),
+        |script, census| {
+            let mut sim = Sim::run(&script, true);
+            sim.sync_all();
+            let full = sim.union_state();
+            same_fold(&full, &sim.devices[0].state, "incremental after sync");
+            let view = View {
+                sim: &sim,
+                state: &full,
+                held: (0..sim.items.len()).collect(),
+            };
+            census_of(&view, census);
+            Ok(())
+        },
+    );
 }
 
 // ---------------------------------------------------------------------------------------
@@ -701,11 +869,32 @@ fn shape(state: &FoldState, labels: &HashMap<ChangeId, usize>) -> Shape {
     let mut heads = BTreeMap::new();
     let mut states = BTreeMap::new();
     for key in state.record_keys() {
-        let name = format!("{key:?}");
+        let name = match &key {
+            // Keyed by its device's id, which the comparison permutes: named by the first
+            // change the device wrote to it instead.
+            RecordKey::DeviceProfile(_) => format!(
+                "DeviceProfile(first written by {:?})",
+                state.history(&key).iter().map(label).min()
+            ),
+            _ => format!("{key:?}"),
+        };
         heads.insert(name.clone(), state.heads(&key).iter().map(label).collect());
         let s = match state.key_state(&key).map(|k| k.state) {
             Some(Resolved::Settled { head }) => format!("settled {}", label(&head)),
-            Some(Resolved::SettledByRule { .. }) => "settled by rule".into(),
+            // Every head a seed stub: the smallest id stays, an id the clock and the
+            // device are part of; otherwise the one head that is not a stub.
+            Some(Resolved::SettledByRule { head, .. }) => {
+                let heads = state.heads(&key);
+                if heads.iter().all(|h| is_seed_stub(state, h)) {
+                    if heads.iter().min() == Some(&head) {
+                        "by rule: the smallest id".into()
+                    } else {
+                        format!("by rule: {}, not the smallest id", label(&head))
+                    }
+                } else {
+                    format!("by rule: {}", label(&head))
+                }
+            }
             Some(Resolved::Merged { how, .. }) => format!("merged {how:?}"),
             Some(Resolved::Conflict(_)) => "conflict".into(),
             None => "none".into(),
@@ -763,7 +952,7 @@ fn fold_lines(lines: &[Option<Verified>]) -> FoldState {
 /// device ids has the same heads, merges and conflicts.
 #[test]
 fn no_survival_by_time_or_identity() {
-    team(CASES, &[], |sim, _| {
+    team_synced(CASES, &[], |sim, _| {
         let original = shape(&sim.devices[0].state, &sim.labels);
         let n = sim.recipes.len();
         let mut rng = Rng(n as u64 + 11);
@@ -804,7 +993,7 @@ fn no_survival_by_time_or_identity() {
 /// plain history lists; a conflict it adds is one whose versions differ in those fields.
 #[test]
 fn mixed_minor_versions_converge() {
-    team(CASES, &[], |sim, _| mixed_minor_case(&sim));
+    team_synced(CASES, &[], |sim, _| mixed_minor_case(&sim));
 }
 
 fn mixed_minor_case(sim: &Sim) -> Result<(), TestCaseError> {
@@ -869,8 +1058,13 @@ fn mixed_minor_case(sim: &Sim) -> Result<(), TestCaseError> {
             .any(|h| labels.get(h).is_some_and(|l| newer_labels.contains(l)))
     };
     for (kind, heads) in a.conflicts.difference(&b.conflicts) {
+        // Grown by a passage's records because a record of the group, old or new, now
+        // differs in a newer field and so diverges from a passage batch.
         let grown = b.conflicts.iter().any(|(k, h)| {
-            k == kind && h.is_superset(heads) && h.difference(heads).any(|l| differs_in_newer(*l))
+            k == kind
+                && h.is_superset(heads)
+                && h.len() > heads.len()
+                && h.iter().any(|l| differs_in_newer(*l))
         });
         prop_assert!(grown, "{kind} {heads:?} is lost with newer fields");
     }
@@ -923,11 +1117,11 @@ fn resolution_always_possible() {
     run_with_census(
         cases(),
         (arb_script(), any::<u64>()),
-        TEAM_STATES,
+        states(&[], false),
         |(script, seed), census| {
             let mut sim = Sim::run(&script, false);
             sim.sync_all();
-            census_of(&sim, &sim.devices[0].state.clone(), census);
+            census_of(&View::of(&sim, 0), census);
             let mut rng = Rng(seed);
             for _ in 0..200 {
                 let state = sim.devices[0].state.clone();
@@ -983,7 +1177,10 @@ fn resolution_always_possible() {
                         ),
                     }
                 }
-                sim.write_planned(0, chosen.planned);
+                // A device's profile is written by that device alone (V4).
+                let writer = sim.writer_of(&conflict.key, 0);
+                sim.write_planned(writer, chosen.planned);
+                sim.exchange(writer, 0, 0, 0);
                 let after = &sim.devices[0].state;
                 prop_assert!(
                     after.conflict(&conflict.id).is_none(),
@@ -1018,69 +1215,119 @@ fn generated_word(token: &str) -> bool {
 /// texts, and every other word comes from a listed incoherence.
 #[test]
 fn provisional_usfm_never_drops_words() {
-    team(CASES, &["structure issue"], |sim, census| {
-        let state = &sim.devices[0].state;
-        if !state.book(BookId::Titus).projects() {
-            return Ok(());
-        }
-        let issues: BTreeSet<u16> = state
-            .conflicts()
-            .filter(|c| c.kind == ConflictKind::StructureIssue)
-            .filter_map(|c| match &c.key {
-                RecordKey::Verse(_, ch, _) | RecordKey::ChapterFront(_, ch) => Some(ch.get()),
-                _ => None,
-            })
-            .collect();
-        if !issues.is_empty() {
-            census.saw("structure issue");
-        }
-        let mut expected: BTreeMap<u16, Vec<String>> = BTreeMap::new();
-        for key in state.record_keys() {
-            let RecordKey::Verse(BookId::Titus, ch, _) = key else {
-                continue;
-            };
-            if let Some(Record::Verse {
-                value: VerseValue::Text { words, .. },
-                ..
-            }) = state.projected(&key)
-            {
-                expected.entry(ch.get()).or_default().extend(
+    team(
+        CASES,
+        &["structure issue", "stray covered verse"],
+        |view, census| {
+            let state = view.state;
+            if !state.book(BookId::Titus).projects() {
+                return Ok(());
+            }
+            let issues: BTreeSet<u16> = state
+                .conflicts()
+                .filter(|c| c.kind == ConflictKind::StructureIssue)
+                .filter_map(|c| match &c.key {
+                    RecordKey::Verse(_, ch, _) | RecordKey::ChapterFront(_, ch) => Some(ch.get()),
+                    _ => None,
+                })
+                .collect();
+            if !issues.is_empty() {
+                census.saw("structure issue");
+            }
+            // Per chapter, the projected value of every verse.
+            let mut chapters: BTreeMap<u16, BTreeMap<u16, (RecordKey, Option<Record>)>> =
+                BTreeMap::new();
+            for key in state.record_keys() {
+                if let RecordKey::Verse(BookId::Titus, ch, v) = key {
+                    let projected = state.projected(&key);
+                    chapters
+                        .entry(ch.get())
+                        .or_default()
+                        .insert(v.get(), (key, projected));
+                }
+            }
+            for (chapter, verses) in &chapters {
+                let words_of = |words: &str| -> Vec<String> {
                     words
                         .split_whitespace()
                         .filter(|w| generated_word(w))
-                        .map(str::to_owned),
+                        .map(str::to_owned)
+                        .collect()
+                };
+                // Covered verses a run consumes (§7.5): a text and the covered verses after it.
+                let mut consumed: BTreeSet<u16> = BTreeSet::new();
+                for (v, (_, value)) in verses {
+                    if let Some(Record::Verse {
+                        value: VerseValue::Text { last, .. },
+                        ..
+                    }) = value
+                    {
+                        let mut end = *v;
+                        while end < last.get()
+                            && matches!(
+                                verses.get(&(end + 1)).and_then(|(_, r)| r.as_ref()),
+                                Some(Record::Verse { value: VerseValue::Covered { by }, .. }) if by.get() == *v
+                            )
+                        {
+                            end += 1;
+                            consumed.insert(end);
+                        }
+                    }
+                }
+                let mut want: Vec<String> = Vec::new();
+                for (v, (key, value)) in verses {
+                    match value {
+                        Some(Record::Verse {
+                            value: VerseValue::Text { words, .. },
+                            ..
+                        }) => want.extend(words_of(words)),
+                        // An incoherent covered verse shows its own newest text (§7.5).
+                        Some(Record::Verse {
+                            value: VerseValue::Covered { .. },
+                            ..
+                        }) if !consumed.contains(v) => {
+                            let newest = state.history(key).into_iter().rev().find_map(|c| {
+                                match state.body(&c).map(|b| b.record) {
+                                    Some(Record::Verse {
+                                        value: VerseValue::Text { words, .. },
+                                        ..
+                                    }) => Some(words),
+                                    _ => None,
+                                }
+                            });
+                            if let Some(words) = newest {
+                                census.saw("stray covered verse");
+                                want.extend(words_of(&words));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                let usfm = state
+                    .chapter_usfm(BookId::Titus, *chapter)
+                    .unwrap_or_default();
+                let mut got: Vec<String> = words_of(&usfm);
+                got.sort();
+                want.sort();
+                prop_assert_eq!(
+                    got,
+                    want,
+                    "chapter {} (issues {:?}):\n{}",
+                    chapter,
+                    issues.contains(chapter),
+                    usfm
                 );
             }
-        }
-        for chapter in 1..=2u16 {
-            let usfm = state
-                .chapter_usfm(BookId::Titus, chapter)
-                .unwrap_or_default();
-            let mut got: Vec<String> = usfm
-                .split_whitespace()
-                .filter(|w| generated_word(w))
-                .map(str::to_owned)
-                .collect();
-            got.sort();
-            let mut want = expected.remove(&chapter).unwrap_or_default();
-            want.sort();
-            if issues.contains(&chapter) {
-                for w in &want {
-                    prop_assert!(got.contains(w), "chapter {chapter} lost {w}");
-                }
-            } else {
-                prop_assert_eq!(got, want, "chapter {}:\n{}", chapter, usfm);
-            }
-        }
-        Ok(())
-    });
+            Ok(())
+        },
+    );
 }
 
 /// Fails if an attached record is left on an identity no screen shows.
 #[test]
 fn every_head_reachable_from_a_screen() {
-    team(CASES, &[], |sim, _| {
-        let state = &sim.devices[0].state;
+    team(CASES, &[], |view, _| {
+        let state = view.state;
         let candidates: BTreeSet<ChangeId> = state
             .conflicts()
             .flat_map(|c| {
@@ -1090,19 +1337,34 @@ fn every_head_reachable_from_a_screen() {
             })
             .collect();
         let detached: BTreeSet<RecordKey> = state.detached().cloned().collect();
-        let decisions: BTreeSet<RecordKey> = state
-            .render(&DerivedFile::Decisions(
+        // Every decision file and every comments file of every projected book.
+        let mut decisions: BTreeSet<RecordKey> = BTreeSet::new();
+        let mut comments: BTreeMap<String, bool> = BTreeMap::new();
+        for book in state.projected_books() {
+            for tool in [
                 ToolId::TranslationNotes,
-                BookId::Titus,
-            ))
-            .map(|bytes| {
-                decode_decisions(ToolId::TranslationNotes, BookId::Titus, &bytes)
-                    .expect("decodes")
-                    .into_iter()
-                    .map(|r| r.key())
-                    .collect()
-            })
-            .unwrap_or_default();
+                ToolId::TranslationWords,
+                ToolId::TranslationQuestions,
+            ] {
+                if let Some(bytes) = state.render(&DerivedFile::Decisions(tool, book)) {
+                    decisions.extend(
+                        decode_decisions(tool, book, &bytes)
+                            .expect("decodes")
+                            .into_iter()
+                            .map(|r| r.key()),
+                    );
+                }
+            }
+            if let Some(bytes) = state.render(&DerivedFile::Comments(book)) {
+                let doc: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+                for c in doc["comments"].as_array().into_iter().flatten() {
+                    comments.insert(
+                        c["id"].as_str().unwrap_or_default().to_owned(),
+                        !c["placed"].is_null(),
+                    );
+                }
+            }
+        }
         for key in state.record_keys() {
             for head in state.heads(&key) {
                 if candidates.contains(&head) || detached.contains(&key) {
@@ -1115,15 +1377,29 @@ fn every_head_reachable_from_a_screen() {
                 if book.is_some_and(|b| !state.book(b).projects()) {
                     continue; // History of a removed book, or a book no presence names.
                 }
+                // A head not listed under Detached is placed on a screen.
                 match &body.record {
-                    Record::Alignment { .. } => {
-                        prop_assert!(state.placement(&key) != Placement::NotAttached, "{key:?}");
+                    Record::Alignment { value, .. } => {
+                        let placed = state.placement(&key);
+                        prop_assert!(
+                            matches!(placed, Placement::Run { .. }) || value.dismissed,
+                            "{key:?} is placed nowhere and not listed: {placed:?}"
+                        );
                     }
-                    Record::Comment { value, .. } => {
+                    Record::Comment { id, value } => {
                         if let CommentTarget::Verse { .. } = value.target {
+                            let placed = state.placement(&key);
                             prop_assert!(
-                                state.placement(&key) != Placement::NotAttached,
-                                "{key:?}"
+                                matches!(placed, Placement::Run { .. }),
+                                "{key:?} is placed nowhere and not listed: {placed:?}"
+                            );
+                        }
+                        if let CommentTarget::Check(_) = value.target {
+                            prop_assert_eq!(
+                                comments.get(&id.to_hex()),
+                                Some(&true),
+                                "{:?} is on no check and not listed",
+                                key
                             );
                         }
                     }
@@ -1164,8 +1440,14 @@ fn book_removal_hides_nothing_unseen() {
     team(
         CASES,
         &["removed with unseen work", "removed, all seen"],
-        |sim, census| {
-            let state = &sim.devices[0].state;
+        |view, census| {
+            let (sim, state) = (view.sim, view.state);
+            // A Bible project keeps a book projected, so the burrito stays valid (§7.6).
+            prop_assert!(
+                state.books().is_empty() || !state.projected_books().is_empty(),
+                "no book projects: {:?}",
+                state.books()
+            );
             for book in [BookId::Titus, BookId::Ruth] {
                 let presence = RecordKey::BookPresence(book);
                 let heads = state.heads(&presence);
@@ -1183,8 +1465,8 @@ fn book_removal_hides_nothing_unseen() {
                     continue;
                 }
                 let mut unseen = 0u32;
-                for (label, line) in sim.items.iter().enumerate() {
-                    let Some(Verified::Change(change)) = line else {
+                for (label, line) in view.lines() {
+                    let Verified::Change(change) = line else {
                         continue;
                     };
                     if !sim::belongs_to(&sim.recipes[label], book) {
@@ -1716,6 +1998,7 @@ fn a_passage_grown_by_newer_fields_keeps_the_plain_conflict() {
                 text: false,
             },
         ],
+        last_books_removed: false,
     };
     let mut sim = Sim::run(&script, false);
     sim.sync_all();

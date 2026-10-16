@@ -229,11 +229,7 @@ fn build_group(state: &mut FoldState, mut records: Vec<KeyIdx>, dirty: &mut Dirt
             let meta = state.meta(*h);
             all_heads.push(meta.id);
             batches.insert(state.batch(meta.batch).id);
-            if state
-                .faults_of(r)
-                .iter()
-                .any(|(c, _, f)| c == h && *f == super::state::Fault::Missing)
-            {
+            if super::attach::continues_missing(state, &[*h]) {
                 incomplete = true;
             }
             let side = side_of

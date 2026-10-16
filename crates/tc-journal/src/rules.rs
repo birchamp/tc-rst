@@ -229,8 +229,10 @@ fn check_parents(body: &ChangeBody) -> Result<(), RuleViolation> {
             problem: "the parents are not sorted, or one is named twice".into(),
         });
     }
+    // Two changes under one comment id (a forgery or a broken random source) are a
+    // conflict, and its resolution names both: the only comment change with parents.
     let grow_only = match &body.record {
-        Record::Comment { .. } => Some("comment"),
+        Record::Comment { .. } if body.cause != crate::change::Cause::Resolve => Some("comment"),
         Record::BatchRelease { .. } => Some("batch release"),
         _ => None,
     };

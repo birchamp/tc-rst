@@ -665,17 +665,7 @@ impl FoldState {
                 None => entry.other_checks.push(k),
             },
             RecordKey::Comment(_) => {
-                let chapter = match shape {
-                    Shape::Comment { target } => match &**target {
-                        crate::record::CommentTarget::Verse { chapter, .. } => Some(chapter.get()),
-                        crate::record::CommentTarget::Check(check) => {
-                            super::attach::target_chapter(check)
-                        }
-                        crate::record::CommentTarget::Frame { .. } => None,
-                    },
-                    _ => None,
-                };
-                if let Some(c) = chapter {
+                if let Some(c) = comment_chapter(shape) {
                     self.chapters
                         .entry_or((book, c), ChapterEntry::default)
                         .comments
@@ -883,6 +873,9 @@ impl FoldState {
             let k = self.intern_hashed_key(key, hash, book, &self.metas[c.get()].shape.clone());
             self.metas[c.get()].key = k;
             self.keys[k.get()].changes.push(c);
+            if self.keys[k.get()].changes.len() > 1 {
+                self.file_comment(k, c, dirty);
+            }
         }
         self.batch_ids.reserve(added);
         for (i, batch) in batches.into_iter().enumerate() {
@@ -1030,6 +1023,9 @@ impl FoldState {
                 });
                 self.ids.insert(id_hash(&id), c.0);
                 self.entry_mut(k).changes.push(c);
+                if self.entry(k).changes.len() > 1 {
+                    self.file_comment(k, c, dirty);
+                }
                 if let Some(entry) = self.batches.get_mut(b.get()) {
                     entry.members.push(c);
                 }
@@ -1067,6 +1063,56 @@ impl FoldState {
             seq,
             changes,
         });
+    }
+
+    /// Files comment key `k` under the book and chapter that its change `c` targets too.
+    /// Two changes under one comment id (§8.1) may target different books: the key is a
+    /// record of each, whichever arrived first, and never moves (I1).
+    fn file_comment(&mut self, k: KeyIdx, c: ChangeIdx, dirty: &mut Dirty) {
+        if !matches!(self.entry(k).key, RecordKey::Comment(_)) {
+            return;
+        }
+        let shape = self.meta(c).shape.clone();
+        let book = meta::book_of(&self.entry(k).key, &shape);
+        let active = self.entry(k).active > 0;
+        if let Some(book) = book {
+            let entry = Arc::make_mut(&mut self.books)
+                .entry(book)
+                .or_insert_with(BookEntry::new);
+            if !entry.keys.contains(&k) {
+                entry.keys.push(k);
+                if active {
+                    entry.records += 1;
+                }
+                dirty.books.insert(book);
+            }
+            if let Some(chapter) = comment_chapter(&shape) {
+                let comments = &mut self
+                    .chapters
+                    .entry_or((book, chapter), ChapterEntry::default)
+                    .comments;
+                if !comments.contains(&k) {
+                    comments.push(k);
+                }
+            }
+        }
+    }
+
+    /// The books a key is a record of (§7.6): its own, and for a comment every book a
+    /// change under its id targets.
+    pub(crate) fn books_of(&self, k: KeyIdx) -> SmallVec<[BookId; 1]> {
+        let entry = self.entry(k);
+        let mut out: SmallVec<[BookId; 1]> = entry.book.into_iter().collect();
+        if matches!(entry.key, RecordKey::Comment(_)) && entry.changes.len() > 1 {
+            for c in &entry.changes {
+                if let Some(book) = meta::book_of(&entry.key, &self.meta(*c).shape)
+                    && !out.contains(&book)
+                {
+                    out.push(book);
+                }
+            }
+        }
+        out
     }
 
     // ---------------------------------------------------------------------------------
@@ -1213,14 +1259,14 @@ impl FoldState {
         }
         let entry = &mut self.keys[k.get()];
         entry.active += 1;
-        if entry.active == 1
-            && let Some(book) = entry.book
-        {
-            if let Some(be) = Arc::make_mut(&mut self.books).get_mut(&book) {
-                be.records += 1;
-            }
-            if !dirty.all {
-                dirty.books.insert(book);
+        if entry.active == 1 {
+            for book in self.books_of(k) {
+                if let Some(be) = Arc::make_mut(&mut self.books).get_mut(&book) {
+                    be.records += 1;
+                }
+                if !dirty.all {
+                    dirty.books.insert(book);
+                }
             }
         }
         if !dirty.all {
@@ -1530,9 +1576,7 @@ impl FoldState {
             RecordKey::CarriedFile(_) => dirty.paths = true,
             _ => {}
         }
-        if let Some(book) = entry.book {
-            dirty.books.insert(book);
-        }
+        dirty.books.extend(self.books_of(k));
         dirty.attached.insert(k);
     }
 
@@ -1803,4 +1847,16 @@ pub(crate) fn conflict_sort(conflict: &Conflict) -> ConflictSort {
         conflict.kind.order(),
         conflict.id,
     )
+}
+
+/// The chapter a comment is filed under: its verse's, or its check's target chapter.
+fn comment_chapter(shape: &Shape) -> Option<u16> {
+    match shape {
+        Shape::Comment { target } => match &**target {
+            crate::record::CommentTarget::Verse { chapter, .. } => Some(chapter.get()),
+            crate::record::CommentTarget::Check(check) => super::attach::target_chapter(check),
+            crate::record::CommentTarget::Frame { .. } => None,
+        },
+        _ => None,
+    }
 }

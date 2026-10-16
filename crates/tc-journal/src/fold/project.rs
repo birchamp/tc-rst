@@ -906,6 +906,16 @@ impl FoldState {
             let Record::Comment { value: comment, .. } = &*record else {
                 continue;
             };
+            // A comment id held by changes that target several books shows with the book
+            // its shown version targets.
+            let target_book = match &comment.target {
+                CommentTarget::Verse { book, .. } => Some(*book),
+                CommentTarget::Check(check) => check.book(),
+                CommentTarget::Frame { .. } => None,
+            };
+            if target_book != Some(book) {
+                continue;
+            }
             let head = match &self.entry(k).projected {
                 Projected::Change(c) => *c,
                 _ => match self.entry(k).heads.first() {

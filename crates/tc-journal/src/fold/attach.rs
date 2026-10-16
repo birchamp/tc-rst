@@ -328,8 +328,13 @@ fn issue_conflict(
     if let Some(k) = state.key_idx(&key) {
         keys.push(k);
     }
+    // Only verses with a folded version are records of the range: a verse whose only
+    // change is held in an incomplete batch has nothing to show or resolve (and filing it
+    // would make the listing depend on when the held change arrived).
     for v in others {
-        if let Some(k) = entry.verses.get(&v) {
+        if let Some(k) = entry.verses.get(&v)
+            && !state.entry(*k).heads.is_empty()
+        {
             keys.push(*k);
         }
     }
@@ -372,7 +377,7 @@ fn issue_conflict(
             .max_by_key(|h| state.meta(*h).order())
             .map_or(ChangeId::from_bytes([0; 32]), |h| state.meta(h).id),
         batches: batches.into_iter().collect(),
-        incomplete_history: false,
+        incomplete_history: continues_missing(state, &heads),
         unreadable,
     })
 }
@@ -394,6 +399,17 @@ pub(crate) fn candidates_of(
     }
     unreadable.sort();
     (candidates, unreadable)
+}
+
+/// Whether a head of a conflict continues a change that has not arrived (§7.4): its
+/// conflict is marked incomplete history.
+pub(crate) fn continues_missing(state: &FoldState, heads: &[ChangeIdx]) -> bool {
+    heads.iter().any(|h| {
+        state
+            .faults_of(state.meta(*h).key)
+            .iter()
+            .any(|(c, _, f)| c == h && *f == Fault::Missing)
+    })
 }
 
 // ---------------------------------------------------------------------------------------
@@ -506,10 +522,7 @@ fn local_conflict(state: &FoldState, k: KeyIdx, local: &super::state::LocalConfl
         .iter()
         .map(|h| state.batch(state.meta(*h).batch).id)
         .collect();
-    let incomplete_history = state
-        .faults_of(k)
-        .iter()
-        .any(|(c, _, f)| heads.contains(c) && *f == Fault::Missing);
+    let incomplete_history = continues_missing(state, &heads);
     Conflict {
         id,
         key: entry.key.clone(),
@@ -1102,7 +1115,7 @@ pub(crate) fn stage_paths(state: &mut FoldState, dirty: &mut Dirty) {
                 .collect::<BTreeSet<_>>()
                 .into_iter()
                 .collect(),
-            incomplete_history: false,
+            incomplete_history: continues_missing(state, &heads),
             unreadable,
         });
     }

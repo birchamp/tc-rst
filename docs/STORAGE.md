@@ -1225,7 +1225,9 @@ that breaks one is a **quarantined change**: kept in its file, not folded, liste
 - **V4 device profiles.** A `DeviceProfile(d)` change is written by device `d`, or by an Importer
   device for a Tc4Actor or Tc3User profile.
 - **V5 parents.** Sorted, unique, at most 4,096.
-- **V6 grow-only records.** A `Comment` or `BatchRelease` change has no parents.
+- **V6 grow-only records.** A `BatchRelease` change has no parents. A `Comment` change has no
+  parents unless its cause is `Resolve`: two changes under one comment id are a `Comment`
+  conflict, and its resolution names both (§8.3).
 - **V7 limits.** JSON nesting depth ≤ 64; a change line ≤ 4 MiB, counting its tab, hash and
   line feed.
 - **V8 carried paths.** A `CarriedFile` path is not a path the app derives or owns (anything
@@ -2123,7 +2125,9 @@ unseen = { c on any record of book b : for every removal head r, c ∉ closure_r
 
 The records of a book are its `BookHeader`, `ChapterFront`, `Verse`, `BookLayout` and
 `Alignment` records, every `Check` whose target is in the book, and every `Comment` whose target
-is in the book. If `unseen` is non-empty, the fold lists `BookRemovedWhileEdited { unseen }`
+is in the book. Two changes under one comment id (§8.1) may target different books: the comment
+is then a record of each, by the changes that target it, so which change arrived first never
+matters (I1). If `unseen` is non-empty, the fold lists `BookRemovedWhileEdited { unseen }`
 ("Maria removed Jonah on 3 Oct. Juan made 14 changes to Jonah after that.") and the book projects
 as present, with the scope of the nearest `Present` ancestor, until a person decides. If
 `unseen` is empty, the book projects nothing and its records stay (I2 state d); restoring the
@@ -2418,6 +2422,10 @@ Every choice is one `Resolve` batch whose changes name every current head as par
   chosen value; the pin resolution, the carry-over and the grouped check resolutions are one
   batch. If the chosen version is not installed, *Download* comes first.
 - **Settings, project details, book header, chapter front, OBS frames:** *Keep this one*; *Edit*.
+- **Comment** (two changes under one comment id): *Keep this one*; *Keep both* joins the texts
+  with the authors' names. The resolution is the one comment change with parents (V6).
+- **Device profile** (two versions of one device's profile, only from a duplicated device):
+  *Keep this one*, written by that device (V4).
 - **Carried file:** *Keep this file*; *Keep the other*; *Keep both* (the other version gets its
   own path and record).
 - **Path case:** *Rename* one of the files (a new `CarriedFile` record at the new path and
@@ -3442,6 +3450,7 @@ and the on-disk end state, not only what the fold returns.
 | L98 | A version the fold's source cannot read (a locked file, a cloud placeholder) is taken as absent: two unread versions settle as equal, or an unread base lets the one readable head merge over a version nobody saw, and the next edit's token supersedes it | an unreadable value is unknown, never absent or equal: the record is listed as a conflict marked unreadable, no token names an unread version, no choice is made while one is unread, and `retry_unreadable` judges it again (§2.6) | `unreadable_versions_are_listed_never_settled`, `unreadable_equal_versions_wait_to_be_read`, `unreadable_base_never_merges_away_a_version`, `unreadable_settled_version_is_not_in_a_token` |
 | L99 | Applying offline changes to a moved check applies only the newest editor's changes (by clock) and supersedes the others, and leaves out the units other than judgement, comment and bookmark | every decided version's changed units are applied, every unit of §7.3; two different changes of one unit refuse the choice (§8.3) | `loss_carryover_two_offline_editors`, `loss_carryover_two_verdicts_refused` |
 | L100 | *Choose per line* starts from one head's value and skips the units that merged cleanly, so the other person's agreed change (a comment) is lost; with no folded head it panics | the record starts from the merged agreed units and takes only the disputed units from the picks; it is offered only for a record's own conflict with disputed units (§8.3) | `loss_choose_per_line_keeps_agreed_units`, `per_unit_not_offered_without_units` |
+| L101 | Two changes under one comment id that target different books file the comment under the book of whichever arrived first, so devices disagree on removal visibility, `RecordsWithoutBook` and the comments files | the comment is a record of every book a change under its id targets (§7.6); a comments file lists it with the book its shown version targets | `duplicated_comment_id_across_books_converges`; property `fold_converges_under_any_union` |
 
 ---
 
@@ -3458,8 +3467,11 @@ smart-HTTP git server (a small Rust server around `git http-backend`, so server 
 The generators must reach the states they claim. Each run counts the states it produced
 (conflicts per kind, criss-cross bases, structure issues, book removals with unseen work,
 incomplete batches, duplicate devices, damaged packs) and fails if a counter is zero over the
-run (tC4 D51: a generator that re-folds after every event never builds a fork). Devices keep
-their own stale views on purpose. The team generator lives in `tc-journal/tests/sim`; the fold
+run (tC4 D51: a generator that re-folds after every event never builds a fork). A state counts
+only when it is in a state a property asserts on, never when it was only passed on the way.
+Devices keep their own stale views on purpose: a property of one device's fold asserts on the
+view, before the last exchange, of the device holding the most defects (held batches, missing
+parents), and again once every device holds everything. The team generator lives in `tc-journal/tests/sim`; the fold
 properties run there over the in-memory union, and its `Transport` trait is how `tc-store` (the
 exchange zip) and `tc-sync` (the local git server) run the same scripts through their transports.
 Its scripts write every record kind but OBS frames, whose records go through the same merge code

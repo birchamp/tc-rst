@@ -2396,3 +2396,174 @@ fn loss_carryover_two_verdicts_refused() {
         ))
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// Rules the review found untested (§16.7)
+// ---------------------------------------------------------------------------------------
+
+/// L50, §7.5: a verse written as covered alone, with no run reaching it, shows its own
+/// newest text once, labelled as itself, and the incoherence is listed.
+#[test]
+fn coherence_stray_covered_verse_shows_its_own_text() {
+    let mut maria = Dev::new(1);
+    let mut tool = Dev::new(2);
+    let book = imported_book(&mut maria, &[6]);
+    let edited = maria.one(
+        verse(1, 5, text("Maria's verse five", 5)),
+        vec![on(&book, &verse_key(1, 5)).id()],
+    );
+    let stray = tool.one(verse(1, 5, covered(4)), vec![edited.id()]);
+    let state = assert_converges(&all_of(&[&book, &[edited, stray]]));
+    let text = usfm(&state);
+    assert_eq!(
+        text.matches("\\v 5 Maria's verse five\n").count(),
+        1,
+        "{text}"
+    );
+    assert!(text.contains("\\v 4 words of 1:4\n"), "{text}");
+    assert!(
+        state
+            .conflicts()
+            .any(|c| c.kind == ConflictKind::StructureIssue && c.key == verse_key(1, 5))
+    );
+}
+
+/// An outside edit recorded with an unknown base (§11.1 X3).
+fn unknown_base_edit() -> Cause {
+    Cause::External {
+        source: tc_journal::ExternalSource::LocalFile {
+            path: tc_journal::RepoPath::parse("ingredients/TIT.usfm").expect("path"),
+            seen_md5: md5("an older file"),
+        },
+        unknown_base: true,
+    }
+}
+
+/// L41, L42, F7: an outside edit recorded without a base never becomes the provisional
+/// version over a person's edit, however new its clock, for a verse's own conflict and as
+/// a passage side's time.
+#[test]
+fn outside_edit_without_base_is_never_provisional() {
+    let mut maria = Dev::new(1);
+    let mut juan = Dev::new(2);
+    let mut outside = Dev::new(3);
+    let book = imported_book(&mut maria, &[6]);
+    juan.at = maria.at + 60_000;
+    outside.at = maria.at + 3_600_000;
+    let edit = juan.one(
+        verse(1, 1, text("Juan's verse one", 1)),
+        vec![on(&book, &verse_key(1, 1)).id()],
+    );
+    let wiped = outside.with(verse(1, 1, text("", 1)), vec![], unknown_base_edit());
+    let state = assert_converges(&all_of(&[&book, &[edit.clone(), wiped]]));
+    let conflict = the_conflict(&state);
+    assert_eq!(conflict.provisional, edit.id());
+    assert_eq!(
+        projected_words(&state, 1, 1).as_deref(),
+        Some("Juan's verse one")
+    );
+
+    // A passage: Maria joins 4–5; a later outside edit without a base rewrites verse 5.
+    let mut maria = Dev::new(1);
+    let mut outside = Dev::new(3);
+    let book = imported_book(&mut maria, &[6]);
+    let span = join(&mut maria, &book, 1, 4, 5);
+    outside.at = maria.at + 3_600_000;
+    let reverted = outside.with(
+        verse(1, 5, text("an old copy of five", 5)),
+        vec![],
+        unknown_base_edit(),
+    );
+    let state = assert_converges(&all_of(&[&book, &span, &[reverted]]));
+    let conflict = the_conflict(&state);
+    assert_eq!(conflict.kind, ConflictKind::Passage);
+    assert!(
+        span.iter().any(|c| c.id() == conflict.provisional),
+        "Maria's side is provisional"
+    );
+    assert!(usfm(&state).contains("\\v 4-5 words of 1:4 words of 1:5\n"));
+}
+
+/// L10, I3: when every head of a record is a seed stub, the one with the smallest id stays,
+/// whichever clock is newest.
+#[test]
+fn seed_stubs_settle_on_the_smallest_id_whatever_the_clock() {
+    for juan_later in [false, true] {
+        let mut maria = Dev::new(1);
+        let mut juan = Dev::new(2);
+        juan.at = maria.at + if juan_later { 3_600_000 } else { -3_600_000 };
+        let a = seed_book(&mut maria, &[2]);
+        // Juan's template writes its stubs differently: empty verses, a bare marker.
+        let b = juan.batch(
+            vec![
+                (present(PresentHow::Added), vec![]),
+                (header(), vec![]),
+                (
+                    Record::ChapterFront {
+                        book: BOOK,
+                        chapter: ch(1),
+                        value: ChapterFront::Present(UsfmBytes("\\c 1\n".into())),
+                    },
+                    vec![],
+                ),
+                (verse(1, 1, text("", 1)), vec![]),
+                (verse(1, 2, text("", 2)), vec![]),
+            ],
+            Cause::Seed,
+        );
+        let state = assert_converges(&all_of(&[&a, &b]));
+        assert_eq!(state.conflict_count(), 0);
+        for key in [verse_key(1, 1), RecordKey::ChapterFront(BOOK, ch(1))] {
+            let heads = state.heads(&key);
+            assert_eq!(heads.len(), 2);
+            match state.key_state(&key).map(|k| k.state) {
+                Some(Resolved::SettledByRule { head, .. }) => {
+                    assert_eq!(Some(&head), heads.iter().min(), "{key:?}")
+                }
+                other => panic!("{key:?}: {other:?}"),
+            }
+        }
+    }
+}
+
+/// L101, I1: two changes under one comment id that target different books (§8.1) make the
+/// comment a record of both books whatever their order of arrival, so removal visibility,
+/// `RecordsWithoutBook` and the comments files agree on every device.
+#[test]
+fn duplicated_comment_id_across_books_converges() {
+    let mut maria = Dev::new(1);
+    let mut juan = Dev::new(2);
+    let book = imported_book(&mut maria, &[2]);
+    let titus = maria.one(comment(9, verse_target(1, 1), "on Titus"), vec![]);
+    let ruth = juan.one(
+        comment(
+            9,
+            tc_journal::record::CommentTarget::Verse {
+                book: BookId::Ruth,
+                chapter: ch(1),
+                verse: vn(1),
+            },
+            "on Ruth",
+        ),
+        vec![],
+    );
+    for order in [[titus.clone(), ruth.clone()], [ruth.clone(), titus.clone()]] {
+        let mut state = FoldState::new(ProjectKind::Bible);
+        state.add(book.iter().cloned().map(FoldInput::from));
+        for change in &order {
+            state.add([FoldInput::from(change.clone())]);
+        }
+        same_fold(&fold(&all_of(&[&book, &order])), &state, "by arrival");
+    }
+    let state = assert_converges(&all_of(&[&book, &[titus.clone(), ruth.clone()]]));
+    let conflict = the_conflict(&state);
+    assert_eq!(conflict.kind, ConflictKind::Comment);
+    // Ruth has a version of the comment and no presence.
+    assert!(state.anomalies().any(|a| matches!(
+        a,
+        Anomaly::RecordsWithoutBook {
+            book: BookId::Ruth,
+            records: 1
+        }
+    )));
+}

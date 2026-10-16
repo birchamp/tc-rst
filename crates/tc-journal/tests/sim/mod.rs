@@ -34,7 +34,7 @@ use tc_journal::record::{
 use tc_journal::{
     BatchId, BatchRef, BookId, Cause, Change, ChangeBody, ChangeId, ChapterNo, CheckKey, CommentId,
     DeviceId, DeviceSeq, ImportSource, MetaField, MetaPath, PinGroup, Record, RecordKey, RepoPath,
-    SettingKey, UnknownKey, VerseNo, WallTime,
+    SettingKey, ToolId, UnknownKey, VerseNo, WallTime,
 };
 
 // ---------------------------------------------------------------------------------------
@@ -170,12 +170,25 @@ pub enum Op {
         at: u8,
         covered: bool,
     },
+    /// The project's versification (`vrs.json`).
+    Versification {
+        dev: u8,
+        value: u8,
+    },
+    /// The device's own profile (its display name).
+    Profile {
+        dev: u8,
+        value: u8,
+    },
 }
 
 #[derive(Debug, Clone)]
 pub struct Script {
     pub devices: u8,
     pub ops: Vec<Op>,
+    /// The script ends with everyone in step and the last two books removed at the same
+    /// time (§7.6): a state any later edit of either book would change.
+    pub last_books_removed: bool,
 }
 
 pub fn arb_op() -> impl Strategy<Value = Op> {
@@ -212,12 +225,22 @@ pub fn arb_op() -> impl Strategy<Value = Op> {
         1 => (d(), d()).prop_map(|(dev, at)| Op::Poison { dev, at }),
         12 => (d(), d(), d(), d()).prop_map(|(a, b, what, at)| Op::Fork { a, b, what, at }),
         1 => (d(), d(), any::<bool>()).prop_map(|(dev, at, covered)| Op::Stray { dev, at, covered }),
+        1 => (d(), d()).prop_map(|(dev, value)| Op::Versification { dev, value }),
+        1 => (d(), d()).prop_map(|(dev, value)| Op::Profile { dev, value }),
     ]
 }
 
 pub fn arb_script() -> impl Strategy<Value = Script> {
-    (3u8..=5, prop::collection::vec(arb_op(), 20..70))
-        .prop_map(|(devices, ops)| Script { devices, ops })
+    (
+        3u8..=5,
+        prop::collection::vec(arb_op(), 20..70),
+        prop::bool::weighted(0.2),
+    )
+        .prop_map(|(devices, ops, last_books_removed)| Script {
+            devices,
+            ops,
+            last_books_removed,
+        })
 }
 
 // ---------------------------------------------------------------------------------------
@@ -327,6 +350,11 @@ fn mint_one(
 ) -> Option<Verified> {
     let id_of = |l: &usize| ids.get(*l).copied().flatten();
     let record = match &recipe.template {
+        // A device's profile names its writer (V4), whatever id the writer is given.
+        Template::Plain(Record::DeviceProfile { value, .. }) => Record::DeviceProfile {
+            device: (how.device)(recipe.device),
+            value: value.clone(),
+        },
         Template::Plain(record) => record.clone(),
         Template::Removed { book, seen } => {
             let mut seen: Vec<_> = seen.iter().filter_map(id_of).map(|i| i.short()).collect();
@@ -468,7 +496,16 @@ pub struct Sim {
     pub reached: BTreeSet<&'static str>,
 }
 
-pub const CHECKS: [(u16, u16); 4] = [(1, 1), (1, 3), (2, 2), (1, 5)];
+/// The checks the team decides: translationNotes and translationWords of Titus, and
+/// translationNotes of Ruth.
+pub const CHECKS: [(ToolId, BookId, u16, u16); 6] = [
+    (ToolId::TranslationNotes, BookId::Titus, 1, 1),
+    (ToolId::TranslationNotes, BookId::Titus, 1, 3),
+    (ToolId::TranslationNotes, BookId::Titus, 2, 2),
+    (ToolId::TranslationNotes, BookId::Titus, 1, 5),
+    (ToolId::TranslationWords, BookId::Titus, 1, 2),
+    (ToolId::TranslationNotes, BookId::Ruth, 1, 1),
+];
 
 impl Sim {
     pub fn new(devices: u8) -> Self {
@@ -513,12 +550,17 @@ impl Sim {
                 file_name: "RUT.usfm".into(),
             }),
         );
-        let seed = seed_items(BookId::Titus, &[5, 4]);
+        let seed = seed_items(BookId::Titus, &[5, 4, 2], "___");
         sim.write(1, seed, Cause::Seed);
+        // Ana's template too, with empty stubs: chapter 3 exists only in the two
+        // templates, so every head of its records is a seed stub (§7.3 rule 2).
+        let seed = seed_items(BookId::Titus, &[5, 4, 2], "");
+        sim.write(2, seed, Cause::Seed);
         for to in 1..sim.devices.len() {
             sim.exchange(0, to, 0, 0);
         }
         sim.exchange(1, 0, 0, 0);
+        sim.exchange(2, 0, 0, 0);
         sim
     }
 
@@ -527,6 +569,11 @@ impl Sim {
         sim.check_incremental = check_incremental;
         for op in &script.ops {
             sim.step(op);
+        }
+        if script.last_books_removed {
+            sim.sync_all();
+            sim.remove(0, BookId::Titus);
+            sim.remove(1, BookId::Ruth);
         }
         sim
     }
@@ -969,6 +1016,12 @@ impl Sim {
             Op::Poison { dev, at } => self.poison(self.dev(dev), at),
             Op::Fork { a, b, what, at } => self.fork(self.dev(a), self.dev(b), what, at),
             Op::Stray { dev, at, covered } => self.stray(self.dev(dev), at, covered),
+            Op::Versification { dev, value } => self.versification(self.dev(dev), value),
+            Op::Profile { dev, value } => {
+                let d = self.dev(dev);
+                let screen = self.screen(d, &RecordKey::DeviceProfile(self.devices[d].id), false);
+                self.profile(d, value, screen, None);
+            }
         }
     }
 
@@ -980,7 +1033,7 @@ impl Sim {
         self.exchange(a, b, 0, 0);
         self.exchange(b, a, 0, 0);
         // The rarer outcomes (merges by unit, moved checks, newer kinds) come twice.
-        let what = match what % 18 {
+        let what = match what % 22 {
             14 => 2,
             15 => 6,
             16 => 3,
@@ -1041,6 +1094,30 @@ impl Sim {
             12 => {
                 self.remove(a, book(at.is_multiple_of(3)));
                 self.edit(b, at, false, false, None);
+            }
+            18 => {
+                self.versification(a, at);
+                self.versification(b, at.wrapping_add(1));
+            }
+            19 => {
+                // One device's profile saved by two machines that share its identity.
+                let key = RecordKey::DeviceProfile(self.devices[a].id);
+                let screen = self.screen(a, &key, false);
+                self.profile(a, at, screen.clone(), None);
+                let seq = self.devices[a].seq;
+                self.profile(a, at.wrapping_add(1), screen, Some(seq));
+                self.reached.insert("twin");
+            }
+            20 => {
+                // The last two books removed at the same time (§7.6).
+                self.remove(a, BookId::Titus);
+                self.remove(b, BookId::Ruth);
+            }
+            21 => {
+                // Two comments under one id: a broken random source (§8.1), on two verses.
+                let id = self.comment_id(a);
+                self.comment_as(a, at | 1, id);
+                self.comment_as(b, (at | 1).wrapping_add(3), id);
             }
             _ => {
                 let book = book(at.is_multiple_of(3));
@@ -1344,7 +1421,7 @@ impl Sim {
         self.write_section(d, records, Cause::Edit);
     }
 
-    fn remove(&mut self, d: usize, book: BookId) {
+    pub fn remove(&mut self, d: usize, book: BookId) {
         if !self.devices[d].state.book(book).projects() {
             return;
         }
@@ -1478,8 +1555,8 @@ impl Sim {
     }
 
     fn decide(&mut self, d: usize, which: u8, what: u8, stale: bool) {
-        let (c, v) = CHECKS[usize::from(which) % CHECKS.len()];
-        let key = self.live_check(d, &tck(c, v));
+        let target = CHECKS[usize::from(which) % CHECKS.len()];
+        let key = self.live_check(d, &tck(target));
         let rkey = RecordKey::Check(key.clone());
         let screen = self.screen(d, &rkey, stale);
         let mut value = match &screen.shown {
@@ -1488,7 +1565,14 @@ impl Sim {
                 ..
             }) => value.clone(),
             Some(_) => return,
-            None => decision(Some(UserStatus::Todo), false, None),
+            None => {
+                // A first decision records the resource the checker's screen resolved.
+                let mut first = decision(Some(UserStatus::Todo), false, None);
+                if let Some(pin) = current_pin(&self.devices[d].state, target.0) {
+                    first.resource = pin;
+                }
+                first
+            }
         };
         match what % 4 {
             0 => value.judgement.status = Some(UserStatus::Valid),
@@ -1502,8 +1586,9 @@ impl Sim {
     }
 
     fn carry_over(&mut self, d: usize, which: u8) {
-        let (c, v) = CHECKS[usize::from(which) % CHECKS.len()];
-        let key = self.live_check(d, &tck(c, v));
+        let target = CHECKS[usize::from(which) % CHECKS.len()];
+        let (tool, book, c, v) = target;
+        let key = self.live_check(d, &tck(target));
         let Some(Record::Check {
             value: CheckValue::Decision(mut value),
             ..
@@ -1514,8 +1599,16 @@ impl Sim {
             return;
         };
         let n = self.fresh();
-        let to = check_key_id(&format!("m{n}"), c, v);
-        value.resource.sha = oid((n % 200) as u8);
+        let to = check_key_id(tool, book, &format!("m{n}"), c, v);
+        // The carry-over of an upgrade moves the decision to the pinned resource when the
+        // pins name one, else to a version nobody pinned.
+        value.resource = match current_pin(&self.devices[d].state, tool) {
+            Some(pin) if n.is_multiple_of(2) => pin,
+            _ => tc_journal::record::ResourceRef {
+                repo_path: value.resource.repo_path.clone(),
+                sha: oid((n % 200) as u8),
+            },
+        };
         let old = self.screen(d, &RecordKey::Check(key.clone()), false);
         let new = self.screen(d, &RecordKey::Check(to.clone()), false);
         self.write(
@@ -1531,9 +1624,21 @@ impl Sim {
     }
 
     fn comment(&mut self, d: usize, on: u8) {
+        let id = self.comment_id(d);
+        self.comment_as(d, on, id);
+    }
+
+    fn comment_id(&mut self, d: usize) -> CommentId {
+        let n = self.fresh();
+        let mut id = [0u8; 16];
+        id[..4].copy_from_slice(&n.to_be_bytes());
+        id[4] = d as u8;
+        CommentId::from_bytes(id)
+    }
+
+    fn comment_as(&mut self, d: usize, on: u8, id: CommentId) {
         let target = if on.is_multiple_of(3) {
-            let (c, v) = CHECKS[usize::from(on / 3) % CHECKS.len()];
-            CommentTarget::Check(tck(c, v))
+            CommentTarget::Check(tck(CHECKS[usize::from(on / 3) % CHECKS.len()]))
         } else {
             let Some((c, v)) = self.slot(d, on) else {
                 return;
@@ -1544,16 +1649,12 @@ impl Sim {
                 verse: vno(v),
             }
         };
-        let n = self.fresh();
-        let mut id = [0u8; 16];
-        id[..4].copy_from_slice(&n.to_be_bytes());
-        id[4] = d as u8;
         let text = self.fresh_words(d, 2);
         self.write(
             d,
             vec![(
                 Template::Plain(Record::Comment {
-                    id: CommentId::from_bytes(id),
+                    id,
                     value: CommentValue { target, text },
                 }),
                 vec![],
@@ -1574,10 +1675,11 @@ impl Sim {
             _ => Vec::new(),
         };
         let lang = ["en", "es", "fr"][usize::from(value) % 3];
-        let (name, json) = match slot % 3 {
+        let (name, json) = match slot % 4 {
             0 => ("gatewayLanguage", Json::from(lang)),
             1 => ("translationNotes", resource_slot(lang, "tn", value)),
-            _ => ("translationWords", resource_slot(lang, "tw", value)),
+            2 => ("translationWords", resource_slot(lang, "tw", value)),
+            _ => ("translationWordsLinks", resource_slot(lang, "twl", value)),
         };
         slots.retain(|(k, _)| k != name);
         slots.push((name.to_owned(), json));
@@ -1765,6 +1867,59 @@ impl Sim {
         self.write_screen(d, record, screen, Cause::Edit, Forge::Plain);
     }
 
+    fn versification(&mut self, d: usize, value: u8) {
+        let key = RecordKey::Versification;
+        let screen = self.screen(d, &key, false);
+        let record = Record::Versification {
+            value: tc_journal::record::VersificationValue {
+                name: Some(format!("custom {}", value % 3).into()),
+                bytes: format!("{{\"maxVerses\":{{\"TIT\":[\"{}\"]}}}}", 15 + value % 4),
+            },
+        };
+        self.write_screen(d, record, screen, Cause::Edit, Forge::Plain);
+    }
+
+    /// Device `d` saves its profile from `screen`; with `twin`, a second machine that
+    /// shares its identity saves it, reusing seq `twin`.
+    fn profile(&mut self, d: usize, value: u8, screen: Screen, twin: Option<u64>) {
+        let record = Record::DeviceProfile {
+            device: self.devices[d].id,
+            value: tc_journal::record::DeviceProfileValue {
+                display_name: Some(format!("Person {d} {}", value % 4).into()),
+                door43_username: None,
+                legacy: None,
+            },
+        };
+        if screen.shown.as_ref() == Some(&record) {
+            return;
+        }
+        let labels = self.write_forged(
+            d,
+            vec![(Template::Plain(record), screen.token.clone(), Forge::Plain)],
+            Cause::Edit,
+            twin,
+        );
+        for label in labels {
+            self.writes.push(Write {
+                label,
+                screen: screen.clone(),
+            });
+        }
+    }
+
+    /// The device that may write record `key`: a device profile only by its own device
+    /// (V4), anything else by `d`.
+    pub fn writer_of(&self, key: &RecordKey, d: usize) -> usize {
+        match key {
+            RecordKey::DeviceProfile(id) => self
+                .devices
+                .iter()
+                .position(|dev| dev.id == *id)
+                .unwrap_or(d),
+            _ => d,
+        }
+    }
+
     fn resolve(&mut self, d: usize, pick: u8, how: u8) {
         let conflicts: Vec<Conflict> = self.devices[d].state.conflicts().cloned().collect();
         if conflicts.is_empty() {
@@ -1775,7 +1930,11 @@ impl Sim {
         let Some(chosen) = chosen else {
             return;
         };
-        self.write_planned(d, chosen.planned);
+        let writer = self.writer_of(&conflict.key, d);
+        if writer != d {
+            self.exchange(d, writer, 0, 0);
+        }
+        self.write_planned(writer, chosen.planned);
     }
 
     pub fn write_planned(&mut self, d: usize, planned: Vec<PlannedChange>) {
@@ -2195,10 +2354,22 @@ fn import_items(book: BookId, chapters: &[u16]) -> Vec<(Template, Vec<ChangeId>)
         .collect()
 }
 
-fn seed_items(book: BookId, chapters: &[u16]) -> Vec<(Template, Vec<ChangeId>)> {
+fn seed_items(book: BookId, chapters: &[u16], stub: &str) -> Vec<(Template, Vec<ChangeId>)> {
     import_items(book, chapters)
         .into_iter()
         .map(|(t, p)| match t {
+            Template::Plain(Record::ChapterFront {
+                book,
+                chapter,
+                value: ChapterFront::Present(_),
+            }) if stub.is_empty() => (
+                Template::Plain(Record::ChapterFront {
+                    book,
+                    chapter,
+                    value: ChapterFront::Present(UsfmBytes(format!("\\c {}\n", chapter.get()))),
+                }),
+                p,
+            ),
             Template::Plain(Record::Verse {
                 book,
                 chapter,
@@ -2218,7 +2389,7 @@ fn seed_items(book: BookId, chapters: &[u16]) -> Vec<(Template, Vec<ChangeId>)> 
                     verse,
                     value: VerseValue::Text {
                         marker,
-                        words: "___".into(),
+                        words: stub.into(),
                         layout,
                         last,
                         from,
@@ -2235,7 +2406,7 @@ fn resource_slot(lang: &str, kind: &str, value: u8) -> Json {
     tc_obj(&[
         (
             "repoPath",
-            Json::from(format!("git.door43.org/org/{lang}_{kind}")),
+            Json::from(format!("git.door43.org/unfoldingWord/{lang}_{kind}")),
         ),
         ("sha", Json::from(oid(value).to_hex())),
         ("version", Json::from(format!("v{}", value % 5))),
@@ -2267,12 +2438,38 @@ pub fn vkey(c: u16, v: u16) -> RecordKey {
     RecordKey::Verse(BookId::Titus, chno(c), vno(v))
 }
 
-fn tck(c: u16, v: u16) -> CheckKey {
-    check_key_id(&format!("c{c}{v}"), c, v)
+fn tck((tool, book, c, v): (ToolId, BookId, u16, u16)) -> CheckKey {
+    check_key_id(tool, book, &format!("c{c}{v}"), c, v)
 }
 
-fn check_key_id(id: &str, c: u16, v: u16) -> CheckKey {
+fn check_key_id(tool: ToolId, book: BookId, id: &str, c: u16, v: u16) -> CheckKey {
     let mut key = check_key("abcd", c, v);
+    key.tool = tool;
     key.check_id = tc_journal::CheckId::parse(id).expect("id");
+    key.target = tc_journal::CheckTarget::Verse {
+        book,
+        chapter: tc_journal::RefPart::parse(&c.to_string()).expect("chapter"),
+        verse: tc_journal::RefPart::parse(&v.to_string()).expect("verse"),
+    };
     key
+}
+
+/// The pin a checker's tool resolves to in the device's projected pins, as `resolution`
+/// does (§7.7), when there is one: a decision made now records it.
+fn current_pin(state: &FoldState, tool: ToolId) -> Option<tc_journal::record::ResourceRef> {
+    let slot = match tool {
+        ToolId::TranslationNotes => "translationNotes",
+        ToolId::TranslationWords => "translationWordsLinks",
+        ToolId::TranslationQuestions => "translationQuestions",
+    };
+    let Some(Record::Pins { value, .. }) = state.projected(&RecordKey::Pins(PinGroup::Primary))
+    else {
+        return None;
+    };
+    let pin = value.0.get(&tc_journal::SlotName::parse(slot).ok()?)?;
+    let map = pin.0.as_obj()?;
+    Some(tc_journal::record::ResourceRef {
+        repo_path: map.get("repoPath")?.as_str()?.into(),
+        sha: tc_journal::GitOid::parse(map.get("sha")?.as_str()?)?,
+    })
 }
