@@ -80,16 +80,15 @@ check in CI that can fail.
   J9a, J9c, J9d, J11 to J13, J16, J17, J18 and J20 to J26 (tC4 `docs/JOURNEYS.md`).
   Where tC4 asserts an internal file shape, the Rust test asserts the equivalent fact in
   the new format.
-- **P2. Team work.** These journeys pass end to end against a Door43-compatible git
-  server:
-  - J17: open a shared project from Door43 on another computer, or from an exchange file,
-    then continue offline.
+- **P2. Team work.** These journeys pass end to end:
+  - J17: open a shared project on another computer, then continue offline. The project
+    comes from Door43, through a Door43-compatible git server, or from an exchange file.
   - J18: keep one version of a conflicted verse. As in tC4, step 3 of J26 can prove it.
-  - J26: sync one project with two teammates through Door43. Three users edit offline at
-    the same time. The steps are tC4's. The rebuild adds one: A also resolves the
-    conflict between two check decisions.
+  - J26: sync one project with two teammates through Door43, against a Door43-compatible
+    git server. Three users edit offline at the same time. The steps are tC4's. The
+    rebuild adds one: A also resolves the conflict between two check decisions.
   - The rebuild's own journey: exchange by USB file in both directions, while both sides
-    keep editing.
+    keep editing. It needs no server.
 - **P3. No silent loss.** A property test generates random concurrent histories for
   three or more devices and merges them in random orders and groupings. It shows that
   every merge order gives the same state and that no operation disappears without
