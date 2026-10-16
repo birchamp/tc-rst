@@ -47,6 +47,9 @@ pub enum StoryError {
     },
     #[error("story {story} carries a reference line but no frame (§10)")]
     ReferenceWithoutFrame { story: StoryNo },
+    /// tC4 has no limit; a frame number here is a `u16`, as STORAGE §2.2's `FrameNo` is.
+    #[error("story {story} line {line} starts frame 65536 — a story holds at most 65535 frames")]
+    TooManyFrames { story: StoryNo, line: usize },
 }
 
 /// `Number(digits)` as JavaScript prints it, for the digits of a title line short enough to

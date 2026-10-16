@@ -9,10 +9,10 @@ use common::{SETS, stories};
 use proptest::prelude::*;
 use tc_helps::obs::{ObsFrame, ObsImage, ObsStory, parse_obs_story};
 use tc_obs::story::{
-    StoryState, apply_story_state, decode_story, parse_story, seed_story, write_frame,
-    write_reference, write_title,
+    StoryState, apply_story_state, decode_story, frame_text_problem, parse_story, seed_story,
+    write_frame, write_reference, write_title,
 };
-use tc_obs::{FrameNo, StoryFile, TextProblem, WriteError};
+use tc_obs::{FrameNo, Reformatted, StoryError, StoryFile, StoryNo, TextProblem, WriteError};
 
 #[test]
 fn every_shipped_story_reads_back_byte_for_byte() {
@@ -47,7 +47,9 @@ fn every_shipped_story_renders_back_from_its_records() {
     let template = stories("template");
     for set in SETS {
         for (i, text) in stories(set).into_iter().enumerate() {
-            let records = decode_story(&text).unwrap();
+            let decoded = decode_story(&text).unwrap();
+            assert_eq!(decoded.reformatted, [], "{set} {}", i + 1);
+            let records = decoded.records;
             assert_eq!(records.render().unwrap(), text, "{set} {}", i + 1);
             let story = parse_story(&text).unwrap();
             assert_eq!(records.title.as_deref(), Some(story.title.as_str()));
@@ -100,7 +102,7 @@ fn a_frame_write_changes_only_that_frames_paragraph() {
 #[test]
 fn parts_the_writers_would_refuse_stay_in_the_base_as_written() {
     let text = "# 1. Title with a trailing space \n\n![a](b)\n\nuno\n# 2. looks like a title\n\n![a](c)\n\ndos\n\n_ spaced _\n";
-    let records = decode_story(text).unwrap();
+    let records = decode_story(text).unwrap().records;
     assert_eq!(records.title, None);
     assert_eq!(records.frames, [None, Some("dos".to_owned())]);
     assert_eq!(records.reference, None);
@@ -112,11 +114,131 @@ fn parts_the_writers_would_refuse_stay_in_the_base_as_written() {
 }
 
 #[test]
-fn whitespace_in_a_frame_region_is_layout_not_text() {
+fn whitespace_no_record_keeps_is_named_where_rendering_rewrites_it() {
     let a = "# 4. T\n\n![a](b)\n\nuno\n\n![a](c)\n\ndos\n\n_R_\n";
-    let b = "# 4. T\n\n![a](b)\nuno\n \n\u{a0}\n![a](c)\n\n\n\ndos\n\t\n_R_\n\n\n";
-    assert_eq!(decode_story(a).unwrap(), decode_story(b).unwrap());
-    assert_eq!(decode_story(b).unwrap().render().unwrap(), a);
+    let b = "# 04. T\n\n![a](b)\nuno\n \n\u{a0}\n![a](c)\n\n\n\ndos\n\t\n_R_\n\n\n";
+    let (a, b) = (decode_story(a).unwrap(), decode_story(b).unwrap());
+    assert_eq!(a.reformatted, []);
+    // The same records: the layout is no record's.
+    assert_eq!(b.records, a.records);
+    // So rendering them writes the writers' layout, and the decoder says where.
+    assert_eq!(
+        b.reformatted,
+        [
+            Reformatted::Title,
+            Reformatted::Frame(FrameNo(1)),
+            Reformatted::Frame(FrameNo(2)),
+            Reformatted::Reference,
+        ]
+    );
+    // One blank line each side, but one of them holds a space or a tab.
+    for spaced in [
+        "# 4.\n\n![a](b)\n\nuno\n \n![a](c)\n\ndos\n",
+        "# 4.\n\n![a](b)\n\t\nuno\n\n![a](c)\n\ndos\n",
+    ] {
+        assert_eq!(
+            decode_story(spaced).unwrap().reformatted,
+            [Reformatted::Frame(FrameNo(1))]
+        );
+    }
+    // Empty frames, and a file without a line end after its reference line.
+    let empty = "# 4.\n\n![a](b)\n\n\n![a](c)\n\n\n\n_R_";
+    assert_eq!(
+        decode_story(empty).unwrap().reformatted,
+        [Reformatted::Frame(FrameNo(1)), Reformatted::Reference]
+    );
+    let last = "# 4.\n\n![a](b)\n\n\n\n![a](c)\n\n\n\n";
+    assert_eq!(
+        decode_story(last).unwrap().reformatted,
+        [Reformatted::Frame(FrameNo(2))]
+    );
+    // A frame the writers refuse keeps its layout in the base.
+    let kept = "# 4.\n\n![a](b)\n \nuno\n_x_\n\n\n![a](c)\n\ndos\n";
+    let decoded = decode_story(kept).unwrap();
+    assert_eq!(decoded.records.frames, [None, Some("dos".to_owned())]);
+    assert_eq!(decoded.reformatted, []);
+    assert_eq!(decoded.records.render().unwrap(), kept);
+}
+
+/// The reference line stays in the base when the last frame's paragraph does: a last line
+/// in the reference form must not become the base's reference line.
+#[test]
+fn a_last_paragraph_the_writers_refuse_keeps_its_closing_underscore_line() {
+    for (text, frames) in [
+        (
+            "# 1. T\n\n![a](b)\n\nIn the beginning.\n_God made it all._\n\n_A Bible story from: Genesis 1-2_\n",
+            vec![None],
+        ),
+        (
+            "# 1. T\n\n![a](b)\n\nIn the beginning.\n_God made it all._\n_A Bible story from: Genesis 1-2_\n",
+            vec![None],
+        ),
+        (
+            "# 1. T\n\n![a](b)\n\nuno\n\n![a](c)\n\ndos\n_emphasis_\n\n_A Bible story from: Genesis 1-2_\n",
+            vec![Some("uno".to_owned()), None],
+        ),
+        (
+            "# 1. T\n\n![a](b)\n\nIn the beginning.\n__\n\n_A Bible story from: Genesis 1-2_\n",
+            vec![None],
+        ),
+    ] {
+        let decoded = decode_story(text).unwrap();
+        assert_eq!(decoded.records.frames, frames, "{text:?}");
+        assert_eq!(
+            decoded.records.reference.as_deref(),
+            Some("A Bible story from: Genesis 1-2")
+        );
+        assert_eq!(decoded.reformatted, []);
+        let rendered = decoded.records.render().unwrap();
+        assert_eq!(rendered, text);
+        assert_eq!(parse_story(&rendered), parse_story(text));
+        // A new reference replaces the line in place, and the paragraph stays.
+        let mut records = decoded.records.clone();
+        records.reference = Some("Génesis 1-2".to_owned());
+        let story = parse_story(&records.render().unwrap()).unwrap();
+        assert_eq!(story.reference.as_deref(), Some("Génesis 1-2"));
+        assert_eq!(story.frames, parse_story(text).unwrap().frames);
+    }
+}
+
+#[test]
+fn a_story_reads_up_to_the_frames_a_frame_number_can_count() {
+    let story = |frames: usize| {
+        let mut text = String::from("# 1. Title\n\n");
+        for f in 1..=frames {
+            text.push_str(&format!("![a](b{f})\n\nframe {f}\n\n"));
+        }
+        // The writers end the file one line end after the last paragraph.
+        text.pop();
+        text
+    };
+    let most = story(usize::from(u16::MAX));
+    let file = StoryFile::parse(most.as_str()).unwrap();
+    assert_eq!(file.text(FrameNo(u16::MAX)), Some("frame 65535"));
+    let parsed = file.story();
+    assert_eq!(parsed.frames.len(), 65_535);
+    assert_eq!(parsed.frames[65_534].text, "frame 65535");
+    let records = decode_story(&most).unwrap().records;
+    assert_eq!(records.render().unwrap(), most);
+    let mut state = StoryState::default();
+    state.frames.insert(FrameNo(u16::MAX), "last".to_owned());
+    let applied = apply_story_state(&most, &state).unwrap();
+    assert_eq!(
+        StoryFile::parse(applied).unwrap().text(FrameNo(u16::MAX)),
+        Some("last")
+    );
+
+    let over = story(65_536);
+    let refused = StoryError::TooManyFrames {
+        story: StoryNo::new(1).unwrap(),
+        line: 3 + 4 * 65_535,
+    };
+    assert_eq!(StoryFile::parse(over.as_str()).err(), Some(refused.clone()));
+    assert_eq!(decode_story(&over).err(), Some(refused.clone()));
+    assert_eq!(
+        apply_story_state(&over, &state),
+        Err(WriteError::Story(refused))
+    );
 }
 
 #[test]
@@ -248,6 +370,25 @@ fn text_line() -> impl Strategy<Value = String> {
     })
 }
 
+/// A paragraph line the reader keeps in its frame but the writers refuse: the reference
+/// form, which only the last line of a file takes as the reference, and the title form,
+/// which only the first line takes as the title.
+fn refused_line() -> impl Strategy<Value = String> {
+    prop::sample::select(vec![
+        "_x_",
+        "__",
+        "_ _",
+        "_God made it all._",
+        "# 2. looks like a title",
+        "# 7.",
+    ])
+    .prop_map(str::to_owned)
+}
+
+fn paragraph_line() -> impl Strategy<Value = String> {
+    prop_oneof![8 => text_line(), 1 => refused_line()]
+}
+
 fn image_line() -> impl Strategy<Value = String> {
     prop_oneof![
         (1u8..=50, 1u8..=20).prop_map(|(s, f)| format!(
@@ -268,7 +409,7 @@ fn generated() -> impl Strategy<Value = Generated> {
         1u8..=50,
         one_line(20),
         prop::collection::vec(
-            (image_line(), prop::collection::vec(text_line(), 0..=3)),
+            (image_line(), prop::collection::vec(paragraph_line(), 0..=3)),
             0..=6,
         )
         .prop_filter("distinct image lines", |frames| {
@@ -287,7 +428,7 @@ fn generated() -> impl Strategy<Value = Generated> {
             |(
                 number,
                 title,
-                frames,
+                mut frames,
                 reference,
                 after_title,
                 gaps,
@@ -295,6 +436,16 @@ fn generated() -> impl Strategy<Value = Generated> {
                 final_newline,
             )| {
                 let reference = if frames.is_empty() { None } else { reference };
+                // Without a reference line, the file's last line in the reference form
+                // is its reference.
+                if reference.is_none()
+                    && let Some((_, text)) = frames.last_mut()
+                    && text
+                        .last()
+                        .is_some_and(|l| l.len() >= 2 && l.starts_with('_') && l.ends_with('_'))
+                {
+                    text.push("fin".to_owned());
+                }
                 let gaps = gaps.into_iter().take(frames.len()).collect();
                 Generated {
                     number,
@@ -323,21 +474,32 @@ proptest! {
 
     #[test]
     fn records_render_back_and_decode_the_same(g in generated()) {
-        if g.frames.is_empty() {
-            // Everything after a frameless story's title is template lines, kept as written.
-            let text = g.text(false);
-            prop_assert_eq!(decode_story(&text).unwrap().render().unwrap(), text);
-            return Ok(());
+        for canonical in [true, false] {
+            let text = g.text(canonical);
+            let decoded = decode_story(&text).unwrap();
+            let rendered = decoded.records.render().unwrap();
+            // No text is lost or changed.
+            prop_assert_eq!(parse_story(&rendered).unwrap(), g.story());
+            // The bytes come back unless the decoder names what rendering reformats, which
+            // a file in the writers' layout never has.
+            prop_assert_eq!(decoded.reformatted.is_empty(), rendered == text);
+            if canonical {
+                prop_assert_eq!(&decoded.reformatted, &[]);
+            }
+            // Rendering then decoding gives back every record.
+            let again = decode_story(&rendered).unwrap();
+            prop_assert_eq!(&again.records, &decoded.records);
+            prop_assert_eq!(again.reformatted, []);
         }
-        let canonical = g.text(true);
-        let records = decode_story(&canonical).unwrap();
-        prop_assert_eq!(records.render().unwrap(), canonical.clone());
-        // Any spacing decodes to the same records, which render in the writers' layout.
-        let spaced = decode_story(&g.text(false)).unwrap();
-        prop_assert_eq!(&spaced, &records);
-        // Rendering then decoding gives back every record.
-        let again = decode_story(&records.render().unwrap()).unwrap();
-        prop_assert_eq!(again, records);
+        // Where every paragraph is recorded, its spacing is no part of any record. (A
+        // frameless story is all template lines, kept as written.)
+        let writable = g.frames.iter().all(|(_, t)| frame_text_problem(&t.join("\n")).is_none());
+        if writable && !g.frames.is_empty() {
+            prop_assert_eq!(
+                decode_story(&g.text(false)).unwrap().records,
+                decode_story(&g.text(true)).unwrap().records
+            );
+        }
     }
 
     #[test]
@@ -391,7 +553,7 @@ proptest! {
     #[test]
     fn a_state_applied_onto_its_own_base_is_the_file(g in generated()) {
         let canonical = g.text(true);
-        let records = decode_story(&canonical).unwrap();
+        let records = decode_story(&canonical).unwrap().records;
         prop_assert_eq!(apply_story_state(&records.base, &records.state()).unwrap(), canonical);
         // An empty state leaves any file as it is.
         let text = g.text(false);

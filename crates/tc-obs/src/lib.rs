@@ -32,4 +32,4 @@ pub mod template;
 
 pub use error::{Error, NewProjectError, StoryError, TemplateError, TextProblem, WriteError};
 pub use ids::{FrameNo, STORY_COUNT, StoryNo};
-pub use story::{StoryFile, StoryRecords, StoryState, decode_story};
+pub use story::{DecodedStory, Reformatted, StoryFile, StoryRecords, StoryState, decode_story};

@@ -21,13 +21,42 @@ use crate::ids::{FrameNo, StoryNo};
 use crate::js::{is_blank, trim};
 
 thread_local! {
-    static LINES_EXAMINED: Cell<u64> = const { Cell::new(0) };
+    static LINES_TOUCHED: Cell<u64> = const { Cell::new(0) };
 }
 
-/// How many story lines this thread has examined since it started, in any read or write:
-/// the operation count the performance tests assert (docs/PERFORMANCE.md rule 2).
-pub fn lines_examined() -> u64 {
-    LINES_EXAMINED.with(Cell::get)
+/// How many story lines this thread has read or written since it started: each line a
+/// read splits off, and each line a writer, the decoder or a projection puts out. The
+/// operation count the performance tests assert (docs/PERFORMANCE.md rule 2).
+pub fn lines_touched() -> u64 {
+    LINES_TOUCHED.with(Cell::get)
+}
+
+fn touch(lines: usize) {
+    LINES_TOUCHED.with(|n| n.set(n.get() + lines as u64));
+}
+
+/// Joins the lines of a file a writer puts out.
+fn emit(lines: &[&str]) -> String {
+    touch(lines.len());
+    lines.join("\n")
+}
+
+/// The number of the frame at `index` (from 0) of a story `split` read, which refuses a
+/// story with more frames than a `FrameNo` can number.
+fn frame_no(index: usize) -> FrameNo {
+    u16::try_from(index + 1)
+        .map(FrameNo)
+        .unwrap_or_else(|_| unreachable!("split reads at most {} frames", u16::MAX))
+}
+
+/// The title line `# N. title`, or `# N.` for an empty title (`writeTitle`,
+/// `journal/story.mjs:151-158`).
+fn title_line_of(number: StoryNo, title: &str) -> String {
+    if title.is_empty() {
+        format!("# {number}.")
+    } else {
+        format!("# {number}. {title}")
+    }
 }
 
 /// `TITLE_RE` (`journal/story.mjs:15`): `# `, ASCII digits, `.`, then nothing or a space and
@@ -98,7 +127,7 @@ fn split(bytes: &str) -> Result<Split<'_>, StoryError> {
         return Err(StoryError::CarriageReturn);
     }
     let lines: Vec<&str> = bytes.split('\n').collect();
-    LINES_EXAMINED.with(|n| n.set(n.get() + lines.len() as u64));
+    touch(lines.len());
     let first = lines[0];
     let (digits, title) = title_line(first).ok_or_else(|| StoryError::NotTitle {
         start: String::from_utf16_lossy(&first.encode_utf16().take(40).collect::<Vec<u16>>()),
@@ -126,6 +155,12 @@ fn split(bytes: &str) -> Result<Split<'_>, StoryError> {
     let mut frames: Vec<FrameLines> = Vec::new();
     for (i, line) in lines.iter().enumerate().take(end).skip(1) {
         if is_image_line(line) {
+            if frames.len() == usize::from(u16::MAX) {
+                return Err(StoryError::TooManyFrames {
+                    story: number,
+                    line: i + 1,
+                });
+            }
             frames.push(FrameLines {
                 image: i,
                 text: None,
@@ -308,10 +343,10 @@ impl StoryFile {
         ObsStory {
             number: self.number.get(),
             title: self.title().to_owned(),
-            frames: (1..=self.frames.len())
-                .map(|f| ObsFrame {
-                    image: image_of(self.image_line(f).unwrap_or_default()),
-                    text: self.text(FrameNo(f as u16)).unwrap_or_default().to_owned(),
+            frames: (0..self.frames.len())
+                .map(|i| ObsFrame {
+                    image: image_of(self.image_line(i + 1).unwrap_or_default()),
+                    text: self.text(frame_no(i)).unwrap_or_default().to_owned(),
                 })
                 .collect(),
             reference: self.reference().map(str::to_owned),
@@ -389,7 +424,7 @@ fn splice(lines: &[&str], range: Range<usize>, replacement: &[&str]) -> String {
     out.extend_from_slice(&lines[..range.start]);
     out.extend_from_slice(replacement);
     out.extend_from_slice(&lines[range.end..]);
-    out.join("\n")
+    emit(&out)
 }
 
 /// Sets frame `frame`'s paragraph, or the title for frame 0 (tC4 `writeFrame`,
@@ -437,12 +472,7 @@ pub fn write_title(bytes: &str, text: &str) -> Result<String, WriteError> {
         return Err(WriteError::TitleText(problem));
     }
     let s = split(bytes)?;
-    let line = if text.is_empty() {
-        format!("# {}.", s.number)
-    } else {
-        format!("# {}. {text}", s.number)
-    };
-    Ok(splice(&s.lines, 0..1, &[&line]))
+    Ok(splice(&s.lines, 0..1, &[&title_line_of(s.number, text)]))
 }
 
 /// Sets the reference line's text (tC4 `writeRef`, `journal/story.mjs:159-174`). A story
@@ -523,13 +553,10 @@ pub fn apply_story_state(base: &str, state: &StoryState) -> Result<String, Write
         }
     }
 
-    let title = state.frames.get(&FrameNo::TITLE).map(|t| {
-        if t.is_empty() {
-            format!("# {}.", s.number)
-        } else {
-            format!("# {}. {t}", s.number)
-        }
-    });
+    let title = state
+        .frames
+        .get(&FrameNo::TITLE)
+        .map(|t| title_line_of(s.number, t));
     let reference = state.reference.as_ref().map(|r| format!("_{r}_"));
     let lines = &s.lines;
     let mut out: Vec<&str> = Vec::with_capacity(lines.len() + 8);
@@ -540,7 +567,7 @@ pub fn apply_story_state(base: &str, state: &StoryState) -> Result<String, Write
     for (i, frame) in s.frames.iter().enumerate() {
         let f = i + 1;
         out.push(lines[frame.image]);
-        let written = state.frames.get(&FrameNo(f as u16));
+        let written = state.frames.get(&frame_no(i));
         let last = f == count;
         if let (true, None, Some(reference)) = (last, s.reference, reference.as_deref()) {
             // `write_reference` on a story with no reference line: after the last frame's
@@ -588,7 +615,7 @@ pub fn apply_story_state(base: &str, state: &StoryState) -> Result<String, Write
         out.push(reference.as_deref().unwrap_or(lines[at]));
         out.extend_from_slice(&lines[at + 1..]);
     }
-    Ok(out.join("\n"))
+    Ok(emit(&out))
 }
 
 /// The refusal of a part's text: the title's for frame 0, a paragraph's for the other
@@ -609,7 +636,9 @@ pub struct StoryRecords {
     pub story: StoryNo,
     /// The template lines: the file with each recorded part reduced to the seed form —
     /// the title to `# N.`, each recorded frame's region to the template's empty form,
-    /// and a recorded reference line removed with what follows it.
+    /// and a recorded reference line removed with what follows it when the last frame's
+    /// paragraph is recorded too. Otherwise the reference line stays where it is, and the
+    /// `StoryRef` record replaces it there.
     pub base: String,
     /// `None` when the writers would refuse the title as it stands; it then stays in the
     /// base, as written.
@@ -623,15 +652,17 @@ pub struct StoryRecords {
 }
 
 impl StoryRecords {
-    /// The state that, applied onto the base, gives the file again.
+    /// The state that, applied onto the base, gives the file again. A frame past
+    /// 65,535 has no number and is left out; no base can hold it, so rendering such
+    /// records is refused.
     pub fn state(&self) -> StoryState {
         let mut frames = BTreeMap::new();
         if let Some(title) = &self.title {
             frames.insert(FrameNo::TITLE, title.clone());
         }
-        for (i, text) in self.frames.iter().enumerate() {
+        for (number, text) in (1..=u16::MAX).zip(&self.frames) {
             if let Some(text) = text {
-                frames.insert(FrameNo(i as u16 + 1), text.clone());
+                frames.insert(FrameNo(number), text.clone());
             }
         }
         StoryState {
@@ -646,54 +677,139 @@ impl StoryRecords {
     }
 }
 
+/// A part of a story file that rendering its records writes in the writers' form where
+/// the file has another. Only the layout differs: blank lines, or how the title line
+/// writes its number. Every text stays as it is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Reformatted {
+    /// The title line: its number written with leading zeros (`# 01.`), or a space after
+    /// an empty title (`# 1. `).
+    Title,
+    /// The blank lines around this frame's paragraph, or of this empty frame: lines that
+    /// hold only spaces, or more or fewer blank lines than the writers write.
+    Frame(FrameNo),
+    /// The lines after the reference line: blank lines, or no line end after it.
+    Reference,
+}
+
+/// A story file as the records it stands for, and the parts of it whose layout no record
+/// keeps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecodedStory {
+    pub records: StoryRecords,
+    /// Empty exactly when rendering the records gives back the file's bytes, which it does
+    /// for every file in the writers' layout: every story tC4 writes and every shipped
+    /// story. Otherwise rendering rewrites the layout of these parts, in file order. No
+    /// record holds that layout, so the caller says so (STORAGE §11.1 X3's whitespace-only
+    /// notice) rather than rewriting it unnoticed.
+    pub reformatted: Vec<Reformatted>,
+}
+
 /// Splits a story file into the records it stands for (STORAGE §11.1: an OBS story decodes
-/// to `StoryBase`, `Frame` and `StoryRef`). Rendering them gives the file back when it is
-/// in the writers' layout, which every tC4-written and every shipped story is; a file in
-/// another layout renders in that layout with the same texts.
-pub fn decode_story(bytes: &str) -> Result<StoryRecords, StoryError> {
+/// to `StoryBase`, `Frame` and `StoryRef`) in one pass over its lines.
+///
+/// Every part the writers accept is recorded, so its layout is the writers' once the
+/// records are rendered. tC4 keeps a frame's bytes until its journal holds that frame; its
+/// base is the committed file. A decoder that left a respaced frame out of the records
+/// would leave its text in the base, under a `Frame` record the store already holds, so
+/// the layout goes and [`DecodedStory::reformatted`] names where.
+pub fn decode_story(bytes: &str) -> Result<DecodedStory, StoryError> {
     let s = split(bytes)?;
-    let mut lines: Vec<String> = s.lines.iter().map(|l| (*l).to_owned()).collect();
+    let lines = &s.lines;
+    let mut reformatted = Vec::new();
+
     let title_text = s.title_text();
     let title = title_text_problem(title_text)
         .is_none()
         .then(|| title_text.to_owned());
-    if title.is_some() {
-        lines[0] = format!("# {}.", s.number);
-    }
+    let seed_title = title_line_of(s.number, "");
+    let first = match &title {
+        Some(text) => {
+            if lines[0] != title_line_of(s.number, text) {
+                reformatted.push(Reformatted::Title);
+            }
+            seed_title.as_str()
+        }
+        None => lines[0],
+    };
+    let frames: Vec<Option<String>> = s
+        .frames
+        .iter()
+        .map(|f| {
+            let text = s.frame_text(f);
+            frame_text_problem(&text).is_none().then_some(text)
+        })
+        .collect();
     let reference = s
         .reference_text()
         .filter(|r| reference_text_problem(r).is_none())
         .map(str::to_owned);
-    if let (Some(at), Some(_)) = (s.reference, &reference) {
-        lines.truncate(at);
-    }
-    let mut frames = Vec::with_capacity(s.frames.len());
-    for f in &s.frames {
-        let text = s.frame_text(f);
-        frames.push(frame_text_problem(&text).is_none().then_some(text));
-    }
-    // From the last frame back, so the line numbers of the frames before stay put.
-    for f in (1..=s.frames.len()).rev() {
-        if frames[f - 1].is_none() {
+    // A paragraph the writers refuse stays in the base, and when it is the last frame's,
+    // its last line may be in the reference form: with the reference line gone, that line
+    // would read as the reference and the record would overwrite it.
+    let cut = s
+        .reference
+        .filter(|_| reference.is_some() && matches!(frames.last(), Some(Some(_))));
+    let base_end = cut.unwrap_or(lines.len());
+
+    let mut base: Vec<&str> = Vec::with_capacity(base_end);
+    base.push(first);
+    let first_image = s.frames.first().map_or(lines.len(), |f| f.image);
+    base.extend_from_slice(&lines[1..first_image]);
+    for (i, (frame, text)) in s.frames.iter().zip(&frames).enumerate() {
+        base.push(lines[frame.image]);
+        let region = s.frame_region(i + 1);
+        if text.is_none() {
+            base.extend_from_slice(&lines[region]);
             continue;
         }
-        let start = s.frames[f - 1].image + 1;
-        let end = match s.frames.get(f) {
-            Some(next) => next.image,
-            None => s.reference.unwrap_or(s.lines.len()).min(lines.len()),
-        };
-        let empty: &[&str] = if end < lines.len() {
+        base.extend_from_slice(if region.end < base_end {
             &EMPTY_FRAME_MID
         } else {
             &EMPTY_FRAME_LAST
+        });
+        // What rendering writes here: the paragraph between two empty lines, or an empty
+        // frame's form, which is the shorter one whenever an image or reference line
+        // follows.
+        let writers = match frame.text {
+            Some((first, last)) => {
+                first == region.start + 1
+                    && last + 2 == region.end
+                    && lines[region.start].is_empty()
+                    && lines[last + 1].is_empty()
+            }
+            None => {
+                let empty = if region.end < lines.len() {
+                    EMPTY_FRAME_MID.len()
+                } else {
+                    EMPTY_FRAME_LAST.len()
+                };
+                region.len() == empty && lines[region].iter().all(|l| l.is_empty())
+            }
         };
-        lines.splice(start..end, empty.iter().map(|l| (*l).to_owned()));
+        if !writers {
+            reformatted.push(Reformatted::Frame(frame_no(i)));
+        }
     }
-    Ok(StoryRecords {
-        story: s.number,
-        base: lines.join("\n"),
-        title,
-        frames,
-        reference,
+    if !s.frames.is_empty() {
+        let tail = s.frame_region(s.frames.len()).end;
+        match cut {
+            None => base.extend_from_slice(&lines[tail..]),
+            Some(at) => {
+                if lines[at + 1..] != [""] {
+                    reformatted.push(Reformatted::Reference);
+                }
+            }
+        }
+    }
+    Ok(DecodedStory {
+        records: StoryRecords {
+            story: s.number,
+            base: emit(&base),
+            title,
+            frames,
+            reference,
+        },
+        reformatted,
     })
 }
