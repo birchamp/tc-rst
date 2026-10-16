@@ -17,17 +17,17 @@ PNG per screen.
   in `history/d494a9d/`.
 - Help pages: tc-website `cdfdf9b7d534e7574beb3fcf44678973cdc5f9d7`, the commit that tC4 pins in
   `scripts/fetch-help.mjs`. The pin is the same at both commits.
-- Output: 59 screenshots at device scale 1, in `screens/`, 7,814,948 bytes (7.5 MiB) in total.
-  Each is 1280x800, except the six screens whose name ends in `-620`, which are 620x800. 47 are
-  complete and 12 are incomplete. `manifest.json` lists each screenshot with the steps that
-  reach it. The 42 screens of the first baseline were captured again; 17 screens were added for
+- Output: 61 screenshots at device scale 1, in `screens/`, 7,998,133 bytes (7.6 MiB) in total.
+  Each is 1280x800, except the six screens whose name ends in `-620`, which are 620x800. 51 are
+  complete and 10 are incomplete. `manifest.json` lists each screenshot with the steps that
+  reach it. The 42 screens of the first baseline were captured again; 19 screens were added for
   `d310bf3` ("Screens added for d310bf3").
 - Browser: Chromium 141.0.7390.37, headless, through Playwright 1.56.1. This Playwright version
   matches the Chromium build 1194 in `/opt/pw-browsers`.
 - Two consecutive full runs at `d310bf3` gave byte-identical PNGs, first for the 42 screens,
-  then for 50, and then for all 59. A control run at `d494a9d` on the same machine gave the
-  committed `d494a9d` PNGs byte for byte, so each change listed below comes from tC4, not from
-  the machine.
+  then for 50, then for 59, and then for all 61. The last two runs also gave the same
+  `manifest.json`. A control run at `d494a9d` on the same machine gave the committed `d494a9d`
+  PNGs byte for byte, so each change listed below comes from tC4, not from the machine.
 
 ## Rerun
 
@@ -52,8 +52,8 @@ npm run capture      # build the client if needed, rebuild the state, capture ev
    `/api/...` and the built client at `/clients/uw-tc4/`.
 4. It drives each screen, writes `screens/<name>.png`, and writes `manifest.json`.
 
-A full run took about 90 seconds after the first build at `d494a9d`. At `d310bf3`, with 59
-screens on 4 CPUs shared with other work, it took about 4 minutes.
+A full run took about 90 seconds after the first build at `d494a9d`. At `d310bf3`, with 61
+screens on 4 CPUs shared with other work, it took about 5 minutes.
 
 Options:
 
@@ -72,10 +72,16 @@ npm run check        # or, from the repository root: node --test parity/tc4-base
 
 The check needs no browser, no tC4 checkout and no network, and CI runs it. It fails when a
 screenshot is not in `manifest.json` or has the wrong size, when this README's screen table or
-totals differ from the manifest, when the README does not record the tC4 commit, when a
-tool's marking row lacks a screen in English or Arabic at 1280 or 620 px, or when "Where the
+totals differ from the manifest, or when the README does not record the tC4 commit. It fails
+when a tool's marking row lacks a screen in English or Arabic at 1280 or 620 px. It fails
+unless complete screens show the sync result toast of a failed sync, of an ok sync, and of an
+ok sync with teammates' changes, "Changes from", the note on missing versions, Review and
+Download. It fails when "Where the
 rebuild differs on purpose" differs from the manifest's `rebuildDiffers` notes or cites a
-ruling that `docs/PLAN.md` does not list. Run it after every capture.
+ruling that `docs/PLAN.md` does not list, and when a screen shows a shared OBS card with
+"Upload changes" but does not cite Q2. The toast and the cards are read from the DOM at each
+shot (`syncToast` and `homeCards` in `manifest.json`). The check also starts the mock server
+and drives its sync routes (`mock-server/server.test.mjs`). Run it after every capture.
 
 ### Capture another tC4 commit
 
@@ -115,6 +121,7 @@ out byte for byte the same. The capture itself needs no network except the help-
 | Path | Purpose |
 |---|---|
 | `mock-server/server.mjs` | The Pankosmia API mock, backed by files on disk, plus the static server for the built client. |
+| `mock-server/server.test.mjs` | Checks that the mock's push, clone, copy and delete answer as pankosmia-web does (see "The mock server"). |
 | `mock-server/fake-door43.mjs` | A fake Door43 (Gitea API v1) for the share screens. It is routed inside the browser context. It is trimmed from tC4's own `e2e/helpers/door43.ts`. |
 | `fixtures/build-state.mjs` | Builds a state directory, in the Pankosmia working-directory layout, from tC4's fixtures and `fixtures/vendor/`. |
 | `fixtures/vendor/` | Resource files that tC4 does not vendor, cut from published copies by `make-vendor.mjs`. `README.md` and `SOURCES.json` there give the source of each file and the licence. |
@@ -151,18 +158,35 @@ These simplifications do not show on any captured screen:
 
 - `/git/add-and-commit` records the message and clears the pending set, and `/git/status` lists
   the files written since then. `/git/remotes` reads `.remotes.json`.
-- The routes that create a project or book, and the push and the zip imports, answer
+- The routes that create a project or book, the pull and the zip imports answer
   `is_good: false`. The capture never submits them.
 - The gitea catalog answers "offline mode" while the net gate is off, and `[]` when it is on.
 
-This one shows on two screens, `open-door43-refused` and `sync-failed`:
+Door43 `main` of each repository is a folder, `.state/<scenario>/door43/<host>/<org>/<repo>/`.
+It holds the files of the last push. There is no git history. The sync routes follow
+pankosmia-web's `push.rs`, `clone_repo.rs`, `copy_repo.rs` and `delete_repo.rs`:
 
-- There is no git. `/git/clone-repo` answers "offline mode" (HTTP 401) while the net gate is
-  off, as the platform does, and HTTP 400 when it is on. `/git/copy` and `/git/pull-repo` answer
-  HTTP 400. `/git/branches` lists `main` as the checked-out branch. `/git/delete` of a folder
-  that is not there answers the platform's HTTP 400 `could not delete repo: No such file or
-  directory (os error 2)`, which tC4 reads as "not there". It never deletes a folder that is
-  there. So a sync or an open from Door43 ends in tC4's refusal for a failed clone.
+- `/git/push` answers "offline mode" (HTTP 401) while the net gate is off. Otherwise it finds
+  the remote by name and makes Door43 `main` equal to the project. The project's
+  `.remotes.json` stays behind. No push is refused as not a fast-forward.
+- `/git/clone-repo/<host>/<org>/<repo>` answers "offline mode" (HTTP 401) while the net gate
+  is off. Otherwise it copies Door43 `main` to the fixed path `<host>/<org>/<repo>`, with the
+  remote `origin` at `https://<host>/<org>/<repo>`. A folder there that is not empty answers
+  HTTP 400 with `code=Exists (-4)`, which tC4 reads as `sync.clone-path-exists`. A repository
+  that Door43 does not hold answers HTTP 400 `could not clone repo: …`, which tC4 reads as
+  `sync.clone-failed`.
+- `/git/copy` needs a source folder and a target that does not exist. It copies the folder,
+  then deletes the source when `delete_src` is true. It has no net gate.
+- `/git/delete` removes the folder. A folder that is not there answers the platform's HTTP 400
+  `could not delete repo: No such file or directory (os error 2)`, which tC4 reads as "not
+  there".
+- `/git/branches` lists `main` as the checked-out branch.
+
+Some steps change Door43 itself, not the app. The capture does them through `mock.door43` in
+`server.mjs`: it pushes a project as its first share does, or it takes a repository off
+Door43. For teammates' changes, it adds journal segments to Door43 `main` with tC4's own
+journal writers (`journal/files.mjs`), as tC4's `e2e/sync-button.spec.ts` does. These steps
+start with "Door43" in the screen table.
 
 `mock-server/fake-door43.mjs` also answers the check that Home makes before a sync
 (`door43Api.ts` `hasBranch`): each repository of the fake user has a `main` branch.
@@ -213,7 +237,7 @@ No copy of these was found, so they are absent:
 |---|---|
 | `sample` | The conformance samples exactly as tC4 ships them. The Bible sample pins an **es-419 primary set** with an English fallback. Its es-419 TWL, tW and tA are absent, so the Translation Words tool reads "Needs downloading". |
 | `en-pins` | Both samples are pinned to the installed English suite on both rungs. This is how tC4 pins a project it creates. For the Bible sample, this is tC4's own J4 journey setup (`e2e/helpers/rig.ts` `writeProjectPins`, plus `restateRecordAsEnglish` for both decision files). For the OBS sample, the primary set becomes a copy of its English fallback set. The change is applied before the project is first opened. |
-| `shared` | The scenario `sample`, with both samples shared on Door43 as a first share leaves them: each has the remote `origin` at `https://git.door43.org/facilitator-zq/<project>.git` (in the mock's `.remotes.json`). The owner is the fake Door43 user. |
+| `shared` | The scenario `sample`, with both samples shared on Door43 as a first share leaves them: each has the remote `origin` at `https://git.door43.org/facilitator-zq/<project>.git` (in the mock's `.remotes.json`). The owner is the fake Door43 user. Door43 holds no copy of either sample until a screen's steps push one. |
 
 Each screen starts from a reload of Home. The per-client settings document is reset to its
 seeded form (install records only) first, so no screen depends on a place that an earlier screen
@@ -265,7 +289,7 @@ screen shows a designed absence state because data is missing; the next section 
 | `obs-check-picker` | sample | check | OBS sample card: story tile "1 · La Creación" → Mode switch: Check | OBS Check tool picker: Translation Words and Translation Notes "Needs downloading", Community Checking (no Align for OBS) | incomplete |
 | `open-door43` | sample | home + openDoor43 | + Add a project → Open a project from Door43 | Open a project from Door43 dialog, empty: the note "The project opens from git.door43.org. Only public repositories can be opened.", Door43 repository, Project name, the note that tC4 checks every file before it adds the project, Cancel / Open project (disabled) | complete |
 | `open-door43-internet-consent` | sample | home + netAsk | + Add a project → Open a project from Door43 → Repository: facilitator-zq/es-419_tit_equipo → Open project | "Turn on the internet?" asked for an open from Door43 (kind `open`): get a full copy of the project and check its files; nothing from your projects is sent | complete |
-| `open-door43-refused` | sample | home + openDoor43 | + Add a project → Open a project from Door43 → Repository: facilitator-zq/es-419_tit_equipo → Open project → Turn on internet | Open a project from Door43 dialog with the refusal callout "This project cannot be opened." for a clone that failed (code sync.clone-failed), "No project was added." and Ask for help | incomplete |
+| `open-door43-refused` | sample | home + openDoor43 | + Add a project → Open a project from Door43 → Repository: facilitator-zq/es-419_tit_equipo → Open project → Turn on internet | Open a project from Door43 dialog with the refusal callout "This project cannot be opened." for a clone that failed (code sync.clone-failed), "No project was added." and Ask for help. The clone fails because Door43 has no repository of that name | complete |
 | `en-understand-tit1` | en-pins | read | Bible sample card: Titus tile | Understand, Titus 1, Section view, helps panel on Notes with the English Translation Notes v91 (intro note, abstract-nouns note) | complete |
 | `en-understand-tw-article` | en-pins | read | Bible sample card: Titus tile → Helps tab: Words → Card "of God": Read the article | Understand with the Words tab (Key word cards) and the Translation Words article pane open on "God" (kt/god.md) | complete |
 | `en-understand-questions` | en-pins | read | Bible sample card: Titus tile → Helps tab: Questions | Understand with the Questions tab selected | incomplete |
@@ -289,8 +313,10 @@ screen shows a designed absence state because data is missing; the next section 
 | `en-check-tn-session-620` | en-pins | check | Window 620 px wide → Bible sample card: Titus tile → Mode switch: Check → Translation Notes card: Start checking → Scroll the marking row into view | en-check-tn-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines; at this width the project button in the header lies over the mode switch | complete |
 | `ar-check-tn-session-620` | en-pins | check | Window 620 px wide → App language: العربية (saved before the launch) → Bible sample card: Titus tile → Mode switch: مراجعة (Check) → Translation Notes card: Start checking → Scroll the marking row into view | ar-check-tn-session-row in a window 620 px wide: the marking row wraps onto three lines, right to left | complete |
 | `shared-home` | shared | home | Launch tC4 | Home with both samples shared on Door43: "On Door43" beside each name; the Bible card reads "Sync with Door43", the OBS card "Upload changes" (tC4 4.0 syncs Bible projects only) | complete |
-| `sync-internet-consent` | shared | home + netAsk | Bible sample card: Sync with Door43 | "Turn on the internet?" asked for a sync (kind `sync`): get the changes of your teammates and send the changes of this project | complete |
-| `sync-failed` | shared | home | Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the sync result toast of a sync that did not complete: red dot, "The sync did not complete." and the sentence of code sync.clone-failed, the dismiss button | incomplete |
+| `sync-internet-consent` | shared | home + netAsk | Bible sample card: Sync with Door43 | "Turn on the internet?" asked for a sync (kind `sync`): get the changes of your teammates and send the changes of this project. Behind the scrim, the OBS card reads "Upload changes" | complete |
+| `sync-failed` | shared | home | Door43: the Bible sample's repository is not there → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the sync result toast of a sync that did not complete: red dot, "The sync did not complete." and the sentence of code sync.clone-failed, the dismiss button. The clone of Door43 main fails because the repository is not on Door43, as when it was deleted there | complete |
+| `sync-ok` | shared | home | Bible sample card: Titus tile → Home → Door43 main: the Bible sample as it is now (the push of its first share) → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the toast of a sync that completed with no change from teammates: kindle dot, "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review", the note "This project now uses 5 resource versions that are not on this computer.", Download and the dismiss button | complete |
+| `sync-ok-teammates` | shared | home | Bible sample card: Titus tile → Home → Door43 main: the Bible sample as it is now (the push of its first share) → Door43 main: two teammates change Titus 1:1 from the same version → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the toast of a sync that brought two teammates' changes to Titus 1:1: kindle dot, "Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review", "Changes from: Teammate 1 · Teammate 2", the note on the 5 missing resource versions, Review, Download and the dismiss button; the Bible card shows the chip "1 conflict · Review" and the Titus tile "1 conflict" | complete |
 
 ## Incomplete screens and why
 
@@ -315,11 +341,6 @@ that tC4 designed for absent data, so that state is part of the baseline too.
 - **Door43 is faked: `share-dialog` and `share-dialog-check`.** The account `facilitator-zq` and
   the organizations `Equipo-Ejemplo` and `es-419_gl` are invented by `fake-door43.mjs`, and
   nothing is created or pushed.
-- **No git: `open-door43-refused` and `sync-failed`.** The clone of Door43 `main` fails, so the
-  dialog shows tC4's refusal `sync.clone-failed`, and the toast shows "The sync did not
-  complete." with that code's sentence. These are real tC4 states. A successful open and the
-  toast of a completed sync need a git server with teammates' journals. tC4 proves those in its
-  own journeys J17 and J26 and in `e2e/sync-button.spec.ts`.
 
 These are also known differences from a real install. None of them makes a screen incomplete:
 
@@ -346,9 +367,15 @@ The entry of each screen in `manifest.json` has the same note in `rebuildDiffers
 | `open-door43` | Q3 | The note has no sentence that only public repositories can be opened. A new key replaces `openDoor43.where` in all 10 languages. A private repository opens after sign-in. |
 | `open-door43-refused` | Q3 | tC4's sentence for this refusal, `openDoor43.refused.other`, says "Make sure that the repository is public". The rebuild opens private repositories, so its sentence must not say this. The delta document replaces only `openDoor43.where`, so the new text of this sentence is not decided yet. When Door43 answers 401 or 404 and nobody is signed in, the rebuild shows the sign-in step instead of this refusal. |
 | `shared-home` | Q2 | The OBS card reads "Sync with Door43", like the Bible card. The rebuild syncs OBS projects too. |
+| `sync-internet-consent` | Q2 | Behind the scrim, the OBS card reads "Sync with Door43". |
+| `sync-failed` | Q2 | The OBS card reads "Sync with Door43". |
+| `sync-ok` | Q2 | The OBS card reads "Sync with Door43". |
+| `sync-ok-teammates` | Q2 | The OBS card reads "Sync with Door43". |
 
 The other rulings change no captured screen. For example, the Align screens show Titus 1:1,
 which has a saved alignment, so tC4 already shows its word bank in verse order there (Q15).
+On `sync-ok-teammates` the one conflict is a verse conflict, so the rebuild shows Review there
+too (Q5).
 
 ## Changes since d494a9d
 
@@ -384,7 +411,7 @@ Two changes do not show on these screens:
 
 ## Screens added for d310bf3
 
-`docs/TC4-DELTA-2026-10-16.md` §3.14 item 3 asks for new screens. These 17 were added:
+`docs/TC4-DELTA-2026-10-16.md` §3.14 item 3 asks for new screens. These 19 were added:
 
 | Screen | What it shows | tC4 change |
 |---|---|---|
@@ -405,6 +432,8 @@ Two changes do not show on these screens:
 | `shared-home` | Home with shared projects: the Bible card reads "Sync with Door43", the OBS card "Upload changes". | #690 |
 | `sync-internet-consent` | The internet question of a sync (kind `sync`). | #690 |
 | `sync-failed` | The sync result toast of a sync that did not complete. | #690, #691 |
+| `sync-ok` | The toast of a sync that completed with no change from teammates: the count line, the note on missing resource versions and Download. | #690, #691 |
+| `sync-ok-teammates` | The toast of a sync that brought teammates' changes and a verse conflict: the count line, "Changes from", the note on missing resource versions, Review and Download. | #690, #691 |
 
 Already in the 42 screens: Add a project with four cards (`add-project`) and the sign-in step
 with the name notice (`share-signin`).
@@ -415,10 +444,12 @@ The Translation Notes and Align rows are below the fold at 800 px, so their scre
 row into view. tC4's own images of these rows, cropped to the row, are in its
 `docs/evidence/navigation-pills-2026-10-15/` at `d310bf3`.
 
-Not captured here: the toast of a sync that completes ("Synced with Door43", the three counts,
-"Changes from", Review and Download). The mock has no git, so no sync completes. Making one
-complete needs a git-backed fake Door43 with teammates' journals. tC4 has no committed image of
+Every part of the sync result toast now has a reference image. tC4 has no committed image of
 this toast; its `e2e/sync-button.spec.ts` writes screenshots only as test output on its rig.
+`sync-ok` and `sync-ok-teammates` follow that spec's two syncs. The project is opened once
+before it is pushed, because tC4 writes the sample's journal when it first opens it. Without
+that journal on Door43, tC4 stops the sync with `sync.verify-failed`. Not captured: the
+conflict review that Review opens, and an open from Door43 that succeeds (J17).
 
 ## Rendering determinism
 
@@ -432,6 +463,8 @@ The run also controls the following:
 - Locale `en-US`, time zone `UTC` and the light color scheme.
 - Each shot waits until no `/api` request has been in flight for 800 ms and the fonts are loaded,
   and is taken with `animations: 'disabled'`. The help shot also waits for the frame's images.
+- `absentReads` in the manifest are sorted, because concurrent reads finish in a different
+  order from run to run.
 - The browser can reach no origin except the mock server and the faked Door43. Any other request
   is refused and listed in `refusedExternalRequests` in the manifest. The list is empty.
 
@@ -441,7 +474,8 @@ The run also controls the following:
 `_local_/_local_/` and resources under `_local_/_sideloaded_/`. The install records are in
 `client_settings/uw-tc4.json`. A Rust build can therefore open the same projects and resources and
 render the same screens at 1280x800. For each screen, follow the `steps` in `manifest.json` from
-a fresh state of the same scenario (`npm run state -- --scenario <name>`). A screen with a
+a fresh state of the same scenario (`npm run state -- --scenario <name>`). A step that starts
+with "Door43" changes Door43, not the app: do it on the rebuild's fake Door43. A screen with a
 `viewport` in the manifest uses that window size, and a screen with a `locale` uses that app
 language. A screen with `rebuildDiffers` matches tC4 except for what that note says ("Where the
 rebuild differs on purpose"). The two renderers differ, so a comparison needs a tolerance.

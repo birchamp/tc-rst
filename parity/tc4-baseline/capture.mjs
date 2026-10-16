@@ -19,7 +19,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import { buildState, DEFAULT_TC4, SCENARIOS, ABSENT } from './fixtures/build-state.mjs';
 import { startMockServer } from './mock-server/server.mjs';
@@ -37,6 +37,10 @@ const OBS = '_local_/_local_/sample_burrito_obs';
 const POINTER_REST = { x: 1000, y: 28 };
 /** A Door43 repository that no sample uses, so its default project name is free. */
 const OPEN_REPO = `${FAKE_USER.username}/es-419_tit_equipo`;
+/** The teammates of tC4's e2e/sync-button.spec.ts. */
+const TEAMMATES = ['b678teammate0001', 'c678teammate0002'];
+/** The owner ruling under which every shared OBS card differs: tC4 reads "Upload changes" there. */
+const OBS_SYNCS = { ruling: 'Q2', rebuild: 'The OBS card reads "Sync with Door43", like the Bible card: the rebuild syncs OBS projects too.' };
 
 /** Rendering flags that keep repeated runs pixel-identical: without them a few rounded
  * edges differ by up to 8/255 between runs (raster tiling). */
@@ -121,8 +125,32 @@ async function settle(page, inFlight, quietMs = 800) {
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
+/**
+ * Two teammates change Titus 1:1 from the same version on Door43 `main`, which gives one
+ * verse conflict. This is tC4's e2e/sync-button.spec.ts `teammatesChangeOneVerse`: the
+ * segments are written by tC4's own reference journal writers, never by hand.
+ */
+async function teammatesChangeOneVerse(main) {
+  const journal = (file) => import(pathToFileURL(path.join(TC4, 'journal', file)).href);
+  const [{ makeClock }, { fold }, { actorDirFor, readUnion, writeActionSegment }] = await Promise.all(
+    ['hlc.mjs', 'fold.mjs', 'files.mjs'].map(journal));
+  const journalDir = path.join(main, 'ingredients', 'checking', 'journal');
+  const union = readUnion(journalDir);
+  const base = fold(union).headsTs['text|TIT|1:1'];
+  if (!base) throw new Error('Door43 main holds no version of TIT 1:1: open the project before it is pushed');
+  const last = union.map((e) => e.ts).sort().pop();
+  let now = Date.now();
+  TEAMMATES.forEach((actor, i) => {
+    const clock = makeClock(actor, () => now);
+    clock.ratchet(last);
+    now += 1000;
+    const event = { v: 1, op: 'text.verse.set', actor, ts: clock.issue(), base, book: 'TIT', chapter: '1', verse: '1', text: `Pablo, versión del compañero ${i + 1}.\n` };
+    writeActionSegment(actorDirFor(journalDir, actor), [event]);
+  });
+}
+
 /** Helpers each screen's `run` receives. */
-function appDriver({ page, origin, state }) {
+function appDriver({ page, origin, state, door43 }) {
   const settingsFile = path.join(state, 'client_settings', 'uw-tc4.json');
   const pristineSettings = fs.readFileSync(settingsFile);
   /** The catalog of the app language that home() set: the steps wait on its texts. */
@@ -180,6 +208,20 @@ function appDriver({ page, origin, state }) {
       await page.getByLabel('Password', { exact: true }).fill(FAKE_USER.password);
       await page.getByTestId('signin-submit').click();
     },
+    /** Door43 `main` of a shared project becomes the project as it is now: the push of its
+     * first share. tC4 seeds the journal of a conformance sample when it first opens it, so
+     * the project must be opened first, as tC4's e2e/sync-button.spec.ts opens it before it
+     * shares it. Without the journal on Door43, the sync stops at sync.verify-failed. */
+    pushToDoor43: (repo) => door43.push(repo),
+    /** Take a shared project's repository off Door43, so a clone of it fails. */
+    removeFromDoor43: (repo) => door43.remove(repo),
+    teammatesChangeOneVerse: (repo) => teammatesChangeOneVerse(door43.push(repo)),
+    /** Sync with Door43 from the project card: the internet question, then the sign-in. */
+    async syncFromHome(repo) {
+      await page.getByTestId(`share-${repo}`).click();
+      await page.getByTestId('net-confirm').click();
+      await this.signIn();
+    },
     /** Turn the internet on from the account menu (D95: every launch starts off). */
     async internetOn() {
       await page.getByTestId('account-menu').click();
@@ -201,6 +243,8 @@ function appDriver({ page, origin, state }) {
 // 1280x800), markingRow (the tool whose whole marking row the image shows) and
 // rebuildDiffers (an owner ruling under which the rebuild must not copy this screen exactly:
 // the ruling, as numbered in docs/TC4-DELTA-2026-10-16.md §5, and what the rebuild shows).
+// The manifest also records what the DOM shows at the shot: `homeCards` and `syncToast`
+// (see `observe`).
 
 const SCREEN_LIST = [
   // -------- scenario: sample (the conformance samples as tC4 ships them) --------
@@ -526,8 +570,7 @@ const SCREEN_LIST = [
   {
     name: 'open-door43-refused', scenario: 'sample', view: 'home', modal: 'openDoor43',
     steps: ['Home', '+ Add a project', 'Open a project from Door43', `Repository: ${OPEN_REPO}`, 'Open project', 'Turn on internet'],
-    shows: 'Open a project from Door43 dialog with the refusal callout "This project cannot be opened." for a clone that failed (code sync.clone-failed), "No project was added." and Ask for help',
-    incomplete: 'The mock has no git, so the clone fails: this is tC4\'s refusal for a failed clone. A successful open needs a git server, as in tC4\'s own journey J17.',
+    shows: 'Open a project from Door43 dialog with the refusal callout "This project cannot be opened." for a clone that failed (code sync.clone-failed), "No project was added." and Ask for help. The clone fails because Door43 has no repository of that name',
     rebuildDiffers: { ruling: 'Q3', rebuild: 'The refusal sentence (openDoor43.refused.other) says "Make sure that the repository is public". The rebuild opens private repositories, so its sentence must not say this. The delta document replaces only openDoor43.where, so the new text of this sentence is not decided yet. When Door43 answers 401 or 404 and nobody is signed in, the rebuild shows the sign-in step instead of this refusal.' },
     run: async (app) => {
       const { page } = app;
@@ -746,13 +789,14 @@ const SCREEN_LIST = [
     name: 'shared-home', scenario: 'shared', view: 'home', modal: null,
     steps: ['Launch tC4'],
     shows: 'Home with both samples shared on Door43: "On Door43" beside each name; the Bible card reads "Sync with Door43", the OBS card "Upload changes" (tC4 4.0 syncs Bible projects only)',
-    rebuildDiffers: { ruling: 'Q2', rebuild: 'The OBS card reads "Sync with Door43", like the Bible card: the rebuild syncs OBS projects too.' },
+    rebuildDiffers: OBS_SYNCS,
     run: async (app) => { await app.home(); await app.page.getByTestId(`share-card-${BIBLE}`).and(app.page.locator('[data-action="sync"]')).waitFor(); },
   },
   {
     name: 'sync-internet-consent', scenario: 'shared', view: 'home', modal: 'netAsk',
     steps: ['Home', 'Bible sample card: Sync with Door43'],
-    shows: '"Turn on the internet?" asked for a sync (kind `sync`): get the changes of your teammates and send the changes of this project',
+    shows: '"Turn on the internet?" asked for a sync (kind `sync`): get the changes of your teammates and send the changes of this project. Behind the scrim, the OBS card reads "Upload changes"',
+    rebuildDiffers: OBS_SYNCS,
     run: async (app) => {
       await app.home();
       await app.page.getByTestId(`share-${BIBLE}`).click();
@@ -761,21 +805,102 @@ const SCREEN_LIST = [
   },
   {
     name: 'sync-failed', scenario: 'shared', view: 'home', modal: null,
-    steps: ['Home', 'Bible sample card: Sync with Door43', 'Turn on internet', `Sign in as ${FAKE_USER.username}`],
-    shows: 'Home with the sync result toast of a sync that did not complete: red dot, "The sync did not complete." and the sentence of code sync.clone-failed, the dismiss button',
-    incomplete: 'The mock has no git, so the clone of Door43 main fails: this is tC4\'s toast for a failed clone. The toast of a sync that completes (the three counts, "Changes from", Review and Download) needs a git server with teammates\' journals, as in tC4\'s e2e/sync-button.spec.ts and journey J26.',
+    steps: ['Home', 'Door43: the Bible sample\'s repository is not there', 'Bible sample card: Sync with Door43', 'Turn on internet', `Sign in as ${FAKE_USER.username}`],
+    shows: 'Home with the sync result toast of a sync that did not complete: red dot, "The sync did not complete." and the sentence of code sync.clone-failed, the dismiss button. The clone of Door43 main fails because the repository is not on Door43, as when it was deleted there',
+    rebuildDiffers: OBS_SYNCS,
     run: async (app) => {
-      const { page } = app;
       await app.home();
-      await page.getByTestId(`share-${BIBLE}`).click();
-      await page.getByTestId('net-confirm').click();
-      await app.signIn();
-      await page.locator('[data-testid="sync-result"][data-ok="0"]').waitFor();
+      app.removeFromDoor43(BIBLE);
+      await app.syncFromHome(BIBLE);
+      await app.page.locator('[data-testid="sync-result"][data-ok="0"]').waitFor();
+    },
+  },
+  {
+    name: 'sync-ok', scenario: 'shared', view: 'home', modal: null,
+    steps: ['Home', 'Bible sample card: Titus tile', 'Home', 'Door43 main: the Bible sample as it is now (the push of its first share)', 'Bible sample card: Sync with Door43', 'Turn on internet', `Sign in as ${FAKE_USER.username}`],
+    shows: 'Home with the toast of a sync that completed with no change from teammates: kindle dot, "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review", the note "This project now uses 5 resource versions that are not on this computer.", Download and the dismiss button',
+    rebuildDiffers: OBS_SYNCS,
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.home();
+      app.pushToDoor43(BIBLE);
+      await app.syncFromHome(BIBLE);
+      await app.page.locator('[data-testid="sync-result"][data-ok="1"]').waitFor({ timeout: 120_000 });
+    },
+  },
+  {
+    name: 'sync-ok-teammates', scenario: 'shared', view: 'home', modal: null,
+    steps: ['Home', 'Bible sample card: Titus tile', 'Home', 'Door43 main: the Bible sample as it is now (the push of its first share)', 'Door43 main: two teammates change Titus 1:1 from the same version', 'Bible sample card: Sync with Door43', 'Turn on internet', `Sign in as ${FAKE_USER.username}`],
+    shows: 'Home with the toast of a sync that brought two teammates\' changes to Titus 1:1: kindle dot, "Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review", "Changes from: Teammate 1 · Teammate 2", the note on the 5 missing resource versions, Review, Download and the dismiss button; the Bible card shows the chip "1 conflict · Review" and the Titus tile "1 conflict"',
+    rebuildDiffers: OBS_SYNCS,
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.home();
+      await app.teammatesChangeOneVerse(BIBLE);
+      await app.syncFromHome(BIBLE);
+      await app.page.locator('[data-testid="sync-result"][data-ok="1"]').waitFor({ timeout: 120_000 });
     },
   },
 ];
 
 // ---- the run ---------------------------------------------------------------
+
+/**
+ * What the DOM shows at the shot, for the checks in baseline.test.mjs:
+ * - `homeCards`: for each project card whose share button the image shows, the button's
+ *   action (tC4 Home.jsx `data-action`: share, sync or upload). A button under a dialog's
+ *   translucent scrim shows; one under an opaque panel does not.
+ * - `syncToast`: the parts of the sync result toast (tC4 SyncResult.jsx), when it shows.
+ */
+function observe(page) {
+  return page.evaluate(() => {
+    const inWindow = (el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth
+        && getComputedStyle(el).visibility !== 'hidden';
+    };
+    const alpha = (color) => {
+      const m = color.match(/rgba?\(([^)]*)\)/);
+      if (!m) return color === 'transparent' ? 0 : 1;
+      const parts = m[1].split(/[\s,/]+/).filter(Boolean);
+      return parts.length > 3 ? Number(parts[3]) : 1;
+    };
+    /** Whether nothing opaque lies over the centre of `el`. */
+    const shown = (el) => {
+      if (!inWindow(el)) return false;
+      const r = el.getBoundingClientRect();
+      for (const over of document.elementsFromPoint(r.left + r.width / 2, r.top + r.height / 2)) {
+        if (over === el || el.contains(over)) return true;
+        if (over.contains(el)) continue;
+        const style = getComputedStyle(over);
+        if (Number(style.opacity) === 1 && (alpha(style.backgroundColor) === 1 || style.backgroundImage !== 'none')) return false;
+      }
+      return false;
+    };
+    const homeCards = {};
+    for (const card of document.querySelectorAll('[data-testid^="share-card-"]')) {
+      const repo = card.dataset.testid.slice('share-card-'.length);
+      const button = card.querySelector(`[data-testid="share-${repo}"]`);
+      if (button && shown(button)) homeCards[repo] = card.dataset.action;
+    }
+    const toast = document.querySelector('[data-testid="sync-result"]');
+    if (!toast || !inWindow(toast)) return { homeCards, syncToast: null };
+    const part = (id) => toast.querySelector(`[data-testid="${id}"]`);
+    const count = (id) => Number(part(id)?.dataset.count ?? 0);
+    return {
+      homeCards,
+      syncToast: {
+        ok: toast.dataset.ok === '1',
+        code: toast.dataset.code || null,
+        text: toast.innerText.replace(/\s+/g, ' ').trim(),
+        received: count('sync-count-received'),
+        newestWins: count('sync-count-newest'),
+        verseConflicts: count('sync-count-conflicts'),
+        from: part('sync-received-from')?.innerText ?? null,
+        missingPins: count('sync-missing-pins'),
+        links: ['review', 'download'].filter((link) => part(`sync-${link}`)),
+      },
+    };
+  });
+}
 
 /** Fold reads that differ only in a story number (Home reads every gateway story title) into
  * one line, so the manifest stays readable. */
@@ -809,7 +934,7 @@ async function captureScenario(browser, scenario, screens, tc4) {
   const page = await context.newPage();
   const pageErrors = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
-  const app = appDriver({ page, origin: mock.origin, state });
+  const app = appDriver({ page, origin: mock.origin, state, door43: mock.door43 });
   const results = [];
   for (const screen of screens) {
     const firstRequest = mock.requests.length;
@@ -830,9 +955,11 @@ async function captureScenario(browser, scenario, screens, tc4) {
     await page.waitForTimeout(150);
     const file = path.join(SCREENS, `${screen.name}.png`);
     await page.screenshot({ path: file, animations: 'disabled' });
+    const { homeCards, syncToast } = await observe(page);
+    // Sorted: concurrent reads finish in a different order from run to run.
     const absent = compactReads([...new Set(mock.requests.slice(firstRequest)
       .filter((r) => r.status >= 400 && !/checking(\/|%2F)journal/.test(`${r.path}${r.query}`))
-      .map((r) => `${r.method} ${decodeURIComponent(r.path.replace(/^\/api/, ''))}${decodeURIComponent(r.query)} -> ${r.status}`))]);
+      .map((r) => `${r.method} ${decodeURIComponent(r.path.replace(/^\/api/, ''))}${decodeURIComponent(r.query)} -> ${r.status}`))].sort());
     console.log(error ? `FAILED: ${error}` : 'ok');
     results.push({
       name: screen.name,
@@ -844,6 +971,8 @@ async function captureScenario(browser, scenario, screens, tc4) {
       ...(screen.viewport ? { viewport: screen.viewport } : {}),
       ...(screen.markingRow ? { markingRow: screen.markingRow } : {}),
       ...(screen.rebuildDiffers ? { rebuildDiffers: screen.rebuildDiffers } : {}),
+      ...(Object.keys(homeCards).length ? { homeCards } : {}),
+      ...(syncToast ? { syncToast } : {}),
       steps: screen.steps,
       shows: screen.shows,
       status: error ? 'failed' : screen.incomplete ? 'incomplete' : 'complete',

@@ -110,3 +110,22 @@ test('the screens named as changed or added are in the manifest, and each change
   const old = JSON.parse(fs.readFileSync(path.join(HERE, 'history', 'd494a9d', 'manifest.json'), 'utf8'));
   for (const { name } of added) assert.ok(!old.screens.some((s) => s.name === name), `${name} was already in the d494a9d baseline`);
 });
+
+test('the sync result toast is captured for a failed sync and for an ok sync with every part', () => {
+  const toasts = manifest.screens.filter((s) => s.syncToast).map((s) => ({ name: s.name, status: s.status, ...s.syncToast }));
+  const failed = toasts.find((t) => !t.ok);
+  assert.ok(failed?.code, 'no screen shows the toast of a sync that did not complete, with its code');
+  const plain = toasts.find((t) => t.ok && t.received === 0 && t.verseConflicts === 0);
+  assert.ok(plain, 'no screen shows the toast of an ok sync with no change from teammates');
+  const full = toasts.find((t) => t.ok && t.received > 0 && t.verseConflicts > 0 && t.from && t.missingPins > 0);
+  assert.ok(full, 'no screen shows an ok toast with teammates\' changes, a verse conflict, "Changes from" and the missing-versions note');
+  assert.deepEqual(full.links, ['review', 'download'], `${full.name} does not show both Review and Download`);
+  for (const t of [failed, plain, full]) assert.equal(t.status, 'complete', `${t.name} is not complete`);
+});
+
+test('every screen where a shared OBS card reads "Upload changes" cites Q2', () => {
+  // Q2: the rebuild syncs OBS projects, so no shared card of the rebuild offers Upload changes.
+  const uploads = manifest.screens.filter((s) => Object.values(s.homeCards ?? {}).includes('upload'));
+  assert.ok(uploads.length > 0, 'no screen records a card with Upload changes (homeCards)');
+  for (const s of uploads) assert.equal(s.rebuildDiffers?.ruling, 'Q2', `${s.name} shows Upload changes but does not cite Q2`);
+});

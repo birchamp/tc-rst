@@ -109,11 +109,11 @@
   ],
   "refusedExternalRequests": [],
   "totals": {
-    "screens": 59,
-    "complete": 47,
-    "incomplete": 12,
+    "screens": 61,
+    "complete": 51,
+    "incomplete": 10,
     "failed": 0,
-    "bytes": 7814948
+    "bytes": 7998133
   },
   "screens": [
     {
@@ -124,6 +124,10 @@
         "url": "/clients/uw-tc4/",
         "view": "home",
         "modal": null
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
       },
       "steps": [
         "Launch tC4"
@@ -209,10 +213,10 @@
       "status": "incomplete",
       "incomplete": "The link under WHAT TO CHECK reads \"Learn more: Translation Academy\" instead of the article title: the sample pins es-419_ta v4 for its primary set and tC4 vendors no copy (en-check-tn-session shows the titled link).",
       "absentReads": [
-        "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_gl--es-419_ta?ipath=translate/figs-abstractnouns/01.md -> 400",
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_gl--es-419_ta?ipath=checking/figs-abstractnouns/01.md -> 400",
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_gl--es-419_ta?ipath=intro/figs-abstractnouns/01.md -> 400",
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_gl--es-419_ta?ipath=process/figs-abstractnouns/01.md -> 400",
-        "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_gl--es-419_ta?ipath=intro/figs-abstractnouns/01.md -> 400"
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_gl--es-419_ta?ipath=translate/figs-abstractnouns/01.md -> 400"
       ],
       "bytes": 168286
     },
@@ -368,6 +372,10 @@
         "view": "home",
         "modal": "settings"
       },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
       "steps": [
         "Home",
         "Bible sample card: Settings"
@@ -386,6 +394,10 @@
         "view": "home",
         "modal": "addProject"
       },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
       "steps": [
         "Home",
         "+ Add a project"
@@ -403,6 +415,10 @@
         "url": "/clients/uw-tc4/",
         "view": "home",
         "modal": "newProject"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
       },
       "steps": [
         "Home",
@@ -423,6 +439,10 @@
         "view": "home",
         "modal": "import"
       },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
       "steps": [
         "Home",
         "+ Add a project",
@@ -442,6 +462,10 @@
         "view": "home",
         "modal": "netAsk"
       },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
       "steps": [
         "Home",
         "Bible sample card: Share on Door43"
@@ -459,6 +483,10 @@
         "url": "/clients/uw-tc4/",
         "view": "home",
         "modal": "signIn"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
       },
       "steps": [
         "Home",
@@ -478,6 +506,10 @@
         "url": "/clients/uw-tc4/",
         "view": "home",
         "modal": "share"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
       },
       "steps": [
         "Home",
@@ -499,6 +531,10 @@
         "url": "/clients/uw-tc4/",
         "view": "home",
         "modal": "share"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
       },
       "steps": [
         "Home",
@@ -522,6 +558,10 @@
         "view": "home",
         "modal": "account menu (popover)"
       },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
       "steps": [
         "Home",
         "Account button (top right)"
@@ -539,6 +579,10 @@
         "url": "/clients/uw-tc4/",
         "view": "home",
         "modal": "app language"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
       },
       "steps": [
         "Home",
@@ -578,6 +622,10 @@
         "view": "home",
         "modal": "about"
       },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
       "steps": [
         "Home",
         "Account button",
@@ -616,6 +664,10 @@
         "view": "home",
         "modal": "newObs"
       },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
       "steps": [
         "Home",
         "+ Add a project",
@@ -634,6 +686,9 @@
         "url": "/clients/uw-tc4/",
         "view": "home",
         "modal": "addBook"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share"
       },
       "steps": [
         "Home",
@@ -661,10 +716,10 @@
       "shows": "Get source texts: Pinned resources (Check for updates) and the gateway-language packages to choose from. Opening it opens the project, so Understand (Jonah) is behind it",
       "status": "complete",
       "absentReads": [
-        "GET /burrito/ingredient/raw/_local_/_sideloaded_/unfoldingword--hbo_uhb?ipath=JON.usfm -> 400",
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_ult?ipath=JON.usfm -> 400",
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_ust?ipath=JON.usfm -> 400",
-        "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_tn?ipath=JON.tsv -> 400"
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_tn?ipath=JON.tsv -> 400",
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/unfoldingword--hbo_uhb?ipath=JON.usfm -> 400"
       ],
       "bytes": 100002
     },
@@ -760,6 +815,10 @@
         "ruling": "Q3",
         "rebuild": "The note has no sentence that only public repositories can be opened: a new key replaces openDoor43.where in all 10 languages. A private repository opens after sign-in."
       },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
       "steps": [
         "Home",
         "+ Add a project",
@@ -778,6 +837,10 @@
         "url": "/clients/uw-tc4/",
         "view": "home",
         "modal": "netAsk"
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
       },
       "steps": [
         "Home",
@@ -804,6 +867,10 @@
         "ruling": "Q3",
         "rebuild": "The refusal sentence (openDoor43.refused.other) says \"Make sure that the repository is public\". The rebuild opens private repositories, so its sentence must not say this. The delta document replaces only openDoor43.where, so the new text of this sentence is not decided yet. When Door43 answers 401 or 404 and nobody is signed in, the rebuild shows the sign-in step instead of this refusal."
       },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "share",
+        "_local_/_local_/sample_burrito": "share"
+      },
       "steps": [
         "Home",
         "+ Add a project",
@@ -812,12 +879,11 @@
         "Open project",
         "Turn on internet"
       ],
-      "shows": "Open a project from Door43 dialog with the refusal callout \"This project cannot be opened.\" for a clone that failed (code sync.clone-failed), \"No project was added.\" and Ask for help",
-      "status": "incomplete",
-      "incomplete": "The mock has no git, so the clone fails: this is tC4's refusal for a failed clone. A successful open needs a git server, as in tC4's own journey J17.",
+      "shows": "Open a project from Door43 dialog with the refusal callout \"This project cannot be opened.\" for a clone that failed (code sync.clone-failed), \"No project was added.\" and Ask for help. The clone fails because Door43 has no repository of that name",
+      "status": "complete",
       "absentReads": [
-        "POST /git/delete/_local_/_archive_/tc4-open--_local_-s_local_-ses-d419_tit_equipo -> 400",
-        "POST /git/clone-repo/git.door43.org/facilitator-zq/es-419_tit_equipo -> 400"
+        "POST /git/clone-repo/git.door43.org/facilitator-zq/es-419_tit_equipo -> 400",
+        "POST /git/delete/_local_/_archive_/tc4-open--_local_-s_local_-ses-d419_tit_equipo -> 400"
       ],
       "bytes": 119109
     },
@@ -1149,9 +1215,9 @@
       "shows": "OBS Translation Notes session, story 1 (sorted By frame), item \"The Creation\" 1:0: the title note, the English gateway title highlighted, the Spanish title, the marking row with \"← Previous\" and \"Next →\"",
       "status": "complete",
       "absentReads": [
-        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)",
+        "GET /burrito/ingredient/raw/_local_/_local_/sample_burrito_obs?ipath=checking/translationNotes/OBS.json -> 400",
         "GET /burrito/ingredient/raw/_local_/_local_/sample_burrito_obs?ipath=checking/translationWords/OBS.json -> 400",
-        "GET /burrito/ingredient/raw/_local_/_local_/sample_burrito_obs?ipath=checking/translationNotes/OBS.json -> 400"
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
       "bytes": 110657
     },
@@ -1363,6 +1429,10 @@
         "ruling": "Q2",
         "rebuild": "The OBS card reads \"Sync with Door43\", like the Bible card: the rebuild syncs OBS projects too."
       },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "upload",
+        "_local_/_local_/sample_burrito": "sync"
+      },
       "steps": [
         "Launch tC4"
       ],
@@ -1380,11 +1450,19 @@
         "view": "home",
         "modal": "netAsk"
       },
+      "rebuildDiffers": {
+        "ruling": "Q2",
+        "rebuild": "The OBS card reads \"Sync with Door43\", like the Bible card: the rebuild syncs OBS projects too."
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "upload",
+        "_local_/_local_/sample_burrito": "sync"
+      },
       "steps": [
         "Home",
         "Bible sample card: Sync with Door43"
       ],
-      "shows": "\"Turn on the internet?\" asked for a sync (kind `sync`): get the changes of your teammates and send the changes of this project",
+      "shows": "\"Turn on the internet?\" asked for a sync (kind `sync`): get the changes of your teammates and send the changes of this project. Behind the scrim, the OBS card reads \"Upload changes\"",
       "status": "complete",
       "absentReads": [],
       "bytes": 94046
@@ -1398,20 +1476,133 @@
         "view": "home",
         "modal": null
       },
+      "rebuildDiffers": {
+        "ruling": "Q2",
+        "rebuild": "The OBS card reads \"Sync with Door43\", like the Bible card: the rebuild syncs OBS projects too."
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "upload",
+        "_local_/_local_/sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": false,
+        "code": "sync.clone-failed",
+        "text": "The sync did not complete. tC4 could not get the project from Door43. Nothing changed. Try again.",
+        "received": 0,
+        "newestWins": 0,
+        "verseConflicts": 0,
+        "from": null,
+        "missingPins": 0,
+        "links": []
+      },
       "steps": [
         "Home",
+        "Door43: the Bible sample's repository is not there",
         "Bible sample card: Sync with Door43",
         "Turn on internet",
         "Sign in as facilitator-zq"
       ],
-      "shows": "Home with the sync result toast of a sync that did not complete: red dot, \"The sync did not complete.\" and the sentence of code sync.clone-failed, the dismiss button",
-      "status": "incomplete",
-      "incomplete": "The mock has no git, so the clone of Door43 main fails: this is tC4's toast for a failed clone. The toast of a sync that completes (the three counts, \"Changes from\", Review and Download) needs a git server with teammates' journals, as in tC4's e2e/sync-button.spec.ts and journey J26.",
+      "shows": "Home with the sync result toast of a sync that did not complete: red dot, \"The sync did not complete.\" and the sentence of code sync.clone-failed, the dismiss button. The clone of Door43 main fails because the repository is not on Door43, as when it was deleted there",
+      "status": "complete",
       "absentReads": [
-        "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400",
-        "POST /git/clone-repo/git.door43.org/facilitator-zq/sample_burrito -> 400"
+        "POST /git/clone-repo/git.door43.org/facilitator-zq/sample_burrito -> 400",
+        "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400"
       ],
       "bytes": 83704
+    },
+    {
+      "name": "sync-ok",
+      "file": "screens/sync-ok.png",
+      "scenario": "shared",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": null
+      },
+      "rebuildDiffers": {
+        "ruling": "Q2",
+        "rebuild": "The OBS card reads \"Sync with Door43\", like the Bible card: the rebuild syncs OBS projects too."
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "upload",
+        "_local_/_local_/sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": true,
+        "code": null,
+        "text": "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review This project now uses 5 resource versions that are not on this computer. Download",
+        "received": 0,
+        "newestWins": 0,
+        "verseConflicts": 0,
+        "from": null,
+        "missingPins": 5,
+        "links": [
+          "download"
+        ]
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Home",
+        "Door43 main: the Bible sample as it is now (the push of its first share)",
+        "Bible sample card: Sync with Door43",
+        "Turn on internet",
+        "Sign in as facilitator-zq"
+      ],
+      "shows": "Home with the toast of a sync that completed with no change from teammates: kindle dot, \"Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review\", the note \"This project now uses 5 resource versions that are not on this computer.\", Download and the dismiss button",
+      "status": "complete",
+      "absentReads": [
+        "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400"
+      ],
+      "bytes": 88365
+    },
+    {
+      "name": "sync-ok-teammates",
+      "file": "screens/sync-ok-teammates.png",
+      "scenario": "shared",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": null
+      },
+      "rebuildDiffers": {
+        "ruling": "Q2",
+        "rebuild": "The OBS card reads \"Sync with Door43\", like the Bible card: the rebuild syncs OBS projects too."
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "upload",
+        "_local_/_local_/sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": true,
+        "code": null,
+        "text": "Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Changes from: Teammate 1 · Teammate 2 This project now uses 5 resource versions that are not on this computer. Review Download",
+        "received": 2,
+        "newestWins": 0,
+        "verseConflicts": 1,
+        "from": "Changes from: Teammate 1 · Teammate 2",
+        "missingPins": 5,
+        "links": [
+          "review",
+          "download"
+        ]
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Home",
+        "Door43 main: the Bible sample as it is now (the push of its first share)",
+        "Door43 main: two teammates change Titus 1:1 from the same version",
+        "Bible sample card: Sync with Door43",
+        "Turn on internet",
+        "Sign in as facilitator-zq"
+      ],
+      "shows": "Home with the toast of a sync that brought two teammates' changes to Titus 1:1: kindle dot, \"Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review\", \"Changes from: Teammate 1 · Teammate 2\", the note on the 5 missing resource versions, Review, Download and the dismiss button; the Bible card shows the chip \"1 conflict · Review\" and the Titus tile \"1 conflict\"",
+      "status": "complete",
+      "absentReads": [
+        "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400"
+      ],
+      "bytes": 94820
     }
   ]
 }
