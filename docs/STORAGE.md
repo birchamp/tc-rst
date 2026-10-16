@@ -3452,21 +3452,23 @@ days a year.
 | `metadata.json` | ≈ 120 KB | 600 entries × ≈ 200 B, pretty-printed |
 | Working tree | ≈ 880 MiB | packs 674 MiB (measured) + derived ≈ 210 MiB (compact sidecars: alignments ≈ 90 MiB, decisions ≈ 110 MiB, USFM ≈ 5 MiB) |
 | `.git` after 3 years | ≈ 250–400 MiB | packs ≈ 70 MiB zlib, stored two to three times because consolidation writes new blobs; derived file history ≈ 110 MiB as deltas; ≈ 7,500 commits of ≈ 15 KB trees |
-| Cold open, 4 cores, SSD | target ≤ 3 s; measured with the fold cache 2.6 s (median of 5, p95 2.9 s) on a shared 4-vCPU VM without SHA extensions while other jobs kept its load average near 9, 2.5 s of CPU over all threads; the first open without a cache (§18 item 15) 10 to 14 s there, 27 s of CPU | with the fold cache (§3.6, §6.1 O8) the open reads and fingerprints every file (664 MB, a few tenths of a second of CPU) and takes each file's prepared changes from its section instead of hashing and parsing its lines; the fold indexes them as they arrive, about 2 s on one thread, and its work after the last file is 0.7 s. Without the cache, reading, verifying (two SHA-256 passes over every byte, P2 and P4) and decoding every change is about 16.8 s of single-thread work, of which SHA-256 is about 10 s and parsing and checking 6.2 s, 5.8 s on 4 threads on a quiet VM; `docs/evidence/storage-fold-2026-10-16.md`. A corpus of 277,880 changes (the size of the probe's 278,041 actions, which it folded in 1.13 s) folds in 0.92 s (0.59 s on a faster VM) |
+| Cold open, 4 cores, SSD | target ≤ 3 s; only load and fold (O8) measured, the rest of the open (O1 to O7, O9 to O13) needs `tc-store`: with the fold cache 1.8 s (median of 9, p95 1.9 s) with the files in the page cache and 1.9 s (p95 2.0 s) with the guest's page cache cold, 2.5 to 2.7 s of CPU over all threads, on a 4-vCPU VM without SHA instructions and no other job running; as fast with a cache another build of the same `INDEX_VERSION` wrote; the first open without a cache (§18 item 15) 5.9 to 6.3 s (p95 6.6 to 8.5 s), 20 s of CPU with glibc malloc and 13.5 s with jemalloc | with the fold cache (§3.6, §6.1 O8) the open reads and fingerprints every file (705 MB) and takes each file's prepared changes from its section instead of hashing and parsing its lines; the fold indexes them as they arrive, and its work after the last file is 0.5 to 0.6 s. Without the cache every byte is hashed once (P4, with `ring`: one pass over every file takes 1 s of the four threads' time) and every change is parsed and checked; `docs/evidence/storage-fold-2026-10-16.md`. A corpus of 277,880 changes (the size of the probe's 278,041 actions, which it folded in 1.13 s) folds in 0.92 s (0.59 s on a faster VM) |
 | Cold open, 2-core laptop, HDD | ≈ 6–10 s | disk-bound; determinate progress per phase |
 | Save one verse | 1–10 ms | one `atomic_write` of ≈ 1 KB (measured 0.41 ms on the VM, fsyncbench) |
-| Materialize one book | 20–60 ms estimated; measured projection of Psalms 358 ms (488 ms when other jobs shared the VM): **missed** against the 300 ms budget | projecting every Psalms file (USFM, alignments, tN and TWL decisions, comments; 18.7 MB) with values read from disk and checked against their fingerprints (§2.6), on 4 threads, 0.9 s of CPU, about half of it decoding the book's 25,132 records and a third writing the decisions; the USFM alone 14 ms, one chapter 0.11 ms; the write and `metadata.json` are `tc-store`'s |
+| Materialize one book | 20–60 ms estimated; measured projection of Psalms 205 to 217 ms (medians of 20, p95 247 to 278 ms) on the VM with at most one other job running, within the 300 ms budget; 348 to 376 ms when other jobs loaded it (the build before `1665eba`: 341 to 521 ms in the same rounds); not measured on the reference laptop | projecting every Psalms file (USFM, alignments, tN and TWL decisions, comments; 18.7 MB) with values read from disk and checked against their fingerprints (§2.6), on 4 threads, about 0.5 s of CPU (2.3 G instructions), about half of it decoding the book's records from JSON; the book's files are listed from its own records, and decisions and alignments are decoded, written and freed in chunks on threads; the USFM alone 16 ms, one chapter 0.13 ms; the write and `metadata.json` are `tc-store`'s, and with §6.2 an open after no change projects no file |
 | Checkpoint | 0.1–0.5 s | seal ≤ 1 MiB, materialize, tree of changed directories, one commit |
 | Daily sync | 1–3 s + network | incremental fetch of a few hundred KB; push ≈ 0.3–1 MB (non-thin, §9.5) |
 | Join | ≈ 250–400 MiB full clone, or ≈ 120 MiB exchange file | packs deflate ≈ 5x in the zip |
 | USB export | ≈ 120 MiB, 5–15 s on USB 2 | |
-| Memory | ≈ 100 MiB typical, ≈ 350 MiB peak; measured folded state 205–214 MB, 233 MB heap peak during the open; an open with the fold cache peaks at 334 MiB RSS with glibc malloc (395–403 MiB when one process opens the project again and again), 269–281 MiB with the fold open; without the cache, RSS after the open 256 MiB with jemalloc (peak 345 MiB), 374 MiB with glibc malloc | ≈ 340 B of tables per change (each change's entry 130 B, of which 8 B is the value's fingerprint; record keys, batches, position indexes); values are byte ranges read on demand and dropped when a book is idle; the open folds each file as it arrives, so its peak holds the tables and a few files' inputs; glibc keeps what reading threads free in their arenas |
+| Memory | ≈ 100 MiB typical, ≈ 350 MiB peak; measured folded state 205–214 MB of heap; an open with the fold cache peaks at 326–340 MiB RSS and leaves 250–277 MiB with the fold open; the first open without a cache peaks at 424–442 MiB (**missed**); with Psalms projected after an open, jemalloc peaks at 317–323 MiB and keeps 295–298 MiB, glibc malloc 409–429 MiB (it keeps what threads free); the steady 150 MiB is **missed** by the fold's tables alone | ≈ 340 B of tables per change (each change's entry 130 B, of which 8 B is the value's fingerprint; record keys, batches, position indexes); values are byte ranges read on demand and dropped when a book is idle; the open folds each file as it arrives, so its peak holds the tables and a few files' inputs; glibc keeps what reading threads free in their arenas |
 
 An aligned NT project is about a quarter of these figures. Rows that say "measured" were
 measured on this format with the `tc-corpus` whole-Bible corpus, release builds
 (`docs/evidence/storage-fold-2026-10-16.md`); the other rows are still estimates from probes,
-until `tc-store` and `tc-sync` measure save, checkpoint, sync and export (§16.5). The cold open
-meets 3 s through the fold cache `.tc/index.bin` (§3.6, §6.1 O8). It holds a section per file,
+until `tc-store` and `tc-sync` measure save, checkpoint, sync and export (§16.5). With the fold
+cache `.tc/index.bin` (§3.6, §6.1 O8), load and fold take 1.8 s; the rest of the open (O1 to O7,
+O9 to O13) is not measured until `tc-store` exists, so the 3 s cold open is not yet shown end
+to end. The cache holds a section per file,
 keyed by the file's path, size and fingerprint, not one key for the whole set of files: a save,
 a seal, a consolidation or a sync costs the next open only the parse of the files it added, a
 file another program changed is read again, and a file that is gone is never asked for. The
@@ -3864,9 +3866,10 @@ go in `[workspace.dependencies]`. No CRDT library and no git content merge (`.au
     (§11.1 X3); the app keeps the file's previous line endings.
 15. **The first open without a fold cache** (a project just received or copied without its
     `.tc/`, or the first open after an update that raised `INDEX_VERSION` or the format minor)
-    verifies and parses every change: about 17 s of single-thread work for a whole Bible on a processor
-    without SHA instructions, 5.8 s on four threads (§14). It shows determinate progress and
-    writes the cache, so the next open takes about 2 s.
+    verifies and parses every change: for a whole Bible on a processor without SHA
+    instructions, about 20 s of CPU over four threads with glibc malloc (13.5 s with jemalloc)
+    and 5.9 to 6.3 s of wall time on the quiet VM (§14). It shows determinate progress and
+    writes the cache, so the next open's load and fold take about 1.8 s.
 
 ---
 

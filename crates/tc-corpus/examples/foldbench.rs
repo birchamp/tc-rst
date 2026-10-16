@@ -14,6 +14,8 @@
 //! stops after the first open when there is no cache yet, `FOLDBENCH_CACHED_ONLY`
 //! stops after the opens with the cache, `FOLDBENCH_STREAM_ONLY` after the opens without
 //! it too (for a heap profile), and `FOLDBENCH_FOLD_ONLY` after the open's parts.
+//! `FOLDBENCH_PSALMS_ONLY` projects Psalms right after the opens with the cache, the app's
+//! case for memory: the whole Bible open, Psalms in use.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
@@ -543,6 +545,22 @@ fn run(args: &[String]) {
         cached_tail.report();
         return;
     }
+    // The app's case: the whole Bible opened with the cache, then Psalms in use.
+    if std::env::var("FOLDBENCH_PSALMS_ONLY").is_ok() {
+        cached.report();
+        cached_tail.report();
+        let state = state.expect("folded");
+        println!("RSS with the fold open {:.0} MiB", rss_mib());
+        reset_peak_rss();
+        project_psalms(&state);
+        println!(
+            "peak RSS while Psalms was projected {:.0} MiB; RSS with the fold open after \
+             Psalms was projected {:.0} MiB",
+            peak_rss_mib(),
+            rss_mib()
+        );
+        return;
+    }
     let mut open = Stats::new(
         "Cold open without a cache: read, verify, prepare and fold, the fold indexing as files \
          are read",
@@ -923,6 +941,25 @@ fn run(args: &[String]) {
     }
     scratch.report();
 
+    project_psalms(&state);
+    let mut snapshot = Stats::new("Snapshot (clone of the fold)");
+    for _ in 0..20 {
+        let t = Instant::now();
+        let s = state.clone();
+        snapshot.times.push(t.elapsed());
+        drop(s);
+    }
+    snapshot.report();
+    println!(
+        "peak RSS {:.0} MiB; RSS with the fold open after Psalms was projected {:.0} MiB",
+        peak_rss_mib(),
+        rss_mib()
+    );
+}
+
+/// Renders every file of Psalms `FOLDBENCH_PROJECTIONS` times (20 by default), with its
+/// values read from the files, as materializing the book does.
+fn project_psalms(state: &FoldState) {
     let projection_runs: usize = std::env::var("FOLDBENCH_PROJECTIONS")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -966,13 +1003,4 @@ fn run(args: &[String]) {
             std::fs::write(path, bytes).expect("write");
         }
     }
-    let mut snapshot = Stats::new("Snapshot (clone of the fold)");
-    for _ in 0..20 {
-        let t = Instant::now();
-        let s = state.clone();
-        snapshot.times.push(t.elapsed());
-        drop(s);
-    }
-    snapshot.report();
-    println!("peak RSS {:.0} MiB", peak_rss_mib());
 }

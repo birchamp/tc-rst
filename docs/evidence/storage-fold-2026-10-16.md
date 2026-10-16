@@ -12,7 +12,234 @@ Budgets (docs/PERFORMANCE.md) that `tc-journal` owns or feeds:
 | Memory, whole Bible open (`tc-store`; the folded state is the fold's part) | 350 MiB peak; 150 MiB steady |
 | Corpus generator, whole Bible | well under a minute |
 
-## After the review of the fold (the commit that adds this section)
+## After the fold cache, hash-once, `ring` and the projection fix (evening, 2026-10-16)
+
+### Machine and method
+
+Intel Xeon @ 2.80 GHz (Cascade Lake, family 6 model 85: AVX2 and AVX-512, **no SHA
+instructions**), 4 vCPUs under KVM, 15 GiB RAM, a virtio disk; Linux 6.18; Rust 1.97.0,
+release profile, glibc malloc unless a row says jemalloc 5.3 (`LD_PRELOAD`). The VM was
+restarted at 20:49 UTC. From 21:10 to 21:18 UTC no other job ran on it (`ps`, and the start
+times of the jobs that came after):
+the 1-minute load average of 2.4 to 4.5 in those rows is the benchmark's own four reading
+threads. From 21:18 other agents' builds and tests shared the VM (load 3 to 9); rows measured
+then say so.
+
+Commits: the opens, the open's parts and the incremental steps were measured at `8ebccfa`,
+the Psalms projection and the memory with Psalms in use at `1665eba`, which changed only
+`render_book` (no open and no incremental step calls it). `foldbench` as committed with this
+section only adds the Psalms-only mode and the RSS after the projections. The other build of
+the same cache version is `8ac67d9`: `INDEX_VERSION` 3 as at HEAD, hashing with `sha2`
+instead of `ring`.
+
+The corpus is the one of the sections below (seed 1, 617,143 changes, 131 packs and 172
+pending files, 705,135,600 bytes), generated again with `foldbench save bible` at `8ebccfa`:
+byte for byte the corpus saved at 19:55 with the hash-once names. Its fold cache is
+64,521,542 bytes.
+
+Each open in the first table is its own process, so no open inherits another's heap
+(`docs/evidence/storage-fold-2026-10-16/opens.py`, raw rows in `opens-8ebccfa.tsv` beside
+it). Each of 9 rounds runs, in this order: (c) delete `index.bin`, read every file once,
+open without a cache (it writes the cache); (a) read every file, open with the cache; (b)
+evict, open with the cache; (c, cold) delete `index.bin`, evict, open without a cache (the
+cache it writes must equal the first byte for byte); then the other build opens without a
+cache and writes its own cache, which must equal this build's byte for byte (it did in every
+round), and (d) this build opens with that cache.
+
+**Cold page cache.** `/proc/sys/vm/drop_caches` cannot be written in this VM. Eviction is
+`fsync` then `posix_fadvise(POSIX_FADV_DONTNEED)` on every pack, pending file and `index.bin`
+(`cachectl.py evict`). Before every cold open the driver asserts with `mincore` that none of
+their bytes (769,657,142 with the cache, 705,135,600 without) is resident, and a plain read of
+the 705 MB took 0.27 s with the files in the page cache and 0.68 s after eviction. The guest's page cache is cold; the host's
+may not be (a virtio disk), and 1 GB/s is faster than a SATA SSD. On the reference laptop's
+SSD at about 500 MB/s, reading the files takes about 1.4 s; how much of it the open's
+fingerprinting and fold hide is not measured.
+
+### Results
+
+Load and fold of the whole Bible (§6.1 O8 only), 4 reading threads, one open per process,
+21:10 to 21:16 UTC:
+
+| Action | Page cache | Runs | Median | p95 | CPU, all threads (median) | The fold after the last file (median, p95) | Peak RSS | Load |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| (a) With the fold cache | warm | 9 | 1,802 ms | 1,890 ms | 2,480 ms | 518, 696 ms | 329–334 MiB | 2.7–4.3 |
+| (b) With the fold cache | cold | 9 | 1,875 ms | 1,980 ms | 2,700 ms | 574, 601 ms | 326–331 MiB | 2.7–4.3 |
+| (c) Without a cache: the first open | warm | 9 | 6,290 ms | 8,483 ms | 19,880 ms | 603, 651 ms | 433–441 MiB | 2.4–4.3 |
+| (c) Without a cache | cold | 9 | 5,899 ms | 6,556 ms | 20,420 ms | 583, 736 ms | 431–435 MiB | 2.6–4.2 |
+| (d) With a cache another build wrote (`8ac67d9`) | warm | 9 | 1,724 ms | 1,945 ms | 2,460 ms | 540, 556 ms | 330–334 MiB | 2.7–4.5 |
+| The other build's first open (`8ac67d9`, `sha2`) | warm | 9 | 6,291 ms | 8,578 ms | 21,350 ms | 580, 658 ms | 428–433 MiB | 2.8–4.5 |
+
+The budget of this branch's PERFORMANCE.md is 3 s for the whole cold open. The owner ruled on
+2026-10-16 that an open without a usable cache, or the first after a restart with a cold disk
+cache, may take 10 s (`docs/JOURNAL-DECISION-2026-10-16.md`, Decisions); that row is not in
+this branch's PERFORMANCE.md yet. Both must show progress within 300 ms (rule 4).
+
+The same opens with jemalloc, interleaved with glibc, 22:24 to 22:27 UTC while other jobs kept
+the load at 4.9 to 5.7 (3 runs each; CPU is the firmer figure under load): without a cache,
+glibc 7,177 to 11,959 ms wall and 19,640 to 20,960 ms of CPU, jemalloc 5,048 to 7,154 ms wall
+and 13,490 to 13,850 ms of CPU, a third less CPU, with the same peak (427 to 442 MiB); with the
+cache, 1.8 to 2.0 s for both.
+
+Every part, one process (`foldbench run DIR 4`, `8ebccfa`, 21:16 to 21:18 UTC, load 3.0 to
+4.4):
+
+| Action | Runs | Median | p95 | Budget |
+|---|---:|---:|---:|---|
+| Read, verify and prepare (4 threads; 17.4 to 18.8 s of CPU) | 5 | 7,069 ms | 8,418 ms | |
+| SHA-256 (`ring`) of every file once (4 threads) | 3 | 987 ms | 1,098 ms | |
+| Full fold of the prepared changes (one thread) | 5 | 2,223 ms | 2,400 ms | |
+| Open with the fold cache, five times in one process | 5 | 1,964 ms | 2,015 ms | 3 s |
+| Open without a cache, five times in one process (19.0 to 19.6 s of CPU) | 5 | 8,629 ms | 9,000 ms | 3 s |
+| Incremental step: save one Psalms verse | 200 | 0.047 ms | 0.238 ms | 2 ms |
+| Incremental step: record one Psalms decision | 200 | 0.011 ms | 0.018 ms | 1 ms |
+| Incremental step: save one Psalms alignment | 200 | 0.009 ms | 0.014 ms | 2 ms |
+| Conflict counts after a save | 200 | 0.000 ms | 0.000 ms | 1 ms |
+| Incremental step with a live snapshot: save one Psalms verse | 200 | 0.200 ms | 0.289 ms | 2 ms |
+| Incremental step with a live snapshot: record one Psalms decision | 200 | 0.165 ms | 0.304 ms | 1 ms |
+| Incremental step: resolve one Psalms conflict | 100 | 0.051 ms | 0.171 ms | 1 ms |
+| Conflict list and counts from scratch | 20 | 17.8 ms | 29.2 ms | 100 ms |
+| Psalms USFM alone | 20 | 15.6 ms | 23.6 ms | 150 ms |
+| One Psalms chapter's USFM | 20 | 0.133 ms | 0.700 ms | 50 ms |
+| Snapshot (clone of the fold) | 20 | 0.194 ms | 0.794 ms | |
+
+An open without a cache in a process that has already opened the project several times takes
+longer on the same CPU time (8.6 s against 6.3 s in a fresh process); the first table, one
+open per process, is the app's case.
+
+The Psalms projection (every file of the book, values read from the files; what materializing
+it renders) and memory with Psalms in use, `FOLDBENCH_RUNS=1 FOLDBENCH_PSALMS_ONLY=1
+foldbench run DIR 4`: one open with the cache, then 20 projections, in one process. `head` is
+the build of `8ebccfa`, before the projection fix, interleaved with `1665eba`:
+
+| Build | Allocator | Load before..after | Runs | Median | p95 | CPU, all threads (median) | Budget |
+|---|---|---|---:|---:|---:|---:|---|
+| `8ebccfa`, before the fix | glibc | 2.2..2.5 | 20 | 362 ms | 442 ms | 730 ms | 300 ms |
+| `1665eba` | glibc | 2.5..3.2 | 20 | **205 ms** | **247 ms** | 520 ms | 300 ms |
+| `1665eba` | jemalloc | 3.2..4.0 | 20 | 243 ms | 385 ms | 460 ms | 300 ms |
+| `8ebccfa`, before the fix | glibc | 4.0..4.6 | 20 | 521 ms | 642 ms | 630 ms | 300 ms |
+| `1665eba` | glibc | 4.6..6.2 | 20 | 376 ms | 420 ms | 520 ms | 300 ms |
+| `1665eba` | jemalloc | 6.2..6.8 | 20 | 317 ms | 405 ms | 460 ms | 300 ms |
+| `8ebccfa`, before the fix | glibc | 6.8..7.6 | 20 | 511 ms | 672 ms | 650 ms | 300 ms |
+| `1665eba` | glibc | 7.6..8.6 | 20 | 348 ms | 428 ms | 520 ms | 300 ms |
+| `1665eba` | jemalloc | 8.6..8.9 | 20 | 331 ms | 409 ms | 480 ms | 300 ms |
+| `1665eba` | glibc | 1.9..1.9 | 20 | **206 ms** | **262 ms** | 530 ms | 300 ms |
+| `8ebccfa`, before the fix | glibc | 1.9..1.9 | 20 | 341 ms | 367 ms | 700 ms | 300 ms |
+| `1665eba` | glibc | 1.9..2.9 | 20 | **217 ms** | **278 ms** | 560 ms | 300 ms |
+| `1665eba` | jemalloc | 2.9..3.9 | 20 | **185 ms** | **211 ms** | 490 ms | 300 ms |
+
+Rows are in the order they ran: the first nine from 22:10 to 22:13 UTC, when from the second
+row on other agents' builds and tests shared the VM; the last four from 22:48 to 22:49 UTC,
+with one other job running. With at most one other job running, the projection meets its
+budget (205 to 217 ms median, 247 to 278 ms p95 with glibc; 185 ms and 211 ms with jemalloc);
+as the load grows it misses it. In every pair the build before the fix was 1.4 to 1.8 times
+slower. Whether the budget holds on the reference laptop is not measured.
+
+Each projection writes 5 files, 18,747,613 bytes, byte for byte the same with both builds.
+
+### Memory
+
+| State | glibc malloc | jemalloc | Budget |
+|---|---:|---:|---|
+| Peak of an open with the cache | 326–336 MiB | 335–340 MiB | 350 MiB: met |
+| Peak of the first open without a cache | 427–441 MiB | 424–442 MiB | 350 MiB: **missed** |
+| RSS after an open with the cache, the fold open | 264–277 MiB | 250–252 MiB | 150 MiB steady: **missed** |
+| Peak while Psalms is projected, after an open with the cache (`1665eba`) | 409–429 MiB (450–502 at `8ebccfa`) | 317–323 MiB (354–355 at `8ebccfa`) | 350 MiB: **missed** with glibc, met with jemalloc |
+| RSS with the fold open after Psalms was projected (`1665eba`) | 409–429 MiB | 295–298 MiB | 150 MiB steady: **missed** |
+
+The folded state itself is 205 to 214 MB of heap (massif, sections below): the steady budget
+is missed by the fold's tables alone. glibc keeps what the reading and projecting threads
+free in their arenas, so its RSS after a projection stays at its peak; jemalloc returns it.
+The first open's peak also holds the sections of the new cache (64.5 MB) until the cache is
+written.
+
+### What is not measured
+
+Only O8 of §6.1 is measured here. O1 to O7 (lock, temporary files, git, format and filesystem
+gates, identity, finishing interrupted work) and O9 to O13 (classifying the derived and
+carried paths, materializing, backfill, drafts, the report) need `tc-store`, which is not
+built. **The 3 s cold open is therefore not shown end to end.** Nor is anything here measured
+on the reference laptop, on Windows with Defender, on a CPU with SHA instructions, or with the
+host's disk cache cold.
+
+### What changed since the numbers below (`6e8adac`, 12:25 UTC)
+
+- `8690c52`: values and files are fingerprinted with a full-avalanche step instead of FxHash.
+- `2d63657`, `c45fb07`: the fold cache `.tc/index.bin`, read by any build of its
+  `INDEX_VERSION` and format minor (STORAGE.md §3.6). (d) above shows an app update that
+  keeps the encoding keeps the cache: the other build's cache is byte for byte this build's,
+  and opening with it takes as long as with this build's own.
+- `8ac67d9`: a pack's and a pending file's names come from the header line and the line ids,
+  so a read hashes each byte once. Measured then: CPU over all threads 26.5 s before, 22.6 s
+  after (median of 6 interleaved runs at load 4.4 to 6.3).
+- `250b2b0`: SHA-256 through `ring`, 1.7 times `sha2`'s speed on this CPU in `shabench`. In
+  the opens above, `ring` saves 1.5 s of CPU on the first open (19.9 s against 21.4 s); the
+  wall medians are equal, within this VM's spread.
+- `1665eba`: the projection fix below.
+- The VM was quiet for the first two tables; the numbers below were taken at load 6 to 10.
+  CPU times compare: the first open used 25.9 to 28.4 s of CPU at `6e8adac` and 19.9 s now;
+  SHA-256 of every file once took 1,022 ms at the quiet measurement of `225d19e` and 987 ms
+  now.
+
+### The Psalms projection: profile, fix and what is left
+
+Callgrind on the whole-Bible fold opened with the cache, and the projection's phases timed on
+their own (a temporary build, load about 4): listing the book's files took 43 to 65 ms on one
+thread, because it listed every derived file of the project, visiting each of its 283,593
+records (125 M instructions); decoding every record of the book into a shared map 93 to 121
+ms on four threads (1.18 G instructions); rendering the files 113 to 141 ms, of which the
+alignments sidecar, written on one thread, took 100 to 134 ms; freeing the decoded records 36
+to 56 ms. `1665eba` lists the book's files from its own records, writes the alignment records
+in chunks on threads, decodes decisions and alignments in their own file's chunks and frees
+them as it goes, and writes each decision's context once. The files are byte for byte the
+same. One projection fell from 2.59 G to 2.30 G instructions. The new operation-count test
+`a_book_lists_its_files_from_its_own_records` fails on the old listing (221,293 records on the
+corpus ten times larger, where Psalms holds 24,910).
+
+What is left is CPU: decoding the book's records from JSON is about half of the instructions
+(the flat parse 0.5 G, building the records 0.6 G) and the decisions about 0.7 G, a quarter of
+which is the selection text that checks the selections of verses whose text changed. Keeping a decision's context
+as its canonical JSON text in the record model (J1) would remove most of the decision
+writing. More decisive for the person: with §6.2 as now written, an open after no change
+projects no file, and a save projects only its book's files (unit S2 must show it with
+`an_open_after_one_save_projects_only_that_books_files`). Materializing is background work
+(PERFORMANCE.md rule 4): no screen waits for it.
+
+### To reproduce
+
+```sh
+cargo build --release -p tc-corpus --example foldbench
+target/release/examples/foldbench save bible DIR
+# the first table: 9 rounds, one open per process; OTHER is a build of another commit with
+# the same INDEX_VERSION (here 8ac67d9)
+python3 -I docs/evidence/storage-fold-2026-10-16/opens.py DIR \
+    target/release/examples/foldbench OTHER 9 opens.tsv
+# every part in one process
+target/release/examples/foldbench run DIR 4
+# the projection and memory with Psalms in use, after one open with the cache
+FOLDBENCH_RUNS=1 FOLDBENCH_PSALMS_ONLY=1 target/release/examples/foldbench run DIR 4
+LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2 FOLDBENCH_RUNS=1 \
+    FOLDBENCH_PSALMS_ONLY=1 target/release/examples/foldbench run DIR 4
+# instruction counts of one projection
+FOLDBENCH_PROJECTIONS=1 FOLDBENCH_RUNS=1 FOLDBENCH_PSALMS_ONLY=1 \
+    valgrind --tool=callgrind target/release/examples/foldbench run DIR 4
+```
+
+### What S1, S2 and P must do about these numbers
+
+- **S1** measures the whole open (O1 to O13) on this corpus: with the cache and a warm and a
+  cold page cache, without a cache, and after an update; on this VM and on the reference
+  laptop (memo plan step 5). It reads with a bounded pool, shows progress within 300 ms
+  (`open_shows_determinate_progress_by_300_ms`), and may write the new cache's sections as
+  they are made rather than holding them (64.5 MB) to the end of the first open.
+- **S2** proves that an open after no change projects nothing and reads no derived file, and
+  that a save re-projects only its book's files (§16.5a).
+- **P** (and `tc-app`) choose the allocator: jemalloc took a third less CPU on the first open
+  and returns what threads free (steady RSS 295 MiB against 424 MiB with glibc after Psalms
+  was projected). The steady budget of 150 MiB needs the fold to keep only the heads and the
+  open books' histories in memory and to read an idle book's history from `.tc/index.bin`
+  when a step reaches it: a change to the fold's tables and to `tc-store`, not made here.
+
+## After the review of the fold (`6e8adac`)
 
 Measured on the same VM and corpus as below, at the commit that adds this section, on
 2026-10-16 from 12:25 to 12:29 UTC. Other jobs shared the VM's four vCPUs (load average 6 to
