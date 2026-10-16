@@ -13,7 +13,9 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use common::install_fixture;
-use tc_resources::{Installed, Receipt, ResourcePin, ResourceStore, Sha256, content_files_opened};
+use tc_resources::{
+    Installed, Receipt, ResourcePin, ResourceStore, Sha256, StoreError, content_files_opened,
+};
 use tempfile::TempDir;
 
 /// A bundled store of three real fixture exports, as an installer ships it.
@@ -138,7 +140,7 @@ fn c29_an_install_opens_each_bundled_file_once_and_a_repeat_start_opens_none() {
     assert_eq!(opens, 0, "a repeat start opens no resource file");
     assert_eq!(again.already_installed.len(), 3);
     assert!(again.added.is_empty() && again.checked_again.is_empty());
-    assert!(again.damaged.is_empty() && again.refused.is_empty());
+    assert!(again.refused.is_empty());
     assert_eq!(
         tree(machine_dir.path()),
         written,
@@ -174,28 +176,108 @@ fn c29_a_changed_receipt_makes_that_copy_be_checked_again_against_its_own_receip
     );
     assert_eq!(report.checked_again, [s.pins[0].to_string()]);
     assert_eq!(report.already_installed.len(), 3);
-    assert!(report.added.is_empty() && report.damaged.is_empty());
+    assert!(report.added.is_empty());
     assert_eq!(fs::read(&tsv).unwrap(), drifted, "the copy keeps its bytes");
     let (opens, report) = opened(|| s.machine.seed_from(&s.bundled).unwrap());
     assert_eq!(opens, 0, "the new receipt is recorded as checked");
     assert!(report.checked_again.is_empty());
 
-    // Negative control: a receipt that disagrees with its copy is damaged. The copy is
-    // left as it is, and no record vouches for it at the next start either.
+    // Negative control: a receipt that disagrees with its copy still stops the start. The
+    // copy is left as it is, and no record vouches for it at the next start either.
     set_receipt_entry(
         &tn,
         "ingredients/TIT.tsv",
         drifted.len() as u64 + 1,
         Sha256::of(&drifted),
     );
+    let record = fs::read(tn.dir().join("checked.json")).unwrap();
     for _ in 0..2 {
-        let report = s.machine.seed_from(&s.bundled).unwrap();
-        assert_eq!(report.damaged.len(), 1);
-        assert_eq!(report.damaged[0].0, s.pins[0].to_string());
-        assert!(report.checked_again.is_empty() && report.added.is_empty());
-        assert_eq!(report.already_installed.len(), 2);
+        let problem = damaged_file(&s, &tn, "ingredients/TIT.tsv");
+        assert!(problem.contains("bytes, the receipt says"), "{problem}");
         assert_eq!(fs::read(&tsv).unwrap(), drifted);
+        assert_eq!(fs::read(tn.dir().join("checked.json")).unwrap(), record);
     }
+}
+
+/// Seeds `s` and expects it to stop on `copy`'s `file`; returns the problem it names.
+fn damaged_file(s: &Seeded, copy: &Installed, file: &str) -> String {
+    match s.machine.seed_from(&s.bundled) {
+        Err(StoreError::Damaged {
+            path,
+            file: found,
+            problem,
+        }) if path == copy.dir() && found == file => problem,
+        other => panic!(
+            "expected {file} of {} damaged: {other:?}",
+            copy.dir().display()
+        ),
+    }
+}
+
+#[test]
+fn c29_a_copy_that_fails_its_check_stops_the_start_and_is_never_overwritten() {
+    // tC4 `scripts/desktop-resources.test.cjs:453-463`: an incomplete or conflicting
+    // copy at the bundled resource's place cannot be accepted or silently overwritten.
+    let s = first_start();
+    let tn = s.machine.dcs(&s.pins[0]).unwrap().unwrap();
+    let record = tn.dir().join("checked.json");
+    let tsv = tn.dir().join("content/ingredients/TIT.tsv");
+    let bytes = fs::read(&tsv).unwrap();
+
+    // A missing file, and no record: the copy is checked, and the bundle is not opened.
+    fs::remove_file(&record).unwrap();
+    fs::remove_file(&tsv).unwrap();
+    let (opens, _) = opened(|| damaged_file(&s, &tn, "ingredients/TIT.tsv"));
+    assert!(opens <= file_count(&tn), "{opens}");
+    assert!(!tsv.exists(), "the copy is not repaired from the bundle");
+    assert!(!record.exists(), "no record vouches for the copy");
+
+    // One more byte.
+    let mut longer = bytes.clone();
+    longer.extend_from_slice(b"corrupted");
+    fs::write(&tsv, &longer).unwrap();
+    let problem = damaged_file(&s, &tn, "ingredients/TIT.tsv");
+    assert!(problem.contains("bytes, the receipt says"), "{problem}");
+
+    // The same size, one byte changed: this start stops, and so does the next.
+    let mut flipped = bytes.clone();
+    flipped[0] ^= 1;
+    fs::write(&tsv, &flipped).unwrap();
+    for _ in 0..2 {
+        let problem = damaged_file(&s, &tn, "ingredients/TIT.tsv");
+        assert!(problem.contains("SHA-256"), "{problem}");
+        assert_eq!(fs::read(&tsv).unwrap(), flipped);
+        assert!(!record.exists());
+    }
+
+    // A receipt that cannot be read, or that names another resource.
+    fs::write(&tsv, &bytes).unwrap();
+    let receipt = tn.dir().join("receipt.json");
+    let own = fs::read(&receipt).unwrap();
+    // Neither opens the bundle: no copy is made over it.
+    fs::remove_file(&receipt).unwrap();
+    let (opens, seeded) = opened(|| s.machine.seed_from(&s.bundled));
+    assert!(
+        matches!(&seeded, Err(StoreError::BadReceipt { path, .. }) if path == tn.dir()),
+        "{seeded:?}"
+    );
+    assert_eq!(opens, 0);
+    let tw = s.machine.dcs(&s.pins[1]).unwrap().unwrap();
+    fs::copy(tw.dir().join("receipt.json"), &receipt).unwrap();
+    let (opens, seeded) = opened(|| s.machine.seed_from(&s.bundled));
+    assert!(
+        matches!(&seeded, Err(StoreError::Occupied { path, .. }) if path == tn.dir()),
+        "{seeded:?}"
+    );
+    assert_eq!(opens, 0);
+    assert!(!record.exists());
+
+    // Control: the copy's own receipt back, and the copy is checked again and trusted.
+    fs::write(&receipt, &own).unwrap();
+    let report = s.machine.seed_from(&s.bundled).unwrap();
+    assert_eq!(report.checked_again, [s.pins[0].to_string()]);
+    assert_eq!(report.already_installed.len(), 3);
+    assert!(record.exists());
 }
 
 #[test]

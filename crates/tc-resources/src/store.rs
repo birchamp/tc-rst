@@ -36,9 +36,10 @@
 //! they were checked against. A later start trusts the copy while that record names its
 //! receipt, and opens none of its files (tC4 #740). A copy whose receipt changed, or whose
 //! record is missing or unreadable, is checked again against its own receipt, and its
-//! record is replaced atomically. Like tC4, this does not see a change to a content file
-//! made after its check: a reader that finds a file whose size differs from the receipt's
-//! refuses it ([`Installed::read`]).
+//! record is replaced atomically. A copy that fails that check stops the seeding, as it
+//! stops tC4's start, and is left as it is. Like tC4, this does not see a change to a
+//! content file made after its check: a reader that finds a file whose size differs from
+//! the receipt's refuses it ([`Installed::read`]).
 //!
 //! One process owns a store: the app's server. Two processes installing into one store
 //! at once is not supported, because opening the store clears `.partial/`.
@@ -310,8 +311,14 @@ impl Installed {
     fn read_checked(&self, record: &FileRecord) -> Result<Vec<u8>, StoreError> {
         let full = self.dir.join(CONTENT).join(&record.path);
         let bytes = read_content(&full).map_err(|e| self.damaged(&record.path, e.to_string()))?;
-        if bytes.len() as u64 != record.size || Sha256::of(&bytes) != record.sha256 {
-            return Err(self.damaged(&record.path, "its bytes changed".to_owned()));
+        if bytes.len() as u64 != record.size {
+            return Err(self.damaged(
+                &record.path,
+                format!("{} bytes, the receipt says {}", bytes.len(), record.size),
+            ));
+        }
+        if Sha256::of(&bytes) != record.sha256 {
+            return Err(self.damaged(&record.path, "its SHA-256 is not the receipt's".to_owned()));
         }
         Ok(bytes)
     }
@@ -395,9 +402,6 @@ pub struct SeedReport {
     /// Of `already_installed`: copies whose receipt was not the one their files were last
     /// checked against, checked again now against their own receipt.
     pub checked_again: Vec<String>,
-    /// Copies in this store, of installs the bundle holds too, whose files no longer match
-    /// their own receipt: left as they are, and checked again at the next seeding.
-    pub damaged: Vec<(String, StoreError)>,
     /// Bundled installs whose files no longer match their receipts: not copied.
     pub refused: Vec<(String, StoreError)>,
 }
@@ -562,6 +566,11 @@ impl ResourceStore {
     /// again while its check record names its receipt: a repeat start reads receipts and
     /// check records only. A copy whose receipt changed since its check is checked again
     /// against its own receipt, never the bundle's (tC4 #740).
+    ///
+    /// A copy of a bundled install that cannot be trusted stops the seeding with its error,
+    /// as tC4 stops its start (`scripts/desktop-resources.test.cjs:453-463, 597-600`): a
+    /// copy whose files fail that check, or whose receipt cannot be read or names another
+    /// resource. The copy is left as it is, never overwritten from the bundle.
     pub fn seed_from(&self, bundled: &ResourceStore) -> Result<SeedReport, StoreError> {
         let inventory = bundled.installed()?;
         let mut report = SeedReport::default();
@@ -572,24 +581,14 @@ impl ResourceStore {
         }
         for install in inventory.installs {
             let name = install.origin().describe();
-            match self.find(install.origin()) {
-                Ok(Some(copy)) => {
-                    if !copy.is_checked() {
-                        if let Err(e) = copy.verify() {
-                            report.damaged.push((name, e));
-                            continue;
-                        }
-                        copy.record_check()?;
-                        report.checked_again.push(name.clone());
-                    }
-                    report.already_installed.push(name);
-                    continue;
+            if let Some(copy) = self.find(install.origin())? {
+                if !copy.is_checked() {
+                    copy.verify()?;
+                    copy.record_check()?;
+                    report.checked_again.push(name.clone());
                 }
-                Ok(None) => {}
-                Err(e) => {
-                    report.refused.push((name, e));
-                    continue;
-                }
+                report.already_installed.push(name);
+                continue;
             }
             let files = match install.read_all_checked() {
                 Ok(files) => files,
