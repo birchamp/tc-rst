@@ -19,13 +19,14 @@ use tc_obs::images::{
 };
 use tc_obs::print::{PrintedFrame, PrintedStory, printed_stories, story_drafted};
 use tc_obs::progress::first_story;
+use tc_obs::questions::{parse_story_questions, story_questions};
 use tc_obs::recency::{RecentStory, record_recent_story};
 use tc_obs::story::{
     StoryState, apply_story_state, frame_text_problem, parse_story, reference_text_problem,
     seed_story, title_text_problem, write_frame, write_reference, write_title,
 };
 use tc_obs::template::with_localized_names;
-use tc_obs::{FrameNo, StoryError, TextProblem, WriteError};
+use tc_obs::{FrameNo, StoryError, StoryNo, TextProblem, WriteError};
 
 fn vectors() -> &'static Value {
     static V: OnceLock<Value> = OnceLock::new();
@@ -605,6 +606,40 @@ fn localized_names_is_added_as_tc4_adds_it() {
                 "{name}"
             ),
         }
+    }
+}
+
+#[test]
+fn story_questions_keep_the_rows_tc4_derives() {
+    let cases = vectors()["questions"].as_array().unwrap();
+    assert!(cases.len() >= 12);
+    for case in cases {
+        let questions = parse_story_questions(case["tsv"].as_str().unwrap()).unwrap();
+        let story = case["story"]
+            .as_u64()
+            .map(|n| StoryNo::new(u8::try_from(n).unwrap()).unwrap());
+        let ours: Vec<Value> = story_questions(&questions, story)
+            .into_iter()
+            .map(|q| {
+                let tc_helps::HelpRef::Obs(at) = q.reference else {
+                    panic!("an OBS question")
+                };
+                json!({
+                    "id": q.id.upstream_row_id().unwrap().as_str(),
+                    "story": at.story(),
+                    "frame": at.frame(),
+                    "question": q.question,
+                    "response": q.response,
+                })
+            })
+            .collect();
+        assert_eq!(
+            Value::Array(ours),
+            case["items"],
+            "{} (story {})",
+            case["name"],
+            case["story"]
+        );
     }
 }
 

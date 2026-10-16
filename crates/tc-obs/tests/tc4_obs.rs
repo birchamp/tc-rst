@@ -12,7 +12,7 @@ mod common;
 use common::{bundle_file, stories};
 use serde_json::json;
 use tc_helps::obs::ObsStory;
-use tc_helps::tsv::{TsvScope, parse_notes, parse_questions, parse_word_links};
+use tc_helps::tsv::{TsvScope, parse_notes, parse_word_links};
 use tc_helps::{HelpRef, ObsRef};
 use tc_obs::frame_set::frame_set_mismatch;
 use tc_obs::images::{
@@ -24,7 +24,7 @@ use tc_obs::presentation::{
     PackVia, SourceInput, SourceState, pack_not_installed, pinned_packs, present_story, read_pack,
 };
 use tc_obs::progress::{first_story, obs_progress, story_percent, story_to_open};
-use tc_obs::questions::story_questions;
+use tc_obs::questions::{parse_story_questions, story_questions};
 use tc_obs::recency::{RECENT_STORIES, RecentStory, record_recent_story};
 use tc_obs::story::{parse_story, write_frame, write_reference, write_title};
 use tc_obs::template::{NewObsProject, create_obs_project};
@@ -750,10 +750,10 @@ fn the_default_pack_is_the_pin_tc_resources_ships() {
 // ---------------------------------------------------------------------------------------
 
 fn obs_tq() -> Vec<tc_helps::Question> {
-    parse_questions(
-        &bundle_file("en_obs-tq_v10.sb.zip", "en_obs-tq/ingredients/OBS.tsv"),
-        TsvScope::Obs,
-    )
+    parse_story_questions(&bundle_file(
+        "en_obs-tq_v10.sb.zip",
+        "en_obs-tq/ingredients/OBS.tsv",
+    ))
     .unwrap()
 }
 
@@ -795,6 +795,64 @@ fn one_storys_questions_are_its_rows_with_the_creation_question_first() {
     );
     assert_eq!(one[0].response, "God created everything.");
     assert_eq!(StoryNo::new(51), None);
+}
+
+const TQ_HEADER: &str = "Reference\tID\tTags\tQuote\tOccurrence\tQuestion\tResponse";
+
+fn tq_table(rows: &[(&str, &str)]) -> String {
+    let mut tsv = format!("{TQ_HEADER}\n");
+    for (reference, id) in rows {
+        tsv.push_str(&format!("{reference}\t{id}\t\t\t1\tQ?\tR.\n"));
+    }
+    tsv
+}
+
+fn ids_and_frames(questions: &[tc_helps::Question]) -> Vec<(String, u8, u16)> {
+    story_questions(questions, None)
+        .into_iter()
+        .map(|q| {
+            let HelpRef::Obs(at) = q.reference else {
+                panic!("an OBS question")
+            };
+            let id = q.id.upstream_row_id().unwrap().as_str().to_owned();
+            (id, at.story(), at.frame())
+        })
+        .collect()
+}
+
+#[test]
+fn a_question_row_whose_locator_is_not_two_integers_is_dropped_and_the_rest_kept() {
+    let tsv = tq_table(&[
+        ("1:1", "aaaa"),
+        ("front:intro", "bbbb"),
+        ("1:x", "cccc"),
+        ("2:3", "dddd"),
+    ]);
+    let questions = parse_story_questions(&tsv).unwrap();
+    assert_eq!(
+        ids_and_frames(&questions),
+        [("aaaa".to_owned(), 1, 1), ("dddd".to_owned(), 2, 3)]
+    );
+    // A row that is broken in another way still refuses the table, at its line.
+    let broken = format!("{tsv}front:intro\tbbbb\n2:4\tdddd\n");
+    let refused = parse_story_questions(&broken).unwrap_err().to_string();
+    assert!(refused.contains("line 7"), "{refused}");
+}
+
+/// tC4 keeps these three rows (as frame 2 of story 1, story 0 and story 51); no project
+/// has those stories, no session shows them, and a question here cannot address them.
+#[test]
+fn a_question_for_no_story_of_a_project_is_dropped() {
+    let tsv = tq_table(&[
+        ("1:2:3", "aaaa"),
+        ("0:1", "bbbb"),
+        ("51:1", "cccc"),
+        ("50:1", "dddd"),
+    ]);
+    assert_eq!(
+        ids_and_frames(&parse_story_questions(&tsv).unwrap()),
+        [("dddd".to_owned(), 50, 1)]
+    );
 }
 
 /// The OBS helps the app ships address frames the en_obs v9 stories have: frame 0 is a

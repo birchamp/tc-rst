@@ -15,6 +15,8 @@
 // - `toNumber`: JavaScript's `Number(string)`, which state.jsx applies to a Home tile's
 //   story and to the remembered story before it opens one.
 // - `localizedNames`: `withLocalizedNames` (scripts/fix-obs-template.mjs).
+// - `questions`: `deriveObsItems(tsv, 'translationQuestions', story)` (src/data/derive.ts,
+//   bundled with its imports) on small OBS Translation Questions tables.
 // - `draft`: the drafted story 1 of conformance/generate-obs.mjs, from its
 //   conformance/fixtures/obs-draft.mjs.
 //
@@ -25,6 +27,7 @@ import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -53,6 +56,20 @@ const tsModule = async (rel) => {
   const source = fs.readFileSync(path.join(tc4, rel), 'utf8');
   const { code } = esbuild.transformSync(source, { loader: 'ts', format: 'esm' });
   return import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+};
+// A module whose imports must come along: bundled, and loaded from a scratch file.
+const bundledModule = (rel) => {
+  const { outputFiles } = esbuild.buildSync({
+    entryPoints: [path.join(tc4, rel)], bundle: true, format: 'cjs', platform: 'node', write: false, logLevel: 'silent',
+  });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gen-obs-vectors-'));
+  try {
+    const file = path.join(dir, 'module.cjs');
+    fs.writeFileSync(file, outputFiles[0].text);
+    return createRequire(file)(file);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 };
 const images = await tsModule('src/data/obsImages.ts');
 const frameSet = await tsModule('src/data/obsFrameSet.ts');
@@ -449,6 +466,30 @@ const localizedNames = LOCALIZED.map(({ name, text }) => {
   return r.error !== undefined ? { name, error: r.error } : { name, md5: md5(r.ok), text: name === 'template' ? undefined : r.ok };
 });
 
+// ---------- OBS Translation Questions (derive.ts) ----------
+const derive = bundledModule('src/data/derive.ts');
+const TQ_HEADER = 'Reference\tID\tTags\tQuote\tOccurrence\tQuestion\tResponse';
+const tqTable = (rows, eol = '\n') =>
+  [TQ_HEADER, ...rows.map(([ref, id]) => `${ref}\t${id}\t\t\t1\tQ ${id}?\tR ${id}.`)].join(eol) + eol;
+const QUESTION_TABLES = [
+  { name: 'drops a row whose locator is not two integers, keeps the rest', tsv: tqTable([['1:1', 'aaaa'], ['front:intro', 'bbbb'], ['1:x', 'cccc'], ['2:3', 'dddd']]) },
+  { name: 'title rows, leading zeros, empty and spaced locators', tsv: tqTable([['1:0', 'aaaa'], ['01:02', 'bbbb'], ['1:', 'cccc'], [' 1:1', 'dddd'], ['', 'eeee'], ['intro:1', 'ffff'], ['50:18', 'gggg'], ['2:1 ', 'hhhh'], ['1:1-2', 'iiii']]) },
+  { name: 'CRLF line ends and blank lines', tsv: `\r\n${tqTable([['1:1', 'aaaa'], ['front:intro', 'bbbb'], ['2:3', 'dddd']], '\r\n')}\r\n \r\n` },
+  { name: 'only rows that address no frame', tsv: tqTable([['front:intro', 'aaaa'], ['1:intro', 'bbbb']]) },
+];
+const questions = QUESTION_TABLES.flatMap(({ name, tsv }) => [null, 1, 2].map((story) => ({
+  name,
+  tsv,
+  story,
+  items: derive.deriveObsItems(tsv, 'translationQuestions', story ?? undefined).map((item) => ({
+    id: item.contextId.checkId,
+    story: item.contextId.reference.story,
+    frame: item.contextId.reference.frame,
+    question: item.question,
+    response: item.response,
+  })),
+})));
+
 // ---------- the drafted sample story (generate-obs.mjs) ----------
 let drafted = story.seedStory(sets.template(1));
 drafted = story.writeFrame(drafted, 0, DRAFT.title);
@@ -472,6 +513,7 @@ const out = {
   recency: recencyCases,
   toNumber,
   localizedNames,
+  questions,
   draft: { draft: DRAFT, story1Md5: md5(drafted) },
 };
 process.stdout.write(`${JSON.stringify(out)}\n`);
