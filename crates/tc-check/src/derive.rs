@@ -306,9 +306,9 @@ fn note_cell(note: &Note) -> String {
 /// `ref.split(':').map(refPart)`): `front:intro` is chapter `front`, verse `intro`;
 /// `N:intro` and `N:front` are verse `intro` and verse `front` of chapter N. A verse list,
 /// and a reference kept as written, keep the first two `:`-separated parts of the cell as
-/// it was written, so `1:3,5` is verse `3,5`, `1:30-2:2` is verse `30-2` and `1:1a` is
-/// verse `1a`. A cell with no second part, or with an empty one, names no verse a check
-/// key can hold.
+/// tC4 reads it (without a CR at its end), so `1:3,5` is verse `3,5`, `1:30-2:2` is verse
+/// `30-2` and `1:1a` is verse `1a`. A cell with no second part, or with an empty one, names
+/// no verse a check key can hold.
 fn bible_target(
     book: BookId,
     place: &BibleRef,

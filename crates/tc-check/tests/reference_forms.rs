@@ -51,9 +51,10 @@ fn every_reference_form_derives_the_checks_tc4_derives() {
         .notes;
     let links =
         parse_word_links(vectors["tables"]["translationWords"].as_str().unwrap(), PSA).unwrap();
-    assert_eq!((notes.len(), links.len()), (26, 26));
-    // Eight rows are in forms tc-helps gives a place to (`3:01`, `03:front`, `3:front`,
-    // `front:intro`, `3:intro`, `3:1`, `3:1-200`, `151:1`); the other 18 are kept as written.
+    assert_eq!((notes.len(), links.len()), (29, 29));
+    // Eleven rows are in forms tc-helps gives a place to (`3:01`, `03:front`, `3:front`,
+    // `front:intro`, `3:intro`, `3:1`, `3:1-200`, `151:1`, and `3:1`, `3:front` and `3:2`
+    // followed by a CR, which tC4 drops); the other 18 are kept as written.
     let as_written = notes
         .iter()
         .filter(|n| matches!(&n.reference, HelpRef::Bible(r) if matches!(r.locus, BibleLocus::AsWritten(_))))

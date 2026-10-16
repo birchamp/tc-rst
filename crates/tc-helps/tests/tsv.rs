@@ -17,8 +17,8 @@ use tc_helps::tsv::{
     write_notes, write_questions, write_word_links,
 };
 use tc_helps::{
-    AcademyArticleId, BibleLocus, CheckBlocker, CheckReadiness, Error, HelpRef, Manual, NotACheck,
-    Occurrence, TsvTable, WordArticleId, WordCategory, WriteProblem,
+    AcademyArticleId, BibleLocus, CheckBlocker, CheckReadiness, Error, HelpItemId, HelpRef, Manual,
+    NotACheck, Occurrence, RowId, TsvTable, WordArticleId, WordCategory, WriteProblem,
 };
 
 const TIT: TsvScope = TsvScope::Book(BookId::Titus);
@@ -389,7 +389,8 @@ fn cells_keep_the_form_they_were_read_in() {
     let notes = parse_notes(text, TIT).unwrap().notes;
     assert_eq!(notes[0].reference.tsv_text(), "1:1-3");
     assert_eq!(notes[0].tags, ["a", "b"]);
-    assert_eq!(notes[0].quote.as_str(), "x\r");
+    // tC4 drops a CR from the end of every cell (`tsvRows`); the table still writes it back.
+    assert_eq!(notes[0].quote.as_str(), "x");
     assert_eq!(notes[0].occurrence, Occurrence::nth(1).unwrap());
     assert_eq!(notes[0].text, "See \\v 1.");
     assert_eq!(
@@ -650,7 +651,61 @@ fn reference_cell() -> impl Strategy<Value = String> {
     ]
 }
 
+/// The rows of a table as tC4's `tsvRows` (`derive.ts`) reads them: lines split on LF,
+/// those whose `trim()` is empty dropped, the header dropped, cells split on tabs, and one CR
+/// dropped from the end of every cell.
+fn tc4_rows(text: &str) -> Vec<Vec<&str>> {
+    text.split('\n')
+        .filter(|line| !line.trim().is_empty())
+        .skip(1)
+        .map(|line| {
+            line.split('\t')
+                .map(|cell| cell.strip_suffix('\r').unwrap_or(cell))
+                .collect()
+        })
+        .collect()
+}
+
+/// Up to `max` CRs, to end a cell with.
+fn crs(max: usize) -> impl Strategy<Value = String> {
+    (0..=max).prop_map(|n| "\r".repeat(n))
+}
+
 proptest! {
+    /// A cell that ends in a CR, a CR before a tab, reads as tC4 reads it, without that CR,
+    /// and the table writes back with it.
+    #[test]
+    fn cells_ending_in_a_cr_read_as_tc4_reads_them(rows in prop::collection::vec(
+        ((reference_cell(), crs(2)), ("[a-z0-9]{4}", crs(1)), (tag_cell(), crs(2)),
+         (cell_text(), crs(2)), (occurrence(), crs(1)), "[a-z0-9]{1,15}"),
+        1..12,
+    ), crlf in any::<bool>()) {
+        let mut text = "Reference\tID\tTags\tOrigWords\tOccurrence\tTWLink\n".to_owned();
+        for ((reference, r), (id, i), (tags, t), (words, w), (occ, o), slug) in &rows {
+            text.push_str(&row(vec![
+                format!("{reference}{r}"), format!("{id}{i}"), format!("{tags}{t}"),
+                format!("{words}{w}"), format!("{occ}{o}"),
+                format!("rc://*/tw/dict/bible/kt/{slug}"),
+            ]));
+            text.push('\n');
+        }
+        let links = parse_word_links(&text, TIT).unwrap();
+        let tc4 = tc4_rows(&text);
+        prop_assert_eq!(links.len(), tc4.len());
+        for (link, cells) in links.iter().zip(&tc4) {
+            let reference = link.read_from.as_ref().and_then(|r| r.get("Reference"))
+                .map_or_else(|| link.reference.tsv_text(), str::to_owned);
+            prop_assert_eq!(&reference, cells[0]);
+            prop_assert_eq!(&link.id, &HelpItemId::Row(RowId::parse(cells[1]).unwrap()));
+            prop_assert_eq!(link.orig_words.as_str(), cells[3]);
+        }
+        prop_assert_eq!(&write_word_links(&links, TIT, WordLinkStyle::Rc).unwrap(), &text);
+        if crlf {
+            let windows = text.replace('\n', "\r\n");
+            prop_assert_eq!(parse_word_links(&windows, TIT).unwrap(), links);
+        }
+    }
+
     #[test]
     fn notes_tables_round_trip(rows in prop::collection::vec(
         (reference_cell(), "[a-z0-9]{4}", tag_cell(), support(), cell_text(), occurrence(),

@@ -1,6 +1,7 @@
 //! A Bible table's `Reference` in a form this crate gives no place to (`1:1a`, `0:front`,
 //! `3:front `, `1:0`, an empty cell) is read and kept as written, as tC4 reads every
-//! Reference cell. The tables and tC4's rows come from
+//! Reference cell. A CR at the end of a cell is not part of it, as in tC4's `tsvRows`. The
+//! tables and tC4's rows come from
 //! `fixtures/check/reference-forms-vectors.json`, which
 //! `crates/tc-check/tools/gen-psalms-vectors.cjs` makes with tC4's own readers.
 
@@ -126,6 +127,26 @@ fn every_reference_form_tc4_reads_is_read_and_written_back() {
             "{cell:?}"
         );
     }
+
+    // A CR before a tab ends the cell's text, in every cell but the last.
+    let row = |id: &str| {
+        notes
+            .iter()
+            .find(|n| matches!(&n.id, HelpItemId::Row(r) if r.as_str() == id))
+            .unwrap()
+    };
+    assert_eq!(row("f026").reference.tsv_text(), "3:1");
+    assert_eq!(locus(&row("f027").reference), &BibleLocus::ChapterFront(3));
+    let every_cell = row("f028");
+    assert_eq!(every_cell.reference.tsv_text(), "3:2");
+    assert!(every_cell.tags.is_empty());
+    assert_eq!(
+        every_cell.support_reference.as_ref().and_then(|s| s.slug()),
+        Some("figs-metaphor")
+    );
+    assert_eq!(every_cell.quote, row("f000").quote);
+    assert_eq!(every_cell.occurrence, Occurrence::nth(1).unwrap());
+    assert_eq!(every_cell.text, "A note");
 }
 
 #[test]
@@ -212,7 +233,7 @@ fn a_reference_kept_as_written_is_on_no_verse_and_listed_with_its_chapter() {
         ),
         ["0:front", "0:intro"]
     );
-    // The front of chapter 3 is still only `3:front` and `03:front`.
+    // The front of chapter 3 is still only `3:front`, `03:front` and `3:front` and a CR.
     assert_eq!(
         cells(
             helps
@@ -220,7 +241,7 @@ fn a_reference_kept_as_written_is_on_no_verse_and_listed_with_its_chapter() {
                 .map(|f| &f.item.reference)
                 .collect()
         ),
-        ["3:front", "3:front"]
+        ["3:front", "3:front", "3:front"]
     );
 }
 

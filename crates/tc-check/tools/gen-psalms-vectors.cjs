@@ -15,10 +15,10 @@
 //   number of rows tC4's TSV reader returns, the md5 of their identities in order (one
 //   `checkId|chapter|verse|occurrence` line each, joined by "\n"), and the lines it skips.
 // - fixtures/check/reference-forms-vectors.json: Psalms tN, TWL and tQ tables written here,
-//   one row per Reference form (`1:1a`, `0:front`, `3:front ` and others no shipped table
-//   has), with the rows tC4's readers return and what `deriveForProject` makes of the tN
-//   and TWL tables. tC4 reads every Reference cell, so tc-helps must not refuse a table
-//   over one.
+//   one row per Reference form (`1:1a`, `0:front`, `3:front `, `3:1` and a CR, and others no
+//   shipped table has) and a row whose every cell but the last ends in a CR, with the rows
+//   tC4's readers return and what `deriveForProject` makes of the tN and TWL tables. tC4
+//   reads every Reference cell, so tc-helps must not refuse a table over one.
 //
 // It bundles tC4's sources with the esbuild in tC4's node_modules, as
 // crates/tc-align/tools/gen-align-vectors.cjs does, so the vectors come from the code tC4
@@ -199,9 +199,18 @@ const main = async () => {
     "1:1a", "0:front", "3:front ", "3:Front", "front:front", "3:1,front", "1:0", "3:2-1",
     "1:1:1", "intro", "", "3:", ":1", " 3:1", "3:01", "3:1-2:4", "3:1\u20133", "3:\u0663",
     "03:front", "3:front", "front:intro", "3:intro", "0:intro", "3:1", "3:1-200", "151:1",
+    // tsvRows drops one CR from the end of every cell, so these are 3:1 and 3:front.
+    "3:1\r", "3:front\r",
   ];
+  const rowId = (i) => `f${String(i).padStart(3, "0")}`;
   const formTable = (header, cells) =>
-    [header, ...FORMS.map((ref, i) => [ref, `f${String(i).padStart(3, "0")}`, ...cells].join("\t")), ""].join("\n");
+    [
+      header,
+      ...FORMS.map((ref, i) => [ref, rowId(i), ...cells].join("\t")),
+      // A row whose every cell but the last ends in a CR.
+      ["3:2", rowId(FORMS.length), ...cells].map((c, i, all) => (i < all.length - 1 ? `${c}\r` : c)).join("\t"),
+      "",
+    ].join("\n");
   const formTables = {
     translationNotes: formTable(
       "Reference\tID\tTags\tSupportReference\tQuote\tOccurrence\tNote",

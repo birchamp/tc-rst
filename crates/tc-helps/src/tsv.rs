@@ -3,7 +3,8 @@
 //! books and for Open Bible Stories.
 //!
 //! The header row is the version of a table. A header this module does not know is
-//! refused, never guessed at. Rows are split on tabs only (the tables have no quoting).
+//! refused, never guessed at. Rows are split on tabs only (the tables have no quoting). A
+//! cell is read as tC4's `tsvRows` reads it: a CR at its end is not part of it.
 //! A row that does not parse refuses the whole table, with the line and column named. The
 //! `Reference` of a Bible table always parses: a form this crate gives no place to, such as
 //! `1:1a`, is kept as written ([`BibleLocus::AsWritten`]), because tC4 reads every row
@@ -21,7 +22,8 @@
 //! tags, `01` occurrences, `1:1-1:3` references, a lone backslash). A writer writes such a
 //! cell back as it was read while the item still holds the value read from it, so a table
 //! read and written unchanged keeps its bytes, and an edit changes only the cells it
-//! touches. The writers write no byte order mark and LF line ends.
+//! touches. The writers write no byte order mark and LF line ends. A cell whose text ends
+//! in a CR is written with one more, which reading drops.
 
 use tc_core::BookId;
 
@@ -108,49 +110,114 @@ pub enum WordLinkStyle {
 /// The cells of the row an item was read from that the writers would write differently,
 /// by column, as they were written. See the module documentation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReadCells(Vec<(&'static str, String)>);
+pub struct ReadCells(Vec<KeptCell>);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct KeptCell {
+    column: &'static str,
+    text: String,
+    cr: bool,
+}
+
+impl KeptCell {
+    fn written(&self) -> String {
+        let mut cell = self.text.clone();
+        if self.cr {
+            cell.push('\r');
+        }
+        cell
+    }
+}
 
 impl ReadCells {
-    /// The cell of `column` as it was read, when the writers would not write it that way.
+    /// The cell of `column` as tC4 reads it, without a CR at its end, when the writers
+    /// would not write it that way.
     pub fn get(&self, column: &str) -> Option<&str> {
-        self.0
-            .iter()
-            .find(|(c, _)| *c == column)
-            .map(|(_, text)| text.as_str())
+        self.kept(column).map(|c| c.text.as_str())
     }
 
-    /// The cells of `raw` that differ from `written`, the writer's own form of the item;
+    fn kept(&self, column: &str) -> Option<&KeptCell> {
+        self.0.iter().find(|c| c.column == column)
+    }
+
+    /// The cells of `read` that differ from `written`, the writer's own form of the item;
     /// every cell when the writer refuses the item.
     fn of(
         header: &[&'static str],
-        raw: &[&str],
+        read: &[Cell<'_>],
         written: Result<Vec<String>, Error>,
     ) -> Option<Self> {
-        let kept: Vec<(&'static str, String)> = header
+        let kept: Vec<KeptCell> = header
             .iter()
-            .zip(raw)
+            .zip(read)
             .enumerate()
-            .filter(|(i, (_, raw))| {
-                !matches!(&written, Ok(cells) if cells.get(*i).map(String::as_str) == Some(**raw))
+            .filter(|(i, (_, cell))| {
+                !matches!(&written, Ok(cells) if cells.get(*i).is_some_and(|w| cell.is_written_as(w)))
             })
-            .map(|(_, (column, raw))| (*column, (*raw).to_owned()))
+            .map(|(_, (column, cell))| KeptCell {
+                column,
+                text: cell.text.to_owned(),
+                cr: cell.cr,
+            })
             .collect();
         (!kept.is_empty()).then_some(Self(kept))
     }
+}
+
+/// One cell of a row. `text` is the cell as tC4 reads it: `tsvRows` (`derive.ts`) splits
+/// the table on LF alone and drops one CR from the end of every cell, so `3:1` followed by
+/// a CR and a tab is the reference `3:1`. `cr` tells that the file had that CR, so the cell
+/// writes back as it was. The CR of a CRLF line end is the last cell's: that cell keeps
+/// all the text before it.
+#[derive(Debug, Clone, Copy)]
+struct Cell<'a> {
+    text: &'a str,
+    cr: bool,
+}
+
+impl<'a> Cell<'a> {
+    /// `raw` is the text between two tabs of a line whose CRLF end is removed.
+    fn read(raw: &'a str, last: bool) -> Self {
+        match raw.strip_suffix('\r') {
+            Some(text) if !last => Self { text, cr: true },
+            // A CR is left at the end of the last cell only when the line ended in two;
+            // written back with LF line ends, the cell takes the one it lost.
+            _ => Self {
+                text: raw,
+                cr: raw.ends_with('\r'),
+            },
+        }
+    }
+
+    fn is_written_as(&self, cell: &str) -> bool {
+        match cell.strip_suffix('\r') {
+            Some(text) if self.cr => text == self.text,
+            _ => !self.cr && cell == self.text,
+        }
+    }
+}
+
+/// The cell that tC4 and [`rows`] read back as `text`. A cell that ends in a CR takes one
+/// more, which reading drops; a CR anywhere else is cell text.
+fn with_cr(mut text: String) -> String {
+    if text.ends_with('\r') {
+        text.push('\r');
+    }
+    text
 }
 
 struct Row<'a> {
     table: TsvTable,
     header: &'static [&'static str],
     line: usize,
-    cells: Vec<&'a str>,
+    cells: Vec<Cell<'a>>,
 }
 
 impl<'a> Row<'a> {
     /// `rows` refuses a row whose cell count differs from the header's, so every column
     /// index of the header is in range.
     fn cell(&self, i: usize) -> &'a str {
-        self.cells[i]
+        self.cells[i].text
     }
 
     fn fail(&self, i: usize, problem: CellProblem) -> Error {
@@ -255,22 +322,27 @@ fn rows<'a>(
         if line.trim().is_empty() {
             continue;
         }
-        // A CR before the LF ends a CRLF line; any other CR is cell text.
+        // The CR of a CRLF line end; see `Cell`.
         let line = line.strip_suffix('\r').unwrap_or(line);
-        let cells: Vec<&str> = line.split('\t').collect();
-        if cells.len() != header.len() {
+        let raw: Vec<&str> = line.split('\t').collect();
+        if raw.len() != header.len() {
             return Err(Error::TsvColumnCount {
                 table,
                 line: i + 1,
-                found: cells.len(),
+                found: raw.len(),
                 expected: header.len(),
             });
         }
+        let last = raw.len() - 1;
         out.push(Row {
             table,
             header,
             line: i + 1,
-            cells,
+            cells: raw
+                .iter()
+                .enumerate()
+                .map(|(i, raw)| Cell::read(raw, i == last))
+                .collect(),
         });
     }
     Ok(out)
@@ -508,22 +580,14 @@ impl<'a> RowWriter<'a> {
     ) -> Result<(), Error> {
         let kept = self
             .read
-            .and_then(|r| r.get(column))
-            .filter(|raw| holds(raw));
+            .and_then(|r| r.kept(column))
+            .filter(|kept| holds(&kept.text));
         let cell = match kept {
-            Some(raw) => raw.to_owned(),
-            None => write()?,
+            Some(kept) => kept.written(),
+            None => with_cr(write()?),
         };
         self.cells.push(cell);
         Ok(())
-    }
-
-    fn finish(self) -> Result<Vec<String>, Error> {
-        // A CR at the end of a row would read back as a CRLF line end.
-        match self.cells.last() {
-            Some(last) if last.ends_with('\r') => Err(unwritable(self.table, last)),
-            _ => Ok(self.cells),
-        }
     }
 
     fn reference(&mut self, reference: &HelpRef, scope: TsvScope) -> Result<(), Error> {
@@ -537,7 +601,11 @@ impl<'a> RowWriter<'a> {
 
     fn id(&mut self, id: &HelpItemId, what: &'static str) -> Result<(), Error> {
         let table = self.table;
-        self.cell("ID", |_| false, || row_id(id, table, what))
+        self.cell(
+            "ID",
+            |raw| matches!(id, HelpItemId::Row(row) if row.as_str() == raw),
+            || row_id(id, table, what),
+        )
     }
 
     fn tags(&mut self, values: &[String]) -> Result<(), Error> {
@@ -658,7 +726,7 @@ fn note_row(n: &Note, scope: TsvScope) -> Result<Vec<String>, Error> {
     w.plain("Quote", n.quote.as_str())?;
     w.occurrence(n.occurrence)?;
     w.markdown("Note", &n.text)?;
-    w.finish()
+    Ok(w.cells)
 }
 
 fn legacy_row(n: &Note, scope: TsvScope) -> Result<Vec<String>, Error> {
@@ -680,13 +748,17 @@ fn legacy_row(n: &Note, scope: TsvScope) -> Result<Vec<String>, Error> {
         || Ok(book.code().to_owned()),
     )?;
     // Chapter and Verse name one place together: a kept cell is written with the other
-    // as read or canonical, when the pair still names the item's place.
-    let canonical = legacy_place(&r.locus);
-    let read = |column: &str, canonical: Option<&String>| {
+    // as read or canonical, when the pair still names the item's place. Each is a pair of
+    // the text read and the cell written.
+    let canonical = legacy_place(&r.locus).map(|(c, v)| {
+        let cell = |text: String| (text.clone(), with_cr(text));
+        (cell(c), cell(v))
+    });
+    let read = |column: &str, canonical: Option<&(String, String)>| {
         n.read_from
             .as_ref()
-            .and_then(|cells| cells.get(column))
-            .map(str::to_owned)
+            .and_then(|cells| cells.kept(column))
+            .map(|kept| (kept.text.clone(), kept.written()))
             .or_else(|| canonical.cloned())
     };
     let pair = (
@@ -694,11 +766,11 @@ fn legacy_row(n: &Note, scope: TsvScope) -> Result<Vec<String>, Error> {
         read("Verse", canonical.as_ref().map(|p| &p.1)),
     );
     let (chapter, verse) = match pair {
-        (Some(c), Some(v)) if parse_legacy_place(&c, &v).as_ref() == Some(&r.locus) => (c, v),
+        (Some(c), Some(v)) if parse_legacy_place(&c.0, &v.0).as_ref() == Some(&r.locus) => (c, v),
         _ => canonical.ok_or_else(|| write_error(t, WriteProblem::Reference(r.to_string())))?,
     };
-    w.cells.push(chapter);
-    w.cells.push(verse);
+    w.cells.push(chapter.1);
+    w.cells.push(verse.1);
     w.id(&n.id, "note")?;
     w.support_reference(&n.support_reference)?;
     w.plain("OrigQuote", n.quote.as_str())?;
@@ -714,7 +786,7 @@ fn legacy_row(n: &Note, scope: TsvScope) -> Result<Vec<String>, Error> {
             plain(&n.text.replace('\n', "<br>"), t)
         },
     )?;
-    w.finish()
+    Ok(w.cells)
 }
 
 /// The `Chapter` and `Verse` cells of the legacy table: one chapter per row.
@@ -799,7 +871,7 @@ fn word_link_row(
             )),
         },
     )?;
-    w.finish()
+    Ok(w.cells)
 }
 
 /// Writes a words links table for `scope`.
@@ -824,7 +896,7 @@ fn question_row(q: &Question, scope: TsvScope) -> Result<Vec<String>, Error> {
     w.occurrence(q.occurrence)?;
     w.markdown("Question", &q.question)?;
     w.markdown("Response", &q.response)?;
-    w.finish()
+    Ok(w.cells)
 }
 
 /// Writes a questions table for `scope`.
