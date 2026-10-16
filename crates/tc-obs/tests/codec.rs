@@ -398,3 +398,41 @@ proptest! {
         prop_assert_eq!(apply_story_state(&text, &StoryState::default()).unwrap(), text);
     }
 }
+
+/// tC4's `applyStoryState`: one writer per part, each reading the whole file again.
+fn apply_one_by_one(base: &str, state: &StoryState) -> Result<String, WriteError> {
+    let mut out = base.to_owned();
+    for (frame, text) in &state.frames {
+        out = write_frame(&out, *frame, text)?;
+    }
+    if let Some(reference) = &state.reference {
+        out = write_reference(&out, reference)?;
+    }
+    Ok(out)
+}
+
+fn part_text() -> impl Strategy<Value = String> {
+    prop_oneof![
+        6 => prop::collection::vec(text_line(), 0..=3).prop_map(|lines| lines.join("\n")),
+        1 => prop::sample::select(vec!["a\n\nb", " ", "![x](y)", "_r_", "# 3.", "x\r", " T"]).prop_map(str::to_owned),
+    ]
+}
+
+proptest! {
+    #[test]
+    fn a_state_applies_in_one_pass_as_tc4s_writers_apply_it(
+        g in generated(),
+        parts in prop::collection::btree_map(0u16..9, part_text(), 0..5),
+        reference in prop::option::of(prop_oneof![4 => one_line(12), 1 => Just(" R".to_owned())]),
+        broken in prop::bool::weighted(0.1),
+    ) {
+        let base = if broken { format!("{}\n\nloose text", g.text(false).replacen('#', "", 1)) } else { g.text(false) };
+        // A title must be one trimmed line.
+        let frames = parts
+            .into_iter()
+            .map(|(f, t)| (FrameNo(f), if f == 0 { t.replace('\n', " ").trim().to_owned() } else { t }))
+            .collect();
+        let state = StoryState { frames, reference };
+        prop_assert_eq!(apply_story_state(&base, &state), apply_one_by_one(&base, &state));
+    }
+}

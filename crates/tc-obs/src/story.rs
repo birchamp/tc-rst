@@ -490,15 +490,121 @@ pub struct StoryState {
 /// Applies a folded state onto a base file: each frame in ascending order, then the
 /// reference line (tC4 `applyStoryState`, `journal/story.mjs:184-190`). A part with no
 /// value keeps the base's text.
+///
+/// tC4 runs one writer per part, and each writer reads the whole file again, so a story's
+/// cost grows with its frames times its lines. This reads the base once and gives the same
+/// bytes and the same refusal: the writers only change their own regions, and a written
+/// story always reads again with the same frames.
 pub fn apply_story_state(base: &str, state: &StoryState) -> Result<String, WriteError> {
-    let mut out = base.to_owned();
-    for (frame, text) in &state.frames {
-        out = write_frame(&out, *frame, text)?;
+    let parts: Vec<(Option<FrameNo>, &str)> = state
+        .frames
+        .iter()
+        .map(|(frame, text)| (Some(*frame), text.as_str()))
+        .chain(state.reference.as_deref().map(|r| (None, r)))
+        .collect();
+    let Some(&(frame, text)) = parts.first() else {
+        return Ok(base.to_owned());
+    };
+    // Each writer checks its text before it reads the file.
+    if let Some(error) = text_error(frame, text) {
+        return Err(error);
     }
-    if let Some(reference) = &state.reference {
-        out = write_reference(&out, reference)?;
+    let s = split(base)?;
+    for &(frame, text) in &parts {
+        if let Some(error) = text_error(frame, text) {
+            return Err(error);
+        }
+        match frame {
+            Some(f) if usize::from(f.0) > s.frames.len() => {
+                return Err(WriteError::NoSuchFrame {
+                    story: s.number,
+                    frames: s.frames.len(),
+                    frame: f,
+                });
+            }
+            None if s.reference.is_none() && s.frames.is_empty() => {
+                return Err(WriteError::NoFrameForReference { story: s.number });
+            }
+            _ => {}
+        }
     }
-    Ok(out)
+
+    let title = state.frames.get(&FrameNo::TITLE).map(|t| {
+        if t.is_empty() {
+            format!("# {}.", s.number)
+        } else {
+            format!("# {}. {t}", s.number)
+        }
+    });
+    let reference = state.reference.as_ref().map(|r| format!("_{r}_"));
+    let lines = &s.lines;
+    let mut out: Vec<&str> = Vec::with_capacity(lines.len() + 8);
+    out.push(title.as_deref().unwrap_or(lines[0]));
+    let first_image = s.frames.first().map_or(lines.len(), |f| f.image);
+    out.extend_from_slice(&lines[1..first_image]);
+    let count = s.frames.len();
+    for (i, frame) in s.frames.iter().enumerate() {
+        let f = i + 1;
+        out.push(lines[frame.image]);
+        let written = state.frames.get(&FrameNo(f as u16));
+        let last = f == count;
+        if let (true, None, Some(reference)) = (last, s.reference, reference.as_deref()) {
+            // `write_reference` on a story with no reference line: after the last frame's
+            // paragraph, or after the template's spacing when the frame is empty.
+            let text_end = match written {
+                Some(t) if !t.is_empty() => {
+                    out.push("");
+                    out.extend(t.split('\n'));
+                    true
+                }
+                Some(_) => false,
+                None => match frame.text {
+                    Some((_, last_text)) => {
+                        out.extend_from_slice(&lines[frame.image + 1..=last_text]);
+                        true
+                    }
+                    None => false,
+                },
+            };
+            if text_end {
+                out.extend(["", reference, ""]);
+            } else {
+                out.extend(["", "", "", reference, ""]);
+            }
+            continue;
+        }
+        match written {
+            None => out.extend_from_slice(&lines[s.frame_region(f)]),
+            Some(t) if t.is_empty() => {
+                let followed = !last || s.reference.is_some();
+                out.extend_from_slice(if followed {
+                    &EMPTY_FRAME_MID
+                } else {
+                    &EMPTY_FRAME_LAST
+                });
+            }
+            Some(t) => {
+                out.push("");
+                out.extend(t.split('\n'));
+                out.push("");
+            }
+        }
+    }
+    if let Some(at) = s.reference {
+        out.push(reference.as_deref().unwrap_or(lines[at]));
+        out.extend_from_slice(&lines[at + 1..]);
+    }
+    Ok(out.join("\n"))
+}
+
+/// The refusal of a part's text: the title's for frame 0, a paragraph's for the other
+/// frames, the reference line's for `None`.
+fn text_error(frame: Option<FrameNo>, text: &str) -> Option<WriteError> {
+    match frame {
+        Some(f) if f.is_title() => title_text_problem(text).map(WriteError::TitleText),
+        Some(_) => frame_text_problem(text).map(WriteError::FrameText),
+        None => reference_text_problem(text).map(WriteError::ReferenceText),
+    }
 }
 
 /// The records a story file stands for, in STORAGE §2.2's terms: the base (`StoryBase`),
