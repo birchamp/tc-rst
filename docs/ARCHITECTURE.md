@@ -88,7 +88,7 @@ Dependency rules:
 - `tc-ui` depends only on `tc-api` and `tc-core`, so the UI cannot touch storage directly.
 - Only `tc-store` writes project files, and only `tc-door43` opens network connections.
 - Pure logic (`tc-usfm`, `tc-versification`, `tc-helps`, `tc-journal`'s fold, `tc-check`,
-  `tc-align`) does no I/O and is tested with plain values.
+  `tc-align`, `tc-obs`) does no I/O and is tested with plain values.
 
 ## UI
 

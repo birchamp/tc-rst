@@ -55,7 +55,7 @@ fn title_line(line: &str) -> Option<(&str, Option<Range<usize>>)> {
 
 /// `IMAGE_RE` (`journal/story.mjs:16`): `![alt](url)`, the alt without `]`, the url without
 /// `)`.
-pub(crate) fn is_image_line(line: &str) -> bool {
+fn is_image_line(line: &str) -> bool {
     let Some(rest) = line.strip_prefix("![") else {
         return false;
     };
@@ -172,15 +172,10 @@ fn story_number(digits: &str) -> Option<StoryNo> {
 }
 
 impl Split<'_> {
-    /// The bytes of lines `range`, joined by `\n`.
-    fn joined(&self, first: usize, last: usize) -> String {
-        self.lines[first..=last].join("\n")
-    }
-
     fn frame_text(&self, frame: &FrameLines) -> String {
         frame
             .text
-            .map(|(first, last)| self.joined(first, last))
+            .map(|(first, last)| self.lines[first..=last].join("\n"))
             .unwrap_or_default()
     }
 
@@ -272,9 +267,8 @@ impl StoryFile {
 
     /// The title without `# N. `; empty in a seed file (`# 2.`).
     pub fn title(&self) -> &str {
-        self.title
-            .clone()
-            .map_or("", |range| &self.text[self.lines[0].start..][range])
+        // The title line is the first line, which starts the text.
+        self.title.clone().map_or("", |range| &self.text[range])
     }
 
     pub fn frame_count(&self) -> usize {

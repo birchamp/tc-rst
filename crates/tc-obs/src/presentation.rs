@@ -11,7 +11,10 @@ use std::collections::BTreeSet;
 use tc_helps::obs::ObsStory;
 
 use crate::frame_set::frame_set_mismatch;
-use crate::images::{ImageAsset, ImagePack, ImagePins, ImageResolution, PackPin, resolve_image};
+use crate::images::{
+    ImageAsset, ImagePack, ImagePins, ImageResolution, PackPin, pack_from_ingredients,
+    pack_from_paths, resolve_image,
+};
 use crate::story::parse_story;
 
 /// What the caller knows of the gateway story.
@@ -101,7 +104,7 @@ pub fn read_pack(
     };
     let listing_error = match listing {
         Ok(paths) => {
-            let pack = crate::images::pack_from_paths(pin, &paths, uri_for);
+            let pack = pack_from_paths(pin, &paths, uri_for);
             let r = report(&pack, Some(PackVia::Paths), None);
             return (pack, r);
         }
@@ -109,8 +112,7 @@ pub fn read_pack(
     };
     match ingredient_keys() {
         Ok(keys) => {
-            let pack =
-                crate::images::pack_from_ingredients(pin, keys.iter().map(String::as_str), uri_for);
+            let pack = pack_from_ingredients(pin, keys.iter().map(String::as_str), uri_for);
             let r = report(&pack, Some(PackVia::Metadata), Some(listing_error));
             (pack, r)
         }
