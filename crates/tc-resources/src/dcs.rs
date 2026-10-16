@@ -19,7 +19,7 @@
 use tc_door43::{Door43Client, FileMode, TagName, UnpackedFile, VerifiedArchive};
 use tc_helps::metadata::parse_burrito_metadata;
 
-use crate::error::{InstallError, Refusal};
+use crate::error::{InstallError, LexiconError, Refusal};
 use crate::fetched::{FetchedLock, TreeCheck};
 use crate::layout;
 use crate::lexicon::{LEXICON_FILE, LEXICON_FLAVOR, is_lexicon_archive, repackage_lexicon};
@@ -127,7 +127,8 @@ pub enum LexiconInstall {
 /// when the app is packaged. The archive must match the entry `lock` holds for the pin's
 /// commit (its size, its SHA-256 and the commit's tree that Door43 reported); without an
 /// entry it is [`LexiconInstall::Unconfirmed`]. A confirmed archive is repackaged into one
-/// file by the function a download uses.
+/// file by the function a download uses, and that file must have the SHA-256 the entry
+/// records as `lexiconSha256`.
 pub fn install_lexicon_zip(
     store: &ResourceStore,
     pin: &ResourcePin,
@@ -149,7 +150,17 @@ pub fn install_lexicon_zip(
         TreeCheck::Unconfirmed => return Ok(LexiconInstall::Unconfirmed),
         TreeCheck::Confirmed(archive) => archive,
     };
-    let staged = from_archive(pin, archive, Sha256::of(zip), Packaging::Lexicon)?;
+    let (staged, found) =
+        staged_lexicon(with_flavor(pin, &archive.files), &archive, Sha256::of(zip))?;
+    let recorded = lock
+        .entry(pin.repo.repo(), &pin.sha)
+        .and_then(|entry| entry.lexicon_sha256);
+    if recorded != Some(found) {
+        return Err(InstallError::Lexicon {
+            what: pin.to_string(),
+            problem: LexiconError::NotTheRecordedFile { recorded, found },
+        });
+    }
     store.install(staged).map(LexiconInstall::Installed)
 }
 
@@ -269,37 +280,12 @@ fn from_archive(
     zip_sha256: Sha256,
     packaging: Packaging,
 ) -> Result<Staged, InstallError> {
-    let mut pin = pin.clone();
     let lexicon = packaging == Packaging::Lexicon
-        || is_lexicon_pin(&pin)
+        || is_lexicon_pin(pin)
         || is_lexicon_archive(&archive.files);
-    if pin.flavor.is_none() {
-        pin.flavor = archive
-            .files
-            .iter()
-            .find(|f| f.path == "metadata.json")
-            .and_then(|f| std::str::from_utf8(&f.bytes).ok())
-            .and_then(|text| parse_burrito_metadata(text).ok())
-            .and_then(|m| m.identity.flavor);
-    }
+    let pin = with_flavor(pin, &archive.files);
     if lexicon {
-        let bytes =
-            repackage_lexicon(pin.repo.repo(), &archive, zip_sha256).map_err(|problem| {
-                InstallError::Lexicon {
-                    what: pin.to_string(),
-                    problem,
-                }
-            })?;
-        return Ok(Staged {
-            origin: Origin::Dcs {
-                pin,
-                packaging: Packaging::Lexicon,
-                left_out: Vec::new(),
-                missing_ingredients: Vec::new(),
-            },
-            books: Some(BookCoverage::WholeCollection),
-            files: vec![(LEXICON_FILE.to_owned(), bytes)],
-        });
+        return staged_lexicon(pin, &archive, zip_sha256).map(|(staged, _)| staged);
     }
     // A symbolic link's target can point anywhere; it is never written (tc-door43
     // `FileMode::Symlink`).
@@ -323,4 +309,45 @@ fn from_archive(
         books,
         files: files.into_iter().map(|f| (f.path, f.bytes)).collect(),
     })
+}
+
+/// The pin, with the flavor the archive's metadata declares when the pin names none.
+fn with_flavor(pin: &ResourcePin, files: &[UnpackedFile]) -> ResourcePin {
+    let mut pin = pin.clone();
+    if pin.flavor.is_none() {
+        pin.flavor = files
+            .iter()
+            .find(|f| f.path == "metadata.json")
+            .and_then(|f| std::str::from_utf8(&f.bytes).ok())
+            .and_then(|text| parse_burrito_metadata(text).ok())
+            .and_then(|m| m.identity.flavor);
+    }
+    pin
+}
+
+/// A lexicon's install: the one file [`repackage_lexicon`] makes of its archive, and that
+/// file's SHA-256.
+fn staged_lexicon(
+    pin: ResourcePin,
+    archive: &VerifiedArchive,
+    zip_sha256: Sha256,
+) -> Result<(Staged, Sha256), InstallError> {
+    let bytes = repackage_lexicon(pin.repo.repo(), archive, zip_sha256).map_err(|problem| {
+        InstallError::Lexicon {
+            what: pin.to_string(),
+            problem,
+        }
+    })?;
+    let sha256 = Sha256::of(&bytes);
+    let staged = Staged {
+        origin: Origin::Dcs {
+            pin,
+            packaging: Packaging::Lexicon,
+            left_out: Vec::new(),
+            missing_ingredients: Vec::new(),
+        },
+        books: Some(BookCoverage::WholeCollection),
+        files: vec![(LEXICON_FILE.to_owned(), bytes)],
+    };
+    Ok((staged, sha256))
 }

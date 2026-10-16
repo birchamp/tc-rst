@@ -136,6 +136,15 @@ pub enum LexiconError {
     NotJson { path: String, reason: String },
     #[error("entry {path}: {problem}")]
     BadEntry { path: String, problem: String },
+    /// The packaging step's check against `fetched.lock`'s `lexiconSha256`.
+    #[error(
+        "the repackaged file's SHA-256 is {found}, but fetched.lock records {}",
+        .recorded.map_or_else(|| "none (record it as lexiconSha256)".to_owned(), |r| r.to_string())
+    )]
+    NotTheRecordedFile {
+        recorded: Option<Sha256>,
+        found: Sha256,
+    },
     #[error("the file's format is {found:?}, not \"tc-lexicon\", so this app cannot read it")]
     UnknownFormat { found: String },
     #[error(

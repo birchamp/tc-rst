@@ -4,7 +4,9 @@
 //! The lexicons ship as git archives whose burrito metadata vouches for nothing, and the
 //! OBS image pack is downloaded when the app is packaged (`bundle/en/README.md`). An entry
 //! names a commit, that commit's tree id as Door43 reported it, and the archive's SHA-256
-//! and size. [`LockEntry::verify`] accepts an archive only when all four hold.
+//! and size. [`LockEntry::verify`] accepts an archive only when all four hold. A lexicon's
+//! entry also records the SHA-256 of the one JSON file its archive is repackaged into
+//! (`lexiconSha256`), which the packaging step checks ([`crate::install_lexicon_zip`]).
 //!
 //! ```json
 //! {
@@ -13,6 +15,7 @@
 //!   "entries": [
 //!     { "repo": "uW/en_ugl", "commit": "<40 hex>", "tree": "<40 hex>",
 //!       "file": "en_ugl-<commit>.zip", "sha256": "<64 hex>", "size": 0,
+//!       "lexiconSha256": "<64 hex>",
 //!       "checked": "<YYYY-MM-DD>", "how": "<the lookup and the cross-check>" }
 //!   ]
 //! }
@@ -47,6 +50,10 @@ pub struct LockEntry {
     pub sha256: Sha256,
     /// The archive's size in bytes.
     pub size: u64,
+    /// For a lexicon: the SHA-256 of the file [`crate::repackage_lexicon`] makes of the
+    /// archive. Repackaging gives the same bytes every time, so this changes only when the
+    /// format or its writer does, on purpose.
+    pub lexicon_sha256: Option<Sha256>,
     /// The day the facts were looked up, `YYYY-MM-DD`.
     pub checked: String,
     /// How the tree id was looked up and cross-checked.
@@ -62,7 +69,7 @@ struct RawLock {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct RawEntry {
     repo: String,
     commit: String,
@@ -70,6 +77,8 @@ struct RawEntry {
     file: Option<String>,
     sha256: String,
     size: u64,
+    #[serde(default)]
+    lexicon_sha256: Option<String>,
     checked: String,
     how: String,
 }
@@ -181,6 +190,11 @@ impl RawEntry {
             file: self.file,
             sha256: self.sha256.parse().map_err(|e| format!("sha256: {e}"))?,
             size: self.size,
+            lexicon_sha256: self
+                .lexicon_sha256
+                .map(|hex| hex.parse())
+                .transpose()
+                .map_err(|e| format!("lexiconSha256: {e}"))?,
             checked: self.checked,
             how: self.how,
         })
@@ -281,6 +295,22 @@ mod tests {
         );
         assert_eq!(entry.size, 748);
         assert_eq!(entry.checked, "2026-10-16");
+        assert_eq!(entry.lexicon_sha256, None);
+    }
+
+    #[test]
+    fn a_lexicon_entry_records_its_repackaged_file() {
+        let mut lexicon = entry();
+        let hex = "7798835a14559f03b3d3e4b804b6d88f6118923fd07ff39c44e14258a9f3f094";
+        lexicon["lexiconSha256"] = json!(hex);
+        let lock = FetchedLock::parse(&lock_with(lexicon)).unwrap();
+        assert_eq!(
+            lock.entries[0]
+                .lexicon_sha256
+                .map(Sha256::to_hex)
+                .as_deref(),
+            Some(hex)
+        );
     }
 
     #[test]
@@ -314,6 +344,7 @@ mod tests {
             ("checked", json!("16 Oct 2026"), "YYYY-MM-DD"),
             ("how", json!(" "), "how is empty"),
             ("size", json!(-1), "expected u64"),
+            ("lexiconSha256", json!("7798"), "lexiconSha256"),
             ("note", json!("extra"), "unknown field"),
         ];
         for (key, value, says) in cases {

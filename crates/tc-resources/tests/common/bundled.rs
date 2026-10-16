@@ -18,6 +18,11 @@ pub struct BundledLexicon {
     /// The tree the zip's files hash to, which Door43 must confirm.
     pub zip_tree: &'static str,
     pub entries: usize,
+    /// The repackaged file's SHA-256 and size, recorded in `bundle/en/README.md`.
+    /// Repackaging is deterministic, so a change here is a change of the format or of its
+    /// writer, made on purpose.
+    pub json_sha256: &'static str,
+    pub json_size: usize,
 }
 
 pub const UGL: BundledLexicon = BundledLexicon {
@@ -25,6 +30,8 @@ pub const UGL: BundledLexicon = BundledLexicon {
     file: "en_ugl-d9d29e2d589258ce27f92b59f753a3af03ab7a72.zip",
     zip_tree: "4d24ed9c8ceb768df1069feed0cc375d32cd93ce",
     entries: 5408,
+    json_sha256: "7798835a14559f03b3d3e4b804b6d88f6118923fd07ff39c44e14258a9f3f094",
+    json_size: 500_021,
 };
 
 pub const UHL: BundledLexicon = BundledLexicon {
@@ -32,6 +39,8 @@ pub const UHL: BundledLexicon = BundledLexicon {
     file: "en_uhl-72df5ac25acf9d51e826b20e3ad883a5a657ef4e.zip",
     zip_tree: "ad07f5e41f7052598d90eb8dc2b9ecad811b0b17",
     entries: 8674,
+    json_sha256: "b3a002bbfe52720624b9e97a1130b138cfb4ecfc30a5d4111e7fa1f1581cc258",
+    json_size: 2_055_993,
 };
 
 pub fn bundle() -> PathBuf {
@@ -102,6 +111,7 @@ pub fn lock_from_the_zips() -> FetchedLock {
                 file: Some(lexicon.file.to_owned()),
                 sha256: Sha256::of(&zip),
                 size: zip.len() as u64,
+                lexicon_sha256: Some(lexicon.json_sha256.parse().unwrap()),
                 checked: "2026-10-16".to_owned(),
                 how: "tests only: the tree the zip holds, not confirmed by Door43".to_owned(),
             }

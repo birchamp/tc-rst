@@ -11,30 +11,19 @@ use std::fs;
 use std::io::{Cursor, Read};
 use std::path::PathBuf;
 
-use common::bundled::{BundledLexicon, UGL, UHL, bundle};
+use common::bundled::{UGL, UHL, bundle};
 use common::nothing_installed;
 use serde_json::Value;
 use tc_door43::VerificationError;
 use tc_resources::strongs::LexiconId;
 use tc_resources::{
-    FetchedLock, InstallError, LEXICON_FILE, Lexicon, LexiconInstall, LexiconUnavailable, Lexicons,
-    Origin, Packaging, PartEntry, Refusal, RepoPath, ResourcePin, ResourceStore, Sha256,
-    Testaments, TreeCheck, content_files_opened, install_lexicon_zip, open_lexicon,
+    FetchedLock, InstallError, LEXICON_FILE, Lexicon, LexiconError, LexiconInstall,
+    LexiconUnavailable, Lexicons, Origin, Packaging, PartEntry, Refusal, RepoPath, ResourcePin,
+    ResourceStore, Sha256, Testaments, TreeCheck, content_files_opened, install_lexicon_zip,
+    open_lexicon,
 };
 
 const MAX: u64 = 1 << 30;
-
-/// The SHA-256 of each bundled lexicon repackaged, recorded in `bundle/en/README.md`.
-/// Repackaging is deterministic, so a change here is a change of the format or of its
-/// writer, made on purpose.
-const UGL_JSON: (&str, usize) = (
-    "7798835a14559f03b3d3e4b804b6d88f6118923fd07ff39c44e14258a9f3f094",
-    500_021,
-);
-const UHL_JSON: (&str, usize) = (
-    "b3a002bbfe52720624b9e97a1130b138cfb4ecfc30a5d4111e7fa1f1581cc258",
-    2_055_993,
-);
 
 /// Every file of a zip below its top folder, by path.
 fn unzipped(zip: &[u8]) -> Vec<(String, Vec<u8>)> {
@@ -51,13 +40,6 @@ fn unzipped(zip: &[u8]) -> Vec<(String, Vec<u8>)> {
         out.push((path, bytes));
     }
     out
-}
-
-fn recorded(lexicon: &BundledLexicon) -> (&'static str, usize) {
-    match lexicon.id {
-        LexiconId::Ugl => UGL_JSON,
-        LexiconId::Uhl => UHL_JSON,
-    }
 }
 
 #[test]
@@ -85,10 +67,9 @@ fn repackaging_a_bundled_lexicon_gives_the_same_bytes_every_time() {
         )
         .unwrap();
         assert_eq!(again, lexicon.repackaged(), "{}", lexicon.file);
-        let (sha256, size) = recorded(&lexicon);
         assert_eq!(
             (Sha256::of(&again).to_hex().as_str(), again.len()),
-            (sha256, size),
+            (lexicon.json_sha256, lexicon.json_size),
             "{}",
             lexicon.file
         );
@@ -334,6 +315,43 @@ fn an_archive_that_does_not_match_its_lock_entry_is_refused() {
                 refusal: Refusal::Door43(VerificationError::TreeMismatch { .. }),
                 ..
             }
+        ),
+        "{err}"
+    );
+    nothing_installed(&store);
+}
+
+#[test]
+fn the_repackaged_file_must_be_the_one_the_lock_records() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = ResourceStore::open(dir.path()).unwrap();
+    let zip = fs::read(fixture_dir().join(EXCERPT)).unwrap();
+    let pin = excerpt_pin();
+    let recorded = excerpt_lock().entries[0].lexicon_sha256.unwrap();
+
+    let mut unrecorded = excerpt_lock();
+    unrecorded.entries[0].lexicon_sha256 = None;
+    let err = install_lexicon_zip(&store, &pin, &unrecorded, &zip, MAX).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        format!(
+            "fixture/en_uhl_excerpt (7791a4f…) cannot be installed as a lexicon: the repackaged \
+             file's SHA-256 is {recorded}, but fetched.lock records none (record it as \
+             lexiconSha256)"
+        )
+    );
+    nothing_installed(&store);
+
+    let mut other = excerpt_lock();
+    other.entries[0].lexicon_sha256 = Some(Sha256::of(b"another writer"));
+    let err = install_lexicon_zip(&store, &pin, &other, &zip, MAX).unwrap_err();
+    assert!(
+        matches!(
+            &err,
+            InstallError::Lexicon {
+                problem: LexiconError::NotTheRecordedFile { found, .. },
+                ..
+            } if *found == recorded
         ),
         "{err}"
     );

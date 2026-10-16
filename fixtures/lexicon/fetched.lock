@@ -9,6 +9,7 @@
       "file": "en_uhl_excerpt-7791a4fdd72748b5d59ed8744c1a9ccc9ed9543a.zip",
       "sha256": "0d31b69214e4f87eaa99d32a06e6637a707565e9bc8c9f958634b27622dbeec6",
       "size": 2670,
+      "lexiconSha256": "6242cc6552271165531e5d0e15ab3c65b99db56bafd84429dbb86ad1564557e9",
       "checked": "2026-10-16",
       "how": "git rev-parse HEAD^{tree} in the repository that made the archive with git archive (fixtures/lexicon/README.md)"
     }
