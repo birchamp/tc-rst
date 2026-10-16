@@ -1837,6 +1837,29 @@ O14 The storage check, in the background (PERFORMANCE.md rule 4): read every pat
 Open refuses only for: the lock is held (read-only instead), the folder cannot be read, the
 format major is newer, or the folder is not a project. It never refuses because of content.
 
+**Progress.** The open shows determinate progress within 300 ms of the person's action
+(PERFORMANCE.md rule 4), as tC4's open does (its J15, `e2e/j15-slow-open.spec.ts`). An open
+still running 300 ms after the command shows from then on its phase and how much of it is done,
+never a spinner alone; an open that ends sooner shows nothing. The phases are: finishing
+interrupted work (O2 to O7); reading changes (O8: files and bytes read, of the totals the
+listing gives); folding (the fold's work after the last file, in steps of a known total);
+checking files (O9: paths, of the total); writing files (O10: paths, of the total). The actor's threads count into shared
+counters, and a reporter thread, never the screen thread, sends the first report 300 ms after
+the command, whatever a read is still waiting for, then at most every 100 ms while a count
+moves. Counts only grow within a phase. The last report comes before the project is usable;
+an open that fails ends with its error after its last report. Neither leaves an indicator
+standing.
+
+The test `open_shows_determinate_progress_by_300_ms` (unit S1) opens the whole-Bible corpus
+through a `FaultFs` that delays every read so that the open lasts several seconds, and asserts:
+the first report, with a phase and a total, is sent no earlier than 300 ms and no later than
+400 ms after the open command; no report is sent from the caller's thread; counts never fall
+within a phase, and each phase's last count is its total; the last report precedes "usable".
+It opens a small fixture without delays and asserts that, if the open ended before the 300 ms
+mark, no report was sent. It opens a folder that stops being readable 400 ms into the open
+(the `FaultFs` fails every read from then on), and asserts that the open ends with its error,
+after its last report.
+
 **A read-only open only reads.** When O1, O4 or O5 makes the open read-only, the app skips O2,
 the rebuild in O3, every restore in O4 and O7, the blob and cache writes of O8, O9 to O12, and
 every write of O14 (it still reports what it finds):
@@ -3693,6 +3716,11 @@ Playwright drives the real UI against the real server for:
 - J8 checkpoints (exactly one commit when leaving with changes, none without), J11 share, J12 and
   J13 with a teammate's concurrent checks, J9a, J9c and J9d imports with byte-identical text (P9),
   and the tC4 4.0 import of every tC4 conformance fixture.
+- **Opening a project** (tC4's J15 cases, PERFORMANCE.md rule 4): a small project shows no
+  indicator before 300 ms; the whole-Bible corpus shows determinate progress from 300 ms on,
+  with phases in order and counts that only grow, and the indicator leaves no earlier than the
+  project's text is on screen; a folder that stops being readable shows its error and leaves no
+  indicator. Unit S1's `open_shows_determinate_progress_by_300_ms` proves the store's side.
 
 ### 16.5 Probes and measurements before the format is frozen
 

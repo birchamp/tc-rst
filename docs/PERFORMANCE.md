@@ -22,7 +22,17 @@ rebuild must stay quick at that size for the whole life of a project.
    network. A save is acknowledged when it is durable (STORAGE.md), and the save budget
    below includes the fsync.
 4. **Background work** shows determinate progress, lets saves continue, and can be cancelled
-   or resumed.
+   or resumed. It shows that progress within 300 ms of the person's action, off the screen
+   thread, as tC4 does (its J15, `e2e/j15-slow-open.spec.ts`, and the owner's ruling of
+   2026-08-25): an action still running 300 ms after the click shows from then on its phase
+   and a count or fraction that only grows within the phase; an action that ends sooner shows
+   nothing, so a quick action never flashes an indicator. The indicator leaves when the action
+   ends or gives way to its error; it is never left standing. The working threads count into
+   shared counters and a timer off the screen thread sends the reports (rule 3), so a slow
+   read cannot hold the first report back. Opening a project is such an action. `tc-store`
+   proves it for the open with `open_shows_determinate_progress_by_300_ms` (unit S1,
+   STORAGE.md §6.1), and each action under "Background work" gets the same test for its own
+   progress.
 5. **Measure release builds** on the corpus below. Record the median and p95 of at least 20
    runs (5 runs for actions over 1 s), the machine and the commit in `docs/evidence/`. CI
    runs the same benchmarks and fails a budget only above three times its value, because CI
