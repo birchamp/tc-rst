@@ -1,0 +1,16 @@
+{
+  "format": "tc-fetched-lock",
+  "version": 1,
+  "entries": [
+    {
+      "repo": "fixture/en_uhl_excerpt",
+      "commit": "7791a4fdd72748b5d59ed8744c1a9ccc9ed9543a",
+      "tree": "83455fb87ea50c37c6a8fbb86be297fa016b473a",
+      "file": "en_uhl_excerpt-7791a4fdd72748b5d59ed8744c1a9ccc9ed9543a.zip",
+      "sha256": "0d31b69214e4f87eaa99d32a06e6637a707565e9bc8c9f958634b27622dbeec6",
+      "size": 2670,
+      "checked": "2026-10-16",
+      "how": "git rev-parse HEAD^{tree} in the repository that made the archive with git archive (fixtures/lexicon/README.md)"
+    }
+  ]
+}

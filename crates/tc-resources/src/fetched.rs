@@ -120,6 +120,39 @@ impl FetchedLock {
         }
         Ok(Self { entries })
     }
+
+    /// The entry for `commit` of `repo`.
+    pub fn entry(&self, repo: &RepoRef, commit: &CommitSha) -> Option<&LockEntry> {
+        self.entries
+            .iter()
+            .find(|e| e.repo == *repo && e.commit == *commit)
+    }
+
+    /// Checks the archive of `commit` of `repo` against this lock. Without an entry for
+    /// that commit, no tree that Door43 reported is known, so the archive is unconfirmed;
+    /// with one, it must match it ([`LockEntry::verify`]).
+    pub fn check(
+        &self,
+        repo: &RepoRef,
+        commit: &CommitSha,
+        zip: &[u8],
+        max_unpacked: u64,
+    ) -> Result<TreeCheck, Refusal> {
+        match self.entry(repo, commit) {
+            None => Ok(TreeCheck::Unconfirmed),
+            Some(entry) => entry.verify(zip, max_unpacked).map(TreeCheck::Confirmed),
+        }
+    }
+}
+
+/// What [`FetchedLock::check`] found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TreeCheck {
+    /// The archive is the lock entry's download, and its files are the tree Door43
+    /// reported for the commit.
+    Confirmed(VerifiedArchive),
+    /// The lock has no entry for the commit yet: nothing confirms the archive's files.
+    Unconfirmed,
 }
 
 impl RawEntry {
