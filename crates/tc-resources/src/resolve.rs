@@ -15,7 +15,7 @@
 //! coverage only: it passes [`RecordedOnly`].
 
 use tc_core::BookId;
-use tc_door43::CommitSha;
+use tc_door43::{CommitSha, RepoRef};
 
 use crate::pin::{BookCoverage, RepoPath, ResourcePin};
 use crate::sets::{ProjectPins, Rung, SetSlot, Tool};
@@ -349,6 +349,44 @@ fn missing_pin(
         .pin(SetSlot::TranslationWords)
         .filter(|tw| !installed(tw))
         .cloned()
+}
+
+/// How many of a project's pins name a version this computer lacks (tC4
+/// `missingPinCount`, `src/data/installed.ts:282`, D88 point 6): each pin of both language
+/// sets, the original-language `nt` and `ot` pins and each source pane pin, once per
+/// place it is pinned. `installed` answers whether this exact commit is on this machine.
+///
+/// Lexicon pins are left out, as tC4 leaves them out: the Download that this count offers
+/// after a sync opens Source texts, which offers no lexicon.
+pub fn missing_pin_count(pins: &ProjectPins, installed: &dyn Fn(&ResourcePin) -> bool) -> usize {
+    downloadable_pins(pins)
+        .filter(|pin| !installed(pin))
+        .count()
+}
+
+/// The project's pin of `repo` that no install on this machine satisfies: the version a
+/// download of that repository from Source texts must fetch, instead of the catalogue's
+/// latest (tC4 `unsatisfiedProjectPinFor`, `src/data/installed.ts:328`, D58). The primary
+/// set is searched first, then the fallback set, `nt`, `ot` and the source panes. `None`
+/// when the project pins `repo` nowhere or every pin of it is installed.
+pub fn unsatisfied_pin_for<'a>(
+    pins: &'a ProjectPins,
+    repo: &RepoRef,
+    installed: &dyn Fn(&ResourcePin) -> bool,
+) -> Option<&'a ResourcePin> {
+    downloadable_pins(pins).find(|pin| pin.is_repo(repo) && !installed(pin))
+}
+
+/// The pins that Source texts can download, in tC4's search order.
+fn downloadable_pins(pins: &ProjectPins) -> impl Iterator<Item = &ResourcePin> {
+    let sets = Rung::LADDER
+        .into_iter()
+        .filter_map(|rung| pins.set(rung))
+        .flat_map(|set| set.pins.values());
+    let original = &pins.original_language;
+    sets.chain(original.nt.iter())
+        .chain(original.ot.iter())
+        .chain(pins.extra_scripture.iter().map(|pane| &pane.pin))
 }
 
 /// Where in a project's pins a pin sits, for a coverage write-back.
