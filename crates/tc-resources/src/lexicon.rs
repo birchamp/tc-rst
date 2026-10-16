@@ -36,9 +36,8 @@
 #![allow(clippy::result_large_err)]
 
 use std::cell::Cell;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
-use std::marker::PhantomData;
 
 use serde::Deserialize;
 use serde::de::{self, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
@@ -221,26 +220,6 @@ pub struct LexiconEntry {
     pub other: Map<String, Value>,
 }
 
-impl LexiconEntry {
-    fn from_value(value: Value) -> Result<Self, String> {
-        if let Some(problem) = entry_problem(&value) {
-            return Err(problem);
-        }
-        let Value::Object(mut other) = value else {
-            return Err("it is not a JSON object".to_owned());
-        };
-        let mut text = |key| match other.shift_remove(key) {
-            Some(Value::String(s)) => Some(s),
-            _ => None,
-        };
-        Ok(Self {
-            brief: text("brief"),
-            long: text("long"),
-            other,
-        })
-    }
-}
-
 thread_local! {
     static ENTRIES_PROBED: Cell<u64> = const { Cell::new(0) };
 }
@@ -277,10 +256,10 @@ struct RawLexicon {
     _version: IgnoredAny,
     source: RawSource,
     metadata: Strict,
-    entries: Unique<Strict>,
+    entries: Entries,
     #[serde(default)]
     index: Option<Strict>,
-    files: Unique<String>,
+    files: Files,
 }
 
 #[derive(Deserialize)]
@@ -331,29 +310,15 @@ impl Lexicon {
                 .parse()
                 .map_err(|e: crate::ParseError| bad("source.archiveSha256", e.to_string()))?,
         };
-        let mut entries = HashMap::with_capacity(raw.entries.0.len());
-        for (key, Strict(value)) in raw.entries.0 {
-            let number = canonical_number(&key).ok_or_else(|| {
-                bad(
-                    "entries",
-                    format!(
-                        "{key:?} is not an entry number (a decimal number without leading zeros)"
-                    ),
-                )
-            })?;
-            let entry =
-                LexiconEntry::from_value(value).map_err(|e| bad(&format!("entry {key}"), e))?;
-            entries.insert(number, entry);
-        }
-        if entries.is_empty() {
+        if raw.entries.0.is_empty() {
             return Err(LexiconError::NoEntries);
         }
         Ok(Self {
             source,
             metadata: raw.metadata.0,
-            entries,
+            entries: raw.entries.0,
             index: raw.index.map(|i| i.0),
-            files: raw.files.0.into_iter().collect(),
+            files: raw.files.0,
         })
     }
 
@@ -571,42 +536,133 @@ impl<'de> Visitor<'de> for StrictVisitor {
         Ok(Value::Array(items))
     }
 
-    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Value, A::Error> {
-        let Unique(pairs) = UniqueVisitor::<Strict>(PhantomData).visit_map(map)?;
-        Ok(Value::Object(
-            pairs.into_iter().map(|(k, Strict(v))| (k, v)).collect(),
-        ))
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Value, A::Error> {
+        let mut object = Map::new();
+        while let Some(key) = map.next_key::<String>()? {
+            match object.entry(key) {
+                serde_json::map::Entry::Occupied(taken) => return Err(twice(taken.key())),
+                serde_json::map::Entry::Vacant(free) => {
+                    free.insert(map.next_value::<Strict>()?.0);
+                }
+            }
+        }
+        Ok(Value::Object(object))
     }
 }
 
-/// A JSON object's pairs in order, refused when a key appears twice.
-struct Unique<V>(Vec<(String, V)>);
+fn twice<E: de::Error>(key: &str) -> E {
+    E::custom(format!("the key {key:?} appears twice"))
+}
 
-impl<'de, V: Deserialize<'de>> Deserialize<'de> for Unique<V> {
+impl<'de> Deserialize<'de> for LexiconEntry {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        d.deserialize_map(UniqueVisitor(PhantomData))
+        d.deserialize_map(EntryVisitor)
     }
 }
 
-struct UniqueVisitor<V>(PhantomData<V>);
+struct EntryVisitor;
 
-impl<'de, V: Deserialize<'de>> Visitor<'de> for UniqueVisitor<V> {
-    type Value = Unique<V>;
+impl<'de> Visitor<'de> for EntryVisitor {
+    type Value = LexiconEntry;
 
     fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("a JSON object")
+        f.write_str("an entry: a JSON object whose brief and long are text")
     }
 
-    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Unique<V>, A::Error> {
-        let mut seen = HashSet::new();
-        let mut pairs = Vec::with_capacity(map.size_hint().unwrap_or(0));
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<LexiconEntry, A::Error> {
+        let mut entry = LexiconEntry {
+            brief: None,
+            long: None,
+            other: Map::new(),
+        };
         while let Some(key) = map.next_key::<String>()? {
-            if !seen.insert(key.clone()) {
-                return Err(de::Error::custom(format!("the key {key:?} appears twice")));
+            let slot = match key.as_str() {
+                "brief" => &mut entry.brief,
+                "long" => &mut entry.long,
+                _ => match entry.other.entry(key) {
+                    serde_json::map::Entry::Occupied(taken) => return Err(twice(taken.key())),
+                    serde_json::map::Entry::Vacant(free) => {
+                        free.insert(map.next_value::<Strict>()?.0);
+                        continue;
+                    }
+                },
+            };
+            if slot.replace(map.next_value()?).is_some() {
+                return Err(twice(&key));
             }
-            pairs.push((key, map.next_value()?));
         }
-        Ok(Unique(pairs))
+        Ok(entry)
+    }
+}
+
+/// `entries`: each key an entry number, written without leading zeros.
+struct Entries(HashMap<u32, LexiconEntry>);
+
+impl<'de> Deserialize<'de> for Entries {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        d.deserialize_map(EntriesVisitor)
+    }
+}
+
+struct EntriesVisitor;
+
+impl<'de> Visitor<'de> for EntriesVisitor {
+    type Value = Entries;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("entries by number")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Entries, A::Error> {
+        let mut entries = HashMap::new();
+        while let Some(key) = map.next_key::<String>()? {
+            let number = canonical_number(&key).ok_or_else(|| {
+                de::Error::custom(format!(
+                    "{key:?} is not an entry number (a decimal number without leading zeros)"
+                ))
+            })?;
+            match entries.entry(number) {
+                std::collections::hash_map::Entry::Occupied(_) => return Err(twice(&key)),
+                std::collections::hash_map::Entry::Vacant(free) => {
+                    free.insert(map.next_value::<LexiconEntry>()?);
+                }
+            }
+        }
+        Ok(Entries(entries))
+    }
+}
+
+/// `files`: text by path.
+struct Files(BTreeMap<String, String>);
+
+impl<'de> Deserialize<'de> for Files {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        d.deserialize_map(FilesVisitor)
+    }
+}
+
+struct FilesVisitor;
+
+impl<'de> Visitor<'de> for FilesVisitor {
+    type Value = Files;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("files: text by path")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Files, A::Error> {
+        let mut files = BTreeMap::new();
+        while let Some(path) = map.next_key::<String>()? {
+            match files.entry(path) {
+                std::collections::btree_map::Entry::Occupied(taken) => {
+                    return Err(twice(taken.key()));
+                }
+                std::collections::btree_map::Entry::Vacant(free) => {
+                    free.insert(map.next_value::<String>()?);
+                }
+            }
+        }
+        Ok(Files(files))
     }
 }
 

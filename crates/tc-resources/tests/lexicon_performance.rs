@@ -19,8 +19,8 @@ use std::time::{Duration, Instant};
 use common::bundled::{UGL, UHL, lock_from_the_zips};
 use serde_json::{Map, Value};
 use tc_resources::{
-    Lexicon, LexiconInstall, Lexicons, PartEntry, ResourceStore, Testaments, content_files_opened,
-    install_lexicon_zip, lexicon_entries_probed, open_lexicon,
+    LEXICON_FILE, Lexicon, LexiconInstall, Lexicons, PartEntry, ResourceStore, Testaments,
+    content_files_opened, install_lexicon_zip, lexicon_entries_probed, open_lexicon,
 };
 
 const LOAD_BUDGET: Duration = Duration::from_millis(100);
@@ -140,36 +140,49 @@ fn median_and_p95(mut times: Vec<Duration>) -> (Duration, Duration) {
     (times[times.len() / 2], p95)
 }
 
+/// The time `f` takes, not counting the drop of what it returns: a session keeps its
+/// lexicons until it ends.
+fn timed<T>(f: impl FnOnce() -> T) -> (Duration, T) {
+    let start = Instant::now();
+    let value = f();
+    (start.elapsed(), value)
+}
+
 #[test]
 fn loading_the_hebrew_lexicon_meets_the_budget() {
     let (_dir, store, _) = store_with_both();
     let pin = UHL.pin();
-    let start = Instant::now();
-    let lexicon = open_lexicon(&store, &pin).unwrap();
-    let first = start.elapsed();
+    let (first, lexicon) = timed(|| open_lexicon(&store, &pin).unwrap());
     assert_eq!(lexicon.len(), UHL.entries);
     // A debug build only checks that the code runs.
     let runs = if cfg!(debug_assertions) { 1 } else { 21 };
-    let times: Vec<Duration> = (0..runs)
-        .map(|_| {
-            let start = Instant::now();
-            open_lexicon(&store, &pin).unwrap();
-            start.elapsed()
-        })
-        .collect();
-    let (median, p95) = median_and_p95(times);
+    let (mut loads, mut reads, mut parses) = (Vec::new(), Vec::new(), Vec::new());
+    for _ in 0..runs {
+        let (load, lexicon) = timed(|| open_lexicon(&store, &pin).unwrap());
+        drop(lexicon);
+        loads.push(load);
+        // The two parts of a load: reading the file, and parsing it.
+        let installed = store.dcs(&pin).unwrap().unwrap();
+        let (read, bytes) = timed(|| installed.read(LEXICON_FILE).unwrap());
+        let (parse, lexicon) = timed(|| Lexicon::parse(&bytes).unwrap());
+        drop(lexicon);
+        reads.push(read);
+        parses.push(parse);
+    }
+    let (median, p95) = median_and_p95(loads);
     println!(
-        "load en_uhl ({} bytes, {} entries): first {first:?}, median {median:?}, p95 {p95:?} of {runs}",
+        "load en_uhl ({} bytes, {} entries): first {first:?}, median {median:?}, p95 {p95:?} of {runs}; \
+         read median {:?}, parse median {:?}",
         UHL.repackaged().len(),
-        UHL.entries
+        UHL.entries,
+        median_and_p95(reads).0,
+        median_and_p95(parses).0,
     );
-    let start = Instant::now();
-    open_lexicon(&store, &UGL.pin()).unwrap();
+    let (ugl, _) = timed(|| open_lexicon(&store, &UGL.pin()).unwrap());
     println!(
-        "load en_ugl ({} bytes, {} entries): {:?}",
+        "load en_ugl ({} bytes, {} entries): {ugl:?}",
         UGL.repackaged().len(),
         UGL.entries,
-        start.elapsed()
     );
     if !cfg!(debug_assertions) {
         assert!(
