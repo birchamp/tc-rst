@@ -116,8 +116,9 @@ fn packs_of(changes: &[Verified]) -> Vec<File> {
         .collect()
 }
 
-/// The pinned change of every record kind (`tests/fixtures/v0-every-kind.ndjson`), and a
-/// change of a kind from a newer minor, which the fold holds as an opaque record.
+/// The pinned change of every record kind (`tests/fixtures/v0-every-kind.ndjson`), a change
+/// of a kind from a newer minor, which the fold holds as an opaque record, one with a cause
+/// from a newer minor, and values the fixture does not hold.
 fn every_kind() -> Vec<Verified> {
     let pinned = std::fs::read(fixtures().join("v0-every-kind.ndjson")).unwrap();
     let mut out: Vec<Verified> = pinned
@@ -134,15 +135,30 @@ fn every_kind() -> Vec<Verified> {
         json::parse(br#"{"note":{"id":"n1","value":{"text":"later"}}}"#).unwrap(),
     );
     map.insert("v".into(), Json::from(1u64));
-    let newer_text = Json::Obj(map).to_canonical_string();
+    let newer_text = Json::Obj(map.clone()).to_canonical_string();
     let newer = parse_change(
         ChangeId::of(newer_text.as_bytes()),
         Arc::from(newer_text.as_bytes()),
     );
     assert!(matches!(newer, Verified::Change(_)), "{newer:?}");
     out.push(newer);
+    // A cause from a newer minor, which the fold keeps as `Cause::Newer`.
+    map.insert("cause".into(), json::parse(br#"{"later":{}}"#).unwrap());
+    let newer_cause_text = Json::Obj(map).to_canonical_string();
+    let newer_cause = parse_change(
+        ChangeId::of(newer_cause_text.as_bytes()),
+        Arc::from(newer_cause_text.as_bytes()),
+    );
+    let Verified::Change(change) = &newer_cause else {
+        panic!("{newer_cause:?}")
+    };
+    assert!(matches!(
+        change.body().cause,
+        tc_journal::Cause::Newer { .. }
+    ));
+    out.push(newer_cause);
     // Values the generated fixture happens not to hold.
-    use support::{Dev, absent, present, text, text_from, verse};
+    use support::{Dev, absent, check_key, comment, present, text, text_from, verse};
     use tc_journal::record::PresentHow;
     let mut dev = Dev::new(8);
     let values = vec![
@@ -151,6 +167,11 @@ fn every_kind() -> Vec<Verified> {
         verse(2, 1, absent(None)),
         present(PresentHow::Added),
         present(PresentHow::StartedEmpty),
+        comment(
+            9,
+            tc_journal::record::CommentTarget::Check(check_key("abc1", 1, 1)),
+            "on a check",
+        ),
     ];
     for record in values {
         out.push(Verified::Change(dev.one(record, vec![])));
@@ -542,7 +563,7 @@ fn the_encoding_is_pinned() {
         (INDEX_VERSION, digest.as_str()),
         (
             3,
-            "c0643c4428a408c4bda41255f1a6135f3cc6f6f4ebd1de8df46b41dc67b36ac0"
+            "2da67c1119030ef8668e99666f4bf74036490b8a8e82eb65c0967be7b7ce600b"
         ),
         "the cache's bytes changed: raise INDEX_VERSION and pin the new digest"
     );
@@ -571,6 +592,8 @@ fn the_pinned_changes_cover_the_summary() {
         "cause: Seed",
         "cause: StartOver",
         "cause: System",
+        "cause: Newer",
+        "target: Check(",
         "stub: true",
         "stub: false",
         // Shapes.
