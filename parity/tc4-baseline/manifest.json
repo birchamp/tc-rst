@@ -654,6 +654,10 @@
         "view": "home",
         "modal": "openDoor43"
       },
+      "rebuildDiffers": {
+        "ruling": "Q3",
+        "rebuild": "The note has no sentence that only public repositories can be opened: a new key replaces openDoor43.where in all 10 languages. A private repository opens after sign-in."
+      },
       "steps": [
         "Home",
         "+ Add a project",
@@ -693,6 +697,10 @@
         "url": "/clients/uw-tc4/",
         "view": "home",
         "modal": "openDoor43"
+      },
+      "rebuildDiffers": {
+        "ruling": "Q3",
+        "rebuild": "The refusal sentence (openDoor43.refused.other) says \"Make sure that the repository is public\". The rebuild opens private repositories, so its sentence must not say this. The delta document replaces only openDoor43.where, so the new text of this sentence is not decided yet. When Door43 answers 401 or 404 and nobody is signed in, the rebuild shows the sign-in step instead of this refusal."
       },
       "steps": [
         "Home",
@@ -1103,6 +1111,10 @@
         "url": "/clients/uw-tc4/",
         "view": "home",
         "modal": null
+      },
+      "rebuildDiffers": {
+        "ruling": "Q2",
+        "rebuild": "The OBS card reads \"Sync with Door43\", like the Bible card: the rebuild syncs OBS projects too."
       },
       "steps": [
         "Launch tC4"

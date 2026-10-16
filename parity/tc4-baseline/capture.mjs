@@ -197,8 +197,10 @@ function appDriver({ page, origin, state }) {
 // Translate), modal (what is layered over the view), steps (what a person does, in tC4's
 // own words), shows, incomplete (why the screen cannot show what a full install shows,
 // when that is so), and run (the same steps, driven). Optional: locale (the app language,
-// which run passes to home(); English by default) and viewport (another window size than
-// 1280x800).
+// which run passes to home(); English by default), viewport (another window size than
+// 1280x800) and rebuildDiffers (an owner ruling under which the rebuild must not copy this
+// screen exactly: the ruling, as numbered in docs/TC4-DELTA-2026-10-16.md §5, and what the
+// rebuild shows).
 
 const SCREEN_LIST = [
   // -------- scenario: sample (the conformance samples as tC4 ships them) --------
@@ -465,6 +467,7 @@ const SCREEN_LIST = [
     name: 'open-door43', scenario: 'sample', view: 'home', modal: 'openDoor43',
     steps: ['Home', '+ Add a project', 'Open a project from Door43'],
     shows: 'Open a project from Door43 dialog, empty: the note "The project opens from git.door43.org. Only public repositories can be opened.", Door43 repository, Project name, the note that tC4 checks every file before it adds the project, Cancel / Open project (disabled)',
+    rebuildDiffers: { ruling: 'Q3', rebuild: 'The note has no sentence that only public repositories can be opened: a new key replaces openDoor43.where in all 10 languages. A private repository opens after sign-in.' },
     run: async (app) => {
       await app.home(); await app.page.getByTestId('add-project').click();
       await app.page.getByText('Open a project from Door43', { exact: true }).click();
@@ -489,6 +492,7 @@ const SCREEN_LIST = [
     steps: ['Home', '+ Add a project', 'Open a project from Door43', `Repository: ${OPEN_REPO}`, 'Open project', 'Turn on internet'],
     shows: 'Open a project from Door43 dialog with the refusal callout "This project cannot be opened." for a clone that failed (code sync.clone-failed), "No project was added." and Ask for help',
     incomplete: 'The mock has no git, so the clone fails: this is tC4\'s refusal for a failed clone. A successful open needs a git server, as in tC4\'s own journey J17.',
+    rebuildDiffers: { ruling: 'Q3', rebuild: 'The refusal sentence (openDoor43.refused.other) says "Make sure that the repository is public". The rebuild opens private repositories, so its sentence must not say this. The delta document replaces only openDoor43.where, so the new text of this sentence is not decided yet. When Door43 answers 401 or 404 and nobody is signed in, the rebuild shows the sign-in step instead of this refusal.' },
     run: async (app) => {
       const { page } = app;
       await app.home(); await page.getByTestId('add-project').click();
@@ -661,6 +665,7 @@ const SCREEN_LIST = [
     name: 'shared-home', scenario: 'shared', view: 'home', modal: null,
     steps: ['Launch tC4'],
     shows: 'Home with both samples shared on Door43: "On Door43" beside each name; the Bible card reads "Sync with Door43", the OBS card "Upload changes" (tC4 4.0 syncs Bible projects only)',
+    rebuildDiffers: { ruling: 'Q2', rebuild: 'The OBS card reads "Sync with Door43", like the Bible card: the rebuild syncs OBS projects too.' },
     run: async (app) => { await app.home(); await app.page.getByTestId(`share-card-${BIBLE}`).and(app.page.locator('[data-action="sync"]')).waitFor(); },
   },
   {
@@ -756,6 +761,7 @@ async function captureScenario(browser, scenario, screens, tc4) {
       route: { url: '/clients/uw-tc4/', view: screen.view, modal: screen.modal },
       ...(screen.locale ? { locale: screen.locale } : {}),
       ...(screen.viewport ? { viewport: screen.viewport } : {}),
+      ...(screen.rebuildDiffers ? { rebuildDiffers: screen.rebuildDiffers } : {}),
       steps: screen.steps,
       shows: screen.shows,
       status: error ? 'failed' : screen.incomplete ? 'incomplete' : 'complete',

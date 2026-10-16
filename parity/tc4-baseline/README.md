@@ -310,6 +310,22 @@ These are also known differences from a real install. None of them makes a scree
 - `source-texts` opens the project first, so Understand (Jonah, the first book) is behind the
   dialog, and its helps panel reads "The installed resource has nothing for this book."
 
+## Where the rebuild differs on purpose
+
+The project owner ruled that the rebuild differs from tC4 4.0 in some places. `docs/PLAN.md`
+lists these rulings under "Where the rebuild differs from tC4 4.0 on purpose". On the screens
+below, do not copy tC4's text into the rebuild. The rest of each screen is still the reference.
+The entry of each screen in `manifest.json` has the same note in `rebuildDiffers`.
+
+| Screen | Ruling | What the rebuild shows |
+|---|---|---|
+| `open-door43` | Q3 | The note has no sentence that only public repositories can be opened. A new key replaces `openDoor43.where` in all 10 languages. A private repository opens after sign-in. |
+| `open-door43-refused` | Q3 | tC4's sentence for this refusal, `openDoor43.refused.other`, says "Make sure that the repository is public". The rebuild opens private repositories, so its sentence must not say this. The delta document replaces only `openDoor43.where`, so the new text of this sentence is not decided yet. When Door43 answers 401 or 404 and nobody is signed in, the rebuild shows the sign-in step instead of this refusal. |
+| `shared-home` | Q2 | The OBS card reads "Sync with Door43", like the Bible card. The rebuild syncs OBS projects too. |
+
+The other rulings change no captured screen. For example, the Align screens show Titus 1:1,
+which has a saved alignment, so tC4 already shows its word bank in verse order there (Q15).
+
 ## Changes since d494a9d
 
 16 of the 42 screens changed from `d494a9d` to `d310bf3`. The other 26 are byte-identical. The
@@ -395,4 +411,5 @@ The run also controls the following:
 render the same screens at 1280x800. For each screen, follow the `steps` in `manifest.json` from
 a fresh state of the same scenario (`npm run state -- --scenario <name>`). A screen with a
 `viewport` in the manifest uses that window size, and a screen with a `locale` uses that app
-language. The two renderers differ, so a comparison needs a tolerance.
+language. A screen with `rebuildDiffers` matches tC4 except for what that note says ("Where the
+rebuild differs on purpose"). The two renderers differ, so a comparison needs a tolerance.
