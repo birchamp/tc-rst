@@ -22,7 +22,9 @@
 // the files of the last push to it. A clone copies that folder to the fixed clone path, and a
 // push replaces it with the pushed project. There is no history, so a push is never refused
 // as not a fast-forward. `door43` on the returned object lets the capture push a project the
-// way a first share does, or take a repository off Door43.
+// way a first share does, take a repository off Door43, or drop the connection of the next
+// clone. The fake Door43 API (fake-door43.mjs) reads the same folders, so its branch check
+// agrees with what a clone finds.
 //
 // Deliberate simplifications. None of them is visible on the captured screens:
 //   - no git: add-and-commit records the message in memory and clears the pending set;
@@ -105,6 +107,8 @@ export function createMockServer({ state, client }) {
   const pending = new Map();
   const commits = [];
   const requests = [];
+  /** The Door43 `main` folders whose next clone loses its connection. */
+  const droppedClones = new Set();
 
   // ---- helpers -------------------------------------------------------------
 
@@ -373,6 +377,11 @@ export function createMockServer({ state, client }) {
         throw new HttpError(400, `could not clone repo: '${target}' exists and is not an empty directory; class=Invalid (3); code=Exists (-4)`);
       }
       const main = door43MainOf(origin);
+      if (droppedClones.delete(main)) {
+        // libgit2 1.9 streams/socket.c socket_connect, as git2's Error Display writes it:
+        // class Os (2), and code GenericError, which Display leaves out.
+        throw new HttpError(400, `could not clone repo: failed to connect to ${host}; class=Os (2)`);
+      }
       if (!fs.existsSync(main)) throw new HttpError(400, `could not clone repo: the tc4-baseline mock's Door43 has no repository ${clonePath}`);
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.cpSync(main, target, { recursive: true });
@@ -489,8 +498,9 @@ export function createMockServer({ state, client }) {
     });
   });
   /** Door43 for the capture. `push` is a push of `repoPath` to its remote `remote`, as a
-   * share or a sync makes it; `remove` takes that repository off Door43. Each answers the
-   * folder of Door43 `main`. */
+   * share or a sync makes it; `remove` takes that repository off Door43; `dropNextClone`
+   * makes the next clone of that repository fail to connect, once. Each answers the folder
+   * of Door43 `main`. `holds` answers whether Door43 has `main` of `<host>/<org>/<repo>`. */
   const door43 = {
     push: (repoPath, remote = 'origin') => pushTo(repoPath, remote),
     remove: (repoPath, remote = 'origin') => {
@@ -498,6 +508,13 @@ export function createMockServer({ state, client }) {
       fs.rmSync(main, { recursive: true, force: true });
       return main;
     },
+    dropNextClone: (repoPath, remote = 'origin') => {
+      const main = remoteMain(repoPath, remote);
+      droppedClones.add(main);
+      return main;
+    },
+    holds: (host, org, repo) => [host, org, repo].every((s) => SAFE_SEGMENT.test(s))
+      && fs.existsSync(door43MainOf(`https://${host}/${org}/${repo}`)),
   };
   return { server, requests, commits, door43 };
 }

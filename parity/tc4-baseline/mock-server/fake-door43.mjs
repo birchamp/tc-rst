@@ -3,8 +3,8 @@
 // (e2e/helpers/door43.ts at d494a9d, the same at d310bf3): sign-in with Basic auth, token
 // mint, the user's organizations with their create permission, and the per-language
 // repository count that picks the "Recommended" organization. For the sync screens it also
-// answers that the fake user's repositories have a `main` branch. Repository creation and
-// push are not served.
+// answers the branch check, from the mock server's Door43 folders (server.mjs `door43`), so
+// it agrees with what a clone finds. Repository creation and push are not served.
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -28,8 +28,12 @@ function decodeBasic(credentials) {
   }
 }
 
-/** Route every request to `server` (the client's DCS_SERVER) through the fake. */
-export async function routeFakeDoor43(context, { server = 'https://git.door43.org', user = FAKE_USER, organizations = FAKE_ORGANIZATIONS } = {}) {
+/**
+ * The fake's answer to one request: `answer(method, url, headers, body)` gives
+ * `{ status, headers?, body? }`. `door43` is the mock server's Door43 (server.mjs): its
+ * `holds(host, org, repo)` says whether Door43 has `main` of that repository.
+ */
+export function fakeDoor43({ door43, user = FAKE_USER, organizations = FAKE_ORGANIZATIONS }) {
   const valid = new Set();
   const tokens = [];
   let next = 1;
@@ -64,10 +68,12 @@ export async function routeFakeDoor43(context, { server = 'https://git.door43.or
       return { status: 200, body: page > 1 ? [] : organizations.map((o, i) => ({ id: i + 1, username: o.username, full_name: o.fullName ?? '' })) };
     }
     // #678: before a sync, Home asks whether Door43 `main` exists (door43Api.ts hasBranch).
-    // Every repository of the fake user is a shared sample with its `main`.
+    // Door43 answers 404 for a repository that is not there and for an empty one, and tC4
+    // then skips the sync (state.jsx mainOnDoor43, syncsNow).
     const branch = route.match(/^\/repos\/([^/]+)\/([^/]+)\/branches\/([^/]+)$/);
     if (branch) {
-      return branch[1] === user.username && branch[3] === 'main'
+      const [, owner, repo, name] = branch.map(decodeURIComponent);
+      return name === 'main' && door43.holds(url.host, owner, repo)
         ? { status: 200, body: { name: 'main' } }
         : { status: 404, body: { message: 'branch does not exist' } };
     }
@@ -79,6 +85,12 @@ export async function routeFakeDoor43(context, { server = 'https://git.door43.or
     }
     return { status: 404, body: { message: 'not served by the tc4-baseline fake Door43' } };
   };
+  return answer;
+}
+
+/** Route every request to `server` (the client's DCS_SERVER) through the fake. */
+export async function routeFakeDoor43(context, { server = 'https://git.door43.org', ...options }) {
+  const answer = fakeDoor43(options);
   await context.route(`${server}/**`, async (route) => {
     const request = route.request();
     const out = answer(request.method(), new URL(request.url()), request.headers(), request.postData());

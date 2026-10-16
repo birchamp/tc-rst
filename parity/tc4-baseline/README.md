@@ -71,17 +71,18 @@ npm run check        # or, from the repository root: node --test parity/tc4-base
 ```
 
 The check needs no browser, no tC4 checkout and no network, and CI runs it. It fails when a
-screenshot is not in `manifest.json` or has the wrong size, when this README's screen table or
-totals differ from the manifest, or when the README does not record the tC4 commit. It fails
-when a tool's marking row lacks a screen in English or Arabic at 1280 or 620 px. It fails
-unless complete screens show the sync result toast of a failed sync, of an ok sync, and of an
+screenshot is not in `manifest.json` or has the wrong size, when a cell of this README's screen
+table or a total differs from the manifest, or when the README does not record the tC4 commit.
+It fails when a tool's marking row lacks a screen in English or Arabic at 1280 or 620 px. It
+fails unless complete screens show the sync result toast of a failed sync, of an ok sync, and of an
 ok sync with teammates' changes, "Changes from", the note on missing versions, Review and
 Download. It fails when "Where the
 rebuild differs on purpose" differs from the manifest's `rebuildDiffers` notes or cites a
 ruling that `docs/PLAN.md` does not list, and when a screen shows a shared OBS card with
 "Upload changes" but does not cite Q2. The toast and the cards are read from the DOM at each
 shot (`syncToast` and `homeCards` in `manifest.json`). The check also starts the mock server
-and drives its sync routes (`mock-server/server.test.mjs`). Run it after every capture.
+and drives its sync routes and the fake Door43's branch check (`mock-server/server.test.mjs`).
+Run it after every capture.
 
 ### Capture another tC4 commit
 
@@ -121,8 +122,8 @@ out byte for byte the same. The capture itself needs no network except the help-
 | Path | Purpose |
 |---|---|
 | `mock-server/server.mjs` | The Pankosmia API mock, backed by files on disk, plus the static server for the built client. |
-| `mock-server/server.test.mjs` | Checks that the mock's push, clone, copy and delete answer as pankosmia-web does (see "The mock server"). |
-| `mock-server/fake-door43.mjs` | A fake Door43 (Gitea API v1) for the share screens. It is routed inside the browser context. It is trimmed from tC4's own `e2e/helpers/door43.ts`. |
+| `mock-server/server.test.mjs` | Checks that the mock's push, clone, copy and delete answer as pankosmia-web does, and that the fake Door43's branch check agrees with the mock's Door43 (see "The mock server"). |
+| `mock-server/fake-door43.mjs` | A fake Door43 (Gitea API v1) for the share and sync screens. It is routed inside the browser context. It is trimmed from tC4's own `e2e/helpers/door43.ts`. |
 | `fixtures/build-state.mjs` | Builds a state directory, in the Pankosmia working-directory layout, from tC4's fixtures and `fixtures/vendor/`. |
 | `fixtures/vendor/` | Resource files that tC4 does not vendor, cut from published copies by `make-vendor.mjs`. `README.md` and `SOURCES.json` there give the source of each file and the licence. |
 | `capture.mjs` | The Playwright capture. It holds the screen list, the steps and the reason each incomplete screen is incomplete. |
@@ -173,8 +174,10 @@ pankosmia-web's `push.rs`, `clone_repo.rs`, `copy_repo.rs` and `delete_repo.rs`:
   is off. Otherwise it copies Door43 `main` to the fixed path `<host>/<org>/<repo>`, with the
   remote `origin` at `https://<host>/<org>/<repo>`. A folder there that is not empty answers
   HTTP 400 with `code=Exists (-4)`, which tC4 reads as `sync.clone-path-exists`. A repository
-  that Door43 does not hold answers HTTP 400 `could not clone repo: …`, which tC4 reads as
-  `sync.clone-failed`.
+  that Door43 does not hold answers HTTP 400 `could not clone repo: …`. A clone whose
+  connection drops answers HTTP 400 `could not clone repo: failed to connect to <host>;
+  class=Os (2)`, the text of libgit2's failed connect (`streams/socket.c`) as git2 writes it.
+  tC4 reads both as `sync.clone-failed`.
 - `/git/copy` needs a source folder and a target that does not exist. It copies the folder,
   then deletes the source when `delete_src` is true. It has no net gate.
 - `/git/delete` removes the folder. A folder that is not there answers the platform's HTTP 400
@@ -183,13 +186,16 @@ pankosmia-web's `push.rs`, `clone_repo.rs`, `copy_repo.rs` and `delete_repo.rs`:
 - `/git/branches` lists `main` as the checked-out branch.
 
 Some steps change Door43 itself, not the app. The capture does them through `mock.door43` in
-`server.mjs`: it pushes a project as its first share does, or it takes a repository off
-Door43. For teammates' changes, it adds journal segments to Door43 `main` with tC4's own
+`server.mjs`: it pushes a project as its first share does, or it drops the connection of the
+next clone. For teammates' changes, it adds journal segments to Door43 `main` with tC4's own
 journal writers (`journal/files.mjs`), as tC4's `e2e/sync-button.spec.ts` does. These steps
 start with "Door43" in the screen table.
 
 `mock-server/fake-door43.mjs` also answers the check that Home makes before a sync
-(`door43Api.ts` `hasBranch`): each repository of the fake user has a `main` branch.
+(`door43Api.ts` `hasBranch`). It reads the mock's Door43 folders: `main` answers 200 while
+Door43 holds the repository, and 404 otherwise. On 404, tC4 skips the sync and opens the
+Upload changes dialog (`state.jsx` `mainOnDoor43` and `syncsNow`). So every sync screen pushes
+the project to Door43 first.
 
 ### Data: what the mock serves
 
@@ -314,7 +320,7 @@ screen shows a designed absence state because data is missing; the next section 
 | `ar-check-tn-session-620` | en-pins | check | Window 620 px wide → App language: العربية (saved before the launch) → Bible sample card: Titus tile → Mode switch: مراجعة (Check) → Translation Notes card: Start checking → Scroll the marking row into view | ar-check-tn-session-row in a window 620 px wide: the marking row wraps onto three lines, right to left | complete |
 | `shared-home` | shared | home | Launch tC4 | Home with both samples shared on Door43: "On Door43" beside each name; the Bible card reads "Sync with Door43", the OBS card "Upload changes" (tC4 4.0 syncs Bible projects only) | complete |
 | `sync-internet-consent` | shared | home + netAsk | Bible sample card: Sync with Door43 | "Turn on the internet?" asked for a sync (kind `sync`): get the changes of your teammates and send the changes of this project. Behind the scrim, the OBS card reads "Upload changes" | complete |
-| `sync-failed` | shared | home | Door43: the Bible sample's repository is not there → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the sync result toast of a sync that did not complete: red dot, "The sync did not complete." and the sentence of code sync.clone-failed, the dismiss button. The clone of Door43 main fails because the repository is not on Door43, as when it was deleted there | complete |
+| `sync-failed` | shared | home | Door43 main: the Bible sample as it is now (the push of its first share) → Door43: the connection drops at the next clone of the Bible sample's repository → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the sync result toast of a sync that did not complete: red dot, "The sync did not complete." and the sentence of code sync.clone-failed, the dismiss button. Door43 has main, so the sync starts, and then the clone of main fails because the connection to git.door43.org drops | complete |
 | `sync-ok` | shared | home | Bible sample card: Titus tile → Home → Door43 main: the Bible sample as it is now (the push of its first share) → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the toast of a sync that completed with no change from teammates: kindle dot, "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review", the note "This project now uses 5 resource versions that are not on this computer.", Download and the dismiss button | complete |
 | `sync-ok-teammates` | shared | home | Bible sample card: Titus tile → Home → Door43 main: the Bible sample as it is now (the push of its first share) → Door43 main: two teammates change Titus 1:1 from the same version → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the toast of a sync that brought two teammates' changes to Titus 1:1: kindle dot, "Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review", "Changes from: Teammate 1 · Teammate 2", the note on the 5 missing resource versions, Review, Download and the dismiss button; the Bible card shows the chip "1 conflict · Review" and the Titus tile "1 conflict" | complete |
 

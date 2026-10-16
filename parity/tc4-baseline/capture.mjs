@@ -213,8 +213,8 @@ function appDriver({ page, origin, state, door43 }) {
      * the project must be opened first, as tC4's e2e/sync-button.spec.ts opens it before it
      * shares it. Without the journal on Door43, the sync stops at sync.verify-failed. */
     pushToDoor43: (repo) => door43.push(repo),
-    /** Take a shared project's repository off Door43, so a clone of it fails. */
-    removeFromDoor43: (repo) => door43.remove(repo),
+    /** The next clone of a shared project's repository fails to connect, once. */
+    dropNextClone: (repo) => door43.dropNextClone(repo),
     teammatesChangeOneVerse: (repo) => teammatesChangeOneVerse(door43.push(repo)),
     /** Sync with Door43 from the project card: the internet question, then the sign-in. */
     async syncFromHome(repo) {
@@ -805,12 +805,13 @@ const SCREEN_LIST = [
   },
   {
     name: 'sync-failed', scenario: 'shared', view: 'home', modal: null,
-    steps: ['Home', 'Door43: the Bible sample\'s repository is not there', 'Bible sample card: Sync with Door43', 'Turn on internet', `Sign in as ${FAKE_USER.username}`],
-    shows: 'Home with the sync result toast of a sync that did not complete: red dot, "The sync did not complete." and the sentence of code sync.clone-failed, the dismiss button. The clone of Door43 main fails because the repository is not on Door43, as when it was deleted there',
+    steps: ['Home', 'Door43 main: the Bible sample as it is now (the push of its first share)', 'Door43: the connection drops at the next clone of the Bible sample\'s repository', 'Bible sample card: Sync with Door43', 'Turn on internet', `Sign in as ${FAKE_USER.username}`],
+    shows: 'Home with the sync result toast of a sync that did not complete: red dot, "The sync did not complete." and the sentence of code sync.clone-failed, the dismiss button. Door43 has main, so the sync starts, and then the clone of main fails because the connection to git.door43.org drops',
     rebuildDiffers: OBS_SYNCS,
     run: async (app) => {
       await app.home();
-      app.removeFromDoor43(BIBLE);
+      app.pushToDoor43(BIBLE);
+      app.dropNextClone(BIBLE);
       await app.syncFromHome(BIBLE);
       await app.page.locator('[data-testid="sync-result"][data-ok="0"]').waitFor();
     },
@@ -923,7 +924,7 @@ async function captureScenario(browser, scenario, screens, tc4) {
   buildState({ tc4: TC4, out: state, scenario });
   const mock = await startMockServer({ state, client: DIST, port });
   const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1, locale: 'en-US', timezoneId: 'UTC', colorScheme: 'light' });
-  await routeFakeDoor43(context);
+  await routeFakeDoor43(context, { door43: mock.door43 });
   // Nothing else may leave the browser: any other origin is refused and reported.
   const external = new Set();
   await context.route((url) => url.origin !== mock.origin && url.origin !== 'https://git.door43.org', (route) => {

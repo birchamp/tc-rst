@@ -59,12 +59,19 @@ test('every PNG is in the manifest, at its window size and with its byte count',
   assert.equal(t.bytes, manifest.screens.reduce((n, s) => n + s.bytes, 0));
 });
 
-test('the README lists every screen of the manifest in order, with its scenario and status', () => {
+test('the README lists every screen of the manifest in order, with its scenario, view, steps, what it shows and status', () => {
   const rows = screenRows(section(readme, 'The screenshots'));
   assert.deepEqual(rows.map((r) => r.name), manifest.screens.map((s) => s.name));
   for (const { name, cells } of rows) {
-    assert.equal(cells[0], byName.get(name).scenario, `scenario of ${name}`);
-    assert.equal(cells.at(-1), byName.get(name).status, `status of ${name}`);
+    const s = byName.get(name);
+    const [scenario, view, steps, shows, status] = cells;
+    assert.equal(scenario, s.scenario, `scenario of ${name}`);
+    assert.equal(view, s.route.modal ? `${s.route.view} + ${s.route.modal}` : s.route.view, `view of ${name}`);
+    // The column gives the steps after the launch on Home: the manifest's first "Home" is left out.
+    const home = s.steps.indexOf('Home');
+    assert.equal(steps, s.steps.filter((_, i) => i !== home).join(' → '), `steps of ${name}`);
+    assert.equal(shows, s.shows, `what ${name} shows`);
+    assert.equal(status, s.status, `status of ${name}`);
   }
 });
 

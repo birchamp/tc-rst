@@ -1497,12 +1497,13 @@
       },
       "steps": [
         "Home",
-        "Door43: the Bible sample's repository is not there",
+        "Door43 main: the Bible sample as it is now (the push of its first share)",
+        "Door43: the connection drops at the next clone of the Bible sample's repository",
         "Bible sample card: Sync with Door43",
         "Turn on internet",
         "Sign in as facilitator-zq"
       ],
-      "shows": "Home with the sync result toast of a sync that did not complete: red dot, \"The sync did not complete.\" and the sentence of code sync.clone-failed, the dismiss button. The clone of Door43 main fails because the repository is not on Door43, as when it was deleted there",
+      "shows": "Home with the sync result toast of a sync that did not complete: red dot, \"The sync did not complete.\" and the sentence of code sync.clone-failed, the dismiss button. Door43 has main, so the sync starts, and then the clone of main fails because the connection to git.door43.org drops",
       "status": "complete",
       "absentReads": [
         "POST /git/clone-repo/git.door43.org/facilitator-zq/sample_burrito -> 400",
