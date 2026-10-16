@@ -18,12 +18,15 @@
 // machine): a missing file reads "could not read ingredient content: <io error>", a missing
 // repo lists no paths, and so on. tC4 quotes some of these texts on screen.
 //
-// Deliberate simplifications (none of them is visible on the captured screens):
+// Deliberate simplifications. None of them is visible on the captured screens, except the
+// last one:
 //   - no git: add-and-commit records the message in memory and clears the pending set;
 //     /git/status reports the files written since the last commit;
 //   - creation routes (new-text-translation, new-obs-resource, new-scripture-book),
 //     push and the zip imports answer is_good:false: the capture never submits them;
-//   - the gitea catalog answers "offline mode" while the net gate is off and [] when on.
+//   - the gitea catalog answers "offline mode" while the net gate is off and [] when on;
+//   - clone, copy and pull answer is_good:false, so a sync or an open from Door43 ends in
+//     tC4's refusal for a failed clone (the screens sync-failed and open-door43-refused).
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -310,10 +313,27 @@ export function createMockServer({ state, client }) {
     ['POST', '/git/push/', () => (netEnabled // push 527
       ? { json: { is_good: false, reason: 'push is not implemented by the tc4-baseline mock' } }
       : { status: 401, json: { is_good: false, reason: 'offline mode' } })],
+    // The sync transport (#673, #676). There is no git, so a clone fails the way the
+    // platform answers a failed clone, and tC4 shows its refusal for that.
+    ['POST', '/git/clone-repo/', () => (netEnabled // cloneRepo 543
+      ? { status: 400, json: { is_good: false, reason: 'clone is not implemented by the tc4-baseline mock' } }
+      : { status: 401, json: { is_good: false, reason: 'offline mode' } })],
+    ['POST', '/git/copy/', () => ({ status: 400, json: { is_good: false, reason: 'copy is not implemented by the tc4-baseline mock' } })], // copyRepo 552
+    ['GET', '/git/branches/', (rest) => { // listBranches 562
+      mustRepo(takeRepo(rest)[0]);
+      return { json: { is_good: true, payload: { branches: [{ name: 'main', is_head: true }] } } };
+    }],
+    ['POST', '/git/pull-repo/', () => ({ status: 400, json: { is_good: false, reason: 'pull is not implemented by the tc4-baseline mock' } })], // pullRepo 573
     ['POST', '/git/new-text-translation', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 607
     ['POST', '/git/new-obs-resource', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 653
     ['POST', '/git/new-scripture-book/', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 675
-    ['POST', '/git/delete/', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // deleteRepo 343
+    ['POST', '/git/delete/', (rest) => { // deleteRepo 343
+      // pankosmia-web delete_repo.rs: remove_dir_all, and its io error as HTTP 400. tC4 reads
+      // that error as "not there" (serverApi.ts isNotFound), so a sync or an open that clears
+      // a scratch folder goes on. A folder that is there is never deleted here.
+      if (!fs.existsSync(repoDir(takeRepo(rest)[0]))) throw new HttpError(400, `could not delete repo: ${IO_ENOENT}`);
+      return { json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } };
+    }],
     ['GET', '/content-utils/versifications', () => ({ json: VERSIFICATIONS })], // getVersifications 680
     ['GET', '/content-utils/versification/', (rest) => { // getVersification 685
       const name = decodeURIComponent(rest);

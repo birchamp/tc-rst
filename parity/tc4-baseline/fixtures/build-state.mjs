@@ -32,6 +32,8 @@ const arg = (name, fallback) => {
   const at = process.argv.indexOf(name);
   return at > 0 ? path.resolve(process.argv[at + 1]) : fallback;
 };
+/** The owner of the shared samples: the fake Door43 user (mock-server/fake-door43.mjs). */
+const SHARED_OWNER = 'facilitator-zq';
 export const DEFAULT_TC4 = process.env.TC4_ROOT ?? '/home/user/unfoldingword/translationcore4';
 /** The capture keeps one state dir per scenario: .state/<scenario>. */
 export const stateDirFor = (scenario) => path.join(BASELINE, '.state', scenario);
@@ -356,9 +358,21 @@ function pinEnglishObsSuite(projectDir) {
   fs.writeFileSync(file, `${JSON.stringify(doc, null, 2)}\n`);
 }
 
+/**
+ * Scenario `shared`: both samples are shared on Door43, as a first share leaves them. A share
+ * adds the remote `origin` (src/data/share/shareOperation.ts, addRemote), and the mock keeps a
+ * project's remotes in `.remotes.json`. The owner is the fake Door43 user; the repository
+ * name is the one the Share dialog proposes.
+ */
+function shareOnDoor43(projectDir, owner) {
+  const url = `https://git.door43.org/${owner}/${path.basename(projectDir)}.git`;
+  fs.writeFileSync(path.join(projectDir, '.remotes.json'), JSON.stringify([{ name: 'origin', url }]));
+}
+
 export const SCENARIOS = {
   sample: 'the conformance samples exactly as tC4 ships them (es-419 primary set, English fallback)',
   'en-pins': 'both samples pinned to the installed English suite on both rungs (sample_burrito: tC4 J4 journey setup, decision records restated as English; sample_burrito_obs: primary set = its English fallback set)',
+  shared: 'the scenario sample, with both samples shared on Door43 by the fake user (remote origin on git.door43.org)',
 };
 
 export function buildState({ tc4 = DEFAULT_TC4, scenario = 'sample', out = stateDirFor(scenario) } = {}) {
@@ -378,6 +392,9 @@ export function buildState({ tc4 = DEFAULT_TC4, scenario = 'sample', out = state
   if (scenario === 'en-pins') {
     pinEnglishSuite(path.join(repos, '_local_', '_local_', 'sample_burrito'), installed);
     pinEnglishObsSuite(path.join(repos, '_local_', '_local_', 'sample_burrito_obs'));
+  }
+  if (scenario === 'shared') {
+    for (const project of PROJECTS) shareOnDoor43(path.join(repos, '_local_', '_local_', project.dir), SHARED_OWNER);
   }
   fs.mkdirSync(path.join(out, 'client_settings'), { recursive: true });
   fs.writeFileSync(

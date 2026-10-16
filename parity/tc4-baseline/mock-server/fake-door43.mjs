@@ -2,8 +2,9 @@
 // context so no request leaves the machine. A trimmed port of tC4's own e2e fake
 // (e2e/helpers/door43.ts at d494a9d, the same at d310bf3): sign-in with Basic auth, token
 // mint, the user's organizations with their create permission, and the per-language
-// repository count that picks the "Recommended" organization. Repository creation and push
-// are not served.
+// repository count that picks the "Recommended" organization. For the sync screens it also
+// answers that the fake user's repositories have a `main` branch. Repository creation and
+// push are not served.
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -61,6 +62,14 @@ export async function routeFakeDoor43(context, { server = 'https://git.door43.or
     if (route === '/user/orgs') {
       const page = Number(url.searchParams.get('page') ?? 1);
       return { status: 200, body: page > 1 ? [] : organizations.map((o, i) => ({ id: i + 1, username: o.username, full_name: o.fullName ?? '' })) };
+    }
+    // #678: before a sync, Home asks whether Door43 `main` exists (door43Api.ts hasBranch).
+    // Every repository of the fake user is a shared sample with its `main`.
+    const branch = route.match(/^\/repos\/([^/]+)\/([^/]+)\/branches\/([^/]+)$/);
+    if (branch) {
+      return branch[1] === user.username && branch[3] === 'main'
+        ? { status: 200, body: { name: 'main' } }
+        : { status: 404, body: { message: 'branch does not exist' } };
     }
     const permissions = route.match(/^\/users\/([^/]+)\/orgs\/([^/]+)\/permissions$/);
     if (permissions) {

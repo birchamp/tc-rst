@@ -14,7 +14,8 @@
   },
   "scenarios": {
     "sample": "the conformance samples exactly as tC4 ships them (es-419 primary set, English fallback)",
-    "en-pins": "both samples pinned to the installed English suite on both rungs (sample_burrito: tC4 J4 journey setup, decision records restated as English; sample_burrito_obs: primary set = its English fallback set)"
+    "en-pins": "both samples pinned to the installed English suite on both rungs (sample_burrito: tC4 J4 journey setup, decision records restated as English; sample_burrito_obs: primary set = its English fallback set)",
+    "shared": "the scenario sample, with both samples shared on Door43 by the fake user (remote origin on git.door43.org)"
   },
   "resources": [
     {
@@ -108,11 +109,11 @@
   ],
   "refusedExternalRequests": [],
   "totals": {
-    "screens": 42,
-    "complete": 32,
-    "incomplete": 10,
+    "screens": 50,
+    "complete": 38,
+    "incomplete": 12,
     "failed": 0,
-    "bytes": 5827275
+    "bytes": 6651377
   },
   "screens": [
     {
@@ -645,6 +646,72 @@
       "bytes": 80861
     },
     {
+      "name": "open-door43",
+      "file": "screens/open-door43.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "openDoor43"
+      },
+      "steps": [
+        "Home",
+        "+ Add a project",
+        "Open a project from Door43"
+      ],
+      "shows": "Open a project from Door43 dialog, empty: the note \"The project opens from git.door43.org. Only public repositories can be opened.\", Door43 repository, Project name, the note that tC4 checks every file before it adds the project, Cancel / Open project (disabled)",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 103351
+    },
+    {
+      "name": "open-door43-internet-consent",
+      "file": "screens/open-door43-internet-consent.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "netAsk"
+      },
+      "steps": [
+        "Home",
+        "+ Add a project",
+        "Open a project from Door43",
+        "Repository: facilitator-zq/es-419_tit_equipo",
+        "Open project"
+      ],
+      "shows": "\"Turn on the internet?\" asked for an open from Door43 (kind `open`): get a full copy of the project and check its files; nothing from your projects is sent",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 109746
+    },
+    {
+      "name": "open-door43-refused",
+      "file": "screens/open-door43-refused.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "openDoor43"
+      },
+      "steps": [
+        "Home",
+        "+ Add a project",
+        "Open a project from Door43",
+        "Repository: facilitator-zq/es-419_tit_equipo",
+        "Open project",
+        "Turn on internet"
+      ],
+      "shows": "Open a project from Door43 dialog with the refusal callout \"This project cannot be opened.\" for a clone that failed (code sync.clone-failed), \"No project was added.\" and Ask for help",
+      "status": "incomplete",
+      "incomplete": "The mock has no git, so the clone fails: this is tC4's refusal for a failed clone. A successful open needs a git server, as in tC4's own journey J17.",
+      "absentReads": [
+        "POST /git/delete/_local_/_archive_/tc4-open--_local_-s_local_-ses-d419_tit_equipo -> 400",
+        "POST /git/clone-repo/git.door43.org/facilitator-zq/es-419_tit_equipo -> 400"
+      ],
+      "bytes": 119109
+    },
+    {
       "name": "en-understand-tit1",
       "file": "screens/en-understand-tit1.png",
       "scenario": "en-pins",
@@ -975,6 +1042,117 @@
         "GET /burrito/ingredient/raw/_local_/_local_/sample_burrito_obs?ipath=checking/translationNotes/OBS.json -> 400"
       ],
       "bytes": 110657
+    },
+    {
+      "name": "ar-check-tw-session",
+      "file": "screens/ar-check-tw-session.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "locale": "ar",
+      "steps": [
+        "App language: العربية (saved before the launch)",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: مراجعة (Check)",
+        "Translation Words card: Start checking"
+      ],
+      "shows": "en-check-tw-session with the interface in Arabic: the whole chrome right to left, and the marking row \"→ السابق\", the triage buttons, \"التالي ←\", with the arrows turned for right to left",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 143378
+    },
+    {
+      "name": "en-check-tw-session-620",
+      "file": "screens/en-check-tw-session-620.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "viewport": {
+        "width": 620,
+        "height": 800
+      },
+      "steps": [
+        "Window 620 px wide",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Translation Words card: Start checking",
+        "Scroll the marking row into view"
+      ],
+      "shows": "en-check-tw-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines; at this width the project button in the header lies over the mode switch",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 98108
+    },
+    {
+      "name": "shared-home",
+      "file": "screens/shared-home.png",
+      "scenario": "shared",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": null
+      },
+      "steps": [
+        "Launch tC4"
+      ],
+      "shows": "Home with both samples shared on Door43: \"On Door43\" beside each name; the Bible card reads \"Sync with Door43\", the OBS card \"Upload changes\" (tC4 4.0 syncs Bible projects only)",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 72660
+    },
+    {
+      "name": "sync-internet-consent",
+      "file": "screens/sync-internet-consent.png",
+      "scenario": "shared",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": "netAsk"
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Sync with Door43"
+      ],
+      "shows": "\"Turn on the internet?\" asked for a sync (kind `sync`): get the changes of your teammates and send the changes of this project",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 94046
+    },
+    {
+      "name": "sync-failed",
+      "file": "screens/sync-failed.png",
+      "scenario": "shared",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": null
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Sync with Door43",
+        "Turn on internet",
+        "Sign in as facilitator-zq"
+      ],
+      "shows": "Home with the sync result toast of a sync that did not complete: red dot, \"The sync did not complete.\" and the sentence of code sync.clone-failed, the dismiss button",
+      "status": "incomplete",
+      "incomplete": "The mock has no git, so the clone of Door43 main fails: this is tC4's toast for a failed clone. The toast of a sync that completes (the three counts, \"Changes from\", Review and Download) needs a git server with teammates' journals, as in tC4's e2e/sync-button.spec.ts and journey J26.",
+      "absentReads": [
+        "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400",
+        "POST /git/clone-repo/git.door43.org/facilitator-zq/sample_burrito -> 400"
+      ],
+      "bytes": 83704
     }
   ]
 }

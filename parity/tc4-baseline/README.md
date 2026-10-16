@@ -17,14 +17,16 @@ PNG per screen.
   in `history/d494a9d/`.
 - Help pages: tc-website `cdfdf9b7d534e7574beb3fcf44678973cdc5f9d7`, the commit that tC4 pins in
   `scripts/fetch-help.mjs`. The pin is the same at both commits.
-- Output: 42 screenshots, 1280x800 at device scale 1, in `screens/`, 5,827,275 bytes (5.6 MiB) in
-  total. 32 are complete and 10 are incomplete. `manifest.json` lists each screenshot with the
-  steps that reach it.
+- Output: 50 screenshots at device scale 1, in `screens/`, 6,651,377 bytes (6.3 MiB) in total.
+  Each is 1280x800, except `en-check-tw-session-620` at 620x800. 38 are complete and 12 are
+  incomplete. `manifest.json` lists each screenshot with the steps that reach it. The 42
+  screens of the first baseline were captured again; 8 screens were added for `d310bf3`
+  ("Screens added for d310bf3").
 - Browser: Chromium 141.0.7390.37, headless, through Playwright 1.56.1. This Playwright version
   matches the Chromium build 1194 in `/opt/pw-browsers`.
-- Two consecutive full runs at `d310bf3` gave byte-identical PNGs. A control run at `d494a9d` on
-  the same machine gave the committed `d494a9d` PNGs byte for byte, so each change listed below
-  comes from tC4, not from the machine.
+- Two consecutive full runs at `d310bf3` gave byte-identical PNGs, first for the 42 screens and
+  then for all 50. A control run at `d494a9d` on the same machine gave the committed `d494a9d`
+  PNGs byte for byte, so each change listed below comes from tC4, not from the machine.
 
 ## Rerun
 
@@ -49,7 +51,8 @@ npm run capture      # build the client if needed, rebuild the state, capture ev
    `/api/...` and the built client at `/clients/uw-tc4/`.
 4. It drives each screen, writes `screens/<name>.png`, and writes `manifest.json`.
 
-A full run takes about 90 seconds after the first build.
+A full run took about 90 seconds after the first build at `d494a9d`. At `d310bf3`, with 50
+screens on 4 CPUs shared with other work, it took about 2.5 minutes.
 
 Options:
 
@@ -131,11 +134,23 @@ that matter for the screens work against the state directory:
 
 These simplifications do not show on any captured screen:
 
-- There is no git. `/git/add-and-commit` records the message and clears the pending set, and
-  `/git/status` lists the files written since then. `/git/remotes` reads `.remotes.json`.
+- `/git/add-and-commit` records the message and clears the pending set, and `/git/status` lists
+  the files written since then. `/git/remotes` reads `.remotes.json`.
 - The routes that create a project or book, and the push and the zip imports, answer
   `is_good: false`. The capture never submits them.
 - The gitea catalog answers "offline mode" while the net gate is off, and `[]` when it is on.
+
+This one shows on two screens, `open-door43-refused` and `sync-failed`:
+
+- There is no git. `/git/clone-repo` answers "offline mode" (HTTP 401) while the net gate is
+  off, as the platform does, and HTTP 400 when it is on. `/git/copy` and `/git/pull-repo` answer
+  HTTP 400. `/git/branches` lists `main` as the checked-out branch. `/git/delete` of a folder
+  that is not there answers the platform's HTTP 400 `could not delete repo: No such file or
+  directory (os error 2)`, which tC4 reads as "not there". It never deletes a folder that is
+  there. So a sync or an open from Door43 ends in tC4's refusal for a failed clone.
+
+`mock-server/fake-door43.mjs` also answers the check that Home makes before a sync
+(`door43Api.ts` `hasBranch`): each repository of the fake user has a `main` branch.
 
 ### Data: what the mock serves
 
@@ -183,6 +198,7 @@ No copy of these was found, so they are absent:
 |---|---|
 | `sample` | The conformance samples exactly as tC4 ships them. The Bible sample pins an **es-419 primary set** with an English fallback. Its es-419 TWL, tW and tA are absent, so the Translation Words tool reads "Needs downloading". |
 | `en-pins` | Both samples are pinned to the installed English suite on both rungs. This is how tC4 pins a project it creates. For the Bible sample, this is tC4's own J4 journey setup (`e2e/helpers/rig.ts` `writeProjectPins`, plus `restateRecordAsEnglish` for both decision files). For the OBS sample, the primary set becomes a copy of its English fallback set. The change is applied before the project is first opened. |
+| `shared` | The scenario `sample`, with both samples shared on Door43 as a first share leaves them: each has the remote `origin` at `https://git.door43.org/facilitator-zq/<project>.git` (in the mock's `.remotes.json`). The owner is the fake Door43 user. |
 
 Each screen starts from a reload of Home. The per-client settings document is reset to its
 seeded form (install records only) first, so no screen depends on a place that an earlier screen
@@ -192,7 +208,9 @@ remembered. The pointer rests on an empty part of the title bar for every shot.
 
 tC4 has no router: the URL is always `/clients/uw-tc4/`, and a screen is the app state that the
 steps reach. "View" is tC4's `s.view` (`read` is Understand, `draft` is Translate, `publish` is
-Community Checking), plus the dialog or panel over it. Every path starts at Home. "Status" is
+Community Checking), plus the dialog or panel over it. Every path starts at Home. The interface
+is in English, except for `ar-check-tw-session`, where Arabic is saved as the app language
+before the launch. "Status" is
 `complete` when the screen shows what a full install shows. It is `incomplete` when part of the
 screen shows a designed absence state because data is missing; the next section says why, and
 `manifest.json` has the same text (`incomplete`) and the reads that failed (`absentReads`).
@@ -226,6 +244,9 @@ screen shows a designed absence state because data is missing; the next section 
 | `obs-understand` | sample | read | OBS sample card: story tile "1 · La Creación" | OBS Understand, story 1: story rail with the frame grid, one unit per frame with the comment box, helps panel | incomplete |
 | `obs-translate` | sample | draft | OBS sample card: story tile "1 · La Creación" → Mode switch: Translate | OBS Translate, story 1: the gateway-story and picture notices, the title and frames 1-2 drafted in Spanish, "Draft frame N" pills | incomplete |
 | `obs-check-picker` | sample | check | OBS sample card: story tile "1 · La Creación" → Mode switch: Check | OBS Check tool picker: Translation Words and Translation Notes "Needs downloading", Community Checking (no Align for OBS) | incomplete |
+| `open-door43` | sample | home + openDoor43 | + Add a project → Open a project from Door43 | Open a project from Door43 dialog, empty: the note "The project opens from git.door43.org. Only public repositories can be opened.", Door43 repository, Project name, the note that tC4 checks every file before it adds the project, Cancel / Open project (disabled) | complete |
+| `open-door43-internet-consent` | sample | home + netAsk | + Add a project → Open a project from Door43 → Repository: facilitator-zq/es-419_tit_equipo → Open project | "Turn on the internet?" asked for an open from Door43 (kind `open`): get a full copy of the project and check its files; nothing from your projects is sent | complete |
+| `open-door43-refused` | sample | home + openDoor43 | + Add a project → Open a project from Door43 → Repository: facilitator-zq/es-419_tit_equipo → Open project → Turn on internet | Open a project from Door43 dialog with the refusal callout "This project cannot be opened." for a clone that failed (code sync.clone-failed), "No project was added." and Ask for help | incomplete |
 | `en-understand-tit1` | en-pins | read | Bible sample card: Titus tile | Understand, Titus 1, Section view, helps panel on Notes with the English Translation Notes v91 (intro note, abstract-nouns note) | complete |
 | `en-understand-tw-article` | en-pins | read | Bible sample card: Titus tile → Helps tab: Words → Card "of God": Read the article | Understand with the Words tab (Key word cards) and the Translation Words article pane open on "God" (kt/god.md) | complete |
 | `en-understand-questions` | en-pins | read | Bible sample card: Titus tile → Helps tab: Questions | Understand with the Questions tab selected | incomplete |
@@ -241,6 +262,11 @@ screen shows a designed absence state because data is missing; the next section 
 | `en-obs-understand` | en-pins | read | OBS sample card: story tile "1 · La Creación" | OBS Understand, story 1: the English gateway frames with a comment box each, helps panel with the English OBS notes (en_obs-tn v13) | incomplete |
 | `en-obs-translate` | en-pins | draft | OBS sample card: story tile "1 · La Creación" → Mode switch: Translate | OBS Translate, story 1: the English gateway story beside the Spanish title and frames, English OBS helps | incomplete |
 | `en-obs-check-tn-session` | en-pins | check | OBS sample card: story tile "1 · La Creación" → Mode switch: Check → Translation Notes card: Start checking | OBS Translation Notes session, story 1 (sorted By frame), item "The Creation" 1:0: the title note, the English gateway title highlighted, the Spanish title, the marking row with "← Previous" and "Next →" | complete |
+| `ar-check-tw-session` | en-pins | check | App language: العربية (saved before the launch) → Bible sample card: Titus tile → Mode switch: مراجعة (Check) → Translation Words card: Start checking | en-check-tw-session with the interface in Arabic: the whole chrome right to left, and the marking row "→ السابق", the triage buttons, "التالي ←", with the arrows turned for right to left | complete |
+| `en-check-tw-session-620` | en-pins | check | Window 620 px wide → Bible sample card: Titus tile → Mode switch: Check → Translation Words card: Start checking → Scroll the marking row into view | en-check-tw-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines; at this width the project button in the header lies over the mode switch | complete |
+| `shared-home` | shared | home | Launch tC4 | Home with both samples shared on Door43: "On Door43" beside each name; the Bible card reads "Sync with Door43", the OBS card "Upload changes" (tC4 4.0 syncs Bible projects only) | complete |
+| `sync-internet-consent` | shared | home + netAsk | Bible sample card: Sync with Door43 | "Turn on the internet?" asked for a sync (kind `sync`): get the changes of your teammates and send the changes of this project | complete |
+| `sync-failed` | shared | home | Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the sync result toast of a sync that did not complete: red dot, "The sync did not complete." and the sentence of code sync.clone-failed, the dismiss button | incomplete |
 
 ## Incomplete screens and why
 
@@ -265,6 +291,11 @@ that tC4 designed for absent data, so that state is part of the baseline too.
 - **Door43 is faked: `share-dialog` and `share-dialog-check`.** The account `facilitator-zq` and
   the organizations `Equipo-Ejemplo` and `es-419_gl` are invented by `fake-door43.mjs`, and
   nothing is created or pushed.
+- **No git: `open-door43-refused` and `sync-failed`.** The clone of Door43 `main` fails, so the
+  dialog shows tC4's refusal `sync.clone-failed`, and the toast shows "The sync did not
+  complete." with that code's sentence. These are real tC4 states. A successful open and the
+  toast of a completed sync need a git server with teammates' journals. tC4 proves those in its
+  own journeys J17 and J26 and in `e2e/sync-button.spec.ts`.
 
 These are also known differences from a real install. None of them makes a screen incomplete:
 
@@ -311,6 +342,36 @@ Two changes do not show on these screens:
 - `help`: topic pages now swap in place without a white flash (#738). The shot shows the index
   page only.
 
+## Screens added for d310bf3
+
+`docs/TC4-DELTA-2026-10-16.md` §3.14 item 3 asks for new screens. These 8 were added:
+
+| Screen | What it shows | tC4 change |
+|---|---|---|
+| `open-door43` | The Open a project from Door43 dialog, empty. | #692 |
+| `open-door43-internet-consent` | The internet question of an open from Door43 (kind `open`). | #692 |
+| `open-door43-refused` | The dialog's refusal callout, for a clone that failed. | #692 |
+| `ar-check-tw-session` | The Translation Words session with the interface in Arabic. The marking row runs right to left, and its arrows turn. | #745, #739 |
+| `en-check-tw-session-620` | The same session in a window 620 px wide. The marking row wraps. | #745 |
+| `shared-home` | Home with shared projects: the Bible card reads "Sync with Door43", the OBS card "Upload changes". | #690 |
+| `sync-internet-consent` | The internet question of a sync (kind `sync`). | #690 |
+| `sync-failed` | The sync result toast of a sync that did not complete. | #690, #691 |
+
+Already in the 42 screens: Add a project with four cards (`add-project`) and the sign-in step
+with the name notice (`share-signin`).
+
+Not captured here:
+
+- The toast of a sync that completes: "Synced with Door43", the three counts, "Changes from",
+  Review and Download. The mock has no git, so no sync completes. Making one complete needs a
+  git-backed fake Door43 with teammates' journals. tC4 has no committed image of this toast;
+  its `e2e/sync-button.spec.ts` writes screenshots only as test output on its rig.
+- The marking row of Align and of Translation Notes in Arabic and at 620 px. The marking row of
+  Translation Notes is below the fold at 800 px. tC4's own images of these rows are in its
+  `docs/evidence/navigation-pills-2026-10-15/` at `d310bf3`: `align-ar.png`,
+  `align-ar-narrow.png`, `translationNotes-ar.png`, `translationNotes-ar-narrow.png` and their
+  `en` versions.
+
 ## Rendering determinism
 
 `capture.mjs` launches Chromium with `--force-color-profile=srgb --disable-partial-raster
@@ -332,5 +393,6 @@ The run also controls the following:
 `_local_/_local_/` and resources under `_local_/_sideloaded_/`. The install records are in
 `client_settings/uw-tc4.json`. A Rust build can therefore open the same projects and resources and
 render the same screens at 1280x800. For each screen, follow the `steps` in `manifest.json` from
-a fresh state of the same scenario (`npm run state -- --scenario <name>`). The two renderers
-differ, so a comparison needs a tolerance.
+a fresh state of the same scenario (`npm run state -- --scenario <name>`). A screen with a
+`viewport` in the manifest uses that window size, and a screen with a `locale` uses that app
+language. The two renderers differ, so a comparison needs a tolerance.

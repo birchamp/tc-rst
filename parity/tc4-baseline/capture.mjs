@@ -35,6 +35,8 @@ const OBS = '_local_/_local_/sample_burrito_obs';
 /** An empty stretch of the title bar (and the scrim under a dialog): the pointer rests here
  * for every screenshot, so no hover state leaks into an image. */
 const POINTER_REST = { x: 1000, y: 28 };
+/** A Door43 repository that no sample uses, so its default project name is free. */
+const OPEN_REPO = `${FAKE_USER.username}/es-419_tit_equipo`;
 
 /** Rendering flags that keep repeated runs pixel-identical: without them a few rounded
  * edges differ by up to 8/255 between runs (raster tiling). */
@@ -45,6 +47,8 @@ const argValue = (name) => {
   return at > 0 ? process.argv[at + 1] : undefined;
 };
 const only = argValue('--only')?.split(',');
+/** tC4's catalog of one app language, for steps that wait on a text (src/i18n/<locale>.json). */
+const catalog = (locale) => JSON.parse(fs.readFileSync(path.join(TC4, 'src', 'i18n', `${locale}.json`), 'utf8'));
 const port = Number(argValue('--port') ?? process.env.TC4_BASELINE_PORT ?? 19998);
 
 // ---- the tC4 client build ---------------------------------------------------
@@ -121,6 +125,8 @@ async function settle(page, inFlight, quietMs = 800) {
 function appDriver({ page, origin, state }) {
   const settingsFile = path.join(state, 'client_settings', 'uw-tc4.json');
   const pristineSettings = fs.readFileSync(settingsFile);
+  /** The catalog of the app language that home() set: the steps wait on its texts. */
+  let c = catalog('en');
   const card = (repo) => page.getByTestId(`project-${repo}`);
   const tab = async (name, ready) => {
     await page.getByRole('tab', { name, exact: true }).click();
@@ -129,28 +135,33 @@ function appDriver({ page, origin, state }) {
   return {
     page,
     /** Reload Home with the per-client document back to its seeded form (install records
-     * only): no remembered place, no Resume card, no last-used order. */
-    async home() {
-      fs.writeFileSync(settingsFile, pristineSettings);
+     * only): no remembered place, no Resume card, no last-used order. Another `locale` is
+     * saved as the app language first, the way tC4 saves it (`appLocale`, state.jsx
+     * readSavedLocale). */
+    async home({ locale = 'en' } = {}) {
+      c = catalog(locale);
+      fs.writeFileSync(settingsFile, locale === 'en' ? pristineSettings
+        : `${JSON.stringify({ ...JSON.parse(pristineSettings), appLocale: locale }, null, 2)}\n`);
       await page.goto(`${origin}/clients/uw-tc4/`);
       await card(BIBLE).waitFor();
       await card(OBS).waitFor();
+      await page.waitForFunction((lang) => document.documentElement.lang === lang, locale);
     },
     card,
     tab,
     async openTitus() {
       await card(BIBLE).getByRole('button', { name: /Titus/ }).click();
       await page.getByTestId('understand').waitFor();
-      await page.getByText('Loading the passage and its helps…').first().waitFor({ state: 'hidden' });
+      await page.getByText(c['understand.loading']).first().waitFor({ state: 'hidden' });
     },
     async openStory1() {
       await card(OBS).getByTestId('story-tile-1').click();
       await page.getByTestId('helps-panel').waitFor();
     },
     async openCheck() {
-      await tab('Check');
-      await page.getByRole('heading', { name: 'Choose a checking tool' }).waitFor();
-      await page.getByText('Checking what is available…').waitFor({ state: 'hidden' });
+      await tab(c['nav.check']);
+      await page.getByRole('heading', { name: c['check.title'] }).waitFor();
+      await page.getByText(c['check.checking']).waitFor({ state: 'hidden' });
     },
     async openAlign() {
       await page.getByTestId('open-align').click();
@@ -161,6 +172,13 @@ function appDriver({ page, origin, state }) {
       await page.getByTestId(`open-${id}`).click();
       await page.getByTestId('check-session').waitFor();
       await page.getByTestId('check-quote').waitFor();
+    },
+    /** Sign in as the fake Door43 user in the sign-in step that is open. */
+    async signIn() {
+      await page.getByTestId('share-signin').waitFor();
+      await page.getByLabel('Door43 username or email').fill(FAKE_USER.username);
+      await page.getByLabel('Password', { exact: true }).fill(FAKE_USER.password);
+      await page.getByTestId('signin-submit').click();
     },
     /** Turn the internet on from the account menu (D95: every launch starts off). */
     async internetOn() {
@@ -178,7 +196,9 @@ function appDriver({ page, origin, state }) {
 // (tC4's s.view: home | read | draft | check | publish; read = Understand, draft =
 // Translate), modal (what is layered over the view), steps (what a person does, in tC4's
 // own words), shows, incomplete (why the screen cannot show what a full install shows,
-// when that is so), and run (the same steps, driven).
+// when that is so), and run (the same steps, driven). Optional: locale (the app language,
+// which run passes to home(); English by default) and viewport (another window size than
+// 1280x800).
 
 const SCREEN_LIST = [
   // -------- scenario: sample (the conformance samples as tC4 ships them) --------
@@ -441,6 +461,44 @@ const SCREEN_LIST = [
     incomplete: 'Both helps tools read "Needs downloading": es-419_obs-twl / es-419_obs-tn are not vendored (see en-obs-check-tn-session for a ready session).',
     run: async (app) => { await app.home(); await app.openStory1(); await app.openCheck(); },
   },
+  {
+    name: 'open-door43', scenario: 'sample', view: 'home', modal: 'openDoor43',
+    steps: ['Home', '+ Add a project', 'Open a project from Door43'],
+    shows: 'Open a project from Door43 dialog, empty: the note "The project opens from git.door43.org. Only public repositories can be opened.", Door43 repository, Project name, the note that tC4 checks every file before it adds the project, Cancel / Open project (disabled)',
+    run: async (app) => {
+      await app.home(); await app.page.getByTestId('add-project').click();
+      await app.page.getByText('Open a project from Door43', { exact: true }).click();
+      await app.page.getByTestId('open-door43-modal').waitFor();
+    },
+  },
+  {
+    name: 'open-door43-internet-consent', scenario: 'sample', view: 'home', modal: 'netAsk',
+    steps: ['Home', '+ Add a project', 'Open a project from Door43', `Repository: ${OPEN_REPO}`, 'Open project'],
+    shows: '"Turn on the internet?" asked for an open from Door43 (kind `open`): get a full copy of the project and check its files; nothing from your projects is sent',
+    run: async (app) => {
+      const { page } = app;
+      await app.home(); await page.getByTestId('add-project').click();
+      await page.getByText('Open a project from Door43', { exact: true }).click();
+      await page.getByTestId('open-door43-repo').fill(OPEN_REPO);
+      await page.getByTestId('open-door43-submit').click();
+      await page.locator('[data-testid="net-ask"][data-kind="open"]').waitFor();
+    },
+  },
+  {
+    name: 'open-door43-refused', scenario: 'sample', view: 'home', modal: 'openDoor43',
+    steps: ['Home', '+ Add a project', 'Open a project from Door43', `Repository: ${OPEN_REPO}`, 'Open project', 'Turn on internet'],
+    shows: 'Open a project from Door43 dialog with the refusal callout "This project cannot be opened." for a clone that failed (code sync.clone-failed), "No project was added." and Ask for help',
+    incomplete: 'The mock has no git, so the clone fails: this is tC4\'s refusal for a failed clone. A successful open needs a git server, as in tC4\'s own journey J17.',
+    run: async (app) => {
+      const { page } = app;
+      await app.home(); await page.getByTestId('add-project').click();
+      await page.getByText('Open a project from Door43', { exact: true }).click();
+      await page.getByTestId('open-door43-repo').fill(OPEN_REPO);
+      await page.getByTestId('open-door43-submit').click();
+      await page.getByTestId('net-confirm').click();
+      await page.getByTestId('open-door43-refused').waitFor();
+    },
+  },
 
   // -------- scenario: en-pins (the installed English suite pinned, as tC4 pins a new project) --------
   {
@@ -583,6 +641,52 @@ const SCREEN_LIST = [
     shows: 'OBS Translation Notes session, story 1 (sorted By frame), item "The Creation" 1:0: the title note, the English gateway title highlighted, the Spanish title, the marking row with "← Previous" and "Next →"',
     run: async (app) => { await app.home(); await app.openStory1(); await app.openCheck(); await app.openTool('translationNotes'); },
   },
+  {
+    name: 'ar-check-tw-session', scenario: 'en-pins', view: 'check', modal: null, locale: 'ar',
+    steps: ['App language: العربية (saved before the launch)', 'Home', 'Bible sample card: Titus tile', 'Mode switch: مراجعة (Check)', 'Translation Words card: Start checking'],
+    shows: 'en-check-tw-session with the interface in Arabic: the whole chrome right to left, and the marking row "→ السابق", the triage buttons, "التالي ←", with the arrows turned for right to left',
+    run: async (app) => { await app.home({ locale: 'ar' }); await app.openTitus(); await app.openCheck(); await app.openTool('translationWords'); },
+  },
+  {
+    name: 'en-check-tw-session-620', scenario: 'en-pins', view: 'check', modal: null, viewport: { width: 620, height: 800 },
+    steps: ['Window 620 px wide', 'Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Translation Words card: Start checking', 'Scroll the marking row into view'],
+    shows: 'en-check-tw-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines; at this width the project button in the header lies over the mode switch',
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.openCheck(); await app.openTool('translationWords');
+      await app.page.getByTestId('check-next').scrollIntoViewIfNeeded();
+    },
+  },
+  // -------- scenario: shared (both samples shared on Door43) --------
+  {
+    name: 'shared-home', scenario: 'shared', view: 'home', modal: null,
+    steps: ['Launch tC4'],
+    shows: 'Home with both samples shared on Door43: "On Door43" beside each name; the Bible card reads "Sync with Door43", the OBS card "Upload changes" (tC4 4.0 syncs Bible projects only)',
+    run: async (app) => { await app.home(); await app.page.getByTestId(`share-card-${BIBLE}`).and(app.page.locator('[data-action="sync"]')).waitFor(); },
+  },
+  {
+    name: 'sync-internet-consent', scenario: 'shared', view: 'home', modal: 'netAsk',
+    steps: ['Home', 'Bible sample card: Sync with Door43'],
+    shows: '"Turn on the internet?" asked for a sync (kind `sync`): get the changes of your teammates and send the changes of this project',
+    run: async (app) => {
+      await app.home();
+      await app.page.getByTestId(`share-${BIBLE}`).click();
+      await app.page.locator('[data-testid="net-ask"][data-kind="sync"]').waitFor();
+    },
+  },
+  {
+    name: 'sync-failed', scenario: 'shared', view: 'home', modal: null,
+    steps: ['Home', 'Bible sample card: Sync with Door43', 'Turn on internet', `Sign in as ${FAKE_USER.username}`],
+    shows: 'Home with the sync result toast of a sync that did not complete: red dot, "The sync did not complete." and the sentence of code sync.clone-failed, the dismiss button',
+    incomplete: 'The mock has no git, so the clone of Door43 main fails: this is tC4\'s toast for a failed clone. The toast of a sync that completes (the three counts, "Changes from", Review and Download) needs a git server with teammates\' journals, as in tC4\'s e2e/sync-button.spec.ts and journey J26.',
+    run: async (app) => {
+      const { page } = app;
+      await app.home();
+      await page.getByTestId(`share-${BIBLE}`).click();
+      await page.getByTestId('net-confirm').click();
+      await app.signIn();
+      await page.locator('[data-testid="sync-result"][data-ok="0"]').waitFor();
+    },
+  },
 ];
 
 // ---- the run ---------------------------------------------------------------
@@ -625,6 +729,9 @@ async function captureScenario(browser, scenario, screens, tc4) {
     const firstRequest = mock.requests.length;
     pageErrors.length = 0;
     process.stdout.write(`  ${screen.name} ... `);
+    const size = screen.viewport ?? VIEWPORT;
+    const now = page.viewportSize();
+    if (now.width !== size.width || now.height !== size.height) await page.setViewportSize(size);
     let error = null;
     try {
       await screen.run(app);
@@ -647,6 +754,8 @@ async function captureScenario(browser, scenario, screens, tc4) {
       scenario,
       // tC4 has no router: the URL never changes, and the screen is the app state below.
       route: { url: '/clients/uw-tc4/', view: screen.view, modal: screen.modal },
+      ...(screen.locale ? { locale: screen.locale } : {}),
+      ...(screen.viewport ? { viewport: screen.viewport } : {}),
       steps: screen.steps,
       shows: screen.shows,
       status: error ? 'failed' : screen.incomplete ? 'incomplete' : 'complete',
