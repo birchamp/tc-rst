@@ -10,6 +10,7 @@ use common::{aquifer_pin, aquifer_zip, fixture, install_fixture, repo_path};
 use tc_core::{BookId, Reference};
 use tc_helps::metadata::HelpsSource;
 use tc_helps::{CheckBlocker as ItemBlocker, CheckReadiness, HelpsPart, ObsRef, Occurrence};
+use tc_resources::resolve::{missing_pin_count, unsatisfied_pin_for};
 use tc_resources::{
     AquiferHelps, GatewayLanguage, HelpsChoice, LanguageSet, Missing, PaneId, PartStatus,
     ProjectPins, ResourcePin, ResourceStore, Rung, ScripturePane, SetSlot, TextRole, TextStatus,
@@ -251,6 +252,33 @@ fn a_book_loads_each_part_from_its_rung_and_states_what_is_missing() {
         Some(TextStatus::Missing(Missing::NotInstalled(_)))
     ));
     assert_eq!(loaded.texts.len(), 4);
+}
+
+#[test]
+fn the_store_answers_which_pinned_versions_this_computer_lacks() {
+    let (_dir, store) = store();
+    let en = install_fixtures(&store);
+    let pins = project(&en);
+    let installed = |pin: &ResourcePin| store.has_dcs(pin);
+    // Not installed: the fallback's questions and simplified Bible, both original-language
+    // texts and the UST pane. The two lexicons are not installed either, and not counted.
+    assert!(pins.lexicon.nt.as_ref().is_some_and(|p| !store.has_dcs(p)));
+    assert_eq!(missing_pin_count(&pins, &installed), 5);
+    let ust = &pins.extra_scripture[1].pin;
+    let fallback_ust = pins
+        .fallback
+        .as_ref()
+        .unwrap()
+        .pin(SetSlot::SimplifiedText)
+        .unwrap();
+    assert_eq!(
+        unsatisfied_pin_for(&pins, ust.repo.repo(), &installed),
+        Some(fallback_ust)
+    );
+    assert_eq!(
+        unsatisfied_pin_for(&pins, en.ult.repo.repo(), &installed),
+        None
+    );
 }
 
 #[test]

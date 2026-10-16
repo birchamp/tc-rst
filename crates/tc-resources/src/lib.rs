@@ -11,7 +11,9 @@
 //!   [`suite`] holds the bundled English pins; [`gateway_change`] counts what a change of
 //!   gateway language would cost before it is made.
 //! - **Resolution.** [`resolve`] ports the D30 ladder: which rung answers a (tool, book),
-//!   and what opening it requires (ready, fetch, unavailable, unpinned, not covered).
+//!   and what opening it requires (ready, fetch, unavailable, unpinned, not covered). It
+//!   also counts the pinned versions this computer lacks, and names the one a download of
+//!   a repository must fetch.
 //! - **Store.** [`ResourceStore`] keeps installed resources by source, owner, repository
 //!   and commit, each installed atomically and never modified after, with a receipt that
 //!   lets it be verified. A bundled store seeds a first run that is offline.
