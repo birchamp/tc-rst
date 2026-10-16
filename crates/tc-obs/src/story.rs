@@ -356,8 +356,13 @@ pub fn frame_text_problem(text: &str) -> Option<TextProblem> {
 }
 
 /// Why `text` cannot be a title (tC4 `titleTextError`, `journal/story.mjs:60-64`).
+///
+/// tC4 accepts a title holding U+2028 or U+2029 and writes it, and its reader then refuses
+/// the file, since a title line is `.*` and JavaScript's `.` stops at those characters:
+/// the whole story could no longer be read. Here such a title is not one line, so the
+/// write is refused and the story stays readable.
 pub fn title_text_problem(text: &str) -> Option<TextProblem> {
-    if text.contains(['\r', '\n']) {
+    if text.contains(['\r', '\n', '\u{2028}', '\u{2029}']) {
         Some(TextProblem::NotOneLine)
     } else if text != trim(text) {
         Some(TextProblem::OuterWhitespace)

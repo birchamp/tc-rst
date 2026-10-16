@@ -25,7 +25,7 @@ use tc_obs::story::{
     seed_story, title_text_problem, write_frame, write_reference, write_title,
 };
 use tc_obs::template::with_localized_names;
-use tc_obs::{FrameNo, StoryError, WriteError};
+use tc_obs::{FrameNo, StoryError, TextProblem, WriteError};
 
 fn vectors() -> &'static Value {
     static V: OnceLock<Value> = OnceLock::new();
@@ -181,15 +181,34 @@ fn run(text: &str, op: &Value) -> Option<Result<String, WriteError>> {
     })
 }
 
-fn check_ops(text: &str, ops: &[Value], label: &str) -> (usize, usize) {
-    let (mut checked, mut skipped) = (0, 0);
+/// A title write whose title holds U+2028 or U+2029 and no other line break.
+fn separator_title(op: &Value) -> bool {
+    let is_title = op["op"] == "title" || (op["op"] == "frame" && op["args"][0] == 0);
+    let title = op["args"]
+        .as_array()
+        .unwrap()
+        .last()
+        .unwrap()
+        .as_str()
+        .unwrap_or_default();
+    is_title && title.contains(['\u{2028}', '\u{2029}']) && !title.contains(['\r', '\n'])
+}
+
+/// The ops checked, and of them the titles tC4 writes and then cannot read back.
+#[derive(Default)]
+struct Checked {
+    ops: usize,
+    unreadable_titles: usize,
+}
+
+fn check_ops(text: &str, ops: &[Value], label: &str, checked: &mut Checked) {
     for op in ops {
         let Some(ours) = run(text, op) else {
             let error = op["error"].as_str().unwrap();
             assert!(error.contains("frame"), "{label}: {op}");
-            skipped += 1;
             continue;
         };
+        checked.ops += 1;
         match ours {
             Ok(out) => {
                 if let Some(expected) = op.get("text") {
@@ -206,6 +225,17 @@ fn check_ops(text: &str, ops: &[Value], label: &str) -> (usize, usize) {
                     );
                 }
             }
+            Err(WriteError::TitleText(TextProblem::NotOneLine)) if separator_title(op) => {
+                // tC4 writes a title holding a line separator, and its reader then refuses
+                // the story; tc-obs refuses the title instead. Where tC4 refused the write
+                // for another reason, both refuse.
+                if let Some(written) = op["text"].as_str() {
+                    assert!(parse_story(written).is_err(), "{label}: {op}");
+                }
+                if op["error"].is_null() {
+                    checked.unreadable_titles += 1;
+                }
+            }
             Err(error) => {
                 let theirs = op["error"]
                     .as_str()
@@ -216,31 +246,39 @@ fn check_ops(text: &str, ops: &[Value], label: &str) -> (usize, usize) {
                 );
             }
         }
-        checked += 1;
     }
-    (checked, skipped)
 }
 
 #[test]
 fn the_writers_give_tc4s_bytes_and_refusals() {
     let v = vectors();
     let parse_cases = v["parse"]["cases"].as_array().unwrap();
-    let mut checked = 0;
+    let mut checked = Checked::default();
     for case in v["writes"]["cases"].as_array().unwrap() {
         let source = &parse_cases[case["case"].as_u64().unwrap() as usize];
-        let (n, _) = check_ops(
+        check_ops(
             source["text"].as_str().unwrap(),
             case["ops"].as_array().unwrap(),
             source["name"].as_str().unwrap(),
+            &mut checked,
         );
-        checked += n;
     }
     for case in v["writes"]["fixtures"].as_array().unwrap() {
         let label = format!("{} {}", case["set"], case["n"]);
-        let (n, _) = check_ops(fixture_story(case), case["ops"].as_array().unwrap(), &label);
-        checked += n;
+        check_ops(
+            fixture_story(case),
+            case["ops"].as_array().unwrap(),
+            &label,
+            &mut checked,
+        );
     }
-    assert!(checked > 3500, "{checked}");
+    assert!(checked.ops > 3500, "{}", checked.ops);
+    // The one place tc-obs departs from tC4.
+    assert!(
+        (1..100).contains(&checked.unreadable_titles),
+        "{}",
+        checked.unreadable_titles
+    );
 }
 
 #[test]
@@ -253,11 +291,13 @@ fn the_text_rules_are_tc4s() {
             case["frame"].as_str(),
             "frame {input:?}"
         );
-        assert_eq!(
-            text(title_text_problem(input)).as_deref(),
-            case["title"].as_str(),
-            "title {input:?}"
-        );
+        // Titles with a line separator: see `the_writers_give_tc4s_bytes_and_refusals`.
+        let title = if input.contains(['\u{2028}', '\u{2029}']) && !input.contains(['\r', '\n']) {
+            Some(TextProblem::NotOneLine.to_string())
+        } else {
+            case["title"].as_str().map(str::to_owned)
+        };
+        assert_eq!(text(title_text_problem(input)), title, "title {input:?}");
         assert_eq!(
             text(reference_text_problem(input)).as_deref(),
             case["ref"].as_str(),
