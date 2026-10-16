@@ -118,16 +118,39 @@ test('the screens named as changed or added are in the manifest, and each change
   for (const { name } of added) assert.ok(!old.screens.some((s) => s.name === name), `${name} was already in the d494a9d baseline`);
 });
 
-test('the sync result toast is captured for a failed sync and for an ok sync with every part', () => {
+test('every part of the sync result toast is captured (tC4 SyncResult.jsx)', () => {
   const toasts = manifest.screens.filter((s) => s.syncToast).map((s) => ({ name: s.name, status: s.status, ...s.syncToast }));
-  const failed = toasts.find((t) => !t.ok);
-  assert.ok(failed?.code, 'no screen shows the toast of a sync that did not complete, with its code');
-  const plain = toasts.find((t) => t.ok && t.received === 0 && t.verseConflicts === 0);
-  assert.ok(plain, 'no screen shows the toast of an ok sync with no change from teammates');
-  const full = toasts.find((t) => t.ok && t.received > 0 && t.verseConflicts > 0 && t.from && t.missingPins > 0);
-  assert.ok(full, 'no screen shows an ok toast with teammates\' changes, a verse conflict, "Changes from" and the missing-versions note');
-  assert.deepEqual(full.links, ['review', 'download'], `${full.name} does not show both Review and Download`);
-  for (const t of [failed, plain, full]) assert.equal(t.status, 'complete', `${t.name} is not complete`);
+  const failed = toasts.find((t) => !t.ok && t.code);
+  assert.ok(failed, 'no screen shows the toast of a sync that did not complete, with its code');
+  assert.equal(failed.status, 'complete', `${failed.name} is not complete`);
+  const ok = toasts.filter((t) => t.ok);
+  const parts = {
+    'the count line with no change from teammates': (t) => t.received === 0 && t.verseConflicts === 0,
+    'teammates\' changes with "Changes from"': (t) => t.received > 0 && t.from,
+    'a verse conflict with Review': (t) => t.verseConflicts > 0 && t.links.includes('review'),
+    'the note on missing resource versions with Download': (t) => t.missingPins > 0 && t.links.includes('download'),
+  };
+  for (const [part, shows] of Object.entries(parts)) assert.ok(ok.some(shows), `no screen shows ${part}`);
+});
+
+test('a toast that counts missing resource versions is on an incomplete screen that names them', () => {
+  // Complete means what a full install shows, and a full install has every pinned version,
+  // so it counts none. The capture lists the versions by tC4's own rule (missingPinCount).
+  const counted = manifest.screens.filter((s) => s.syncToast?.missingPins > 0);
+  assert.ok(counted.length > 0, 'no screen shows the note on missing resource versions');
+  const absent = flat(manifest.absentResources.join(' '));
+  const incompleteSection = section(readme, 'Incomplete screens and why');
+  for (const s of counted) {
+    const { missingPins, missingVersions } = s.syncToast;
+    assert.equal(missingVersions?.length, missingPins, `${s.name} counts ${missingPins} versions, but the manifest lists ${JSON.stringify(missingVersions)}`);
+    assert.equal(s.status, 'incomplete', `${s.name} counts versions that the mock lacks, so it is not what a full install shows`);
+    for (const version of missingVersions) {
+      const named = version.split('/').at(-1); // "es-419_twl v18"
+      assert.ok(absent.includes(named), `${named}, which ${s.name} counts, is not listed as absent`);
+      assert.ok(s.incomplete.includes(named), `the reason ${s.name} is incomplete does not name ${named}`);
+    }
+    assert.ok(incompleteSection.includes(`\`${s.name}\``), `"Incomplete screens and why" does not name ${s.name}`);
+  }
 });
 
 test('every screen where a shared OBS card reads "Upload changes" cites Q2', () => {

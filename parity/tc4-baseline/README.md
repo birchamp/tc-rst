@@ -18,8 +18,8 @@ PNG per screen.
 - Help pages: tc-website `cdfdf9b7d534e7574beb3fcf44678973cdc5f9d7`, the commit that tC4 pins in
   `scripts/fetch-help.mjs`. The pin is the same at both commits.
 - Output: 61 screenshots at device scale 1, in `screens/`, 7,998,133 bytes (7.6 MiB) in total.
-  Each is 1280x800, except the six screens whose name ends in `-620`, which are 620x800. 51 are
-  complete and 10 are incomplete. `manifest.json` lists each screenshot with the steps that
+  Each is 1280x800, except the six screens whose name ends in `-620`, which are 620x800. 49 are
+  complete and 12 are incomplete. `manifest.json` lists each screenshot with the steps that
   reach it. The 42 screens of the first baseline were captured again; 19 screens were added for
   `d310bf3` ("Screens added for d310bf3").
 - Browser: Chromium 141.0.7390.37, headless, through Playwright 1.56.1. This Playwright version
@@ -73,16 +73,21 @@ npm run check        # or, from the repository root: node --test parity/tc4-base
 The check needs no browser, no tC4 checkout and no network, and CI runs it. It fails when a
 screenshot is not in `manifest.json` or has the wrong size, when a cell of this README's screen
 table or a total differs from the manifest, or when the README does not record the tC4 commit.
-It fails when a tool's marking row lacks a screen in English or Arabic at 1280 or 620 px. It
-fails unless complete screens show the sync result toast of a failed sync, of an ok sync, and of an
-ok sync with teammates' changes, "Changes from", the note on missing versions, Review and
-Download. It fails when "Where the
-rebuild differs on purpose" differs from the manifest's `rebuildDiffers` notes or cites a
-ruling that `docs/PLAN.md` does not list, and when a screen shows a shared OBS card with
-"Upload changes" but does not cite Q2. The toast and the cards are read from the DOM at each
-shot (`syncToast` and `homeCards` in `manifest.json`). The check also starts the mock server
-and drives its sync routes and the fake Door43's branch check (`mock-server/server.test.mjs`).
-Run it after every capture.
+It fails when a tool's marking row lacks a screen in English or Arabic at 1280 or 620 px.
+
+It fails unless the screens show every part of the sync result toast: a failed sync with its
+code, an ok sync with no change, "Changes from", a verse conflict with Review, and the note on
+missing versions with Download. A screen whose toast counts missing versions must be
+incomplete, and its reason must name each version. The capture lists those versions by tC4's
+own rule (`missingPinCount` in `src/data/installed.ts`).
+
+It fails when "Where the rebuild differs on purpose" differs from the manifest's
+`rebuildDiffers` notes or cites a ruling that `docs/PLAN.md` does not list, and when a screen
+shows a shared OBS card with "Upload changes" but does not cite Q2. The toast and the cards are
+read from the DOM at each shot (`syncToast` and `homeCards` in `manifest.json`).
+
+The check also starts the mock server and drives its sync routes and the fake Door43's branch
+check (`mock-server/server.test.mjs`). Run it after every capture.
 
 ### Capture another tC4 commit
 
@@ -233,7 +238,8 @@ No copy of these was found, so they are absent:
 - es-419_twl v18, es-419_tw v37 and es-419_ta v4 (the primary set of the Bible sample)
 - es-419_obs v2, es-419_obs-tn v2 and es-419_obs-twl v2 (the primary set of the OBS sample)
 - en_obs v9 stories 2-50, and the picture pack uW/obs_images_360
-- the lexicons en_ugl and en_uhl, and hbo_uhb (no captured screen reads them)
+- the lexicons en_ugl and en_uhl, and hbo_uhb (no captured screen reads them, but the sync
+  toasts count hbo_uhb v3.0.0 as a missing version)
 - helps for Jonah, the Bible sample's second book
 - en_ta `translate/figs-inclusive`, which es-419_tn v66 names; en_ta v86 and v88 do not have it
 
@@ -321,8 +327,8 @@ screen shows a designed absence state because data is missing; the next section 
 | `shared-home` | shared | home | Launch tC4 | Home with both samples shared on Door43: "On Door43" beside each name; the Bible card reads "Sync with Door43", the OBS card "Upload changes" (tC4 4.0 syncs Bible projects only) | complete |
 | `sync-internet-consent` | shared | home + netAsk | Bible sample card: Sync with Door43 | "Turn on the internet?" asked for a sync (kind `sync`): get the changes of your teammates and send the changes of this project. Behind the scrim, the OBS card reads "Upload changes" | complete |
 | `sync-failed` | shared | home | Door43 main: the Bible sample as it is now (the push of its first share) → Door43: the connection drops at the next clone of the Bible sample's repository → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the sync result toast of a sync that did not complete: red dot, "The sync did not complete." and the sentence of code sync.clone-failed, the dismiss button. Door43 has main, so the sync starts, and then the clone of main fails because the connection to git.door43.org drops | complete |
-| `sync-ok` | shared | home | Bible sample card: Titus tile → Home → Door43 main: the Bible sample as it is now (the push of its first share) → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the toast of a sync that completed with no change from teammates: kindle dot, "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review", the note "This project now uses 5 resource versions that are not on this computer.", Download and the dismiss button | complete |
-| `sync-ok-teammates` | shared | home | Bible sample card: Titus tile → Home → Door43 main: the Bible sample as it is now (the push of its first share) → Door43 main: two teammates change Titus 1:1 from the same version → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the toast of a sync that brought two teammates' changes to Titus 1:1: kindle dot, "Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review", "Changes from: Teammate 1 · Teammate 2", the note on the 5 missing resource versions, Review, Download and the dismiss button; the Bible card shows the chip "1 conflict · Review" and the Titus tile "1 conflict" | complete |
+| `sync-ok` | shared | home | Bible sample card: Titus tile → Home → Door43 main: the Bible sample as it is now (the push of its first share) → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the toast of a sync that completed with no change from teammates: kindle dot, "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review", the note "This project now uses 5 resource versions that are not on this computer.", Download and the dismiss button | incomplete |
+| `sync-ok-teammates` | shared | home | Bible sample card: Titus tile → Home → Door43 main: the Bible sample as it is now (the push of its first share) → Door43 main: two teammates change Titus 1:1 from the same version → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the toast of a sync that brought two teammates' changes to Titus 1:1: kindle dot, "Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review", "Changes from: Teammate 1 · Teammate 2", the note on the 5 missing resource versions, Review, Download and the dismiss button; the Bible card shows the chip "1 conflict · Review" and the Titus tile "1 conflict" | incomplete |
 
 ## Incomplete screens and why
 
@@ -347,6 +353,13 @@ that tC4 designed for absent data, so that state is part of the baseline too.
 - **Door43 is faked: `share-dialog` and `share-dialog-check`.** The account `facilitator-zq` and
   the organizations `Equipo-Ejemplo` and `es-419_gl` are invented by `fake-door43.mjs`, and
   nothing is created or pushed.
+- **Missing resource versions: `sync-ok` and `sync-ok-teammates`.** The toast's note counts
+  the 5 versions that the Bible sample pins and the mock lacks: es-419_twl v18, es-419_tw v37,
+  es-419_ta v4, en_tq v91 and hbo_uhb v3.0.0. `syncToast.missingVersions` lists them, by tC4's
+  own rule. With every pinned version on the computer, the toast shows no such note and no
+  Download, and the dot of `sync-ok` is green. tC4's desktop package ships en_tq v91 and
+  hbo_uhb v3.0.0 (`scripts/package-desktop.zsh`), so a packaged install that also holds the
+  mock's resources counts 3.
 
 These are also known differences from a real install. None of them makes a screen incomplete:
 

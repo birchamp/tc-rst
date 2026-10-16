@@ -41,6 +41,9 @@ const OPEN_REPO = `${FAKE_USER.username}/es-419_tit_equipo`;
 const TEAMMATES = ['b678teammate0001', 'c678teammate0002'];
 /** The owner ruling under which every shared OBS card differs: tC4 reads "Upload changes" there. */
 const OBS_SYNCS = { ruling: 'Q2', rebuild: 'The OBS card reads "Sync with Door43", like the Bible card: the rebuild syncs OBS projects too.' };
+/** Why an ok sync toast is incomplete: its note counts pinned versions that the mock lacks.
+ * The manifest lists them (`syncToast.missingVersions`), by tC4's own rule. */
+const MISSING_VERSIONS = 'The note on missing resource versions counts the 5 versions that the Bible sample pins and the mock does not have: es-419_twl v18, es-419_tw v37, es-419_ta v4, en_tq v91 and hbo_uhb v3.0.0. With every pinned version on the computer, the toast shows no such note and no Download.';
 
 /** Rendering flags that keep repeated runs pixel-identical: without them a few rounded
  * edges differ by up to 8/255 between runs (raster tiling). */
@@ -98,6 +101,32 @@ function buildClient(commit) {
   execFileSync('npx', ['vite', 'build', '--outDir', DIST, '--emptyOutDir'], { cwd: TC4, stdio: out() });
   fs.writeFileSync(stampFile, `${JSON.stringify({ commit, helpPages })}\n`);
   return helpPages;
+}
+
+/** tC4's own count for the toast's note on missing resource versions
+ * (src/data/installed.ts `missingPinCount`), bundled with tC4's esbuild. */
+async function tc4MissingPinCount() {
+  const out = path.join(HERE, '.cache', 'tc4-installed.mjs');
+  execFileSync(path.join(TC4, 'node_modules', '.bin', 'esbuild'),
+    [path.join(TC4, 'src', 'data', 'installed.ts'), '--bundle', '--format=esm', '--platform=node', `--outfile=${out}`, '--log-level=warning']);
+  return (await import(pathToFileURL(out).href)).missingPinCount;
+}
+
+/** The pinned versions of the project at `repo` that the note counts: each pin that
+ * `missingPinCount` counts on its own, over the install records in `state`. */
+function missingVersionsOf(missingPinCount, state, repo) {
+  const json = (...parts) => JSON.parse(fs.readFileSync(path.join(state, ...parts), 'utf8'));
+  const pins = json('repos', ...repo.split('/'), 'ingredients', 'checking', 'resources.json');
+  const installed = json('client_settings', 'uw-tc4.json').installedResources;
+  // the pins missingPinCount reads, in its order
+  const all = [
+    ...Object.values(pins.languageSets ?? {}).flatMap((set) => Object.values(set ?? {})),
+    ...Object.values(pins.resources?.originalLanguage ?? {}),
+    ...(pins.extraScripture ?? []),
+  ];
+  const missing = all.filter((pin) => missingPinCount({ extraScripture: [pin] }, installed) === 1);
+  if (missing.length !== missingPinCount(pins, installed)) throw new Error(`the missing pins of ${repo} do not add up to tC4's count`);
+  return missing.map((pin) => `${pin.repoPath} ${pin.version}`);
 }
 
 // ---- driving the app ---------------------------------------------------------
@@ -820,6 +849,7 @@ const SCREEN_LIST = [
     name: 'sync-ok', scenario: 'shared', view: 'home', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Home', 'Door43 main: the Bible sample as it is now (the push of its first share)', 'Bible sample card: Sync with Door43', 'Turn on internet', `Sign in as ${FAKE_USER.username}`],
     shows: 'Home with the toast of a sync that completed with no change from teammates: kindle dot, "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review", the note "This project now uses 5 resource versions that are not on this computer.", Download and the dismiss button',
+    incomplete: `${MISSING_VERSIONS} Its dot is then green.`,
     rebuildDiffers: OBS_SYNCS,
     run: async (app) => {
       await app.home(); await app.openTitus(); await app.home();
@@ -832,6 +862,7 @@ const SCREEN_LIST = [
     name: 'sync-ok-teammates', scenario: 'shared', view: 'home', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Home', 'Door43 main: the Bible sample as it is now (the push of its first share)', 'Door43 main: two teammates change Titus 1:1 from the same version', 'Bible sample card: Sync with Door43', 'Turn on internet', `Sign in as ${FAKE_USER.username}`],
     shows: 'Home with the toast of a sync that brought two teammates\' changes to Titus 1:1: kindle dot, "Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review", "Changes from: Teammate 1 · Teammate 2", the note on the 5 missing resource versions, Review, Download and the dismiss button; the Bible card shows the chip "1 conflict · Review" and the Titus tile "1 conflict"',
+    incomplete: MISSING_VERSIONS,
     rebuildDiffers: OBS_SYNCS,
     run: async (app) => {
       await app.home(); await app.openTitus(); await app.home();
@@ -919,7 +950,7 @@ function compactReads(reads) {
   }).flat();
 }
 
-async function captureScenario(browser, scenario, screens, tc4) {
+async function captureScenario(browser, scenario, screens, missingPinCount) {
   const state = path.join(HERE, '.state', scenario);
   buildState({ tc4: TC4, out: state, scenario });
   const mock = await startMockServer({ state, client: DIST, port });
@@ -957,6 +988,8 @@ async function captureScenario(browser, scenario, screens, tc4) {
     const file = path.join(SCREENS, `${screen.name}.png`);
     await page.screenshot({ path: file, animations: 'disabled' });
     const { homeCards, syncToast } = await observe(page);
+    // tC4 4.0 syncs Bible projects only, so every sync result is the Bible sample's.
+    if (syncToast?.ok) syncToast.missingVersions = missingVersionsOf(missingPinCount, state, BIBLE);
     // Sorted: concurrent reads finish in a different order from run to run.
     const absent = compactReads([...new Set(mock.requests.slice(firstRequest)
       .filter((r) => r.status >= 400 && !/checking(\/|%2F)journal/.test(`${r.path}${r.query}`))
@@ -995,6 +1028,7 @@ async function main() {
   console.log(`tC4 ${tc4.version} at ${tc4.commit}${tc4.dirty ? ' (working tree has local changes)' : ''}`);
   const helpPages = buildClient(tc4.commit);
   if (process.argv.includes('--build-only')) return;
+  const missingPinCount = await tc4MissingPinCount();
   fs.mkdirSync(SCREENS, { recursive: true });
   const selected = SCREEN_LIST.filter((s) => !only || only.includes(s.name));
   const browser = await chromium.launch({ args: CHROMIUM_ARGS });
@@ -1004,7 +1038,7 @@ async function main() {
     const list = selected.filter((s) => s.scenario === scenario);
     if (!list.length) continue;
     console.log(`scenario ${scenario}: ${SCENARIOS[scenario]}`);
-    const { results, external } = await captureScenario(browser, scenario, list, tc4);
+    const { results, external } = await captureScenario(browser, scenario, list, missingPinCount);
     screens.push(...results);
     refused.push(...external);
   }

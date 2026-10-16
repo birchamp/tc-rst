@@ -204,7 +204,7 @@ export const ABSENT = [
   'git.door43.org/es-419_gl/es-419_obs v2, es-419_obs-tn v2, es-419_obs-twl v2 (primary set of sample_burrito_obs)',
   'git.door43.org/unfoldingWord/en_obs v9: stories 2-50 (only story 1 is served)',
   'git.door43.org/uW/obs_images_360 (the OBS pictures)',
-  'git.door43.org/unfoldingWord/en_ugl v0.5 and hbo_uhb v3.0.0 / en_uhl (no captured screen reads them)',
+  'git.door43.org/unfoldingWord/en_ugl v0.5 and hbo_uhb v3.0.0 / en_uhl (no captured screen reads them; the sync toasts count hbo_uhb v3.0.0 as a missing version)',
   'every resource is a Titus slice: Jonah, the Bible sample\'s second book, has no helps, and only the tW and tA articles that the Titus helps link are served',
   'en_ta translate/figs-inclusive, which es-419_tn v66 names; en_ta v86 and v88 do not carry it either',
 ];

@@ -103,15 +103,15 @@
     "git.door43.org/es-419_gl/es-419_obs v2, es-419_obs-tn v2, es-419_obs-twl v2 (primary set of sample_burrito_obs)",
     "git.door43.org/unfoldingWord/en_obs v9: stories 2-50 (only story 1 is served)",
     "git.door43.org/uW/obs_images_360 (the OBS pictures)",
-    "git.door43.org/unfoldingWord/en_ugl v0.5 and hbo_uhb v3.0.0 / en_uhl (no captured screen reads them)",
+    "git.door43.org/unfoldingWord/en_ugl v0.5 and hbo_uhb v3.0.0 / en_uhl (no captured screen reads them; the sync toasts count hbo_uhb v3.0.0 as a missing version)",
     "every resource is a Titus slice: Jonah, the Bible sample's second book, has no helps, and only the tW and tA articles that the Titus helps link are served",
     "en_ta translate/figs-inclusive, which es-419_tn v66 names; en_ta v86 and v88 do not carry it either"
   ],
   "refusedExternalRequests": [],
   "totals": {
     "screens": 61,
-    "complete": 51,
-    "incomplete": 10,
+    "complete": 49,
+    "incomplete": 12,
     "failed": 0,
     "bytes": 7998133
   },
@@ -1539,6 +1539,13 @@
         "missingPins": 5,
         "links": [
           "download"
+        ],
+        "missingVersions": [
+          "git.door43.org/es-419_gl/es-419_twl v18",
+          "git.door43.org/es-419_gl/es-419_tw v37",
+          "git.door43.org/es-419_gl/es-419_ta v4",
+          "git.door43.org/unfoldingWord/en_tq v91",
+          "git.door43.org/unfoldingWord/hbo_uhb v3.0.0"
         ]
       },
       "steps": [
@@ -1551,7 +1558,8 @@
         "Sign in as facilitator-zq"
       ],
       "shows": "Home with the toast of a sync that completed with no change from teammates: kindle dot, \"Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review\", the note \"This project now uses 5 resource versions that are not on this computer.\", Download and the dismiss button",
-      "status": "complete",
+      "status": "incomplete",
+      "incomplete": "The note on missing resource versions counts the 5 versions that the Bible sample pins and the mock does not have: es-419_twl v18, es-419_tw v37, es-419_ta v4, en_tq v91 and hbo_uhb v3.0.0. With every pinned version on the computer, the toast shows no such note and no Download. Its dot is then green.",
       "absentReads": [
         "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400"
       ],
@@ -1586,6 +1594,13 @@
         "links": [
           "review",
           "download"
+        ],
+        "missingVersions": [
+          "git.door43.org/es-419_gl/es-419_twl v18",
+          "git.door43.org/es-419_gl/es-419_tw v37",
+          "git.door43.org/es-419_gl/es-419_ta v4",
+          "git.door43.org/unfoldingWord/en_tq v91",
+          "git.door43.org/unfoldingWord/hbo_uhb v3.0.0"
         ]
       },
       "steps": [
@@ -1599,7 +1614,8 @@
         "Sign in as facilitator-zq"
       ],
       "shows": "Home with the toast of a sync that brought two teammates' changes to Titus 1:1: kindle dot, \"Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review\", \"Changes from: Teammate 1 · Teammate 2\", the note on the 5 missing resource versions, Review, Download and the dismiss button; the Bible card shows the chip \"1 conflict · Review\" and the Titus tile \"1 conflict\"",
-      "status": "complete",
+      "status": "incomplete",
+      "incomplete": "The note on missing resource versions counts the 5 versions that the Bible sample pins and the mock does not have: es-419_twl v18, es-419_tw v37, es-419_ta v4, en_tq v91 and hbo_uhb v3.0.0. With every pinned version on the computer, the toast shows no such note and no Download.",
       "absentReads": [
         "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400"
       ],
