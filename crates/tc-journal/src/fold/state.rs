@@ -362,7 +362,7 @@ pub struct FoldState {
     pub(crate) anomalies: im::OrdSet<Anomaly>,
     pub(crate) detached: im::OrdSet<RecordKey>,
     /// Conflict counts by book and kind order.
-    pub(crate) counts: BTreeMap<(Option<BookId>, u8), u32>,
+    pub(crate) counts: super::ConflictCounts,
     /// Anchor (book, chapter, verse) → the verses whose projected text holds it.
     pub(crate) anchors: CowMap<(BookId, u16, u16), BTreeSet<(u16, u16)>>,
     pub(crate) pins: Arc<super::attach::PinsView>,
@@ -373,6 +373,9 @@ pub struct FoldState {
     pub(crate) resources: Resources,
     /// Reads the values the fold does not keep in memory.
     pub(crate) source: Option<Arc<dyn ValueSource>>,
+    /// Records decoded ahead for one rendering (see [`FoldState::render_book`]); `None` in
+    /// the state itself.
+    pub(crate) records: Option<Arc<super::cow::FxMap<ChangeIdx, Arc<Record>>>>,
     pub(crate) counters: Arc<CounterCells>,
 }
 
@@ -417,6 +420,7 @@ impl FoldState {
             case_moves: Arc::new(BTreeMap::new()),
             resources: Resources::default(),
             source: None,
+            records: None,
             counters: Arc::new(CounterCells::default()),
         }
     }

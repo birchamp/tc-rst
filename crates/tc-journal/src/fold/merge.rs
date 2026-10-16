@@ -92,6 +92,21 @@ pub(crate) fn value_of(state: &FoldState, c: ChangeIdx) -> Option<Json> {
 
 /// The record of a change, decoded from its stored bytes.
 pub(crate) fn record_of(state: &FoldState, c: ChangeIdx) -> Option<Record> {
+    if let Some(record) = state.records.as_ref().and_then(|r| r.get(&c)) {
+        return Some((**record).clone());
+    }
+    decode_record(state, c)
+}
+
+/// [`record_of`] shared: a record decoded ahead is not copied.
+pub(crate) fn record_arc(state: &FoldState, c: ChangeIdx) -> Option<Arc<Record>> {
+    if let Some(record) = state.records.as_ref().and_then(|r| r.get(&c)) {
+        return Some(record.clone());
+    }
+    decode_record(state, c).map(Arc::new)
+}
+
+fn decode_record(state: &FoldState, c: ChangeIdx) -> Option<Record> {
     state.count(super::Counter::ValuesDecoded, 1);
     super::meta::decode(&state.bytes(c)?).map(|body| body.record)
 }

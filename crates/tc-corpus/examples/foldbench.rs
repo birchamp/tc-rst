@@ -82,6 +82,20 @@ fn cpu_ns() -> u64 {
         .unwrap_or(0)
 }
 
+/// CPU time of the whole process, user and system, in ms (10 ms resolution).
+fn process_cpu_ms() -> u64 {
+    let stat = std::fs::read_to_string("/proc/self/stat").unwrap_or_default();
+    let rest = stat.rsplit(')').next().unwrap_or("");
+    let field = |n: usize| -> u64 {
+        rest.split_whitespace()
+            .nth(n)
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0)
+    };
+    // utime and stime, in clock ticks of 10 ms.
+    (field(11) + field(12)) * 10
+}
+
 fn minflt() -> u64 {
     let stat = std::fs::read_to_string("/proc/self/stat").unwrap_or_default();
     let rest = stat.rsplit(')').next().unwrap_or("");
@@ -520,20 +534,14 @@ fn run(args: &[String]) {
     }
     resolve.report();
 
-    let mut scratch = Stats::new("Conflict list and counts from scratch (every record)");
+    let mut scratch =
+        Stats::new("Conflict list and counts from scratch (every record's conflict built again)");
     for _ in 0..20 {
         let t = Instant::now();
-        let mut n = 0usize;
-        for key in state.record_keys() {
-            if let Some(ks) = state.key_state(&key)
-                && matches!(ks.state, tc_journal::fold::Resolved::Conflict(_))
-            {
-                n += 1;
-            }
-        }
-        let list: Vec<_> = state.conflicts().cloned().collect();
-        std::hint::black_box((n, list));
+        let (list, counts) = state.conflicts_rebuilt();
         scratch.times.push(t.elapsed());
+        assert_eq!(list.len(), state.conflict_count());
+        assert_eq!(&counts, state.conflict_counts());
     }
     scratch.report();
 
@@ -547,10 +555,13 @@ fn run(args: &[String]) {
     let mut chapter = Stats::new("One Psalms chapter's USFM");
     let mut files = 0;
     let mut bytes = 0;
+    let mut cpu = Vec::new();
     for run in 0..projection_runs {
         let t = Instant::now();
+        let c = process_cpu_ms();
         let rendered = state.render_book(BookId::Psalms);
         projection.times.push(t.elapsed());
+        cpu.push(process_cpu_ms() - c);
         files = rendered.len();
         bytes = rendered.iter().map(|(_, b)| b.len()).sum::<usize>();
         let t = Instant::now();
@@ -563,7 +574,20 @@ fn run(args: &[String]) {
     projection.report();
     usfm.report();
     chapter.report();
-    println!("Psalms: {files} files, {bytes} bytes");
+    cpu.sort_unstable();
+    println!(
+        "Psalms: {files} files, {bytes} bytes; CPU time of a projection, all threads: median {} ms",
+        cpu[cpu.len() / 2]
+    );
+    // To compare the bytes of two builds: FOLDBENCH_DUMP=DIR writes every file of Psalms.
+    if let Ok(dump) = std::env::var("FOLDBENCH_DUMP") {
+        let dump = PathBuf::from(dump);
+        for (file, bytes) in state.render_book(BookId::Psalms) {
+            let path = dump.join(file.path());
+            std::fs::create_dir_all(path.parent().expect("a parent")).expect("dir");
+            std::fs::write(path, bytes).expect("write");
+        }
+    }
     let mut snapshot = Stats::new("Snapshot (clone of the fold)");
     for _ in 0..20 {
         let t = Instant::now();

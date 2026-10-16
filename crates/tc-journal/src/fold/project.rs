@@ -6,7 +6,7 @@
 
 use super::attach::{self, ShownVerse, runs};
 use super::books::rewound_batches;
-use super::merge::{ancestors_or_self, record_of};
+use super::merge::{ancestors_or_self, record_arc, record_of};
 use super::meta::{ChangeIdx, KeyIdx, Shape, VerseShape};
 use super::state::{FoldState, Projected};
 use super::{Conflict, ConflictKind, Counter};
@@ -20,6 +20,7 @@ use crate::record::{
 };
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 use tc_core::BookId;
 use tc_usfm::codec::{self, BookParts, ChapterParts, VersePart, VerseText};
 
@@ -150,6 +151,39 @@ fn compact(v: &Value) -> String {
     serde_json::to_string(v).unwrap_or_default()
 }
 
+/// `work` applied to every item on up to four threads, the results in item order.
+fn on_threads<T: Sync, R: Send>(items: &[T], work: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    let threads = 4.min(items.len()).max(1);
+    if threads == 1 {
+        return items.iter().map(&work).collect();
+    }
+    let work = &work;
+    let mut slots: Vec<Option<R>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..threads)
+            .map(|t| {
+                scope.spawn(move || {
+                    items
+                        .iter()
+                        .enumerate()
+                        .skip(t)
+                        .step_by(threads)
+                        .map(|(i, item)| (i, work(item)))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        let mut slots: Vec<Option<R>> = (0..items.len()).map(|_| None).collect();
+        for handle in handles {
+            // A thread that panicked leaves its slots empty; the work never panics.
+            for (i, r) in handle.join().unwrap_or_default() {
+                slots[i] = Some(r);
+            }
+        }
+        slots
+    });
+    slots.drain(..).flatten().collect()
+}
+
 fn pretty(v: &Value) -> Vec<u8> {
     let mut out = serde_json::to_string_pretty(v)
         .unwrap_or_default()
@@ -230,11 +264,15 @@ fn verse_text(record: &Record) -> Option<VerseText> {
 
 impl FoldState {
     fn projected_record(&self, k: KeyIdx) -> Option<Record> {
+        self.projected_arc(k).map(Arc::unwrap_or_clone)
+    }
+
+    fn projected_arc(&self, k: KeyIdx) -> Option<Arc<Record>> {
         self.count(Counter::RecordsProjected, 1);
         match &self.entry(k).projected {
             Projected::Nothing => None,
-            Projected::Change(c) => record_of(self, *c),
-            Projected::Merged(record) => Some((**record).clone()),
+            Projected::Change(c) => record_arc(self, *c),
+            Projected::Merged(record) => Some(record.clone()),
         }
     }
 
@@ -289,11 +327,11 @@ impl FoldState {
                     let record = match &s {
                         ShownVerse::Change(_, c) => {
                             self.count(Counter::RecordsProjected, 1);
-                            record_of(self, *c)
+                            record_arc(self, *c)
                         }
-                        ShownVerse::Merged(_, record) => Some((**record).clone()),
+                        ShownVerse::Merged(_, record) => Some(record.clone()),
                     };
-                    if let Some(text) = record.as_ref().and_then(verse_text) {
+                    if let Some(text) = record.as_deref().and_then(verse_text) {
                         out.verses.insert(verse, VersePart::Text(text));
                     }
                 }
@@ -497,41 +535,61 @@ impl FoldState {
     }
 
     /// Every derived file of one book the projection holds, with its bytes: what
-    /// materializing a book writes (§5.10). The files share the book's text and render on
-    /// up to four threads, so a book costs about as much as its largest file.
+    /// materializing a book writes (§5.10). The book's records are read and decoded once,
+    /// on up to four threads, and its files share the book's text and render on up to four
+    /// threads.
     pub fn render_book(&self, book: BookId) -> Vec<(DerivedFile, Vec<u8>)> {
         let files: Vec<DerivedFile> = self
             .derived_files()
             .into_iter()
             .filter(|f| f.book() == Some(book))
             .collect();
+        if files.is_empty() {
+            return Vec::new();
+        }
+        let view = self.with_records_of(book);
+        let view = &view;
         let text = std::sync::OnceLock::new();
-        if self.book(book).projects() {
-            let _ = text.set(self.book_text(book));
+        if view.book(book).projects() {
+            let _ = text.set(view.book_text(book));
         }
         let text = &text;
-        let mut out: Vec<(DerivedFile, Vec<u8>)> = std::thread::scope(|scope| {
-            let threads = 4.min(files.len()).max(1);
-            let handles: Vec<_> = (0..threads)
-                .map(|t| {
-                    let files = &files;
-                    scope.spawn(move || {
-                        files
-                            .iter()
-                            .skip(t)
-                            .step_by(threads)
-                            .filter_map(|f| self.render_with(f, text).map(|b| (f.clone(), b)))
-                            .collect::<Vec<_>>()
-                    })
-                })
-                .collect();
-            handles
-                .into_iter()
-                .flat_map(|h| h.join().unwrap_or_default())
-                .collect()
-        });
+        let mut out: Vec<(DerivedFile, Vec<u8>)> = on_threads(&files, |f| {
+            view.render_with(f, text).map(|b| (f.clone(), b))
+        })
+        .into_iter()
+        .flatten()
+        .collect();
         out.sort_by(|a, b| a.0.cmp(&b.0));
         out
+    }
+
+    /// A snapshot of this state holding every projected record of `book` decoded, so the
+    /// files of the book read each value once.
+    fn with_records_of(&self, book: BookId) -> FoldState {
+        let changes: Vec<ChangeIdx> = self
+            .books
+            .get(&book)
+            .map(|b| {
+                b.keys
+                    .iter()
+                    .filter_map(|k| match &self.entry(*k).projected {
+                        Projected::Change(c) => Some(*c),
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let chunks: Vec<&[ChangeIdx]> = changes.chunks(256).collect();
+        let decoded = on_threads(&chunks, |chunk| {
+            chunk
+                .iter()
+                .filter_map(|c| Some((*c, record_arc(self, *c)?)))
+                .collect::<Vec<_>>()
+        });
+        let mut view = self.clone();
+        view.records = Some(Arc::new(decoded.into_iter().flatten().collect()));
+        view
     }
 
     fn render_with(
@@ -574,8 +632,8 @@ impl FoldState {
         let text = text_of(book);
         let ol_sha = self.pins.original_sha(book);
         // (chapter, label) → record; placed records first.
-        let mut placed: BTreeMap<(u16, u16, u16), Value> = BTreeMap::new();
-        let mut fallback: Vec<((u16, u16), Value)> = Vec::new();
+        let mut placed: BTreeMap<(u16, u16, u16), String> = BTreeMap::new();
+        let mut fallback: Vec<((u16, u16), String)> = Vec::new();
         let mut taken: BTreeSet<(u16, u16)> = BTreeSet::new();
         let keys: Vec<KeyIdx> = self
             .books
@@ -596,7 +654,10 @@ impl FoldState {
                 continue;
             };
             let (c, v) = (c.get(), v.get());
-            let Some(Record::Alignment { value, .. }) = self.projected_record(k) else {
+            let Some(record) = self.projected_arc(k) else {
+                continue;
+            };
+            let Record::Alignment { value, .. } = &*record else {
                 continue;
             };
             let (place, _) = attach::place(self, book, (c, v));
@@ -620,31 +681,31 @@ impl FoldState {
                         && value.source.as_ref().is_none_or(|s| Some(s.sha) == ol_sha)
                         && !value.marked_invalid;
                     taken.insert((rc, rv));
-                    let mut record = alignment_record(&value, !valid);
+                    let mut record = alignment_record(value, !valid);
                     if (rc, rv) != (c, v) {
                         add_anchor(&mut record, c, v);
                     }
                     if value.span_end.get() != label_end {
                         add_span_end(&mut record, value.span_end.get());
                     }
-                    placed.insert((rc, rv, label_end), record);
+                    placed.insert((rc, rv, label_end), record.finish());
                 }
                 _ => {
-                    let mut record = alignment_record(&value, true);
+                    let mut record = alignment_record(value, true);
                     if value.span_end.get() != v {
                         add_span_end(&mut record, value.span_end.get());
                     }
-                    fallback.push(((c, v), record));
+                    fallback.push(((c, v), record.finish()));
                 }
             }
         }
         let mut chapters: BTreeMap<u16, Vec<(u16, String)>> = BTreeMap::new();
         for ((c, v, end), record) in placed {
             let label = codec::label(v, end.max(v));
-            chapters.entry(c).or_default().push((
-                v,
-                format!("{}:{}", compact(&Value::from(label)), compact(&record)),
-            ));
+            chapters
+                .entry(c)
+                .or_default()
+                .push((v, format!("{}:{record}", compact(&Value::from(label)))));
         }
         for ((c, v), record) in fallback {
             // A record whose own label another record holds stays in the journal and in
@@ -654,11 +715,7 @@ impl FoldState {
             }
             chapters.entry(c).or_default().push((
                 v,
-                format!(
-                    "{}:{}",
-                    compact(&Value::from(v.to_string())),
-                    compact(&record)
-                ),
+                format!("{}:{record}", compact(&Value::from(v.to_string()))),
             ));
         }
         let head = format!(
@@ -699,13 +756,14 @@ impl FoldState {
         let text = text_of(book);
         let resolution = self.pins.resolution(tool, book);
         let resolved = resolution.as_ref().map(|r| r.0.clone());
-        let mut records: Vec<(String, String)> = Vec::new();
-        let mut verses: BTreeMap<(String, String), VerseFacts> = BTreeMap::new();
         let keys: Vec<KeyIdx> = self
             .books
             .get(&book)
             .map(|b| b.keys.clone())
             .unwrap_or_default();
+        // The tool's decisions, by target verse, so the decisions of one verse share its
+        // text and derivations (tN and TWL hold several per verse).
+        let mut decisions: Vec<Targeted<'_>> = Vec::new();
         for k in keys {
             let RecordKey::Check(check) = &self.entry(k).key else {
                 continue;
@@ -713,35 +771,50 @@ impl FoldState {
             if check.tool != tool {
                 continue;
             }
-            let Some(Record::Check {
-                value: CheckValue::Decision(decision),
-                ..
-            }) = self.projected_record(k)
-            else {
+            let Some(record) = self.projected_arc(k) else {
                 continue;
             };
-            let newest = self
-                .entry(k)
-                .heads
-                .iter()
-                .map(|h| self.meta(*h).at)
-                .max()
-                .unwrap_or(WallTime(0));
             let target = match &check.target {
-                CheckTarget::Verse { chapter, verse, .. } => {
-                    (chapter.as_str().to_owned(), verse.as_str().to_owned())
-                }
-                CheckTarget::Frame { .. } => (String::new(), String::new()),
+                CheckTarget::Verse { chapter, verse, .. } => (chapter.as_str(), verse.as_str()),
+                CheckTarget::Frame { .. } => ("", ""),
             };
-            // Decisions of one verse share its text and derivations (tN and TWL hold
-            // several per verse).
-            let facts = verses
-                .entry(target)
-                .or_insert_with(|| VerseFacts::of(target_text(text, check)));
-            let record = decision_record(&decision, check, resolved.as_ref(), facts, newest);
-            let context = compact(&value(&Json::Obj(decision.context.clone())));
-            records.push((context, compact(&record)));
+            decisions.push((target, k, record));
         }
+        decisions.sort_by_key(|(target, k, _)| (*target, *k));
+        // Rendered in chunks on several threads: a book holds thousands of decisions.
+        let chunks: Vec<&[Targeted<'_>]> = decisions.chunks(512).collect();
+        let rendered = on_threads(&chunks, |chunk| {
+            let mut out: Vec<(String, String)> = Vec::with_capacity(chunk.len());
+            let mut verse: Option<((&str, &str), VerseFacts)> = None;
+            for (target, k, record) in chunk.iter() {
+                let Record::Check {
+                    key: check,
+                    value: CheckValue::Decision(decision),
+                } = &**record
+                else {
+                    continue;
+                };
+                let newest = self
+                    .entry(*k)
+                    .heads
+                    .iter()
+                    .map(|h| self.meta(*h).at)
+                    .max()
+                    .unwrap_or(WallTime(0));
+                if verse.as_ref().is_none_or(|(t, _)| t != target) {
+                    verse = Some((*target, VerseFacts::of(target_text(text, check))));
+                }
+                let Some((_, facts)) = &verse else {
+                    continue;
+                };
+                let record = decision_record(decision, check, resolved.as_ref(), facts, newest);
+                let mut context = String::new();
+                write_map(&decision.context, &mut context);
+                out.push((context, record.finish()));
+            }
+            out
+        });
+        let mut records: Vec<(String, String)> = rendered.into_iter().flatten().collect();
         records.sort();
         let mut head = Map::new();
         head.insert("schemaVersion".into(), Value::from(1));
@@ -788,7 +861,10 @@ impl FoldState {
             let RecordKey::Comment(id) = &self.entry(k).key else {
                 continue;
             };
-            let Some(Record::Comment { value: comment, .. }) = self.projected_record(k) else {
+            let Some(record) = self.projected_arc(k) else {
+                continue;
+            };
+            let Record::Comment { value: comment, .. } = &*record else {
                 continue;
             };
             let head = match &self.entry(k).projected {
@@ -1040,7 +1116,9 @@ fn check_verse(check: &CheckKey) -> Option<(u16, u16)> {
     }
 }
 
-/// The text a decision's target names: the runs covering its verse or span.
+/// A decision's record with its key and the (chapter, verse) its target names.
+type Targeted<'a> = ((&'a str, &'a str), KeyIdx, Arc<Record>);
+
 /// What the decisions of one check target read of its verse text (§7.7).
 pub(crate) struct VerseFacts {
     content: String,
@@ -1060,6 +1138,7 @@ impl VerseFacts {
     }
 }
 
+/// The text a decision's target names: the runs covering its verse or span.
 fn target_text(text: &BookText, check: &CheckKey) -> String {
     let CheckTarget::Verse { chapter, verse, .. } = &check.target else {
         return String::new();
@@ -1090,108 +1169,176 @@ fn target_text(text: &BookText, check: &CheckKey) -> String {
         .join("")
 }
 
-fn source_word(w: &SourceWord) -> Value {
-    let mut m = Map::new();
+/// A JSON object written as a preserve-order `serde_json::Map` serializes compactly:
+/// members in the order their keys were first set; a key set again keeps its place and
+/// takes the new value. Records render through it without building a `Value` tree.
+pub(crate) struct Obj<'a> {
+    members: Vec<(&'a str, std::ops::Range<usize>)>,
+    values: String,
+}
+
+impl<'a> Obj<'a> {
+    pub(crate) fn new() -> Self {
+        Self {
+            members: Vec::with_capacity(16),
+            values: String::with_capacity(256),
+        }
+    }
+
+    /// Sets `key` to the JSON text `write` appends.
+    fn raw(&mut self, key: &'a str, write: impl FnOnce(&mut String)) {
+        let start = self.values.len();
+        write(&mut self.values);
+        let range = start..self.values.len();
+        match self.members.iter_mut().find(|(k, _)| *k == key) {
+            Some(member) => member.1 = range,
+            None => self.members.push((key, range)),
+        }
+    }
+
+    fn str(&mut self, key: &'a str, value: &str) {
+        self.raw(key, |out| crate::json::write_string(value, out));
+    }
+
+    fn bool(&mut self, key: &'a str, value: bool) {
+        self.raw(key, |out| {
+            out.push_str(if value { "true" } else { "false" })
+        });
+    }
+
+    fn int(&mut self, key: &'a str, value: impl std::fmt::Display) {
+        use std::fmt::Write as _;
+        self.raw(key, |out| {
+            let _ = write!(out, "{value}");
+        });
+    }
+
+    fn json(&mut self, key: &'a str, value: &Json) {
+        self.raw(key, |out| value.write_str(out));
+    }
+
+    /// Sets every member of `extra`, the stored fields a newer minor added.
+    fn extra(&mut self, extra: &'a crate::json::JsonMap) {
+        for (k, v) in extra {
+            self.json(k, v);
+        }
+    }
+
+    fn write(&self, out: &mut String) {
+        out.push('{');
+        for (i, (key, range)) in self.members.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            crate::json::write_string(key, out);
+            out.push(':');
+            out.push_str(&self.values[range.clone()]);
+        }
+        out.push('}');
+    }
+
+    pub(crate) fn finish(&self) -> String {
+        let mut out = String::with_capacity(self.values.len() + 16 * self.members.len());
+        self.write(&mut out);
+        out
+    }
+}
+
+/// A canonical object (sorted keys) as compact JSON, as serde_json writes it.
+fn write_map(map: &crate::json::JsonMap, out: &mut String) {
+    Json::Obj(map.clone()).write_str(out);
+}
+
+/// Appends a JSON array of `items`, each written by `write`.
+fn write_array<T>(out: &mut String, items: &[T], mut write: impl FnMut(&T, &mut String)) {
+    out.push('[');
+    for (i, item) in items.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        write(item, out);
+    }
+    out.push(']');
+}
+
+fn source_word(w: &SourceWord, out: &mut String) {
+    let mut m = Obj::new();
     if let Some(s) = &w.strong {
-        m.insert("strong".into(), Value::from(s.as_str()));
+        m.str("strong", s.as_str());
     }
     if let Some(s) = &w.lemma {
-        m.insert("lemma".into(), Value::from(s.as_str()));
+        m.str("lemma", s.as_str());
     }
     if let Some(s) = &w.morph {
-        m.insert("morph".into(), Value::from(s.as_str()));
+        m.str("morph", s.as_str());
     }
-    m.insert("occurrence".into(), Value::from(w.occurrence));
-    m.insert("occurrences".into(), Value::from(w.occurrences));
-    m.insert("word".into(), Value::from(w.word.as_str()));
-    for (k, v) in &w.extra {
-        m.insert(k.clone(), value(v));
-    }
-    Value::Object(m)
+    m.int("occurrence", w.occurrence);
+    m.int("occurrences", w.occurrences);
+    m.str("word", w.word.as_str());
+    m.extra(&w.extra);
+    m.write(out);
 }
 
-fn target_word(w: &TargetWord) -> Value {
-    let mut m = Map::new();
-    m.insert("occurrence".into(), Value::from(w.occurrence));
-    m.insert("occurrences".into(), Value::from(w.occurrences));
-    m.insert("word".into(), Value::from(w.word.as_str()));
-    for (k, v) in &w.extra {
-        m.insert(k.clone(), value(v));
-    }
-    Value::Object(m)
+fn target_word(w: &TargetWord, out: &mut String) {
+    let mut m = Obj::new();
+    m.int("occurrence", w.occurrence);
+    m.int("occurrences", w.occurrences);
+    m.str("word", w.word.as_str());
+    m.extra(&w.extra);
+    m.write(out);
 }
 
-fn group(g: &AlignmentGroup) -> Value {
-    let mut m = Map::new();
-    m.insert(
-        "topWords".into(),
-        Value::Array(g.top_words.iter().map(source_word).collect()),
-    );
-    m.insert(
-        "bottomWords".into(),
-        Value::Array(g.bottom_words.iter().map(target_word).collect()),
-    );
-    for (k, v) in &g.extra {
-        m.insert(k.clone(), value(v));
-    }
-    Value::Object(m)
+fn group(g: &AlignmentGroup, out: &mut String) {
+    let mut m = Obj::new();
+    m.raw("topWords", |o| write_array(o, &g.top_words, source_word));
+    m.raw("bottomWords", |o| {
+        write_array(o, &g.bottom_words, target_word)
+    });
+    m.extra(&g.extra);
+    m.write(out);
 }
 
 /// A tC4 §5.1 alignment record with `invalid` computed and every stored field kept.
-pub(crate) fn alignment_record(a: &AlignmentValue, invalid: bool) -> Value {
-    let mut m = Map::new();
-    m.insert(
-        "alignments".into(),
-        Value::Array(a.alignments.iter().map(group).collect()),
-    );
-    m.insert(
-        "wordBank".into(),
-        Value::Array(a.word_bank.iter().map(target_word).collect()),
-    );
-    m.insert("invalid".into(), Value::from(invalid));
-    m.insert(
-        "targetVerseMd5".into(),
-        Value::from(a.target_verse_md5.to_hex()),
-    );
-    m.insert(
-        "sourceVersion".into(),
-        Value::from(a.source_version.as_ref()),
-    );
-    m.insert("done".into(), Value::from(a.done));
+pub(crate) fn alignment_record(a: &AlignmentValue, invalid: bool) -> Obj<'_> {
+    let mut m = Obj::new();
+    m.raw("alignments", |o| write_array(o, &a.alignments, group));
+    m.raw("wordBank", |o| write_array(o, &a.word_bank, target_word));
+    m.bool("invalid", invalid);
+    m.str("targetVerseMd5", &a.target_verse_md5.to_hex());
+    m.str("sourceVersion", a.source_version.as_ref());
+    m.bool("done", a.done);
     if let Some(source) = &a.source {
-        let mut s = Map::new();
-        s.insert("repoPath".into(), Value::from(source.repo_path.as_ref()));
-        s.insert("sha".into(), Value::from(source.sha.to_hex()));
-        m.insert("source".into(), Value::Object(s));
+        m.raw("source", |o| {
+            let mut s = Obj::new();
+            s.str("repoPath", source.repo_path.as_ref());
+            s.str("sha", &source.sha.to_hex());
+            s.write(o);
+        });
     }
     if a.marked_invalid {
-        m.insert("markedInvalid".into(), Value::from(true));
+        m.bool("markedInvalid", true);
     }
     if a.dismissed {
-        m.insert("dismissed".into(), Value::from(true));
+        m.bool("dismissed", true);
     }
-    for (k, v) in &a.extra {
-        m.insert(k.clone(), value(v));
-    }
-    Value::Object(m)
+    m.extra(&a.extra);
+    m
 }
 
 /// The anchor of a record placed at another verse (a renumber moved its text), so a decoder
 /// reads it back under its own key.
-fn add_anchor(record: &mut Value, chapter: u16, verse: u16) {
-    if let Value::Object(m) = record {
-        let mut a = Map::new();
-        a.insert("chapter".into(), Value::from(chapter));
-        a.insert("verse".into(), Value::from(verse));
-        m.insert("anchor".into(), Value::Object(a));
-    }
+fn add_anchor(record: &mut Obj<'_>, chapter: u16, verse: u16) {
+    record.raw("anchor", |o| {
+        let mut a = Obj::new();
+        a.int("chapter", chapter);
+        a.int("verse", verse);
+        a.write(o);
+    });
 }
 
 /// The span end of a record whose label does not say it.
-fn add_span_end(record: &mut Value, end: u16) {
-    if let Value::Object(m) = record {
-        m.insert("spanEnd".into(), Value::from(end));
-    }
+fn add_span_end(record: &mut Obj<'_>, end: u16) {
+    record.int("spanEnd", end);
 }
 
 fn status_name(s: UserStatus) -> &'static str {
@@ -1203,13 +1350,13 @@ fn status_name(s: UserStatus) -> &'static str {
 }
 
 /// A tC4 §5.2 decision record with its flags computed (§7.7).
-pub(crate) fn decision_record(
-    d: &DecisionRecord,
+pub(crate) fn decision_record<'a>(
+    d: &'a DecisionRecord,
     check: &CheckKey,
     resolved: Option<&crate::record::ResourceRef>,
     verse: &VerseFacts,
     newest: WallTime,
-) -> Value {
+) -> Obj<'a> {
     let resource_ok = attach::resource_ok(&d.resource, resolved);
     let verse_changed = verse.md5 != d.judgement.verse_text_md5;
     let selections_ok = !verse_changed
@@ -1227,87 +1374,71 @@ pub(crate) fn decision_record(
                 .fits(&counts)
         });
     let invalidated = !resource_ok || !selections_ok || d.imported_invalid;
-    let mut m = Map::new();
-    m.insert("contextId".into(), value(&Json::Obj(d.context.clone())));
+    let mut m = Obj::new();
+    m.raw("contextId", |o| write_map(&d.context, o));
     if let Some(category) = &d.category {
-        m.insert("category".into(), Value::from(category.as_ref()));
+        m.str("category", category.as_ref());
     }
-    m.insert(
-        "selections".into(),
-        match &d.judgement.selections {
-            Some(list) => Value::Array(
-                list.iter()
-                    .map(|s| {
-                        let mut sel = Map::new();
-                        sel.insert("text".into(), Value::from(s.text.as_str()));
-                        sel.insert("occurrence".into(), Value::from(s.occurrence));
-                        sel.insert("occurrences".into(), Value::from(s.occurrences));
-                        for (k, v) in &s.extra {
-                            sel.insert(k.clone(), value(v));
-                        }
-                        Value::Object(sel)
-                    })
-                    .collect(),
-            ),
-            None => Value::from(false),
-        },
-    );
-    m.insert(
-        "comments".into(),
-        d.comment
-            .as_ref()
-            .map_or(Value::from(false), |c| Value::from(c.as_str())),
-    );
-    m.insert("reminders".into(), Value::from(d.bookmarked));
-    m.insert(
-        "nothingToSelect".into(),
-        Value::from(d.judgement.nothing_to_select),
-    );
-    m.insert("verseEdits".into(), Value::from(verse_changed));
-    m.insert("invalidated".into(), Value::from(invalidated));
+    match &d.judgement.selections {
+        Some(list) => m.raw("selections", |o| {
+            write_array(o, list, |s, o| {
+                let mut sel = Obj::new();
+                sel.str("text", s.text.as_str());
+                sel.int("occurrence", s.occurrence);
+                sel.int("occurrences", s.occurrences);
+                sel.extra(&s.extra);
+                sel.write(o);
+            });
+        }),
+        None => m.bool("selections", false),
+    }
+    match &d.comment {
+        Some(c) => m.str("comments", c.as_str()),
+        None => m.bool("comments", false),
+    }
+    m.bool("reminders", d.bookmarked);
+    m.bool("nothingToSelect", d.judgement.nothing_to_select);
+    m.bool("verseEdits", verse_changed);
+    m.bool("invalidated", invalidated);
     let status = match (invalidated, d.judgement.status) {
         (true, Some(UserStatus::Todo)) => Some("todo"),
         (true, _) => Some("invalid"),
         (false, s) => s.map(status_name),
     };
     if let Some(status) = status {
-        m.insert("status".into(), Value::from(status));
+        m.str("status", status);
     }
     if invalidated && d.judgement.status == Some(UserStatus::Invalid) {
-        m.insert("userInvalid".into(), Value::from(true));
+        m.bool("userInvalid", true);
     }
-    m.insert("modifiedTimestamp".into(), Value::from(rfc3339(newest)));
+    m.str("modifiedTimestamp", &rfc3339(newest));
     // What the journal stores beyond tC4's shape, so a decoder reads the record back.
     if let Some(s) = d.judgement.status {
-        m.insert("userStatus".into(), Value::from(status_name(s)));
+        m.str("userStatus", status_name(s));
     }
-    m.insert(
-        "verseTextMd5".into(),
-        Value::from(d.judgement.verse_text_md5.to_hex()),
-    );
+    m.str("verseTextMd5", &d.judgement.verse_text_md5.to_hex());
     if resolved.is_none_or(|r| *r != d.resource) {
-        let mut r = Map::new();
-        r.insert(
-            "repoPath".into(),
-            Value::from(d.resource.repo_path.as_ref()),
-        );
-        r.insert("sha".into(), Value::from(d.resource.sha.to_hex()));
-        m.insert("pinnedResource".into(), Value::Object(r));
+        m.raw("pinnedResource", |o| {
+            let mut r = Obj::new();
+            r.str("repoPath", d.resource.repo_path.as_ref());
+            r.str("sha", &d.resource.sha.to_hex());
+            r.write(o);
+        });
     }
     if d.imported_invalid {
-        m.insert("importedInvalid".into(), Value::from(true));
+        m.bool("importedInvalid", true);
     }
     if d.dismissed {
-        m.insert("dismissed".into(), Value::from(true));
+        m.bool("dismissed", true);
     }
     if derive_key(check.tool, check.book(), &d.context).as_ref() != Some(check) {
-        let key = canon::check_key_json(check).map_or(Value::Null, |j| value(&j));
-        m.insert("checkKey".into(), key);
+        match canon::check_key_json(check) {
+            Some(key) => m.json("checkKey", &key),
+            None => m.raw("checkKey", |o| o.push_str("null")),
+        }
     }
-    for (k, v) in &d.extra {
-        m.insert(k.clone(), value(v));
-    }
-    Value::Object(m)
+    m.extra(&d.extra);
+    m
 }
 
 /// The check key a tC3 context names: its check id, reference and occurrence.

@@ -280,7 +280,7 @@ impl Json {
         out.extend_from_slice(text.as_bytes());
     }
 
-    fn write_str(&self, out: &mut String) {
+    pub(crate) fn write_str(&self, out: &mut String) {
         match self {
             Json::Null => out.push_str("null"),
             Json::Bool(true) => out.push_str("true"),
@@ -350,7 +350,7 @@ impl Json {
     }
 }
 
-fn write_string(s: &str, out: &mut String) {
+pub(crate) fn write_string(s: &str, out: &mut String) {
     out.push('"');
     // Most strings need no escape: copy them whole.
     if !s.bytes().any(|b| b == b'"' || b == b'\\' || b < 0x20) {

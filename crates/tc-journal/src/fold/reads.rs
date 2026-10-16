@@ -9,7 +9,6 @@ use crate::ids::{BatchId, ChangeId, DeviceId, DeviceSeq, PackId, WallTime};
 use crate::keys::RecordKey;
 use crate::record::Record;
 use crate::token::{ShownToken, TokenError, TokenKey};
-use std::collections::BTreeMap;
 use tc_core::BookId;
 
 /// One change the fold holds.
@@ -203,7 +202,7 @@ impl FoldState {
 
     /// Conflict counts per book and kind (`None` for records of no book), kept up to date by
     /// every step: the Home card and the book tiles.
-    pub fn conflict_counts(&self) -> &BTreeMap<(Option<BookId>, u8), u32> {
+    pub fn conflict_counts(&self) -> &super::ConflictCounts {
         &self.counts
     }
 

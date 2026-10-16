@@ -413,6 +413,41 @@ pub(crate) fn stage_local(state: &mut FoldState, dirty: &mut Dirty) {
     }
 }
 
+impl FoldState {
+    /// The conflict list and its counts built again instead of read from the list each
+    /// step keeps: every record's own conflict is built anew from its heads (its
+    /// candidates' values read again), and the conflicts of passage groups, chapters, books
+    /// and carried paths are gathered from their owners. A background check compares it
+    /// with [`FoldState::conflicts`] and [`FoldState::conflict_counts`] (§7.8).
+    pub fn conflicts_rebuilt(&self) -> (Vec<Conflict>, super::ConflictCounts) {
+        let mut out: Vec<Conflict> = Vec::new();
+        for (i, entry) in self.keys.iter().enumerate() {
+            if let (Local::Conflict { id, provisional }, None) = (&entry.local, entry.group) {
+                out.push(local_conflict(self, KeyIdx(i as u32), *id, *provisional));
+            }
+        }
+        for (owner, sorts) in self.owned.iter() {
+            if matches!(owner, super::state::Owner::Key(_)) {
+                continue;
+            }
+            out.extend(
+                sorts
+                    .iter()
+                    .filter_map(|sort| self.conflicts.get(sort))
+                    .map(|c| (**c).clone()),
+            );
+        }
+        out.sort_by_key(super::state::conflict_sort);
+        let mut counts = super::ConflictCounts::new();
+        for conflict in &out {
+            *counts
+                .entry((conflict.key.book(), conflict.kind.order()))
+                .or_insert(0) += 1;
+        }
+        (out, counts)
+    }
+}
+
 fn local_conflict(
     state: &FoldState,
     k: KeyIdx,

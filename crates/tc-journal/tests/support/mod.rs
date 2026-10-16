@@ -571,8 +571,23 @@ pub fn same_fold(expected: &FoldState, got: &FoldState, how: &str) {
     );
 }
 
+/// The conflict list and counts each step keeps equal the list built again from the
+/// records' resolutions (§7.8).
+pub fn kept_list_is_rebuilt(state: &FoldState, how: &str) {
+    let (rebuilt, counts) = state.conflicts_rebuilt();
+    let kept: Vec<&tc_journal::fold::Conflict> = state.conflicts().collect();
+    assert_eq!(
+        kept,
+        rebuilt.iter().collect::<Vec<_>>(),
+        "{how}: the kept conflict list"
+    );
+    assert_eq!(state.conflict_counts(), &counts, "{how}: the kept counts");
+}
+
 /// Two folds agree on heads, conflicts, anomalies and the Detached list.
 pub fn same_summary(expected: &FoldState, got: &FoldState, how: &str) {
+    kept_list_is_rebuilt(expected, how);
+    kept_list_is_rebuilt(got, how);
     let (a, b) = (summary(expected), summary(got));
     assert_eq!(a.0, b.0, "{how}: frontier");
     for (x, y) in a.1.iter().zip(b.1.iter()) {

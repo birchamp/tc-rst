@@ -804,97 +804,112 @@ fn no_survival_by_time_or_identity() {
 /// plain history lists; a conflict it adds is one whose versions differ in those fields.
 #[test]
 fn mixed_minor_versions_converge() {
-    team(CASES, &[], |sim, _| {
-        let devices: Vec<DeviceId> = sim.devices.iter().map(|d| d.id).collect();
-        let lines = mint(
-            &sim.recipes,
-            &Mint {
-                at: &|_, at| at,
-                device: &|d| devices[d],
-                newer: &|label, forge| {
-                    if forge == Forge::Plain && label % 3 == 1 {
-                        Forge::Newer
-                    } else {
-                        forge
-                    }
-                },
+    team(CASES, &[], |sim, _| mixed_minor_case(&sim));
+}
+
+fn mixed_minor_case(sim: &Sim) -> Result<(), TestCaseError> {
+    let devices: Vec<DeviceId> = sim.devices.iter().map(|d| d.id).collect();
+    let lines = mint(
+        &sim.recipes,
+        &Mint {
+            at: &|_, at| at,
+            device: &|d| devices[d],
+            newer: &|label, forge| {
+                if forge == Forge::Plain && label % 3 == 1 {
+                    Forge::Newer
+                } else {
+                    forge
+                }
             },
-        );
-        let state = fold_lines(&lines);
-        let labels = labels_of(&lines);
-        // The same history written by this minor alone.
-        let plain_lines = mint(
-            &sim.recipes,
-            &Mint {
-                at: &|_, at| at,
-                device: &|d| devices[d],
-                newer: &|_, forge| {
-                    if forge == Forge::Newer {
-                        Forge::Plain
-                    } else {
-                        forge
-                    }
-                },
+        },
+    );
+    let state = fold_lines(&lines);
+    let labels = labels_of(&lines);
+    // The same history written by this minor alone.
+    let plain_lines = mint(
+        &sim.recipes,
+        &Mint {
+            at: &|_, at| at,
+            device: &|d| devices[d],
+            newer: &|_, forge| {
+                if forge == Forge::Newer {
+                    Forge::Plain
+                } else {
+                    forge
+                }
             },
-        );
-        let plain = fold_lines(&plain_lines);
-        for (label, line) in lines.iter().enumerate() {
-            if let Some(Verified::Change(change)) = line {
-                prop_assert_eq!(change.body().record.key(), sim.recipes[label].key());
-            }
+        },
+    );
+    let plain = fold_lines(&plain_lines);
+    for (label, line) in lines.iter().enumerate() {
+        if let Some(Verified::Change(change)) = line {
+            prop_assert_eq!(change.body().record.key(), sim.recipes[label].key());
         }
-        let a = shape(&plain, &labels_of(&plain_lines));
-        let b = shape(&state, &labels);
-        prop_assert_eq!(&a.heads, &b.heads);
-        for conflict in a.conflicts.difference(&b.conflicts) {
-            prop_assert!(false, "{conflict:?} is lost with newer fields");
-        }
-        let newer_labels: BTreeSet<usize> = lines
+    }
+    let a = shape(&plain, &labels_of(&plain_lines));
+    let b = shape(&state, &labels);
+    prop_assert_eq!(&a.heads, &b.heads);
+    let newer_labels: BTreeSet<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| {
+            l.as_ref()
+                .is_some_and(|l| String::from_utf8_lossy(l.raw()).contains("xNewer"))
+        })
+        .map(|(label, _)| label)
+        .collect();
+    // Versions that differ only in a newer field do not merge as equal values (F6 tests
+    // equal values first), so such a record joins the passage group it diverges in, and
+    // with it every record of that passage (a passage is judged whole, §7.3): a plain group
+    // is still listed, grown by records of which at least one differs in a newer field.
+    let differs_in_newer = |label: usize| {
+        state
+            .heads(&sim.recipes[label].key())
             .iter()
-            .enumerate()
-            .filter(|(_, l)| {
-                l.as_ref()
-                    .is_some_and(|l| String::from_utf8_lossy(l.raw()).contains("xNewer"))
-            })
-            .map(|(label, _)| label)
+            .any(|h| labels.get(h).is_some_and(|l| newer_labels.contains(l)))
+    };
+    for (kind, heads) in a.conflicts.difference(&b.conflicts) {
+        let grown = b.conflicts.iter().any(|(k, h)| {
+            k == kind && h.is_superset(heads) && h.difference(heads).any(|l| differs_in_newer(*l))
+        });
+        prop_assert!(grown, "{kind} {heads:?} is lost with newer fields");
+    }
+    for conflict in state.conflicts() {
+        let heads: BTreeSet<usize> = conflict
+            .candidates
+            .iter()
+            .flat_map(|x| std::iter::once(x.head).chain(x.also.iter().copied()))
+            .map(|h| labels.get(&h).copied().unwrap_or(usize::MAX))
             .collect();
-        for conflict in state.conflicts() {
-            let heads: BTreeSet<usize> = conflict
-                .candidates
-                .iter()
-                .flat_map(|x| std::iter::once(x.head).chain(x.also.iter().copied()))
-                .map(|h| labels.get(&h).copied().unwrap_or(usize::MAX))
-                .collect();
-            if a.conflicts
-                .contains(&(format!("{:?}", conflict.kind), heads.clone()))
-            {
-                continue;
-            }
-            if matches!(
-                conflict.kind,
-                ConflictKind::LastBookRemoved | ConflictKind::StructureIssue
-            ) {
-                continue;
-            }
-            let involved = heads
-                .iter()
-                .copied()
-                .chain(conflict.bases.iter().filter_map(|b| labels.get(b).copied()));
-            let mut involved = involved;
-            prop_assert!(
-                involved.any(|l| newer_labels.contains(&l)),
-                "{:?} {heads:?} added without a newer field",
-                conflict.kind
-            );
+        if a.conflicts
+            .contains(&(format!("{:?}", conflict.kind), heads.clone()))
+        {
+            continue;
         }
-        for (path, bytes) in derived_bytes(&state) {
-            prop_assert!(
-                !String::from_utf8_lossy(&bytes).contains("xNewer"),
-                "{path} projects an unknown field"
-            );
+        if matches!(
+            conflict.kind,
+            ConflictKind::LastBookRemoved | ConflictKind::StructureIssue
+        ) {
+            continue;
         }
-        Ok(())
-    });
+        let involved = heads
+            .iter()
+            .copied()
+            .chain(conflict.bases.iter().filter_map(|b| labels.get(b).copied()));
+        let mut involved = involved;
+        prop_assert!(
+            involved.any(|l| newer_labels.contains(&l)),
+            "{:?} {heads:?} added without a newer field",
+            conflict.kind
+        );
+    }
+    for (path, bytes) in derived_bytes(&state) {
+        prop_assert!(
+            !String::from_utf8_lossy(&bytes).contains("xNewer"),
+            "{path} projects an unknown field"
+        );
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1517,4 +1532,152 @@ fn sidecar_decode_render() {
             Ok(())
         },
     );
+}
+
+/// A history `mixed_minor_versions_converge` found: in it, section saves leave verses 3
+/// to 6 with two equal heads each, merged in the plain history; with newer fields, three
+/// of them differ only in those fields, so they and their whole passage join the passage
+/// group. The plain Passage conflict must still be listed, grown, not dropped.
+#[test]
+fn a_passage_grown_by_newer_fields_keeps_the_plain_conflict() {
+    let script = sim::Script {
+        devices: 3,
+        ops: vec![
+            sim::Op::Edit {
+                dev: 0,
+                at: 20,
+                stale: false,
+                newer: false,
+            },
+            sim::Op::BookLayout { dev: 0, seed: 0 },
+            sim::Op::Fork {
+                a: 0,
+                b: 16,
+                what: 27,
+                at: 1,
+            },
+            sim::Op::Fork {
+                a: 21,
+                b: 121,
+                what: 4,
+                at: 0,
+            },
+            sim::Op::Comment { dev: 0, on: 0 },
+            sim::Op::Fork {
+                a: 77,
+                b: 202,
+                what: 30,
+                at: 38,
+            },
+            sim::Op::Renumber { dev: 33, at: 235 },
+            sim::Op::Fork {
+                a: 1,
+                b: 213,
+                what: 255,
+                at: 247,
+            },
+            sim::Op::Resolve {
+                dev: 133,
+                pick: 14,
+                how: 172,
+            },
+            sim::Op::Drag { dev: 27, at: 196 },
+            sim::Op::Renumber { dev: 212, at: 26 },
+            sim::Op::Edit {
+                dev: 90,
+                at: 60,
+                stale: false,
+                newer: false,
+            },
+            sim::Op::Resolve {
+                dev: 226,
+                pick: 171,
+                how: 187,
+            },
+            sim::Op::Decide {
+                dev: 244,
+                check: 186,
+                what: 5,
+                stale: true,
+            },
+            sim::Op::Align {
+                dev: 239,
+                at: 84,
+                current: false,
+                newer: false,
+            },
+            sim::Op::Resolve {
+                dev: 57,
+                pick: 21,
+                how: 75,
+            },
+            sim::Op::Layout { dev: 61, at: 249 },
+            sim::Op::Align {
+                dev: 59,
+                at: 203,
+                current: true,
+                newer: false,
+            },
+            sim::Op::Edit {
+                dev: 67,
+                at: 134,
+                stale: true,
+                newer: false,
+            },
+            sim::Op::Carried {
+                dev: 42,
+                path: 215,
+                value: 135,
+            },
+            sim::Op::Fork {
+                a: 38,
+                b: 153,
+                what: 194,
+                at: 101,
+            },
+            sim::Op::Align {
+                dev: 81,
+                at: 164,
+                current: false,
+                newer: false,
+            },
+            sim::Op::Setting {
+                dev: 175,
+                path: 69,
+                value: 19,
+            },
+            sim::Op::Resolve {
+                dev: 100,
+                pick: 22,
+                how: 255,
+            },
+            sim::Op::Stray {
+                dev: 135,
+                at: 31,
+                covered: true,
+            },
+            sim::Op::Edit {
+                dev: 18,
+                at: 194,
+                stale: true,
+                newer: false,
+            },
+            sim::Op::Decide {
+                dev: 217,
+                check: 134,
+                what: 198,
+                stale: false,
+            },
+            sim::Op::Restore {
+                dev: 6,
+                ruth: false,
+                text: false,
+            },
+        ],
+    };
+    let mut sim = Sim::run(&script, false);
+    sim.sync_all();
+    if let Err(e) = mixed_minor_case(&sim) {
+        panic!("{e}");
+    }
 }

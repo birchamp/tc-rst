@@ -106,6 +106,10 @@ impl fmt::Display for ConflictId {
     }
 }
 
+/// Conflict counts by book (`None` for records of no book) and kind order
+/// ([`ConflictKind::order`]).
+pub type ConflictCounts = std::collections::BTreeMap<(Option<BookId>, u8), u32>;
+
 /// A record's heads and how they resolve (§2.6).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyState {
