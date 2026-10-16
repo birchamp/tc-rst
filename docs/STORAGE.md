@@ -605,10 +605,14 @@ pub struct ValueAt { pub offset: u64, pub file: u32, pub len: u32 }
 /// `tc-store` reads the file again, or the pack's blob when the file is gone or damaged, and
 /// reports a value it cannot read as a notice. `prepare_at` takes a 64-bit fingerprint of the
 /// bytes it verified against the change id, and the fold checks the bytes it reads against it,
-/// so a file changed after it was read does not pass for the change: a change within one 8-byte
-/// word never does (each step of the fingerprint is one to one), any other with a chance of
-/// about 2⁻⁶⁴. (Computing SHA-256 again was a third of a book's projection without SHA
-/// instructions, §14; the id was proved when the bytes were read.)
+/// so a file changed after it was read does not pass for the change. The fingerprint runs four
+/// lanes over the 8-byte words, each step `lane = mix(lane ^ word)` with `mix` splitmix64's
+/// finalizer (a bijection in which every input bit flips about half the output bits), then
+/// folds the lanes and the length through the same step: a change within one 8-byte word never
+/// passes (every step is one to one), any other accidental change with a chance of about
+/// 2⁻⁶⁴. It is no defence against forgery (§18 item 3). (Computing SHA-256 again was a third
+/// of a book's projection without SHA instructions, §14; the id was proved when the bytes
+/// were read. FxHash, used first, let a two-bit burst across a word boundary pass.)
 ///
 /// A value the source cannot read is unknown, never absent and never equal to another: a
 /// record with several heads and such a head or base is not merged or settled but listed as
