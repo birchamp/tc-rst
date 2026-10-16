@@ -18,17 +18,17 @@ The first open of a process is timed alone; then 21 opens give the median and p9
 
 ## Results
 
-Commit `1a7ca24` (branch `fix-helps-front`), release build, Rust stable, Linux 6.18,
-4 vCPU Intel Xeon @ 2.80 GHz, 15 GiB RAM, shared with other builds (load average 3.2 to
-3.4 during the runs). Five separate processes, 2026-10-15:
+Commit `99b2926` (branch `fix-helps-front`), release build, rustc 1.97.0, Linux 6.18,
+4 vCPU Intel Xeon @ 2.80 GHz, 15 GiB RAM, shared with other builds (load average 2.6 to
+3.0 during the runs). Five separate processes, 2026-10-16:
 
 | Process | First open | Median of 21 | p95 of 21 |
 |---|---|---|---|
-| 1 | 93 ms | 71 ms | 78 ms |
-| 2 | 103 ms | 77 ms | 110 ms |
-| 3 | 89 ms | 75 ms | 117 ms |
-| 4 | 93 ms | 68 ms | 82 ms |
-| 5 | 94 ms | 66 ms | 69 ms |
+| 1 | 84 ms | 70 ms | 100 ms |
+| 2 | 101 ms | 69 ms | 82 ms |
+| 3 | 83 ms | 68 ms | 95 ms |
+| 4 | 88 ms | 68 ms | 75 ms |
+| 5 | 88 ms | 66 ms | 80 ms |
 
 Every run is under the 250 ms budget. The p95 spread follows the load from the other
 builds on the machine. The test fails in a release build only above 750 ms, three times
