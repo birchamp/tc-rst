@@ -14,8 +14,9 @@ use tc_journal::pending::read_pending;
 #[derive(Debug)]
 struct Files {
     files: Vec<Vec<u8>>,
-    /// Files whose bytes changed after they were read.
-    changed: Mutex<Vec<u32>>,
+    /// Files whose bytes changed after they were read: one byte of each value read from
+    /// them is flipped, at this share of the value's length.
+    changed: Mutex<Vec<(u32, f64)>>,
 }
 
 impl ValueSource for Files {
@@ -23,10 +24,12 @@ impl ValueSource for Files {
         let file = self.files.get(at.file as usize)?;
         let start = usize::try_from(at.offset).ok()?;
         let mut bytes = file.get(start..start + at.len as usize)?.to_vec();
-        if self.changed.lock().ok()?.contains(&at.file)
-            && let Some(first) = bytes.first_mut()
-        {
-            *first ^= 1;
+        let changed = self.changed.lock().ok()?;
+        if let Some((_, share)) = changed.iter().find(|(f, _)| *f == at.file) {
+            let i = ((bytes.len() as f64 * share) as usize).min(bytes.len().saturating_sub(1));
+            if let Some(byte) = bytes.get_mut(i) {
+                *byte ^= 1;
+            }
         }
         Some(bytes)
     }
@@ -128,7 +131,15 @@ fn bytes_that_changed_on_disk_never_pass_for_the_change() {
             bytes.windows(raw.len()).any(|w| w == &raw[..])
         })
         .expect("a file holds it");
-    files.changed.lock().unwrap().push(file);
-    assert_eq!(state.raw(&head), None);
-    assert_eq!(state.body(&head), None);
+    for share in [0.0, 0.37, 0.5, 1.0] {
+        *files.changed.lock().unwrap() = vec![(file, share)];
+        assert_eq!(
+            state.raw(&head),
+            None,
+            "a byte flipped at {share} of the value"
+        );
+        assert_eq!(state.body(&head), None);
+    }
+    files.changed.lock().unwrap().clear();
+    assert_eq!(state.raw(&head).as_deref(), Some(&raw[..]));
 }

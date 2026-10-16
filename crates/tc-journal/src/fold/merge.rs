@@ -108,7 +108,7 @@ pub(crate) fn record_arc(state: &FoldState, c: ChangeIdx) -> Option<Arc<Record>>
 
 fn decode_record(state: &FoldState, c: ChangeIdx) -> Option<Record> {
     state.count(super::Counter::ValuesDecoded, 1);
-    super::meta::decode(&state.bytes(c)?).map(|body| body.record)
+    super::meta::decode_record(&state.bytes(c)?)
 }
 
 fn seed_stub_kind(key: &RecordKey) -> bool {

@@ -601,8 +601,12 @@ pub struct FoldInput { line: Verified, pack: Option<PackId> }
 /// of the JSON in it (`PackRead::spans`, `PendingRead::spans`).
 pub struct ValueAt { pub offset: u64, pub file: u32, pub len: u32 }
 /// `tc-store` reads the file again, or the pack's blob when the file is gone or damaged, and
-/// reports a value it cannot read as a notice. The fold checks the bytes against the change id,
-/// so a file changed after it was read never passes for the change.
+/// reports a value it cannot read as a notice. `prepare_at` takes a 64-bit fingerprint of the
+/// bytes it verified against the change id, and the fold checks the bytes it reads against it,
+/// so a file changed after it was read does not pass for the change: a change within one 8-byte
+/// word never does (each step of the fingerprint is one to one), any other with a chance of
+/// about 2⁻⁶⁴. (Computing SHA-256 again was a third of a book's projection without SHA
+/// instructions, §14; the id was proved when the bytes were read.)
 pub trait ValueSource: Send + Sync { fn read(&self, at: ValueAt) -> Option<Vec<u8>>; }
 /// What one `add` changed: the records, books and chapters to re-project (§5.0 B5), the
 /// conflicts that did not exist before (B6), and whether pins or paths changed.

@@ -387,6 +387,12 @@ pub(crate) fn decode(raw: &[u8]) -> Option<ChangeBody> {
     canon::decode_body_view(tape.root()).ok()
 }
 
+/// [`decode`]'s record alone: the other fields of the change are not decoded.
+pub(crate) fn decode_record(raw: &[u8]) -> Option<crate::record::Record> {
+    let tape = json::parse_tape(raw).ok()?;
+    canon::decode_stored_record(tape.root())
+}
+
 /// The JSON of a change's record value (`record.<kind>.value`), `None` when the record has
 /// no value member (a `None` setting, project detail, layout or story reference).
 pub(crate) fn value_json(raw: &[u8]) -> Option<json::Json> {

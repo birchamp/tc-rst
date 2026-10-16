@@ -19,7 +19,7 @@ use crate::record::{
     DecisionRecord, LayoutItem, Record, SourceWord, TargetWord, UserStatus, VerseValue,
 };
 use serde_json::{Map, Value};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use tc_core::BookId;
 use tc_usfm::codec::{self, BookParts, ChapterParts, VersePart, VerseText};
@@ -184,6 +184,24 @@ fn on_threads<T: Sync, R: Send>(items: &[T], work: impl Fn(&T) -> R + Sync) -> V
     slots.drain(..).flatten().collect()
 }
 
+/// Records decoded together on one thread.
+type DecodedChunk = Vec<(ChangeIdx, Arc<Record>)>;
+
+/// Drops `items` on up to four threads.
+fn drop_on_threads<T: Send>(mut items: Vec<T>) {
+    let threads = 4.min(items.len());
+    if threads <= 1 {
+        return;
+    }
+    let share = items.len().div_ceil(threads);
+    std::thread::scope(|scope| {
+        while !items.is_empty() {
+            let part = items.split_off(items.len().saturating_sub(share));
+            scope.spawn(move || drop(part));
+        }
+    });
+}
+
 fn pretty(v: &Value) -> Vec<u8> {
     let mut out = serde_json::to_string_pretty(v)
         .unwrap_or_default()
@@ -216,6 +234,24 @@ fn lines(head: &str, records: &[String], tail: &str) -> Vec<u8> {
 pub(crate) struct BookText {
     /// chapter → verse → what the verse shows.
     pub chapters: BTreeMap<u16, ChapterText>,
+    /// What alignments and decisions read of a text, by the text, so the files of a book,
+    /// rendered on several threads, derive each verse's plain text once.
+    facts: std::sync::Mutex<HashMap<String, Arc<VerseFacts>>>,
+}
+
+impl BookText {
+    pub(crate) fn facts(&self, content: String) -> Arc<VerseFacts> {
+        let cached = |map: &HashMap<String, Arc<VerseFacts>>| map.get(&content).cloned();
+        if let Some(facts) = self.facts.lock().ok().and_then(|map| cached(&map)) {
+            return facts;
+        }
+        // Derived outside the lock: the other threads keep reading meanwhile.
+        let facts = Arc::new(VerseFacts::of(content.clone()));
+        match self.facts.lock() {
+            Ok(mut map) => map.entry(content).or_insert(facts).clone(),
+            Err(_) => facts,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -388,6 +424,7 @@ impl FoldState {
                 .into_iter()
                 .map(|c| (c, self.chapter_text(book, c, &rewound)))
                 .collect(),
+            facts: Default::default(),
         }
     }
 
@@ -547,26 +584,28 @@ impl FoldState {
         if files.is_empty() {
             return Vec::new();
         }
-        let view = self.with_records_of(book);
-        let view = &view;
+        let (view, decoded) = self.with_records_of(book);
         let text = std::sync::OnceLock::new();
         if view.book(book).projects() {
             let _ = text.set(view.book_text(book));
         }
-        let text = &text;
         let mut out: Vec<(DerivedFile, Vec<u8>)> = on_threads(&files, |f| {
-            view.render_with(f, text).map(|b| (f.clone(), b))
+            view.render_with(f, &text).map(|b| (f.clone(), b))
         })
         .into_iter()
         .flatten()
         .collect();
         out.sort_by(|a, b| a.0.cmp(&b.0));
+        // The decoded records are hundreds of thousands of small allocations: freed on one
+        // thread they were a tenth of the projection's time.
+        drop(view);
+        drop_on_threads(decoded);
         out
     }
 
     /// A snapshot of this state holding every projected record of `book` decoded, so the
-    /// files of the book read each value once.
-    fn with_records_of(&self, book: BookId) -> FoldState {
+    /// files of the book read each value once, and the decoded records in chunks.
+    fn with_records_of(&self, book: BookId) -> (FoldState, Vec<DecodedChunk>) {
         let changes: Vec<ChangeIdx> = self
             .books
             .get(&book)
@@ -588,8 +627,8 @@ impl FoldState {
                 .collect::<Vec<_>>()
         });
         let mut view = self.clone();
-        view.records = Some(Arc::new(decoded.into_iter().flatten().collect()));
-        view
+        view.records = Some(Arc::new(decoded.iter().flatten().cloned().collect()));
+        (view, decoded)
     }
 
     fn render_with(
@@ -670,7 +709,7 @@ impl FoldState {
                     let chapter = text.chapters.get(&rc);
                     let end = chapter.and_then(|t| t.ends.get(&rv)).copied().unwrap_or(rv);
                     let content = chapter.and_then(|t| t.content(rv)).unwrap_or_default();
-                    let md5 = md5_of(&tc_usfm::plain_text_v1(&content));
+                    let md5 = text.facts(content).md5;
                     // The alignment covers as many verses as it did where it was made: a
                     // text that moved keeps its alignment valid at its new number.
                     let length = value.span_end.get().checked_sub(v);
@@ -785,7 +824,7 @@ impl FoldState {
         let chunks: Vec<&[Targeted<'_>]> = decisions.chunks(512).collect();
         let rendered = on_threads(&chunks, |chunk| {
             let mut out: Vec<(String, String)> = Vec::with_capacity(chunk.len());
-            let mut verse: Option<((&str, &str), VerseFacts)> = None;
+            let mut verse: Option<((&str, &str), Arc<VerseFacts>)> = None;
             for (target, k, record) in chunk.iter() {
                 let Record::Check {
                     key: check,
@@ -802,7 +841,7 @@ impl FoldState {
                     .max()
                     .unwrap_or(WallTime(0));
                 if verse.as_ref().is_none_or(|(t, _)| t != target) {
-                    verse = Some((*target, VerseFacts::of(target_text(text, check))));
+                    verse = Some((*target, text.facts(target_text(text, check))));
                 }
                 let Some((_, facts)) = &verse else {
                     continue;
@@ -1126,7 +1165,7 @@ pub(crate) struct VerseFacts {
     /// md5 of `plain_text_v1(content)`.
     md5: crate::ids::Md5,
     /// Made when a decision's verse text changed and its selections must be checked.
-    selection: std::cell::OnceCell<tc_usfm::SelectionText>,
+    selection: std::sync::OnceLock<tc_usfm::SelectionText>,
 }
 
 impl VerseFacts {
@@ -1134,7 +1173,7 @@ impl VerseFacts {
         Self {
             md5: md5_of(&tc_usfm::plain_text_v1(&content)),
             content,
-            selection: std::cell::OnceCell::new(),
+            selection: std::sync::OnceLock::new(),
         }
     }
 }
@@ -1207,11 +1246,9 @@ impl<'a> Obj<'a> {
         });
     }
 
-    fn int(&mut self, key: &'a str, value: impl std::fmt::Display) {
-        use std::fmt::Write as _;
-        self.raw(key, |out| {
-            let _ = write!(out, "{value}");
-        });
+    fn int(&mut self, key: &'a str, value: impl Into<i128>) {
+        let value = value.into();
+        self.raw(key, |out| crate::json::write_int(value, out));
     }
 
     fn json(&mut self, key: &'a str, value: &Json) {
@@ -1247,7 +1284,7 @@ impl<'a> Obj<'a> {
 
 /// A canonical object (sorted keys) as compact JSON, as serde_json writes it.
 fn write_map(map: &crate::json::JsonMap, out: &mut String) {
-    Json::Obj(map.clone()).write_str(out);
+    crate::json::write_map(map, out);
 }
 
 /// Appends a JSON array of `items`, each written by `write`.

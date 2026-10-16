@@ -74,7 +74,7 @@ impl FoldInput {
     /// its value from its [`ValueSource`] when it needs it (§14).
     pub fn prepare_at(self, at: ValueAt) -> Self {
         self.prepare_with(|change| {
-            Stored::located(at).unwrap_or_else(|| Stored::bytes(change.raw().clone()))
+            Stored::located(at, change.raw()).unwrap_or_else(|| Stored::bytes(change.raw().clone()))
         })
     }
 
@@ -1673,12 +1673,18 @@ impl FoldState {
     }
 
     /// The canonical bytes of change `c`: kept in memory, or read from the source and
-    /// checked against the change's id. `None` only when the source cannot read them.
+    /// checked against the fingerprint of the bytes that were verified. `None` only when
+    /// the source cannot read them, or reads other bytes.
     pub(crate) fn bytes(&self, c: ChangeIdx) -> Option<Arc<[u8]>> {
         let meta = self.meta(c);
         match &meta.value {
             Stored::Bytes(bytes) => Some((**bytes).clone()),
-            Stored::At { file, offset, len } => {
+            Stored::At {
+                file,
+                offset,
+                len,
+                fingerprint,
+            } => {
                 self.count(Counter::ValuesRead, 1);
                 let at = ValueAt {
                     offset: u64::from(*offset),
@@ -1686,7 +1692,7 @@ impl FoldState {
                     len: *len,
                 };
                 let bytes = self.source.as_ref()?.read(at)?;
-                (ChangeId::of(&bytes) == meta.id).then(|| Arc::from(bytes))
+                (super::value::fingerprint(&bytes) == *fingerprint).then(|| Arc::from(bytes))
             }
         }
     }

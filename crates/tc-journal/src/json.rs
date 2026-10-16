@@ -271,10 +271,7 @@ impl Json {
             Json::Null => out.push_str("null"),
             Json::Bool(true) => out.push_str("true"),
             Json::Bool(false) => out.push_str("false"),
-            Json::Int(n) => {
-                use std::fmt::Write as _;
-                let _ = write!(out, "{}", n.0);
-            }
+            Json::Int(n) => write_int(n.0, out),
             Json::Str(s) => write_string(s, out),
             Json::Arr(items) => {
                 out.push('[');
@@ -286,18 +283,7 @@ impl Json {
                 }
                 out.push(']');
             }
-            Json::Obj(map) => {
-                out.push('{');
-                for (i, (key, value)) in map.iter().enumerate() {
-                    if i > 0 {
-                        out.push(',');
-                    }
-                    write_string(key, out);
-                    out.push(':');
-                    value.write_str(out);
-                }
-                out.push('}');
-            }
+            Json::Obj(map) => write_map(map, out),
         }
     }
 
@@ -336,30 +322,72 @@ impl Json {
     }
 }
 
+/// Writes an object in canonical form.
+pub(crate) fn write_map(map: &JsonMap, out: &mut String) {
+    out.push('{');
+    for (i, (key, value)) in map.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        write_string(key, out);
+        out.push(':');
+        value.write_str(out);
+    }
+    out.push('}');
+}
+
 pub(crate) fn write_string(s: &str, out: &mut String) {
     out.push('"');
-    // Most strings need no escape: copy them whole.
-    if !s.bytes().any(|b| b == b'"' || b == b'\\' || b < 0x20) {
-        out.push_str(s);
-        out.push('"');
-        return;
-    }
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\u{8}' => out.push_str("\\b"),
-            '\u{c}' => out.push_str("\\f"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if u32::from(c) < 0x20 => {
-                out.push_str(&format!("\\u{:04x}", u32::from(c)));
+    let bytes = s.as_bytes();
+    let mut from = 0;
+    loop {
+        // `plain_run` stops only at ASCII bytes, so every slice ends on a character boundary.
+        let to = plain_run(bytes, from);
+        out.push_str(s.get(from..to).unwrap_or_default());
+        let Some(&b) = bytes.get(to) else {
+            break;
+        };
+        match b {
+            b'"' => out.push_str("\\\""),
+            b'\\' => out.push_str("\\\\"),
+            0x08 => out.push_str("\\b"),
+            0x0c => out.push_str("\\f"),
+            b'\n' => out.push_str("\\n"),
+            b'\r' => out.push_str("\\r"),
+            b'\t' => out.push_str("\\t"),
+            _ => {
+                const HEX: &[u8; 16] = b"0123456789abcdef";
+                out.push_str("\\u00");
+                out.push(char::from(HEX[usize::from(b >> 4)]));
+                out.push(char::from(HEX[usize::from(b & 0xf)]));
             }
-            c => out.push(c),
         }
+        from = to + 1;
     }
     out.push('"');
+}
+
+/// Writes an integer in decimal without going through `fmt`.
+pub(crate) fn write_int(n: i128, out: &mut String) {
+    // An i128 has at most 39 digits.
+    let mut digits = [0u8; 40];
+    let mut at = digits.len();
+    let mut m = n.unsigned_abs();
+    loop {
+        at -= 1;
+        // A digit: `m % 10` is below 10.
+        digits[at] = b'0' + (m % 10) as u8;
+        m /= 10;
+        if m == 0 {
+            break;
+        }
+    }
+    if n < 0 {
+        out.push('-');
+    }
+    for &d in &digits[at..] {
+        out.push(char::from(d));
+    }
 }
 
 /// Why bytes are not canonical JSON.

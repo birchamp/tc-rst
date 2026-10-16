@@ -1956,6 +1956,17 @@ fn read_body(j: View<'_>) -> R<ChangeBody> {
     Ok(body)
 }
 
+/// The record of a change whose canonical JSON passed the per-change rules when it was
+/// read, read as [`read_body`] reads it.
+pub(crate) fn decode_stored_record(j: View<'_>) -> Option<Record> {
+    let map = j.as_obj()?;
+    let v = u16::from_json(map.get("v")?, STRICT).ok()?;
+    let cx = Cx {
+        lenient: v > FORMAT_MINOR,
+    };
+    decode_record(map.get("record")?, cx).ok()
+}
+
 /// The batch, device and seq of a change that does not decode, when those fields still
 /// read, so the fold can hold its batch.
 pub(crate) fn best_effort_origin(
