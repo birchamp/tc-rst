@@ -3312,15 +3312,15 @@ days a year.
 | `metadata.json` | ≈ 120 KB | 600 entries × ≈ 200 B, pretty-printed |
 | Working tree | ≈ 880 MiB | packs 674 MiB (measured) + derived ≈ 210 MiB (compact sidecars: alignments ≈ 90 MiB, decisions ≈ 110 MiB, USFM ≈ 5 MiB) |
 | `.git` after 3 years | ≈ 250–400 MiB | packs ≈ 70 MiB zlib, stored two to three times because consolidation writes new blobs; derived file history ≈ 110 MiB as deltas; ≈ 7,500 commits of ≈ 15 KB trees |
-| Cold open, 4 cores, SSD | target ≤ 3 s; measured 7.8 s on a shared 4-vCPU VM without SHA extensions: **missed** | fold 2.0 s on one thread (median of 5; 1.47 s earlier the same day, when the VM was faster); reading, verifying (two SHA-256 passes over every byte, P2 and P4) and decoding every change 5.8 s on 4 threads, about 16.8 s of single-thread work of which SHA-256 is about 10 s and parsing and checking 6.2 s; `docs/evidence/storage-fold-2026-10-16.md`. A corpus of 277,880 changes (the size of the probe's 278,041 actions, which it folded in 1.13 s) folds in 0.92 s (0.59 s on the faster VM) |
+| Cold open, 4 cores, SSD | target ≤ 3 s; measured 7.8 s on a shared 4-vCPU VM without SHA extensions, 11.6 s when other jobs shared it: **missed** | the fold indexes each file's changes as it is read, and its work after the last file is 0.68 s (0.40 s for the 277,880-change corpus); reading, verifying (two SHA-256 passes over every byte, P2 and P4) and decoding every change 5.8 s on 4 threads on the quieter VM, about 16.8 s of single-thread work of which SHA-256 is about 10 s and parsing and checking 6.2 s; the full fold alone 2.0 s on one thread (1.47 s earlier the same day, when the VM was faster); `docs/evidence/storage-fold-2026-10-16.md`. A corpus of 277,880 changes (the size of the probe's 278,041 actions, which it folded in 1.13 s) folds in 0.92 s (0.59 s on the faster VM) |
 | Cold open, 2-core laptop, HDD | ≈ 6–10 s | disk-bound; determinate progress per phase |
 | Save one verse | 1–10 ms | one `atomic_write` of ≈ 1 KB (measured 0.41 ms on the VM, fsyncbench) |
-| Materialize one book | 20–60 ms estimated; measured projection of Psalms 358 ms | projecting every Psalms file (USFM, alignments, tN and TWL decisions, comments; 18.7 MB) with values read from disk and checked against their fingerprints (§2.6), on 4 threads, 0.93 s of CPU; the USFM alone 14 ms, one chapter 0.11 ms; the write and `metadata.json` are `tc-store`'s |
+| Materialize one book | 20–60 ms estimated; measured projection of Psalms 358 ms (488 ms when other jobs shared the VM): **missed** against the 300 ms budget | projecting every Psalms file (USFM, alignments, tN and TWL decisions, comments; 18.7 MB) with values read from disk and checked against their fingerprints (§2.6), on 4 threads, 0.9 s of CPU, about half of it decoding the book's 25,132 records and a third writing the decisions; the USFM alone 14 ms, one chapter 0.11 ms; the write and `metadata.json` are `tc-store`'s |
 | Checkpoint | 0.1–0.5 s | seal ≤ 1 MiB, materialize, tree of changed directories, one commit |
 | Daily sync | 1–3 s + network | incremental fetch of a few hundred KB; push ≈ 0.3–1 MB (non-thin, §9.5) |
 | Join | ≈ 250–400 MiB full clone, or ≈ 120 MiB exchange file | packs deflate ≈ 5x in the zip |
 | USB export | ≈ 120 MiB, 5–15 s on USB 2 | |
-| Memory | ≈ 100 MiB typical, ≈ 350 MiB peak; measured folded state 202 MB, 413 MB heap peak during the open | ≈ 330 B of tables per change (change 136 B, of which 8 B is the value's fingerprint; record 160 B, batch 56 B, indexes); values are byte ranges read on demand and dropped when a book is idle; the peak holds the prepared inputs and the growing tables at once |
+| Memory | ≈ 100 MiB typical, ≈ 350 MiB peak; measured folded state 205–214 MB, 233 MB heap peak during the open; RSS after the open 256 MiB with jemalloc (peak 345 MiB), 374 MiB with glibc malloc | ≈ 340 B of tables per change (each change's entry 130 B, of which 8 B is the value's fingerprint; record keys, batches, position indexes); values are byte ranges read on demand and dropped when a book is idle; the open folds each file as it arrives, so its peak holds the tables and a few files' inputs; glibc keeps what reading threads free in their arenas |
 
 An aligned NT project is about a quarter of these figures. Rows that say "measured" were
 measured on this format with the `tc-corpus` whole-Bible corpus, release builds
@@ -3881,3 +3881,53 @@ The regression tests are rows L64 to L96 of §15.3 and the property tests added 
 40. **A large push cannot resume.** Real. Changed: large pushes become a chain of valid commits
     pushed one at a time; the exchange file is offered after repeated failures (§9.1 S7, §9.5).
     L96.
+
+### Review of the fold (unit J2), 2026-10-16
+
+An independent review of the fold, its conflicts and its projections. Each finding was checked
+with a test that failed before the change. The regression tests are rows L97 to L102 of §15.4.
+
+1. **Keeping a passage candidate writes another person's version, chosen by clock**
+   (blocker). Real: *Keep* chose among every version on the kept side by `(rank, at, id)`, and
+   *Keep separate* and *Keep joined* chose between concurrent texts the same way. Changed: a
+   choice writes exactly the version picked; where a side or a verse's history still holds two
+   versions, the choice asks (§8.3). L97.
+2. **Unreadable values hide a conflict or merge it away.** Real. Changed: an unreadable value
+   is unknown, never absent or equal; such records are listed as conflicts marked unreadable,
+   tokens never name an unread version, choices are refused, `retry_unreadable` judges them
+   again, and `tc-store` writes no derived file meanwhile (§2.6). L98.
+3. **Applying offline changes to a moved check applies only the newest editor's.** Real.
+   Changed: every editor's changed units, every unit of §7.3; two different changes of one unit
+   refuse the choice (§8.3). L99.
+4. **Choose per line drops units that merged cleanly; panics with no folded head.** Real.
+   Changed: it starts from the merged agreed units and is offered only with disputed units
+   (§8.3). L100.
+5. **Four rules could be deleted without a failing test.** Real. Changed: direct tests for each,
+   and the properties now catch each mutation (§16.1).
+6. **The property census counted states its assertions never saw; two record kinds were never
+   generated.** Real. Changed: the census counts only asserted views, team properties assert
+   before the last exchange too, and the scripts write versification and device profiles
+   (§16.1). The stronger generator found three more defects, fixed here: a comment id written
+   twice across books (L101), a structure issue that listed a verse with only a held change,
+   and conflicts of other kinds that did not say a head continues a missing change. It also
+   showed that a `Comment` conflict could never be resolved under V6, which now lets a
+   resolution name parents.
+7. **Budgets missed: cold open, Psalms projection, memory.** Real. Partly changed: changes are
+   folded as the reading threads hand them over, so the fold's own work after the last file is
+   about 0.7 s and the open's heap peak fell from 413 MB to 233 MB. Still missed, with the
+   evidence and the remaining work in `docs/evidence/storage-fold-2026-10-16.md`: the cold
+   open's read (hashing and parsing every change; `.tc/index.bin`, §14), the Psalms projection
+   (decoding and writing out again every decision's context), and the steady memory (the
+   resident history is about 200 MiB). The budgets are unchanged.
+8. **A comment's book depends on which change arrived first.** Real. Changed: a comment id
+   held by changes that target several books is a record of each (§7.6). L101.
+9. **Every step scans the whole anomaly list.** Real. Changed: each anomaly is replaced by its
+   exact value; anomaly writes are counted by the operation-count tests.
+10. **A save while a snapshot is alive costs more than 2 ms.** Real (1.5 ms median, 2.7 ms p95).
+    Changed: smaller shared chunks and shards, and each book's entry shared on its own (0.26 ms,
+    p95 0.40 ms).
+11. **Start empty is rewound only when the shown change is its own.** Real, and the spec had the
+    gap the review named. Changed: every change that is or descends from a rewound `StartOver`
+    change is rewound and listed in the presence conflict; *Restore the text* restores such
+    verses (§7.6). L102.
+12. **`per_unit` panics on a conflict whose record has no folded heads.** Real; fixed with 4.

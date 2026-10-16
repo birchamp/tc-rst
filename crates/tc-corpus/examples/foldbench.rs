@@ -366,7 +366,11 @@ fn run(args: &[String]) {
     if std::env::var("FOLDBENCH_STREAM_ONLY").is_ok() {
         open.report();
         after_read.report();
-        println!("peak RSS during the streamed cold opens {open_peak:.0} MiB");
+        println!(
+            "peak RSS during the streamed cold opens {open_peak:.0} MiB, RSS with the fold \
+             open {:.0} MiB",
+            rss_mib()
+        );
         return;
     }
     // The parts on their own: reading every file, then folding what was read.

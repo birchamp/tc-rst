@@ -12,7 +12,101 @@ Budgets (docs/PERFORMANCE.md) that `tc-journal` owns or feeds:
 | Memory, whole Bible open (`tc-store`; the folded state is the fold's part) | 350 MiB peak; 150 MiB steady |
 | Corpus generator, whole Bible | well under a minute |
 
-## What is measured
+## After the review of the fold (the commit that adds this section)
+
+Measured on the same VM and corpus as below, at the commit that adds this section, on
+2026-10-16 from 12:25 to 12:29 UTC. Other jobs shared the VM's four vCPUs (load average 6 to
+10): SHA-256 of every file once took 1,831 ms against 1,022 ms in the quieter measurement
+below, so wall times here are about 1.8 times what an idle machine gives. CPU times are
+less affected. `foldbench run DIR 4`; the cold open now hands each file's prepared changes to
+the fold as soon as a reading thread has them, and the fold indexes them while the threads
+read the rest.
+
+| Action | Runs | Median | p95 | Budget |
+|---|---:|---:|---:|---|
+| Cold open, the fold indexing as files are read | 5 | 11,572 ms | 12,290 ms | 3 s: **missed** (the read) |
+| The fold's work after the last file is read (F2 to F10) | 5 | 677 ms | 993 ms | part of 3 s |
+| Read, verify and prepare alone (4 threads) | 5 | 11,083 ms | 12,265 ms | |
+| Full fold of the prepared changes alone (one thread) | 5 | 2,870 ms | 3,528 ms | |
+| Incremental step: save one Psalms verse | 200 | 0.053 ms | 0.297 ms | 2 ms |
+| Incremental step: record one Psalms decision | 200 | 0.012 ms | 0.021 ms | 1 ms |
+| Incremental step with a live snapshot: save one Psalms verse | 200 | 0.261 ms | 0.421 ms | 2 ms |
+| Incremental step with a live snapshot: record one Psalms decision | 200 | 0.233 ms | 0.401 ms | 1 ms |
+| Incremental step: resolve one Psalms conflict | 100 | 0.064 ms | 0.201 ms | 1 ms |
+| Conflict list and counts from scratch | 20 | 22.7 ms | 29.2 ms | 100 ms |
+| Psalms projection: every file of the book | 20 | 488 ms | 1,034 ms | 300 ms: **missed** |
+| Psalms USFM alone | 20 | 15.8 ms | 23.0 ms | 150 ms |
+| One Psalms chapter's USFM | 20 | 0.142 ms | 0.399 ms | 50 ms |
+| Snapshot (clone of the fold) | 20 | 0.197 ms | 0.883 ms | |
+
+The streamed open used 25.9 to 28.4 s of CPU over all threads, the same as reading then
+folding. Its peak RSS over the five opens was 388 MiB (716 MiB before the change); massif
+counts a heap peak of 233 MB (413 MB before), almost all of it the folded state itself (205
+to 214 MB of useful heap at the end of the open). The Psalms projection's CPU time over all
+threads has a median of 890 ms.
+
+Resident memory after one streamed open (`FOLDBENCH_RUNS=1 FOLDBENCH_STREAM_ONLY=1`, same
+build, 12:32 to 12:35 UTC), peak and then with the fold open:
+
+| Allocator | Reading threads | Peak RSS | RSS with the fold open |
+|---|---:|---:|---:|
+| glibc malloc | 4 | 374 MiB | 374 MiB |
+| glibc malloc | 1 | 274 MiB | 274 MiB |
+| glibc malloc, `MALLOC_ARENA_MAX=1` | 4 | 323 MiB | 323 MiB |
+| jemalloc 5.3 (`LD_PRELOAD`), default settings | 4 | 345 MiB | 256 MiB |
+| jemalloc 5.3, `dirty_decay_ms:0,muzzy_decay_ms:0` | 4 | 285 MiB | 243 MiB |
+
+glibc keeps most of what the reading threads freed in their arenas; jemalloc gives it back to
+the system. Which allocator the app links is `tc-app`'s choice.
+
+The parts of the folded state at massif's peak (one reading thread): each change's entry (its
+id, record, batch, parents, device and sequence, time, and where its value lies) 80 MB, about
+130 B a change; the record keys 44 MB; the batches 30 MB; the position indexes 29 MB; the
+rest is heads, links, passages and conflict lists.
+
+The fold of the corpus of 277,880 changes (`foldbench save bible-share 0.42`, the size of the
+probe's 278,041 actions): 5 runs, median 1,047 ms, p95 1,111 ms (0.92 s in the quieter
+measurement below); its streamed cold open 4.8 s, of which the fold's work after the last
+file 402 ms.
+
+Steps with a live snapshot were added by this review (finding 10). Before the change, back to
+back on the same corpus: 1.51 ms (p95 2.66 ms) for the verse save and 1.43 ms (p95 2.59 ms)
+for the decision; the change shares the tables in chunks of 256 instead of 4,096, the
+position indexes in 256 shards instead of 64, and each book's entry on its own. A snapshot
+now copies about 6,000 pointers (0.2 ms, was 0.02 ms).
+
+### Where the misses stand
+
+**Cold open.** The fold's own share on the critical path is now its work after the last
+file, 0.68 s here (about 0.4 s on an idle VM by the SHA-256 reference). The rest is the read:
+24 to 27 s of CPU for two SHA-256 passes over 664 MB (P2 and P4, about 10 s without SHA
+instructions) and parsing every change. On four cores without SHA instructions that alone is
+6 s or more; with SHA instructions about 13 s of CPU, still above 3 s. STORAGE.md §14 names
+the remedy, `.tc/index.bin`, which `tc-store` owns: an open with an unchanged pack set reads
+heads and value locations instead of verifying and parsing every pack.
+
+**Psalms projection.** 890 ms of CPU over four threads; 358 ms on the quieter VM below.
+Callgrind on the Psalms corpus: decoding the book's 25,132 projected records is about half
+the instructions and already runs on four threads, in chunks; rendering the tN and TWL
+decisions, also chunked on threads, is about a third. What is left is CPU: a decision's
+context is decoded into a map and written out again. Keeping it as its canonical JSON text
+in the record model would remove most of that work; that is a change to `tc-journal`'s
+record types (J1) and every decoder, not made here. Materializing is background work
+(PERFORMANCE.md rule 4): no screen waits for it.
+
+**Memory.** The open's heap peak (233 MB) is within the 350 MiB peak, and so is its RSS
+with an allocator that returns freed memory (345 MiB with jemalloc; 374 to 388 MiB with
+glibc's default arenas). The steady budget of 150 MiB is missed: the folded state is 196 to
+204 MiB of heap on its own (256 MiB RSS with jemalloc). Values are already read on demand
+from the files; what stays resident is each change's place in the history, which every
+incremental step reads without touching the disk. Meeting 150 MiB means keeping only the
+heads and the open books' histories in memory and the rest in `.tc/index.bin`, read when a
+step reaches an idle book. That is a change to the fold's tables and to `tc-store`, not made
+here, and the budget is unchanged.
+
+## Earlier measurement (`225d19e`, before the review)
+
+### What is measured
 
 `crates/tc-corpus/examples/foldbench.rs`. `foldbench save bible DIR` generates the whole-Bible
 corpus of STORAGE.md §14 with `tc-corpus` (seed 1) and writes its packs and pending files
@@ -49,7 +143,7 @@ UGNT text and rows are real for the books the releases hold, the rest sampled, a
 history generated. The corpus generated at `225d19e` is byte for byte the one generated at
 `747a7f4`.
 
-## Machine
+### Machine
 
 Intel Xeon @ 2.80 GHz (Cascade Lake: AVX-512, no SHA extensions), 4 vCPU, 15 GiB RAM;
 virtio disk; Linux 6.18; Rust 1.97.0, release profile. Measured at commit `225d19e`,
@@ -61,7 +155,7 @@ and generated it in 31.7 s and in 57 s. Each comparison below between builds the
 runs both builds in the same session, one right after the other. Four loading threads did about 2.6 times the work of one (21 to 22 s of CPU
 over a 5.8 s load, for about 16.8 s of single-thread work).
 
-## Results
+### Results
 
 Whole Bible, `foldbench run DIR 4`. "Before" is the build of `59bc3e1` (the previous
 evidence), run right after this one:
@@ -107,7 +201,7 @@ Instruction counts (callgrind, Psalms corpus):
 One thread, whole Bible (`loadprof bible`): SHA-256 of every line 5.0 s, `parse_change` 6.2 s
 (114 MB/s), `prepare` 0.6 s; the file hashes (P2) are another pass like the line hashes.
 
-## Memory
+### Memory
 
 Massif, whole Bible, one reading thread (`FOLDBENCH_RUNS=1 FOLDBENCH_FOLD_ONLY=1`): the
 folded state holds 201.9 MB of heap (218.2 MB with the allocator's overhead), about 330 bytes
@@ -118,7 +212,7 @@ change. The peak during the open is 412.9 MB of heap (433.5 MB with overhead), w
 prepared inputs (233 MB) and the growing tables are both alive. The process's resident size
 after five opens was 592 MiB, which includes memory the allocator keeps after frees.
 
-## Operation counts
+### Operation counts
 
 `crates/tc-journal/tests/operation_counts.rs` runs each step on the Psalms corpus (47,357
 changes) and on the corpus made ten times larger (489,713 changes, 30 devices), on a Psalms
@@ -131,7 +225,7 @@ chapter whose records are alike in both. Every counter is equal on both corpora:
 | Alignment | 1 | 1 | 0 | 0 | 1 | 0 | 0 | 1 | 0 |
 | Resolution | 1 | 1 | 0 | 0 | 1 | 1 | 10 | 11 | 0 |
 
-## What changed since the previous measurement
+### What changed since the previous measurement
 
 - **Changes are decoded from a flat parse** (`836be53`). The parser writes one list of nodes
   whose strings stay in the text, and the decoders read it directly, instead of building a
@@ -146,7 +240,7 @@ chapter whose records are alike in both. Every counter is equal on both corpora:
 - **The corpus generator** seals its packs on three threads and no longer scans every
   change written so far for the ones to encode (`abcaf26`).
 
-## What misses and why
+### What misses and why
 
 **Cold open (7.8 s against 3 s).** The fold takes 2.0 s on one thread; the rest is reading
 the packs, which is CPU-bound: one thread needs about 16.8 s for the whole Bible, of which
@@ -173,7 +267,7 @@ single-change batches without a batch entry (about 20 MB), check keys without he
 (about 15 MB), and folding the open's inputs as they are read instead of collecting them
 first (most of the 233 MB the inputs hold at the peak).
 
-## To reproduce
+### To reproduce
 
 ```sh
 cargo build --release -p tc-corpus --example foldbench --example generate --example loadprof
