@@ -11,6 +11,64 @@
   idle machine gives"). Both sides were run on one quiet laptop, interleaved, five runs each,
   with the thermal speed limit read around every run. It never throttled.
 
+## F0. Reconciliation with `docs/JOURNAL-DECISION-2026-10-16.md`
+
+That memo landed on `claude/focused-ride-5uzj7p` (`905f82d`, `5e48078`) while this run was
+going, so neither saw the other. It reaches its conclusions on the shared Xeon at load 2.6 to
+17.8 **with no SHA instructions** — the conditions this run was commissioned to remove. Read
+the two together as follows.
+
+**Its question 5 to the owner is answered.** It asks: *"The reference laptop. Which machine is
+it, and does it have SHA instructions? ... With them, the no-cache open is much cheaper."* The
+machine used here has them (Ice Lake: SHA **and** AVX-512). F1 is the measurement, and "much
+cheaper" is **6.5× on the hash, 2.1× on the cold open**.
+
+**Its question 4 can drop an estimate.** It asks whether "about 5 to 8 s on 4 cores without
+SHA instructions, estimate" is acceptable for a received project. On 4 cores **with** SHA
+instructions the streamed cold open of 617,143 changes is **3,782.8 ms** measured, median of
+5, p95 3,875.8 ms. The band is not needed for that CPU class.
+
+**Where a quiet machine replaces a loaded one.** Same tC4 commit, same corpus sizes:
+
+| Measure | Memo (loaded Xeon, no SHA ext.) | Here (quiet Ice Lake, SHA ext.) |
+|---|---:|---:|
+| tC4 fold only, 278,041 events | 13.9 s (median of 30) | **6.02 s** (median of 5) |
+| Rebuild fold only, 617,143 changes | 2.89 s | **1.13 s** |
+| Rebuild open, 4 threads, 617,143 | 12.7 s loaded; 7.8 s "quiet VM" | **3.78 s** |
+
+**Where the two runs agree, independently.** These were reached separately and should now be
+treated as settled: tC4 re-folds the whole set at every save and keeps no fold between opens
+(its RT-4, F3 here); tC4's fold projects eagerly, so fold-against-fold rows compare different
+stages (its RT-5, "Stages, named" here); tC4's read cost is per file (its RT-7, the 213 µs a
+file here).
+
+**One correction to this document's own headline.** The 40× cold-open ratio in F2 compares each
+side **in its intended configuration** — tC4's reference reader is synchronous and
+single-threaded, the rebuild's open uses 4 threads — and it ran on **APFS**, which costs more
+per file than the memo's Linux virtio disk (213 µs an event here against its 135 µs). The
+memo's single-thread row is the like-for-like ratio and it is **2.1×** (37.7 s against 17.6 s
+at about 300k). Both numbers are honest and they answer different questions: 2.1× is "the same
+work on one thread", 40× is "each design as it would actually run". **Quote 2.1× when comparing
+implementations and 40× only with the thread counts and the filesystem stated.** Nothing in F2
+is retracted, but the bare ratio should not travel on its own.
+
+**One of the memo's three lessons needs narrowing.** It recommends adopting `ring` for a faster
+SHA-256, measuring `sha2` 0.11 at 158 to 180 MB/s against `ring` 0.17 at 245 to 343 MB/s on a
+CPU with no SHA instructions. Hashing 705,135,636 bytes once took 158.2 ms on 4 threads here —
+about 4,460 MB/s aggregate, roughly **1,115 MB/s a thread, some 6.6× the memo's `sha2`
+figure**. That is the size of the SHA-instruction speed-up, which means **`sha2` 0.11 is
+already taking the hardware path on this CPU** and `ring` has little left to give there. Keep
+the lesson for targets with no SHA instructions; do not expect it to help on recent Intel, AMD
+or Apple silicon. Worth confirming with the memo's own probe run on this CPU before acting.
+
+The memo's other two lessons are untouched by this run: hash each byte once (the open still
+hashes every byte twice here, P2 and P4), and show progress after 300 ms.
+
+**What this run does not settle for the memo.** Its central caveat stands: nobody has measured
+a full open, because `tc-store` does not exist. Everything here is `foldbench`, so O9's
+classification of derived paths is not in any number above, and neither is the J2 fold cache,
+which was uncommitted and unreviewed and was not exercised.
+
 ## F1. The SHA-extension estimate is now a measurement, and it moves two budgets
 
 `storage-fold-2026-10-16.md` states the premise as an estimate: *"Processors with SHA
