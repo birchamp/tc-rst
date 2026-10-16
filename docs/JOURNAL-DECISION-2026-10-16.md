@@ -28,7 +28,11 @@ run on one machine today.
   SHA instructions change: hashing 6.5 times faster, a first open without a cache in 3.8 s.
 - **Question 3 is settled by AGENTS.md:** when two people judge a check or an alignment
   differently, both are kept and shown (P3). tC4's newest-wins rule does not apply.
-- **Question 6 is open** and optional: B is safe without a tC4 4.0.x "project moved" message.
+- **Question 6: a tC4 4.0.x "project moved" message only if tC4 knows where the project moved
+  to.** The move writes `ingredients/tc/moved.json` naming the rebuild by an application id;
+  tC4 shows the notice only for an id it ships knowing, with the name and download page from
+  its own table, and otherwise keeps today's refusal. The request to the tC4 team is
+  `docs/TC4-REQUEST-MOVED-NOTICE.md`.
 - **Units C, S1, S2, P, X and I go ahead** under B, with plan steps 1 to 7 and 9.
 
 ## The answer in short
