@@ -11,7 +11,7 @@ mod support;
 
 use common::{Census, run_with_census};
 use proptest::prelude::*;
-use sim::{Forge, Mint, Sim, arb_script, choose, mint};
+use sim::{Forge, Kept, Mint, Sim, arb_script, choose, mint};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use support::{derived_bytes, same_fold};
 use tc_journal::change::{Verified, parse_change};
@@ -938,10 +938,52 @@ fn resolution_always_possible() {
                     .collect();
                 let Some(conflict) = open.first() else { break };
                 let (pick, how) = (rng.next() as u8, rng.next() as u8);
-                let planned = choose(&state, conflict, pick, how)
+                let chosen = choose(&state, conflict, pick, how)
                     .or_else(|| choose(&state, conflict, pick, 0));
-                prop_assert!(planned.is_some(), "no choice for {:?}", conflict.kind);
-                sim.write_planned(0, planned.unwrap());
+                prop_assert!(chosen.is_some(), "no choice for {:?}", conflict.kind);
+                let chosen = chosen.unwrap();
+                // Each version the person picked is what its record keeps: no clock and no
+                // other version of the same side stands in for it.
+                for head in &chosen.picks {
+                    // A candidate, or an earlier version from its record's History.
+                    let picked = state.body(head).map(|b| b.record);
+                    prop_assert!(picked.is_some(), "{head:?} is no version");
+                    let picked = picked.unwrap();
+                    let written = chosen
+                        .planned
+                        .iter()
+                        .find(|p| p.record.key() == picked.key())
+                        .map(|p| p.record.clone());
+                    match chosen.kept {
+                        Kept::Exact => prop_assert_eq!(
+                            written.as_ref(),
+                            Some(&picked),
+                            "{:?}: the picked version is not what is kept",
+                            conflict.kind
+                        ),
+                        Kept::Words => prop_assert_eq!(
+                            written.as_ref().and_then(support::words_of),
+                            support::words_of(&picked),
+                            "{:?} at {:?} {:?} (how {}): the picked words are not what is kept: {:?}; candidates {:?}",
+                            conflict.kind,
+                            conflict.key,
+                            conflict.also_keys,
+                            how % 4,
+                            chosen.planned.iter().map(|p| &p.record).collect::<Vec<_>>(),
+                            conflict
+                                .candidates
+                                .iter()
+                                .map(|c| (c.head, &c.value))
+                                .collect::<Vec<_>>()
+                        ),
+                        Kept::AsItIs => prop_assert!(
+                            written.is_none(),
+                            "{:?}: the picked file is replaced",
+                            conflict.kind
+                        ),
+                    }
+                }
+                sim.write_planned(0, chosen.planned);
                 let after = &sim.devices[0].state;
                 prop_assert!(
                     after.conflict(&conflict.id).is_none(),

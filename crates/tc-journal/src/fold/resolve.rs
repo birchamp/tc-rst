@@ -33,6 +33,10 @@ pub enum ResolveError {
     MissingValue(RecordKey),
     #[error("this choice does not apply to a conflict of this kind")]
     NotOffered,
+    /// A version of `0` could not be read on this computer (an unreadable file): the
+    /// person has not seen it, so no choice may replace it yet (§2.6).
+    #[error("a version of {0:?} cannot be read on this computer yet")]
+    Unreadable(RecordKey),
 }
 
 impl FoldState {
@@ -100,7 +104,10 @@ impl FoldState {
     ) -> Result<Vec<PlannedChange>, ResolveError> {
         match conflict.kind {
             ConflictKind::Passage => {
-                self.keep_side(conflict, candidate.side.unwrap_or(Side::Others))
+                let head = self
+                    .change_idx(&candidate.head)
+                    .ok_or(ResolveError::NotACandidate)?;
+                self.keep_side(conflict, candidate.side.unwrap_or(Side::Others), &[head])
             }
             ConflictKind::StructureIssue => self.keep_structure(conflict, candidate),
             ConflictKind::BookRemovedWhileEdited { .. } => match &candidate.value {
@@ -136,13 +143,42 @@ impl FoldState {
     // Passages
     // ---------------------------------------------------------------------------------
 
-    /// *Keep Maria's passage* (§8.3): every record of the group takes its value from that
-    /// side, with every other passage side rewound; a record the side did not have before
-    /// becomes absent.
-    pub fn keep_side(
+    /// *Keep Maria's passage* (§8.3) for a person who picked `heads`: the first names the
+    /// side, and each picks the version of its own record (of any side: a record the kept
+    /// side did not write may hold two versions of the others). Every record of the group takes
+    /// its value from that side, with every other passage side rewound; a record the side did
+    /// not have before becomes absent. A record for which the side still holds several
+    /// different versions and no pick names one is left to the person
+    /// ([`ResolveError::MissingValue`]): no clock chooses what is kept (I3).
+    pub fn keep_passage(
+        &self,
+        id: &ConflictId,
+        heads: &[ChangeId],
+    ) -> Result<Vec<PlannedChange>, ResolveError> {
+        let conflict = self.listed(id)?;
+        if conflict.kind != ConflictKind::Passage {
+            return Err(ResolveError::NotOffered);
+        }
+        let mut side = None;
+        let mut chosen = Vec::new();
+        for head in heads {
+            let candidate = conflict
+                .candidates
+                .iter()
+                .find(|c| c.head == *head || c.also.contains(head))
+                .ok_or(ResolveError::NotACandidate)?;
+            side.get_or_insert(candidate.side.unwrap_or(Side::Others));
+            chosen.push(self.change_idx(head).ok_or(ResolveError::NotACandidate)?);
+        }
+        let side = side.ok_or(ResolveError::NotACandidate)?;
+        self.keep_side(conflict, side, &chosen)
+    }
+
+    fn keep_side(
         &self,
         conflict: &Conflict,
         side: Side,
+        chosen: &[ChangeIdx],
     ) -> Result<Vec<PlannedChange>, ResolveError> {
         let sides: BTreeSet<Side> = conflict.candidates.iter().filter_map(|c| c.side).collect();
         let losing: BTreeSet<crate::ids::BatchId> = sides
@@ -197,22 +233,56 @@ impl FoldState {
             } else {
                 &preferred
             };
-            let chosen = pool.iter().copied().max_by_key(|c| self.meta(*c).order());
-            let record = match chosen.and_then(|c| record_of(self, c)) {
-                Some(record) => record,
-                None => match &key {
-                    RecordKey::Verse(book, chapter, verse) => Record::Verse {
-                        book: *book,
-                        chapter: *chapter,
-                        verse: *verse,
-                        value: VerseValue::Absent { moved_to: None },
+            let picked: Vec<ChangeIdx> = chosen
+                .iter()
+                .copied()
+                .filter(|c| self.meta(*c).key == k)
+                .collect();
+            let record = match picked.as_slice() {
+                [] => match self.one_value(&key, pool)? {
+                    Some(record) => record,
+                    None => match &key {
+                        RecordKey::Verse(book, chapter, verse) => Record::Verse {
+                            book: *book,
+                            chapter: *chapter,
+                            verse: *verse,
+                            value: VerseValue::Absent { moved_to: None },
+                        },
+                        other => return Err(ResolveError::MissingValue(other.clone())),
                     },
-                    other => return Err(ResolveError::MissingValue(other.clone())),
                 },
+                // The version the person picked, exactly, whichever side it also descends
+                // from.
+                [one] => {
+                    record_of(self, *one).ok_or_else(|| ResolveError::Unreadable(key.clone()))?
+                }
+                _ => return Err(ResolveError::NotACandidate),
             };
             out.push(self.resolving(record));
         }
         Ok(out)
+    }
+
+    /// The one value the versions of `pool` share: `None` when the pool is empty, and
+    /// [`ResolveError::MissingValue`] when they differ, for the person to choose.
+    fn one_value(
+        &self,
+        key: &RecordKey,
+        pool: &[ChangeIdx],
+    ) -> Result<Option<Record>, ResolveError> {
+        let mut found: Option<Record> = None;
+        for c in pool {
+            let record =
+                record_of(self, *c).ok_or_else(|| ResolveError::Unreadable(key.clone()))?;
+            match &found {
+                Some(seen) if *seen != record => {
+                    return Err(ResolveError::MissingValue(key.clone()));
+                }
+                Some(_) => {}
+                None => found = Some(record),
+            }
+        }
+        Ok(found)
     }
 
     // ---------------------------------------------------------------------------------
@@ -231,9 +301,11 @@ impl FoldState {
     /// The latest text a verse had as a verse of its own (its `last` is itself), else its
     /// latest text: what *Keep separate* writes back (the base before a join). "Latest" is
     /// by ancestry: a text that another one continues is never chosen, so a slow clock
-    /// cannot bring back the words a later edit replaced; only between concurrent texts
-    /// does (rank, at, id) choose.
-    fn own_text(&self, k: KeyIdx, verse: u16) -> Option<VerseValue> {
+    /// cannot bring back the words a later edit replaced. Concurrent latest texts that
+    /// differ are the person's to choose ([`ResolveError::MissingValue`]); no clock picks
+    /// one (I3).
+    fn own_text(&self, k: KeyIdx, verse: u16) -> Result<Option<VerseValue>, ResolveError> {
+        let key = self.entry(k).key.clone();
         let mut seen: BTreeSet<ChangeIdx> = BTreeSet::new();
         for h in self.entry(k).heads.iter() {
             seen.extend(ancestors_or_self(self, *h));
@@ -242,16 +314,14 @@ impl FoldState {
             .into_iter()
             .filter(|c| matches!(self.meta(*c).verse(), Some(VerseShape::Text { .. })))
             .collect();
-        let latest = |pool: Vec<ChangeIdx>| -> Option<ChangeIdx> {
+        let latest = |pool: Vec<ChangeIdx>| -> Vec<ChangeIdx> {
             let mut below: BTreeSet<ChangeIdx> = BTreeSet::new();
             for c in &pool {
                 for p in super::merge::key_parents(self, *c) {
                     below.extend(ancestors_or_self(self, p));
                 }
             }
-            pool.into_iter()
-                .filter(|c| !below.contains(c))
-                .max_by_key(|c| self.meta(*c).order())
+            pool.into_iter().filter(|c| !below.contains(c)).collect()
         };
         let own = latest(
             texts
@@ -260,8 +330,25 @@ impl FoldState {
                 .filter(|c| matches!(self.meta(*c).verse(), Some(VerseShape::Text { last, .. }) if last == verse))
                 .collect(),
         );
-        let c = own.or_else(|| latest(texts.clone()))?;
-        match record_of(self, c)? {
+        let pool = if own.is_empty() { latest(texts) } else { own };
+        let mut found: Option<VerseValue> = None;
+        for c in pool {
+            let record = record_of(self, c).ok_or_else(|| ResolveError::Unreadable(key.clone()))?;
+            let Some(value) = Self::as_verse(record, verse) else {
+                continue;
+            };
+            match &found {
+                Some(seen) if *seen != value => return Err(ResolveError::MissingValue(key)),
+                Some(_) => {}
+                None => found = Some(value),
+            }
+        }
+        Ok(found)
+    }
+
+    /// A verse record's text, written as a verse of its own numbered `verse`.
+    fn as_verse(record: Record, verse: u16) -> Option<VerseValue> {
+        match record {
             Record::Verse {
                 value:
                     VerseValue::Text {
@@ -283,10 +370,40 @@ impl FoldState {
         }
     }
 
+    /// The versions a person picked in `heads`, by record: each a folded version of a
+    /// record of the conflict, a head or an earlier version from its History (the text a
+    /// verse had before a join may be two concurrent texts that a later change continued).
+    fn picks(
+        &self,
+        conflict: &Conflict,
+        heads: &[ChangeId],
+    ) -> Result<BTreeMap<RecordKey, ChangeIdx>, ResolveError> {
+        let keys: BTreeSet<RecordKey> = Self::conflict_keys(conflict).into_iter().collect();
+        let mut out = BTreeMap::new();
+        for head in heads {
+            let c = self.change_idx(head).ok_or(ResolveError::NotACandidate)?;
+            let k = self.meta(c).key;
+            let key = self.entry(k).key.clone();
+            if !keys.contains(&key) || !self.meta(c).active {
+                return Err(ResolveError::NotACandidate);
+            }
+            if out.insert(key, c).is_some() {
+                return Err(ResolveError::NotACandidate);
+            }
+        }
+        Ok(out)
+    }
+
     /// *Keep 4 and 5 separate* (§8.3): every verse of the range a text of its own, with the
-    /// words it had before the join.
-    pub fn keep_separate(&self, id: &ConflictId) -> Result<Vec<PlannedChange>, ResolveError> {
+    /// words it had before the join, or the text of the version the person picked for it
+    /// in `heads` (needed where a verse has several such texts).
+    pub fn keep_separate(
+        &self,
+        id: &ConflictId,
+        heads: &[ChangeId],
+    ) -> Result<Vec<PlannedChange>, ResolveError> {
         let conflict = self.listed(id)?;
+        let picks = self.picks(conflict, heads)?;
         let mut out = Vec::new();
         for key in Self::conflict_keys(conflict) {
             let RecordKey::Verse(book, chapter, verse) = &key else {
@@ -295,89 +412,147 @@ impl FoldState {
                 }
                 continue;
             };
-            let value = self
-                .idx_of(&key)
-                .and_then(|k| self.own_text(k, verse.get()))
-                .unwrap_or(VerseValue::Absent { moved_to: None });
+            let picked = match picks.get(&key) {
+                Some(c) => {
+                    let record =
+                        record_of(self, *c).ok_or_else(|| ResolveError::Unreadable(key.clone()))?;
+                    Some(Self::as_verse(record, verse.get()).ok_or(ResolveError::NotOffered)?)
+                }
+                None => match self.idx_of(&key) {
+                    Some(k) => self.own_text(k, verse.get())?,
+                    None => None,
+                },
+            };
+            let value = picked.unwrap_or(VerseValue::Absent { moved_to: None });
             out.push(self.resolving(Self::verse_record(*book, *chapter, *verse, value)));
         }
         Ok(out)
     }
 
-    /// *Keep the joined verses* (§8.3): the first verse of the range keeps its span text,
-    /// the others are covered by it.
-    pub fn keep_joined(&self, id: &ConflictId) -> Result<Vec<PlannedChange>, ResolveError> {
+    /// *Keep the joined verses* (§8.3): one verse of the range keeps a span text and the
+    /// verses after it are covered by it. The span is the first span the person picked in
+    /// `heads`, at its own verse; else the one version of the range's first verse that
+    /// spans; else that verse's own text, spanning the range. A verse of the range before
+    /// the span keeps its own text, or the text picked for it in `heads`, as a verse of its
+    /// own.
+    pub fn keep_joined(
+        &self,
+        id: &ConflictId,
+        heads: &[ChangeId],
+    ) -> Result<Vec<PlannedChange>, ResolveError> {
         let conflict = self.listed(id)?;
-        let keys = Self::conflict_keys(conflict);
-        let verses: Vec<(BookId, ChapterNo, VerseNo)> = keys
+        let picks = self.picks(conflict, heads)?;
+        let mut verses: Vec<(BookId, ChapterNo, VerseNo)> = Self::conflict_keys(conflict)
             .iter()
             .filter_map(|k| match k {
                 RecordKey::Verse(b, c, v) => Some((*b, *c, *v)),
                 _ => None,
             })
             .collect();
-        let Some(&(book, chapter, first)) = verses.iter().min_by_key(|(_, _, v)| *v) else {
+        verses.sort();
+        let Some(&(book, chapter, first)) = verses.first() else {
             return Err(ResolveError::NotOffered);
         };
-        let last = verses.iter().map(|(_, _, v)| *v).max().unwrap_or(first);
-        let head = self
-            .projected(&RecordKey::Verse(book, chapter, first))
-            .and_then(|r| match r {
+        let text_of = |key: &RecordKey, c: ChangeIdx| -> Result<Option<VerseValue>, ResolveError> {
+            let record = record_of(self, c).ok_or_else(|| ResolveError::Unreadable(key.clone()))?;
+            Ok(match record {
                 Record::Verse {
-                    value: VerseValue::Text { .. },
+                    value: value @ VerseValue::Text { .. },
                     ..
-                } => Some(r),
+                } => Some(value),
                 _ => None,
-            });
-        let text = match head {
-            Some(Record::Verse {
-                value:
-                    VerseValue::Text {
-                        marker,
-                        words,
-                        layout,
-                        from,
-                        ..
-                    },
-                ..
-            }) => VerseValue::Text {
-                marker,
-                words,
-                layout,
-                last,
-                from,
-            },
-            _ => self
-                .idx_of(&RecordKey::Verse(book, chapter, first))
-                .and_then(|k| self.own_text(k, first.get()))
-                .map(|v| match v {
-                    VerseValue::Text {
-                        marker,
-                        words,
-                        layout,
-                        from,
-                        ..
-                    } => VerseValue::Text {
-                        marker,
-                        words,
-                        layout,
-                        last,
-                        from,
-                    },
-                    other => other,
-                })
-                .ok_or(ResolveError::NotOffered)?,
+            })
         };
-        let mut out = vec![self.resolving(Self::verse_record(book, chapter, first, text))];
-        for (b, c, v) in verses {
-            if v != first {
-                out.push(self.resolving(Self::verse_record(
-                    b,
-                    c,
-                    v,
-                    VerseValue::Covered { by: first },
-                )));
+        let spans = |v: VerseNo, value: &VerseValue| matches!(value, VerseValue::Text { last, .. } if *last > v);
+        // The first picked span, at its own verse; later picks are texts of verses of
+        // their own.
+        let mut start: Option<(VerseNo, VerseValue)> = None;
+        for head in heads {
+            let Some(c) = self.change_idx(head) else {
+                continue;
+            };
+            let key = self.entry(self.meta(c).key).key.clone();
+            let RecordKey::Verse(_, _, v) = key else {
+                continue;
+            };
+            if let Some(value) = text_of(&key, c)?
+                && spans(v, &value)
+            {
+                start = Some((v, value));
+                break;
             }
+        }
+        let first_key = RecordKey::Verse(book, chapter, first);
+        let (start, text) = match start {
+            Some(found) => found,
+            None => {
+                let text = match picks.get(&first_key) {
+                    Some(c) => text_of(&first_key, *c)?.ok_or(ResolveError::NotOffered)?,
+                    None => {
+                        let k = self.idx_of(&first_key).ok_or(ResolveError::NotOffered)?;
+                        let mut found: Vec<VerseValue> = Vec::new();
+                        for h in self.entry(k).heads.iter() {
+                            if let Some(value) = text_of(&first_key, *h)?
+                                && spans(first, &value)
+                                && !found.contains(&value)
+                            {
+                                found.push(value);
+                            }
+                        }
+                        match found.len() {
+                            0 => self
+                                .own_text(k, first.get())?
+                                .ok_or(ResolveError::NotOffered)?,
+                            1 => found.remove(0),
+                            _ => return Err(ResolveError::MissingValue(first_key.clone())),
+                        }
+                    }
+                };
+                (first, text)
+            }
+        };
+        let VerseValue::Text {
+            marker,
+            words,
+            layout,
+            from,
+            last: span_last,
+        } = text
+        else {
+            return Err(ResolveError::NotOffered);
+        };
+        let last = verses
+            .iter()
+            .map(|(_, _, v)| *v)
+            .max()
+            .unwrap_or(start)
+            .max(span_last);
+        let mut out = Vec::new();
+        for (b, c, v) in verses {
+            let key = RecordKey::Verse(b, c, v);
+            let value = if v == start {
+                VerseValue::Text {
+                    marker: marker.clone(),
+                    words: words.clone(),
+                    layout: layout.clone(),
+                    last,
+                    from,
+                }
+            } else if v > start {
+                VerseValue::Covered { by: start }
+            } else {
+                // Before the kept span: the verse's own text, or the version picked.
+                let own = match picks.get(&key) {
+                    Some(p) => text_of(&key, *p)?
+                        .and_then(|t| Self::as_verse(Self::verse_record(b, c, v, t), v.get())),
+                    None => match self.idx_of(&key) {
+                        Some(k) => self.own_text(k, v.get())?,
+                        None => None,
+                    },
+                };
+                own.unwrap_or(VerseValue::Absent { moved_to: None })
+            };
+            out.push(self.resolving(Self::verse_record(b, c, v, value)));
         }
         Ok(out)
     }
@@ -403,8 +578,14 @@ impl FoldState {
                 value: VerseValue::Text { last, .. },
                 verse,
                 ..
-            } if last > verse => self.keep_joined(&conflict.id),
-            _ => self.keep_separate(&conflict.id),
+            } if last > verse => self.keep_joined(&conflict.id, &[candidate.head]),
+            // A text of its own is the version kept for its verse; a covered or absent
+            // verse picks nothing, and each verse keeps its own text.
+            Record::Verse {
+                value: VerseValue::Text { .. },
+                ..
+            } => self.keep_separate(&conflict.id, &[candidate.head]),
+            _ => self.keep_separate(&conflict.id, &[]),
         }
     }
 
@@ -573,7 +754,7 @@ impl FoldState {
         }
         let mut versions: Vec<Vec<Option<Record>>> = Vec::new();
         for side in &sides {
-            let values = self.keep_side(conflict, *side).ok()?;
+            let values = self.keep_side(conflict, *side, &[]).ok()?;
             let by_key: BTreeMap<RecordKey, Record> = values
                 .into_iter()
                 .map(|p| (p.record.key(), p.record))

@@ -2357,6 +2357,11 @@ Every choice is one `Resolve` batch whose changes name every current head as par
     verse 4 had before the join (the base), in an editor so the person can adjust it. No
     duplicated words are left for the person to find.
   - *Edit the passage*: the section editor with every version beside it.
+
+  A choice keeps the version the person picked exactly. Where a verse of the range holds
+  two concurrent versions of its own text (two people changed it), or the range's first verse
+  two spans, the choice asks which one to keep, from the candidates or from History; no clock
+  picks what is kept (I3).
 - **Passage:** described as what each side did to the passage, in words: "Maria renumbered
   Titus 1:16–2:15 (each verse moved one number later). Juan changed the verse that was 2:2
   before the renumber (its text is now at 2:3)." or "Maria moved 'C' from verse 5 to verse 4.
@@ -2368,6 +2373,12 @@ Every choice is one `Resolve` batch whose changes name every current head as par
     passage ("Juan's change applied to 2:3, where that text now is"; "'A B′ C' in 4, 'D E' in
     5"), the person sees it and confirms it;
   - *Edit the passage*: the section editor with every side beside it.
+
+  *Keep* on a candidate keeps that side and writes exactly that candidate on its record. A
+  side can hold two different versions of one record (Juan and Ana each changed verse 5 while
+  Maria joined 4–5: both are "the others"), and a record the kept side did not write can keep
+  two versions of the others. For each such record the choice asks which version to keep
+  (`keep_passage` takes one picked version per record); no clock picks what is kept (I3).
 - **Book removed while edited:** *Restore Jonah* (`Present`, every record projects again);
   *Keep it removed* (a new `Removed` whose `seen` covers every current head, so the unseen work
   is now seen and stays in History); *Show Juan's changes* (read-only).
@@ -3405,6 +3416,12 @@ and the on-disk end state, not only what the fold returns.
 | L94 | The working folder is an invalid burrito during seals and intakes for longer than I7 said | every write group ends with a `metadata.json` rewrite; I7 states the windows; the crash tests assert validity after each (§1 I7, §16.2) | `burrito_valid_after_every_write_group` |
 | L95 | A display name such as `Ana/Pedro` makes every USB export fail | the file name is cleaned and falls back to ids (§10.1 E4) | `usb_export_name_sanitized` |
 | L96 | A large push cannot resume, so an upgrade never reaches Door43 on a poor link | large pushes are a chain of valid commits pushed one at a time; the exchange file is offered after repeated failures (§9.5) | `sync_large_push_chain_resumes` |
+
+### 15.4 Cases found by the review of the fold
+
+| # | Case | What prevents it | Test |
+|---|---|---|---|
+| L97 | Keeping one candidate of a passage conflict writes another person's version of the same record, the one a later clock prefers, and supersedes the chosen one; *Keep separate* picks between two concurrent texts of a verse by clock | a choice writes exactly the version picked; where a side, or a verse's own history, holds two different versions the person did not pick between, the choice asks (§8.3) | `loss_passage_keeps_the_picked_version`, `loss_passage_side_with_two_versions_asks`, `loss_keep_separate_never_picks_by_clock`, `loss_keep_joined_keeps_the_picked_span`; property `resolution_always_possible` |
 
 ---
 

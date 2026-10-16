@@ -22,7 +22,8 @@ use std::sync::Arc;
 use tc_journal::change::{Verified, parse_change};
 use tc_journal::command::{Choice, PlannedChange};
 use tc_journal::fold::{
-    Anomaly, BookView, Conflict, ConflictKind, FoldInput, FoldState, ProjectKind, Resolved,
+    Anomaly, BookView, Conflict, ConflictKind, FoldInput, FoldState, ProjectKind, ResolveError,
+    Resolved,
 };
 use tc_journal::json::{Json, JsonMap};
 use tc_journal::record::{
@@ -1770,11 +1771,11 @@ impl Sim {
             return;
         }
         let conflict = conflicts[usize::from(pick) % conflicts.len()].clone();
-        let planned = choose(&self.devices[d].state, &conflict, pick, how);
-        let Some(planned) = planned else {
+        let chosen = choose(&self.devices[d].state, &conflict, pick, how);
+        let Some(chosen) = chosen else {
             return;
         };
-        self.write_planned(d, planned);
+        self.write_planned(d, chosen.planned);
     }
 
     pub fn write_planned(&mut self, d: usize, planned: Vec<PlannedChange>) {
@@ -1899,45 +1900,187 @@ impl Sim {
     }
 }
 
-/// A choice for a conflict, as a person might make it.
-pub fn choose(
-    state: &FoldState,
-    conflict: &Conflict,
-    pick: u8,
-    how: u8,
-) -> Option<Vec<PlannedChange>> {
+/// A person's choice made into changes, and the versions the person picked.
+pub struct Chosen {
+    pub planned: Vec<PlannedChange>,
+    pub picks: Vec<ChangeId>,
+    pub kept: Kept,
+}
+
+/// How a picked version is kept.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kept {
+    /// Its record is written with exactly its value.
+    Exact,
+    /// Its record is written with its words (a structure choice numbers a text again).
+    Words,
+    /// Its record is left as it is (a path-case choice removes the other files).
+    AsItIs,
+}
+
+type Plan<'a> = dyn Fn(&[ChangeId]) -> Result<Vec<PlannedChange>, ResolveError> + 'a;
+
+/// A choice for a conflict, as a person might make it. Where a choice leaves a record's
+/// version to the person ([`ResolveError::MissingValue`]: its side holds several), the
+/// person picks one of that record's candidates and chooses again.
+pub fn choose(state: &FoldState, conflict: &Conflict, pick: u8, how: u8) -> Option<Chosen> {
     let id = &conflict.id;
-    let candidate = |n: u8| {
-        conflict
-            .candidates
-            .get(usize::from(n) % conflict.candidates.len().max(1))
-            .map(|c| Choice::Candidate { head: c.head })
+    let first = conflict
+        .candidates
+        .get(usize::from(pick) % conflict.candidates.len().max(1))
+        .cloned();
+    let structure = |c: &tc_journal::fold::Candidate| {
+        matches!(
+            &c.value,
+            Record::Verse {
+                value: VerseValue::Text { .. },
+                ..
+            }
+        )
     };
-    let by_candidate = || state.resolution(id, &candidate(pick)?).ok();
+    // Picks a candidate for each record a choice leaves open, and chooses again.
+    let with_picks = |mut picks: Vec<ChangeId>, kept: Kept, plan: &Plan| -> Option<Chosen> {
+        let exact = kept == Kept::Exact;
+        let side = picks.first().and_then(|p| {
+            conflict
+                .candidates
+                .iter()
+                .find(|c| c.head == *p)
+                .and_then(|c| c.side)
+        });
+        for round in 0..64usize {
+            match plan(&picks) {
+                Ok(planned) => {
+                    return Some(Chosen {
+                        planned,
+                        picks,
+                        kept,
+                    });
+                }
+                Err(ResolveError::MissingValue(key)) => {
+                    // The kept side's versions first; a record that side did not write
+                    // may hold two versions of the others.
+                    let mut options: Vec<(bool, ChangeId)> = conflict
+                        .candidates
+                        .iter()
+                        .filter(|c| c.value.key() == key && (exact || structure(c)))
+                        .filter(|c| !picks.contains(&c.head))
+                        .map(|c| (c.side != side, c.head))
+                        .collect();
+                    if options.is_empty() && !exact {
+                        // The text a verse had before a join may be two concurrent
+                        // versions in its History.
+                        options = state
+                            .history(&key)
+                            .into_iter()
+                            .filter(|h| !picks.contains(h))
+                            .filter(|h| {
+                                state.body(h).is_some_and(|b| {
+                                    matches!(
+                                        b.record,
+                                        Record::Verse {
+                                            value: VerseValue::Text { .. },
+                                            ..
+                                        }
+                                    )
+                                })
+                            })
+                            .map(|h| (false, h))
+                            .collect();
+                    }
+                    options.sort();
+                    let same = options.iter().filter(|(other, _)| !other).count();
+                    let options: Vec<ChangeId> = options
+                        .into_iter()
+                        .take(if same > 0 { same } else { usize::MAX })
+                        .map(|(_, head)| head)
+                        .collect();
+                    if options.is_empty() {
+                        return None;
+                    }
+                    picks.push(options[(usize::from(pick) + round) % options.len()]);
+                }
+                Err(_) => return None,
+            }
+        }
+        None
+    };
+    let separate = |picks: &[ChangeId]| state.keep_separate(id, picks);
+    let joined = |picks: &[ChangeId]| state.keep_joined(id, picks);
+    let passage = |picks: &[ChangeId]| state.keep_passage(id, picks);
+    let by_candidate = || {
+        let first = first.clone()?;
+        let head = first.head;
+        match state.resolution(id, &Choice::Candidate { head }) {
+            Ok(planned) => Some(Chosen {
+                planned,
+                // A structure choice keeps a covered or absent candidate's record as each
+                // verse's own text.
+                picks: if conflict.kind == ConflictKind::StructureIssue && !structure(&first) {
+                    Vec::new()
+                } else {
+                    vec![head]
+                },
+                kept: match conflict.kind {
+                    ConflictKind::StructureIssue => Kept::Words,
+                    ConflictKind::PathCase => Kept::AsItIs,
+                    _ => Kept::Exact,
+                },
+            }),
+            Err(ResolveError::MissingValue(_)) => match conflict.kind {
+                ConflictKind::Passage => with_picks(vec![head], Kept::Exact, &passage),
+                ConflictKind::StructureIssue => {
+                    let spans = matches!(
+                        &first.value,
+                        Record::Verse { value: VerseValue::Text { last, .. }, verse, .. } if last > verse
+                    );
+                    let picks = if structure(&first) {
+                        vec![head]
+                    } else {
+                        Vec::new()
+                    };
+                    if spans {
+                        with_picks(picks, Kept::Words, &joined)
+                    } else {
+                        with_picks(picks, Kept::Words, &separate)
+                    }
+                }
+                _ => None,
+            },
+            Err(_) => None,
+        }
+    };
+    let values = |planned: Option<Vec<PlannedChange>>| {
+        planned.map(|planned| Chosen {
+            planned,
+            picks: Vec::new(),
+            kept: Kept::Words,
+        })
+    };
     match (conflict.kind, how % 4) {
         (ConflictKind::VerseText, 1) => match state.combine(id) {
-            Some(record) => state.resolution(id, &Choice::Values(vec![record])).ok(),
+            Some(record) => values(state.resolution(id, &Choice::Values(vec![record])).ok()),
             None => by_candidate(),
         },
         (ConflictKind::Passage, 1) => match state.combine_passage(id) {
-            Some(records) => state.resolution(id, &Choice::Values(records)).ok(),
+            Some(records) => values(state.resolution(id, &Choice::Values(records)).ok()),
             None => by_candidate(),
         },
         (
             ConflictKind::Passage | ConflictKind::VerseStructure | ConflictKind::StructureIssue,
             2,
-        ) => state.keep_separate(id).ok(),
+        ) => with_picks(Vec::new(), Kept::Words, &separate),
         (
             ConflictKind::Passage | ConflictKind::VerseStructure | ConflictKind::StructureIssue,
             3,
-        ) => state.keep_joined(id).ok().or_else(by_candidate),
-        (ConflictKind::CheckMoved, 1 | 3) => state.apply_to_moved_check(id).ok(),
+        ) => with_picks(Vec::new(), Kept::Words, &joined).or_else(by_candidate),
+        (ConflictKind::CheckMoved, 1 | 3) => values(state.apply_to_moved_check(id).ok()),
         (ConflictKind::BookRemovedWhileEdited { .. }, 1) => match &conflict.key {
-            RecordKey::BookPresence(book) => Some(vec![state.keep_removed(*book)]),
+            RecordKey::BookPresence(book) => values(Some(vec![state.keep_removed(*book)])),
             _ => None,
         },
         (ConflictKind::BookRemovedWhileEdited { .. } | ConflictKind::LastBookRemoved, _) => {
-            state.restore_book(*id).ok()
+            values(state.restore_book(*id).ok())
         }
         _ => by_candidate(),
     }

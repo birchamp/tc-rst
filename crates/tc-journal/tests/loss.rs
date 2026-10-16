@@ -259,7 +259,7 @@ fn loss_span_resolution_restores_both_verses() {
     let state = fold(&all);
     let id = the_conflict(&state).id;
     let mut ana = Dev::new(3);
-    let planned = state.keep_separate(&id).expect("offered");
+    let planned = state.keep_separate(&id, &[]).expect("offered");
     assert_eq!(planned.len(), 2, "one batch writes both verses");
     all.extend(ana.apply(planned));
     let state = assert_converges(&all);
@@ -2070,5 +2070,165 @@ fn loss_metadata_unmodelled_fields_kept() {
     assert_eq!(
         doc["localizedNames"]["book-tit"]["long"]["en"],
         "The Letter to Titus"
+    );
+}
+
+// ---------------------------------------------------------------------------------------
+// Cases found by the review of the fold (§15.4)
+// ---------------------------------------------------------------------------------------
+
+/// Maria joins 1:4–5 while Juan and Ana each change verse 5 (Ana later) and, when
+/// `both_verses`, verse 4 too: one side, "the others", holds two versions of a record.
+fn join_vs_two_editors(both_verses: bool) -> (Vec<Change>, FoldState, Vec<Change>, Vec<Change>) {
+    let mut maria = Dev::new(1);
+    let mut juan = Dev::new(2);
+    let mut ana = Dev::new(3);
+    let book = imported_book(&mut maria, &[6]);
+    juan.at = maria.at + 60_000;
+    ana.at = maria.at + 3_600_000;
+    let span = join(&mut maria, &book, 1, 4, 5);
+    let edits = |dev: &mut Dev, who: &str| -> Vec<Change> {
+        let mut out = vec![dev.one(
+            verse(1, 5, text(&format!("{who}'s five"), 5)),
+            vec![on(&book, &verse_key(1, 5)).id()],
+        )];
+        if both_verses {
+            out.push(dev.one(
+                verse(1, 4, text(&format!("{who}'s four"), 4)),
+                vec![on(&book, &verse_key(1, 4)).id()],
+            ));
+        }
+        out
+    };
+    let juans = edits(&mut juan, "Juan");
+    let anas = edits(&mut ana, "Ana");
+    let all = all_of(&[&book, &span, &juans, &anas]);
+    let state = assert_converges(&all);
+    (all, state, juans, anas)
+}
+
+/// L97: keeping one candidate of a passage conflict writes exactly that version, never
+/// another version of the same side that a later clock prefers (I3).
+#[test]
+fn loss_passage_keeps_the_picked_version() {
+    for pick_juan in [true, false] {
+        let (mut all, state, juans, anas) = join_vs_two_editors(false);
+        let conflict = the_conflict(&state);
+        assert_eq!(conflict.kind, ConflictKind::Passage);
+        let (picked, words) = if pick_juan {
+            (&juans[0], "Juan's five")
+        } else {
+            (&anas[0], "Ana's five")
+        };
+        let planned = state
+            .resolution(&conflict.id, &Choice::Candidate { head: picked.id() })
+            .expect("one version of each record");
+        let five = planned
+            .iter()
+            .find(|p| p.record.key() == verse_key(1, 5))
+            .expect("verse 5 is written");
+        assert_eq!(five.record, verse(1, 5, text(words, 5)));
+        let four = planned
+            .iter()
+            .find(|p| p.record.key() == verse_key(1, 4))
+            .expect("verse 4 is written");
+        assert_eq!(four.record, verse(1, 4, text("words of 1:4", 4)));
+        all.extend(Dev::new(4).apply(planned));
+        let state = assert_converges(&all);
+        assert_eq!(state.conflict_count(), 0);
+        assert_eq!(projected_words(&state, 1, 5).as_deref(), Some(words));
+    }
+}
+
+/// L97: where the kept side holds two versions of a record the person did not pick
+/// between, the choice asks for one instead of letting the clock pick; picking it keeps it.
+#[test]
+fn loss_passage_side_with_two_versions_asks() {
+    let (mut all, state, juans, anas) = join_vs_two_editors(true);
+    let conflict = the_conflict(&state);
+    let asked = state.resolution(
+        &conflict.id,
+        &Choice::Candidate {
+            head: juans[0].id(),
+        },
+    );
+    assert_eq!(
+        asked,
+        Err(tc_journal::fold::ResolveError::MissingValue(verse_key(
+            1, 4
+        )))
+    );
+    let planned = state
+        .keep_passage(&conflict.id, &[juans[0].id(), anas[1].id()])
+        .expect("a version of each record");
+    let by_key: BTreeMap<RecordKey, Record> = planned
+        .iter()
+        .map(|p| (p.record.key(), p.record.clone()))
+        .collect();
+    assert_eq!(
+        by_key[&verse_key(1, 5)],
+        verse(1, 5, text("Juan's five", 5))
+    );
+    assert_eq!(by_key[&verse_key(1, 4)], verse(1, 4, text("Ana's four", 4)));
+    all.extend(Dev::new(4).apply(planned));
+    let state = assert_converges(&all);
+    assert_eq!(state.conflict_count(), 0);
+}
+
+/// L97: *Keep 4 and 5 separate* writes back a verse's own text only when it has one;
+/// two concurrent texts of it are the person's to pick, never the newest by clock.
+#[test]
+fn loss_keep_separate_never_picks_by_clock() {
+    let (_, state, juans, _) = join_vs_two_editors(false);
+    let conflict = the_conflict(&state);
+    assert_eq!(
+        state.keep_separate(&conflict.id, &[]),
+        Err(tc_journal::fold::ResolveError::MissingValue(verse_key(
+            1, 5
+        )))
+    );
+    let planned = state
+        .keep_separate(&conflict.id, &[juans[0].id()])
+        .expect("Juan's verse 5 picked");
+    let five = planned
+        .iter()
+        .find(|p| p.record.key() == verse_key(1, 5))
+        .expect("verse 5");
+    assert_eq!(five.record, verse(1, 5, text("Juan's five", 5)));
+}
+
+/// L97: keeping the joined verses after picking a span keeps that span's words at its own
+/// verse, whatever span the range's first verse holds.
+#[test]
+fn loss_keep_joined_keeps_the_picked_span() {
+    let mut maria = Dev::new(1);
+    let mut juan = Dev::new(2);
+    let book = imported_book(&mut maria, &[6]);
+    // Two spans written alone by a foreign tool: 3–4 and 4–5, so 3 is short of its end.
+    let three = maria.one(
+        verse(1, 3, text("words of 1:3 words of 1:4", 4)),
+        vec![on(&book, &verse_key(1, 3)).id()],
+    );
+    let four = juan.one(
+        verse(1, 4, text("words of 1:4 words of 1:5", 5)),
+        vec![on(&book, &verse_key(1, 4)).id()],
+    );
+    let state = assert_converges(&all_of(&[&book, &[three, four.clone()]]));
+    let conflict = state
+        .conflicts()
+        .find(|c| c.kind == ConflictKind::StructureIssue && c.key == verse_key(1, 3))
+        .cloned()
+        .expect("verse 3 spans past a verse it does not cover");
+    let planned = state
+        .resolution(&conflict.id, &Choice::Candidate { head: four.id() })
+        .expect("offered");
+    let by_key: BTreeMap<RecordKey, Record> = planned
+        .iter()
+        .map(|p| (p.record.key(), p.record.clone()))
+        .collect();
+    assert_eq!(
+        by_key.get(&verse_key(1, 4)).and_then(words_of).as_deref(),
+        Some("words of 1:4 words of 1:5"),
+        "{planned:#?}"
     );
 }
