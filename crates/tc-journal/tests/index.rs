@@ -11,17 +11,16 @@ use common::{arb_body, fixtures, local, project, verse_change};
 use proptest::prelude::*;
 use std::sync::Arc;
 use tc_corpus::{Corpus, Spec};
+use tc_journal::consolidate::consolidate;
 use tc_journal::fold::{FoldInput, FoldState, ProjectKind, ValueAt, ValueSource};
 use tc_journal::index::{
     FileKey, Fingerprinter, INDEX_VERSION, Index, IndexError, Loaded, Section, fingerprint,
     load_pack, load_pending,
 };
 use tc_journal::json::{self, Json};
-use tc_journal::pack::{PackSpec, seal};
+use tc_journal::pack::{PackPath, PackSpec, YearMonth, seal};
 use tc_journal::pending::{PendingHeader, PendingStatus, Purpose, encode_pending, read_pending};
 use tc_journal::{Change, ChangeId, PackId, ProjectId, Verified, WallTime, parse_change};
-
-const BUILD: &str = "test build";
 
 /// Whether a file of a project folder is a pack or a pending file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,10 +134,27 @@ fn every_kind() -> Vec<Verified> {
         json::parse(br#"{"note":{"id":"n1","value":{"text":"later"}}}"#).unwrap(),
     );
     map.insert("v".into(), Json::from(1u64));
-    let text = Json::Obj(map).to_canonical_string();
-    let newer = parse_change(ChangeId::of(text.as_bytes()), Arc::from(text.as_bytes()));
+    let newer_text = Json::Obj(map).to_canonical_string();
+    let newer = parse_change(
+        ChangeId::of(newer_text.as_bytes()),
+        Arc::from(newer_text.as_bytes()),
+    );
     assert!(matches!(newer, Verified::Change(_)), "{newer:?}");
     out.push(newer);
+    // Values the generated fixture happens not to hold.
+    use support::{Dev, absent, present, text, text_from, verse};
+    use tc_journal::record::PresentHow;
+    let mut dev = Dev::new(8);
+    let values = vec![
+        verse(1, 1, text("words", 1)),
+        verse(1, 3, text_from("moved here", 3, (2, 1))),
+        verse(2, 1, absent(None)),
+        present(PresentHow::Added),
+        present(PresentHow::StartedEmpty),
+    ];
+    for record in values {
+        out.push(Verified::Change(dev.one(record, vec![])));
+    }
     out
 }
 
@@ -160,7 +176,7 @@ fn every_kind_from_the_cache_is_what_parsing_gives() {
                 .expect("the file can be cached")
         })
         .collect();
-    let index = Index::parse(Index::encode(project(), BUILD, &sections), project(), BUILD).unwrap();
+    let index = Index::parse(Index::encode(project(), &sections), project()).unwrap();
     assert_eq!(index.len(), files.len());
     for (n, file) in files.iter().enumerate() {
         let section = index.section(&file.key()).expect("a section for the file");
@@ -185,8 +201,8 @@ proptest! {
             .collect();
         for file_ in packs_of(&changes).into_iter().chain([pending_of(&changes, 4)]) {
             let section = file_.section(project(), file).expect("the file can be cached");
-            let bytes = Index::encode(project(), BUILD, [&section]);
-            let index = Index::parse(bytes, project(), BUILD).unwrap();
+            let bytes = Index::encode(project(), [&section]);
+            let index = Index::parse(bytes, project()).unwrap();
             let from_cache = index.section(&file_.key()).unwrap().inputs(file).unwrap();
             prop_assert_eq!(texts(&from_cache), texts(&file_.read(project(), file)));
         }
@@ -268,7 +284,7 @@ fn an_open_from_the_cache_is_the_open_from_the_files() {
                 .expect("the file can be cached")
         })
         .collect();
-    let index = Index::parse(Index::encode(project, BUILD, &sections), project, BUILD).unwrap();
+    let index = Index::parse(Index::encode(project, &sections), project).unwrap();
     let (cached, from_cache) = open(&files, Some(&index));
     assert_eq!(from_cache, files.len());
     support::same_fold(&read, &cached, "every file from the cache");
@@ -346,12 +362,7 @@ fn an_open_from_the_cache_is_the_open_from_the_files() {
 fn a_section_stands_only_for_the_bytes_it_was_made_from() {
     let file = pending_of(&every_kind(), 3);
     let section = file.section(project(), 0).unwrap();
-    let index = Index::parse(
-        Index::encode(project(), BUILD, [&section]),
-        project(),
-        BUILD,
-    )
-    .unwrap();
+    let index = Index::parse(Index::encode(project(), [&section]), project()).unwrap();
     let key = file.key();
     assert!(index.section(&key).is_some());
     let mut other = key.clone();
@@ -366,32 +377,28 @@ fn a_section_stands_only_for_the_bytes_it_was_made_from() {
 }
 
 #[test]
-fn an_index_of_another_project_version_or_build_is_not_read() {
+fn an_index_of_another_project_or_version_is_not_read() {
     let file = pending_of(&every_kind(), 3);
     let section = file.section(project(), 0).unwrap();
-    let bytes = Index::encode(project(), BUILD, [&section]);
+    let bytes = Index::encode(project(), [&section]);
     assert_eq!(
-        Index::parse(bytes.clone(), common::other_project(), BUILD).err(),
+        Index::parse(bytes.clone(), common::other_project()).err(),
         Some(IndexError::Project)
-    );
-    assert_eq!(
-        Index::parse(bytes.clone(), project(), "another build").err(),
-        Some(IndexError::Build)
     );
     let mut newer = bytes.clone();
     newer[8..12].copy_from_slice(&(INDEX_VERSION + 1).to_le_bytes());
     assert_eq!(
-        Index::parse(newer, project(), BUILD).err(),
+        Index::parse(newer, project()).err(),
         Some(IndexError::Version(INDEX_VERSION + 1))
     );
     let mut minor = bytes.clone();
     minor[12] ^= 1;
     assert!(matches!(
-        Index::parse(minor, project(), BUILD).err(),
+        Index::parse(minor, project()).err(),
         Some(IndexError::Minor(_))
     ));
     assert_eq!(
-        Index::parse(b"not an index".to_vec(), project(), BUILD).err(),
+        Index::parse(b"not an index".to_vec(), project()).err(),
         Some(IndexError::NotAnIndex)
     );
 }
@@ -404,10 +411,10 @@ fn a_damaged_index_never_gives_other_changes() {
     let changes: Vec<Verified> = every_kind().into_iter().take(6).collect();
     let file = pending_of(&changes, 3);
     let section = file.section(project(), 0).unwrap();
-    let bytes = Index::encode(project(), BUILD, [&section]);
+    let bytes = Index::encode(project(), [&section]);
     let expected = texts(&file.read(project(), 0));
     let check = |damaged: Vec<u8>, how: &str| {
-        let Ok(index) = Index::parse(damaged, project(), BUILD) else {
+        let Ok(index) = Index::parse(damaged, project()) else {
             return;
         };
         let Some(section) = index.section(&file.key()) else {
@@ -423,7 +430,7 @@ fn a_damaged_index_never_gives_other_changes() {
             let mut damaged = bytes.clone();
             damaged[at] ^= 1 << bit;
             check(damaged.clone(), &format!("bit {bit} of byte {at}"));
-            let used = Index::parse(damaged, project(), BUILD)
+            let used = Index::parse(damaged, project())
                 .ok()
                 .and_then(|i| i.section(&file.key()).map(|s| s.inputs(0).is_ok()))
                 .unwrap_or(false);
@@ -433,7 +440,7 @@ fn a_damaged_index_never_gives_other_changes() {
     assert_eq!(unused, bytes.len() * 8, "no damaged index is used");
     for len in 0..bytes.len() {
         check(bytes[..len].to_vec(), &format!("cut at {len}"));
-        assert!(Index::parse(bytes[..len].to_vec(), project(), BUILD).is_err());
+        assert!(Index::parse(bytes[..len].to_vec(), project()).is_err());
     }
 }
 
@@ -449,7 +456,7 @@ proptest! {
             // A valid header, so the section framing and decoding are reached.
             let file = pending_of(&every_kind()[..2], 3);
             let section = file.section(project(), 0).unwrap();
-            let mut valid = Index::encode(project(), BUILD, [&section]);
+            let mut valid = Index::encode(project(), [&section]);
             let keep = valid.len().min(40);
             valid.truncate(keep);
             valid.extend_from_slice(&bytes);
@@ -457,7 +464,7 @@ proptest! {
         } else {
             bytes
         };
-        if let Ok(index) = Index::parse(input, project(), BUILD) {
+        if let Ok(index) = Index::parse(input, project()) {
             for section in index.sections() {
                 let _ = section.inputs(0);
             }
@@ -514,9 +521,11 @@ fn a_file_the_cache_cannot_stand_for_has_no_section() {
     }
 }
 
-/// The bytes of the cache of the pinned changes of every kind. A change to what a prepared
-/// change keeps, or to how the cache writes it, changes them: then raise `INDEX_VERSION`,
-/// so no app reads a cache an older build wrote as its own, and pin the new digest.
+/// The bytes of the cache of the pinned changes of every kind. Every build of the app reads a
+/// cache of its own `INDEX_VERSION`, so a change to what a prepared change keeps, or to how
+/// the cache writes it, must raise the version: it changes these bytes, and this test fails
+/// until the version is raised and the new digest pinned. The pinned changes hold every value
+/// of every field the summary keeps (`the_pinned_changes_cover_the_summary`).
 #[test]
 fn the_encoding_is_pinned() {
     let changes = every_kind();
@@ -527,16 +536,94 @@ fn the_encoding_is_pinned() {
         .enumerate()
         .map(|(n, f)| f.section(project(), n as u32).unwrap())
         .collect();
-    let bytes = Index::encode(project(), BUILD, &sections);
+    let bytes = Index::encode(project(), &sections);
     let digest = PackId::of(&bytes).to_hex();
     assert_eq!(
         (INDEX_VERSION, digest.as_str()),
         (
-            1,
-            "2b157fa1f612b0f4131a921a287faf05663cf70d35b26d9b40e169879b85f7a3"
+            2,
+            "5cf37724ff5a80e1ec69a421ef6a8c2ceb5acc7b14c81613dd0245534427f817"
         ),
         "the cache's bytes changed: raise INDEX_VERSION and pin the new digest"
     );
+}
+
+/// The changes `the_encoding_is_pinned` caches give every field of the summary a prepared
+/// change keeps every value its type has (each cause, each shape and its parts, seed stubs and
+/// changes that are not, no parent, one and several, times before and after 1970, single
+/// and multi-change batches, every kind of key), so a change to how any of them is kept or
+/// written changes the pinned bytes.
+#[test]
+fn the_pinned_changes_cover_the_summary() {
+    let changes = every_kind();
+    let file = pending_of(&changes, 3);
+    let text = format!("{:?}", file.read(project(), 0));
+    let mut missing = Vec::new();
+    for needle in [
+        // Causes, and the seed stub flag.
+        "cause: Edit",
+        "cause: Resolve",
+        "cause: Restore",
+        "cause: CarryOver",
+        "unknown_base: false",
+        "unknown_base: true",
+        "cause: Import",
+        "cause: Seed",
+        "cause: StartOver",
+        "cause: System",
+        "stub: true",
+        "stub: false",
+        // Shapes.
+        "shape: Other",
+        "Text {",
+        "from: None",
+        "from: Some(",
+        "Covered {",
+        "Absent {",
+        "moved_to: None",
+        "moved_to: Some(",
+        "present: true",
+        "present: false",
+        "Presence(Some(",
+        "Presence(None)",
+        "Added",
+        "RestoredText",
+        "StartedEmpty",
+        "Alignment {",
+        "Decision {",
+        "MovedTo {",
+        "Comment {",
+        "Carried {",
+        "oid: None",
+        "oid: Some(",
+        "Release {",
+        "dismissed: true",
+        "dismissed: false",
+        // Keys.
+        "BookPresence(",
+        "BookHeader(",
+        "ChapterFront(",
+        "Verse(",
+        "BookLayout(",
+        "Check(",
+        "Comment(",
+        "Pins(",
+        "Setting(",
+        "ProjectMeta(",
+        "Versification",
+        "DeviceProfile(",
+        "StoryBase(",
+        "Frame(",
+        "StoryRef(",
+        "CarriedFile(",
+        "BatchRelease(",
+        "Unknown(",
+    ] {
+        if !text.contains(needle) {
+            missing.push(needle);
+        }
+    }
+    assert!(missing.is_empty(), "not covered: {missing:?}");
 }
 
 #[test]
@@ -549,12 +636,12 @@ fn the_same_sections_give_the_same_bytes() {
         .enumerate()
         .map(|(n, f)| f.section(project(), n as u32).unwrap())
         .collect();
-    let forward = Index::encode(project(), BUILD, &sections);
-    let backward = Index::encode(project(), BUILD, sections.iter().rev());
+    let forward = Index::encode(project(), &sections);
+    let backward = Index::encode(project(), sections.iter().rev());
     assert_eq!(forward, backward);
     // An index written from the sections of a parsed index is the same index.
-    let index = Index::parse(forward.clone(), project(), BUILD).unwrap();
-    assert_eq!(Index::encode(project(), BUILD, index.sections()), forward);
+    let index = Index::parse(forward.clone(), project()).unwrap();
+    assert_eq!(Index::encode(project(), index.sections()), forward);
 }
 
 proptest! {
@@ -581,4 +668,386 @@ proptest! {
             prop_assert_ne!(fingerprint(&flipped), fingerprint(&bytes));
         }
     }
+}
+
+// ---------------------------------------------------------------------------------------
+// Opens with a cache that no longer stands for the files
+// ---------------------------------------------------------------------------------------
+
+/// What an open of `files` gives: the fold, whether each file came from the cache, and what
+/// reading each file reported (a file from the cache was valid when its section was made).
+struct Opened {
+    fold: FoldState,
+    from_cache: Vec<bool>,
+    reports: Vec<String>,
+}
+
+fn open_with(files: &[File], project: ProjectId, index: Option<&Index>) -> Opened {
+    let mut inputs = Vec::new();
+    let mut from_cache = Vec::new();
+    let mut reports = Vec::new();
+    for (n, file) in files.iter().enumerate() {
+        let n = n as u32;
+        let cached = index
+            .and_then(|i| i.section(&file.key()))
+            .and_then(|s| s.inputs(n).ok());
+        from_cache.push(cached.is_some());
+        match cached {
+            Some(cached) => {
+                inputs.extend(cached);
+                reports.push("Valid".to_string());
+            }
+            None => {
+                let (status, loaded) = match file.kind {
+                    FileKind::Pack => {
+                        let (read, loaded) = load_pack(&file.path, &file.bytes, project, n);
+                        (format!("{:?}", read.status), loaded)
+                    }
+                    FileKind::Pending => {
+                        let (read, loaded) = load_pending(&file.path, &file.bytes, project, n);
+                        (format!("{:?}", read.status), loaded)
+                    }
+                };
+                inputs.extend(loaded.inputs);
+                reports.push(status);
+            }
+        }
+    }
+    let source: Arc<dyn ValueSource> =
+        Arc::new(Files(files.iter().map(|f| f.bytes.clone()).collect()));
+    Opened {
+        fold: FoldState::fold_from(ProjectKind::Bible, Some(source), inputs),
+        from_cache,
+        reports,
+    }
+}
+
+/// The index `index_bytes` (none when it does not parse) gives the open of `files` exactly
+/// what an open without a cache gives: the same fold, and every file reported as reading it
+/// reports it. Returns which files came from the cache.
+fn opens_as_without(
+    files: &[File],
+    project: ProjectId,
+    index_bytes: &[u8],
+    how: &str,
+) -> Vec<bool> {
+    let index = Index::parse(index_bytes.to_vec(), project).ok();
+    let read = open_with(files, project, None);
+    let cached = open_with(files, project, index.as_ref());
+    support::same_fold(&read.fold, &cached.fold, how);
+    assert_eq!(
+        read.reports, cached.reports,
+        "{how}: what each file reports"
+    );
+    cached.from_cache
+}
+
+fn index_bytes_of(files: &[File], project: ProjectId) -> Vec<u8> {
+    let sections: Vec<Section> = files
+        .iter()
+        .enumerate()
+        .map(|(n, f)| {
+            f.section(project, n as u32)
+                .expect("the file can be cached")
+        })
+        .collect();
+    Index::encode(project, &sections)
+}
+
+/// A small project: a seeded Titus 1 in a pack, and two devices' concurrent edits of one
+/// verse in pending files, so the fold holds a conflict and projects every derived file.
+fn small_project() -> Vec<File> {
+    small_project_with("one side")
+}
+
+/// [`small_project`] whose first edit has the words `words`.
+fn small_project_with(words: &str) -> Vec<File> {
+    use support::{Dev, seed_book, text, verse};
+    let mut one = Dev::new(1);
+    let mut two = Dev::new(2);
+    let seed = seed_book(&mut one, &[3]);
+    let base = support::on(&seed, &support::verse_key(1, 2)).id();
+    let a = one.one(verse(1, 2, text(words, 2)), vec![base]);
+    let b = two.one(verse(1, 2, text("other side", 2)), vec![base]);
+    let lines: Vec<Verified> = seed.into_iter().map(Verified::Change).collect();
+    let mut files = packs_of(&lines);
+    files.push(pending_of(&[Verified::Change(a)], 1));
+    files.push(pending_of(&[Verified::Change(b)], 2));
+    files
+}
+
+/// A changed byte anywhere in a file (every byte of every file of a small project): the
+/// file is read, reported as damaged and salvaged exactly as without the cache, and every
+/// other file still comes from the cache.
+#[test]
+fn a_changed_byte_anywhere_opens_as_without_the_cache() {
+    let files = small_project();
+    let index = index_bytes_of(&files, project());
+    let opened = open_with(
+        &files,
+        project(),
+        Index::parse(index.clone(), project()).ok().as_ref(),
+    );
+    assert!(opened.from_cache.iter().all(|c| *c));
+    assert!(opened.fold.conflict_count() > 0, "the edits conflict");
+    for (n, file) in files.iter().enumerate() {
+        for at in 0..file.bytes.len() {
+            let mut changed = files.clone();
+            changed[n].bytes[at] ^= 0x01;
+            let how = format!("{} byte {at}", file.path);
+            let from_cache = opens_as_without(&changed, project(), &index, &how);
+            assert!(!from_cache[n], "{how}: the changed file is read");
+            assert_eq!(
+                from_cache.iter().filter(|c| **c).count(),
+                files.len() - 1,
+                "{how}"
+            );
+        }
+    }
+}
+
+/// A file cut short at every length, and a pending file that grows: the size differs, so the
+/// file is read.
+#[test]
+fn a_truncated_or_grown_file_opens_as_without_the_cache() {
+    let files = small_project();
+    let index = index_bytes_of(&files, project());
+    for (n, file) in files.iter().enumerate() {
+        for len in 0..file.bytes.len() {
+            let mut cut = files.clone();
+            cut[n].bytes.truncate(len);
+            let how = format!("{} cut to {len} bytes", file.path);
+            assert!(!opens_as_without(&cut, project(), &index, &how)[n], "{how}");
+        }
+    }
+    let pending = files
+        .iter()
+        .position(|f| f.kind == FileKind::Pending)
+        .unwrap();
+    // Another program appends a line that verifies, then one that does not.
+    let extra = verse_change(local(7), 1, 3, "appended");
+    let mut grown = files.clone();
+    grown[pending]
+        .bytes
+        .extend_from_slice(&tc_journal::line::encode_line(extra.id(), extra.raw()));
+    assert!(!opens_as_without(&grown, project(), &index, "a line appended")[pending]);
+    grown[pending].bytes.extend_from_slice(b"not a line");
+    assert!(!opens_as_without(&grown, project(), &index, "bytes appended")[pending]);
+}
+
+/// A file replaced by another of exactly the same size at the same path: a pending file by
+/// another save, and a pack by another pack (whose name then does not match its path).
+#[test]
+fn a_file_replaced_by_one_of_the_same_size_opens_as_without_the_cache() {
+    let files = small_project();
+    let index = index_bytes_of(&files, project());
+    let pending = files
+        .iter()
+        .position(|f| f.kind == FileKind::Pending)
+        .unwrap();
+    let mut replaced = files.clone();
+    // The other save differs from the first in its words alone, and has their length.
+    let other = small_project_with("ONE SIDE");
+    assert_eq!(other[pending].bytes.len(), files[pending].bytes.len());
+    assert_ne!(other[pending].bytes, files[pending].bytes);
+    replaced[pending].bytes = other[pending].bytes.clone();
+    assert!(!opens_as_without(&replaced, project(), &index, "another save")[pending]);
+
+    let pack = files.iter().position(|f| f.kind == FileKind::Pack).unwrap();
+    let lines =
+        tc_journal::pack::read_pack(&files[pack].path, &files[pack].bytes, project()).entries;
+    let resealed = seal(
+        &PackSpec {
+            project: project(),
+            sealer: local(1),
+            sealed: WallTime(1_760_000_000_001),
+        },
+        &lines,
+    )
+    .unwrap()
+    .packs
+    .remove(0);
+    assert_eq!(resealed.bytes.len(), files[pack].bytes.len());
+    assert_ne!(resealed.bytes, files[pack].bytes);
+    let mut replaced = files.clone();
+    replaced[pack].bytes = resealed.bytes;
+    let from_cache = opens_as_without(&replaced, project(), &index, "another pack");
+    assert!(!from_cache[pack]);
+}
+
+/// Files added, removed and renamed since the cache was written: a new file is read, a
+/// gone file is never asked for, and a file at a new path is read at that path.
+#[test]
+fn added_removed_and_renamed_files_open_as_without_the_cache() {
+    let files = small_project();
+    let index = index_bytes_of(&files, project());
+    let pending = files
+        .iter()
+        .position(|f| f.kind == FileKind::Pending)
+        .unwrap();
+    let pack = files.iter().position(|f| f.kind == FileKind::Pack).unwrap();
+
+    let mut added = files.clone();
+    added.push(pending_of(
+        &[Verified::Change(verse_change(
+            local(5),
+            1,
+            1,
+            "a later save",
+        ))],
+        5,
+    ));
+    let from_cache = opens_as_without(&added, project(), &index, "a file added");
+    assert_eq!(from_cache, [vec![true; files.len()], vec![false]].concat());
+
+    for gone in 0..files.len() {
+        let mut removed = files.clone();
+        removed.remove(gone);
+        let from_cache = opens_as_without(&removed, project(), &index, "a file removed");
+        assert!(from_cache.iter().all(|c| *c));
+    }
+
+    let mut renamed = files.clone();
+    renamed[pending].path = ".tc/pending/a save (conflicted copy).batch".into();
+    let month = PackPath::parse(&files[pack].path).unwrap();
+    renamed[pack].path = PackPath {
+        month: YearMonth::new(2020, 1).unwrap(),
+        ..month
+    }
+    .to_string();
+    let from_cache = opens_as_without(&renamed, project(), &index, "files renamed");
+    assert!(!from_cache[pending] && !from_cache[pack]);
+    let opened = open_with(&renamed, project(), None);
+    assert_eq!(
+        opened.reports[pack], "Valid",
+        "a pack moved to another month is valid"
+    );
+}
+
+/// A consolidation replaces two packs with one that lists them in `replaces` (§4.7): the
+/// new pack is read, and the replaced packs, removed or still there, open as without.
+#[test]
+fn a_consolidation_opens_as_without_the_cache() {
+    let files = corpus_files();
+    let project = project_of(&files);
+    let index = index_bytes_of(&files, project);
+    let mut packs: Vec<(usize, tc_journal::pack::PackRead)> = files
+        .iter()
+        .enumerate()
+        .filter(|(_, f)| f.kind == FileKind::Pack)
+        .map(|(n, f)| (n, tc_journal::pack::read_pack(&f.path, &f.bytes, project)))
+        .collect();
+    // Two packs of one sealer.
+    let sealer = packs[0].1.header.as_ref().unwrap().sealer;
+    packs.retain(|(_, p)| p.header.as_ref().unwrap().sealer == sealer);
+    assert!(packs.len() >= 2, "the corpus has two packs of one sealer");
+    let (a, b) = (&packs[0], &packs[1]);
+    let merged = consolidate(
+        &PackSpec {
+            project,
+            sealer,
+            sealed: WallTime(1_900_000_000_000),
+        },
+        &[&a.1, &b.1],
+    )
+    .unwrap();
+    assert_eq!(merged.len(), 1);
+    let new = File {
+        kind: FileKind::Pack,
+        path: merged[0].path.to_string(),
+        bytes: merged[0].bytes.clone(),
+    };
+    let mut both = files.clone();
+    both.push(new.clone());
+    let from_cache = opens_as_without(&both, project, &index, "consolidated, old packs kept");
+    assert_eq!(from_cache.iter().filter(|c| !**c).count(), 1);
+    let mut replaced: Vec<File> = files
+        .iter()
+        .enumerate()
+        .filter(|(n, _)| *n != a.0 && *n != b.0)
+        .map(|(_, f)| f.clone())
+        .collect();
+    replaced.push(new);
+    opens_as_without(
+        &replaced,
+        project,
+        &index,
+        "consolidated, old packs removed",
+    );
+}
+
+/// A damaged, truncated, foreign, older or newer `index.bin` is not used, or loses only the
+/// damaged sections: the open is the open without a cache.
+#[test]
+fn a_damaged_or_foreign_index_opens_as_without_it() {
+    let files = small_project();
+    let index = index_bytes_of(&files, project());
+    for at in (0..index.len()).step_by(7) {
+        let mut damaged = index.clone();
+        damaged[at] ^= 0x10;
+        opens_as_without(&files, project(), &damaged, &format!("index byte {at}"));
+    }
+    for len in (0..index.len()).step_by(11) {
+        let from_cache = opens_as_without(&files, project(), &index[..len], &format!("cut {len}"));
+        assert!(
+            from_cache.iter().all(|c| !*c),
+            "a truncated index is not read"
+        );
+    }
+    let foreign = {
+        let sections: Vec<Section> = files
+            .iter()
+            .enumerate()
+            .map(|(n, f)| f.section(project(), n as u32).unwrap())
+            .collect();
+        Index::encode(common::other_project(), &sections)
+    };
+    assert!(
+        opens_as_without(&files, project(), &foreign, "another project's")
+            .iter()
+            .all(|c| !*c)
+    );
+    for version in [INDEX_VERSION - 1, INDEX_VERSION + 1] {
+        let mut other = index.clone();
+        other[8..12].copy_from_slice(&version.to_le_bytes());
+        let how = format!("version {version}");
+        assert!(
+            opens_as_without(&files, project(), &other, &how)
+                .iter()
+                .all(|c| !*c)
+        );
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(24))]
+
+    /// A changed byte anywhere in a file of the corpus of the operation-count tests.
+    #[test]
+    fn a_changed_byte_in_the_corpus_opens_as_without_the_cache(
+        pick in any::<prop::sample::Index>(),
+        at in any::<prop::sample::Index>(),
+        xor in 1u8..,
+    ) {
+        let (files, project, index) = corpus_with_index();
+        let project = *project;
+        let n = pick.index(files.len());
+        let mut changed = files.clone();
+        let at = at.index(changed[n].bytes.len());
+        changed[n].bytes[at] ^= xor;
+        let from_cache =
+            opens_as_without(&changed, project, index, &format!("{} byte {at}", files[n].path));
+        prop_assert!(!from_cache[n]);
+    }
+}
+
+fn corpus_with_index() -> &'static (Vec<File>, ProjectId, Vec<u8>) {
+    static CORPUS: std::sync::OnceLock<(Vec<File>, ProjectId, Vec<u8>)> =
+        std::sync::OnceLock::new();
+    CORPUS.get_or_init(|| {
+        let files = corpus_files();
+        let project = project_of(&files);
+        let index = index_bytes_of(&files, project);
+        (files, project, index)
+    })
 }

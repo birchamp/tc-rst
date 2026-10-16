@@ -1055,7 +1055,28 @@ None of these files is project data that another device needs. Each is written w
 | `external/<utc>-<escaped path>` | byte copies of files changed outside the app, and files moved out of `ingredients/` | kept until the person dismisses the notice |
 | `sync.json` | `{remoteUrl, branch, confirmed: {commit, at}}` | last confirmed Door43 state; rebuilds `.git` config after git damage (§6.4 G4) |
 | `drafts.json` | `[{shown, field, text, at}]` | unsaved editor text, written at most every second while text is unsaved (§5.14) |
-| `index.bin` | the fold cache (`tc_journal::index`): for each valid pack and pending file an open read in full, a section keyed by the file's path, size and 64-bit fingerprint, holding the prepared changes the fold takes from it (each change's id, where its JSON lies in the file, the fingerprint of those bytes and its summary); stamped with the cache version, the format minor, the project and the app build that wrote it | a cold open takes each unchanged file's changes from it instead of verifying and parsing the file again (§6.1 O8, §14). It never decides what exists: a missing, damaged or other build's cache, or a file it holds no section for, only means that file is read |
+| `index.bin` | the fold cache (`tc_journal::index`): for each valid pack and pending file an open read in full, a section keyed by the file's path, size and 64-bit fingerprint, holding the prepared changes the fold takes from it (each change's id, where its JSON lies in the file, the fingerprint of those bytes and its summary); stamped with the cache version (`INDEX_VERSION`), the format minor and the project | a cold open takes each unchanged file's changes from it instead of verifying and parsing the file again (§6.1 O8, §14). It never decides what exists: a missing or damaged cache, one of another version, minor or project, or a file it holds no section for, only means that file is read |
+
+**What the fold cache trusts.** A section stands for a file when the file's path, its size and
+the 64-bit fingerprint (§2.6) of its whole content, taken from the bytes the open reads at that
+open, equal the section's key: no time, name or inode. Any build of the app reads a cache of its
+own `INDEX_VERSION` and format minor, so an update that changes neither keeps the cache. Against
+accidental damage that is enough: the size catches every truncation, extension, insertion and
+deletion; the fingerprint catches every change within one aligned 8-byte word (each of its steps
+is one to one) and any other accidental change except with a chance of about 2⁻⁶⁴ for each
+changed file (bit flips, a torn or zeroed page, a file another program rewrote or replaced, a
+restored older copy). Each section carries a fingerprint of its own bytes, so a damaged cache
+loses sections and never gives other changes; and only a file whose every line verified and
+parsed has a section, so a damaged, newer or foreign file, or one with a quarantined line, is
+read and reported at every open. The cache does not protect against a file made on purpose to
+match a section's key (the fingerprint is not a cryptographic hash), a cache written on purpose,
+or a build whose summaries or per-change rules differ for the same bytes without a new
+`INDEX_VERSION` (the test `the_encoding_is_pinned` covers every field of the summary). The
+remaining risk is acceptable: a file whose damage collides still gives the changes it held when
+they were verified, so nothing is lost or altered in the fold; what is missed is the notice that
+the file is damaged, and a value read from the damaged part fails its own fingerprint and is
+listed as unreadable (§2.6). Trusting size and modification time instead would spare reading
+the files but would miss damage that keeps them.
 
 ### 3.7 Application data (per installation, never in a project)
 
@@ -1759,8 +1780,9 @@ O7  Finish interrupted work:
     - every expected pack (§4.4) missing from the working tree or failing P2 there → restore it
       from a valid blob, with `PackRestored`;
     - materialize.intent.json → kept for O9's classification.
-O8  Load: read the fold cache `.tc/index.bin` (§3.6; missing, damaged, or written by another
-    build or cache version: no cache). Read every pack and pending file in parallel (rayon)
+O8  Load: read the fold cache `.tc/index.bin` (§3.6; missing, damaged, of another project,
+    or of another cache version or format minor: no cache; any build of the app reads a cache
+    of its own version and minor). Read every pack and pending file in parallel (rayon)
     and take its fingerprint. A file whose path, size and fingerprint equal a cache section's
     takes that section's prepared changes: those bytes passed P1 to P4 at that path when the
     section was made and give the same changes again, so they are not hashed, verified or
@@ -3064,7 +3086,7 @@ paths break the grammar or have a dot segment are foreign entries (§9.4), kept 
 | Pack | header `tcpack` | the pack framing changes (never so far) |
 | Exchange file | zip comment `tc-exchange <n>` | the comment changes |
 | tC4-shaped sidecars | their `schemaVersion` (1, and 2 for `resources.json`) | their shape changes |
-| Fold cache (`.tc/index.bin`, local) | `INDEX_VERSION`, the format minor and the app build that wrote it; any other value makes it no cache | its encoding, or what the fold keeps of a change, changes (the test `the_encoding_is_pinned` fails until `INDEX_VERSION` is raised) |
+| Fold cache (`.tc/index.bin`, local) | `INDEX_VERSION` and the format minor; any other value makes it no cache. Not the app build: every build of one version and minor reads the cache, so an update keeps it | its encoding, what the fold keeps of a change, or what the per-change rules decide for any bytes changes, a bug fix included (the test `the_encoding_is_pinned` fails until `INDEX_VERSION` is raised for the first two) |
 
 ```json
 {"format":"tc-project","major":1,"minor":0,"minReaderMinor":0,
@@ -3529,6 +3551,7 @@ and are covered by the projection tests.
 | `pack_round_trip_and_salvage` | packs with random bit flips | an intact pack passes P2–P4; a damaged one salvages exactly the lines whose bytes are intact; no salvaged change differs from what its author wrote | a damaged line is accepted |
 | `any_changes_come_back_from_the_cache_unchanged` | arbitrary `ChangeBody` values in packs and pending files, cached at one file number and read back at another | every prepared change from the fold cache equals the one reading the file gives | the cache drops or alters a field of what the fold keeps |
 | `a_damaged_index_never_gives_other_changes` | every single-bit flip and every truncation of a fold cache; arbitrary bytes after a valid header | the cache is unreadable or the section unused, never a section that gives other changes; no panic | a section is used without its fingerprint, or the decoder trusts a length |
+| `a_changed_byte_in_the_corpus_opens_as_without_the_cache` | a fold cache of the operation-count corpus, then any byte of any of its files changed (the deterministic tests beside it: every byte and every length of every file of a small project, a file replaced by one of the same size, files added, removed, renamed and grown, a consolidation, a damaged, truncated, foreign, older or newer cache) | the open with the cache gives the full fold output (heads, conflicts, anomalies, Detached, every derived file) and the per-file reports of the open without it; the changed file is read | a section stands for bytes other than those it was made from, or hides a damaged file |
 | `sidecar_decode_render` | random decisions and alignments | decoding a rendered sidecar gives the same records | an outside-edit decode would invent a change |
 | `every_written_state_is_a_valid_burrito` | every state any test writes (§16.6) | `tc_burrito::check` passes | a writer skips the check or lists a wrong md5 |
 
@@ -3653,7 +3676,8 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | anchors and Detached (place attached records by number) | `every_head_reachable_from_a_screen` |
 | foreign entries (build merge trees from owned paths only) | `loss_foreign_entries_kept_on_tip` |
 | `commit_received` (stamp received changes) | `door43_ingest_written_verbatim` |
-| the fold cache's key (take a section by path alone) | `a_section_stands_only_for_the_bytes_it_was_made_from`, `an_open_from_the_cache_is_the_open_from_the_files` |
+| the fold cache's key (take a section by path alone, or by path and size) | `a_section_stands_only_for_the_bytes_it_was_made_from`, `an_open_from_the_cache_is_the_open_from_the_files`, `a_changed_byte_anywhere_opens_as_without_the_cache`, `a_file_replaced_by_one_of_the_same_size_opens_as_without_the_cache` |
+| the fold cache's validity (cache a damaged, foreign or newer file, or one with a quarantined line) | `a_file_the_cache_cannot_stand_for_has_no_section`, `a_changed_byte_anywhere_opens_as_without_the_cache` |
 | the fold cache's section fingerprint | `a_damaged_index_never_gives_other_changes` |
 
 ---
@@ -3718,9 +3742,9 @@ go in `[workspace.dependencies]`. No CRDT library and no git content merge (`.au
     another computer) is in History everywhere but its bytes only on that computer.
 14. **Whitespace at line ends and line endings** changed by an outside editor are not recorded
     (§11.1 X3); the app keeps the file's previous line endings.
-15. **The first open without a fold cache** (a project just received, or the first open after
-    the app is updated, since a cache is read only by the build that wrote it) verifies and
-    parses every change: about 17 s of single-thread work for a whole Bible on a processor
+15. **The first open without a fold cache** (a project just received or copied without its
+    `.tc/`, or the first open after an update that raised `INDEX_VERSION` or the format minor)
+    verifies and parses every change: about 17 s of single-thread work for a whole Bible on a processor
     without SHA instructions, 5.8 s on four threads (§14). It shows determinate progress and
     writes the cache, so the next open takes about 2 s.
 

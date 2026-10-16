@@ -2,26 +2,52 @@
 //!
 //! An open reads every pack and pending file, verifies every line and parses every change
 //! (§4.4). For a whole Bible that is most of the open's work, and the same bytes at the same
-//! path give the same result every time. The cache keeps, for each file an open read, what
-//! the fold takes from it: each change's id, where its JSON lies in the file, the
-//! fingerprint of those bytes (§2.6) and the summary the fold keeps
-//! ([`FoldInput::prepare_at`]). An open that finds a file whose path, size and
-//! [`fingerprint`] equal a section's takes the section's inputs instead of hashing,
-//! verifying and parsing the file's lines: those bytes passed P1 to P4 at that path when the
-//! section was made, and pass them again. The fingerprint costs a small part of what one
-//! SHA-256 pass costs on a processor without SHA instructions (§14).
+//! path give the same changes every time. The cache keeps, for each file an open read in full
+//! and found valid ([`load_pack`], [`load_pending`]), what the fold takes from it: each
+//! change's id, where its JSON lies in the file, the fingerprint of those bytes (§2.6) and the
+//! summary the fold keeps ([`FoldInput::prepare_at`]). An open that finds a file whose key
+//! equals a section's takes the section's inputs instead of hashing, verifying and parsing the
+//! file's lines.
 //!
-//! The cache never decides what exists. A section stands for exactly the bytes it was made
-//! from, so a new file, a changed file, or a file the cache does not hold is read as before,
-//! and a file that is gone is never asked for. A section that does not check (its
-//! fingerprint, the version or build that wrote it, a value that breaks its type's grammar)
-//! is not used: the open reads that file instead. Only a file whose every line verified and
-//! parsed has a section, so a damaged file is read, and reported, at every open.
+//! # What the cache trusts
+//!
+//! A section stands for a file when the file's path in the project folder, its size and the
+//! 64-bit [`fingerprint`] of its whole content equal the section's [`FileKey`]. The open
+//! takes the fingerprint of the bytes it reads at that open; it trusts no time, name or inode.
+//! The index as a whole is read when its encoding version ([`INDEX_VERSION`]), the format
+//! minor and the project are this app's and this project's, by any build of the app: an update
+//! that does not change the encoding keeps the cache.
+//!
+//! Against accidental damage that is enough. The size catches every truncation, extension,
+//! insertion and deletion. The fingerprint catches every change within one aligned 8-byte
+//! word, because each of its steps is one to one, and any other change that is not made on
+//! purpose except with a chance of about 2⁻⁶⁴ for each changed file: bit flips, a torn or
+//! zeroed page, a file another program rewrote, replaced or restored from an older copy. A
+//! section carries a fingerprint of its own bytes, and every value it holds is checked
+//! against its type's grammar, so a damaged index loses sections and never gives other
+//! changes. Only a file whose every line verified and parsed has a section, so a damaged,
+//! newer or foreign file, or one with a quarantined line, is read and reported at every open.
+//!
+//! It does not protect against a file made on purpose to have a cached file's path, size and
+//! fingerprint (the fingerprint is not a cryptographic hash; a collision is easy to compute),
+//! or against an index written on purpose. Whoever can write the project folder can write
+//! valid changes as well, and the format's hashes detect damage, not forgery (§18 item 3). Nor
+//! does it protect against a build whose [`FoldInput::prepare_at`] or per-change rules give
+//! other results for the same bytes without raising [`INDEX_VERSION`]: such a build would keep
+//! an older build's results until the file changes. The test `the_encoding_is_pinned` fails
+//! when any field the summary keeps changes for any kind of change.
+//!
+//! The remaining risk is acceptable. When a damaged file collides, the open takes the changes
+//! the file held when they were verified, so nothing is lost or altered in the fold; what is
+//! missed is the notice that the file is damaged. A value the fold reads from the damaged part
+//! is checked against its own fingerprint, so it is listed as unreadable rather than used.
+//! Trusting less (hashing every file again) costs what the cache saves; trusting more (size
+//! and modification time without reading) would miss damage that keeps them.
 //!
 //! No I/O: `tc-store` reads the file, and writes it with `atomic_write`.
 //!
 //! ```text
-//! index   := "tc-index" | version u32 | minor u16 | project [16] | build str
+//! index   := "tc-index" | version u32 | minor u16 | project [16]
 //!            | count var | count × (len var | section of len bytes)
 //! section := fingerprint u64 of the rest | path str | size var | file fingerprint u64
 //!            | pack: 0, or 1 and the pack's id [32]
@@ -56,12 +82,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tc_core::BookId;
 
-/// The version of this encoding and of the summaries it holds. Raise it whenever what
-/// [`FoldInput::prepare_at`] keeps of a change, or how it is written here, changes; the
-/// test `the_encoding_is_pinned` fails until it is raised. (The build stamp of
-/// [`Index::encode`] already keeps a release from reading another release's cache; this
-/// keeps two builds of one version apart.)
-pub const INDEX_VERSION: u32 = 1;
+/// The version of this encoding and of the summaries it holds. Every build of the app reads
+/// an index of its own version and format minor, so raise it whenever how a section is
+/// written here, what [`FoldInput::prepare_at`] keeps of a change, or what the per-change
+/// rules decide for any bytes changes, a bug fix included. The test `the_encoding_is_pinned`
+/// fails until it is raised for the first two.
+pub const INDEX_VERSION: u32 = 2;
 
 const MAGIC: &[u8; 8] = b"tc-index";
 
@@ -77,8 +103,6 @@ pub enum IndexError {
     Version(u32),
     #[error("the index was written for format minor {0}")]
     Minor(u16),
-    #[error("the index was written by another build of the app")]
-    Build,
     #[error("the index is of another project")]
     Project,
     #[error("the index ends early or holds a value out of range")]
@@ -406,14 +430,10 @@ pub struct Index {
 }
 
 impl Index {
-    /// The bytes of an index of project `project` that holds `sections`, written by the
-    /// app build `build`. An index is read only by the build that wrote it, so `build` names
-    /// the exact build (its version and source revision): a build that summarizes changes
-    /// differently never takes another's sections. Sections are written in path order, so
-    /// the same sections give the same bytes.
+    /// The bytes of an index of project `project` that holds `sections`. Sections are written
+    /// in path order, so the same sections give the same bytes.
     pub fn encode<'a>(
         project: ProjectId,
-        build: &str,
         sections: impl IntoIterator<Item = &'a Section>,
     ) -> Vec<u8> {
         let mut sections: Vec<&Section> = sections.into_iter().collect();
@@ -424,7 +444,6 @@ impl Index {
         out.bytes(&INDEX_VERSION.to_le_bytes());
         out.bytes(&FORMAT_MINOR.to_le_bytes());
         out.bytes(project.as_bytes());
-        out.str(build);
         out.var(sections.len() as u64);
         for section in sections {
             let body = section.body();
@@ -434,10 +453,10 @@ impl Index {
         out.0
     }
 
-    /// Reads an index of project `project` written by the app build `build`. The sections'
-    /// fingerprints are checked when their inputs are taken ([`Section::inputs`]), on the
-    /// open's reading threads.
-    pub fn parse(bytes: impl Into<Arc<[u8]>>, project: ProjectId, build: &str) -> R<Self> {
+    /// Reads an index of project `project`, written by any build of this [`INDEX_VERSION`]
+    /// and format minor. The sections' fingerprints are checked when their inputs are taken
+    /// ([`Section::inputs`]), on the open's reading threads.
+    pub fn parse(bytes: impl Into<Arc<[u8]>>, project: ProjectId) -> R<Self> {
         let bytes: Arc<[u8]> = bytes.into();
         let mut input = In::new(&bytes);
         if input.take(MAGIC.len()).ok() != Some(MAGIC.as_slice()) {
@@ -453,9 +472,6 @@ impl Index {
         }
         if ProjectId::from_bytes(input.array()?) != project {
             return Err(IndexError::Project);
-        }
-        if input.str()? != build {
-            return Err(IndexError::Build);
         }
         let count = input.var()?;
         let mut sections = HashMap::new();

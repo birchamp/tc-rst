@@ -177,9 +177,6 @@ fn files(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// The app build the benchmark's cache is written by (`tc-store` passes the app's own).
-const BUILD: &str = concat!("foldbench ", env!("CARGO_PKG_VERSION"));
-
 /// Where the saved corpus keeps its fold cache: `.tc/index.bin` in a project folder.
 fn index_path(dir: &Path) -> PathBuf {
     dir.join("index.bin")
@@ -349,10 +346,10 @@ fn cache_unchanged(held: usize, read: &Read) -> bool {
 }
 
 /// Reads the fold cache of a saved corpus, as an open reads `.tc/index.bin` before the
-/// files; `None` when there is none or it is not this build's.
+/// files; `None` when there is none, or it is of another cache version or format minor.
 fn read_index(dir: &Path) -> Option<Arc<Index>> {
     let bytes = std::fs::read(index_path(dir)).ok()?;
-    match Index::parse(bytes, project_of(dir), BUILD) {
+    match Index::parse(bytes, project_of(dir)) {
         Ok(index) => Some(Arc::new(index)),
         Err(error) => {
             eprintln!("the fold cache is not used: {error}");
@@ -369,7 +366,7 @@ fn write_index(dir: &Path, read: &Read, old: Option<&Index>) -> usize {
         .iter()
         .filter_map(|(key, made)| made.as_ref().or_else(|| old?.section(key)))
         .collect();
-    let bytes = Index::encode(project_of(dir), BUILD, sections);
+    let bytes = Index::encode(project_of(dir), sections);
     let temp = dir.join(".~index.bin.tmp");
     std::fs::write(&temp, &bytes).expect("write the cache");
     std::fs::rename(&temp, index_path(dir)).expect("rename the cache");
@@ -461,8 +458,8 @@ fn run(args: &[String]) {
         .and_then(|v| v.parse().ok())
         .unwrap_or(5);
     let file_count = files(&dir.join("packs")).len() + files(&dir.join("pending")).len();
-    // The first open of a project, or the first after an update of the app, has no cache:
-    // it reads every file and writes the cache for the next.
+    // The first open of a project, or the first after an update that changed the cache's
+    // encoding, has no cache: it reads every file and writes the cache for the next.
     if read_index(&dir).is_none() {
         let started = Instant::now();
         let (folded, _, read) = open_streamed(&dir, threads, None);
