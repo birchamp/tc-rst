@@ -369,6 +369,11 @@ const RESOLVE = [
   { name: 'project host basename', line: '![x](q.jpg)', pins: pinsWith(null, null), project: { p: { uri: 'local://q.jpg', role: 'x-obsimages' } }, packs: [], fallbackPack: { pin: EN_OBS_IMAGES, images: {} } },
   { name: 'project bad uri', line: '![x](q.jpg)', pins: pinsWith(null, null), project: { p: { uri: 'http://', role: 'x-obsimages' } }, packs: [], fallbackPack: { pin: EN_OBS_IMAGES, images: { 'q.jpg': 'local://d' } } },
   { name: 'default undecodable', line: line1, pins: pinsWith(null, null), project: {}, packs: [], fallbackPack: { pin: EN_OBS_IMAGES, images: { [name1]: { uri: 'local://bad', decodable: false } } } },
+  { name: 'primary empty uri', line: line1, pins: pinsWith(EN_OBS_IMAGES, null), project: {}, packs: [{ pin: EN_OBS_IMAGES, images: { [name1]: '' } }], fallbackPack: { pin: EN_OBS_IMAGES, images: { [name1]: 'local://default' } } },
+  { name: 'fallback empty uri object', line: line1, pins: pinsWith(OTHER, EN_OBS_IMAGES), project: {}, packs: [{ pin: OTHER, images: {} }, { pin: EN_OBS_IMAGES, images: { [name1]: { uri: '' } } }], fallbackPack: { pin: EN_OBS_IMAGES, images: { [name1]: 'local://default' } } },
+  { name: 'default empty uri', line: line1, pins: pinsWith(null, null), project: {}, packs: [], fallbackPack: { pin: EN_OBS_IMAGES, images: { [name1]: '' } } },
+  { name: 'default empty uri object', line: line1, pins: pinsWith(null, null), project: {}, packs: [], fallbackPack: { pin: EN_OBS_IMAGES, images: { [name1]: { uri: '' } } } },
+  { name: 'project empty uri', line: line1, pins: pinsWith(null, null), project: { a: { uri: '', role: 'x-obsimages' } }, packs: [], fallbackPack: { pin: EN_OBS_IMAGES, images: { [name1]: 'local://default' } } },
 ];
 const resolve = RESOLVE.map((c) => ({ ...c, result: images.resolveObsImage(c.line, c.pins, c.project, c.packs, c.fallbackPack) }));
 

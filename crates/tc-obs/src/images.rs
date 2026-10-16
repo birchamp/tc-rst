@@ -85,8 +85,11 @@ impl ImageAsset {
         }
     }
 
+    /// The uri, unless a loader could not decode the bytes. An empty uri is no picture:
+    /// tC4 tests a candidate's uri for truth (`assetUri`, `if (uri)`,
+    /// `obsImages.ts:82-85`, `:133`, `:141`, `:145`).
     fn usable_uri(&self) -> Option<&str> {
-        (self.decodable != Some(false)).then_some(self.uri.as_str())
+        (self.decodable != Some(false) && !self.uri.is_empty()).then_some(self.uri.as_str())
     }
 }
 
