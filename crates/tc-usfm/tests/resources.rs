@@ -511,8 +511,10 @@ fn every_verse_of_the_ult_v91_reads_apart_and_weaves_back() {
             kept: 0,
             renumbered: 3,
             milestones_moved: 180,
-            // Most of them in Lamentations, whose acrostic letters (`\qa BETH`) stand bare in
-            // the verse before, where weave writes them as `\w` words.
+            // 63 of them are the verses of Lamentations that end with the next verse's
+            // acrostic letter, which the file leaves bare (`\qa BETH` before `\v 2`): weave
+            // writes it as a `\w` word (`tests/superscriptions.rs`). For 27 of them that is
+            // the only change.
             relaid: 82,
             refused: ult_refused(),
             superscriptions: 50,
@@ -652,6 +654,7 @@ fn every_verse_of_the_ust_v91_reads_apart_and_weaves_back() {
             kept: 0,
             renumbered: 3,
             milestones_moved: 157,
+            // 47 in Lamentations, as in the ULT; for 25 of them the letter is the only change.
             relaid: 62,
             refused: ust_refused(),
             superscriptions: 52,

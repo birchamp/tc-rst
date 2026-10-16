@@ -87,6 +87,13 @@
 //!   of the ULT v91 and UST v91 that does not come back byte for byte is one that tC4's own
 //!   export does not write back either (`tests/resources.rs` checks each verse against
 //!   tC4's export and says how the others come out).
+//! - In tC4's cut a verse of Lamentations ends with the acrostic letter of the next one
+//!   (`\qa BETH` before `\v 2`). usfm-js shows it as this verse's text, so it is a word of
+//!   this verse. The ULT and UST write it bare, and weave writes it as a `\w` word, as
+//!   tC4's export does once the verse's record banks it (`tests/superscriptions.rs`).
+//!   tC4's own export writes the published verse without its alignment: word-aligner
+//!   banks only `\w` words, so the record it reads leaves the letter out and cannot be
+//!   merged. In [`crate::Book`]'s cut the letter leads into the next verse instead.
 //! - For other aligned text the groups survive but bytes may differ: attributes in
 //!   another order, a run that tC4 would have cut, a `\zaln-e` after the punctuation that
 //!   follows its last word, other whitespace before a `\w`, a `\zaln-s` that closes

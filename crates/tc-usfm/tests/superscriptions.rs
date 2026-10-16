@@ -4,13 +4,14 @@
 //! `crates/tc-usfm/tools/gen-superscription-vectors.mjs`. The published cases are every
 //! verse of the ULT v91 and UST v91 Psalms that starts with `\d`; the scale Psalms are the
 //! same bytes as the ULT's. The heading cases show where tC4's export can write an aligned
-//! word in a heading back, and where it cannot.
+//! word in a heading back, and where it cannot. The acrostic cases show how a bare `\qa`
+//! letter at the end of a verse in tC4's cut is woven.
 
 // Helpers outside `#[test]` functions read fixtures and may fail loudly.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use tc_usfm::{
@@ -228,6 +229,72 @@ fn an_aligned_heading_is_read_where_tc4_writes_it_back() {
     }
     assert_eq!(read, ["d", "sp", "qa", "lit"]);
     assert_eq!(refused.len(), 13, "{refused:?}");
+}
+
+/// Verse `chapter:verse` of a book as tC4 cuts it to align and export it (`decompose` in
+/// tC4's `journal/skeleton.mjs`): from after `\v N ` to the next `\v ` or `\c `.
+fn tc4_slot<'a>(book: &'a str, chapter: &str, verse: &str) -> &'a str {
+    let chapter_at = book.find(&format!("\\c {chapter}\n")).unwrap();
+    let marker = format!("\\v {verse} ");
+    let start = chapter_at + book[chapter_at..].find(&marker).unwrap() + marker.len();
+    let end = ["\\v ", "\\c "]
+        .into_iter()
+        .filter_map(|next| book[start..].find(next))
+        .min()
+        .map_or(book.len(), |end| start + end);
+    &book[start..end]
+}
+
+/// In tC4's cut, LAM 1:1 ends with the acrostic letter of verse 2 (`\qa BETH` before
+/// `\v 2`), which the ULT and UST write bare. usfm-js shows it as the verse's text, so it is
+/// the verse's last word. weave writes it as a `\w` word,
+/// `\qa \w BETH|x-occurrence="1" x-occurrences="1"\w*`, the form the ULT and UST already
+/// give some of their letters, and writes the whole verse as tC4's export writes it once
+/// the verse's record banks the letter. tC4's export of the published verse cannot merge
+/// the record it reads, which leaves the bare letter out, and writes the verse without its
+/// alignment. In the book cut the letter leads into verse 2 and is no word of verse 1.
+#[test]
+fn an_acrostic_letter_that_ends_a_verse_is_woven_as_tc4_weaves_it() {
+    let acrostics = vectors("acrostics");
+    for case in &acrostics {
+        let source = str_of(case, "source");
+        let text = published(source);
+        let (chapter, verse) = (str_of(case, "chapter"), str_of(case, "verse"));
+        let at = format!("{source} {chapter}:{verse}");
+        let slot = tc4_slot(&text, chapter, verse);
+        assert!(slot.ends_with("\n\\qa BETH\n\\q1 "), "{at}");
+        let parsed = parse_aligned(slot).unwrap_or_else(|e| panic!("{at}: {e}"));
+        assert_eq!(plain_text(slot), str_of(case, "text"), "{at}");
+        assert_eq!(parsed.words, words(&case["words"]), "{at}");
+        let held: HashSet<&TargetWord> = parsed.groups.iter().flat_map(|g| &g.targets).collect();
+        let bank: Vec<TargetWord> = parsed
+            .words
+            .iter()
+            .filter(|w| !held.contains(w))
+            .cloned()
+            .collect();
+        assert_eq!(bank, words(&case["bank"]), "{at}");
+
+        let woven = weave(&parsed.plain, &parsed.groups).unwrap();
+        let wrapped = "\n\\qa \\w BETH|x-occurrence=\"1\" x-occurrences=\"1\"\\w*\n\\q1 ";
+        assert!(woven.ends_with(wrapped), "{at}");
+        // tC4's export also writes one more space after the paragraph marker that ends the
+        // verse (`\q1  `), which the published verses do not have.
+        assert_eq!(format!("{woven} "), str_of(case, "woven"), "{at}");
+
+        let book = Book::parse(&text);
+        let unit = book
+            .verse(chapter.parse().unwrap(), verse.parse().unwrap())
+            .unwrap();
+        assert!(!unit.body().contains("\\qa"), "{at}");
+        let in_book = parse_aligned(unit.body()).unwrap();
+        assert_eq!(
+            in_book.words,
+            parsed.words[..parsed.words.len() - 1],
+            "{at}"
+        );
+    }
+    assert_eq!(acrostics.len(), 2);
 }
 
 /// The scale Psalms hold the same superscriptions as the ULT v91 Psalms, byte for byte.

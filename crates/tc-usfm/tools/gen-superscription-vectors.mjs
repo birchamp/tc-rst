@@ -22,6 +22,13 @@
 // - `headings`: an aligned word in each heading that may stand inside a verse, and
 //   whether tC4's export writes the verse back (`same`) or cannot merge its alignment and
 //   writes it without (`unaligned`).
+// - `acrostics`: LAM 1:1 of the ULT v91 and UST v91, which in tC4's cut ends with the bare
+//   acrostic letter of verse 2 (`\qa BETH`). For each, the verse's text and words as above,
+//   the words no alignment holds (`bank`), and `woven`: what tC4's export writes once the
+//   verse's record banks them, as a record made in tC4's aligner does (`bootstrapVerse` in
+//   src/data/align/edit.ts:46 banks every word of the verse text). The script checks that
+//   the export cannot merge the record word-aligner reads out of the published verse,
+//   which banks only `\w` words and so leaves the bare letter out.
 //
 // The verses are every verse of the ULT v91 and UST v91 Psalms whose text starts with `\d`
 // (read from the burrito exports in bundle/en/), and hand-written drafts. For each
@@ -176,10 +183,36 @@ for (const marker of ["d", "sp", "qa", "lit", "s", "s1", "s5", "d1", "ms", "ms1"
   headings.push({ marker, content, exported });
 }
 
+const acrostics = [];
+for (const [archive, entry] of [
+  ["bundle/en/en_ult_v91.sb.zip", "en_ult/ingredients/LAM.usfm"],
+  ["bundle/en/en_ust_v91.sb.zip", "en_ust/ingredients/LAM.usfm"],
+]) {
+  const files = unzipSync(fs.readFileSync(archive), { filter: (f) => f.name === entry });
+  const usfm = strFromU8(files[entry]);
+  const { chapter, verse, content } = slots(usfm).find((s) => s.chapter === "1" && s.verse === "1");
+  if (!/\n\\qa BETH\n\\q1 $/.test(content)) throw new Error(`${archive} 1:1 does not end with a bare \\qa BETH`);
+  const text = verseText(usfmjs.toJSON(usfm).chapters[chapter][verse]);
+  const listed = words(text);
+  const record = quiet(() => AlignmentHelpers.extractAlignmentsFromTargetVerse(content, null));
+  const alignments = record.alignment.map((a) => ({ topWords: a.topWords.map(topWord), bottomWords: a.bottomWords.map(bottomWord) }));
+  const clean = UsfmFileConversionHelpers.cleanAlignmentMarkersFromString(content);
+  if (merge(clean, alignments, record.wordBank.map(bottomWord)) !== null) {
+    throw new Error(`${archive} 1:1: tC4's export merges the published record`);
+  }
+  const held = new Set(alignments.flatMap((a) => a.bottomWords).map((w) => `${w.word} ${w.occurrence}`));
+  const bank = listed.filter(([word, occurrence]) => !held.has(`${word} ${occurrence}`));
+  const woven = merge(clean, alignments, bank.map(([word, occurrence, occurrences]) => ({ word, occurrence, occurrences })));
+  if (typeof woven !== "string") throw new Error(`${archive} 1:1: tC4's export cannot merge the record with its bank`);
+  acrostics.push({ source: `${archive} ${entry}`, chapter, verse, text, words: listed, bank, woven });
+}
+
 process.stdout.write(
   `{"generator": "crates/tc-usfm/tools/gen-superscription-vectors.mjs",\n "libraries": ${JSON.stringify(pinned)},\n "cases": [\n` +
     cases.map((c) => "  " + JSON.stringify(c)).join(",\n") +
     "\n],\n \"headings\": [\n" +
     headings.map((h) => "  " + JSON.stringify(h)).join(",\n") +
+    "\n],\n \"acrostics\": [\n" +
+    acrostics.map((a) => "  " + JSON.stringify(a)).join(",\n") +
     "\n]}\n",
 );
