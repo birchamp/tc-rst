@@ -40,7 +40,7 @@ pub(crate) fn stage_groups(state: &mut FoldState, dirty: &mut Dirty) {
             .filter(|k| matches!(state.entry(*k).key, RecordKey::Verse(..)))
             .collect();
         for &b in &dirty.regroup {
-            for book in state.batch(b).passage.clone() {
+            for book in state.passage_of(b).to_vec() {
                 todo.extend(passage_records(state, b, book));
             }
         }
@@ -117,7 +117,7 @@ fn component(
         let RecordKey::Verse(book, ..) = state.entry(r).key else {
             continue;
         };
-        for b in state.entry(r).div.clone() {
+        for b in state.div_of(r).to_vec() {
             for other in passage_records(state, b, book) {
                 if !members.contains(&other) {
                     queue.push(other);
@@ -133,8 +133,8 @@ pub(crate) fn local_projection(state: &FoldState, k: KeyIdx) -> Projected {
     match &state.entry(k).local {
         Local::Empty => Projected::Nothing,
         Local::Settled(c) | Local::ByRule(c) => Projected::Change(*c),
-        Local::Merged(record, _) => Projected::Merged(record.clone()),
-        Local::Conflict { provisional, .. } => Projected::Change(*provisional),
+        Local::Merged(merged) => Projected::Merged(merged.0.clone()),
+        Local::Conflict(conflict) => Projected::Change(conflict.provisional),
         // Not in a group (its batches' passages could not be read): its newest head.
         Local::Passage => {
             let heads = state.entry(k).heads.to_vec();
@@ -175,7 +175,7 @@ fn build_group(state: &mut FoldState, mut records: Vec<KeyIdx>, dirty: &mut Dirt
             .iter()
             .copied()
             .map(|c| (state.meta(c).batch, c))
-            .filter(|(b, _)| state.batch(*b).passage.contains(&book))
+            .filter(|(b, _)| state.passage_of(*b).contains(&book))
             .collect();
         for x in div_set {
             let anc_x = ancestors_or_self(state, x);
@@ -229,8 +229,7 @@ fn build_group(state: &mut FoldState, mut records: Vec<KeyIdx>, dirty: &mut Dirt
             all_heads.push(meta.id);
             batches.insert(state.batch(meta.batch).id);
             if state
-                .entry(r)
-                .faults
+                .faults_of(r)
                 .iter()
                 .any(|(c, _, f)| c == h && *f == super::state::Fault::Missing)
             {

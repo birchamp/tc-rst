@@ -927,7 +927,8 @@ impl FoldState {
             record.insert("text".into(), Value::from(comment.text.as_str()));
             record.insert(
                 "author".into(),
-                attach::author(self, meta.device).map_or(Value::Null, |a| Value::from(a.as_ref())),
+                attach::author(self, self.device_of(meta))
+                    .map_or(Value::Null, |a| Value::from(a.as_ref())),
             );
             record.insert("at".into(), Value::from(rfc3339(meta.at)));
             records.push((

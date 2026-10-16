@@ -114,11 +114,11 @@ impl FoldState {
                     head: self.meta(*c).id,
                     rule: AutoRule::SeedStubs,
                 },
-                Local::Merged(record, how) => Resolved::Merged {
-                    merged: Box::new((**record).clone()),
-                    how: how.clone(),
+                Local::Merged(merged) => Resolved::Merged {
+                    merged: Box::new((*merged.0).clone()),
+                    how: merged.1.clone(),
                 },
-                Local::Conflict { id, .. } => Resolved::Conflict(*id),
+                Local::Conflict(conflict) => Resolved::Conflict(conflict.id),
                 Local::Passage => Resolved::Conflict(ConflictId::of(&heads)),
             }
         };
@@ -217,7 +217,7 @@ impl FoldState {
     }
 
     pub fn change(&self, id: &ChangeId) -> Option<ChangeView> {
-        let c = *self.ids.get(id)?;
+        let c = self.change_idx(id)?;
         Some(self.view(c))
     }
 
@@ -227,7 +227,7 @@ impl FoldState {
             id: meta.id,
             key: self.entry(meta.key).key.clone(),
             parents: meta.parents.to_vec(),
-            device: meta.device,
+            device: self.device_of(meta),
             seq: meta.seq,
             at: meta.at,
             batch: self.batch(meta.batch).id,
@@ -238,13 +238,13 @@ impl FoldState {
 
     /// A change's body, decoded from its stored bytes.
     pub fn body(&self, id: &ChangeId) -> Option<ChangeBody> {
-        let c = *self.ids.get(id)?;
+        let c = self.change_idx(id)?;
         super::meta::decode(&self.bytes(c)?)
     }
 
     /// A change's canonical bytes, exactly as stored.
     pub fn raw(&self, id: &ChangeId) -> Option<std::sync::Arc<[u8]>> {
-        let c = *self.ids.get(id)?;
+        let c = self.change_idx(id)?;
         self.bytes(c)
     }
 
@@ -286,12 +286,12 @@ impl FoldState {
             };
         }
         let in_conflict =
-            entry.group.is_some() || matches!(entry.local, Local::Conflict { .. } | Local::Passage);
+            entry.group.is_some() || matches!(entry.local, Local::Conflict(_) | Local::Passage);
         if !in_conflict {
             return entry.heads.iter().map(|h| self.meta(*h).id).collect();
         }
         let chosen = displayed
-            .and_then(|id| self.ids.get(&id).copied())
+            .and_then(|id| self.change_idx(&id))
             .filter(|c| entry.heads.contains(c));
         let shown = match (chosen, &entry.projected) {
             (Some(c), _) => c,

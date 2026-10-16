@@ -39,11 +39,28 @@ pub trait ValueSource: Send + Sync + fmt::Debug {
     fn read(&self, at: ValueAt) -> Option<Vec<u8>>;
 }
 
-/// A change's bytes as the fold keeps them.
+/// A change's bytes as the fold keeps them: 16 bytes for each of hundreds of thousands of
+/// changes.
 #[derive(Debug, Clone)]
 pub(crate) enum Stored {
     /// In memory: a change added by a command, or a loader that keeps every value.
-    Bytes(Arc<[u8]>),
+    Bytes(Box<Arc<[u8]>>),
     /// Read from the fold's source when needed.
-    At(ValueAt),
+    At { file: u32, offset: u32, len: u32 },
+}
+
+impl Stored {
+    pub(crate) fn bytes(bytes: Arc<[u8]>) -> Self {
+        Self::Bytes(Box::new(bytes))
+    }
+
+    /// Where `at` says, when its offset fits in 32 bits (a pack holds at most 64 MiB; only
+    /// a pending file of more than 4 GiB does not fit, and its values stay in memory).
+    pub(crate) fn located(at: ValueAt) -> Option<Self> {
+        Some(Self::At {
+            file: at.file,
+            offset: u32::try_from(at.offset).ok()?,
+            len: at.len,
+        })
+    }
 }

@@ -402,8 +402,8 @@ pub(crate) fn stage_local(state: &mut FoldState, dirty: &mut Dirty) {
         }
         let projected = local_projection(state, k);
         state.entry_mut(k).projected = projected;
-        let conflict = match state.entry(k).local {
-            Local::Conflict { id, provisional } => Some(local_conflict(state, k, id, provisional)),
+        let conflict = match &state.entry(k).local {
+            Local::Conflict(c) => Some(local_conflict(state, k, c.id, c.provisional)),
             _ => None,
         };
         state.set_conflicts(Owner::Key(k), conflict.into_iter().collect(), dirty);
@@ -422,8 +422,8 @@ impl FoldState {
     pub fn conflicts_rebuilt(&self) -> (Vec<Conflict>, super::ConflictCounts) {
         let mut out: Vec<Conflict> = Vec::new();
         for (i, entry) in self.keys.iter().enumerate() {
-            if let (Local::Conflict { id, provisional }, None) = (&entry.local, entry.group) {
-                out.push(local_conflict(self, KeyIdx(i as u32), *id, *provisional));
+            if let (Local::Conflict(c), None) = (&entry.local, entry.group) {
+                out.push(local_conflict(self, KeyIdx(i as u32), c.id, c.provisional));
             }
         }
         for (owner, sorts) in self.owned.iter() {
@@ -478,8 +478,8 @@ fn local_conflict(
         .iter()
         .map(|h| state.batch(state.meta(*h).batch).id)
         .collect();
-    let incomplete_history = entry
-        .faults
+    let incomplete_history = state
+        .faults_of(k)
         .iter()
         .any(|(c, _, f)| heads.contains(c) && *f == Fault::Missing);
     Conflict {
@@ -510,8 +510,8 @@ pub(crate) fn candidate(
     Some(Candidate {
         head: meta.id,
         also,
-        device: meta.device,
-        author: author(state, meta.device),
+        device: state.device_of(meta),
+        author: author(state, state.device_of(meta)),
         at: meta.at,
         cause: body.cause,
         value: body.record,

@@ -218,14 +218,6 @@ impl<K: Hash + Eq + Clone, V: Clone> CowMap<K, V> {
         old
     }
 
-    /// Makes room for about `additional` more entries, spread over the shards.
-    pub(crate) fn reserve(&mut self, additional: usize) {
-        let per_shard = additional / SHARDS + additional / (SHARDS * 8) + 1;
-        for shard in &mut self.shards {
-            Arc::make_mut(shard).reserve(per_shard);
-        }
-    }
-
     /// The value at `key`, inserted from `make` when there is none.
     pub(crate) fn entry_or(&mut self, key: K, make: impl FnOnce() -> V) -> &mut V {
         let shard = shard_of(&key);
@@ -240,6 +232,131 @@ impl<K: Hash + Eq + Clone, V: Clone> CowMap<K, V> {
     /// Every entry, in no particular order: callers sort what they hand out.
     pub(crate) fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
         self.shards.iter().flat_map(|shard| shard.iter())
+    }
+}
+
+/// A hash index of positions in one of the fold's tables, in shared shards like
+/// [`CowMap`]. It stores no keys, only each position and 32 bits of its key's hash: the
+/// caller hashes a key and says whether the item at a position has it, reading the item
+/// from its own table. An id, a device and seq or a batch costs 8 bytes of index this way,
+/// where a map would hold a second copy of the key.
+#[derive(Debug, Clone)]
+pub(crate) struct PosIndex {
+    shards: Vec<Arc<PosShard>>,
+}
+
+/// Open addressing with linear probing. A slot holds `hash32 << 32 | (position + 1)`; 0 is
+/// empty.
+#[derive(Debug, Clone, Default)]
+struct PosShard {
+    slots: Vec<u64>,
+    len: usize,
+}
+
+/// Spreads every bit of a hash over every other (the 64-bit finalizer of MurmurHash3), so
+/// the shard and the slot can each take their own bits.
+fn spread(hash: u64) -> u64 {
+    let mut h = hash;
+    h ^= h >> 33;
+    h = h.wrapping_mul(0xff51_afd7_ed55_8ccd);
+    h ^= h >> 33;
+    h = h.wrapping_mul(0xc4ce_b9fe_1a85_ec53);
+    h ^ (h >> 33)
+}
+
+impl Default for PosIndex {
+    fn default() -> Self {
+        Self {
+            shards: (0..SHARDS).map(|_| Arc::new(PosShard::default())).collect(),
+        }
+    }
+}
+
+impl PosShard {
+    fn bucket(&self, hash32: u32) -> usize {
+        hash32 as usize & (self.slots.len() - 1)
+    }
+
+    /// Places a slot without checking for room.
+    fn place(&mut self, slot: u64) {
+        let mut at = self.bucket((slot >> 32) as u32);
+        while self.slots[at] != 0 {
+            at = (at + 1) & (self.slots.len() - 1);
+        }
+        self.slots[at] = slot;
+        self.len += 1;
+    }
+
+    /// Room for `more` slots at a load of at most four in five.
+    fn make_room(&mut self, more: usize) {
+        let want = self.len + more;
+        if want * 5 <= self.slots.len() * 4 {
+            return;
+        }
+        let size = (want * 5 / 4 + 1).next_power_of_two().max(16);
+        let old = std::mem::replace(&mut self.slots, vec![0; size]);
+        self.len = 0;
+        for slot in old.into_iter().filter(|s| *s != 0) {
+            self.place(slot);
+        }
+    }
+}
+
+impl PosIndex {
+    fn split(hash: u64) -> (usize, u32) {
+        let h = spread(hash);
+        ((h >> 58) as usize % SHARDS, h as u32)
+    }
+
+    /// The first position whose item `is` the key hashed to `hash`.
+    pub(crate) fn find(&self, hash: u64, mut is: impl FnMut(u32) -> bool) -> Option<u32> {
+        let (shard, hash32) = Self::split(hash);
+        let shard = &self.shards[shard];
+        if shard.slots.is_empty() {
+            return None;
+        }
+        let mut at = shard.bucket(hash32);
+        loop {
+            let slot = shard.slots[at];
+            if slot == 0 {
+                return None;
+            }
+            if (slot >> 32) as u32 == hash32 {
+                let position = (slot as u32).wrapping_sub(1);
+                if is(position) {
+                    return Some(position);
+                }
+            }
+            at = (at + 1) & (shard.slots.len() - 1);
+        }
+    }
+
+    /// Every position whose item `is` the key hashed to `hash`, in no particular order.
+    pub(crate) fn find_all(&self, hash: u64, mut is: impl FnMut(u32) -> bool) -> Vec<u32> {
+        let mut out = Vec::new();
+        let _ = self.find(hash, |position| {
+            if is(position) {
+                out.push(position);
+            }
+            false
+        });
+        out
+    }
+
+    /// Files `position` under `hash`. The caller has checked whether it is filed already.
+    pub(crate) fn insert(&mut self, hash: u64, position: u32) {
+        let (shard, hash32) = Self::split(hash);
+        let shard = Arc::make_mut(&mut self.shards[shard]);
+        shard.make_room(1);
+        shard.place((u64::from(hash32) << 32) | u64::from(position.wrapping_add(1)));
+    }
+
+    /// Makes room for about `additional` more positions, spread over the shards.
+    pub(crate) fn reserve(&mut self, additional: usize) {
+        let per_shard = additional / SHARDS + additional / (SHARDS * 8) + 1;
+        for shard in &mut self.shards {
+            Arc::make_mut(shard).make_room(per_shard);
+        }
     }
 }
 
@@ -280,5 +397,32 @@ mod tests {
         assert_eq!(m.get(&2000), Some(&1));
         assert_eq!(m.len(), 1000);
         assert_eq!(m.iter().count(), 1000);
+    }
+
+    #[test]
+    fn a_position_index_finds_what_its_table_holds() {
+        // The table: position → key; keys collide in their hashes on purpose.
+        let keys: Vec<u64> = (0..20_000u64).map(|i| i % 7_000).collect();
+        let hash = |key: u64| key % 997;
+        let mut index = PosIndex::default();
+        for (position, key) in keys.iter().enumerate().take(10_000) {
+            index.insert(hash(*key), position as u32);
+        }
+        let snapshot = index.clone();
+        index.reserve(10_000);
+        for (position, key) in keys.iter().enumerate().skip(10_000) {
+            index.insert(hash(*key), position as u32);
+        }
+        for key in [0u64, 5, 996, 6_999] {
+            let mut all = index.find_all(hash(key), |p| keys[p as usize] == key);
+            all.sort_unstable();
+            let expected: Vec<u32> = (0..20_000u32)
+                .filter(|p| keys[*p as usize] == key)
+                .collect();
+            assert_eq!(all, expected);
+            let first = snapshot.find(hash(key), |p| keys[p as usize] == key);
+            assert!(first.is_some_and(|p| p < 10_000 && keys[p as usize] == key));
+        }
+        assert_eq!(index.find(hash(7_001), |p| keys[p as usize] == 7_001), None);
     }
 }

@@ -16,7 +16,7 @@ pub(crate) fn key_parents(state: &FoldState, c: ChangeIdx) -> SmallVec<[ChangeId
     let meta = state.meta(c);
     meta.parents
         .iter()
-        .filter_map(|p| state.ids.get(p).copied())
+        .filter_map(|p| state.change_idx(p))
         .filter(|p| {
             let pm = state.meta(*p);
             pm.active && pm.key == meta.key
@@ -146,7 +146,7 @@ pub(crate) fn resolve_local(state: &FoldState, k: KeyIdx) -> (Local, SmallVec<[B
             },
         };
         return (
-            Local::Merged(Arc::new(record), MergeHow::Union),
+            Local::Merged(Box::new((Arc::new(record), MergeHow::Union))),
             SmallVec::new(),
         );
     }
@@ -154,7 +154,7 @@ pub(crate) fn resolve_local(state: &FoldState, k: KeyIdx) -> (Local, SmallVec<[B
     if values.iter().all(|v| *v == values[0]) {
         return match record_of(state, heads[0]) {
             Some(record) => (
-                Local::Merged(Arc::new(record), MergeHow::EqualValues),
+                Local::Merged(Box::new((Arc::new(record), MergeHow::EqualValues))),
                 SmallVec::new(),
             ),
             None => (Local::Settled(heads[0]), SmallVec::new()),
@@ -185,7 +185,7 @@ pub(crate) fn resolve_local(state: &FoldState, k: KeyIdx) -> (Local, SmallVec<[B
             if values.iter().all(|v| *v == values[0]) {
                 return match record_of(state, heads[0]) {
                     Some(record) => (
-                        Local::Merged(Arc::new(record), MergeHow::EqualValues),
+                        Local::Merged(Box::new((Arc::new(record), MergeHow::EqualValues))),
                         SmallVec::new(),
                     ),
                     None => (Local::Settled(heads[0]), SmallVec::new()),
@@ -198,7 +198,7 @@ pub(crate) fn resolve_local(state: &FoldState, k: KeyIdx) -> (Local, SmallVec<[B
         let mut diverges: SmallVec<[BatchIdx; 1]> = SmallVec::new();
         for c in div(&ancestry) {
             let b = state.meta(c).batch;
-            if state.batch(b).passage.contains(book) && !diverges.contains(&b) {
+            if state.passage_of(b).contains(book) && !diverges.contains(&b) {
                 diverges.push(b);
             }
         }
@@ -215,7 +215,10 @@ pub(crate) fn resolve_local(state: &FoldState, k: KeyIdx) -> (Local, SmallVec<[B
             let record = rebuild_record(state, heads[0], merged);
             match record {
                 Some(record) => (
-                    Local::Merged(Arc::new(record), MergeHow::Units(outcome.changed)),
+                    Local::Merged(Box::new((
+                        Arc::new(record),
+                        MergeHow::Units(outcome.changed),
+                    ))),
                     SmallVec::new(),
                 ),
                 None => conflict(state, k, &heads),
@@ -233,10 +236,10 @@ fn conflict(
     let provisional = provisional(state, heads);
     let ids: Vec<crate::ids::ChangeId> = heads.iter().map(|h| state.meta(*h).id).collect();
     (
-        Local::Conflict {
+        Local::Conflict(Box::new(super::state::LocalConflict {
             id: super::ConflictId::of(&ids),
             provisional,
-        },
+        })),
         SmallVec::new(),
     )
 }

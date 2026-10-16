@@ -36,6 +36,11 @@ impl KeyIdx {
     }
 }
 
+/// A device's place in the fold's device table: a project has a handful of devices, and
+/// every change names one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) struct DeviceIdx(pub(crate) u32);
+
 /// A batch's place in the fold's batch table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct BatchIdx(pub(crate) u32);
@@ -121,7 +126,7 @@ pub(crate) enum Shape {
         oid: Option<GitOid>,
     },
     Release {
-        changes: Arc<[ChangeId]>,
+        changes: Arc<Vec<ChangeId>>,
     },
 }
 
@@ -132,7 +137,8 @@ pub(crate) struct Meta {
     pub key: KeyIdx,
     pub batch: BatchIdx,
     pub parents: SmallVec<[ChangeId; 1]>,
-    pub device: DeviceId,
+    /// In [`super::FoldState`]'s device table.
+    pub device: DeviceIdx,
     pub seq: DeviceSeq,
     pub at: WallTime,
     pub cause: CauseClass,
@@ -255,7 +261,7 @@ fn shape_of(record: &Record, resources: &mut Resources) -> Shape {
             },
         },
         Record::BatchRelease { value, .. } => Shape::Release {
-            changes: value.changes.clone().into(),
+            changes: Arc::new(value.changes.clone()),
         },
         _ => Shape::Other,
     }

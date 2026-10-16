@@ -661,10 +661,8 @@ impl FoldState {
         for unit in &units {
             let from = match picks.get(&unit.name) {
                 Some(pick) => self
-                    .ids
-                    .get(pick)
+                    .change_idx(pick)
                     .filter(|c| heads.contains(c))
-                    .copied()
                     .ok_or(ResolveError::NotACandidate)?,
                 None if conflict.disputed.contains(&unit.name) => {
                     return Err(ResolveError::MissingValue(conflict.key.clone()));
