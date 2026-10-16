@@ -4,8 +4,9 @@
 //! The catalogs in `assets/i18n/<id>.json` are tC4's `src/i18n/<id>.json` at commit `d310bf3`,
 //! copied byte for byte: flat objects from a dotted key to a message with `{name}`
 //! placeholders, 1,029 keys each. tC4 has no other source of interface text, so a screen that
-//! uses the same key shows the same words. To update them, copy the files again from a tC4
-//! checkout and run `cargo test -p tc-ui`, which checks every catalog against English.
+//! uses the same key shows the same words. To update them, run `crates/tc-ui/vendor-tc4.sh` on a
+//! tC4 checkout, then `cargo test -p tc-ui`, which checks every catalog against English and
+//! every vendored file against tC4's blob id in `vendored-from-tc4.txt`.
 
 /// The direction an interface reads in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

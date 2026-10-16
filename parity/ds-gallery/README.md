@@ -73,7 +73,8 @@ steps. `?case=Button/primary-md&auto=1` shows one case alone.
 `wasm32-unknown-unknown`) with the same DOM. Its `gallery` feature draws every case of
 `gallery-spec.json` by the same protocol: the same page globals (`__galleryBooted`, `__mount`,
 `__galleryMounted`), the same frame and tC4's stylesheet, fonts and images, copied verbatim into
-`crates/tc-ui/assets/`.
+`crates/tc-ui/assets/` by `crates/tc-ui/vendor-tc4.sh`. `cargo test -p tc-ui` checks each of
+them against its git blob id in tC4 (`crates/tc-ui/vendored-from-tc4.txt`).
 
 ### Build
 

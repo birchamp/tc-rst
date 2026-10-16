@@ -2899,6 +2899,7 @@ dependencies = [
  "proptest",
  "send_wrapper",
  "serde_json",
+ "sha1",
  "unicode-general-category",
  "wasm-bindgen",
  "wasm-bindgen-futures",
