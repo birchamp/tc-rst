@@ -320,3 +320,75 @@ fn c29_a_missing_or_unreadable_check_record_is_no_check() {
     let report = s.machine.seed_from(&s.bundled).unwrap();
     assert_eq!(report.checked_again.len(), 3);
 }
+
+#[test]
+fn c29_a_file_no_receipt_lists_stops_no_start() {
+    // tC4's `validateTree` (`scripts/desktop-bootstrap.cjs:164-176`) checks only the files
+    // its inventory lists, so a file manager's leftover in a copy never stops a start.
+    let s = first_start();
+    let tn = s.machine.dcs(&s.pins[0]).unwrap().unwrap();
+    let record = tn.dir().join("checked.json");
+    let strays = [
+        tn.dir().join("content/.DS_Store"),
+        tn.dir().join("content/ingredients/Thumbs.db"),
+    ];
+    for stray in &strays {
+        fs::write(stray, b"finder").unwrap();
+    }
+
+    // No record: a copy checked again, or a store written before copies were recorded.
+    fs::remove_file(&record).unwrap();
+    let (opens, report) = opened(|| s.machine.seed_from(&s.bundled).unwrap());
+    assert_eq!(opens, file_count(&tn), "only the listed files are opened");
+    assert_eq!(report.checked_again, [s.pins[0].to_string()]);
+    assert_eq!(report.already_installed.len(), 3);
+    assert!(report.added.is_empty() && report.refused.is_empty());
+    assert!(record.exists(), "the check is recorded");
+    for stray in &strays {
+        assert_eq!(
+            fs::read(stray).unwrap(),
+            b"finder",
+            "the file is left as it is"
+        );
+    }
+    let (opens, report) = opened(|| s.machine.seed_from(&s.bundled).unwrap());
+    assert_eq!(opens, 0);
+    assert!(report.checked_again.is_empty());
+
+    // Negative control: beside such a file, a listed file that fails its check still
+    // stops the start.
+    fs::remove_file(&record).unwrap();
+    let tsv = tn.dir().join("content/ingredients/TIT.tsv");
+    let mut flipped = fs::read(&tsv).unwrap();
+    flipped[0] ^= 1;
+    fs::write(&tsv, &flipped).unwrap();
+    let problem = damaged_file(&s, &tn, "ingredients/TIT.tsv");
+    assert!(problem.contains("SHA-256"), "{problem}");
+}
+
+#[test]
+fn c29_a_bundled_install_with_a_file_no_receipt_lists_is_copied_without_it() {
+    let (bundled_dir, pins) = bundle();
+    let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+    let bundled_tn = bundled.dcs(&pins[0]).unwrap().unwrap();
+    fs::write(bundled_tn.dir().join("content/.DS_Store"), b"finder").unwrap();
+    let machine_dir = tempfile::tempdir().unwrap();
+    let machine = ResourceStore::open(machine_dir.path()).unwrap();
+
+    let (opens, report) = opened(|| machine.seed_from(&bundled).unwrap());
+    assert_eq!(report.added.len(), 3);
+    assert!(report.refused.is_empty(), "{:?}", report.refused);
+    let bundled_files: u64 = bundled
+        .installed()
+        .unwrap()
+        .installs
+        .iter()
+        .map(file_count)
+        .sum();
+    assert_eq!(opens, bundled_files, "only the listed files are opened");
+    let tn = machine.dcs(&pins[0]).unwrap().unwrap();
+    assert!(!tn.dir().join("content/.DS_Store").exists());
+    tn.verify().unwrap();
+    let (opens, _) = opened(|| machine.seed_from(&bundled).unwrap());
+    assert_eq!(opens, 0);
+}

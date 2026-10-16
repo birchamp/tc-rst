@@ -291,16 +291,23 @@ impl Installed {
     /// folder holds nothing else.
     pub fn verify(&self) -> Result<(), StoreError> {
         self.check_listing()?;
+        self.check_listed()
+    }
+
+    /// Checks each file the receipt lists against its size and SHA-256, opening each
+    /// once. Seeding checks only these, as tC4's `validateTree`
+    /// (`scripts/desktop-bootstrap.cjs:164-176`) checks only its inventory's files, so a
+    /// file manager's leftover such as `.DS_Store` never stops a start.
+    fn check_listed(&self) -> Result<(), StoreError> {
         for record in &self.receipt.files {
             self.read_checked(record)?;
         }
         Ok(())
     }
 
-    /// Every file's bytes, checked as [`Installed::verify`] checks them, opening each file
-    /// once.
+    /// The bytes of every file the receipt lists, checked as [`Installed::check_listed`]
+    /// checks them, opening each file once.
     fn read_all_checked(&self) -> Result<Vec<(String, Vec<u8>)>, StoreError> {
-        self.check_listing()?;
         self.receipt
             .files
             .iter()
@@ -560,7 +567,9 @@ impl ResourceStore {
     /// Copies into this store every install of `bundled` that it lacks, checking each
     /// file against the bundled receipt first. An installer ships the bundled store, so a
     /// first run works offline; seeding again after an update adds the new releases and
-    /// keeps the old ones, which projects may still pin.
+    /// keeps the old ones, which projects may still pin. Seeding checks and copies only
+    /// the files a receipt lists: another file in a bundled install or a copy, such as a
+    /// file manager's `.DS_Store`, is left where it is and stops nothing, as in tC4.
     ///
     /// The app seeds at every start, so a copy this store already holds is not read
     /// again while its check record names its receipt: a repeat start reads receipts and
@@ -568,7 +577,7 @@ impl ResourceStore {
     /// against its own receipt, never the bundle's (tC4 #740).
     ///
     /// A copy of a bundled install that cannot be trusted stops the seeding with its error,
-    /// as tC4 stops its start (`scripts/desktop-resources.test.cjs:453-463, 597-600`): a
+    /// as tC4 stops its start (`scripts/desktop-resources.test.cjs:453-463, 586-589`): a
     /// copy whose files fail that check, or whose receipt cannot be read or names another
     /// resource. The copy is left as it is, never overwritten from the bundle.
     pub fn seed_from(&self, bundled: &ResourceStore) -> Result<SeedReport, StoreError> {
@@ -583,7 +592,7 @@ impl ResourceStore {
             let name = install.origin().describe();
             if let Some(copy) = self.find(install.origin())? {
                 if !copy.is_checked() {
-                    copy.verify()?;
+                    copy.check_listed()?;
                     copy.record_check()?;
                     report.checked_again.push(name.clone());
                 }
