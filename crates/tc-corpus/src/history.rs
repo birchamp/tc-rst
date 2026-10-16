@@ -195,13 +195,19 @@ pub(crate) struct Sim<'a> {
     rng: Rng,
     project: ProjectId,
     nodes: Vec<Node>,
+    /// The nodes not encoded yet, in order.
+    unencoded: Vec<u32>,
     keys: HashMap<RecordKey, u32>,
     key_nodes: Vec<Vec<u32>>,
     key_list: Vec<RecordKey>,
     hub: Vec<u32>,
     devs: Vec<Dev>,
     books: Vec<BookState>,
-    packs: Vec<PackFile>,
+    /// Where seals go: threads encode and hash the packs while the team works on (each
+    /// pack is a SHA-256 pass over its bytes).
+    sealer: Option<std::sync::mpsc::SyncSender<SealJob>>,
+    /// Seals sent so far, so the packs come back in the order they were sealed.
+    seals: usize,
     stats: Stats,
     decisions: BTreeMap<(usize, usize), DecisionInput>,
     pins: Pins,
@@ -229,6 +235,44 @@ fn oid(label: &str) -> GitOid {
     out[..16].copy_from_slice(&digest);
     out[16..].copy_from_slice(&more[..4]);
     GitOid::from_bytes(out)
+}
+
+/// A seal: its place in sealing order, and the device's lines.
+type SealJob = (usize, PackSpec, Vec<Verified>);
+
+/// Threads that encode packs while the simulation goes on.
+const SEALERS: usize = 3;
+
+/// Seals the jobs of `queue` until it closes: each job's packs, by its place.
+fn seal_jobs(
+    queue: &std::sync::Mutex<std::sync::mpsc::Receiver<SealJob>>,
+) -> Vec<(usize, Result<Vec<PackFile>, CorpusError>)> {
+    let mut out = Vec::new();
+    loop {
+        let job = match queue.lock() {
+            Ok(receiver) => receiver.recv(),
+            Err(_) => break,
+        };
+        let Ok((n, spec, lines)) = job else {
+            break;
+        };
+        let packs = seal(&spec, &lines)
+            .map_err(|e| err(e.to_string()))
+            .map(|sealed| {
+                sealed
+                    .packs
+                    .into_iter()
+                    .map(|pack| PackFile {
+                        path: pack.path.to_string(),
+                        id: pack.id,
+                        changes: pack.changes.len(),
+                        bytes: pack.bytes,
+                    })
+                    .collect()
+            });
+        out.push((n, packs));
+    }
+    out
 }
 
 fn err(text: impl Into<String>) -> CorpusError {
@@ -332,13 +376,15 @@ impl<'a> Sim<'a> {
             rng,
             project,
             nodes: Vec::new(),
+            unencoded: Vec::new(),
             keys: HashMap::new(),
             key_nodes: Vec::new(),
             key_list: Vec::new(),
             hub: Vec::new(),
             devs,
             books: Vec::new(),
-            packs: Vec::new(),
+            sealer: None,
+            seals: 0,
             stats: Stats::default(),
             decisions: BTreeMap::new(),
             pins,
@@ -351,6 +397,43 @@ impl<'a> Sim<'a> {
     }
 
     pub(crate) fn run(mut self) -> Result<Output, CorpusError> {
+        let (jobs, queue) = std::sync::mpsc::sync_channel::<SealJob>(SEALERS);
+        let queue = std::sync::Mutex::new(queue);
+        std::thread::scope(|scope| {
+            let workers: Vec<_> = (0..SEALERS)
+                .map(|_| scope.spawn(|| seal_jobs(&queue)))
+                .collect();
+            self.sealer = Some(jobs);
+            let simulated = self.simulate();
+            // Closing the channel lets the sealing threads finish the queue and stop.
+            self.sealer = None;
+            let mut sealed = Vec::new();
+            for worker in workers {
+                sealed.extend(worker.join().map_err(|_| err("a sealing thread failed"))?);
+            }
+            let pending = simulated?;
+            sealed.sort_by_key(|(n, _)| *n);
+            let mut packs = Vec::new();
+            for (_, result) in sealed {
+                packs.extend(result?);
+            }
+            let mut decisions: Vec<DecisionInput> = self.decisions.into_values().collect();
+            decisions.sort_by_key(|d| (d.book, d.check));
+            Ok(Output {
+                journal: Journal {
+                    project: self.project,
+                    devices: self.devs.iter().map(|d| d.id).collect(),
+                    packs,
+                    pending,
+                    stats: self.stats,
+                },
+                decisions,
+            })
+        })
+    }
+
+    /// Three years of team work; the pending files of device 0 at the end.
+    fn simulate(&mut self) -> Result<Vec<EncodedPending>, CorpusError> {
         self.assign_books();
         self.create_project()?;
         let days = i64::from(self.spec.days.max(1));
@@ -433,18 +516,7 @@ impl<'a> Sim<'a> {
                 .collect::<Result<_, _>>()?;
             pending.push(encode_pending(&header, &lines).map_err(|e| err(e.to_string()))?);
         }
-        let mut decisions: Vec<DecisionInput> = self.decisions.into_values().collect();
-        decisions.sort_by_key(|d| (d.book, d.check));
-        Ok(Output {
-            journal: Journal {
-                project: self.project,
-                devices: self.devs.iter().map(|d| d.id).collect(),
-                packs: self.packs,
-                pending,
-                stats: self.stats,
-            },
-            decisions,
-        })
+        Ok(pending)
     }
 
     /// Seals device `d`'s unsealed changes into packs of at most 64 MiB.
@@ -463,15 +535,14 @@ impl<'a> Sim<'a> {
             sealer: self.devs[d].id,
             sealed,
         };
-        let result = seal(&spec, &lines).map_err(|e| err(e.to_string()))?;
-        for pack in result.packs {
-            self.packs.push(PackFile {
-                path: pack.path.to_string(),
-                id: pack.id,
-                changes: pack.changes.len(),
-                bytes: pack.bytes,
-            });
-        }
+        let sealer = self
+            .sealer
+            .as_ref()
+            .ok_or_else(|| err("a seal after the sealing threads stopped"))?;
+        sealer
+            .send((self.seals, spec, lines))
+            .map_err(|_| err("the sealing threads stopped"))?;
+        self.seals += 1;
         Ok(())
     }
 
@@ -631,6 +702,7 @@ impl<'a> Sim<'a> {
                 change: None,
             });
             self.key_nodes[k as usize].push(index);
+            self.unencoded.push(index);
             self.devs[d].unpushed.push(index);
             self.devs[d].today.push(k);
             self.stats.changes += 1;
@@ -648,10 +720,11 @@ impl<'a> Sim<'a> {
     /// corpus.
     fn encode(&mut self) -> Result<(), CorpusError> {
         let mut by_key: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
-        for (n, node) in self.nodes.iter().enumerate() {
-            if node.id.is_none() {
-                by_key.entry(node.key).or_default().push(n as u32);
-            }
+        for n in std::mem::take(&mut self.unencoded) {
+            by_key
+                .entry(self.nodes[n as usize].key)
+                .or_default()
+                .push(n);
         }
         if by_key.is_empty() {
             return Ok(());
