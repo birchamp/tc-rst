@@ -8,6 +8,29 @@ Start from branch `claude/focused-ride-5uzj7p` (pull it first), create a new bra
 `door43-facts`, commit there, and push it. Do not push to `claude/focused-ride-5uzj7p`: the
 cloud session pushes there and will merge your branch.
 
+## Status on branch `door43-facts` (2026-10-16)
+
+A cloud session started this task and could not reach `git.door43.org`: the proxy refused
+the connection. It did the parts that need no Door43 and pushed them to `door43-facts`, so
+start from that branch.
+
+- `tc_resources::FetchedLock` reads the lock into typed values, and `LockEntry::verify`
+  checks an archive's size, sha256 and tree (`crates/tc-resources/src/fetched.rs`).
+  `check_folder` in `crates/tc-resources/tests/fetched_lock.rs` checks a folder against its
+  lock, and fails on an archive named `<repo>-<40 hex>.zip` that has no entry. Its tests run
+  on `fixtures/door43/fetched-lock/`.
+- `crates/tc-door43/examples/door43_live.rs` runs the four checks of step 5. It has been run
+  against the fake only.
+
+Left for a machine that reaches Door43: steps 1 and 2, step 3, the bundle half of step 4 (a
+test that calls `check_folder` on `bundle/en/`, and the README), running step 5 with its
+evidence file, and step 6.
+
+The two bundled zips pass every other check of `verify_archive`, and their files hash to
+the trees below. These ids come from the zips, not from Door43, so they are what Door43 must
+confirm. Do not copy them into the lock: `en_ugl` `4d24ed9c8ceb768df1069feed0cc375d32cd93ce`,
+`en_uhl` `ad07f5e41f7052598d90eb8dc2b9ecad811b0b17`.
+
 Read first: `bundle/en/README.md` (the sections "Shipped: the git archive of each commit-only
 pin" and "Fetched when the app is packaged"), `crates/tc-door43/src/verify.rs`
 (`verify_archive(zip, commit, commit_tree, max_unpacked)`, `verify_sb_export`) and
