@@ -308,20 +308,21 @@ fn parse_legacy_place(chapter: &str, verse: &str) -> Option<BibleLocus> {
 }
 
 /// Splits a table into rows, checking the header and the column count of every row.
-/// Blank lines are skipped. Line numbers count from 1 at the header.
+/// Blank lines are skipped, before the header too. Line numbers count from 1 at the first
+/// line, which is the header in every published table.
 fn rows<'a>(
     text: &'a str,
     table: TsvTable,
     header: &'static [&'static str],
 ) -> Result<Vec<Row<'a>>, Error> {
-    let mut lines = text.split('\n').enumerate();
+    let mut lines = text
+        .split('\n')
+        .enumerate()
+        .filter(|(_, line)| !blank(line));
     let first = lines.next().map(|(_, l)| l).unwrap_or("");
     check_header(first, table, header)?;
     let mut out = Vec::new();
     for (i, line) in lines {
-        if line.trim().is_empty() {
-            continue;
-        }
         // The CR of a CRLF line end; see `Cell`.
         let line = line.strip_suffix('\r').unwrap_or(line);
         let raw: Vec<&str> = line.split('\t').collect();
@@ -346,6 +347,18 @@ fn rows<'a>(
         });
     }
     Ok(out)
+}
+
+/// The lines tC4's `tsvRows` drops, before it takes the first line left as the header: those
+/// JavaScript's `trim()` leaves empty. It trims U+FEFF, which Rust's does not. Rust's also
+/// trims U+0085, which JavaScript's does not; tC4 reads a line of that as a row of one cell,
+/// which its tN check list leaves out (no SupportReference) and its TWL reader throws on.
+fn blank(line: &str) -> bool {
+    line.chars().all(|c| c.is_whitespace() || c == '\u{feff}')
+}
+
+fn first_line(text: &str) -> &str {
+    text.split('\n').find(|line| !blank(line)).unwrap_or("")
 }
 
 fn header_text(first: &str) -> &str {
@@ -429,7 +442,7 @@ fn plain(text: &str, table: TsvTable) -> Result<String, Error> {
 
 /// Parses a translation notes table, current or legacy, chosen by its header.
 pub fn parse_notes(text: &str, scope: TsvScope) -> Result<ParsedNotes, Error> {
-    let first = header_text(text.split('\n').next().unwrap_or(""));
+    let first = header_text(first_line(text));
     let legacy = first.split('\t').eq(NOTES_LEGACY.iter().copied());
     match (legacy, scope) {
         (true, TsvScope::Book(book)) => {

@@ -302,3 +302,26 @@ fn the_legacy_table_keeps_a_chapter_and_verse_as_written() {
         );
     }
 }
+
+/// tC4's `tsvRows` drops the lines JavaScript's `trim()` leaves empty, a lone U+FEFF among
+/// them, before it takes the first line left as the header. Such a table is read, not
+/// refused.
+#[test]
+fn the_lines_tc4_drops_as_blank_are_skipped_before_the_header_too() {
+    let vectors = vectors();
+    let blank = &vectors["blankLines"];
+    let links = parse_word_links(blank["table"].as_str().unwrap(), PSA).unwrap();
+    let ours: Vec<Value> = links
+        .iter()
+        .map(|l| tc4_row(&l.id, &l.reference, l.occurrence))
+        .collect();
+    assert_eq!(&ours, blank["rows"].as_array().unwrap());
+
+    // The notes reader finds the legacy table's header past them too.
+    let legacy = fixture("helps/tn-tsv9/en_tn_57-TIT.tsv");
+    let tit = TsvScope::Book(BookId::Titus);
+    assert_eq!(
+        parse_notes(&format!("\n\u{feff}\n{legacy}"), tit).unwrap(),
+        parse_notes(&legacy, tit).unwrap()
+    );
+}

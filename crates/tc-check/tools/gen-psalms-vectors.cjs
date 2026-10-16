@@ -18,7 +18,8 @@
 //   one row per Reference form (`1:1a`, `0:front`, `3:front `, `3:1` and a CR, and others no
 //   shipped table has) and a row whose every cell but the last ends in a CR, with the rows
 //   tC4's readers return and what `deriveForProject` makes of the tN and TWL tables. tC4
-//   reads every Reference cell, so tc-helps must not refuse a table over one.
+//   reads every Reference cell, so tc-helps must not refuse a table over one. `blankLines`
+//   is a TWL table with lines tC4 drops as blank, before the header too.
 //
 // It bundles tC4's sources with the esbuild in tC4's node_modules, as
 // crates/tc-align/tools/gen-align-vectors.cjs does, so the vectors come from the code tC4
@@ -235,6 +236,17 @@ const main = async () => {
     translationWords: tc.deriveTwlItems(formTables.translationWords, "psa"),
     translationQuestions: tc.deriveTqItems(formTables.translationQuestions, "psa"),
   };
+  // Lines tsvRows drops as blank (its trim() is JavaScript's), before the header too.
+  const blankTable = [
+    "",
+    " \r",
+    formTables.translationWords.split("\n")[0],
+    "\ufeff",
+    "\u00a0\t\u2028",
+    ...formTables.translationWords.split("\n").slice(1, 4),
+    "\u3000",
+    "",
+  ].join("\n");
   // A cell with no second part leaves tC4's verse undefined; JSON writes it as null.
   const part = (p) => (p === undefined ? null : p);
   const formIdentity = (c) => [c.checkId, part(c.reference.chapter), part(c.reference.verse), c.occurrence];
@@ -295,10 +307,14 @@ const main = async () => {
   write(
     "fixtures/check/reference-forms-vectors.json",
     {
-      note: "tables: Psalms tables written by the generator, one row per Reference form; rows: what deriveTnItems(keepPlain) / deriveTwlItems / deriveTqItems return for them, as [checkId, chapter, verse, occurrence] with null for an undefined part; cases: deriveForProject on the tN and TWL tables (no tW article gate), schemes from fixtures/tc4/test-fixtures/vrs",
+      note: "tables: Psalms tables written by the generator, one row per Reference form; rows: what deriveTnItems(keepPlain) / deriveTwlItems / deriveTqItems return for them, as [checkId, chapter, verse, occurrence] with null for an undefined part; blankLines: a TWL table with lines tsvRows drops as blank, before and after the header, and what deriveTwlItems returns for it; cases: deriveForProject on the tN and TWL tables (no tW article gate), schemes from fixtures/tc4/test-fixtures/vrs",
       book: "PSA",
       tables: formTables,
       rows: Object.fromEntries(Object.entries(formRows).map(([tool, items]) => [tool, items.map((it) => formIdentity(it.contextId))])),
+      blankLines: {
+        table: blankTable,
+        rows: tc.deriveTwlItems(blankTable, "psa").map((it) => formIdentity(it.contextId)),
+      },
       cases: formCases,
     },
     false,
