@@ -17,17 +17,19 @@ PNG per screen.
   in `history/d494a9d/`.
 - Help pages: tc-website `cdfdf9b7d534e7574beb3fcf44678973cdc5f9d7`, the commit that tC4 pins in
   `scripts/fetch-help.mjs`. The pin is the same at both commits.
-- Output: 61 screenshots at device scale 1, in `screens/`, 7,998,133 bytes (7.6 MiB) in total.
+- Output: 62 screenshots at device scale 1, in `screens/`, 8,094,421 bytes (7.7 MiB) in total.
   Each is 1280x800, except the six screens whose name ends in `-620`, which are 620x800. 49 are
-  complete and 12 are incomplete. `manifest.json` lists each screenshot with the steps that
-  reach it. The 42 screens of the first baseline were captured again; 19 screens were added for
+  complete and 13 are incomplete. `manifest.json` lists each screenshot with the steps that
+  reach it. The 42 screens of the first baseline were captured again; 20 screens were added for
   `d310bf3` ("Screens added for d310bf3").
 - Browser: Chromium 141.0.7390.37, headless, through Playwright 1.56.1. This Playwright version
   matches the Chromium build 1194 in `/opt/pw-browsers`.
 - Two consecutive full runs at `d310bf3` gave byte-identical PNGs, first for the 42 screens,
-  then for 50, then for 59, and then for all 61. The last two runs also gave the same
-  `manifest.json`. A control run at `d494a9d` on the same machine gave the committed `d494a9d`
-  PNGs byte for byte, so each change listed below comes from tC4, not from the machine.
+  then for 50, then for 59, then for 61, and then for all 62. The pairs for 61 and 62 also
+  gave the same `manifest.json`. Each `sync-` screen captured alone, from a fresh state, gave
+  the same PNG as in a full run. A control run at `d494a9d` on the same machine gave the
+  committed `d494a9d` PNGs byte for byte, so each change listed below comes from tC4, not from
+  the machine.
 
 ## Rerun
 
@@ -52,8 +54,8 @@ npm run capture      # build the client if needed, rebuild the state, capture ev
    `/api/...` and the built client at `/clients/uw-tc4/`.
 4. It drives each screen, writes `screens/<name>.png`, and writes `manifest.json`.
 
-A full run took about 90 seconds after the first build at `d494a9d`. At `d310bf3`, with 61
-screens on 4 CPUs shared with other work, it took about 5 minutes.
+A full run took about 90 seconds after the first build at `d494a9d`. At `d310bf3`, with 62
+screens on 4 CPUs shared with other work, it took 3 to 5 minutes.
 
 Options:
 
@@ -76,10 +78,10 @@ table or a total differs from the manifest, or when the README does not record t
 It fails when a tool's marking row lacks a screen in English or Arabic at 1280 or 620 px.
 
 It fails unless the screens show every part of the sync result toast: a failed sync with its
-code, an ok sync with no change, "Changes from", a verse conflict with Review, and the note on
-missing versions with Download. A screen whose toast counts missing versions must be
-incomplete, and its reason must name each version. The capture lists those versions by tC4's
-own rule (`missingPinCount` in `src/data/installed.ts`).
+code, an ok sync with no change, "Changes from", a verse conflict with Review, the note on
+changes that tC4 sent again, and the note on missing versions with Download. A screen whose
+toast counts missing versions must be incomplete, and its reason must name each version. The
+capture lists those versions by tC4's own rule (`missingPinCount` in `src/data/installed.ts`).
 
 It fails when "Where the rebuild differs on purpose" differs from the manifest's
 `rebuildDiffers` notes or cites a ruling that `docs/PLAN.md` does not list, and when a screen
@@ -193,8 +195,8 @@ pankosmia-web's `push.rs`, `clone_repo.rs`, `copy_repo.rs` and `delete_repo.rs`:
 Some steps change Door43 itself, not the app. The capture does them through `mock.door43` in
 `server.mjs`: it pushes a project as its first share does, or it drops the connection of the
 next clone. For teammates' changes, it adds journal segments to Door43 `main` with tC4's own
-journal writers (`journal/files.mjs`), as tC4's `e2e/sync-button.spec.ts` does. These steps
-start with "Door43" in the screen table.
+journal writers (`journal/files.mjs`), as tC4's `e2e/sync-button.spec.ts` does. It can also
+delete one of those segments from `main`. These steps start with "Door43" in the screen table.
 
 `mock-server/fake-door43.mjs` also answers the check that Home makes before a sync
 (`door43Api.ts` `hasBranch`). It reads the mock's Door43 folders: `main` answers 200 while
@@ -329,6 +331,7 @@ screen shows a designed absence state because data is missing; the next section 
 | `sync-failed` | shared | home | Door43 main: the Bible sample as it is now (the push of its first share) → Door43: the connection drops at the next clone of the Bible sample's repository → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the sync result toast of a sync that did not complete: red dot, "The sync did not complete." and the sentence of code sync.clone-failed, the dismiss button. Door43 has main, so the sync starts, and then the clone of main fails because the connection to git.door43.org drops | complete |
 | `sync-ok` | shared | home | Bible sample card: Titus tile → Home → Door43 main: the Bible sample as it is now (the push of its first share) → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the toast of a sync that completed with no change from teammates: kindle dot, "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review", the note "This project now uses 5 resource versions that are not on this computer.", Download and the dismiss button | incomplete |
 | `sync-ok-teammates` | shared | home | Bible sample card: Titus tile → Home → Door43 main: the Bible sample as it is now (the push of its first share) → Door43 main: two teammates change Titus 1:1 from the same version → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the toast of a sync that brought two teammates' changes to Titus 1:1: kindle dot, "Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review", "Changes from: Teammate 1 · Teammate 2", the note on the 5 missing resource versions, Review, Download and the dismiss button; the Bible card shows the chip "1 conflict · Review" and the Titus tile "1 conflict" | incomplete |
+| `sync-ok-restored` | shared | home | Bible sample card: Titus tile → Home → Door43 main: the Bible sample as it is now (the push of its first share) → Door43 main: two teammates change Titus 1:1 from the same version → Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq → Sync result: dismiss → Door43 main: the second teammate's change is gone, as when someone replaces main with an older copy → Bible sample card: Sync with Door43 | Home with the toast of a second sync, after Door43 main lost a teammate's change that the first sync brought to this computer: kindle dot, "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review", the note "Door43 did not have 1 change from a teammate. tC4 sent it again.", the note on the 5 missing resource versions, Review, Download and the dismiss button | incomplete |
 
 ## Incomplete screens and why
 
@@ -353,13 +356,13 @@ that tC4 designed for absent data, so that state is part of the baseline too.
 - **Door43 is faked: `share-dialog` and `share-dialog-check`.** The account `facilitator-zq` and
   the organizations `Equipo-Ejemplo` and `es-419_gl` are invented by `fake-door43.mjs`, and
   nothing is created or pushed.
-- **Missing resource versions: `sync-ok` and `sync-ok-teammates`.** The toast's note counts
-  the 5 versions that the Bible sample pins and the mock lacks: es-419_twl v18, es-419_tw v37,
-  es-419_ta v4, en_tq v91 and hbo_uhb v3.0.0. `syncToast.missingVersions` lists them, by tC4's
-  own rule. With every pinned version on the computer, the toast shows no such note and no
-  Download, and the dot of `sync-ok` is green. tC4's desktop package ships en_tq v91 and
-  hbo_uhb v3.0.0 (`scripts/package-desktop.zsh`), so a packaged install that also holds the
-  mock's resources counts 3.
+- **Missing resource versions: `sync-ok`, `sync-ok-teammates` and `sync-ok-restored`.** The
+  toast's note counts the 5 versions that the Bible sample pins and the mock lacks: es-419_twl
+  v18, es-419_tw v37, es-419_ta v4, en_tq v91 and hbo_uhb v3.0.0. `syncToast.missingVersions`
+  lists them, by tC4's own rule. With every pinned version on the computer, the toast shows no
+  such note and no Download, and the dot of `sync-ok` is green. tC4's desktop package ships
+  en_tq v91 and hbo_uhb v3.0.0 (`scripts/package-desktop.zsh`), so a packaged install that
+  also holds the mock's resources counts 3.
 
 These are also known differences from a real install. None of them makes a screen incomplete:
 
@@ -390,11 +393,12 @@ The entry of each screen in `manifest.json` has the same note in `rebuildDiffers
 | `sync-failed` | Q2 | The OBS card reads "Sync with Door43". |
 | `sync-ok` | Q2 | The OBS card reads "Sync with Door43". |
 | `sync-ok-teammates` | Q2 | The OBS card reads "Sync with Door43". |
+| `sync-ok-restored` | Q2 | The OBS card reads "Sync with Door43". |
 
 The other rulings change no captured screen. For example, the Align screens show Titus 1:1,
 which has a saved alignment, so tC4 already shows its word bank in verse order there (Q15).
-On `sync-ok-teammates` the one conflict is a verse conflict, so the rebuild shows Review there
-too (Q5).
+On `sync-ok-teammates` and `sync-ok-restored` the one conflict is a verse conflict, so the
+rebuild shows Review there too (Q5).
 
 ## Changes since d494a9d
 
@@ -430,7 +434,7 @@ Two changes do not show on these screens:
 
 ## Screens added for d310bf3
 
-`docs/TC4-DELTA-2026-10-16.md` §3.14 item 3 asks for new screens. These 19 were added:
+`docs/TC4-DELTA-2026-10-16.md` §3.14 item 3 asks for new screens. These 20 were added:
 
 | Screen | What it shows | tC4 change |
 |---|---|---|
@@ -453,6 +457,7 @@ Two changes do not show on these screens:
 | `sync-failed` | The sync result toast of a sync that did not complete. | #690, #691 |
 | `sync-ok` | The toast of a sync that completed with no change from teammates: the count line, the note on missing resource versions and Download. | #690, #691 |
 | `sync-ok-teammates` | The toast of a sync that brought teammates' changes and a verse conflict: the count line, "Changes from", the note on missing resource versions, Review and Download. | #690, #691 |
+| `sync-ok-restored` | The toast of a sync that sent again a teammate's change that Door43 main had lost: the note "Door43 did not have 1 change from a teammate. tC4 sent it again." | #690 |
 
 Already in the 42 screens: Add a project with four cards (`add-project`) and the sign-in step
 with the name notice (`share-signin`).
@@ -463,12 +468,17 @@ The Translation Notes and Align rows are below the fold at 800 px, so their scre
 row into view. tC4's own images of these rows, cropped to the row, are in its
 `docs/evidence/navigation-pills-2026-10-15/` at `d310bf3`.
 
-Every part of the sync result toast now has a reference image. tC4 has no committed image of
-this toast; its `e2e/sync-button.spec.ts` writes screenshots only as test output on its rig.
-`sync-ok` and `sync-ok-teammates` follow that spec's two syncs. The project is opened once
-before it is pushed, because tC4 writes the sample's journal when it first opens it. Without
-that journal on Door43, tC4 stops the sync with `sync.verify-failed`. Not captured: the
-conflict review that Review opens, and an open from Door43 that succeeds (J17).
+Every part of the sync result toast now has a reference image: the failed line, the count
+line, "Changes from", the note on changes sent again, the note on missing versions, Review and
+Download. tC4 has no committed image of this toast; its `e2e/sync-button.spec.ts` writes
+screenshots only as test output on its rig. `sync-ok` and `sync-ok-teammates` follow that
+spec's two syncs. The project is opened once before it is pushed, because tC4 writes the
+sample's journal when it first opens it. Without that journal on Door43, tC4 stops the sync
+with `sync.verify-failed`. `sync-ok-restored` syncs twice. Between the two syncs, Door43 main
+loses the segment of the second teammate, so the second sync sends it again.
+
+Not captured: the conflict review that Review opens, a middle count above 0 (a conflict that
+kept the newest version), and an open from Door43 that succeeds (J17).
 
 ## Rendering determinism
 

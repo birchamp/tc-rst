@@ -500,8 +500,10 @@ export function createMockServer({ state, client }) {
   /** Door43 for the capture. `push` is a push of `repoPath` to its remote `remote`, as a
    * share or a sync makes it; `remove` takes that repository off Door43; `dropNextClone`
    * makes the next clone of that repository fail to connect, once. Each answers the folder
-   * of Door43 `main`. `holds` answers whether Door43 has `main` of `<host>/<org>/<repo>`. */
+   * of Door43 `main`, as `mainOf` does. `holds` answers whether Door43 has `main` of
+   * `<host>/<org>/<repo>`. */
   const door43 = {
+    mainOf: (repoPath, remote = 'origin') => remoteMain(repoPath, remote),
     push: (repoPath, remote = 'origin') => pushTo(repoPath, remote),
     remove: (repoPath, remote = 'origin') => {
       const main = remoteMain(repoPath, remote);

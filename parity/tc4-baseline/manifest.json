@@ -109,11 +109,11 @@
   ],
   "refusedExternalRequests": [],
   "totals": {
-    "screens": 61,
+    "screens": 62,
     "complete": 49,
-    "incomplete": 12,
+    "incomplete": 13,
     "failed": 0,
-    "bytes": 7998133
+    "bytes": 8094421
   },
   "screens": [
     {
@@ -1492,6 +1492,7 @@
         "newestWins": 0,
         "verseConflicts": 0,
         "from": null,
+        "restored": 0,
         "missingPins": 0,
         "links": []
       },
@@ -1536,6 +1537,7 @@
         "newestWins": 0,
         "verseConflicts": 0,
         "from": null,
+        "restored": 0,
         "missingPins": 5,
         "links": [
           "download"
@@ -1590,6 +1592,7 @@
         "newestWins": 0,
         "verseConflicts": 1,
         "from": "Changes from: Teammate 1 · Teammate 2",
+        "restored": 0,
         "missingPins": 5,
         "links": [
           "review",
@@ -1620,6 +1623,66 @@
         "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400"
       ],
       "bytes": 94820
+    },
+    {
+      "name": "sync-ok-restored",
+      "file": "screens/sync-ok-restored.png",
+      "scenario": "shared",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "home",
+        "modal": null
+      },
+      "rebuildDiffers": {
+        "ruling": "Q2",
+        "rebuild": "The OBS card reads \"Sync with Door43\", like the Bible card: the rebuild syncs OBS projects too."
+      },
+      "homeCards": {
+        "_local_/_local_/sample_burrito_obs": "upload",
+        "_local_/_local_/sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": true,
+        "code": null,
+        "text": "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Door43 did not have 1 change from a teammate. tC4 sent it again. This project now uses 5 resource versions that are not on this computer. Review Download",
+        "received": 0,
+        "newestWins": 0,
+        "verseConflicts": 1,
+        "from": null,
+        "restored": 1,
+        "missingPins": 5,
+        "links": [
+          "review",
+          "download"
+        ],
+        "missingVersions": [
+          "git.door43.org/es-419_gl/es-419_twl v18",
+          "git.door43.org/es-419_gl/es-419_tw v37",
+          "git.door43.org/es-419_gl/es-419_ta v4",
+          "git.door43.org/unfoldingWord/en_tq v91",
+          "git.door43.org/unfoldingWord/hbo_uhb v3.0.0"
+        ]
+      },
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Home",
+        "Door43 main: the Bible sample as it is now (the push of its first share)",
+        "Door43 main: two teammates change Titus 1:1 from the same version",
+        "Bible sample card: Sync with Door43",
+        "Turn on internet",
+        "Sign in as facilitator-zq",
+        "Sync result: dismiss",
+        "Door43 main: the second teammate's change is gone, as when someone replaces main with an older copy",
+        "Bible sample card: Sync with Door43"
+      ],
+      "shows": "Home with the toast of a second sync, after Door43 main lost a teammate's change that the first sync brought to this computer: kindle dot, \"Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review\", the note \"Door43 did not have 1 change from a teammate. tC4 sent it again.\", the note on the 5 missing resource versions, Review, Download and the dismiss button",
+      "status": "incomplete",
+      "incomplete": "The note on missing resource versions counts the 5 versions that the Bible sample pins and the mock does not have: es-419_twl v18, es-419_tw v37, es-419_ta v4, en_tq v91 and hbo_uhb v3.0.0. With every pinned version on the computer, the toast shows no such note and no Download.",
+      "absentReads": [
+        "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400"
+      ],
+      "bytes": 96288
     }
   ]
 }

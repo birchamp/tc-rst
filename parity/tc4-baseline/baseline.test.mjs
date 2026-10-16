@@ -128,6 +128,7 @@ test('every part of the sync result toast is captured (tC4 SyncResult.jsx)', () 
     'the count line with no change from teammates': (t) => t.received === 0 && t.verseConflicts === 0,
     'teammates\' changes with "Changes from"': (t) => t.received > 0 && t.from,
     'a verse conflict with Review': (t) => t.verseConflicts > 0 && t.links.includes('review'),
+    'the note on changes that tC4 sent again (restored)': (t) => t.restored > 0,
     'the note on missing resource versions with Download': (t) => t.missingPins > 0 && t.links.includes('download'),
   };
   for (const [part, shows] of Object.entries(parts)) assert.ok(ok.some(shows), `no screen shows ${part}`);

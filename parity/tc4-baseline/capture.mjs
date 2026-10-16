@@ -157,7 +157,8 @@ async function settle(page, inFlight, quietMs = 800) {
 /**
  * Two teammates change Titus 1:1 from the same version on Door43 `main`, which gives one
  * verse conflict. This is tC4's e2e/sync-button.spec.ts `teammatesChangeOneVerse`: the
- * segments are written by tC4's own reference journal writers, never by hand.
+ * segments are written by tC4's own reference journal writers, never by hand. Answers the
+ * segment file of each teammate, in the order of TEAMMATES.
  */
 async function teammatesChangeOneVerse(main) {
   const journal = (file) => import(pathToFileURL(path.join(TC4, 'journal', file)).href);
@@ -169,12 +170,12 @@ async function teammatesChangeOneVerse(main) {
   if (!base) throw new Error('Door43 main holds no version of TIT 1:1: open the project before it is pushed');
   const last = union.map((e) => e.ts).sort().pop();
   let now = Date.now();
-  TEAMMATES.forEach((actor, i) => {
+  return TEAMMATES.map((actor, i) => {
     const clock = makeClock(actor, () => now);
     clock.ratchet(last);
     now += 1000;
     const event = { v: 1, op: 'text.verse.set', actor, ts: clock.issue(), base, book: 'TIT', chapter: '1', verse: '1', text: `Pablo, versión del compañero ${i + 1}.\n` };
-    writeActionSegment(actorDirFor(journalDir, actor), [event]);
+    return writeActionSegment(actorDirFor(journalDir, actor), [event]);
   });
 }
 
@@ -245,6 +246,14 @@ function appDriver({ page, origin, state, door43 }) {
     /** The next clone of a shared project's repository fails to connect, once. */
     dropNextClone: (repo) => door43.dropNextClone(repo),
     teammatesChangeOneVerse: (repo) => teammatesChangeOneVerse(door43.push(repo)),
+    /** Door43 `main` loses one segment file, as when someone replaces main with an older
+     * copy. Git keeps no empty folder, so the folders it leaves empty go too. */
+    loseFromDoor43: (repo, segment) => {
+      const journal = path.join(door43.mainOf(repo), 'ingredients', 'checking', 'journal');
+      if (!segment.startsWith(`${journal}${path.sep}`)) throw new Error(`${segment} is not a journal file of Door43 main`);
+      fs.rmSync(segment);
+      for (let dir = path.dirname(segment); dir !== journal && fs.readdirSync(dir).length === 0; dir = path.dirname(dir)) fs.rmdirSync(dir);
+    },
     /** Sync with Door43 from the project card: the internet question, then the sign-in. */
     async syncFromHome(repo) {
       await page.getByTestId(`share-${repo}`).click();
@@ -871,6 +880,26 @@ const SCREEN_LIST = [
       await app.page.locator('[data-testid="sync-result"][data-ok="1"]').waitFor({ timeout: 120_000 });
     },
   },
+  {
+    name: 'sync-ok-restored', scenario: 'shared', view: 'home', modal: null,
+    steps: ['Home', 'Bible sample card: Titus tile', 'Home', 'Door43 main: the Bible sample as it is now (the push of its first share)', 'Door43 main: two teammates change Titus 1:1 from the same version', 'Bible sample card: Sync with Door43', 'Turn on internet', `Sign in as ${FAKE_USER.username}`, 'Sync result: dismiss', 'Door43 main: the second teammate\'s change is gone, as when someone replaces main with an older copy', 'Bible sample card: Sync with Door43'],
+    shows: 'Home with the toast of a second sync, after Door43 main lost a teammate\'s change that the first sync brought to this computer: kindle dot, "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review", the note "Door43 did not have 1 change from a teammate. tC4 sent it again.", the note on the 5 missing resource versions, Review, Download and the dismiss button',
+    incomplete: MISSING_VERSIONS,
+    rebuildDiffers: OBS_SYNCS,
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.home();
+      const [, second] = await app.teammatesChangeOneVerse(BIBLE);
+      await app.syncFromHome(BIBLE);
+      const toast = app.page.getByTestId('sync-result');
+      await app.page.locator('[data-testid="sync-result"][data-ok="1"]').waitFor({ timeout: 120_000 });
+      await toast.getByTestId('sync-dismiss').click();
+      await toast.waitFor({ state: 'detached' });
+      app.loseFromDoor43(BIBLE, second);
+      // The internet is on and the sign-in is kept, so the second sync asks nothing.
+      await app.page.getByTestId(`share-${BIBLE}`).click();
+      await app.page.locator('[data-testid="sync-result"][data-ok="1"]').waitFor({ timeout: 120_000 });
+    },
+  },
 ];
 
 // ---- the run ---------------------------------------------------------------
@@ -927,6 +956,7 @@ function observe(page) {
         newestWins: count('sync-count-newest'),
         verseConflicts: count('sync-count-conflicts'),
         from: part('sync-received-from')?.innerText ?? null,
+        restored: count('sync-restored'),
         missingPins: count('sync-missing-pins'),
         links: ['review', 'download'].filter((link) => part(`sync-${link}`)),
       },
