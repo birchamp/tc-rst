@@ -330,6 +330,24 @@ impl Props {
         }))
     }
 
+    /// The callback a screen keeps for a prop it passes only some of the time, for a component
+    /// that turns the callback off itself (`closable`, `exits_off`, a signal of the callback):
+    /// under an `$if` with a callback in one branch, that callback, called whichever branch is
+    /// in force, so the component's own switch is what keeps it from running.
+    /// [`Props::handler_on`] drives that switch. Any other prop reads as [`Props::handler`].
+    pub fn screen_handler<T: Arg>(&self, key: &str) -> Option<Callback<T>> {
+        let raw = self.raw(key)?;
+        if raw.get("$if").is_none() {
+            return self.handler(key);
+        }
+        let then = raw.get("then").and_then(callback_of::<T>);
+        let otherwise = raw.get("else").and_then(callback_of::<T>);
+        match (then, otherwise) {
+            (Some(cb), None) | (None, Some(cb)) => Some(cb),
+            _ => self.handler(key),
+        }
+    }
+
     pub fn str(&self, key: &str) -> Option<String> {
         match self.take(key)? {
             Value::String(s) => Some(s),

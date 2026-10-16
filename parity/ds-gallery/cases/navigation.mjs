@@ -49,6 +49,15 @@ export default [
     ['project-editing-later', { ...project, onBrandClick: when('editing', undefined, noop), onProjectClick: when('editing', undefined, noop), center: editingSwitch(cell('editing')),
       right: el('Button', { variant: 'secondary', size: 'sm', 'data-testid': 'edit', onClick: setTo('editing', true), children: 'Edit this verse' }) },
       { cells: { editing: false }, steps: [click('[data-testid="edit"]')], note: 'Opening an editing card takes the exits away: the brand loses its pointer, two tabs turn off.' }],
+    ['project-exits-taken', { ...project, onBrandClick: when('editing', undefined, setTo('brand', 'left')), onProjectClick: when('editing', undefined, setTo('chip', 'left')),
+      center: editingSwitch(cell('editing')),
+      right: el('div', { style: { display: 'flex', alignItems: 'center', gap: 8 }, children: [
+        el('Text', { role: 'caption', 'data-testid': 'exits', children: ['brand ', cell('brand'), ' · project ', cell('chip')] }),
+        el('Button', { variant: 'secondary', size: 'sm', 'data-testid': 'edit', onClick: setTo('editing', true), children: 'Edit' }),
+        el('Button', { variant: 'secondary', size: 'sm', 'data-testid': 'done', onClick: setTo('editing', false), children: 'Done' }),
+      ] }) },
+      { cells: { editing: false, brand: 'stays', chip: 'stays' }, steps: [click('[data-testid="edit"]'), click('[data-testid="project-switch"]'), click('img[alt="translationCore"]')],
+        note: 'The exits write what they do on screen. With the editing card open a press on the project chip or the brand does nothing; Done gives the exits back.' }],
   ]),
 
   ...group('Breadcrumb', { frame: { width: 440, height: 52 } }, [

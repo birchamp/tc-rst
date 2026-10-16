@@ -90,7 +90,7 @@ fn handler<T: Arg>(p: &Props, key: &str) -> Option<Callback<T>> {
 
 /// A callback the component takes as a signal: the callback while it is in force.
 fn live_handler<T: Arg>(p: &Props, key: &str) -> Signal<Option<Callback<T>>> {
-    let cb = p.handler(key);
+    let cb = p.screen_handler(key);
     let on = p.handler_on(key);
     Signal::derive(move || cb.filter(|_| on.get()))
 }
@@ -989,8 +989,8 @@ fn app_header(p: Props) -> AnyView {
         switch_title: p.str("switchTitle"),
         center: p.children("center"),
         right: p.children("right"),
-        on_brand_click: handler(&p, "onBrandClick"),
-        on_project_click: handler(&p, "onProjectClick"),
+        on_brand_click: p.screen_handler("onBrandClick"),
+        on_project_click: p.screen_handler("onProjectClick"),
         // tC4 takes the handlers away (`onBrandClick={editing ? undefined : exit}`); the port
         // keeps them and turns them off.
         exits_off: {
@@ -1138,7 +1138,7 @@ fn modal(p: Props) -> AnyView {
         subtitle: p.content("subtitle"),
         width: css_value(p.value("width")),
         close_label: p.str("closeLabel"),
-        on_close: handler(&p, "onClose"),
+        on_close: p.screen_handler("onClose"),
         closable: p.handler_on("onClose"),
         footer: children_fn(&p, "footer"),
         children: children_fn(&p, "children"),

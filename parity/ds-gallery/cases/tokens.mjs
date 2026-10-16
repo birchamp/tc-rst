@@ -3,7 +3,7 @@
 // with inline styles that read the token (var(--name)), never a copied value.
 import fs from 'node:fs';
 import path from 'node:path';
-import { el, group, onDark, T } from './lib.mjs';
+import { el, group, onDark, select, T } from './lib.mjs';
 
 /** Custom properties declared in the file's plain `:root { … }` blocks, in source order, each
  * with the `---- Section ----` comment it sits under. */
@@ -152,6 +152,23 @@ export function tokenCases(tc4) {
       el('div', { style: { height: 72, background: '#fff', borderRadius: 12, boxShadow: `var(${t.name})` } }),
       el('Text', { role: 'captionStrong', as: 'div', children: t.name }),
     ] })), 40) }, { frame: { ...gridFrame(shadows.length, 5, 140, 100, 40, 40), padding: 40 } }],
+    /* base.css (#737): selected text takes the soft highlight yellow, except in Check's "Your
+       translation" line ([data-words="target"]), where a selected word wears that yellow, so
+       text selected there for copying takes the system's highlight. The line is Check.jsx's
+       (src/views/Check.jsx:639-660), its third word selected; the selection runs from the
+       sentence above to the second word. */
+    ['selection', { style: { display: 'flex', flexDirection: 'column', gap: 12 }, children: [
+      el('p', { 'data-testid': 'elsewhere', style: { margin: 0, fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-ui-md)', color: 'var(--text-body)' },
+        children: 'Text selected anywhere else takes the soft yellow.' }),
+      el('p', { 'data-words': 'target', role: 'group', 'aria-label': 'Your translation',
+        style: { direction: 'ltr', textAlign: 'start', fontFamily: 'var(--font-scripture)', fontSize: 'var(--fs-title-lg)', lineHeight: 1.9, color: 'var(--text-scripture)', margin: 0 },
+        children: ['Pablo,', 'siervo', 'de', 'Dios', 'y', 'apóstol'].map((w, i) => el('span', {
+          'data-testid': `tw-${i}`, 'data-selected': i === 2 ? '1' : '0', role: 'button', 'aria-pressed': i === 2 ? 'true' : 'false', tabIndex: i === 0 ? 0 : -1,
+          style: { display: 'inline-block', cursor: 'pointer', borderRadius: 4, padding: '0 .1em', marginInlineEnd: '.22em', background: i === 2 ? 'var(--tc-highlight-soft)' : 'transparent' },
+          children: w,
+        })) }),
+    ] }, { frame: { width: 480, height: 120 }, steps: [select('[data-testid="elsewhere"]', '[data-testid="tw-1"]')],
+      note: 'base.css: the selection outside the target words is the soft yellow; inside, the system highlight, so it never passes for the selected word "de".' }],
     ['control-heights', { children: wrapRow(controls.map((t) => el('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 }, children: [
       el('div', { style: { width: 120, height: `var(${t.name})`, background: 'var(--surface-accent-soft)', border: '1px solid var(--uw-inspire)', borderRadius: 'var(--radius-pill)' } }),
       el('Text', { role: 'captionStrong', as: 'div', children: `${t.name} ${t.value}` }),

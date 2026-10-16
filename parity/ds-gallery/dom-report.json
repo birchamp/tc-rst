@@ -1,6 +1,6 @@
 {
-  "same": 742,
-  "total": 742,
+  "same": 744,
+  "total": 744,
   "cases": [
     {
       "id": "Badge/accent-md",
@@ -1912,6 +1912,12 @@
     },
     {
       "id": "AppHeader/project-editing-later",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "AppHeader/project-exits-taken",
       "same": true,
       "errors": [],
       "diffs": []
@@ -4444,6 +4450,12 @@
     },
     {
       "id": "Tokens/elevation",
+      "same": true,
+      "errors": [],
+      "diffs": []
+    },
+    {
+      "id": "Tokens/selection",
       "same": true,
       "errors": [],
       "diffs": []

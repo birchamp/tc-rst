@@ -1,7 +1,7 @@
 {
-  "same": 52,
-  "total": 52,
-  "steps": 267,
+  "same": 53,
+  "total": 53,
+  "steps": 277,
   "scenarios": [
     {
       "name": "menu-keys",
@@ -406,7 +406,15 @@
     {
       "name": "app-header-exits",
       "case": "AppHeader/project-editing-later",
-      "steps": 5,
+      "steps": 6,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "app-header-exits-taken",
+      "case": "AppHeader/project-exits-taken",
+      "steps": 9,
       "same": true,
       "diffs": [],
       "errors": []

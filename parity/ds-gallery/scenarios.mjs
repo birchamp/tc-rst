@@ -122,7 +122,13 @@ const SCENARIOS = [
     { click: '[role="tab"][aria-selected="true"]' }, { click: '[data-testid="edit"]' }, { click: '[role="tab"][aria-selected="true"]' },
     { key: 'ArrowRight' }, { key: 'ArrowLeft' }, { key: 'Home' }, { key: 'End' }] },
   { name: 'app-header-exits', case: 'AppHeader/project-editing-later', steps: [
-    { hover: '[data-testid="project-switch"]' }, { click: '[data-testid="edit"]' }, { click: '[data-testid="project-switch"]' }, { key: 'Tab' }, { key: 'ArrowRight' }] },
+    { hover: '[data-testid="project-switch"]' }, { click: '[data-testid="edit"]' }, { click: '[data-testid="project-switch"]' }, { key: 'Tab' }, { key: 'ArrowRight' },
+    { click: 'img[alt="translationCore"]' }] },
+  // The exits write what they do: off while editing, on again after Done, each on its own.
+  { name: 'app-header-exits-taken', case: 'AppHeader/project-exits-taken', steps: [
+    { click: '[data-testid="edit"]' }, { click: '[data-testid="project-switch"]' }, { click: 'img[alt="translationCore"]' },
+    { click: '[data-testid="done"]' }, { click: '[data-testid="project-switch"]' }, { click: '[data-testid="edit"]' }, { click: 'img[alt="translationCore"]' },
+    { click: '[data-testid="done"]' }, { click: 'img[alt="translationCore"]' }] },
   { name: 'book-tile-editing', case: 'BookTile/row-editing', steps: [
     { click: 'button[data-tone="accent"]' }, { click: '[data-testid="edit"]' }, { click: 'input' }, { mouse: [100, 35] }, { type: 'x' }] },
 ];

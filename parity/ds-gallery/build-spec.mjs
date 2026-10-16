@@ -38,6 +38,7 @@ const PROTOCOL = {
     click: 'Click the centre of the target.',
     key: 'Press `key` on the focused element.',
     type: 'Type `text` into the focused element, one key at a time.',
+    select: 'Select the text from the start of the first element inside the frame that matches `target` to the end of the first that matches `to` (`target` when absent), by script, as one range.',
   },
   motion: 'Every CSS transition and animation is off (as if finished; an infinite animation shows its element without the animation). The text caret is hidden.',
   settle: 'After mounting wait 150 ms, and after each step 300 ms, then for document.fonts.ready, for every image to decode, and for two animation frames. Then screenshot the frame element.',

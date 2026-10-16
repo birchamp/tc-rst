@@ -8,9 +8,9 @@ cases from `gallery-spec.json` and compares its images with `screens/`.
   **`d310bf304cfee784f4ca45dee474a3faf0d5616e`** (version `4.0.0-rc.1`, clean tree). The gallery
   imports `src/ds/index.js` and `src/ds/styles.css` from that checkout through a Vite alias. It
   copies nothing and changes nothing there.
-- Output: **742 cases**, 742 PNGs in `screens/<Component>/<state>.png`: 706 component cases for
+- Output: **744 cases**, 744 PNGs in `screens/<Component>/<state>.png`: 707 component cases for
   the 53 components that the 52 files in `src/ds/components` export (`Radio.jsx` exports `Radio`
-  and `RadioGroup`), plus 36 token cases. 6.2 MB in total.
+  and `RadioGroup`), plus 37 token cases. 6.3 MB in total.
 - Contract: `gallery-spec.json` lists every case with its component, state, source file, frame,
   document language and direction, exact props as JSON, interaction steps and what it needs.
 - Versions: React 18.3.1, react-dom 18.3.1, Vite 6.4.3, @vitejs/plugin-react 4.7.0 and esbuild
@@ -106,7 +106,7 @@ node capture-rust.mjs             # build (dev), capture screens-rust/, compare 
 node capture-rust.mjs --release   # the same with the wasm-release build
 node diff.mjs                     # compare again without capturing
 npm run build && node dom-diff.mjs   # the DOM of both galleries; needs the React build in dist/
-node scenarios.mjs                # behaviour after each step of 52 sequences; needs both builds
+node scenarios.mjs                # behaviour after each step of 53 sequences; needs both builds
 ```
 
 `capture-rust.mjs` takes `--only`, `--jobs` and `--no-build` as `capture.mjs` does. It serves
@@ -122,7 +122,7 @@ the report.
 
 A still image and the DOM after at most three steps cannot show behaviour: focus that moves or
 is lost, a layer that should close and does not, a node drawn again where React keeps it (which
-stops its transition and drops any focus on it). `scenarios.mjs` drives 52 sequences of up to 13
+stops its transition and drops any focus on it). `scenarios.mjs` drives 53 sequences of up to 13
 steps on both galleries: roving focus and typeahead in Menu, Select and SuggestField, the focus
 trap of Modal, Drawer and ConfirmDialog, Escape and outside presses with a Select or a Menu open
 inside a Modal, state an owner keeps (a Toggle, a RadioGroup, a Table selection by keyboard, a
@@ -131,17 +131,18 @@ drawn (Table rows inserted and changed, rows re-sorted under the focused row, ro
 key, Select groups whose name comes back, suggestions replaced while the list is open),
 controlled values a change does not reach, and props a screen changes on a drawn component (a
 button that turns busy or reaches the end, a dialog that keeps its ✕, Escape and scrim only
-while it is not busy, tabs, header exits and book tiles that an editing card turns off, and a
-press on an off control that keeps the focus in the field). After every step it compares the frame's DOM as
+while it is not busy, tabs, header exits and book tiles that an editing card turns off, header
+exits that write what they do and come back when the card closes, and a press on an off control
+that keeps the focus in the field). After every step it compares the frame's DOM as
 `dom-diff.mjs` sees it, the focused element, the page's scroll lock, and which elements are
 still the nodes they were (each element is numbered once, in document order, when it first
 appears). It writes `scenario-report.json` and takes `--only` with scenario names.
 
-Result at this commit (tC4 d310bf3, dev build): 742 of 742 cases at 0 mismatched pixels. Every
-`screens-rust/` file is byte-identical to its `screens/` file. 742 of 742 cases have the same
-DOM. 52 of 52 scenarios (267 steps) are the same after every step. The 719 cases that existed at
+Result at this commit (tC4 d310bf3, dev build): 744 of 744 cases at 0 mismatched pixels. Every
+`screens-rust/` file is byte-identical to its `screens/` file. 744 of 744 cases have the same
+DOM. 53 of 53 scenarios (277 steps) are the same after every step. The 719 cases that existed at
 d494a9d draw the same tC4 screens at d310bf3: the only design-system change in between is a
-`::selection` rule for `[data-words="target"]`, which no case uses. There
+`::selection` rule for `[data-words="target"]`, which only `Tokens/selection` shows. There
 is no `residuals.json` because nothing needs explaining. Both galleries are captured on the same
 machine, so the machine-dependent rendering under "Skipped, and what to know" (fallback glyphs,
 monospace, Nastaliq) affects both sides alike.
@@ -157,10 +158,10 @@ Each case in `gallery-spec.json`:
 | `frame` | `width`, `height`, `padding` (16 unless stated) and `background` (`#F7FAFC`, which is `--surface-app`). |
 | `document` | `lang` and `dir` of `<html>`. 52 cases use the Arabic interface (`ar`, `rtl`), as tC4 sets it. |
 | `props` | The exact props of the component under test, as JSON. |
-| `render` | Only on 70 cases that place the component in something: a row, an Ocean ground, a centring box. It is the whole tree. Without it the tree is the component with `props`. |
-| `steps` | Interactions before the screenshot (112 cases): `focus` (Tab until the target has keyboard focus), `hover`, `press` (button held), `click`, `key`, `type`. A target is a CSS selector inside the frame. |
-| `needs` | `callbacks`: props that hold a callback (249 cases). `elements`: props that hold elements, such as `children`, `footer`, `trigger`, `center` or a `title` (191 cases). |
-| `cells` | Only on 18 cases that own state, as a screen does: the first value of each cell. A prop `{ "$cell": name }` reads a cell, `{ "$if": name, … }` picks a value by one, and a callback `{ "$fn": "set", "cell": name, "from": path }` writes one. A Toggle that turns on, a RadioGroup that changes, a Table row selected by Enter, Table rows and suggestions that change while they are drawn (rows re-sorted under the focused row among them), a Progress ring that moves, a Modal that closes, and the props tC4's d310bf3 screens change on a drawn component (a sync button that turns busy, a Previous/Next pill that reaches the end, a dialog that loses its ✕ while it works, tabs, book tiles and header exits that an editing card turns off) are drawn by the component, not by a new case. |
+| `render` | Only on 71 cases that place the component in something: a row, an Ocean ground, a centring box. It is the whole tree. Without it the tree is the component with `props`. |
+| `steps` | Interactions before the screenshot (114 cases): `focus` (Tab until the target has keyboard focus), `hover`, `press` (button held), `click`, `key`, `type`, `select` (the text from the start of `target` to the end of `to`, set by script). A target is a CSS selector inside the frame. |
+| `needs` | `callbacks`: props that hold a callback (250 cases). `elements`: props that hold elements, such as `children`, `footer`, `trigger`, `center` or a `title` (193 cases). |
+| `cells` | Only on 19 cases that own state, as a screen does: the first value of each cell. A prop `{ "$cell": name }` reads a cell, `{ "$if": name, … }` picks a value by one, and a callback `{ "$fn": "set", "cell": name, "from": path }` writes one. A Toggle that turns on, a RadioGroup that changes, a Table row selected by Enter, Table rows and suggestions that change while they are drawn (rows re-sorted under the focused row among them), a Progress ring that moves, a Modal that closes, and the props tC4's d310bf3 screens change on a drawn component (a sync button that turns busy, a Previous/Next pill that reaches the end, a dialog that loses its ✕ while it works, tabs, book tiles and header exits that an editing card turns off) are drawn by the component, not by a new case. A callback that the component itself turns off, Modal's `onClose` (`closable`), AppHeader's `onBrandClick` and `onProjectClick` (`exits_off`) and Layer's `onDismiss` (a signal), reaches the port as the screen passes it, without a check of the cell, so only the component's own switch keeps it from running, as on a screen. |
 | `isolate` | The case opens a layer, has steps or sets the document language. The browsing index loads it in an iframe. |
 | `note` | Present where a case needs explaining. |
 
@@ -225,7 +226,7 @@ states are real: Modal, Drawer, ConfirmDialog and Layer open in their frame, Men
 | TextArea | forms/TextArea.jsx | 10 |
 | TextField | forms/TextField.jsx | 12 |
 | Toggle | forms/Toggle.jsx | 10 |
-| AppHeader | navigation/AppHeader.jsx | 12 |
+| AppHeader | navigation/AppHeader.jsx | 13 |
 | Breadcrumb | navigation/Breadcrumb.jsx | 7 |
 | Menu | navigation/Menu.jsx | 7 |
 | Action | primitives/Action.jsx | 52 |
@@ -250,12 +251,14 @@ states are real: Modal, Drawer, ConfirmDialog and Layer open in their frame, Men
 | ScripturePassage | translation/ScripturePassage.jsx | 14 |
 | VerseMarker | translation/VerseMarker.jsx | 8 |
 | WordChip | translation/WordChip.jsx | 7 |
-| Tokens | tokens/*.css | 36 |
+| Tokens | tokens/*.css | 37 |
 
-The 36 token cases: one swatch page per section of `colors.css` (10), the nine tone slots of
+The 37 token cases: one swatch page per section of `colors.css` (10), the nine tone slots of
 each of the seven tones on a light ground and on the Ocean ground (14), the context slots light
 and dark (2), the UI and scripture type scales, the weights, every Text role, the font families,
-spacing, radius, stroke, elevation and control heights (10). `motion.css` and `layer.css` hold
+spacing, radius, stroke, elevation and control heights (10), and `base.css`'s selection colours
+(1): text selected outside Check's "Your translation" line takes the soft yellow, text selected
+inside it (`[data-words="target"]`, #737) the system highlight. `motion.css` and `layer.css` hold
 durations and z-indices, which a still image cannot show, and `print.css` styles only the print
 document.
 

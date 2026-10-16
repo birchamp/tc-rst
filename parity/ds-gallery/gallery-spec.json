@@ -21,7 +21,8 @@
       "press": "Move the pointer to the centre of the target and press the primary button without releasing it (:active).",
       "click": "Click the centre of the target.",
       "key": "Press `key` on the focused element.",
-      "type": "Type `text` into the focused element, one key at a time."
+      "type": "Type `text` into the focused element, one key at a time.",
+      "select": "Select the text from the start of the first element inside the frame that matches `target` to the end of the first that matches `to` (`target` when absent), by script, as one range."
     },
     "motion": "Every CSS transition and animation is off (as if finished; an infinite animation shows its element without the animation). The text caret is hidden.",
     "settle": "After mounting wait 150 ms, and after each step 300 ms, then for document.fonts.ready, for every image to decode, and for two animation frames. Then screenshot the frame element.",
@@ -182,7 +183,7 @@
     {
       "name": "AppHeader",
       "file": "components/navigation/AppHeader.jsx",
-      "cases": 12
+      "cases": 13
     },
     {
       "name": "Breadcrumb",
@@ -307,7 +308,7 @@
     {
       "name": "Tokens",
       "file": "tokens/*.css",
-      "cases": 36
+      "cases": 37
     }
   ],
   "cases": [
@@ -10436,6 +10437,165 @@
       },
       "isolate": true,
       "note": "Opening an editing card takes the exits away: the brand loses its pointer, two tabs turn off."
+    },
+    {
+      "id": "AppHeader/project-exits-taken",
+      "component": "AppHeader",
+      "state": "project-exits-taken",
+      "file": "components/navigation/AppHeader.jsx",
+      "frame": {
+        "width": 1040,
+        "height": 88,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "logoSrc": {
+          "$asset": "public/assets/translationcore-logo.png"
+        },
+        "projectInitials": "EE",
+        "projectName": "Equipo Ejemplo — Tito y Jonás",
+        "projectMeta": "es-419",
+        "switchTitle": "Switch project",
+        "onBrandClick": {
+          "$if": "editing",
+          "else": {
+            "$fn": "set",
+            "cell": "brand",
+            "value": "left"
+          }
+        },
+        "onProjectClick": {
+          "$if": "editing",
+          "else": {
+            "$fn": "set",
+            "cell": "chip",
+            "value": "left"
+          }
+        },
+        "center": {
+          "$el": "Switcher",
+          "props": {
+            "indicator": "pill",
+            "value": "draft",
+            "onChange": {
+              "$fn": "noop"
+            },
+            "options": [
+              {
+                "value": "read",
+                "label": "Understand",
+                "disabled": {
+                  "$cell": "editing"
+                }
+              },
+              {
+                "value": "draft",
+                "label": "Translate"
+              },
+              {
+                "value": "check",
+                "label": "Check",
+                "disabled": {
+                  "$cell": "editing"
+                }
+              }
+            ]
+          }
+        },
+        "right": {
+          "$el": "div",
+          "props": {
+            "style": {
+              "display": "flex",
+              "alignItems": "center",
+              "gap": 8
+            },
+            "children": [
+              {
+                "$el": "Text",
+                "props": {
+                  "role": "caption",
+                  "data-testid": "exits",
+                  "children": [
+                    "brand ",
+                    {
+                      "$cell": "brand"
+                    },
+                    " · project ",
+                    {
+                      "$cell": "chip"
+                    }
+                  ]
+                }
+              },
+              {
+                "$el": "Button",
+                "props": {
+                  "variant": "secondary",
+                  "size": "sm",
+                  "data-testid": "edit",
+                  "onClick": {
+                    "$fn": "set",
+                    "cell": "editing",
+                    "value": true
+                  },
+                  "children": "Edit"
+                }
+              },
+              {
+                "$el": "Button",
+                "props": {
+                  "variant": "secondary",
+                  "size": "sm",
+                  "data-testid": "done",
+                  "onClick": {
+                    "$fn": "set",
+                    "cell": "editing",
+                    "value": false
+                  },
+                  "children": "Done"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "cells": {
+        "editing": false,
+        "brand": "stays",
+        "chip": "stays"
+      },
+      "steps": [
+        {
+          "do": "click",
+          "target": "[data-testid=\"edit\"]"
+        },
+        {
+          "do": "click",
+          "target": "[data-testid=\"project-switch\"]"
+        },
+        {
+          "do": "click",
+          "target": "img[alt=\"translationCore\"]"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onBrandClick.else",
+          "onProjectClick.else"
+        ],
+        "elements": [
+          "center",
+          "right"
+        ]
+      },
+      "isolate": true,
+      "note": "The exits write what they do on screen. With the editing card open a press on the project chip or the brand does nothing; Done gives the exits back."
     },
     {
       "id": "Breadcrumb/default",
@@ -55037,6 +55197,349 @@
         ]
       },
       "isolate": false
+    },
+    {
+      "id": "Tokens/selection",
+      "component": "Tokens",
+      "state": "selection",
+      "file": "tokens/*.css",
+      "frame": {
+        "width": 480,
+        "height": 120,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "style": {
+          "display": "flex",
+          "flexDirection": "column",
+          "gap": 12
+        },
+        "children": [
+          {
+            "$el": "p",
+            "props": {
+              "data-testid": "elsewhere",
+              "style": {
+                "margin": 0,
+                "fontFamily": "var(--font-ui)",
+                "fontSize": "var(--fs-ui-md)",
+                "color": "var(--text-body)"
+              },
+              "children": "Text selected anywhere else takes the soft yellow."
+            }
+          },
+          {
+            "$el": "p",
+            "props": {
+              "data-words": "target",
+              "role": "group",
+              "aria-label": "Your translation",
+              "style": {
+                "direction": "ltr",
+                "textAlign": "start",
+                "fontFamily": "var(--font-scripture)",
+                "fontSize": "var(--fs-title-lg)",
+                "lineHeight": 1.9,
+                "color": "var(--text-scripture)",
+                "margin": 0
+              },
+              "children": [
+                {
+                  "$el": "span",
+                  "props": {
+                    "data-testid": "tw-0",
+                    "data-selected": "0",
+                    "role": "button",
+                    "aria-pressed": "false",
+                    "tabIndex": 0,
+                    "style": {
+                      "display": "inline-block",
+                      "cursor": "pointer",
+                      "borderRadius": 4,
+                      "padding": "0 .1em",
+                      "marginInlineEnd": ".22em",
+                      "background": "transparent"
+                    },
+                    "children": "Pablo,"
+                  }
+                },
+                {
+                  "$el": "span",
+                  "props": {
+                    "data-testid": "tw-1",
+                    "data-selected": "0",
+                    "role": "button",
+                    "aria-pressed": "false",
+                    "tabIndex": -1,
+                    "style": {
+                      "display": "inline-block",
+                      "cursor": "pointer",
+                      "borderRadius": 4,
+                      "padding": "0 .1em",
+                      "marginInlineEnd": ".22em",
+                      "background": "transparent"
+                    },
+                    "children": "siervo"
+                  }
+                },
+                {
+                  "$el": "span",
+                  "props": {
+                    "data-testid": "tw-2",
+                    "data-selected": "1",
+                    "role": "button",
+                    "aria-pressed": "true",
+                    "tabIndex": -1,
+                    "style": {
+                      "display": "inline-block",
+                      "cursor": "pointer",
+                      "borderRadius": 4,
+                      "padding": "0 .1em",
+                      "marginInlineEnd": ".22em",
+                      "background": "var(--tc-highlight-soft)"
+                    },
+                    "children": "de"
+                  }
+                },
+                {
+                  "$el": "span",
+                  "props": {
+                    "data-testid": "tw-3",
+                    "data-selected": "0",
+                    "role": "button",
+                    "aria-pressed": "false",
+                    "tabIndex": -1,
+                    "style": {
+                      "display": "inline-block",
+                      "cursor": "pointer",
+                      "borderRadius": 4,
+                      "padding": "0 .1em",
+                      "marginInlineEnd": ".22em",
+                      "background": "transparent"
+                    },
+                    "children": "Dios"
+                  }
+                },
+                {
+                  "$el": "span",
+                  "props": {
+                    "data-testid": "tw-4",
+                    "data-selected": "0",
+                    "role": "button",
+                    "aria-pressed": "false",
+                    "tabIndex": -1,
+                    "style": {
+                      "display": "inline-block",
+                      "cursor": "pointer",
+                      "borderRadius": 4,
+                      "padding": "0 .1em",
+                      "marginInlineEnd": ".22em",
+                      "background": "transparent"
+                    },
+                    "children": "y"
+                  }
+                },
+                {
+                  "$el": "span",
+                  "props": {
+                    "data-testid": "tw-5",
+                    "data-selected": "0",
+                    "role": "button",
+                    "aria-pressed": "false",
+                    "tabIndex": -1,
+                    "style": {
+                      "display": "inline-block",
+                      "cursor": "pointer",
+                      "borderRadius": 4,
+                      "padding": "0 .1em",
+                      "marginInlineEnd": ".22em",
+                      "background": "transparent"
+                    },
+                    "children": "apóstol"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "render": {
+        "$el": "div",
+        "props": {
+          "style": {
+            "display": "flex",
+            "flexDirection": "column",
+            "gap": 12
+          },
+          "children": [
+            {
+              "$el": "p",
+              "props": {
+                "data-testid": "elsewhere",
+                "style": {
+                  "margin": 0,
+                  "fontFamily": "var(--font-ui)",
+                  "fontSize": "var(--fs-ui-md)",
+                  "color": "var(--text-body)"
+                },
+                "children": "Text selected anywhere else takes the soft yellow."
+              }
+            },
+            {
+              "$el": "p",
+              "props": {
+                "data-words": "target",
+                "role": "group",
+                "aria-label": "Your translation",
+                "style": {
+                  "direction": "ltr",
+                  "textAlign": "start",
+                  "fontFamily": "var(--font-scripture)",
+                  "fontSize": "var(--fs-title-lg)",
+                  "lineHeight": 1.9,
+                  "color": "var(--text-scripture)",
+                  "margin": 0
+                },
+                "children": [
+                  {
+                    "$el": "span",
+                    "props": {
+                      "data-testid": "tw-0",
+                      "data-selected": "0",
+                      "role": "button",
+                      "aria-pressed": "false",
+                      "tabIndex": 0,
+                      "style": {
+                        "display": "inline-block",
+                        "cursor": "pointer",
+                        "borderRadius": 4,
+                        "padding": "0 .1em",
+                        "marginInlineEnd": ".22em",
+                        "background": "transparent"
+                      },
+                      "children": "Pablo,"
+                    }
+                  },
+                  {
+                    "$el": "span",
+                    "props": {
+                      "data-testid": "tw-1",
+                      "data-selected": "0",
+                      "role": "button",
+                      "aria-pressed": "false",
+                      "tabIndex": -1,
+                      "style": {
+                        "display": "inline-block",
+                        "cursor": "pointer",
+                        "borderRadius": 4,
+                        "padding": "0 .1em",
+                        "marginInlineEnd": ".22em",
+                        "background": "transparent"
+                      },
+                      "children": "siervo"
+                    }
+                  },
+                  {
+                    "$el": "span",
+                    "props": {
+                      "data-testid": "tw-2",
+                      "data-selected": "1",
+                      "role": "button",
+                      "aria-pressed": "true",
+                      "tabIndex": -1,
+                      "style": {
+                        "display": "inline-block",
+                        "cursor": "pointer",
+                        "borderRadius": 4,
+                        "padding": "0 .1em",
+                        "marginInlineEnd": ".22em",
+                        "background": "var(--tc-highlight-soft)"
+                      },
+                      "children": "de"
+                    }
+                  },
+                  {
+                    "$el": "span",
+                    "props": {
+                      "data-testid": "tw-3",
+                      "data-selected": "0",
+                      "role": "button",
+                      "aria-pressed": "false",
+                      "tabIndex": -1,
+                      "style": {
+                        "display": "inline-block",
+                        "cursor": "pointer",
+                        "borderRadius": 4,
+                        "padding": "0 .1em",
+                        "marginInlineEnd": ".22em",
+                        "background": "transparent"
+                      },
+                      "children": "Dios"
+                    }
+                  },
+                  {
+                    "$el": "span",
+                    "props": {
+                      "data-testid": "tw-4",
+                      "data-selected": "0",
+                      "role": "button",
+                      "aria-pressed": "false",
+                      "tabIndex": -1,
+                      "style": {
+                        "display": "inline-block",
+                        "cursor": "pointer",
+                        "borderRadius": 4,
+                        "padding": "0 .1em",
+                        "marginInlineEnd": ".22em",
+                        "background": "transparent"
+                      },
+                      "children": "y"
+                    }
+                  },
+                  {
+                    "$el": "span",
+                    "props": {
+                      "data-testid": "tw-5",
+                      "data-selected": "0",
+                      "role": "button",
+                      "aria-pressed": "false",
+                      "tabIndex": -1,
+                      "style": {
+                        "display": "inline-block",
+                        "cursor": "pointer",
+                        "borderRadius": 4,
+                        "padding": "0 .1em",
+                        "marginInlineEnd": ".22em",
+                        "background": "transparent"
+                      },
+                      "children": "apóstol"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "steps": [
+        {
+          "do": "select",
+          "target": "[data-testid=\"elsewhere\"]",
+          "to": "[data-testid=\"tw-1\"]"
+        }
+      ],
+      "needs": {
+        "elements": [
+          "children"
+        ]
+      },
+      "isolate": true,
+      "note": "base.css: the selection outside the target words is the soft yellow; inside, the system highlight, so it never passes for the selected word \"de\"."
     },
     {
       "id": "Tokens/control-heights",

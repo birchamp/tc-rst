@@ -27,6 +27,8 @@ export const hover = (target) => ({ do: 'hover', target });
 export const press = (target) => ({ do: 'press', target });
 export const click = (target) => ({ do: 'click', target });
 export const key = (k) => ({ do: 'key', key: k });
+/** Selects the text from the start of `target` to the end of `to` (or of `target`). */
+export const select = (target, to) => ({ do: 'select', target, ...(to ? { to } : null) });
 
 /** The Ocean title-bar ground: a solid Ocean Surface sets data-on="dark" for its children. */
 export const onDark = (node, pad = 'md') => el('Surface', { tone: 'ocean', fill: 'solid', radius: 'lg', pad, children: node });
