@@ -1,12 +1,14 @@
 //! Which lexicon entry a word's `strong` attribute names: tC4's rule, ported exactly.
 //!
 //! tC4 4.0 adds no lexicon reader of its own (tC4 `docs/PACKAGING.md:996-997`, issue
-//! #703). The rule its word details use is `lexiconHelpers` in word-aligner-lib 1.0.1, a
-//! dependency tC4 pins (tC4 `package.json:39`; `src/helpers/lexiconHelpers.js:61-144` in
-//! that package's source map, minified at `dist/index.es.js:1241-1263`). The same file
-//! drives the word popover of the aligner tC4 tests against
-//! (`@gabrielaillet/word-aligner-rcl` 1.3.18, `PrimaryToken.jsx:141`,
-//! `WordLexiconDetails.jsx:162-182`).
+//! #703). Its views' contract names the lookup `getLexiconData(lexId, entryId)` (tC4
+//! `docs/ARCHITECTURE.md:181`), and the rule that turns a `strong` attribute into those
+//! ids is `lexiconHelpers` in word-aligner-lib 1.0.1, a dependency tC4 pins (tC4
+//! `package.json:39`; `src/helpers/lexiconHelpers.js:61-144` in that package's source map,
+//! minified at `dist/index.es.js:1241-1263`). The same file drives the word popover of the
+//! word-aligner fork whose contract tC4 records (`@gabrielaillet/word-aligner-rcl` 1.3.18,
+//! a development dependency tC4 does not import: tC4 `docs/PLATFORM-NOTES.md:120`; its
+//! `PrimaryToken.jsx:141` and `WordLexiconDetails.jsx:162-182`).
 //!
 //! - A `strong` attribute is split at every `:` into parts (`getStrongsParts`), so
 //!   `c:d:H0776` has the parts `c`, `d` and `H0776`.
