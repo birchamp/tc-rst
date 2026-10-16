@@ -6,7 +6,7 @@
 use super::merge::{ancestors_or_self, record_of, units_for, value_of};
 use super::meta::{ChangeIdx, KeyIdx, VerseShape};
 use super::passage::rewind;
-use super::state::FoldState;
+use super::state::{FoldState, Local};
 use super::{Candidate, Conflict, ConflictId, ConflictKind, Side, UnitName};
 use crate::change::Cause;
 use crate::command::{Choice, PlannedChange};
@@ -33,6 +33,9 @@ pub enum ResolveError {
     MissingValue(RecordKey),
     #[error("this choice does not apply to a conflict of this kind")]
     NotOffered,
+    /// Two people changed this unit of a moved check differently.
+    #[error("two people changed {0:?} of this check differently; keep one version first")]
+    Disputed(UnitName),
     /// A version of `0` could not be read on this computer (an unreadable file): the
     /// person has not seen it, so no choice may replace it yet (§2.6).
     #[error("a version of {0:?} cannot be read on this computer yet")]
@@ -933,8 +936,13 @@ impl FoldState {
         }
     }
 
-    /// *Apply Pedro's change to the moved check* (§8.3): the new key takes the units the
-    /// decision's editor changed relative to the base, and the old key keeps its `MovedTo`.
+    /// *Apply Pedro's change to the moved check* (§8.3): the new key takes, from every
+    /// version of the old key that was decided while the check moved, the units its editor
+    /// changed relative to the base (judgement, comment, bookmark, dismissal, basis, each
+    /// extra field), applied to the new key's value; the old key keeps its `MovedTo`.
+    /// Refused when two editors changed one unit differently (the person keeps one version
+    /// first), when two moves name different checks, or while the new key is itself in
+    /// conflict: no version is chosen by clock (I3).
     pub fn apply_to_moved_check(
         &self,
         id: &ConflictId,
@@ -943,92 +951,115 @@ impl FoldState {
         if conflict.kind != ConflictKind::CheckMoved {
             return Err(ResolveError::NotOffered);
         }
-        let moved = conflict
-            .candidates
-            .iter()
-            .find(|c| {
-                matches!(
-                    c.value,
-                    Record::Check {
-                        value: CheckValue::MovedTo { .. },
-                        ..
-                    }
-                )
-            })
-            .ok_or(ResolveError::NotOffered)?;
-        let edited = conflict
-            .candidates
-            .iter()
-            .find(|c| {
-                matches!(
-                    c.value,
-                    Record::Check {
-                        value: CheckValue::Decision(_),
-                        ..
-                    }
-                )
-            })
-            .ok_or(ResolveError::NotOffered)?;
-        let Record::Check {
-            value: CheckValue::MovedTo { to },
-            ..
-        } = &moved.value
-        else {
+        let old_key = conflict.key.clone();
+        let k = self.idx_of(&old_key).ok_or(ResolveError::UnknownConflict)?;
+        let heads: Vec<ChangeIdx> = self.entry(k).heads.to_vec();
+        let mut moves: Vec<ChangeIdx> = Vec::new();
+        let mut destinations: BTreeSet<crate::keys::CheckKey> = BTreeSet::new();
+        let mut decided: Vec<ChangeIdx> = Vec::new();
+        for h in &heads {
+            match &self.meta(*h).shape {
+                super::meta::Shape::MovedTo { to } => {
+                    moves.push(*h);
+                    destinations.insert((**to).clone());
+                }
+                super::meta::Shape::Decision { .. } => decided.push(*h),
+                _ => {}
+            }
+        }
+        let (Some(to), 1) = (destinations.iter().next().cloned(), destinations.len()) else {
             return Err(ResolveError::NotOffered);
         };
-        let new_key = RecordKey::Check(to.clone());
-        let new_value = self.projected(&new_key);
-        let base = conflict
+        if decided.is_empty() {
+            return Err(ResolveError::NotOffered);
+        }
+        let read = |c: &ChangeIdx| {
+            value_of(self, *c).map_err(|_| ResolveError::Unreadable(old_key.clone()))
+        };
+        let decisions: Vec<Option<Json>> = decided.iter().map(read).collect::<Result<_, _>>()?;
+        let bases: Vec<Option<Json>> = super::merge::ancestry(self, &heads)
             .bases
-            .first()
-            .and_then(|b| self.body(b))
-            .map(|b| b.record);
-        let target = match new_value {
-            Some(Record::Check {
-                value: CheckValue::Decision(d),
-                ..
-            }) => d,
-            _ => match &edited.value {
-                Record::Check {
-                    value: CheckValue::Decision(d),
-                    ..
-                } => d.clone(),
-                _ => return Err(ResolveError::NotOffered),
+            .iter()
+            .filter(|b| matches!(self.meta(**b).shape, super::meta::Shape::Decision { .. }))
+            .map(read)
+            .collect::<Result<_, _>>()?;
+        // The new key's value as the person sees it: settled or merged. A new key in
+        // conflict shows a provisional version, which is not a value to build on.
+        let new_key = RecordKey::Check(to.clone());
+        let target = match self.idx_of(&new_key) {
+            Some(nk) if self.entry(nk).active > 0 => {
+                let entry = self.entry(nk);
+                if entry.group.is_some() || matches!(entry.local, Local::Conflict(_)) {
+                    return Err(ResolveError::MissingValue(new_key));
+                }
+                match self.projected(&new_key) {
+                    Some(
+                        record @ Record::Check {
+                            value: CheckValue::Decision(_),
+                            ..
+                        },
+                    ) => record,
+                    Some(_) => return Err(ResolveError::NotOffered),
+                    None => return Err(ResolveError::Unreadable(new_key)),
+                }
+            }
+            // The new key has no version: the decision as it was when it moved.
+            _ => match bases.first().cloned().flatten() {
+                Some(base) => super::merge::rebuild_record(self, decided[0], Some(base))
+                    .map(|record| match record {
+                        Record::Check { value, .. } => Record::Check {
+                            key: to.clone(),
+                            value,
+                        },
+                        other => other,
+                    })
+                    .ok_or(ResolveError::NotOffered)?,
+                None => return Err(ResolveError::NotOffered),
             },
         };
-        let (
-            Record::Check {
-                value: CheckValue::Decision(changed),
-                ..
-            },
-            Some(Record::Check {
-                value: CheckValue::Decision(before),
-                ..
+        let mut outer =
+            crate::canon::encode_record_json(&target).map_err(|_| ResolveError::NotOffered)?;
+        let mut value = match &mut outer {
+            Json::Obj(map) => map.values_mut().next().and_then(|inner| match inner {
+                Json::Obj(fields) => fields.remove("value"),
+                _ => None,
             }),
-        ) = (&edited.value, base)
-        else {
-            return Err(ResolveError::NotOffered);
+            _ => None,
         };
-        let mut merged = target;
-        if changed.judgement != before.judgement
-            || changed.imported_invalid != before.imported_invalid
+        let versions: Vec<Option<&Json>> = decisions
+            .iter()
+            .chain(bases.iter())
+            .chain(std::iter::once(&value))
+            .map(Option::as_ref)
+            .collect();
+        for unit in units_for(&old_key, &versions) {
+            let base: BTreeSet<Option<Json>> =
+                bases.iter().map(|b| unit.read(b.as_ref())).collect();
+            let known = (base.len() == 1).then(|| base.iter().next().cloned().flatten());
+            let mut changed: Vec<Option<Json>> = Vec::new();
+            for d in &decisions {
+                let mine = unit.read(d.as_ref());
+                if known.as_ref() != Some(&mine) && !changed.contains(&mine) {
+                    changed.push(mine);
+                }
+            }
+            match changed.as_slice() {
+                [] => {}
+                [only] => unit.write(&mut value, only.clone()),
+                _ => return Err(ResolveError::Disputed(unit.name.clone())),
+            }
+        }
+        if let Json::Obj(map) = &mut outer
+            && let Some(Json::Obj(fields)) = map.values_mut().next()
+            && let Some(value) = value
         {
-            merged.judgement = changed.judgement.clone();
-            merged.imported_invalid = changed.imported_invalid;
+            fields.insert("value".into(), value);
         }
-        if changed.comment != before.comment {
-            merged.comment = changed.comment.clone();
-        }
-        if changed.bookmarked != before.bookmarked {
-            merged.bookmarked = changed.bookmarked;
-        }
-        Ok(vec![
-            self.resolving(Record::Check {
-                key: to.clone(),
-                value: CheckValue::Decision(merged),
-            }),
-            self.resolving(moved.value.clone()),
-        ])
+        let merged = crate::canon::decode_record_lenient(&outer).ok_or(ResolveError::NotOffered)?;
+        let mut out = vec![self.resolving(merged)];
+        let moved = record_of(self, moves[0]).ok_or(ResolveError::Unreadable(old_key))?;
+        out.push(self.resolving(moved));
+        Ok(out)
     }
 
     /// *Rename* for a path-case conflict (§8.3): the file at a new path, and the old path

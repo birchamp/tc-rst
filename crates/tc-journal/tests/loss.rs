@@ -2322,3 +2322,77 @@ fn per_unit_not_offered_without_units() {
         Err(tc_journal::fold::ResolveError::NotOffered)
     );
 }
+
+/// Ana's carry-over moves check abcd to efgh while Pedro and Juan each change abcd
+/// offline, Juan later.
+fn carry_over_two_editors(
+    pedro_value: tc_journal::record::DecisionRecord,
+    juan_value: tc_journal::record::DecisionRecord,
+) -> (Vec<Change>, FoldState, tc_journal::CheckKey) {
+    let mut ana = Dev::new(1);
+    let mut pedro = Dev::new(2);
+    let mut juan = Dev::new(3);
+    let book = imported_book(&mut ana, &[3]);
+    let old = check_key("abcd", 1, 1);
+    let new = check_key("efgh", 1, 1);
+    let mut first = decision(Some(UserStatus::Valid), false, Some("first"));
+    first.extra.insert("x-reviewed".into(), Json::from(false));
+    let base = ana.one(check(&old, first.clone()), vec![]);
+    let upgrade = ana.batch(
+        vec![
+            (moved(&old, &new), vec![base.id()]),
+            (check(&new, first), vec![]),
+        ],
+        Cause::CarryOver {
+            group: PinGroup::Primary,
+        },
+    );
+    juan.at = pedro.at + 3_600_000;
+    let p = pedro.one(check(&old, pedro_value), vec![base.id()]);
+    let j = juan.one(check(&old, juan_value), vec![base.id()]);
+    let all = all_of(&[&book, &[base], &upgrade, &[p, j]]);
+    let state = assert_converges(&all);
+    (all, state, new)
+}
+
+/// L99: applying offline changes to a moved check applies every editor's changed units,
+/// not only the newest editor's, and supersedes nobody's verdict unseen.
+#[test]
+fn loss_carryover_two_offline_editors() {
+    let mut pedros = decision(Some(UserStatus::Invalid), false, Some("first"));
+    pedros.extra.insert("x-reviewed".into(), Json::from(false));
+    let mut juans = decision(Some(UserStatus::Valid), true, Some("Juan's note"));
+    juans.extra.insert("x-reviewed".into(), Json::from(true));
+    let (mut all, state, new) = carry_over_two_editors(pedros, juans);
+    let conflict = the_conflict(&state);
+    assert_eq!(conflict.kind, ConflictKind::CheckMoved);
+    let planned = state.apply_to_moved_check(&conflict.id).expect("offered");
+    all.extend(Dev::new(4).apply(planned));
+    let state = assert_converges(&all);
+    assert_eq!(state.conflict_count(), 0);
+    let mut expected = decision(Some(UserStatus::Invalid), true, Some("Juan's note"));
+    expected.extra.insert("x-reviewed".into(), Json::from(true));
+    assert_eq!(
+        state.projected(&RecordKey::Check(new.clone())),
+        Some(check(&new, expected)),
+        "Pedro's verdict and Juan's comment, bookmark and extra field"
+    );
+}
+
+/// L99: two editors who changed the same unit of a moved check differently are not
+/// decided by clock: the choice is refused until one version is kept.
+#[test]
+fn loss_carryover_two_verdicts_refused() {
+    let mut pedros = decision(Some(UserStatus::Invalid), false, Some("first"));
+    pedros.extra.insert("x-reviewed".into(), Json::from(false));
+    let mut juans = decision(Some(UserStatus::Todo), false, Some("first"));
+    juans.extra.insert("x-reviewed".into(), Json::from(false));
+    let (_, state, _) = carry_over_two_editors(pedros, juans);
+    let conflict = the_conflict(&state);
+    assert_eq!(
+        state.apply_to_moved_check(&conflict.id),
+        Err(tc_journal::fold::ResolveError::Disputed(
+            tc_journal::fold::UnitName("/decision/judgement".into())
+        ))
+    );
+}

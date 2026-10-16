@@ -2405,7 +2405,12 @@ Every choice is one `Resolve` batch whose changes name every current head as par
 - **Check moved:** "Ana's upgrade moved this check to the new note; Pedro changed the old one
   (status Invalid, comment '…')". *Apply Pedro's change to the moved check* writes, in one
   batch, the new key with Pedro's changed units (his values for the units he changed relative to
-  the base, applied to the new key's value) and the old key's `MovedTo` as resolution. *Keep
+  the base, applied to the new key's value) and the old key's `MovedTo` as resolution. The units
+  are those of §7.3 (judgement, comment, bookmark, dismissal, basis, each extra field). When
+  several people changed the old check while it moved, every one's changed units are applied;
+  when two of them changed one unit differently, when two moves name different checks, or
+  while the new key is itself in conflict, the choice is refused until a version is kept, so
+  no clock picks a verdict (I3). *Keep
   Pedro's check where it was* keeps the old key's decision (it computes as invalid against the
   new resource) and leaves the moved copy.
 - **Pins:** *Use v92* / *Use v93*, with the consequence counts from the carry-over computation
@@ -3435,6 +3440,7 @@ and the on-disk end state, not only what the fold returns.
 |---|---|---|---|
 | L97 | Keeping one candidate of a passage conflict writes another person's version of the same record, the one a later clock prefers, and supersedes the chosen one; *Keep separate* picks between two concurrent texts of a verse by clock | a choice writes exactly the version picked; where a side, or a verse's own history, holds two different versions the person did not pick between, the choice asks (§8.3) | `loss_passage_keeps_the_picked_version`, `loss_passage_side_with_two_versions_asks`, `loss_keep_separate_never_picks_by_clock`, `loss_keep_joined_keeps_the_picked_span`; property `resolution_always_possible` |
 | L98 | A version the fold's source cannot read (a locked file, a cloud placeholder) is taken as absent: two unread versions settle as equal, or an unread base lets the one readable head merge over a version nobody saw, and the next edit's token supersedes it | an unreadable value is unknown, never absent or equal: the record is listed as a conflict marked unreadable, no token names an unread version, no choice is made while one is unread, and `retry_unreadable` judges it again (§2.6) | `unreadable_versions_are_listed_never_settled`, `unreadable_equal_versions_wait_to_be_read`, `unreadable_base_never_merges_away_a_version`, `unreadable_settled_version_is_not_in_a_token` |
+| L99 | Applying offline changes to a moved check applies only the newest editor's changes (by clock) and supersedes the others, and leaves out the units other than judgement, comment and bookmark | every decided version's changed units are applied, every unit of §7.3; two different changes of one unit refuse the choice (§8.3) | `loss_carryover_two_offline_editors`, `loss_carryover_two_verdicts_refused` |
 | L100 | *Choose per line* starts from one head's value and skips the units that merged cleanly, so the other person's agreed change (a comment) is lost; with no folded head it panics | the record starts from the merged agreed units and takes only the disputed units from the picks; it is offered only for a record's own conflict with disputed units (§8.3) | `loss_choose_per_line_keeps_agreed_units`, `per_unit_not_offered_without_units` |
 
 ---
