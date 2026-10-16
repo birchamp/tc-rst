@@ -92,8 +92,8 @@ The first-launch budget of 60 s is a hard gate now (owner ruling Q24 in
 `docs/TC4-DELTA-2026-10-16.md`). It is tC4's own release gate. The first measurement of the
 rebuild on Windows sets a tighter target. That measurement must come before the target is
 fixed, because `tc-resources` fsyncs every file it installs (`write_synced` in
-`crates/tc-resources/src/store.rs`, lines 732-737). tC4 writes about 3,700 files and does
-not fsync each one.
+`crates/tc-resources/src/store.rs`, lines 732-737). At a first launch, tC4 writes 3,792 files
+into its store and does not fsync each one.
 
 Why tC4 has the gate: before tC4 #740, every tC4 start opened every bundled and installed
 resource file. That was 35,823 opens and 613 MB. It took about 8 minutes on a Windows laptop
@@ -114,10 +114,14 @@ were taken on a Mac (arm64). tC4 has not measured the Windows gate yet either.
 | Empty profile | 16 | 0 | 3,739 | 2,795 ms |
 | Repeat start | 0 | 0 | 0 | 41 ms |
 
+A resource file here is a resource content file, which tC4 calls an ingredient. The 3,739
+resource file writes are part of the 3,792 files that a first launch writes.
+
 The count tests take these counts as their targets:
 
 - A first launch reads each shipped archive once. It writes each installed file once and
-  reads none of them back. tC4 ships 16 archives and writes 3,739 files.
+  reads none of them back. tC4 ships 16 archives and writes 3,739 resource files (3,792 files
+  in all).
 - A repeat launch reads no archive and reads or writes no resource content file.
 
 ## Background work
