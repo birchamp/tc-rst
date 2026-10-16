@@ -64,6 +64,19 @@ Options:
 | `--rebuild` | Build the client again. |
 | `TC4_ROOT=/path/to/translationcore4` | Use another tC4 checkout. |
 
+### Check
+
+```sh
+npm run check        # or, from the repository root: node --test parity/tc4-baseline/baseline.test.mjs
+```
+
+The check needs no browser, no tC4 checkout and no network, and CI runs it. It fails when a
+screenshot is not in `manifest.json` or has the wrong size, when this README's screen table or
+totals differ from the manifest, when the README does not record the tC4 commit, when a
+tool's marking row lacks a screen in English or Arabic at 1280 or 620 px, or when "Where the
+rebuild differs on purpose" differs from the manifest's `rebuildDiffers` notes or cites a
+ruling that `docs/PLAN.md` does not list. Run it after every capture.
+
 ### Capture another tC4 commit
 
 `capture.mjs` builds from `TC4_ROOT` and runs `git -C` in it. Do not check out another commit in
@@ -106,6 +119,7 @@ out byte for byte the same. The capture itself needs no network except the help-
 | `fixtures/build-state.mjs` | Builds a state directory, in the Pankosmia working-directory layout, from tC4's fixtures and `fixtures/vendor/`. |
 | `fixtures/vendor/` | Resource files that tC4 does not vendor, cut from published copies by `make-vendor.mjs`. `README.md` and `SOURCES.json` there give the source of each file and the licence. |
 | `capture.mjs` | The Playwright capture. It holds the screen list, the steps and the reason each incomplete screen is incomplete. |
+| `baseline.test.mjs` | Checks that the screenshots, `manifest.json`, this README and the rulings in `docs/PLAN.md` agree (see "Check"). |
 | `manifest.json` | Generated. Lists the tC4 commit, client build, browser, viewport, scenarios, installed resources (with substitutions), absent resources and every screen. |
 | `screens/*.png` | Generated screenshots. |
 | `history/d494a9d/` | The `d494a9d` images of the screens that changed, and that commit's `manifest.json`. Kept by hand, not by the capture. |
