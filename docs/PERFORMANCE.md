@@ -12,7 +12,11 @@ rebuild must stay quick at that size for the whole life of a project.
 1. **Cost follows what an action touches.** An interactive action costs in proportion to the
    verse, chapter, check or book it touches. It never costs in proportion to the size of the
    project, its history or the number of devices. Only the actions under "Background work"
-   may cost more.
+   may cost more. tC4 shows why: it folds the whole history again at every save, which
+   costs 23.81 µs per event of history, 6.0 s per save at whole-Bible scale, measured with
+   tC4's own fold on its own corpus (`docs/LOCAL-BENCH-FINDINGS-2026-10-16.md`, F3). Folding
+   everything is a correct reading of tC4's specification, so the counters of rule 2 are
+   what keep the rebuild from paying for history on an interactive action.
 2. **Prove rule 1 with counts, not only with clocks.** Each crate gives its tests operation
    counters (records visited, changes parsed, values decoded, bytes read, items derived). A
    test runs an action on the Psalms corpus and again on the same corpus made ten times
@@ -24,7 +28,8 @@ rebuild must stay quick at that size for the whole life of a project.
 4. **Background work** shows determinate progress, lets saves continue, and can be cancelled
    or resumed.
 5. **Measure release builds** on the corpus below. Record the median and p95 of at least 20
-   runs (5 runs for actions over 1 s), the machine and the commit in `docs/evidence/`. CI
+   runs (5 runs for actions over 1 s), the machine (with whether its CPU has SHA and
+   AVX-512 instructions) and the commit in `docs/evidence/`. CI
    runs the same benchmarks and fails a budget only above three times its value, because CI
    machines vary.
 6. **When a budget is missed,** profile, then fix the data structure or the algorithm. Add a
@@ -53,8 +58,15 @@ rebuild must stay quick at that size for the whole life of a project.
 
 ## Budgets
 
-p95 on the reference laptop (4 cores, SSD, 8 GB), release build. "Psalms" means Psalms
-inside the whole-Bible project, so project size is always present.
+p95 on the reference machine, release build. "Psalms" means Psalms inside the whole-Bible
+project, so project size is always present.
+
+The reference machine is a five-year-old Windows laptop (owner ruling, 2026-10-16): 4 cores,
+8 GB, a SATA SSD, Windows 10 or 11 with Defender real-time protection on. Many laptops of that
+age (Intel 10th-generation Core U-series, for example) have no SHA instructions, so every
+budget must hold without them. A CPU with them hashes about 6.5 times faster
+(`docs/LOCAL-BENCH-FINDINGS-2026-10-16.md`, F1), so a measurement on such a CPU alone does not
+show that a budget is met.
 
 | Area | Action | Scale | Budget |
 |---|---|---|---|
@@ -74,7 +86,8 @@ inside the whole-Bible project, so project size is always present.
 | Aligning | Reflow alignments after a verse edit | one verse | 2 ms |
 | Resources | Load one book's resources from the installed store (original language, ULT, UST, tN, TWL, linked tW articles) | Psalms | 300 ms the first time, then cached; 60 MiB per open book |
 | Resources | Load a lexicon (one JSON file per lexicon) and look up an entry | the Hebrew lexicon, 8,674 entries | 100 ms to load once per session; lookups in memory, under 1 ms |
-| Project | Cold open | whole Bible | 3 s, with determinate progress |
+| Project | Cold open with a usable fold cache | whole Bible | 3 s; determinate progress within 300 ms |
+| Project | Cold open with no usable fold cache (a project received from a teammate or imported, or after the cache encoding changes), or the first open after a restart, when the disk cache is cold | whole Bible | 10 s (owner ruling, 2026-10-16); determinate progress within 300 ms |
 | Project | Materialize one book | Psalms | 300 ms, in the background |
 | Project | Checkpoint | whole Bible | 500 ms |
 | Project | Daily sync | whole Bible | 3 s plus network |
