@@ -14,6 +14,11 @@
 // - fixtures/helps/v91-tsv-rows.json: for every TSV of en_tn, en_twl and en_tq v91, the
 //   number of rows tC4's TSV reader returns, the md5 of their identities in order (one
 //   `checkId|chapter|verse|occurrence` line each, joined by "\n"), and the lines it skips.
+// - fixtures/check/reference-forms-vectors.json: Psalms tN, TWL and tQ tables written here,
+//   one row per Reference form (`1:1a`, `0:front`, `3:front ` and others no shipped table
+//   has), with the rows tC4's readers return and what `deriveForProject` makes of the tN
+//   and TWL tables. tC4 reads every Reference cell, so tc-helps must not refuse a table
+//   over one.
 //
 // It bundles tC4's sources with the esbuild in tC4's node_modules, as
 // crates/tc-align/tools/gen-align-vectors.cjs does, so the vectors come from the code tC4
@@ -189,10 +194,84 @@ const main = async () => {
     }
   }
 
+  // Reference forms: one row per form, the same forms in each table.
+  const FORMS = [
+    "1:1a", "0:front", "3:front ", "3:Front", "front:front", "3:1,front", "1:0", "3:2-1",
+    "1:1:1", "intro", "", "3:", ":1", " 3:1", "3:01", "3:1-2:4", "3:1\u20133", "3:\u0663",
+    "03:front", "3:front", "front:intro", "3:intro", "0:intro", "3:1", "3:1-200", "151:1",
+  ];
+  const formTable = (header, cells) =>
+    [header, ...FORMS.map((ref, i) => [ref, `f${String(i).padStart(3, "0")}`, ...cells].join("\t")), ""].join("\n");
+  const formTables = {
+    translationNotes: formTable(
+      "Reference\tID\tTags\tSupportReference\tQuote\tOccurrence\tNote",
+      ["", "rc://*/ta/man/translate/figs-metaphor", "\u05d3\u05b8\u05bc\u05d5\u05b4\u05d3", "1", "A note"],
+    ),
+    translationWords: formTable("Reference\tID\tTags\tOrigWords\tOccurrence\tTWLink", [
+      "",
+      "\u05d3\u05b8\u05bc\u05d5\u05b4\u05d3",
+      "1",
+      "rc://*/tw/dict/bible/names/david",
+    ]),
+    translationQuestions: formTable("Reference\tID\tTags\tQuote\tOccurrence\tQuestion\tResponse", [
+      "",
+      "",
+      "",
+      "A question?",
+      "An answer.",
+    ]),
+  };
+  const formRows = {
+    translationNotes: tc.deriveTnItems(formTables.translationNotes, "psa", { keepPlain: true }),
+    translationWords: tc.deriveTwlItems(formTables.translationWords, "psa"),
+    translationQuestions: tc.deriveTqItems(formTables.translationQuestions, "psa"),
+  };
+  // A cell with no second part leaves tC4's verse undefined; JSON writes it as null.
+  const part = (p) => (p === undefined ? null : p);
+  const formIdentity = (c) => [c.checkId, part(c.reference.chapter), part(c.reference.verse), c.occurrence];
+  const formCases = [];
+  const formPlan = [
+    { to: "eng", scope: [] },
+    { to: "eng", scope: ["3"] },
+    { to: "eng", scope: ["1:1"] },
+    { to: "eng", scope: ["1-3"] },
+    { to: "eng", scope: ["3:1-2"] },
+    { to: "org", scope: [] },
+    { to: "org", scope: ["3"] },
+  ];
+  for (const tool of ["translationNotes", "translationWords"]) {
+    for (const { to, scope } of formPlan) {
+      const out = await tc.deriveForProject({
+        tsv: formTables[tool],
+        tool,
+        bookId: "psa",
+        from: "eng",
+        to,
+        schemes,
+        scopeRanges: scope,
+      });
+      formCases.push({
+        tool,
+        from: "eng",
+        to,
+        scope,
+        mapped: out.mapped,
+        items: out.items.map((it) => formIdentity(it.contextId)),
+        unplaceable: out.unplaceable.map((u) => [...formIdentity(u.item.contextId), u.reason]),
+      });
+    }
+  }
+
   const tc4Source = { commit: tc4Commit, version: tc4Package.version };
-  const write = (file, body) => {
+  const write = (file, body, withInputs = true) => {
     const text = JSON.stringify(
-      { generator: "crates/tc-check/tools/gen-psalms-vectors.cjs", tc4: tc4Source, libraries: pinned, inputs, ...body },
+      {
+        generator: "crates/tc-check/tools/gen-psalms-vectors.cjs",
+        tc4: tc4Source,
+        libraries: pinned,
+        ...(withInputs ? { inputs } : {}),
+        ...body,
+      },
       null,
       1,
     );
@@ -204,6 +283,17 @@ const main = async () => {
     cases,
     books,
   });
+  write(
+    "fixtures/check/reference-forms-vectors.json",
+    {
+      note: "tables: Psalms tables written by the generator, one row per Reference form; rows: what deriveTnItems(keepPlain) / deriveTwlItems / deriveTqItems return for them, as [checkId, chapter, verse, occurrence] with null for an undefined part; cases: deriveForProject on the tN and TWL tables (no tW article gate), schemes from fixtures/tc4/test-fixtures/vrs",
+      book: "PSA",
+      tables: formTables,
+      rows: Object.fromEntries(Object.entries(formRows).map(([tool, items]) => [tool, items.map((it) => formIdentity(it.contextId))])),
+      cases: formCases,
+    },
+    false,
+  );
   write("fixtures/helps/v91-tsv-rows.json", {
     note: "rows: the length of deriveTnItems(keepPlain) / deriveTwlItems / deriveTqItems; md5: of their identities in order, one checkId|chapter|verse|occurrence line each, joined by a newline; skipped: the lines (from 1 at the header) tsvRows drops",
     rows,

@@ -10,19 +10,16 @@ mod common;
 use std::collections::BTreeSet;
 use std::io::Read;
 
-use common::{eng, fixture};
+use common::{eng, fixture, identity, reason};
 use md5::{Digest, Md5};
 use serde_json::{Value, json};
 use tc_burrito::ScopeRange;
-use tc_check::CheckItem;
-use tc_check::derive::{
-    BookSpec, CheckList, DropReason, SkipReason, notes_for_book, word_links_for_book,
-};
+use tc_check::derive::{BookSpec, CheckList, SkipReason, notes_for_book, word_links_for_book};
 use tc_core::BookId;
 use tc_helps::metadata::parse_burrito_metadata;
 use tc_helps::tsv::{TsvScope, parse_notes, parse_word_links};
 use tc_helps::{HelpItemId, WordArticleId};
-use tc_versification::{StandardScheme, Unplaceable};
+use tc_versification::StandardScheme;
 
 /// The files of a burrito export in `bundle/en/` whose path `keep` accepts, by path.
 fn export(zip_name: &str, keep: impl Fn(&str) -> bool) -> Vec<(String, String)> {
@@ -70,34 +67,6 @@ fn tw_articles() -> BTreeSet<WordArticleId> {
 
 fn vectors() -> Value {
     serde_json::from_str(&fixture("check/psalms-vectors.json")).unwrap()
-}
-
-/// tC4's name for why a mapping failed (`UnplaceableReason`).
-fn reason(reason: &DropReason) -> &'static str {
-    match reason {
-        DropReason::UnknownFrame => "unknown-frame",
-        DropReason::Unplaceable(u) => match u {
-            Unplaceable::VerseZero => "verse-zero",
-            Unplaceable::NoChapter => "no-chapter",
-            Unplaceable::PastChapterEnd => "past-chapter-end",
-            Unplaceable::Ambiguous => "ambiguous",
-            Unplaceable::SpanSplit => "span-split",
-            Unplaceable::MalformedReference => "malformed-reference",
-        },
-        DropReason::OtherBook(book) => panic!("tC4 has no reason for a landing in {book:?}"),
-    }
-}
-
-/// `[checkId, chapter, verse, occurrence]` as tC4's `contextId` holds them: a part is a
-/// JSON number when it is digits.
-fn identity(item: &CheckItem) -> Vec<Value> {
-    let reference = item.key.target.to_json();
-    vec![
-        json!(item.key.check_id.as_str()),
-        reference["chapter"].clone(),
-        reference["verse"].clone(),
-        json!(item.key.occurrence),
-    ]
 }
 
 /// A book's helps, read once, for the tool of a case of the vectors.

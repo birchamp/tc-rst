@@ -84,12 +84,50 @@ pub enum BibleLocus {
     BookIntro,
     /// `N:intro` in a TSV, `BBCCC000` in Aquifer.
     ChapterIntro(u16),
-    /// `N:front` in a TSV: what comes before the first verse of chapter N, which in the
-    /// Psalms is the superscription (`\d`). It is not verse 1: tC4 checks it as the verse
-    /// `front` of chapter N (`derive.ts` `refPart`, ruling D60), and its helps panel never
-    /// lists it under a verse (`helpsFocus.js`).
+    /// `N:front` in a TSV: what comes before the first verse of chapter N. The v91 tables
+    /// use it only in the Psalms, for the superscription (`\d`) of the 64 psalms whose
+    /// UHB puts it before `\v 1`. It is not verse 1: tC4 checks it as the verse `front` of
+    /// chapter N (`derive.ts` `refPart`, ruling D60), and its helps panel never lists it
+    /// under a verse (`helpsFocus.js`). In 50 other psalms (11 and 23, for example) the UHB
+    /// has no `\d`, the ULT carries the superscription inside verse 1, and the rows about
+    /// it are on `N:1`.
     ChapterFront(u16),
     Verses(VerseList),
+    /// A TSV reference in any other form, such as `1:1a` or `0:front`, kept as written.
+    /// tC4 reads every `Reference` cell (`ref.split(':').map(refPart)`), so one row in a
+    /// form this crate gives no place to must not cost the reader the whole table.
+    AsWritten(WrittenRef),
+}
+
+/// The text of a TSV `Reference` cell that names no place this crate knows: not
+/// `front:intro`, `N:intro`, `N:front` or a verse list. It holds no tab or line feed, so it
+/// writes back as the cell it was read from.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct WrittenRef(Box<str>);
+
+impl WrittenRef {
+    /// Returns `None` for text a cell cannot hold, and for text that reads as one of the
+    /// places this crate knows, which [`BibleLocus`] holds in its own variant.
+    pub fn new(text: &str) -> Option<Self> {
+        let cell_text = !text.contains(['\t', '\n']);
+        (cell_text && known_tsv_locus(text).is_none()).then(|| Self(text.into()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// The chapter tC4 files the item under: the text before the first `:`, when it is
+    /// digits (`refPart`). `1:1a` is in chapter 1; `front:front` is in none.
+    pub fn chapter(&self) -> Option<u16> {
+        number(self.0.split(':').next().unwrap_or_default())
+    }
+}
+
+impl fmt::Display for WrittenRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -106,8 +144,13 @@ impl BibleRef {
         }
     }
 
-    /// True when this item is about any verse of `passage`. Introductions and chapter
-    /// fronts overlap nothing.
+    /// The text of the TSV `Reference` column for this place.
+    pub fn tsv_text(&self) -> String {
+        TsvLocus(&self.locus).to_string()
+    }
+
+    /// True when this item is about any verse of `passage`. Introductions, chapter fronts
+    /// and references kept as written overlap nothing.
     pub fn overlaps(&self, passage: &Reference) -> bool {
         if self.book != passage.book {
             return false;
@@ -196,7 +239,7 @@ impl HelpRef {
     /// The text of the TSV `Reference` column for this item.
     pub fn tsv_text(&self) -> String {
         match self {
-            HelpRef::Bible(r) => TsvLocus(&r.locus).to_string(),
+            HelpRef::Bible(r) => r.tsv_text(),
             HelpRef::Obs(r) => r.to_string(),
         }
     }
@@ -221,8 +264,13 @@ pub(crate) fn number(text: &str) -> Option<u16> {
 }
 
 /// Reads the TSV `Reference` column of a Bible table: `front:intro`, `N:intro`, `N:front`,
-/// `C:V`, `C:V-V`, `C:V-C:V`, and comma lists of those such as `1:3,5-6`.
+/// `C:V`, `C:V-V`, `C:V-C:V`, and comma lists of those such as `1:3,5-6`. Any other cell
+/// text is kept as written; only a tab or a line feed, which no cell holds, is refused.
 pub(crate) fn parse_tsv_locus(text: &str) -> Option<BibleLocus> {
+    known_tsv_locus(text).or_else(|| WrittenRef::new(text).map(BibleLocus::AsWritten))
+}
+
+fn known_tsv_locus(text: &str) -> Option<BibleLocus> {
     if text == "front:intro" {
         return Some(BibleLocus::BookIntro);
     }
@@ -269,6 +317,7 @@ impl fmt::Display for TsvLocus<'_> {
             BibleLocus::BookIntro => f.write_str("front:intro"),
             BibleLocus::ChapterIntro(c) => write!(f, "{c}:intro"),
             BibleLocus::ChapterFront(c) => write!(f, "{c}:front"),
+            BibleLocus::AsWritten(text) => text.fmt(f),
             BibleLocus::Verses(list) => {
                 let mut chapter = None;
                 for (i, r) in list.0.iter().enumerate() {
@@ -370,7 +419,8 @@ mod tests {
             let locus = parse_tsv_locus(text).unwrap();
             assert_eq!(TsvLocus(&locus).to_string(), text);
         }
-        for bad in [
+        // Any other cell is kept as written, and prints as it was read.
+        for other in [
             "",
             "0:1",
             "1:0",
@@ -385,8 +435,15 @@ mod tests {
             "front:front",
             ":front",
             "1:front,2",
+            "3:front ",
+            "1:1a",
         ] {
-            assert!(parse_tsv_locus(bad).is_none(), "{bad:?} should be refused");
+            let locus = parse_tsv_locus(other).unwrap();
+            assert!(matches!(locus, BibleLocus::AsWritten(_)), "{other:?}");
+            assert_eq!(TsvLocus(&locus).to_string(), other);
+        }
+        for not_a_cell in ["1:1\t", "1:\n1"] {
+            assert!(parse_tsv_locus(not_a_cell).is_none(), "{not_a_cell:?}");
         }
     }
 

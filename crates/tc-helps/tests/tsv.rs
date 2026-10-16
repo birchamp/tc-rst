@@ -522,9 +522,9 @@ fn cell_error(result: Result<impl std::fmt::Debug, Error>) -> (usize, &'static s
 #[test]
 fn malformed_rows_are_refused_naming_line_and_column() {
     let tn = resource("en_tn@v86/TIT.tsv");
+    // A Bible Reference never refuses the table: `reference_forms.rs` reads `1:x` and
+    // `0:1` as written.
     let cases = [
-        (0, "1:x", "Reference"),
-        (0, "0:1", "Reference"),
         (1, "r t9", "ID"),
         (3, "rc://*/ta/man/nomanual/figs-x", "SupportReference"),
         (3, "rc://*/tw/dict/bible/kt/god", "SupportReference"),
@@ -558,9 +558,9 @@ fn malformed_rows_are_refused_naming_line_and_column() {
             ..
         })
     ));
-    // An OBS reference is not a Bible reference.
+    // A Bible reference is not an OBS reference.
     assert_eq!(
-        cell_error(parse_notes(&resource("en_obs-tn@v13/OBS.tsv"), TIT)),
+        cell_error(parse_notes(&resource("en_tn@v86/TIT.tsv"), TsvScope::Obs)),
         (2, "Reference")
     );
 
@@ -578,14 +578,6 @@ fn malformed_rows_are_refused_naming_line_and_column() {
     assert_eq!(
         cell_error(parse_notes(&with_cell(&legacy, 5, 0, "JON"), TIT)),
         (5, "Book")
-    );
-    assert_eq!(
-        cell_error(parse_notes(&with_cell(&legacy, 5, 1, "one"), TIT)),
-        (5, "Chapter")
-    );
-    assert_eq!(
-        cell_error(parse_notes(&with_cell(&legacy, 5, 2, "x"), TIT)),
-        (5, "Verse")
     );
 }
 
@@ -644,13 +636,17 @@ fn tag_cell() -> impl Strategy<Value = String> {
 }
 
 /// A Reference cell, sometimes in a longer form than the writer's (`1:1-1:3`, `01:02`,
-/// `03:front`).
+/// `03:front`), sometimes in a form kept as written (`1:1a`, `0:front`, any cell text).
 fn reference_cell() -> impl Strategy<Value = String> {
     prop_oneof![
-        3 => locus(),
-        1 => (1u16..50, 1u16..50, 1u16..9).prop_map(|(c, v, n)| format!("{c}:{v}-{c}:{}", v + n)),
-        1 => (1u16..9, 1u16..9).prop_map(|(c, v)| format!("0{c}:0{v}")),
-        1 => (1u16..9).prop_map(|c| format!("0{c}:front")),
+        6 => locus(),
+        2 => (1u16..50, 1u16..50, 1u16..9).prop_map(|(c, v, n)| format!("{c}:{v}-{c}:{}", v + n)),
+        2 => (1u16..9, 1u16..9).prop_map(|(c, v)| format!("0{c}:0{v}")),
+        2 => (1u16..9).prop_map(|c| format!("0{c}:front")),
+        1 => (0u16..200, "[a-z]{1,2}").prop_map(|(c, v)| format!("{c}:1{v}")),
+        1 => (0u16..9, prop_oneof![Just("front"), Just("Front"), Just("front "), Just("intro")])
+            .prop_map(|(c, v)| format!("{c}:{v}")),
+        1 => "[^\t\n]{0,12}",
     ]
 }
 

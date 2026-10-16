@@ -4,7 +4,10 @@
 //!
 //! The header row is the version of a table. A header this module does not know is
 //! refused, never guessed at. Rows are split on tabs only (the tables have no quoting).
-//! A row that does not parse refuses the whole table, with the line and column named.
+//! A row that does not parse refuses the whole table, with the line and column named. The
+//! `Reference` of a Bible table always parses: a form this crate gives no place to, such as
+//! `1:1a`, is kept as written ([`BibleLocus::AsWritten`]), because tC4 reads every row
+//! whatever its reference and one such row must not cost a book its helps.
 //!
 //! In the seven-column notes table, and in the question and response columns, a newline
 //! is written `\n` and a backslash `\\`. The model holds the decoded markdown.
@@ -30,7 +33,7 @@ use crate::ids::{
 };
 use crate::links::{LinkBase, LinkTarget, resolve_link};
 use crate::model::{Note, Question, WordLink};
-use crate::refs::{BibleLocus, BibleRef, HelpRef, ObsRef, TsvLocus, number, parse_tsv_locus};
+use crate::refs::{BibleLocus, BibleRef, HelpRef, ObsRef, TsvLocus, parse_tsv_locus};
 
 const NOTES: [&str; 7] = [
     "Reference",
@@ -411,11 +414,8 @@ fn legacy_note(row: &Row, book: BookId) -> Result<Note, Error> {
         ));
     }
     let (chapter, verse) = (row.cell(1), row.cell(2));
-    let chapter_ok = chapter == "front" || number(chapter).is_some();
-    let locus = parse_legacy_place(chapter, verse).ok_or_else(|| {
-        let (i, text) = if chapter_ok { (2, verse) } else { (1, chapter) };
-        row.fail(i, CellProblem::Reference(text.to_owned()))
-    })?;
+    let locus = parse_legacy_place(chapter, verse)
+        .ok_or_else(|| row.fail(1, CellProblem::Reference(format!("{chapter}:{verse}"))))?;
     let gl = row.cell(7);
     let mut note = Note {
         reference: HelpRef::Bible(BibleRef { book, locus }),
@@ -723,6 +723,11 @@ fn legacy_place(locus: &BibleLocus) -> Option<(String, String)> {
         BibleLocus::BookIntro => Some(("front".into(), "intro".into())),
         BibleLocus::ChapterIntro(c) => Some((c.to_string(), "intro".into())),
         BibleLocus::ChapterFront(c) => Some((c.to_string(), "front".into())),
+        // The chapter cell ends at the first `:`, so the pair reads back as the same text.
+        BibleLocus::AsWritten(text) => text
+            .as_str()
+            .split_once(':')
+            .map(|(c, v)| (c.to_owned(), v.to_owned())),
         BibleLocus::Verses(list) => {
             let [range] = list.ranges() else { return None };
             if range.start().chapter != range.end().chapter {

@@ -274,7 +274,7 @@ impl Helps {
             .filter_map(|n| self.note(n))
     }
 
-    /// Notes on the front of `chapter`, before its first verse (the superscription in the
+    /// Notes on the front of `chapter`, before its first verse (a superscription in the
     /// Psalms), in source order. No passage holds them, so [`Helps::notes_for`] leaves
     /// them out; tC4 lists them with the chapter's helps when no verse has the focus
     /// (`helpsFocus.js` `inFocus`).
@@ -282,6 +282,20 @@ impl Helps {
         self.notes
             .iter()
             .filter(move |n| on_front(&n.reference, book, chapter))
+            .filter_map(|n| self.note(n))
+    }
+
+    /// Notes whose reference is kept as written ([`BibleLocus::AsWritten`], such as
+    /// `1:1a`) and names `chapter`, in source order. No passage holds them; tC4 lists them
+    /// with the chapter's helps when no verse has the focus, as it does chapter fronts.
+    pub fn as_written_notes(
+        &self,
+        book: BookId,
+        chapter: u16,
+    ) -> impl Iterator<Item = Found<'_, Note>> {
+        self.notes
+            .iter()
+            .filter(move |n| as_written_in(&n.reference, book, chapter))
             .filter_map(|n| self.note(n))
     }
 
@@ -310,6 +324,18 @@ impl Helps {
         self.word_links
             .iter()
             .filter(move |l| on_front(&l.reference, book, chapter))
+            .filter_map(|l| self.word_link(l))
+    }
+
+    /// Word links kept as written, as [`Helps::as_written_notes`].
+    pub fn as_written_word_links(
+        &self,
+        book: BookId,
+        chapter: u16,
+    ) -> impl Iterator<Item = Found<'_, WordLink>> {
+        self.word_links
+            .iter()
+            .filter(move |l| as_written_in(&l.reference, book, chapter))
             .filter_map(|l| self.word_link(l))
     }
 
@@ -372,6 +398,18 @@ impl Helps {
             .filter_map(|q| self.question(q))
     }
 
+    /// Questions kept as written, as [`Helps::as_written_notes`].
+    pub fn as_written_questions(
+        &self,
+        book: BookId,
+        chapter: u16,
+    ) -> impl Iterator<Item = Found<'_, Question>> {
+        self.questions
+            .iter()
+            .filter(move |q| as_written_in(&q.reference, book, chapter))
+            .filter_map(|q| self.question(q))
+    }
+
     /// Questions on one Open Bible Stories frame, in source order.
     pub fn obs_questions_for(&self, frame: ObsRef) -> impl Iterator<Item = Found<'_, Question>> {
         self.questions
@@ -415,6 +453,14 @@ fn on_front(reference: &HelpRef, book: BookId, chapter: u16) -> bool {
         reference,
         HelpRef::Bible(BibleRef { book: b, locus: BibleLocus::ChapterFront(c) })
             if *b == book && *c == chapter
+    )
+}
+
+fn as_written_in(reference: &HelpRef, book: BookId, chapter: u16) -> bool {
+    matches!(
+        reference,
+        HelpRef::Bible(BibleRef { book: b, locus: BibleLocus::AsWritten(text) })
+            if *b == book && text.chapter() == Some(chapter)
     )
 }
 
