@@ -1,6 +1,7 @@
-//! Properties over random verses and random edit sequences: no edit loses, duplicates or
-//! reorders a word; a reflow keeps or reports every link; aligned USFM and the tC4 record
-//! give back what was written.
+//! Properties over random verses and random edit sequences: no edit loses or duplicates a
+//! word; the aligner keeps the bank and every card in verse order and changes nothing but
+//! the order when a verse opens; a reflow keeps or reports every link; aligned USFM and
+//! the tC4 record give back what was written.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -9,10 +10,11 @@ mod common;
 use common::basis;
 use proptest::prelude::*;
 use std::collections::BTreeMap;
+use tc_align::suggest::RawLink;
 use tc_align::usfm::{from_aligned, weave_verse};
 use tc_align::{
-    Aligner, AlignmentValue, NoReflow, SourceVerse, SourceWord, TargetVerse, TargetWord, WordId,
-    record, reflow,
+    Aligner, AlignmentValue, Click, NoReflow, SourceVerse, SourceWord, TargetVerse, TargetWord,
+    WordId, record, reflow,
 };
 
 const TARGET_WORDS: [&str; 7] = ["a", "b", "c", "de", "Dios", "λόγος", "וַ\u{2060}יְהִי"];
@@ -108,6 +110,147 @@ fn apply(value: &mut AlignmentValue, verse: &TargetVerse, op: &Op) -> bool {
     }
 }
 
+/// One thing a translator does in the Align workspace, with indices folded into range
+/// as the screen offers them, plus some out-of-range ones.
+#[derive(Debug, Clone)]
+enum Step {
+    Place(usize, usize),
+    PlaceMany(usize, Vec<usize>),
+    Unplace(usize, usize),
+    Move(usize, usize, usize),
+    Merge(usize, bool),
+    Split(usize),
+    Clear,
+    Click(usize, Click),
+    PlaceSelection(usize),
+    Suggest(usize, usize),
+    Accept(usize),
+    AcceptAll,
+    RejectAll,
+}
+
+impl Step {
+    fn places(&self) -> bool {
+        matches!(
+            self,
+            Step::Place(..)
+                | Step::PlaceMany(..)
+                | Step::PlaceSelection(_)
+                | Step::Accept(_)
+                | Step::AcceptAll
+        )
+    }
+}
+
+fn step_strategy() -> impl Strategy<Value = Step> {
+    let i = || 0usize..16;
+    let click = prop_oneof![Just(Click::Plain), Just(Click::Toggle), Just(Click::Range)];
+    prop_oneof![
+        3 => (i(), i()).prop_map(|(c, w)| Step::Place(c, w)),
+        2 => (i(), prop::collection::vec(i(), 0..5)).prop_map(|(c, w)| Step::PlaceMany(c, w)),
+        2 => (i(), i()).prop_map(|(c, w)| Step::Unplace(c, w)),
+        1 => (i(), i(), i()).prop_map(|(a, b, w)| Step::Move(a, b, w)),
+        1 => (i(), prop::bool::ANY).prop_map(|(a, up)| Step::Merge(a, up)),
+        1 => i().prop_map(Step::Split),
+        1 => Just(Step::Clear),
+        4 => (i(), click).prop_map(|(w, c)| Step::Click(w, c)),
+        2 => i().prop_map(Step::PlaceSelection),
+        2 => (i(), i()).prop_map(|(s, t)| Step::Suggest(s, t)),
+        1 => i().prop_map(Step::Accept),
+        1 => Just(Step::AcceptAll),
+        1 => Just(Step::RejectAll),
+    ]
+}
+
+/// Do `step`; true when it edited the value.
+fn step_on(aligner: &mut Aligner, step: &Step) -> bool {
+    let cards = aligner.value().alignments.len();
+    let bank = aligner.value().word_bank.clone();
+    let banked = |w: usize| (!bank.is_empty()).then(|| bank[w % bank.len()].clone());
+    let placed = |a: &Aligner, c: usize, w: usize| {
+        let targets = &a.value().alignments[c % cards].targets;
+        (!targets.is_empty()).then(|| targets[w % targets.len()].clone())
+    };
+    match step {
+        Step::Place(c, w) => {
+            banked(*w).is_some_and(|word| aligner.place(c % (cards + 1), &word).is_ok())
+        }
+        Step::PlaceMany(c, ws) => {
+            let words: Vec<TargetWord> = ws.iter().filter_map(|w| banked(*w)).collect();
+            aligner.place_many(c % (cards + 1), &words).is_ok()
+        }
+        Step::Unplace(c, w) => {
+            placed(aligner, *c, *w).is_some_and(|word| aligner.unplace(c % cards, &word).is_ok())
+        }
+        Step::Move(a, b, w) => placed(aligner, *a, *w)
+            .is_some_and(|word| aligner.move_word(a % cards, b % cards, &word).is_ok()),
+        Step::Merge(a, up) => {
+            let a = a % cards;
+            let b = if *up { a + 1 } else { a.wrapping_sub(1) };
+            aligner.merge(a, b).is_ok()
+        }
+        Step::Split(c) => aligner.split(c % (cards + 1)).is_ok(),
+        Step::Clear => {
+            aligner.clear();
+            true
+        }
+        Step::Click(w, click) => {
+            let shown = aligner.shown_bank().len();
+            aligner.click_bank_word(w % (shown + 1), *click);
+            false
+        }
+        Step::PlaceSelection(c) => aligner.place_selection(c % (cards + 1)).is_ok(),
+        Step::Suggest(s, t) => {
+            let input = aligner.session_input();
+            let (sources, targets) = (input.source().len(), input.target().len());
+            aligner.show_suggestions(&[RawLink {
+                source: vec![s % sources],
+                target: vec![t % targets],
+                confidence: 0.9,
+            }]);
+            false
+        }
+        Step::Accept(p) => aligner.accept(*p % (aligner.proposals().len() + 1)).is_ok(),
+        Step::AcceptAll => aligner.accept_all() > 0,
+        Step::RejectAll => {
+            aligner.reject_all();
+            false
+        }
+    }
+}
+
+/// The aligner's bank and every card are in verse order.
+fn assert_shown_in_verse_order(
+    aligner: &Aligner,
+    verse: &TargetVerse,
+) -> Result<(), TestCaseError> {
+    prop_assert!(
+        in_verse_order(verse, &aligner.value().word_bank),
+        "bank {:?}",
+        aligner.value().word_bank
+    );
+    for group in &aligner.value().alignments {
+        prop_assert!(
+            in_verse_order(verse, &group.targets),
+            "card {:?}",
+            group.targets
+        );
+    }
+    Ok(())
+}
+
+/// Every word has a place in `verse` and they stand in that order.
+fn in_verse_order(verse: &TargetVerse, words: &[TargetWord]) -> bool {
+    let places: Option<Vec<usize>> = words.iter().map(|w| verse.position(w)).collect();
+    places.is_some_and(|p| p.windows(2).all(|w| w[0] < w[1]))
+}
+
+/// `part` is `whole` with some words left out, in the same order.
+fn is_subsequence(part: &[TargetWord], whole: &[TargetWord]) -> bool {
+    let mut rest = whole.iter();
+    part.iter().all(|w| rest.any(|x| x == w))
+}
+
 fn key(w: &TargetWord) -> (String, u32) {
     (w.text.clone(), w.occurrence)
 }
@@ -169,8 +312,11 @@ proptest! {
             let flattened: Vec<SourceWord> = value.alignments.iter().flat_map(|g| g.sources.clone()).collect();
             prop_assert_eq!(&flattened, &source_order);
             prop_assert!(value.alignments.iter().all(|g| !g.sources.is_empty()));
-            let order: Vec<_> = value.word_bank.iter().map(|w| (w.occurrence, verse.position(w))).collect();
-            prop_assert!(order.windows(2).all(|p| p[0] <= p[1]), "the bank stays in bootstrap order");
+            if matches!(op, Op::Unlink(..) | Op::Clear) && value != before {
+                prop_assert!(in_verse_order(&verse, &value.word_bank), "unlink and clear sort the bank");
+            } else {
+                prop_assert!(is_subsequence(&value.word_bank, &before.word_bank), "no other edit reorders the bank");
+            }
         }
     }
 
@@ -229,7 +375,7 @@ proptest! {
     }
 
     #[test]
-    fn edits_after_a_carry_over_keep_every_word_once_and_clear_restores_the_bootstrap_bank(
+    fn edits_after_a_carry_over_keep_every_word_once_and_clear_puts_the_whole_bank_in_verse_order(
         source in source_strategy(),
         text in text_strategy(),
         new_text in text_strategy(),
@@ -246,12 +392,78 @@ proptest! {
             prop_assert_eq!(sorted(value.all_target_words().cloned()), sorted(verse.words().to_vec()));
             prop_assert_eq!(value.well_formed(), Ok(()));
             if matches!(op, Op::Clear) {
-                prop_assert_eq!(&value.word_bank, &verse.bank_order());
+                prop_assert_eq!(&value.word_bank, verse.words());
             }
         }
         value.clear(&verse);
-        prop_assert_eq!(&value.word_bank, &verse.bank_order());
+        prop_assert_eq!(&value.word_bank, verse.words());
         prop_assert_eq!(value.placed(), 0);
+    }
+
+    #[test]
+    fn the_aligner_keeps_the_bank_and_every_card_in_verse_order_and_every_word_once(
+        source in source_strategy(),
+        text in text_strategy(),
+        new_text in text_strategy(),
+        ops in prop::collection::vec(op_strategy(), 0..40),
+        stored in prop::bool::ANY,
+        steps in prop::collection::vec(step_strategy(), 0..60),
+    ) {
+        let (value, _) = edited(&source, &text, &ops);
+        let verse = TargetVerse::new(&new_text);
+        let mut aligner = Aligner::open(stored.then_some(&value), verse.clone(), &source, basis(1)).unwrap();
+        let source_order: Vec<SourceWord> = source.words().to_vec();
+        assert_shown_in_verse_order(&aligner, &verse)?;
+        for step in &steps {
+            let before = aligner.value().clone();
+            let changed_before = aligner.is_changed();
+            let selected = aligner.selection();
+            let edited = step_on(&mut aligner, step);
+            if edited {
+                prop_assert!(aligner.is_changed());
+                if step.places() {
+                    prop_assert!(aligner.selection().is_empty(), "placing clears the selection");
+                }
+                if matches!(step, Step::PlaceSelection(_)) {
+                    let mut left = before.word_bank.clone();
+                    left.retain(|w| !selected.contains(w));
+                    prop_assert_eq!(&aligner.value().word_bank, &left, "exactly the shown selection is placed");
+                }
+            } else {
+                prop_assert_eq!(aligner.value(), &before, "a refused edit or a click changes nothing");
+                prop_assert_eq!(aligner.is_changed(), changed_before);
+            }
+            assert_shown_in_verse_order(&aligner, &verse)?;
+            prop_assert_eq!(sorted(aligner.value().all_target_words().cloned()), sorted(verse.words().to_vec()));
+            prop_assert_eq!(aligner.value().well_formed(), Ok(()));
+            let flattened: Vec<SourceWord> = aligner.value().alignments.iter().flat_map(|g| g.sources.clone()).collect();
+            prop_assert_eq!(&flattened, &source_order);
+            let shown = aligner.shown_bank();
+            let selection = aligner.selection();
+            prop_assert!(is_subsequence(&selection, &shown), "the selection is shown, in bank order");
+            prop_assert_eq!(aligner.is_armed(), !selection.is_empty());
+        }
+    }
+
+    #[test]
+    fn opening_a_value_made_for_the_verse_changes_only_its_order(
+        source in source_strategy(),
+        text in text_strategy(),
+        ops in prop::collection::vec(op_strategy(), 0..40),
+    ) {
+        let (mut stored, verse) = edited(&source, &text, &ops);
+        stored.word_bank.reverse();
+        for group in &mut stored.alignments {
+            group.targets.reverse();
+        }
+        let aligner = Aligner::open(Some(&stored), verse.clone(), &source, basis(1)).unwrap();
+        prop_assert!(!aligner.is_changed(), "order alone is not saved");
+        assert_shown_in_verse_order(&aligner, &verse)?;
+        let mut sorted_stored = stored.clone();
+        sorted_stored.bank_in_verse_order(&verse);
+        sorted_stored.cards_in_verse_order(&verse);
+        prop_assert_eq!(aligner.value(), &sorted_stored);
+        prop_assert_eq!(sorted(aligner.value().word_bank.clone()), sorted(stored.word_bank.clone()));
     }
 
     #[test]

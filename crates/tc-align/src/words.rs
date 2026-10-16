@@ -6,6 +6,7 @@
 
 use crate::Error;
 use md5::{Digest, Md5};
+use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 use tc_core::VerseSpan;
@@ -323,16 +324,19 @@ fn source_word(span: &Span<'_>) -> Result<SourceWord, Error> {
 /// (`plain_text_v1` of the verse content, tC4's `verseTextMd5` input). Both the words and
 /// the hash come from that one text, exactly as tC4's aligner tokenizes and hashes its
 /// `targetText`, so the words a record names and the hash it carries always agree.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct TargetVerse {
     text: String,
     md5: TextMd5,
     words: Vec<TargetWord>,
+    /// Each word text's places in the verse, by occurrence, so that a word's place is
+    /// found without a scan: the verse-order sort runs after every edit.
+    places: HashMap<String, Vec<usize>>,
 }
 
 impl TargetVerse {
     pub fn new(text: &str) -> Self {
-        let words = tc_usfm::words::words(text)
+        let words: Vec<TargetWord> = tc_usfm::words::words(text)
             .into_iter()
             .map(|w| TargetWord {
                 text: w.text.to_owned(),
@@ -340,10 +344,15 @@ impl TargetVerse {
                 occurrences: w.occurrences,
             })
             .collect();
+        let mut places: HashMap<String, Vec<usize>> = HashMap::new();
+        for (at, word) in words.iter().enumerate() {
+            places.entry(word.text.clone()).or_default().push(at);
+        }
         Self {
             text: text.to_owned(),
             md5: TextMd5::of(text),
             words,
+            places,
         }
     }
 
@@ -362,7 +371,16 @@ impl TargetVerse {
 
     /// Where `word` stands in the verse, by text and occurrence.
     pub fn position(&self, word: &TargetWord) -> Option<usize> {
-        self.words.iter().position(|w| same_word(w, word))
+        let index = usize::try_from(word.occurrence.checked_sub(1)?).ok()?;
+        self.places.get(word.text.as_str())?.get(index).copied()
+    }
+
+    /// Put `words` in the order they stand in this verse, by text and occurrence, as
+    /// tC4's `inVerseOrder` does (#734): a repeated word by its occurrence, and a word the
+    /// verse does not have after the others, in the order it was in. Right-to-left text
+    /// is in reading order here too: the order is the text's, not the screen's.
+    pub fn sort_in_verse_order(&self, words: &mut [TargetWord]) {
+        words.sort_by_cached_key(|w| self.position(w).unwrap_or(usize::MAX));
     }
 
     /// The verse's words in the order tC4's bootstrap banks them: grouped by occurrence
@@ -371,6 +389,8 @@ impl TargetVerse {
     /// word-aligner's `unmerge`, which tC4 calls to start an unaligned verse, files each
     /// unaligned word under an empty alignment keyed by its occurrence, then concatenates
     /// those alignments' words, so "the cat saw the dog" banks as `the cat saw dog the`.
+    /// [`AlignmentValue::bootstrap`](crate::AlignmentValue::bootstrap) keeps this order so
+    /// that it equals tC4's record; the aligner shows the bank in verse order.
     pub fn bank_order(&self) -> Vec<TargetWord> {
         let mut words = self.words.clone();
         words.sort_by_key(|w| w.occurrence);
@@ -378,9 +398,56 @@ impl TargetVerse {
     }
 }
 
+// `places` is left out: it is only an index of `words`, and a hash map prints its entries
+// in a different order in each value, so two equal verses would print differently.
+impl fmt::Debug for TargetVerse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TargetVerse")
+            .field("text", &self.text)
+            .field("md5", &self.md5)
+            .field("words", &self.words)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Identity of a target word inside one verse: its text plus its occurrence.
 pub(crate) fn same_word(a: &TargetWord, b: &TargetWord) -> bool {
     a.text == b.text && a.occurrence == b.occurrence
+}
+
+/// How the Align workspace tells a repeated word apart (tC4 #735, as tC3's
+/// `WordOccurrence` did, `src/views/Align.jsx:37-48` at d310bf3): a word that occurs more
+/// than once in its verse shows its occurrence number after it, raised, and is named
+/// "word n"; a word that occurs once shows no number.
+pub trait Occurrence {
+    /// The number shown after the word, if the verse has the word more than once.
+    fn shown_occurrence(&self) -> Option<u32>;
+
+    /// The word's accessible name with its number, such as "de 3", if the verse has the
+    /// word more than once. A word that occurs once is named by its text alone.
+    fn occurrence_name(&self) -> Option<String>;
+}
+
+impl Occurrence for TargetWord {
+    fn shown_occurrence(&self) -> Option<u32> {
+        (self.occurrences > 1).then_some(self.occurrence)
+    }
+
+    fn occurrence_name(&self) -> Option<String> {
+        let n = self.shown_occurrence()?;
+        Some(format!("{} {n}", self.text))
+    }
+}
+
+impl Occurrence for SourceWord {
+    fn shown_occurrence(&self) -> Option<u32> {
+        (self.occurrences > 1).then_some(self.occurrence)
+    }
+
+    fn occurrence_name(&self) -> Option<String> {
+        let n = self.shown_occurrence()?;
+        Some(format!("{} {n}", self.content))
+    }
 }
 
 /// A target word's identity inside one verse, as a key: its text and its occurrence.
@@ -402,11 +469,11 @@ impl WordId {
 /// Occurrence numbering by exact text: each word's 1-based index among equal texts, and
 /// the count of equal texts.
 fn number<'a>(texts: impl Iterator<Item = &'a str> + Clone) -> Vec<(u32, u32)> {
-    let mut totals: std::collections::HashMap<&str, u32> = std::collections::HashMap::new();
+    let mut totals: HashMap<&str, u32> = HashMap::new();
     for text in texts.clone() {
         *totals.entry(text).or_default() += 1;
     }
-    let mut seen: std::collections::HashMap<&str, u32> = std::collections::HashMap::new();
+    let mut seen: HashMap<&str, u32> = HashMap::new();
     texts
         .map(|text| {
             let n = seen.entry(text).or_default();

@@ -1,6 +1,8 @@
 //! A right-to-left verse through every step: UHB Jonah 1 aligned to its own words (Hebrew
 //! with word joiners and maqaf), edited, merged into a phrase, written as aligned USFM,
-//! read back, stored as tC4's record, and reflowed after a text edit.
+//! read back, stored as tC4's record, and reflowed after a text edit. The bank and the
+//! cards are in reading order, and a Shift click selects a run in reading order, whichever
+//! way the screen draws the verse.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -8,7 +10,7 @@ mod common;
 
 use common::*;
 use tc_align::usfm::{from_aligned, weave_verse};
-use tc_align::{AlignmentValue, SourceVerse, TargetVerse, record, reflow};
+use tc_align::{Aligner, AlignmentValue, Click, SourceVerse, TargetVerse, record, reflow};
 
 /// Jonah 1's verses as tC4 hashed them, with their UHB words.
 fn jonah_1() -> Vec<(String, TargetVerse, SourceVerse)> {
@@ -83,4 +85,55 @@ fn a_hebrew_verse_edited_keeps_its_other_links_and_reports_the_lost_one() {
         !next.value.done,
         "the card that lost its word leaves the verse to do"
     );
+}
+
+#[test]
+fn hebrew_verses_open_with_the_bank_in_reading_order_and_repeated_words_by_occurrence() {
+    let mut regrouped = Vec::new();
+    for (reference, verse, source) in jonah_1() {
+        let aligner = Aligner::open(None, verse.clone(), &source, basis(1)).unwrap();
+        assert_eq!(aligner.value().word_bank, verse.words(), "{reference}");
+        if verse.bank_order() != verse.words() {
+            regrouped.push(reference);
+        }
+    }
+    // The verses with a repeated word, which tC4's bootstrap banks out of reading order.
+    assert_eq!(regrouped, ["1:3", "1:5", "1:9", "1:10", "1:11"]);
+}
+
+#[test]
+fn a_hebrew_card_keeps_its_words_in_reading_order_however_they_are_dropped() {
+    let (reference, verse, source) = jonah_1().swap_remove(4);
+    assert_eq!(reference, "1:5");
+    let el = |n: u32| {
+        verse
+            .words()
+            .iter()
+            .find(|w| w.text == "אֶל" && w.occurrence == n)
+            .cloned()
+            .unwrap()
+    };
+    let mut aligner = Aligner::open(None, verse.clone(), &source, basis(1)).unwrap();
+    aligner.place(0, &el(3)).unwrap();
+    aligner.place_many(0, &[el(2), el(1)]).unwrap();
+    assert_eq!(aligner.value().alignments[0].targets, [el(1), el(2), el(3)]);
+    aligner.unplace(0, &el(2)).unwrap();
+    let mut bank = verse.words().to_vec();
+    bank.retain(|w| w != &el(1) && w != &el(3));
+    assert_eq!(aligner.value().word_bank, bank, "אֶל 2 is back in its place");
+}
+
+#[test]
+fn a_shift_click_on_a_hebrew_bank_selects_a_run_in_reading_order_either_way() {
+    let (_, verse, source) = jonah_1().swap_remove(2);
+    let mut aligner = Aligner::open(None, verse.clone(), &source, basis(1)).unwrap();
+    let words = verse.words();
+    aligner.click_bank_word(5, Click::Plain);
+    aligner.click_bank_word(2, Click::Range);
+    assert_eq!(aligner.selection(), &words[2..=5]);
+    aligner.click_bank_word(2, Click::Plain);
+    aligner.click_bank_word(7, Click::Range);
+    assert_eq!(aligner.selection(), &words[2..=7]);
+    assert_eq!(aligner.place_selection(3), Ok(6));
+    assert_eq!(aligner.value().alignments[3].targets, &words[2..=7]);
 }

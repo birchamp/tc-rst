@@ -4,22 +4,27 @@
 //! as it was. Together they keep these invariants, as tC4's `edit.ts` does:
 //!
 //! - A target word is in exactly one place: the bank or one card. A word reaches a card
-//!   only from the bank ([`AlignmentValue::link`]) or from another card
-//!   ([`AlignmentValue::move_word`]), and leaves a card only for the bank or another card.
+//!   only from the bank ([`AlignmentValue::link`], [`AlignmentValue::link_many`]) or from
+//!   another card ([`AlignmentValue::move_word`]), and leaves a card only for the bank or
+//!   another card.
 //! - Cards stay in original-language verse order. Only neighbouring cards merge, the
 //!   lower one keeping its place with the words of both in card order, so every phrase
 //!   is a contiguous run of the original verse. A split puts the phrase's words back as
 //!   single cards in place, and the placed target words stay on the first of them.
-//! - Placed words keep the order they were placed in, as tC4 records them.
 //!
-//! The bank starts in tC4's bootstrap order (see [`TargetVerse::bank_order`]), and
-//! [`AlignmentValue::clear`] puts it back in that order. A carry-over to edited text
-//! leaves it in verse order instead, as tC4's reflow does ([`crate::reflow`]). A word
-//! sent back to the bank goes before the first banked word that the bootstrap puts after
-//! it: in a bank in bootstrap order, exactly where the bootstrap had it. tC4's own unlink
-//! instead re-sorts the whole bank by occurrence and then by the locale's collation, so
-//! the bank changes order under the translator's hand; this keeps every other word where
-//! it was.
+//! The word bank and each card's target words are in the order the words stand in the
+//! verse ([`AlignmentValue::bank_in_verse_order`], [`AlignmentValue::cards_in_verse_order`]):
+//! a repeated word by its occurrence, and a word the verse no longer has last. A word sent
+//! back to the bank returns to its place in the verse and the whole bank is put in verse
+//! order, so in a bank already in verse order no other word moves
+//! ([`AlignmentValue::unlink`]); [`AlignmentValue::clear`] also leaves the whole bank in
+//! verse order. tC4 brought this in with 3d43f7c and 91131d9 (#734, the bank) and 26aded2
+//! (#754, the cards), as tC3 kept them. The aligner ([`crate::Aligner`]) puts the bank and
+//! every card in verse order after each edit and when a verse opens; the operations here
+//! sort only where tC4's do, so a placed word joins its card at the end until the aligner
+//! sorts it. [`AlignmentValue::bootstrap`] keeps tC4's record of an unaligned verse, which
+//! banks the words grouped by occurrence ([`TargetVerse::bank_order`]); the aligner shows
+//! that bank in verse order too, from the first view of the verse.
 //!
 //! None of these touch the hash, `done` or `marked_invalid`: [`AlignmentValue::settle`]
 //! does, after each edit, as tC4's aligner does through `stampTargetVerse` and
@@ -46,6 +51,8 @@ pub enum EditError {
     NotAPhrase(usize),
     #[error("there is no suggestion {0}")]
     NoSuchProposal(usize),
+    #[error("none of the words is in the word bank")]
+    NothingToPlace,
 }
 
 impl AlignmentValue {
@@ -86,10 +93,22 @@ impl AlignmentValue {
         Ok(())
     }
 
-    /// Send a placed word back to the bank, before the first banked word that tC4's
-    /// bootstrap puts after it for `verse`. A word the verse no longer has goes after the
-    /// words of its occurrence. tC4's `unlinkWord`, with the bank order described in the
-    /// module documentation.
+    /// Place several banked words on one card, in the order given, and return how many
+    /// were placed. A word that is no longer in the bank is skipped, as tC4's reduce over
+    /// `linkWord` skips it (`src/state.jsx:5249-5261` at d310bf3); the edit is refused,
+    /// changing nothing, only when no word could be placed.
+    pub fn link_many(&mut self, card: usize, words: &[TargetWord]) -> Result<usize, EditError> {
+        self.card(card)?;
+        let placed = words.iter().filter(|w| self.link(card, w).is_ok()).count();
+        if placed == 0 {
+            return Err(EditError::NothingToPlace);
+        }
+        Ok(placed)
+    }
+
+    /// Send a placed word back to the bank, at its place in `verse`, and put the whole
+    /// bank in verse order, so a bank stored in another order comes back in verse order
+    /// too. A word the verse no longer has goes last. tC4's `unlinkWord` (#734).
     pub fn unlink(
         &mut self,
         card: usize,
@@ -106,7 +125,8 @@ impl AlignmentValue {
                 word: word.clone(),
             })?;
         let returned = self.alignments[card].targets.remove(at);
-        bank_insert(&mut self.word_bank, returned, verse);
+        self.word_bank.push(returned);
+        self.bank_in_verse_order(verse);
         Ok(())
     }
 
@@ -167,9 +187,9 @@ impl AlignmentValue {
     }
 
     /// Start the verse over: every phrase split into single cards, every placed word back
-    /// in the bank, and the whole bank in bootstrap order for `verse`, whatever order it
-    /// was in. Banked words the verse no longer has stay, after the words of their
-    /// occurrence.
+    /// in the bank, and the whole bank in verse order for `verse`, whatever order it was
+    /// in. Banked words the verse no longer has stay, last. tC4 has no such action; the
+    /// order is the owner's ruling for every bank (Q15 of the 2026-10-16 delta).
     pub fn clear(&mut self, verse: &TargetVerse) {
         let groups = std::mem::take(&mut self.alignments);
         for group in groups {
@@ -177,7 +197,22 @@ impl AlignmentValue {
             self.alignments
                 .extend(group.sources.into_iter().map(Group::single));
         }
-        self.word_bank.sort_by_key(|w| bootstrap_key(w, verse));
+        self.bank_in_verse_order(verse);
+    }
+
+    /// Put the word bank in the order its words stand in `verse`; a word the verse does not
+    /// have goes last. tC4's `inVerseOrder` (#734).
+    pub fn bank_in_verse_order(&mut self, verse: &TargetVerse) {
+        verse.sort_in_verse_order(&mut self.word_bank);
+    }
+
+    /// Put each card's target words in the order they stand in `verse`; a word the verse
+    /// does not have goes last in its card. Only the target words move. tC4's
+    /// `cardsInVerseOrder` (#754).
+    pub fn cards_in_verse_order(&mut self, verse: &TargetVerse) {
+        for group in &mut self.alignments {
+            verse.sort_in_verse_order(&mut group.targets);
+        }
     }
 
     /// After an edit made against `verse`: the record now vouches for that text, tC3's
@@ -197,20 +232,4 @@ impl AlignmentValue {
         self.marked_invalid = false;
         self.done = true;
     }
-}
-
-/// Where tC4's bootstrap banks `word` for `verse`: by occurrence, then by place in the
-/// verse; a word the verse does not have goes after the words of its occurrence.
-fn bootstrap_key(word: &TargetWord, verse: &TargetVerse) -> (u32, usize) {
-    (word.occurrence, verse.position(word).unwrap_or(usize::MAX))
-}
-
-/// Insert `word` before the first banked word that the bootstrap puts after it.
-fn bank_insert(bank: &mut Vec<TargetWord>, word: TargetWord, verse: &TargetVerse) {
-    let new_key = bootstrap_key(&word, verse);
-    let at = bank
-        .iter()
-        .position(|w| bootstrap_key(w, verse) > new_key)
-        .unwrap_or(bank.len());
-    bank.insert(at, word);
 }

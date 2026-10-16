@@ -348,7 +348,7 @@ fn a_stored_word_held_in_two_places_opens_in_one() {
 }
 
 #[test]
-fn clear_after_a_carry_over_puts_the_bank_back_in_bootstrap_order() {
+fn clear_after_a_carry_over_puts_the_bank_back_in_verse_order() {
     let mut first = open(None, "the cat saw the dog");
     first.place(0, &banked(&first, "cat")).unwrap();
     let stored = first.into_value();
@@ -356,11 +356,20 @@ fn clear_after_a_carry_over_puts_the_bank_back_in_bootstrap_order() {
     let mut aligner = open(Some(&stored), edited);
     assert_eq!(aligner.value().placed(), 1);
     aligner.clear();
-    assert_eq!(
-        aligner.value().word_bank,
-        TargetVerse::new(edited).bank_order()
-    );
+    assert_eq!(aligner.value().word_bank, TargetVerse::new(edited).words());
     assert_eq!(aligner.value().placed(), 0);
+}
+
+#[test]
+fn a_verse_with_no_alignment_shows_its_bank_in_verse_order_from_the_first_view() {
+    // tC4's record of an unaligned verse banks every first occurrence before every
+    // second one; the owner's Q15 ruling shows the bank in verse order from the start.
+    let text = "the cat saw the dog";
+    let verse = TargetVerse::new(text);
+    let aligner = open(None, text);
+    assert_eq!(aligner.value().word_bank, verse.words());
+    assert_ne!(verse.bank_order(), verse.words());
+    assert!(!aligner.is_changed(), "the order alone is not saved");
 }
 
 #[test]
@@ -386,4 +395,22 @@ fn accept_all_places_every_standing_proposal_as_clicks_would() {
     assert_eq!(aligner.value(), by_hand.value());
     assert!(aligner.proposals().is_empty());
     aligner.mark_valid().unwrap();
+}
+
+#[test]
+fn equal_verses_and_aligners_print_alike() {
+    // A verse indexes where its words stand, for the verse-order sort after each edit.
+    // That index is not part of the verse: two equal verses, and two aligners opened on
+    // the same verse, print the same in an assertion message on every run.
+    let text = "a b c d e f g h i j k l m n o p";
+    let verse = TargetVerse::new(text);
+    for _ in 0..4 {
+        let again = TargetVerse::new(text);
+        assert_eq!(again, verse);
+        assert_eq!(format!("{again:?}"), format!("{verse:?}"));
+    }
+    assert_eq!(
+        format!("{:?}", open(None, TEXT)),
+        format!("{:?}", open(None, TEXT))
+    );
 }
