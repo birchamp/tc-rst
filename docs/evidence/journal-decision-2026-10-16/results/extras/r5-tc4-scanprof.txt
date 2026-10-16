@@ -1,0 +1,5 @@
+### tc4-scanprof round 5
+start 14:10:40 5.68 10.29 11.65 4/224 11225
+{"segments":278041,"bytes":259580461,"events":278041,"total_ms":24462,"list_ms":630,"lstat_ms":3332,"read_ms":3978,"outerParse_ms":1388,"sha_ms":2413,"bodyParse_ms":2655,"validate_ms":8886}
+process: real 24.569 s, user 18.482 s, sys 4.530 s
+end 14:11:05 5.32 9.83 11.46 5/215 11376

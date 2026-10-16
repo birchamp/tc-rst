@@ -1,0 +1,5 @@
+### rb-loadprof-tc4shape round 4
+start 14:04:19 15.08 15.12 12.82 14/259 6360
+loadprof one thread: 277 files, 426547852 bytes, 310422 lines (310422 prepared); read 674 ms, file SHA-256 (P2) 5028 ms, line split+SHA-256 (P4) 5171 ms, full read_pack/read_pending+prepare 19468 ms (so parse+checks+prepare = full - P2 - P4 = 9269 ms)
+process: real 30.468 s, user 17.045 s, sys 0.812 s
+end 14:04:50 14.78 15.03 12.86 14/260 6855

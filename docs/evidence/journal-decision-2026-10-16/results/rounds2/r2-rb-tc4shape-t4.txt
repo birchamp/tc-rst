@@ -1,0 +1,13 @@
+### rb-tc4shape-t4 round 2
+start 16:17:50 4.10 4.99 5.12 3/135 8023
+cold open 8.171192251s, the fold after the last file 417.259724ms, cpu over all threads 15520 ms
+load 7.857786716s, cpu over all threads 15280 ms
+fold 1.4382517s, cpu 1336 ms, minor faults 61
+peak RSS during the streamed cold opens 238 MiB
+| Read, verify and prepare | 1 | 7857.787 ms | 7857.787 ms |
+| Full fold of the prepared changes | 1 | 1438.250 ms | 1438.250 ms |
+| Cold open: read, verify, prepare and fold, the fold indexing as files are read | 1 | 8171.190 ms | 8171.190 ms |
+| Cold open: the fold's work after the last file is read (stages F2 to F10) | 1 | 417.260 ms | 417.260 ms |
+peak RSS 332 MiB
+process: real 17.957 s, user 32.036 s, sys 0.722 s
+end 16:18:08 4.77 5.09 5.15 3/135 8066

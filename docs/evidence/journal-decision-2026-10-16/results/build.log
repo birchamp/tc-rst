@@ -1,0 +1,106 @@
+ 12:57:05 up  9:25,  0 user,  load average: 3.71, 5.95, 8.13
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.27
+   Compiling serde_core v1.0.229
+   Compiling autocfg v1.5.1
+   Compiling serde v1.0.229
+   Compiling num-traits v0.2.19
+   Compiling cfg-if v1.0.5
+   Compiling memchr v2.8.3
+   Compiling typenum v1.20.1
+   Compiling syn v3.0.9
+   Compiling version_check v0.9.5
+   Compiling libc v0.2.190
+   Compiling allocator-api2 v0.2.21
+   Compiling foldhash v0.2.0
+   Compiling equivalent v1.0.3
+   Compiling hashbrown v0.17.1
+   Compiling num-integer v0.1.47
+   Compiling zmij v1.0.23
+   Compiling indexmap v2.14.2
+   Compiling hybrid-array v0.4.15
+   Compiling serde_derive v1.0.229
+   Compiling getrandom v0.3.4
+   Compiling serde_json v1.0.154
+   Compiling zerocopy v0.8.63
+   Compiling num-bigint v0.4.8
+   Compiling ahash v0.8.12
+   Compiling cmov v0.5.4
+   Compiling itoa v1.0.18
+   Compiling ref-cast v1.0.27
+   Compiling regex-syntax v0.8.11
+   Compiling thiserror v2.0.21
+   Compiling parking_lot_core v0.9.12
+   Compiling ctutils v0.4.3
+   Compiling num-rational v0.4.2
+   Compiling crypto-common v0.2.2
+   Compiling block-buffer v0.12.1
+   Compiling ref-cast-impl v1.0.27
+   Compiling thiserror-impl v2.0.21
+   Compiling num-iter v0.1.46
+   Compiling num-complex v0.4.6
+   Compiling aho-corasick v1.1.5
+   Compiling const-oid v0.10.2
+   Compiling scopeguard v1.2.0
+   Compiling smallvec v1.16.3
+   Compiling once_cell v1.21.4
+   Compiling regex-automata v0.4.18
+   Compiling lock_api v0.4.14
+   Compiling digest v0.11.3
+   Compiling num v0.4.3
+   Compiling syn v2.0.119
+   Compiling bit-vec v0.8.0
+   Compiling jsonschema-value v0.58.6
+   Compiling borrow-or-share v0.2.4
+   Compiling unicode-general-category v1.1.0
+   Compiling heck v0.5.0
+   Compiling fluent-uri v0.4.1
+   Compiling bit-set v0.8.0
+   Compiling tc-core v0.1.0 (/tmp/claude-0/-home-user-tc-rst/4a142024-63e1-59b8-bcc4-3b15bbfdf386/scratchpad/journal-decision/bench-storage/crates/tc-core)
+   Compiling fraction v0.17.0
+   Compiling strum_macros v0.28.0
+   Compiling parking_lot v0.12.5
+   Compiling bytecount v0.6.9
+   Compiling percent-encoding v2.3.2
+   Compiling micromap v0.3.0
+   Compiling outref v0.5.2
+   Compiling vsimd v0.8.0
+   Compiling num-cmp v0.1.0
+   Compiling referencing v0.58.6
+   Compiling uuid-simd v0.8.0
+   Compiling strum v0.28.0
+   Compiling fancy-regex v0.19.2
+   Compiling regex v1.13.1
+   Compiling jsonschema-regex v0.58.6
+   Compiling email_address v0.2.9
+   Compiling im v15.1.0
+   Compiling bitmaps v2.1.0
+   Compiling data-encoding v2.11.1
+   Compiling rand_core v0.6.4
+   Compiling tinyvec v1.13.3
+   Compiling crc32fast v1.5.2
+   Compiling unicode-normalization v0.1.25
+   Compiling rand_xoshiro v0.6.0
+   Compiling sized-chunks v0.6.5
+   Compiling jsonschema v0.58.6
+   Compiling md-5 v0.11.0
+   Compiling cpufeatures v0.3.1
+   Compiling zlib-rs v0.6.8
+   Compiling sha2 v0.11.1
+   Compiling flate2 v1.1.10
+   Compiling tc-usfm v0.1.0 (/tmp/claude-0/-home-user-tc-rst/4a142024-63e1-59b8-bcc4-3b15bbfdf386/scratchpad/journal-decision/bench-storage/crates/tc-usfm)
+   Compiling hmac v0.13.0
+   Compiling typed-path v0.12.3
+   Compiling uuid v1.28.0
+   Compiling zip v8.6.0
+   Compiling tc-versification v0.1.0 (/tmp/claude-0/-home-user-tc-rst/4a142024-63e1-59b8-bcc4-3b15bbfdf386/scratchpad/journal-decision/bench-storage/crates/tc-versification)
+   Compiling tc-burrito v0.1.0 (/tmp/claude-0/-home-user-tc-rst/4a142024-63e1-59b8-bcc4-3b15bbfdf386/scratchpad/journal-decision/bench-storage/crates/tc-burrito)
+   Compiling tc-journal v0.1.0 (/tmp/claude-0/-home-user-tc-rst/4a142024-63e1-59b8-bcc4-3b15bbfdf386/scratchpad/journal-decision/bench-storage/crates/tc-journal)
+   Compiling tc-corpus v0.1.0 (/tmp/claude-0/-home-user-tc-rst/4a142024-63e1-59b8-bcc4-3b15bbfdf386/scratchpad/journal-decision/bench-storage/crates/tc-corpus)
+    Finished `release` profile [optimized] target(s) in 6m 34s
+
+real	6m34.649s
+user	7m54.784s
+sys	0m20.618s
+EXIT 0

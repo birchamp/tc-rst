@@ -1,0 +1,9 @@
+### rb-tc4shape-project round 4
+start 13:25:34 9.48 5.41 5.79 13/213 21817
+corpus: 310422 changes, 233293 records, 0 conflicts, 65 anomalies; 267 derived files over 66 books + 3 project files
+projection 20.174303804s, cpu over all threads 14970 ms, 267 files, 235605041 bytes {"alignments": 89725006, "decisions": 142974996, "usfm": 2873755}
+| Action | Runs | Median | p95 |
+|---|---:|---:|---:|
+| Projection of every derived file of every book (values read from disk) | 1 | 20174.303 ms | 20174.303 ms |
+process: real 37.045 s, user 30.770 s, sys 1.137 s
+end 13:26:11 10.92 6.26 6.06 7/228 23175

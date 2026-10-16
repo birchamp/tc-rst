@@ -1,0 +1,5 @@
+### node-hashparse-tc4shape round 3
+start 13:55:33 13.70 13.68 10.73 16/236 23251
+{"files":277,"bytes":426547852,"lines":310422,"file_sha_ms":2546,"line_sha_ms":3229,"json_parse_ms":4185,"sha_MBps":168,"parse_MBps":102}
+process: real 16.570 s, user 9.639 s, sys 1.433 s
+end 13:55:49 14.07 13.76 10.80 12/240 23665

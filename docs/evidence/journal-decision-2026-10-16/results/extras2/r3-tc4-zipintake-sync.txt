@@ -1,0 +1,5 @@
+### tc4-zipintake-sync round 3
+start 14:20:44 10.68 8.74 9.81 10/225 17265
+{"segments":278041,"events":278041,"books":66,"zip_bytes":163693661,"read_zip_ms":176,"unzip_ms":14047,"decode_ms":5180,"classify_ms":27553,"intake_ms":46956,"fold_ms":21969,"total_ms":68924,"intake_cpu_ms":39222,"fold_cpu_ms":22645,"maxrss_mib":1819}
+process: real 69.597 s, user 59.035 s, sys 3.420 s
+end 14:21:53 9.74 8.96 9.81 1/210 18902

@@ -1,0 +1,5 @@
+### tc4-open round 2
+start 16:17:16 4.27 5.11 5.17 3/135 7969
+{"rep":0,"events":278041,"books":66,"scan_ms":20470,"fold_ms":13024.1,"total_ms":33494.1,"scan_cpu_ms":21168.042,"fold_cpu_ms":13532.685,"maxrss_mib":837}
+process: real 34.349 s, user 32.318 s, sys 3.795 s
+end 16:17:50 4.10 4.99 5.12 3/135 8020
