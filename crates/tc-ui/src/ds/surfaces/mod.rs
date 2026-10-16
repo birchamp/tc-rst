@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use leptos::ev::MouseEvent;
+use leptos::ev::{MouseEvent, PointerEvent};
 use leptos::prelude::*;
 
 use crate::css::{CssValue, js_number};
@@ -15,6 +15,11 @@ use crate::ds::{
 use crate::tokens::{Align, Border, Corner, Edge, Elevation, Inset, Radius, Shadow};
 
 /// BookTile.jsx: a book button with its drafting progress. Children render below the bar.
+///
+/// `disabled`, `on_pointer_down_capture` and `style` reach the button, as tC4's `...rest` and
+/// `style` do. tC4's book rail turns every tile off while an editing card is open (#698): it
+/// passes `disabled`, a pointerdown-capture handler that calls `preventDefault` so the focus
+/// stays in the card, and `cursor: default`. All three may change while the tile is on screen.
 #[component]
 pub fn BookTile(
     #[prop(into)] name: String,
@@ -25,16 +30,18 @@ pub fn BookTile(
     #[prop(optional, into)] meta_title: Option<String>,
     #[prop(optional)] layout: TileLayout,
     #[prop(optional, into)] active: Signal<bool>,
+    #[prop(optional, into)] disabled: Signal<bool>,
     #[prop(optional)] on_click: Option<Callback<web_sys::Event>>,
-    #[prop(optional)] style: Css,
+    #[prop(optional)] on_pointer_down_capture: Option<Callback<PointerEvent>>,
+    #[prop(optional, into)] style: Signal<Css>,
     #[prop(optional)] attrs: Attrs,
     #[prop(optional)] children: Option<Children>,
 ) -> impl IntoView {
     let row = layout == TileLayout::Row;
-    let mut s = css! { "padding": "10px 12px" };
-    s.set_opt("width", row.then_some("100%"));
-    s.extend(&css! { "text-align": "start", "cursor": "pointer", "font": "inherit" });
-    s.extend(&style);
+    let mut base = css! { "padding": "10px 12px" };
+    base.set_opt("width", row.then_some("100%"));
+    base.extend(&css! { "text-align": "start", "cursor": "pointer", "font": "inherit" });
+    let s = Signal::derive(move || style.with(|st| base.clone().merge(st)));
     let mut title = Attrs::new();
     if let Some(t) = meta_title {
         title.set("title", t);
@@ -55,7 +62,9 @@ pub fn BookTile(
             Interactive::Choice
         }),
         selected: active,
+        disabled,
         on_click,
+        on_pointer_down_capture,
         style: s,
         attrs,
         children: Some(Box::new(move || {
@@ -102,7 +111,7 @@ pub fn Callout(
         border: border.map(Border::from),
         radius: Some(Corner::Lg.into()),
         pad: Some(Inset::Sm.into()),
-        style,
+        style: style.into(),
         attrs,
         children: Some(Box::new(move || {
             view! {
@@ -163,7 +172,7 @@ pub fn Card(
         pad: Some(padding.unwrap_or(Pad::Inset(Inset::Lg))),
         interactive: interactive.then_some(Interactive::Card),
         on_click,
-        style,
+        style: style.into(),
         attrs,
         children,
         ..Default::default()
@@ -171,17 +180,19 @@ pub fn Card(
 }
 
 /// What Modal and Drawer share: a dialog Layer with a scrim that traps the focus, locks the
-/// page's scroll and closes on Escape or a press on the scrim.
+/// page's scroll and, while `closable`, closes on Escape or a press on the scrim.
 fn dialog_layer(
     open: Option<Signal<bool>>,
     on_close: Option<Callback<()>>,
+    closable: Signal<bool>,
     children: ChildrenFn,
 ) -> LayerProps {
+    let dismiss = on_close.map(|cb| Callback::new(move |_| cb.run(())));
     LayerProps {
         open: Some(open.unwrap_or_else(|| Signal::from(true))),
         trap_focus: true,
         lock_scroll: true,
-        on_dismiss: on_close.map(|cb| Callback::new(move |_| cb.run(()))),
+        on_dismiss: Signal::derive(move || dismiss.filter(|_| closable.get())),
         role: Some("dialog".into()),
         ..LayerProps::new(children)
     }
@@ -274,7 +285,7 @@ pub fn Drawer(
         placement: LayerPlacement::End,
         label,
         scrim_attrs: attrs,
-        ..dialog_layer(open, on_close, content)
+        ..dialog_layer(open, on_close, Signal::from(true), content)
     })
 }
 
@@ -305,7 +316,7 @@ pub fn HelpCard(
         interactive: Some(Interactive::Choice),
         selected: active,
         on_click,
-        style,
+        style: style.into(),
         attrs,
         children: Some(Box::new(move || {
             let badge = css! { "display": "inline-flex", "padding": "2px 7px" };
@@ -357,6 +368,11 @@ pub fn Modal(
     #[prop(optional, into)] width: Option<CssValue>,
     #[prop(optional, into)] close_label: Option<String>,
     #[prop(optional)] on_close: Option<Callback<()>>,
+    /// Whether `on_close` is in force: the ✕, Escape and a press on the scrim. tC4's dialogs
+    /// that run an action pass no `onClose` while it runs (`onClose={busy ? undefined :
+    /// close}`, Open from Door43 and GatewayChange), so the dialog cannot close under it.
+    #[prop(into, default = Signal::from(true))]
+    closable: Signal<bool>,
     #[prop(optional)] footer: Option<ChildrenFn>,
     /// Extra attributes of the scrim.
     #[prop(optional)]
@@ -383,7 +399,10 @@ pub fn Modal(
                         <Text attrs=Attrs::from([("id", id.as_str())]) role=TextRole::H3>{title.map(|t| t.view())}</Text>
                         {present(subtitle).map(|s| view! { <Text role=TextRole::Caption>{s.view()}</Text> })}
                     </Stack>
-                    {on_close.map(|cb| dialog_close(close_label, cb))}
+                    {move || {
+                        let label = close_label.clone();
+                        on_close.filter(|_| closable.get()).map(|cb| dialog_close(label, cb))
+                    }}
                 </Stack>
                 <Stack direction=Direction::Column gap=16 style=css! { "padding": "18px 24px 4px" }>
                     {children.map(|c| c())}
@@ -402,6 +421,6 @@ pub fn Modal(
         placement: LayerPlacement::Center,
         labelled_by,
         scrim_attrs: attrs,
-        ..dialog_layer(open, on_close, content)
+        ..dialog_layer(open, on_close, closable, content)
     })
 }

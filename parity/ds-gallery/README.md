@@ -5,12 +5,12 @@ drawn alone in a fixed-size frame and captured as a PNG. The Rust/Leptos port re
 cases from `gallery-spec.json` and compares its images with `screens/`.
 
 - tC4 source: `/home/user/unfoldingword/translationcore4`, commit
-  **`d494a9d6ba9f4cdcc09faff9038c93159106045b`** (version `4.0.0-rc.1`, clean tree). The gallery
+  **`d310bf304cfee784f4ca45dee474a3faf0d5616e`** (version `4.0.0-rc.1`, clean tree). The gallery
   imports `src/ds/index.js` and `src/ds/styles.css` from that checkout through a Vite alias. It
   copies nothing and changes nothing there.
-- Output: **719 cases**, 719 PNGs in `screens/<Component>/<state>.png`: 683 component cases for
+- Output: **751 cases**, 751 PNGs in `screens/<Component>/<state>.png`: 714 component cases for
   the 53 components that the 52 files in `src/ds/components` export (`Radio.jsx` exports `Radio`
-  and `RadioGroup`), plus 36 token cases. 6.0 MB in total.
+  and `RadioGroup`), plus 37 token cases. 6.7 MB in total.
 - Contract: `gallery-spec.json` lists every case with its component, state, source file, frame,
   document language and direction, exact props as JSON, interaction steps and what it needs.
 - Versions: React 18.3.1, react-dom 18.3.1, Vite 6.4.3, @vitejs/plugin-react 4.7.0 and esbuild
@@ -73,7 +73,8 @@ steps. `?case=Button/primary-md&auto=1` shows one case alone.
 `wasm32-unknown-unknown`) with the same DOM. Its `gallery` feature draws every case of
 `gallery-spec.json` by the same protocol: the same page globals (`__galleryBooted`, `__mount`,
 `__galleryMounted`), the same frame and tC4's stylesheet, fonts and images, copied verbatim into
-`crates/tc-ui/assets/`.
+`crates/tc-ui/assets/` by `crates/tc-ui/vendor-tc4.sh`. `cargo test -p tc-ui` checks each of
+them against its git blob id in tC4 (`crates/tc-ui/vendored-from-tc4.txt`).
 
 ### Build
 
@@ -92,8 +93,9 @@ Run them from the repository root. The script builds `tc-ui` with `--features ga
 `-j 2`; set `CARGO_JOBS` to change it) and runs `wasm-bindgen --target web` on the wasm in
 cargo's target directory, which follows `CARGO_TARGET_DIR`. It assembles a static site in
 `target/tc-ui-gallery/` (`--out DIR` to change it): `index.html`, `pkg/`, `assets/` and a copy
-of `gallery-spec.json`. Both profiles draw the same pixels. The release wasm is 1,184,058
-bytes (368 KB with gzip -9), the gallery's spec renderer and `serde_json` included.
+of `gallery-spec.json`. Both profiles drew the same pixels when last compared (719 cases, tC4
+d494a9d); the release wasm was then 1,184,058 bytes (368 KB with gzip -9), the gallery's spec
+renderer and `serde_json` included.
 
 ### Capture and compare
 
@@ -104,7 +106,7 @@ node capture-rust.mjs             # build (dev), capture screens-rust/, compare 
 node capture-rust.mjs --release   # the same with the wasm-release build
 node diff.mjs                     # compare again without capturing
 npm run build && node dom-diff.mjs   # the DOM of both galleries; needs the React build in dist/
-node scenarios.mjs                # behaviour after each step of 43 sequences; needs both builds
+node scenarios.mjs                # behaviour after each step of 53 sequences; needs both builds
 ```
 
 `capture-rust.mjs` takes `--only`, `--jobs` and `--no-build` as `capture.mjs` does. It serves
@@ -120,24 +122,36 @@ the report.
 
 A still image and the DOM after at most three steps cannot show behaviour: focus that moves or
 is lost, a layer that should close and does not, a node drawn again where React keeps it (which
-stops its transition and drops any focus on it). `scenarios.mjs` drives 43 sequences of up to 13
+stops its transition and drops any focus on it). `scenarios.mjs` drives 53 sequences of up to 13
 steps on both galleries: roving focus and typeahead in Menu, Select and SuggestField, the focus
 trap of Modal, Drawer and ConfirmDialog, Escape and outside presses with a Select or a Menu open
 inside a Modal, state an owner keeps (a Toggle, a RadioGroup, a Table selection by keyboard, a
 Progress ring, two Accordion panels open at once), lists whose items change while they are
 drawn (Table rows inserted and changed, rows re-sorted under the focused row, rows that share a
-key, Select groups whose name comes back, suggestions replaced while the list is open), and
-controlled values a change does not reach. After every step it compares the frame's DOM as
+key, Select groups whose name comes back, suggestions replaced while the list is open),
+controlled values a change does not reach, and props a screen changes on a drawn component (a
+button that turns busy or reaches the end, a dialog that keeps its ✕, Escape and scrim only
+while it is not busy, tabs, header exits and book tiles that an editing card turns off, header
+exits that write what they do and come back when the card closes, and a press on an off control
+that keeps the focus in the field). After every step it compares the frame's DOM as
 `dom-diff.mjs` sees it, the focused element, the page's scroll lock, and which elements are
 still the nodes they were (each element is numbered once, in document order, when it first
 appears). It writes `scenario-report.json` and takes `--only` with scenario names.
 
-Result at this commit: 719 of 719 cases at 0 mismatched pixels, with both the dev and the
-wasm-release build. Every `screens-rust/` file is byte-identical to its `screens/` file. 719 of
-719 cases have the same DOM. 43 of 43 scenarios (231 steps) are the same after every step. There
+Result at this commit (tC4 d310bf3, dev build): 751 of 751 cases at 0 mismatched pixels. Every
+`screens-rust/` file is byte-identical to its `screens/` file. 751 of 751 cases have the same
+DOM. 53 of 53 scenarios (277 steps) are the same after every step. The 719 cases that existed at
+d494a9d draw the same tC4 screens at d310bf3: the only design-system change in between is a
+`::selection` rule for `[data-words="target"]`, which only `Tokens/selection` shows. There
 is no `residuals.json` because nothing needs explaining. Both galleries are captured on the same
 machine, so the machine-dependent rendering under "Skipped, and what to know" (fallback glyphs,
 monospace, Nastaliq) affects both sides alike.
+
+CI has no Chromium and no tC4 checkout, so it cannot rerun these scripts. `cargo test -p tc-ui`
+(`crates/tc-ui/tests/gallery_record.rs`) checks what they left instead: every case has its tC4
+screen, `diff-report.json` and `dom-report.json` cover exactly the spec's cases at 0 mismatched
+pixels and the same DOM, and the states that §3.5 of `docs/TC4-DELTA-2026-10-16.md` asks for are
+cases. Run the scripts again and commit their reports with any change to the cases or to tc-ui.
 
 ## The contract
 
@@ -148,21 +162,25 @@ Each case in `gallery-spec.json`:
 | `id` | `<component>/<state>`, also the screen's path. |
 | `component`, `file` | The DS export and its file in `src/ds` (`Tokens` for the token pages). |
 | `frame` | `width`, `height`, `padding` (16 unless stated) and `background` (`#F7FAFC`, which is `--surface-app`). |
-| `document` | `lang` and `dir` of `<html>`. 51 cases use the Arabic interface (`ar`, `rtl`), as tC4 sets it. |
+| `document` | `lang` and `dir` of `<html>`. 53 cases use the Arabic interface (`ar`, `rtl`), as tC4 sets it. |
 | `props` | The exact props of the component under test, as JSON. |
-| `render` | Only on 66 cases that place the component in something: a row, an Ocean ground, a centring box. It is the whole tree. Without it the tree is the component with `props`. |
-| `steps` | Interactions before the screenshot (102 cases): `focus` (Tab until the target has keyboard focus), `hover`, `press` (button held), `click`, `key`, `type`. A target is a CSS selector inside the frame. |
-| `needs` | `callbacks`: props that hold a callback (229 cases). `elements`: props that hold elements, such as `children`, `footer`, `trigger`, `center` or a `title` (186 cases). |
-| `cells` | Only on 11 cases that own state, as a screen does: the first value of each cell. A prop `{ "$cell": name }` reads a cell, and a callback `{ "$fn": "set", "cell": name, "from": path }` writes one. A Toggle that turns on, a RadioGroup that changes, a Table row selected by Enter, Table rows and suggestions that change while they are drawn (rows re-sorted under the focused row among them), a Progress ring that moves, and a Modal that closes are drawn by the component, not by a new case. |
+| `render` | Only on 71 cases that place the component in something: a row, an Ocean ground, a centring box. It is the whole tree. Without it the tree is the component with `props`. |
+| `steps` | Interactions before the screenshot (114 cases): `focus` (Tab until the target has keyboard focus), `hover`, `press` (button held), `click`, `key`, `type`, `select` (the text from the start of `target` to the end of `to`, set by script). A target is a CSS selector inside the frame. |
+| `needs` | `callbacks`: props that hold a callback (256 cases). `elements`: props that hold elements, such as `children`, `footer`, `trigger`, `center` or a `title` (200 cases). |
+| `cells` | Only on 19 cases that own state, as a screen does: the first value of each cell. A prop `{ "$cell": name }` reads a cell, `{ "$if": name, … }` picks a value by one, and a callback `{ "$fn": "set", "cell": name, "from": path }` writes one. A Toggle that turns on, a RadioGroup that changes, a Table row selected by Enter, Table rows and suggestions that change while they are drawn (rows re-sorted under the focused row among them), a Progress ring that moves, a Modal that closes, and the props tC4's d310bf3 screens change on a drawn component (a sync button that turns busy, a Previous/Next pill that reaches the end, a dialog that loses its ✕ while it works, tabs, book tiles and header exits that an editing card turns off) are drawn by the component, not by a new case. A callback that the component itself turns off, Modal's `onClose` (`closable`), AppHeader's `onBrandClick` and `onProjectClick` (`exits_off`) and Layer's `onDismiss` (a signal), reaches the port as the screen passes it, without a check of the cell, so only the component's own switch keeps it from running, as on a screen. |
 | `isolate` | The case opens a layer, has steps or sets the document language. The browsing index loads it in an iframe. |
 | `note` | Present where a case needs explaining. |
 
-Props are plain JSON wherever the component allows it. A tree uses three markers:
+Props are plain JSON wherever the component allows it. A tree uses these markers:
 `{ "$el": "Name", "props": {...} }` is an element (a DS export when the name is capitalised, an
 HTML or SVG tag when it is lower case), `{ "$fn": "noop" }` is a callback that does nothing (some
 components draw a control only when they get one, such as Modal's ✕ or Toast's action), and
-`{ "$asset": "public/assets/…" }` is a file of the tC4 checkout. Two markers carry state: `{ "$cell":
-"on" }` reads a cell of the case's `cells`, and `{ "$fn": "set", "cell": "on", "from":
+`{ "$asset": "public/assets/…" }` is a file of the tC4 checkout, and `{ "$fn": "preventDefault" }` is
+a callback that calls `preventDefault` on its event (tC4's press guard,
+`onPointerDownCapture={(e) => e.preventDefault()}`). Three markers carry state: `{ "$cell":
+"on" }` reads a cell of the case's `cells`, `{ "$if": "busy", "then": a, "else": b }` is `a` while
+the cell is truthy and `b` otherwise (an absent branch is undefined, as in tC4's
+`onClose={busy ? undefined : close}`), and `{ "$fn": "set", "cell": "on", "from":
 "0.target.checked" }` writes it from the callback's arguments (or `"value"` writes a fixed
 value). A cell placed among children draws its value as text, so a case can show what a
 callback handed over. Styles are React inline styles.
@@ -183,12 +201,16 @@ Each component gets its variants, tones and sizes, disabled and selected states,
 keyboard focus where it has them, long text, and right-to-left where it handles direction. Overlay
 states are real: Modal, Drawer, ConfirmDialog and Layer open in their frame, Menu opens with
 `open`, Tooltip opens on hover and focus, and Select and SuggestField open by click or arrow key
-(with the search field, groups, badges, meta, disabled rows and no matches).
+(with the search field, groups, badges, meta, disabled rows and no matches). Two of tC4's
+d310bf3 dialogs are drawn whole from its views, with their English (and once Arabic) text: Open
+a project from Door43 empty, filled, with a name error, refused and busy
+(`src/views/modals/OpenFromDoor43.jsx`), and Add a project with its four cards
+(`src/views/modals/AddProject.jsx`).
 
 | Component | File | Cases |
 |---|---|---|
 | Badge | core/Badge.jsx | 16 |
-| Button | core/Button.jsx | 43 |
+| Button | core/Button.jsx | 54 |
 | Divider | core/Divider.jsx | 5 |
 | IconButton | core/IconButton.jsx | 13 |
 | Overline | core/Overline.jsx | 6 |
@@ -214,7 +236,7 @@ states are real: Modal, Drawer, ConfirmDialog and Layer open in their frame, Men
 | TextArea | forms/TextArea.jsx | 10 |
 | TextField | forms/TextField.jsx | 12 |
 | Toggle | forms/Toggle.jsx | 10 |
-| AppHeader | navigation/AppHeader.jsx | 10 |
+| AppHeader | navigation/AppHeader.jsx | 13 |
 | Breadcrumb | navigation/Breadcrumb.jsx | 7 |
 | Menu | navigation/Menu.jsx | 7 |
 | Action | primitives/Action.jsx | 52 |
@@ -227,24 +249,26 @@ states are real: Modal, Drawer, ConfirmDialog and Layer open in their frame, Men
 | Rule | primitives/Rule.jsx | 5 |
 | Stack | primitives/Stack.jsx | 8 |
 | Surface | primitives/Surface.jsx | 55 |
-| Switcher | primitives/Switcher.jsx | 17 |
+| Switcher | primitives/Switcher.jsx | 19 |
 | Table | primitives/Table.jsx | 13 |
 | Text | primitives/Text.jsx | 40 |
-| BookTile | surfaces/BookTile.jsx | 13 |
+| BookTile | surfaces/BookTile.jsx | 18 |
 | Callout | surfaces/Callout.jsx | 7 |
 | Card | surfaces/Card.jsx | 9 |
 | Drawer | surfaces/Drawer.jsx | 8 |
 | HelpCard | surfaces/HelpCard.jsx | 10 |
-| Modal | surfaces/Modal.jsx | 10 |
+| Modal | surfaces/Modal.jsx | 19 |
 | ScripturePassage | translation/ScripturePassage.jsx | 14 |
 | VerseMarker | translation/VerseMarker.jsx | 8 |
-| WordChip | translation/WordChip.jsx | 6 |
-| Tokens | tokens/*.css | 36 |
+| WordChip | translation/WordChip.jsx | 7 |
+| Tokens | tokens/*.css | 37 |
 
-The 36 token cases: one swatch page per section of `colors.css` (10), the nine tone slots of
+The 37 token cases: one swatch page per section of `colors.css` (10), the nine tone slots of
 each of the seven tones on a light ground and on the Ocean ground (14), the context slots light
 and dark (2), the UI and scripture type scales, the weights, every Text role, the font families,
-spacing, radius, stroke, elevation and control heights (10). `motion.css` and `layer.css` hold
+spacing, radius, stroke, elevation and control heights (10), and `base.css`'s selection colours
+(1): text selected outside Check's "Your translation" line takes the soft yellow, text selected
+inside it (`[data-words="target"]`, #737) the system highlight. `motion.css` and `layer.css` hold
 durations and z-indices, which a still image cannot show, and `print.css` styles only the print
 document.
 

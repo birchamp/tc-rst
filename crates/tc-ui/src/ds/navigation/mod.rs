@@ -33,8 +33,27 @@ pub fn AppHeader(
     right: Option<Slot>,
     #[prop(optional)] on_brand_click: Option<Callback<MouseEvent>>,
     #[prop(optional)] on_project_click: Option<Callback<web_sys::Event>>,
+    /// While true, the brand and the project chip are not exits: a press on either does
+    /// nothing and the brand loses its pointer cursor. tC4 passes neither handler while an
+    /// editing card is open, because leaving the project would drop the card's text (#698).
+    #[prop(optional, into)]
+    exits_off: Signal<bool>,
 ) -> impl IntoView {
     let dark = tone == HeaderTone::Ocean;
+    let on_brand_click = on_brand_click.map(|cb| {
+        Callback::new(move |e| {
+            if !exits_off.get_untracked() {
+                cb.run(e);
+            }
+        })
+    });
+    let on_project_click = on_project_click.map(|cb| {
+        Callback::new(move |e| {
+            if !exits_off.get_untracked() {
+                cb.run(e);
+            }
+        })
+    });
     let switch_title = switch_title.unwrap_or_else(|| "Switch project".into());
     let outer = css! {
         "display": "grid",
@@ -45,7 +64,10 @@ pub fn AppHeader(
         "height": "var(--header-height)",
         "z-index": "var(--z-header)",
     };
-    let brand_style = css! { "flex": "none", "cursor": on_brand_click.map(|_| "pointer") };
+    let brand_style = Signal::derive(move || {
+        let exit = on_brand_click.is_some() && !exits_off.get();
+        css! { "flex": "none", "cursor": exit.then_some("pointer") }
+    });
     let logo = logo_src.filter(|s| !s.is_empty()).map(|src| {
         view! { <img src=src alt="translationCore" style="height: 28px; width: auto; display: block;" /> }
     });
@@ -73,7 +95,7 @@ pub fn AppHeader(
             radius: Some(Corner::Md.into()),
             interactive: Some(Interactive::Quiet),
             on_click: on_project_click,
-            style: css! { "padding": "5px 10px 5px 8px", "cursor": "pointer", "font": "inherit", "min-width": 0 },
+            style: css! { "padding": "5px 10px 5px 8px", "cursor": "pointer", "font": "inherit", "min-width": 0 }.into(),
             attrs: Attrs::new().with("title", title).with("data-testid", "project-switch"),
             children: Some(Box::new(move || {
                 let name_text = crate::ds::Text(crate::ds::TextProps {
@@ -111,7 +133,7 @@ pub fn AppHeader(
         border: Some(if dark { Edge::None } else { Edge::Hair }.into()),
         radius: Some(Corner::None.into()),
         pad: Some("0 16px".into()),
-        style: outer,
+        style: outer.into(),
         children: Some(Box::new(move || {
             let brand = crate::ds::Stack(crate::ds::StackProps {
                 direction: Direction::Row,
@@ -193,7 +215,7 @@ pub fn Breadcrumb(
         align: Some(Align::Center),
         wrap: true,
         tag: Some("nav".into()),
-        style,
+        style: style.into(),
         attrs: a,
         children: Some(Box::new(move || steps().into_any())),
         ..Default::default()
@@ -290,7 +312,7 @@ pub fn Menu(
             anchor_to: Some(anchor_to),
             align,
             dismiss: Dismiss { scrim: false, escape: true, outside: true },
-            on_dismiss: Some(Callback::new(move |_| set(false))),
+            on_dismiss: Some(Callback::new(move |_| set(false))).into(),
             navigate: Some(Navigate::Vertical),
             role: Some("menu".into()),
             ..crate::ds::LayerProps::new(content)

@@ -8,6 +8,7 @@ use crate::ds::{Align, Attrs, Columns, Css, Direction, Justify, Tag, element, sp
 
 /// Flex or grid arrangement with a real `gap`. Sibling groups are laid out with gap, never
 /// with per-element margins, so reordering or deleting a child cannot change the spacing.
+/// `style` may change while the stack is on screen.
 #[component]
 pub fn Stack(
     #[prop(optional)] direction: Direction,
@@ -23,7 +24,7 @@ pub fn Stack(
     #[prop(optional)] grow: bool,
     #[prop(optional, into)] tag: Option<Tag>,
     #[prop(optional)] on_click: Option<Callback<MouseEvent>>,
-    #[prop(optional)] style: Css,
+    #[prop(optional, into)] style: Signal<Css>,
     #[prop(optional)] attrs: Attrs,
     #[prop(optional)] children: Option<Children>,
 ) -> impl IntoView {
@@ -55,9 +56,10 @@ pub fn Stack(
         flex.or_else(|| grow.then_some(CssValue::Number(1.0))),
     );
     s.set("min-width", 0);
-    s.extend(&style);
     element(tag.unwrap_or("div".into()))
-        .attr("style", s.to_style())
+        .attr("style", move || {
+            style.with(|st| s.clone().merge(st).to_style())
+        })
         .add_any_attr(spread(&attrs))
         .on(leptos::ev::click, move |e| {
             if let Some(cb) = on_click {

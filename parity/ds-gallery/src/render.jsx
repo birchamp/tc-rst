@@ -5,9 +5,13 @@
 //   { "$asset": "public/assets/x.png" }   a file of the tC4 checkout, served by the gallery
 //
 //   { "$cell": "on" }                     the current value of one of the case's `cells`
+//   { "$if": "busy", "then": a, "else": b }
+//                                         `a` while the cell is truthy, else `b` (an absent
+//                                         branch is undefined): `onClose={busy ? undefined : close}`
 //   { "$fn": "set", "cell": "on", "from": "0.target.checked" }
 //                                         a callback that writes a cell: `value`, or the value
 //                                         at `from` in its arguments (0 is the first)
+//   { "$fn": "preventDefault" }           a callback that calls preventDefault on its event
 //
 // Everything else is plain JSON and passes through unchanged.
 import React from 'react';
@@ -33,7 +37,12 @@ export function value(v, key, cells) {
   if (v === null || typeof v !== 'object') return v;
   if ('$el' in v) return element(v, key, cells);
   if ('$cell' in v) return cells.values[v.$cell];
+  if ('$if' in v) {
+    const branch = cells.values[v.$if] ? v.then : v.else;
+    return branch === undefined ? undefined : value(branch, key, cells);
+  }
   if ('$fn' in v) {
+    if (v.$fn === 'preventDefault') return (e) => e.preventDefault();
     if (v.$fn !== 'set') return noop;
     return (...args) => cells.set(v.cell, 'value' in v ? v.value : pick(args, v.from));
   }

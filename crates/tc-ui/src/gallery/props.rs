@@ -3,8 +3,9 @@
 //! keyword is in tC4.
 //!
 //! A case can own state, as a screen does: its `cells` are signals, `{ "$cell": name }` reads
-//! one and `{ "$fn": "set", … }` writes one, so a prop the component takes as a signal follows
-//! the write on the nodes already drawn.
+//! one, `{ "$if": name, "then": …, "else": … }` picks a value by one, and `{ "$fn": "set", … }`
+//! writes one, so a prop the component takes as a signal follows the write on the nodes
+//! already drawn.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -17,6 +18,30 @@ use crate::css::{Css, CssValue, css_property, js_number};
 use crate::tokens::Keyword;
 
 use super::render::node;
+
+/// The callback a `{ "$fn": … }` stands for.
+fn callback_of<T: Arg>(v: &Value) -> Option<Callback<T>> {
+    match v.get("$fn")?.as_str()? {
+        "preventDefault" => Some(Callback::new(|e: T| e.prevent_default())),
+        "set" => {
+            let Some(cell) = v.get("cell").and_then(Value::as_str).and_then(cell_named) else {
+                return Some(Callback::new(|_| {}));
+            };
+            let fixed = v.get("value").cloned();
+            let from = v.get("from").and_then(Value::as_str).map(String::from);
+            Some(Callback::new(move |arg: T| {
+                let next = fixed
+                    .clone()
+                    .or_else(|| from.as_deref().and_then(|p| arg.pick(p)));
+                match next {
+                    Some(next) => cell.set(next),
+                    None => warn("gallery: a set callback found no value in its arguments"),
+                }
+            }))
+        }
+        _ => Some(Callback::new(|_| {})),
+    }
+}
 
 /// The props of one element of the tree. Every getter marks its key as read; [`Props::rest`]
 /// is everything no getter read, which is React's `...rest`.
@@ -61,6 +86,46 @@ pub(super) fn cell_of(v: &Value) -> Option<RwSignal<Value>> {
     cell_named(v.get("$cell")?.as_str()?)
 }
 
+/// JavaScript's truthiness.
+fn truthy(v: &Value) -> bool {
+    match v {
+        Value::Null => false,
+        Value::Bool(b) => *b,
+        Value::Number(n) => n.as_f64().is_some_and(|n| n != 0.0 && !n.is_nan()),
+        Value::String(s) => !s.is_empty(),
+        Value::Array(_) | Value::Object(_) => true,
+    }
+}
+
+/// The branch a `{ "$if": cell, "then": …, "else": … }` takes now (`Null` for an absent one).
+fn branch(v: &Map<String, Value>, cell: RwSignal<Value>) -> Value {
+    let key = if cell.with(truthy) { "then" } else { "else" };
+    v.get(key).cloned().unwrap_or(Value::Null)
+}
+
+/// A value that follows the case's cells: a `$cell` or an `$if`. `None` for a fixed value.
+pub(super) fn follow(v: &Value) -> Option<Signal<Value>> {
+    if let Some(cell) = cell_of(v) {
+        return Some(Signal::derive(move || cell.get()));
+    }
+    let m = v.as_object()?;
+    let cell = cell_named(m.get("$if")?.as_str()?)?;
+    let m = m.clone();
+    // A memo: a write that keeps the branch notifies nothing, as React keeps the same value.
+    Some(Memo::new(move |_| branch(&m, cell)).into())
+}
+
+/// A boolean inside a prop (an option's `disabled`), following the cells: absent is false.
+pub fn flag_in(v: Option<&Value>) -> Signal<bool> {
+    let Some(v) = v else {
+        return Signal::from(false);
+    };
+    match follow(v) {
+        Some(s) => Signal::derive(move || s.with(truthy)),
+        None => Signal::from(v.as_bool().unwrap_or(false)),
+    }
+}
+
 /// A callback's argument, as the value a `{ "$fn": "set", "from": path }` takes from it. The
 /// path starts with the argument's position ("0", "0.target.checked", "0.id", "1").
 pub trait Arg: 'static {
@@ -68,10 +133,24 @@ pub trait Arg: 'static {
         let _ = path;
         None
     }
+
+    /// `event.preventDefault()`, for an argument that is an event.
+    fn prevent_default(&self) {
+        warn("gallery: preventDefault on an argument that is not an event");
+    }
 }
 
 impl Arg for () {}
-impl Arg for leptos::ev::MouseEvent {}
+impl Arg for leptos::ev::MouseEvent {
+    fn prevent_default(&self) {
+        web_sys::Event::prevent_default(self);
+    }
+}
+impl Arg for leptos::ev::PointerEvent {
+    fn prevent_default(&self) {
+        web_sys::Event::prevent_default(self);
+    }
+}
 impl Arg for leptos::ev::KeyboardEvent {}
 impl Arg for leptos::ev::FocusEvent {}
 impl Arg for crate::ds::DismissReason {}
@@ -141,24 +220,27 @@ impl Props {
         self.map.get(key).filter(|v| !v.is_null())
     }
 
-    /// The prop's value now: a cell reads as its current value.
+    /// The prop's value now: a cell, or the branch of an `$if`, reads as its current value.
     fn take(&self, key: &str) -> Option<Value> {
         let v = self.raw(key)?;
-        match cell_of(v) {
-            Some(cell) => Some(cell.get_untracked()).filter(|v| !v.is_null()),
+        match follow(v) {
+            Some(s) => Some(s.get_untracked()).filter(|v| !v.is_null()),
             None => Some(v.clone()),
         }
     }
 
-    /// A prop the component takes as a signal: a cell follows its writes, anything else stays.
+    /// A prop the component takes as a signal: a cell or an `$if` follows the writes, anything
+    /// else stays.
     fn live<T: Send + Sync + Clone + 'static>(
         &self,
         key: &str,
         read: impl Fn(&Value) -> Option<T> + Send + Sync + 'static,
     ) -> Signal<Option<T>> {
         match self.raw(key) {
-            Some(v) => match cell_of(v) {
-                Some(cell) => Signal::derive(move || cell.with(&read)),
+            Some(v) => match follow(v) {
+                Some(s) => {
+                    Signal::derive(move || s.with(|v| (!v.is_null()).then(|| read(v)).flatten()))
+                }
                 None => Signal::from(read(v)),
             },
             None => Signal::from(None),
@@ -187,6 +269,12 @@ impl Props {
         Signal::derive(move || s.get().unwrap_or(false))
     }
 
+    /// A React style object the component takes as a signal.
+    pub fn css_signal(&self, key: &str) -> Signal<Css> {
+        let s = self.live(key, |v| Some(style_object(v)));
+        Signal::derive(move || s.get().unwrap_or_default())
+    }
+
     /// A string the component takes as a signal.
     pub fn str_signal(&self, key: &str) -> Signal<Option<String>> {
         self.live(key, |v| match v {
@@ -201,32 +289,63 @@ impl Props {
         self.live(key, Value::as_f64)
     }
 
+    /// Whether a callback prop holds a callback now: React's `onClose={busy ? undefined :
+    /// close}`. Always for a plain callback.
+    pub fn handler_on(&self, key: &str) -> Signal<bool> {
+        let s = self.live(key, |v| Some(v.get("$fn").is_some()));
+        Signal::derive(move || s.get().unwrap_or(false))
+    }
+
+    /// Whether the prop is an `$if`.
+    pub fn is_if(&self, key: &str) -> bool {
+        self.map.get(key).is_some_and(|v| v.get("$if").is_some())
+    }
+
     /// Whether the prop is present, as a cell or a value.
     pub fn has(&self, key: &str) -> bool {
         self.map.get(key).is_some_and(|v| !v.is_null())
     }
 
-    /// A callback prop: `{ "$fn": "noop" }` does nothing, `{ "$fn": "set", … }` writes a cell.
+    /// A callback prop: `{ "$fn": "noop" }` does nothing, `{ "$fn": "preventDefault" }` calls
+    /// `preventDefault` on its event, `{ "$fn": "set", … }` writes a cell. Under an `$if`, the
+    /// callback of the branch in force when it is called; [`Props::handler_on`] says when a
+    /// branch holds one.
     pub fn handler<T: Arg>(&self, key: &str) -> Option<Callback<T>> {
-        let v = self.raw(key)?;
-        let f = v.get("$fn")?.as_str()?;
-        if f != "set" {
-            return Some(Callback::new(|_| {}));
-        }
-        let Some(cell) = v.get("cell").and_then(Value::as_str).and_then(cell_named) else {
-            return Some(Callback::new(|_| {}));
+        let raw = self.raw(key)?;
+        let Some(cell) = raw.get("$if").and_then(Value::as_str).and_then(cell_named) else {
+            return callback_of(raw);
         };
-        let fixed = v.get("value").cloned();
-        let from = v.get("from").and_then(Value::as_str).map(String::from);
+        let then = raw.get("then").and_then(callback_of::<T>);
+        let otherwise = raw.get("else").and_then(callback_of::<T>);
+        then.or(otherwise)?;
         Some(Callback::new(move |arg: T| {
-            let next = fixed
-                .clone()
-                .or_else(|| from.as_deref().and_then(|p| arg.pick(p)));
-            match next {
-                Some(next) => cell.set(next),
-                None => warn("gallery: a set callback found no value in its arguments"),
+            let cb = if cell.with_untracked(truthy) {
+                then
+            } else {
+                otherwise
+            };
+            if let Some(cb) = cb {
+                cb.run(arg);
             }
         }))
+    }
+
+    /// The callback a screen keeps for a prop it passes only some of the time, for a component
+    /// that turns the callback off itself (`closable`, `exits_off`, a signal of the callback):
+    /// under an `$if` with a callback in one branch, that callback, called whichever branch is
+    /// in force, so the component's own switch is what keeps it from running.
+    /// [`Props::handler_on`] drives that switch. Any other prop reads as [`Props::handler`].
+    pub fn screen_handler<T: Arg>(&self, key: &str) -> Option<Callback<T>> {
+        let raw = self.raw(key)?;
+        if raw.get("$if").is_none() {
+            return self.handler(key);
+        }
+        let then = raw.get("then").and_then(callback_of::<T>);
+        let otherwise = raw.get("else").and_then(callback_of::<T>);
+        match (then, otherwise) {
+            (Some(cb), None) | (None, Some(cb)) => Some(cb),
+            _ => self.handler(key),
+        }
     }
 
     pub fn str(&self, key: &str) -> Option<String> {

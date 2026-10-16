@@ -264,6 +264,16 @@ export default [
     ['focus-visible', { options: MODES, value: 'draft', onChange: noop }, { steps: [focus('[role="tab"][aria-selected="true"]')] }],
     ['rtl', { options: [{ value: 'read', label: 'فهم' }, { value: 'draft', label: 'ترجمة' }, { value: 'check', label: 'مراجعة' }], value: 'read', onChange: noop }, { document: AR }],
     ['pill-rtl', { options: [{ value: 'read', label: 'فهم' }, { value: 'draft', label: 'ترجمة' }, { value: 'check', label: 'مراجعة' }], value: 'read', indicator: 'pill', onChange: noop }, { document: AR }],
+    /* #698: while an editing card is open, tC4's mode switch turns Understand and Check off and
+       keeps Translate on (src/App.jsx:111-118). */
+    ['pill-editing', { options: [{ ...MODES[0], disabled: true }, MODES[1], { ...MODES[2], disabled: true }], value: 'draft', indicator: 'pill', onChange: noop }],
+    ['options-turn-off', { options: [{ ...MODES[0], disabled: cell('editing') }, MODES[1], { ...MODES[2], disabled: cell('editing') }], value: 'draft', indicator: 'pill', onChange: noop }, {
+      frame: { height: 120 }, cells: { editing: false },
+      wrap: (node) => el('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 12 }, children: [
+        node, el('Button', { variant: 'secondary', size: 'sm', 'data-testid': 'edit', onClick: setTo('editing', true), children: 'Edit this verse' })] }),
+      steps: [click('[data-testid="edit"]')],
+      note: 'Opening an editing card turns two options off: the same tabs take the disabled state.',
+    }],
   ]),
 
   ...group('Table', { frame: { width: 520, height: 200 } }, [

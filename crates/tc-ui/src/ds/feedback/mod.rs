@@ -73,7 +73,7 @@ pub fn ConfirmDialog(
         },
         trap_focus: true,
         lock_scroll: true,
-        on_dismiss: dismiss,
+        on_dismiss: dismiss.into(),
         role: Some("alertdialog".into()),
         labelled_by: Some(label_id),
         ..crate::ds::LayerProps::new(children)
@@ -245,7 +245,7 @@ pub(crate) fn close_button(
         size: Size::Sm,
         shape,
         icon_only: true,
-        title: Some(title),
+        title: Some(title).into(),
         on_click: Some(on_click),
         style: Signal::from(style),
         children: Some(Box::new(|| "✕".into_any())),

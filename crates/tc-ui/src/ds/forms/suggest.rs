@@ -276,7 +276,7 @@ fn suggest(
                     outside: true,
                 },
                 restore_focus: false,
-                on_dismiss: Some(Callback::new(move |_| close())),
+                on_dismiss: Some(Callback::new(move |_| close())).into(),
                 animate: false,
                 // A press in the list keeps the focus in the field.
                 on_mouse_down: Some(Callback::new(|e: MouseEvent| e.prevent_default())),

@@ -741,7 +741,7 @@ fn Dropdown(
                     outside: true,
                 },
                 restore_focus: false,
-                on_dismiss: Some(Callback::new(move |_| close())),
+                on_dismiss: Some(Callback::new(move |_| close())).into(),
                 // Drawn only while open, with no exit animation: a closed list leaves the page
                 // in the same update that closes it.
                 animate: false,
