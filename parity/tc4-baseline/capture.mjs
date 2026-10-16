@@ -198,9 +198,9 @@ function appDriver({ page, origin, state }) {
 // own words), shows, incomplete (why the screen cannot show what a full install shows,
 // when that is so), and run (the same steps, driven). Optional: locale (the app language,
 // which run passes to home(); English by default), viewport (another window size than
-// 1280x800) and rebuildDiffers (an owner ruling under which the rebuild must not copy this
-// screen exactly: the ruling, as numbered in docs/TC4-DELTA-2026-10-16.md §5, and what the
-// rebuild shows).
+// 1280x800), markingRow (the tool whose whole marking row the image shows) and
+// rebuildDiffers (an owner ruling under which the rebuild must not copy this screen exactly:
+// the ruling, as numbered in docs/TC4-DELTA-2026-10-16.md §5, and what the rebuild shows).
 
 const SCREEN_LIST = [
   // -------- scenario: sample (the conformance samples as tC4 ships them) --------
@@ -253,6 +253,42 @@ const SCREEN_LIST = [
       await app.home(); await app.openTitus(); await app.openCheck(); await app.openAlign();
       await app.page.getByTestId('align-mode-orig').click();
       await app.page.getByTestId('align-bank').waitFor();
+    },
+  },
+  {
+    name: 'align-workspace-row', scenario: 'sample', view: 'check', modal: null, markingRow: 'align',
+    steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Align card', 'Scroll the marking row into view'],
+    shows: 'align-workspace scrolled to the marking row: the word cards, then "← Previous", Mark valid and "Next →" under the card',
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.openCheck(); await app.openAlign();
+      await app.page.getByTestId('align-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'ar-align-workspace-row', scenario: 'sample', view: 'check', modal: null, markingRow: 'align', locale: 'ar',
+    steps: ['App language: العربية (saved before the launch)', 'Home', 'Bible sample card: Titus tile', 'Mode switch: مراجعة (Check)', 'Align card', 'Scroll the marking row into view'],
+    shows: 'align-workspace with the interface in Arabic, scrolled to the marking row: the chrome and the marking row run right to left ("→ السابق", Mark valid, "التالي ←", with the arrows turned); the ULT, the Greek and the draft stay left to right',
+    run: async (app) => {
+      await app.home({ locale: 'ar' }); await app.openTitus(); await app.openCheck(); await app.openAlign();
+      await app.page.getByTestId('align-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'align-workspace-620', scenario: 'sample', view: 'check', modal: null, markingRow: 'align', viewport: { width: 620, height: 800 },
+    steps: ['Window 620 px wide', 'Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Align card', 'Scroll the marking row into view'],
+    shows: 'align-workspace in a window 620 px wide, scrolled to the marking row, which wraps onto two lines ("Next →" alone on the second); at this width the project button in the header lies over the mode switch',
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.openCheck(); await app.openAlign();
+      await app.page.getByTestId('align-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'ar-align-workspace-620', scenario: 'sample', view: 'check', modal: null, markingRow: 'align', locale: 'ar', viewport: { width: 620, height: 800 },
+    steps: ['Window 620 px wide', 'App language: العربية (saved before the launch)', 'Home', 'Bible sample card: Titus tile', 'Mode switch: مراجعة (Check)', 'Align card', 'Scroll the marking row into view'],
+    shows: 'ar-align-workspace-row in a window 620 px wide: the marking row wraps onto two lines, right to left ("التالي ←" alone on the second)',
+    run: async (app) => {
+      await app.home({ locale: 'ar' }); await app.openTitus(); await app.openCheck(); await app.openAlign();
+      await app.page.getByTestId('align-next').scrollIntoViewIfNeeded();
     },
   },
   {
@@ -576,7 +612,7 @@ const SCREEN_LIST = [
     run: async (app) => { await app.home(); await app.openTitus(); await app.openCheck(); },
   },
   {
-    name: 'en-check-tw-session', scenario: 'en-pins', view: 'check', modal: null,
+    name: 'en-check-tw-session', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationWords',
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Translation Words card: Start checking'],
     shows: 'Translation Words session (sorted By word), item "Paul" 1:1: rail, "Learn more: Paul, Saul", compare card (Greek, ULT highlight, the es-419 draft), the marking row ("← Previous", Mark valid, Invalid, To do, "Next →"), Bookmark / Add a comment; the header shows only "Item 1 of 182"',
     run: async (app) => { await app.home(); await app.openTitus(); await app.openCheck(); await app.openTool('translationWords'); },
@@ -640,23 +676,68 @@ const SCREEN_LIST = [
     },
   },
   {
-    name: 'en-obs-check-tn-session', scenario: 'en-pins', view: 'check', modal: null,
+    name: 'en-obs-check-tn-session', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationNotes',
     steps: ['Home', 'OBS sample card: story tile "1 · La Creación"', 'Mode switch: Check', 'Translation Notes card: Start checking'],
     shows: 'OBS Translation Notes session, story 1 (sorted By frame), item "The Creation" 1:0: the title note, the English gateway title highlighted, the Spanish title, the marking row with "← Previous" and "Next →"',
     run: async (app) => { await app.home(); await app.openStory1(); await app.openCheck(); await app.openTool('translationNotes'); },
   },
   {
-    name: 'ar-check-tw-session', scenario: 'en-pins', view: 'check', modal: null, locale: 'ar',
+    name: 'ar-check-tw-session', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationWords', locale: 'ar',
     steps: ['App language: العربية (saved before the launch)', 'Home', 'Bible sample card: Titus tile', 'Mode switch: مراجعة (Check)', 'Translation Words card: Start checking'],
     shows: 'en-check-tw-session with the interface in Arabic: the whole chrome right to left, and the marking row "→ السابق", the triage buttons, "التالي ←", with the arrows turned for right to left',
     run: async (app) => { await app.home({ locale: 'ar' }); await app.openTitus(); await app.openCheck(); await app.openTool('translationWords'); },
   },
   {
-    name: 'en-check-tw-session-620', scenario: 'en-pins', view: 'check', modal: null, viewport: { width: 620, height: 800 },
+    name: 'en-check-tw-session-620', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationWords', viewport: { width: 620, height: 800 },
     steps: ['Window 620 px wide', 'Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Translation Words card: Start checking', 'Scroll the marking row into view'],
     shows: 'en-check-tw-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines; at this width the project button in the header lies over the mode switch',
     run: async (app) => {
       await app.home(); await app.openTitus(); await app.openCheck(); await app.openTool('translationWords');
+      await app.page.getByTestId('check-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'ar-check-tw-session-620', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationWords', locale: 'ar', viewport: { width: 620, height: 800 },
+    steps: ['Window 620 px wide', 'App language: العربية (saved before the launch)', 'Home', 'Bible sample card: Titus tile', 'Mode switch: مراجعة (Check)', 'Translation Words card: Start checking', 'Scroll the marking row into view'],
+    shows: 'ar-check-tw-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines, right to left',
+    run: async (app) => {
+      await app.home({ locale: 'ar' }); await app.openTitus(); await app.openCheck(); await app.openTool('translationWords');
+      await app.page.getByTestId('check-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'en-check-tn-session-row', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationNotes',
+    steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Translation Notes card: Start checking', 'Scroll the marking row into view'],
+    shows: 'en-check-tn-session scrolled to the marking row: the end of WHAT TO CHECK, "Learn more: Abstract Nouns", the compare card, then "← Previous", Mark valid, Invalid, To do, "Next →", and Bookmark / Add a comment',
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.openCheck(); await app.openTool('translationNotes');
+      await app.page.getByTestId('check-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'ar-check-tn-session-row', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationNotes', locale: 'ar',
+    steps: ['App language: العربية (saved before the launch)', 'Home', 'Bible sample card: Titus tile', 'Mode switch: مراجعة (Check)', 'Translation Notes card: Start checking', 'Scroll the marking row into view'],
+    shows: 'en-check-tn-session-row with the interface in Arabic: the chrome and the marking row run right to left ("→ السابق", the triage buttons, "التالي ←", with the arrows turned)',
+    run: async (app) => {
+      await app.home({ locale: 'ar' }); await app.openTitus(); await app.openCheck(); await app.openTool('translationNotes');
+      await app.page.getByTestId('check-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'en-check-tn-session-620', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationNotes', viewport: { width: 620, height: 800 },
+    steps: ['Window 620 px wide', 'Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Translation Notes card: Start checking', 'Scroll the marking row into view'],
+    shows: 'en-check-tn-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines; at this width the project button in the header lies over the mode switch',
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.openCheck(); await app.openTool('translationNotes');
+      await app.page.getByTestId('check-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'ar-check-tn-session-620', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationNotes', locale: 'ar', viewport: { width: 620, height: 800 },
+    steps: ['Window 620 px wide', 'App language: العربية (saved before the launch)', 'Home', 'Bible sample card: Titus tile', 'Mode switch: مراجعة (Check)', 'Translation Notes card: Start checking', 'Scroll the marking row into view'],
+    shows: 'ar-check-tn-session-row in a window 620 px wide: the marking row wraps onto three lines, right to left',
+    run: async (app) => {
+      await app.home({ locale: 'ar' }); await app.openTitus(); await app.openCheck(); await app.openTool('translationNotes');
       await app.page.getByTestId('check-next').scrollIntoViewIfNeeded();
     },
   },
@@ -761,6 +842,7 @@ async function captureScenario(browser, scenario, screens, tc4) {
       route: { url: '/clients/uw-tc4/', view: screen.view, modal: screen.modal },
       ...(screen.locale ? { locale: screen.locale } : {}),
       ...(screen.viewport ? { viewport: screen.viewport } : {}),
+      ...(screen.markingRow ? { markingRow: screen.markingRow } : {}),
       ...(screen.rebuildDiffers ? { rebuildDiffers: screen.rebuildDiffers } : {}),
       steps: screen.steps,
       shows: screen.shows,

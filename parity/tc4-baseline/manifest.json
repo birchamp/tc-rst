@@ -109,11 +109,11 @@
   ],
   "refusedExternalRequests": [],
   "totals": {
-    "screens": 50,
-    "complete": 38,
+    "screens": 59,
+    "complete": 47,
     "incomplete": 12,
     "failed": 0,
-    "bytes": 6651377
+    "bytes": 7814948
   },
   "screens": [
     {
@@ -256,6 +256,108 @@
       "status": "complete",
       "absentReads": [],
       "bytes": 156501
+    },
+    {
+      "name": "align-workspace-row",
+      "file": "screens/align-workspace-row.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "markingRow": "align",
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Align card",
+        "Scroll the marking row into view"
+      ],
+      "shows": "align-workspace scrolled to the marking row: the word cards, then \"← Previous\", Mark valid and \"Next →\" under the card",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 160063
+    },
+    {
+      "name": "ar-align-workspace-row",
+      "file": "screens/ar-align-workspace-row.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "locale": "ar",
+      "markingRow": "align",
+      "steps": [
+        "App language: العربية (saved before the launch)",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: مراجعة (Check)",
+        "Align card",
+        "Scroll the marking row into view"
+      ],
+      "shows": "align-workspace with the interface in Arabic, scrolled to the marking row: the chrome and the marking row run right to left (\"→ السابق\", Mark valid, \"التالي ←\", with the arrows turned); the ULT, the Greek and the draft stay left to right",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 157400
+    },
+    {
+      "name": "align-workspace-620",
+      "file": "screens/align-workspace-620.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "viewport": {
+        "width": 620,
+        "height": 800
+      },
+      "markingRow": "align",
+      "steps": [
+        "Window 620 px wide",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Align card",
+        "Scroll the marking row into view"
+      ],
+      "shows": "align-workspace in a window 620 px wide, scrolled to the marking row, which wraps onto two lines (\"Next →\" alone on the second); at this width the project button in the header lies over the mode switch",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 92126
+    },
+    {
+      "name": "ar-align-workspace-620",
+      "file": "screens/ar-align-workspace-620.png",
+      "scenario": "sample",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "locale": "ar",
+      "viewport": {
+        "width": 620,
+        "height": 800
+      },
+      "markingRow": "align",
+      "steps": [
+        "Window 620 px wide",
+        "App language: العربية (saved before the launch)",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: مراجعة (Check)",
+        "Align card",
+        "Scroll the marking row into view"
+      ],
+      "shows": "ar-align-workspace-row in a window 620 px wide: the marking row wraps onto two lines, right to left (\"التالي ←\" alone on the second)",
+      "status": "complete",
+      "absentReads": [],
+      "bytes": 87143
     },
     {
       "name": "project-settings",
@@ -880,6 +982,7 @@
         "view": "check",
         "modal": null
       },
+      "markingRow": "translationWords",
       "steps": [
         "Home",
         "Bible sample card: Titus tile",
@@ -1036,6 +1139,7 @@
         "view": "check",
         "modal": null
       },
+      "markingRow": "translationNotes",
       "steps": [
         "Home",
         "OBS sample card: story tile \"1 · La Creación\"",
@@ -1061,6 +1165,7 @@
         "modal": null
       },
       "locale": "ar",
+      "markingRow": "translationWords",
       "steps": [
         "App language: العربية (saved before the launch)",
         "Home",
@@ -1088,6 +1193,7 @@
         "width": 620,
         "height": 800
       },
+      "markingRow": "translationWords",
       "steps": [
         "Window 620 px wide",
         "Home",
@@ -1102,6 +1208,147 @@
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
       "bytes": 98108
+    },
+    {
+      "name": "ar-check-tw-session-620",
+      "file": "screens/ar-check-tw-session-620.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "locale": "ar",
+      "viewport": {
+        "width": 620,
+        "height": 800
+      },
+      "markingRow": "translationWords",
+      "steps": [
+        "Window 620 px wide",
+        "App language: العربية (saved before the launch)",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: مراجعة (Check)",
+        "Translation Words card: Start checking",
+        "Scroll the marking row into view"
+      ],
+      "shows": "ar-check-tw-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines, right to left",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 95926
+    },
+    {
+      "name": "en-check-tn-session-row",
+      "file": "screens/en-check-tn-session-row.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "markingRow": "translationNotes",
+      "steps": [
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Translation Notes card: Start checking",
+        "Scroll the marking row into view"
+      ],
+      "shows": "en-check-tn-session scrolled to the marking row: the end of WHAT TO CHECK, \"Learn more: Abstract Nouns\", the compare card, then \"← Previous\", Mark valid, Invalid, To do, \"Next →\", and Bookmark / Add a comment",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 176048
+    },
+    {
+      "name": "ar-check-tn-session-row",
+      "file": "screens/ar-check-tn-session-row.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "locale": "ar",
+      "markingRow": "translationNotes",
+      "steps": [
+        "App language: العربية (saved before the launch)",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: مراجعة (Check)",
+        "Translation Notes card: Start checking",
+        "Scroll the marking row into view"
+      ],
+      "shows": "en-check-tn-session-row with the interface in Arabic: the chrome and the marking row run right to left (\"→ السابق\", the triage buttons, \"التالي ←\", with the arrows turned)",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 174574
+    },
+    {
+      "name": "en-check-tn-session-620",
+      "file": "screens/en-check-tn-session-620.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "viewport": {
+        "width": 620,
+        "height": 800
+      },
+      "markingRow": "translationNotes",
+      "steps": [
+        "Window 620 px wide",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: Check",
+        "Translation Notes card: Start checking",
+        "Scroll the marking row into view"
+      ],
+      "shows": "en-check-tn-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines; at this width the project button in the header lies over the mode switch",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 110704
+    },
+    {
+      "name": "ar-check-tn-session-620",
+      "file": "screens/ar-check-tn-session-620.png",
+      "scenario": "en-pins",
+      "route": {
+        "url": "/clients/uw-tc4/",
+        "view": "check",
+        "modal": null
+      },
+      "locale": "ar",
+      "viewport": {
+        "width": 620,
+        "height": 800
+      },
+      "markingRow": "translationNotes",
+      "steps": [
+        "Window 620 px wide",
+        "App language: العربية (saved before the launch)",
+        "Home",
+        "Bible sample card: Titus tile",
+        "Mode switch: مراجعة (Check)",
+        "Translation Notes card: Start checking",
+        "Scroll the marking row into view"
+      ],
+      "shows": "ar-check-tn-session-row in a window 620 px wide: the marking row wraps onto three lines, right to left",
+      "status": "complete",
+      "absentReads": [
+        "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
+      ],
+      "bytes": 109587
     },
     {
       "name": "shared-home",

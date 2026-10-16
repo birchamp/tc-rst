@@ -17,16 +17,17 @@ PNG per screen.
   in `history/d494a9d/`.
 - Help pages: tc-website `cdfdf9b7d534e7574beb3fcf44678973cdc5f9d7`, the commit that tC4 pins in
   `scripts/fetch-help.mjs`. The pin is the same at both commits.
-- Output: 50 screenshots at device scale 1, in `screens/`, 6,651,377 bytes (6.3 MiB) in total.
-  Each is 1280x800, except `en-check-tw-session-620` at 620x800. 38 are complete and 12 are
-  incomplete. `manifest.json` lists each screenshot with the steps that reach it. The 42
-  screens of the first baseline were captured again; 8 screens were added for `d310bf3`
-  ("Screens added for d310bf3").
+- Output: 59 screenshots at device scale 1, in `screens/`, 7,814,948 bytes (7.5 MiB) in total.
+  Each is 1280x800, except the six screens whose name ends in `-620`, which are 620x800. 47 are
+  complete and 12 are incomplete. `manifest.json` lists each screenshot with the steps that
+  reach it. The 42 screens of the first baseline were captured again; 17 screens were added for
+  `d310bf3` ("Screens added for d310bf3").
 - Browser: Chromium 141.0.7390.37, headless, through Playwright 1.56.1. This Playwright version
   matches the Chromium build 1194 in `/opt/pw-browsers`.
-- Two consecutive full runs at `d310bf3` gave byte-identical PNGs, first for the 42 screens and
-  then for all 50. A control run at `d494a9d` on the same machine gave the committed `d494a9d`
-  PNGs byte for byte, so each change listed below comes from tC4, not from the machine.
+- Two consecutive full runs at `d310bf3` gave byte-identical PNGs, first for the 42 screens,
+  then for 50, and then for all 59. A control run at `d494a9d` on the same machine gave the
+  committed `d494a9d` PNGs byte for byte, so each change listed below comes from tC4, not from
+  the machine.
 
 ## Rerun
 
@@ -51,8 +52,8 @@ npm run capture      # build the client if needed, rebuild the state, capture ev
    `/api/...` and the built client at `/clients/uw-tc4/`.
 4. It drives each screen, writes `screens/<name>.png`, and writes `manifest.json`.
 
-A full run took about 90 seconds after the first build at `d494a9d`. At `d310bf3`, with 50
-screens on 4 CPUs shared with other work, it took about 2.5 minutes.
+A full run took about 90 seconds after the first build at `d494a9d`. At `d310bf3`, with 59
+screens on 4 CPUs shared with other work, it took about 4 minutes.
 
 Options:
 
@@ -209,8 +210,8 @@ remembered. The pointer rests on an empty part of the title bar for every shot.
 tC4 has no router: the URL is always `/clients/uw-tc4/`, and a screen is the app state that the
 steps reach. "View" is tC4's `s.view` (`read` is Understand, `draft` is Translate, `publish` is
 Community Checking), plus the dialog or panel over it. Every path starts at Home. The interface
-is in English, except for `ar-check-tw-session`, where Arabic is saved as the app language
-before the launch. "Status" is
+is in English, except for the screens whose name starts with `ar-`, where Arabic is saved as the
+app language before the launch. "Status" is
 `complete` when the screen shows what a full install shows. It is `incomplete` when part of the
 screen shows a designed absence state because data is missing; the next section says why, and
 `manifest.json` has the same text (`incomplete`) and the reads that failed (`absentReads`).
@@ -224,6 +225,10 @@ screen shows a designed absence state because data is missing; the next section 
 | `check-tn-session` | sample | check | Bible sample card: Titus tile → Mode switch: Check → Translation Notes card: Continue | Translation Notes session on the es-419 notes, resumed at item 2 ("knowledge", 1:1) after the decided item 1: check rail (filters, sort, list), the quote, WHAT TO CHECK with Show more, the compare card (Greek, ULT highlight, the es-419 draft), the marking row ("← Previous", the triage buttons, "Next →") below the fold; the header shows only "Item 2 of 112" | incomplete |
 | `align-workspace` | sample | check | Bible sample card: Titus tile → Mode switch: Check → Align card | Align, Titus 1:1, Gateway · ULT mode: the align rail (46 verses, 5 drafted), the ULT verse, Suggest links (off), the word bank of the es-419 draft in verse order, with an occurrence number on each repeated word (6 of 27 placed), and the ULT word cards with their Greek and their target words in verse order, the sample's six links placed | complete |
 | `align-original` | sample | check | Bible sample card: Titus tile → Mode switch: Check → Align card → Align mode: Original · Greek | Align, Titus 1:1, Original · Greek mode: the Greek verse and one word card per Greek word, the six placed links, an occurrence number on each repeated word (Θεοῦ¹, Dios¹), the word bank in verse order, and the top of the marking row ("← Previous", Mark valid, "Next →") at the bottom edge | complete |
+| `align-workspace-row` | sample | check | Bible sample card: Titus tile → Mode switch: Check → Align card → Scroll the marking row into view | align-workspace scrolled to the marking row: the word cards, then "← Previous", Mark valid and "Next →" under the card | complete |
+| `ar-align-workspace-row` | sample | check | App language: العربية (saved before the launch) → Bible sample card: Titus tile → Mode switch: مراجعة (Check) → Align card → Scroll the marking row into view | align-workspace with the interface in Arabic, scrolled to the marking row: the chrome and the marking row run right to left ("→ السابق", Mark valid, "التالي ←", with the arrows turned); the ULT, the Greek and the draft stay left to right | complete |
+| `align-workspace-620` | sample | check | Window 620 px wide → Bible sample card: Titus tile → Mode switch: Check → Align card → Scroll the marking row into view | align-workspace in a window 620 px wide, scrolled to the marking row, which wraps onto two lines ("Next →" alone on the second); at this width the project button in the header lies over the mode switch | complete |
+| `ar-align-workspace-620` | sample | check | Window 620 px wide → App language: العربية (saved before the launch) → Bible sample card: Titus tile → Mode switch: مراجعة (Check) → Align card → Scroll the marking row into view | ar-align-workspace-row in a window 620 px wide: the marking row wraps onto two lines, right to left ("التالي ←" alone on the second) | complete |
 | `project-settings` | sample | home + settings | Bible sample card: Settings | Project settings dialog: read-only name/language/code, text direction chips, checking language card (English package offered), script font | complete |
 | `add-project` | sample | home + addProject | + Add a project | Add a project chooser with four cards: New Bible, New Open Bible Stories, Import a project, Open a project from Door43 | complete |
 | `new-bible` | sample | home + newProject | + Add a project → New Bible | New Bible dialog, empty: name, language name, code, text direction, checking language (English, Recommended), script font, Versification disclosure | complete |
@@ -264,6 +269,11 @@ screen shows a designed absence state because data is missing; the next section 
 | `en-obs-check-tn-session` | en-pins | check | OBS sample card: story tile "1 · La Creación" → Mode switch: Check → Translation Notes card: Start checking | OBS Translation Notes session, story 1 (sorted By frame), item "The Creation" 1:0: the title note, the English gateway title highlighted, the Spanish title, the marking row with "← Previous" and "Next →" | complete |
 | `ar-check-tw-session` | en-pins | check | App language: العربية (saved before the launch) → Bible sample card: Titus tile → Mode switch: مراجعة (Check) → Translation Words card: Start checking | en-check-tw-session with the interface in Arabic: the whole chrome right to left, and the marking row "→ السابق", the triage buttons, "التالي ←", with the arrows turned for right to left | complete |
 | `en-check-tw-session-620` | en-pins | check | Window 620 px wide → Bible sample card: Titus tile → Mode switch: Check → Translation Words card: Start checking → Scroll the marking row into view | en-check-tw-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines; at this width the project button in the header lies over the mode switch | complete |
+| `ar-check-tw-session-620` | en-pins | check | Window 620 px wide → App language: العربية (saved before the launch) → Bible sample card: Titus tile → Mode switch: مراجعة (Check) → Translation Words card: Start checking → Scroll the marking row into view | ar-check-tw-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines, right to left | complete |
+| `en-check-tn-session-row` | en-pins | check | Bible sample card: Titus tile → Mode switch: Check → Translation Notes card: Start checking → Scroll the marking row into view | en-check-tn-session scrolled to the marking row: the end of WHAT TO CHECK, "Learn more: Abstract Nouns", the compare card, then "← Previous", Mark valid, Invalid, To do, "Next →", and Bookmark / Add a comment | complete |
+| `ar-check-tn-session-row` | en-pins | check | App language: العربية (saved before the launch) → Bible sample card: Titus tile → Mode switch: مراجعة (Check) → Translation Notes card: Start checking → Scroll the marking row into view | en-check-tn-session-row with the interface in Arabic: the chrome and the marking row run right to left ("→ السابق", the triage buttons, "التالي ←", with the arrows turned) | complete |
+| `en-check-tn-session-620` | en-pins | check | Window 620 px wide → Bible sample card: Titus tile → Mode switch: Check → Translation Notes card: Start checking → Scroll the marking row into view | en-check-tn-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines; at this width the project button in the header lies over the mode switch | complete |
+| `ar-check-tn-session-620` | en-pins | check | Window 620 px wide → App language: العربية (saved before the launch) → Bible sample card: Titus tile → Mode switch: مراجعة (Check) → Translation Notes card: Start checking → Scroll the marking row into view | ar-check-tn-session-row in a window 620 px wide: the marking row wraps onto three lines, right to left | complete |
 | `shared-home` | shared | home | Launch tC4 | Home with both samples shared on Door43: "On Door43" beside each name; the Bible card reads "Sync with Door43", the OBS card "Upload changes" (tC4 4.0 syncs Bible projects only) | complete |
 | `sync-internet-consent` | shared | home + netAsk | Bible sample card: Sync with Door43 | "Turn on the internet?" asked for a sync (kind `sync`): get the changes of your teammates and send the changes of this project | complete |
 | `sync-failed` | shared | home | Bible sample card: Sync with Door43 → Turn on internet → Sign in as facilitator-zq | Home with the sync result toast of a sync that did not complete: red dot, "The sync did not complete." and the sentence of code sync.clone-failed, the dismiss button | incomplete |
@@ -360,7 +370,7 @@ Two changes do not show on these screens:
 
 ## Screens added for d310bf3
 
-`docs/TC4-DELTA-2026-10-16.md` §3.14 item 3 asks for new screens. These 8 were added:
+`docs/TC4-DELTA-2026-10-16.md` §3.14 item 3 asks for new screens. These 17 were added:
 
 | Screen | What it shows | tC4 change |
 |---|---|---|
@@ -369,6 +379,15 @@ Two changes do not show on these screens:
 | `open-door43-refused` | The dialog's refusal callout, for a clone that failed. | #692 |
 | `ar-check-tw-session` | The Translation Words session with the interface in Arabic. The marking row runs right to left, and its arrows turn. | #745, #739 |
 | `en-check-tw-session-620` | The same session in a window 620 px wide. The marking row wraps. | #745 |
+| `ar-check-tw-session-620` | The Arabic session in a window 620 px wide. The marking row wraps, right to left. | #745, #739 |
+| `en-check-tn-session-row` | The Translation Notes session, scrolled to its marking row, which is below the fold at 800 px. | #745 |
+| `ar-check-tn-session-row` | The same in Arabic. | #745, #739 |
+| `en-check-tn-session-620` | The Translation Notes session in a window 620 px wide, at its marking row. The row wraps. | #745 |
+| `ar-check-tn-session-620` | The same in Arabic. | #745, #739 |
+| `align-workspace-row` | Align, scrolled to its marking row, which is below the fold at 800 px. | #745 |
+| `ar-align-workspace-row` | The same in Arabic. | #745, #739 |
+| `align-workspace-620` | Align in a window 620 px wide, at its marking row. The row wraps. | #745 |
+| `ar-align-workspace-620` | The same in Arabic. | #745, #739 |
 | `shared-home` | Home with shared projects: the Bible card reads "Sync with Door43", the OBS card "Upload changes". | #690 |
 | `sync-internet-consent` | The internet question of a sync (kind `sync`). | #690 |
 | `sync-failed` | The sync result toast of a sync that did not complete. | #690, #691 |
@@ -376,17 +395,16 @@ Two changes do not show on these screens:
 Already in the 42 screens: Add a project with four cards (`add-project`) and the sign-in step
 with the name notice (`share-signin`).
 
-Not captured here:
+The marking row of Translation Words, Translation Notes and Align is now captured in English
+and in Arabic, at 1280 px and at 620 px. Each such screen has `markingRow` in `manifest.json`.
+The Translation Notes and Align rows are below the fold at 800 px, so their screens scroll the
+row into view. tC4's own images of these rows, cropped to the row, are in its
+`docs/evidence/navigation-pills-2026-10-15/` at `d310bf3`.
 
-- The toast of a sync that completes: "Synced with Door43", the three counts, "Changes from",
-  Review and Download. The mock has no git, so no sync completes. Making one complete needs a
-  git-backed fake Door43 with teammates' journals. tC4 has no committed image of this toast;
-  its `e2e/sync-button.spec.ts` writes screenshots only as test output on its rig.
-- The marking row of Align and of Translation Notes in Arabic and at 620 px. The marking row of
-  Translation Notes is below the fold at 800 px. tC4's own images of these rows are in its
-  `docs/evidence/navigation-pills-2026-10-15/` at `d310bf3`: `align-ar.png`,
-  `align-ar-narrow.png`, `translationNotes-ar.png`, `translationNotes-ar-narrow.png` and their
-  `en` versions.
+Not captured here: the toast of a sync that completes ("Synced with Door43", the three counts,
+"Changes from", Review and Download). The mock has no git, so no sync completes. Making one
+complete needs a git-backed fake Door43 with teammates' journals. tC4 has no committed image of
+this toast; its `e2e/sync-button.spec.ts` writes screenshots only as test output on its rig.
 
 ## Rendering determinism
 
