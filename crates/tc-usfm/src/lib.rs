@@ -58,7 +58,7 @@ pub enum Error {
     #[error("a \\zaln-s is not closed before the end of the verse")]
     UnclosedMilestone,
     #[error(
-        "a \\zaln-s needs x-content, and x-occurrence from 1 to x-occurrences, with no attribute twice: {0}"
+        "a \\zaln-s needs x-content, and an x-occurrence and x-occurrences of at least 1, with no attribute twice: {0}"
     )]
     InvalidSourceWord(String),
     #[error(

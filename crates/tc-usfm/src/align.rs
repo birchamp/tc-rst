@@ -71,6 +71,13 @@
 //! exactly one word of the plain verse (`\w a-b\w*`, or two `\w` with nothing between
 //! them) cannot be placed and fails with [`Error::NotOneWord`].
 //!
+//! A `\zaln-s` is read as written. One whose `x-occurrence` is greater than its
+//! `x-occurrences` names an occurrence that no original-language verse holds: en_ult
+//! MIC 5:7 aligns occurrence 2 of a word that UHB 3.0.0 MIC 5:7 holds once. tC4 reads it
+//! as written (word-aligner marks it `unmatched` when it meets the original verse) and its
+//! export writes it back, so here it stays in its group, [`weave`] writes it back, and
+//! [`AlignedVerse::sources_beyond_count`] reports it for the caller to place or drop.
+//!
 //! # How exact the round trip is
 //!
 //! - `weave(&parse_aligned(x)?.plain, &parse_aligned(x)?.groups) == x` byte for byte for
@@ -155,16 +162,20 @@ pub struct AlignedVerse {
     /// count in `plain`, as (written, counted), in verse order. Empty for text that tC4 or
     /// [`weave`] wrote and nobody edited since.
     pub renumbered: Vec<(TargetWord, TargetWord)>,
+    /// The source word of each `\zaln-s` whose `x-occurrence` is greater than its
+    /// `x-occurrences`, in verse order. It is kept in its groups as written, but no
+    /// original-language verse holds it. See the module documentation.
+    pub sources_beyond_count: Vec<SourceWord>,
 }
 
 /// Take an aligned verse body apart into plain USFM, its words and its groups.
 ///
 /// Fails rather than drop or misread anything when the alignment markup is malformed:
-/// an unbalanced milestone, a `\zaln-s` without `x-content`, `x-occurrence` or
-/// `x-occurrences` or with an attribute twice, a target `\w` whose content is not plain
-/// text or whose attributes are not exactly `x-occurrence` and `x-occurrences`, broken
-/// `\w` or `\zaln` markup, alignment in a heading or sidebar, or an aligned word that is
-/// not one word of the plain verse. See the module documentation.
+/// an unbalanced milestone, a `\zaln-s` without `x-content`, without an `x-occurrence` and
+/// `x-occurrences` of at least 1, or with an attribute twice, a target `\w` whose content
+/// is not plain text or whose attributes are not exactly `x-occurrence` and
+/// `x-occurrences`, broken `\w` or `\zaln` markup, alignment in a heading or sidebar, or an
+/// aligned word that is not one word of the plain verse. See the module documentation.
 pub fn parse_aligned(body: &str) -> Result<AlignedVerse, Error> {
     let doc = Document::parse(body);
     let mut strip = Strip::default();
@@ -195,7 +206,8 @@ pub fn target_words(plain: &str) -> Result<Vec<TargetWord>, Error> {
 /// same occurrence and occurrence count, and no word may belong to two groups that have
 /// sources. A group without sources aligns nothing, so its words stay bare; a group
 /// without targets writes nothing. Each source word that is written needs an occurrence
-/// from 1 to its count and attributes that read back the same.
+/// and a count of at least 1 and attributes that read back the same. An occurrence
+/// greater than the count is written as it stands, as [`parse_aligned`] reads it.
 ///
 /// A verse with any `\w` or `\zaln` markup outside notes fails with
 /// [`Error::WordMarkup`]: already aligned text, and also glossary or Strong's words such
@@ -281,7 +293,7 @@ const KNOWN_KEYS: [&str; 6] = [
 /// The `\zaln-s` for `source`. It refuses what [`parse_aligned`] would refuse or read
 /// differently, so that every milestone weave writes reads back as the same source word.
 fn milestone_start(source: &SourceWord) -> Result<String, Error> {
-    if source.occurrence == 0 || source.occurrence > source.occurrences {
+    if source.occurrence == 0 || source.occurrences == 0 {
         return Err(Error::InvalidOccurrence {
             content: source.content.clone(),
             occurrence: source.occurrence,
@@ -560,6 +572,7 @@ struct Strip {
     groups: Vec<(Vec<SourceWord>, Vec<usize>)>,
     /// The milestone ids above the last word, and the group that word went into.
     current: Option<(Vec<usize>, usize)>,
+    sources_beyond_count: Vec<SourceWord>,
 }
 
 impl Strip {
@@ -586,6 +599,9 @@ impl Strip {
                     if m.name() == "zaln-s" {
                         self.item_start();
                         let source = source_word(m)?;
+                        if source.occurrence > source.occurrences {
+                            self.sources_beyond_count.push(source.clone());
+                        }
                         self.open.push((self.next_id, source, false));
                         self.next_id += 1;
                     } else {
@@ -720,6 +736,7 @@ impl Strip {
             words,
             groups,
             renumbered,
+            sources_beyond_count: self.sources_beyond_count,
         })
     }
 }
@@ -792,7 +809,8 @@ fn source_word(m: &Milestone<'_>) -> Result<SourceWord, Error> {
         }
     }
     word.content = content.ok_or_else(bad)?;
-    if word.occurrence == 0 || word.occurrence > word.occurrences {
+    // 0 stands for a missing number: `count` reads no 0.
+    if word.occurrence == 0 || word.occurrences == 0 {
         return Err(bad());
     }
     Ok(word)
@@ -980,10 +998,20 @@ mod tests {
             parse_aligned("\\zaln-s |x-content=\"α\" x-occurrence=\"1\" x-occurrences=\"1\"\\*"),
             Err(Error::UnclosedMilestone)
         );
-        assert!(matches!(
-            parse_aligned("\\zaln-s |x-occurrence=\"1\" x-occurrences=\"1\"\\*\\zaln-e\\*"),
-            Err(Error::InvalidSourceWord(_))
-        ));
+        for milestone in [
+            "\\zaln-s |x-occurrence=\"1\" x-occurrences=\"1\"\\*",
+            "\\zaln-s |x-occurrence=\"0\" x-occurrences=\"1\" x-content=\"α\"\\*",
+            "\\zaln-s |x-occurrence=\"1\" x-content=\"α\"\\*",
+            "\\zaln-s |x-occurrences=\"1\" x-content=\"α\"\\*",
+        ] {
+            assert!(
+                matches!(
+                    parse_aligned(&format!("{milestone}\\zaln-e\\*")),
+                    Err(Error::InvalidSourceWord(_))
+                ),
+                "{milestone}"
+            );
+        }
         assert!(matches!(
             parse_aligned("\\w a|x-occurrence=\"2\" x-occurrences=\"1\"\\w*"),
             Err(Error::InvalidAlignedWord(_))
@@ -1120,7 +1148,7 @@ mod tests {
             }],
             targets: vec![target("a", 1, 1)],
         };
-        for (occurrence, occurrences) in [(0, 0), (0, 1), (2, 1)] {
+        for (occurrence, occurrences) in [(0, 0), (0, 1), (1, 0)] {
             assert_eq!(
                 weave("a", &[with(occurrence, occurrences, vec![])]),
                 Err(Error::InvalidOccurrence {
@@ -1161,9 +1189,46 @@ mod tests {
                 value: "λόγος".to_owned()
             })
         );
-        let fine = with(1, 2, vec![("x-tw", "rc://*/tw/dict/bible/kt/god")]);
-        let woven = weave("a", std::slice::from_ref(&fine)).unwrap();
-        assert_eq!(parse_aligned(&woven).unwrap().groups, vec![fine]);
+        for fine in [
+            with(1, 2, vec![("x-tw", "rc://*/tw/dict/bible/kt/god")]),
+            with(2, 1, vec![]),
+        ] {
+            let woven = weave("a", std::slice::from_ref(&fine)).unwrap();
+            assert_eq!(parse_aligned(&woven).unwrap().groups, vec![fine]);
+        }
+    }
+
+    /// en_ult MIC 5:7 aligns occurrence 2 of a source word its milestone counts once. tC4
+    /// reads and exports it as written, so it is read, reported and woven back as written.
+    #[test]
+    fn a_source_word_beyond_its_count_is_read_as_written_and_reported() {
+        let beyond = "\\zaln-s |x-strong=\"G0001\" x-occurrence=\"2\" x-occurrences=\"1\" x-content=\"α\"\\*";
+        let verse = format!(
+            "{ZALN}{A}\\zaln-e\\*\n{beyond}\\w b|x-occurrence=\"1\" x-occurrences=\"1\"\\w*\\zaln-e\\*."
+        );
+        let parsed = parse_aligned(&verse).unwrap();
+        let counted_once_twice = SourceWord {
+            occurrence: 2,
+            ..source("α", 1)
+        };
+        assert_eq!(
+            parsed.groups,
+            vec![
+                one(&["α"], &[("a", 1, 1)]),
+                AlignmentGroup {
+                    sources: vec![counted_once_twice.clone()],
+                    targets: vec![target("b", 1, 1)],
+                },
+            ]
+        );
+        assert_eq!(parsed.sources_beyond_count, vec![counted_once_twice]);
+        assert_eq!(weave(&parsed.plain, &parsed.groups).unwrap(), verse);
+        assert!(
+            parse_aligned(&format!("{ZALN}{A}\\zaln-e\\*"))
+                .unwrap()
+                .sources_beyond_count
+                .is_empty()
+        );
     }
 
     #[test]

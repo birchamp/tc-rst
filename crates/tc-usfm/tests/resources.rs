@@ -10,8 +10,7 @@
 //!   export does not write it back either, which `fixtures/usfm/export-vectors.json`
 //!   records for every verse (made with tC4's code by `tools/gen-export-vectors.mjs`).
 //!   Such a verse keeps its text, words and links; it is refused only where tC4's export
-//!   cannot place its alignment and writes it without, or where a `\zaln-s` names an
-//!   occurrence of a source word beyond its own count, which no source verse holds.
+//!   cannot write it back with its text and alignment either.
 //! - As [`Book`] cuts it, by verse unit bodies. A body is refused only where its verse is
 //!   refused in tC4's cut, for the same reason, and otherwise keeps its text, words and
 //!   links.
@@ -334,20 +333,6 @@ fn reason(e: &Error) -> &'static str {
     }
 }
 
-/// A `\zaln-s` whose `x-occurrence` exceeds its `x-occurrences`: it names a source word no
-/// source verse holds. ULT MIC 5:7 aligns occurrence 2 of 1 of a word that UHB 3.0.0
-/// MIC 5:7 holds once, so tC4 cannot place it on the original either.
-fn names_a_missing_occurrence(e: &Error) -> bool {
-    let Error::InvalidSourceWord(milestone) = e else {
-        return false;
-    };
-    let number = |key: &str| -> Option<u32> {
-        let at = milestone.find(&format!(" {key}=\""))? + key.len() + 3;
-        milestone[at..].split('"').next()?.parse().ok()
-    };
-    matches!((number("x-occurrence"), number("x-occurrences")), (Some(n), Some(m)) if n > m)
-}
-
 /// The outcomes of every verse of some books, in one cut.
 #[derive(Debug, Default, PartialEq, Eq)]
 struct Census {
@@ -448,7 +433,7 @@ fn census(books: &[(String, String)]) -> (Census, Census) {
             match &outcome {
                 Ok(Outcome::Same | Outcome::Kept) | Err(_) => {}
                 Ok(Outcome::Refused(e)) => {
-                    if !loses && !(!writes_back && names_a_missing_occurrence(e)) {
+                    if !loses {
                         tc4_cut.failures.push(format!(
                             "{at}: refused, where tC4's export writes its text and alignment: {e}"
                         ));
@@ -510,10 +495,6 @@ fn ult_refused() -> Vec<(String, &'static str)> {
         ("2SA 23:8", "unbalanced milestone"),
         // `ever-flowing`, which tC4's tokenizer reads as two words.
         ("AMO 5:24", "not one word"),
-        // `x-occurrence="2" x-occurrences="1"`.
-        ("MIC 5:7", "invalid source word"),
-        ("MIC 5:8", "invalid source word"),
-        ("MIC 5:13", "invalid source word"),
         ("MIC 7:6", "not one word"),
         ("NEH 2:13", "unbalanced milestone"),
     ])
@@ -529,7 +510,7 @@ fn every_verse_of_the_ult_v91_reads_apart_and_weaves_back() {
             same: 23_631,
             kept: 0,
             renumbered: 3,
-            milestones_moved: 177,
+            milestones_moved: 180,
             // Most of them in Lamentations, whose acrostic letters (`\qa BETH`) stand bare in
             // the verse before, where weave writes them as `\w` words.
             relaid: 82,
@@ -547,7 +528,7 @@ fn every_verse_of_the_ult_v91_reads_apart_and_weaves_back() {
             same: 23_658,
             kept: 0,
             renumbered: 3,
-            milestones_moved: 213,
+            milestones_moved: 216,
             relaid: 19,
             refused: ult_refused(),
             superscriptions: 50,
@@ -555,6 +536,51 @@ fn every_verse_of_the_ult_v91_reads_apart_and_weaves_back() {
             untaken: 0,
             failures: Vec::new(),
         }
+    );
+}
+
+/// ULT MIC 5:7, 5:8 and 5:13 align occurrence 2 of a source word that their milestone
+/// counts once (`x-occurrence="2" x-occurrences="1"`; UHB 3.0.0 MIC 5:7 holds the word
+/// once). tC4 reads such a milestone as written, and its export writes these verses back
+/// with their alignment, closing each milestone before the comma that the file keeps
+/// inside it. So each verse reads apart with those source words reported, and weaves back
+/// with the same text, words and links and its milestones closed where tC4 closes them.
+#[test]
+fn source_words_beyond_their_count_are_read_as_tc4_reads_them() {
+    let name = "bundle/en/en_ult_v91.sb.zip en_ult/ingredients/MIC.usfm";
+    let (_, micah) = export("en_ult_v91.sb.zip")
+        .into_iter()
+        .find(|(book, _)| book == name)
+        .unwrap();
+    let rewritten = &tc4_exports()[name].rewritten;
+    let (found, _) = slots(&micah);
+    let mut beyond = Vec::new();
+    for key in ["5:7", "5:8", "5:13"] {
+        let slot = found.iter().find(|s| s.key == key).unwrap();
+        let parsed = parse_aligned(slot.content).unwrap_or_else(|e| panic!("MIC {key}: {e}"));
+        for source in &parsed.sources_beyond_count {
+            assert!(
+                parsed.groups.iter().any(|g| g.sources.contains(source)),
+                "MIC {key}"
+            );
+            let strong = source.strong.clone().unwrap();
+            beyond.push((key, strong, source.occurrence, source.occurrences));
+        }
+        assert!(rewritten.contains(key), "MIC {key}");
+        assert!(
+            matches!(Outcome::of(slot.content), Ok(Outcome::MilestonesMoved)),
+            "MIC {key}"
+        );
+    }
+    let strong = |s: &str| s.to_owned();
+    assert_eq!(
+        beyond,
+        [
+            ("5:7", strong("c:H1961"), 2, 1),
+            ("5:8", strong("c:H1961"), 2, 1),
+            ("5:13", strong("c:H3808"), 2, 1),
+            ("5:13", strong("H7812"), 2, 1),
+        ]
     );
 }
 
