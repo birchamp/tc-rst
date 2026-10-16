@@ -16,7 +16,8 @@
 //!   a repository must fetch.
 //! - **Store.** [`ResourceStore`] keeps installed resources by source, owner, repository
 //!   and commit, each installed atomically and never modified after, with a receipt that
-//!   lets it be verified. A bundled store seeds a first run that is offline.
+//!   lets it be verified. A bundled store seeds a first run that is offline; each copy is
+//!   checked once, so a repeat start opens no resource file.
 //! - **Installs.** [`install_dcs`] downloads an exact commit through tc-door43 and
 //!   [`install_aquifer`] an exact release asset from GitHub; nothing is kept unless it is
 //!   the pinned bytes. Zips at hand install with [`install_dcs_zip`] and
@@ -70,4 +71,5 @@ pub use sets::{
 };
 pub use store::{
     FileRecord, Installed, Inventory, Origin, Packaging, Receipt, ResourceStore, SeedReport,
+    content_files_opened,
 };
