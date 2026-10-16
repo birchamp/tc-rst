@@ -470,7 +470,7 @@ pub(crate) fn candidate(
     side: Option<Side>,
 ) -> Option<Candidate> {
     let meta = state.meta(head);
-    let body = super::meta::decode(&meta.raw)?;
+    let body = super::meta::decode(&state.bytes(head)?)?;
     state.count(Counter::ValuesDecoded, 1);
     Some(Candidate {
         head: meta.id,

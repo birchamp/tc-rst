@@ -101,22 +101,31 @@ pub(crate) struct Output {
 }
 
 struct Node {
-    id: ChangeId,
+    /// Set when the change is encoded ([`Sim::encode`]); its parents' ids come first.
+    id: Option<ChangeId>,
     key: u32,
     /// The device that wrote it.
     device: u8,
     parents: smallvec_lite::Parents,
     at: i64,
     known: u32,
-    raw: Arc<[u8]>,
+    /// The canonical bytes, once encoded.
+    raw: Option<Arc<[u8]>>,
     /// The words and layout of a verse `Text` value, for edits that start from it.
     text: Option<Arc<(String, String)>>,
+    /// The record, until the change is encoded, and after it for decisions, which later
+    /// saves start from.
+    record: Option<Arc<Record>>,
+    /// What else the change holds, until it is encoded.
+    pending: Option<Box<(DeviceSeq, BatchRef, Cause)>>,
+    /// The encoded change, until a pack or pending file holds it.
+    change: Option<Change>,
 }
 
 mod smallvec_lite {
     /// Parent node indices; most changes have none or one.
     #[derive(Debug, Clone, Default)]
-    pub struct Parents(Vec<u32>);
+    pub struct Parents(pub Vec<u32>);
 
     impl Parents {
         pub fn from_vec(v: Vec<u32>) -> Self {
@@ -135,9 +144,9 @@ struct Dev {
     cursor: usize,
     unpushed: Vec<u32>,
     /// Changes not yet in a pack, in the order they were written.
-    unsealed: Vec<Change>,
+    unsealed: Vec<u32>,
     /// The batches of the last day, for device 0's pending files.
-    today_batches: Vec<Vec<Change>>,
+    today_batches: Vec<Vec<u32>>,
     conflicts: Vec<u32>,
     books: Vec<usize>,
     current: usize,
@@ -408,19 +417,22 @@ impl<'a> Sim<'a> {
         for d in 0..self.devs.len() {
             self.pull(d);
         }
+        self.encode()?;
         let header = PendingHeader {
             device: self.devs[0].id,
             project: self.project,
             purpose: Purpose::Save,
             reconciles: None,
         };
-        let pending = std::mem::take(&mut self.devs[0].today_batches)
-            .into_iter()
-            .map(|batch| {
-                let lines: Vec<Verified> = batch.into_iter().map(Verified::from).collect();
-                encode_pending(&header, &lines).map_err(|e| err(e.to_string()))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let batches = std::mem::take(&mut self.devs[0].today_batches);
+        let mut pending = Vec::with_capacity(batches.len());
+        for batch in batches {
+            let lines: Vec<Verified> = batch
+                .into_iter()
+                .map(|n| self.take_change(n).map(Verified::from))
+                .collect::<Result<_, _>>()?;
+            pending.push(encode_pending(&header, &lines).map_err(|e| err(e.to_string()))?);
+        }
         let mut decisions: Vec<DecisionInput> = self.decisions.into_values().collect();
         decisions.sort_by_key(|d| (d.book, d.check));
         Ok(Output {
@@ -441,7 +453,11 @@ impl<'a> Sim<'a> {
         if changes.is_empty() {
             return Ok(());
         }
-        let lines: Vec<Verified> = changes.into_iter().map(Verified::from).collect();
+        self.encode()?;
+        let lines: Vec<Verified> = changes
+            .into_iter()
+            .map(|n| self.take_change(n).map(Verified::from))
+            .collect::<Result<_, _>>()?;
         let spec = PackSpec {
             project: self.project,
             sealer: self.devs[d].id,
@@ -556,12 +572,14 @@ impl<'a> Sim<'a> {
             .collect()
     }
 
-    /// The head a screen shows: the only head, or the newest by (at, id) of several.
+    /// The head a screen shows: the only head, or the newest of several (by `at`, then by
+    /// when the simulation wrote it; the app breaks a tie of `at` by id, and the clocks of
+    /// the simulated devices never tie).
     fn shown(&self, heads: &[u32]) -> Option<u32> {
         heads
             .iter()
             .copied()
-            .max_by_key(|&n| (self.nodes[n as usize].at, self.nodes[n as usize].id))
+            .max_by_key(|&n| (self.nodes[n as usize].at, n))
     }
 
     /// The token a screen holds for a record: every head of a settled record, the shown
@@ -587,56 +605,158 @@ impl<'a> Sim<'a> {
         let batch = BatchRef::new(batch_id, n).ok_or_else(|| err("empty batch"))?;
         self.stats.batches += 1;
         let mut out = Vec::with_capacity(items.len());
-        let mut batch_changes = Vec::with_capacity(items.len());
-        for (record, parents, text) in items {
+        for (record, mut parents, text) in items {
             self.devs[d].seq += 1;
             self.clock += 1_000 + self.rng.below(20_000) as i64;
-            let mut parent_ids: Vec<ChangeId> =
-                parents.iter().map(|&p| self.nodes[p as usize].id).collect();
-            parent_ids.sort();
-            parent_ids.dedup();
+            parents.sort_unstable();
+            parents.dedup();
             let kind = record_kind(&record);
-            let key = record.key();
-            let body = ChangeBody {
-                v: 0,
-                record,
-                parents: parent_ids,
-                device: self.devs[d].id,
-                seq: DeviceSeq(self.devs[d].seq),
-                at: WallTime(self.clock),
-                batch,
-                cause: cause.clone(),
-            };
-            let change = Change::new(body).map_err(|e| err(format!("{kind}: {e}")))?;
-            let k = self.key_index(&key);
+            let k = self.key_index(&record.key());
             let index = self.nodes.len() as u32;
             self.nodes.push(Node {
-                id: change.id(),
+                id: None,
                 key: k,
                 device: d as u8,
                 parents: smallvec_lite::Parents::from_vec(parents),
                 at: self.clock,
                 known: 1 << d,
-                raw: change.raw().clone(),
+                raw: None,
                 text,
+                record: Some(Arc::new(record)),
+                pending: Some(Box::new((
+                    DeviceSeq(self.devs[d].seq),
+                    batch,
+                    cause.clone(),
+                ))),
+                change: None,
             });
             self.key_nodes[k as usize].push(index);
             self.devs[d].unpushed.push(index);
             self.devs[d].today.push(k);
             self.stats.changes += 1;
-            self.stats.bytes += change.raw().len();
             *self.stats.by_kind.entry(kind).or_default() += 1;
-            batch_changes.push(change);
             out.push(index);
         }
-        self.devs[d].unsealed.extend(batch_changes.iter().cloned());
-        self.devs[d].today_batches.push(batch_changes);
+        self.devs[d].unsealed.extend(out.iter().copied());
+        self.devs[d].today_batches.push(out.clone());
         Ok(out)
+    }
+
+    /// Encodes every change written since the last call: its canonical bytes and id, which
+    /// its children name. The changes of one record form a chain, and records are
+    /// independent, so the records are split over threads; this is most of the cost of a
+    /// corpus.
+    fn encode(&mut self) -> Result<(), CorpusError> {
+        let mut by_key: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
+        for (n, node) in self.nodes.iter().enumerate() {
+            if node.id.is_none() {
+                by_key.entry(node.key).or_default().push(n as u32);
+            }
+        }
+        if by_key.is_empty() {
+            return Ok(());
+        }
+        let groups: Vec<Vec<u32>> = by_key.into_values().collect();
+        let threads = std::thread::available_parallelism()
+            .map_or(1, std::num::NonZeroUsize::get)
+            .clamp(1, 8);
+        let nodes = &self.nodes;
+        let devices: Vec<DeviceId> = self.devs.iter().map(|d| d.id).collect();
+        let devices = &devices;
+        let groups = &groups;
+        let results: Vec<Result<Vec<(u32, Change)>, CorpusError>> = std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..threads)
+                .map(|t| {
+                    scope.spawn(move || {
+                        let mut out = Vec::new();
+                        for group in groups.iter().skip(t).step_by(threads) {
+                            let mut fresh: HashMap<u32, ChangeId> = HashMap::new();
+                            for &n in group {
+                                let node = &nodes[n as usize];
+                                let (Some(record), Some(pending)) = (&node.record, &node.pending)
+                                else {
+                                    return Err(err("a change to encode lost its record"));
+                                };
+                                let mut parents = Vec::with_capacity(node.parents.0.len());
+                                for &p in &node.parents.0 {
+                                    let id = nodes[p as usize]
+                                        .id
+                                        .or_else(|| fresh.get(&p).copied())
+                                        .ok_or_else(|| {
+                                            err("a parent on another record is not encoded")
+                                        })?;
+                                    parents.push(id);
+                                }
+                                parents.sort();
+                                let (seq, batch, cause) = &**pending;
+                                let body = ChangeBody {
+                                    v: 0,
+                                    record: (**record).clone(),
+                                    parents,
+                                    device: devices[usize::from(node.device)],
+                                    seq: *seq,
+                                    at: WallTime(node.at),
+                                    batch: *batch,
+                                    cause: cause.clone(),
+                                };
+                                let kind = record_kind(record);
+                                let change =
+                                    Change::new(body).map_err(|e| err(format!("{kind}: {e}")))?;
+                                fresh.insert(n, change.id());
+                                out.push((n, change));
+                            }
+                        }
+                        Ok(out)
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .map(|h| {
+                    h.join()
+                        .unwrap_or_else(|_| Err(err("an encoding thread failed")))
+                })
+                .collect()
+        });
+        for result in results {
+            for (n, change) in result? {
+                let node = &mut self.nodes[n as usize];
+                node.id = Some(change.id());
+                node.raw = Some(change.raw().clone());
+                node.pending = None;
+                if !matches!(
+                    node.record.as_deref(),
+                    Some(Record::Check {
+                        value: CheckValue::Decision(_),
+                        ..
+                    })
+                ) {
+                    node.record = None;
+                }
+                self.stats.bytes += change.raw().len();
+                node.change = Some(change);
+            }
+        }
+        Ok(())
+    }
+
+    /// The encoded change of node `n`, which a pack or pending file now holds.
+    fn take_change(&mut self, n: u32) -> Result<Change, CorpusError> {
+        self.nodes[n as usize]
+            .change
+            .take()
+            .ok_or_else(|| err("a change was sealed twice or never encoded"))
     }
 
     fn record_of(&self, n: u32) -> Result<Record, CorpusError> {
         let node = &self.nodes[n as usize];
-        match tc_journal::parse_change(node.id, node.raw.clone()) {
+        if let Some(record) = &node.record {
+            return Ok((**record).clone());
+        }
+        let (Some(id), Some(raw)) = (node.id, &node.raw) else {
+            return Err(err("a change has neither its record nor its bytes"));
+        };
+        match tc_journal::parse_change(id, raw.clone()) {
             tc_journal::Verified::Change(c) => Ok(c.into_body().record),
             tc_journal::Verified::Quarantined(q) => Err(err(format!("{}", q.rule))),
         }

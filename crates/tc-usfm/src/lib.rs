@@ -34,7 +34,7 @@ pub use align::{
 };
 pub use attributes::{Attribute, Attributes};
 pub use book::{Book, ChapterMark, Segment, SegmentKind, VerseUnit};
-pub use derivations::{SelectionCount, plain_text_v1, selections_v1, tokenize_v1};
+pub use derivations::{SelectionCount, SelectionText, plain_text_v1, selections_v1, tokenize_v1};
 pub use doc::{Document, Marker, Milestone, Node, Span};
 pub use text::plain_text;
 

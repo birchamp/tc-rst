@@ -20,6 +20,7 @@ mod reads;
 mod resolve;
 mod sidecar;
 mod state;
+mod value;
 
 pub use meta::ChangeIdx;
 pub use project::{CarriedPlacement, DerivedFile};
@@ -27,6 +28,7 @@ pub use reads::{BookView, ChangeView, Placement};
 pub use resolve::ResolveError;
 pub use sidecar::{SidecarError, decode_alignments, decode_decisions, records_from_usfm};
 pub use state::{FoldInput, FoldState, MergeHow, ProjectKind};
+pub use value::{ValueAt, ValueSource};
 
 pub(crate) use merge::{record_of, value_of};
 
@@ -329,9 +331,10 @@ pub(crate) enum Counter {
     AttachedPlaced,
     ConflictsBuilt,
     RecordsProjected,
+    ValuesRead,
 }
 
-const COUNTERS: usize = 12;
+const COUNTERS: usize = 13;
 
 #[derive(Debug, Default)]
 pub(crate) struct CounterCells([AtomicU64; COUNTERS]);
@@ -356,6 +359,7 @@ impl CounterCells {
             attached_placed: get(Counter::AttachedPlaced),
             conflicts_built: get(Counter::ConflictsBuilt),
             records_projected: get(Counter::RecordsProjected),
+            values_read: get(Counter::ValuesRead),
         }
     }
 }
@@ -388,6 +392,8 @@ pub struct Counters {
     pub conflicts_built: u64,
     /// Records read to project derived bytes.
     pub records_projected: u64,
+    /// Values read from the fold's source (§14).
+    pub values_read: u64,
 }
 
 impl Counters {
@@ -406,6 +412,7 @@ impl Counters {
             attached_placed: self.attached_placed - earlier.attached_placed,
             conflicts_built: self.conflicts_built - earlier.conflicts_built,
             records_projected: self.records_projected - earlier.records_projected,
+            values_read: self.values_read - earlier.values_read,
         }
     }
 }

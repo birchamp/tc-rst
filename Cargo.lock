@@ -2135,6 +2135,7 @@ dependencies = [
  "smallvec",
  "tc-burrito",
  "tc-core",
+ "tc-corpus",
  "tc-usfm",
  "thiserror",
  "unicode-normalization",

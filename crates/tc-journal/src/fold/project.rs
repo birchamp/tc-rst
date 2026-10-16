@@ -46,6 +46,17 @@ fn tool_name(tool: ToolId) -> &'static str {
 }
 
 impl DerivedFile {
+    /// The book a file of one book belongs to.
+    pub fn book(&self) -> Option<BookId> {
+        match self {
+            Self::Usfm(book)
+            | Self::Alignments(book)
+            | Self::Decisions(_, book)
+            | Self::Comments(book) => Some(*book),
+            _ => None,
+        }
+    }
+
     /// The repository path of the file.
     pub fn path(&self) -> String {
         match self {
@@ -482,10 +493,57 @@ impl FoldState {
 
     /// The bytes of a derived file, or `None` when the projection does not hold it.
     pub fn render(&self, file: &DerivedFile) -> Option<Vec<u8>> {
+        self.render_with(file, &std::sync::OnceLock::new())
+    }
+
+    /// Every derived file of one book the projection holds, with its bytes: what
+    /// materializing a book writes (§5.10). The files share the book's text and render on
+    /// up to four threads, so a book costs about as much as its largest file.
+    pub fn render_book(&self, book: BookId) -> Vec<(DerivedFile, Vec<u8>)> {
+        let files: Vec<DerivedFile> = self
+            .derived_files()
+            .into_iter()
+            .filter(|f| f.book() == Some(book))
+            .collect();
+        let text = std::sync::OnceLock::new();
+        if self.book(book).projects() {
+            let _ = text.set(self.book_text(book));
+        }
+        let text = &text;
+        let mut out: Vec<(DerivedFile, Vec<u8>)> = std::thread::scope(|scope| {
+            let threads = 4.min(files.len()).max(1);
+            let handles: Vec<_> = (0..threads)
+                .map(|t| {
+                    let files = &files;
+                    scope.spawn(move || {
+                        files
+                            .iter()
+                            .skip(t)
+                            .step_by(threads)
+                            .filter_map(|f| self.render_with(f, text).map(|b| (f.clone(), b)))
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .flat_map(|h| h.join().unwrap_or_default())
+                .collect()
+        });
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    }
+
+    fn render_with(
+        &self,
+        file: &DerivedFile,
+        text: &std::sync::OnceLock<BookText>,
+    ) -> Option<Vec<u8>> {
+        let text_of = |book: BookId| text.get_or_init(|| self.book_text(book));
         match file {
             DerivedFile::Usfm(book) => self.book_usfm(*book).map(String::into_bytes),
-            DerivedFile::Alignments(book) => self.alignments_json(*book),
-            DerivedFile::Decisions(tool, book) => self.decisions_json(*tool, *book),
+            DerivedFile::Alignments(book) => self.alignments_json(*book, text_of),
+            DerivedFile::Decisions(tool, book) => self.decisions_json(*tool, *book, text_of),
             DerivedFile::Comments(book) => self.comments_json(*book),
             DerivedFile::Resources => self.resources_json(),
             DerivedFile::Settings => Some(self.settings_json()),
@@ -505,11 +563,15 @@ impl FoldState {
     // Alignments
     // ---------------------------------------------------------------------------------
 
-    fn alignments_json(&self, book: BookId) -> Option<Vec<u8>> {
+    fn alignments_json<'t>(
+        &self,
+        book: BookId,
+        text_of: impl FnOnce(BookId) -> &'t BookText,
+    ) -> Option<Vec<u8>> {
         if !self.book(book).projects() {
             return None;
         }
-        let text = self.book_text(book);
+        let text = text_of(book);
         let ol_sha = self.pins.original_sha(book);
         // (chapter, label) → record; placed records first.
         let mut placed: BTreeMap<(u16, u16, u16), Value> = BTreeMap::new();
@@ -625,14 +687,20 @@ impl FoldState {
     // Decisions
     // ---------------------------------------------------------------------------------
 
-    fn decisions_json(&self, tool: ToolId, book: BookId) -> Option<Vec<u8>> {
+    fn decisions_json<'t>(
+        &self,
+        tool: ToolId,
+        book: BookId,
+        text_of: impl FnOnce(BookId) -> &'t BookText,
+    ) -> Option<Vec<u8>> {
         if !self.book(book).projects() {
             return None;
         }
-        let text = self.book_text(book);
+        let text = text_of(book);
         let resolution = self.pins.resolution(tool, book);
         let resolved = resolution.as_ref().map(|r| r.0.clone());
         let mut records: Vec<(String, String)> = Vec::new();
+        let mut verses: BTreeMap<(String, String), VerseFacts> = BTreeMap::new();
         let keys: Vec<KeyIdx> = self
             .books
             .get(&book)
@@ -659,8 +727,18 @@ impl FoldState {
                 .map(|h| self.meta(*h).at)
                 .max()
                 .unwrap_or(WallTime(0));
-            let content = target_text(&text, check);
-            let record = decision_record(&decision, check, resolved.as_ref(), &content, newest);
+            let target = match &check.target {
+                CheckTarget::Verse { chapter, verse, .. } => {
+                    (chapter.as_str().to_owned(), verse.as_str().to_owned())
+                }
+                CheckTarget::Frame { .. } => (String::new(), String::new()),
+            };
+            // Decisions of one verse share its text and derivations (tN and TWL hold
+            // several per verse).
+            let facts = verses
+                .entry(target)
+                .or_insert_with(|| VerseFacts::of(target_text(text, check)));
+            let record = decision_record(&decision, check, resolved.as_ref(), facts, newest);
             let context = compact(&value(&Json::Obj(decision.context.clone())));
             records.push((context, compact(&record)));
         }
@@ -963,6 +1041,25 @@ fn check_verse(check: &CheckKey) -> Option<(u16, u16)> {
 }
 
 /// The text a decision's target names: the runs covering its verse or span.
+/// What the decisions of one check target read of its verse text (§7.7).
+pub(crate) struct VerseFacts {
+    content: String,
+    /// md5 of `plain_text_v1(content)`.
+    md5: crate::ids::Md5,
+    /// Made when a decision's verse text changed and its selections must be checked.
+    selection: std::cell::OnceCell<tc_usfm::SelectionText>,
+}
+
+impl VerseFacts {
+    fn of(content: String) -> Self {
+        Self {
+            md5: md5_of(&tc_usfm::plain_text_v1(&content)),
+            content,
+            selection: std::cell::OnceCell::new(),
+        }
+    }
+}
+
 fn target_text(text: &BookText, check: &CheckKey) -> String {
     let CheckTarget::Verse { chapter, verse, .. } = &check.target else {
         return String::new();
@@ -1110,12 +1207,11 @@ pub(crate) fn decision_record(
     d: &DecisionRecord,
     check: &CheckKey,
     resolved: Option<&crate::record::ResourceRef>,
-    verse_text: &str,
+    verse: &VerseFacts,
     newest: WallTime,
 ) -> Value {
-    let plain = tc_usfm::plain_text_v1(verse_text);
     let resource_ok = attach::resource_ok(&d.resource, resolved);
-    let verse_changed = md5_of(&plain) != d.judgement.verse_text_md5;
+    let verse_changed = verse.md5 != d.judgement.verse_text_md5;
     let selections_ok = !verse_changed
         || d.judgement.selections.as_ref().is_none_or(|selections| {
             let counts: Vec<tc_usfm::SelectionCount<'_>> = selections
@@ -1125,7 +1221,10 @@ pub(crate) fn decision_record(
                     occurrences: s.occurrences,
                 })
                 .collect();
-            tc_usfm::selections_v1(verse_text, &counts)
+            verse
+                .selection
+                .get_or_init(|| tc_usfm::SelectionText::v1(&verse.content))
+                .fits(&counts)
         });
     let invalidated = !resource_ok || !selections_ok || d.imported_invalid;
     let mut m = Map::new();

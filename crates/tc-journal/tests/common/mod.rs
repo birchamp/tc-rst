@@ -179,13 +179,15 @@ pub fn arb_json() -> impl Strategy<Value = Json> {
     arb_json_leaf().prop_recursive(4, 24, 4, |inner| {
         prop_oneof![
             prop::collection::vec(inner.clone(), 0..4).prop_map(Json::Arr),
-            prop::collection::btree_map(arb_text(), inner, 0..4).prop_map(Json::Obj),
+            prop::collection::btree_map(arb_text(), inner, 0..4)
+                .prop_map(|map| Json::Obj(map.into_iter().collect())),
         ]
     })
 }
 
 pub fn arb_map() -> impl Strategy<Value = JsonMap> {
     prop::collection::btree_map(arb_text(), arb_json(), 0..3)
+        .prop_map(|map| map.into_iter().collect())
 }
 
 const WORD_PIECES: &[&str] = &[

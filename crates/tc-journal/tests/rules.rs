@@ -35,7 +35,7 @@ fn member<'a>(json: &'a mut Json, path: &[&str]) -> &'a mut Json {
         let Json::Obj(map) = at else {
             panic!("{key} is not inside an object")
         };
-        at = map.get_mut(*key).unwrap_or_else(|| panic!("no {key}"));
+        at = map.get_mut(key).unwrap_or_else(|| panic!("no {key}"));
     }
     at
 }

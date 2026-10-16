@@ -8,6 +8,7 @@ use super::cow::{ChunkVec, CowMap};
 use super::meta::{
     self, BatchIdx, CauseClass, ChangeIdx, KeyIdx, Meta, PackSlot, Quarantined, Resources, Shape,
 };
+use super::value::{Stored, ValueAt, ValueSource};
 use super::{Anomaly, Conflict, ConflictId, Counter, CounterCells, Counters, Frontier};
 use crate::change::Verified;
 use crate::ids::{BatchId, ChangeId, DeviceId, DeviceKind, DeviceSeq, PackId};
@@ -39,7 +40,7 @@ enum Line {
     /// What the fold keeps of a change, read ahead; the decoded value is gone.
     Prepared {
         id: ChangeId,
-        raw: Arc<[u8]>,
+        value: Stored,
         summary: meta::Summary,
     },
 }
@@ -65,13 +66,23 @@ impl FoldInput {
     /// (a decoded value is many small allocations; reading and freeing them is most of the
     /// cost of a change).
     pub fn prepare(self) -> Self {
+        self.prepare_with(|change| Stored::Bytes(change.raw().clone()))
+    }
+
+    /// [`FoldInput::prepare`] that keeps only where the change's bytes are: the fold reads
+    /// its value from its [`ValueSource`] when it needs it (§14).
+    pub fn prepare_at(self, at: ValueAt) -> Self {
+        self.prepare_with(|_| Stored::At(at))
+    }
+
+    fn prepare_with(self, store: impl FnOnce(&crate::change::Change) -> Stored) -> Self {
         match self.line {
             Line::Verified(Verified::Change(change)) => {
                 let id = change.id();
-                let raw = change.raw().clone();
+                let value = store(&change);
                 let summary = meta::summarize(change.body(), &mut Resources::default());
                 Self {
-                    line: Line::Prepared { id, raw, summary },
+                    line: Line::Prepared { id, value, summary },
                     pack: self.pack,
                 }
             }
@@ -360,6 +371,8 @@ pub struct FoldState {
     /// Carried files placed at a `.case-` path (§3.3).
     pub(crate) case_moves: Arc<BTreeMap<crate::ids::RepoPath, String>>,
     pub(crate) resources: Resources,
+    /// Reads the values the fold does not keep in memory.
+    pub(crate) source: Option<Arc<dyn ValueSource>>,
     pub(crate) counters: Arc<CounterCells>,
 }
 
@@ -403,13 +416,25 @@ impl FoldState {
             meta_choices: Arc::new(BTreeMap::new()),
             case_moves: Arc::new(BTreeMap::new()),
             resources: Resources::default(),
+            source: None,
             counters: Arc::new(CounterCells::default()),
         }
     }
 
     /// Folds a set of changes from scratch (§7.2).
     pub fn fold(kind: ProjectKind, changes: impl IntoIterator<Item = FoldInput>) -> Self {
+        Self::fold_from(kind, None, changes)
+    }
+
+    /// [`FoldState::fold`] of changes some of whose values `source` reads on demand
+    /// (inputs made by [`FoldInput::prepare_at`]).
+    pub fn fold_from(
+        kind: ProjectKind,
+        source: Option<Arc<dyn ValueSource>>,
+        changes: impl IntoIterator<Item = FoldInput>,
+    ) -> Self {
         let mut state = Self::new(kind);
+        state.source = source;
         let mut dirty = Dirty {
             all: true,
             ..Dirty::default()
@@ -445,17 +470,33 @@ impl FoldState {
     fn rebuild(&mut self) -> super::Delta {
         let mut inputs = Vec::with_capacity(self.metas.len() + self.quarantined.len());
         for meta in self.metas.iter() {
-            if let crate::change::Verified::Change(change) =
-                crate::change::parse_change(meta.id, meta.raw.clone())
-            {
-                let packs = self.packs_of(meta);
-                if packs.is_empty() {
-                    inputs.push(FoldInput::new(Verified::Change(change), None));
-                } else {
-                    for pack in packs {
-                        inputs.push(FoldInput::new(Verified::Change(change.clone()), Some(pack)));
-                    }
-                }
+            let entry = self.entry(meta.key);
+            let batch = self.batch(meta.batch);
+            let summary = meta::Summary {
+                key: entry.key.clone(),
+                parents: meta.parents.clone(),
+                device: meta.device,
+                seq: meta.seq,
+                at: meta.at,
+                batch: (batch.id, batch.n),
+                cause: meta.cause,
+                stub: meta.stub,
+                shape: meta.shape.clone(),
+                book: entry.book,
+            };
+            let input = |pack| FoldInput {
+                line: Line::Prepared {
+                    id: meta.id,
+                    value: meta.value.clone(),
+                    summary: summary.clone(),
+                },
+                pack,
+            };
+            let packs = self.packs_of(meta);
+            if packs.is_empty() {
+                inputs.push(input(None));
+            } else {
+                inputs.extend(packs.into_iter().map(|pack| input(Some(pack))));
             }
         }
         let quarantined: Vec<FoldInput> = self
@@ -466,6 +507,7 @@ impl FoldState {
         let counters = self.counters.clone();
         let mut fresh = Self::new(self.kind);
         fresh.counters = counters;
+        fresh.source = self.source.clone();
         let mut dirty = Dirty {
             all: true,
             ..Dirty::default()
@@ -727,7 +769,7 @@ impl FoldState {
         let mut batches: Vec<(BatchId, u32)> = Vec::with_capacity(inputs.len());
         for (input, new) in inputs.into_iter().zip(fresh) {
             let pack = input.pack;
-            let (id, raw, mut summary) = match input.line {
+            let (id, value, mut summary) = match input.line {
                 Line::Verified(Verified::Quarantined(q)) => {
                     self.insert(
                         FoldInput {
@@ -738,7 +780,7 @@ impl FoldState {
                     );
                     continue;
                 }
-                Line::Prepared { id, raw, summary } if new => (id, raw, summary),
+                Line::Prepared { id, value, summary } if new => (id, value, summary),
                 // A copy of a change already numbered; its pack is noted above.
                 Line::Prepared { .. } | Line::Verified(Verified::Change(_)) => continue,
             };
@@ -759,7 +801,7 @@ impl FoldState {
                 cause: summary.cause,
                 stub: summary.stub,
                 shape: summary.shape,
-                raw,
+                value,
                 pack,
                 active: false,
             });
@@ -818,7 +860,7 @@ impl FoldState {
     }
 
     fn insert(&mut self, input: FoldInput, dirty: &mut Dirty) {
-        let (id, raw, summary) = match input.line {
+        let (id, value, summary) = match input.line {
             Line::Verified(Verified::Quarantined(q)) => {
                 if self.quarantined.contains_key(&q.id) {
                     return;
@@ -852,14 +894,15 @@ impl FoldState {
                 return;
             }
             Line::Verified(Verified::Change(change)) => {
+                let value = Stored::Bytes(change.raw().clone());
                 if self.ids.contains_key(&change.id()) {
-                    (change.id(), change.raw().clone(), None)
+                    (change.id(), value, None)
                 } else {
                     let summary = meta::summarize(change.body(), &mut self.resources);
-                    (change.id(), change.raw().clone(), Some(summary))
+                    (change.id(), value, Some(summary))
                 }
             }
-            Line::Prepared { id, raw, summary } => (id, raw, Some(summary)),
+            Line::Prepared { id, value, summary } => (id, value, Some(summary)),
         };
         {
             {
@@ -894,7 +937,7 @@ impl FoldState {
                     cause: summary.cause,
                     stub: summary.stub,
                     shape: summary.shape,
-                    raw,
+                    value,
                     pack,
                     active: false,
                 });
@@ -1481,8 +1524,33 @@ impl FoldState {
         self.counters.read()
     }
 
+    /// Gives this state counters of its own, starting at zero, so the work of a snapshot
+    /// is counted apart from the state it was taken from.
+    pub fn own_counters(&mut self) {
+        self.counters = Arc::new(CounterCells::default());
+    }
+
     pub(crate) fn count(&self, counter: Counter, n: u64) {
         self.counters.add(counter, n);
+    }
+
+    /// Reads values on demand from `source` from now on (§14).
+    pub fn set_source(&mut self, source: Arc<dyn ValueSource>) {
+        self.source = Some(source);
+    }
+
+    /// The canonical bytes of change `c`: kept in memory, or read from the source and
+    /// checked against the change's id. `None` only when the source cannot read them.
+    pub(crate) fn bytes(&self, c: ChangeIdx) -> Option<Arc<[u8]>> {
+        let meta = self.meta(c);
+        match &meta.value {
+            Stored::Bytes(bytes) => Some(bytes.clone()),
+            Stored::At(at) => {
+                self.count(Counter::ValuesRead, 1);
+                let bytes = self.source.as_ref()?.read(*at)?;
+                (ChangeId::of(&bytes) == meta.id).then(|| Arc::from(bytes))
+            }
+        }
     }
 }
 

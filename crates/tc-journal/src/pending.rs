@@ -14,8 +14,8 @@ use crate::canon::{HeaderReader, header_object, to_json};
 use crate::change::Verified;
 use crate::ids::{DeviceId, DeviceKind, Md5, ProjectId, RepoPath};
 use crate::json::{self, Json};
-use crate::line::{RawLine, encode_line, frame, read_line, split_lines, verify_line};
-use crate::pack::{NotOurs, PackError, lines_defect, not_ours, salvage};
+use crate::line::{RawLine, Span, encode_line, frame, split_lines, verify_line};
+use crate::pack::{NotOurs, PackError, not_ours, parse_entries, salvage, verified_lines};
 use crate::text::{hex, sha256};
 
 /// The pending-file framing version this app reads and writes.
@@ -78,6 +78,8 @@ pub struct PendingRead {
     pub status: PendingStatus,
     /// Every line of a valid file, or the salvaged lines of a damaged one.
     pub entries: Vec<Verified>,
+    /// Where each entry's JSON lies in the file: `spans[i]` is `entries[i]`'s.
+    pub spans: Vec<Span>,
 }
 
 /// Reads a pending file of project `project`. Never fails.
@@ -87,6 +89,7 @@ pub fn read_pending(bytes: &[u8], project: ProjectId) -> PendingRead {
         header: None,
         status: PendingStatus::Valid,
         entries: Vec::new(),
+        spans: Vec::new(),
     };
     match not_ours(lines.first(), "pending", PENDING_FORMAT, project) {
         Some(NotOurs::Newer(pending)) => {
@@ -99,26 +102,22 @@ pub fn read_pending(bytes: &[u8], project: ProjectId) -> PendingRead {
         }
         None => {}
     }
-    let defect = match lines.first().map(parse_header) {
-        None => Some(PackError::Empty),
-        Some(Err(error)) => Some(error),
+    let body = match lines.first().map(parse_header) {
+        None => Err(PackError::Empty),
+        Some(Err(error)) => Err(error),
         Some(Ok(header)) => {
             read.header = Some(header);
-            lines_defect(&lines[1..])
+            verified_lines(&lines[1..])
         }
     };
-    match defect {
-        None => {
-            read.entries = lines[1..]
-                .iter()
-                .filter_map(|l| read_line(l.bytes))
-                .collect();
-        }
-        Some(error) => {
+    let entries = match body {
+        Ok(entries) => entries,
+        Err(error) => {
             read.status = PendingStatus::Damaged(error);
-            read.entries = salvage(&lines);
+            salvage(&lines)
         }
-    }
+    };
+    (read.entries, read.spans) = parse_entries(entries);
     read
 }
 

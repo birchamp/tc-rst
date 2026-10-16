@@ -10,7 +10,6 @@
 //! [`Json`] cannot hold a float, so every value it holds has exactly one canonical text,
 //! and [`parse`] accepts exactly the texts [`Json::to_canonical`] writes.
 
-use std::collections::BTreeMap;
 use std::fmt;
 
 /// The deepest nesting of arrays and objects a change may hold (rule V7).
@@ -27,8 +26,185 @@ pub enum Json {
     Obj(JsonMap),
 }
 
-/// An object. Iteration order is the canonical key order.
-pub type JsonMap = BTreeMap<String, Json>;
+/// An object: its members sorted by key, each key once, so iteration order is the
+/// canonical key order. A sorted vector rather than a tree: the objects of a change are
+/// small, and parsing canonical JSON appends each member in order, where a tree allocates
+/// a node of eleven slots for every object.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct JsonMap(Vec<(String, Json)>);
+
+type Member = (String, Json);
+
+/// The members of an object in key order, as `(key, value)` pairs.
+pub type Members<'a> =
+    std::iter::Map<std::slice::Iter<'a, Member>, fn(&Member) -> (&String, &Json)>;
+
+fn member_ref((key, value): &Member) -> (&String, &Json) {
+    (key, value)
+}
+
+impl JsonMap {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    fn find(&self, key: &str) -> Result<usize, usize> {
+        self.0.binary_search_by(|(k, _)| k.as_str().cmp(key))
+    }
+
+    pub fn get(&self, key: &str) -> Option<&Json> {
+        self.find(key).ok().map(|at| &self.0[at].1)
+    }
+
+    pub fn get_mut(&mut self, key: &str) -> Option<&mut Json> {
+        let at = self.find(key).ok()?;
+        Some(&mut self.0[at].1)
+    }
+
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.find(key).is_ok()
+    }
+
+    /// Sets `key` to `value` and returns the value it replaces.
+    pub fn insert(&mut self, key: String, value: Json) -> Option<Json> {
+        match self.find(&key) {
+            Ok(at) => Some(std::mem::replace(&mut self.0[at].1, value)),
+            Err(at) => {
+                self.0.insert(at, (key, value));
+                None
+            }
+        }
+    }
+
+    pub fn remove(&mut self, key: &str) -> Option<Json> {
+        let at = self.find(key).ok()?;
+        Some(self.0.remove(at).1)
+    }
+
+    /// The value at `key`, inserted from `make` when there is none.
+    pub fn get_or_insert_with(&mut self, key: String, make: impl FnOnce() -> Json) -> &mut Json {
+        let at = match self.find(&key) {
+            Ok(at) => at,
+            Err(at) => {
+                self.0.insert(at, (key, make()));
+                at
+            }
+        };
+        &mut self.0[at].1
+    }
+
+    pub fn iter(&self) -> Members<'_> {
+        self.0
+            .iter()
+            .map(member_ref as fn(&Member) -> (&String, &Json))
+    }
+
+    pub fn iter_mut(&mut self) -> impl DoubleEndedIterator<Item = (&String, &mut Json)> {
+        self.0.iter_mut().map(|(k, v)| (&*k, v))
+    }
+
+    pub fn keys(&self) -> impl DoubleEndedIterator<Item = &String> + ExactSizeIterator {
+        self.0.iter().map(|(k, _)| k)
+    }
+
+    pub fn values(&self) -> impl DoubleEndedIterator<Item = &Json> + ExactSizeIterator {
+        self.0.iter().map(|(_, v)| v)
+    }
+
+    pub fn values_mut(&mut self) -> impl DoubleEndedIterator<Item = &mut Json> {
+        self.0.iter_mut().map(|(_, v)| v)
+    }
+
+    pub fn first_key_value(&self) -> Option<(&String, &Json)> {
+        self.0.first().map(member_ref)
+    }
+
+    pub fn last_key_value(&self) -> Option<(&String, &Json)> {
+        self.0.last().map(member_ref)
+    }
+
+    /// Keeps the members `keep` says to keep.
+    pub fn retain(&mut self, mut keep: impl FnMut(&String, &mut Json) -> bool) {
+        self.0.retain_mut(|(k, v)| keep(k, v));
+    }
+
+    /// Appends a member whose key sorts after every key already present; `false`, and
+    /// nothing changes, when it does not.
+    fn push_sorted(&mut self, key: String, value: Json) -> Result<(), (String, Json)> {
+        if self
+            .0
+            .last()
+            .is_some_and(|(last, _)| last.as_bytes() >= key.as_bytes())
+        {
+            return Err((key, value));
+        }
+        self.0.push((key, value));
+        Ok(())
+    }
+}
+
+impl fmt::Debug for JsonMap {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_map().entries(self.iter()).finish()
+    }
+}
+
+/// Like a `BTreeMap`: members sorted by key, and of two members with one key the later
+/// one stays. Sorting once makes building a large object from unsorted members
+/// `O(n log n)`, not `O(n²)`.
+impl FromIterator<(String, Json)> for JsonMap {
+    fn from_iter<I: IntoIterator<Item = (String, Json)>>(iter: I) -> Self {
+        let mut members: Vec<Member> = iter.into_iter().collect();
+        members.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut out: Vec<Member> = Vec::with_capacity(members.len());
+        for member in members {
+            match out.last_mut() {
+                Some(last) if last.0 == member.0 => *last = member,
+                _ => out.push(member),
+            }
+        }
+        Self(out)
+    }
+}
+
+impl<const N: usize> From<[(String, Json); N]> for JsonMap {
+    fn from(members: [(String, Json); N]) -> Self {
+        members.into_iter().collect()
+    }
+}
+
+impl Extend<(String, Json)> for JsonMap {
+    fn extend<I: IntoIterator<Item = (String, Json)>>(&mut self, iter: I) {
+        let members = std::mem::take(&mut self.0);
+        *self = members.into_iter().chain(iter).collect();
+    }
+}
+
+impl IntoIterator for JsonMap {
+    type Item = (String, Json);
+    type IntoIter = std::vec::IntoIter<(String, Json)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a JsonMap {
+    type Item = (&'a String, &'a Json);
+    type IntoIter = Members<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
 
 /// An integer from −2⁶³ to 2⁶⁴−1: every `i64` and every `u64`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -99,7 +275,7 @@ impl Json {
     }
 
     pub(crate) fn write(&self, out: &mut Vec<u8>) {
-        let mut text = String::new();
+        let mut text = String::with_capacity(256);
         self.write_str(&mut text);
         out.extend_from_slice(text.as_bytes());
     }
@@ -109,7 +285,10 @@ impl Json {
             Json::Null => out.push_str("null"),
             Json::Bool(true) => out.push_str("true"),
             Json::Bool(false) => out.push_str("false"),
-            Json::Int(n) => out.push_str(&n.0.to_string()),
+            Json::Int(n) => {
+                use std::fmt::Write as _;
+                let _ = write!(out, "{}", n.0);
+            }
             Json::Str(s) => write_string(s, out),
             Json::Arr(items) => {
                 out.push('[');
@@ -173,6 +352,12 @@ impl Json {
 
 fn write_string(s: &str, out: &mut String) {
     out.push('"');
+    // Most strings need no escape: copy them whole.
+    if !s.bytes().any(|b| b == b'"' || b == b'\\' || b < 0x20) {
+        out.push_str(s);
+        out.push('"');
+        return;
+    }
     for c in s.chars() {
         match c {
             '"' => out.push_str("\\\""),
@@ -302,23 +487,24 @@ impl Parser<'_> {
             self.at += 1;
             return Ok(Json::Obj(map));
         }
-        let mut previous: Option<String> = None;
         loop {
             let key_at = self.at;
             let key = self.string()?;
-            if previous
-                .as_ref()
-                .is_some_and(|p| p.as_bytes() >= key.as_bytes())
+            let key_order = JsonError {
+                at: key_at,
+                problem: JsonProblem::KeyOrder,
+            };
+            if map
+                .last_key_value()
+                .is_some_and(|(p, _)| p.as_bytes() >= key.as_bytes())
             {
-                return Err(JsonError {
-                    at: key_at,
-                    problem: JsonProblem::KeyOrder,
-                });
+                return Err(key_order);
             }
             self.expect(b':')?;
             let value = self.value(depth)?;
-            previous = Some(key.clone());
-            map.insert(key, value);
+            if map.push_sorted(key, value).is_err() {
+                return Err(key_order);
+            }
             match self.peek() {
                 Some(b',') => self.at += 1,
                 Some(b'}') => {
@@ -358,7 +544,10 @@ impl Parser<'_> {
         let mut out = String::new();
         loop {
             let rest = &self.text[self.at..];
-            let Some(stop) = rest.find(|c: char| c == '"' || c == '\\' || u32::from(c) < 0x20)
+            // The bytes it stops at are ASCII, so `stop` is a character boundary.
+            let Some(stop) = rest
+                .bytes()
+                .position(|b| b == b'"' || b == b'\\' || b < 0x20)
             else {
                 self.at = self.text.len();
                 return Err(self.error(JsonProblem::UnexpectedEnd));

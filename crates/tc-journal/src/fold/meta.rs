@@ -139,8 +139,8 @@ pub(crate) struct Meta {
     /// A seed stub (§7.3): starting text no person wrote.
     pub stub: bool,
     pub shape: Shape,
-    /// The canonical JSON exactly as stored.
-    pub raw: Arc<[u8]>,
+    /// The canonical JSON exactly as stored, or where to read it.
+    pub value: super::value::Stored,
     /// The first pack that holds it, in [`super::FoldState`]'s pack table; others are in
     /// its `more_packs`.
     pub pack: PackSlot,

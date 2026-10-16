@@ -240,13 +240,13 @@ impl FoldState {
     /// A change's body, decoded from its stored bytes.
     pub fn body(&self, id: &ChangeId) -> Option<ChangeBody> {
         let c = *self.ids.get(id)?;
-        super::meta::decode(&self.meta(c).raw)
+        super::meta::decode(&self.bytes(c)?)
     }
 
     /// A change's canonical bytes, exactly as stored.
     pub fn raw(&self, id: &ChangeId) -> Option<std::sync::Arc<[u8]>> {
         let c = *self.ids.get(id)?;
-        Some(self.meta(c).raw.clone())
+        self.bytes(c)
     }
 
     /// Every folded version of a record, oldest first by (at, id): its History.

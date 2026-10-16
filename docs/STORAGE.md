@@ -578,6 +578,8 @@ commands and projections read it through methods:
 ```rust
 impl FoldState {
     pub fn fold(kind: ProjectKind, changes: impl IntoIterator<Item = FoldInput>) -> Self;  // §7.2
+    pub fn fold_from(kind: ProjectKind, source: Option<Arc<dyn ValueSource>>,
+                     changes: impl IntoIterator<Item = FoldInput>) -> Self;              // values on demand, §14
     pub fn add(&mut self, changes: impl IntoIterator<Item = FoldInput>) -> Delta;            // §7.8
     pub fn key_state(&self, key: &RecordKey) -> Option<KeyState>;
     pub fn projected(&self, key: &RecordKey) -> Option<Record>;   // what projection shows
@@ -591,8 +593,17 @@ impl FoldState {
     // book_usfm, chapter_usfm, carried_files, metadata_source, resolution and the choices of §8.3
 }
 /// A verified line and the pack holding it. `prepare()` reads what the fold keeps and drops
-/// the decoded value, so a loader does that on its reading threads.
+/// the decoded value, so a loader does that on its reading threads. `prepare_at(at)` also
+/// drops the bytes and keeps only where they lie; the fold reads them through its
+/// `ValueSource` when it merges, lists a candidate or projects (§14).
 pub struct FoldInput { line: Verified, pack: Option<PackId> }
+/// Where a loader found a change's canonical JSON: its own number for the file, and the span
+/// of the JSON in it (`PackRead::spans`, `PendingRead::spans`).
+pub struct ValueAt { pub offset: u64, pub file: u32, pub len: u32 }
+/// `tc-store` reads the file again, or the pack's blob when the file is gone or damaged, and
+/// reports a value it cannot read as a notice. The fold checks the bytes against the change id,
+/// so a file changed after it was read never passes for the change.
+pub trait ValueSource: Send + Sync { fn read(&self, at: ValueAt) -> Option<Vec<u8>>; }
 /// What one `add` changed: the records, books and chapters to re-project (§5.0 B5), the
 /// conflicts that did not exist before (B6), and whether pins or paths changed.
 pub struct Delta { pub keys: Vec<RecordKey>, pub books: Vec<BookId>, pub chapters: Vec<(BookId, u16)>,
@@ -1726,8 +1737,10 @@ O7  Finish interrupted work:
     - every expected pack (§4.4) missing from the working tree or failing P2 there → restore it
       from a valid blob, with `PackRestored`;
     - materialize.intent.json → kept for O9's classification.
-O8  Load: read every pack and pending file in parallel (rayon), verify (§4.4), salvage. Store as
-    a blob every pack HEAD's tree does not hold. Then fold (§7). The fold never fails.
+O8  Load: read every pack and pending file in parallel (rayon), verify (§4.4; each line is
+    hashed once), salvage. Store as a blob every pack HEAD's tree does not hold. Then fold (§7),
+    keeping where each change's JSON lies, not its bytes: the fold reads values on demand
+    through the store's `ValueSource` (§2.6, §14). The fold never fails.
 O9  Classify every derived and carried path (§6.2). Edits made outside the app are recorded
     as changes (§11.1) before anything is rewritten.
 O10 Materialize every path whose disk bytes differ from the projection, and metadata.json if it
@@ -2256,8 +2269,8 @@ deltas stay small and Door43 shows one changed line per changed record.
 
 ### 7.8 Incremental fold and snapshots
 
-The actor keeps the fold in memory with persistent maps (`im`), so a snapshot for a sync, an
-upgrade plan or an export is O(1).
+The actor keeps the fold in memory in copy-on-write containers (§2.6), so a snapshot for a
+sync, an upgrade plan or an export is O(1).
 
 - **Local change** c on key k: `heads(k) := heads(k) − parents(c) + {c}`; recompute the state of
   k, its passage group (§7.3), the coherence of its chapter, the placement of the attached
@@ -3568,11 +3581,12 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`, `PARA_MARKERS` and the layout rule), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1`, the OBS story splice |
 | `tc-burrito` | `build_metadata`, `check`, the vendored SB 1.0.0 schema, the extension table, `collision_form` (§3.3) |
 | `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking, the command types. No I/O. |
-| `tc-store` | `Vfs`, `FaultFs`, `atomic_write`, the project lock, `ProjectActor` and commands, open and recovery, materialize, seal, consolidate, outside-edit detection and recording, drafts, identity, local git (tree build, commit, index, repack, object database access) |
+| `tc-store` | `Vfs`, `FaultFs`, `atomic_write`, the project lock, `ProjectActor` and commands, open and recovery, the fold's `ValueSource` over pack and pending files and their blobs, materialize, seal, consolidate, outside-edit detection and recording, drafts, identity, local git (tree build, commit, index, repack, object database access) |
 | `tc-door43` | the internet switch, the Gitea REST client, and git2 network calls (`fetch`, `push`, `list`) on a repository `tc-store` opened |
 | `tc-sync` | the Door43 sync (§9), the exchange file export and import (§10), the Door43 edit walk (§11.2), `ExchangeReport` |
 | `tc-import` | the tC4 4.0 converter and oracle check, the tC4 seed, tC3, raw USFM, foreign burritos |
 | `tc-check`, `tc-align` | building check items and alignments for the screens; they use the derivations of `tc-usfm` |
+| `tc-corpus` | the deterministic scale corpus of `docs/PERFORMANCE.md` (Psalms, ten times Psalms, the whole Bible of §14) as journal packs and pending files and as plain domain inputs, every part labelled; for tests and benchmarks only (`publish = false`) |
 
 Dependencies: `git2 =0.21.0` (default features off; `https`, `vendored-libgit2`;
 `vendored-openssl` on Linux only), `jsonschema =0.58.6` (default features off), `sha2`, `md-5`,

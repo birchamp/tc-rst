@@ -15,8 +15,7 @@ use crate::change::parse_change;
 use crate::ids::{ChangeId, DeviceId, DeviceKind, PackId, PackName, ProjectId, WallTime};
 use crate::json::{self, Json, JsonInt};
 use crate::line::{
-    LINE_OVERHEAD, RawLine, encode_line, frame, read_line, split_lines, verify_line,
-    verify_salvaged,
+    LINE_OVERHEAD, RawLine, Span, encode_line, frame, split_lines, verify_line, verify_salvaged,
 };
 use std::fmt;
 use std::sync::Arc;
@@ -204,6 +203,8 @@ pub struct PackRead {
     pub status: PackStatus,
     /// Every line of a valid pack, or the salvaged lines of a damaged one.
     pub entries: Vec<Verified>,
+    /// Where each entry's JSON lies in the file: `spans[i]` is `entries[i]`'s.
+    pub spans: Vec<Span>,
 }
 
 impl PackRead {
@@ -260,6 +261,7 @@ pub fn read_pack(path: &str, bytes: &[u8], project: ProjectId) -> PackRead {
         header: None,
         status: PackStatus::Valid,
         entries: Vec::new(),
+        spans: Vec::new(),
     };
     match not_ours(lines.first(), "tcpack", PACK_FORMAT, project) {
         Some(NotOurs::Newer(tcpack)) => {
@@ -276,72 +278,88 @@ pub fn read_pack(path: &str, bytes: &[u8], project: ProjectId) -> PackRead {
     if let Some(Ok(header)) = &header {
         read.header = Some(header.clone());
     }
-    let defect = match (&parsed_path, &header) {
-        (None, _) => Some(PackError::BadPath),
-        (Some(p), _) if id.name() != p.name => Some(PackError::NameMismatch),
-        (_, None) => Some(PackError::Empty),
-        (_, Some(Err(error))) => Some(error.clone()),
+    let body = match (&parsed_path, &header) {
+        (None, _) => Err(PackError::BadPath),
+        (Some(p), _) if id.name() != p.name => Err(PackError::NameMismatch),
+        (_, None) => Err(PackError::Empty),
+        (_, Some(Err(error))) => Err(error.clone()),
         (Some(p), Some(Ok(header))) if header.sealer != p.sealer => {
-            Some(PackError::SealerMismatch {
+            Err(PackError::SealerMismatch {
                 header: header.sealer,
                 folder: p.sealer,
             })
         }
-        (Some(_), Some(Ok(header))) => body_defect(header.count, &lines[1..]),
+        (Some(_), Some(Ok(header))) => verified_body(header.count, &lines[1..]),
     };
-    match defect {
-        None => {
-            read.entries = lines[1..]
-                .iter()
-                .filter_map(|l| read_line(l.bytes))
-                .collect();
-        }
-        Some(error) => {
+    let entries = match body {
+        Ok(entries) => entries,
+        Err(error) => {
             read.status = PackStatus::Damaged(error);
-            read.entries = salvage(&lines);
+            salvage(&lines)
         }
-    }
+    };
+    (read.entries, read.spans) = parse_entries(entries);
     read
 }
 
-/// P4 on the lines after a header that passed P1 to P3.
-pub(crate) fn body_defect(count: u32, lines: &[RawLine<'_>]) -> Option<PackError> {
-    if let Some(defect) = lines_defect(lines) {
-        return Some(defect);
-    }
-    let found = lines.len() as u64;
-    (found != u64::from(count)).then_some(PackError::CountMismatch {
-        expected: u64::from(count),
-        found,
-    })
+/// A line that verified: its id, its JSON and where the JSON lies in the file.
+pub(crate) type VerifiedLine<'a> = (ChangeId, &'a [u8], Span);
+
+/// Reads the changes of verified lines.
+pub(crate) fn parse_entries(lines: Vec<VerifiedLine<'_>>) -> (Vec<Verified>, Vec<Span>) {
+    lines
+        .into_iter()
+        .map(|(id, json, span)| (parse_change(id, Arc::from(json)), span))
+        .unzip()
 }
 
-/// The first line (numbered from 1 for the first line after the header) that does not
-/// verify, or a missing final line feed.
-pub(crate) fn lines_defect(lines: &[RawLine<'_>]) -> Option<PackError> {
+/// P4 on the lines after a header that passed P1 to P3: every line verifies, the last
+/// ends with a line feed, and there are `count` of them. Each line is hashed once.
+pub(crate) fn verified_body<'a>(
+    count: u32,
+    lines: &[RawLine<'a>],
+) -> Result<Vec<VerifiedLine<'a>>, PackError> {
+    let verified = verified_lines(lines)?;
+    let found = lines.len() as u64;
+    if found != u64::from(count) {
+        return Err(PackError::CountMismatch {
+            expected: u64::from(count),
+            found,
+        });
+    }
+    Ok(verified)
+}
+
+/// Every line verified, or the first line (numbered from 1 for the first line after the
+/// header) that does not verify, or a missing final line feed.
+pub(crate) fn verified_lines<'a>(
+    lines: &[RawLine<'a>],
+) -> Result<Vec<VerifiedLine<'a>>, PackError> {
+    let mut out = Vec::with_capacity(lines.len());
     for (index, line) in lines.iter().enumerate() {
-        if verify_line(line.bytes).is_none() {
-            return Some(PackError::LineUnverified {
+        let Some((id, json)) = verify_line(line.bytes) else {
+            return Err(PackError::LineUnverified {
                 line: index as u64 + 1,
             });
-        }
+        };
+        out.push((id, json, line.span(json)));
     }
-    lines
-        .last()
-        .is_some_and(|line| !line.terminated)
-        .then_some(PackError::Truncated)
+    if lines.last().is_some_and(|line| !line.terminated) {
+        return Err(PackError::Truncated);
+    }
+    Ok(out)
 }
 
 /// Every line that verifies, as written (§4.4), a CR before its line feed allowed, except a
 /// first line that is a header. A change whose author wrote it is a change wherever it
 /// stands; a header never reads as one.
-pub(crate) fn salvage(lines: &[RawLine<'_>]) -> Vec<Verified> {
+pub(crate) fn salvage<'a>(lines: &[RawLine<'a>]) -> Vec<VerifiedLine<'a>> {
     lines
         .iter()
         .enumerate()
         .filter_map(|(index, line)| {
             let (id, json) = verify_salvaged(line.bytes)?;
-            (index > 0 || !is_header(json)).then(|| parse_change(id, Arc::from(json)))
+            (index > 0 || !is_header(json)).then(|| (id, json, line.span(json)))
         })
         .collect()
 }

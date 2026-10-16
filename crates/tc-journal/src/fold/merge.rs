@@ -87,13 +87,13 @@ pub(crate) fn div(ancestry: &Ancestry) -> BTreeSet<ChangeIdx> {
 /// The record value of a change as JSON (`None` when the record has no value member).
 pub(crate) fn value_of(state: &FoldState, c: ChangeIdx) -> Option<Json> {
     state.count(super::Counter::ValuesDecoded, 1);
-    super::meta::value_json(&state.meta(c).raw)
+    super::meta::value_json(&state.bytes(c)?)
 }
 
 /// The record of a change, decoded from its stored bytes.
 pub(crate) fn record_of(state: &FoldState, c: ChangeIdx) -> Option<Record> {
     state.count(super::Counter::ValuesDecoded, 1);
-    super::meta::decode(&state.meta(c).raw).map(|body| body.record)
+    super::meta::decode(&state.bytes(c)?).map(|body| body.record)
 }
 
 fn seed_stub_kind(key: &RecordKey) -> bool {
@@ -241,8 +241,8 @@ pub(crate) fn rebuild_record(
     template: ChangeIdx,
     value: Option<Json>,
 ) -> Option<Record> {
-    let raw = &state.meta(template).raw;
-    let parsed = crate::json::parse(raw).ok()?;
+    let raw = state.bytes(template)?;
+    let parsed = crate::json::parse(&raw).ok()?;
     let record = parsed.as_obj()?.get("record")?.as_obj()?;
     let (kind, inner) = record.iter().next()?;
     let mut inner = inner.as_obj()?.clone();
@@ -336,9 +336,7 @@ impl Unit {
             let Json::Obj(map) = at else {
                 return;
             };
-            at = map
-                .entry(segment.clone())
-                .or_insert_with(|| Json::Obj(JsonMap::new()));
+            at = map.get_or_insert_with(segment.clone(), || Json::Obj(JsonMap::new()));
         }
         let Json::Obj(map) = at else {
             return;
@@ -373,7 +371,7 @@ fn members<'a>(
     for value in values {
         let mut at = value?;
         for segment in path {
-            at = at.as_obj()?.get(*segment)?;
+            at = at.as_obj()?.get(segment)?;
         }
         out.extend(at.as_obj()?.keys().cloned());
     }
@@ -396,7 +394,7 @@ pub(crate) fn units_for(key: &RecordKey, versions: &[Option<&Json>]) -> Vec<Unit
             let same = texts.iter().all(|t| {
                 fixed
                     .iter()
-                    .all(|f| t.get(*f) == texts.first().and_then(|first| first.get(*f)))
+                    .all(|f| t.get(f) == texts.first().and_then(|first| first.get(f)))
             });
             if !same {
                 return vec![Unit::whole()];

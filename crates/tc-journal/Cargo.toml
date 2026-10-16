@@ -21,6 +21,9 @@ im = "15.1.0"
 
 [dev-dependencies]
 proptest.workspace = true
+# The scale corpus of docs/PERFORMANCE.md, for the operation-count tests. It depends on
+# this crate; as a dev-dependency it links the same build of it.
+tc-corpus = { path = "../tc-corpus" }
 
 [lints]
 workspace = true

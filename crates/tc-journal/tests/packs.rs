@@ -359,6 +359,41 @@ fn a_file_with_crlf_line_endings_salvages_every_change() {
     assert!(read.entries.is_empty());
 }
 
+/// The bytes a span names in `file`.
+fn at_span(file: &[u8], span: tc_journal::line::Span) -> &[u8] {
+    let start = usize::try_from(span.offset).unwrap();
+    &file[start..start + span.len as usize]
+}
+
+/// A loader that drops values reads them again by span (§14), so each span names exactly
+/// its entry's canonical bytes: in a valid pack, in a salvaged one and in a pending file.
+#[test]
+fn every_entry_names_where_its_bytes_lie() {
+    let lines = changes(6);
+    let pack = &seal(&spec(local(9)), &lines).unwrap().packs[0];
+    let damaged = crlf(&pack.bytes);
+    let file = encode_pending(&pending_header(Purpose::Save), &lines).unwrap();
+    let reads = [
+        (pack.bytes.clone(), reread(pack).entries, reread(pack).spans),
+        {
+            let read = read_pack(&pack.path.to_string(), &damaged, project());
+            (damaged.clone(), read.entries, read.spans)
+        },
+        {
+            let read = read_pending(&file.bytes, project());
+            (file.bytes.clone(), read.entries, read.spans)
+        },
+    ];
+    for (bytes, entries, spans) in reads {
+        assert_eq!(entries.len(), 6);
+        assert_eq!(spans.len(), entries.len());
+        for (entry, span) in entries.iter().zip(spans) {
+            let change = entry.as_change().unwrap();
+            assert_eq!(at_span(&bytes, span), &change.raw()[..]);
+        }
+    }
+}
+
 /// A change line is a change wherever it stands, so a file whose header was lost salvages
 /// its first line too. A header, of a pack or of a pending file, never reads as a change.
 #[test]

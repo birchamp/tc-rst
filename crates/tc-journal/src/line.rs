@@ -60,11 +60,32 @@ pub fn read_line(line: &[u8]) -> Option<Verified> {
     Some(parse_change(id, Arc::from(json)))
 }
 
+/// Where a change's canonical JSON lies in the file it was read from: what a loader that
+/// does not keep values in memory reads again (§14).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Span {
+    /// The JSON's first byte, from the start of the file.
+    pub offset: u64,
+    pub len: u32,
+}
+
 /// One line of a file and whether a line feed ended it.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct RawLine<'a> {
     pub(crate) bytes: &'a [u8],
+    /// The line's first byte, from the start of the file.
+    pub(crate) at: usize,
     pub(crate) terminated: bool,
+}
+
+impl RawLine<'_> {
+    /// The span of `json`, a prefix of this line's bytes.
+    pub(crate) fn span(&self, json: &[u8]) -> Span {
+        Span {
+            offset: self.at as u64,
+            len: u32::try_from(json.len()).unwrap_or(u32::MAX),
+        }
+    }
 }
 
 /// The lines of a file. An empty file has no lines; bytes after the last line feed form a
@@ -72,18 +93,22 @@ pub(crate) struct RawLine<'a> {
 pub(crate) fn split_lines(bytes: &[u8]) -> Vec<RawLine<'_>> {
     let mut out = Vec::new();
     let mut rest = bytes;
+    let mut start = 0;
     while !rest.is_empty() {
         match rest.iter().position(|b| *b == b'\n') {
             Some(at) => {
                 out.push(RawLine {
                     bytes: &rest[..at],
+                    at: start,
                     terminated: true,
                 });
                 rest = &rest[at + 1..];
+                start += at + 1;
             }
             None => {
                 out.push(RawLine {
                     bytes: rest,
+                    at: start,
                     terminated: false,
                 });
                 rest = &[];

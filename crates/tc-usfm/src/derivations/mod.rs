@@ -79,12 +79,29 @@ pub struct SelectionCount<'a> {
 
 /// True when every selection still fits `text`: see the module documentation.
 pub fn selections_v1(text: &str, selections: &[SelectionCount<'_>]) -> bool {
-    let Ok(shown) = usfmjs::remove_marker(&js(text)) else {
-        return true;
-    };
-    selections
-        .iter()
-        .all(|s| u64::from(s.occurrences) == count(&shown, &js(s.text)))
+    SelectionText::v1(text).fits(selections)
+}
+
+/// [`selections_v1`] in two steps, for checking many decisions against one verse: the
+/// verse's text as the validator reads it, made once.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SelectionText(Option<JsStr>);
+
+impl SelectionText {
+    /// The text `selections_v1` searches; none when the library throws on it.
+    pub fn v1(text: &str) -> Self {
+        Self(usfmjs::remove_marker(&js(text)).ok())
+    }
+
+    /// [`selections_v1`] of the text this was made from.
+    pub fn fits(&self, selections: &[SelectionCount<'_>]) -> bool {
+        let Some(shown) = &self.0 else {
+            return true;
+        };
+        selections
+            .iter()
+            .all(|s| u64::from(s.occurrences) == count(shown, &js(s.text)))
+    }
 }
 
 /// Non-overlapping occurrences of `needle` in `text`, 0 for an empty needle: what a loop of
