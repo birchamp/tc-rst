@@ -5,9 +5,9 @@
 //! times; a release build fails only above three times a budget (rule 5).
 //!
 //! The words are every `strong` attribute of the UHB Psalms (`fixtures/scale/psa/`). A
-//! lookup reads no file and probes one entry per numbered part, so the count tests run the
-//! same words against the real Hebrew lexicon and against one ten times larger, and the
-//! counts must be equal.
+//! lookup reads no file and finds each numbered part's entry by hash, comparing its number
+//! with about one entry, so the count tests run the same words against the real Hebrew
+//! lexicon and against one ten times larger, and count the entries compared in each.
 
 // Test helpers sit outside `#[test]` functions, where clippy.toml already allows these.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -20,7 +20,7 @@ use common::bundled::{UGL, UHL, lock_from_the_zips};
 use serde_json::{Map, Value};
 use tc_resources::{
     LEXICON_FILE, Lexicon, LexiconInstall, Lexicons, PartEntry, ResourceStore, Testaments,
-    content_files_opened, install_lexicon_zip, lexicon_entries_probed, open_lexicon,
+    content_files_opened, install_lexicon_zip, lexicon_entries_compared, open_lexicon,
 };
 
 const LOAD_BUDGET: Duration = Duration::from_millis(100);
@@ -75,9 +75,10 @@ fn ten_times_larger() -> Lexicon {
     lexicon
 }
 
-/// Entries probed and content files opened while every word is looked up.
+/// Entries compared and content files opened while every word is looked up, and the parts
+/// found.
 fn lookup_counts(lexicons: &Lexicons, words: &[String]) -> (u64, u64, usize) {
-    let (probed, opened) = (lexicon_entries_probed(), content_files_opened());
+    let (compared, opened) = (lexicon_entries_compared(), content_files_opened());
     let mut found = 0;
     for word in words {
         found += lexicons
@@ -87,7 +88,7 @@ fn lookup_counts(lexicons: &Lexicons, words: &[String]) -> (u64, u64, usize) {
             .count();
     }
     (
-        lexicon_entries_probed() - probed,
+        lexicon_entries_compared() - compared,
         content_files_opened() - opened,
         found,
     )
@@ -108,17 +109,24 @@ fn a_lookup_costs_the_same_in_a_lexicon_ten_times_larger() {
     let real = Lexicons::from_parts(Ok(UGL.lexicon()), Ok(UHL.lexicon()));
     let larger = Lexicons::from_parts(Ok(UGL.lexicon()), Ok(ten_times_larger()));
 
-    let (probed, opened, found) = lookup_counts(&real, &words);
-    assert_eq!(probed, numbered, "one probe per numbered part");
+    let (compared, opened, found) = lookup_counts(&real, &words);
     assert_eq!(opened, 0, "a lookup reads no file");
     assert_eq!(found as u64, numbered, "every Psalms word has its entry");
-    assert_eq!(
-        lookup_counts(&larger, &words),
-        (probed, 0, found),
-        "the same words cost the same in a lexicon ten times larger"
-    );
+    let (compared_larger, opened, found_larger) = lookup_counts(&larger, &words);
+    assert_eq!((opened, found_larger), (0, found));
+    // A found part compares its own entry once, and the hash map compares a few others
+    // whose hash happens to look alike; a search or a scan compares more as the lexicon
+    // grows.
+    let one_per_part = numbered..=numbered + numbered / 10;
+    for (lexicon, compared) in [("en_uhl", compared), ("ten times larger", compared_larger)] {
+        assert!(
+            one_per_part.contains(&compared),
+            "{lexicon}: {compared} entries compared for {numbered} numbered parts"
+        );
+    }
     println!(
-        "{} Psalms words, {numbered} numbered parts: {probed} probes in both lexicons",
+        "{} Psalms words, {numbered} numbered parts: {compared} entries compared in en_uhl, \
+         {compared_larger} in a lexicon ten times larger",
         words.len()
     );
 }

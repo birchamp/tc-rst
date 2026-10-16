@@ -76,7 +76,7 @@ pub use error::{
 pub use fetched::{FetchedLock, LOCK_FORMAT, LOCK_VERSION, LockEntry, TreeCheck};
 pub use lexicon::{
     LEXICON_FILE, LEXICON_FORMAT, LEXICON_VERSION, Lexicon, LexiconEntry, LexiconSource, Lexicons,
-    PartEntry, PartLookup, lexicon_entries_probed, open_lexicon, repackage_lexicon,
+    PartEntry, PartLookup, lexicon_entries_compared, open_lexicon, repackage_lexicon,
 };
 pub use load::{
     BookResources, Missing, ObsResources, PartStatus, SourceText, TextRole, TextStatus, load_book,

@@ -38,6 +38,7 @@
 use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
+use std::hash::{BuildHasherDefault, DefaultHasher, Hash, Hasher};
 
 use serde::Deserialize;
 use serde::de::{self, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
@@ -221,21 +222,48 @@ pub struct LexiconEntry {
 }
 
 thread_local! {
-    static ENTRIES_PROBED: Cell<u64> = const { Cell::new(0) };
+    static ENTRIES_COMPARED: Cell<u64> = const { Cell::new(0) };
 }
 
-/// How many entries this thread has looked up by number, in any lexicon: the operation
-/// count the lookup tests assert (docs/PERFORMANCE.md rule 2).
-pub fn lexicon_entries_probed() -> u64 {
-    ENTRIES_PROBED.with(Cell::get)
+/// How many times this thread has compared an entry's number with another, in any
+/// lexicon: the operation count the lookup tests assert (docs/PERFORMANCE.md rule 2). A
+/// lookup that finds its entry by hash compares about one; one that walks the entries
+/// compares one per entry it passes.
+pub fn lexicon_entries_compared() -> u64 {
+    ENTRIES_COMPARED.with(Cell::get)
 }
+
+/// An entry number as the key of [`Entries`], counting each comparison in
+/// [`lexicon_entries_compared`]. The map's own probing calls `eq`, so whatever the map
+/// visits is counted, not only the calls to [`Lexicon::entry`].
+#[derive(Debug, Clone, Copy, Eq)]
+struct EntryKey(u32);
+
+impl PartialEq for EntryKey {
+    fn eq(&self, other: &Self) -> bool {
+        ENTRIES_COMPARED.with(|compared| compared.set(compared.get() + 1));
+        self.0 == other.0
+    }
+}
+
+impl Hash for EntryKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+// A fixed hasher makes the comparisons a lookup counts the same in every run, so the count
+// tests are deterministic (PERFORMANCE.md rule 2). A random seed would guard against keys
+// chosen to collide, but the keys are the entry numbers of a lexicon the app installed from
+// a pinned archive, and a lexicon that collided on purpose would cost at worst a scan.
+type EntryMap = HashMap<EntryKey, LexiconEntry, BuildHasherDefault<DefaultHasher>>;
 
 /// A lexicon in memory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Lexicon {
     source: LexiconSource,
     metadata: Value,
-    entries: HashMap<u32, LexiconEntry>,
+    entries: EntryMap,
     index: Option<Value>,
     files: BTreeMap<String, String>,
 }
@@ -351,13 +379,12 @@ impl Lexicon {
 
     /// The entry with this number.
     pub fn entry(&self, number: u32) -> Option<&LexiconEntry> {
-        ENTRIES_PROBED.with(|probed| probed.set(probed.get() + 1));
-        self.entries.get(&number)
+        self.entries.get(&EntryKey(number))
     }
 
     /// Every entry number, ascending.
     pub fn numbers(&self) -> Vec<u32> {
-        let mut numbers: Vec<u32> = self.entries.keys().copied().collect();
+        let mut numbers: Vec<u32> = self.entries.keys().map(|key| key.0).collect();
         numbers.sort_unstable();
         numbers
     }
@@ -596,7 +623,7 @@ impl<'de> Visitor<'de> for EntryVisitor {
 }
 
 /// `entries`: each key an entry number, written without leading zeros.
-struct Entries(HashMap<u32, LexiconEntry>);
+struct Entries(EntryMap);
 
 impl<'de> Deserialize<'de> for Entries {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
@@ -614,14 +641,14 @@ impl<'de> Visitor<'de> for EntriesVisitor {
     }
 
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Entries, A::Error> {
-        let mut entries = HashMap::new();
+        let mut entries = EntryMap::default();
         while let Some(key) = map.next_key::<String>()? {
             let number = canonical_number(&key).ok_or_else(|| {
                 de::Error::custom(format!(
                     "{key:?} is not an entry number (a decimal number without leading zeros)"
                 ))
             })?;
-            match entries.entry(number) {
+            match entries.entry(EntryKey(number)) {
                 std::collections::hash_map::Entry::Occupied(_) => return Err(twice(&key)),
                 std::collections::hash_map::Entry::Vacant(free) => {
                     free.insert(map.next_value::<LexiconEntry>()?);
@@ -971,6 +998,39 @@ mod tests {
                 METADATA_JSON
             );
         }
+    }
+
+    #[test]
+    fn the_count_grows_with_the_entries_a_lookup_compares() {
+        let mut value: Value = serde_json::from_slice(&repackage(sample()).unwrap()).unwrap();
+        let entries: Map<String, Value> = (1..=1000u32)
+            .map(|n| (n.to_string(), serde_json::json!({ "brief": n.to_string() })))
+            .collect();
+        value["entries"] = Value::Object(entries);
+        let lexicon = Lexicon::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
+        let compared = |look: &dyn Fn()| {
+            let before = lexicon_entries_compared();
+            look();
+            lexicon_entries_compared() - before
+        };
+
+        let by_hash = compared(&|| {
+            for n in 1..=1000 {
+                assert!(lexicon.entry(n).is_some());
+            }
+        });
+        assert!((1000..=1100).contains(&by_hash), "{by_hash}");
+        assert!(compared(&|| assert!(lexicon.entry(1001).is_none())) <= 2);
+        // What a lookup that walked the entries would cost: the count must show it.
+        let walked = compared(&|| {
+            let found = lexicon
+                .entries
+                .iter()
+                .position(|(key, _)| *key == EntryKey(500));
+            assert!(found.is_some());
+        });
+        let passed = lexicon.entries.keys().position(|key| key.0 == 500).unwrap() as u64;
+        assert_eq!(walked, passed + 1);
     }
 
     #[test]
