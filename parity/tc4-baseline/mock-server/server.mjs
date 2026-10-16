@@ -3,7 +3,7 @@
 // directory on disk (fixtures/build-state.mjs builds it), plus a static server for the
 // built tC4 client. It exists only so the tC4 client renders its screens with realistic
 // data for the visual-parity baseline; it is not a faithful server. Routes and response
-// shapes follow src/data/serverApi.ts at tC4 d494a9d (each route cites its wrapper).
+// shapes follow src/data/serverApi.ts at tC4 d310bf3 (each route cites its wrapper).
 //
 //   node mock-server/server.mjs [--state <dir, default .state/sample>] [--client <dist dir>] [--port 19998]
 //
@@ -211,9 +211,9 @@ export function createMockServer({ state, client }) {
 
   /** [method, route prefix, handler(rest, url, body) -> {status?, json?|text?|bytes?, type?}] */
   const routes = [
-    ['GET', '/version', () => ({ json: { pkg_version: '0.18.15', mock: 'tc4-baseline' } })], // getVersion 327
-    ['GET', '/git/list-local-repos', () => ({ json: listRepos() })], // listLocalRepos 332
-    ['GET', '/burrito/metadata/summaries', (rest, url) => { // getSummaries 348
+    ['GET', '/version', () => ({ json: { pkg_version: '0.18.15', mock: 'tc4-baseline' } })], // getVersion 329
+    ['GET', '/git/list-local-repos', () => ({ json: listRepos() })], // listLocalRepos 334
+    ['GET', '/burrito/metadata/summaries', (rest, url) => { // getSummaries 350
       const org = url.searchParams.get('org');
       const out = {};
       for (const repo of listRepos()) {
@@ -222,23 +222,23 @@ export function createMockServer({ state, client }) {
       }
       return { json: out };
     }],
-    ['GET', '/burrito/metadata/summary/', (rest) => ({ json: summaryOf(takeRepo(rest)[0]) })], // getSummary 359
-    ['GET', '/burrito/metadata/raw/', (rest) => ({ json: readMeta(takeRepo(rest)[0]) })], // getMetadataRaw 375
-    ['GET', '/burrito/ingredient/raw/', (rest, url) => { // readIngredient 382
+    ['GET', '/burrito/metadata/summary/', (rest) => ({ json: summaryOf(takeRepo(rest)[0]) })], // getSummary 361
+    ['GET', '/burrito/metadata/raw/', (rest) => ({ json: readMeta(takeRepo(rest)[0]) })], // getMetadataRaw 377
+    ['GET', '/burrito/ingredient/raw/', (rest, url) => { // readIngredient 384
       const [repo] = takeRepo(rest);
       // A missing repo reads like a missing file: the platform only joins paths.
       const file = path.join(repoDir(repo), 'ingredients', ipathOf(url));
       if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new HttpError(400, ENOENT);
       return { bytes: fs.readFileSync(file), type: 'text/plain; charset=utf-8' };
     }],
-    ['GET', '/burrito/ingredient/bytes/', (rest, url) => { // ingredientBytesUrl 405
+    ['GET', '/burrito/ingredient/bytes/', (rest, url) => { // ingredientBytesUrl 407
       const [repo] = takeRepo(rest);
       const ipath = ipathOf(url);
       const file = path.join(repoDir(repo), 'ingredients', ipath);
       if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new HttpError(400, ENOENT);
       return { bytes: fs.readFileSync(file), type: MIME[path.extname(ipath)] ?? 'application/octet-stream' };
     }],
-    ['GET', '/burrito/ingredient/zipped/', (rest, url) => { // readIngredientZipped 395
+    ['GET', '/burrito/ingredient/zipped/', (rest, url) => { // readIngredientZipped 397
       const [repo] = takeRepo(rest);
       const dir = path.join(mustRepo(repo), 'ingredients', ipathOf(url));
       if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new HttpError(400, 'could not locate repo or ingredient directory');
@@ -246,21 +246,21 @@ export function createMockServer({ state, client }) {
       for (const rel of walk(dir)) files[rel] = fs.readFileSync(path.join(dir, rel));
       return { bytes: Buffer.from(zipSync(files)), type: 'application/zip' };
     }],
-    ['GET', '/burrito/zipped/', (rest) => { // getZippedRepo 367
+    ['GET', '/burrito/zipped/', (rest) => { // getZippedRepo 369
       const dir = mustRepo(takeRepo(rest)[0]);
       const files = {};
       for (const rel of walk(dir)) files[rel] = fs.readFileSync(path.join(dir, rel));
       return { bytes: Buffer.from(zipSync(files)), type: 'application/zip' };
     }],
-    ['GET', '/burrito/paths/', (rest) => { // listPaths 417; a missing repo lists no paths
+    ['GET', '/burrito/paths/', (rest) => { // listPaths 419; a missing repo lists no paths
       return { json: walk(path.join(repoDir(takeRepo(rest)[0]), 'ingredients'), { skipHidden: true, skipBak: true }) };
     }],
-    ['GET', '/git/status/', (rest) => { // gitStatus 426
+    ['GET', '/git/status/', (rest) => { // gitStatus 428
       const [repo] = takeRepo(rest);
       mustRepo(repo);
       return { json: [...(pending.get(repo) ?? new Map())].map(([p, change_type]) => ({ path: p, change_type })) };
     }],
-    ['POST', '/burrito/ingredient/raw/', (rest, url, body) => { // writeIngredient 434
+    ['POST', '/burrito/ingredient/raw/', (rest, url, body) => { // writeIngredient 436
       const [repo] = takeRepo(rest);
       const ipath = ipathOf(url);
       const { payload } = readJsonBody(body);
@@ -274,7 +274,7 @@ export function createMockServer({ state, client }) {
       if (url.searchParams.has('update_ingredients')) registerIngredients(repo);
       return { json: OK };
     }],
-    ['POST', '/burrito/ingredient/delete/', (rest, url) => { // deleteIngredient 464
+    ['POST', '/burrito/ingredient/delete/', (rest, url) => { // deleteIngredient 466
       const [repo] = takeRepo(rest);
       const ipath = ipathOf(url);
       const file = path.join(mustRepo(repo), 'ingredients', ipath);
@@ -283,22 +283,22 @@ export function createMockServer({ state, client }) {
       markPending(repo, ipath, 'deleted');
       return { json: OK };
     }],
-    ['POST', '/burrito/metadata/remake-ingredients/', (rest) => { // remakeIngredients 472
+    ['POST', '/burrito/metadata/remake-ingredients/', (rest) => { // remakeIngredients 474
       registerIngredients(takeRepo(rest)[0]);
       return { json: OK };
     }],
-    ['POST', '/git/add-and-commit/', (rest, url, body) => { // addAndCommit 482
+    ['POST', '/git/add-and-commit/', (rest, url, body) => { // addAndCommit 484
       const [repo] = takeRepo(rest);
       mustRepo(repo);
       commits.push({ repo, message: readJsonBody(body).commit_message ?? '', at: new Date().toISOString() });
       pending.delete(repo);
       return { json: OK };
     }],
-    ['GET', '/git/remotes/', (rest) => { // listRemotes 494
+    ['GET', '/git/remotes/', (rest) => { // listRemotes 496
       const file = path.join(mustRepo(takeRepo(rest)[0]), '.remotes.json');
       return { json: { is_good: true, payload: { remotes: fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : [] } } };
     }],
-    ['POST', '/git/remote/add/', (rest, url) => { // addRemote 506
+    ['POST', '/git/remote/add/', (rest, url) => { // addRemote 508
       const file = path.join(mustRepo(takeRepo(rest)[0]), '.remotes.json');
       const remotes = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : [];
       const name = url.searchParams.get('remote_name');
@@ -307,42 +307,42 @@ export function createMockServer({ state, client }) {
       fs.writeFileSync(file, JSON.stringify(remotes));
       return { json: OK };
     }],
-    ['POST', '/git/push/', () => (netEnabled // push 525
+    ['POST', '/git/push/', () => (netEnabled // push 527
       ? { json: { is_good: false, reason: 'push is not implemented by the tc4-baseline mock' } }
       : { status: 401, json: { is_good: false, reason: 'offline mode' } })],
-    ['POST', '/git/new-text-translation', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 535
-    ['POST', '/git/new-obs-resource', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 580
-    ['POST', '/git/new-scripture-book/', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 601
-    ['POST', '/git/delete/', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // deleteRepo 341
-    ['GET', '/content-utils/versifications', () => ({ json: VERSIFICATIONS })], // getVersifications 606
-    ['GET', '/content-utils/versification/', (rest) => { // getVersification 611
+    ['POST', '/git/new-text-translation', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 607
+    ['POST', '/git/new-obs-resource', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 653
+    ['POST', '/git/new-scripture-book/', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 675
+    ['POST', '/git/delete/', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // deleteRepo 343
+    ['GET', '/content-utils/versifications', () => ({ json: VERSIFICATIONS })], // getVersifications 680
+    ['GET', '/content-utils/versification/', (rest) => { // getVersification 685
       const name = decodeURIComponent(rest);
       const file = path.join(state, 'vrs', `${name}.json`);
       if (!VERSIFICATIONS.includes(name) || !fs.existsSync(file)) throw new HttpError(400, `unknown versification ${name}`);
       return { bytes: fs.readFileSync(file), type: 'application/json' };
     }],
-    ['POST', '/app-state/current-project/', (rest) => { // setCurrentProject 618
+    ['POST', '/app-state/current-project/', (rest) => { // setCurrentProject 692
       mustRepo(takeRepo(rest)[0]);
       return { json: OK };
     }],
-    ['GET', '/client-settings/', (rest) => { // getClientSettings 627
+    ['GET', '/client-settings/', (rest) => { // getClientSettings 701, getClientSettingsText 709
       const file = path.join(settingsDir, `${decodeURIComponent(rest)}.json`);
       return fs.existsSync(file) ? { bytes: fs.readFileSync(file), type: 'application/json' } : { json: {} };
     }],
-    ['POST', '/client-settings/', (rest, url, body) => { // setClientSettings 637
+    ['POST', '/client-settings/', (rest, url, body) => { // setClientSettings 716
       const { settings } = readJsonBody(body);
       if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new HttpError(400, 'settings must be a JSON object');
       fs.mkdirSync(settingsDir, { recursive: true });
       fs.writeFileSync(path.join(settingsDir, `${decodeURIComponent(rest)}.json`), JSON.stringify(settings, null, 2));
       return { json: OK };
     }],
-    ['GET', '/net/status', () => ({ json: { is_enabled: netEnabled } })], // getNetEnabled 646
-    ['POST', '/net/enable', () => { netEnabled = true; return { json: OK }; }], // 654
-    ['POST', '/net/disable', () => { netEnabled = false; return { json: OK }; }], // 661
-    ['POST', '/burrito/zipped/', () => ({ json: { is_good: false, reason: 'burrito import is not implemented by the tc4-baseline mock' } })], // 671
-    ['POST', '/temp/bytes', () => ({ status: 400, json: { is_good: false, reason: 'temp upload is not implemented by the tc4-baseline mock' } })], // 708
-    ['POST', '/burrito/remake_burrito_from_zip/', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 734
-    ['GET', '/gitea/remote-repos/', () => (netEnabled ? { json: [] } : { json: { is_good: false, reason: 'offline mode' } })], // remoteRepos 743
+    ['GET', '/net/status', () => ({ json: { is_enabled: netEnabled } })], // getNetEnabled 728
+    ['POST', '/net/enable', () => { netEnabled = true; return { json: OK }; }], // 736
+    ['POST', '/net/disable', () => { netEnabled = false; return { json: OK }; }], // 741
+    ['POST', '/burrito/zipped/', () => ({ json: { is_good: false, reason: 'burrito import is not implemented by the tc4-baseline mock' } })], // 753
+    ['POST', '/temp/bytes', () => ({ status: 400, json: { is_good: false, reason: 'temp upload is not implemented by the tc4-baseline mock' } })], // 790
+    ['POST', '/burrito/remake_burrito_from_zip/', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 816
+    ['GET', '/gitea/remote-repos/', () => (netEnabled ? { json: [] } : { json: { is_good: false, reason: 'offline mode' } })], // remoteRepos 825
   ];
 
   const send = (res, status, type, bytes) => {

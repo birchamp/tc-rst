@@ -1,8 +1,9 @@
 // A fake Door43 (Gitea API v1) for the share screens, served from the Playwright browser
 // context so no request leaves the machine. A trimmed port of tC4's own e2e fake
-// (e2e/helpers/door43.ts at d494a9d): sign-in with Basic auth, token mint, the user's
-// organizations with their create permission, and the per-language repository count that
-// picks the "Recommended" organization. Repository creation and push are not served.
+// (e2e/helpers/door43.ts at d494a9d, the same at d310bf3): sign-in with Basic auth, token
+// mint, the user's organizations with their create permission, and the per-language
+// repository count that picks the "Recommended" organization. Repository creation and push
+// are not served.
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',

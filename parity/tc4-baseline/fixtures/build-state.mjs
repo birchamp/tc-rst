@@ -42,7 +42,8 @@ const VENDOR = path.join(HERE, 'vendor');
 /** A file under fixtures/vendor/ (a `files` value; plain strings are paths under the tC4 root). */
 const vendored = (rel) => ({ vendor: rel });
 
-// The pins of conformance/sample-burrito and src/data/installedSuite.js at tC4 d494a9d.
+// The pins of conformance/sample-burrito and src/data/installedSuite.js at tC4 d494a9d. They
+// are the same at d310bf3.
 const SHA = {
   en_ult_v91: '35d215957f3203fd2e2fac5702ce14902d417f9d',
   en_ust_v91: '85f274a74245cb418f85266e1a5b524bc3e91e9c',

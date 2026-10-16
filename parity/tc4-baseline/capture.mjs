@@ -197,7 +197,7 @@ const SCREEN_LIST = [
   {
     name: 'translate-tit1', scenario: 'sample', view: 'draft', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Translate'],
-    shows: 'Translate, Titus 1, Section mode: ULT beside the es-419 draft, helps panel with the Comments tab',
+    shows: 'Translate, Titus 1, Section mode: ULT beside the es-419 draft, each "Draft section" a pill in the accent colour at the end of its row, helps panel with the Comments tab',
     run: async (app) => {
       await app.home(); await app.openTitus();
       await app.tab('Translate', app.page.getByRole('button', { name: /Draft section 1–3/ }));
@@ -213,20 +213,20 @@ const SCREEN_LIST = [
   {
     name: 'check-tn-session', scenario: 'sample', view: 'check', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Translation Notes card: Continue'],
-    shows: 'Translation Notes session on the es-419 notes, resumed at item 2 ("knowledge", 1:1) after the decided item 1: check rail (filters, sort, list), the quote, WHAT TO CHECK with Show more, the compare card (Greek, ULT highlight, the es-419 draft), triage buttons below the fold',
+    shows: 'Translation Notes session on the es-419 notes, resumed at item 2 ("knowledge", 1:1) after the decided item 1: check rail (filters, sort, list), the quote, WHAT TO CHECK with Show more, the compare card (Greek, ULT highlight, the es-419 draft), the marking row ("← Previous", the triage buttons, "Next →") below the fold; the header shows only "Item 2 of 112"',
     incomplete: 'The link under WHAT TO CHECK reads "Learn more: Translation Academy" instead of the article title: the sample pins es-419_ta v4 for its primary set and tC4 vendors no copy (en-check-tn-session shows the titled link).',
     run: async (app) => { await app.home(); await app.openTitus(); await app.openCheck(); await app.openTool('translationNotes'); },
   },
   {
     name: 'align-workspace', scenario: 'sample', view: 'check', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Align card'],
-    shows: 'Align, Titus 1:1, Gateway · ULT mode: the align rail (46 verses, 5 drafted), the ULT verse, Suggest links (off), the word bank of the es-419 draft (6 of 27 placed) and the ULT word cards with their Greek, the sample\'s six links placed',
+    shows: 'Align, Titus 1:1, Gateway · ULT mode: the align rail (46 verses, 5 drafted), the ULT verse, Suggest links (off), the word bank of the es-419 draft in verse order, with an occurrence number on each repeated word (6 of 27 placed), and the ULT word cards with their Greek and their target words in verse order, the sample\'s six links placed',
     run: async (app) => { await app.home(); await app.openTitus(); await app.openCheck(); await app.openAlign(); },
   },
   {
     name: 'align-original', scenario: 'sample', view: 'check', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Align card', 'Align mode: Original · Greek'],
-    shows: 'Align, Titus 1:1, Original · Greek mode: the Greek verse and one word card per Greek word, the six placed links',
+    shows: 'Align, Titus 1:1, Original · Greek mode: the Greek verse and one word card per Greek word, the six placed links, an occurrence number on each repeated word (Θεοῦ¹, Dios¹), the word bank in verse order, and the top of the marking row ("← Previous", Mark valid, "Next →") at the bottom edge',
     run: async (app) => {
       await app.home(); await app.openTitus(); await app.openCheck(); await app.openAlign();
       await app.page.getByTestId('align-mode-orig').click();
@@ -247,7 +247,7 @@ const SCREEN_LIST = [
   {
     name: 'add-project', scenario: 'sample', view: 'home', modal: 'addProject',
     steps: ['Home', '+ Add a project'],
-    shows: 'Add a project chooser: New Bible, New Open Bible Stories, Import a project',
+    shows: 'Add a project chooser with four cards: New Bible, New Open Bible Stories, Import a project, Open a project from Door43',
     run: async (app) => { await app.home(); await app.page.getByTestId('add-project').click(); await app.page.getByTestId('add-project-modal').waitFor(); },
   },
   {
@@ -283,7 +283,7 @@ const SCREEN_LIST = [
   {
     name: 'share-signin', scenario: 'sample', view: 'home', modal: 'signIn',
     steps: ['Home', 'Bible sample card: Share on Door43', 'Turn on internet'],
-    shows: 'Sign in to Door43 dialog (signs in to git.door43.org), empty fields',
+    shows: 'Sign in to Door43 dialog (signs in to git.door43.org), empty fields, and the notice that the Door43 username goes into the project, stays in it, and goes into each Scripture Burrito export',
     run: async (app) => {
       await app.home();
       await app.page.getByTestId(`share-${BIBLE}`).click();
@@ -475,7 +475,7 @@ const SCREEN_LIST = [
   {
     name: 'en-translate-tit1', scenario: 'en-pins', view: 'draft', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Translate'],
-    shows: 'Translate, Titus 1, Section mode, English helps',
+    shows: 'Translate, Titus 1, Section mode, English helps, each "Draft section" a pill in the accent colour at the end of its row',
     run: async (app) => {
       await app.home(); await app.openTitus();
       await app.tab('Translate', app.page.getByRole('button', { name: /Draft section 1–3/ }));
@@ -484,7 +484,7 @@ const SCREEN_LIST = [
   {
     name: 'en-translate-section-editor', scenario: 'en-pins', view: 'draft', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Translate', 'Draft section 1–3'],
-    shows: 'Section editor open on Titus 1:1-3 (Type mode): one "N body" line per verse, Save section / Cancel',
+    shows: 'Section editor open on Titus 1:1-3 (Type mode): one "N body" line per verse, Save section / Cancel; while it is open, the Understand and Check tabs, the book rail and the other "Draft section" pills are disabled',
     run: async (app) => {
       await app.home(); await app.openTitus();
       await app.tab('Translate', app.page.getByRole('button', { name: /Draft section 1–3/ }));
@@ -495,7 +495,7 @@ const SCREEN_LIST = [
   {
     name: 'en-translate-verse-editor', scenario: 'en-pins', view: 'draft', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Translate', 'Unit switch: Verse', 'Verse 2 (drafted text)', 'Scroll the editor to the middle of the pane'],
-    shows: 'Verse mode with the verse editor open on Titus 1:2 ("Editing below" marker, "DRAFTING 2" card with Save verse / Cancel)',
+    shows: 'Verse mode with the verse editor open on Titus 1:2 ("Editing below" marker, "DRAFTING 2" card with Save verse / Cancel); while it is open, the Understand and Check tabs and the book rail are disabled',
     run: async (app) => {
       const { page } = app;
       await app.home(); await app.openTitus();
@@ -516,7 +516,7 @@ const SCREEN_LIST = [
   {
     name: 'en-check-tw-session', scenario: 'en-pins', view: 'check', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Translation Words card: Start checking'],
-    shows: 'Translation Words session (sorted By word), item "Paul" 1:1: rail, "Learn more: Paul, Saul", compare card (Greek, ULT highlight, the es-419 draft), triage, Bookmark / Add a comment',
+    shows: 'Translation Words session (sorted By word), item "Paul" 1:1: rail, "Learn more: Paul, Saul", compare card (Greek, ULT highlight, the es-419 draft), the marking row ("← Previous", Mark valid, Invalid, To do, "Next →"), Bookmark / Add a comment; the header shows only "Item 1 of 182"',
     run: async (app) => { await app.home(); await app.openTitus(); await app.openCheck(); await app.openTool('translationWords'); },
   },
   {
@@ -580,7 +580,7 @@ const SCREEN_LIST = [
   {
     name: 'en-obs-check-tn-session', scenario: 'en-pins', view: 'check', modal: null,
     steps: ['Home', 'OBS sample card: story tile "1 · La Creación"', 'Mode switch: Check', 'Translation Notes card: Start checking'],
-    shows: 'OBS Translation Notes session, story 1 (sorted By frame), item "The Creation" 1:0: the title note, the English gateway title highlighted, the Spanish title',
+    shows: 'OBS Translation Notes session, story 1 (sorted By frame), item "The Creation" 1:0: the title note, the English gateway title highlighted, the Spanish title, the marking row with "← Previous" and "Next →"',
     run: async (app) => { await app.home(); await app.openStory1(); await app.openCheck(); await app.openTool('translationNotes'); },
   },
 ];
