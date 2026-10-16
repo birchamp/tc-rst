@@ -3270,15 +3270,15 @@ days a year.
 | `metadata.json` | ≈ 120 KB | 600 entries × ≈ 200 B, pretty-printed |
 | Working tree | ≈ 880 MiB | packs 674 MiB (measured) + derived ≈ 210 MiB (compact sidecars: alignments ≈ 90 MiB, decisions ≈ 110 MiB, USFM ≈ 5 MiB) |
 | `.git` after 3 years | ≈ 250–400 MiB | packs ≈ 70 MiB zlib, stored two to three times because consolidation writes new blobs; derived file history ≈ 110 MiB as deltas; ≈ 7,500 commits of ≈ 15 KB trees |
-| Cold open, 4 cores, SSD | target ≤ 3 s; measured 7.5 s on a 4-vCPU VM without SHA extensions: **missed** | fold 1.47 s (median of 5); reading, verifying (two SHA-256 passes over every byte, P2 and P4) and decoding every change 5.96 s on 4 threads, of which SHA-256 is about 1.8 s; `docs/evidence/storage-fold-2026-10-16.md`. The earlier estimate of 1.5–2.5 s came from packbench and the probe fold of 278,041 actions (0.90 s and 1.13 s); this fold folds 277,880 changes in 0.59 s |
+| Cold open, 4 cores, SSD | target ≤ 3 s; measured 7.8 s on a shared 4-vCPU VM without SHA extensions: **missed** | fold 2.0 s on one thread (median of 5; 1.47 s earlier the same day, when the VM was faster); reading, verifying (two SHA-256 passes over every byte, P2 and P4) and decoding every change 5.8 s on 4 threads, about 16.8 s of single-thread work of which SHA-256 is about 10 s and parsing and checking 6.2 s; `docs/evidence/storage-fold-2026-10-16.md`. A corpus of 277,880 changes (the size of the probe's 278,041 actions, which it folded in 1.13 s) folds in 0.92 s (0.59 s on the faster VM) |
 | Cold open, 2-core laptop, HDD | ≈ 6–10 s | disk-bound; determinate progress per phase |
 | Save one verse | 1–10 ms | one `atomic_write` of ≈ 1 KB (measured 0.41 ms on the VM, fsyncbench) |
-| Materialize one book | 20–60 ms estimated; measured projection of Psalms 406 ms | projecting every Psalms file (USFM, alignments, tN and TWL decisions, comments; 18.7 MB) with values read from disk and checked against their ids, on 4 threads; the USFM alone 23 ms, one chapter 0.15 ms; the write and `metadata.json` are `tc-store`'s |
+| Materialize one book | 20–60 ms estimated; measured projection of Psalms 358 ms | projecting every Psalms file (USFM, alignments, tN and TWL decisions, comments; 18.7 MB) with values read from disk and checked against their fingerprints (§2.6), on 4 threads, 0.93 s of CPU; the USFM alone 14 ms, one chapter 0.11 ms; the write and `metadata.json` are `tc-store`'s |
 | Checkpoint | 0.1–0.5 s | seal ≤ 1 MiB, materialize, tree of changed directories, one commit |
 | Daily sync | 1–3 s + network | incremental fetch of a few hundred KB; push ≈ 0.3–1 MB (non-thin, §9.5) |
 | Join | ≈ 250–400 MiB full clone, or ≈ 120 MiB exchange file | packs deflate ≈ 5x in the zip |
 | USB export | ≈ 120 MiB, 5–15 s on USB 2 | |
-| Memory | ≈ 100 MiB typical, ≈ 350 MiB peak; measured folded state 197 MB, 431 MB heap peak during the open | ≈ 320 B of tables per change (change 128 B, record 160 B, batch 56 B, indexes); values are byte ranges read on demand and dropped when a book is idle; the peak holds the prepared inputs and the growing tables at once |
+| Memory | ≈ 100 MiB typical, ≈ 350 MiB peak; measured folded state 202 MB, 413 MB heap peak during the open | ≈ 330 B of tables per change (change 136 B, of which 8 B is the value's fingerprint; record 160 B, batch 56 B, indexes); values are byte ranges read on demand and dropped when a book is idle; the peak holds the prepared inputs and the growing tables at once |
 
 An aligned NT project is about a quarter of these figures. Rows that say "measured" were
 measured on this format with the `tc-corpus` whole-Bible corpus, release builds
