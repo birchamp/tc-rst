@@ -6,18 +6,68 @@ The decision log is `.audit/rebuild.tsv`. The research behind each claim is cite
 
 ## The goal
 
-Rebuild tC4 in Rust so a translator gets the same outcome as tC4 4.0 today, plus three
-things tC4 does not yet do:
+Rebuild tC4 in Rust so a translator gets the same outcome as tC4 4.0, plus three things
+tC4 4.0 does not do.
 
-1. Several team members work on one project offline and exchange work later, through
-   Door43 or a USB drive, while others keep working. Nothing anyone wrote is lost.
-2. Translation helps can come from Door43 (DCS) or from Aquifer.
+tC4 4.0 includes Door43 team sync, "Open a project from Door43" and an Arabic interface
+(tC4 decision D102). Team sync in tC4 4.0 is round 1 of its epic #24: one public repository,
+the `main` branch only, Bible projects only, one "Sync with Door43" button, a result toast
+and a review of verse-text conflicts.
+
+The three things the rebuild adds:
+
+1. Team work goes further. Several team members work on one project offline and exchange
+   work later, while others keep working. Nothing anyone wrote is lost. Beyond tC4 4.0,
+   the rebuild has:
+   - exchange by USB drive or file;
+   - saves that continue while a sync runs;
+   - private repositories;
+   - any default branch, not only `main`;
+   - sync of Open Bible Stories (OBS) projects;
+   - a review of every conflict kind, not only verse text;
+   - carried files, such as audio, that travel with the project.
+2. Translation helps can come from Door43 (DCS) or from Aquifer. tC4 plans Aquifer for
+   4.1.0 (its epic #711).
 3. Every project on disk, and every project that leaves the app, is a valid Scripture
    Burrito.
 
 The guide is `docs/VISION.md` in the tC4 repository. tC4's decisions, its Burrito
 specification and its internal structures inform the design but do not bind it. The
 user-visible outcome binds it. The tC4 user interface and design system are kept.
+
+### The reference version
+
+tC4 4.0 has no tag yet. Until it has one, the reference is tC4 `main` at commit `d310bf3`
+(2026-10-16). When the v4.0.0 tag exists on `release/4.0`, the reference moves to that tag.
+`parity/tc4-baseline/README.md` records the commit that its screens show.
+`docs/TC4-DELTA-2026-10-16.md` lists every tC4 change from `d494a9d` to `d310bf3`.
+
+### Where the rebuild differs from tC4 4.0 on purpose
+
+The project owner ruled on these points on 2026-10-16 (`docs/TC4-DELTA-2026-10-16.md` §5).
+
+- OBS projects sync like Bible projects. The card reads "Sync with Door43", and the Share
+  dialog shows the line about team access. tC4 4.0 syncs Bible projects only (Q2).
+- A private repository opens and syncs through sign-in. The app fetches without
+  credentials first. When Door43 answers 401 or 404 and nobody is signed in, the app
+  shows the sign-in step and tries again with the token. tC4 4.0 opens public repositories
+  only (Q3).
+- A sync checks write access before it fetches. One API call reads `permissions.push`.
+  Without write access the sync refuses, and nothing changes, as in tC4. Other refusals
+  after the received work arrived keep that work and say so (Q8).
+- The aligner shows the word bank and the words of each card in verse order everywhere:
+  from the first view of a verse, after an edit, and after Clear. tC4 at `d310bf3` still
+  opens a verse with no saved alignment in word-aligner order (Q15).
+- A conflict between two check decisions is shown and can be resolved. tC4 keeps the
+  newest decision and shows only a count (Q1, AGENTS.md).
+- One damaged incoming file is salvaged. It does not stop the whole sync or open (Q4).
+- Every other question in that §5 follows its recommendation.
+
+The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
+ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9
+give the same outcomes, and STORAGE §9.9 keeps saves flowing while a sync runs. tC4 can
+leave a torn `metadata.json` (tC4 RISKS #13). The rebuild cannot, because it writes every
+file atomically (STORAGE L18).
 
 ## Definition of done
 
@@ -27,15 +77,19 @@ check in CI that can fail.
 - **P1. Journeys.** Every live tC4 journey has an automated end-to-end test that drives
   the Rust app through its UI in a browser engine and asserts the journey's
   user-visible end state and its on-disk end state. The live journeys are J1 to J8,
-  J9a, J9c, J9d, J11 to J13, J16 and J20 to J25 (tC4 `docs/JOURNEYS.md`). Where tC4
-  asserts an internal file shape, the Rust test asserts the equivalent fact in the new
-  format.
-- **P2. Team work.** New journeys pass end to end:
-  - J17: receive a project, continue offline.
-  - J18: keep one version of a conflicted verse.
-  - Team sync through a Door43-compatible git server, with three users editing
-    offline at the same time.
-  - Exchange by USB file in both directions, while both sides keep editing.
+  J9a, J9c, J9d, J11 to J13, J16, J17, J18 and J20 to J26 (tC4 `docs/JOURNEYS.md`).
+  Where tC4 asserts an internal file shape, the Rust test asserts the equivalent fact in
+  the new format.
+- **P2. Team work.** These journeys pass end to end against a Door43-compatible git
+  server:
+  - J17: open a shared project from Door43 on another computer, or from an exchange file,
+    then continue offline.
+  - J18: keep one version of a conflicted verse. As in tC4, step 3 of J26 can prove it.
+  - J26: sync one project with two teammates through Door43. Three users edit offline at
+    the same time. The steps are tC4's. The rebuild adds one: A also resolves the
+    conflict between two check decisions.
+  - The rebuild's own journey: exchange by USB file in both directions, while both sides
+    keep editing.
 - **P3. No silent loss.** A property test generates random concurrent histories for
   three or more devices and merges them in random orders and groupings. It shows that
   every merge order gives the same state and that no operation disappears without
@@ -43,8 +97,13 @@ check in CI that can fail.
   either merges without loss or appears as a conflict the user can see. Each silent-loss
   case found in tC4's design is a named regression test.
 - **P4. Crash safety.** A test kills the writer at every write point of save, sync,
-  import and checkpoint. After each kill, reopening the project gives either the state
-  before the action or the state after it. Nothing is lost and nothing is corrupt.
+  import and checkpoint. After each kill, reopening the project gives the state before
+  the action, the state after it, or, for a sync or an import, a valid state between the
+  two in which each received batch is whole or absent (STORAGE §6.4, rows Y2 and I2).
+  Nothing is lost and nothing is corrupt. For a sync this is also tC4's G8: after a kill
+  or a power loss at any point, the project opens, no own change is lost, no teammate's
+  change is reverted or given to another person, and the next sync converges with
+  Door43.
 - **P5. Valid burritos.** Every project state written by any test is validated against
   the Scripture Burrito 1.0 schema plus the checks the schema misses: ingredient md5
   and size, path rules, and scope coverage. This includes every commit, export and USB
@@ -52,14 +111,23 @@ check in CI that can fail.
 - **P6. Helps sources.** The same helps screens work with DCS resources and with
   Aquifer resources, pinned and offline, using recorded real data as fixtures.
 - **P7. Same look.** The key screens are screenshotted in the Rust app and compared with
-  the same screens in tC4. A human reviews the differences, and the differences are
-  listed.
+  the same screens in tC4, with the interface in English (`en`) and in Arabic (`ar`). The
+  tC4 screens are in `parity/tc4-baseline`, captured at the reference version. A human
+  reviews the differences, and the differences are listed.
 - **P8. Scripts.** Arabic and Hebrew text renders right-to-left and edits correctly in
-  the browser engine used by tests. Graphite rendering is checked by a probe that also
-  measures vertical glyph extent. That probe runs in the Electronite shell on the
+  the browser engine used by tests. The app's own interface is right-to-left in Arabic,
+  as in tC4 4.0, not only the scripture text. Graphite rendering is checked by a probe that
+  also measures vertical glyph extent. That probe runs in the Electronite shell on the
   release pipeline, because this container cannot run Electronite.
 - **P9. Carry-over.** A tC4 4.0 project, a tC3 project, raw USFM and a Scripture Burrito
-  each import into a valid project with their text unchanged byte for byte.
+  each import into a valid project with their text unchanged byte for byte. The tC4 4.0
+  cases include:
+  - a project that has synced with a team: its name events, a local history that differs
+    from Door43 `main`, and the folders a sync leaves behind, which the import skips;
+  - a project whose sync apply stopped part way: the import refuses it and says to open
+    it in tC4 once, so tC4 can finish its sync (Q23);
+  - a torn `metadata.json`;
+  - the stamps that the platform writes into `metadata.json`.
 
 ## Scope
 
