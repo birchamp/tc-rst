@@ -168,18 +168,18 @@ impl FoldState {
         }
     }
 
-    /// For a verse whose projected change is a `StartOver` of a *Start empty* that lost
-    /// the presence race to *Restore the text*: what the projection shows instead (§7.6).
+    /// For a verse whose projected value is, or descends from, a `StartOver` change of a
+    /// *Start empty* that lost the presence race to *Restore the text*: what the projection
+    /// shows instead (§7.6).
     fn shown_after_restore(&self, k: KeyIdx) -> Option<attach::ShownVerse> {
         let RecordKey::Verse(book, ..) = &self.entry(k).key else {
             return None;
         };
-        let Projected::Change(c) = &self.entry(k).projected else {
+        if matches!(self.entry(k).projected, Projected::Nothing) {
             return None;
-        };
-        let batch = self.batch(self.meta(*c).batch).id;
+        }
         let rewound = super::books::rewound_batches(self, *book);
-        if !rewound.contains(&batch) {
+        if attach::rewound_here(self, k, &rewound).is_empty() {
             return None;
         }
         attach::shown_verse(self, k, &rewound)

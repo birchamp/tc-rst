@@ -383,6 +383,10 @@ pub struct FoldState {
     pub(crate) conflict_ids: im::HashMap<ConflictId, ConflictSort>,
     pub(crate) owned: CowMap<Owner, SmallVec<[ConflictSort; 1]>>,
     pub(crate) anomalies: im::OrdSet<Anomaly>,
+    /// The `RecordsWithoutBook` anomaly listed for each book.
+    pub(crate) without_book: CowMap<BookId, Anomaly>,
+    /// The `UnknownKinds` anomaly listed, if any.
+    pub(crate) unknown_anomaly: Option<Anomaly>,
     pub(crate) detached: im::OrdSet<RecordKey>,
     /// Conflict counts by book and kind order.
     pub(crate) counts: super::ConflictCounts,
@@ -442,6 +446,8 @@ impl FoldState {
             conflict_ids: im::HashMap::new(),
             owned: CowMap::default(),
             anomalies: im::OrdSet::new(),
+            without_book: CowMap::default(),
+            unknown_anomaly: None,
             detached: im::OrdSet::new(),
             counts: BTreeMap::new(),
             anchors: CowMap::default(),
@@ -920,14 +926,20 @@ impl FoldState {
         let all = self
             .duplicate_seqs
             .entry_or(slot, || SmallVec::from_slice(&[first]));
+        let before = all.clone();
         all.push(c);
         let all = all.clone();
-        let mut changes: Vec<ChangeId> = all
-            .iter()
-            .map(|x| if *x == c { id } else { self.meta(*x).id })
-            .collect();
-        changes.sort();
-        self.set_duplicate(device, seq, changes);
+        let ids_of = |list: &[ChangeIdx]| -> Vec<ChangeId> {
+            let mut changes: Vec<ChangeId> = list
+                .iter()
+                .map(|x| if *x == c { id } else { self.meta(*x).id })
+                .collect();
+            changes.sort();
+            changes
+        };
+        let old = (before.len() >= 2).then(|| ids_of(&before));
+        let new = ids_of(&all);
+        self.set_duplicate(device, seq, old, new);
     }
 
     fn insert(&mut self, input: FoldInput, dirty: &mut Dirty) {
@@ -937,7 +949,7 @@ impl FoldState {
                     return;
                 }
                 let batch = q.batch.map(|b| (b.id, b.n()));
-                self.anomalies.insert(Anomaly::QuarantinedChange {
+                self.list_anomaly(Anomaly::QuarantinedChange {
                     change: q.id,
                     rule: q.rule.clone(),
                 });
@@ -1046,19 +1058,35 @@ impl FoldState {
         }
     }
 
-    fn set_duplicate(&mut self, device: DeviceId, seq: DeviceSeq, changes: Vec<ChangeId>) {
-        let stale: Vec<Anomaly> = self
-            .anomalies
-            .iter()
-            .filter(|a| {
-                matches!(a, Anomaly::DuplicateDevice { device: d, seq: s, .. } if *d == device && *s == seq)
-            })
-            .cloned()
-            .collect();
-        for anomaly in stale {
-            self.anomalies.remove(&anomaly);
+    /// Lists an anomaly; each listing or unlisting is counted, and no step reads the
+    /// whole list.
+    pub(crate) fn list_anomaly(&mut self, anomaly: Anomaly) {
+        self.count(Counter::AnomaliesTouched, 1);
+        self.anomalies.insert(anomaly);
+    }
+
+    pub(crate) fn unlist_anomaly(&mut self, anomaly: &Anomaly) {
+        self.count(Counter::AnomaliesTouched, 1);
+        self.anomalies.remove(anomaly);
+    }
+
+    /// Lists the changes that claim one Local device and seq, replacing the listing of
+    /// the `old` ones by its exact value.
+    fn set_duplicate(
+        &mut self,
+        device: DeviceId,
+        seq: DeviceSeq,
+        old: Option<Vec<ChangeId>>,
+        changes: Vec<ChangeId>,
+    ) {
+        if let Some(old) = old {
+            self.unlist_anomaly(&Anomaly::DuplicateDevice {
+                device,
+                seq,
+                changes: old,
+            });
         }
-        self.anomalies.insert(Anomaly::DuplicateDevice {
+        self.list_anomaly(Anomaly::DuplicateDevice {
             device,
             seq,
             changes,
@@ -1350,10 +1378,10 @@ impl FoldState {
             return;
         }
         if let Some(old) = &held.anomaly {
-            self.anomalies.remove(old);
+            self.unlist_anomaly(old);
         }
         if let Some(new) = &anomaly {
-            self.anomalies.insert(new.clone());
+            self.list_anomaly(new.clone());
         }
         self.batches[b.get()].held = true;
         self.held.entry_or(b, Held::default).anomaly = anomaly;
@@ -1479,12 +1507,12 @@ impl FoldState {
         self.sort_by_id(&mut heads);
         // Replace this key's link anomalies.
         for (c, p, fault) in old_faults.iter() {
-            self.anomalies
-                .remove(&link_anomaly(self.meta(*c).id, *p, *fault));
+            let anomaly = link_anomaly(self.meta(*c).id, *p, *fault);
+            self.unlist_anomaly(&anomaly);
         }
         for (c, p, fault) in faults.iter() {
-            self.anomalies
-                .insert(link_anomaly(self.meta(*c).id, *p, *fault));
+            let anomaly = link_anomaly(self.meta(*c).id, *p, *fault);
+            self.list_anomaly(anomaly);
         }
         self.entry_mut(k).heads = heads;
         if !faults.is_empty() {
@@ -1583,15 +1611,6 @@ impl FoldState {
     /// The anomaly of unknown kinds (§12): one entry for every folded change of a kind from
     /// a newer minor.
     fn stage_unknown(&mut self) {
-        let stale: Vec<Anomaly> = self
-            .anomalies
-            .iter()
-            .filter(|a| matches!(a, Anomaly::UnknownKinds { .. }))
-            .cloned()
-            .collect();
-        for anomaly in stale {
-            self.anomalies.remove(&anomaly);
-        }
         let mut kinds: BTreeSet<Box<str>> = BTreeSet::new();
         let mut changes = 0u32;
         for k in self.unknown_keys.iter() {
@@ -1601,11 +1620,19 @@ impl FoldState {
                 changes += entry.active;
             }
         }
-        if changes > 0 {
-            self.anomalies.insert(Anomaly::UnknownKinds {
-                kinds: kinds.into_iter().collect(),
-                changes,
-            });
+        let new = (changes > 0).then(|| Anomaly::UnknownKinds {
+            kinds: kinds.into_iter().collect(),
+            changes,
+        });
+        if new == self.unknown_anomaly {
+            return;
+        }
+        if let Some(old) = self.unknown_anomaly.take() {
+            self.unlist_anomaly(&old);
+        }
+        if let Some(new) = new {
+            self.list_anomaly(new.clone());
+            self.unknown_anomaly = Some(new);
         }
     }
 

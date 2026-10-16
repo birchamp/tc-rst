@@ -46,13 +46,60 @@ fn target_verse(check: &CheckKey) -> Option<(u16, u16)> {
 // What a verse shows
 // ---------------------------------------------------------------------------------------
 
-/// The value projection shows for a verse record: its projected value, with the
-/// `StartOver` changes of a *Start empty* that lost to *Restore the text* rewound (§7.6).
+/// The changes of verse record `k` that projection rewinds (§7.6): its changes of the
+/// `StartOver` batches in `rewound`, when its projected value is, or descends from, one of
+/// them. Empty when the record shows its own projected value.
+pub(crate) fn rewound_here(
+    state: &FoldState,
+    k: KeyIdx,
+    rewound: &[crate::ids::BatchId],
+) -> BTreeSet<ChangeIdx> {
+    if rewound.is_empty() {
+        return BTreeSet::new();
+    }
+    let entry = state.entry(k);
+    let bad: BTreeSet<ChangeIdx> = entry
+        .changes
+        .iter()
+        .copied()
+        .filter(|x| {
+            state.meta(*x).active && rewound.contains(&state.batch(state.meta(*x).batch).id)
+        })
+        .collect();
+    if bad.is_empty() {
+        return bad;
+    }
+    let shown: Vec<ChangeIdx> = match &entry.projected {
+        Projected::Nothing => Vec::new(),
+        Projected::Change(c) => vec![*c],
+        Projected::Merged(_) => entry.heads.to_vec(),
+    };
+    let descends = shown.iter().any(|c| {
+        super::merge::ancestors_or_self(state, *c)
+            .iter()
+            .any(|a| bad.contains(a))
+    });
+    if descends { bad } else { BTreeSet::new() }
+}
+
+/// The value projection shows for a verse record: its projected value, with every change
+/// that is or descends from a `StartOver` change of a *Start empty* that lost to *Restore
+/// the text* rewound (§7.6, §7.3).
 pub(crate) fn shown_verse(
     state: &FoldState,
     k: KeyIdx,
     rewound: &[crate::ids::BatchId],
 ) -> Option<ShownVerse> {
+    let bad = rewound_here(state, k, rewound);
+    if !bad.is_empty() {
+        let heads = state.entry(k).heads.to_vec();
+        let back = rewind(state, &heads, &bad);
+        return back
+            .iter()
+            .copied()
+            .max_by_key(|x| state.meta(*x).order())
+            .and_then(|x| state.meta(x).verse().map(|s| ShownVerse::Change(s, x)));
+    }
     match &state.entry(k).projected {
         Projected::Nothing => None,
         Projected::Merged(record) => match &**record {
@@ -61,29 +108,7 @@ pub(crate) fn shown_verse(
             }
             _ => None,
         },
-        Projected::Change(c) => {
-            let c = *c;
-            if !rewound.is_empty() && rewound.contains(&state.batch(state.meta(c).batch).id) {
-                let bad: BTreeSet<ChangeIdx> = state
-                    .entry(k)
-                    .changes
-                    .iter()
-                    .copied()
-                    .filter(|x| {
-                        state.meta(*x).active
-                            && rewound.contains(&state.batch(state.meta(*x).batch).id)
-                    })
-                    .collect();
-                let heads = state.entry(k).heads.to_vec();
-                let back = rewind(state, &heads, &bad);
-                return back
-                    .iter()
-                    .copied()
-                    .max_by_key(|x| state.meta(*x).order())
-                    .and_then(|x| state.meta(x).verse().map(|s| ShownVerse::Change(s, x)));
-            }
-            state.meta(c).verse().map(|s| ShownVerse::Change(s, c))
-        }
+        Projected::Change(c) => state.meta(*c).verse().map(|s| ShownVerse::Change(s, *c)),
     }
 }
 
@@ -446,6 +471,15 @@ pub(crate) fn stage_local(state: &mut FoldState, dirty: &mut Dirty) {
     }
 }
 
+/// Lists record `k`'s own conflict again (its candidates may follow other records).
+pub(crate) fn relist(state: &mut FoldState, k: KeyIdx, dirty: &mut Dirty) {
+    let conflict = match &state.entry(k).local {
+        Local::Conflict(c) if state.entry(k).group.is_none() => local_conflict(state, k, c),
+        _ => return,
+    };
+    state.set_conflicts(Owner::Key(k), vec![conflict], dirty);
+}
+
 impl FoldState {
     /// The conflict list and its counts built again instead of read from the list each
     /// step keeps: every record's own conflict is built anew from its heads (its
@@ -514,6 +548,51 @@ fn local_conflict(state: &FoldState, k: KeyIdx, local: &super::state::LocalConfl
                 .map(|b| state.meta(*b).id),
         );
     }
+    // A restore race (§7.6): a verse changed after *Start empty* is rewound for projection
+    // while *Restore the text* is provisional, so it is a candidate here whichever is (its
+    // `StartOver` changes are the *Start empty* candidate's).
+    let mut also_keys: Vec<RecordKey> = Vec::new();
+    if let RecordKey::BookPresence(book) = &entry.key {
+        let race = super::books::race_batches(state, *book);
+        if !race.is_empty()
+            && let Some(b) = state.books.get(book)
+        {
+            for &v in &b.keys {
+                if !matches!(state.entry(v).key, RecordKey::Verse(..)) {
+                    continue;
+                }
+                let bad: BTreeSet<ChangeIdx> = state
+                    .entry(v)
+                    .changes
+                    .iter()
+                    .copied()
+                    .filter(|x| {
+                        state.meta(*x).active
+                            && race.contains(&state.batch(state.meta(*x).batch).id)
+                    })
+                    .collect();
+                let mut listed = false;
+                for h in state.entry(v).heads.iter() {
+                    if bad.contains(h)
+                        || !super::merge::ancestors_or_self(state, *h)
+                            .iter()
+                            .any(|a| bad.contains(a))
+                    {
+                        continue;
+                    }
+                    listed = true;
+                    match candidate(state, *h, Vec::new(), None) {
+                        Some(c) => candidates.push(c),
+                        None => unreadable.push(state.meta(*h).id),
+                    }
+                }
+                if listed {
+                    also_keys.push(state.entry(v).key.clone());
+                }
+            }
+        }
+    }
+    also_keys.sort();
     unreadable.sort();
     unreadable.dedup();
     let (id, provisional) = (local.id, local.provisional);
@@ -526,7 +605,7 @@ fn local_conflict(state: &FoldState, k: KeyIdx, local: &super::state::LocalConfl
     Conflict {
         id,
         key: entry.key.clone(),
-        also_keys: Vec::new(),
+        also_keys,
         kind: conflict_kind(state, &entry.key, &heads),
         bases: anc.bases.iter().map(|b| state.meta(*b).id).collect(),
         candidates,

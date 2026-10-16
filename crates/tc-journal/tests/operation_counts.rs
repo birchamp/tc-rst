@@ -177,6 +177,11 @@ fn assert_no_growth(action: &str, small: Counters, big: Counters) {
             big.records_projected,
         ),
         ("values read", small.values_read, big.values_read),
+        (
+            "anomalies touched",
+            small.anomalies_touched,
+            big.anomalies_touched,
+        ),
     ];
     eprintln!("{action}, Psalms: {small:?}");
     eprintln!("{action}, ten times larger: {big:?}");
@@ -214,28 +219,63 @@ fn the_larger_corpus_is_ten_times_larger() {
 
 #[test]
 fn a_verse_save_and_its_chapter_cost_what_they_touch() {
-    let measure = |state: &FoldState| {
-        let mut state = fork(state);
-        let (key, record) = text_verse(&state);
-        let mut dev = Dev::new(201);
-        let parents = state.shown_heads(&key, None);
-        let change = dev.batch(
-            vec![(reword(&record, "a saved verse"), parents)],
-            Cause::Edit,
-        );
-        let mut counts = step(&mut state, change);
-        assert_local("verse save", counts, 1);
-        let before = state.counters();
-        let usfm = state
-            .chapter_usfm(PSALMS, common_chapter())
-            .expect("the chapter projects");
-        assert!(usfm.contains("a saved verse"));
-        let projection = state.counters().since(&before);
-        counts.records_projected += projection.records_projected;
-        counts.values_decoded += projection.values_decoded;
-        counts
-    };
-    assert_no_growth("verse save", measure(psalms()), measure(larger()));
+    assert_no_growth("verse save", verse_save(psalms()), verse_save(larger()));
+}
+
+/// A verse save on `state`, counted with its chapter's USFM.
+fn verse_save(state: &FoldState) -> Counters {
+    let mut state = fork(state);
+    let (key, record) = text_verse(&state);
+    let mut dev = Dev::new(201);
+    let parents = state.shown_heads(&key, None);
+    let change = dev.batch(
+        vec![(reword(&record, "a saved verse"), parents)],
+        Cause::Edit,
+    );
+    let mut counts = step(&mut state, change);
+    assert_local("verse save", counts, 1);
+    let before = state.counters();
+    let usfm = state
+        .chapter_usfm(PSALMS, common_chapter())
+        .expect("the chapter projects");
+    assert!(usfm.contains("a saved verse"));
+    let projection = state.counters().since(&before);
+    counts.records_projected += projection.records_projected;
+    counts.values_decoded += projection.values_decoded;
+    counts
+}
+
+/// A step never reads the list of anomalies: a project with thousands of them (a lost or
+/// damaged pack leaves many missing parents) saves a verse with the same work.
+#[test]
+fn a_verse_save_costs_nothing_per_anomaly() {
+    let mut damaged = psalms().clone();
+    let mut dev = Dev::new(209);
+    let orphans: Vec<tc_journal::Change> = (0..2_000u32)
+        .flat_map(|i| {
+            let mut lost = [0u8; 32];
+            lost[..4].copy_from_slice(&i.to_be_bytes());
+            let record = Record::Verse {
+                book: BookId::Genesis,
+                chapter: tc_journal::ChapterNo::new(1 + (i / 50) as u16).expect("chapter"),
+                verse: tc_journal::VerseNo::new(1 + (i % 50) as u16).expect("verse"),
+                value: VerseValue::Text {
+                    marker: tc_journal::record::MarkerWs::canonical(),
+                    words: format!("orphan {i}"),
+                    layout: "\n".into(),
+                    last: tc_journal::VerseNo::new(1 + (i % 50) as u16).expect("verse"),
+                    from: None,
+                },
+            };
+            dev.batch(
+                vec![(record, vec![ChangeId::from_bytes(lost)])],
+                Cause::Edit,
+            )
+        })
+        .collect();
+    damaged.add(orphans.into_iter().map(FoldInput::from));
+    assert!(damaged.anomalies().count() >= 2_000 + psalms().anomalies().count());
+    assert_no_growth("verse save", verse_save(psalms()), verse_save(&damaged));
 }
 
 #[test]

@@ -340,9 +340,10 @@ pub(crate) enum Counter {
     ConflictsBuilt,
     RecordsProjected,
     ValuesRead,
+    AnomaliesTouched,
 }
 
-const COUNTERS: usize = 13;
+const COUNTERS: usize = 14;
 
 #[derive(Debug, Default)]
 pub(crate) struct CounterCells([AtomicU64; COUNTERS]);
@@ -368,6 +369,7 @@ impl CounterCells {
             conflicts_built: get(Counter::ConflictsBuilt),
             records_projected: get(Counter::RecordsProjected),
             values_read: get(Counter::ValuesRead),
+            anomalies_touched: get(Counter::AnomaliesTouched),
         }
     }
 }
@@ -402,6 +404,8 @@ pub struct Counters {
     pub records_projected: u64,
     /// Values read from the fold's source (§14).
     pub values_read: u64,
+    /// Anomalies listed or unlisted.
+    pub anomalies_touched: u64,
 }
 
 impl Counters {
@@ -421,6 +425,7 @@ impl Counters {
             conflicts_built: self.conflicts_built - earlier.conflicts_built,
             records_projected: self.records_projected - earlier.records_projected,
             values_read: self.values_read - earlier.values_read,
+            anomalies_touched: self.anomalies_touched - earlier.anomalies_touched,
         }
     }
 }

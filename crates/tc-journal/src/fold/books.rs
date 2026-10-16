@@ -38,6 +38,18 @@ pub(crate) fn stage_books(state: &mut FoldState, dirty: &mut Dirty) {
             }
             mark_book(state, book, dirty);
         }
+        // A restore race lists the verses typed after the losing *Start empty* (§7.6):
+        // its conflict follows the book's verses.
+        if !dirty.all
+            && let Some(presence) = state.books.get(&book).and_then(|b| b.presence)
+            && matches!(
+                state.entry(presence).local,
+                super::state::Local::Conflict(_)
+            )
+            && !race_batches(state, book).is_empty()
+        {
+            super::attach::relist(state, presence, dirty);
+        }
     }
     if changed || dirty.all || dirty.books.iter().any(|b| removed(state, *b)) {
         last_book(state, dirty);
@@ -227,26 +239,26 @@ fn book_conflict(
     }
 }
 
-/// `RecordsWithoutBook`: records of a book that no folded presence change mentions.
+/// `RecordsWithoutBook`: records of a book that no folded presence change mentions. The
+/// anomaly listed for each book is kept beside the list, so a step replaces it by its exact
+/// value instead of looking for it among every anomaly.
 fn records_anomaly(state: &mut FoldState, book: BookId) {
-    let stale: Vec<Anomaly> = state
-        .anomalies
-        .iter()
-        .filter(|a| matches!(a, Anomaly::RecordsWithoutBook { book: b, .. } if *b == book))
-        .cloned()
-        .collect();
-    for a in stale {
-        state.anomalies.remove(&a);
-    }
-    let Some(entry) = state.books.get(&book) else {
+    let new = state.books.get(&book).and_then(|entry| {
+        let mentioned = entry.presence.is_some_and(|p| state.entry(p).active > 0);
+        (!mentioned && entry.records > 0).then_some(Anomaly::RecordsWithoutBook {
+            book,
+            records: entry.records,
+        })
+    });
+    if state.without_book.get(&book) == new.as_ref() {
         return;
-    };
-    let mentioned = entry.presence.is_some_and(|p| state.entry(p).active > 0);
-    if !mentioned && entry.records > 0 {
-        let records = entry.records;
-        state
-            .anomalies
-            .insert(Anomaly::RecordsWithoutBook { book, records });
+    }
+    if let Some(old) = state.without_book.remove(&book) {
+        state.unlist_anomaly(&old);
+    }
+    if let Some(new) = new {
+        state.list_anomaly(new.clone());
+        state.without_book.insert(book, new);
     }
 }
 
@@ -310,42 +322,54 @@ fn last_book(state: &mut FoldState, dirty: &mut Dirty) {
 }
 
 /// For a book whose presence is in conflict between *Restore the text* and *Start empty*
-/// (§7.6): the `StartOver` batches projection rewinds, because the provisional presence
-/// head restored the text.
-pub(crate) fn rewound_batches(state: &FoldState, book: BookId) -> Vec<crate::ids::BatchId> {
+/// (§7.6): the *Start empty* batches of the race, whichever is provisional. Read no clock.
+pub(crate) fn race_batches(state: &FoldState, book: BookId) -> Vec<crate::ids::BatchId> {
     let Some(presence) = state.books.get(&book).and_then(|b| b.presence) else {
         return Vec::new();
     };
-    let heads: Vec<ChangeIdx> = state.entry(presence).heads.to_vec();
-    if heads.len() < 2 {
-        return Vec::new();
-    }
-    let present: Vec<ChangeIdx> = heads
-        .iter()
-        .copied()
-        .filter(|h| matches!(state.meta(*h).shape, Shape::Presence(Some(_))))
-        .collect();
-    let Some(provisional) = present
-        .iter()
-        .copied()
-        .max_by_key(|h| (state.meta(*h).at, state.meta(*h).id))
-    else {
-        return Vec::new();
-    };
-    if !matches!(
-        state.meta(provisional).shape,
-        Shape::Presence(Some(PresentHow::RestoredText))
-    ) {
+    let heads = &state.entry(presence).heads;
+    if heads.len() < 2
+        || !heads.iter().any(|h| {
+            matches!(
+                state.meta(*h).shape,
+                Shape::Presence(Some(PresentHow::RestoredText))
+            )
+        })
+    {
         return Vec::new();
     }
     let mut out: BTreeMap<crate::ids::BatchId, ()> = BTreeMap::new();
-    for h in present {
+    for h in heads.iter() {
         if matches!(
-            state.meta(h).shape,
+            state.meta(*h).shape,
             Shape::Presence(Some(PresentHow::StartedEmpty))
         ) {
-            out.insert(state.batch(state.meta(h).batch).id, ());
+            out.insert(state.batch(state.meta(*h).batch).id, ());
         }
     }
     out.into_keys().collect()
+}
+
+/// The *Start empty* batches projection rewinds (§7.6): those of the race, when the
+/// provisional presence head (the `Present` head with the largest `(at, id)`) restored the
+/// text.
+pub(crate) fn rewound_batches(state: &FoldState, book: BookId) -> Vec<crate::ids::BatchId> {
+    let race = race_batches(state, book);
+    if race.is_empty() {
+        return race;
+    }
+    let Some(presence) = state.books.get(&book).and_then(|b| b.presence) else {
+        return Vec::new();
+    };
+    let provisional = state
+        .entry(presence)
+        .heads
+        .iter()
+        .copied()
+        .filter(|h| matches!(state.meta(*h).shape, Shape::Presence(Some(_))))
+        .max_by_key(|h| (state.meta(*h).at, state.meta(*h).id));
+    match provisional.map(|h| &state.meta(h).shape) {
+        Some(Shape::Presence(Some(PresentHow::RestoredText))) => race,
+        _ => Vec::new(),
+    }
 }

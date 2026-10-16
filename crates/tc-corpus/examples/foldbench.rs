@@ -517,6 +517,74 @@ fn run(args: &[String]) {
     alignment.report();
     counts.report();
 
+    // The same steps while a snapshot is alive (a sync, an export or an upgrade plan holds
+    // one, §7.8): the first write to each shared part of the state copies it.
+    let mut verse = Stats::new("Incremental step with a live snapshot: save one Psalms verse");
+    let mut decision =
+        Stats::new("Incremental step with a live snapshot: record one Psalms decision");
+    for i in 0..200 {
+        let key = &psalms_verses[(i * 6151) % psalms_verses.len()];
+        if let Some(Record::Verse {
+            book,
+            chapter,
+            verse: v,
+            value:
+                VerseValue::Text {
+                    marker,
+                    layout,
+                    last,
+                    from,
+                    ..
+                },
+        }) = state.projected(key)
+        {
+            let change = writer.write(
+                Record::Verse {
+                    book,
+                    chapter,
+                    verse: v,
+                    value: VerseValue::Text {
+                        marker,
+                        words: format!("snapshot words {i}"),
+                        layout,
+                        last,
+                        from,
+                    },
+                },
+                state.shown_heads(key, None),
+                Cause::Edit,
+            );
+            let snapshot = state.clone();
+            let t = Instant::now();
+            state.add([FoldInput::from(change)]);
+            verse.times.push(t.elapsed());
+            drop(snapshot);
+        }
+        let key = &psalms_checks[(i * 7_793) % psalms_checks.len()];
+        if let Some(Record::Check {
+            key: check,
+            value: CheckValue::Decision(mut value),
+        }) = state.projected(key)
+        {
+            value.bookmarked = !value.bookmarked;
+            let change = writer.write(
+                Record::Check {
+                    key: check,
+                    value: CheckValue::Decision(value),
+                },
+                state.shown_heads(key, None),
+                Cause::Edit,
+            );
+            let snapshot = state.clone();
+            let t = Instant::now();
+            state.add([FoldInput::from(change)]);
+            decision.times.push(t.elapsed());
+            drop(snapshot);
+        }
+    }
+    verse.report();
+    decision.report();
+
     // A resolution: make a conflict on a Psalms verse, then resolve it.
     let mut resolve = Stats::new("Incremental step: resolve one Psalms conflict");
     let mut other = Writer {

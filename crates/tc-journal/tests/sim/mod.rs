@@ -2183,6 +2183,10 @@ pub fn choose(state: &FoldState, conflict: &Conflict, pick: u8, how: u8) -> Opti
                 kept: match conflict.kind {
                     ConflictKind::StructureIssue => Kept::Words,
                     ConflictKind::PathCase => Kept::AsItIs,
+                    // A verse typed after *Start empty* keeps that side as it is (§7.6).
+                    ConflictKind::BookPresence if matches!(first.value, Record::Verse { .. }) => {
+                        Kept::AsItIs
+                    }
                     _ => Kept::Exact,
                 },
             }),

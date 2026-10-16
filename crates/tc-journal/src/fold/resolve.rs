@@ -127,6 +127,7 @@ impl FoldState {
                 _ => self.restore_book(conflict.id),
             },
             ConflictKind::LastBookRemoved => self.restore_book(conflict.id),
+            ConflictKind::BookPresence => self.keep_presence(conflict, candidate),
             ConflictKind::PathCase => match &candidate.value {
                 // Keeping one file at its place removes nothing: the others are renamed by
                 // a person. Keeping a candidate here means removing every other file.
@@ -146,6 +147,110 @@ impl FoldState {
             },
             _ => Ok(vec![self.resolving(candidate.value.clone())]),
         }
+    }
+
+    /// A choice in a book's presence conflict (§7.6, §8.3). *Restore the text* against
+    /// *Start empty* writes, in one batch, the presence and, on every verse whose value is
+    /// or descends from a `StartOver` change of *Start empty*, the value it had before it
+    /// (a `Restore`). Keeping a verse typed after *Start empty*, listed as a candidate,
+    /// keeps *Start empty*.
+    fn keep_presence(
+        &self,
+        conflict: &Conflict,
+        candidate: &Candidate,
+    ) -> Result<Vec<PlannedChange>, ResolveError> {
+        let RecordKey::BookPresence(book) = conflict.key else {
+            return Err(ResolveError::NotOffered);
+        };
+        let empty = |c: &&Candidate| {
+            matches!(
+                c.value,
+                Record::BookPresence {
+                    value: BookPresence::Present {
+                        how: PresentHow::StartedEmpty,
+                        ..
+                    },
+                    ..
+                }
+            )
+        };
+        let candidate = match &candidate.value {
+            Record::Verse { .. } => conflict
+                .candidates
+                .iter()
+                .find(empty)
+                .ok_or(ResolveError::NotOffered)?,
+            _ => candidate,
+        };
+        let mut out = vec![self.resolving(candidate.value.clone())];
+        let restores = matches!(
+            candidate.value,
+            Record::BookPresence {
+                value: BookPresence::Present {
+                    how: PresentHow::RestoredText,
+                    ..
+                },
+                ..
+            }
+        );
+        if !restores {
+            return Ok(out);
+        }
+        let losing: Vec<crate::ids::BatchId> = conflict
+            .candidates
+            .iter()
+            .filter(empty)
+            .filter_map(|c| self.change_idx(&c.head))
+            .map(|c| self.batch(self.meta(c).batch).id)
+            .collect();
+        let Some(entry) = self.books.get(&book) else {
+            return Ok(out);
+        };
+        for &k in &entry.keys {
+            let key = self.entry(k).key.clone();
+            if !matches!(key, RecordKey::Verse(..)) {
+                continue;
+            }
+            let heads: Vec<ChangeIdx> = self.entry(k).heads.to_vec();
+            let bad: BTreeSet<ChangeIdx> = self
+                .entry(k)
+                .changes
+                .iter()
+                .copied()
+                .filter(|c| {
+                    self.meta(*c).active && losing.contains(&self.batch(self.meta(*c).batch).id)
+                })
+                .collect();
+            let touched = heads
+                .iter()
+                .any(|h| ancestors_or_self(self, *h).iter().any(|a| bad.contains(a)));
+            if !touched {
+                continue;
+            }
+            let back = rewind(self, &heads, &bad);
+            let record = match (&key, self.one_value(&key, &back)) {
+                (_, Ok(Some(record))) => record,
+                (RecordKey::Verse(book, chapter, verse), Ok(None)) => Record::Verse {
+                    book: *book,
+                    chapter: *chapter,
+                    verse: *verse,
+                    value: VerseValue::Absent { moved_to: None },
+                },
+                // Concurrent edits besides *Start empty*: the verse keeps its own conflict
+                // with that batch, for a choice of its own.
+                (_, Err(ResolveError::MissingValue(_))) => continue,
+                (_, Err(e)) => return Err(e),
+                (other, Ok(None)) => return Err(ResolveError::MissingValue(other.clone())),
+            };
+            let mut planned = self.resolving(record);
+            if let [from] = back.as_slice() {
+                planned.cause = Cause::Restore {
+                    from: self.meta(*from).id,
+                };
+            }
+            out.push(planned);
+        }
+        Ok(out)
     }
 
     // ---------------------------------------------------------------------------------

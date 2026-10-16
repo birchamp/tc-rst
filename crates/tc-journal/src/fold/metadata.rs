@@ -254,10 +254,10 @@ impl FoldState {
             let choice = self.meta_choice(k);
             let old = self.meta_choices.get(&k).and_then(|c| c.anomaly.clone());
             if let Some(old) = old {
-                self.anomalies.remove(&old);
+                self.unlist_anomaly(&old);
             }
             if let Some(new) = &choice.anomaly {
-                self.anomalies.insert(new.clone());
+                self.list_anomaly(new.clone());
             }
             Arc::make_mut(&mut self.meta_choices).insert(k, choice);
         }

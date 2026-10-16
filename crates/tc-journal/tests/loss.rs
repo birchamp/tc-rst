@@ -2567,3 +2567,109 @@ fn duplicated_comment_id_across_books_converges() {
         }
     )));
 }
+
+/// Juan chose *Start empty* and then typed verse 1; Maria's *Restore the text* is newer.
+fn start_empty_then_typed() -> (Vec<Change>, Change, Change, Change) {
+    let mut maria = Dev::new(1);
+    let mut juan = Dev::new(2);
+    let book = titus_and_ruth(&mut maria, &[2]);
+    let presence = on(&book, &RecordKey::BookPresence(BOOK));
+    let removal = maria.one(removed(&ids(&book)), vec![presence.id()]);
+    juan.at = maria.at;
+    maria.at += 3_600_000;
+    let empty = juan.batch(
+        vec![
+            (present(PresentHow::StartedEmpty), vec![removal.id()]),
+            (
+                verse(1, 1, text("___", 1)),
+                vec![on(&book, &verse_key(1, 1)).id()],
+            ),
+            (
+                verse(1, 2, text("___", 2)),
+                vec![on(&book, &verse_key(1, 2)).id()],
+            ),
+        ],
+        Cause::StartOver,
+    );
+    let typed = juan.one(
+        verse(1, 1, text("Juan new one", 1)),
+        vec![on(&empty, &verse_key(1, 1)).id()],
+    );
+    let restore = maria.one(present(PresentHow::RestoredText), vec![removal.id()]);
+    let all = all_of(&[&book, &[removal], &empty, &[typed.clone(), restore.clone()]]);
+    (all, empty[0].clone(), typed, restore)
+}
+
+/// L102: after *Restore the text* wins provisionally, a verse typed after *Start empty* is
+/// rewound with it, so no verse shows one side beside another's, and the typed verse is a
+/// candidate of the presence conflict; each choice keeps one side whole.
+#[test]
+fn loss_start_empty_descendants_rewound_and_listed() {
+    let (all, started_empty, typed, restore) = start_empty_then_typed();
+    let state = assert_converges(&all);
+    let text = usfm(&state);
+    assert!(text.contains("\\v 1 words of 1:1\n"), "{text}");
+    assert!(text.contains("\\v 2 words of 1:2\n"), "{text}");
+    assert!(!text.contains("Juan new one"), "{text}");
+    let conflict = state
+        .conflicts_of(ConflictKind::BookPresence)
+        .next()
+        .cloned()
+        .expect("the restore race");
+    assert_eq!(conflict.provisional, restore.id());
+    assert!(
+        conflict.candidates.iter().any(|c| c.head == typed.id()),
+        "the typed verse is listed: {:#?}",
+        conflict.candidates
+    );
+    assert!(conflict.also_keys.contains(&verse_key(1, 1)));
+    // A screen shows the restored text, and an edit continues it.
+    let shown = state.shown_heads(&verse_key(1, 1), None);
+    assert!(!shown.contains(&typed.id()));
+    assert_eq!(
+        projected_words(&state, 1, 1).as_deref(),
+        Some("words of 1:1")
+    );
+
+    // Restore the text: the book's text, every verse restored in the same batch.
+    let mut ana = Dev::new(3);
+    let planned = state
+        .resolution(&conflict.id, &Choice::Candidate { head: restore.id() })
+        .expect("offered");
+    let mut restored = all.clone();
+    restored.extend(ana.apply(planned));
+    let after = assert_converges(&restored);
+    assert_eq!(
+        after.conflict_count(),
+        0,
+        "{:#?}",
+        after.conflicts().collect::<Vec<_>>()
+    );
+    assert_eq!(
+        projected_words(&after, 1, 1).as_deref(),
+        Some("words of 1:1")
+    );
+    assert_eq!(
+        projected_words(&after, 1, 2).as_deref(),
+        Some("words of 1:2")
+    );
+
+    // Start empty: Juan's side whole, his typed verse included.
+    let planned = state
+        .resolution(
+            &conflict.id,
+            &Choice::Candidate {
+                head: started_empty.id(),
+            },
+        )
+        .expect("offered");
+    let mut emptied = all;
+    emptied.extend(ana.apply(planned));
+    let after = assert_converges(&emptied);
+    assert_eq!(after.conflict_count(), 0);
+    assert_eq!(
+        projected_words(&after, 1, 1).as_deref(),
+        Some("Juan new one")
+    );
+    assert_eq!(projected_words(&after, 1, 2).as_deref(), Some("___"));
+}

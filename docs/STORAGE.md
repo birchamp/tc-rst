@@ -2096,12 +2096,18 @@ the scope of the `Present` head that has the largest `(at, id)`. A `Present` aga
 is also a `BookPresence` conflict, and so are two `Present` heads with different values: a
 different scope, or *Restore the text* against *Start empty* ("Maria restored Jonah with its
 text; Juan restored it with empty verses"). While that race is open, the provisional `Present`
-head (largest `(at, id)`) decides what the book shows: if it is *Restore the text*, the
-`StartOver` changes of the concurrent *Start empty* batch are rewound (§7.3) for projection, so
-the text shows; if it is *Start empty*, the empty verses show. A verse someone edited
-concurrently with *Start empty* is in the `Passage` conflict of that batch (§7.3). Choosing
-*Restore the text* writes, in one batch, the presence resolution and, on every verse whose head
-is a `StartOver` change of the losing batch, a `Restore` of that change's parent value.
+head (largest `(at, id)`) decides what the book shows: if it is *Restore the text*, every
+verse change that is, or descends from, a `StartOver` change of the concurrent *Start empty*
+batch is rewound (§7.3) for projection, so the text shows and no verse typed after *Start
+empty* shows beside restored ones; if it is *Start empty*, the empty verses show. A verse
+someone edited concurrently with *Start empty* is in the `Passage` conflict of that batch
+(§7.3). A verse changed after *Start empty* (descending from its `StartOver` change) is listed
+as a candidate of the presence conflict, with its record in `also_keys`, so it is on a screen
+while it is rewound (I2); the `StartOver` changes themselves are the *Start empty* candidate's.
+Choosing *Restore the text* writes, in one batch, the presence resolution and, on every verse
+whose head is or descends from a `StartOver` change of the losing batch, a `Restore` of the
+value rewinding gives. Choosing *Start empty*, or a verse listed as its candidate, keeps that
+side whole.
 
 **A book file appearing outside the app adds the book.** A USFM file or a sidecar of a book
 that has no `Present` head, decoded from Door43, an exchange file or this computer (§11.1 X2),
@@ -3451,6 +3457,7 @@ and the on-disk end state, not only what the fold returns.
 | L99 | Applying offline changes to a moved check applies only the newest editor's changes (by clock) and supersedes the others, and leaves out the units other than judgement, comment and bookmark | every decided version's changed units are applied, every unit of §7.3; two different changes of one unit refuse the choice (§8.3) | `loss_carryover_two_offline_editors`, `loss_carryover_two_verdicts_refused` |
 | L100 | *Choose per line* starts from one head's value and skips the units that merged cleanly, so the other person's agreed change (a comment) is lost; with no folded head it panics | the record starts from the merged agreed units and takes only the disputed units from the picks; it is offered only for a record's own conflict with disputed units (§8.3) | `loss_choose_per_line_keeps_agreed_units`, `per_unit_not_offered_without_units` |
 | L101 | Two changes under one comment id that target different books file the comment under the book of whichever arrived first, so devices disagree on removal visibility, `RecordsWithoutBook` and the comments files | the comment is a record of every book a change under its id targets (§7.6); a comments file lists it with the book its shown version targets | `duplicated_comment_id_across_books_converges`; property `fold_converges_under_any_union` |
+| L102 | A *Start empty* rewound after *Restore the text* rewinds only its own `StartOver` changes: a verse typed after starting empty shows beside restored verses, a mix of the two sides, and is on no screen once rewound | every verse change that is or descends from a rewound `StartOver` change is rewound, and listed as a candidate of the book's presence conflict; *Restore the text* restores each such verse (§7.6) | `loss_start_empty_descendants_rewound_and_listed` |
 
 ---
 
