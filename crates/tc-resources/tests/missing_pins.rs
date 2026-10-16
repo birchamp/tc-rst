@@ -9,7 +9,9 @@ mod common;
 
 use common::{fixture, repo_path};
 use tc_resources::resolve::{missing_pin_count, unsatisfied_pin_for};
-use tc_resources::{GatewayLanguage, LanguageSet, ProjectPins, ResourcePin, SetSlot};
+use tc_resources::{
+    GatewayLanguage, LanguageSet, ProjectPins, ResourcePin, ScripturePane, SetSlot,
+};
 
 fn pin(repo: &str, sha: char, version: &str) -> ResourcePin {
     ResourcePin::new(repo_path(repo), sha.to_string().repeat(40).parse().unwrap())
@@ -191,5 +193,42 @@ fn round_20_a_download_must_satisfy_the_project_pin() {
     assert_eq!(
         unsatisfied_pin_for(&both, &ugnt_repo, &|_| false),
         Some(&ugnt_in_set)
+    );
+}
+
+#[test]
+fn the_lookup_takes_the_primary_set_then_the_fallback_set_then_the_panes() {
+    // tC4 `unsatisfiedProjectPinFor` on a project that pins en_ust three times: "The
+    // primary rung wins when both rungs pin the repo", and the panes come last.
+    let primary = pin("unfoldingWord/en_ust", 'a', "v86");
+    let fallback = pin("unfoldingWord/en_ust", 'b', "v87");
+    let pane = pin("unfoldingWord/en_ust", 'c', "v88");
+    let ust = primary.repo.repo().clone();
+    let pins = ProjectPins {
+        primary: Some(english().with(SetSlot::SimplifiedText, primary.clone())),
+        fallback: Some(english().with(SetSlot::SimplifiedText, fallback.clone())),
+        extra_scripture: vec![ScripturePane {
+            id: "ust".parse().unwrap(),
+            pin: pane.clone(),
+        }],
+        ..ProjectPins::default()
+    };
+
+    assert_eq!(unsatisfied_pin_for(&pins, &ust, &|_| false), Some(&primary));
+    assert_eq!(
+        unsatisfied_pin_for(&pins, &ust, &holding(vec![primary.clone()])),
+        Some(&fallback)
+    );
+    assert_eq!(
+        unsatisfied_pin_for(
+            &pins,
+            &ust,
+            &holding(vec![primary.clone(), fallback.clone()])
+        ),
+        Some(&pane)
+    );
+    assert_eq!(
+        unsatisfied_pin_for(&pins, &ust, &holding(vec![primary, fallback, pane])),
+        None
     );
 }
