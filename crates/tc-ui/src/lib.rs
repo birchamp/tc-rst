@@ -6,14 +6,17 @@
 //! unchanged. The `gallery` feature adds the page that draws every case of
 //! `parity/ds-gallery/gallery-spec.json` for the pixel comparison with tC4.
 //!
+//! [`i18n`] is tC4's locale registry, and `assets/i18n` holds tC4's message catalogs.
+//!
 //! The components only run in a browser, so they compile for `wasm32` only. The pure parts
-//! (inline-style building, keyword enums, layout arithmetic, string rules, keyed lists)
-//! compile everywhere and are tested on the host.
+//! (inline-style building, keyword enums, layout arithmetic, string rules, keyed lists, the
+//! locale registry) compile everywhere and are tested on the host.
 
 #[macro_use]
 pub mod css;
 pub mod attrs;
 pub mod geometry;
+pub mod i18n;
 pub mod keyed;
 pub mod text;
 pub mod tokens;
