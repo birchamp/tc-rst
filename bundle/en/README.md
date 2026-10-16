@@ -104,7 +104,8 @@ and the installer checks it.
   "source": { "repo": "uW/en_uhl", "commit": "72df5ac2…", "archiveSha256": "bbb8e3c4…" },
   "metadata": { "…": "the archive's metadata.json, unchanged as a value (license and credits)" },
   "entries": { "1": { "brief": "father", "long": "…" }, "2": { "…": "…" } },
-  "index": [ { "id": "H1", "name": "אָב" } ]
+  "index": [ { "id": "H1", "name": "אָב" } ],
+  "files": { "ingredients/README.md": "# unfoldingWord Hebrew Lexicon\n\n" }
 }
 ```
 
@@ -112,6 +113,12 @@ and the installer checks it.
   ascending numeric order. An entry with fields other than `brief` and `long` keeps them.
 - `index` is `ingredients/index.json` unchanged, and is present only when the archive has
   one (`en_uhl`).
+- `files` holds every other file of the archive (today only `ingredients/README.md`) as its
+  text, byte for byte, keyed by its path below the archive's top folder, so the notes and
+  attribution the publisher ships travel with the entries. A file that is not UTF-8 text
+  makes the archive refused, in words. tC4 keeps every source file of a lexicon in its
+  compact copy (#740); this is the same promise (the owner's ruling on Q26 in
+  `docs/TC4-DELTA-2026-10-16.md`).
 - A reader refuses a `format` it does not know or a `version` newer than it reads, in words,
   and the app shows the lexicon as unavailable rather than guessing.
 
