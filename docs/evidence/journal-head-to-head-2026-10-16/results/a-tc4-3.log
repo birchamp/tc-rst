@@ -1,0 +1,27 @@
+side=tc4 phase=A run=3 start=14:19:30Z load1=3.43 speed_limit=100
+bench-fold — issue #80
+date: 2026-10-16T14:19:31.698Z  commit: d310bf3  node: v22.23.2
+machine: Intel(R) Core(TM) i7-1068NG7 CPU @ 2.30GHz (8 cores), 16 GB, darwin 25.6.0
+mode: full (3 repetitions, median) — checked whole Bible
+corpus: 66 books, 31104 verses, 215767 check decisions, 278041 events total, 31170 events (text-only)
+
+[fold] checked whole Bible (278041 events, 31104 alignment heads, 215767 decisions): 5888.8 ms  (runs: 5782.8, 5888.8, 6012.7)
+[C1] verseTextMd5 over the 31104 projected alignment texts: 231.8 ms  (0.007 ms/parse)
+[C1] control — same fold minus align.verse.set ONLY (246937 events, decisions kept): 4240.0 ms  (alignment projection cost by difference: 1648.9 ms)
+[C1] breakdown — slotKeysOf(skeleton).includes(vkey) per alignment head: 2828.7 ms over 31104 heads
+[C2] text-only union: 31170 events, 31236 head keys; base fold 417.4 ms
+[C2] + one constant-shape rename apply, 0 mapped keys: 459.6 ms; 500 mapped keys: 922.2 ms
+[C2] marginal scan cost: 0.925 ms per mapped key over 31236 head keys (29.6 ns per mapped-key×head)
+[C3] text-only fold vs book count (the per-book projection scan is O(books × head keys)):
+[C3]   17 books, 12887 events, 12904 head keys: 151.7 ms
+[C3]   33 books, 22718 events, 22751 head keys: 281.7 ms
+[C3]   66 books, 31170 events, 31236 head keys: 429.2 ms
+[open] full-scan baseline — REFERENCE READER (fs), a LOWER BOUND on the production HTTP open path; one segment per event, 3 repetition(s) per size (read+validate, then +fold):
+[open]     8000 segments: scan 582.3 ms, scan+fold 730.4 ms  (write of last batch: 3094.7 ms)
+[open]    32000 segments: scan 2545.2 ms, scan+fold 2994.7 ms  (write of last batch: 8933.8 ms)
+[open]   128000 segments: scan 10035.1 ms, scan+fold 12303.5 ms  (write of last batch: 39308.1 ms)
+[open]   278041 segments: scan 58645.9 ms, scan+fold 65207.6 ms  (write of last batch: 62518.3 ms)
+[open] on-disk journal: 278041 segments, 259,580,461 bytes (247.6 MiB content; avg 934 B/segment)
+
+done. Record these numbers in docs/evidence/ with the machine, the commit and the date (issue #80).
+end=14:30:45Z load1=3.28 speed_limit=100

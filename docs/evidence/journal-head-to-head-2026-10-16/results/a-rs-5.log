@@ -1,0 +1,28 @@
+side=rebuild phase=A run=5 start=14:54:41Z load1=2.99 speed_limit=100
+cold open 1.758282607s, the fold after the last file 195.394206ms, cpu over all threads 0 ms
+load 1.414996395s, cpu over all threads 0 ms
+fold 486.619833ms, cpu 0 ms, minor faults 0
+peak RSS during the streamed cold opens 0 MiB
+corpus: 277880 lines, 156744 records, 60 conflicts, 65 anomalies; peak RSS 0 MiB, RSS with the fold open 0 MiB
+| Action | Runs | Median | p95 |
+|---|---:|---:|---:|
+| Read, verify and prepare | 1 | 1414.996 ms | 1414.996 ms |
+| SHA-256 of every file once (one of the load's two passes) | 3 | 70.597 ms | 72.158 ms |
+| Full fold of the prepared changes | 1 | 486.618 ms | 486.618 ms |
+| Cold open: read, verify, prepare and fold, the fold indexing as files are read | 1 | 1758.282 ms | 1758.282 ms |
+| Cold open: the fold's work after the last file is read (stages F2 to F10) | 1 | 195.394 ms | 195.394 ms |
+| Incremental step: save one Psalms verse | 200 | 0.025 ms | 0.102 ms |
+| Incremental step: record one Psalms decision | 200 | 0.010 ms | 0.017 ms |
+| Incremental step: save one Psalms alignment | 200 | 0.010 ms | 0.019 ms |
+| Conflict counts after a save (incremental) | 200 | 0.000 ms | 0.000 ms |
+| Incremental step with a live snapshot: save one Psalms verse | 200 | 0.108 ms | 0.172 ms |
+| Incremental step with a live snapshot: record one Psalms decision | 200 | 0.089 ms | 0.141 ms |
+| Incremental step: resolve one Psalms conflict | 100 | 0.027 ms | 0.059 ms |
+| Conflict list and counts from scratch (every record's conflict built again) | 20 | 9.168 ms | 10.900 ms |
+| Psalms projection: every file of the book (values read from disk) | 20 | 149.619 ms | 160.200 ms |
+| Psalms USFM alone | 20 | 14.233 ms | 15.240 ms |
+| One Psalms chapter's USFM | 20 | 0.094 ms | 0.331 ms |
+Psalms: 5 files, 10716066 bytes; CPU time of a projection, all threads: median 0 ms
+| Snapshot (clone of the fold) | 20 | 0.030 ms | 0.111 ms |
+peak RSS 0 MiB
+end=14:54:49Z load1=3.21 speed_limit=100

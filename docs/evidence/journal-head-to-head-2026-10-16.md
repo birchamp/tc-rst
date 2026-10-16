@@ -7,6 +7,10 @@ code. Both sides were therefore run on one quiet local machine, interleaved, fiv
 **tC4:** `unfoldingWord/translationCore4` at `d310bf3` (clean tree; `bench-fold.mjs` stamps the
 commit and marks a dirty tree). **Rebuild:** this repository at `6e8adac` (`storage`, clean).
 
+**Raw output:** `journal-head-to-head-2026-10-16/` — all 15 run logs with their load and
+thermal-limit lines, the per-save sweep, and the two scripts, committed as they ran. See its
+`README.md` for the layout.
+
 ## Machine
 
 MacBook Pro 16,2 (13-inch, 2020). Intel Core i7-1068NG7 @ 2.30 GHz — **Ice Lake: AVX-512 AND

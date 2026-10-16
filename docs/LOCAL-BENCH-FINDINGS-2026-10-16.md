@@ -3,6 +3,9 @@
 - **Date:** 2026-10-16. **For:** whoever works on `tc-journal`, `tc-corpus` and the budgets.
 - **Branch:** `bench-local` (cut from `claude/focused-ride-5uzj7p`). Nothing was pushed to
   `storage` or to `claude/focused-ride-5uzj7p`. Merge or cherry-pick from here.
+- **Raw output:** `docs/evidence/journal-head-to-head-2026-10-16/` — every run log with its
+  load and `CPU_Speed_Limit` lines, the per-save sweep, and both scripts, so every number
+  above can be checked against what produced it.
 - **Full record:** `docs/evidence/journal-head-to-head-2026-10-16.md` — machine, every run,
   medians, ranges, stage attribution, corpus byte counts.
 - **Measured:** this repository at `6e8adac` (`storage`); tC4 at `d310bf3`. Both clean trees.
