@@ -3,18 +3,18 @@
 
 use std::path::PathBuf;
 
-use serde_json::Value;
+use serde_json::{Value, json};
 use tc_check::carry::StoredDecision;
-use tc_check::derive::{BookSpec, CheckList};
+use tc_check::derive::{BookSpec, CheckList, DropReason};
 use tc_check::{
-    CheckId, CheckKey, CheckTarget, Coverage, Decision, Judgement, Pin, RefPart, RepoPath,
-    ResourceRef, Selection, TextMd5, ToolId, UserStatus,
+    CheckId, CheckItem, CheckKey, CheckTarget, Coverage, Decision, Judgement, Pin, RefPart,
+    RepoPath, ResourceRef, Selection, TextMd5, ToolId, UserStatus,
 };
 use tc_core::{BookId, VerseSpan};
 use tc_helps::tsv::{TsvScope, parse_notes, parse_word_links};
 use tc_helps::{CommitSha, Note, WordLink};
 use tc_usfm::Book;
-use tc_versification::StandardScheme;
+use tc_versification::{StandardScheme, Unplaceable};
 
 pub fn fixture_path(rel: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -58,6 +58,34 @@ pub fn eng(book: BookId) -> BookSpec<'static> {
         project_frame: Some(StandardScheme::Eng.scheme()),
         scope: &[],
     }
+}
+
+/// tC4's name for why a mapping failed (`UnplaceableReason`).
+pub fn reason(reason: &DropReason) -> &'static str {
+    match reason {
+        DropReason::UnknownFrame => "unknown-frame",
+        DropReason::Unplaceable(u) => match u {
+            Unplaceable::VerseZero => "verse-zero",
+            Unplaceable::NoChapter => "no-chapter",
+            Unplaceable::PastChapterEnd => "past-chapter-end",
+            Unplaceable::Ambiguous => "ambiguous",
+            Unplaceable::SpanSplit => "span-split",
+            Unplaceable::MalformedReference => "malformed-reference",
+        },
+        DropReason::OtherBook(book) => panic!("tC4 has no reason for a landing in {book:?}"),
+    }
+}
+
+/// `[checkId, chapter, verse, occurrence]` as tC4's `contextId` holds them: a part is a
+/// JSON number when it is digits.
+pub fn identity(item: &CheckItem) -> Vec<Value> {
+    let reference = item.key.target.to_json();
+    vec![
+        json!(item.key.check_id.as_str()),
+        reference["chapter"].clone(),
+        reference["verse"].clone(),
+        json!(item.key.occurrence),
+    ]
 }
 
 pub fn checks_of(list: &CheckList) -> Vec<String> {

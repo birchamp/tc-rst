@@ -2799,6 +2799,7 @@ dependencies = [
  "tc-versification",
  "thiserror 2.0.21",
  "unicode-normalization",
+ "zip",
 ]
 
 [[package]]
@@ -2854,6 +2855,7 @@ dependencies = [
 name = "tc-helps"
 version = "0.1.0"
 dependencies = [
+ "md-5",
  "proptest",
  "serde",
  "serde_json",
@@ -2862,6 +2864,7 @@ dependencies = [
  "unicode-general-category",
  "unicode-normalization",
  "yaml-rust2",
+ "zip",
 ]
 
 [[package]]

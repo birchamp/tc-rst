@@ -167,8 +167,9 @@ impl Note {
                 book: r.book,
                 chapter: match &r.locus {
                     BibleLocus::BookIntro => None,
-                    BibleLocus::ChapterIntro(c) => Some(*c),
+                    BibleLocus::ChapterIntro(c) | BibleLocus::ChapterFront(c) => Some(*c),
                     BibleLocus::Verses(list) => Some(list.start().chapter),
+                    BibleLocus::AsWritten(text) => text.chapter(),
                 },
             },
             HelpRef::Obs(_) => LinkBase::ObsNote,
