@@ -254,23 +254,65 @@ function openMirror() {
   fs.closeSync(fd0);
   fs.renameSync(temporary, file);
   const fd = fs.openSync(file, 'a');
+  // AD21: each change is appended at once and the log is synced at most once a second, on
+  // libuv's thread pool, never on this thread: every request the window makes waits for this
+  // thread (AD11), so a synchronous write here would delay every aligner click. One write runs
+  // at a time, which keeps the lines in order; lines that arrive meanwhile go out together in
+  // the next write.
+  let queued = [];
+  let writing = false;
   let dirty = false;
-  // Each change is appended at once; the log is synced at most once a second (AD21).
-  setInterval(() => {
-    if (!dirty) return;
-    dirty = false;
-    try {
-      fs.fsyncSync(fd);
-    } catch (_) {
+  let syncing = false;
+  const idle = [];
+  const wake = () => {
+    if (!writing && queued.length === 0) idle.splice(0).forEach((resolve) => resolve());
+  };
+  const writeChunk = (chunk, offset) => {
+    fs.write(fd, chunk, offset, chunk.length - offset, null, (error, written) => {
+      if (error) {
+        record('mirror-write-failed', { message: error.message, bytes: chunk.length - offset });
+      } else if (offset + written < chunk.length) {
+        writeChunk(chunk, offset + written);
+        return;
+      }
+      writing = false;
       dirty = true;
-    }
+      drain();
+      wake();
+    });
+  };
+  const drain = () => {
+    if (writing || queued.length === 0) return;
+    writing = true;
+    const chunk = Buffer.from(queued.join(''), 'utf8');
+    queued = [];
+    writeChunk(chunk, 0);
+  };
+  const sync = () =>
+    new Promise((resolve) => {
+      syncing = true;
+      fs.fsync(fd, (error) => {
+        syncing = false;
+        if (error) dirty = true;
+        resolve();
+      });
+    });
+  setInterval(() => {
+    if (!dirty || syncing) return;
+    dirty = false;
+    sync();
   }, 1000);
   return {
     launch,
     append(entry) {
       if (!entry || typeof entry.key !== 'string') return;
-      fs.writeSync(fd, `${JSON.stringify({ key: entry.key, text: entry.text, n: entry.n, at: entry.at })}\n`);
-      dirty = true;
+      queued.push(`${JSON.stringify({ key: entry.key, text: entry.text, n: entry.n, at: entry.at })}\n`);
+      drain();
+    },
+    // A normal quit waits until every line is written and synced.
+    async flush() {
+      while (writing || queued.length > 0) await new Promise((resolve) => idle.push(resolve));
+      await sync();
     },
   };
 }
@@ -292,6 +334,10 @@ async function quit(why) {
     ]);
     record('server-stopped', { exited });
     if (!exited) s.child.kill();
+  }
+  if (mirror) {
+    const flushed = await Promise.race([mirror.flush().then(() => true), sleep(5000).then(() => false)]);
+    record('mirror-flushed', { flushed });
   }
   app.exit(0);
 }

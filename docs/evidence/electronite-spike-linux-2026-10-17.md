@@ -231,6 +231,11 @@ the end: (made - kept) x 50 ms.
 | protocol | hard kill | 303 | 5.1 s after typing began | 101 | 303 | 101 | 10.1 s | 303 | 0.0 s | 303 (0) | exited after 1272.0 (quit: stdin-closed) |
 | protocol | normal quit (control) | 302 | 5.1 s after typing began | 101 | 302 | 303 | 0.0 s | 303 | 0.0 s | 303 (0) | exited after 124.0 (quit: quit-message) |
 
+These rows were taken with the mirror appending and syncing synchronously on the shell's main
+thread. The mirror now does both off that thread (AD21), and the case was run again in
+`electronite-spike-linux-2026-10-17-hardkill.md`: the mirror still kept every keystroke the
+server saw, and `localStorage` again lost about 10 s.
+
 ## 5. Graphite (informational)
 
 Awami Nastaliq has Graphite tables and no OpenType substitutions: with Graphite its letters

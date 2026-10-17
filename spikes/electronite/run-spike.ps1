@@ -676,7 +676,7 @@ if ($kills.Count -gt 0) {
     Add '## 4. A hard kill while typing (AD21)'
     Add ''
     Add 'The page types one letter every 50 ms. Each keystroke is written to `localStorage` at once,'
-    Add "sent to the shell, which appends it to its mirror file (synced at most once a second), and"
+    Add "sent to the shell, which appends it to its mirror file off its main thread (synced at most once a second), and"
     Add 'reported to the server. Chromium writes `localStorage` to the profile some seconds after the'
     Add 'page sets it. The script waits until the profile''s files on disk hold the draft (the "first'
     Add ('write to disk" column), lets the page type ' + $AfterCommit + ' s more, then ends the shell''s process (or, as the')
