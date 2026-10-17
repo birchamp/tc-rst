@@ -12,6 +12,148 @@ Budgets (docs/PERFORMANCE.md) that `tc-journal` owns or feeds:
 | Memory, whole Bible open (`tc-store`; the folded state is the fold's part) | 350 MiB peak; 150 MiB steady |
 | Corpus generator, whole Bible | well under a minute |
 
+## Memory after the unit C gate (2026-10-17)
+
+The gate for unit C found the memory budget missed by more than three times on two runs of
+`foldbench run DIR 4`: 631 and 616 MiB resident with the fold open after Psalms was projected,
+504 and 501 MiB with the whole fold open, and a peak of 1,130 and 1,127 MiB, against 150 MiB
+steady and 350 MiB peak.
+
+### What made those figures
+
+Profiled on this branch at `2ed0ea0` (massif, and `/proc/self/smaps` by kind of mapping):
+
+1. **The folded state**: 204.5 MB of heap with 15.4 MB of allocator overhead after an open
+   with the cache. The change table took 136 bytes for each of 617,086 changes (83.9 MB), the
+   key table 160 bytes for each of 283,606 records (45.4 MB) and every check key three heap
+   strings of a few bytes (most of the 15 MB of overhead), the batch table 56 bytes for each
+   of 554,000 batches (31.0 MB), the four position indexes 29.4 MB.
+2. **The first open without a cache**: `load_pack` parsed every line of a pack before
+   preparing any, so each reading thread held a whole pack's decoded changes; it peaked at
+   450 to 456 MiB.
+3. **The projection's threads**: rendering a book's files on four threads, each rendering its
+   chunks on four more, ran sixteen threads at once. glibc gives each thread its own heap and
+   keeps it at its high-water mark, so projecting Psalms after an open with the cache left
+   427 to 449 MiB resident (282 to 285 MiB before it).
+4. **The benchmark itself**: the SHA-256 pass held all 705 MB of the corpus's files at once
+   (the 1.1 GiB peak), and the last figures were read after sixteen opens and a phase that
+   holds every prepared change at once, none of which the app does. With glibc each of those
+   phases left its threads' heaps at their high-water marks; the main heap, which holds the
+   fold's tables, stayed at the state's size throughout.
+
+### What changed
+
+- `1904292`: the fold's entries are smaller: a change 96 bytes (its first parent inline and
+  others beside the table, its sequence number in 32 bits, its value's place in 20 bytes, its
+  shape in 8 with the rare kinds' payloads beside, its flags in one byte), a batch 28 bytes
+  (one member inline), a record 144 bytes (its changes and heads in a 16-byte list), and the
+  identity strings of keys hold up to 15 bytes inline, so a check key allocates nothing.
+- `5398045`: `foldbench` hashes the files one at a time for the SHA-256 pass and prints each
+  phase's own peak.
+- `44bada3`: a file's lines are parsed and prepared one at a time; the fold's parallel steps
+  run on one rayon pool however they nest; a fold from scratch reuses one chunk buffer.
+- `c7ab2dc`: `foldbench run` ends by starting `foldbench app`, the app's case in a process of
+  its own: one open, then the incremental steps, the conflict lists, 20 projections of Psalms
+  and the snapshots. The readers run on the same pool and reuse their buffers.
+
+### Machine and method
+
+A 4-vCPU KVM guest, Intel Xeon @ 2.10 GHz (family 6 model 207) **with** SHA instructions,
+AVX2 and AVX-512, 15.7 GiB RAM; Linux 6.18; Rust 1.97.0, release profile; glibc 2.39 malloc
+and jemalloc 5.3 (`LD_PRELOAD`). It is not the VM of the sections below, and other agents'
+builds and tests shared it: the 1-minute load average was 2.7 to 9.3 during the rounds, so the
+times below are not comparable with those sections' and only the memory figures are measured
+well. The corpus is generated again with `foldbench save bible` (617,086 changes, 674 MiB); the
+fold cache is 64,525,623 bytes, written byte for byte alike by both builds.
+
+`memory.py` (beside this file; raw rows in `memory-c7ab2dc.tsv`) runs, in 5 rounds whose
+order alternates, the build before the fixes (`2ed0ea0`) and this one (`c7ab2dc`), each case
+in its own process with every file read just before: the first open without a cache, an open
+with the cache followed by 20 projections of Psalms, and (this build only) the app's case.
+
+### Results
+
+| Case | Allocator | Build | Peak of the open | RSS with the fold open | Peak after the open | RSS at the end |
+|---|---|---|---:|---:|---:|---:|
+| First open without a cache | glibc | before | 450–456 MiB | | | |
+| First open without a cache | glibc | this | **317–324 MiB** | | | |
+| First open without a cache | jemalloc | before | 453–466 MiB | | | |
+| First open without a cache | jemalloc | this | 348–356 MiB | | | |
+| Open with the cache, then Psalms projected 20 times | glibc | before | 344–347 MiB | 282–285 MiB | 427–449 MiB | 427–449 MiB |
+| Open with the cache, then Psalms projected 20 times | glibc | this | **281–294 MiB** | **222–231 MiB** | **278–285 MiB** | **278–285 MiB** |
+| Open with the cache, then Psalms projected 20 times | jemalloc | before | 355–360 MiB | 250–252 MiB | 315–321 MiB | 295–302 MiB |
+| Open with the cache, then Psalms projected 20 times | jemalloc | this | 315–319 MiB | 256–260 MiB | 337–357 MiB | 318–335 MiB |
+| The app's case | glibc | this | 285–291 MiB | 217–232 MiB | 302–306 MiB | 302–306 MiB |
+| The app's case | jemalloc | this | 315–319 MiB | 257–261 MiB | 360–373 MiB | 340–349 MiB |
+
+The first open without a cache took 2.6 to 4.8 s against 6.0 to 9.4 s for the build before
+(each pair interleaved, glibc); its peak no longer holds a pack's decoded changes on each
+reading thread. With jemalloc the projections leave more resident than before (jemalloc keeps
+freed pages for ten seconds before it returns them, and the pool's threads now live on); with
+glibc they leave 150 MiB less.
+
+Massif of an open with the cache and one projection (this build, `FOLDBENCH_PSALMS_ONLY`): the
+folded state is **169.7 MB of heap with 4.1 MB of allocator overhead** (204.5 and 15.4 MB
+before): the change table 59.3 MB, the key table 40.8 MB, the position indexes 29.4 MB, the
+batch table 15.5 MB, the books' and chapters' key lists 5.0 MB, the rest 20 MB. The open's
+heap peaks at 261 MB (309 MB before) while the cache's 64.5 MB are read. Projecting Psalms
+adds about 40 MB at its peak: the rendered records (17 MB), the files put together (18.5 MB)
+and the decoded alignments.
+
+`foldbench run DIR 4`, the gate's command, twice (12:09 and 12:11 UTC, load 4.2 to 7.0; the
+first without a cache): the first open peaks at 317 MiB; the opens with the cache at 282 to
+412 MiB (each after the earlier opens of the same process); the opens without a cache at 350
+and 351 MiB; collecting every prepared change and folding it at 543 MiB; the process holds
+391 MiB after them (the main heap 179 MiB, other anonymous memory, the threads' heaps,
+215 MiB). The app's case in its own process: the open peaks at 289 and 290 MiB and leaves 226
+and 231 MiB (the main heap 169 MiB, other anonymous 45 and 50 MiB); after the steps,
+conflict lists, projections and snapshots, 304 and 310 MiB (the main heap 175 MiB, other
+anonymous 117 and 123 MiB), which is also their peak.
+
+### Against the budgets
+
+| Budget | This build (glibc) | |
+|---|---|---|
+| 350 MiB peak | the open with the cache 281–294 MiB, the app's case 302–310 MiB, the first open without a cache 317–324 MiB | met |
+| 150 MiB steady | 217–232 MiB with the fold open; 302–310 MiB after the app's case | **missed** (1.5 to 2.1 times) |
+
+Every figure the gate's command prints is now under three times its budget.
+
+### What the steady budget still needs
+
+- **The fold's tables are larger than the budget's share.** The state is 174 MB of heap: 96
+  bytes for each change and three position-index slots for each, 144 bytes for each record,
+  28 for each batch. Smaller levers remain, each a few megabytes (each Local device's sequence
+  numbers in a dense table instead of an index, about 6 MB; indexes filled closer to their
+  limit, 3 to 5 MB; a batch of one change kept in its change's entry, about 8 MB), but no
+  layout of every change in memory meets 150 MiB with the app around it. That needs the fold
+  to keep only the heads and the open books' histories in memory and to read an idle book's
+  history from `.tc/index.bin` when a step reaches it (as the evening's section below says): a
+  change to the fold's tables and to `tc-store`.
+- **The allocator.** With glibc the worker threads' heaps hold 41 to 50 MiB after an open and
+  about 120 MiB after the app's case. With `MALLOC_MMAP_THRESHOLD_` and
+  `MALLOC_TRIM_THRESHOLD_` fixed at 128 KiB (glibc's dynamic thresholds off) an open leaves
+  180 MiB (2 MiB in those heaps) and the app's case 272 MiB; with one arena
+  (`MALLOC_ARENA_MAX=1`) 197 and 241 MiB, but the projection takes 534 ms. The reference
+  machine runs Windows, whose heap is neither; which allocator and settings the app ships is
+  the app's choice (P, `tc-app`), to be measured there.
+- **The projection's transient memory.** A book's files are put together from one string for
+  each record (17 MB for Psalms) and then copied whole; writing each chunk's records into one
+  buffer would avoid most of those 17 MB and the thousands of allocations they take.
+
+### To reproduce
+
+```sh
+cargo build --release -p tc-corpus --example foldbench
+target/release/examples/foldbench save bible DIR
+target/release/examples/foldbench run DIR 4
+# BEFORE: a build of 2ed0ea0
+python3 -I docs/evidence/storage-fold-2026-10-16/memory.py DIR BEFORE \
+    target/release/examples/foldbench 5 memory.tsv
+FOLDBENCH_RUNS=1 FOLDBENCH_PSALMS_ONLY=1 FOLDBENCH_PROJECTIONS=1 valgrind --tool=massif \
+    target/release/examples/foldbench run DIR 4
+```
+
 ## After the review fixes (2026-10-17)
 
 ### What changed since the evening's numbers
