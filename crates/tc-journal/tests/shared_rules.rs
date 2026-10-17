@@ -9,6 +9,7 @@
 
 mod support;
 
+use proptest::prelude::*;
 use support::*;
 use tc_journal::alignment::{AlignedRun, Stale, split_aligned};
 use tc_journal::command::{DecisionBasis, DecisionChange, DecisionEdit};
@@ -560,4 +561,162 @@ fn aligned_titus_verses_split_into_text_and_alignment() {
     // A verse whose `\w` words carry more than the occurrence attributes is kept as written.
     let odd = "\\zaln-s |x-strong=\"G39720\" x-lemma=\"Παῦλος\" x-morph=\"Gr,N,,,,,NMS,\" x-occurrence=\"1\" x-occurrences=\"1\" x-content=\"Παῦλος\"\\*\\w Paul|x-occurrence=\"1\" x-occurrences=\"1\" x-lemma=\"p\"\\w*\\zaln-e\\*,";
     assert!(split_aligned(odd, VerseNo::new(1).unwrap()).is_none());
+}
+
+/// Two aligned words of en_ult TIT 1:1 as tC4's export writes them.
+const PAUL_A_SERVANT: &str = "\\zaln-s |x-strong=\"G39720\" x-lemma=\"Παῦλος\" x-morph=\"Gr,N,,,,,NMS,\" x-occurrence=\"1\" x-occurrences=\"1\" x-content=\"Παῦλος\"\\*\\w Paul|x-occurrence=\"1\" x-occurrences=\"1\"\\w*\\zaln-e\\*,\n\\zaln-s |x-strong=\"G14010\" x-lemma=\"δοῦλος\" x-morph=\"Gr,N,,,,,NMS,\" x-occurrence=\"1\" x-occurrences=\"1\" x-content=\"δοῦλος\"\\*\\w a|x-occurrence=\"1\" x-occurrences=\"1\"\\w*\n\\w servant|x-occurrence=\"1\" x-occurrences=\"1\"\\w*\\zaln-e\\*";
+
+/// §13.5: an aligned verse that reads apart and weaves, but not back into the same bytes, is
+/// imported as written. Each input here passes `parse_aligned` and `weave`, so only the
+/// byte-for-byte check keeps the import from rewriting the translator's markup.
+#[test]
+fn an_aligned_verse_weave_would_rewrite_is_kept_as_written() {
+    let one = VerseNo::new(1).unwrap();
+    assert!(split_aligned(PAUL_A_SERVANT, one).is_some());
+    let rewritten = [
+        // Milestone attributes in another order.
+        PAUL_A_SERVANT.replacen(
+            "x-strong=\"G39720\" x-lemma=\"Παῦλος\"",
+            "x-lemma=\"Παῦλος\" x-strong=\"G39720\"",
+            1,
+        ),
+        // A line break before `\zaln-e\*`.
+        PAUL_A_SERVANT.replacen("\\w*\\zaln-e\\*,", "\\w*\n\\zaln-e\\*,", 1),
+        // Two spaces where the export writes one line break.
+        PAUL_A_SERVANT.replacen(",\n\\zaln-s", ",  \\zaln-s", 1),
+        // An unaligned `\w` word after a space.
+        format!("{PAUL_A_SERVANT} \\w of|x-occurrence=\"1\" x-occurrences=\"1\"\\w*"),
+        // A bare unaligned word.
+        format!("{PAUL_A_SERVANT} of"),
+        // An attribute beyond the six named ones, written before `x-content`.
+        PAUL_A_SERVANT.replacen(
+            "x-content=\"Παῦλος\"",
+            "x-tw=\"rc://*/tw/dict/bible/names/paul\" x-content=\"Παῦλος\"",
+            1,
+        ),
+        // Two such attributes out of name order: the codec writes them back, the record's
+        // map would not.
+        PAUL_A_SERVANT.replacen(
+            "x-content=\"Παῦλος\"",
+            "x-content=\"Παῦλος\" x-tw=\"b\" x-abc=\"a\"",
+            1,
+        ),
+    ];
+    for content in &rewritten {
+        let verse = tc_usfm::parse_aligned(content).unwrap();
+        tc_usfm::weave(&verse.plain, &verse.groups).unwrap();
+        assert!(
+            split_aligned(content, one).is_none(),
+            "split although weave does not give back {content:?}"
+        );
+    }
+}
+
+/// A generated aligned verse: words of a small vocabulary, each opening a group, joining
+/// the open one, standing as an unaligned `\w` or bare, with the separators, milestone
+/// attribute orders, extra attributes, `\zaln-e` placements and occurrence counts that
+/// tC4's export writes and the ones it does not.
+fn arb_aligned_verse() -> impl Strategy<Value = String> {
+    const VOCAB: [&str; 5] = ["Paul", "a", "servant", "of", "God"];
+    // The export's own separators first: a space before a word is written as a line break.
+    const SEPARATORS: [&str; 6] = ["\n", ",\n", " ", "  ", ", ", " \n"];
+    let rare = || prop::bool::weighted(0.08);
+    let word = (
+        0..VOCAB.len(),
+        prop_oneof![4 => Just(0u8), 4 => Just(1u8), 1 => Just(2u8), 1 => Just(3u8)],
+        prop_oneof![8 => 0..2usize, 1 => 2..SEPARATORS.len()],
+        [rare(), rare(), rare(), rare()],
+    );
+    (prop::collection::vec(word, 1..7), 0..3usize).prop_map(|(words, end)| {
+        let mut total = std::collections::HashMap::new();
+        for (w, ..) in &words {
+            *total.entry(VOCAB[*w]).or_insert(0u32) += 1;
+        }
+        let mut seen = std::collections::HashMap::new();
+        let mut out = String::new();
+        let mut open = false;
+        for (i, (w, mode, sep, [late_close, swap, extra, miscount])) in words.iter().enumerate() {
+            let text = VOCAB[*w];
+            let joins = *mode == 1 && open;
+            if i > 0 {
+                let close = open && !joins;
+                if close && !late_close {
+                    out.push_str("\\zaln-e\\*");
+                }
+                out.push_str(SEPARATORS[*sep]);
+                if close && *late_close {
+                    out.push_str("\\zaln-e\\*");
+                }
+            }
+            if !joins {
+                open = false;
+            }
+            if *mode < 2 && !joins {
+                let (first, second) = (format!("x-strong=\"G{i}\""), format!("x-lemma=\"l{i}\""));
+                let (first, second) = if *swap { (second, first) } else { (first, second) };
+                let tw = if *extra { " x-tw=\"rc://t\"" } else { "" };
+                out.push_str(&format!(
+                    "\\zaln-s |{first} {second} x-morph=\"Gr,N\" x-occurrence=\"1\" x-occurrences=\"1\" x-content=\"c{i}\"{tw}\\*"
+                ));
+                open = true;
+            }
+            let occurrence = seen.entry(text).or_insert(0u32);
+            *occurrence += 1;
+            let occurrences = total[text] + u32::from(*miscount);
+            if *mode < 3 {
+                out.push_str(&format!(
+                    "\\w {text}|x-occurrence=\"{occurrence}\" x-occurrences=\"{occurrences}\"\\w*"
+                ));
+            } else {
+                out.push_str(text);
+            }
+        }
+        if open {
+            out.push_str("\\zaln-e\\*");
+        }
+        out.push_str(["", ",", "."][end]);
+        out
+    })
+}
+
+/// §13.5: whatever the aligned-USFM split takes apart weaves back into the same bytes, so an
+/// import never rewrites a verse it splits. The census proves the generator reaches both
+/// outcomes.
+#[test]
+fn a_split_verse_weaves_back_byte_for_byte() {
+    let one = VerseNo::new(1).unwrap();
+    let (split, kept) = (std::cell::Cell::new(0), std::cell::Cell::new(0));
+    let config = proptest::test_runner::Config {
+        cases: 1024,
+        ..Default::default()
+    };
+    let mut runner = proptest::test_runner::TestRunner::new_with_rng(
+        config,
+        proptest::test_runner::TestRng::deterministic_rng(
+            proptest::test_runner::RngAlgorithm::ChaCha,
+        ),
+    );
+    runner
+        .run(&arb_aligned_verse(), |content| {
+            match split_aligned(&content, one) {
+                Some((plain, value)) => {
+                    split.set(split.get() + 1);
+                    prop_assert_eq!(
+                        tc_usfm::weave(&plain, &value.usfm_groups()).unwrap(),
+                        content.clone()
+                    );
+                    prop_assert_eq!(&plain, &tc_usfm::parse_aligned(&content).unwrap().plain);
+                    prop_assert_eq!(value.target_verse_md5, verse_text_md5_v1(&plain));
+                }
+                None => kept.set(kept.get() + 1),
+            }
+            Ok(())
+        })
+        .unwrap();
+    assert!(
+        split.get() >= 100 && kept.get() >= 100,
+        "split {} kept {}",
+        split.get(),
+        kept.get()
+    );
 }
