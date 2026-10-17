@@ -7,8 +7,9 @@ license.workspace = true
 rust-version.workspace = true
 
 [features]
-# Making and reading token texts. Only the server side (tc-app) enables it; tc-ui never does,
-# so the UI's wasm32 build proves the UI cannot make, read or change a token (AD3).
+# Making and reading token texts. Only the server side (tc-app) enables it; tc-ui never does.
+# The token types have no other conversion to or from text, so UI code can make, read or
+# relabel a token only by re-encoding it through JSON, which the server's MAC refuses (R19).
 server = []
 # The `test` service, which exists only in test builds of the server (AD35).
 test-hooks = []

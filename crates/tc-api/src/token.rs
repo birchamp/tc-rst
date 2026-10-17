@@ -7,13 +7,17 @@
 //! `rt1.`, so a token of the wrong kind is refused when it is parsed, and a scan of the DOM
 //! for either prefix finds any token that leaked into it.
 //!
-//! The UI cannot make, read or change a token: without the `server` feature, which only the
-//! server side enables, a token is made only by deserializing one the server sent, and it
-//! prints as `ShownToken(..)`.
+//! Neither type converts to or from text, except through `from_body` and `body`, which exist
+//! only with the `server` feature that only the server side enables. In the UI a token is
+//! made only by deserializing JSON, its text leaves only by serializing it, and it prints as
+//! `ShownToken(..)`, so ordinary code cannot build, read or relabel one. Code that re-encodes
+//! a token through JSON on purpose can; the server's check of the token's MAC, which also
+//! covers its kind (R19), refuses what it makes.
 
 use std::fmt;
 
-use serde::{Deserialize, Serialize};
+use serde::de::{self, Deserializer, Visitor};
+use serde::{Deserialize, Serialize, Serializer};
 
 /// Why a token text was refused.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -61,8 +65,7 @@ fn check_body(kind: &'static str, body: &str) -> Result<(), TokenTextError> {
 macro_rules! token {
     ($(#[$doc:meta])* $name:ident, $prefix:literal, $kind:literal) => {
         $(#[$doc])*
-        #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-        #[serde(try_from = "String", into = "String")]
+        #[derive(Clone, PartialEq, Eq, Hash)]
         pub struct $name(String);
 
         impl $name {
@@ -93,16 +96,27 @@ macro_rules! token {
             }
         }
 
-        impl TryFrom<String> for $name {
-            type Error = TokenTextError;
-            fn try_from(text: String) -> Result<Self, TokenTextError> {
-                Self::parse_text(&text)
+        // Written by hand so that no `TryFrom<String>` or `Into<String>` exists for serde to
+        // use: either would let the UI make or read a token without the `server` feature.
+        impl Serialize for $name {
+            fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                s.serialize_str(&self.0)
             }
         }
 
-        impl From<$name> for String {
-            fn from(token: $name) -> Self {
-                token.0
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+                struct Text;
+                impl Visitor<'_> for Text {
+                    type Value = $name;
+                    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                        f.write_str(concat!("a ", $kind, " text"))
+                    }
+                    fn visit_str<E: de::Error>(self, text: &str) -> Result<$name, E> {
+                        $name::parse_text(text).map_err(E::custom)
+                    }
+                }
+                d.deserialize_str(Text)
             }
         }
 

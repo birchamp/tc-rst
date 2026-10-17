@@ -66,6 +66,52 @@ fn a_token_body_must_be_base64url_of_a_plausible_length() {
     );
 }
 
+/// Whether a type implements a trait, decided when the test compiles: the inherent constant
+/// exists only when the bound holds, and the trait's constant answers otherwise.
+macro_rules! implements {
+    ($ty:ty: $($bound:tt)+) => {{
+        struct Probe<T: ?Sized>(std::marker::PhantomData<T>);
+        #[allow(dead_code)]
+        trait No {
+            const YES: bool = false;
+        }
+        impl<T: ?Sized> No for Probe<T> {}
+        #[allow(dead_code)]
+        impl<T: ?Sized + $($bound)+> Probe<T> {
+            const YES: bool = true;
+        }
+        <Probe<$ty>>::YES
+    }};
+}
+
+#[test]
+fn a_token_has_no_conversion_to_or_from_text() {
+    // Only the `server` feature's `from_body` and `body` make or read a token, so the UI,
+    // which never enables it, can neither build one from text nor relabel one (AD3).
+    assert!(
+        implements!(String: TryFrom<String>),
+        "the probe answers yes"
+    );
+    assert!(
+        implements!(RequestId: Into<String>),
+        "the probe answers yes"
+    );
+    macro_rules! no_conversion {
+        ($($token:ty),*) => {$(
+            assert!(!implements!($token: TryFrom<String>));
+            assert!(!implements!($token: TryFrom<&'static str>));
+            assert!(!implements!($token: std::str::FromStr));
+            assert!(!implements!($token: From<String>));
+            assert!(!implements!($token: Into<String>));
+            assert!(!implements!($token: AsRef<str>));
+            assert!(!implements!($token: std::borrow::Borrow<str>));
+            assert!(!implements!($token: std::ops::Deref));
+            assert!(!implements!($token: std::fmt::Display));
+        )*};
+    }
+    no_conversion!(ShownToken, ReviewToken);
+}
+
 #[test]
 fn a_token_never_prints_its_text() {
     let token = ShownToken::from_body(BODY).unwrap();
