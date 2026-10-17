@@ -310,3 +310,71 @@ fn the_start_cleanup_reports_a_join_it_removed_and_hands_out_no_staging_folder_b
     );
     assert!(fs.peek(&join.join(".git/HEAD")).is_none());
 }
+
+/// `test/sync/syncOperation.test.ts` power-loss scenarios: packs written and derived files
+/// stale, then a crash, plus a real edit of the book made outside the app before the reopen.
+/// The reopen materializes forward everything but that file, which it holds unchanged with a
+/// notice (unit S1 holds rather than records an outside edit, §6.2, §11.1): the edit is never
+/// written over, and the save stays in the project.
+#[test]
+fn a_reopen_after_packs_and_stale_files_keeps_an_outside_edit_of_the_book() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    save_verse(&handle, 2, 1, "speak what fits sound teaching").unwrap();
+    handle.wait_idle();
+    // Killed before the materialization: the save is in a pending file, TIT.usfm is stale.
+    let fs = rig.fs.crash(true);
+    drop(handle);
+    let usfm = folder.join("ingredients/TIT.usfm");
+    let mut edited = fs.peek(&usfm).unwrap();
+    let at = edited.windows(3).position(|w| w == b"___").unwrap();
+    edited[at..at + 3].copy_from_slice(b"Pau");
+    fs.put(&usfm, &edited, None);
+    let rig2 = rig_as(fs.clone(), APP, "host-1");
+    let handle = rig2.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    assert!(
+        handle.notices().iter().any(|n| matches!(
+            &n.notice,
+            Notice::OutsideEditHeld { path, .. } | Notice::StorageDamage { path, .. }
+                if path.as_str() == "ingredients/TIT.usfm"
+        )),
+        "{:?}",
+        handle.notices()
+    );
+    assert_eq!(
+        fs.peek(&usfm).as_deref(),
+        Some(edited.as_slice()),
+        "never written over"
+    );
+    assert_eq!(
+        words(&handle, 2, 1).as_deref(),
+        Some("speak what fits sound teaching")
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&fs, &folder);
+}
+
+/// `syncOperation.test.ts`, a file that is not UTF-8: a derived file replaced by bytes that
+/// are not text still lets the project open and save, and is held, not read as an edit.
+#[test]
+fn a_derived_file_that_is_not_utf8_never_stops_the_project() {
+    let (rig, folder) = titus();
+    let fs = rig.fs.crash(false);
+    let usfm = folder.join("ingredients/TIT.usfm");
+    let garbage: Vec<u8> = (0..300u32).map(|i| (i % 7 * 37 + 128) as u8).collect();
+    fs.put(&usfm, &garbage, None);
+    let rig2 = rig_as(fs.clone(), APP, "host-1");
+    let handle = rig2.store.open(&folder, &OpenOptions::default()).unwrap();
+    assert_eq!(handle.facts().mode, tc_store::Mode::Writable);
+    save_verse(&handle, 1, 1, "still saves").unwrap();
+    handle.leave(tc_store::Leave::Book(TIT)).wait().unwrap();
+    assert_eq!(
+        fs.peek(&usfm),
+        Some(garbage),
+        "held: never written over unread"
+    );
+    assert!(!handle.notices().is_empty());
+    handle.close().unwrap();
+    assert_valid_burrito(&fs, &folder);
+}
