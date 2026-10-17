@@ -11,6 +11,18 @@ function Format-Invariant([string]$Format, $Value) {
     return [string]::Format([Globalization.CultureInfo]::InvariantCulture, $Format, $Value)
 }
 
+# foldbench's machine line ("cpu: sha false, avx2 true, avx512f false, ...") as the JSON that
+# `tc4-standin machine` prints.
+function ConvertFrom-MachineLine([string]$Line) {
+    $features = [ordered]@{}
+    foreach ($name in @('sha', 'avx2', 'avx512f', 'avx512bw', 'avx512vl')) {
+        $m = [regex]::Match("$Line", "\b$name (true|false)\b")
+        if ($m.Success) { $features[$name] = ($m.Groups[1].Value -eq 'true') }
+    }
+    if ($features.Count -eq 0) { return '' }
+    return ($features | ConvertTo-Json -Compress)
+}
+
 # CPU features as `tc4-standin machine` or foldbench's machine line report them.
 function Get-MachineFacts([string]$CpuFeaturesJson) {
     $facts = [ordered]@{}
@@ -105,6 +117,10 @@ function Format-MachineTable($Facts) {
 
 function Get-Commit([string]$Repo) {
     try {
+        $top = (git -C $Repo rev-parse --show-toplevel 2>$null)
+        if (-not $top -or ((Resolve-Path $top).Path.TrimEnd('\', '/') -ne (Resolve-Path $Repo).Path.TrimEnd('\', '/'))) {
+            return 'unknown (not the top of a git checkout)'
+        }
         $sha = (git -C $Repo rev-parse HEAD 2>$null)
         $branch = (git -C $Repo rev-parse --abbrev-ref HEAD 2>$null)
         $dirty = (git -C $Repo status --porcelain --untracked-files=no 2>$null)
