@@ -126,7 +126,7 @@ what changed for each finding, which parts were done another way, and why.
 | AD6 | One seam to storage. Before S1, `MemoryBackend` executes no command: it answers `Unavailable`, or a scripted outcome under the `test-hooks` feature. | No second copy of STORAGE's B1–B2 rules. Save behaviour in the UI is still testable before S1. | Core-first's temporary command builder, whose deletion depended on S1 publishing a pure `build_batch`. |
 | AD7 | The fixture seed is STORAGE §13.2's state seed, with its checks, written as `tc_app::backend::seed::tc4_state_seed`. When unit I lands, `memory_seed_equals_tc_import_seed` runs and the copy is deleted. | §13.2 (STORAGE:3433-3442) requires byte-for-byte USFM and `vrs.json` and field-for-field sidecars. A checked seed cannot make a screen look right for the wrong reason. | A new `tc-import` crate now (unit I owns it); a seed without the check. |
 | AD8 | The open's progress is tc-store's reporter, forwarded unchanged. tc-app's own reporter times only tc-app's jobs. | STORAGE:1870-1891 gives the clock to the store, and S1's `open_shows_determinate_progress_by_300_ms` tests it. | A tc-app clock for the open and an invented `Preparing` phase. |
-| AD9 | Typed `POST /api/v1/<service>/<name>` with JSON. HTTP 200 carries `Reply<E> = Result<E::Ok, ApiError>`. Statuses are used only below the API: 401 token, 403 Host or Origin, 409 API version, 413 upload cap. | One exhaustive Rust match in the UI. A proxy or auth failure cannot be mistaken for a domain refusal. | 422 for every error; a result type per area without one error enum. |
+| AD9 | Typed `POST /api/v1/<service>/<name>` with JSON. HTTP 200 carries `ReplyOf<E>`, the enum `Reply<E::Ok>`: `{"type": "ok", "value": …}` or `{"type": "err", "value": <ApiError>}`, the crate's one enum form, not serde's `{"Ok": …}` for a `Result` *(A1)*. Statuses are used only below the API: 401 token, 403 Host or Origin, 409 API version, 413 upload cap. | One exhaustive Rust match in the UI. A proxy or auth failure cannot be mistaken for a domain refusal. | 422 for every error; a result type per area without one error enum. |
 | AD10 | Events come on one SSE stream, `GET /api/v1/events`, read with `fetch` and the token header. Frames carry a sequence number; a ring of 4,096 frames serves reconnects; a gap gives `Resync`. | Works the same in the shell, in Playwright and in a developer's browser, whether or not header injection reaches it. | `EventSource` (needs injection or a cookie); WebSocket (no headers; opaque to Playwright); polling. |
 | AD11 | ARCH:42-44 stays as written. The shell adds `X-Tc-Token` through `session.webRequest.onBeforeSendHeaders`, with a URL filter that lists only the server's paths outside `/api/`: `/`, `/ui/*`, `/help/*`, `/media/*`, `/download/*`, `/print/*` and `/prepare.html`. The UI's own `fetch` calls set the header themselves, so no API request or event-stream read passes through the main process. Playwright uses `extraHTTPHeaders`. Only debug builds accept a one-time `?dev-token=` cookie. Capability URLs are the fallback if Electronite misses a request type (G0 probes every type). *(A-14)* | No amendment to the fixed security decision; images, iframes, downloads and the print window carry the header, and the aligner's round trip does not pay for a hop through the main process. | A production launch cookie (core-first); public static files plus capability URLs (slice-first); a filter over every request. |
 | AD12 | A project is named by `ProjectRef`, its folder under the projects root. `ProjectId` is data. Scopes, sessions, Home cards and summaries are keyed by folder. `prefs/<projectId>.json` stays as STORAGE §3.7 lists it. | Two imports of one tC4 project get one id (STORAGE:3374, T4), and a copied folder is expected (STORAGE:2015-2036, `FolderCopied`). Two folders must be two cards. | Keying by `ProjectId`. |
@@ -217,6 +217,8 @@ what changed for each finding, which parts were done another way, and why.
   `#[serde(deny_unknown_fields)]`. Struct fields are camelCase. An enum of unit variants is a
   camelCase string (`"rtl"`); every other enum is adjacently tagged,
   `{"type": "<camelCase variant>", "value": <data>}`, with no `value` for a unit variant. *(A1)*
+  The reply body is such an enum too (`Reply`, AD9), and a test checks every golden file
+  against this rule.
   This design said "internally tagged" before unit A1 built the crate: serde's internal tagging
   cannot carry a variant that holds a string or a number (`NotSaved::Disk(String)`,
   `Who::Username(String)`), and it fails when such a value is written, not when the code
@@ -280,7 +282,8 @@ pub trait Endpoint: Serialize + DeserializeOwned + 'static {
     type Ok: Serialize + DeserializeOwned;
 }
 pub trait Write: Endpoint { fn request(&self) -> RequestId; }  // every Command and StartJob
-pub type Reply<E> = Result<<E as Endpoint>::Ok, ApiError>;
+pub enum Reply<T> { Ok(T), Err(ApiError) }  // {"type":"ok","value":…} | {"type":"err","value":…}; into_result() *(A1)*
+pub type ReplyOf<E> = Reply<<E as Endpoint>::Ok>;
 
 // endpoint_table!(callback) hands `callback!` one row per endpoint *(A1)*:
 //     query "app/hello": app::Hello => app::HelloView;
@@ -1203,7 +1206,7 @@ show a 401 page.
 
 ### 6.2 Reading
 
-- `api.query::<E>(req).await -> Reply<E>`. A screen holds `Load<T> { Loading, Ready(T),
+- `api.query::<E>(req).await -> ReplyOf<E>`. A screen holds `Load<T> { Loading, Ready(T),
   Refreshing(T), Failed(ApiError) }`. "Failed" is never drawn as "absent".
 - A reply is dropped when its scope is no longer current, or when its `ViewSeq` is older than the
   cached one.

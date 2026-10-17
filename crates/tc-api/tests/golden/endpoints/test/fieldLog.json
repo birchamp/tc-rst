@@ -5,17 +5,29 @@
   "request": {
     "field": "verse-1"
   },
-  "ok": {
-    "current": {
-      "value": "Paul, a servant of God",
-      "token": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
-      "marker": null
-    },
-    "stores": [
-      {
-        "request": "11111111111111111111111111111111",
-        "text": "Paul, a servant of God"
+  "reply": {
+    "type": "ok",
+    "value": {
+      "current": {
+        "value": "Paul, a servant of God",
+        "token": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA",
+        "marker": null
+      },
+      "stores": [
+        {
+          "request": "11111111111111111111111111111111",
+          "text": "Paul, a servant of God"
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
       }
-    ]
+    }
   }
 }

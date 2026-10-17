@@ -5,7 +5,19 @@
   "request": {
     "report": 17
   },
-  "ok": {
-    "attachment": "translationCore 0.1.0 · windows\nReport: sync, 2026-10-17T15:00:00Z\n{}\n"
+  "reply": {
+    "type": "ok",
+    "value": {
+      "attachment": "translationCore 0.1.0 · windows\nReport: sync, 2026-10-17T15:00:00Z\n{}\n"
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
   }
 }

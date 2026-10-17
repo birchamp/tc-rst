@@ -3,7 +3,19 @@
   "kind": "query",
   "net": null,
   "request": {},
-  "ok": {
-    "busy": false
+  "reply": {
+    "type": "ok",
+    "value": {
+      "busy": false
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
   }
 }

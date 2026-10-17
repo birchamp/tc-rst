@@ -3,7 +3,17 @@
   "kind": "query",
   "net": "profile",
   "request": {},
-  "ok": {
-    "url": "https://git.door43.org/jdoe"
+  "reply": {
+    "type": "ok",
+    "value": {
+      "url": "https://git.door43.org/jdoe"
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "profile"
+    }
   }
 }

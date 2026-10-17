@@ -4,8 +4,8 @@
 //! [`Endpoint`] and builds [`ALL`], and from which the server builds its routes and the
 //! application its handlers, so the three cannot drift.
 
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
 use crate::error::ApiError;
 use crate::ids::RequestId;
@@ -107,8 +107,39 @@ pub trait Write: Endpoint {
     fn request(&self) -> RequestId;
 }
 
-/// What an endpoint answers inside an HTTP 200.
-pub type Reply<E> = Result<<E as Endpoint>::Ok, ApiError>;
+/// What an endpoint answers inside an HTTP 200 (AD9). On the wire it follows the crate's
+/// rule for enums: `{"type": "ok", "value": <reply>}` or `{"type": "err", "value":
+/// <ApiError>}`. Serde's own form of `Result`, `{"Ok": …}`, would break that rule at the top
+/// of every reply.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+pub enum Reply<T> {
+    Ok(T),
+    Err(ApiError),
+}
+
+/// The reply of endpoint `E`.
+pub type ReplyOf<E> = Reply<<E as Endpoint>::Ok>;
+
+impl<T> Reply<T> {
+    /// The reply as a `Result`, for `?` and one exhaustive match.
+    pub fn into_result(self) -> Result<T, ApiError> {
+        match self {
+            Self::Ok(ok) => Ok(ok),
+            Self::Err(error) => Err(error),
+        }
+    }
+}
+
+impl<T> From<Result<T, ApiError>> for Reply<T> {
+    fn from(result: Result<T, ApiError>) -> Self {
+        match result {
+            Ok(ok) => Self::Ok(ok),
+            Err(error) => Self::Err(error),
+        }
+    }
+}
 
 /// One row of [`ALL`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -5,12 +5,22 @@
   "request": {
     "request": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"
   },
-  "ok": {
-    "outcome": "refused",
-    "account": {
-      "user": null,
-      "kept": "notKept",
-      "notice": "savedRefused"
+  "reply": {
+    "type": "ok",
+    "value": {
+      "outcome": "refused",
+      "account": {
+        "user": null,
+        "kept": "notKept",
+        "notice": "savedRefused"
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "checkSignIn"
     }
   }
 }

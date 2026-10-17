@@ -5,7 +5,17 @@
   "request": {
     "url": "https://help.door43.org/en/knowledgebase"
   },
-  "ok": {
-    "url": "https://git.door43.org/jdoe"
+  "reply": {
+    "type": "ok",
+    "value": {
+      "url": "https://git.door43.org/jdoe"
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "helpLink"
+    }
   }
 }

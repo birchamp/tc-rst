@@ -5,9 +5,21 @@
   "request": {
     "request": "0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d"
   },
-  "ok": {
-    "user": "jdoe",
-    "kept": "kept",
-    "notice": null
+  "reply": {
+    "type": "ok",
+    "value": {
+      "user": "jdoe",
+      "kept": "kept",
+      "notice": null
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
   }
 }

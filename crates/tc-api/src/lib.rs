@@ -14,6 +14,8 @@
 //!   own fields) cannot carry a variant that holds a string or a number, and an enum inside
 //!   an enum would put two tags in one object, so every data enum uses this one form.
 //! - Every enum is closed: an unknown variant is refused, never read as a fallback.
+//! - A reply is the enum [`Reply`]: `{"type": "ok", "value": …}` or `{"type": "err",
+//!   "value": <ApiError>}`.
 //! - Every identifier checks its format when it is read.
 
 #[cfg(feature = "proptest")]
@@ -40,7 +42,9 @@ pub mod test;
 pub mod token;
 pub mod write;
 
-pub use endpoint::{ALL, API_VERSION, Endpoint, EndpointInfo, Kind, NetKind, Reply, Write};
+pub use endpoint::{
+    ALL, API_VERSION, Endpoint, EndpointInfo, Kind, NetKind, Reply, ReplyOf, Write,
+};
 pub use error::ApiError;
 pub use ids::{RequestId, Scope};
 pub use refusal::{Message, Refusal};

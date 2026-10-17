@@ -7,5 +7,17 @@
     "at": "beforeReply",
     "path": "test/fieldStore"
   },
-  "ok": null
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
 }

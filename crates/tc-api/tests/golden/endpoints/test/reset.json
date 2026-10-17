@@ -5,5 +5,17 @@
   "request": {
     "request": "12121212121212121212121212121212"
   },
-  "ok": null
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
 }

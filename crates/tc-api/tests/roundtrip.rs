@@ -210,7 +210,7 @@ where
     E::Ok: Arbitrary + PartialEq + Debug,
 {
     round_trip::<E>()?;
-    round_trip::<tc_api::Reply<E>>().map_err(|e| format!("{}: {e}", E::PATH))
+    round_trip::<tc_api::ReplyOf<E>>().map_err(|e| format!("{}: {e}", E::PATH))
 }
 
 macro_rules! endpoints {

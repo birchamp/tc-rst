@@ -6,7 +6,19 @@
     "request": "07070707070707070707070707070707",
     "on": true
   },
-  "ok": {
-    "on": true
+  "reply": {
+    "type": "ok",
+    "value": {
+      "on": true
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
   }
 }

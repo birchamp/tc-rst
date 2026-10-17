@@ -8,9 +8,19 @@
     "password": "correct horse",
     "stay": true
   },
-  "ok": {
-    "user": "jdoe",
-    "kept": "kept",
-    "notice": null
+  "reply": {
+    "type": "ok",
+    "value": {
+      "user": "jdoe",
+      "kept": "kept",
+      "notice": null
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "signIn"
+    }
   }
 }

@@ -51,7 +51,7 @@ use tc_api::test::{
 use tc_api::write::{
     Ack, ConflictBrief, NotSaved, ReadOnlyReason, SaveRefusal, SavedValue, Stored, TokenUpdate,
 };
-use tc_api::{ALL, Endpoint, Kind, ShownToken};
+use tc_api::{ALL, Endpoint, Kind, Reply, ReplyOf, ShownToken};
 use tc_core::BookId;
 
 /// An example value for a golden file.
@@ -507,24 +507,45 @@ fn check_golden(relative: &str, value: &Value) -> Option<String> {
     }
 }
 
-/// The golden of one endpoint, after checking that its JSON reads back as the same values.
+/// An error the endpoint can answer: the internet question's for an endpoint that asks it,
+/// else a bug's report, which any endpoint can give.
+fn error_example<E: Endpoint>() -> ApiError {
+    match E::NET {
+        Some(kind) => ApiError::NeedsInternet(kind),
+        None => ApiError::Internal {
+            report: ReportId::new(9),
+        },
+    }
+}
+
+/// The golden of one endpoint: the request and the whole HTTP 200 body of a reply and of an
+/// error, after checking that each reads back as the same value.
 fn endpoint_golden<E>() -> (String, Value)
 where
     E: Endpoint + Example + PartialEq + std::fmt::Debug,
     E::Ok: Example + PartialEq + std::fmt::Debug,
 {
     let request = serde_json::to_value(E::example()).unwrap();
-    let ok = serde_json::to_value(E::Ok::example()).unwrap();
     let back: E = serde_json::from_value(request.clone()).unwrap();
     assert_eq!(back, E::example(), "{} request reads back", E::PATH);
-    let back: E::Ok = serde_json::from_value(ok.clone()).unwrap();
-    assert_eq!(back, E::Ok::example(), "{} reply reads back", E::PATH);
+    let mut bodies = Vec::new();
+    for body in [
+        ReplyOf::<E>::Ok(E::Ok::example()),
+        ReplyOf::<E>::Err(error_example::<E>()),
+    ] {
+        let value = serde_json::to_value(&body).unwrap();
+        let back: ReplyOf<E> = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(back, body, "{} reply reads back", E::PATH);
+        bodies.push(value);
+    }
+    let [reply, error] = <[Value; 2]>::try_from(bodies).unwrap();
     let golden = json!({
         "path": E::PATH,
         "kind": E::KIND,
         "net": E::NET,
         "request": request,
-        "ok": ok,
+        "reply": reply,
+        "error": error,
     });
     (format!("endpoints/{}.json", E::PATH), golden)
 }
@@ -817,4 +838,92 @@ fn no_golden_file_is_left_without_its_endpoint_or_type() {
         return;
     }
     assert!(stale.is_empty(), "golden files nothing writes: {stale:?}");
+}
+
+#[test]
+fn a_reply_is_tagged_like_every_other_enum() {
+    use tc_api::net::NetView;
+    let ok: Reply<NetView> = Reply::Ok(NetView { on: true });
+    assert_eq!(
+        serde_json::to_value(&ok).unwrap(),
+        json!({"type": "ok", "value": {"on": true}})
+    );
+    let err: Reply<NetView> = Reply::Err(ApiError::RequestReused);
+    assert_eq!(
+        serde_json::to_value(&err).unwrap(),
+        json!({"type": "err", "value": {"type": "requestReused"}})
+    );
+    assert_eq!(
+        serde_json::to_value(Reply::<()>::Ok(())).unwrap(),
+        json!({"type": "ok", "value": null})
+    );
+    // Serde's own form of `Result` is not the wire form.
+    assert!(serde_json::from_value::<Reply<NetView>>(json!({"Ok": {"on": true}})).is_err());
+    assert_eq!(ok.into_result(), Ok(NetView { on: true }));
+    assert_eq!(
+        Reply::from(Err::<(), _>(ApiError::StaleSession)),
+        Reply::Err(ApiError::StaleSession)
+    );
+}
+
+/// Every object in `value` with where it is, for messages.
+fn objects<'a>(
+    value: &'a Value,
+    at: String,
+    out: &mut Vec<(String, &'a serde_json::Map<String, Value>)>,
+) {
+    match value {
+        Value::Object(map) => {
+            out.push((at.clone(), map));
+            for (key, inner) in map {
+                objects(inner, format!("{at}.{key}"), out);
+            }
+        }
+        Value::Array(items) => {
+            for (i, inner) in items.iter().enumerate() {
+                objects(inner, format!("{at}[{i}]"), out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn is_camel_case(name: &str) -> bool {
+    name.chars().next().is_some_and(|c| c.is_ascii_lowercase())
+        && name.chars().all(|c| c.is_ascii_alphanumeric())
+}
+
+#[test]
+fn every_golden_file_follows_the_wire_rules() {
+    // APP-DESIGN §3.1: camelCase fields, and every enum that carries data, the reply
+    // envelope included, as {"type": <camelCase variant>, "value": <data>}.
+    let mut files = BTreeSet::new();
+    files_under(&golden_dir(), &mut files);
+    assert!(files.len() > 20, "{} golden files", files.len());
+    let mut problems = Vec::new();
+    for path in files {
+        let text = std::fs::read_to_string(&path).unwrap();
+        let value: Value = serde_json::from_str(&text).unwrap();
+        let name = path
+            .strip_prefix(golden_dir())
+            .unwrap()
+            .display()
+            .to_string();
+        let mut found = Vec::new();
+        objects(&value, name, &mut found);
+        for (at, map) in found {
+            for key in map.keys().filter(|key| !is_camel_case(key)) {
+                problems.push(format!("{at}: key {key:?} is not camelCase"));
+            }
+            if let Some(tag) = map.get("type") {
+                if !tag.as_str().is_some_and(is_camel_case) {
+                    problems.push(format!("{at}: tag {tag} is not a camelCase name"));
+                }
+                if map.keys().any(|key| key != "type" && key != "value") {
+                    problems.push(format!("{at}: a tagged enum holds other keys"));
+                }
+            }
+        }
+    }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
 }

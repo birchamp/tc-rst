@@ -1,6 +1,7 @@
 //! The one error type of every reply (APP-DESIGN §3.5, AD9). HTTP 200 carries
-//! `Result<Ok, ApiError>`, so the UI handles every outcome in one exhaustive match, and a
-//! proxy or token failure, which never reaches this type, cannot be read as a refusal.
+//! [`Reply`](crate::Reply), the reply or an `ApiError`, so the UI handles every outcome in
+//! one exhaustive match, and a proxy or token failure, which never reaches this type, cannot
+//! be read as a refusal.
 
 use serde::{Deserialize, Serialize};
 

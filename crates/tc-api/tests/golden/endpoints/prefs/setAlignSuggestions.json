@@ -10,5 +10,17 @@
     "request": "05050505050505050505050505050505",
     "on": true
   },
-  "ok": null
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
 }

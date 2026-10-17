@@ -9,5 +9,17 @@
     "message": "index out of bounds",
     "at": 1792000000000
   },
-  "ok": null
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
 }

@@ -10,5 +10,17 @@
     "request": "04040404040404040404040404040404",
     "unit": "verse"
   },
-  "ok": null
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
 }
