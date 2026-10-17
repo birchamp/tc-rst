@@ -1064,31 +1064,31 @@ None of these files is project data that another device needs. Each is written w
 the 64-bit fingerprint (§2.6) of its whole content, taken from the bytes the open reads at that
 open, equal the section's key: no time, name or inode. Any build of the app reads a cache of its
 own `INDEX_VERSION`, format minor and probe stamp, so an update that changes none of them keeps
-the cache. Against
-accidental damage that is enough: the size catches every truncation, extension, insertion and
-deletion; the fingerprint catches every change within one aligned 8-byte word (each of its steps
-is one to one) and any other accidental change except with a chance of about 2⁻⁶⁴ for each
-changed file (bit flips, a torn or zeroed page, a file another program rewrote or replaced, a
-restored older copy). Each section carries a fingerprint of its own bytes, so a damaged cache
-loses sections and never gives other changes; and only a file whose every line verified and
-parsed has a section, so a damaged, newer or foreign file, or one with a quarantined line, is
-read and reported at every open. The cache does not protect against a file made on purpose to
-match a section's key (the fingerprint is not a cryptographic hash) or a cache written on
-purpose. **The probe stamp** keeps builds that summarize changes differently apart without
-anyone having to remember a version raise: the cache is stamped with the fingerprint of the
-sections the writing build makes of a fixed probe (`tc-journal/src/index_probe.batch`: every
-record kind seeded and not, every verse value class seeded and not, every value of every field
-the summary keeps; `the_probe_covers_every_class`), computed once a process in about a
-millisecond, and a build whose stamp differs does not read it. So a build that changes
-`FoldInput::prepare_at`, the section encoding or a per-change rule in a way any probe change
-shows never takes an older build's summaries; `the_encoding_is_pinned` also pins the stamp,
-so the change is seen in review and `INDEX_VERSION` raised. A change of behaviour on bytes the
-probe does not hold (a rule made stricter for a rare value) is not seen by the stamp: it must
-raise `INDEX_VERSION` or add a probe change that shows it. The remaining risk is acceptable: a file whose damage collides still gives the changes it held when
-they were verified, so nothing is lost or altered in the fold; what is missed is the notice that
-the file is damaged, and a value read from the damaged part fails its own fingerprint and is
-listed as unreadable (§2.6). Trusting size and modification time instead would spare reading
-the files but would miss damage that keeps them.
+the cache. Against accidental damage that is enough: the size catches every truncation,
+extension, insertion and deletion; the fingerprint catches every change within one aligned
+8-byte word (each of its steps is one to one) and any other accidental change except with a
+chance of about 2⁻⁶⁴ for each changed file (bit flips, a torn or zeroed page, a file another
+program rewrote or replaced, a restored older copy). Each section carries a fingerprint of its
+own bytes, so a damaged cache loses sections and never gives other changes; and only a file
+whose every line verified and parsed has a section, so a damaged, newer or foreign file, or one
+with a quarantined line, is read and reported at every open. The cache does not protect against
+a file made on purpose to match a section's key (the fingerprint is not a cryptographic hash) or
+a cache written on purpose. **The probe stamp** keeps builds that summarize changes differently
+apart without anyone having to remember a version raise: the cache is stamped with the
+fingerprint of the sections the writing build makes of a fixed probe
+(`tc-journal/src/index_probe.batch`: every record kind seeded and not, every verse value class
+seeded and not, every value of every field the summary keeps; `the_probe_covers_every_class`),
+computed once a process (5.5 ms on the VM of §14), and a build whose stamp differs does not read
+it. So a build that changes `FoldInput::prepare_at`, the section encoding or a per-change rule
+in a way any probe change shows never takes an older build's summaries; `the_encoding_is_pinned`
+also pins the stamp, so the change is seen in review and `INDEX_VERSION` raised. A change of
+behaviour on bytes the probe does not hold (a rule made stricter for a rare value) is not seen
+by the stamp: it must raise `INDEX_VERSION` or add a probe change that shows it. The remaining
+risk is acceptable: a file whose damage collides still gives the changes it held when they were
+verified, so nothing is lost or altered in the fold; what is missed is the notice that the file
+is damaged, and a value read from the damaged part fails its own fingerprint and is listed as
+unreadable (§2.6). Trusting size and modification time instead would spare reading the files but
+would miss damage that keeps them.
 
 ### 3.7 Application data (per installation, never in a project)
 
@@ -1819,21 +1819,26 @@ O7  Finish interrupted work:
     These rules read each file's facts (`tc_journal::index::Facts`: a pack's id, path, header,
     status and change ids; a pending file's header, status and change ids), which O8's read of
     the file gives, from its bytes or from its cache section alike, so no file is read twice.
-O8  Load: read the fold cache `.tc/index.bin` (§3.6; missing, damaged, of another project,
-    or of another cache version, format minor or probe stamp: no cache; any build of the app
-    reads a cache of its own version, minor and stamp). Read every pack and pending file in parallel (rayon)
-    and take its fingerprint. A file whose path, size and fingerprint equal a cache section's
-    takes that section's prepared changes: those bytes passed P1 to P4 at that path when the
-    section was made and give the same changes again, so they are not hashed, verified or
-    parsed again. Every other file is verified (§4.4; each line is hashed once) and salvaged,
+    The open does not hold every pack's change ids until the rules run: for a whole Bible that
+    is 20 MB more at the open's peak, which then misses its budget with jemalloc (§14). Only a
+    pack another pack's `replaces` lists, and the pack that lists it, need their ids (none in a
+    converged tree); a pack that only a later header lists gives its ids again from its section,
+    or by a second read, which only an interrupted consolidation leaves to do.
+O8  Load: read the fold cache `.tc/index.bin` (§3.6; missing, damaged, of another project, or of
+    another cache version, format minor or probe stamp: no cache; any build of the app reads a
+    cache of its own version, minor and stamp). Read every pack and pending file in parallel
+    (rayon) and take its fingerprint. A file whose path, size and fingerprint equal a cache
+    section's takes that section's prepared changes: those bytes passed P1 to P4 at that path
+    when the section was made and give the same changes again, so they are not hashed, verified
+    or parsed again. Every other file is verified (§4.4; each line is hashed once) and salvaged,
     and a section is made of each valid file whose every line is a change that parsed (a
     damaged, newer or foreign file, or one with a quarantined line, is read and reported at
     every open). Store as a blob every pack HEAD's tree does not hold. The fold indexes each
-    file's changes as they arrive (§7), keeping where each change's JSON lies, not its bytes:
-    it reads values on demand through the store's `ValueSource` (§2.6, §14). The fold never
-    fails. When the sections differ from the cache's (a new, changed or gone file), write the
-    cache again in the background with `atomic_write`; a crash before that costs the next
-    open the parse of those files only.
+    file's changes as they arrive (§7), keeping where each change's JSON lies, not its bytes: it
+    reads values on demand through the store's `ValueSource` (§2.6, §14). The fold never fails.
+    When the sections differ from the cache's (a new, changed or gone file), write the cache
+    again in the background with `atomic_write`; a crash before that costs the next open the
+    parse of those files only.
 O9  Classify every derived and carried path (§6.2), reading and projecting only what may have
     changed. A path is converged without being read or projected when it is clean by stat (its
     manifest entry settled, its size and mtime equal to the entry's), the digest of the heads
@@ -3527,27 +3532,27 @@ days a year.
 | `metadata.json` | ≈ 120 KB | 600 entries × ≈ 200 B, pretty-printed |
 | Working tree | ≈ 880 MiB | packs 674 MiB (measured) + derived ≈ 210 MiB (compact sidecars: alignments ≈ 90 MiB, decisions ≈ 110 MiB, USFM ≈ 5 MiB) |
 | `.git` after 3 years | ≈ 250–400 MiB | packs ≈ 70 MiB zlib, stored two to three times because consolidation writes new blobs; derived file history ≈ 110 MiB as deltas; ≈ 7,500 commits of ≈ 15 KB trees |
-| Cold open, 4 cores, SSD | target ≤ 3 s; only load and fold (O8) measured, the rest of the open (O1 to O7, O9 to O13) needs `tc-store`: with the fold cache 1.8 s (median of 9, p95 1.9 s) with the files in the page cache and 1.9 s (p95 2.0 s) with the guest's page cache cold, 2.5 to 2.7 s of CPU over all threads, on a 4-vCPU VM without SHA instructions and no other job running; as fast with a cache another build of the same `INDEX_VERSION` wrote; the first open without a cache (§18 item 15) 5.9 to 6.3 s (p95 6.6 to 8.5 s), 20 s of CPU with glibc malloc and 13.5 s with jemalloc | with the fold cache (§3.6, §6.1 O8) the open reads and fingerprints every file (705 MB) and takes each file's prepared changes from its section instead of hashing and parsing its lines; the fold indexes them as they arrive, and its work after the last file is 0.5 to 0.6 s. Without the cache every byte is hashed once (P4, with `ring`: one pass over every file takes 1 s of the four threads' time) and every change is parsed and checked; `docs/evidence/storage-fold-2026-10-16.md`. A corpus of 277,880 changes (the size of the probe's 278,041 actions, which it folded in 1.13 s) folds in 0.92 s (0.59 s on a faster VM) |
+| Cold open, 4 cores, SSD | target ≤ 3 s; only load and fold (O8, with O7's rules on the files' facts) measured, the rest of the open (O1 to O6, the rest of O7, O9 to O13) needs `tc-store`, so the 3 s is not shown end to end: with the fold cache 1.6 s (median of 9, p95 1.7 s) with the files in the page cache and 1.7 s (p95 1.9 s) with the guest's page cache cold, 2.5 to 2.6 s of CPU over all threads, on a 4-vCPU VM without SHA instructions and no other job running; as fast with a cache another build of the same `INDEX_VERSION` and probe stamp wrote; the first open without a cache (§18 item 15) 5.4 to 5.5 s (p95 5.4 to 5.6 s; 5.9 to 6.3 s the evening before), 19 s of CPU with glibc malloc and 13.5 s with jemalloc: **missed** against this branch's 3 s, within the owner's 10 s for an open without a usable cache (`docs/JOURNAL-DECISION-2026-10-16.md`, Decisions), which is not yet in PERFORMANCE.md | with the fold cache (§3.6, §6.1 O8) the open reads and fingerprints every file (705 MB) and takes each file's prepared changes from its section instead of hashing and parsing its lines; the fold indexes them as they arrive, and its work after the last file is 0.5 to 0.6 s; O7's rules take 1 to 2 ms. Without the cache every byte is hashed once (P4, with `ring`: one pass over every file takes 1 s of the four threads' time) and every change is parsed and checked; `docs/evidence/storage-fold-2026-10-16.md`. A corpus of 277,880 changes (the size of the probe's 278,041 actions, which it folded in 1.13 s) folds in 0.92 s (0.59 s on a faster VM) |
 | Cold open, 2-core laptop, HDD | ≈ 6–10 s | disk-bound; determinate progress per phase |
 | Save one verse | 1–10 ms | one `atomic_write` of ≈ 1 KB (measured 0.41 ms on the VM, fsyncbench) |
-| Materialize one book | 20–60 ms estimated; measured projection of Psalms 205 to 217 ms (medians of 20, p95 247 to 278 ms) on the VM with at most one other job running, within the 300 ms budget; 348 to 376 ms when other jobs loaded it (the build before `1665eba`: 341 to 521 ms in the same rounds); not measured on the reference laptop | projecting every Psalms file (USFM, alignments, tN and TWL decisions, comments; 18.7 MB) with values read from disk and checked against their fingerprints (§2.6), on 4 threads, about 0.5 s of CPU (2.3 G instructions), about half of it decoding the book's records from JSON; the book's files are listed from its own records, and decisions and alignments are decoded, written and freed in chunks on threads; the USFM alone 16 ms, one chapter 0.13 ms; the write and `metadata.json` are `tc-store`'s, and with §6.2 an open after no change projects no file |
+| Materialize one book | 20–60 ms estimated; measured projection of Psalms 150 to 164 ms (medians of 20 in each of 5 processes, p95 177 to 195 ms) on the VM with no other job running, 205 to 217 ms (p95 247 to 278 ms) with one other job, within the 300 ms budget; 348 to 376 ms when other jobs loaded it (the build before `1665eba`: 341 to 521 ms in the same rounds); not measured on the reference laptop | projecting every Psalms file (USFM, alignments, tN and TWL decisions, comments; 18.7 MB) with values read from disk and checked against their fingerprints (§2.6), on 4 threads, about 0.5 s of CPU (2.3 G instructions), about half of it decoding the book's records from JSON; the book's files are listed from its own records, and decisions and alignments are decoded, written and freed in chunks on threads; the USFM alone 16 ms, one chapter 0.13 ms; the write and `metadata.json` are `tc-store`'s, and with §6.2 an open after no change projects no file |
 | Checkpoint | 0.1–0.5 s | seal ≤ 1 MiB, materialize, tree of changed directories, one commit |
 | Daily sync | 1–3 s + network | incremental fetch of a few hundred KB; push ≈ 0.3–1 MB (non-thin, §9.5) |
 | Join | ≈ 250–400 MiB full clone, or ≈ 120 MiB exchange file | packs deflate ≈ 5x in the zip |
 | USB export | ≈ 120 MiB, 5–15 s on USB 2 | |
-| Memory | ≈ 100 MiB typical, ≈ 350 MiB peak; measured folded state 205–214 MB of heap; an open with the fold cache peaks at 326–340 MiB RSS and leaves 250–277 MiB with the fold open; the first open without a cache peaks at 424–442 MiB (**missed**); with Psalms projected after an open, jemalloc peaks at 317–323 MiB and keeps 295–298 MiB, glibc malloc 409–429 MiB (it keeps what threads free); the steady 150 MiB is **missed** by the fold's tables alone | ≈ 340 B of tables per change (each change's entry 130 B, of which 8 B is the value's fingerprint; record keys, batches, position indexes); values are byte ranges read on demand and dropped when a book is idle; the open folds each file as it arrives, so its peak holds the tables and a few files' inputs; glibc keeps what reading threads free in their arenas |
+| Memory | ≈ 100 MiB typical, ≈ 350 MiB peak; measured folded state 205–214 MB of heap; an open with the fold cache that holds every file's facts until O7's rules peaks at 341–347 MiB RSS with glibc malloc and 354–362 MiB with jemalloc (**missed**), 331–341 MiB when it drops the change ids (§6.1 O7), and leaves 279–286 MiB (glibc) or 249–253 MiB (jemalloc) with the fold open; the first open without a cache peaks at 442–451 MiB (**missed**); with Psalms projected after an open, jemalloc peaks at 314–319 MiB and keeps 295–303 MiB, glibc malloc 406–433 MiB (it keeps what threads free); the steady 150 MiB is **missed** by the fold's tables alone | ≈ 340 B of tables per change (each change's entry 130 B, of which 8 B is the value's fingerprint; record keys, batches, position indexes); values are byte ranges read on demand and dropped when a book is idle; the open folds each file as it arrives, so its peak holds the tables and a few files' inputs; glibc keeps what reading threads free in their arenas |
 
 An aligned NT project is about a quarter of these figures. Rows that say "measured" were
 measured on this format with the `tc-corpus` whole-Bible corpus, release builds
 (`docs/evidence/storage-fold-2026-10-16.md`); the other rows are still estimates from probes,
 until `tc-store` and `tc-sync` measure save, checkpoint, sync and export (§16.5). With the fold
-cache `.tc/index.bin` (§3.6, §6.1 O8), load and fold take 1.8 s; the rest of the open (O1 to O7,
-O9 to O13) is not measured until `tc-store` exists, so the 3 s cold open is not yet shown end
-to end. The cache holds a section per file,
-keyed by the file's path, size and fingerprint, not one key for the whole set of files: a save,
-a seal, a consolidation or a sync costs the next open only the parse of the files it added, a
-file another program changed is read again, and a file that is gone is never asked for. The
-first open without a cache verifies and parses every change (§18 item 15).
+cache `.tc/index.bin` (§3.6, §6.1 O8), load and fold take 1.6 to 1.9 s; the rest of the open (O1
+to O7, O9 to O13) is not measured until `tc-store` exists, so the 3 s cold open is not yet shown
+end to end. The cache holds a section per file, keyed by the file's path, size and fingerprint,
+not one key for the whole set of files: a save, a seal, a consolidation or a sync costs the next
+open only the parse of the files it added, a file another program changed is read again, and a
+file that is gone is never asked for. The first open without a cache verifies and parses every
+change (§18 item 15).
 
 ---
 
@@ -3946,11 +3951,13 @@ go in `[workspace.dependencies]`. No CRDT library and no git content merge (`.au
 14. **Whitespace at line ends and line endings** changed by an outside editor are not recorded
     (§11.1 X3); the app keeps the file's previous line endings.
 15. **The first open without a fold cache** (a project just received or copied without its
-    `.tc/`, or the first open after an update that raised `INDEX_VERSION` or the format minor)
+    `.tc/`, or the first open after an update that raised `INDEX_VERSION` or the format minor or
+    changed the probe stamp, §3.6)
     verifies and parses every change: for a whole Bible on a processor without SHA
-    instructions, about 20 s of CPU over four threads with glibc malloc (13.5 s with jemalloc)
-    and 5.9 to 6.3 s of wall time on the quiet VM (§14). It shows determinate progress and
-    writes the cache, so the next open's load and fold take about 1.8 s.
+    instructions, 19 to 20 s of CPU over four threads with glibc malloc (13.5 s with jemalloc)
+    and 5.4 to 6.3 s of wall time on the quiet VM (§14), over this branch's 3 s and within the
+    owner's 10 s for such an open. It shows determinate progress and writes the cache, so the
+    next open's load and fold take about 1.7 s.
 
 ---
 

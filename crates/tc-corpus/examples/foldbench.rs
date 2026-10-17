@@ -7,15 +7,18 @@
 //! with the fold cache (`DIR/index.bin`, `.tc/index.bin` in a project; the first run writes
 //! it): each file is read and hashed, and its prepared changes taken from the cache; and
 //! without it: every line verified, parsed and prepared on `threads` threads, keeping only
-//! where each value lies. Then the full fold, one incremental step after a verse save, a
-//! decision, an alignment and a resolution, the conflict list from scratch, and the Psalms
-//! projection, whose values are read from the files on demand. Times are medians and p95
-//! over repeated runs. `FOLDBENCH_RUNS` sets the runs of the open, `FOLDBENCH_FIRST_ONLY`
-//! stops after the first open when there is no cache yet, `FOLDBENCH_CACHED_ONLY`
-//! stops after the opens with the cache, `FOLDBENCH_STREAM_ONLY` after the opens without
-//! it too (for a heap profile), and `FOLDBENCH_FOLD_ONLY` after the open's parts.
+//! where each value lies. Either way the open keeps each file's facts and, once the last file
+//! is read, runs O7's rules on them (§6.1). Then the full fold, one incremental step after a
+//! verse save, a decision, an alignment and a resolution, the conflict list from scratch, and
+//! the Psalms projection, whose values are read from the files on demand. Times are medians
+//! and p95 over repeated runs. `FOLDBENCH_RUNS` sets the runs of the open,
+//! `FOLDBENCH_FIRST_ONLY` stops after the first open when there is no cache yet,
+//! `FOLDBENCH_CACHED_ONLY` stops after the opens with the cache, `FOLDBENCH_STREAM_ONLY` after
+//! the opens without it too (for a heap profile), and `FOLDBENCH_FOLD_ONLY` after the open's
+//! parts.
 //! `FOLDBENCH_PSALMS_ONLY` projects Psalms right after the opens with the cache, the app's
-//! case for memory: the whole Bible open, Psalms in use.
+//! case for memory: the whole Bible open, Psalms in use. `FOLDBENCH_NO_O7` drops each file's
+//! facts as it is read instead of holding them for O7's rules, to measure what holding costs.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
@@ -24,8 +27,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tc_corpus::{Corpus, Spec};
+use tc_journal::consolidate::redundancy;
 use tc_journal::fold::{DerivedFile, FoldInput, FoldState, ProjectKind, ValueAt, ValueSource};
 use tc_journal::index::{Facts, FileKey, Fingerprinter, Index, Section};
+use tc_journal::pack::PackFacts;
+use tc_journal::pending::PendingFacts;
 use tc_journal::record::{CheckValue, VerseValue};
 use tc_journal::{
     BatchId, BatchRef, BookId, Cause, Change, ChangeBody, DeviceId, DeviceSeq, ProjectId, Record,
@@ -195,12 +201,12 @@ fn project_of(dir: &Path) -> ProjectId {
 }
 
 /// What a streamed open hands over: each file's prepared changes as soon as a reading
-/// thread has them, the source the fold reads values from, and, once every file is read,
-/// each file's key with the section made of it when the cache did not hold it.
+/// thread has them, the source the fold reads values from, and each file's key, with the
+/// section made of it when the cache did not hold it, and its facts for O7's rules.
 struct Streamed {
     inputs: std::sync::mpsc::Receiver<Vec<FoldInput>>,
     source: Arc<dyn ValueSource>,
-    sections: std::sync::mpsc::Receiver<(FileKey, Option<Section>)>,
+    sections: std::sync::mpsc::Receiver<(FileKey, Option<Section>, Option<Facts>)>,
 }
 
 /// The key of the file at `path` in the project folder, taken a chunk at a time, so a file
@@ -255,7 +261,10 @@ fn load_streamed(dir: &Path, threads: usize, index: Option<Arc<Index>>) -> Strea
     // A few files in flight per thread at most: memory holds what is being folded, not
     // the whole project's prepared changes.
     let (send, receive) = std::sync::mpsc::sync_channel::<Vec<FoldInput>>(threads * 2);
-    let (send_section, sections) = std::sync::mpsc::channel::<(FileKey, Option<Section>)>();
+    let (send_section, sections) =
+        std::sync::mpsc::channel::<(FileKey, Option<Section>, Option<Facts>)>();
+    // To measure what holding every file's facts until O7 costs, `FOLDBENCH_NO_O7` drops them.
+    let keep_facts = std::env::var_os("FOLDBENCH_NO_O7").is_none();
     for _ in 0..threads {
         let (queue, next, send) = (queue.clone(), next.clone(), send.clone());
         let (send_section, index) = (send_section.clone(), index.clone());
@@ -272,11 +281,11 @@ fn load_streamed(dir: &Path, threads: usize, index: Option<Arc<Index>>) -> Strea
                 };
                 let cached = index.as_ref().and_then(|index| {
                     let key = key_of(&cache_path, path, &mut buffer);
-                    let inputs = index.section(&key)?.load(*file).ok()?.inputs;
-                    Some((key, inputs))
+                    let loaded = index.section(&key)?.load(*file).ok()?;
+                    Some((key, loaded.inputs, loaded.facts))
                 });
-                let (key, inputs, section) = match cached {
-                    Some((key, inputs)) => (key, inputs, None),
+                let (key, inputs, section, facts) = match cached {
+                    Some((key, inputs, facts)) => (key, inputs, None, facts),
                     None => {
                         // Read whole, and keyed by the bytes read, which may differ from
                         // those fingerprinted if another program replaced the file since.
@@ -293,10 +302,10 @@ fn load_streamed(dir: &Path, threads: usize, index: Option<Arc<Index>>) -> Strea
                         } else {
                             tc_journal::index::load_pending(&cache_path, &bytes, project, *file)
                         };
-                        (loaded.key, loaded.inputs, loaded.section)
+                        (loaded.key, loaded.inputs, loaded.section, loaded.facts)
                     }
                 };
-                let _ = send_section.send((key, section));
+                let _ = send_section.send((key, section, keep_facts.then_some(facts)));
                 if send.send(inputs).is_err() {
                     return;
                 }
@@ -324,26 +333,104 @@ fn load(dir: &Path, threads: usize) -> (Vec<FoldInput>, Arc<dyn ValueSource>) {
 /// not hold it.
 type Read = Vec<(FileKey, Option<Section>)>;
 
-/// One streamed open: the fold indexes each file's changes as they arrive. Returns the
-/// fold, the time after the last file was read, and the files read.
+/// One streamed open: the fold indexes each file's changes as they arrive. Once the last file
+/// is read, O7's rules run on the files' facts (§6.1): the pack rule (§4.7) needs only the
+/// packs' facts, so it runs then and the packs' change ids are dropped before the fold's
+/// stages allocate; the pending rule asks the fold, so it runs after them. Returns the fold,
+/// the time after the last file was read (the fold's stages and the rules), the rules' time,
+/// and the files read.
 fn open_streamed(
     dir: &Path,
     threads: usize,
     index: Option<Arc<Index>>,
-) -> (FoldState, Duration, Read) {
+) -> (FoldState, Duration, Duration, Read) {
     let streamed = load_streamed(dir, threads, index);
+    let sections = streamed.sections;
     let last_read = std::cell::Cell::new(None);
+    let after_read = std::cell::RefCell::new(None);
     let inputs = streamed
         .inputs
         .into_iter()
         .flatten()
         .chain(std::iter::from_fn(|| {
-            last_read.set(Some(Instant::now()));
+            if last_read.get().is_none() {
+                last_read.set(Some(Instant::now()));
+                // Every reading thread has ended, so every file's facts were sent.
+                *after_read.borrow_mut() = Some(pack_rules(sections.iter()));
+            }
             None
         }));
     let folded = FoldState::fold_from(ProjectKind::Bible, Some(streamed.source), inputs);
+    let (read, pending, mut rules) = after_read.into_inner().expect("the last file was read");
+    if let Some(pending) = pending {
+        let started = Instant::now();
+        pending_rule(&folded, &pending.0, &pending.1);
+        rules += started.elapsed();
+    }
     let tail = last_read.get().map(|t| t.elapsed()).unwrap_or_default();
-    (folded, tail, streamed.sections.into_iter().collect())
+    (folded, tail, rules, read)
+}
+
+/// The facts the pending rule needs: the valid packs' ids and every pending file's facts.
+type PendingInput = (
+    std::collections::HashSet<tc_journal::PackId>,
+    Vec<PendingFacts>,
+);
+
+/// The files read and O7's pack rule: the packs a valid pack replaces (§4.7). Returns the
+/// files, what the pending rule needs (`None` when the facts were dropped as files were
+/// read), and the rule's time. The saved corpus has no replaced pack.
+fn pack_rules(
+    files: impl Iterator<Item = (FileKey, Option<Section>, Option<Facts>)>,
+) -> (Read, Option<PendingInput>, Duration) {
+    let started = Instant::now();
+    let mut read = Read::new();
+    let mut packs: Vec<PackFacts> = Vec::new();
+    let mut pending: Vec<PendingFacts> = Vec::new();
+    let mut kept = true;
+    for (key, section, facts) in files {
+        read.push((key, section));
+        match facts {
+            Some(Facts::Pack(facts)) => packs.push(facts),
+            Some(Facts::Pending(facts)) => pending.push(facts),
+            None => kept = false,
+        }
+    }
+    if !kept {
+        return (read, None, started.elapsed());
+    }
+    let result = redundancy(&packs);
+    assert!(
+        result.redundant.is_empty() && result.kept.is_empty(),
+        "{result:?}"
+    );
+    let valid = packs
+        .iter()
+        .filter(|pack| pack.is_valid())
+        .map(|pack| pack.id)
+        .collect();
+    drop(packs);
+    (read, Some((valid, pending)), started.elapsed())
+}
+
+/// O7's pending rule: a pending file every change of which a valid pack holds is removed. It
+/// asks the fold which packs hold each change, as `tc-store` may. The saved corpus has none.
+fn pending_rule(
+    folded: &FoldState,
+    valid: &std::collections::HashSet<tc_journal::PackId>,
+    pending: &[PendingFacts],
+) {
+    let held = pending
+        .iter()
+        .filter(|file| {
+            file.ids.iter().all(|id| {
+                folded
+                    .change(id)
+                    .is_some_and(|change| change.packs.iter().any(|p| valid.contains(p)))
+            })
+        })
+        .count();
+    assert_eq!(held, 0, "no pending file of the corpus is sealed");
 }
 
 /// Whether the cache an open used still stands for every file it read: no file was read
@@ -471,6 +558,10 @@ fn run(args: &[String]) {
         "identification.name",
         &serde_json::json!({"en": "x"}),
     );
+    // Every open of a process pays the probe stamp once (§3.6); the opens below do not.
+    let t = Instant::now();
+    let stamp = tc_journal::index::stamp();
+    println!("probe stamp {stamp:#x} computed in {:?}", t.elapsed());
     let runs: usize = std::env::var("FOLDBENCH_RUNS")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -482,7 +573,7 @@ fn run(args: &[String]) {
         reset_peak_rss();
         let started = Instant::now();
         let cpu = process_cpu_ms();
-        let (folded, tail, read) = open_streamed(&dir, threads, None);
+        let (folded, tail, rules, read) = open_streamed(&dir, threads, None);
         let opened = started.elapsed();
         let cpu = process_cpu_ms() - cpu;
         let peak = peak_rss_mib();
@@ -491,7 +582,7 @@ fn run(args: &[String]) {
         println!(
             "first open without a cache {:.0} ms, the fold after the last file {:.0} ms, cpu over \
              all threads {cpu} ms, peak RSS {peak:.0} MiB; the cache of {} files written in {:?}, \
-             {size} bytes",
+             {size} bytes; O7's rules {rules:?}",
             opened.as_secs_f64() * 1e3,
             tail.as_secs_f64() * 1e3,
             read.len(),
@@ -520,7 +611,7 @@ fn run(args: &[String]) {
         let index = read_index(&dir).expect("the fold cache");
         let held = index.len();
         // The reading threads hold the cache, so it is freed once the last file is read.
-        let (folded, tail, read) = open_streamed(&dir, threads, Some(index));
+        let (folded, tail, rules, read) = open_streamed(&dir, threads, Some(index));
         cached.times.push(started.elapsed());
         cached_tail.times.push(tail);
         assert_eq!(read.len(), file_count);
@@ -530,7 +621,7 @@ fn run(args: &[String]) {
         );
         eprintln!(
             "cold open with the cache {:?}, the fold after the last file {tail:?}, cpu over all \
-             threads {} ms",
+             threads {} ms, O7's rules {rules:?}",
             started.elapsed(),
             process_cpu_ms() - cpu
         );
@@ -581,7 +672,7 @@ fn run(args: &[String]) {
         drop(state.take());
         let started = Instant::now();
         let cpu = process_cpu_ms();
-        let (folded, tail, _) = open_streamed(&dir, threads, None);
+        let (folded, tail, _, _) = open_streamed(&dir, threads, None);
         open.times.push(started.elapsed());
         after_read.times.push(tail);
         eprintln!(

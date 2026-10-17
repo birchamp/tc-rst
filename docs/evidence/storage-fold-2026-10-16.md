@@ -12,6 +12,154 @@ Budgets (docs/PERFORMANCE.md) that `tc-journal` owns or feeds:
 | Memory, whole Bible open (`tc-store`; the folded state is the fold's part) | 350 MiB peak; 150 MiB steady |
 | Corpus generator, whole Bible | well under a minute |
 
+## After the review fixes (2026-10-17)
+
+### What changed since the evening's numbers
+
+- `b05a586`: `load_pack`, `load_pending` and a cache section give a file's facts (a pack's id,
+  path, header, status and sorted change ids; a pending file's header, status and ids) for
+  O7's rules, so a section keeps the file's header (`INDEX_VERSION` 4). The open sorts every
+  file's ids once.
+- `9c36a3f`: the cache is stamped with what the build makes of a fixed probe
+  (`INDEX_VERSION` 5). Computing the stamp takes 5.5 ms once a process (median of 20, 5.3 to
+  10.1 ms), not the millisecond first written.
+- `foldbench` now holds every file's facts until O7's rules and runs them: the pack rule
+  (§4.7, `consolidate::redundancy`) as soon as the last file is read, then the pending rule
+  after the fold, asking the fold which packs hold each change. They take 1 to 2 ms on the
+  corpus, which has nothing to remove. `FOLDBENCH_NO_O7` drops the facts as each file is read,
+  to measure what holding them costs.
+- The cache grows by 11,226 bytes, the 303 headers, to 64,532,768 bytes.
+
+### Machine and method
+
+The VM of the sections below, restarted at 01:49 UTC. From 02:16 to 02:43 UTC no other job
+ran on it (`ps` at 02:16, 02:24 and 02:42 UTC): the load of 1.5 to 5.5 in the rows is the
+benchmark's own threads. Builds: `04999b1` with this commit's `foldbench`; the other build of
+the same encoding is that build with SHA-256 through `sha2` instead of `ring` (`sha.rs`,
+`Chosen = Sha2`): `INDEX_VERSION` 5 and the stamp `0x45f99a8a0cf98153` like this build's, and
+its cache equalled this build's byte for byte in every round. The build before the fixes is
+`00c28cb`, the commit that recorded the evening's numbers. The corpus is generated again with
+`foldbench save bible DIR` at `04999b1`: 617,143 changes, 131 packs and 172 pending files,
+705,135,600 bytes, as in the evening (the generator and the pack and pending codecs have not
+changed since).
+
+Eviction is the evening's (`cachectl.py evict`, checked with `mincore` before every cold
+open): a plain read of the files and the cache (769,668,368 bytes) took 0.25 s with them in
+the page cache and 0.71 to 0.72 s after eviction (three pairs at 02:43 UTC).
+
+Raw rows: `opens-04999b1.tsv` (`opens.py`), `ab-00c28cb-04999b1.tsv` (`ab.py`: the build
+before the fixes and this one, interleaved, each round's order reversed from the last) and
+`facts-04999b1.tsv` (`facts.py`), beside this file.
+
+### Results
+
+Load and fold of the whole Bible (§6.1 O8, and O7's rules on the files' facts), 4 reading
+threads, one open per process, 9 interleaved rounds, 02:33 to 02:37 UTC:
+
+| Action | Page cache | Runs | Median | p95 | CPU, all threads (median) | After the last file (median, p95) | Peak RSS | Load |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| (a) With the fold cache | warm | 9 | 1,635 ms | 1,727 ms | 2,450 ms | 499, 540 ms | 344–346 MiB | 1.7–3.3 |
+| (b) With the fold cache | cold | 9 | 1,702 ms | 1,859 ms | 2,610 ms | 504, 609 ms | 341–347 MiB | 1.7–3.4 |
+| (c) Without a cache: the first open | warm | 9 | 5,352 ms | 5,449 ms | 18,770 ms | 537, 566 ms | 443–449 MiB | 1.5–3.3 |
+| (c) Without a cache | cold | 9 | 5,527 ms | 5,563 ms | 19,050 ms | 568, 636 ms | 442–451 MiB | 1.7–3.4 |
+| (d) With a cache another build wrote (`sha2`) | warm | 9 | 1,654 ms | 1,764 ms | 2,480 ms | 501, 524 ms | 342–346 MiB | 2.0–3.5 |
+| The other build's first open (`sha2`) | warm | 9 | 5,690 ms | 5,935 ms | 20,300 ms | 540, 637 ms | 443–447 MiB | 1.9–3.5 |
+
+Against the budgets: the cold open's budget in this branch's PERFORMANCE.md is 3 s for the
+whole open. (a), (b) and (d) take 1.6 to 1.9 s for load and fold, the rest of the open not
+measured. The first open without a cache, 5.4 to 5.5 s, **misses** that 3 s; it is within the
+owner's ruling of 10 s for an open without a usable cache
+(`docs/JOURNAL-DECISION-2026-10-16.md`, Decisions), which is not yet in PERFORMANCE.md.
+
+The fixes against the build before them, interleaved, 5 rounds, 02:37 to 02:40 UTC (load 2.5
+to 4.4), every file read once before each open:
+
+| Action | Build | Median | p95 | CPU (median) | Peak RSS | RSS with the fold open |
+|---|---|---:|---:|---:|---:|---:|
+| Open with the cache, glibc | `00c28cb` | 1,720 ms | 1,879 ms | 2,400 ms | 331–333 MiB | 269–272 MiB |
+| Open with the cache, glibc | this | 1,707 ms | 1,821 ms | 2,500 ms | 344–345 MiB | 282–283 MiB |
+| Open with the cache, jemalloc | `00c28cb` | 1,746 ms | 1,883 ms | 2,430 ms | 338–343 MiB | 252–254 MiB |
+| Open with the cache, jemalloc | this | 1,797 ms | 1,972 ms | 2,600 ms | **354–359 MiB** | 249–253 MiB |
+| First open, glibc | `00c28cb` | 5,326 ms | 5,688 ms | 18,670 ms | 431–435 MiB | |
+| First open, glibc | this | 5,287 ms | 5,666 ms | 18,760 ms | 446–448 MiB | |
+
+The jemalloc rows are the opens before the Psalms projections below. Times are unchanged
+within the VM's spread; CPU grows by about 0.1 s (sorting each file's ids, the facts); the
+peak grows by 12 to 13 MiB with glibc and 18 MiB with jemalloc (medians). Holding the facts is
+the cause (`facts.py`, 5 rounds, 02:40 to
+02:42 UTC, load 3.0 to 5.5, each the open with the cache before Psalms is projected):
+
+| Facts | Allocator | Peak RSS of the open | RSS with the fold open | Peak while Psalms is projected | RSS after |
+|---|---|---:|---:|---:|---:|
+| held until O7's rules | glibc | 342–347 MiB | 280–285 MiB | 416–432 MiB | 416–432 MiB |
+| dropped as each file is read | glibc | 331–333 MiB | 269–271 MiB | 398–419 MiB | 398–419 MiB |
+| held until O7's rules | jemalloc | **354–362 MiB** | 250–252 MiB | 315–316 MiB | 295–300 MiB |
+| dropped as each file is read | jemalloc | 335–341 MiB | 251–253 MiB | 316–319 MiB | 296–299 MiB |
+
+The ids of 617,143 changes are 19.8 MB. The open's peak comes while the files are read, when
+the cache's bytes (64.5 MB) and nearly all the fold's tables are in memory with every file's
+facts, so running the pack rule as soon as the last file is read does not lower it; it does
+let jemalloc return the ids before the fold's stages (RSS with the fold open 250 MiB, against
+271 to 275 MiB when the rules ran after the fold, `facts.py` at 02:26 UTC). With jemalloc the
+open now **misses** the 350 MiB peak by 4 to 12 MiB; with glibc it meets it by 3 to 9 MiB.
+
+The Psalms projection, after one open with the cache, 20 projections per process, the same
+interleaved rounds (02:37 to 02:40 UTC, load 2.5 to 4.4):
+
+| Build | Allocator | Medians of the 5 processes | p95s | CPU of a projection (median) | Budget |
+|---|---|---:|---:|---:|---|
+| `00c28cb` | glibc | 148–155 ms | 172–207 ms | 490–510 ms | 300 ms |
+| this | glibc | 150–164 ms | 177–195 ms | 490–520 ms | 300 ms |
+| `00c28cb` | jemalloc | 140–151 ms | 152–201 ms | 470–490 ms | 300 ms |
+| this | jemalloc | 137–154 ms | 166–191 ms | 460–510 ms | 300 ms |
+
+The projection meets its budget on the quiet VM; the fixes do not touch it. (The evening's 205
+to 217 ms were measured with one other job running.)
+
+Memory, this build:
+
+| State | glibc malloc | jemalloc | Budget |
+|---|---:|---:|---|
+| Peak of an open with the cache, the facts held until O7's rules | 341–347 MiB | 354–362 MiB | 350 MiB: met with glibc, **missed** with jemalloc |
+| The same, the facts dropped as each file is read | 331–333 MiB | 335–341 MiB | 350 MiB: met |
+| Peak of the first open without a cache | 442–451 MiB | | 350 MiB: **missed** |
+| RSS after an open with the cache, the fold open | 279–286 MiB | 249–253 MiB | 150 MiB steady: **missed** |
+| Peak while Psalms is projected, after an open with the cache | 406–433 MiB | 314–319 MiB | 350 MiB: **missed** with glibc, met with jemalloc |
+| RSS with the fold open after Psalms was projected | 406–433 MiB | 295–303 MiB | 150 MiB steady: **missed** |
+
+### What is not measured
+
+As before: only O8 of §6.1 (and O7's rules on the facts O8 gives) is measured. O1 to O6, the
+rest of O7 and O9 to O13 need `tc-store`, so **the 3 s cold open is not shown end to end**.
+Nothing here is measured on the reference laptop, on Windows, on a CPU with SHA instructions,
+or with the host's disk cache cold.
+
+### What S1 must do about these numbers
+
+Everything the evening's list says, and: O7 must not hold every file's change ids through
+the read, since that alone takes the open over its peak with jemalloc. Only a pack that a
+pack's `replaces` lists, and the pack that lists it, need their ids, and in a converged tree
+none does. The open can keep the ids of those packs only (the cached packs' headers are in
+their sections; a pack read in full brings its own), and take the ids of a pack that only a
+later header lists from its section, or by reading it again, which only an interrupted
+consolidation leaves to do. `FOLDBENCH_NO_O7` measures the peak that gives on this corpus
+(331 to 341 MiB).
+
+### To reproduce
+
+```sh
+cargo build --release -p tc-corpus --example foldbench
+target/release/examples/foldbench save bible DIR
+# OTHER: the same commit with `type Chosen = Sha2;` in crates/tc-journal/src/sha.rs
+python3 -I docs/evidence/storage-fold-2026-10-16/opens.py DIR \
+    target/release/examples/foldbench OTHER 9 opens.tsv
+# BEFORE: a build of 00c28cb; it keeps its own cache in DIR-before (hard links to DIR)
+python3 -I docs/evidence/storage-fold-2026-10-16/ab.py DIR BEFORE \
+    target/release/examples/foldbench 5 ab.tsv
+python3 -I docs/evidence/storage-fold-2026-10-16/facts.py DIR \
+    target/release/examples/foldbench 5 facts.tsv
+```
+
 ## After the fold cache, hash-once, `ring` and the projection fix (evening, 2026-10-16)
 
 ### Machine and method

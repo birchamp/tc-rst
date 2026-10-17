@@ -117,7 +117,7 @@ pub const PROBE_PROJECT: [u8; 16] = [
 
 /// What this build makes of the probe: the fingerprint of the sections of the probe's pending
 /// file and of a pack sealed from its changes. Two builds with the same stamp make the same
-/// sections of every change of the probe. Computed once a process, in about a millisecond.
+/// sections of every change of the probe. Computed once a process, in about 5 ms.
 pub fn stamp() -> u64 {
     static STAMP: OnceLock<u64> = OnceLock::new();
     *STAMP.get_or_init(probe_stamp)
