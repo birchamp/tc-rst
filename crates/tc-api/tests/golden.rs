@@ -39,8 +39,8 @@ use tc_api::jobs::{
 };
 use tc_api::net::{NetView, Set, State as NetState};
 use tc_api::prefs::{
-    DraftUnit, PlaceMode, PlaceUnit, PlaceUpdate, RecordPlace, SetAlignSuggestions, SetDraftUnit,
-    SetLocale,
+    DraftUnit, PlaceChange, PlaceMode, PlaceUpdate, PlaceVerse, RecordPlace, SetAlignSuggestions,
+    SetDraftUnit, SetLocale,
 };
 use tc_api::refusal::Message;
 use tc_api::shown::{ConflictMarker, PersonLabel, Shown, Who};
@@ -228,12 +228,13 @@ impl Example for RecordPlace {
         RecordPlace {
             at: scope(),
             request: request(6),
-            place: PlaceUpdate {
-                unit: PlaceUnit::Book(BookId::Titus),
+            // A translation note on the chapter's introduction (`TIT 1:intro`).
+            place: PlaceUpdate::Book {
+                book: BookId::Titus,
                 mode: Some(PlaceMode::Check),
                 chapter: Some(1),
-                verse: Some(4),
-                tool: Some(Tool::TranslationWords),
+                verse: PlaceChange::Set(PlaceVerse::parse("intro").unwrap()),
+                tool: Some(Tool::TranslationNotes),
             },
         }
     }

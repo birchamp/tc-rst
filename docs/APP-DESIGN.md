@@ -651,6 +651,12 @@ has no `sync: SyncAction`: by the owner's ruling Q2 every shared project, Bible 
 the hooks `test/quiet`, `crash`, `hold`, `release`, `fieldStore`, `fieldLog`, `reset`. Each later
 unit adds the rows of its screens to `endpoint_table!` (B9b adds `account/orgs` and `repoLink`).
 
+`prefs/recordPlace` carries one observation of the place in a book or a story, as tC4's
+`rememberPlace` makes it (`tC4:src/state.jsx:3821-3845`): a mode, chapter or tool left out keeps
+the stored one, and the verse (a text: `4-5` for a bridge, `intro` or `front` for a check note,
+as tC4's `PlaceRecord` keeps `number | string`) or a story's frame is kept, cleared (a chapter
+click) or set. *(A1: the first build typed the verse as a number and could not clear it.)*
+
 Two rows changed when A1 built them. `account/link` became one endpoint per question, because an
 endpoint declares one `NET` and the UI asks before it sends: `profileLink` [profile] and
 `helpLink` [helpLink] now, `repoLink` [repoLink] with B9b. `feedback/send` is gone: the owner
