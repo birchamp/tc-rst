@@ -21,6 +21,8 @@ zip.workspace = true
 # shabench compares the two SHA-256 implementations on the corpus.
 ring.workspace = true
 sha2.workspace = true
+# foldbench reads files on the worker pool the fold itself uses, as an open does.
+rayon.workspace = true
 
 [lints]
 workspace = true

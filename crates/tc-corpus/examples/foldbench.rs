@@ -8,10 +8,12 @@
 //! it): each file is read and hashed, and its prepared changes taken from the cache; and
 //! without it: every line verified, parsed and prepared on `threads` threads, keeping only
 //! where each value lies. Either way the open keeps each file's facts and, once the last file
-//! is read, runs O7's rules on them (§6.1). Then the full fold, one incremental step after a
-//! verse save, a decision, an alignment and a resolution, the conflict list from scratch, and
-//! the Psalms projection, whose values are read from the files on demand. Times are medians
-//! and p95 over repeated runs. `FOLDBENCH_RUNS` sets the runs of the open,
+//! is read, runs O7's rules on them (§6.1). Then the full fold; and, in a process of its own
+//! (`... -- app DIR [threads]`, which `run` starts last), the app's case: one open with the
+//! cache, then one incremental step after a verse save, a decision, an alignment and a
+//! resolution, the conflict list from scratch, the Psalms projection, whose values are read
+//! from the files on demand, and snapshots, with the memory that leaves resident. Times are
+//! medians and p95 over repeated runs. `FOLDBENCH_RUNS` sets the runs of the open,
 //! `FOLDBENCH_FIRST_ONLY` stops after the first open when there is no cache yet,
 //! `FOLDBENCH_CACHED_ONLY` stops after the opens with the cache, `FOLDBENCH_STREAM_ONLY` after
 //! the opens without it too (for a heap profile), and `FOLDBENCH_FOLD_ONLY` after the open's
@@ -43,9 +45,11 @@ fn main() {
     match args.first().map(String::as_str) {
         Some("save") => save(&args[1..]),
         Some("run") => run(&args[1..]),
+        Some("app") => app(&args[1..]),
         _ => {
             eprintln!(
-                "foldbench save <psalms|scaled N|bible|bible-share S> DIR | run DIR [threads]"
+                "foldbench save <psalms|scaled N|bible|bible-share S> DIR | run DIR [threads] | \
+                 app DIR [threads]"
             );
             std::process::exit(2);
         }
@@ -156,6 +160,43 @@ fn reset_peak_rss() {
 
 fn rss_mib() -> Option<f64> {
     status_mib("VmRSS:")
+}
+
+/// Where the resident memory is (`/proc/self/smaps`): the main thread's heap, which holds the
+/// fold's tables; other anonymous memory, which is the heaps of worker threads and large
+/// blocks; and mapped files, the program's code among them.
+fn resident_by_kind() -> String {
+    let Ok(text) = std::fs::read_to_string("/proc/self/smaps") else {
+        return "resident memory by kind unavailable".to_owned();
+    };
+    let (mut heap, mut anonymous, mut files) = (0u64, 0u64, 0u64);
+    let mut kind = 0;
+    for line in text.lines() {
+        let mut words = line.split_whitespace();
+        let first = words.next().unwrap_or_default();
+        if let Some(kb) = line.strip_prefix("Rss:") {
+            let kb: u64 = kb.trim().trim_end_matches("kB").trim().parse().unwrap_or(0);
+            match kind {
+                0 => heap += kb,
+                1 => anonymous += kb,
+                _ => files += kb,
+            }
+        } else if first.contains('-') && !first.ends_with(':') {
+            // A mapping's first line: range, permissions, offset, device, inode, path.
+            kind = match words.nth(4) {
+                Some("[heap]") => 0,
+                None => 1,
+                Some(path) if path.starts_with('[') => 1,
+                Some(_) => 2,
+            };
+        }
+    }
+    format!(
+        "resident: the main heap {} MiB, other anonymous memory {} MiB, mapped files {} MiB",
+        heap / 1024,
+        anonymous / 1024,
+        files / 1024
+    )
 }
 
 /// A time in ms, or "unavailable".
@@ -311,11 +352,15 @@ fn load_streamed(dir: &Path, threads: usize, index: Option<Arc<Index>>) -> Strea
         std::sync::mpsc::channel::<(FileKey, Option<Section>, Option<Facts>)>();
     // To measure what holding every file's facts until O7 costs, `FOLDBENCH_NO_O7` drops them.
     let keep_facts = std::env::var_os("FOLDBENCH_NO_O7").is_none();
+    // The readers run on the worker pool the fold's own parallel stages use, so the open's
+    // threads are the pool's, not four more each open; each reuses its buffers from file to
+    // file.
     for _ in 0..threads {
         let (queue, next, send) = (queue.clone(), next.clone(), send.clone());
         let (send_section, index) = (send_section.clone(), index.clone());
-        std::thread::spawn(move || {
+        rayon::spawn(move || {
             let mut buffer = vec![0u8; 1 << 20];
+            let mut whole: Vec<u8> = Vec::new();
             while let Some((file, is_pack, path)) =
                 queue.get(next.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
             {
@@ -335,10 +380,17 @@ fn load_streamed(dir: &Path, threads: usize, index: Option<Arc<Index>>) -> Strea
                     None => {
                         // Read whole, and keyed by the bytes read, which may differ from
                         // those fingerprinted if another program replaced the file since.
-                        let bytes = std::fs::read(path).expect("read");
+                        whole.clear();
+                        {
+                            use std::io::Read;
+                            File::open(path)
+                                .and_then(|mut f| f.read_to_end(&mut whole))
+                                .expect("read");
+                        }
+                        let bytes = &whole;
                         let loaded = if *is_pack {
                             let loaded =
-                                tc_journal::index::load_pack(&cache_path, &bytes, project, *file);
+                                tc_journal::index::load_pack(&cache_path, bytes, project, *file);
                             assert!(
                                 matches!(&loaded.facts, Facts::Pack(pack) if pack.is_valid()),
                                 "{cache_path}: {:?}",
@@ -346,7 +398,7 @@ fn load_streamed(dir: &Path, threads: usize, index: Option<Arc<Index>>) -> Strea
                             );
                             loaded
                         } else {
-                            tc_journal::index::load_pending(&cache_path, &bytes, project, *file)
+                            tc_journal::index::load_pending(&cache_path, bytes, project, *file)
                         };
                         (loaded.key, loaded.inputs, loaded.section, loaded.facts)
                     }
@@ -687,6 +739,7 @@ fn run(args: &[String]) {
         println!("RSS with the fold open {}", mib(rss_mib()));
         reset_peak_rss();
         project_psalms(&state);
+        println!("{}", resident_by_kind());
         println!(
             "peak RSS while Psalms was projected {}; RSS with the fold open after Psalms was \
              projected {}",
@@ -776,7 +829,7 @@ fn run(args: &[String]) {
         mib(open_peak),
         mib(peak_rss_mib())
     );
-    let mut state = state.expect("folded");
+    let state = state.expect("folded");
     if std::env::var("FOLDBENCH_FOLD_ONLY").is_ok() {
         load_only.report();
         fold_only.report();
@@ -845,8 +898,62 @@ fn run(args: &[String]) {
     open.report();
     after_read.report();
 
-    // The app's case from here: the whole Bible open, a person working in Psalms.
+    println!(
+        "this process, after its opens and the parts: {}",
+        resident_by_kind()
+    );
+    // The app's case runs in a process of its own: an app opens a project once, and this
+    // process has opened it many times and held every prepared change at once, memory the
+    // allocator may keep after it is freed.
+    drop(state);
+    use std::io::Write;
+    std::io::stdout().flush().expect("flush");
+    let status = std::process::Command::new(std::env::current_exe().expect("this program"))
+        .arg("app")
+        .arg(&dir)
+        .arg(threads.to_string())
+        .status()
+        .expect("the app's case");
+    assert!(status.success(), "the app's case failed");
+}
+
+/// The app's case: one open (with the fold cache, or the first, which writes it), then a
+/// person working in Psalms (saves,
+/// decisions, alignments and resolutions, the conflict list, the book's projection and
+/// snapshots), in a process that has done nothing else.
+fn app(args: &[String]) {
+    let dir = PathBuf::from(&args[0]);
+    let threads: usize = args.get(1).and_then(|t| t.parse().ok()).unwrap_or(4);
+    let _ = tc_burrito::check_field(
+        tc_burrito::ProjectKind::BibleText,
+        "identification.name",
+        &serde_json::json!({"en": "x"}),
+    );
+    let _ = tc_journal::index::stamp();
+    println!(
+        "the app's case, in a process of its own: RSS before the open {}",
+        mib(rss_mib())
+    );
     reset_peak_rss();
+    let started = Instant::now();
+    // Without a cache this is the first open of a project, which writes the cache.
+    let index = read_index(&dir);
+    let cached = index.is_some();
+    let (state, _, _, read) = open_streamed(&dir, threads, index);
+    if !cached {
+        write_index(&dir, &read, None);
+    }
+    drop(read);
+    println!(
+        "open {} the fold cache {:?}, peak RSS {}; RSS with the fold open {}",
+        if cached { "with" } else { "without" },
+        started.elapsed(),
+        mib(peak_rss_mib()),
+        mib(rss_mib())
+    );
+    println!("{}", resident_by_kind());
+    reset_peak_rss();
+    let mut state = state;
     let keys = state.record_keys();
     let psalms_verses: Vec<RecordKey> = keys
         .iter()
@@ -1113,6 +1220,7 @@ fn run(args: &[String]) {
         drop(s);
     }
     snapshot.report();
+    println!("{}", resident_by_kind());
     println!(
         "peak RSS of the incremental steps, conflict lists, Psalms projections and snapshots \
          {}; RSS with the fold open after Psalms was projected {}",
