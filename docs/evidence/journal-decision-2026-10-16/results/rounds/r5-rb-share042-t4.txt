@@ -1,0 +1,13 @@
+### rb-share042-t4 round 5
+start 13:30:05 5.39 6.07 6.04 1/188 26879
+cold open 3.729306636s, the fold after the last file 319.508337ms, cpu over all threads 10870 ms
+load 4.605852716s, cpu over all threads 10230 ms
+fold 1.05561202s, cpu 969 ms, minor faults 45
+peak RSS during the streamed cold opens 191 MiB
+| Read, verify and prepare | 1 | 4605.853 ms | 4605.853 ms |
+| Full fold of the prepared changes | 1 | 1055.611 ms | 1055.611 ms |
+| Cold open: read, verify, prepare and fold, the fold indexing as files are read | 1 | 3729.306 ms | 3729.306 ms |
+| Cold open: the fold's work after the last file is read (stages F2 to F10) | 1 | 319.508 ms | 319.508 ms |
+peak RSS 273 MiB
+process: real 9.675 s, user 21.772 s, sys 0.667 s
+end 13:30:14 5.33 6.03 6.03 6/208 26942

@@ -1,0 +1,14 @@
+statprobe 17:37:14 load 5.58 2.72 3.31 11/205 9940
+created 617143 sparse files in 19.7 s
+round 1: files=617143 list=556 ms; list+lstat 1 thread=4086 ms; list+lstat 4 threads=3105 ms (bytes 576411562 576411562)
+round 2: files=617143 list=608 ms; list+lstat 1 thread=3603 ms; list+lstat 4 threads=3147 ms (bytes 576411562 576411562)
+round 3: files=617143 list=476 ms; list+lstat 1 thread=3653 ms; list+lstat 4 threads=3146 ms (bytes 576411562 576411562)
+removed in 9.4 s
+end 17:38:06 load 7.49 3.78 3.65 8/209 11697
+statprobe2 17:38:22 load 7.76 4.02 3.73 5/207 12266
+created 617143 sparse files in 202.1 s
+round 1: files=617143 list=851 ms; list+lstat by path 1 thread=3875 ms, 4 threads=3740 ms; list+fstatat 1 thread=2758 ms, 3 threads (one per actor folder)=1368 ms (bytes 576411562 576411562)
+round 2: files=617143 list=733 ms; list+lstat by path 1 thread=3911 ms, 4 threads=4078 ms; list+fstatat 1 thread=2680 ms, 3 threads (one per actor folder)=1645 ms (bytes 576411562 576411562)
+round 3: files=617143 list=471 ms; list+lstat by path 1 thread=3875 ms, 4 threads=3269 ms; list+fstatat 1 thread=3403 ms, 3 threads (one per actor folder)=2267 ms (bytes 576411562 576411562)
+removed in 10.0 s
+end 17:42:34 load 10.64 7.39 5.16 9/290 20059

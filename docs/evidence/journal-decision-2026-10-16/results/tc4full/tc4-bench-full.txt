@@ -1,0 +1,30 @@
+### tc4-bench-full
+start 16:36:49 9.73 9.80 7.57 8/221 24801
+bench-fold — issue #80
+date: 2026-10-16T16:36:51.572Z  commit: d310bf3  node: v22.22.0
+machine: Intel(R) Xeon(R) Processor @ 2.80GHz (4 cores), 16 GB, linux 6.18.44-fc-v139
+mode: full (3 repetitions, median) — checked whole Bible
+corpus: 66 books, 31104 verses, 215767 check decisions, 278041 events total, 31170 events (text-only)
+
+[fold] checked whole Bible (278041 events, 31104 alignment heads, 215767 decisions): 18291.0 ms  (runs: 18236.2, 18291.0, 20016.3)
+[C1] verseTextMd5 over the 31104 projected alignment texts: 833.3 ms  (0.027 ms/parse)
+[C1] control — same fold minus align.verse.set ONLY (246937 events, decisions kept): 11998.7 ms  (alignment projection cost by difference: 6292.3 ms)
+[C1] breakdown — slotKeysOf(skeleton).includes(vkey) per alignment head: 10100.1 ms over 31104 heads
+[C2] text-only union: 31170 events, 31236 head keys; base fold 1313.6 ms
+[C2] + one constant-shape rename apply, 0 mapped keys: 1809.9 ms; 500 mapped keys: 3674.8 ms
+[C2] marginal scan cost: 3.730 ms per mapped key over 31236 head keys (119.4 ns per mapped-key×head)
+[C3] text-only fold vs book count (the per-book projection scan is O(books × head keys)):
+[C3]   17 books, 12887 events, 12904 head keys: 671.9 ms
+[C3]   33 books, 22718 events, 22751 head keys: 719.3 ms
+[C3]   66 books, 31170 events, 31236 head keys: 1035.1 ms
+[open] full-scan baseline — REFERENCE READER (fs), a LOWER BOUND on the production HTTP open path; one segment per event, 3 repetition(s) per size (read+validate, then +fold):
+[open]     8000 segments: scan 856.7 ms, scan+fold 1505.1 ms  (write of last batch: 4250.7 ms)
+[open]    32000 segments: scan 5347.2 ms, scan+fold 7143.8 ms  (write of last batch: 19527.3 ms)
+[open]   128000 segments: scan 22101.1 ms, scan+fold 33474.6 ms  (write of last batch: 74352.9 ms)
+[open]   278041 segments: scan 53331.1 ms, scan+fold 61852.3 ms  (write of last batch: 110448.7 ms)
+[open] on-disk journal: 278041 segments, 259,580,461 bytes (247.6 MiB content; avg 934 B/segment)
+
+done. Record these numbers in docs/evidence/ with the machine, the commit and the date (issue #80).
+process: real 1102.894 s, user 526.955 s, sys 106.994 s
+exit 0
+end 16:55:12 10.98 12.43 11.47 12/220 25466

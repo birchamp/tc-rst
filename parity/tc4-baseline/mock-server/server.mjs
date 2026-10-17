@@ -3,7 +3,7 @@
 // directory on disk (fixtures/build-state.mjs builds it), plus a static server for the
 // built tC4 client. It exists only so the tC4 client renders its screens with realistic
 // data for the visual-parity baseline; it is not a faithful server. Routes and response
-// shapes follow src/data/serverApi.ts at tC4 d494a9d (each route cites its wrapper).
+// shapes follow src/data/serverApi.ts at tC4 d310bf3 (each route cites its wrapper).
 //
 //   node mock-server/server.mjs [--state <dir, default .state/sample>] [--client <dist dir>] [--port 19998]
 //
@@ -18,18 +18,25 @@
 // machine): a missing file reads "could not read ingredient content: <io error>", a missing
 // repo lists no paths, and so on. tC4 quotes some of these texts on screen.
 //
-// Deliberate simplifications (none of them is visible on the captured screens):
+// Door43 `main` of each repository is a plain folder, <state>/door43/<host>/<org>/<repo>:
+// the files of the last push to it. A clone copies that folder to the fixed clone path, and a
+// push replaces it with the pushed project. There is no history, so a push is never refused
+// as not a fast-forward. `door43` on the returned object lets the capture push a project the
+// way a first share does, take a repository off Door43, or drop the connection of the next
+// clone. The fake Door43 API (fake-door43.mjs) reads the same folders, so its branch check
+// agrees with what a clone finds.
+//
+// Deliberate simplifications. None of them is visible on the captured screens:
 //   - no git: add-and-commit records the message in memory and clears the pending set;
 //     /git/status reports the files written since the last commit;
-//   - creation routes (new-text-translation, new-obs-resource, new-scripture-book),
-//     push and the zip imports answer is_good:false: the capture never submits them;
+//   - creation routes (new-text-translation, new-obs-resource, new-scripture-book), pull
+//     and the zip imports answer is_good:false: the capture never submits them;
 //   - the gitea catalog answers "offline mode" while the net gate is off and [] when on.
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { zipSync } from 'fflate';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE = path.resolve(HERE, '..');
@@ -72,6 +79,10 @@ class HttpError extends Error {
 
 const md5 = (bytes) => crypto.createHash('md5').update(bytes).digest('hex');
 
+/** A zip of `files`. fflate loads on first use, so the server starts with Node built-ins only
+ * (CI runs mock-server/server.test.mjs without an install step). */
+const zip = async (files) => Buffer.from((await import('fflate')).zipSync(files));
+
 /** Every file under `dir`, as `/`-joined paths relative to it. */
 function walk(dir, { skipHidden = false, skipBak = false } = {}) {
   const out = [];
@@ -89,12 +100,15 @@ function walk(dir, { skipHidden = false, skipBak = false } = {}) {
 
 export function createMockServer({ state, client }) {
   const reposRoot = path.join(state, 'repos');
+  const door43Root = path.join(state, 'door43');
   const settingsDir = path.join(state, 'client_settings');
   let netEnabled = false;
   /** repoPath -> Map<ipath, change_type> written since the last commit */
   const pending = new Map();
   const commits = [];
   const requests = [];
+  /** The Door43 `main` folders whose next clone loses its connection. */
+  const droppedClones = new Set();
 
   // ---- helpers -------------------------------------------------------------
 
@@ -118,6 +132,39 @@ export function createMockServer({ state, client }) {
     const ipath = url.searchParams.get('ipath');
     if (!ipath || !segmentsOk(ipath.split('/'))) throw new HttpError(400, `bad ipath ${ipath}`);
     return ipath;
+  };
+  /** The remotes of a repo: the mock's stand-in for its git config (`[{ name, url }]`). */
+  const remotesFile = (repoPath) => path.join(repoDir(repoPath), '.remotes.json');
+  const readRemotes = (repoPath) => (fs.existsSync(remotesFile(repoPath)) ? JSON.parse(fs.readFileSync(remotesFile(repoPath), 'utf8')) : []);
+  /** Door43 `main` of `https://<host>/<org>/<repo>[.git]`, as a folder. */
+  const door43MainOf = (url) => {
+    const { host, pathname } = new URL(url);
+    const [org, repo] = pathname.replace(/^\/+/, '').replace(/\.git$/, '').split('/');
+    return path.join(door43Root, host, org, repo);
+  };
+  const remoteMain = (repoPath, name) => {
+    const remote = readRemotes(repoPath).find((r) => r.name === name);
+    if (!remote) throw new HttpError(400, `Could not find remote ${name}`);
+    return door43MainOf(remote.url);
+  };
+  /** A push: Door43 `main` becomes the pushed project. The remotes are the pusher's git
+   * config, not content, so they stay behind. */
+  const pushTo = (repoPath, name) => {
+    const main = remoteMain(repoPath, name);
+    fs.rmSync(main, { recursive: true, force: true });
+    fs.mkdirSync(path.dirname(main), { recursive: true });
+    fs.cpSync(repoDir(repoPath), main, { recursive: true, filter: (src) => src !== remotesFile(repoPath) });
+    return main;
+  };
+  /** Copy a repo folder with its pending set: a copy keeps uncommitted files uncommitted. */
+  const copyRepoDir = (src, target) => {
+    fs.mkdirSync(path.dirname(repoDir(target)), { recursive: true });
+    fs.cpSync(repoDir(src), repoDir(target), { recursive: true });
+    if (pending.has(src)) pending.set(target, new Map(pending.get(src)));
+  };
+  const deleteRepoDir = (repoPath) => {
+    fs.rmSync(repoDir(repoPath), { recursive: true, force: true });
+    pending.delete(repoPath);
   };
   const readMeta = (repoPath) => JSON.parse(fs.readFileSync(path.join(mustRepo(repoPath, `could not read metadata: ${IO_ENOENT}`), 'metadata.json'), 'utf8'));
   const listRepos = () => {
@@ -211,9 +258,9 @@ export function createMockServer({ state, client }) {
 
   /** [method, route prefix, handler(rest, url, body) -> {status?, json?|text?|bytes?, type?}] */
   const routes = [
-    ['GET', '/version', () => ({ json: { pkg_version: '0.18.15', mock: 'tc4-baseline' } })], // getVersion 327
-    ['GET', '/git/list-local-repos', () => ({ json: listRepos() })], // listLocalRepos 332
-    ['GET', '/burrito/metadata/summaries', (rest, url) => { // getSummaries 348
+    ['GET', '/version', () => ({ json: { pkg_version: '0.18.15', mock: 'tc4-baseline' } })], // getVersion 329
+    ['GET', '/git/list-local-repos', () => ({ json: listRepos() })], // listLocalRepos 334
+    ['GET', '/burrito/metadata/summaries', (rest, url) => { // getSummaries 350
       const org = url.searchParams.get('org');
       const out = {};
       for (const repo of listRepos()) {
@@ -222,45 +269,45 @@ export function createMockServer({ state, client }) {
       }
       return { json: out };
     }],
-    ['GET', '/burrito/metadata/summary/', (rest) => ({ json: summaryOf(takeRepo(rest)[0]) })], // getSummary 359
-    ['GET', '/burrito/metadata/raw/', (rest) => ({ json: readMeta(takeRepo(rest)[0]) })], // getMetadataRaw 375
-    ['GET', '/burrito/ingredient/raw/', (rest, url) => { // readIngredient 382
+    ['GET', '/burrito/metadata/summary/', (rest) => ({ json: summaryOf(takeRepo(rest)[0]) })], // getSummary 361
+    ['GET', '/burrito/metadata/raw/', (rest) => ({ json: readMeta(takeRepo(rest)[0]) })], // getMetadataRaw 377
+    ['GET', '/burrito/ingredient/raw/', (rest, url) => { // readIngredient 384
       const [repo] = takeRepo(rest);
       // A missing repo reads like a missing file: the platform only joins paths.
       const file = path.join(repoDir(repo), 'ingredients', ipathOf(url));
       if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new HttpError(400, ENOENT);
       return { bytes: fs.readFileSync(file), type: 'text/plain; charset=utf-8' };
     }],
-    ['GET', '/burrito/ingredient/bytes/', (rest, url) => { // ingredientBytesUrl 405
+    ['GET', '/burrito/ingredient/bytes/', (rest, url) => { // ingredientBytesUrl 407
       const [repo] = takeRepo(rest);
       const ipath = ipathOf(url);
       const file = path.join(repoDir(repo), 'ingredients', ipath);
       if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new HttpError(400, ENOENT);
       return { bytes: fs.readFileSync(file), type: MIME[path.extname(ipath)] ?? 'application/octet-stream' };
     }],
-    ['GET', '/burrito/ingredient/zipped/', (rest, url) => { // readIngredientZipped 395
+    ['GET', '/burrito/ingredient/zipped/', async (rest, url) => { // readIngredientZipped 397
       const [repo] = takeRepo(rest);
       const dir = path.join(mustRepo(repo), 'ingredients', ipathOf(url));
       if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new HttpError(400, 'could not locate repo or ingredient directory');
       const files = {};
       for (const rel of walk(dir)) files[rel] = fs.readFileSync(path.join(dir, rel));
-      return { bytes: Buffer.from(zipSync(files)), type: 'application/zip' };
+      return { bytes: await zip(files), type: 'application/zip' };
     }],
-    ['GET', '/burrito/zipped/', (rest) => { // getZippedRepo 367
+    ['GET', '/burrito/zipped/', async (rest) => { // getZippedRepo 369
       const dir = mustRepo(takeRepo(rest)[0]);
       const files = {};
       for (const rel of walk(dir)) files[rel] = fs.readFileSync(path.join(dir, rel));
-      return { bytes: Buffer.from(zipSync(files)), type: 'application/zip' };
+      return { bytes: await zip(files), type: 'application/zip' };
     }],
-    ['GET', '/burrito/paths/', (rest) => { // listPaths 417; a missing repo lists no paths
+    ['GET', '/burrito/paths/', (rest) => { // listPaths 419; a missing repo lists no paths
       return { json: walk(path.join(repoDir(takeRepo(rest)[0]), 'ingredients'), { skipHidden: true, skipBak: true }) };
     }],
-    ['GET', '/git/status/', (rest) => { // gitStatus 426
+    ['GET', '/git/status/', (rest) => { // gitStatus 428
       const [repo] = takeRepo(rest);
       mustRepo(repo);
       return { json: [...(pending.get(repo) ?? new Map())].map(([p, change_type]) => ({ path: p, change_type })) };
     }],
-    ['POST', '/burrito/ingredient/raw/', (rest, url, body) => { // writeIngredient 434
+    ['POST', '/burrito/ingredient/raw/', (rest, url, body) => { // writeIngredient 436
       const [repo] = takeRepo(rest);
       const ipath = ipathOf(url);
       const { payload } = readJsonBody(body);
@@ -274,7 +321,7 @@ export function createMockServer({ state, client }) {
       if (url.searchParams.has('update_ingredients')) registerIngredients(repo);
       return { json: OK };
     }],
-    ['POST', '/burrito/ingredient/delete/', (rest, url) => { // deleteIngredient 464
+    ['POST', '/burrito/ingredient/delete/', (rest, url) => { // deleteIngredient 466
       const [repo] = takeRepo(rest);
       const ipath = ipathOf(url);
       const file = path.join(mustRepo(repo), 'ingredients', ipath);
@@ -283,22 +330,22 @@ export function createMockServer({ state, client }) {
       markPending(repo, ipath, 'deleted');
       return { json: OK };
     }],
-    ['POST', '/burrito/metadata/remake-ingredients/', (rest) => { // remakeIngredients 472
+    ['POST', '/burrito/metadata/remake-ingredients/', (rest) => { // remakeIngredients 474
       registerIngredients(takeRepo(rest)[0]);
       return { json: OK };
     }],
-    ['POST', '/git/add-and-commit/', (rest, url, body) => { // addAndCommit 482
+    ['POST', '/git/add-and-commit/', (rest, url, body) => { // addAndCommit 484
       const [repo] = takeRepo(rest);
       mustRepo(repo);
       commits.push({ repo, message: readJsonBody(body).commit_message ?? '', at: new Date().toISOString() });
       pending.delete(repo);
       return { json: OK };
     }],
-    ['GET', '/git/remotes/', (rest) => { // listRemotes 494
+    ['GET', '/git/remotes/', (rest) => { // listRemotes 496
       const file = path.join(mustRepo(takeRepo(rest)[0]), '.remotes.json');
       return { json: { is_good: true, payload: { remotes: fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : [] } } };
     }],
-    ['POST', '/git/remote/add/', (rest, url) => { // addRemote 506
+    ['POST', '/git/remote/add/', (rest, url) => { // addRemote 508
       const file = path.join(mustRepo(takeRepo(rest)[0]), '.remotes.json');
       const remotes = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : [];
       const name = url.searchParams.get('remote_name');
@@ -307,42 +354,96 @@ export function createMockServer({ state, client }) {
       fs.writeFileSync(file, JSON.stringify(remotes));
       return { json: OK };
     }],
-    ['POST', '/git/push/', () => (netEnabled // push 525
-      ? { json: { is_good: false, reason: 'push is not implemented by the tc4-baseline mock' } }
-      : { status: 401, json: { is_good: false, reason: 'offline mode' } })],
-    ['POST', '/git/new-text-translation', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 535
-    ['POST', '/git/new-obs-resource', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 580
-    ['POST', '/git/new-scripture-book/', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 601
-    ['POST', '/git/delete/', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // deleteRepo 341
-    ['GET', '/content-utils/versifications', () => ({ json: VERSIFICATIONS })], // getVersifications 606
-    ['GET', '/content-utils/versification/', (rest) => { // getVersification 611
+    ['POST', '/git/push/', (rest, url, body) => { // push 527
+      // pankosmia-web push.rs: the gate first, then the remote by name. Every push succeeds:
+      // the fake Door43 user owns every repository it is asked about.
+      if (!netEnabled) return { status: 401, json: { is_good: false, reason: 'offline mode' } };
+      const [repo] = takeRepo(rest);
+      mustRepo(repo);
+      pushTo(repo, readJsonBody(body).remote);
+      return { json: OK };
+    }],
+    // The sync transport (#673, #676), as pankosmia-web 0.19.2 (bf0a5d3) answers it.
+    ['POST', '/git/clone-repo/', (rest) => { // cloneRepo 543
+      // clone_repo.rs: the gate, then a full clone of https://<host>/<org>/<repo> into the
+      // fixed path <host>/<org>/<repo>, whose origin is that url. git2 refuses a folder that
+      // is not empty with code=Exists (-4), which tC4 reads as sync.clone-path-exists.
+      if (!netEnabled) return { status: 401, json: { is_good: false, reason: 'offline mode' } };
+      const [clonePath] = takeRepo(rest);
+      const [host, org, repo] = clonePath.split('/');
+      const target = repoDir(`${host}/${org}/${repo.replace(/\.git$/, '')}`);
+      const origin = `https://${clonePath}`;
+      if (fs.existsSync(target) && fs.readdirSync(target).length) {
+        throw new HttpError(400, `could not clone repo: '${target}' exists and is not an empty directory; class=Invalid (3); code=Exists (-4)`);
+      }
+      const main = door43MainOf(origin);
+      if (droppedClones.delete(main)) {
+        // libgit2 1.9 streams/socket.c socket_connect, as git2's Error Display writes it:
+        // class Os (2), and code GenericError, which Display leaves out.
+        throw new HttpError(400, `could not clone repo: failed to connect to ${host}; class=Os (2)`);
+      }
+      if (!fs.existsSync(main)) throw new HttpError(400, `could not clone repo: the tc4-baseline mock's Door43 has no repository ${clonePath}`);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.cpSync(main, target, { recursive: true });
+      fs.writeFileSync(path.join(target, '.remotes.json'), JSON.stringify([{ name: 'origin', url: origin }]));
+      return { json: OK };
+    }],
+    ['POST', '/git/copy/', (rest, url) => { // copyRepo 552
+      // copy_repo.rs: the source must be a folder and the target must not exist; the whole
+      // folder is copied, then the source is deleted when delete_src is true. No net gate.
+      const [src] = takeRepo(rest);
+      const target = takeRepo(url.searchParams.get('target_path') ?? '')[0];
+      if (!fs.existsSync(repoDir(src)) || !fs.statSync(repoDir(src)).isDirectory()) throw new HttpError(400, 'Source repo not found or not a directory');
+      if (fs.existsSync(repoDir(target))) throw new HttpError(400, 'Target repo already exists');
+      copyRepoDir(src, target);
+      if (url.searchParams.get('delete_src') === 'true') deleteRepoDir(src);
+      return { json: OK };
+    }],
+    ['GET', '/git/branches/', (rest) => { // listBranches 562
+      mustRepo(takeRepo(rest)[0]);
+      return { json: { is_good: true, payload: { branches: [{ name: 'main', is_head: true }] } } };
+    }],
+    ['POST', '/git/pull-repo/', () => ({ status: 400, json: { is_good: false, reason: 'pull is not implemented by the tc4-baseline mock' } })], // pullRepo 573
+    ['POST', '/git/new-text-translation', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 607
+    ['POST', '/git/new-obs-resource', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 653
+    ['POST', '/git/new-scripture-book/', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 675
+    ['POST', '/git/delete/', (rest) => { // deleteRepo 343
+      // delete_repo.rs: remove_dir_all, and its io error as HTTP 400. tC4 reads that error as
+      // "not there" (serverApi.ts isNotFound), so a sync that clears its scratch copy goes on.
+      const [repo] = takeRepo(rest);
+      if (!fs.existsSync(repoDir(repo))) throw new HttpError(400, `could not delete repo: ${IO_ENOENT}`);
+      deleteRepoDir(repo);
+      return { json: OK };
+    }],
+    ['GET', '/content-utils/versifications', () => ({ json: VERSIFICATIONS })], // getVersifications 680
+    ['GET', '/content-utils/versification/', (rest) => { // getVersification 685
       const name = decodeURIComponent(rest);
       const file = path.join(state, 'vrs', `${name}.json`);
       if (!VERSIFICATIONS.includes(name) || !fs.existsSync(file)) throw new HttpError(400, `unknown versification ${name}`);
       return { bytes: fs.readFileSync(file), type: 'application/json' };
     }],
-    ['POST', '/app-state/current-project/', (rest) => { // setCurrentProject 618
+    ['POST', '/app-state/current-project/', (rest) => { // setCurrentProject 692
       mustRepo(takeRepo(rest)[0]);
       return { json: OK };
     }],
-    ['GET', '/client-settings/', (rest) => { // getClientSettings 627
+    ['GET', '/client-settings/', (rest) => { // getClientSettings 701, getClientSettingsText 709
       const file = path.join(settingsDir, `${decodeURIComponent(rest)}.json`);
       return fs.existsSync(file) ? { bytes: fs.readFileSync(file), type: 'application/json' } : { json: {} };
     }],
-    ['POST', '/client-settings/', (rest, url, body) => { // setClientSettings 637
+    ['POST', '/client-settings/', (rest, url, body) => { // setClientSettings 716
       const { settings } = readJsonBody(body);
       if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new HttpError(400, 'settings must be a JSON object');
       fs.mkdirSync(settingsDir, { recursive: true });
       fs.writeFileSync(path.join(settingsDir, `${decodeURIComponent(rest)}.json`), JSON.stringify(settings, null, 2));
       return { json: OK };
     }],
-    ['GET', '/net/status', () => ({ json: { is_enabled: netEnabled } })], // getNetEnabled 646
-    ['POST', '/net/enable', () => { netEnabled = true; return { json: OK }; }], // 654
-    ['POST', '/net/disable', () => { netEnabled = false; return { json: OK }; }], // 661
-    ['POST', '/burrito/zipped/', () => ({ json: { is_good: false, reason: 'burrito import is not implemented by the tc4-baseline mock' } })], // 671
-    ['POST', '/temp/bytes', () => ({ status: 400, json: { is_good: false, reason: 'temp upload is not implemented by the tc4-baseline mock' } })], // 708
-    ['POST', '/burrito/remake_burrito_from_zip/', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 734
-    ['GET', '/gitea/remote-repos/', () => (netEnabled ? { json: [] } : { json: { is_good: false, reason: 'offline mode' } })], // remoteRepos 743
+    ['GET', '/net/status', () => ({ json: { is_enabled: netEnabled } })], // getNetEnabled 728
+    ['POST', '/net/enable', () => { netEnabled = true; return { json: OK }; }], // 736
+    ['POST', '/net/disable', () => { netEnabled = false; return { json: OK }; }], // 741
+    ['POST', '/burrito/zipped/', () => ({ json: { is_good: false, reason: 'burrito import is not implemented by the tc4-baseline mock' } })], // 753
+    ['POST', '/temp/bytes', () => ({ status: 400, json: { is_good: false, reason: 'temp upload is not implemented by the tc4-baseline mock' } })], // 790
+    ['POST', '/burrito/remake_burrito_from_zip/', () => ({ json: { is_good: false, reason: 'not implemented by the tc4-baseline mock' } })], // 816
+    ['GET', '/gitea/remote-repos/', () => (netEnabled ? { json: [] } : { json: { is_good: false, reason: 'offline mode' } })], // remoteRepos 825
   ];
 
   const send = (res, status, type, bytes) => {
@@ -350,14 +451,14 @@ export function createMockServer({ state, client }) {
     res.end(bytes);
   };
 
-  const handleApi = (req, res, url, body) => {
+  const handleApi = async (req, res, url, body) => {
     const route = url.pathname.slice('/api'.length);
     const entry = routes.find(([method, prefix]) =>
       method === req.method && (prefix.endsWith('/') ? route.startsWith(prefix) : route === prefix));
     let status = 200;
     try {
       if (!entry) throw new HttpError(404, `no such route in the tc4-baseline mock: ${req.method} ${route}`);
-      const out = entry[2](route.slice(entry[1].length), url, body) ?? {};
+      const out = (await entry[2](route.slice(entry[1].length), url, body)) ?? {};
       status = out.status ?? 200;
       if (out.bytes) send(res, status, out.type ?? 'application/octet-stream', out.bytes);
       else send(res, status, 'application/json', Buffer.from(JSON.stringify(out.json ?? OK)));
@@ -396,7 +497,28 @@ export function createMockServer({ state, client }) {
       else handleStatic(req, res, url);
     });
   });
-  return { server, requests, commits };
+  /** Door43 for the capture. `push` is a push of `repoPath` to its remote `remote`, as a
+   * share or a sync makes it; `remove` takes that repository off Door43; `dropNextClone`
+   * makes the next clone of that repository fail to connect, once. Each answers the folder
+   * of Door43 `main`, as `mainOf` does. `holds` answers whether Door43 has `main` of
+   * `<host>/<org>/<repo>`. */
+  const door43 = {
+    mainOf: (repoPath, remote = 'origin') => remoteMain(repoPath, remote),
+    push: (repoPath, remote = 'origin') => pushTo(repoPath, remote),
+    remove: (repoPath, remote = 'origin') => {
+      const main = remoteMain(repoPath, remote);
+      fs.rmSync(main, { recursive: true, force: true });
+      return main;
+    },
+    dropNextClone: (repoPath, remote = 'origin') => {
+      const main = remoteMain(repoPath, remote);
+      droppedClones.add(main);
+      return main;
+    },
+    holds: (host, org, repo) => [host, org, repo].every((s) => SAFE_SEGMENT.test(s))
+      && fs.existsSync(door43MainOf(`https://${host}/${org}/${repo}`)),
+  };
+  return { server, requests, commits, door43 };
 }
 
 export function startMockServer({ state, client, port = 19998, host = '127.0.0.1' }) {

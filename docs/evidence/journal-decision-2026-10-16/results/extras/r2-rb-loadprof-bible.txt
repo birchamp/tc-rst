@@ -1,0 +1,5 @@
+### rb-loadprof-bible round 2
+start 13:53:59 17.76 13.84 10.44 5/251 21141
+loadprof one thread: 303 files, 705135600 bytes, 617143 lines (617143 prepared); read 873 ms, file SHA-256 (P2) 6524 ms, line split+SHA-256 (P4) 7708 ms, full read_pack/read_pending+prepare 28512 ms (so parse+checks+prepare = full - P2 - P4 = 14280 ms)
+process: real 43.875 s, user 28.461 s, sys 1.159 s
+end 13:54:43 16.30 14.00 10.66 13/244 22290

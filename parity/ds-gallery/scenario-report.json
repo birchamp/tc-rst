@@ -1,0 +1,431 @@
+{
+  "same": 53,
+  "total": 53,
+  "steps": 277,
+  "scenarios": [
+    {
+      "name": "menu-keys",
+      "case": "Menu/closed",
+      "steps": 13,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "menu-open",
+      "case": "Menu/open",
+      "steps": 5,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "select-keys",
+      "case": "Select/value",
+      "steps": 13,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "select-toggle",
+      "case": "Modal/nested-select",
+      "steps": 5,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "select-search",
+      "case": "Select/open-search",
+      "steps": 11,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "select-groups",
+      "case": "Select/open-groups",
+      "steps": 5,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "select-choose",
+      "case": "Modal/nested-select",
+      "steps": 5,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "suggest-keys",
+      "case": "SuggestField/value",
+      "steps": 11,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "suggest-change-keys",
+      "case": "SuggestField/suggestions-change",
+      "steps": 6,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "suggest-change-click",
+      "case": "SuggestField/suggestions-change",
+      "steps": 4,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "select-interleaved",
+      "case": "Select/open-interleaved-groups",
+      "steps": 6,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "select-duplicate-values",
+      "case": "Select/open-duplicate-values",
+      "steps": 5,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "switcher-roving",
+      "case": "Switcher/underline",
+      "steps": 7,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "switcher-disabled",
+      "case": "Switcher/disabled-option",
+      "steps": 3,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "modal-trap",
+      "case": "Modal/default",
+      "steps": 11,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "drawer-trap",
+      "case": "Drawer/default",
+      "steps": 6,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "confirm-trap",
+      "case": "ConfirmDialog/default",
+      "steps": 5,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "nested-select-escape",
+      "case": "Modal/nested-select",
+      "steps": 4,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "nested-select-scrim",
+      "case": "Modal/nested-select",
+      "steps": 3,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "nested-menu-escape",
+      "case": "Modal/nested-menu",
+      "steps": 6,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "nested-menu-scrim",
+      "case": "Modal/nested-menu",
+      "steps": 3,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "nested-menu-choose",
+      "case": "Modal/nested-menu",
+      "steps": 4,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "tooltip",
+      "case": "Tooltip/resting",
+      "steps": 4,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "accordion",
+      "case": "Accordion/closed",
+      "steps": 7,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "table-select",
+      "case": "Table/stateful",
+      "steps": 8,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "accordion-two-open",
+      "case": "Accordion/first-open",
+      "steps": 8,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "table-duplicate-keys",
+      "case": "Table/duplicate-ids",
+      "steps": 6,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "table-rows-change",
+      "case": "Table/rows-change",
+      "steps": 8,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "table-move-up",
+      "case": "Table/rows-move-up",
+      "steps": 8,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "table-move-down",
+      "case": "Table/rows-move-down",
+      "steps": 5,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "table-move-click",
+      "case": "Table/rows-move-down",
+      "steps": 3,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "table-noop",
+      "case": "Table/row-hover",
+      "steps": 5,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "toggle",
+      "case": "Toggle/stateful",
+      "steps": 4,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "radio-group",
+      "case": "RadioGroup/stateful",
+      "steps": 4,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "radio-group-rejected",
+      "case": "RadioGroup/legend",
+      "steps": 3,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "progress-ring",
+      "case": "Progress/ring-stateful",
+      "steps": 1,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "checkbox-controlled",
+      "case": "Checkbox/label-checked",
+      "steps": 3,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "checkbox-unchecked",
+      "case": "Checkbox/label",
+      "steps": 2,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "toggle-controlled",
+      "case": "Toggle/label-on",
+      "steps": 1,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "text-field",
+      "case": "TextField/value",
+      "steps": 3,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "search-field",
+      "case": "SearchField/value-no-clear",
+      "steps": 3,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "search-clear",
+      "case": "SearchField/value-clear",
+      "steps": 1,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "card-keys",
+      "case": "Card/interactive-hover",
+      "steps": 3,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "button-busy",
+      "case": "Button/sync-press",
+      "steps": 4,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "button-nav-end",
+      "case": "Button/nav-to-end",
+      "steps": 3,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "button-press-guard",
+      "case": "Button/draft-section-off",
+      "steps": 3,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "modal-busy",
+      "case": "Modal/busy-later",
+      "steps": 6,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "modal-not-busy-escape",
+      "case": "Modal/busy-later",
+      "steps": 2,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "modal-not-busy-scrim",
+      "case": "Modal/busy-later",
+      "steps": 1,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "switcher-turn-off",
+      "case": "Switcher/options-turn-off",
+      "steps": 7,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "app-header-exits",
+      "case": "AppHeader/project-editing-later",
+      "steps": 6,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "app-header-exits-taken",
+      "case": "AppHeader/project-exits-taken",
+      "steps": 9,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "book-tile-editing",
+      "case": "BookTile/row-editing",
+      "steps": 5,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    }
+  ]
+}

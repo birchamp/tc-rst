@@ -17,8 +17,8 @@ use tc_helps::tsv::{
     write_notes, write_questions, write_word_links,
 };
 use tc_helps::{
-    AcademyArticleId, BibleLocus, CheckBlocker, CheckReadiness, Error, HelpRef, Manual, NotACheck,
-    Occurrence, TsvTable, WordArticleId, WordCategory, WriteProblem,
+    AcademyArticleId, BibleLocus, CheckBlocker, CheckReadiness, Error, HelpItemId, HelpRef, Manual,
+    NotACheck, Occurrence, RowId, TsvTable, WordArticleId, WordCategory, WriteProblem,
 };
 
 const TIT: TsvScope = TsvScope::Book(BookId::Titus);
@@ -389,7 +389,8 @@ fn cells_keep_the_form_they_were_read_in() {
     let notes = parse_notes(text, TIT).unwrap().notes;
     assert_eq!(notes[0].reference.tsv_text(), "1:1-3");
     assert_eq!(notes[0].tags, ["a", "b"]);
-    assert_eq!(notes[0].quote.as_str(), "x\r");
+    // tC4 drops a CR from the end of every cell (`tsvRows`); the table still writes it back.
+    assert_eq!(notes[0].quote.as_str(), "x");
     assert_eq!(notes[0].occurrence, Occurrence::nth(1).unwrap());
     assert_eq!(notes[0].text, "See \\v 1.");
     assert_eq!(
@@ -522,9 +523,9 @@ fn cell_error(result: Result<impl std::fmt::Debug, Error>) -> (usize, &'static s
 #[test]
 fn malformed_rows_are_refused_naming_line_and_column() {
     let tn = resource("en_tn@v86/TIT.tsv");
+    // A Bible Reference never refuses the table: `reference_forms.rs` reads `1:x` and
+    // `0:1` as written.
     let cases = [
-        (0, "1:x", "Reference"),
-        (0, "0:1", "Reference"),
         (1, "r t9", "ID"),
         (3, "rc://*/ta/man/nomanual/figs-x", "SupportReference"),
         (3, "rc://*/tw/dict/bible/kt/god", "SupportReference"),
@@ -558,9 +559,9 @@ fn malformed_rows_are_refused_naming_line_and_column() {
             ..
         })
     ));
-    // An OBS reference is not a Bible reference.
+    // A Bible reference is not an OBS reference.
     assert_eq!(
-        cell_error(parse_notes(&resource("en_obs-tn@v13/OBS.tsv"), TIT)),
+        cell_error(parse_notes(&resource("en_tn@v86/TIT.tsv"), TsvScope::Obs)),
         (2, "Reference")
     );
 
@@ -579,20 +580,13 @@ fn malformed_rows_are_refused_naming_line_and_column() {
         cell_error(parse_notes(&with_cell(&legacy, 5, 0, "JON"), TIT)),
         (5, "Book")
     );
-    assert_eq!(
-        cell_error(parse_notes(&with_cell(&legacy, 5, 1, "one"), TIT)),
-        (5, "Chapter")
-    );
-    assert_eq!(
-        cell_error(parse_notes(&with_cell(&legacy, 5, 2, "x"), TIT)),
-        (5, "Verse")
-    );
 }
 
 fn locus() -> impl Strategy<Value = String> {
     prop_oneof![
         Just("front:intro".to_owned()),
         (1u16..200).prop_map(|c| format!("{c}:intro")),
+        (1u16..200).prop_map(|c| format!("{c}:front")),
         (1u16..200, 1u16..200).prop_map(|(c, v)| format!("{c}:{v}")),
         (1u16..200, 1u16..100, 0u16..20).prop_map(|(c, v, n)| format!("{c}:{v}-{}", v + n + 1)),
         (1u16..100, 1u16..100, 1u16..50, 1u16..100)
@@ -642,16 +636,76 @@ fn tag_cell() -> impl Strategy<Value = String> {
     ]
 }
 
-/// A Reference cell, sometimes in a longer form than the writer's (`1:1-1:3`, `01:02`).
+/// A Reference cell, sometimes in a longer form than the writer's (`1:1-1:3`, `01:02`,
+/// `03:front`), sometimes in a form kept as written (`1:1a`, `0:front`, any cell text).
 fn reference_cell() -> impl Strategy<Value = String> {
     prop_oneof![
-        3 => locus(),
-        1 => (1u16..50, 1u16..50, 1u16..9).prop_map(|(c, v, n)| format!("{c}:{v}-{c}:{}", v + n)),
-        1 => (1u16..9, 1u16..9).prop_map(|(c, v)| format!("0{c}:0{v}")),
+        6 => locus(),
+        2 => (1u16..50, 1u16..50, 1u16..9).prop_map(|(c, v, n)| format!("{c}:{v}-{c}:{}", v + n)),
+        2 => (1u16..9, 1u16..9).prop_map(|(c, v)| format!("0{c}:0{v}")),
+        2 => (1u16..9).prop_map(|c| format!("0{c}:front")),
+        1 => (0u16..200, "[a-z]{1,2}").prop_map(|(c, v)| format!("{c}:1{v}")),
+        1 => (0u16..9, prop_oneof![Just("front"), Just("Front"), Just("front "), Just("intro")])
+            .prop_map(|(c, v)| format!("{c}:{v}")),
+        1 => "[^\t\n]{0,12}",
     ]
 }
 
+/// The rows of a table as tC4's `tsvRows` (`derive.ts`) reads them: lines split on LF,
+/// those whose `trim()` is empty dropped, the header dropped, cells split on tabs, and one CR
+/// dropped from the end of every cell.
+fn tc4_rows(text: &str) -> Vec<Vec<&str>> {
+    text.split('\n')
+        .filter(|line| !line.trim().is_empty())
+        .skip(1)
+        .map(|line| {
+            line.split('\t')
+                .map(|cell| cell.strip_suffix('\r').unwrap_or(cell))
+                .collect()
+        })
+        .collect()
+}
+
+/// Up to `max` CRs, to end a cell with.
+fn crs(max: usize) -> impl Strategy<Value = String> {
+    (0..=max).prop_map(|n| "\r".repeat(n))
+}
+
 proptest! {
+    /// A cell that ends in a CR, a CR before a tab, reads as tC4 reads it, without that CR,
+    /// and the table writes back with it.
+    #[test]
+    fn cells_ending_in_a_cr_read_as_tc4_reads_them(rows in prop::collection::vec(
+        ((reference_cell(), crs(2)), ("[a-z0-9]{4}", crs(1)), (tag_cell(), crs(2)),
+         (cell_text(), crs(2)), (occurrence(), crs(1)), "[a-z0-9]{1,15}"),
+        1..12,
+    ), crlf in any::<bool>()) {
+        let mut text = "Reference\tID\tTags\tOrigWords\tOccurrence\tTWLink\n".to_owned();
+        for ((reference, r), (id, i), (tags, t), (words, w), (occ, o), slug) in &rows {
+            text.push_str(&row(vec![
+                format!("{reference}{r}"), format!("{id}{i}"), format!("{tags}{t}"),
+                format!("{words}{w}"), format!("{occ}{o}"),
+                format!("rc://*/tw/dict/bible/kt/{slug}"),
+            ]));
+            text.push('\n');
+        }
+        let links = parse_word_links(&text, TIT).unwrap();
+        let tc4 = tc4_rows(&text);
+        prop_assert_eq!(links.len(), tc4.len());
+        for (link, cells) in links.iter().zip(&tc4) {
+            let reference = link.read_from.as_ref().and_then(|r| r.get("Reference"))
+                .map_or_else(|| link.reference.tsv_text(), str::to_owned);
+            prop_assert_eq!(&reference, cells[0]);
+            prop_assert_eq!(&link.id, &HelpItemId::Row(RowId::parse(cells[1]).unwrap()));
+            prop_assert_eq!(link.orig_words.as_str(), cells[3]);
+        }
+        prop_assert_eq!(&write_word_links(&links, TIT, WordLinkStyle::Rc).unwrap(), &text);
+        if crlf {
+            let windows = text.replace('\n', "\r\n");
+            prop_assert_eq!(parse_word_links(&windows, TIT).unwrap(), links);
+        }
+    }
+
     #[test]
     fn notes_tables_round_trip(rows in prop::collection::vec(
         (reference_cell(), "[a-z0-9]{4}", tag_cell(), support(), cell_text(), occurrence(),

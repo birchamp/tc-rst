@@ -1,0 +1,9 @@
+bench-fold — issue #80
+date: 2026-10-16T13:31:43.139Z  commit: d310bf3  node: v22.22.0
+machine: Intel(R) Xeon(R) Processor @ 2.80GHz (4 cores), 16 GB, linux 6.18.44-fc-v139
+mode: full (3 repetitions, median) — checked whole Bible
+corpus: 66 books, 31104 verses, 280641 check decisions, 576195 events total, 248898 events (text-only)
+
+wrote 576195 segments, 467361527 bytes in 251263 ms; ops {"book.add":66,"text.verse.set":248832,"align.verse.set":46656,"check.decision.set":280641}
+process: real 282.744 s, user 195.920 s, sys 72.969 s
+EXIT 0

@@ -1,4 +1,5 @@
-//! A Psalms-sized aligned book parses well within the 100 ms budget in release builds.
+//! A Psalms-sized aligned book parses well within the 100 ms budget, and the ULT Psalms
+//! read apart within 300 ms, in release builds.
 //! Run `cargo test --release -p tc-usfm --test performance -- --nocapture` to see times.
 
 // Helpers outside `#[test]` functions read fixtures and may fail loudly.
@@ -77,5 +78,45 @@ fn a_psalms_sized_book_parses_quickly() {
     );
     if !cfg!(debug_assertions) {
         assert!(segments < Duration::from_millis(100), "{segments:?}");
+    }
+}
+
+/// Reading the ULT Psalms (`fixtures/scale/psa/en_ult/19-PSA.usfm`, the ULT v91 Psalms,
+/// 5,146,082 bytes): cutting the book into verses and taking every verse apart into plain
+/// text, words and alignment groups, superscriptions included, within 300 ms by the median
+/// of 20 runs in a release build. `docs/PERFORMANCE.md` gives 300 ms to loading all of a
+/// book's resources, so the time printed here is the ULT's share of that budget.
+#[test]
+fn the_ult_psalms_read_apart_within_the_resources_budget() {
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/scale/psa/en_ult/19-PSA.usfm");
+    let text = std::fs::read_to_string(path).unwrap();
+    let read = || {
+        let book = Book::parse(&text);
+        let mut groups = 0;
+        for unit in book.verses() {
+            groups += tc_usfm::parse_aligned(unit.body()).unwrap().groups.len();
+        }
+        groups
+    };
+    assert_eq!(read(), 21_009);
+    let runs = if cfg!(debug_assertions) { 1 } else { 20 };
+    let mut times: Vec<Duration> = (0..runs)
+        .map(|_| {
+            let start = Instant::now();
+            read();
+            start.elapsed()
+        })
+        .collect();
+    times.sort();
+    let median = times[times.len() / 2];
+    let p95 = times[(times.len() * 95).div_ceil(100) - 1];
+    eprintln!(
+        "{} bytes read apart in {:?} at best, {median:?} median, {p95:?} p95 ({runs} runs)",
+        text.len(),
+        times[0]
+    );
+    if !cfg!(debug_assertions) {
+        assert!(median < Duration::from_millis(300), "{median:?}");
     }
 }

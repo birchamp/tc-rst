@@ -1,0 +1,6 @@
+### tc4-zipintake cold
+start 16:02:37 13.13 8.47 3.71 10/254 13409
+Buffers:          452252 kB Cached:          3465400 kB 
+{"segments":278041,"events":278041,"books":66,"zip_bytes":163693661,"read_zip_ms":13483,"unzip_ms":11013,"decode_ms":5043,"classify_ms":100829,"intake_ms":130368,"fold_ms":35137,"total_ms":165506,"intake_cpu_ms":72664,"fold_cpu_ms":21128,"maxrss_mib":1712}
+process: real 167.128 s, user 75.842 s, sys 18.401 s
+end 16:05:24 12.66 10.00 5.06 11/244 19362

@@ -8,19 +8,19 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio"] }
-base64 = "0.22.1"
+axum = { workspace = true, features = ["http1", "json", "query", "tokio"] }
+base64.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sha1 = "0.10.7"
+sha1.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
-tokio = { version = "1.53.3", features = ["rt", "net", "process", "io-util", "sync", "time", "macros"] }
+tokio = { workspace = true, features = ["rt", "net", "process", "io-util", "sync", "time", "macros"] }
 zip.workspace = true
 
 [dev-dependencies]
-reqwest = { version = "0.13.5", default-features = false }
-tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros"] }
+reqwest.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [lints]
 workspace = true

@@ -1,0 +1,23 @@
+### tc4-bench-full round 1
+start 14:22:33 9.39 8.99 9.79 10/210 19936
+bench-fold — issue #80
+date: 2026-10-16T14:22:35.436Z  commit: d310bf3  node: v22.22.0
+machine: Intel(R) Xeon(R) Processor @ 2.80GHz (4 cores), 16 GB, linux 6.18.44-fc-v139
+mode: full (3 repetitions, median) — checked whole Bible
+corpus: 66 books, 31104 verses, 215767 check decisions, 278041 events total, 31170 events (text-only)
+
+[fold] checked whole Bible (278041 events, 31104 alignment heads, 215767 decisions): 16880.4 ms  (runs: 15582.2, 16880.4, 17591.2)
+[C1] verseTextMd5 over the 31104 projected alignment texts: 661.0 ms  (0.021 ms/parse)
+[C1] control — same fold minus align.verse.set ONLY (246937 events, decisions kept): 12907.4 ms  (alignment projection cost by difference: 3973.0 ms)
+[C1] breakdown — slotKeysOf(skeleton).includes(vkey) per alignment head: 7857.1 ms over 31104 heads
+[C2] text-only union: 31170 events, 31236 head keys; base fold 985.0 ms
+[C2] + one constant-shape rename apply, 0 mapped keys: 1313.9 ms; 500 mapped keys: 3927.6 ms
+[C2] marginal scan cost: 5.228 ms per mapped key over 31236 head keys (167.4 ns per mapped-key×head)
+[C3] text-only fold vs book count (the per-book projection scan is O(books × head keys)):
+[C3]   17 books, 12887 events, 12904 head keys: 413.0 ms
+[C3]   33 books, 22718 events, 22751 head keys: 826.1 ms
+[C3]   66 books, 31170 events, 31236 head keys: 1189.4 ms
+[open] full-scan baseline — REFERENCE READER (fs), a LOWER BOUND on the production HTTP open path; one segment per event, 3 repetition(s) per size (read+validate, then +fold):
+[open]     8000 segments: scan 1031.5 ms, scan+fold 1334.6 ms  (write of last batch: 4866.3 ms)
+[open]    32000 segments: scan 3830.6 ms, scan+fold 5861.7 ms  (write of last batch: 12621.6 ms)
+[open]   128000 segments: scan 14489.7 ms, scan+fold 21658.7 ms  (write of last batch: 54910.6 ms)

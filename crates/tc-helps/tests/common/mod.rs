@@ -22,3 +22,36 @@ pub fn resource(rel: &str) -> String {
 pub fn aquifer(rel: &str) -> String {
     fixture(&format!("aquifer/{rel}"))
 }
+
+/// Every `<repo>/ingredients/<BOOK>.tsv` of a burrito export in `bundle/en/`, such as
+/// `en_tn_v91.sb.zip`, by book code, in code order.
+pub fn export_tables(zip_name: &str) -> Vec<(String, String)> {
+    use std::io::Read;
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../bundle/en")
+        .join(zip_name);
+    let file = std::fs::File::open(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let mut archive = zip::ZipArchive::new(file).unwrap_or_else(|e| panic!("{zip_name}: {e}"));
+    let mut out = Vec::new();
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .unwrap_or_else(|e| panic!("{zip_name}: {e}"));
+        let name = entry.name().to_owned();
+        let parts: Vec<&str> = name.split('/').collect();
+        let [_, "ingredients", file] = parts[..] else {
+            continue;
+        };
+        let Some(code) = file.strip_suffix(".tsv") else {
+            continue;
+        };
+        let code = code.to_owned();
+        let mut text = String::new();
+        entry
+            .read_to_string(&mut text)
+            .unwrap_or_else(|e| panic!("{name}: {e}"));
+        out.push((code, text));
+    }
+    out.sort();
+    out
+}

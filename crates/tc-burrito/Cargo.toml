@@ -18,13 +18,13 @@ thiserror.workspace = true
 # so the validator is built without any network code. The exact pin is the version the
 # research probe cross-checked against ajv on 48 documents.
 jsonschema = { version = "=0.58.6", default-features = false }
-md-5 = "0.11.0"
+md-5.workspace = true
 # Two ingredient paths that differ only by Unicode normalization (NFC or NFD) name one file
 # on macOS, so path collisions are found on the NFC form.
 unicode-normalization.workspace = true
 # Invisible format characters (General Category Cf) are refused in ingredient paths: HFS+
 # ignores several of them when it compares names, and direction overrides disguise names.
-unicode-general-category = "1.1.0"
+unicode-general-category.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

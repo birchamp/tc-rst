@@ -4,6 +4,17 @@
 export const el = (name, props = {}) => ({ $el: name, props });
 /** A callback that does nothing. Some components draw a control only when one is passed. */
 export const noop = { $fn: 'noop' };
+/** The current value of the case's cell `name` (the case option `cells` holds the first). */
+export const cell = (name) => ({ $cell: name });
+/** A callback that writes cell `name`: the value at `from` in its arguments ("0" is the first). */
+export const set = (name, from) => ({ $fn: 'set', cell: name, from });
+/** A callback that writes `value` into cell `name`. */
+export const setTo = (name, value) => ({ $fn: 'set', cell: name, value });
+/** `then` while cell `name` is truthy, else `otherwise`; an absent branch is undefined, as in
+ * tC4's `onClose={busy ? undefined : close}`. */
+export const when = (name, then, otherwise) => ({ $if: name, then, else: otherwise });
+/** A callback that calls preventDefault on its event: tC4's press guard while a card is open. */
+export const prevent = { $fn: 'preventDefault' };
 /** A file of the tC4 checkout, by its path there. */
 export const asset = (path) => ({ $asset: path });
 
@@ -16,6 +27,8 @@ export const hover = (target) => ({ do: 'hover', target });
 export const press = (target) => ({ do: 'press', target });
 export const click = (target) => ({ do: 'click', target });
 export const key = (k) => ({ do: 'key', key: k });
+/** Selects the text from the start of `target` to the end of `to` (or of `target`). */
+export const select = (target, to) => ({ do: 'select', target, ...(to ? { to } : null) });
 
 /** The Ocean title-bar ground: a solid Ocean Surface sets data-on="dark" for its children. */
 export const onDark = (node, pad = 'md') => el('Surface', { tone: 'ocean', fill: 'solid', radius: 'lg', pad, children: node });
@@ -30,7 +43,8 @@ export const row = (children, gap = 12) => el('div', {
 /**
  * Cases of one component. `defaults` holds `frame` ({ width, height }) and any other case
  * option; each entry is [state, props, options?]. Options: frame, document, steps, wrap (a
- * function from the component's node to the rendered tree), note.
+ * function from the component's node to the rendered tree), cells (the first value of each
+ * cell that `cell` reads and `set` writes, which is how a case owns state), note.
  */
 export function group(component, defaults, entries) {
   return entries.map(([state, props, opts = {}]) => ({

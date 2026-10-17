@@ -41,4 +41,6 @@ pub use ids::{
 pub use model::{
     AcademyArticle, CheckBlocker, CheckReadiness, NotACheck, Note, Question, WordArticle, WordLink,
 };
-pub use refs::{BibleLocus, BibleRef, ChapterVerse, HelpRef, ObsRef, VerseList, VerseRange};
+pub use refs::{
+    BibleLocus, BibleRef, ChapterVerse, HelpRef, ObsRef, VerseList, VerseRange, WrittenRef,
+};

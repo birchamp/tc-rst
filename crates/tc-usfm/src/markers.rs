@@ -17,8 +17,9 @@ pub enum MarkerClass {
     Introduction,
     /// Chapter presentation that belongs to the chapter, not to a verse: `\cl`, `\cp`, `\cd`.
     ChapterLevel,
-    /// A paragraph-level marker whose text is a title, not verse text: `\s1`, `\ms`, `\r`,
-    /// `\d`, `\sp`, `\qa`, `\rem`…
+    /// A paragraph-level marker whose text is a title: `\s1`, `\ms`, `\r`, `\d`, `\sp`,
+    /// `\qa`, `\rem`… Inside a verse, the text of `\d`, `\sp`, `\qa` and `\lit` is verse text
+    /// all the same ([`shows_as_verse_text`]).
     Heading,
     /// A paragraph-level marker whose text is verse text, or that carries no text: `\p`,
     /// `\q1`, `\m`, `\b`, `\li1`, `\pi`, `\tr`, `\ts`…
@@ -82,6 +83,16 @@ pub fn classify(name: &str) -> MarkerClass {
         | "xk" | "xq" | "xt" | "xta" | "xop" | "xot" | "xnt" | "xdc" => MarkerClass::NoteContent,
         _ => MarkerClass::Character,
     }
+}
+
+/// The headings whose text usfm-js shows as verse content (the `display` flag of its
+/// `USFM_PROPERTIES`): a Psalm's superscription `\d`, a speaker `\sp`, an acrostic letter
+/// `\qa` and a liturgical note `\lit`. Inside a verse, tC4 reads their words as the verse's
+/// words, and its export aligns them: en_ult and en_ust write a superscription as
+/// `\v 1 \d \zaln-s …`. Every other heading's text is left out of the verse, and tC4's
+/// export cannot align it. The names are exact, as usfm-js looks them up: `\d1` is not `\d`.
+pub fn shows_as_verse_text(name: &str) -> bool {
+    matches!(name, "d" | "sp" | "qa" | "lit")
 }
 
 /// Character spans whose content is never verse text: notes, figures, alternate and

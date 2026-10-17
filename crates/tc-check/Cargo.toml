@@ -1,0 +1,28 @@
+[package]
+name = "tc-check"
+description = "The checking logic behind the tN and tW Check screens: check lists, selections, computed validity, progress, rail filters, carry-over plans and the guided fix."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tc-core = { path = "../tc-core" }
+tc-usfm = { path = "../tc-usfm" }
+tc-versification = { path = "../tc-versification" }
+tc-helps = { path = "../tc-helps" }
+tc-burrito = { path = "../tc-burrito" }
+serde_json.workspace = true
+thiserror.workspace = true
+# A decision records the md5 of the verse text it was made against (STORAGE.md §2.3).
+md-5.workspace = true
+# A check id is refused unless it is NFC (STORAGE.md §2.2).
+unicode-normalization.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+# The Psalms vectors are checked against the burrito exports in bundle/en.
+zip.workspace = true
+
+[lints]
+workspace = true

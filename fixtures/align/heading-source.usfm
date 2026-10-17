@@ -1,0 +1,65 @@
+\id PSA Synthetic original-language verses with headings, notes, sidebars and other hidden spans inside verses, for tc-align
+\usfm 3.0
+\c 1
+\p
+\v 1 \w אַ|lemma="אַ" strong="H1" x-morph="He,Np"\w* \s5
+\w בּ|lemma="בּ" strong="H2" x-morph="He,Np"\w* \w אַ|lemma="אַ" strong="H1" x-morph="He,Np"\w*
+\v 2 \w אַ|lemma="אַ" strong="H1"\w*
+\r \w ר|lemma="ר" strong="H3"\w*
+\w בּ|lemma="בּ" strong="H2"\w*
+\v 3 \w אַ|lemma="אַ" strong="H1"\w*
+\qa \w ק|lemma="ק" strong="H4"\w*
+\q1 \w בּ|lemma="בּ" strong="H2"\w*
+\v 4 \w אַ|lemma="אַ" strong="H1"\w*
+\sp \w ס|lemma="ס" strong="H5"\w*
+\w בּ|lemma="בּ" strong="H2"\w*
+\v 5 \d \w ד|lemma="ד" strong="H6"\w* \w אַ|lemma="אַ" strong="H1"\w*
+\q1 \w בּ|lemma="בּ" strong="H2"\w* \w אַ|lemma="אַ" strong="H1"\w*
+\v 6 \w אַ|lemma="אַ" strong="H1"\w*
+\ms \w מ|lemma="מ" strong="H7"\w*
+\p \w בּ|lemma="בּ" strong="H2"\w*
+\v 7 \w אַ|lemma="אַ" strong="H1"\w* \s Words of a heading \w ה|lemma="ה" strong="H8"\w*
+\p \w בּ|lemma="בּ" strong="H2"\w*
+\v 8 \w אַ|lemma="אַ" strong="H1"\w* \f + \fr 1:8 \ft \w נ|lemma="נ" strong="H9"\w*\f* \w בּ|lemma="בּ" strong="H2"\w*
+\v 9 \w אַ|lemma="אַ" strong="H1"\w*
+\s1 \w ה|lemma="ה" strong="H8"\w* \w אַ|lemma="אַ" strong="H1"\w*
+\p \w בּ|lemma="בּ" strong="H2"\w*
+\v 10 \w אַ|lemma="אַ" strong="H1"\w* \cl \w ל|lemma="ל" strong="H10"\w*
+\w בּ|lemma="בּ" strong="H2"\w*
+\v 11 \w אַ|lemma="אַ" strong="H1"\w* \w בּ|lemma="בּ" strong="H2"\w*
+\s5
+\w ט|lemma="ט" strong="H11"\w* \w אַ|lemma="אַ" strong="H1"\w*
+\c 2
+\cl \w ל|lemma="ל" strong="H10"\w*
+\s \w ש|lemma="ש" strong="H12"\w*
+\p
+\v 1 \w אַ|lemma="אַ" strong="H1"\w* \w בּ|lemma="בּ" strong="H2"\w*
+\c 3
+\p
+\v 1 \w אַ|lemma="אַ" strong="H1"\w* \esb \s \w ז|lemma="ז" strong="H13"\w*
+\p \w אַ|lemma="אַ" strong="H1"\w* \esbe \w בּ|lemma="בּ" strong="H2"\w*
+\v 2 \w אַ|lemma="אַ" strong="H1"\w* \w בּ|lemma="בּ" strong="H2"\w*
+\esb
+\s \w ז|lemma="ז" strong="H13"\w*
+\p \w אַ|lemma="אַ" strong="H1"\w*
+\esbe
+\v 3 \w אַ|lemma="אַ" strong="H1"\w* \pro \w ז|lemma="ז" strong="H13"\w* \w אַ|lemma="אַ" strong="H1"\w*\pro* \ndx \w ז|lemma="ז" strong="H13"\w*\ndx* \fv \w ז|lemma="ז" strong="H13"\w*\fv* \w בּ|lemma="בּ" strong="H2"\w*
+\v 4 \w אַ|lemma="אַ" strong="H1"\w* \xt \w ז|lemma="ז" strong="H13"\w*\xt* \ior \w ז|lemma="ז" strong="H13"\w*\ior* \iqt \w ז|lemma="ז" strong="H13"\w*\iqt* \w בּ|lemma="בּ" strong="H2"\w*
+\v 5 \w אַ|lemma="אַ" strong="H1"\w* \fdc \w ז|lemma="ז" strong="H13"\w*\fdc* \xdc \w ז|lemma="ז" strong="H13"\w*\xdc* \fm \w ז|lemma="ז" strong="H13"\w*\fm* \w בּ|lemma="בּ" strong="H2"\w*
+\v 6 \w אַ|lemma="אַ" strong="H1"\w* \fa \w ז|lemma="ז" strong="H13"\w*\fa* \fqa \w ז|lemma="ז" strong="H13"\w*\fqa* \rt \w ז|lemma="ז" strong="H13"\w*\rt* \sis \w ז|lemma="ז" strong="H13"\w*\sis* \w בּ|lemma="בּ" strong="H2"\w*
+\v 7 \w אַ|lemma="אַ" strong="H1"\w* \xnt \w ז|lemma="ז" strong="H13"\w*\xnt* \xop \w ז|lemma="ז" strong="H13"\w*\xop* \xot \w ז|lemma="ז" strong="H13"\w*\xot* \w בּ|lemma="בּ" strong="H2"\w*
+\v 8 \w אַ|lemma="אַ" strong="H1"\w* \f + \ft \w ז|lemma="ז" strong="H13"\w*
+\p \w אַ|lemma="אַ" strong="H1"\w* \f* \w בּ|lemma="בּ" strong="H2"\w*
+\v 9 \w אַ|lemma="אַ" strong="H1"\w* \f + \ft \w ז|lemma="ז" strong="H13"\w*
+\p \w אַ|lemma="אַ" strong="H1"\w* \w בּ|lemma="בּ" strong="H2"\w*
+\v 10 \w אַ|lemma="אַ" strong="H1"\w* \pro \w ז|lemma="ז" strong="H13"\w* \pro \w ז|lemma="ז" strong="H13"\w*\pro* \w אַ|lemma="אַ" strong="H1"\w*\pro* \w בּ|lemma="בּ" strong="H2"\w*
+\v 11 \w אַ|lemma="אַ" strong="H1"\w* \esb \s \w ז|lemma="ז" strong="H13"\w* \esb* \w אַ|lemma="אַ" strong="H1"\w* \esbe \w בּ|lemma="בּ" strong="H2"\w*
+\v 12 \w אַ|lemma="אַ" strong="H1"\w* \add \w אַ|lemma="אַ" strong="H1"\w* \f + \ft \w ז|lemma="ז" strong="H13"\w*\f* \w אַ|lemma="אַ" strong="H1"\w*\add* \w בּ|lemma="בּ" strong="H2"\w*
+\v 13 \w אַ|lemma="אַ" strong="H1"\w* \k-s | x-tw="rc://*/tw/dict/bible/kt/god"\*\w אַ|lemma="אַ" strong="H1"\w* \f + \ft \w ז|lemma="ז" strong="H13"\w*\f*\k-e\* \k-s | x-tw="rc://*/tw/dict/bible/kt/god"\*\w אַ|lemma="אַ" strong="H1"\w*\k-e\* \f + \ft \w ז|lemma="ז" strong="H13"\w*\f* \w בּ|lemma="בּ" strong="H2"\w*
+\v 14 \w אַ|lemma="אַ" strong="H1"\w* \add \w אַ|lemma="אַ" strong="H1"\w* \ts\* \f + \ft \w ז|lemma="ז" strong="H13"\w*\f* \w אַ|lemma="אַ" strong="H1"\w*\add* \w בּ|lemma="בּ" strong="H2"\w*
+\v 15 \w אַ|lemma="אַ" strong="H1"\w* \w בּ|lemma="בּ" strong="H2"\w*
+\esb \s \w ז|lemma="ז" strong="H13"\w* \p \w אַ|lemma="אַ" strong="H1"\w* \esbe
+\c 4
+\p
+\v 1 \w אַ|lemma="אַ" strong="H1"\w* \w בּ|lemma="בּ" strong="H2"\w*
+\v 2 \w אַ|lemma="אַ" strong="H1"\w* \add \w אַ|lemma="אַ" strong="H1"\w* \ts-s\* \f + \ft \w ז|lemma="ז" strong="H13"\w*\f* \w אַ|lemma="אַ" strong="H1"\w* \ts-e\*\add* \w בּ|lemma="בּ" strong="H2"\w*

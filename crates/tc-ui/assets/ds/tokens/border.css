@@ -1,0 +1,13 @@
+:root {
+  /* ---- Stroke scale ----
+     Four weights, one job each. Never write a raw px border width in a component. */
+  --stroke-hair:     1px;   /* internal rules: row separators, table rules, tab strips */
+  --stroke:          1px;   /* surface edges: cards, menus, toasts, fields, buttons */
+  --stroke-selected: 1.5px; /* a bordered surface the user chooses; all dashed states */
+  --stroke-control:  2px;   /* small binary controls + the active-tab indicator */
+
+  /* Dashed borders exist only for "nothing here yet" and "drop here". */
+  --border-dashed:   var(--border-strong);
+  --border-dashed-accent: rgba(49,173,227,.5);
+  --border-danger:   rgba(162,19,9,.35);
+}

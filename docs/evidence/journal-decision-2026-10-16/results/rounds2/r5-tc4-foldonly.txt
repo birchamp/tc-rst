@@ -1,0 +1,11 @@
+### tc4-foldonly round 5
+start 16:30:54 12.21 7.78 5.99 16/224 18406
+bench-fold — issue #80
+date: 2026-10-16T16:30:57.500Z  commit: d310bf3  node: v22.22.0
+machine: Intel(R) Xeon(R) Processor @ 2.80GHz (4 cores), 16 GB, linux 6.18.44-fc-v139
+mode: full (3 repetitions, median) — checked whole Bible
+corpus: 66 books, 31104 verses, 215767 check decisions, 278041 events total, 31170 events (text-only)
+
+[fold] checked whole Bible (278041 events, 31104 alignment heads, 215767 decisions): 17126.4 ms  (runs: 17026.0, 17126.4, 17713.4)
+process: real 74.804 s, user 55.947 s, sys 2.836 s
+end 16:32:08 11.95 8.78 6.48 16/242 19948

@@ -20,3 +20,18 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+      # tc-ui's components compile for wasm32 only, so the host steps above never see them.
+      - run: cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings
+      - run: cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets --features gallery -- -D warnings
+
+  # The tC4 visual-parity baseline: its screenshots, manifest, README and the owner's rulings in
+  # docs/PLAN.md must agree, and the mock server must answer the sync transport as the platform
+  # does. Node built-ins only, so no install step.
+  parity-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test parity/tc4-baseline/baseline.test.mjs parity/tc4-baseline/mock-server/server.test.mjs

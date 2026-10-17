@@ -19,7 +19,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import { buildState, DEFAULT_TC4, SCENARIOS, ABSENT } from './fixtures/build-state.mjs';
 import { startMockServer } from './mock-server/server.mjs';
@@ -35,6 +35,15 @@ const OBS = '_local_/_local_/sample_burrito_obs';
 /** An empty stretch of the title bar (and the scrim under a dialog): the pointer rests here
  * for every screenshot, so no hover state leaks into an image. */
 const POINTER_REST = { x: 1000, y: 28 };
+/** A Door43 repository that no sample uses, so its default project name is free. */
+const OPEN_REPO = `${FAKE_USER.username}/es-419_tit_equipo`;
+/** The teammates of tC4's e2e/sync-button.spec.ts. */
+const TEAMMATES = ['b678teammate0001', 'c678teammate0002'];
+/** The owner ruling under which every shared OBS card differs: tC4 reads "Upload changes" there. */
+const OBS_SYNCS = { ruling: 'Q2', rebuild: 'The OBS card reads "Sync with Door43", like the Bible card: the rebuild syncs OBS projects too.' };
+/** Why an ok sync toast is incomplete: its note counts pinned versions that the mock lacks.
+ * The manifest lists them (`syncToast.missingVersions`), by tC4's own rule. */
+const MISSING_VERSIONS = 'The note on missing resource versions counts the 5 versions that the Bible sample pins and the mock does not have: es-419_twl v18, es-419_tw v37, es-419_ta v4, en_tq v91 and hbo_uhb v3.0.0. With every pinned version on the computer, the toast shows no such note and no Download.';
 
 /** Rendering flags that keep repeated runs pixel-identical: without them a few rounded
  * edges differ by up to 8/255 between runs (raster tiling). */
@@ -45,6 +54,8 @@ const argValue = (name) => {
   return at > 0 ? process.argv[at + 1] : undefined;
 };
 const only = argValue('--only')?.split(',');
+/** tC4's catalog of one app language, for steps that wait on a text (src/i18n/<locale>.json). */
+const catalog = (locale) => JSON.parse(fs.readFileSync(path.join(TC4, 'src', 'i18n', `${locale}.json`), 'utf8'));
 const port = Number(argValue('--port') ?? process.env.TC4_BASELINE_PORT ?? 19998);
 
 // ---- the tC4 client build ---------------------------------------------------
@@ -92,6 +103,32 @@ function buildClient(commit) {
   return helpPages;
 }
 
+/** tC4's own count for the toast's note on missing resource versions
+ * (src/data/installed.ts `missingPinCount`), bundled with tC4's esbuild. */
+async function tc4MissingPinCount() {
+  const out = path.join(HERE, '.cache', 'tc4-installed.mjs');
+  execFileSync(path.join(TC4, 'node_modules', '.bin', 'esbuild'),
+    [path.join(TC4, 'src', 'data', 'installed.ts'), '--bundle', '--format=esm', '--platform=node', `--outfile=${out}`, '--log-level=warning']);
+  return (await import(pathToFileURL(out).href)).missingPinCount;
+}
+
+/** The pinned versions of the project at `repo` that the note counts: each pin that
+ * `missingPinCount` counts on its own, over the install records in `state`. */
+function missingVersionsOf(missingPinCount, state, repo) {
+  const json = (...parts) => JSON.parse(fs.readFileSync(path.join(state, ...parts), 'utf8'));
+  const pins = json('repos', ...repo.split('/'), 'ingredients', 'checking', 'resources.json');
+  const installed = json('client_settings', 'uw-tc4.json').installedResources;
+  // the pins missingPinCount reads, in its order
+  const all = [
+    ...Object.values(pins.languageSets ?? {}).flatMap((set) => Object.values(set ?? {})),
+    ...Object.values(pins.resources?.originalLanguage ?? {}),
+    ...(pins.extraScripture ?? []),
+  ];
+  const missing = all.filter((pin) => missingPinCount({ extraScripture: [pin] }, installed) === 1);
+  if (missing.length !== missingPinCount(pins, installed)) throw new Error(`the missing pins of ${repo} do not add up to tC4's count`);
+  return missing.map((pin) => `${pin.repoPath} ${pin.version}`);
+}
+
 // ---- driving the app ---------------------------------------------------------
 
 /** Every /api request in flight from the browser, so a screenshot waits until the app has
@@ -117,10 +154,37 @@ async function settle(page, inFlight, quietMs = 800) {
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
+/**
+ * Two teammates change Titus 1:1 from the same version on Door43 `main`, which gives one
+ * verse conflict. This is tC4's e2e/sync-button.spec.ts `teammatesChangeOneVerse`: the
+ * segments are written by tC4's own reference journal writers, never by hand. Answers the
+ * segment file of each teammate, in the order of TEAMMATES.
+ */
+async function teammatesChangeOneVerse(main) {
+  const journal = (file) => import(pathToFileURL(path.join(TC4, 'journal', file)).href);
+  const [{ makeClock }, { fold }, { actorDirFor, readUnion, writeActionSegment }] = await Promise.all(
+    ['hlc.mjs', 'fold.mjs', 'files.mjs'].map(journal));
+  const journalDir = path.join(main, 'ingredients', 'checking', 'journal');
+  const union = readUnion(journalDir);
+  const base = fold(union).headsTs['text|TIT|1:1'];
+  if (!base) throw new Error('Door43 main holds no version of TIT 1:1: open the project before it is pushed');
+  const last = union.map((e) => e.ts).sort().pop();
+  let now = Date.now();
+  return TEAMMATES.map((actor, i) => {
+    const clock = makeClock(actor, () => now);
+    clock.ratchet(last);
+    now += 1000;
+    const event = { v: 1, op: 'text.verse.set', actor, ts: clock.issue(), base, book: 'TIT', chapter: '1', verse: '1', text: `Pablo, versión del compañero ${i + 1}.\n` };
+    return writeActionSegment(actorDirFor(journalDir, actor), [event]);
+  });
+}
+
 /** Helpers each screen's `run` receives. */
-function appDriver({ page, origin, state }) {
+function appDriver({ page, origin, state, door43 }) {
   const settingsFile = path.join(state, 'client_settings', 'uw-tc4.json');
   const pristineSettings = fs.readFileSync(settingsFile);
+  /** The catalog of the app language that home() set: the steps wait on its texts. */
+  let c = catalog('en');
   const card = (repo) => page.getByTestId(`project-${repo}`);
   const tab = async (name, ready) => {
     await page.getByRole('tab', { name, exact: true }).click();
@@ -129,28 +193,33 @@ function appDriver({ page, origin, state }) {
   return {
     page,
     /** Reload Home with the per-client document back to its seeded form (install records
-     * only): no remembered place, no Resume card, no last-used order. */
-    async home() {
-      fs.writeFileSync(settingsFile, pristineSettings);
+     * only): no remembered place, no Resume card, no last-used order. Another `locale` is
+     * saved as the app language first, the way tC4 saves it (`appLocale`, state.jsx
+     * readSavedLocale). */
+    async home({ locale = 'en' } = {}) {
+      c = catalog(locale);
+      fs.writeFileSync(settingsFile, locale === 'en' ? pristineSettings
+        : `${JSON.stringify({ ...JSON.parse(pristineSettings), appLocale: locale }, null, 2)}\n`);
       await page.goto(`${origin}/clients/uw-tc4/`);
       await card(BIBLE).waitFor();
       await card(OBS).waitFor();
+      await page.waitForFunction((lang) => document.documentElement.lang === lang, locale);
     },
     card,
     tab,
     async openTitus() {
       await card(BIBLE).getByRole('button', { name: /Titus/ }).click();
       await page.getByTestId('understand').waitFor();
-      await page.getByText('Loading the passage and its helps…').first().waitFor({ state: 'hidden' });
+      await page.getByText(c['understand.loading']).first().waitFor({ state: 'hidden' });
     },
     async openStory1() {
       await card(OBS).getByTestId('story-tile-1').click();
       await page.getByTestId('helps-panel').waitFor();
     },
     async openCheck() {
-      await tab('Check');
-      await page.getByRole('heading', { name: 'Choose a checking tool' }).waitFor();
-      await page.getByText('Checking what is available…').waitFor({ state: 'hidden' });
+      await tab(c['nav.check']);
+      await page.getByRole('heading', { name: c['check.title'] }).waitFor();
+      await page.getByText(c['check.checking']).waitFor({ state: 'hidden' });
     },
     async openAlign() {
       await page.getByTestId('open-align').click();
@@ -161,6 +230,35 @@ function appDriver({ page, origin, state }) {
       await page.getByTestId(`open-${id}`).click();
       await page.getByTestId('check-session').waitFor();
       await page.getByTestId('check-quote').waitFor();
+    },
+    /** Sign in as the fake Door43 user in the sign-in step that is open. */
+    async signIn() {
+      await page.getByTestId('share-signin').waitFor();
+      await page.getByLabel('Door43 username or email').fill(FAKE_USER.username);
+      await page.getByLabel('Password', { exact: true }).fill(FAKE_USER.password);
+      await page.getByTestId('signin-submit').click();
+    },
+    /** Door43 `main` of a shared project becomes the project as it is now: the push of its
+     * first share. tC4 seeds the journal of a conformance sample when it first opens it, so
+     * the project must be opened first, as tC4's e2e/sync-button.spec.ts opens it before it
+     * shares it. Without the journal on Door43, the sync stops at sync.verify-failed. */
+    pushToDoor43: (repo) => door43.push(repo),
+    /** The next clone of a shared project's repository fails to connect, once. */
+    dropNextClone: (repo) => door43.dropNextClone(repo),
+    teammatesChangeOneVerse: (repo) => teammatesChangeOneVerse(door43.push(repo)),
+    /** Door43 `main` loses one segment file, as when someone replaces main with an older
+     * copy. Git keeps no empty folder, so the folders it leaves empty go too. */
+    loseFromDoor43: (repo, segment) => {
+      const journal = path.join(door43.mainOf(repo), 'ingredients', 'checking', 'journal');
+      if (!segment.startsWith(`${journal}${path.sep}`)) throw new Error(`${segment} is not a journal file of Door43 main`);
+      fs.rmSync(segment);
+      for (let dir = path.dirname(segment); dir !== journal && fs.readdirSync(dir).length === 0; dir = path.dirname(dir)) fs.rmdirSync(dir);
+    },
+    /** Sync with Door43 from the project card: the internet question, then the sign-in. */
+    async syncFromHome(repo) {
+      await page.getByTestId(`share-${repo}`).click();
+      await page.getByTestId('net-confirm').click();
+      await this.signIn();
     },
     /** Turn the internet on from the account menu (D95: every launch starts off). */
     async internetOn() {
@@ -178,7 +276,13 @@ function appDriver({ page, origin, state }) {
 // (tC4's s.view: home | read | draft | check | publish; read = Understand, draft =
 // Translate), modal (what is layered over the view), steps (what a person does, in tC4's
 // own words), shows, incomplete (why the screen cannot show what a full install shows,
-// when that is so), and run (the same steps, driven).
+// when that is so), and run (the same steps, driven). Optional: locale (the app language,
+// which run passes to home(); English by default), viewport (another window size than
+// 1280x800), markingRow (the tool whose whole marking row the image shows) and
+// rebuildDiffers (an owner ruling under which the rebuild must not copy this screen exactly:
+// the ruling, as numbered in docs/TC4-DELTA-2026-10-16.md §5, and what the rebuild shows).
+// The manifest also records what the DOM shows at the shot: `homeCards` and `syncToast`
+// (see `observe`).
 
 const SCREEN_LIST = [
   // -------- scenario: sample (the conformance samples as tC4 ships them) --------
@@ -197,7 +301,7 @@ const SCREEN_LIST = [
   {
     name: 'translate-tit1', scenario: 'sample', view: 'draft', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Translate'],
-    shows: 'Translate, Titus 1, Section mode: ULT beside the es-419 draft, helps panel with the Comments tab',
+    shows: 'Translate, Titus 1, Section mode: ULT beside the es-419 draft, each "Draft section" a pill in the accent colour at the end of its row, helps panel with the Comments tab',
     run: async (app) => {
       await app.home(); await app.openTitus();
       await app.tab('Translate', app.page.getByRole('button', { name: /Draft section 1–3/ }));
@@ -213,24 +317,60 @@ const SCREEN_LIST = [
   {
     name: 'check-tn-session', scenario: 'sample', view: 'check', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Translation Notes card: Continue'],
-    shows: 'Translation Notes session on the es-419 notes, resumed at item 2 ("knowledge", 1:1) after the decided item 1: check rail (filters, sort, list), the quote, WHAT TO CHECK with Show more, the compare card (Greek, ULT highlight, the es-419 draft), triage buttons below the fold',
+    shows: 'Translation Notes session on the es-419 notes, resumed at item 2 ("knowledge", 1:1) after the decided item 1: check rail (filters, sort, list), the quote, WHAT TO CHECK with Show more, the compare card (Greek, ULT highlight, the es-419 draft), the marking row ("← Previous", the triage buttons, "Next →") below the fold; the header shows only "Item 2 of 112"',
     incomplete: 'The link under WHAT TO CHECK reads "Learn more: Translation Academy" instead of the article title: the sample pins es-419_ta v4 for its primary set and tC4 vendors no copy (en-check-tn-session shows the titled link).',
     run: async (app) => { await app.home(); await app.openTitus(); await app.openCheck(); await app.openTool('translationNotes'); },
   },
   {
     name: 'align-workspace', scenario: 'sample', view: 'check', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Align card'],
-    shows: 'Align, Titus 1:1, Gateway · ULT mode: the align rail (46 verses, 5 drafted), the ULT verse, Suggest links (off), the word bank of the es-419 draft (6 of 27 placed) and the ULT word cards with their Greek, the sample\'s six links placed',
+    shows: 'Align, Titus 1:1, Gateway · ULT mode: the align rail (46 verses, 5 drafted), the ULT verse, Suggest links (off), the word bank of the es-419 draft in verse order, with an occurrence number on each repeated word (6 of 27 placed), and the ULT word cards with their Greek and their target words in verse order, the sample\'s six links placed',
     run: async (app) => { await app.home(); await app.openTitus(); await app.openCheck(); await app.openAlign(); },
   },
   {
     name: 'align-original', scenario: 'sample', view: 'check', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Align card', 'Align mode: Original · Greek'],
-    shows: 'Align, Titus 1:1, Original · Greek mode: the Greek verse and one word card per Greek word, the six placed links',
+    shows: 'Align, Titus 1:1, Original · Greek mode: the Greek verse and one word card per Greek word, the six placed links, an occurrence number on each repeated word (Θεοῦ¹, Dios¹), the word bank in verse order, and the top of the marking row ("← Previous", Mark valid, "Next →") at the bottom edge',
     run: async (app) => {
       await app.home(); await app.openTitus(); await app.openCheck(); await app.openAlign();
       await app.page.getByTestId('align-mode-orig').click();
       await app.page.getByTestId('align-bank').waitFor();
+    },
+  },
+  {
+    name: 'align-workspace-row', scenario: 'sample', view: 'check', modal: null, markingRow: 'align',
+    steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Align card', 'Scroll the marking row into view'],
+    shows: 'align-workspace scrolled to the marking row: the word cards, then "← Previous", Mark valid and "Next →" under the card',
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.openCheck(); await app.openAlign();
+      await app.page.getByTestId('align-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'ar-align-workspace-row', scenario: 'sample', view: 'check', modal: null, markingRow: 'align', locale: 'ar',
+    steps: ['App language: العربية (saved before the launch)', 'Home', 'Bible sample card: Titus tile', 'Mode switch: مراجعة (Check)', 'Align card', 'Scroll the marking row into view'],
+    shows: 'align-workspace with the interface in Arabic, scrolled to the marking row: the chrome and the marking row run right to left ("→ السابق", Mark valid, "التالي ←", with the arrows turned); the ULT, the Greek and the draft stay left to right',
+    run: async (app) => {
+      await app.home({ locale: 'ar' }); await app.openTitus(); await app.openCheck(); await app.openAlign();
+      await app.page.getByTestId('align-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'align-workspace-620', scenario: 'sample', view: 'check', modal: null, markingRow: 'align', viewport: { width: 620, height: 800 },
+    steps: ['Window 620 px wide', 'Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Align card', 'Scroll the marking row into view'],
+    shows: 'align-workspace in a window 620 px wide, scrolled to the marking row, which wraps onto two lines ("Next →" alone on the second); at this width the project button in the header lies over the mode switch',
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.openCheck(); await app.openAlign();
+      await app.page.getByTestId('align-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'ar-align-workspace-620', scenario: 'sample', view: 'check', modal: null, markingRow: 'align', locale: 'ar', viewport: { width: 620, height: 800 },
+    steps: ['Window 620 px wide', 'App language: العربية (saved before the launch)', 'Home', 'Bible sample card: Titus tile', 'Mode switch: مراجعة (Check)', 'Align card', 'Scroll the marking row into view'],
+    shows: 'ar-align-workspace-row in a window 620 px wide: the marking row wraps onto two lines, right to left ("التالي ←" alone on the second)',
+    run: async (app) => {
+      await app.home({ locale: 'ar' }); await app.openTitus(); await app.openCheck(); await app.openAlign();
+      await app.page.getByTestId('align-next').scrollIntoViewIfNeeded();
     },
   },
   {
@@ -247,7 +387,7 @@ const SCREEN_LIST = [
   {
     name: 'add-project', scenario: 'sample', view: 'home', modal: 'addProject',
     steps: ['Home', '+ Add a project'],
-    shows: 'Add a project chooser: New Bible, New Open Bible Stories, Import a project',
+    shows: 'Add a project chooser with four cards: New Bible, New Open Bible Stories, Import a project, Open a project from Door43',
     run: async (app) => { await app.home(); await app.page.getByTestId('add-project').click(); await app.page.getByTestId('add-project-modal').waitFor(); },
   },
   {
@@ -283,7 +423,7 @@ const SCREEN_LIST = [
   {
     name: 'share-signin', scenario: 'sample', view: 'home', modal: 'signIn',
     steps: ['Home', 'Bible sample card: Share on Door43', 'Turn on internet'],
-    shows: 'Sign in to Door43 dialog (signs in to git.door43.org), empty fields',
+    shows: 'Sign in to Door43 dialog (signs in to git.door43.org), empty fields, and the notice that the Door43 username goes into the project, stays in it, and goes into each Scripture Burrito export',
     run: async (app) => {
       await app.home();
       await app.page.getByTestId(`share-${BIBLE}`).click();
@@ -441,6 +581,45 @@ const SCREEN_LIST = [
     incomplete: 'Both helps tools read "Needs downloading": es-419_obs-twl / es-419_obs-tn are not vendored (see en-obs-check-tn-session for a ready session).',
     run: async (app) => { await app.home(); await app.openStory1(); await app.openCheck(); },
   },
+  {
+    name: 'open-door43', scenario: 'sample', view: 'home', modal: 'openDoor43',
+    steps: ['Home', '+ Add a project', 'Open a project from Door43'],
+    shows: 'Open a project from Door43 dialog, empty: the note "The project opens from git.door43.org. Only public repositories can be opened.", Door43 repository, Project name, the note that tC4 checks every file before it adds the project, Cancel / Open project (disabled)',
+    rebuildDiffers: { ruling: 'Q3', rebuild: 'The note has no sentence that only public repositories can be opened: a new key replaces openDoor43.where in all 10 languages. A private repository opens after sign-in.' },
+    run: async (app) => {
+      await app.home(); await app.page.getByTestId('add-project').click();
+      await app.page.getByText('Open a project from Door43', { exact: true }).click();
+      await app.page.getByTestId('open-door43-modal').waitFor();
+    },
+  },
+  {
+    name: 'open-door43-internet-consent', scenario: 'sample', view: 'home', modal: 'netAsk',
+    steps: ['Home', '+ Add a project', 'Open a project from Door43', `Repository: ${OPEN_REPO}`, 'Open project'],
+    shows: '"Turn on the internet?" asked for an open from Door43 (kind `open`): get a full copy of the project and check its files; nothing from your projects is sent',
+    run: async (app) => {
+      const { page } = app;
+      await app.home(); await page.getByTestId('add-project').click();
+      await page.getByText('Open a project from Door43', { exact: true }).click();
+      await page.getByTestId('open-door43-repo').fill(OPEN_REPO);
+      await page.getByTestId('open-door43-submit').click();
+      await page.locator('[data-testid="net-ask"][data-kind="open"]').waitFor();
+    },
+  },
+  {
+    name: 'open-door43-refused', scenario: 'sample', view: 'home', modal: 'openDoor43',
+    steps: ['Home', '+ Add a project', 'Open a project from Door43', `Repository: ${OPEN_REPO}`, 'Open project', 'Turn on internet'],
+    shows: 'Open a project from Door43 dialog with the refusal callout "This project cannot be opened." for a clone that failed (code sync.clone-failed), "No project was added." and Ask for help. The clone fails because Door43 has no repository of that name',
+    rebuildDiffers: { ruling: 'Q3', rebuild: 'The refusal sentence (openDoor43.refused.other) says "Make sure that the repository is public". The rebuild opens private repositories, so its sentence must not say this. The delta document replaces only openDoor43.where, so the new text of this sentence is not decided yet. When Door43 answers 401 or 404 and nobody is signed in, the rebuild shows the sign-in step instead of this refusal.' },
+    run: async (app) => {
+      const { page } = app;
+      await app.home(); await page.getByTestId('add-project').click();
+      await page.getByText('Open a project from Door43', { exact: true }).click();
+      await page.getByTestId('open-door43-repo').fill(OPEN_REPO);
+      await page.getByTestId('open-door43-submit').click();
+      await page.getByTestId('net-confirm').click();
+      await page.getByTestId('open-door43-refused').waitFor();
+    },
+  },
 
   // -------- scenario: en-pins (the installed English suite pinned, as tC4 pins a new project) --------
   {
@@ -475,7 +654,7 @@ const SCREEN_LIST = [
   {
     name: 'en-translate-tit1', scenario: 'en-pins', view: 'draft', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Translate'],
-    shows: 'Translate, Titus 1, Section mode, English helps',
+    shows: 'Translate, Titus 1, Section mode, English helps, each "Draft section" a pill in the accent colour at the end of its row',
     run: async (app) => {
       await app.home(); await app.openTitus();
       await app.tab('Translate', app.page.getByRole('button', { name: /Draft section 1–3/ }));
@@ -484,7 +663,7 @@ const SCREEN_LIST = [
   {
     name: 'en-translate-section-editor', scenario: 'en-pins', view: 'draft', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Translate', 'Draft section 1–3'],
-    shows: 'Section editor open on Titus 1:1-3 (Type mode): one "N body" line per verse, Save section / Cancel',
+    shows: 'Section editor open on Titus 1:1-3 (Type mode): one "N body" line per verse, Save section / Cancel; while it is open, the Understand and Check tabs, the book rail and the other "Draft section" pills are disabled',
     run: async (app) => {
       await app.home(); await app.openTitus();
       await app.tab('Translate', app.page.getByRole('button', { name: /Draft section 1–3/ }));
@@ -495,7 +674,7 @@ const SCREEN_LIST = [
   {
     name: 'en-translate-verse-editor', scenario: 'en-pins', view: 'draft', modal: null,
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Translate', 'Unit switch: Verse', 'Verse 2 (drafted text)', 'Scroll the editor to the middle of the pane'],
-    shows: 'Verse mode with the verse editor open on Titus 1:2 ("Editing below" marker, "DRAFTING 2" card with Save verse / Cancel)',
+    shows: 'Verse mode with the verse editor open on Titus 1:2 ("Editing below" marker, "DRAFTING 2" card with Save verse / Cancel); while it is open, the Understand and Check tabs and the book rail are disabled',
     run: async (app) => {
       const { page } = app;
       await app.home(); await app.openTitus();
@@ -514,9 +693,9 @@ const SCREEN_LIST = [
     run: async (app) => { await app.home(); await app.openTitus(); await app.openCheck(); },
   },
   {
-    name: 'en-check-tw-session', scenario: 'en-pins', view: 'check', modal: null,
+    name: 'en-check-tw-session', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationWords',
     steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Translation Words card: Start checking'],
-    shows: 'Translation Words session (sorted By word), item "Paul" 1:1: rail, "Learn more: Paul, Saul", compare card (Greek, ULT highlight, the es-419 draft), triage, Bookmark / Add a comment',
+    shows: 'Translation Words session (sorted By word), item "Paul" 1:1: rail, "Learn more: Paul, Saul", compare card (Greek, ULT highlight, the es-419 draft), the marking row ("← Previous", Mark valid, Invalid, To do, "Next →"), Bookmark / Add a comment; the header shows only "Item 1 of 182"',
     run: async (app) => { await app.home(); await app.openTitus(); await app.openCheck(); await app.openTool('translationWords'); },
   },
   {
@@ -578,14 +757,212 @@ const SCREEN_LIST = [
     },
   },
   {
-    name: 'en-obs-check-tn-session', scenario: 'en-pins', view: 'check', modal: null,
+    name: 'en-obs-check-tn-session', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationNotes',
     steps: ['Home', 'OBS sample card: story tile "1 · La Creación"', 'Mode switch: Check', 'Translation Notes card: Start checking'],
-    shows: 'OBS Translation Notes session, story 1 (sorted By frame), item "The Creation" 1:0: the title note, the English gateway title highlighted, the Spanish title',
+    shows: 'OBS Translation Notes session, story 1 (sorted By frame), item "The Creation" 1:0: the title note, the English gateway title highlighted, the Spanish title, the marking row with "← Previous" and "Next →"',
     run: async (app) => { await app.home(); await app.openStory1(); await app.openCheck(); await app.openTool('translationNotes'); },
+  },
+  {
+    name: 'ar-check-tw-session', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationWords', locale: 'ar',
+    steps: ['App language: العربية (saved before the launch)', 'Home', 'Bible sample card: Titus tile', 'Mode switch: مراجعة (Check)', 'Translation Words card: Start checking'],
+    shows: 'en-check-tw-session with the interface in Arabic: the whole chrome right to left, and the marking row "→ السابق", the triage buttons, "التالي ←", with the arrows turned for right to left',
+    run: async (app) => { await app.home({ locale: 'ar' }); await app.openTitus(); await app.openCheck(); await app.openTool('translationWords'); },
+  },
+  {
+    name: 'en-check-tw-session-620', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationWords', viewport: { width: 620, height: 800 },
+    steps: ['Window 620 px wide', 'Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Translation Words card: Start checking', 'Scroll the marking row into view'],
+    shows: 'en-check-tw-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines; at this width the project button in the header lies over the mode switch',
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.openCheck(); await app.openTool('translationWords');
+      await app.page.getByTestId('check-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'ar-check-tw-session-620', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationWords', locale: 'ar', viewport: { width: 620, height: 800 },
+    steps: ['Window 620 px wide', 'App language: العربية (saved before the launch)', 'Home', 'Bible sample card: Titus tile', 'Mode switch: مراجعة (Check)', 'Translation Words card: Start checking', 'Scroll the marking row into view'],
+    shows: 'ar-check-tw-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines, right to left',
+    run: async (app) => {
+      await app.home({ locale: 'ar' }); await app.openTitus(); await app.openCheck(); await app.openTool('translationWords');
+      await app.page.getByTestId('check-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'en-check-tn-session-row', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationNotes',
+    steps: ['Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Translation Notes card: Start checking', 'Scroll the marking row into view'],
+    shows: 'en-check-tn-session scrolled to the marking row: the end of WHAT TO CHECK, "Learn more: Abstract Nouns", the compare card, then "← Previous", Mark valid, Invalid, To do, "Next →", and Bookmark / Add a comment',
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.openCheck(); await app.openTool('translationNotes');
+      await app.page.getByTestId('check-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'ar-check-tn-session-row', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationNotes', locale: 'ar',
+    steps: ['App language: العربية (saved before the launch)', 'Home', 'Bible sample card: Titus tile', 'Mode switch: مراجعة (Check)', 'Translation Notes card: Start checking', 'Scroll the marking row into view'],
+    shows: 'en-check-tn-session-row with the interface in Arabic: the chrome and the marking row run right to left ("→ السابق", the triage buttons, "التالي ←", with the arrows turned)',
+    run: async (app) => {
+      await app.home({ locale: 'ar' }); await app.openTitus(); await app.openCheck(); await app.openTool('translationNotes');
+      await app.page.getByTestId('check-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'en-check-tn-session-620', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationNotes', viewport: { width: 620, height: 800 },
+    steps: ['Window 620 px wide', 'Home', 'Bible sample card: Titus tile', 'Mode switch: Check', 'Translation Notes card: Start checking', 'Scroll the marking row into view'],
+    shows: 'en-check-tn-session in a window 620 px wide, scrolled to the marking row, which wraps onto three lines; at this width the project button in the header lies over the mode switch',
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.openCheck(); await app.openTool('translationNotes');
+      await app.page.getByTestId('check-next').scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    name: 'ar-check-tn-session-620', scenario: 'en-pins', view: 'check', modal: null, markingRow: 'translationNotes', locale: 'ar', viewport: { width: 620, height: 800 },
+    steps: ['Window 620 px wide', 'App language: العربية (saved before the launch)', 'Home', 'Bible sample card: Titus tile', 'Mode switch: مراجعة (Check)', 'Translation Notes card: Start checking', 'Scroll the marking row into view'],
+    shows: 'ar-check-tn-session-row in a window 620 px wide: the marking row wraps onto three lines, right to left',
+    run: async (app) => {
+      await app.home({ locale: 'ar' }); await app.openTitus(); await app.openCheck(); await app.openTool('translationNotes');
+      await app.page.getByTestId('check-next').scrollIntoViewIfNeeded();
+    },
+  },
+  // -------- scenario: shared (both samples shared on Door43) --------
+  {
+    name: 'shared-home', scenario: 'shared', view: 'home', modal: null,
+    steps: ['Launch tC4'],
+    shows: 'Home with both samples shared on Door43: "On Door43" beside each name; the Bible card reads "Sync with Door43", the OBS card "Upload changes" (tC4 4.0 syncs Bible projects only)',
+    rebuildDiffers: OBS_SYNCS,
+    run: async (app) => { await app.home(); await app.page.getByTestId(`share-card-${BIBLE}`).and(app.page.locator('[data-action="sync"]')).waitFor(); },
+  },
+  {
+    name: 'sync-internet-consent', scenario: 'shared', view: 'home', modal: 'netAsk',
+    steps: ['Home', 'Bible sample card: Sync with Door43'],
+    shows: '"Turn on the internet?" asked for a sync (kind `sync`): get the changes of your teammates and send the changes of this project. Behind the scrim, the OBS card reads "Upload changes"',
+    rebuildDiffers: OBS_SYNCS,
+    run: async (app) => {
+      await app.home();
+      await app.page.getByTestId(`share-${BIBLE}`).click();
+      await app.page.locator('[data-testid="net-ask"][data-kind="sync"]').waitFor();
+    },
+  },
+  {
+    name: 'sync-failed', scenario: 'shared', view: 'home', modal: null,
+    steps: ['Home', 'Door43 main: the Bible sample as it is now (the push of its first share)', 'Door43: the connection drops at the next clone of the Bible sample\'s repository', 'Bible sample card: Sync with Door43', 'Turn on internet', `Sign in as ${FAKE_USER.username}`],
+    shows: 'Home with the sync result toast of a sync that did not complete: red dot, "The sync did not complete." and the sentence of code sync.clone-failed, the dismiss button. Door43 has main, so the sync starts, and then the clone of main fails because the connection to git.door43.org drops',
+    rebuildDiffers: OBS_SYNCS,
+    run: async (app) => {
+      await app.home();
+      app.pushToDoor43(BIBLE);
+      app.dropNextClone(BIBLE);
+      await app.syncFromHome(BIBLE);
+      await app.page.locator('[data-testid="sync-result"][data-ok="0"]').waitFor();
+    },
+  },
+  {
+    name: 'sync-ok', scenario: 'shared', view: 'home', modal: null,
+    steps: ['Home', 'Bible sample card: Titus tile', 'Home', 'Door43 main: the Bible sample as it is now (the push of its first share)', 'Bible sample card: Sync with Door43', 'Turn on internet', `Sign in as ${FAKE_USER.username}`],
+    shows: 'Home with the toast of a sync that completed with no change from teammates: kindle dot, "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review", the note "This project now uses 5 resource versions that are not on this computer.", Download and the dismiss button',
+    incomplete: `${MISSING_VERSIONS} Its dot is then green.`,
+    rebuildDiffers: OBS_SYNCS,
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.home();
+      app.pushToDoor43(BIBLE);
+      await app.syncFromHome(BIBLE);
+      await app.page.locator('[data-testid="sync-result"][data-ok="1"]').waitFor({ timeout: 120_000 });
+    },
+  },
+  {
+    name: 'sync-ok-teammates', scenario: 'shared', view: 'home', modal: null,
+    steps: ['Home', 'Bible sample card: Titus tile', 'Home', 'Door43 main: the Bible sample as it is now (the push of its first share)', 'Door43 main: two teammates change Titus 1:1 from the same version', 'Bible sample card: Sync with Door43', 'Turn on internet', `Sign in as ${FAKE_USER.username}`],
+    shows: 'Home with the toast of a sync that brought two teammates\' changes to Titus 1:1: kindle dot, "Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review", "Changes from: Teammate 1 · Teammate 2", the note on the 5 missing resource versions, Review, Download and the dismiss button; the Bible card shows the chip "1 conflict · Review" and the Titus tile "1 conflict"',
+    incomplete: MISSING_VERSIONS,
+    rebuildDiffers: OBS_SYNCS,
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.home();
+      await app.teammatesChangeOneVerse(BIBLE);
+      await app.syncFromHome(BIBLE);
+      await app.page.locator('[data-testid="sync-result"][data-ok="1"]').waitFor({ timeout: 120_000 });
+    },
+  },
+  {
+    name: 'sync-ok-restored', scenario: 'shared', view: 'home', modal: null,
+    steps: ['Home', 'Bible sample card: Titus tile', 'Home', 'Door43 main: the Bible sample as it is now (the push of its first share)', 'Door43 main: two teammates change Titus 1:1 from the same version', 'Bible sample card: Sync with Door43', 'Turn on internet', `Sign in as ${FAKE_USER.username}`, 'Sync result: dismiss', 'Door43 main: the second teammate\'s change is gone, as when someone replaces main with an older copy', 'Bible sample card: Sync with Door43'],
+    shows: 'Home with the toast of a second sync, after Door43 main lost a teammate\'s change that the first sync brought to this computer: kindle dot, "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review", the note "Door43 did not have 1 change from a teammate. tC4 sent it again.", the note on the 5 missing resource versions, Review, Download and the dismiss button',
+    incomplete: MISSING_VERSIONS,
+    rebuildDiffers: OBS_SYNCS,
+    run: async (app) => {
+      await app.home(); await app.openTitus(); await app.home();
+      const [, second] = await app.teammatesChangeOneVerse(BIBLE);
+      await app.syncFromHome(BIBLE);
+      const toast = app.page.getByTestId('sync-result');
+      await app.page.locator('[data-testid="sync-result"][data-ok="1"]').waitFor({ timeout: 120_000 });
+      await toast.getByTestId('sync-dismiss').click();
+      await toast.waitFor({ state: 'detached' });
+      app.loseFromDoor43(BIBLE, second);
+      // The internet is on and the sign-in is kept, so the second sync asks nothing.
+      await app.page.getByTestId(`share-${BIBLE}`).click();
+      await app.page.locator('[data-testid="sync-result"][data-ok="1"]').waitFor({ timeout: 120_000 });
+    },
   },
 ];
 
 // ---- the run ---------------------------------------------------------------
+
+/**
+ * What the DOM shows at the shot, for the checks in baseline.test.mjs:
+ * - `homeCards`: for each project card whose share button the image shows, the button's
+ *   action (tC4 Home.jsx `data-action`: share, sync or upload). A button under a dialog's
+ *   translucent scrim shows; one under an opaque panel does not.
+ * - `syncToast`: the parts of the sync result toast (tC4 SyncResult.jsx), when it shows.
+ */
+function observe(page) {
+  return page.evaluate(() => {
+    const inWindow = (el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth
+        && getComputedStyle(el).visibility !== 'hidden';
+    };
+    const alpha = (color) => {
+      const m = color.match(/rgba?\(([^)]*)\)/);
+      if (!m) return color === 'transparent' ? 0 : 1;
+      const parts = m[1].split(/[\s,/]+/).filter(Boolean);
+      return parts.length > 3 ? Number(parts[3]) : 1;
+    };
+    /** Whether nothing opaque lies over the centre of `el`. */
+    const shown = (el) => {
+      if (!inWindow(el)) return false;
+      const r = el.getBoundingClientRect();
+      for (const over of document.elementsFromPoint(r.left + r.width / 2, r.top + r.height / 2)) {
+        if (over === el || el.contains(over)) return true;
+        if (over.contains(el)) continue;
+        const style = getComputedStyle(over);
+        if (Number(style.opacity) === 1 && (alpha(style.backgroundColor) === 1 || style.backgroundImage !== 'none')) return false;
+      }
+      return false;
+    };
+    const homeCards = {};
+    for (const card of document.querySelectorAll('[data-testid^="share-card-"]')) {
+      const repo = card.dataset.testid.slice('share-card-'.length);
+      const button = card.querySelector(`[data-testid="share-${repo}"]`);
+      if (button && shown(button)) homeCards[repo] = card.dataset.action;
+    }
+    const toast = document.querySelector('[data-testid="sync-result"]');
+    if (!toast || !inWindow(toast)) return { homeCards, syncToast: null };
+    const part = (id) => toast.querySelector(`[data-testid="${id}"]`);
+    const count = (id) => Number(part(id)?.dataset.count ?? 0);
+    return {
+      homeCards,
+      syncToast: {
+        ok: toast.dataset.ok === '1',
+        code: toast.dataset.code || null,
+        text: toast.innerText.replace(/\s+/g, ' ').trim(),
+        received: count('sync-count-received'),
+        newestWins: count('sync-count-newest'),
+        verseConflicts: count('sync-count-conflicts'),
+        from: part('sync-received-from')?.innerText ?? null,
+        restored: count('sync-restored'),
+        missingPins: count('sync-missing-pins'),
+        links: ['review', 'download'].filter((link) => part(`sync-${link}`)),
+      },
+    };
+  });
+}
 
 /** Fold reads that differ only in a story number (Home reads every gateway story title) into
  * one line, so the manifest stays readable. */
@@ -603,12 +980,12 @@ function compactReads(reads) {
   }).flat();
 }
 
-async function captureScenario(browser, scenario, screens, tc4) {
+async function captureScenario(browser, scenario, screens, missingPinCount) {
   const state = path.join(HERE, '.state', scenario);
   buildState({ tc4: TC4, out: state, scenario });
   const mock = await startMockServer({ state, client: DIST, port });
   const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1, locale: 'en-US', timezoneId: 'UTC', colorScheme: 'light' });
-  await routeFakeDoor43(context);
+  await routeFakeDoor43(context, { door43: mock.door43 });
   // Nothing else may leave the browser: any other origin is refused and reported.
   const external = new Set();
   await context.route((url) => url.origin !== mock.origin && url.origin !== 'https://git.door43.org', (route) => {
@@ -619,12 +996,15 @@ async function captureScenario(browser, scenario, screens, tc4) {
   const page = await context.newPage();
   const pageErrors = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
-  const app = appDriver({ page, origin: mock.origin, state });
+  const app = appDriver({ page, origin: mock.origin, state, door43: mock.door43 });
   const results = [];
   for (const screen of screens) {
     const firstRequest = mock.requests.length;
     pageErrors.length = 0;
     process.stdout.write(`  ${screen.name} ... `);
+    const size = screen.viewport ?? VIEWPORT;
+    const now = page.viewportSize();
+    if (now.width !== size.width || now.height !== size.height) await page.setViewportSize(size);
     let error = null;
     try {
       await screen.run(app);
@@ -637,9 +1017,13 @@ async function captureScenario(browser, scenario, screens, tc4) {
     await page.waitForTimeout(150);
     const file = path.join(SCREENS, `${screen.name}.png`);
     await page.screenshot({ path: file, animations: 'disabled' });
+    const { homeCards, syncToast } = await observe(page);
+    // tC4 4.0 syncs Bible projects only, so every sync result is the Bible sample's.
+    if (syncToast?.ok) syncToast.missingVersions = missingVersionsOf(missingPinCount, state, BIBLE);
+    // Sorted: concurrent reads finish in a different order from run to run.
     const absent = compactReads([...new Set(mock.requests.slice(firstRequest)
       .filter((r) => r.status >= 400 && !/checking(\/|%2F)journal/.test(`${r.path}${r.query}`))
-      .map((r) => `${r.method} ${decodeURIComponent(r.path.replace(/^\/api/, ''))}${decodeURIComponent(r.query)} -> ${r.status}`))]);
+      .map((r) => `${r.method} ${decodeURIComponent(r.path.replace(/^\/api/, ''))}${decodeURIComponent(r.query)} -> ${r.status}`))].sort());
     console.log(error ? `FAILED: ${error}` : 'ok');
     results.push({
       name: screen.name,
@@ -647,6 +1031,12 @@ async function captureScenario(browser, scenario, screens, tc4) {
       scenario,
       // tC4 has no router: the URL never changes, and the screen is the app state below.
       route: { url: '/clients/uw-tc4/', view: screen.view, modal: screen.modal },
+      ...(screen.locale ? { locale: screen.locale } : {}),
+      ...(screen.viewport ? { viewport: screen.viewport } : {}),
+      ...(screen.markingRow ? { markingRow: screen.markingRow } : {}),
+      ...(screen.rebuildDiffers ? { rebuildDiffers: screen.rebuildDiffers } : {}),
+      ...(Object.keys(homeCards).length ? { homeCards } : {}),
+      ...(syncToast ? { syncToast } : {}),
       steps: screen.steps,
       shows: screen.shows,
       status: error ? 'failed' : screen.incomplete ? 'incomplete' : 'complete',
@@ -668,6 +1058,7 @@ async function main() {
   console.log(`tC4 ${tc4.version} at ${tc4.commit}${tc4.dirty ? ' (working tree has local changes)' : ''}`);
   const helpPages = buildClient(tc4.commit);
   if (process.argv.includes('--build-only')) return;
+  const missingPinCount = await tc4MissingPinCount();
   fs.mkdirSync(SCREENS, { recursive: true });
   const selected = SCREEN_LIST.filter((s) => !only || only.includes(s.name));
   const browser = await chromium.launch({ args: CHROMIUM_ARGS });
@@ -677,7 +1068,7 @@ async function main() {
     const list = selected.filter((s) => s.scenario === scenario);
     if (!list.length) continue;
     console.log(`scenario ${scenario}: ${SCENARIOS[scenario]}`);
-    const { results, external } = await captureScenario(browser, scenario, list, tc4);
+    const { results, external } = await captureScenario(browser, scenario, list, missingPinCount);
     screens.push(...results);
     refused.push(...external);
   }

@@ -1,0 +1,20 @@
+Memo probe, 2026-10-16 17:07-17:12 UTC, this VM (Xeon 2.8 GHz, 4 vCPU, no SHA-NI), load average 3.3-4.4.
+Source: ../memo-probe/src/main.rs (cargo build --release --offline; sha2 =0.11.1, ring =0.17.14).
+Data was written to ../memo-probe/data and deleted afterwards. Warm page cache (files read just after writing).
+
+SHA-256 over 426,000,000 bytes in memory, one thread, 3 rounds each
+  whole-file chunks (1 MiB):  sha2 0.11  2559 / 2695 / 2370 ms  (158-180 MB/s)
+                              ring 0.17  1530 / 1409 / 1244 ms  (278-343 MB/s)
+  per line (1,374 B):         sha2 0.11  2622 / 2508 / 2665 ms  (160-170 MB/s)
+                              ring 0.17  1664 / 1738 / 1455 ms  (245-293 MB/s)
+  ring/sha2 speed ratio: 1.6-1.9x
+
+Per-file reads, std::fs::read_dir then std::fs::read of every file, 3 rounds each
+  278,041 files of 934 B (tC4 bench size), one folder:
+    1 thread: list 209 / 273 / 214 ms, read 2857 / 1949 / 1941 ms (7.0-10.3 us/file)
+    4 threads: list 219 / 194 / 199 ms, read 1284 / 1204 / 1161 ms
+  617,143 files of 934 B, one folder:
+    1 thread: list 474 / 449 / 520 ms, read 6768 / 4850 / 5227 ms (7.9-11.0 us/file)
+    4 threads: list 459 / 446 / 528 ms, read 2592 / 2326 / 2448 ms
+  277 files of 1,539,891 B (426.5 MB, the rebuild's tc4shape file count):
+    1 thread: read 73 / 68 / 96 ms; 4 threads: read 52 / 59 / 74 ms
