@@ -8,6 +8,23 @@ code on 2026-10-17; §13 lists what was read. A red team attacked it the same da
 finding RT-n is marked *(A-n)*, and "How each point was answered", after the red team, says
 what changed for each finding, which parts were done another way, and why.
 
+## Owner's answers (2026-10-17)
+
+- **Q-6, alignment after a verse edit:** no automatic reflow write. A verse edit writes no
+  alignment; the aligner applies the lossless reflow when it opens the verse, as designed.
+- **Q-24, the Understand comment box:** (c). R24, a record that revises the comment the box
+  showed and keeps the earlier text in History, is requested from unit S1.
+- **Q-4, projects folder:** `%USERPROFILE%\translationCore4\projects` (or
+  `~/translationCore4/projects`), checked against the cloud detection at first launch.
+- **Q-26, Windows runs:** the owner runs G0 on a Windows laptop on 2026-10-17 at 16:00 US
+  Eastern (20:00 UTC). The release pipeline will have a Windows machine for G1 and G2.
+- **Q-2, feedback:** the shell sends it, gated by the server's internet switch.
+- **Phase 0 starts now.**
+- **A rule for every unit:** where tC4's behavior works against what a feature is for, follow
+  what the translator needs and record the difference with its reason (AGENTS.md, "Matching
+  tC4").
+- The other questions follow their recommendations in §12.
+
 ---
 
 ## 0. How to read this document
