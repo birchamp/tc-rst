@@ -350,7 +350,10 @@ impl RecordRef {
         if !(text.starts_with('{') && text.ends_with('}')) {
             return refuse(WHAT, "not a JSON object");
         }
-        if text.chars().any(char::is_control) {
+        // tc-journal's canonical JSON escapes every character below U+0020 and writes every
+        // other one raw, U+007F to U+009F included (`tc-journal/src/json.rs`), so only these
+        // can never appear.
+        if text.chars().any(|c| c < ' ') {
             return refuse(WHAT, "not canonical JSON");
         }
         Ok(Self(text.to_owned()))

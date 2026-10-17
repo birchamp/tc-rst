@@ -167,11 +167,26 @@ fn hex_refs_have_their_lengths() {
 #[test]
 fn a_record_is_a_bounded_json_object() {
     assert!(reads::<RecordRef>(r#"{"book":"TIT","kind":"verse"}"#));
-    for bad in ["", "TIT 1:1", "[1]", "{\"a\":\"\n\"}"] {
+    for bad in ["", "TIT 1:1", "[1]", "{\"a\":\"\n\"}", "{\"a\":\"\u{1f}\"}"] {
         assert!(!reads::<RecordRef>(bad), "{bad:?}");
     }
     let long = format!("{{\"a\":\"{}\"}}", "x".repeat(RecordRef::MAX_BYTES));
     assert!(!reads::<RecordRef>(&long));
+}
+
+#[test]
+fn a_record_reads_every_text_canonical_json_writes() {
+    // tc-journal writes U+007F to U+009F and the line separators raw, and a resources key or
+    // a setting name may hold them, so an Ack or a Changed event naming such a record reads.
+    for raw in [
+        '\u{7f}', '\u{80}', '\u{85}', '\u{9f}', '\u{2028}', '\u{2029}',
+    ] {
+        let text = format!(r#"{{"kind":"setting","name":"a{raw}b"}}"#);
+        assert!(RecordRef::parse(&text).is_ok(), "{text:?}");
+        assert!(reads::<RecordRef>(&text), "{text:?}");
+    }
+    // Escaped forms are plain ASCII.
+    assert!(reads::<RecordRef>(r#"{"name":"a\u001fb\nc"}"#));
 }
 
 #[test]
