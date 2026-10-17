@@ -7,8 +7,9 @@
 //! (`DIR/projects/bible`, app data in `DIR/app`); `... -- open DIR CASE` opens it once in a
 //! process of its own and prints one line (CASE: `warm`, `nocache`, `cold`, which first asks
 //! the kernel to drop its page cache); `... -- run DIR [runs]` runs the opens in child
-//! processes, then the saves, and prints the report; `... -- saves DIR` times the saves
-//! alone.
+//! processes, then the saves, and prints the report (with `STOREBENCH_OTHER` naming a
+//! binary of another build, also the opens that take the fold cache that build wrote);
+//! `... -- saves DIR` times the saves alone.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
@@ -159,6 +160,7 @@ fn open_once(dir: &Path, case: &str) {
             return;
         }
     }
+    let load_before = loadavg();
     let store = store(dir);
     let reports: Arc<Mutex<Vec<(Duration, Progress)>>> = Arc::default();
     let started = Instant::now();
@@ -185,15 +187,20 @@ fn open_once(dir: &Path, case: &str) {
         .map(|(at, p)| format!("{at:?} {:?} {}/{}", p.phase, p.done, p.total));
     println!(
         "{case}: usable {:.3} s, background done {:.3} s, peak {peak:.0} MiB, steady {steady:.0} MiB, \
-         files opened {}, bytes read {}, projected {}, derived read {}, first report {}, reports {}",
+         files opened {}, journal files {} ({} from the cache), bytes read {}, projected {}, \
+         derived read {}, first report {}, reports {}, load {} before, {} after",
         usable.as_secs_f64(),
         idle.as_secs_f64(),
         counters.files_opened,
+        counters.journal_files_read,
+        counters.journal_files_cached,
         counters.bytes_read,
         counters.projected,
         counters.derived_read,
         first.unwrap_or_else(|| "none".into()),
-        reports.len()
+        reports.len(),
+        load_before,
+        loadavg(),
     );
     handle.close().expect("close");
 }
@@ -236,11 +243,31 @@ fn run(dir: &Path, runs: usize) {
         flags.contains(" sha_ni"),
         flags.contains(" avx512f")
     );
-    for case in ["warm", "nocache", "cold"] {
+    // `update`: the fold cache written by another build of the same cache encoding (a
+    // binary built with other features, named by STOREBENCH_OTHER), as after an app update.
+    let other = std::env::var_os("STOREBENCH_OTHER").map(PathBuf::from);
+    for case in ["warm", "cold", "nocache", "update"] {
+        if case == "update" && other.is_none() {
+            println!("update: skipped, STOREBENCH_OTHER names no other build");
+            continue;
+        }
         let mut times = Vec::new();
         for _ in 0..runs {
+            if case == "update"
+                && let Some(other) = &other
+            {
+                let out = std::process::Command::new(other)
+                    .args(["open", &dir.to_string_lossy(), "nocache"])
+                    .output()
+                    .unwrap();
+                println!(
+                    "  other build wrote the cache: {}",
+                    String::from_utf8_lossy(&out.stdout).trim()
+                );
+            }
+            let open_case = if case == "update" { "warm" } else { case };
             let out = std::process::Command::new(&exe)
-                .args(["open", &dir.to_string_lossy(), case])
+                .args(["open", &dir.to_string_lossy(), open_case])
                 .output()
                 .unwrap();
             let line = String::from_utf8_lossy(&out.stdout).trim().to_owned();
@@ -279,6 +306,10 @@ fn saves(dir: &Path) {
         }
     }
     verses.truncate(200);
+    // Words no earlier run saved, so every save writes (an unchanged value writes nothing).
+    let run = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis());
     let mut verse_ms = Vec::new();
     let mut opened = 0u64;
     let mut fsyncs = 0u64;
@@ -289,11 +320,12 @@ fn saves(dir: &Path) {
         let reply = handle
             .submit(Command::SaveVerse {
                 shown,
-                words: format!("A saved verse number {i}"),
+                words: format!("A saved verse number {i} of run {run}"),
             })
             .wait();
         verse_ms.push(started.elapsed().as_secs_f64() * 1000.0);
-        reply.expect("save");
+        let reply = reply.expect("save");
+        assert!(!reply.changes.is_empty(), "every save writes");
         let delta = handle.counters().since(&before);
         opened += delta.files_opened;
         fsyncs += delta.fsyncs;
@@ -352,7 +384,8 @@ fn saves(dir: &Path) {
             })
             .wait();
         decision_ms.push(started.elapsed().as_secs_f64() * 1000.0);
-        reply.expect("decision");
+        let reply = reply.expect("decision");
+        assert!(!reply.changes.is_empty(), "every decision writes");
     }
     for (name, mut ms) in [("verse save", verse_ms), ("decision", decision_ms)] {
         ms.sort_by(|a, b| a.partial_cmp(b).unwrap());
