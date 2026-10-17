@@ -4,18 +4,16 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::collections::BTreeMap;
-
 use proptest::prelude::*;
 use tc_export::book::{
     BookChapter, BookVerse, ChapterPart, FlowBlock, Opening, Piece, PrintPart, VerseLine,
     VersePiece, print_book, print_parts, printed_items,
 };
 use tc_export::page::{ChapterOpening, ObsLayout, PageSetup, Pictures, VerseNumbers};
-use tc_export::stories::{FrameBlock, Side, StoryBlock, StoryTitle, print_stories};
+use tc_export::stories::{FrameBlock, Side, StoryBlock, StoryPictures, StoryTitle, print_stories};
 use tc_export::{Direction, PrintText, Run};
 use tc_helps::obs::{ObsFrame, ObsImage, ObsStory};
-use tc_obs::print::{printed, story_drafted};
+use tc_obs::print::printed;
 
 fn setups() -> impl Strategy<Value = PageSetup> {
     (any::<bool>(), any::<bool>(), any::<bool>(), any::<bool>()).prop_map(
@@ -85,12 +83,23 @@ fn books() -> impl Strategy<Value = Vec<BookChapter>> {
     )
 }
 
+/// The text a verse prints, stated from its fields rather than by `printed_text`, so the
+/// property below checks the rule instead of repeating it: a drafted verse with no text to
+/// show prints as not yet drafted.
+fn shown(verse: &BookVerse) -> Option<&str> {
+    (verse.drafted && !verse.text.is_empty()).then_some(verse.text.as_str())
+}
+
+fn chapter_prints(chapter: &BookChapter) -> bool {
+    chapter.verses.iter().any(|verse| shown(verse).is_some())
+}
+
 proptest! {
     #[test]
     fn every_drafted_verse_prints_once(chapters in books(), setup in setups(), dir in directions()) {
         let items = printed_items(&chapters);
         let view = print_book("Book", &items, &setup, dir);
-        let printing: Vec<usize> = (0..chapters.len()).filter(|&i| chapters[i].prints_text()).collect();
+        let printing: Vec<usize> = (0..chapters.len()).filter(|&i| chapter_prints(&chapters[i])).collect();
         let (Some(&first), Some(&last)) = (printing.first(), printing.last()) else {
             prop_assert!(view.flow.is_empty());
             return Ok(());
@@ -102,7 +111,7 @@ proptest! {
             let chapter = &chapters[i];
             match flow.next() {
                 Some(FlowBlock::Chapter(block)) => {
-                    prop_assert!(chapter.prints_text());
+                    prop_assert!(chapter_prints(chapter));
                     prop_assert_eq!(block.chapter, chapter.number);
                     prop_assert!(!block.continues);
                     let opening = match setup.chapter_opening {
@@ -113,7 +122,7 @@ proptest! {
                     // One line per verse, in order: every verse prints, and only once.
                     prop_assert_eq!(block.verses.len(), chapter.verses.len());
                     for (line, verse) in block.verses.iter().zip(&chapter.verses) {
-                        let expected = match verse.printed_text() {
+                        let expected = match shown(verse) {
                             Some(text) => VerseLine::Text {
                                 number: (setup.verse_numbers == VerseNumbers::Shown).then_some(verse.label.as_str()),
                                 text,
@@ -127,7 +136,7 @@ proptest! {
                 Some(FlowBlock::Gap(PrintText::ChaptersNotDrafted(run))) => {
                     // A gap stands for the longest run of chapters with nothing to print.
                     let mut j = i;
-                    while !chapters[j].prints_text() {
+                    while !chapter_prints(&chapters[j]) {
                         j += 1;
                     }
                     prop_assert!(j > i);
@@ -204,21 +213,49 @@ fn stories() -> impl Strategy<Value = Vec<ObsStory>> {
     })
 }
 
-/// Pictures for every third frame are missing, so a printed frame may have none.
-fn sources(story: &ObsStory) -> BTreeMap<usize, String> {
-    (1..=story.frames.len())
-        .filter(|n| n % 3 != 0)
-        .map(|n| (n, format!("{}-{n}.jpg", story.number)))
+/// The pictures a caller hands the print, built here rather than taken from
+/// `tc_obs::print::printed` (which drops empty sources), so the print's own rule is what
+/// the property checks: every fourth frame has no picture and the frame before it an empty
+/// source, and neither prints a picture (tC4 prints one only when `src` is truthy).
+fn pictures_of(stories: &[ObsStory]) -> StoryPictures {
+    stories
+        .iter()
+        .map(|story| {
+            let sources = (1..=story.frames.len())
+                .filter(|n| n % 4 != 0)
+                .map(|n| {
+                    let src = if n % 4 == 3 {
+                        String::new()
+                    } else {
+                        format!("{}-{n}.jpg", story.number)
+                    };
+                    (n, src)
+                })
+                .collect();
+            (story.number, sources)
+        })
         .collect()
+}
+
+fn has_picture(frame: usize) -> bool {
+    matches!(frame % 4, 1 | 2)
+}
+
+/// Whether a story prints, stated from its fields rather than by tc-obs' `story_drafted`:
+/// it has a title, a reference with text or a frame with text.
+fn story_prints(story: &ObsStory) -> bool {
+    !story.title.is_empty()
+        || story.reference.as_deref().is_some_and(|r| !r.is_empty())
+        || story.frames.iter().any(|frame| !frame.text.is_empty())
 }
 
 proptest! {
     #[test]
     fn every_drafted_frame_prints_once(stories in stories(), setup in setups(), dir in directions()) {
-        let mut pictures = sources;
-        let printed = printed(&stories, Some(&mut pictures));
-        let view = print_stories(&printed.items, &printed.pictures, &setup, dir);
-        let drafted: Vec<usize> = (0..stories.len()).filter(|&i| story_drafted(&stories[i])).collect();
+        let printed = printed(&stories, None);
+        let pictures = pictures_of(&stories);
+        let view = print_stories(&printed.items, &pictures, &setup, dir);
+        let drafted: Vec<usize> = (0..stories.len()).filter(|&i| story_prints(&stories[i])).collect();
         let (Some(&first), Some(&last)) = (drafted.first(), drafted.last()) else {
             prop_assert!(view.blocks.is_empty());
             prop_assert_eq!(view.nothing_drafted(), Some(PrintText::NothingDrafted));
@@ -236,7 +273,7 @@ proptest! {
             let story = &stories[i];
             match blocks.next() {
                 Some(StoryBlock::Story(page)) => {
-                    prop_assert!(story_drafted(story));
+                    prop_assert!(story_prints(story));
                     prop_assert_eq!(page.number, story.number);
                     let title = if story.title.is_empty() {
                         StoryTitle::Numbered(PrintText::StoryNumber { story: story.number })
@@ -255,7 +292,7 @@ proptest! {
                                 prop_assert!(!text.is_empty());
                                 prop_assert_eq!(frame.frame, n);
                                 prop_assert_eq!(frame.text, text.as_str());
-                                let shown = setup.pictures == Pictures::Shown && n % 3 != 0;
+                                let shown = setup.pictures == Pictures::Shown && has_picture(n);
                                 prop_assert_eq!(frame.picture.is_some(), shown);
                                 if let Some(picture) = frame.picture {
                                     prop_assert_eq!(picture.src, format!("{}-{n}.jpg", story.number));
@@ -281,7 +318,7 @@ proptest! {
                 }
                 Some(StoryBlock::Gap(PrintText::StoriesNotDrafted(run))) => {
                     let mut j = i;
-                    while !story_drafted(&stories[j]) {
+                    while !story_prints(&stories[j]) {
                         j += 1;
                     }
                     prop_assert!(j > i);
