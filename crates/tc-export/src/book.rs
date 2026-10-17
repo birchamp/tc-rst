@@ -109,9 +109,11 @@ pub fn has_undrafted(chapters: &[BookChapter]) -> bool {
 pub enum Piece<'a> {
     /// The whole verse.
     Whole,
-    /// The words of the verse before a page break; the verse's number shows.
+    /// The words of the verse before its first page break, never empty; its number shows
+    /// when verse numbers are on.
     Start(&'a str),
-    /// The words of the verse after a page break, never empty; no number shows.
+    /// The words of the verse after a page break, up to the next break if it has one, never
+    /// empty; no number shows.
     Continued(&'a str),
 }
 
