@@ -1,7 +1,11 @@
-//! The one SHA-256 every hash of the format goes through: change ids (§2.5), the names of
-//! packs and pending files (§4.3), conflict ids and the frontier (§2.6). A first open without
-//! the fold cache hashes every byte of every change once (§14), so this is the hottest code of
-//! that open on a processor without SHA instructions.
+//! The one SHA-256 every content hash of the format goes through: change ids (§2.5), the names
+//! of packs and pending files (§4.3), conflict ids, derived device ids and the frontier
+//! (§2.6). A first open without the fold cache hashes every byte of every change once (§14),
+//! so this is the hottest code of that open on a processor without SHA instructions. The one
+//! other use of SHA-256, the HMAC of shown tokens (`token.rs`, §2.7), goes through the `hmac`
+//! crate over `sha2`: it signs a few hundred bytes a command, its result never lies in a
+//! project file, and both implementations give the same digests, so it does not follow the
+//! choice below.
 //!
 //! The implementation is chosen on one line, [`Chosen`]. On a processor without SHA
 //! instructions, the kind the reference laptop is, `ring` 0.17.14 hashed the whole-Bible

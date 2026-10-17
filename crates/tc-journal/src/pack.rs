@@ -160,7 +160,7 @@ pub struct PackHeader {
 pub enum PackError {
     #[error("the path is not ingredients/tc/changes/<device>/<yyyy-mm>/<32 hex>.ndjson")]
     BadPath,
-    #[error("the file's SHA-256 does not start with its name")]
+    #[error("the hash of the file's header and line ids does not start with its name")]
     NameMismatch,
     #[error("the file is empty")]
     Empty,

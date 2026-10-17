@@ -57,7 +57,8 @@ hex_id!(
     16
 );
 hex_id!(
-    /// SHA-256 of a pack file's bytes.
+    /// A pack's id (§4.3): SHA-256 of its header line and its lines' ids
+    /// ([`PackId::of_pack`]); SHA-256 of all its bytes for a file that does not frame a pack.
     PackId,
     32
 );
