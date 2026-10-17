@@ -598,6 +598,7 @@ fn run(args: &[String]) {
     let t = Instant::now();
     let stamp = tc_journal::index::stamp();
     println!("probe stamp {stamp:#x} computed in {:?}", t.elapsed());
+    println!("RSS before the first open {}", mib(rss_mib()));
     let runs: usize = std::env::var("FOLDBENCH_RUNS")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -706,6 +707,7 @@ fn run(args: &[String]) {
     let mut load_only = Stats::new("Read, verify and prepare");
     // The cold open: the fold indexes each file's changes as the reading threads hand
     // them over, then runs its stages once the last arrives.
+    reset_peak_rss();
     for _ in 0..runs {
         drop(state.take());
         let started = Instant::now();
@@ -734,7 +736,9 @@ fn run(args: &[String]) {
         );
         return;
     }
-    // The parts on their own: reading every file, then folding what was read.
+    // The parts on their own: reading every file, then folding what was read. No open
+    // holds every prepared change at once like this; its peak is printed on its own.
+    reset_peak_rss();
     for _ in 0..runs {
         drop(state.take());
         let started = Instant::now();
@@ -766,7 +770,12 @@ fn run(args: &[String]) {
         load_only.times.push(loaded);
         state = Some(folded);
     }
-    println!("peak RSS during the streamed cold opens {}", mib(open_peak));
+    println!(
+        "peak RSS during the streamed cold opens {}; while every prepared change was collected \
+         and folded {}",
+        mib(open_peak),
+        mib(peak_rss_mib())
+    );
     let mut state = state.expect("folded");
     if std::env::var("FOLDBENCH_FOLD_ONLY").is_ok() {
         load_only.report();
@@ -779,44 +788,56 @@ fn run(args: &[String]) {
         return;
     }
     println!(
-        "corpus: {} lines, {} records, {} conflicts, {} anomalies; peak RSS {}, RSS with the \
-         fold open {}",
+        "corpus: {} lines, {} records, {} conflicts, {} anomalies; RSS with the fold open {}",
         changes,
         state.record_keys().len(),
         state.conflict_count(),
         state.anomalies().count(),
-        mib(peak_rss_mib()),
         mib(rss_mib())
     );
     println!("| Action | Runs | Median | p95 |");
     println!("|---|---:|---:|---:|");
     load_only.report();
     // What SHA-256 alone costs: one pass over every file's bytes on the same threads (P2
-    // hashes each file once and P4 each line once, so a load hashes every byte twice).
+    // hashes each file once and P4 each line once, so a load hashes every byte twice). Each
+    // thread reads its files one at a time into one buffer and times only the hashing, so
+    // the pass holds a few files, not the project's 700 MB; the slowest thread's hashing
+    // time is the pass's.
     let mut sha = Stats::new("SHA-256 of every file once (one of the load's two passes)");
     let all: Vec<PathBuf> = files(&dir.join("packs"))
         .into_iter()
         .chain(files(&dir.join("pending")))
         .collect();
-    let bytes: Vec<Vec<u8>> = all
-        .iter()
-        .map(|p| std::fs::read(p).expect("read"))
-        .collect();
     for _ in 0..3 {
-        let t = Instant::now();
-        std::thread::scope(|scope| {
-            for t in 0..threads {
-                let bytes = &bytes;
-                scope.spawn(move || {
-                    for b in bytes.iter().skip(t).step_by(threads) {
-                        std::hint::black_box(tc_journal::PackId::of(b));
-                    }
-                });
-            }
+        let busy = std::thread::scope(|scope| {
+            let workers: Vec<_> = (0..threads)
+                .map(|t| {
+                    let all = &all;
+                    scope.spawn(move || {
+                        use std::io::Read;
+                        let mut buffer = Vec::new();
+                        let mut busy = Duration::ZERO;
+                        for path in all.iter().skip(t).step_by(threads) {
+                            buffer.clear();
+                            File::open(path)
+                                .and_then(|mut f| f.read_to_end(&mut buffer))
+                                .expect("read");
+                            let started = Instant::now();
+                            std::hint::black_box(tc_journal::PackId::of(&buffer));
+                            busy += started.elapsed();
+                        }
+                        busy
+                    })
+                })
+                .collect();
+            workers
+                .into_iter()
+                .map(|w| w.join().expect("a hashing thread"))
+                .max()
+                .unwrap_or_default()
         });
-        sha.times.push(t.elapsed());
+        sha.times.push(busy);
     }
-    drop(bytes);
     sha.report();
     fold_only.report();
     cached.report();
@@ -824,6 +845,8 @@ fn run(args: &[String]) {
     open.report();
     after_read.report();
 
+    // The app's case from here: the whole Bible open, a person working in Psalms.
+    reset_peak_rss();
     let keys = state.record_keys();
     let psalms_verses: Vec<RecordKey> = keys
         .iter()
@@ -1091,7 +1114,8 @@ fn run(args: &[String]) {
     }
     snapshot.report();
     println!(
-        "peak RSS {}; RSS with the fold open after Psalms was projected {}",
+        "peak RSS of the incremental steps, conflict lists, Psalms projections and snapshots \
+         {}; RSS with the fold open after Psalms was projected {}",
         mib(peak_rss_mib()),
         mib(rss_mib())
     );
