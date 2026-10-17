@@ -45,8 +45,12 @@ const resultsFile = path.join(out, `results-${tag}.json`);
 const appData = path.join(out, `appdata-${tag}`);
 const APP_ORIGIN = 'tc4://app';
 
+const tokensSeen = [];
+
+// Every event line goes through redact: no token reaches a file.
 function record(ev, data) {
-  fs.appendFileSync(eventsFile, `${JSON.stringify({ t: Date.now(), ev, ...(data || {}) })}\n`);
+  const line = JSON.stringify({ t: Date.now(), ev, ...(data || {}) });
+  fs.appendFileSync(eventsFile, `${lib.redact(line, tokensSeen)}\n`);
 }
 
 function writeJsonAtomically(file, value) {
@@ -67,7 +71,12 @@ app.setPath('userData', path.join(out, `profile-${options.mode}`));
 // A covered or background window would stop its animation frames and skew the round trip.
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
-if (process.platform === 'linux') app.commandLine.appendSwitch('disable-dev-shm-usage');
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('disable-dev-shm-usage');
+  // The Linux runs are this container's, under Xvfb with no GPU, where the GPU process now and
+  // then failed to start and the window never loaded. Windows and macOS keep the GPU.
+  app.disableHardwareAcceleration();
+}
 if (options.mode === 'protocol') {
   protocol.registerSchemesAsPrivileged([
     {
@@ -127,7 +136,9 @@ function startServer() {
       if (!addressed) {
         addressed = true;
         try {
-          resolve({ child, pid: child.pid, startedAt: started, addressAt: Date.now(), ...lib.parseAddress(line) });
+          const address = lib.parseAddress(line);
+          tokensSeen.push(address.token);
+          resolve({ child, pid: child.pid, startedAt: started, addressAt: Date.now(), ...address });
         } catch (error) {
           reject(error);
         }
@@ -158,7 +169,9 @@ function onServerExit(child, code, signal) {
       writeStatus();
       if (options.mode !== 'protocol') installFilter();
       record('server-started', { pid: started.pid, port: started.port, restart: true, sinceExitMs: Date.now() - exitedAt });
-      if (win && !win.isDestroyed()) win.loadURL(homeUrl());
+      if (win && !win.isDestroyed()) {
+        win.loadURL(homeUrl()).catch((error) => record('load-failed', { message: error.message }));
+      }
     })
     .catch((error) => record('restart-failed', { message: error.message }));
 }

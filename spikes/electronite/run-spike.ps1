@@ -232,6 +232,7 @@ if (Want 'run') {
             param($dir)
             $shell = Start-Shell $dir $mode 'run' @{}
             Track @($shell.Id)
+            if (-not (Wait-ShellEvent $dir "$mode-run" 'page-loaded' 1 120000)) { throw 'the page did not load in 2 minutes' }
             if (-not $shell.WaitForExit(20 * 60 * 1000)) { throw "the $mode run took more than 20 minutes" }
             $result = Read-Json (Join-Path $dir "results-$mode-run.json")
             if ($null -eq $result) { throw "the $mode run wrote no results; see $dir" }
@@ -409,6 +410,16 @@ foreach ($file in (Get-ChildItem -LiteralPath $Out -Recurse -File)) {
         Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $raw "$case-$($file.Name)") -Force
     }
 }
+# The shell never writes a token, and this checks it: a fragment token in a copied file is
+# taken out and named in the report.
+$leaks = @()
+foreach ($file in (Get-ChildItem -LiteralPath $raw -File | Where-Object { $_.Extension -ne '.png' })) {
+    $text = [IO.File]::ReadAllText($file.FullName)
+    if ($text -match '#t=[A-Za-z0-9_-]{20,}') {
+        Write-Utf8File $file.FullName ($text -replace '#t=[A-Za-z0-9_-]{20,}', '#t=<token>')
+        $leaks += $file.Name
+    }
+}
 $rawRel = $raw.Replace($repo, '.').Replace('\', '/')
 $anyRun = $null
 foreach ($key in $results.Keys) { if ($results[$key].shell) { $anyRun = $results[$key]; break } }
@@ -445,6 +456,12 @@ if ($failures.Count -gt 0) {
     Add '## Cases that did not finish'
     Add ''
     foreach ($f in $failures) { Add "- $f" }
+    Add ''
+}
+if ($leaks.Count -gt 0) {
+    Add '## A token was found and removed'
+    Add ''
+    Add "These copied files held a launch token, now replaced by ``<token>``: $($leaks -join ', '). This is a bug in the spike."
     Add ''
 }
 if ($retries.Count -gt 0) {

@@ -101,3 +101,10 @@ test('the mirror keeps the last line per field, skips a torn line and honours re
   assert.deepEqual(lib.parseMirror(lib.compactMirror(parsed.entries)).entries, parsed.entries);
   assert.deepEqual(lib.parseMirror('').entries, []);
 });
+
+test('a token never survives redaction, in a fragment or on its own', () => {
+  const message = `ERR_ABORTED (-3) loading '${ORIGIN}/#t=${TOKEN}'`;
+  assert.equal(lib.redact(message, []), `ERR_ABORTED (-3) loading '${ORIGIN}/#t=<token>'`);
+  assert.equal(lib.redact(`x-tc-token: ${TOKEN}`, [TOKEN]), 'x-tc-token: <token>');
+  assert.equal(lib.redact('nothing secret', [null, TOKEN]), 'nothing secret');
+});

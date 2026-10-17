@@ -172,6 +172,16 @@ function compactMirror(entries) {
   return entries.map((entry) => `${JSON.stringify(entry)}\n`).join('');
 }
 
+// Text with every launch token taken out: the `#t=` fragment of a URL, and the tokens given.
+// Electron's own error messages quote the URL they failed to load, fragment and all.
+function redact(text, tokens) {
+  let out = String(text).replace(/#t=[A-Za-z0-9_-]+/g, '#t=<token>');
+  for (const token of tokens || []) {
+    if (token) out = out.split(token).join('<token>');
+  }
+  return out;
+}
+
 module.exports = {
   CASES,
   MODES,
@@ -185,6 +195,7 @@ module.exports = {
   portlessPatterns,
   proxyHeaders,
   proxyTarget,
+  redact,
   sameOrigin,
   wantsToken,
 };
