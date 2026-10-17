@@ -204,11 +204,24 @@ what changed for each finding, which parts were done another way, and why.
 - Builds for the host and for `wasm32-unknown-unknown`. CI adds
   `cargo clippy -p tc-api --target wasm32-unknown-unknown --all-targets -- -D warnings`.
 - Dependencies: `tc-core` (which already serializes `BookId`, `VerseSpan` and `Reference`,
-  `crates/tc-core/src/books.rs:227-237`, `lib.rs:93-145`), `serde`, `thiserror`.
+  `crates/tc-core/src/books.rs:227-237`, `lib.rs:93-145`), `serde`, `thiserror`; `proptest` and
+  `proptest-derive` only under the feature `proptest`.
+- Features *(A1)*: `server` gives the token types their constructor and accessor (§3.4); tc-app
+  enables it and tc-ui never does, so the UI's wasm32 build proves the UI cannot make or read a
+  token. `test-hooks` adds the `test` service (AD35). `proptest` derives `Arbitrary` for every
+  wire type, for the round trips here and for property tests in tc-app and tc-ui.
 - No I/O and no `std::time`. Times are `WallMs(i64)`.
 - Every identifier is a newtype whose `Deserialize` validates its format. Requests use
-  `#[serde(deny_unknown_fields)]`. Enums are internally tagged with camelCase names.
-- Every enum on the wire is closed. A `proptest` round trip covers every type.
+  `#[serde(deny_unknown_fields)]`. Struct fields are camelCase. An enum of unit variants is a
+  camelCase string (`"rtl"`); every other enum is adjacently tagged,
+  `{"type": "<camelCase variant>", "value": <data>}`, with no `value` for a unit variant. *(A1)*
+  This design said "internally tagged" before unit A1 built the crate: serde's internal tagging
+  cannot carry a variant that holds a string or a number (`NotSaved::Disk(String)`,
+  `Who::Username(String)`), and it fails when such a value is written, not when the code
+  compiles; and an enum inside an enum (`ApiError::Refused(Refusal::Sync(…))`) would put two
+  `type` keys in one object. Adjacent tagging keeps the tuple variants of these sketches.
+- Every enum on the wire is closed. A `proptest` round trip covers every type, every request
+  and every reply.
 - Pure logic only where both sides must agree (§3.8).
 
 ### 3.2 Identifiers and scope
@@ -237,6 +250,12 @@ pub struct LocaleId(String);         // one of the 10 ids of tc-ui's LOCALES
 pub struct WallMs(i64);
 ```
 
+`ProjectRef` refuses only a name that could leave the projects root: empty, `.`, `..`, or one
+that holds `/`, `\` or NUL. Every other name a disk allows is kept, spaces, colons and every
+script included, so no project folder is unreachable from the UI; the registry reports a folder
+whose name fails the check instead of skipping it. `LocaleId` is checked against
+`tc_api::ids::LOCALE_IDS`, which a test compares with tc-ui's catalogs. *(A1)*
+
 ### 3.3 Endpoints
 
 ```rust
@@ -249,15 +268,21 @@ pub enum NetKind { Share, Upload, SignIn, CheckSignIn, Sources, Fix, ImportVersi
 pub trait Endpoint: Serialize + DeserializeOwned + 'static {
     const PATH: &'static str;              // "editor/saveVerse"
     const KIND: Kind;                      // a Query never changes state; a Command carries a RequestId
-    const NET: Option<NetKind> = None;     // the UI asks the internet question first (AD25)
+    const NET: Option<NetKind>;            // the UI asks the internet question first (AD25)
     type Ok: Serialize + DeserializeOwned;
 }
+pub trait Write: Endpoint { fn request(&self) -> RequestId; }  // every Command and StartJob
 pub type Reply<E> = Result<<E as Endpoint>::Ok, ApiError>;
 
-// endpoints! { app::Hello, prefs::SetLocale, editor::SaveVerse, ... }
-// generates `ALL: &[(&str, Kind, Option<NetKind>)]`. tc-server builds its routes from the same
-// list, and tc-app must implement `Handle<E>` for each, so a request without a handler does not
-// compile.
+// endpoint_table!(callback) hands `callback!` one row per endpoint *(A1)*:
+//     query "app/hello": app::Hello => app::HelloView;
+//     command [SignIn] "account/signIn": account::SignIn => account::AccountView;
+// tc-api implements `Endpoint` from it (and `Write`, from the request's `request` field, for every
+// `command` and `job` row, so a write without a RequestId does not compile) and builds
+// `ALL: &[EndpointInfo { path, kind, net }]`. test_hook_table! holds the `test` rows and exists
+// only with `test-hooks`; ALL includes them then. tc-server builds its routes from the same
+// tables, and tc-app must implement `Handle<E>` for each row, so a request without a handler
+// does not compile.
 pub const API_VERSION: u32 = 1;           // header `X-Tc-Api`
 ```
 
@@ -268,8 +293,9 @@ removes the Upload changes dialog (DELTA:1137, PLAN:49-50).
 
 ```rust
 // token.rs. Deserialize checks the prefix ("st1." for ShownToken, "rt1." for ReviewToken), then
-// the base64url alphabet and length. No constructor, no accessor, no Display; Debug prints
-// "ShownToken(..)". *(A-7)*
+// the base64url alphabet and length. No Display; Debug prints "ShownToken(..)". The constructor
+// `from_body(&str)` and the accessor `body()` (tc-journal's token text) exist only with the
+// `server` feature, which tc-ui never enables. *(A-7, A1)*
 #[serde(transparent)] pub struct ShownToken(String);   // STORAGE:745-767
 #[serde(transparent)] pub struct ReviewToken(String);  // every head of a record (STORAGE:1610-1616)
 
@@ -343,8 +369,10 @@ pub enum ApiError {
     Internal { report: ReportId },              // a bug; "Ask for help" carries the report
 }
 
-/// Closed, grouped by family. Each family enum implements `code()` (tC4's code where one
-/// exists), `key()` (the catalog key) and `vars()` (placeholder values).
+/// Closed, grouped by family. Each family enum implements `Message`: `code()` (tC4's code where
+/// one exists), `key()` (the catalog key), `vars()` (placeholder values) and `detail()` (the
+/// diagnosis tC4's `failureText` puts before the sentence, when the sentence has no
+/// placeholder for it). *(A1)*
 pub enum Refusal {
     Open(OpenRefusal),          // NewerFormat, NotAProject, Unreadable
     Create(CreateRefusal),
@@ -367,6 +395,23 @@ pub enum SyncRefusal {          // DELTA:740-800; tC4 SYNC_REFUSALS (tC4:src/vie
 }
 ```
 
+The families hold the refusals their flows meet so far *(A1)*: Open (the three above), Sync,
+Share and Sign-in (STORAGE §9.6, tC4's `refusalForSignIn`), Export (tC4's five codes), Import (tC4's
+two `refusal.import.*` codes; F1 adds the importer's), Open from Door43 (`name-exists`,
+`no-journal`, `removed`), Create (`wizard.nameInUse`, `wizard.error`), Resources (tC4's sources,
+fix, upgrade and gateway messages), Exchange (STORAGE §10: damaged, newer format, verify failed,
+not written, unreadable), Feedback (tC4's five `feedback.reason.*`, which the shell answers, Q-2)
+and Prefs (`language.saveFailed`). A unit that builds a flow adds the refusals it meets, with
+their keys.
+
+A sync refusal maps to a message by DELTA §3.15.2's table. After intake *(A1, PLAN Q8)*: an
+unreachable or missing remote shows a rebuild key that says the received work was kept and
+yours was not sent, instead of `cloneFailed`'s "Nothing changed"; an `Io` shows "received and
+kept, but the sync stopped: {reason}"; every other refusal keeps its key and adds a second
+sentence, `SyncFailure::kept_note()`, "Your teammates' changes were received and kept." So no
+failure after intake says "nothing changed". `NotShared`, `ProjectMismatch`, `NeedsNewerApp`
+and `Tc4TeamRepository` are found before intake (STORAGE §9.1 S0, §9.2 N1, N2).
+
 The UI builds a sentence the way tC4's `failureText` does: diagnosis, then the recovery sentence
 (`tC4:src/state.jsx:1781-1788`). "Ask for help" shows when the sentence contains `feedback.ask`
 (`tC4:src/state.jsx:1792-1793`).
@@ -378,10 +423,20 @@ Tests in `tc-api`:
   still English is listed in `assets/i18n-rebuild/<id>.pending.json`; it passes in debug builds
   and fails the release check `release_has_no_pending_translation`, so an Arabic screen cannot
   ship in English unnoticed (Q-10). *(A-32)*
-- `no_two_sync_refusals_share_a_message` (DELTA:797-799).
+- `no_two_sync_refusals_share_a_message` (DELTA:797-799): two refusals share a key only where
+  DELTA §3.15.2's table joins them (`NotSignedIn` and `AuthFailed`; `Unreachable` and
+  `RemoteMissing`; `RefRejected` and `Io` in `syncResult.error.other`, told apart by
+  `{reason}`), and no two keys read the same *(A1)*.
 - `no_tc4_code_without_a_variant`: every `refusal.*` code in the vendored catalogs has a variant
-  or a line in a pinned "vendored and unused" list (DELTA:790-797).
+  or a line in a pinned "vendored and unused" list (DELTA:790-797). The list, with a reason per
+  code, is `UNUSED_TC4_CODES` in `crates/tc-api/tests/refusals.rs`; a code both produced and
+  listed fails too.
 - `rebuild_keys_never_shadow_vendored_keys`.
+- `release_has_no_pending_translation` passes in debug builds and fails under
+  `cargo test --release`; the release pipeline (G1, G2) must run
+  `cargo test --release -p tc-api --test refusals` before it builds an installer *(A1)*.
+  The rebuild key files are in `crates/tc-ui/assets/i18n-rebuild/` (a README there says how to
+  add a translation); tc-ui's `assets_hold_only_the_vendored_files` leaves that folder out.
 
 ### 3.6 Events, jobs and progress
 
@@ -391,19 +446,19 @@ pub struct EventFrame { pub seq: u64, pub instance: ServerInstance, pub event: E
 pub enum Event {
     Resync,                                              // a gap: read every live query again
     Internet { on: bool },
-    Account(AccountState),
-    Job { id: JobId, kind: JobKind, project: Option<ProjectRef>, state: JobState },
+    Account(AccountView),                                // { user, kept, notice } (A1)
+    Job(JobView),                                        // { id, kind, project, state }; `jobs/get` answers the same view (A1)
     ProjectsChanged,                                     // create, import, join
     HomeCard { project: ProjectRef },                    // a summary was computed or changed
     Session { at: Scope, event: SessionEvent },
-    Startup(StartupProgress),                            // first-launch seeding
+    Startup(StartupState),                               // Ready | Preparing(StartupProgress { done, total }) | Failed { reason } (A1)
 }
 pub enum SessionEvent {
     Opened, Closed,
     Mode(SessionMode),                                   // Writable | ReadOnly(reason)
     Changed { view: ViewSeq, scope: ChangeScope, cause: ChangeCause },
     Notice(NoticeView),                                  // STORAGE:680-735 anomalies and notices
-    Checkpoint(CheckpointOutcome),                       // Committed | Unchanged | Failed(Refusal)
+    Checkpoint(CheckpointOutcome),                       // Committed | Unchanged | Failed { reason } (A1)
     MaterializeBlocked { paths: Vec<String> },           // "can't update TIT.usfm…" (STORAGE §5.10)
     Received(ReceivedSheet),                             // STORAGE:2681-2684
     Suggest { testament: Testament, status: SuggestStatus },
@@ -413,12 +468,15 @@ pub enum ChangeCause { LocalSave { request: RequestId }, Intake { from: Vec<Pers
                        OutsideEdit { path: String }, Upgrade, Resolve, Import, System }
 pub enum ChangeScope { Parts(ChangeParts), Everything } // a list over its cap gives Everything *(A-30)*
 pub struct ChangeParts {                                 // tc-app's form of the fold's Delta (STORAGE:628-629)
-    pub chapters: Vec<(BookId, u16)>, pub books: Vec<BookId>, pub stories: Vec<u8>,
-    pub checks: Vec<(Tool, BookId)>,                     // an open rail asks `check/rows { since }`
+    pub chapters: Vec<ChapterRef>,                       // { book, chapter }
+    pub books: Vec<BookId>, pub stories: Vec<u8>,
+    pub checks: Vec<CheckListRef>,                       // { tool, book }; an open rail asks `check/rows { since }`
                                                          // for the rows that changed; never the whole rail *(A-12)*
-    pub records: Vec<(RecordRef, Option<PersonLabel>)>,  // capped at 256; who wrote each
+    pub records: Vec<RecordChange>,                      // { record, by: Option<PersonLabel> }; capped at 256
     pub aspects: Vec<Aspect>,                            // Pins | Settings | Meta | Conflicts *(A-30)*
 }
+pub enum QueryKey { Chapter(ChapterRef), Book(BookId), Story(u8), CheckList(CheckListRef),
+                    Record(RecordRef), Aspect(Aspect) }  // a query names one or more (A1)
 impl QueryKey { pub fn depends_on(&self, scope: &ChangeScope) -> bool }  // one rule for the UI and the tests
 
 // job.rs
@@ -438,6 +496,19 @@ pub enum Phase {
 `JobOutcome` is typed per kind: `Opened(OpenedSession)`, `Synced(SyncResultView)`,
 `ExportReady { download, file_name }`, `PlanReady { plan, consequences }`, `Created { project }`.
 A final outcome stays readable through `jobs/get` for 10 minutes.
+
+What unit A1 built *(A1)*: the frame, `Event`, and the session events `Opened`, `Closed`, `Mode`,
+`Changed`, `Checkpoint`, `MaterializeBlocked` and `AlignSave`; `ChangeScope::bounded` turns a
+change past the record cap into `Everything`. `Notice`, `Received` and `Suggest` carry view
+types of later screens and come with the units that show them (C1b and D1, E2, B6), as do the
+outcomes `Opened` (B1b), `Synced` (B10) and `PlanReady` (C8) and the phases of share, exchange,
+import and export; `JobOutcome::Finished` ends a job whose end is its whole result (a seed, a
+download, a summary, a training). The change parts are named structs, not tuples, so their JSON
+names its fields. A checkpoint failure carries its reason, not a `Refusal`: no refusal family
+describes one, and the UI shows tC4's "Checkpoint not saved" with Retry and the reason as its
+diagnosis (`tC4:src/App.jsx:63-67`). `QueryKey::depends_on` errs toward a refresh: a chapter
+follows its own edits and its book; a book any of its chapters; a check list its rows, its book
+and the pins; a record, a story and an aspect only themselves.
 
 No screen shows `Train` or `HomeSummary` progress. Their `Job` frames go out once a second at
 most; only their end (`Done`, `Failed`, `Cancelled`) goes out at once. The other jobs keep the
@@ -502,13 +573,20 @@ pub struct AlignerView { pub aligner: AlignerId, pub reference: Reference, pub c
 // home.rs
 pub struct HomeCard { pub project: ProjectRef, pub id: ProjectId, pub name: String, pub tag: String,
                       pub dir: Direction, pub kind: ProjectKind, pub origin: ProjectOrigin,  // Created | Imported
-                      pub door43: Door43Card,                     // Local | Shared { place, sync: SyncAction } *(A-30)*
+                      pub door43: Door43Card,                     // Local | Shared { place: RepoPlace { owner, name } } *(A-30, A1)*
                       pub books: Vec<BookTile>, pub stories: Option<StoryTiles>,
                       pub conflicts: Known<ConflictCounts>, pub in_progress: Known<u32> }
 ```
 
 Every optional part is a `Slot`, `Known` or `Result`, so "could not be read" never looks like
 "absent" (tC4's D30 rule).
+
+Unit A1 built the state enums of this section *(A-30)*: `BankSelection`, `Freshness` and
+`AlignSave` (`tc_api::align`), `ProjectOrigin` and `Door43Card` (`tc_api::home`), with the parts of
+the Check rail that an `Ack` carries (`RailRow`, `RailRowPatch`, `RowFlags`, `Dot`, `Category`,
+`Tool`, in `tc_api::check`). The screens' units build the views around them. `Door43Card::Shared`
+has no `sync: SyncAction`: by the owner's ruling Q2 every shared project, Bible or OBS, offers
+"Sync with Door43", and "Syncing…" comes from the running job, not from the card.
 
 ### 3.8 Shared pure models (`tc_api::model`)
 
@@ -530,7 +608,7 @@ Every optional part is a `Slot`, `Known` or `Result`, so "could not be read" nev
 | `app` | `hello` → `{api, build, instance, internet, account, sessions, prefs, startup}`; `quit`; `clientError` |
 | `prefs` | `setLocale`, `setDraftUnit`, `setAlignSuggestions`, `recordPlace` |
 | `net` | `state`, `set` |
-| `account` | `state` (sends nothing to Door43), `signIn` [signIn], `cancelSignIn`, `resume` [checkSignIn], `signOut`, `orgs` [share], `link` [profile, repoLink or helpLink] |
+| `account` | `state` (sends nothing to Door43), `signIn` [signIn], `cancelSignIn`, `resume` [checkSignIn], `signOut`, `orgs` [share], `profileLink` [profile], `repoLink` [repoLink], `helpLink` [helpLink] |
 | `home` | `list`, `card`, `nameFree`, `versifications`, `languages` |
 | `session` | `open { buffered }` (job; `buffered` carries the browser and mirror entries for the folder, §6.6), `close`, `leave { mode \| book }`, `focus` (outside-edit check, STORAGE §11.1), `notices`, `dismissNotice`, `keepDraft`, `keepDraftAsVersion`, `discardDraft`, `retryCheckpoint` |
 | `editor` | `book`, `chapters`, `sources`, `original`, `saveVerse`, `saveLayout`, `saveSection`, `draft`, `addComment` |
@@ -546,9 +624,21 @@ Every optional part is a `Slot`, `Known` or `Result`, so "could not be read" nev
 | `exchange` | `exportFile` (job), `identify`, `receive` (job) |
 | `import` | `review`, `versions` [importVersions], `run` (job) |
 | `export` | `preflight`, `run` (job) |
-| `feedback` | `compose`, `send` [feedback] |
+| `feedback` | `compose` (the shell sends the report, Q-2) |
 | `jobs` | `get`, `cancel` |
-| `test` (feature `test-hooks`) | `quiet`, `hold`, `release`, `crash`, `fieldStore`, `clock`, `script`, `door43`, `inspect`, `writeTeammate`, `counters`, `reset` |
+| `test` (feature `test-hooks`) | `quiet`, `hold`, `release`, `crash`, `fieldStore`, `fieldLog`, `clock`, `script`, `door43`, `inspect`, `writeTeammate`, `counters`, `reset` |
+
+**The endpoints of phase 0** *(A1)*, which unit A1 defined with golden JSON, are `app/hello`, `quit`,
+`clientError`; all four of `prefs`; `net/state`, `set`; `jobs/get`, `cancel`; `account/state`,
+`signIn`, `cancelSignIn`, `resume`, `signOut`, `profileLink`, `helpLink`; `feedback/compose`; and
+the hooks `test/quiet`, `crash`, `hold`, `release`, `fieldStore`, `fieldLog`, `reset`. Each later
+unit adds the rows of its screens to `endpoint_table!` (B9b adds `account/orgs` and `repoLink`).
+
+Two rows changed when A1 built them. `account/link` became one endpoint per question, because an
+endpoint declares one `NET` and the UI asks before it sends: `profileLink` [profile] and
+`helpLink` [helpLink] now, `repoLink` [repoLink] with B9b. `feedback/send` is gone: the owner
+answered Q-2 with (a), so the shell sends the report and the server only composes the attachment
+(§5.7).
 
 ### 3.10 Versioning
 
@@ -1022,16 +1112,19 @@ lifecycle.rs`): `closed_stdin_quits_within_5_s`, `second_instance_waits_then_nam
 7. Private repositories (Q3, PLAN:51-54): `door43/open` fetches without credentials first; on 401
    or 404 with no session the job ends with `NeedsSignIn(PrivateRepository)`, the UI shows M12 and
    runs the open again.
-8. Links to a profile, a repository or help ask the question first, then `account/link` gives the
-   URL and the shell opens it with `openExternal` (`window.open` in a browser).
+8. Links to a profile, a repository or help ask the question first, then `account/profileLink`,
+   `repoLink` or `helpLink` gives the URL and the shell opens it with `openExternal`
+   (`window.open` in a browser).
 9. The Door43 server is `--door43`: QA in dev builds, production otherwise
    (`tC4:src/data/dcsServer.ts:65-84`), and the fake's URL in every test.
 
 ### 5.7 The shell bridge (`window.tc4Shell`)
 
 `printPdf(url)`, `chooseFolder()`, `chooseFile()`, `openExternal(url)`, `setCanClose(bool)`,
-`onCloseRequested(fn)`, `onDownloadDone(fn)`, `feedbackSend(report)` (if Q-2 picks the shell),
-`bufferChanged(entry)` and `takeBuffered()` (the draft mirror, AD21), `platform`. Without the
+`onCloseRequested(fn)`, `onDownloadDone(fn)`, `feedbackSend(report)` (the owner's answer to Q-2:
+the UI asks the internet question with `net.ask.feedback` first, and the main script reads
+`net/state` with the token before it sends, answering tC4's `offline` reason while the switch is
+off), `bufferChanged(entry)` and `takeBuffered()` (the draft mirror, AD21), `platform`. Without the
 bridge (dev, Playwright) the features degrade as tC4's do in a browser: no PDF item, Feedback
 says it was not sent (`tC4:src/state.jsx:4143-4167`), and the buffer lives only in
 `localStorage`. Playwright injects a stub with `addInitScript` where a journey needs a folder, a
@@ -1052,6 +1145,7 @@ show a 401 page.
 | `test/hold`, `test/release` | hold a book read, a checkpoint, a materialize, a save before B3, a draft write, or a sync step (R8); replaces tC4's `e2e/helpers/checkpointHold.ts:14` |
 | `test/crash` | end `tc4` at a named point (after a reply is sent, before B3, while a draft is written) for the reload and relaunch tests of §6.6 *(A-2, A-3)* |
 | `test/fieldStore` | a write endpoint that goes through the real reply cache and records every text it stores, with holds and crash points, so A4b can prove the save machine's no-loss rules before any real save exists *(A-2)* |
+| `test/fieldLog` | a test field's current value with its token, and every text `test/fieldStore` stored into it, in order: what A4b's tests read back *(A1)* |
 | `test/clock` | a fixed clock for dates in screenshots |
 | `test/script` | queue scripted save or job outcomes (memory backend and port doubles) |
 | `test/door43` | configure tc-door43-fake faults, including R13's dropped connection |
