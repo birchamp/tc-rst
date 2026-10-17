@@ -108,6 +108,53 @@ fn a_file_whose_scope_digest_is_unchanged_renders_the_same_bytes() {
     );
 }
 
+/// The digests are a function of the change set (I1): a fold of the same changes in another
+/// order, or one change at a time, gives every file the same digest. An open compares the
+/// digest its own fold computes with the one the materialization's fold wrote; a digest that
+/// followed arrival order would project files that did not change.
+#[test]
+fn a_files_scope_digest_is_a_function_of_the_change_set() {
+    use tc_journal::fold::ProjectKind;
+    run_with_census(
+        64,
+        arb_script(),
+        &["comments", "decisions", "project"],
+        |script, census| {
+            let sim = Sim::run(&script, false);
+            let union = sim.union();
+            let forward = FoldState::fold(ProjectKind::Bible, union.clone());
+            let mut reversed_inputs = union.clone();
+            reversed_inputs.reverse();
+            let reversed = FoldState::fold(ProjectKind::Bible, reversed_inputs);
+            let mut one_by_one = FoldState::fold(ProjectKind::Bible, Vec::new());
+            for (i, input) in union.into_iter().enumerate().rev() {
+                if i % 2 == 0 {
+                    one_by_one.add([input]);
+                } else {
+                    one_by_one.add(std::iter::once(input));
+                }
+            }
+            let files: Vec<DerivedFile> = forward.derived_files();
+            let expected = forward.scope_digests(&files);
+            for other in [&reversed, &one_by_one] {
+                prop_assert_eq!(&other.scope_digests(&files), &expected);
+                prop_assert_eq!(
+                    other.metadata_scope_digest(),
+                    forward.metadata_scope_digest()
+                );
+            }
+            for file in &files {
+                census.saw(match class(file) {
+                    "comments" => "comments",
+                    "decisions" => "decisions",
+                    _ => "project",
+                });
+            }
+            Ok(())
+        },
+    );
+}
+
 /// The heads file lists the token rule's heads of exactly the records the digest covers.
 #[test]
 fn a_file_s_heads_are_the_token_rule_s_heads_of_its_scope() {

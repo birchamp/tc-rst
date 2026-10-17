@@ -21,7 +21,7 @@
 //! (`tests/scope.rs`) checks, over random team histories, that a file whose digest did not
 //! change between two folds renders the same bytes in both.
 
-use super::meta::{ChangeIdx, KeyIdx};
+use super::meta::KeyIdx;
 use super::project::DerivedFile;
 use super::state::{FoldState, Projected};
 use super::{Conflict, ConflictKind};
@@ -110,25 +110,29 @@ impl FoldState {
                 let comments = self.book_keys_where(*book, |k| matches!(k, RecordKey::Comment(_)));
                 self.with_comment_targets(comments)
             }
-            Part::Pins => self.pin_keys.iter().copied().collect(),
-            Part::Settings => self.setting_keys.iter().copied().collect(),
+            Part::Pins => self.by_key(self.pin_keys.iter().copied().collect()),
+            Part::Settings => self.by_key(self.setting_keys.iter().copied().collect()),
             Part::Versification => self
                 .key_idx(&RecordKey::Versification)
                 .into_iter()
                 .collect(),
-            Part::Story(story) => self
-                .story_keys
-                .iter()
-                .copied()
-                .filter(|k| story_of(&self.entry(*k).key) == Some(*story))
-                .collect(),
-            Part::Stories => self.story_keys.iter().copied().collect(),
-            Part::StoryChecks(tool) => self
-                .story_attached
-                .values()
-                .flat_map(|keys| keys.iter().copied())
-                .filter(|k| matches!(&self.entry(*k).key, RecordKey::Check(c) if c.tool == *tool))
-                .collect(),
+            Part::Story(story) => self.by_key(
+                self.story_keys
+                    .iter()
+                    .copied()
+                    .filter(|k| story_of(&self.entry(*k).key) == Some(*story))
+                    .collect(),
+            ),
+            Part::Stories => self.by_key(self.story_keys.iter().copied().collect()),
+            Part::StoryChecks(tool) => self.by_key(
+                self.story_attached
+                    .values()
+                    .flat_map(|keys| keys.iter().copied())
+                    .filter(
+                        |k| matches!(&self.entry(*k).key, RecordKey::Check(c) if c.tool == *tool),
+                    )
+                    .collect(),
+            ),
             Part::StoryComments => {
                 let comments: Vec<KeyIdx> = self
                     .story_attached
@@ -136,11 +140,19 @@ impl FoldState {
                     .flat_map(|keys| keys.iter().copied())
                     .filter(|k| matches!(self.entry(*k).key, RecordKey::Comment(_)))
                     .collect();
-                self.with_comment_targets(comments)
+                self.with_comment_targets(self.by_key(comments))
             }
             Part::Conflicts => Vec::new(),
-            Part::Meta => self.meta_choices.keys().copied().collect(),
+            Part::Meta => self.by_key(self.meta_choices.keys().copied().collect()),
         }
+    }
+
+    /// `keys` in record key order. A key's index is the order the fold first met it, which
+    /// differs between two folds of one change set, so no digest may follow it (I1).
+    fn by_key(&self, mut keys: Vec<KeyIdx>) -> Vec<KeyIdx> {
+        keys.sort_by(|a, b| self.entry(*a).key.cmp(&self.entry(*b).key));
+        keys.dedup();
+        keys
     }
 
     /// A book's text records, in a fixed order: presence, header, layout, then each chapter's
@@ -197,7 +209,7 @@ impl FoldState {
             }
         }
         let mut out = comments;
-        out.extend(chained);
+        out.extend(self.by_key(chained.into_iter().collect()));
         out
     }
 
@@ -253,10 +265,12 @@ impl FoldState {
                 .unwrap_or_default();
             stream.update(&key);
             stream.update(&[0]);
-            let heads: Vec<ChangeIdx> = entry.heads.iter().copied().collect();
+            // In id order: a change's index is the order the fold met it.
+            let mut heads: Vec<ChangeId> = entry.heads.iter().map(|h| self.meta(*h).id).collect();
+            heads.sort_unstable();
             stream.update(&(heads.len() as u32).to_le_bytes());
             for h in heads {
-                stream.update(self.meta(h).id.as_bytes());
+                stream.update(h.as_bytes());
             }
             // Every folded version, not only the heads: a parent that arrives after its
             // child changes the bases, passage sides and incoherent-verse fallbacks a
