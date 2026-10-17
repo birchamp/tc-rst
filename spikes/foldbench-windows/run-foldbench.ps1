@@ -326,6 +326,9 @@ if ($Phase -eq 'cold') {
     $cached = Invoke-CachedOpen $Corpus
     Add-Row 'cold' 'a_cache_cold' $cached
     Say 'Cold phase: one first open without a cache, on the copy'
+    # An earlier cold run left its fold cache in the copy; removing it reads no corpus file.
+    $copyIndex = Join-Path $coldCopy 'index.bin'
+    if (Test-Path -LiteralPath $copyIndex) { Remove-Item -LiteralPath $copyIndex -Force }
     $first = Invoke-FirstOpen $coldCopy
     Add-Row 'cold' 'c_nocache_cold' $first
     Add ''
