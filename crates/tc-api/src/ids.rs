@@ -43,10 +43,17 @@ fn parse_hex16(what: &'static str, text: &str) -> Result<[u8; 16], IdError> {
 /// A project folder: its name under the projects root, one path segment (AD12).
 ///
 /// The registry lists folders and the server joins this name to the projects root, so the
-/// check here keeps a name from leaving the root: it refuses an empty name, `.`, `..`, and
-/// any name holding `/`, `\` or NUL. Any other name a file system allows is kept, so no
-/// project folder becomes unreachable from the UI. The registry reports a folder whose name
-/// fails this check instead of skipping it.
+/// check here keeps a name from leaving the root on every system the app runs on. It
+/// refuses an empty name, any name holding `/`, `\`, NUL or `:`, and any name made only of
+/// dots and spaces. On Windows, joining a name with a drive prefix (`C:`, `c:..`) replaces
+/// the whole path, and `name:stream` names an NTFS stream, so no Windows folder name holds a
+/// colon; and Windows drops trailing dots and spaces from the last segment of a path, so
+/// `...` or `.. ` would name the root or its parent. Every other name is kept, so no
+/// project folder becomes unreachable from the UI; the registry reports a folder whose
+/// name fails this check instead of skipping it.
+///
+/// Two names can still name one folder where the file system ignores letter case or a
+/// trailing dot, so the registry opens only a folder it lists, by the name it listed.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct ProjectRef(String);
@@ -60,14 +67,14 @@ impl ProjectRef {
         if name.is_empty() {
             return refuse(WHAT, "empty");
         }
-        if name == "." || name == ".." {
+        if name.chars().all(|c| c == '.' || c == ' ') {
             return refuse(WHAT, "not a folder name");
         }
         if name.len() > Self::MAX_BYTES {
             return refuse(WHAT, "too long");
         }
-        if name.contains(['/', '\\', '\0']) {
-            return refuse(WHAT, "more than one path segment");
+        if name.contains(['/', '\\', '\0', ':']) {
+            return refuse(WHAT, "not one path segment on every system");
         }
         Ok(Self(name.to_owned()))
     }
@@ -439,8 +446,10 @@ mod arbitrary {
         fn arbitrary_with((): ()) -> Self::Strategy {
             // Any characters but the separators, including spaces, dots and non-Latin
             // letters that real folder names have.
-            regex("[^/\\\\\u{0}]{1,40}")
-                .prop_filter_map("not . or ..", |name| ProjectRef::parse(&name).ok())
+            regex("[^/\\\\\u{0}:]{1,40}")
+                .prop_filter_map("not only dots and spaces", |name| {
+                    ProjectRef::parse(&name).ok()
+                })
                 .boxed()
         }
     }

@@ -80,14 +80,15 @@ fn a_project_folder_is_one_path_segment_and_any_name_a_disk_allows() {
         assert!(ProjectRef::parse(bad).is_err(), "{bad:?}");
         assert!(!reads::<ProjectRef>(bad), "{bad:?}");
     }
-    // Real folder names keep their spaces, dots, colons and scripts, so no project becomes
+    // Real folder names keep their spaces, dots and scripts, so no project becomes
     // unreachable from the UI.
     for good in [
         "kr_ulb",
         "Kanuri Bible",
         "en_ult.v2",
         ".hidden",
-        "a:b",
+        "....hidden",
+        " leading space",
         "العربية",
         "हिन्दी बाइबिल",
         &"x".repeat(255),
@@ -96,6 +97,30 @@ fn a_project_folder_is_one_path_segment_and_any_name_a_disk_allows() {
         assert!(reads::<ProjectRef>(good), "{good:?}");
     }
     assert!(ProjectRef::parse(&"x".repeat(ProjectRef::MAX_BYTES + 1)).is_err());
+}
+
+#[test]
+fn a_project_folder_cannot_leave_the_root_on_windows() {
+    // On Windows, `root.join("c:..")` replaces the whole path with a path relative to
+    // drive C, and `a:b` names a stream of the file `a`. No Windows folder name holds a colon.
+    for bad in [
+        "C:",
+        "C:evil",
+        "c:..",
+        "D:Users",
+        "a:b",
+        "kr_ulb:stream",
+        "x::$DATA",
+    ] {
+        assert!(ProjectRef::parse(bad).is_err(), "{bad:?}");
+        assert!(!reads::<ProjectRef>(bad), "{bad:?}");
+    }
+    // Windows drops the trailing dots and spaces of a path's last segment, so these would
+    // name the root itself or its parent.
+    for bad in ["...", ". ", ".. ", " ", "  ", ". . ."] {
+        assert!(ProjectRef::parse(bad).is_err(), "{bad:?}");
+        assert!(!reads::<ProjectRef>(bad), "{bad:?}");
+    }
 }
 
 #[test]

@@ -250,10 +250,16 @@ pub struct LocaleId(String);         // one of the 10 ids of tc-ui's LOCALES
 pub struct WallMs(i64);
 ```
 
-`ProjectRef` refuses only a name that could leave the projects root: empty, `.`, `..`, or one
-that holds `/`, `\` or NUL. Every other name a disk allows is kept, spaces, colons and every
-script included, so no project folder is unreachable from the UI; the registry reports a folder
-whose name fails the check instead of skipping it. `LocaleId` is checked against
+`ProjectRef` refuses only a name that could leave the projects root on some system the app runs
+on: an empty name, one that holds `/`, `\`, NUL or `:`, or one made only of dots and spaces.
+On Windows, joining a name with a drive prefix (`C:`, `c:..`) replaces the whole path and
+`name:stream` names an NTFS stream, so no Windows folder holds a colon; and Windows drops the
+trailing dots and spaces of a path's last segment, so `...` or `.. ` would name the root or its
+parent. Every other name is kept, spaces, leading dots and every script included, so no project
+folder is unreachable from the UI; the registry reports a folder whose name fails the check
+instead of skipping it. Where the file system ignores letter case or a trailing dot, two names
+can name one folder, so the registry opens only a folder it lists, by the name it listed. *(A1:
+the first text kept colons, which let `c:..` leave the root on Windows.)* `LocaleId` is checked against
 `tc_api::ids::LOCALE_IDS`, which a test compares with tc-ui's catalogs. *(A1)*
 
 ### 3.3 Endpoints
