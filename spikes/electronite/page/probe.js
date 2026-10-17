@@ -439,11 +439,12 @@
         body: JSON.stringify({ word: clickSeq++ % 40 }),
       });
       if (!response.ok) throw new Error(`align/click answered ${response.status}`);
+      const bytes = Number(response.headers.get('content-length') || 0);
       const reply = await response.json();
       const replied = performance.now();
       render(reply);
       const rendered = performance.now();
-      if (settle) settle.resolve({ replied, rendered, bytes: reply.view ? JSON.stringify(reply).length : 0 });
+      if (settle) settle.resolve({ replied, rendered, bytes });
     } catch (e) {
       if (settle) settle.reject(e);
     }
