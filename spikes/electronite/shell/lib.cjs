@@ -59,8 +59,9 @@ function parseAddress(line) {
 }
 
 // AD11: the header filter lists only the server's paths outside /api/, so no API request and
-// no event-stream read passes through the main process. `filter-all` lists every path: what
-// it costs if /api/ cannot be left out.
+// no event-stream read runs its JS listener. They still cross Electron's request proxy on the
+// main process's UI thread, as every request of the window does (the api-main-thread probe).
+// `filter-all` lists every path: what it costs if /api/ cannot be left out.
 function filterPatterns(origin, mode) {
   if (mode === 'filter-all') return [`${origin}/*`];
   return [
