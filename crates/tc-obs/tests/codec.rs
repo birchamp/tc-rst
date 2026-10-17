@@ -9,8 +9,8 @@ use common::{SETS, stories};
 use proptest::prelude::*;
 use tc_helps::obs::{ObsFrame, ObsImage, ObsStory, parse_obs_story};
 use tc_obs::story::{
-    StoryState, apply_story_state, decode_story, frame_text_problem, parse_story, seed_story,
-    write_frame, write_reference, write_title,
+    StoryRecords, StoryState, apply_story_state, decode_story, frame_text_problem, parse_story,
+    seed_story, write_frame, write_reference, write_title,
 };
 use tc_obs::{FrameNo, Reformatted, StoryError, StoryFile, StoryNo, TextProblem, WriteError};
 
@@ -72,6 +72,108 @@ fn every_shipped_story_renders_back_from_its_records() {
             );
         }
     }
+}
+
+/// The keys whose decoded value differs from the value written, as STORAGE §11.1 X3 finds
+/// them for a story: `StoryBase`, `Frame` (frame 0 the title) and `StoryRef`.
+fn changed_keys(found: &StoryRecords, written: &StoryRecords) -> Vec<String> {
+    let mut keys = Vec::new();
+    if found.base != written.base {
+        keys.push("StoryBase".to_owned());
+    }
+    if found.title != written.title {
+        keys.push("Frame 0".to_owned());
+    }
+    let frames = found.frames.len().max(written.frames.len());
+    for i in 0..frames {
+        if found.frames.get(i).cloned().flatten() != written.frames.get(i).cloned().flatten() {
+            keys.push(format!("Frame {}", i + 1));
+        }
+    }
+    if found.reference != written.reference {
+        keys.push("StoryRef".to_owned());
+    }
+    keys
+}
+
+/// What a new project's store holds for a story: its `StoryBase`, the template's seed form,
+/// and no other record (tC4 journals nothing at creation; STORAGE §5.15).
+fn new_project_story(n: usize, template: &str) -> StoryRecords {
+    StoryRecords {
+        story: StoryNo::new(u8::try_from(n).unwrap()).unwrap(),
+        base: seed_story(template).unwrap(),
+        title: None,
+        frames: vec![None; parse_story(template).unwrap().frames.len()],
+        reference: None,
+    }
+}
+
+#[test]
+fn an_untouched_story_of_a_new_project_decodes_to_the_records_its_store_shows() {
+    for (i, template) in stories("template").iter().enumerate() {
+        let store = new_project_story(i + 1, template);
+        let file = store.render().unwrap();
+        assert_eq!(file, store.base);
+        let found = decode_story(&file).unwrap();
+        assert_eq!(found.reformatted, []);
+        // The decoder records the empty title and each empty frame, which the store never
+        // wrote: compared with the store's own records, all of them read as changed.
+        assert_eq!(
+            changed_keys(&found.records, &store).len(),
+            1 + store.frames.len()
+        );
+        // Compared with what those records decode to, nothing changed.
+        let written = store.as_decoded().unwrap();
+        assert_eq!(changed_keys(&found.records, &written), Vec::<String>::new());
+        assert_eq!(written.base, store.base);
+        assert_eq!(written.title.as_deref(), Some(""));
+        assert!(written.frames.iter().all(|f| f.as_deref() == Some("")));
+        assert_eq!(written.reference, None);
+    }
+}
+
+#[test]
+fn an_outside_edit_of_a_new_projects_story_changes_only_the_parts_it_edits() {
+    let template = &stories("template")[0];
+    let store = new_project_story(1, template);
+    let edited = write_title(&store.render().unwrap(), "La creación").unwrap();
+    let edited = write_frame(&edited, FrameNo(3), "Al tercer día.").unwrap();
+    let edited = write_reference(&edited, "Génesis 1-2").unwrap();
+    let found = decode_story(&edited).unwrap().records;
+    assert_eq!(
+        changed_keys(&found, &store.as_decoded().unwrap()),
+        ["Frame 0", "Frame 3", "StoryRef"]
+    );
+    // A frame cleared outside the app is a change of a frame the store holds text for.
+    let mut drafted = store.clone();
+    drafted.frames[1] = Some("Dios creó.".to_owned());
+    let cleared = write_frame(&drafted.render().unwrap(), FrameNo(2), "").unwrap();
+    assert_eq!(cleared, store.render().unwrap());
+    assert_eq!(
+        changed_keys(
+            &decode_story(&cleared).unwrap().records,
+            &drafted.as_decoded().unwrap()
+        ),
+        ["Frame 2"]
+    );
+}
+
+#[test]
+fn a_cleared_frame_and_a_frame_never_written_are_the_same_file_and_the_same_records() {
+    let template = &stories("template")[0];
+    let never = new_project_story(1, template);
+    let mut cleared = never.clone();
+    cleared.frames[2] = Some(String::new());
+    cleared.title = Some(String::new());
+    assert_eq!(cleared.render().unwrap(), never.render().unwrap());
+    assert_eq!(cleared.as_decoded().unwrap(), never.as_decoded().unwrap());
+    // A record with text is its text.
+    let mut drafted = never.clone();
+    drafted.frames[2] = Some("Al tercer día.".to_owned());
+    assert_eq!(
+        drafted.as_decoded().unwrap().frames[2].as_deref(),
+        Some("Al tercer día.")
+    );
 }
 
 #[test]
@@ -548,6 +650,35 @@ proptest! {
             prop_assert_eq!(story.frames, g.story().frames);
             prop_assert_eq!(write_reference(&referenced, &reference).unwrap(), referenced);
         }
+    }
+
+    #[test]
+    fn a_part_with_no_record_decodes_as_the_empty_text_its_base_holds(
+        g in generated(),
+        unwritten in prop::collection::vec(any::<bool>(), 41),
+    ) {
+        let records = decode_story(&g.text(false)).unwrap().records;
+        // Decoded records decode to themselves.
+        prop_assert_eq!(&records.as_decoded().unwrap(), &records);
+        // Take away some of the records: those parts show the base's empty text.
+        let mut store = records.clone();
+        let mut empty = records.clone();
+        if unwritten[40] && store.title.is_some() {
+            store.title = None;
+            empty.title = Some(String::new());
+        }
+        for (i, gone) in unwritten.iter().take(40).enumerate() {
+            if *gone && store.frames.get(i).is_some_and(Option::is_some) {
+                store.frames[i] = None;
+                empty.frames[i] = Some(String::new());
+            }
+        }
+        prop_assert_eq!(store.render().unwrap(), empty.render().unwrap());
+        let shown = store.as_decoded().unwrap();
+        prop_assert_eq!(&shown, &empty.as_decoded().unwrap());
+        prop_assert_eq!(&shown.title, &empty.title);
+        prop_assert_eq!(&shown.frames, &empty.frames);
+        prop_assert_eq!(&shown.reference, &records.reference);
     }
 
     #[test]

@@ -5,8 +5,10 @@
 //!
 //! - [`story`] reads a story file `content/NN.md` without losing a byte ([`StoryFile`]),
 //!   and holds tC4's three writers, which splice lines and never re-serialize. It also
-//!   splits a file into the records STORAGE §2.2 keeps for it ([`decode_story`]) and
-//!   renders them back ([`StoryRecords::render`]).
+//!   splits a file into the records STORAGE §2.2 keeps for it ([`decode_story`]),
+//!   renders them back ([`StoryRecords::render`]) and gives a store's records as decoding
+//!   their file gives them back, which is what a decoded file is compared with
+//!   ([`StoryRecords::as_decoded`]).
 //! - [`ids`] holds [`StoryNo`] and [`FrameNo`] (frame 0 is the title) and the paths of an
 //!   OBS project.
 //! - [`images`] finds the picture of each frame; [`presentation`] puts a story, its

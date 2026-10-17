@@ -675,6 +675,24 @@ impl StoryRecords {
     pub fn render(&self) -> Result<String, WriteError> {
         apply_story_state(&self.base, &self.state())
     }
+
+    /// These records as decoding their file gives them back. A decoded file is compared
+    /// with these, not with the records as a store holds them, to find the parts someone
+    /// changed (STORAGE §11.1 X3's `written(k)`).
+    ///
+    /// A part with no record shows the text its base holds there. A record of that same
+    /// text renders the same bytes, so no decoder can tell the two apart, and
+    /// [`decode_story`] records every part the writers accept, the empty ones too. A new
+    /// project's store holds only each story's `StoryBase` (tC4 journals nothing at
+    /// creation, `src/data/journal/journalingStore.ts:1204-1212`), and its untouched file
+    /// decodes to an empty title record and an empty record for each frame. Against the
+    /// store's own records, each of those would be an outside change of a part nobody
+    /// wrote. Against these, an untouched file changes nothing and an outside edit
+    /// changes only the parts it edits. A cleared frame and a frame never written both
+    /// decode as the empty text.
+    pub fn as_decoded(&self) -> Result<StoryRecords, WriteError> {
+        Ok(decode_story(&self.render()?)?.records)
+    }
 }
 
 /// A part of a story file that rendering its records writes in the writers' form where
@@ -709,10 +727,14 @@ pub struct DecodedStory {
 /// to `StoryBase`, `Frame` and `StoryRef`) in one pass over its lines.
 ///
 /// Every part the writers accept is recorded, so its layout is the writers' once the
-/// records are rendered. tC4 keeps a frame's bytes until its journal holds that frame; its
-/// base is the committed file. A decoder that left a respaced frame out of the records
-/// would leave its text in the base, under a `Frame` record the store already holds, so
-/// the layout goes and [`DecodedStory::reformatted`] names where.
+/// records are rendered. An empty part is recorded too: a file holds no sign of whether
+/// an empty frame was cleared or never written, so compare the result with
+/// [`StoryRecords::as_decoded`] of a store's records, not with those records.
+///
+/// tC4 keeps a frame's bytes until its journal holds that frame; its base is the committed
+/// file. A decoder that left a respaced frame out of the records would leave its text in
+/// the base, under a `Frame` record the store already holds, so the layout goes and
+/// [`DecodedStory::reformatted`] names where.
 pub fn decode_story(bytes: &str) -> Result<DecodedStory, StoryError> {
     let s = split(bytes)?;
     let lines = &s.lines;
