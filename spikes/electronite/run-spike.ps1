@@ -9,14 +9,16 @@ PowerShell 7, on Windows and on Linux. It records no token and no password.
 
 Cases, in this order:
   run       each mode: probe every request type, then 200 aligner clicks alone and 200 while
-            OBS-sized pictures and a help page load, then the Graphite probe;
+            OBS-sized pictures and a help page load, then the Graphite probe; every mode runs
+            once per pass, in the opposite order in each pass after the first;
   restart   end the server; the shell starts it again and loads Home at the new address;
   close     close the window normally; the shell stops the server;
   endshell  end the shell's process; does the server exit within 5 s? Twice: the server
             started plainly, and started detached;
-  hardkill  type, end the shell's process, then open the profile again and read what
-            localStorage and the shell's mirror file kept; then the same with a normal quit,
-            as the control.
+  hardkill  type until Chromium has written localStorage to the profile once and then for
+            -AfterCommit seconds more, end the shell's process, then open the profile again
+            and read what localStorage and the shell's mirror file kept; then the same with a
+            normal quit, as the control.
 
 .EXAMPLE
 powershell -ExecutionPolicy Bypass -File spikes\electronite\run-spike.ps1 -Electron C:\tc4-g0\electronite\electron.exe
@@ -27,6 +29,8 @@ param(
     [string]$Out = '',
     [int]$Clicks = 200,
     [int]$Warmup = 20,
+    [int]$Passes = 2,
+    [int]$AfterCommit = 10,
     [string]$Report = '',
     [string]$Server = '',
     [string[]]$Only = @()
@@ -179,18 +183,54 @@ function Get-ServerQuit([string]$Dir, [string]$Tag) {
     return ($quits[-1] | ConvertFrom-Json).why
 }
 
+# The most keystrokes the profile's localStorage files hold on disk. Chromium keeps
+# localStorage in a LevelDB folder in the profile, and the page's draft names its count as
+# "n":<count>. The files are opened with full sharing, so Chromium can go on writing them.
+function Get-CommittedKeystrokes([string]$ProfileDir) {
+    $folder = Join-Path $ProfileDir 'Local Storage/leveldb'
+    if (-not (Test-Path -LiteralPath $folder)) { return 0 }
+    $best = 0
+    foreach ($file in @(Get-ChildItem -LiteralPath $folder -File -ErrorAction SilentlyContinue)) {
+        if (@('.log', '.ldb') -notcontains $file.Extension) { continue }
+        $bytes = $null
+        $read = 0
+        try {
+            $stream = [IO.File]::Open($file.FullName, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]'ReadWrite, Delete')
+            try {
+                $bytes = New-Object byte[] ([int]$stream.Length)
+                while ($read -lt $bytes.Length) {
+                    $got = $stream.Read($bytes, $read, $bytes.Length - $read)
+                    if ($got -le 0) { break }
+                    $read += $got
+                }
+            } finally {
+                $stream.Dispose()
+            }
+        } catch {
+            continue
+        }
+        $text = [Text.Encoding]::GetEncoding(28591).GetString($bytes, 0, $read)
+        foreach ($match in [regex]::Matches($text, '"n":(\d+)')) {
+            $value = [int]$match.Groups[1].Value
+            if ($value -gt $best) { $best = $value }
+        }
+    }
+    return $best
+}
+
 function Fmt([object]$Value) {
     if ($null -eq $Value) { return '-' }
     return Format-Invariant '{0:0.0}' ([double]$Value)
 }
 
-function Verdict([object]$Pass) {
-    if ($null -eq $Pass) { return 'skipped' }
-    if ($Pass) { return 'passes' }
+function Verdict([object]$Probe) {
+    # An informational probe says what it found; it is never a gap in AD11.
+    if ($Probe.finding) { return "$($Probe.finding)" }
+    if ($null -eq $Probe.pass) { return 'skipped' }
+    if ($Probe.pass) { return 'passes' }
     return '**fails**'
 }
 
-$results = [ordered]@{}
 $failures = @()
 $retries = @()
 $restarts = @()
@@ -227,22 +267,32 @@ function Track([int[]]$Ids) { $script:caseProcesses += $Ids }
 # ------------------------------------------------------------------ run: probes and round trips
 
 $modes = @('filter', 'protocol', 'filter-all')
+# Each mode runs once per pass; later passes alternate the order, so a drift over the run (the
+# laptop warming up, a background task) does not fall on one mode only.
+$runs = @()
 if (Want 'run') {
-    foreach ($mode in $modes) {
-        Say "Run, $mode mode: probes, then $Clicks clicks alone and $Clicks while pictures load"
-        $result = Invoke-Case "run, $mode mode" (Join-Path $Out "run-$mode") {
-            param($dir)
-            $shell = Start-Shell $dir $mode 'run' @{}
-            Track @($shell.Id)
-            if (-not (Wait-ShellEvent $dir "$mode-run" 'page-loaded' 1 120000)) { throw 'the page did not load in 2 minutes' }
-            if (-not $shell.WaitForExit(20 * 60 * 1000)) { throw "the $mode run took more than 20 minutes" }
-            $result = Read-Json (Join-Path $dir "results-$mode-run.json")
-            if ($null -eq $result) { throw "the $mode run wrote no results; see $dir" }
-            if ($result.error) { throw "the page failed: $($result.error)" }
-            $result
+    for ($pass = 1; $pass -le $Passes; $pass++) {
+        $order = if ($pass % 2 -eq 1) { $modes } else { @($modes[($modes.Count - 1)..0]) }
+        foreach ($mode in $order) {
+            Say "Run, pass $pass of $Passes, $mode mode: probes, then $Clicks clicks alone and $Clicks while pictures load"
+            $result = Invoke-Case "run, $mode mode, pass $pass" (Join-Path $Out "run-$mode-$pass") {
+                param($dir)
+                $shell = Start-Shell $dir $mode 'run' @{}
+                Track @($shell.Id)
+                if (-not (Wait-ShellEvent $dir "$mode-run" 'page-loaded' 1 120000)) { throw 'the page did not load in 2 minutes' }
+                if (-not $shell.WaitForExit(20 * 60 * 1000)) { throw "the $mode run took more than 20 minutes" }
+                $result = Read-Json (Join-Path $dir "results-$mode-run.json")
+                if ($null -eq $result) { throw "the $mode run wrote no results; see $dir" }
+                if ($result.error) { throw "the page failed: $($result.error)" }
+                $result
+            }
+            if ($result) { $runs += [pscustomobject]@{ Mode = $mode; Pass = $pass; Result = $result } }
         }
-        if ($result) { $results["run-$mode"] = $result }
     }
+}
+
+function Get-Runs([string]$Mode) {
+    return @($runs | Where-Object { $_.Mode -eq $Mode } | Sort-Object Pass)
 }
 
 # ------------------------------------------------------------------ restart: end the server
@@ -368,7 +418,18 @@ if (Want 'hardkill') {
                 if (-not $typing) { throw 'typing did not start' }
                 $status = Read-Json (Join-Path $dir "status-$tag.json")
                 Track @($status.serverPid)
-                Start-Sleep -Milliseconds (2500 + (Get-Random -Minimum 0 -Maximum 1000))
+                # Chromium writes localStorage to the profile some seconds after the page sets
+                # it. End the shell only after that first write and -AfterCommit seconds more,
+                # so what localStorage keeps is not decided by when the script acts.
+                $profileDir = Join-Path $dir "profile-$mode"
+                $commitDeadline = (Get-NowMs) + 60000
+                $committedMs = $null
+                while ((Get-NowMs) -lt $commitDeadline) {
+                    if ((Get-CommittedKeystrokes $profileDir) -gt 0) { $committedMs = (Get-NowMs) - $typing.t0; break }
+                    Start-Sleep -Milliseconds 250
+                }
+                Start-Sleep -Seconds $AfterCommit
+                $onDisk = Get-CommittedKeystrokes $profileDir
                 $acted = Get-NowMs
                 if ($end -eq 'kill') {
                     Stop-Process -Id $shell.Id -Force
@@ -396,6 +457,9 @@ if (Want 'hardkill') {
                     Mode       = $mode
                     End        = if ($end -eq 'kill') { 'hard kill' } else { 'normal quit (control)' }
                     Made       = $made
+                    Every      = $typing.every
+                    Committed  = $committedMs
+                    OnDisk     = $onDisk
                     ServerSaw  = $serverSaw
                     Local      = $seen.localStorage.n
                     LocalError = $seen.localStorage.error
@@ -436,7 +500,7 @@ foreach ($file in (Get-ChildItem -LiteralPath $raw -File | Where-Object { $_.Ext
 }
 $rawRel = $raw.Replace($repo, '.').Replace('\', '/')
 $anyRun = $null
-foreach ($key in $results.Keys) { if ($results[$key].shell) { $anyRun = $results[$key]; break } }
+foreach ($run in $runs) { if ($run.Result.shell) { $anyRun = $run.Result; break } }
 $versions = if ($anyRun) { $anyRun.shell.versions } else { $null }
 $md = New-Object System.Collections.Generic.List[string]
 function Add([string]$Line) { $md.Add($Line) }
@@ -485,32 +549,44 @@ if ($retries.Count -gt 0) {
     Add ''
 }
 
-if ($results.Count -gt 0) {
+if ($runs.Count -gt 0) {
     Add '## 1. Request types (AD11, Q-1)'
     Add ''
     Add 'A probe passes when the page saw the load succeed and the server saw the request with the'
     Add 'token. `filter` is AD11 (onBeforeSendHeaders on the paths outside `/api/`), `protocol` is'
     Add 'the Q-1 prototype (a privileged `tc4://` scheme proxied by `protocol.handle`), `filter-all`'
-    Add 'is a filter over every path.'
+    Add 'is a filter over every path. A cell that differs between passes shows each pass in turn.'
+    Add 'Rows marked informational are not request types the app relies on, and never count as a'
+    Add 'gap in AD11.'
     Add ''
-    $present = @($modes | Where-Object { $results.Contains("run-$_") })
-    Add ('| Request | ' + (($present | ForEach-Object { $_ }) -join ' | ') + ' |')
+    Add '`api-main-thread` times the page''s own `/api/` fetch with the shell''s main thread idle, then'
+    Add 'while that thread is blocked 200 ms of every 250 ms. Electron passes every request of the'
+    Add 'window through a proxy on that thread, whatever the filter''s URL list says; the list only'
+    Add 'spares the filter''s JS listener (`api-listener`). "Waits for the main process" means the'
+    Add 'busy p95 rose by more than 50 ms.'
+    Add ''
+    $present = @($modes | Where-Object { (Get-Runs $_).Count -gt 0 })
+    Add ('| Request | ' + ($present -join ' | ') + ' |')
     Add ('|---|' + (($present | ForEach-Object { '---' }) -join '|') + '|')
-    $names = @($results["run-$($present[0])"].probes | ForEach-Object { $_.name })
-    foreach ($name in $names) {
-        $what = ($results["run-$($present[0])"].probes | Where-Object { $_.name -eq $name } | Select-Object -First 1).what
+    $first = (Get-Runs $present[0])[0].Result
+    foreach ($probe0 in $first.probes) {
+        $name = $probe0.name
         $cells = foreach ($mode in $present) {
-            $probe = $results["run-$mode"].probes | Where-Object { $_.name -eq $name } | Select-Object -First 1
-            if ($probe) { Verdict $probe.pass } else { '-' }
+            $seen = @(Get-Runs $mode | ForEach-Object {
+                    $probe = $_.Result.probes | Where-Object { $_.name -eq $name } | Select-Object -First 1
+                    if ($probe) { Verdict $probe } else { '-' }
+                })
+            $distinct = @($seen | Select-Object -Unique)
+            if ($distinct.Count -le 1) { $distinct[0] } else { $seen -join ' / ' }
         }
-        Add ("| $name ($what) | " + ($cells -join ' | ') + ' |')
+        Add ("| $name ($($probe0.what)) | " + ($cells -join ' | ') + ' |')
     }
     Add ''
     Add 'What each probe saw:'
     Add ''
-    foreach ($mode in $present) {
-        foreach ($probe in $results["run-$mode"].probes) {
-            Add ("- $mode, $($probe.name): " + ("$($probe.detail)" -replace '\|', '/'))
+    foreach ($run in $runs) {
+        foreach ($probe in $run.Result.probes) {
+            Add ("- $($run.Mode), pass $($run.Pass), $($probe.name): " + ("$($probe.detail)" -replace '\|', '/'))
         }
     }
     Add ''
@@ -519,18 +595,58 @@ if ($results.Count -gt 0) {
     Add 'One click: the page posts to `/api/v1/align/click` with its own fetch, gets about 20 KB of'
     Add 'JSON, parses it and rebuilds the word bank and the cards. "Reply" ends when the JSON is'
     Add 'parsed, "rendered" when the DOM is rebuilt, "frame" at the start of the next animation frame,'
-    Add 'which paints it. Times in ms, nearest-rank, after the warm-up clicks. While loading: a'
-    Add "story's 15 OBS-sized pictures (640x360, about 70 KB) every 500 ms, the help page every second,"
-    Add 'and the event stream open. The budget is 30 ms (PERFORMANCE.md, Aligning).'
+    Add 'and "painted" when the main thread has finished that frame''s style, layout and paint (a'
+    Add 'message posted from the frame''s requestAnimationFrame callback, which Chromium handles only'
+    Add 'after them; the compositor shows the frame at the next display refresh). Painted is the'
+    Add 'figure for Q-13 and Q-1. Times in ms, nearest-rank, after the warm-up clicks. While loading:'
+    Add "a story's 15 OBS-sized pictures (640x360, about 70 KB) every 500 ms, the help page every"
+    Add 'second, and the event stream open. The budget is 30 ms (PERFORMANCE.md, Aligning).'
     Add ''
-    Add '| Mode | While | Clicks | Reply median | Reply p95 | Rendered p95 | Frame median | Frame p95 | Frames missed | Loaded meanwhile |'
-    Add '|---|---|---:|---:|---:|---:|---:|---:|---:|---|'
+    Add '| Mode | Pass | While | Clicks | Reply median | Reply p95 | Rendered p95 | Frame p95 | Painted median | Painted p95 | Frames missed | Loaded meanwhile |'
+    Add '|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|'
     foreach ($mode in $present) {
-        foreach ($rt in $results["run-$mode"].roundTrip) {
-            $loaded = '-'
-            if ($rt.load) { $loaded = "$($rt.load.pictures) pictures, $($rt.load.helpPages) help pages, $($rt.load.events) events" }
-            Add ("| $mode | $($rt.label) | $($rt.clicks) | $(Fmt $rt.reply.median) | $(Fmt $rt.reply.p95) | $(Fmt $rt.rendered.p95) | $(Fmt $rt.frame.median) | $(Fmt $rt.frame.p95) | $($rt.frameTimeouts) | $loaded |")
+        foreach ($run in (Get-Runs $mode)) {
+            foreach ($rt in $run.Result.roundTrip) {
+                $loaded = '-'
+                if ($rt.load) { $loaded = "$($rt.load.pictures) pictures, $($rt.load.helpPages) help pages, $($rt.load.events) events" }
+                Add ("| $mode | $($run.Pass) | $($rt.label) | $($rt.clicks) | $(Fmt $rt.reply.median) | $(Fmt $rt.reply.p95) | $(Fmt $rt.rendered.p95) | $(Fmt $rt.frame.p95) | $(Fmt $rt.painted.median) | $(Fmt $rt.painted.p95) | $($rt.frameTimeouts) | $loaded |")
+            }
         }
+    }
+    Add ''
+    Add 'The painted p95 of each pass, and its spread (the highest minus the lowest):'
+    Add ''
+    Add '| Mode | While | Painted p95 by pass | Lowest | Highest | Spread |'
+    Add '|---|---|---|---:|---:|---:|'
+    $ranges = @{}
+    foreach ($mode in $present) {
+        foreach ($label in @('alone', 'loading')) {
+            $values = @(Get-Runs $mode | ForEach-Object {
+                    $rt = $_.Result.roundTrip | Where-Object { $_.label -eq $label } | Select-Object -First 1
+                    if ($rt -and $null -ne $rt.painted.p95) { [double]$rt.painted.p95 }
+                })
+            if ($values.Count -eq 0) { continue }
+            $low = ($values | Measure-Object -Minimum).Minimum
+            $high = ($values | Measure-Object -Maximum).Maximum
+            $ranges["$mode/$label"] = @($low, $high)
+            Add ("| $mode | $label | " + (($values | ForEach-Object { Fmt $_ }) -join ', ') + " | $(Fmt $low) | $(Fmt $high) | $(Fmt ($high - $low)) |")
+        }
+    }
+    Add ''
+    foreach ($label in @('alone', 'loading')) {
+        $f = $ranges["filter/$label"]
+        $p = $ranges["protocol/$label"]
+        if (-not $f -or -not $p) { continue }
+        if ($Passes -lt 2) {
+            $line = 'one pass only: no spread, so this run alone does not decide Q-1'
+        } elseif ($p[1] -lt $f[0]) {
+            $line = "protocol lower in every pass, by $(Fmt ($f[0] - $p[1])) ms or more"
+        } elseif ($f[1] -lt $p[0]) {
+            $line = "filter lower in every pass, by $(Fmt ($p[0] - $f[1])) ms or more"
+        } else {
+            $line = 'the passes overlap: the difference is inside the spread and does not decide Q-1'
+        }
+        Add "- Q-1, $label (painted p95, protocol against filter): $line."
     }
     Add ''
 }
@@ -561,17 +677,24 @@ if ($kills.Count -gt 0) {
     Add ''
     Add 'The page types one letter every 50 ms. Each keystroke is written to `localStorage` at once,'
     Add "sent to the shell, which appends it to its mirror file (synced at most once a second), and"
-    Add 'reported to the server. The script ends the shell''s process (or, as the control, asks the'
-    Add 'shell to quit normally), then opens the same profile again (same origin) and reads what was'
-    Add 'kept. Counts are keystrokes; "made" counts them from the clock up to the moment the script'
-    Add 'acted, so a normal quit can keep a few more.'
+    Add 'reported to the server. Chromium writes `localStorage` to the profile some seconds after the'
+    Add 'page sets it. The script waits until the profile''s files on disk hold the draft (the "first'
+    Add ('write to disk" column), lets the page type ' + $AfterCommit + ' s more, then ends the shell''s process (or, as the')
+    Add 'control, asks the shell to quit normally), opens the same profile again (same origin) and'
+    Add 'reads what was kept. Counts are keystrokes; "made" counts them from the clock up to the moment'
+    Add 'the script acted, so a normal quit can keep a few more. "Lost" is the typing time missing at'
+    Add 'the end: (made - kept) x 50 ms.'
     Add ''
-    Add '| Mode | How the shell ended | Made (from the clock) | The server saw | localStorage kept | The mirror kept | Mirror lines (torn) | The server |'
-    Add '|---|---|---:|---:|---:|---:|---|---|'
+    Add '| Mode | How the shell ended | Made (from the clock) | First write to disk | On disk just before | The server saw | localStorage kept | localStorage lost | The mirror kept | The mirror lost | Mirror lines (torn) | The server |'
+    Add '|---|---|---:|---|---:|---:|---:|---:|---:|---:|---|---|'
     foreach ($k in $kills) {
+        $every = if ($k.Every) { [double]$k.Every } else { 50.0 }
         $local = if ($k.LocalError) { "error: $($k.LocalError)" } else { "$($k.Local)" }
+        $localLost = if ($k.LocalError) { '-' } else { "$(Fmt ([math]::Max(0, $k.Made - [double]$k.Local) * $every / 1000)) s" }
+        $mirrorLost = "$(Fmt ([math]::Max(0, $k.Made - [double]$k.Mirror) * $every / 1000)) s"
+        $firstWrite = if ($null -eq $k.Committed) { '**none in 60 s**' } else { "$(Fmt ($k.Committed / 1000)) s after typing began" }
         $server = if ($null -eq $k.ServerMs) { 'still running after 10 s' } else { "exited after $(Fmt $k.ServerMs) (quit: $($k.Why))" }
-        Add ("| $($k.Mode) | $($k.End) | $($k.Made) | $($k.ServerSaw) | $local | $($k.Mirror) | $($k.Lines) ($($k.Torn)) | $server |")
+        Add ("| $($k.Mode) | $($k.End) | $($k.Made) | $firstWrite | $($k.OnDisk) | $($k.ServerSaw) | $local | $localLost | $($k.Mirror) | $mirrorLost | $($k.Lines) ($($k.Torn)) | $server |")
     }
     Add ''
 }
@@ -588,8 +711,9 @@ if ($anyRun -and $anyRun.graphite) {
     Add '| Mode | Font loaded | Width | Height | Canvas width | Ascent | Descent | Joined | Screenshot |'
     Add '|---|---|---:|---:|---:|---:|---:|---|---|'
     foreach ($mode in $modes) {
-        if (-not $results.Contains("run-$mode")) { continue }
-        $g = $results["run-$mode"].graphite
+        $modeRuns = @(Get-Runs $mode)
+        if ($modeRuns.Count -eq 0) { continue }
+        $g = $modeRuns[0].Result.graphite
         $joined = if ($g.fontLoaded -and [double]$g.boxWidth -lt 480) { 'yes' } else { '**no**' }
         Add ("| $mode | $($g.fontLoaded) | $(Fmt $g.boxWidth) | $(Fmt $g.boxHeight) | $(Fmt $g.canvasWidth) | $(Fmt $g.ascent) | $(Fmt $g.descent) | $joined | ``$($g.screenshot)`` |")
     }
@@ -601,16 +725,22 @@ Add ''
 Add '- **AD11 and capability URLs.** A request type that fails under `filter` above is one that'
 Add '  the header filter misses; section 5.2 then moves `/media`, `/download` and `/print` to capability'
 Add '  URLs. A failure under `filter` that also fails under `filter-all` is not the filter''s list.'
+Add '  Informational rows (EventSource, `api-main-thread`) are never such a failure.'
+Add '- **The main process.** `api-main-thread` shows whether the page''s `/api/` requests wait for'
+Add '  the shell''s main thread. If they do, the shell must keep synchronous work off that thread'
+Add '  (the mirror''s appends and fsync in G1), or every aligner click waits for it.'
 Add '- **Q-1, the custom scheme.** The design''s rule: take `protocol.handle` if it adds less to'
-Add '  the aligner''s round trip than the filter, otherwise the filter. Compare the frame p95 of'
-Add '  `protocol` and `filter`, alone and while loading, and the probe rows.'
-Add '- **Q-13, the aligner fallback.** If the frame p95 of `filter` misses 30 ms on the reference'
-Add '  laptop, Q-13 goes to the owner with these numbers.'
+Add '  the aligner''s round trip than the filter, otherwise the filter. Compare the painted p95 of'
+Add '  `protocol` and `filter`, alone and while loading, across the passes, and the probe rows. A'
+Add '  difference inside the spread between passes does not decide Q-1.'
+Add '- **Q-13, the aligner fallback.** If the painted p95 of `filter` misses 30 ms in any pass on'
+Add '  the reference laptop, Q-13 goes to the owner with these numbers.'
 Add '- **AD39 and G1.** The restart rows show whether the shell restarts the server and reloads'
 Add '  Home. The "end the shell" rows show whether the server quits by itself when the shell dies,'
 Add '  or is ended with it, which decides how G1 starts `tc4`.'
-Add '- **AD21.** The hard-kill rows show how many keystrokes `localStorage` and the shell''s mirror'
-Add '  keep when the whole app dies.'
+Add '- **AD21.** The hard-kill rows show how many keystrokes, and how many seconds of typing,'
+Add '  `localStorage` and the shell''s mirror keep when the whole app dies after Chromium has'
+Add '  written `localStorage` once.'
 Add ''
 
 Write-Utf8File $Report (($md -join "`n") + "`n")

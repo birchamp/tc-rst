@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('tc4Shell', {
     event: (name, data) => ipcRenderer.send('spike:event', name, data),
     report: (results) => ipcRenderer.invoke('spike:report', results),
     filterCounts: () => ipcRenderer.invoke('spike:filterCounts'),
+    busy: (plan) => ipcRenderer.invoke('spike:busy', plan),
     childWindow: () => ipcRenderer.invoke('spike:childWindow'),
     capture: (rect) => ipcRenderer.invoke('spike:capture', rect),
   },

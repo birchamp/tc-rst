@@ -21,7 +21,7 @@ const STANDIN = process.env.TC4_STANDIN || path.join(__dirname, '..', 'target', 
 
 const BROWSER_PROBES = ['document', 'script', 'stylesheet', 'fetch', 'image', 'iframe', 'font', 'css-url', 'event-stream'];
 const SELF_LOADED = ['image', 'iframe', 'font', 'css-url'];
-const SHELL_ONLY = ['download', 'print', 'child-window', 'api-hop'];
+const SHELL_ONLY = ['download', 'print', 'child-window', 'api-listener', 'api-main-thread'];
 
 async function startServer() {
   const appData = fs.mkdtempSync(path.join(os.tmpdir(), 'tc4-spike-page-'));
@@ -77,11 +77,18 @@ test('with the token on every request, every probe a browser can run passes', as
     const probes = byName(results);
     for (const name of BROWSER_PROBES) assert.equal(probes[name].pass, true, `${name}: ${probes[name].detail}`);
     for (const name of SHELL_ONLY) assert.equal(probes[name].pass, null, `${name} needs the shell`);
+    // EventSource is informational (AD10 reads the stream with fetch), and says so in its verdict.
+    assert.equal(probes.eventsource.informational, true);
+    assert.match(probes.eventsource.finding, /informational, not used: AD10/);
     assert.equal(results.tokenFromFragment, true);
     assert.equal(results.roundTrip.length, 2);
     for (const rt of results.roundTrip) {
       assert.equal(rt.reply.n, 20);
       assert.equal(rt.raw.frame.length, 20);
+      // The painted stamp comes after the frame's style, layout and paint, so never before the
+      // frame starts, and the Q-13 figure is taken from it.
+      assert.equal(rt.painted.n, 20);
+      rt.raw.painted.forEach((p, k) => assert.ok(p >= rt.raw.frame[k], `click ${k}: painted ${p} before frame ${rt.raw.frame[k]}`));
       assert.ok(rt.replyBytes >= 20 * 1024, `the reply is ${rt.replyBytes} bytes`);
       assert.ok(rt.reply.median > 0 && rt.reply.median <= rt.reply.p95 && rt.reply.p95 <= rt.frame.p95 + 1000);
     }

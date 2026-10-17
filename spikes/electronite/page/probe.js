@@ -10,6 +10,8 @@
   const DRAFTS = 'tc4.drafts.v2';
   const FIELD = 'spike-project|spike-id|PSA 119:176';
   const KEY_EVERY_MS = 50;
+  const BUSY_BLOCK_MS = 200;
+  const BUSY_EVERY_MS = 250;
 
   // §5.2: the token comes in the URL fragment, is kept in sessionStorage, and the page sends it
   // in a header on its own requests. Under protocol.handle there is no token: the shell adds it.
@@ -307,8 +309,10 @@
           };
         });
         const hits = await serverHits('eventsource');
+        const pass = outcome === 'a frame arrived';
         return {
-          pass: outcome === 'a frame arrived',
+          pass,
+          finding: `${pass ? 'passes' : 'fails'} (informational, not used: AD10)`,
           detail: `${outcome}; server: ${describeHits(hits)}. EventSource sends no header of its own: under AD11 /api/ gets no token (401), and it can never send X-Tc-Api (409)`,
         };
       },
@@ -360,18 +364,64 @@
       },
     },
     {
-      name: 'api-hop',
-      what: 'no /api/ request passes through the main process',
+      name: 'api-listener',
+      what: "the filter's JS listener saw no /api/ request (AD11's URL list)",
       run: async () => {
         if (!shell) return skip('needs the shell');
         const seen = await shell.spike.filterCounts();
         if (seen.mode === 'protocol') {
-          return { pass: null, detail: `every request crosses the main process under protocol.handle (${seen.total} so far)` };
+          return {
+            pass: null,
+            finding: 'no filter: protocol.handle sees every request',
+            detail: `no filter under protocol.handle: its handler saw ${seen.total} request(s) so far`,
+          };
         }
         const api = seen.byPath.api || 0;
+        const filtered = seen.mode === 'filter';
         return {
-          pass: seen.mode === 'filter' ? api === 0 : null,
+          pass: filtered ? api === 0 : null,
+          finding: filtered ? undefined : `saw ${api} /api/ request(s): this filter lists every path`,
           detail: `the filter (${seen.patternForm}) saw ${api} /api/ request(s) and ${seen.total} in all: ${JSON.stringify(seen.byPath)}`,
+        };
+      },
+    },
+    {
+      name: 'api-main-thread',
+      what: "the page's /api/ fetch while the shell's main thread is busy (informational)",
+      informational: true,
+      run: async () => {
+        if (!shell) return skip('needs the shell');
+        // The same request, timed with the main process idle and then while its thread is
+        // blocked 200 ms of every 250 ms, as synchronous work in the shell would block it. If
+        // the busy times rise by about the blocks, every /api/ request waits for that thread,
+        // whatever the filter's URL list says.
+        const time = async (n) => {
+          const times = [];
+          for (let i = 0; i < n; i++) {
+            const start = performance.now();
+            await api('/api/v1/spike/hello?probe=api-main-thread');
+            times.push(performance.now() - start);
+            await sleep(20 + ((i * 37) % 60));
+          }
+          return stats(times);
+        };
+        const idle = await time(40);
+        await shell.spike.busy({ block: BUSY_BLOCK_MS, every: BUSY_EVERY_MS, ms: 30000 });
+        let busy;
+        try {
+          busy = await time(40);
+        } finally {
+          await shell.spike.busy({ stop: true });
+        }
+        const waits = busy.p95 - idle.p95 > BUSY_BLOCK_MS / 4;
+        return {
+          pass: null,
+          finding: waits ? 'waits for the main process' : 'does not wait for the main process',
+          idle,
+          busy,
+          detail:
+            `idle: median ${idle.median} ms, p95 ${idle.p95} ms; main thread blocked ${BUSY_BLOCK_MS} ms of every ` +
+            `${BUSY_EVERY_MS} ms: median ${busy.median} ms, p95 ${busy.p95} ms (40 requests each)`,
         };
       },
     },
@@ -392,7 +442,8 @@
       results.push(row);
       const line = document.createElement('div');
       line.className = row.pass === true ? 'probe-pass' : row.pass === false ? 'probe-fail' : '';
-      line.textContent = `${row.name}: ${row.pass === true ? 'passes' : row.pass === false ? 'fails' : 'skipped'}: ${row.detail}`;
+      const verdict = row.finding || (row.pass === true ? 'passes' : row.pass === false ? 'fails' : 'skipped');
+      line.textContent = `${row.name}: ${verdict}: ${row.detail}`;
       table.append(line);
     }
     return results;
@@ -450,23 +501,32 @@
     }
   });
 
-  // The start of the next frame, in which the new DOM is painted; null if no frame came in
-  // 200 ms (a hidden or covered window).
+  // The start of the next animation frame, and the moment the main thread has finished that
+  // frame's style, layout and paint. Chromium runs those after the frame's
+  // requestAnimationFrame callbacks, in the same task, so a message posted from the callback is
+  // handled only once they are done. Both are null if no frame came in 200 ms (a hidden or
+  // covered window).
   function nextFrame() {
     return new Promise((resolve) => {
       let settled = false;
-      requestAnimationFrame(() => {
+      const timer = setTimeout(() => {
         if (!settled) {
           settled = true;
-          resolve(performance.now());
-        }
-      });
-      setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          resolve(null);
+          resolve({ frame: null, painted: null });
         }
       }, 200);
+      requestAnimationFrame(() => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        const frame = performance.now();
+        const channel = new MessageChannel();
+        channel.port1.onmessage = () => {
+          channel.port1.close();
+          resolve({ frame, painted: performance.now() });
+        };
+        channel.port2.postMessage(null);
+      });
     });
   }
 
@@ -475,6 +535,7 @@
     const reply = [];
     const rendered = [];
     const frame = [];
+    const painted = [];
     let frameTimeouts = 0;
     let bytes = 0;
     for (let i = 0; i < warmup + count; i++) {
@@ -484,12 +545,14 @@
       const start = performance.now();
       button.click();
       const result = await withTimeout(done, 10000, 'align/click');
-      const painted = await nextFrame();
-      if (painted === null) frameTimeouts++;
+      const next = await nextFrame();
+      if (next.frame === null) frameTimeouts++;
       if (i >= warmup) {
+        const now = performance.now();
         reply.push(result.replied - start);
         rendered.push(result.rendered - start);
-        frame.push((painted === null ? performance.now() : painted) - start);
+        frame.push((next.frame === null ? now : next.frame) - start);
+        painted.push((next.painted === null ? now : next.painted) - start);
         bytes = result.bytes;
       }
       if (i % 20 === 0) setStatus(`Round trip (${label}): ${i} of ${warmup + count}`);
@@ -505,7 +568,8 @@
       reply: stats(reply),
       rendered: stats(rendered),
       frame: stats(frame),
-      raw: { reply, rendered, frame },
+      painted: stats(painted),
+      raw: { reply, rendered, frame, painted },
     };
   }
 

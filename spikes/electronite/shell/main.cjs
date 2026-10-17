@@ -328,6 +328,28 @@ ipcMain.handle('spike:report', (_event, results) => {
   return true;
 });
 ipcMain.handle('spike:filterCounts', () => ({ mode: options.mode, patternForm, total: seen.total, byPath: { ...seen.byPath } }));
+// The api-main-thread probe: block this thread `block` ms of every `every` ms, for at most
+// `ms` ms or until the page asks to stop, as synchronous work in the shell would block it.
+let busyTimer = null;
+ipcMain.handle('spike:busy', (_event, plan) => {
+  clearInterval(busyTimer);
+  busyTimer = null;
+  if (plan.stop) return { stopped: true };
+  const block = Math.min(Number(plan.block) || 200, 1000);
+  const until = Date.now() + Math.min(Number(plan.ms) || 10000, 60000);
+  busyTimer = setInterval(() => {
+    if (Date.now() >= until) {
+      clearInterval(busyTimer);
+      busyTimer = null;
+      return;
+    }
+    const end = Date.now() + block;
+    while (Date.now() < end) {
+      // Busy on purpose: this is the blocked thread the probe measures.
+    }
+  }, Number(plan.every) || 250);
+  return { until };
+});
 ipcMain.handle('spike:childWindow', async () => {
   for (let i = 0; i < 50 && !childWindowResult; i++) await sleep(100);
   return childWindowResult;
