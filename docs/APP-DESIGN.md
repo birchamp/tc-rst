@@ -30,6 +30,44 @@ what changed for each finding, which parts were done another way, and why.
   tC4").
 - The other questions follow their recommendations in §12.
 
+## G0 results on the reference laptop (2026-10-17)
+
+The owner's Windows session ran `.audit/tasks/g0-windows.md` at `939596a` on a Dell Latitude
+7490 (i5-8350U, 4 cores, 8 GB, SATA SSD, Windows 10, Defender on, no SHA instructions).
+Evidence: `docs/evidence/electronite-spike-2026-10-17.md` and
+`docs/evidence/storage-fold-windows-g0-2026-10-17.md`.
+
+- **AD11 holds.** Every request type the app uses passes under the header filter: document,
+  script, style sheet, fetch, image, iframe, web font, CSS `url()`, the event stream, download,
+  the print window and a same-origin child window. `/media`, `/download` and `/print` need no
+  capability URLs.
+- **Requests wait for the shell's main thread.** With that thread blocked 200 ms of every
+  250 ms, an `/api/` fetch's p95 rose from 7-11 ms to 202-203 ms in every mode. G1 keeps all
+  synchronous work off that thread (AD21's mirror included).
+- **Q-13 does not arise.** The aligner click's painted p95 under the filter was 22.4-24.5 ms in
+  every pass, alone and while pictures loaded, under the 30 ms budget. AD18 stands.
+- **Q-1 is not decided by speed.** Painted p95: filter 22.4-24.5 ms, protocol 22.7-25.5 ms; the
+  passes overlap. By §12's rule the custom scheme does not add less than the filter, so the
+  filter (AD11) stays unless the owner wants one origin across launches for another reason.
+- **AD39 holds.** After the server was ended, the shell had a new server in 52-78 ms and Home
+  again in 109 ms. Closing the window ended the server in 115 ms. Ending the shell's process
+  ended the server through its closed stdin in 43-74 ms, started plainly or detached, and left
+  no process behind, so G1 starts `tc4` plainly.
+- **AD21 holds.** After a hard kill while typing, `localStorage` had lost the last 10.1 s of
+  typing (Chromium first wrote it to disk 5.1 s after typing began); the shell's mirror kept
+  every keystroke the server saw, with no torn line. This run's mirror still wrote on the main
+  thread; `e2212de` moved it off, and the Linux rerun kept every keystroke too.
+- **Graphite works on Windows.** Awami Nastaliq joined (302.9 px wide, as on Linux) in
+  Electronite 37.1.0 (Chromium 138). This is a smoke test, not the P8 probe.
+- **The driver's own event log can be torn by a hard kill**: the first hard-kill attempt failed
+  to parse a half-written last line, and the retry ran. Every reader of a log the shell or
+  `tc4` appends to (AD21's mirror, the event logs) skips a torn last line.
+- **Storage on the laptop.** The fold opened in 1.86 s with its cache (budget 3 s) and in
+  6.3 s without one (10 s); peak working set 270-273 MiB (350 MiB). The Psalms materialize
+  (342-401 ms against 300 ms) and the working set right after the open (192-210 MiB against
+  150 MiB steady) missed; the owner asked whether those two budgets matter for a person, and
+  `docs/BUDGET-REVIEW-2026-10-17.md` answers that.
+
 ---
 
 ## 0. How to read this document
@@ -1997,7 +2035,7 @@ last.
 
 | Q | Question | Recommendation |
 |---|---|---|
-| Q-1 | **Stable origin.** Every launch has a new port. The shell's mirror (AD21) now keeps typed text through any crash and across launches, so this no longer decides whether text survives *(A-3)*. It still decides whether the shell serves the UI from a privileged custom scheme (Electron `protocol.handle`) proxied to the server, which gives one origin across launches and lets the shell add the token header itself instead of filtering requests (AD11). G0 prototypes both. Under `protocol.handle`, Electronite v37 hands the handler a same-origin request without an `Origin` header, so the shell sets the server's own `Origin` on what it forwards (G0). Under both, every request crosses the main process's UI thread (AD11). | Decide after G0: the custom scheme if it adds less to the aligner's round trip than the filter, otherwise the filter. G0 times both in alternating passes; a difference inside the spread between passes does not decide. The UI code is the same either way *(A-14)*. |
+| Q-1 | **Stable origin.** Every launch has a new port. The shell's mirror (AD21) now keeps typed text through any crash and across launches, so this no longer decides whether text survives *(A-3)*. It still decides whether the shell serves the UI from a privileged custom scheme (Electron `protocol.handle`) proxied to the server, which gives one origin across launches and lets the shell add the token header itself instead of filtering requests (AD11). G0 prototypes both. Under `protocol.handle`, Electronite v37 hands the handler a same-origin request without an `Origin` header, so the shell sets the server's own `Origin` on what it forwards (G0). Under both, every request crosses the main process's UI thread (AD11). | Decide after G0: the custom scheme if it adds less to the aligner's round trip than the filter, otherwise the filter. G0 times both in alternating passes; a difference inside the spread between passes does not decide. The UI code is the same either way *(A-14)*. **G0 (2026-10-17):** the passes overlap (filter 22.4-24.5 ms, protocol 22.7-25.5 ms painted p95), so the filter stays; put to the owner with the numbers. |
 | Q-2 | **Feedback send.** tC4 sends from Electron main to SendGrid (`tC4:scripts/desktop-feedback.cjs:13`). ARCH:13-14 gives every network request to the server; AGENTS.md allows network only in tc-door43 and tc-resources. Options: (a) the shell sends, gated by the server's switch; (b) a mail client in tc-door43 with the key as a build secret; (c) no sending, keep "Copy the report". | (a): it keeps the key out of the server and reuses tC4's code. |
 | Q-3 | **Keychain.** The `keyring` crate in the server, or Electronite `safeStorage` through the shell (`tC4:scripts/desktop-main.cjs:51-96`)? | `keyring` behind the `Keychain` trait; keep "no keychain on this computer". |
 | Q-4 | **Projects folder.** A default under Documents that OneDrive redirects would open every project read-only (STORAGE:1387-1396). | `%USERPROFILE%\translationCore4\projects` (or `~/translationCore4/projects`), checked against the cloud detection at first launch. |
@@ -2009,7 +2047,7 @@ last.
 | Q-10 | **Translations** of rebuild-only keys into nine languages: who, and does a release wait? | English fallback per key until translated; release waits, and `release_has_no_pending_translation` enforces it *(A-32)*. |
 | Q-11 | **Parity resources.** Reproduce the baseline's substitutes and absences (the default), or recapture tC4 from `bundle/en` so more screens are complete? | Reproduce now; recapture at the v4.0.0 tag. |
 | Q-12 | **Virtualization threshold** of 400 rows: whole DOM on the fixtures, virtualized above. | Accept. |
-| Q-13 | **Aligner fallback.** If a click's round trip misses 30 ms, may tc-ui link tc-align's pure `Aligner`, an exception to ARCH:88? | Decide after G0's measurement in Electronite on Windows; A2's loopback number alone cannot show a miss the product would have. The pure view builder makes the fallback a switch *(A-14)*. |
+| Q-13 | **Aligner fallback.** If a click's round trip misses 30 ms, may tc-ui link tc-align's pure `Aligner`, an exception to ARCH:88? | Decide after G0's measurement in Electronite on Windows; A2's loopback number alone cannot show a miss the product would have. The pure view builder makes the fallback a switch *(A-14)*. **G0 (2026-10-17): does not arise;** the filter's painted p95 was 22.4-24.5 ms on the reference laptop. |
 | Q-14 | **Settings from Home** show from files and open the project (with progress) only on Save. tC4 also opens a store only for the save, without making the project current (`tC4:src/state.jsx:6741-6744`), but a whole Bible's open can take up to 10 s. | Accept. |
 | Q-15 | **Memory.** A sync or USB export from Home opens a side session; with another whole Bible open that is two folds against a 350 MiB peak (PERF:96). Allow, or make the second open wait? | Allow; G2 measures. |
 | Q-16 | **Branches.** Phase 0 lands on main. After unit C, should storage merge into main so app units land on main, or should app units land on a branch cut from storage? Starting B1b–B4b on a merge branch before C finishes is possible but risks rework if C changes the pin types. | Merge storage into main after C; storage units merge into main as each lands. The seed spike B1a runs on a branch cut from `storage` now and is rebased when C merges *(A-16)*. |
