@@ -520,7 +520,10 @@ fn is_seed_stub(state: &FoldState, id: &ChangeId) -> bool {
 /// hides that a version continues a change that has not arrived (§7.4).
 #[test]
 fn concurrent_differences_are_visible() {
-    team(CASES, &["incomplete history"], |view, census| {
+    // A view that holds a change whose parent has not arrived comes from about one script in
+    // eighteen (66 of 1,152 measured): in 64 cases the census misses it about one run in
+    // forty, in 256 less than one in a million.
+    team(CASES * 4, &["incomplete history"], |view, census| {
         let state = view.state;
         let continuing: BTreeSet<ChangeId> = state
             .anomalies()
