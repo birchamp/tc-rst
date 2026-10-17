@@ -200,12 +200,12 @@ pub async fn install_all(
     store: &ResourceStore,
     client: &Door43Client,
     pins: &[ResourcePin],
-) -> Result<Vec<Installed>, (ResourcePin, InstallError)> {
+) -> Result<Vec<Installed>, Box<(ResourcePin, InstallError)>> {
     let mut out = Vec::new();
     for pin in pins {
         match install_dcs(store, client, pin).await {
             Ok(installed) => out.push(installed),
-            Err(e) => return Err((pin.clone(), e)),
+            Err(e) => return Err(Box::new((pin.clone(), e))),
         }
     }
     Ok(out)
