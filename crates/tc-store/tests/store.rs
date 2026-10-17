@@ -36,3 +36,6 @@ mod consolidation;
 
 #[path = "store/commands.rs"]
 mod commands;
+
+#[path = "store/drafts.rs"]
+mod drafts;

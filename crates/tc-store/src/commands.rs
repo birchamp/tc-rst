@@ -623,10 +623,37 @@ fn save_alignment(
 ) -> R<Vec<PlannedChange>> {
     let shown = ctx.edit(shown)?;
     let verse_shown = ctx.edit(verse_shown)?;
-    let RecordKey::Alignment(book, chapter, anchor) = shown.key().clone() else {
+    let displayed_verse = ctx.displayed(&verse_shown)?;
+    let displayed = match ctx.displayed(&shown)? {
+        Some(Record::Alignment { value, .. }) => Some(value),
+        _ => None,
+    };
+    let record = alignment_record(
+        ctx,
+        shown.key(),
+        verse_shown.key(),
+        displayed_verse,
+        displayed,
+        edit,
+    )?;
+    unchanged_or(ctx, &shown, record, Cause::Edit)
+}
+
+/// The alignment record the aligner's `edit` makes (§5.3), stamped from the verse value the
+/// aligner displayed, not the current one: if the verse changed meanwhile, the saved
+/// alignment is stale at once and shown so, never re-stamped silently.
+fn alignment_record(
+    ctx: &Ctx<'_>,
+    key: &RecordKey,
+    verse_key: &RecordKey,
+    verse_value: Option<Record>,
+    displayed: Option<AlignmentValue>,
+    edit: &AlignmentEdit,
+) -> R<Record> {
+    let RecordKey::Alignment(book, chapter, anchor) = key.clone() else {
         return Err(refused(Refusal::WrongRecord("an alignment")));
     };
-    let RecordKey::Verse(vbook, _, run_start) = verse_shown.key().clone() else {
+    let RecordKey::Verse(vbook, _, run_start) = verse_key.clone() else {
         return Err(refused(Refusal::WrongRecord("the aligned verse")));
     };
     if vbook != book {
@@ -643,13 +670,9 @@ fn save_alignment(
                 ..
             },
         ..
-    }) = ctx.displayed(&verse_shown)?
+    }) = verse_value
     else {
         return Err(refused(Refusal::NotText));
-    };
-    let displayed = match ctx.displayed(&shown)? {
-        Some(Record::Alignment { value, .. }) => Some(value),
-        _ => None,
     };
     let content = format!("{words}{layout}");
     let target = TargetVerse::new(&content);
@@ -676,13 +699,12 @@ fn save_alignment(
             .iter()
             .map(|w| (w.word.as_str(), w.occurrence)),
     );
-    let record = Record::Alignment {
+    Ok(Record::Alignment {
         book,
         chapter,
         verse: anchor,
         value,
-    };
-    unchanged_or(ctx, &shown, record, Cause::Edit)
+    })
 }
 
 /// The target's text by the no-text rule of §7.7, from the verse the screen displayed: the
@@ -1346,8 +1368,8 @@ fn keep_draft(
             (DraftField::CheckComment, Some(t)) => {
                 return keep_check_comment(ctx, t, &draft.text, true);
             }
-            (DraftField::Alignment, Some(t)) => {
-                return keep_alignment(ctx, t, &draft.text, true);
+            (DraftField::Alignment, Some(_)) => {
+                return keep_alignment(ctx, &draft.shown, &draft.text, true);
             }
             _ => return Err(refused(Refusal::WrongRecord("a draft with its token"))),
         };
@@ -1414,7 +1436,7 @@ fn keep_draft(
             return keep_check_comment(ctx, token, &draft.text, false);
         }
         (DraftField::Alignment, RecordKey::Alignment(..), _) => {
-            return keep_alignment(ctx, token, &draft.text, false);
+            return keep_alignment(ctx, &draft.shown, &draft.text, false);
         }
         _ => return Err(refused(Refusal::WrongRecord("a draft its record can take"))),
     };
@@ -1455,25 +1477,54 @@ fn keep_check_comment(
     }
 }
 
+/// *Keep* an aligner's draft (R23): the links as an alignment save with the draft's two
+/// tokens, the alignment's and the verse's it displayed, so a first alignment of a verse is
+/// kept as well as an edited one. An unverifiable draft (R20) is stamped from what the
+/// records hold now and written with no parents. A draft with the alignment's token alone
+/// (an older draft) keeps the links on the alignment it showed.
 fn keep_alignment(
     ctx: &Ctx<'_>,
-    token: &ShownToken,
+    tokens: &[ShownToken],
     text: &str,
     verified: bool,
 ) -> R<Vec<PlannedChange>> {
-    let RecordKey::Alignment(book, chapter, verse) = token.key().clone() else {
-        return Err(refused(Refusal::WrongRecord("an alignment")));
-    };
+    let token = tokens
+        .first()
+        .ok_or(refused(Refusal::WrongRecord("a draft with its token")))?;
     let edit = AlignmentEdit::from_json(text).ok_or(refused(Refusal::Text(
         "the draft's links do not read".into(),
     )))?;
+    match (tokens.get(1), verified) {
+        (Some(verse_token), true) => return save_alignment(ctx, token, verse_token, &edit),
+        (Some(verse_token), false) => {
+            let displayed = match ctx.fold.projected(token.key()) {
+                Some(Record::Alignment { value, .. }) => Some(value),
+                _ => None,
+            };
+            let record = alignment_record(
+                ctx,
+                token.key(),
+                verse_token.key(),
+                ctx.fold.projected(verse_token.key()),
+                displayed,
+                &edit,
+            )?;
+            return Ok(vec![change(record, &[], Cause::Edit)]);
+        }
+        (None, _) => {}
+    }
+    let RecordKey::Alignment(book, chapter, verse) = token.key().clone() else {
+        return Err(refused(Refusal::WrongRecord("an alignment")));
+    };
     let base = if verified {
         ctx.displayed(token)?
     } else {
         ctx.fold.projected(token.key())
     };
     let Some(Record::Alignment { mut value, .. }) = base else {
-        return Err(refused(Refusal::WrongRecord("an alignment that exists")));
+        return Err(refused(Refusal::WrongRecord(
+            "an alignment that exists, or the aligned verse's token",
+        )));
     };
     value.alignments = edit.alignments;
     value.word_bank = edit.word_bank;

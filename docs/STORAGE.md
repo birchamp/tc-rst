@@ -1946,7 +1946,7 @@ new one (crash row D1). A successful save of that field removes its entry. The f
 | `Frame`, `StoryRef` | the frame's or the reference line's text | the record's |
 | `CheckComment` | the decision's comment | the decision's |
 | `UserComment { target }` | the comment box (APP-DESIGN R15) | none for a new comment; the comment's for a revision (§5.5) |
-| `Alignment` | the aligner's unsaved links, as `AlignmentEdit::to_json` writes them (APP-DESIGN R23) | the alignment's |
+| `Alignment` | the aligner's unsaved links, as `AlignmentEdit::to_json` writes them (APP-DESIGN R23) | the alignment's, then the verse's it displayed, so *Keep* saves it as `SaveAlignment` would, a verse's first alignment included |
 
 An entry of `drafts.json` is `{field, shown: [token text], text, at}`.
 

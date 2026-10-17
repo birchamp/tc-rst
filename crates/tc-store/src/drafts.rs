@@ -273,7 +273,13 @@ impl DraftWriter {
         counters: Arc<Counters>,
         read_only: bool,
     ) -> Self {
-        let entries = read_entries(&*vfs, &folder);
+        // A read-only open offers nothing (§5.14): keeping a draft would write, and the
+        // window that holds the project may still be writing the same drafts.
+        let entries = if read_only {
+            Vec::new()
+        } else {
+            read_entries(&*vfs, &folder)
+        };
         let offered = to_offer(entries.clone(), fold, signing);
         let keep: BTreeMap<String, Entry> = entries
             .into_iter()
