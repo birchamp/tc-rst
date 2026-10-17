@@ -34,7 +34,11 @@ Words used here: a **change** is one immutable version of one record (tC4 called
    decides, the text shows the whole passage from one side, so no word is shown twice or lost.
 4. **Invalidation is computed.** An alignment or check decision stores what it was made against
    (verse text hash, resource sha). The fold computes "invalid, kept" from the current text and
-   pins. A text edit or resource upgrade writes nothing on alignments or decisions.
+   pins. A resource upgrade writes nothing on alignments, and a text edit nothing on
+   decisions. A text edit carries the verse's alignment over to the new text in the same batch
+   (`tc_align::reflow`: links to words the verse still has are kept, the others go back to the
+   bank), so a verse and its alignment are never seen apart; the earlier alignment stays in
+   History (§5.1).
 5. **Storage.** A save is one atomic file in `.tc/pending/`, outside the burrito, named by its
    device and its content hash, so no other save can ever replace it. A **seal**
    moves pending changes into an immutable NDJSON pack under `ingredients/tc/changes/`, which is
@@ -4387,6 +4391,12 @@ go in `[workspace.dependencies]`. No CRDT library and no git content merge (`.au
     and 5.4 to 6.3 s of wall time on the quiet VM (§14), within the 10 s budget for such an
     open (§14, PERFORMANCE.md); 3.8 s on the owner's laptop with SHA instructions. It shows determinate progress and writes the cache, so the
     next open's load and fold take about 1.7 s.
+16. **A whole Bible open keeps 270 to 330 MiB resident**, against the 150 MiB steady budget
+    (`docs/evidence/storage-open-save-2026-10-17.md`; the 350 MiB peak is met). The fold holds
+    an entry for every change and record of the project's history (about 170 MB of tables for
+    617,000 changes, §14), and glibc keeps each worker thread's heap at its high-water mark.
+    Meeting the budget needs the fold to keep only the heads and the open books' histories in
+    memory and read the rest on demand, a change to `tc-journal`'s tables.
 
 ---
 
