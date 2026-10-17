@@ -1318,3 +1318,128 @@ fn read_only_refuses_every_command_and_writes_nothing() {
     assert!(changed.is_empty(), "a read-only open wrote {changed:?}");
     writer.close().unwrap();
 }
+
+/// An Open Bible Stories project made as a new one is (§3.2): its details and each story's
+/// template base, seeded from the shipped template.
+fn stories() -> (FaultFs, PathBuf) {
+    let fs = FaultFs::new();
+    let rig = rig(fs.clone());
+    let mut records: Vec<Record> = first_records()
+        .into_iter()
+        .filter(|r| !matches!(r, Record::Versification { .. }))
+        .collect();
+    for story in tc_obs::ids::StoryNo::all() {
+        records.push(Record::StoryBase {
+            story: tc_journal::StoryNo::new(story.get()).unwrap(),
+            value: tc_obs::story::seed_story(tc_obs::template::template_story(story)).unwrap(),
+        });
+    }
+    let folder = rig
+        .store
+        .create(&tc_store::NewProject {
+            name: "Stories".into(),
+            kind: tc_journal::fold::ProjectKind::Stories,
+            records,
+            books: Vec::new(),
+        })
+        .unwrap();
+    (fs.crash(false), folder)
+}
+
+fn frame(story: u8, frame: u16) -> RecordKey {
+    RecordKey::Frame(
+        tc_journal::StoryNo::new(story).unwrap(),
+        tc_journal::FrameNo(frame),
+    )
+}
+
+/// §5.15: a frame, a title and a reference line are saved by tC4's text rules, written to
+/// the story's file, and a kill at any write point leaves the save whole or absent.
+#[test]
+fn an_obs_frame_is_saved_by_tc4s_text_rules_and_whole_or_not_at_all() {
+    let (fs, folder) = stories();
+    let (rig, handle) = open(&fs, &folder);
+    assert_eq!(handle.facts().kind, tc_journal::fold::ProjectKind::Stories);
+    submit(
+        &handle,
+        Command::SaveFrame {
+            shown: token(&handle, &frame(1, 1)),
+            text: "This is how God made everything.".into(),
+        },
+    )
+    .unwrap();
+    submit(
+        &handle,
+        Command::SaveFrame {
+            shown: token(&handle, &frame(1, 0)),
+            text: "The Creation".into(),
+        },
+    )
+    .unwrap();
+    // Two paragraphs, a leading newline or a reference line where a frame goes: refused.
+    for bad in [
+        "one\n\ntwo",
+        "\nleading",
+        "_A Bible story from: Genesis 1-2_",
+    ] {
+        let refused = submit(
+            &handle,
+            Command::SaveFrame {
+                shown: token(&handle, &frame(1, 2)),
+                text: bad.into(),
+            },
+        );
+        assert!(
+            matches!(refused, Err(CommandError::Refused(Refusal::Text(_)))),
+            "{bad:?}: {refused:?}"
+        );
+    }
+    // A verse save is no command of a stories project.
+    assert!(matches!(
+        save_verse(&handle, 1, 1, "x"),
+        Err(CommandError::Refused(_)) | Err(CommandError::BadToken(_))
+    ));
+    handle.leave(tc_store::Leave::Mode).wait().unwrap();
+    let story = String::from_utf8(
+        rig.fs
+            .peek(&folder.join("ingredients/content/01.md"))
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        story.contains("This is how God made everything."),
+        "{story}"
+    );
+    assert!(story.starts_with("# The Creation"), "{story}");
+    assert_valid_burrito(&rig.fs, &folder);
+    handle.close().unwrap();
+    // The crash sweep of one frame save.
+    let base = rig.fs.crash(false);
+    let before = {
+        let (_rig, handle) = open(&base, &folder);
+        let ids = all_ids(handle.snapshot().fold());
+        handle.close().unwrap();
+        ids
+    };
+    let points = kill_everywhere(
+        &base,
+        &folder,
+        &|handle| {
+            outcome_of(submit(
+                handle,
+                Command::SaveFrame {
+                    shown: token(handle, &frame(2, 1)),
+                    text: "God put the man in the garden.".into(),
+                },
+            ))
+        },
+        &|handle, outcome| {
+            let got = written("SaveFrame", &before, handle.snapshot().fold());
+            match outcome {
+                Outcome::Saved => assert_eq!(got, vec!["Frame".to_owned()]),
+                Outcome::NotSaved => assert!(got.is_empty() || got == vec!["Frame".to_owned()]),
+            }
+        },
+    );
+    assert!(points >= 4);
+}

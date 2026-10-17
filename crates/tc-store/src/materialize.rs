@@ -52,10 +52,7 @@ fn is_text(file: &DerivedFile) -> bool {
 
 /// `currentScope` of an OBS project: the template's table verbatim (§3.2).
 pub(crate) fn obs_scope() -> serde_json::Value {
-    serde_json::from_str::<serde_json::Value>(tc_obs::template::template_metadata())
-        .ok()
-        .and_then(|v| v.pointer("/type/flavorType/currentScope").cloned())
-        .unwrap_or(serde_json::Value::Null)
+    tc_obs::template::template_current_scope()
 }
 
 impl Project {
@@ -282,10 +279,15 @@ impl Project {
                 (p.clone(), (Md5::of(b), b.len() as u64, nfc))
             })
             .collect();
-        // A project with no book yet (a create before its first book) has no valid
-        // `metadata.json`; nothing is written until it has one (M2).
-        let Ok(metadata) = self.build_metadata(&projection, &planned, &report.removed) else {
-            return Ok(report);
+        // A Bible project with no book yet (a create before its first book) has no valid
+        // `metadata.json`; nothing is written until it has one (M2). Any other failure is a
+        // bug, reported, and nothing is written either.
+        let metadata = match self.build_metadata(&projection, &planned, &report.removed) {
+            Ok(metadata) => metadata,
+            Err(_) if self.kind == ProjectKind::Bible && self.fold.projected_books().is_empty() => {
+                return Ok(report);
+            }
+            Err(e) => return Err(e),
         };
         // M3: the intent.
         let mut intent = Intent::default();
