@@ -90,49 +90,61 @@ fn save(args: &[String]) {
     }
 }
 
-fn cpu_ns() -> u64 {
+// Every reading below comes from Linux's `/proc`. Where it cannot be read (macOS, Windows,
+// a container without `/proc`), the figure is `None` and prints as "unavailable", so a zero
+// is never taken for a measurement (docs/LOCAL-BENCH-FINDINGS-2026-10-16.md F4).
+
+/// CPU time of the calling thread, in ns.
+fn cpu_ns() -> Option<u64> {
     std::fs::read_to_string("/proc/thread-self/schedstat")
+        .ok()?
+        .split_whitespace()
+        .next()?
+        .parse()
         .ok()
-        .and_then(|s| s.split_whitespace().next().and_then(|v| v.parse().ok()))
-        .unwrap_or(0)
+}
+
+/// A field of `/proc/self/stat` after the command name.
+fn stat_field(n: usize) -> Option<u64> {
+    let stat = std::fs::read_to_string("/proc/self/stat").ok()?;
+    stat.rsplit(')')
+        .next()?
+        .split_whitespace()
+        .nth(n)?
+        .parse()
+        .ok()
 }
 
 /// CPU time of the whole process, user and system, in ms (10 ms resolution).
-fn process_cpu_ms() -> u64 {
-    let stat = std::fs::read_to_string("/proc/self/stat").unwrap_or_default();
-    let rest = stat.rsplit(')').next().unwrap_or("");
-    let field = |n: usize| -> u64 {
-        rest.split_whitespace()
-            .nth(n)
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(0)
-    };
+fn process_cpu_ms() -> Option<u64> {
     // utime and stime, in clock ticks of 10 ms.
-    (field(11) + field(12)) * 10
+    Some((stat_field(11)? + stat_field(12)?) * 10)
 }
 
-fn minflt() -> u64 {
-    let stat = std::fs::read_to_string("/proc/self/stat").unwrap_or_default();
-    let rest = stat.rsplit(')').next().unwrap_or("");
-    rest.split_whitespace()
-        .nth(7)
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(0)
+/// The process CPU time spent since `start`, a reading of [`process_cpu_ms`].
+fn cpu_since(start: Option<u64>) -> Option<u64> {
+    process_cpu_ms()?.checked_sub(start?)
+}
+
+fn minflt() -> Option<u64> {
+    stat_field(7)
 }
 
 /// A line of `/proc/self/status` in MiB: `VmHWM` is the peak resident memory, `VmRSS` the
 /// current.
-fn status_mib(field: &str) -> f64 {
-    let status = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
-    status
+fn status_mib(field: &str) -> Option<f64> {
+    let status = std::fs::read_to_string("/proc/self/status").ok()?;
+    let kb: f64 = status
         .lines()
-        .find(|l| l.starts_with(field))
-        .and_then(|l| l.split_whitespace().nth(1))
-        .and_then(|kb| kb.parse::<f64>().ok())
-        .map_or(0.0, |kb| kb / 1024.0)
+        .find(|l| l.starts_with(field))?
+        .split_whitespace()
+        .nth(1)?
+        .parse()
+        .ok()?;
+    Some(kb / 1024.0)
 }
 
-fn peak_rss_mib() -> f64 {
+fn peak_rss_mib() -> Option<f64> {
     status_mib("VmHWM:")
 }
 
@@ -142,8 +154,42 @@ fn reset_peak_rss() {
     let _ = std::fs::write("/proc/self/clear_refs", "5");
 }
 
-fn rss_mib() -> f64 {
+fn rss_mib() -> Option<f64> {
     status_mib("VmRSS:")
+}
+
+/// A time in ms, or "unavailable".
+fn ms(reading: Option<u64>) -> String {
+    reading.map_or_else(|| "unavailable".to_owned(), |v| format!("{v} ms"))
+}
+
+/// A size in MiB, or "unavailable".
+fn mib(reading: Option<f64>) -> String {
+    reading.map_or_else(|| "unavailable".to_owned(), |v| format!("{v:.0} MiB"))
+}
+
+/// A count, or "unavailable".
+fn count(reading: Option<u64>) -> String {
+    reading.map_or_else(|| "unavailable".to_owned(), |v| v.to_string())
+}
+
+/// The machine line: the CPU features that move the budgets (SHA instructions make SHA-256
+/// 6.5 times faster, docs/LOCAL-BENCH-FINDINGS-2026-10-16.md F1), the threads and the load.
+fn machine_line(threads: usize) -> String {
+    #[cfg(target_arch = "x86_64")]
+    let features = format!(
+        "sha {}, avx2 {}, avx512f {}, avx512bw {}, avx512vl {}",
+        std::is_x86_feature_detected!("sha"),
+        std::is_x86_feature_detected!("avx2"),
+        std::is_x86_feature_detected!("avx512f"),
+        std::is_x86_feature_detected!("avx512bw"),
+        std::is_x86_feature_detected!("avx512vl"),
+    );
+    #[cfg(not(target_arch = "x86_64"))]
+    let features = "not x86, so no SHA or AVX-512 bits to read".to_owned();
+    let load = std::fs::read_to_string("/proc/loadavg")
+        .map_or_else(|_| "unavailable".to_owned(), |l| l.trim().to_owned());
+    format!("cpu: {features}; {threads} threads; load {load}")
 }
 
 /// The packs and pending files of a saved corpus, read again by span: what `tc-store` does
@@ -541,17 +587,7 @@ impl Writer {
 fn run(args: &[String]) {
     let dir = PathBuf::from(&args[0]);
     let threads: usize = args.get(1).and_then(|t| t.parse().ok()).unwrap_or(4);
-    #[cfg(target_arch = "x86_64")]
-    println!(
-        "cpu: sha {}, avx2 {}, avx512f {}; {} threads; load {}",
-        std::is_x86_feature_detected!("sha"),
-        std::is_x86_feature_detected!("avx2"),
-        std::is_x86_feature_detected!("avx512f"),
-        threads,
-        std::fs::read_to_string("/proc/loadavg")
-            .unwrap_or_default()
-            .trim()
-    );
+    println!("{}", machine_line(threads));
     // The schema validator is compiled once per process; not part of any action.
     let _ = tc_burrito::check_field(
         tc_burrito::ProjectKind::BibleText,
@@ -575,16 +611,18 @@ fn run(args: &[String]) {
         let cpu = process_cpu_ms();
         let (folded, tail, rules, read) = open_streamed(&dir, threads, None);
         let opened = started.elapsed();
-        let cpu = process_cpu_ms() - cpu;
+        let cpu = cpu_since(cpu);
         let peak = peak_rss_mib();
         let t = Instant::now();
         let size = write_index(&dir, &read, None);
         println!(
             "first open without a cache {:.0} ms, the fold after the last file {:.0} ms, cpu over \
-             all threads {cpu} ms, peak RSS {peak:.0} MiB; the cache of {} files written in {:?}, \
-             {size} bytes; O7's rules {rules:?}",
+             all threads {}, peak RSS {}; the cache of {} files written in {:?}, {size} bytes; \
+             O7's rules {rules:?}",
             opened.as_secs_f64() * 1e3,
             tail.as_secs_f64() * 1e3,
+            ms(cpu),
+            mib(peak),
             read.len(),
             t.elapsed()
         );
@@ -621,9 +659,9 @@ fn run(args: &[String]) {
         );
         eprintln!(
             "cold open with the cache {:?}, the fold after the last file {tail:?}, cpu over all \
-             threads {} ms, O7's rules {rules:?}",
+             threads {}, O7's rules {rules:?}",
             started.elapsed(),
-            process_cpu_ms() - cpu
+            ms(cpu_since(cpu))
         );
         changes = folded.len();
         state = Some(folded);
@@ -631,9 +669,9 @@ fn run(args: &[String]) {
     }
     println!(
         "fold cache: {index_bytes} bytes for {file_count} files; peak RSS of each cold open with \
-         the cache {:?} MiB, RSS with the fold open {:.0} MiB",
-        peaks.iter().map(|p| p.round() as u64).collect::<Vec<_>>(),
-        rss_mib()
+         the cache {:?}, RSS with the fold open {}",
+        peaks.iter().map(|p| mib(*p)).collect::<Vec<_>>(),
+        mib(rss_mib())
     );
     if std::env::var("FOLDBENCH_CACHED_ONLY").is_ok() {
         cached.report();
@@ -645,14 +683,14 @@ fn run(args: &[String]) {
         cached.report();
         cached_tail.report();
         let state = state.expect("folded");
-        println!("RSS with the fold open {:.0} MiB", rss_mib());
+        println!("RSS with the fold open {}", mib(rss_mib()));
         reset_peak_rss();
         project_psalms(&state);
         println!(
-            "peak RSS while Psalms was projected {:.0} MiB; RSS with the fold open after \
-             Psalms was projected {:.0} MiB",
-            peak_rss_mib(),
-            rss_mib()
+            "peak RSS while Psalms was projected {}; RSS with the fold open after Psalms was \
+             projected {}",
+            mib(peak_rss_mib()),
+            mib(rss_mib())
         );
         return;
     }
@@ -676,9 +714,9 @@ fn run(args: &[String]) {
         open.times.push(started.elapsed());
         after_read.times.push(tail);
         eprintln!(
-            "cold open {:?}, the fold after the last file {tail:?}, cpu over all threads {} ms",
+            "cold open {:?}, the fold after the last file {tail:?}, cpu over all threads {}",
             started.elapsed(),
-            process_cpu_ms() - cpu
+            ms(cpu_since(cpu))
         );
         changes = folded.len();
         state = Some(folded);
@@ -690,9 +728,9 @@ fn run(args: &[String]) {
         open.report();
         after_read.report();
         println!(
-            "peak RSS during the streamed cold opens {open_peak:.0} MiB, RSS with the fold \
-             open {:.0} MiB",
-            rss_mib()
+            "peak RSS during the streamed cold opens {}, RSS with the fold open {}",
+            mib(open_peak),
+            mib(rss_mib())
         );
         return;
     }
@@ -704,8 +742,8 @@ fn run(args: &[String]) {
         let (inputs, source) = load(&dir, threads);
         let loaded = started.elapsed();
         eprintln!(
-            "load {loaded:?}, cpu over all threads {} ms",
-            process_cpu_ms() - load_cpu
+            "load {loaded:?}, cpu over all threads {}",
+            ms(cpu_since(load_cpu))
         );
         let t = Instant::now();
         let f0 = minflt();
@@ -713,15 +751,22 @@ fn run(args: &[String]) {
         let folded = FoldState::fold_from(ProjectKind::Bible, Some(source), inputs);
         fold_only.times.push(t.elapsed());
         eprintln!(
-            "fold {:?}, cpu {} ms, minor faults {}",
+            "fold {:?}, cpu {}, minor faults {}",
             t.elapsed(),
-            (cpu_ns() - c0) / 1_000_000,
-            minflt() - f0
+            ms(cpu_ns()
+                .zip(c0)
+                .and_then(|(now, start)| now.checked_sub(start))
+                .map(|ns| ns / 1_000_000)),
+            count(
+                minflt()
+                    .zip(f0)
+                    .and_then(|(now, start)| now.checked_sub(start))
+            )
         );
         load_only.times.push(loaded);
         state = Some(folded);
     }
-    println!("peak RSS during the streamed cold opens {open_peak:.0} MiB");
+    println!("peak RSS during the streamed cold opens {}", mib(open_peak));
     let mut state = state.expect("folded");
     if std::env::var("FOLDBENCH_FOLD_ONLY").is_ok() {
         load_only.report();
@@ -730,18 +775,18 @@ fn run(args: &[String]) {
         cached_tail.report();
         open.report();
         after_read.report();
-        println!("peak RSS {:.0} MiB", peak_rss_mib());
+        println!("peak RSS {}", mib(peak_rss_mib()));
         return;
     }
     println!(
-        "corpus: {} lines, {} records, {} conflicts, {} anomalies; peak RSS {:.0} MiB, \
-         RSS with the fold open {:.0} MiB",
+        "corpus: {} lines, {} records, {} conflicts, {} anomalies; peak RSS {}, RSS with the \
+         fold open {}",
         changes,
         state.record_keys().len(),
         state.conflict_count(),
         state.anomalies().count(),
-        peak_rss_mib(),
-        rss_mib()
+        mib(peak_rss_mib()),
+        mib(rss_mib())
     );
     println!("| Action | Runs | Median | p95 |");
     println!("|---|---:|---:|---:|");
@@ -1046,9 +1091,9 @@ fn run(args: &[String]) {
     }
     snapshot.report();
     println!(
-        "peak RSS {:.0} MiB; RSS with the fold open after Psalms was projected {:.0} MiB",
-        peak_rss_mib(),
-        rss_mib()
+        "peak RSS {}; RSS with the fold open after Psalms was projected {}",
+        mib(peak_rss_mib()),
+        mib(rss_mib())
     );
 }
 
@@ -1071,7 +1116,7 @@ fn project_psalms(state: &FoldState) {
         let c = process_cpu_ms();
         let rendered = state.render_book(BookId::Psalms);
         projection.times.push(t.elapsed());
-        cpu.push(process_cpu_ms() - c);
+        cpu.push(cpu_since(c));
         files = rendered.len();
         bytes = rendered.iter().map(|(_, b)| b.len()).sum::<usize>();
         let t = Instant::now();
@@ -1084,10 +1129,15 @@ fn project_psalms(state: &FoldState) {
     projection.report();
     usfm.report();
     chapter.report();
-    cpu.sort_unstable();
+    // One unreadable run makes the median unavailable rather than skew it.
+    let mut cpu: Option<Vec<u64>> = cpu.into_iter().collect();
+    let median = cpu.as_mut().and_then(|cpu| {
+        cpu.sort_unstable();
+        cpu.get(cpu.len() / 2).copied()
+    });
     println!(
-        "Psalms: {files} files, {bytes} bytes; CPU time of a projection, all threads: median {} ms",
-        cpu[cpu.len() / 2]
+        "Psalms: {files} files, {bytes} bytes; CPU time of a projection, all threads: median {}",
+        ms(median)
     );
     // To compare the bytes of two builds: FOLDBENCH_DUMP=DIR writes every file of Psalms.
     if let Ok(dump) = std::env::var("FOLDBENCH_DUMP") {

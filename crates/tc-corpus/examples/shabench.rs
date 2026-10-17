@@ -82,7 +82,7 @@ fn load() -> String {
         .unwrap_or_default()
         .split_whitespace()
         .next()
-        .unwrap_or("?")
+        .unwrap_or("unavailable")
         .to_owned()
 }
 
@@ -99,11 +99,15 @@ fn main() {
     let line_bytes: usize = lines.iter().map(|l| l.len()).sum();
     #[cfg(target_arch = "x86_64")]
     println!(
-        "cpu: sha {}, avx2 {}, avx512f {}",
+        "cpu: sha {}, avx2 {}, avx512f {}, avx512bw {}, avx512vl {}",
         std::is_x86_feature_detected!("sha"),
         std::is_x86_feature_detected!("avx2"),
         std::is_x86_feature_detected!("avx512f"),
+        std::is_x86_feature_detected!("avx512bw"),
+        std::is_x86_feature_detected!("avx512vl"),
     );
+    #[cfg(not(target_arch = "x86_64"))]
+    println!("cpu: not x86, so no SHA or AVX-512 bits to read");
     println!(
         "{} files, {} bytes; {} lines, {line_bytes} bytes of JSON ({} B a line)",
         whole.len(),

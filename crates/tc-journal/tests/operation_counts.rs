@@ -2,6 +2,13 @@
 //! touches. Each step runs on the Psalms corpus and on the corpus ten times larger (more
 //! books, more history, more devices), on a Psalms chapter whose records are alike in both,
 //! and fails if any of the fold's work counters is larger on the larger corpus.
+//!
+//! These counters exist because the other reading of the spec has been measured: tC4
+//! re-folds its whole history at every save, at 23.81 microseconds an event, linear with no
+//! plateau, so a save at whole-Bible scale costs about 6 s
+//! (`docs/LOCAL-BENCH-FINDINGS-2026-10-16.md` F3). tC4 does it for a sound reason (its fold
+//! is defined as a pure function of the event set), and a fold that is correct the same way
+//! here would be just as slow unless a test pins what each step may touch.
 
 // Helpers build fixed, known-valid values and may fail loudly.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

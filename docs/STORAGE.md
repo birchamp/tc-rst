@@ -3443,6 +3443,14 @@ import and changes nothing.
 
 ### 13.3 Moving a Door43 team from tC4 4.x
 
+**The move is one way** (owner ruling, 2026-10-16: option B of
+`docs/JOURNAL-DECISION-2026-10-16.md`). Rebuild users and tC4 4.0 users never share a Door43
+project: once a team moves, its repository holds this format, and tC4 4.x refuses to sync it.
+No way back is built: there is no export of a moved project to tC4 4.0 (the memo's plan step 8
+is dropped). No straggler's work is lost by this: a tC4 4.x sync of a moved repository refuses
+before it pushes, so it overwrites nothing, and the bridge below converts the tC4 segments a
+straggler pushes after the move.
+
 A Door43 repository with `ingredients/checking/journal/` and no `ingredients/tc/format.json` is a
 tC4 team repository. The new app does not sync with it silently. It says: "This project is shared
 by translationCore 4. Move the team to the new translationCore? Teammates who still use
@@ -3517,6 +3525,21 @@ the codec; tC4-shaped `x-` sidecars become records as in §13.2. A burrito with
 
 ## 14. Scale: a fully checked whole Bible, three translators, three years
 
+**The reference machine and the open budgets** (owner rulings of 2026-10-16,
+`docs/JOURNAL-DECISION-2026-10-16.md` "Decisions"; `docs/PERFORMANCE.md` "Budgets" holds the
+same figures). Budgets are p95 on a five-year-old Windows laptop: 4 cores, 8 GB, a SATA SSD,
+Windows 10 or 11 with Defender real-time protection on. Many laptops of that age (Intel
+10th-generation Core U-series, for example) have no SHA instructions, so every budget must hold
+without them; a measurement on a CPU with them does not alone show a budget met. An ordinary
+cold open of a whole Bible, with a usable fold cache (§3.6), takes at most **3 s**. The first
+open of a project with no usable fold cache (one received from a teammate, imported, or opened
+after the cache encoding changed, §18 item 15) and the first open after a restart, when the
+disk cache is cold, take at most **10 s**. Every open shows determinate progress within 300 ms
+(PERFORMANCE.md rule 4). The owner's quiet laptop (Ice Lake, with SHA instructions,
+`docs/LOCAL-BENCH-FINDINGS-2026-10-16.md` and `docs/evidence/journal-head-to-head-2026-10-16.md`)
+hashed 6.5 times faster than the VM below, opened the whole Bible without a cache in 3.8 s and
+projected Psalms in 269 ms; the VM rows below are the CPU class without SHA instructions.
+
 Assumptions: 66 books, 1,189 chapters, 31,102 verses; 215,767 check items (tC4's benchmark
 corpus); about 8 verse saves per verse across the team (autosave on blur and after 2 s idle), 1.5
 alignment saves per verse, 1.3 saves per check item, 5,000 comments; three devices, 250 working
@@ -3532,8 +3555,7 @@ days a year.
 | `metadata.json` | ≈ 120 KB | 600 entries × ≈ 200 B, pretty-printed |
 | Working tree | ≈ 880 MiB | packs 674 MiB (measured) + derived ≈ 210 MiB (compact sidecars: alignments ≈ 90 MiB, decisions ≈ 110 MiB, USFM ≈ 5 MiB) |
 | `.git` after 3 years | ≈ 250–400 MiB | packs ≈ 70 MiB zlib, stored two to three times because consolidation writes new blobs; derived file history ≈ 110 MiB as deltas; ≈ 7,500 commits of ≈ 15 KB trees |
-| Cold open, 4 cores, SSD | target ≤ 3 s; only load and fold (O8, with O7's rules on the files' facts) measured, the rest of the open (O1 to O6, the rest of O7, O9 to O13) needs `tc-store`, so the 3 s is not shown end to end: with the fold cache 1.6 s (median of 9, p95 1.7 s) with the files in the page cache and 1.7 s (p95 1.9 s) with the guest's page cache cold, 2.5 to 2.6 s of CPU over all threads, on a 4-vCPU VM without SHA instructions and no other job running; as fast with a cache another build of the same `INDEX_VERSION` and probe stamp wrote; the first open without a cache (§18 item 15) 5.4 to 5.5 s (p95 5.4 to 5.6 s; 5.9 to 6.3 s the evening before), 19 s of CPU with glibc malloc and 13.5 s with jemalloc: **missed** against this branch's 3 s, within the owner's 10 s for an open without a usable cache (`docs/JOURNAL-DECISION-2026-10-16.md`, Decisions), which is not yet in PERFORMANCE.md | with the fold cache (§3.6, §6.1 O8) the open reads and fingerprints every file (705 MB) and takes each file's prepared changes from its section instead of hashing and parsing its lines; the fold indexes them as they arrive, and its work after the last file is 0.5 to 0.6 s; O7's rules take 1 to 2 ms. Without the cache every byte is hashed once (P4, with `ring`: one pass over every file takes 1 s of the four threads' time) and every change is parsed and checked; `docs/evidence/storage-fold-2026-10-16.md`. A corpus of 277,880 changes (the size of the probe's 278,041 actions, which it folded in 1.13 s) folds in 0.92 s (0.59 s on a faster VM) |
-| Cold open, 2-core laptop, HDD | ≈ 6–10 s | disk-bound; determinate progress per phase |
+| Cold open, 4 cores, SSD | budget 3 s with a usable fold cache, 10 s without one or with a cold disk cache; only load and fold (O8, with O7's rules on the files' facts) measured, the rest of the open (O1 to O6, the rest of O7, O9 to O13) needs `tc-store`, so the 3 s is not shown end to end: with the fold cache 1.6 s (median of 9, p95 1.7 s) with the files in the page cache and 1.7 s (p95 1.9 s) with the guest's page cache cold, 2.5 to 2.6 s of CPU over all threads, on a 4-vCPU VM without SHA instructions and no other job running; as fast with a cache another build of the same `INDEX_VERSION` and probe stamp wrote; the first open without a cache (§18 item 15) 5.4 to 5.5 s (p95 5.4 to 5.6 s; 5.9 to 6.3 s the evening before), 19 s of CPU with glibc malloc and 13.5 s with jemalloc: within the 10 s budget of an open without a usable cache; on the owner's Ice Lake laptop with SHA instructions 3.8 s (median of 5, p95 3.9 s) | with the fold cache (§3.6, §6.1 O8) the open reads and fingerprints every file (705 MB) and takes each file's prepared changes from its section instead of hashing and parsing its lines; the fold indexes them as they arrive, and its work after the last file is 0.5 to 0.6 s; O7's rules take 1 to 2 ms. Without the cache every byte is hashed once (P4, with `ring`: one pass over every file takes 1 s of the four threads' time) and every change is parsed and checked; `docs/evidence/storage-fold-2026-10-16.md`. A corpus of 277,880 changes (the size of the probe's 278,041 actions, which it folded in 1.13 s) folds in 0.92 s (0.59 s on a faster VM) |
 | Save one verse | 1–10 ms | one `atomic_write` of ≈ 1 KB (measured 0.41 ms on the VM, fsyncbench) |
 | Materialize one book | 20–60 ms estimated; measured projection of Psalms 150 to 164 ms (medians of 20 in each of 5 processes, p95 177 to 195 ms) on the VM with no other job running, 205 to 217 ms (p95 247 to 278 ms) with one other job, within the 300 ms budget; 348 to 376 ms when other jobs loaded it (the build before `1665eba`: 341 to 521 ms in the same rounds); not measured on the reference laptop | projecting every Psalms file (USFM, alignments, tN and TWL decisions, comments; 18.7 MB) with values read from disk and checked against their fingerprints (§2.6), on 4 threads, about 0.5 s of CPU (2.3 G instructions), about half of it decoding the book's records from JSON; the book's files are listed from its own records, and decisions and alignments are decoded, written and freed in chunks on threads; the USFM alone 16 ms, one chapter 0.13 ms; the write and `metadata.json` are `tc-store`'s, and with §6.2 an open after no change projects no file |
 | Checkpoint | 0.1–0.5 s | seal ≤ 1 MiB, materialize, tree of changed directories, one commit |
@@ -3807,7 +3829,8 @@ Playwright drives the real UI against the real server for:
 ### 16.5 Probes and measurements before the format is frozen
 
 1. **Scale corpus.** Generate the §14 corpus; measure cold open, save, materialize, checkpoint,
-   sync and USB export on the reference laptop; the open target is 3 s.
+   sync and USB export on the reference laptop (§14); the open budgets are 3 s with a usable
+   fold cache and 10 s without one or with a cold disk cache.
 2. **Shallow join.** Fetch, commit and push from a depth-1 clone against Gitea (a container where
    available; the local server otherwise). Until it passes, joins are full clones.
 3. **Ref rejection.** A server hook and a protected branch reject the ref after the pack;
@@ -3955,8 +3978,8 @@ go in `[workspace.dependencies]`. No CRDT library and no git content merge (`.au
     changed the probe stamp, §3.6)
     verifies and parses every change: for a whole Bible on a processor without SHA
     instructions, 19 to 20 s of CPU over four threads with glibc malloc (13.5 s with jemalloc)
-    and 5.4 to 6.3 s of wall time on the quiet VM (§14), over this branch's 3 s and within the
-    owner's 10 s for such an open. It shows determinate progress and writes the cache, so the
+    and 5.4 to 6.3 s of wall time on the quiet VM (§14), within the 10 s budget for such an
+    open (§14, PERFORMANCE.md); 3.8 s on the owner's laptop with SHA instructions. It shows determinate progress and writes the cache, so the
     next open's load and fold take about 1.7 s.
 
 ---
