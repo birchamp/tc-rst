@@ -230,12 +230,17 @@ pub struct PackFacts {
 
 impl PackFacts {
     pub fn of(read: &PackRead) -> Self {
+        Self::with_ids(read, read.entries.iter().map(Verified::id))
+    }
+
+    /// The facts of `read`, whose entries have the ids `ids`.
+    pub(crate) fn with_ids(read: &PackRead, ids: impl Iterator<Item = ChangeId>) -> Self {
         Self {
             id: read.id,
             path: read.path,
             header: read.header.clone(),
             status: read.status.clone(),
-            ids: sorted_ids(&read.entries),
+            ids: sorted_ids(ids),
         }
     }
 
@@ -249,9 +254,9 @@ impl PackFacts {
     }
 }
 
-/// The ids of `entries`, sorted, without repeats.
-pub(crate) fn sorted_ids(entries: &[Verified]) -> Vec<ChangeId> {
-    let mut ids: Vec<ChangeId> = entries.iter().map(Verified::id).collect();
+/// `ids` sorted, without repeats.
+pub(crate) fn sorted_ids(ids: impl Iterator<Item = ChangeId>) -> Vec<ChangeId> {
+    let mut ids: Vec<ChangeId> = ids.collect();
     ids.sort_unstable();
     ids.dedup();
     ids
@@ -297,6 +302,19 @@ pub(crate) fn not_ours(
 /// wrong comes back in [`PackRead::status`]. Each byte of a valid pack is hashed once: P2
 /// compares the name with the hash of the header line and the ids P4 verified.
 pub fn read_pack(path: &str, bytes: &[u8], project: ProjectId) -> PackRead {
+    let (mut read, lines) = read_pack_lines(path, bytes, project);
+    (read.entries, read.spans) = parse_entries(lines);
+    read
+}
+
+/// [`read_pack`] without its entries: the read, and the lines that verified (or were
+/// salvaged), in file order, still to parse. A loader that keeps only what the fold keeps of
+/// each change parses them one at a time, so a file's changes are never all decoded at once.
+pub(crate) fn read_pack_lines<'a>(
+    path: &str,
+    bytes: &'a [u8],
+    project: ProjectId,
+) -> (PackRead, Vec<VerifiedLine<'a>>) {
     let parsed_path = PackPath::parse(path);
     let lines = split_lines(bytes);
     let mut read = PackRead {
@@ -312,12 +330,12 @@ pub fn read_pack(path: &str, bytes: &[u8], project: ProjectId) -> PackRead {
         Some(NotOurs::Newer(tcpack)) => {
             read.id = PackId::of(bytes);
             read.status = PackStatus::Newer { tcpack };
-            return read;
+            return (read, Vec::new());
         }
         Some(NotOurs::Foreign(owner)) => {
             read.id = PackId::of(bytes);
             read.status = PackStatus::Foreign { project: owner };
-            return read;
+            return (read, Vec::new());
         }
         None => {}
     }
@@ -367,8 +385,7 @@ pub fn read_pack(path: &str, bytes: &[u8], project: ProjectId) -> PackRead {
             salvage(&lines)
         }
     };
-    (read.entries, read.spans) = parse_entries(entries);
-    read
+    (read, entries)
 }
 
 /// A line that verified: its id, its JSON and where the JSON lies in the file.

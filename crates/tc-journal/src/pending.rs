@@ -16,7 +16,7 @@ use crate::ids::{ChangeId, DeviceId, DeviceKind, Md5, ProjectId, RepoPath};
 use crate::json::{self, Json};
 use crate::line::{RawLine, Span, encode_line, file_hash, frame, split_lines, verify_line};
 use crate::pack::{
-    NotOurs, PackError, not_ours, parse_entries, salvage, sorted_ids, verified_lines,
+    NotOurs, PackError, VerifiedLine, not_ours, parse_entries, salvage, sorted_ids, verified_lines,
 };
 use crate::text::hex;
 
@@ -98,16 +98,32 @@ pub struct PendingFacts {
 
 impl PendingFacts {
     pub fn of(read: &PendingRead) -> Self {
+        Self::with_ids(read, read.entries.iter().map(Verified::id))
+    }
+
+    /// The facts of `read`, whose entries have the ids `ids`.
+    pub(crate) fn with_ids(read: &PendingRead, ids: impl Iterator<Item = ChangeId>) -> Self {
         Self {
             header: read.header.clone(),
             status: read.status.clone(),
-            ids: sorted_ids(&read.entries),
+            ids: sorted_ids(ids),
         }
     }
 }
 
 /// Reads a pending file of project `project`. Never fails.
 pub fn read_pending(bytes: &[u8], project: ProjectId) -> PendingRead {
+    let (mut read, lines) = read_pending_lines(bytes, project);
+    (read.entries, read.spans) = parse_entries(lines);
+    read
+}
+
+/// [`read_pending`] without its entries: the read, and its verified (or salvaged) lines in
+/// file order, still to parse (see [`crate::pack::read_pack_lines`]).
+pub(crate) fn read_pending_lines(
+    bytes: &[u8],
+    project: ProjectId,
+) -> (PendingRead, Vec<VerifiedLine<'_>>) {
     let lines = split_lines(bytes);
     let mut read = PendingRead {
         header: None,
@@ -118,11 +134,11 @@ pub fn read_pending(bytes: &[u8], project: ProjectId) -> PendingRead {
     match not_ours(lines.first(), "pending", PENDING_FORMAT, project) {
         Some(NotOurs::Newer(pending)) => {
             read.status = PendingStatus::Newer { pending };
-            return read;
+            return (read, Vec::new());
         }
         Some(NotOurs::Foreign(owner)) => {
             read.status = PendingStatus::Foreign { project: owner };
-            return read;
+            return (read, Vec::new());
         }
         None => {}
     }
@@ -141,8 +157,7 @@ pub fn read_pending(bytes: &[u8], project: ProjectId) -> PendingRead {
             salvage(&lines)
         }
     };
-    (read.entries, read.spans) = parse_entries(entries);
-    read
+    (read, entries)
 }
 
 fn parse_header(line: &RawLine<'_>) -> Result<PendingHeader, PackError> {

@@ -89,8 +89,7 @@ use crate::ids::{
 };
 use crate::json;
 use crate::keys::{CheckId, CheckKey, CheckTarget, RecordKey, RefPart, ToolId};
-use crate::line::Span;
-use crate::pack::{PackFacts, PackHeader, PackPath, PackStatus};
+use crate::pack::{PackFacts, PackHeader, PackPath, PackStatus, VerifiedLine};
 use crate::pending::{PendingFacts, PendingHeader, PendingStatus, Purpose, Reconciles};
 use crate::record::{ChapterVerse, CommentTarget, PresentHow, ResourceRef};
 use smallvec::SmallVec;
@@ -251,9 +250,9 @@ enum Head {
 /// it, prepares its changes at file number `file`, and makes its section from the same
 /// bytes, so a section always holds every change of exactly the bytes it is keyed by.
 pub fn load_pack(path: &str, bytes: &[u8], project: ProjectId, file: u32) -> Loaded {
-    let read = crate::pack::read_pack(path, bytes, project);
-    let facts = PackFacts::of(&read);
-    let inputs = prepare(read.entries, read.spans, Some(read.id), file);
+    let (read, lines) = crate::pack::read_pack_lines(path, bytes, project);
+    let facts = PackFacts::with_ids(&read, lines.iter().map(|line| line.0));
+    let inputs = prepare(lines, Some(read.id), file);
     let key = FileKey::of(path, bytes);
     let section = match (read.status, read.header) {
         (PackStatus::Valid, Some(header)) => {
@@ -275,9 +274,9 @@ pub fn load_pack(path: &str, bytes: &[u8], project: ProjectId, file: u32) -> Loa
 
 /// [`load_pack`] for a pending file at `path` (`.tc/pending/<name>`, §4.2).
 pub fn load_pending(path: &str, bytes: &[u8], project: ProjectId, file: u32) -> Loaded {
-    let read = crate::pending::read_pending(bytes, project);
-    let facts = PendingFacts::of(&read);
-    let inputs = prepare(read.entries, read.spans, None, file);
+    let (read, lines) = crate::pending::read_pending_lines(bytes, project);
+    let facts = PendingFacts::with_ids(&read, lines.iter().map(|line| line.0));
+    let inputs = prepare(lines, None, file);
     let key = FileKey::of(path, bytes);
     let section = match (read.status, read.header) {
         (PendingStatus::Valid, Some(header)) => {
@@ -293,16 +292,15 @@ pub fn load_pending(path: &str, bytes: &[u8], project: ProjectId, file: u32) -> 
     }
 }
 
-fn prepare(
-    entries: Vec<Verified>,
-    spans: Vec<Span>,
-    pack: Option<PackId>,
-    file: u32,
-) -> Vec<FoldInput> {
-    entries
+/// Each line parsed and prepared in turn, so one decoded change is alive at a time: a pack
+/// of thousands of changes, decoded whole, was tens of megabytes on each reading thread.
+fn prepare(lines: Vec<VerifiedLine<'_>>, pack: Option<PackId>, file: u32) -> Vec<FoldInput> {
+    lines
         .into_iter()
-        .zip(spans)
-        .map(|(entry, span)| FoldInput::new(entry, pack).prepare_at(ValueAt::new(file, span)))
+        .map(|(id, json, span)| {
+            FoldInput::new(crate::change::parse_change(id, Arc::from(json)), pack)
+                .prepare_at(ValueAt::new(file, span))
+        })
         .collect()
 }
 

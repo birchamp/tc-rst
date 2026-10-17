@@ -18,6 +18,9 @@ hmac = "0.13.0"
 uuid = "1.28.0"
 smallvec = "1.16.3"
 im = "15.1.0"
+# One pool of worker threads for the fold's parallel work (placing attached records,
+# projecting a book), however it nests: each thread keeps an allocator heap of its own.
+rayon.workspace = true
 
 # SHA-256 of every change and file name (src/sha.rs). ring needs a random source that
 # wasm32-unknown-unknown lacks, so a wasm32 build hashes with sha2 instead.

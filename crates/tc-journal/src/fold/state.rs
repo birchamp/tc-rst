@@ -562,11 +562,10 @@ impl FoldState {
         for input in changes {
             chunk.push(input);
             if chunk.len() == INDEX_CHUNK {
-                state.index_all(std::mem::take(&mut chunk), &mut dirty);
-                chunk.reserve(INDEX_CHUNK);
+                state.index_all(&mut chunk, &mut dirty);
             }
         }
-        state.index_all(chunk, &mut dirty);
+        state.index_all(&mut chunk, &mut dirty);
         state.resolve_absent_parents();
         state.run(&mut dirty);
         if dirty.rebuild {
@@ -820,7 +819,8 @@ impl FoldState {
             all: true,
             ..Dirty::default()
         };
-        fresh.index_all(inputs.into_iter().chain(quarantined).collect(), &mut dirty);
+        let mut all: Vec<FoldInput> = inputs.into_iter().chain(quarantined).collect();
+        fresh.index_all(&mut all, &mut dirty);
         fresh.run(&mut dirty);
         *self = fresh;
         super::Delta::everything()
@@ -1108,9 +1108,14 @@ impl FoldState {
     /// time, built in passes that each fill one table. A pass reads its input in order and
     /// does one lookup per change, so the lookups of neighbouring changes overlap; a
     /// whole-Bible index is several times faster this way than change by change.
-    fn index_all(&mut self, inputs: Vec<FoldInput>, dirty: &mut Dirty) {
+    /// Takes every input out of `inputs` and leaves it empty with its room, so a fold from
+    /// scratch fills one buffer chunk after chunk.
+    fn index_all(&mut self, buffer: &mut Vec<FoldInput>, dirty: &mut Dirty) {
         let base = self.metas.len();
-        let inputs: Vec<FoldInput> = inputs.into_iter().map(FoldInput::prepare).collect();
+        let mut inputs: Vec<FoldInput> = std::mem::take(buffer)
+            .into_iter()
+            .map(FoldInput::prepare)
+            .collect();
         // Ids: each change once, numbered in input order.
         self.ids.reserve(inputs.len());
         let mut fresh: Vec<bool> = Vec::with_capacity(inputs.len());
@@ -1147,7 +1152,7 @@ impl FoldState {
         // The change table, with the record keys and batches set aside for their passes.
         let mut keys: Vec<(u64, RecordKey, Option<BookId>)> = Vec::with_capacity(inputs.len());
         let mut batches: Vec<(BatchId, u32)> = Vec::with_capacity(inputs.len());
-        for (input, new) in inputs.into_iter().zip(fresh) {
+        for (input, new) in inputs.drain(..).zip(fresh) {
             let pack = input.pack;
             let (id, value, summary) = match input.line {
                 Line::Verified(Verified::Quarantined(q)) => {
@@ -1200,6 +1205,7 @@ impl FoldState {
                 pack,
             });
         }
+        *buffer = inputs;
         let added = self.metas.len() - base;
         self.count(Counter::ChangesIndexed, added as u64);
         self.key_ids.reserve(added / 2);

@@ -150,55 +150,22 @@ fn compact(v: &Value) -> String {
     serde_json::to_string(v).unwrap_or_default()
 }
 
-/// `work` applied to every item on up to four threads, the results in item order.
+/// `work` applied to every item on the worker pool, the results in item order. Every
+/// parallel step of the fold runs on the one pool, however the steps nest: threads spawned
+/// for each step, four at each level, ran sixteen at once while a book was projected, and
+/// each kept an allocator heap at its high-water mark afterwards.
 pub(crate) fn on_threads<T: Sync, R: Send>(items: &[T], work: impl Fn(&T) -> R + Sync) -> Vec<R> {
-    let threads = 4.min(items.len()).max(1);
-    if threads == 1 {
-        return items.iter().map(&work).collect();
-    }
-    let work = &work;
-    let mut slots: Vec<Option<R>> = std::thread::scope(|scope| {
-        let handles: Vec<_> = (0..threads)
-            .map(|t| {
-                scope.spawn(move || {
-                    items
-                        .iter()
-                        .enumerate()
-                        .skip(t)
-                        .step_by(threads)
-                        .map(|(i, item)| (i, work(item)))
-                        .collect::<Vec<_>>()
-                })
-            })
-            .collect();
-        let mut slots: Vec<Option<R>> = (0..items.len()).map(|_| None).collect();
-        for handle in handles {
-            // A thread that panicked leaves its slots empty; the work never panics.
-            for (i, r) in handle.join().unwrap_or_default() {
-                slots[i] = Some(r);
-            }
-        }
-        slots
-    });
-    slots.drain(..).flatten().collect()
+    use rayon::prelude::*;
+    items.par_iter().map(&work).collect()
 }
 
 /// Records decoded together on one thread.
 type DecodedChunk = Vec<(ChangeIdx, Arc<Record>)>;
 
-/// Drops `items` on up to four threads.
-fn drop_on_threads<T: Send>(mut items: Vec<T>) {
-    let threads = 4.min(items.len());
-    if threads <= 1 {
-        return;
-    }
-    let share = items.len().div_ceil(threads);
-    std::thread::scope(|scope| {
-        while !items.is_empty() {
-            let part = items.split_off(items.len().saturating_sub(share));
-            scope.spawn(move || drop(part));
-        }
-    });
+/// Drops `items` on the worker pool.
+fn drop_on_threads<T: Send>(items: Vec<T>) {
+    use rayon::prelude::*;
+    items.into_par_iter().for_each(drop);
 }
 
 fn pretty(v: &Value) -> Vec<u8> {
@@ -865,6 +832,10 @@ impl FoldState {
                 })
                 .collect::<Vec<_>>()
         });
+        // The decoded records, several times the size of what they write, go before the
+        // file is put together.
+        drop(plan);
+        drop(records);
         for (slot, record) in written.into_iter().flatten() {
             match slot {
                 AlignmentSlot::Placed { at, .. } => {
