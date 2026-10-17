@@ -393,3 +393,59 @@ fn a_racy_or_mtime_restored_file_is_never_overwritten() {
     assert_eq!(fs.peek(&usfm).as_deref(), Some(edited.as_slice()));
     handle.close().unwrap();
 }
+
+/// The fold cache (`.tc/index.bin`, §3.6, §6.1 O8) is stamped with its encoding, the format
+/// minor, the probe stamp and the project only, so another open, another installation or an
+/// app update that keeps the encoding takes every unchanged file from it; a damaged cache is
+/// only a cache that is not there.
+#[test]
+fn the_fold_cache_is_kept_by_every_open_of_the_same_encoding() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
+    handle.wait_idle();
+    handle.close().unwrap();
+    let fs = rig.fs.crash(false);
+    let index = folder.join(".tc/index.bin");
+    // The close wrote the cache; the next open takes every file from it.
+    let (first, _) = open_once(&fs, &folder);
+    assert!(first.journal_files_read > 0);
+    assert_eq!(
+        first.journal_files_cached, first.journal_files_read,
+        "{first:?}"
+    );
+    let written = fs.peek(&index).unwrap();
+    // Another installation (other app data, other secret) opening a copy of the folder takes
+    // it too: nothing of the build or the installation is in it.
+    let copy = fs.copy();
+    let other = rig_as(copy.clone(), "/other-app", "host-2");
+    let handle = other
+        .store
+        .open(
+            &folder,
+            &OpenOptions {
+                other_computer_closed: true,
+                ..OpenOptions::default()
+            },
+        )
+        .unwrap();
+    handle.wait_idle();
+    let counters = handle.counters();
+    handle.close().unwrap();
+    assert_eq!(
+        counters.journal_files_cached, counters.journal_files_read,
+        "{counters:?}"
+    );
+    // A damaged cache gives nothing and is written again.
+    let mut damaged = written.clone();
+    let last = damaged.len() - 1;
+    damaged[last] ^= 0x40;
+    fs.put(&index, &damaged, None);
+    let (after_damage, _) = open_once(&fs, &folder);
+    assert!(
+        after_damage.journal_files_cached < after_damage.journal_files_read,
+        "the damaged section is not used: {after_damage:?}"
+    );
+    let (again, _) = open_once(&fs, &folder);
+    assert_eq!(again.journal_files_cached, again.journal_files_read);
+}

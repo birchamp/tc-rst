@@ -184,6 +184,9 @@ impl Project {
         if !self.fold.unreadable_records().is_empty() {
             return Ok(report);
         }
+        self.shared
+            .hooks
+            .wait(crate::hooks::Point::BeforeMaterialize);
         let intent_now = self
             .read_rel(INTENT)?
             .and_then(|b| Intent::parse(&b))

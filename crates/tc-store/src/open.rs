@@ -298,6 +298,12 @@ fn open_inner(
         },
     );
     let mut notices: Vec<(Notice, Option<String>)> = Vec::new();
+    for read in &reads {
+        if let Ok(facts) = &read.outcome {
+            counters.add(&counters.journal_files_read, 1);
+            counters.add(&counters.journal_files_cached, u64::from(facts.cached));
+        }
+    }
     let (mut journal, index_cache) = journal_of(reads, index.as_deref(), &mut notices);
     if !journal.unreadable.is_empty() && vfs.read(&folder.path(PROJECT_JSON)).is_err() {
         // Not one file a cloud client holds back: the folder itself stopped being readable.

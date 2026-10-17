@@ -406,3 +406,284 @@ fn the_last_book_cannot_be_removed() {
     );
     handle.close().unwrap();
 }
+
+/// APP-DESIGN §4.2 `minted_token_parses`, `forged_token_is_refused`: a screen cannot make a
+/// token the store did not mint (§2.7).
+#[test]
+fn a_minted_token_parses_and_a_forged_one_is_refused() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    let minted = handle.mint(&verse(1, 1), None).unwrap();
+    let text = minted.to_text();
+    assert_eq!(handle.parse_edit(&text).unwrap(), minted);
+    // One character changed anywhere is refused.
+    for at in [0, text.len() / 2, text.len() - 1] {
+        let mut forged: Vec<char> = text.chars().collect();
+        forged[at] = if forged[at] == 'A' { 'B' } else { 'A' };
+        let forged: String = forged.into_iter().collect();
+        assert!(handle.parse_edit(&forged).is_err(), "changed at {at}");
+    }
+    // A token another installation minted for the same records is refused.
+    let other = rig_as(rig.fs.copy(), "/other-app", "host-1");
+    let copy = other.store.open(&folder, &OpenOptions::default()).unwrap();
+    let theirs = copy.mint(&verse(1, 1), None).unwrap();
+    assert!(handle.parse_edit(&theirs.to_text()).is_err());
+    let refused = handle
+        .submit(Command::SaveVerse {
+            shown: theirs,
+            words: "forged".into(),
+        })
+        .wait();
+    assert!(
+        matches!(refused, Err(CommandError::BadToken(_))),
+        "{refused:?}"
+    );
+    copy.close().unwrap();
+    handle.close().unwrap();
+}
+
+/// APP-DESIGN §4.2 `review_token_lists_every_head`, and an edit token of a record in
+/// conflict lists only the displayed candidate (§2.7).
+#[test]
+fn a_review_token_lists_every_head_and_an_edit_token_only_the_shown_one() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    let shown = handle.mint(&verse(1, 3), None).unwrap();
+    for words in ["one", "two"] {
+        handle
+            .submit(Command::SaveVerse {
+                shown: shown.clone(),
+                words: words.into(),
+            })
+            .wait()
+            .unwrap();
+    }
+    let mut heads = handle.snapshot().fold().heads(&verse(1, 3));
+    heads.sort();
+    assert_eq!(heads.len(), 2);
+    let review = handle.mint_review(&verse(1, 3)).unwrap();
+    assert_eq!(review.heads(), heads.as_slice());
+    let edit = handle.mint(&verse(1, 3), None).unwrap();
+    assert_eq!(edit.heads().len(), 1);
+    handle.close().unwrap();
+}
+
+/// APP-DESIGN §4.2 `reply_token_lists_only_the_new_change` and `read_your_writes`: the
+/// reply's token continues the saved version, and the snapshot its `seq` names holds it.
+#[test]
+fn a_reply_token_lists_only_the_new_change_and_its_seq_reads_the_write() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    let reply = save_verse(&handle, 1, 7, "an overseer").unwrap();
+    let (key, token) = reply.tokens.first().unwrap();
+    assert_eq!(*key, verse(1, 7));
+    assert_eq!(token.heads(), reply.changes.as_slice());
+    let snapshot = handle.snapshot();
+    assert!(snapshot.seq() >= reply.seq);
+    assert!(snapshot.fold().body(&reply.changes[0]).is_some());
+    // Saving again from the reply's token continues it: one head, no conflict.
+    let next = handle
+        .submit(Command::SaveVerse {
+            shown: token.clone(),
+            words: "an overseer must be".into(),
+        })
+        .wait()
+        .unwrap();
+    assert!(next.new_conflicts.is_empty());
+    assert_eq!(handle.snapshot().fold().heads(&verse(1, 7)), next.changes);
+    handle.close().unwrap();
+}
+
+/// APP-DESIGN §4.2 `snapshot_clone_costs_nothing` (§2.6, R5): taking a snapshot is an `Arc`
+/// clone of what the actor published, not a copy of the fold.
+#[test]
+fn a_snapshot_costs_nothing_to_take() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    // A clone of the fold costs a few hundred pointer copies; 200,000 of them would take
+    // seconds. An Arc clone takes nanoseconds.
+    let started = std::time::Instant::now();
+    let mut seq = 0;
+    for _ in 0..200_000 {
+        seq += handle.snapshot().seq();
+    }
+    assert!(seq > 0);
+    assert!(
+        started.elapsed() < std::time::Duration::from_millis(1500),
+        "{:?}",
+        started.elapsed()
+    );
+    handle.close().unwrap();
+}
+
+/// APP-DESIGN §4.2 `reads_never_wait_behind_a_long_command`: with the actor held inside a
+/// checkpoint, snapshots and book reads still come back, and a save waits its turn.
+#[test]
+fn reads_never_wait_behind_a_held_checkpoint() {
+    let hooks = std::sync::Arc::new(tc_store::Hooks::default());
+    let rig = rig_with_hooks(FaultFs::new(), hooks.clone());
+    rig.store.wait_cleanup();
+    let folder = create_titus(&rig, "Titus");
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    hooks.hold(tc_store::Point::BeforeCheckpoint);
+    let checkpoint = handle.checkpoint(tc_store::CheckpointReason::LeavingTranslate);
+    hooks.wait_reached(tc_store::Point::BeforeCheckpoint, 1);
+    let save = handle.submit(Command::SaveVerse {
+        shown: handle.mint(&verse(1, 8), None).unwrap(),
+        words: "hospitable".into(),
+    });
+    assert!(handle.snapshot().fold().book_usfm(TIT).is_some());
+    assert!(handle.read_book(TIT).wait().usfm.is_some());
+    assert!(!save.is_ready(), "the save waits behind the checkpoint");
+    hooks.release(tc_store::Point::BeforeCheckpoint);
+    checkpoint.wait().unwrap();
+    assert_eq!(save.wait().unwrap().stored, Stored::Durable);
+    handle.close().unwrap();
+}
+
+/// APP-DESIGN §4.2 `section_save_checks_only_displayed_values` (§5.2 step 2, L74): a join
+/// made after the section editor drew its screen does not refuse the editor's save; the two
+/// are one visible passage conflict.
+#[test]
+fn a_section_save_checks_only_what_it_displayed() {
+    use tc_journal::command::SectionValue;
+    use tc_journal::record::VerseValue;
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    let text = |v: u16| match handle.snapshot().fold().projected(&verse(1, v)) {
+        Some(tc_journal::Record::Verse { value, .. }) => value,
+        other => panic!("{other:?}"),
+    };
+    // The section editor shows 1:5 and 1:6.
+    let shown5 = handle.mint(&verse(1, 5), None).unwrap();
+    let shown6 = handle.mint(&verse(1, 6), None).unwrap();
+    let (five, six) = (text(5), text(6));
+    // Meanwhile 6 and 7 are joined.
+    let VerseValue::Text { marker, layout, .. } = six.clone() else {
+        panic!()
+    };
+    handle
+        .submit(Command::SaveSection {
+            book: TIT,
+            shown: vec![
+                (
+                    handle.mint(&verse(1, 6), None).unwrap(),
+                    Some(SectionValue::Verse(VerseValue::Text {
+                        marker: marker.clone(),
+                        words: "six and seven".into(),
+                        layout: layout.clone(),
+                        last: tc_journal::VerseNo::new(7).unwrap(),
+                        from: None,
+                    })),
+                ),
+                (
+                    handle.mint(&verse(1, 7), None).unwrap(),
+                    Some(SectionValue::Verse(VerseValue::Covered {
+                        by: tc_journal::VerseNo::new(6).unwrap(),
+                    })),
+                ),
+            ],
+            layout: None,
+        })
+        .wait()
+        .unwrap();
+    // The editor's own edit of 5 and 6, from what it displayed.
+    let edited = |v: VerseValue, words: &str| match v {
+        VerseValue::Text {
+            marker,
+            layout,
+            last,
+            from,
+            ..
+        } => VerseValue::Text {
+            marker,
+            words: words.into(),
+            layout,
+            last,
+            from,
+        },
+        other => other,
+    };
+    let reply = handle
+        .submit(Command::SaveSection {
+            book: TIT,
+            shown: vec![
+                (
+                    shown5,
+                    Some(SectionValue::Verse(edited(five, "five, edited"))),
+                ),
+                (
+                    shown6,
+                    Some(SectionValue::Verse(edited(six, "six, edited"))),
+                ),
+            ],
+            layout: None,
+        })
+        .wait()
+        .unwrap();
+    assert_eq!(reply.stored, Stored::Durable);
+    assert!(!reply.new_conflicts.is_empty(), "a visible conflict");
+    let conflict = handle
+        .snapshot()
+        .fold()
+        .conflicts()
+        .find(|c| reply.new_conflicts.contains(&c.id))
+        .cloned()
+        .unwrap();
+    assert_eq!(conflict.kind, tc_journal::fold::ConflictKind::Passage);
+    handle.close().unwrap();
+}
+
+/// APP-DESIGN §4.2 `not_written_keeps_seq_and_retry_uses_the_same_token` (§5.0 B3): a save
+/// the disk refused keeps the editor's text and the device's counter, and a retry with the
+/// same token writes the change the first attempt would have written.
+#[test]
+fn a_save_not_written_keeps_its_seq_and_a_retry_with_the_same_token_saves() {
+    let (rig, folder) = titus();
+    let fs = rig.fs.crash(false);
+    let rig = rig_as(fs.clone(), APP, "host-1");
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    let shown = handle.mint(&verse(1, 9), None).unwrap();
+    let before = handle.snapshot().fold().clone();
+    let device = handle.facts().device;
+    let next_seq = before
+        .device_stats()
+        .get(&device)
+        .map_or(1, |s| s.max_seq.0 + 1);
+    // The pending folder exists, so the save's first write point is the temp file's
+    // creation.
+    fs.fail_op(0, std::io::ErrorKind::StorageFull);
+    let refused = handle
+        .submit(Command::SaveVerse {
+            shown: shown.clone(),
+            words: "holding firm".into(),
+        })
+        .wait();
+    assert!(
+        matches!(refused, Err(CommandError::NotWritten(_))),
+        "{refused:?}"
+    );
+    assert_eq!(words(&handle, 1, 9), before_words(&before, 9));
+    let reply = handle
+        .submit(Command::SaveVerse {
+            shown,
+            words: "holding firm".into(),
+        })
+        .wait()
+        .unwrap();
+    let body = handle.snapshot().fold().body(&reply.changes[0]).unwrap();
+    assert_eq!(body.seq.0, next_seq, "the refused save used no seq");
+    assert_eq!(words(&handle, 1, 9).as_deref(), Some("holding firm"));
+    handle.close().unwrap();
+}
+
+fn before_words(fold: &tc_journal::fold::FoldState, v: u16) -> Option<String> {
+    match fold.projected(&verse(1, v)) {
+        Some(tc_journal::Record::Verse {
+            value: tc_journal::record::VerseValue::Text { words, .. },
+            ..
+        }) => Some(words),
+        _ => None,
+    }
+}

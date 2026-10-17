@@ -1,0 +1,1320 @@
+//! Every write path of `docs/STORAGE.md` §5 as a command through the handle: what each one
+//! writes (§5.1 to §5.9, §5.15, §5.16), and that a kill at any of its write points, with or
+//! without a power cut, leaves its batch whole or absent and a reported save present
+//! (§16.2).
+
+use crate::common::*;
+use crate::crash::{Outcome, kill_everywhere, outcome_of};
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+use tc_journal::command::{
+    AlignmentEdit, Choice, Command, DecisionBasis, DecisionChange, DecisionEdit, Draft, DraftField,
+    PlannedChange, RestoreMode, SectionValue, SeedSource, UpgradePlan,
+};
+use tc_journal::fold::{Anomaly, FoldState};
+use tc_journal::keys::{CheckId, CheckKey, CheckTarget, PinGroup, RefPart, SettingKey, ToolId};
+use tc_journal::pending::{PendingHeader, Purpose, encode_pending};
+use tc_journal::record::{
+    AlignmentGroup, BookPresence, CarriedValue, CheckValue, CommentTarget, CommentValue,
+    PinGroupValue, PresentHow, ResourceRef, Scope, ScopeRanges, SlotValue, SourceWord, TargetWord,
+    UserStatus, VerseValue,
+};
+use tc_journal::{
+    BatchId, BatchRef, BookId, Cause, Change, ChangeBody, ChangeId, ChapterNo, DeviceId, DeviceSeq,
+    FORMAT_MINOR, GitOid, Json, JsonMap, Md5, MetaField, ProjectId, Record, RecordKey, RepoPath,
+    ShownToken, SlotName, Verified, VerseNo, WallTime,
+};
+use tc_store::fault::FaultFs;
+use tc_store::{CommandError, OpenOptions, ProjectHandle, Refusal, Stored};
+
+const PHM: BookId = BookId::Philemon;
+const JUD: BookId = BookId::Jude;
+const JN3: BookId = BookId::ThirdJohn;
+
+/// A small literal source for a book's stubs (§5.7): chapters, verses, a span, paragraphs.
+fn source(code: &str) -> String {
+    format!(
+        "\\id {code} source\n\\usfm 3.0\n\\h {code}\n\\mt {code}\n\\c 1\n\\p\n\\v 1 One.\n\\v 2 Two.\n\\v 3-4 Three and four.\n\\p\n\\v 5 Five.\n"
+    )
+}
+
+fn vkey(book: BookId, c: u16, v: u16) -> RecordKey {
+    RecordKey::Verse(book, ChapterNo::new(c).unwrap(), VerseNo::new(v).unwrap())
+}
+
+fn tn_key(c: u16, v: u16, occurrence: u32) -> CheckKey {
+    CheckKey {
+        tool: ToolId::TranslationNotes,
+        check_id: CheckId::parse("abcd").unwrap(),
+        target: CheckTarget::Verse {
+            book: TIT,
+            chapter: RefPart::parse(&c.to_string()).unwrap(),
+            verse: RefPart::parse(&v.to_string()).unwrap(),
+        },
+        occurrence,
+    }
+}
+
+fn oid(n: u8) -> GitOid {
+    GitOid::parse(&format!("{:040x}", n)).unwrap()
+}
+
+fn tn_resource() -> ResourceRef {
+    ResourceRef {
+        repo_path: "git.door43.org/unfoldingWord/en_tn".into(),
+        sha: oid(7),
+    }
+}
+
+fn decision_edit(changes: Vec<DecisionChange>) -> DecisionEdit {
+    DecisionEdit {
+        basis: Some(DecisionBasis {
+            context: JsonMap::from([("checkId".to_owned(), Json::from("abcd"))]),
+            category: Some("figures".into()),
+        }),
+        resource: tn_resource(),
+        changes,
+    }
+}
+
+fn submit(handle: &ProjectHandle, command: Command) -> Result<tc_store::StoreReply, CommandError> {
+    handle.submit(command).wait()
+}
+
+fn token(handle: &ProjectHandle, key: &RecordKey) -> ShownToken {
+    handle.mint(key, None).unwrap()
+}
+
+fn review(handle: &ProjectHandle, key: &RecordKey) -> ShownToken {
+    handle.mint_review(key).unwrap()
+}
+
+fn projected(handle: &ProjectHandle, key: &RecordKey) -> Option<Record> {
+    handle.snapshot().fold().projected(key)
+}
+
+fn project_id(fs: &FaultFs, folder: &Path) -> ProjectId {
+    let bytes = fs
+        .peek(&folder.join("ingredients/tc/project.json"))
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    ProjectId::parse(json["projectId"].as_str().unwrap()).unwrap()
+}
+
+/// A teammate's batch put into `.tc/pending/` as a cloud client or an intake would leave it:
+/// `records` written by device `device`, `n` the batch's declared size.
+fn teammate_batch(
+    fs: &FaultFs,
+    folder: &Path,
+    device: DeviceId,
+    n: u32,
+    records: Vec<(Record, Vec<ChangeId>)>,
+) -> Vec<ChangeId> {
+    let batch = BatchRef::new(BatchId::from_bytes([device.as_bytes()[1]; 16]), n).unwrap();
+    let changes: Vec<Change> = records
+        .into_iter()
+        .enumerate()
+        .map(|(i, (record, parents))| {
+            Change::new(ChangeBody {
+                v: FORMAT_MINOR,
+                record,
+                parents,
+                device,
+                seq: DeviceSeq(i as u64 + 1),
+                at: WallTime(1_792_195_100_000),
+                batch,
+                cause: Cause::Edit,
+            })
+            .unwrap()
+        })
+        .collect();
+    let ids = changes.iter().map(Change::id).collect();
+    let header = PendingHeader {
+        device,
+        project: project_id(fs, folder),
+        purpose: Purpose::Save,
+        reconciles: None,
+    };
+    let lines: Vec<Verified> = changes.into_iter().map(Verified::from).collect();
+    let file = encode_pending(&header, &lines).unwrap();
+    fs.put(
+        &folder.join(format!(".tc/pending/{}", file.name)),
+        &file.bytes,
+        None,
+    );
+    ids
+}
+
+fn alignment_edit(word: &str) -> AlignmentEdit {
+    AlignmentEdit {
+        alignments: vec![AlignmentGroup {
+            top_words: vec![SourceWord {
+                word: "Παῦλος".into(),
+                strong: None,
+                lemma: Some("Παῦλος".into()),
+                morph: None,
+                occurrence: 1,
+                occurrences: 1,
+                extra: Default::default(),
+            }],
+            bottom_words: vec![TargetWord {
+                word: word.into(),
+                occurrence: 1,
+                occurrences: 1,
+                extra: Default::default(),
+            }],
+            extra: Default::default(),
+        }],
+        word_bank: Vec::new(),
+        done: false,
+    }
+}
+
+fn add_book(handle: &ProjectHandle, book: BookId) -> Result<tc_store::StoreReply, CommandError> {
+    submit(
+        handle,
+        Command::AddBook {
+            book,
+            scope: Scope::Whole,
+            seed: SeedSource {
+                usfm: source(book.code()),
+            },
+        },
+    )
+}
+
+/// A teammate's device: a Local device other than this folder's.
+fn teammate() -> DeviceId {
+    DeviceId::local([5u8; 15])
+}
+
+/// The project every test below starts from, closed: Titus with an alignment on 1:1, a
+/// decision on 1:2, a comment on 1:2, a setting, a carried file, Philemon added, Jude added
+/// and removed, a conflict of two of this device's versions of 1:3, a conflict of this
+/// device's and a teammate's versions of 1:4, and a teammate's batch of two of which only
+/// one change arrived.
+fn rich() -> (FaultFs, PathBuf) {
+    static BASE: std::sync::OnceLock<(FaultFs, PathBuf)> = std::sync::OnceLock::new();
+    let (fs, folder) = BASE.get_or_init(|| {
+        let (rig, folder) = titus();
+        let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+        save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+        submit(
+            &handle,
+            Command::SaveAlignment {
+                shown: token(
+                    &handle,
+                    &RecordKey::Alignment(
+                        TIT,
+                        ChapterNo::new(1).unwrap(),
+                        VerseNo::new(1).unwrap(),
+                    ),
+                ),
+                verse_shown: token(&handle, &verse(1, 1)),
+                value: alignment_edit("Paul"),
+            },
+        )
+        .unwrap();
+        save_verse(&handle, 1, 2, "in hope of eternal life").unwrap();
+        submit(
+            &handle,
+            Command::SaveDecision {
+                shown: token(&handle, &RecordKey::Check(tn_key(1, 2, 1))),
+                verse_shown: token(&handle, &verse(1, 2)),
+                value: decision_edit(vec![DecisionChange::Status(Some(UserStatus::Valid))]),
+            },
+        )
+        .unwrap();
+        submit(
+            &handle,
+            Command::AddComment {
+                target: CommentTarget::Verse {
+                    book: TIT,
+                    chapter: ChapterNo::new(1).unwrap(),
+                    verse: VerseNo::new(2).unwrap(),
+                },
+                text: "Check eternal".into(),
+            },
+        )
+        .unwrap();
+        let setting = RecordKey::Setting(SettingKey::parse("textDirection").unwrap());
+        submit(
+            &handle,
+            Command::SetSetting {
+                shown: token(&handle, &setting),
+                value: Some(Json::from("ltr")),
+            },
+        )
+        .unwrap();
+        submit(
+            &handle,
+            Command::ApplyUpgrade {
+                plan: UpgradePlan {
+                    changes: vec![PlannedChange {
+                        record: Record::CarriedFile {
+                            path: RepoPath::parse("ingredients/audio/tit-1.mp3").unwrap(),
+                            value: CarriedValue::Present {
+                                oid: oid(9),
+                                size: 3,
+                                md5: Md5::of(b"mp3"),
+                            },
+                        },
+                        parents: Vec::new(),
+                        cause: Cause::Seed,
+                    }],
+                },
+            },
+        )
+        .unwrap();
+        add_book(&handle, PHM).unwrap();
+        add_book(&handle, JUD).unwrap();
+        submit(
+            &handle,
+            Command::RemoveBook {
+                book: JUD,
+                presence_shown: token(&handle, &RecordKey::BookPresence(JUD)),
+            },
+        )
+        .unwrap();
+        // Two of this device's versions of 1:3, both from one displayed token.
+        let shown = token(&handle, &verse(1, 3));
+        for words in ["One version", "Another version"] {
+            submit(
+                &handle,
+                Command::SaveVerse {
+                    shown: shown.clone(),
+                    words: words.into(),
+                },
+            )
+            .unwrap();
+        }
+        let before_teammate = handle.snapshot().fold().heads(&verse(1, 4));
+        save_verse(&handle, 1, 4, "My version of four").unwrap();
+        handle.wait_idle();
+        handle.close().unwrap();
+        // A teammate's version of 1:4 from the same base, and one change of a batch of two.
+        let Some(Record::Verse { value, .. }) = ({
+            let rig = rig_as(rig.fs.copy(), APP, "host-1");
+            let h = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+            let v = h.snapshot().fold().projected(&verse(1, 4));
+            h.close().unwrap();
+            v
+        }) else {
+            panic!("1:4 has a value");
+        };
+        let VerseValue::Text {
+            marker,
+            layout,
+            last,
+            from,
+            ..
+        } = value
+        else {
+            panic!("1:4 is text");
+        };
+        let theirs = Record::Verse {
+            book: TIT,
+            chapter: ChapterNo::new(1).unwrap(),
+            verse: VerseNo::new(4).unwrap(),
+            value: VerseValue::Text {
+                marker,
+                words: "Their version of four".into(),
+                layout,
+                last,
+                from,
+            },
+        };
+        teammate_batch(
+            &rig.fs,
+            &folder,
+            teammate(),
+            1,
+            vec![(theirs, before_teammate)],
+        );
+        let half = Record::Comment {
+            id: tc_journal::CommentId::from_bytes([4u8; 16]),
+            value: CommentValue {
+                target: CommentTarget::Verse {
+                    book: TIT,
+                    chapter: ChapterNo::new(1).unwrap(),
+                    verse: VerseNo::new(5).unwrap(),
+                },
+                text: "Half of a batch".into(),
+            },
+        };
+        teammate_batch(
+            &rig.fs,
+            &folder,
+            DeviceId::local([6u8; 15]),
+            2,
+            vec![(half, Vec::new())],
+        );
+        // One open folds and seals them as any open would.
+        let reopened = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+        reopened.wait_idle();
+        reopened.close().unwrap();
+        (rig.fs.crash(false), folder)
+    });
+    (fs.copy(), folder.clone())
+}
+
+fn open(fs: &FaultFs, folder: &Path) -> (Rig, ProjectHandle) {
+    let rig = rig_as(fs.clone(), APP, "host-1");
+    let handle = rig.store.open(folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    (rig, handle)
+}
+
+fn conflict_of(fold: &FoldState, key: &RecordKey) -> tc_journal::fold::Conflict {
+    fold.conflicts()
+        .find(|c| c.key == *key || c.also_keys.contains(key))
+        .cloned()
+        .unwrap_or_else(|| panic!("no conflict on {key:?}"))
+}
+
+/// One command of each kind of §2.7, built from what `handle` shows now. `None` when the
+/// command does not apply to the project.
+fn every_command(handle: &ProjectHandle) -> Vec<(&'static str, Command)> {
+    let snapshot = handle.snapshot();
+    let fold = snapshot.fold();
+    let mut out: Vec<(&'static str, Command)> = Vec::new();
+    out.push((
+        "SaveVerse",
+        Command::SaveVerse {
+            shown: token(handle, &verse(1, 6)),
+            words: "if anyone is blameless".into(),
+        },
+    ));
+    // A layout another verse of the chapter has.
+    let layout_of = |v: u16| match fold.projected(&verse(1, v)) {
+        Some(Record::Verse {
+            value: VerseValue::Text { layout, .. },
+            ..
+        }) => Some(layout),
+        _ => None,
+    };
+    let own = layout_of(7).unwrap();
+    if let Some(other) = (1..=16).filter_map(layout_of).find(|l| *l != own) {
+        out.push((
+            "SaveLayout",
+            Command::SaveLayout {
+                shown: token(handle, &verse(1, 7)),
+                layout: other,
+            },
+        ));
+    }
+    // A join of 1:8 and 1:9.
+    let (Some(Record::Verse { value: eight, .. }), Some(Record::Verse { .. })) =
+        (fold.projected(&verse(1, 8)), fold.projected(&verse(1, 9)))
+    else {
+        panic!("1:8 and 1:9 exist");
+    };
+    let VerseValue::Text { marker, layout, .. } = eight else {
+        panic!("1:8 is text");
+    };
+    out.push((
+        "SaveSection",
+        Command::SaveSection {
+            book: TIT,
+            shown: vec![
+                (
+                    token(handle, &verse(1, 8)),
+                    Some(SectionValue::Verse(VerseValue::Text {
+                        marker,
+                        words: "eight and nine".into(),
+                        layout,
+                        last: VerseNo::new(9).unwrap(),
+                        from: None,
+                    })),
+                ),
+                (
+                    token(handle, &verse(1, 9)),
+                    Some(SectionValue::Verse(VerseValue::Covered {
+                        by: VerseNo::new(8).unwrap(),
+                    })),
+                ),
+            ],
+            layout: None,
+        },
+    ));
+    let a11 = RecordKey::Alignment(TIT, ChapterNo::new(1).unwrap(), VerseNo::new(1).unwrap());
+    out.push((
+        "SaveAlignment",
+        Command::SaveAlignment {
+            shown: token(handle, &a11),
+            verse_shown: token(handle, &verse(1, 1)),
+            value: alignment_edit("servant"),
+        },
+    ));
+    out.push((
+        "SaveDecision",
+        Command::SaveDecision {
+            shown: token(handle, &RecordKey::Check(tn_key(1, 2, 1))),
+            verse_shown: token(handle, &verse(1, 2)),
+            value: decision_edit(vec![DecisionChange::Bookmarked(true)]),
+        },
+    ));
+    out.push((
+        "AddComment",
+        Command::AddComment {
+            target: CommentTarget::Verse {
+                book: TIT,
+                chapter: ChapterNo::new(1).unwrap(),
+                verse: VerseNo::new(6).unwrap(),
+            },
+            text: "Another comment".into(),
+        },
+    ));
+    let comment = fold
+        .record_keys()
+        .into_iter()
+        .find(|k| {
+            matches!(k, RecordKey::Comment(_))
+                && matches!(fold.projected(k), Some(Record::Comment { value, .. }) if value.text == "Check eternal")
+        })
+        .unwrap();
+    out.push((
+        "ReviseComment",
+        Command::ReviseComment {
+            shown: token(handle, &comment),
+            text: "Check the word eternal".into(),
+        },
+    ));
+    let setting = RecordKey::Setting(SettingKey::parse("textDirection").unwrap());
+    out.push((
+        "SetSetting",
+        Command::SetSetting {
+            shown: token(handle, &setting),
+            value: Some(Json::from("rtl")),
+        },
+    ));
+    out.push((
+        "SetMeta",
+        Command::SetMeta {
+            shown: token(handle, &RecordKey::ProjectMeta(MetaField::Name)),
+            value: Some(Json::Obj(JsonMap::from([(
+                "en".to_owned(),
+                Json::from("Titus, revised"),
+            )]))),
+        },
+    ));
+    let pins = RecordKey::Pins(PinGroup::Lexicon);
+    out.push((
+        "SetPins",
+        Command::SetPins {
+            shown: token(handle, &pins),
+            value: PinGroupValue(BTreeMap::from([(
+                SlotName::parse("ugl").unwrap(),
+                SlotValue(Json::Obj(JsonMap::from([
+                    (
+                        "repoPath".to_owned(),
+                        Json::from("git.door43.org/unfoldingWord/en_ugl"),
+                    ),
+                    ("sha".to_owned(), Json::from(oid(3).to_hex())),
+                    ("version".to_owned(), Json::from("v1")),
+                ]))),
+            )])),
+        },
+    ));
+    out.push((
+        "AddBook",
+        Command::AddBook {
+            book: JN3,
+            scope: Scope::Whole,
+            seed: SeedSource {
+                usfm: source("3JN"),
+            },
+        },
+    ));
+    out.push((
+        "RemoveBook",
+        Command::RemoveBook {
+            book: PHM,
+            presence_shown: token(handle, &RecordKey::BookPresence(PHM)),
+        },
+    ));
+    for (name, mode) in [
+        ("RestoreBook KeepText", RestoreMode::KeepText),
+        ("RestoreBook StartEmpty", RestoreMode::StartEmpty),
+    ] {
+        out.push((
+            name,
+            Command::RestoreBook {
+                book: JUD,
+                presence_shown: token(handle, &RecordKey::BookPresence(JUD)),
+                mode,
+            },
+        ));
+    }
+    out.push((
+        "SetBookScope",
+        Command::SetBookScope {
+            presence_shown: token(handle, &RecordKey::BookPresence(PHM)),
+            scope: Scope::Ranges(ScopeRanges::new(vec!["1:1-2".parse().unwrap()]).unwrap()),
+        },
+    ));
+    out.push((
+        "ApplyUpgrade",
+        Command::ApplyUpgrade {
+            plan: UpgradePlan {
+                changes: vec![PlannedChange {
+                    record: Record::Check {
+                        key: tn_key(1, 2, 1),
+                        value: match fold.projected(&RecordKey::Check(tn_key(1, 2, 1))) {
+                            Some(Record::Check {
+                                value: CheckValue::Decision(mut d),
+                                ..
+                            }) => {
+                                d.resource = ResourceRef {
+                                    repo_path: d.resource.repo_path.clone(),
+                                    sha: oid(8),
+                                };
+                                CheckValue::Decision(d)
+                            }
+                            other => panic!("{other:?}"),
+                        },
+                    },
+                    parents: fold.heads(&RecordKey::Check(tn_key(1, 2, 1))),
+                    cause: Cause::CarryOver {
+                        group: PinGroup::Primary,
+                    },
+                }],
+            },
+        },
+    ));
+    let mine = conflict_of(fold, &verse(1, 3));
+    out.push((
+        "Resolve",
+        Command::Resolve {
+            conflict: mine.id,
+            shown: vec![review(handle, &verse(1, 3))],
+            choice: Choice::Candidate {
+                head: mine.candidates[0].head,
+            },
+        },
+    ));
+    let shared = conflict_of(fold, &verse(1, 4));
+    out.push((
+        "ResolveBulk",
+        Command::ResolveBulk {
+            devices: BTreeSet::from([handle.facts().device]),
+            conflicts: vec![(shared.id, vec![review(handle, &verse(1, 4))])],
+        },
+    ));
+    out.push((
+        "MoveCheck",
+        Command::MoveCheck {
+            shown: token(handle, &RecordKey::Check(tn_key(1, 2, 1))),
+            to: tn_key(1, 2, 2),
+            to_shown: token(handle, &RecordKey::Check(tn_key(1, 2, 2))),
+        },
+    ));
+    let first = fold.history(&verse(1, 1))[0];
+    out.push((
+        "Restore",
+        Command::Restore {
+            shown: token(handle, &verse(1, 1)),
+            from: first,
+        },
+    ));
+    out.push((
+        "RemoveCarriedFile",
+        Command::RemoveCarriedFile {
+            shown: token(
+                handle,
+                &RecordKey::CarriedFile(RepoPath::parse("ingredients/audio/tit-1.mp3").unwrap()),
+            ),
+        },
+    ));
+    let held = fold
+        .anomalies()
+        .find_map(|a| match a {
+            Anomaly::IncompleteBatch { batch, .. } => Some(*batch),
+            _ => None,
+        })
+        .expect("the half batch is held");
+    out.push(("ReleaseBatch", Command::ReleaseBatch { batch: held }));
+    out.push((
+        "Dismiss",
+        Command::Dismiss {
+            shown: token(handle, &a11),
+        },
+    ));
+    out.push((
+        "KeepDraft",
+        Command::KeepDraft {
+            draft: Draft {
+                field: DraftField::Words,
+                shown: vec![token(handle, &verse(1, 10))],
+                text: "a draft kept".into(),
+            },
+            section: Vec::new(),
+        },
+    ));
+    out
+}
+
+/// Every change the fold holds: those it applies, and those of batches it holds back.
+fn all_ids(fold: &FoldState) -> BTreeSet<ChangeId> {
+    let held: Vec<BatchId> = fold
+        .anomalies()
+        .filter_map(|a| match a {
+            Anomaly::IncompleteBatch { batch, .. } => Some(*batch),
+            _ => None,
+        })
+        .collect();
+    fold.record_keys()
+        .iter()
+        .flat_map(|k| fold.history(k))
+        .chain(held.into_iter().flat_map(|b| fold.batch_changes(b)))
+        .collect()
+}
+
+/// The kind of a record, for comparing what two runs of one command wrote.
+fn kind(key: &RecordKey) -> String {
+    let text = format!("{key:?}");
+    text.split(['(', ' ', '{'])
+        .next()
+        .unwrap_or_default()
+        .to_owned()
+}
+
+/// What one command wrote over `before`: the kinds of its records, sorted. Panics unless
+/// the new changes are whole batches with every change present.
+fn written(name: &str, before: &BTreeSet<ChangeId>, fold: &FoldState) -> Vec<String> {
+    let new: Vec<ChangeId> = all_ids(fold).difference(before).copied().collect();
+    let mut batches: BTreeMap<BatchRef, u32> = BTreeMap::new();
+    let mut kinds = Vec::new();
+    for id in &new {
+        let body = fold.body(id).unwrap();
+        *batches.entry(body.batch).or_default() += 1;
+        kinds.push(kind(&body.record.key()));
+    }
+    assert!(
+        batches.len() <= 1,
+        "{name} wrote {} batches: {kinds:?}",
+        batches.len()
+    );
+    for (batch, have) in &batches {
+        assert_eq!(*have, batch.n(), "a half batch: {have} of {}", batch.n());
+    }
+    assert!(
+        !fold
+            .anomalies()
+            .any(|a| matches!(a, Anomaly::IncompleteBatch { batch, .. } if batches.keys().any(|b| b.id == *batch))),
+        "the batch is listed as incomplete"
+    );
+    kinds.sort();
+    kinds
+}
+
+/// Every command, killed before each of its write points with and without power loss: the
+/// reopened project holds the command's whole batch or none of it, and a command that
+/// replied "Saved" holds it after a power cut too (§16.2, rows W1 to W4).
+#[test]
+fn crash_every_command_at_every_write_point() {
+    let (base, folder) = rich();
+    let (rig, handle) = open(&base, &folder);
+    let names: Vec<&'static str> = every_command(&handle).into_iter().map(|(n, _)| n).collect();
+    let before = all_ids(handle.snapshot().fold());
+    handle.close().unwrap();
+    drop(rig);
+    assert!(names.len() >= 24, "{names:?}");
+    for name in names {
+        // What the command writes when nothing stops it.
+        let (rig, handle) = open(&base.copy(), &folder);
+        let command = every_command(&handle)
+            .into_iter()
+            .find(|(n, _)| *n == name)
+            .unwrap()
+            .1;
+        let reply = submit(&handle, command).unwrap_or_else(|e| panic!("{name}: {e:?}"));
+        assert_eq!(reply.stored, Stored::Durable, "{name}");
+        let after = written(name, &before, handle.snapshot().fold());
+        assert!(!after.is_empty(), "{name} wrote nothing");
+        handle.close().unwrap();
+        drop(rig);
+        let points = kill_everywhere(
+            &base,
+            &folder,
+            &|handle| {
+                let command = every_command(handle)
+                    .into_iter()
+                    .find(|(n, _)| *n == name)
+                    .unwrap()
+                    .1;
+                outcome_of(submit(handle, command))
+            },
+            &|handle, outcome| {
+                let got = written(name, &before, handle.snapshot().fold());
+                match outcome {
+                    Outcome::Saved => assert_eq!(got, after, "{name}: a saved batch is gone"),
+                    Outcome::NotSaved => assert!(
+                        got.is_empty() || got == after,
+                        "{name}: neither before nor after: {got:?}"
+                    ),
+                }
+            },
+        );
+        assert!(points >= 4, "{name}: {points} kill points");
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// What each command writes
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn a_layout_save_changes_only_the_layout() {
+    let (fs, folder) = rich();
+    let (_rig, handle) = open(&fs, &folder);
+    let before = projected(&handle, &verse(1, 7));
+    let (_, command) = every_command(&handle)
+        .into_iter()
+        .find(|(n, _)| *n == "SaveLayout")
+        .unwrap();
+    let Command::SaveLayout { layout, .. } = &command else {
+        unreachable!()
+    };
+    let layout = layout.clone();
+    submit(&handle, command).unwrap();
+    let (
+        Some(Record::Verse {
+            value:
+                VerseValue::Text {
+                    words: w0,
+                    marker: m0,
+                    last: l0,
+                    ..
+                },
+            ..
+        }),
+        Some(Record::Verse {
+            value:
+                VerseValue::Text {
+                    words: w1,
+                    marker: m1,
+                    last: l1,
+                    layout: new,
+                    ..
+                },
+            ..
+        }),
+    ) = (before, projected(&handle, &verse(1, 7)))
+    else {
+        panic!("1:7 is text");
+    };
+    assert_eq!((w0, m0, l0), (w1, m1, l1));
+    assert_eq!(new, layout);
+    handle.close().unwrap();
+}
+
+#[test]
+fn a_judgement_records_the_text_it_was_made_against_and_to_do_stamps_nothing() {
+    let (fs, folder) = rich();
+    let (_rig, handle) = open(&fs, &folder);
+    let key = RecordKey::Check(tn_key(1, 2, 1));
+    let decision = |handle: &ProjectHandle| match projected(handle, &key) {
+        Some(Record::Check {
+            value: CheckValue::Decision(d),
+            ..
+        }) => d,
+        other => panic!("{other:?}"),
+    };
+    let judged = decision(&handle);
+    assert_eq!(judged.judgement.status, Some(UserStatus::Valid));
+    assert_eq!(
+        judged.judgement.verse_text_md5,
+        tc_journal::decision::verse_text_md5_v1("in hope of eternal life")
+    );
+    assert_eq!(judged.resource, tn_resource());
+    // The verse changes; To do changes only the status (§5.4).
+    save_verse(&handle, 1, 2, "in the hope of life eternal").unwrap();
+    submit(
+        &handle,
+        Command::SaveDecision {
+            shown: token(&handle, &key),
+            verse_shown: token(&handle, &verse(1, 2)),
+            value: decision_edit(vec![DecisionChange::Status(Some(UserStatus::Todo))]),
+        },
+    )
+    .unwrap();
+    let todo = decision(&handle);
+    assert_eq!(todo.judgement.status, Some(UserStatus::Todo));
+    assert_eq!(
+        todo.judgement.verse_text_md5,
+        judged.judgement.verse_text_md5
+    );
+    handle.close().unwrap();
+}
+
+#[test]
+fn a_project_detail_that_would_break_the_burrito_is_refused_in_words() {
+    let (fs, folder) = rich();
+    let (_rig, handle) = open(&fs, &folder);
+    let result = submit(
+        &handle,
+        Command::SetMeta {
+            shown: token(&handle, &RecordKey::ProjectMeta(MetaField::Name)),
+            value: Some(Json::from("a name with a trailing space ")),
+        },
+    );
+    assert!(
+        matches!(
+            result,
+            Err(CommandError::Refused(Refusal::NotValidInBurrito(_)))
+        ),
+        "{result:?}"
+    );
+    handle.close().unwrap();
+}
+
+#[test]
+fn a_book_is_added_with_stubs_removed_with_what_was_seen_and_restored_either_way() {
+    let (fs, folder) = rich();
+    let (rig, handle) = open(&fs, &folder);
+    // Added: presence, header, fronts and a stub per verse; the span stays a span.
+    assert!(handle.snapshot().fold().book(PHM).projects());
+    match projected(&handle, &vkey(PHM, 1, 3)) {
+        Some(Record::Verse {
+            value: VerseValue::Text { words, last, .. },
+            ..
+        }) => {
+            assert_eq!(words, "___");
+            assert_eq!(last.get(), 4);
+        }
+        other => panic!("{other:?}"),
+    }
+    assert!(matches!(
+        projected(&handle, &vkey(PHM, 1, 4)),
+        Some(Record::Verse {
+            value: VerseValue::Covered { .. },
+            ..
+        })
+    ));
+    // Adding it again is refused.
+    assert!(matches!(
+        add_book(&handle, PHM),
+        Err(CommandError::Refused(Refusal::Book(_)))
+    ));
+    // Removed: the change lists every head of the book it saw; the records stay.
+    let heads_of_book: BTreeSet<ChangeId> = handle
+        .snapshot()
+        .fold()
+        .record_keys()
+        .into_iter()
+        .filter(|k| k.book() == Some(PHM) && !matches!(k, RecordKey::BookPresence(_)))
+        .flat_map(|k| handle.snapshot().fold().heads(&k))
+        .collect();
+    let reply = submit(
+        &handle,
+        Command::RemoveBook {
+            book: PHM,
+            presence_shown: token(&handle, &RecordKey::BookPresence(PHM)),
+        },
+    )
+    .unwrap();
+    let body = handle.snapshot().fold().body(&reply.changes[0]).unwrap();
+    let Record::BookPresence {
+        value: BookPresence::Removed { seen },
+        ..
+    } = body.record
+    else {
+        panic!("{:?}", body.record);
+    };
+    assert_eq!(seen.len(), heads_of_book.len());
+    assert!(!handle.snapshot().fold().book(PHM).projects());
+    handle.leave(tc_store::Leave::Mode).wait().unwrap();
+    assert!(rig.fs.peek(&folder.join("ingredients/PHM.usfm")).is_none());
+    assert_valid_burrito(&rig.fs, &folder);
+    // Restored with its text.
+    submit(
+        &handle,
+        Command::RestoreBook {
+            book: PHM,
+            presence_shown: token(&handle, &RecordKey::BookPresence(PHM)),
+            mode: RestoreMode::KeepText,
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        projected(&handle, &RecordKey::BookPresence(PHM)),
+        Some(Record::BookPresence {
+            value: BookPresence::Present {
+                how: PresentHow::RestoredText,
+                ..
+            },
+            ..
+        })
+    ));
+    // Jude, removed in the base, restored empty: every verse a StartOver change whose
+    // parents keep the old text in History.
+    let jude_heads = handle.snapshot().fold().heads(&vkey(JUD, 1, 1));
+    let reply = submit(
+        &handle,
+        Command::RestoreBook {
+            book: JUD,
+            presence_shown: token(&handle, &RecordKey::BookPresence(JUD)),
+            mode: RestoreMode::StartEmpty,
+        },
+    )
+    .unwrap();
+    let fold = handle.snapshot().fold().clone();
+    let restarted = reply
+        .changes
+        .iter()
+        .filter_map(|id| fold.body(id))
+        .find(|b| b.record.key() == vkey(JUD, 1, 1))
+        .unwrap();
+    assert!(matches!(restarted.cause, Cause::StartOver));
+    assert_eq!(restarted.parents, jude_heads);
+    handle.close().unwrap();
+}
+
+#[test]
+fn a_book_scope_is_set_and_one_the_burrito_refuses_is_refused() {
+    let (fs, folder) = rich();
+    let (rig, handle) = open(&fs, &folder);
+    let (_, command) = every_command(&handle)
+        .into_iter()
+        .find(|(n, _)| *n == "SetBookScope")
+        .unwrap();
+    submit(&handle, command).unwrap();
+    handle.leave(tc_store::Leave::Mode).wait().unwrap();
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&rig.fs.peek(&folder.join("metadata.json")).unwrap()).unwrap();
+    assert_eq!(
+        metadata["type"]["flavorType"]["currentScope"]["PHM"],
+        serde_json::json!(["1:1-2"])
+    );
+    handle.close().unwrap();
+}
+
+#[test]
+fn an_upgrade_plan_made_from_an_older_snapshot_is_made_again() {
+    let (fs, folder) = rich();
+    let (_rig, handle) = open(&fs, &folder);
+    let (_, command) = every_command(&handle)
+        .into_iter()
+        .find(|(n, _)| *n == "ApplyUpgrade")
+        .unwrap();
+    // A decision of the plan changes before the plan is applied.
+    submit(
+        &handle,
+        Command::SaveDecision {
+            shown: token(&handle, &RecordKey::Check(tn_key(1, 2, 1))),
+            verse_shown: token(&handle, &verse(1, 2)),
+            value: decision_edit(vec![DecisionChange::Comment(Some("later".into()))]),
+        },
+    )
+    .unwrap();
+    let before = all_ids(handle.snapshot().fold());
+    assert!(matches!(
+        submit(&handle, command),
+        Err(CommandError::PlanStale)
+    ));
+    assert_eq!(
+        all_ids(handle.snapshot().fold()),
+        before,
+        "nothing is written"
+    );
+    handle.close().unwrap();
+}
+
+#[test]
+fn a_resolution_keeps_the_chosen_version_and_names_every_head() {
+    let (fs, folder) = rich();
+    let (_rig, handle) = open(&fs, &folder);
+    let fold = handle.snapshot().fold().clone();
+    let conflict = conflict_of(&fold, &verse(1, 3));
+    let chosen = conflict.candidates[1].clone();
+    // An edit token is no resolution, and a stale review token is "look again".
+    assert!(matches!(
+        submit(
+            &handle,
+            Command::Resolve {
+                conflict: conflict.id,
+                shown: vec![token(&handle, &verse(1, 3))],
+                choice: Choice::Candidate { head: chosen.head },
+            }
+        ),
+        Err(CommandError::Refused(Refusal::WrongTokenKind))
+    ));
+    let review_token = review(&handle, &verse(1, 3));
+    let reply = submit(
+        &handle,
+        Command::Resolve {
+            conflict: conflict.id,
+            shown: vec![review_token.clone()],
+            choice: Choice::Candidate { head: chosen.head },
+        },
+    )
+    .unwrap();
+    let body = handle.snapshot().fold().body(&reply.changes[0]).unwrap();
+    assert!(matches!(body.cause, Cause::Resolve));
+    let mut heads = fold.heads(&verse(1, 3));
+    heads.sort();
+    assert_eq!(body.parents, heads);
+    assert_eq!(projected(&handle, &verse(1, 3)), Some(chosen.value));
+    assert!(
+        handle
+            .snapshot()
+            .fold()
+            .conflicts()
+            .all(|c| c.id != conflict.id)
+    );
+    // The same choice again, from the screen that showed the conflict: look again.
+    assert!(matches!(
+        submit(
+            &handle,
+            Command::Resolve {
+                conflict: conflict.id,
+                shown: vec![review_token],
+                choice: Choice::Candidate { head: chosen.head },
+            }
+        ),
+        Err(CommandError::LookAgain)
+    ));
+    handle.close().unwrap();
+}
+
+#[test]
+fn a_bulk_choice_by_this_computer_keeps_its_versions_and_skips_conflicts_inside_it() {
+    let (fs, folder) = rich();
+    let (_rig, handle) = open(&fs, &folder);
+    let fold = handle.snapshot().fold().clone();
+    let shared = conflict_of(&fold, &verse(1, 4));
+    let own = conflict_of(&fold, &verse(1, 3));
+    let reply = submit(
+        &handle,
+        Command::ResolveBulk {
+            devices: BTreeSet::from([handle.facts().device]),
+            conflicts: vec![
+                (shared.id, vec![review(&handle, &verse(1, 4))]),
+                (own.id, vec![review(&handle, &verse(1, 3))]),
+            ],
+        },
+    )
+    .unwrap();
+    // 1:3's two versions are both this computer's: left for a choice of its own (L78).
+    assert_eq!(reply.skipped, vec![own.id]);
+    assert_eq!(words(&handle, 1, 4).as_deref(), Some("My version of four"));
+    handle.close().unwrap();
+}
+
+#[test]
+fn a_moved_check_keeps_its_decision_under_the_new_key() {
+    let (fs, folder) = rich();
+    let (_rig, handle) = open(&fs, &folder);
+    let old = RecordKey::Check(tn_key(1, 2, 1));
+    let new = RecordKey::Check(tn_key(1, 2, 2));
+    let decision = projected(&handle, &old);
+    submit(
+        &handle,
+        Command::MoveCheck {
+            shown: token(&handle, &old),
+            to: tn_key(1, 2, 2),
+            to_shown: token(&handle, &new),
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        projected(&handle, &old),
+        Some(Record::Check {
+            value: CheckValue::MovedTo { .. },
+            ..
+        })
+    ));
+    let (
+        Some(Record::Check {
+            value: CheckValue::Decision(was),
+            ..
+        }),
+        Some(Record::Check {
+            value: CheckValue::Decision(now),
+            ..
+        }),
+    ) = (decision, projected(&handle, &new))
+    else {
+        panic!("decisions");
+    };
+    assert_eq!(was, now);
+    handle.close().unwrap();
+}
+
+#[test]
+fn a_restored_version_continues_what_was_shown() {
+    let (fs, folder) = rich();
+    let (_rig, handle) = open(&fs, &folder);
+    let fold = handle.snapshot().fold().clone();
+    let first = fold.history(&verse(1, 1))[0];
+    let first_value = fold.body(&first).unwrap().record;
+    let reply = submit(
+        &handle,
+        Command::Restore {
+            shown: token(&handle, &verse(1, 1)),
+            from: first,
+        },
+    )
+    .unwrap();
+    let body = handle.snapshot().fold().body(&reply.changes[0]).unwrap();
+    assert_eq!(body.cause, Cause::Restore { from: first });
+    assert_eq!(body.parents, fold.heads(&verse(1, 1)));
+    assert_eq!(projected(&handle, &verse(1, 1)), Some(first_value));
+    // A version of another record is refused.
+    assert!(
+        submit(
+            &handle,
+            Command::Restore {
+                shown: token(&handle, &verse(1, 2)),
+                from: first,
+            }
+        )
+        .is_err()
+    );
+    handle.close().unwrap();
+}
+
+#[test]
+fn a_carried_file_is_removed_only_by_its_command() {
+    let (fs, folder) = rich();
+    let (_rig, handle) = open(&fs, &folder);
+    let key = RecordKey::CarriedFile(RepoPath::parse("ingredients/audio/tit-1.mp3").unwrap());
+    let heads = handle.snapshot().fold().heads(&key);
+    let reply = submit(
+        &handle,
+        Command::RemoveCarriedFile {
+            shown: token(&handle, &key),
+        },
+    )
+    .unwrap();
+    let body = handle.snapshot().fold().body(&reply.changes[0]).unwrap();
+    assert_eq!(
+        body.record,
+        Record::CarriedFile {
+            path: RepoPath::parse("ingredients/audio/tit-1.mp3").unwrap(),
+            value: CarriedValue::Removed,
+        }
+    );
+    assert_eq!(body.parents, heads);
+    handle.close().unwrap();
+}
+
+#[test]
+fn what_was_recovered_of_a_batch_is_applied_by_a_release() {
+    let (fs, folder) = rich();
+    let (_rig, handle) = open(&fs, &folder);
+    let fold = handle.snapshot().fold().clone();
+    let held = fold
+        .anomalies()
+        .find_map(|a| match a {
+            Anomaly::IncompleteBatch { batch, .. } => Some(*batch),
+            _ => None,
+        })
+        .unwrap();
+    let comment = |handle: &ProjectHandle| {
+        handle.snapshot().fold().record_keys().into_iter().any(|k| {
+            matches!(
+                handle.snapshot().fold().projected(&k),
+                Some(Record::Comment { value, .. }) if value.text == "Half of a batch"
+            )
+        })
+    };
+    assert!(!comment(&handle), "a held batch applies nothing");
+    let reply = submit(&handle, Command::ReleaseBatch { batch: held }).unwrap();
+    assert_eq!(reply.changes.len(), 1);
+    let body = handle.snapshot().fold().body(&reply.changes[0]).unwrap();
+    assert_eq!(
+        body.record,
+        Record::BatchRelease {
+            batch: held,
+            value: tc_journal::record::BatchReleaseValue {
+                changes: handle.snapshot().fold().batch_changes(held),
+            },
+        }
+    );
+    assert!(body.parents.is_empty(), "a release is grow-only (V6)");
+    assert!(comment(&handle), "the recovered change applies");
+    // A batch that is not held has nothing to release.
+    assert!(matches!(
+        submit(
+            &handle,
+            Command::ReleaseBatch {
+                batch: BatchId::from_bytes([1u8; 16])
+            }
+        ),
+        Err(CommandError::Refused(Refusal::NothingToRelease))
+    ));
+    handle.close().unwrap();
+}
+
+#[test]
+fn a_dismissed_alignment_is_kept_with_its_flag() {
+    let (fs, folder) = rich();
+    let (_rig, handle) = open(&fs, &folder);
+    let key = RecordKey::Alignment(TIT, ChapterNo::new(1).unwrap(), VerseNo::new(1).unwrap());
+    let before = projected(&handle, &key);
+    submit(
+        &handle,
+        Command::Dismiss {
+            shown: token(&handle, &key),
+        },
+    )
+    .unwrap();
+    let (Some(Record::Alignment { value: was, .. }), Some(Record::Alignment { value: now, .. })) =
+        (before, projected(&handle, &key))
+    else {
+        panic!("alignments");
+    };
+    assert!(now.dismissed && !was.dismissed);
+    assert_eq!(now.alignments, was.alignments);
+    // A verse is not something to dismiss.
+    assert!(matches!(
+        submit(
+            &handle,
+            Command::Dismiss {
+                shown: token(&handle, &verse(1, 1)),
+            }
+        ),
+        Err(CommandError::Refused(Refusal::NotDismissable))
+    ));
+    handle.close().unwrap();
+}
+
+/// A read-only project refuses every command of §2.7 and writes nothing (APP-DESIGN §4.2
+/// `read_only_refuses_every_command_and_writes_nothing`).
+#[test]
+fn read_only_refuses_every_command_and_writes_nothing() {
+    let (fs, folder) = rich();
+    let (_rig, writer) = open(&fs, &folder);
+    let other = rig_as(fs.clone(), APP, "host-1");
+    let reader = other.store.open(&folder, &OpenOptions::default()).unwrap();
+    assert!(matches!(reader.facts().mode, tc_store::Mode::ReadOnly(_)));
+    let before = files(&fs, &folder);
+    for (name, command) in every_command(&reader) {
+        let result = submit(&reader, command);
+        assert!(
+            matches!(result, Err(CommandError::ReadOnly(_))),
+            "{name}: {result:?}"
+        );
+    }
+    let draft = submit(
+        &reader,
+        Command::Draft(Draft {
+            field: DraftField::Words,
+            shown: vec![token(&reader, &verse(1, 1))],
+            text: "unsaved".into(),
+        }),
+    );
+    assert!(matches!(draft, Err(CommandError::ReadOnly(_))));
+    reader.wait_idle();
+    reader.close().unwrap();
+    let after = files(&fs, &folder);
+    let changed: Vec<&String> = after
+        .keys()
+        .chain(before.keys())
+        .filter(|k| *k != ".tc/lock" && before.get(*k) != after.get(*k))
+        .collect();
+    assert!(changed.is_empty(), "a read-only open wrote {changed:?}");
+    writer.close().unwrap();
+}

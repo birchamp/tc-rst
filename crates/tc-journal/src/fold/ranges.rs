@@ -138,7 +138,8 @@ impl FoldState {
             .unwrap_or_default()
     }
 
-    /// The short ids of every head of every record of `book`: what a removal holds as seen
+    /// The short ids of every head of every record of `book` but its presence: what a
+    /// removal holds as seen
     /// (§5.7), sorted, without repeats.
     pub fn book_heads_seen(&self, book: BookId) -> Vec<ShortId> {
         let mut seen: Vec<ShortId> = self
@@ -147,6 +148,7 @@ impl FoldState {
             .map(|b| {
                 b.keys
                     .iter()
+                    .filter(|k| Some(**k) != b.presence)
                     .flat_map(|k| self.entry(*k).heads.iter())
                     .map(|h| self.meta(*h).id.short())
                     .collect()

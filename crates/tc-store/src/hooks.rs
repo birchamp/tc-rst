@@ -1,6 +1,7 @@
-//! Holds a test places at named points (APP-DESIGN R8): before a book read, before a draft
-//! write, before the durability point of a save. Only with the `test-hooks` feature; without
-//! it every point passes at once and the type holds nothing.
+//! Holds a test places at named points (APP-DESIGN R8): before a book read, a draft write,
+//! the durability point of a save, a checkpoint, a materialization, a staging folder's
+//! removal and its rename. Only with the `test-hooks` feature; without it every point passes
+//! at once and the type holds nothing.
 
 /// A point a test can hold.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -8,6 +9,10 @@ pub enum Point {
     BeforeBookRead,
     BeforeDraftWrite,
     BeforeDurablePending,
+    /// The actor is about to seal and materialize for a checkpoint (§5.13).
+    BeforeCheckpoint,
+    /// The actor is about to write derived files (§5.10).
+    BeforeMaterialize,
     /// The start cleanup is about to remove a staging folder (N1).
     BeforeStagingRemoval,
     /// A create or copy is about to rename its staging folder into place (N2).

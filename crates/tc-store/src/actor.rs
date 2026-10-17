@@ -211,6 +211,10 @@ impl Actor {
         if self.second_writer()? {
             return Ok(());
         }
+        self.project
+            .shared
+            .hooks
+            .wait(crate::hooks::Point::BeforeCheckpoint);
         self.project.seal()?;
         self.materialize()
     }

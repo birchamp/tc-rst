@@ -1538,9 +1538,11 @@ layer holds an open project as a handle:
   alignment from that one snapshot (§3.10 item 3).
 - `leave`, `checkpoint`, `restore_held`, `dismiss_notice`, `offered_drafts`, `discard_draft`,
   `wait_idle`, `close`, and `counters()`: files opened, created, read and written, fsyncs,
-  renames, listings, derived files read, projected and written, heads files read, and the time
-  commands waited in the queue (R14). Tests hold the store at named points (before a book
-  read, a draft write, the durability point of a save, a staging removal and rename; R8).
+  renames, listings, derived files read, projected and written, heads files read, journal
+  files read and how many of them came from the fold cache, and the time commands waited in
+  the queue (R14). Tests hold the store at named points (before a book read, a draft write,
+  the durability point of a save, a checkpoint, a materialization, a staging removal and
+  rename; R8).
 
 ### 5.1 Save one verse (Translate, verse by verse)
 

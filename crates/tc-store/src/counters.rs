@@ -70,8 +70,10 @@ counters! {
     derived_written,
     /// Heads files read.
     heads_read,
-    /// Pack and pending files read in full or fingerprinted.
+    /// Pack and pending files an open read, in full or to fingerprint them.
     journal_files_read,
+    /// Of those, the files whose changes came from the fold cache (§6.1 O8).
+    journal_files_cached,
     /// Commands the actor ran.
     commands,
     /// Nanoseconds commands waited in the actor's queue before it took them.

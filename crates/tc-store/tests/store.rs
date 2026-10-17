@@ -33,3 +33,6 @@ mod tc4;
 
 #[path = "store/consolidation.rs"]
 mod consolidation;
+
+#[path = "store/commands.rs"]
+mod commands;
