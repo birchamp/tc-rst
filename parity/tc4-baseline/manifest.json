@@ -135,7 +135,8 @@
       "shows": "Home: \"Your projects\" with the OBS sample (story tiles, 1% drafted) and the Bible sample (Jonah and Titus tiles, \"+ Add a book\")",
       "status": "complete",
       "absentReads": [],
-      "bytes": 67947
+      "bytes": 67947,
+      "sha256": "51cd494e7401c671d6e4a8f3b37a02731674133c047f114660a7b5b9c0417ffb"
     },
     {
       "name": "understand-tit1",
@@ -153,7 +154,8 @@
       "shows": "Understand, Titus 1, Section view: book rail, ULT source units with the comment box, helps panel on Notes (es-419 Translation Notes of the primary set)",
       "status": "complete",
       "absentReads": [],
-      "bytes": 188086
+      "bytes": 188086,
+      "sha256": "aed5a51b64361d05e2862253ce9c231bc760159e2924e7da518772067ec8f1c3"
     },
     {
       "name": "translate-tit1",
@@ -172,7 +174,8 @@
       "shows": "Translate, Titus 1, Section mode: ULT beside the es-419 draft, each \"Draft section\" a pill in the accent colour at the end of its row, helps panel with the Comments tab",
       "status": "complete",
       "absentReads": [],
-      "bytes": 237899
+      "bytes": 237899,
+      "sha256": "a4aa0fe24b3014a7542a5cabcb869ccd187b2eca870df3c34bd0ae98935fb66e"
     },
     {
       "name": "check-picker",
@@ -192,7 +195,8 @@
       "status": "incomplete",
       "incomplete": "Translation Words reads \"Needs downloading\": the sample pins es-419_twl v18 / es-419_tw v37 for its primary set and tC4 vendors neither (see en-check-picker for the ready card).",
       "absentReads": [],
-      "bytes": 101512
+      "bytes": 101512,
+      "sha256": "0c651d8d1ab97fb8d60ad76ebf34d226261d2775c2856a1020cbeddf1c024a00"
     },
     {
       "name": "check-tn-session",
@@ -218,7 +222,8 @@
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_gl--es-419_ta?ipath=process/figs-abstractnouns/01.md -> 400",
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_gl--es-419_ta?ipath=translate/figs-abstractnouns/01.md -> 400"
       ],
-      "bytes": 168286
+      "bytes": 168286,
+      "sha256": "9130658d8f35f332d5e90033576163678ae05f605136fa3995a6aabb9c67c0fc"
     },
     {
       "name": "align-workspace",
@@ -238,7 +243,8 @@
       "shows": "Align, Titus 1:1, Gateway · ULT mode: the align rail (46 verses, 5 drafted), the ULT verse, Suggest links (off), the word bank of the es-419 draft in verse order, with an occurrence number on each repeated word (6 of 27 placed), and the ULT word cards with their Greek and their target words in verse order, the sample's six links placed",
       "status": "complete",
       "absentReads": [],
-      "bytes": 160701
+      "bytes": 160701,
+      "sha256": "a0537de85c4691c6957b66f139c3b453b07f3bb2564f2b76ab99f95d4d306b1e"
     },
     {
       "name": "align-original",
@@ -259,7 +265,8 @@
       "shows": "Align, Titus 1:1, Original · Greek mode: the Greek verse and one word card per Greek word, the six placed links, an occurrence number on each repeated word (Θεοῦ¹, Dios¹), the word bank in verse order, and the top of the marking row (\"← Previous\", Mark valid, \"Next →\") at the bottom edge",
       "status": "complete",
       "absentReads": [],
-      "bytes": 156501
+      "bytes": 156501,
+      "sha256": "0d6c4786bcfa10498f245d5f5163a434bd66806597956c530a356f1fc33d9e59"
     },
     {
       "name": "align-workspace-row",
@@ -281,7 +288,8 @@
       "shows": "align-workspace scrolled to the marking row: the word cards, then \"← Previous\", Mark valid and \"Next →\" under the card",
       "status": "complete",
       "absentReads": [],
-      "bytes": 160063
+      "bytes": 160063,
+      "sha256": "14026477f2ab90415c1a467dc01f35b0b494f34385f7c873244c29d83ef69e76"
     },
     {
       "name": "ar-align-workspace-row",
@@ -305,7 +313,8 @@
       "shows": "align-workspace with the interface in Arabic, scrolled to the marking row: the chrome and the marking row run right to left (\"→ السابق\", Mark valid, \"التالي ←\", with the arrows turned); the ULT, the Greek and the draft stay left to right",
       "status": "complete",
       "absentReads": [],
-      "bytes": 157400
+      "bytes": 157400,
+      "sha256": "b7168f49943aca284025a3c2c93625916073a8813f79a1af806fff74e0af0a7e"
     },
     {
       "name": "align-workspace-620",
@@ -332,7 +341,8 @@
       "shows": "align-workspace in a window 620 px wide, scrolled to the marking row, which wraps onto two lines (\"Next →\" alone on the second); at this width the project button in the header lies over the mode switch",
       "status": "complete",
       "absentReads": [],
-      "bytes": 92126
+      "bytes": 92126,
+      "sha256": "18eeb0dedd909069865a96480d8b9e2c61e82ec1d9758ba47fc677a31e99097c"
     },
     {
       "name": "ar-align-workspace-620",
@@ -361,7 +371,8 @@
       "shows": "ar-align-workspace-row in a window 620 px wide: the marking row wraps onto two lines, right to left (\"التالي ←\" alone on the second)",
       "status": "complete",
       "absentReads": [],
-      "bytes": 87143
+      "bytes": 87143,
+      "sha256": "807ec12f7a6be2499722d8207f6922291f76103393929491f8c314577069cd0a"
     },
     {
       "name": "project-settings",
@@ -383,7 +394,8 @@
       "shows": "Project settings dialog: read-only name/language/code, text direction chips, checking language card (English package offered), script font",
       "status": "complete",
       "absentReads": [],
-      "bytes": 105067
+      "bytes": 105067,
+      "sha256": "42b1085f79866e90721b248a5c6a2ffdfec8bed2a9410c3d86e4f00ae30daf6f"
     },
     {
       "name": "add-project",
@@ -405,7 +417,8 @@
       "shows": "Add a project chooser with four cards: New Bible, New Open Bible Stories, Import a project, Open a project from Door43",
       "status": "complete",
       "absentReads": [],
-      "bytes": 100254
+      "bytes": 100254,
+      "sha256": "d5e0f6a01615ed3540f784e1f21b62c966d32bbe5116a3ac275be8aa85fb084d"
     },
     {
       "name": "new-bible",
@@ -428,7 +441,8 @@
       "shows": "New Bible dialog, empty: name, language name, code, text direction, checking language (English, Recommended), script font, Versification disclosure",
       "status": "complete",
       "absentReads": [],
-      "bytes": 109289
+      "bytes": 109289,
+      "sha256": "e02d5a6de2735a83fb21e41b18f647353f8b14b15be1eaf8c82ab9b56b55b2c8"
     },
     {
       "name": "import",
@@ -451,7 +465,8 @@
       "shows": "Import a project, step 1 of 3: tC3 project, USFM files, Scripture Burrito",
       "status": "complete",
       "absentReads": [],
-      "bytes": 88948
+      "bytes": 88948,
+      "sha256": "16ef9ddd7e0d7433645e1e90507ba43a374668a7494f14352740f2fa167c652d"
     },
     {
       "name": "share-internet-consent",
@@ -473,7 +488,8 @@
       "shows": "\"Turn on the internet?\" consent dialog that every internet step asks first while the internet is off",
       "status": "complete",
       "absentReads": [],
-      "bytes": 92593
+      "bytes": 92593,
+      "sha256": "9310708053b401c581788994ba64d96132b5d76c36b5834aa120ae1c64f5ff28"
     },
     {
       "name": "share-signin",
@@ -496,7 +512,8 @@
       "shows": "Sign in to Door43 dialog (signs in to git.door43.org), empty fields, and the notice that the Door43 username goes into the project, stays in it, and goes into each Scripture Burrito export",
       "status": "complete",
       "absentReads": [],
-      "bytes": 98649
+      "bytes": 98649,
+      "sha256": "968165ce32fc187c45aefe6e9a2f1d6905979fc45308ba791ca0739de73fa2d7"
     },
     {
       "name": "share-dialog",
@@ -521,7 +538,8 @@
       "status": "incomplete",
       "incomplete": "Door43 is faked in the browser (mock-server/fake-door43.mjs): the account facilitator-zq and the organizations Equipo-Ejemplo, es-419_gl are invented.",
       "absentReads": [],
-      "bytes": 96225
+      "bytes": 96225,
+      "sha256": "0714f44fe27569abb777e4fc82f843b51ebdc8ed7cdb2fb5c956c3a7b5b5cbc4"
     },
     {
       "name": "share-dialog-check",
@@ -547,7 +565,8 @@
       "status": "incomplete",
       "incomplete": "Door43 is faked in the browser (see share-dialog). Nothing is created or pushed.",
       "absentReads": [],
-      "bytes": 91736
+      "bytes": 91736,
+      "sha256": "e6dbad83b844611c1568ec9dcd23d0a990ef8918a8001ffb5ecccdbb097182d4"
     },
     {
       "name": "account-menu",
@@ -569,7 +588,8 @@
       "shows": "Account menu: Sign in to Door43, Use the internet (off), Help and guides, App language, Report a problem, About translationCore",
       "status": "complete",
       "absentReads": [],
-      "bytes": 82432
+      "bytes": 82432,
+      "sha256": "3e7c003e62c37d9a7cce9684329fe1cfe6427154921c3801bbba2146c4fb228a"
     },
     {
       "name": "app-language",
@@ -592,7 +612,8 @@
       "shows": "App language dialog with English selected",
       "status": "complete",
       "absentReads": [],
-      "bytes": 84277
+      "bytes": 84277,
+      "sha256": "eab902edd92edac32148f74a27a04aa7cd7223eec065f44d2910e4b474cf7481"
     },
     {
       "name": "help",
@@ -611,7 +632,8 @@
       "shows": "Help and guides: the full-window panel with the help pages of the build (tc-website tc-help/ at the commit tC4 pins) open on their index",
       "status": "complete",
       "absentReads": [],
-      "bytes": 158153
+      "bytes": 158153,
+      "sha256": "2ec102ca60ab4b43c4f9a320e29dc4c5ab36a70b687a856bc8a7d6cdd1f93bbe"
     },
     {
       "name": "about",
@@ -634,7 +656,8 @@
       "shows": "About translationCore: version and commit of the build, copyright line, license name and Read the license",
       "status": "complete",
       "absentReads": [],
-      "bytes": 88547
+      "bytes": 88547,
+      "sha256": "5625a65cb2ca81858f4099baef9a0956f82ac9012971adb4e31564035cda3088"
     },
     {
       "name": "feedback",
@@ -653,7 +676,8 @@
       "shows": "Report a problem dialog, empty message",
       "status": "complete",
       "absentReads": [],
-      "bytes": 89618
+      "bytes": 89618,
+      "sha256": "97f37d1fd07007ffd5155d204bcab4774625098b73a82d2a4fd15a3a5e13a8e8"
     },
     {
       "name": "new-obs",
@@ -676,7 +700,8 @@
       "shows": "New Open Bible Stories dialog, empty",
       "status": "complete",
       "absentReads": [],
-      "bytes": 111121
+      "bytes": 111121,
+      "sha256": "bfe8cdf69cd6a3bd6a14f4b42f0f0126ad1f69b1536c9182d118d6848ac6461c"
     },
     {
       "name": "add-book",
@@ -697,7 +722,8 @@
       "shows": "Add a book to the Bible sample: Start a blank book, or Add books from USFM files",
       "status": "complete",
       "absentReads": [],
-      "bytes": 92520
+      "bytes": 92520,
+      "sha256": "d474f5759503b6996a2551267de7f4fb7c5fd7ab1d9e4659001e89a779d2bf1b"
     },
     {
       "name": "source-texts",
@@ -721,7 +747,8 @@
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/es-419_tn?ipath=JON.tsv -> 400",
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/unfoldingword--hbo_uhb?ipath=JON.usfm -> 400"
       ],
-      "bytes": 100002
+      "bytes": 100002,
+      "sha256": "2a768f78a7e4b83fa96e93a7d24032fe2fa5252ff135929475ca147398dc9cf4"
     },
     {
       "name": "guided-fix",
@@ -741,7 +768,8 @@
       "shows": "Guided fix for the Translation Words tool: what is missing (the es-419 TWL/tW pins) and the ways to get it",
       "status": "complete",
       "absentReads": [],
-      "bytes": 139904
+      "bytes": 139904,
+      "sha256": "587c5b5a7aeb77f72d5ce43efded17dabc3c0f4e12bc30262b765268c1b37c43"
     },
     {
       "name": "obs-understand",
@@ -760,7 +788,8 @@
       "status": "incomplete",
       "incomplete": "Every gateway frame reads \"Gateway text is unavailable.\" and the helps say \"The pinned resource is not on this computer yet\": the sample pins the es-419 OBS set (es-419_obs, es-419_obs-tn, es-419_obs-twl) for its primary set, and no copy is available. No picture pack (uW/obs_images_360) either. en-obs-understand shows the English set.",
       "absentReads": [],
-      "bytes": 103986
+      "bytes": 103986,
+      "sha256": "be4938ec0843c475afe7efb443c3f984c5cb534fdad430ecb445c7197fa038ee"
     },
     {
       "name": "obs-translate",
@@ -780,7 +809,8 @@
       "status": "incomplete",
       "incomplete": "The source column reads \"Gateway text is unavailable.\" under the \"pinned gateway story … is not on this machine / Get source\" notice, and there are no pictures: no copy of the pinned es-419_obs v2 or of the picture pack uW/obs_images_360 is available. en-obs-translate shows the English gateway story.",
       "absentReads": [],
-      "bytes": 138469
+      "bytes": 138469,
+      "sha256": "6784d065c0768d6f0c65d827d74f7dca2f6e06ad02a2c92bad23d63223daf5b2"
     },
     {
       "name": "obs-check-picker",
@@ -800,7 +830,8 @@
       "status": "incomplete",
       "incomplete": "Both helps tools read \"Needs downloading\": es-419_obs-twl / es-419_obs-tn are not vendored (see en-obs-check-tn-session for a ready session).",
       "absentReads": [],
-      "bytes": 80861
+      "bytes": 80861,
+      "sha256": "2b1a8d1e7aa0d22dc79c05fafd28d8683a35c97e358f36c296cd2afa38d85dd4"
     },
     {
       "name": "open-door43",
@@ -827,7 +858,8 @@
       "shows": "Open a project from Door43 dialog, empty: the note \"The project opens from git.door43.org. Only public repositories can be opened.\", Door43 repository, Project name, the note that tC4 checks every file before it adds the project, Cancel / Open project (disabled)",
       "status": "complete",
       "absentReads": [],
-      "bytes": 103351
+      "bytes": 103351,
+      "sha256": "520657cad1152d74a69351f3bd48b3d983f60f5db37da1fdde1a0d35b0aabf43"
     },
     {
       "name": "open-door43-internet-consent",
@@ -852,7 +884,8 @@
       "shows": "\"Turn on the internet?\" asked for an open from Door43 (kind `open`): get a full copy of the project and check its files; nothing from your projects is sent",
       "status": "complete",
       "absentReads": [],
-      "bytes": 109746
+      "bytes": 109746,
+      "sha256": "a581da4ebceb43bbcaaf3fb7bac57f03d77db174912d7c06a9112c0eaacd1a6c"
     },
     {
       "name": "open-door43-refused",
@@ -885,7 +918,8 @@
         "POST /git/clone-repo/git.door43.org/facilitator-zq/es-419_tit_equipo -> 400",
         "POST /git/delete/_local_/_archive_/tc4-open--_local_-s_local_-ses-d419_tit_equipo -> 400"
       ],
-      "bytes": 119109
+      "bytes": 119109,
+      "sha256": "88489e43e6aabd07f429fa473d9840734ba202acee9dc19b08f8d951fd6e658e"
     },
     {
       "name": "en-understand-tit1",
@@ -905,7 +939,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 193025
+      "bytes": 193025,
+      "sha256": "a645efd4851c5c7cb6e53e0d07b4896134936e57d0dbfcdb5a24bc601e212b70"
     },
     {
       "name": "en-understand-tw-article",
@@ -927,7 +962,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 165009
+      "bytes": 165009,
+      "sha256": "edd033e68d6b14240f27f0da859b3cc8989b9d1ee1d44dd1a274c57c828945f3"
     },
     {
       "name": "en-understand-questions",
@@ -949,7 +985,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 129538
+      "bytes": 129538,
+      "sha256": "0485e0b4b5fe9cf86cdad4517f98ad044039f0477935fecfe87ae33277e067c0"
     },
     {
       "name": "en-translate-tit1",
@@ -970,7 +1007,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 242124
+      "bytes": 242124,
+      "sha256": "b36fea813e6990f1c343fff94813b16dc3a5e97d32045bfddb832b5751559d77"
     },
     {
       "name": "en-translate-section-editor",
@@ -992,7 +1030,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 214499
+      "bytes": 214499,
+      "sha256": "f9df791991baa141d6474626501230e62c5355a8d848b30ec01f6800e63f215f"
     },
     {
       "name": "en-translate-verse-editor",
@@ -1016,7 +1055,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 214059
+      "bytes": 214059,
+      "sha256": "c292bf9198f5248d2830ea067c67171a3125a69c932004c7a6bb37683a44dba0"
     },
     {
       "name": "en-check-picker",
@@ -1037,7 +1077,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 81595
+      "bytes": 81595,
+      "sha256": "01ff407287717b3eede92c9def59d7ad770c532889055d0ae7c82e201094b7d6"
     },
     {
       "name": "en-check-tw-session",
@@ -1060,7 +1101,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 138750
+      "bytes": 138750,
+      "sha256": "c8491d9724278fb74c502b1c6cc4b01cb857210c2003b903b011be5fa41bde01"
     },
     {
       "name": "en-check-tw-article",
@@ -1084,7 +1126,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 218651
+      "bytes": 218651,
+      "sha256": "00fc6d23f447a2a70dda309674ab4f9624cbf4e1b96b87c15fd6b65932a2dfcb"
     },
     {
       "name": "en-check-tn-session",
@@ -1106,7 +1149,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 185399
+      "bytes": 185399,
+      "sha256": "d35c5ca8b9064b1f6c911bba0c926b3233b94da48f68ad7e8661d0b44e3f114e"
     },
     {
       "name": "en-check-ta-drawer",
@@ -1129,7 +1173,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 277863
+      "bytes": 277863,
+      "sha256": "37eed9065f893c5442c8633d1015d055dfa1db1b9a5605c1fa5fd663bdd48f04"
     },
     {
       "name": "en-community-checking",
@@ -1151,7 +1196,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 160945
+      "bytes": 160945,
+      "sha256": "e8f11cd06adeeda59f365d41fbb32c373c67a096b03bed8bb8d47552cfdd8598"
     },
     {
       "name": "en-obs-understand",
@@ -1172,7 +1218,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 156361
+      "bytes": 156361,
+      "sha256": "0394132d609a545c7c7e6791044d05bca44436af75f87b4850983b3efd083346"
     },
     {
       "name": "en-obs-translate",
@@ -1194,7 +1241,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 205217
+      "bytes": 205217,
+      "sha256": "c26e72b482a96237b495cd889ce89b992b635706c16104ebd74dad2f79445fff"
     },
     {
       "name": "en-obs-check-tn-session",
@@ -1219,7 +1267,8 @@
         "GET /burrito/ingredient/raw/_local_/_local_/sample_burrito_obs?ipath=checking/translationWords/OBS.json -> 400",
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 110657
+      "bytes": 110657,
+      "sha256": "9117208ec8ed6965736b2a1d51952427b1d468f35cf3ce611dfdc88e2524dd23"
     },
     {
       "name": "ar-check-tw-session",
@@ -1244,7 +1293,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 143378
+      "bytes": 143378,
+      "sha256": "c7a6728261feaa54362aaff403393a5bcca09d375b10846bef515fa4cb884fbf"
     },
     {
       "name": "en-check-tw-session-620",
@@ -1273,7 +1323,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 98108
+      "bytes": 98108,
+      "sha256": "d4de6a90d62f9c2d21468974305dec15d0eb9bdedb0d6ce3fde96eb04d1179c0"
     },
     {
       "name": "ar-check-tw-session-620",
@@ -1304,7 +1355,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 95926
+      "bytes": 95926,
+      "sha256": "f21639f5a5d94480890ca8115eb83a08ded71a56fcb73635f2a4ef77914adcaf"
     },
     {
       "name": "en-check-tn-session-row",
@@ -1328,7 +1380,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 176048
+      "bytes": 176048,
+      "sha256": "dae5a7e2a277be2b0fe908f0ba093ef62101b01c7a16bf3d05744da660560bfb"
     },
     {
       "name": "ar-check-tn-session-row",
@@ -1354,7 +1407,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 174574
+      "bytes": 174574,
+      "sha256": "0ab9c3ac8b2508c306f35a52c5cf815334b6d1126553c94112fc2c1d34f33774"
     },
     {
       "name": "en-check-tn-session-620",
@@ -1383,7 +1437,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 110704
+      "bytes": 110704,
+      "sha256": "0a61078af6d72e6f02be456161704d6651931610a1df2290e8d5084320ece2e9"
     },
     {
       "name": "ar-check-tn-session-620",
@@ -1414,7 +1469,8 @@
       "absentReads": [
         "GET /burrito/ingredient/raw/_local_/_sideloaded_/en_obs?ipath=content/{02..50}.md -> 400 (49 reads)"
       ],
-      "bytes": 109587
+      "bytes": 109587,
+      "sha256": "a7ffc8094c20f65cf89fe7122f118b3dc674720ee1e14946b7cc3d6c4acbef4f"
     },
     {
       "name": "shared-home",
@@ -1439,7 +1495,8 @@
       "shows": "Home with both samples shared on Door43: \"On Door43\" beside each name; the Bible card reads \"Sync with Door43\", the OBS card \"Upload changes\" (tC4 4.0 syncs Bible projects only)",
       "status": "complete",
       "absentReads": [],
-      "bytes": 72660
+      "bytes": 72660,
+      "sha256": "2787c3704de6aceac9baa84900556d1fdd38dd093636952f881bb1288ade70e3"
     },
     {
       "name": "sync-internet-consent",
@@ -1465,7 +1522,8 @@
       "shows": "\"Turn on the internet?\" asked for a sync (kind `sync`): get the changes of your teammates and send the changes of this project. Behind the scrim, the OBS card reads \"Upload changes\"",
       "status": "complete",
       "absentReads": [],
-      "bytes": 94046
+      "bytes": 94046,
+      "sha256": "b39645f490e411c0f359afb01ddcbfb0a8c91fd3b5fe9b7114de713c81d1542b"
     },
     {
       "name": "sync-failed",
@@ -1510,7 +1568,8 @@
         "POST /git/clone-repo/git.door43.org/facilitator-zq/sample_burrito -> 400",
         "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400"
       ],
-      "bytes": 83704
+      "bytes": 83704,
+      "sha256": "fed2f1f0e9e632a250e0907ac3e07eeb50746ec603777a607678f43a247c34ca"
     },
     {
       "name": "sync-ok",
@@ -1565,7 +1624,8 @@
       "absentReads": [
         "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400"
       ],
-      "bytes": 88365
+      "bytes": 88365,
+      "sha256": "3794d8052a01078c992dabd747fdb206005db9ad2d25cc3b026a975a2e75d0e3"
     },
     {
       "name": "sync-ok-teammates",
@@ -1622,7 +1682,8 @@
       "absentReads": [
         "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400"
       ],
-      "bytes": 94820
+      "bytes": 94820,
+      "sha256": "c244285d642a3a1b092adc8462b536b976b21c749727aa0e244746b85ec3d932"
     },
     {
       "name": "sync-ok-restored",
@@ -1682,7 +1743,8 @@
       "absentReads": [
         "POST /git/delete/_local_/_archive_/tc4-sync--_local_-s_local_-ssample_burrito -> 400"
       ],
-      "bytes": 96288
+      "bytes": 96288,
+      "sha256": "5c3950c4ed0ceb2493c7b8ae3e00762776bb3a84316843172ec4c98b6957c672"
     }
   ]
 }

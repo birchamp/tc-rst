@@ -4,7 +4,9 @@
 //
 //   node --test parity/tc4-baseline/baseline.test.mjs
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -35,28 +37,75 @@ function screenRows(text) {
 
 const flat = (text) => text.replace(/\s+/g, ' ');
 
-/** Width and height from a PNG's IHDR chunk. */
-function pngSize(file) {
-  const bytes = fs.readFileSync(file);
-  assert.equal(bytes.toString('latin1', 12, 16), 'IHDR', `${file} is not a PNG`);
+/** Width and height from a PNG's IHDR chunk, or null for a file that is not a PNG. */
+function pngSize(bytes) {
+  if (bytes.length < 24 || bytes.toString('latin1', 12, 16) !== 'IHDR') return null;
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
 }
 
-test('every PNG is in the manifest, at its window size and with its byte count', () => {
-  const pngs = fs.readdirSync(path.join(HERE, 'screens')).filter((f) => f.endsWith('.png')).sort();
-  assert.deepEqual(pngs, manifest.screens.map((s) => `${s.name}.png`).sort());
+const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+
+/**
+ * What is wrong with the screenshots under `dir` against `manifest`: each PNG must be listed,
+ * at its window size, with its byte count and its sha256. Answers one line per problem.
+ */
+function baselineProblems(manifest, dir) {
+  const problems = [];
+  const listed = (ext) => manifest.screens.map((s) => `${s.name}.${ext}`).sort();
+  const found = (sub, ext) => fs.readdirSync(path.join(dir, sub)).filter((f) => f.endsWith(`.${ext}`)).sort();
+  for (const [sub, ext] of [['screens', 'png']]) {
+    const want = listed(ext);
+    const have = found(sub, ext);
+    for (const f of want) if (!have.includes(f)) problems.push(`${sub}/${f} is missing`);
+    for (const f of have) if (!want.includes(f)) problems.push(`${sub}/${f} is not in the manifest`);
+  }
   for (const s of manifest.screens) {
-    const file = path.join(HERE, s.file);
-    const { width, height } = s.viewport ?? manifest.viewport;
-    assert.deepEqual(pngSize(file), { width, height }, s.name);
-    assert.equal(fs.statSync(file).size, s.bytes, s.name);
-    assert.notEqual(s.status, 'failed', s.name);
+    if (s.status === 'failed') problems.push(`${s.name} failed: ${s.error}`);
+    if (s.file !== `screens/${s.name}.png`) problems.push(`${s.name}: the manifest names the screenshot ${s.file}`);
+    const png = path.join(dir, `screens/${s.name}.png`);
+    if (fs.existsSync(png)) {
+      const bytes = fs.readFileSync(png);
+      const { width, height } = s.viewport ?? manifest.viewport;
+      const size = pngSize(bytes);
+      if (size?.width !== width || size?.height !== height) problems.push(`${s.name}.png is ${size ? `${size.width}x${size.height}` : 'not a PNG'}, not ${width}x${height}`);
+      if (bytes.length !== s.bytes) problems.push(`${s.name}.png has ${bytes.length} bytes, the manifest says ${s.bytes}`);
+      if (sha256(bytes) !== s.sha256) problems.push(`${s.name}.png has sha256 ${sha256(bytes)}, the manifest says ${s.sha256}`);
+    }
   }
   const t = manifest.totals;
-  assert.equal(t.screens, manifest.screens.length);
-  assert.equal(t.complete, manifest.screens.filter((s) => s.status === 'complete').length);
-  assert.equal(t.incomplete, manifest.screens.filter((s) => s.status === 'incomplete').length);
-  assert.equal(t.bytes, manifest.screens.reduce((n, s) => n + s.bytes, 0));
+  const count = (status) => manifest.screens.filter((s) => s.status === status).length;
+  if (t.screens !== manifest.screens.length) problems.push(`totals.screens is ${t.screens}, not ${manifest.screens.length}`);
+  if (t.complete !== count('complete')) problems.push(`totals.complete is ${t.complete}, not ${count('complete')}`);
+  if (t.incomplete !== count('incomplete')) problems.push(`totals.incomplete is ${t.incomplete}, not ${count('incomplete')}`);
+  const bytes = manifest.screens.reduce((n, s) => n + s.bytes, 0);
+  if (t.bytes !== bytes) problems.push(`totals.bytes is ${t.bytes}, not ${bytes}`);
+  return problems;
+}
+
+test('every PNG is in the manifest, with its window size, byte count and sha256', () => {
+  assert.deepEqual(baselineProblems(manifest, HERE), []);
+});
+
+test('the check fails on a PNG that differs from the manifest by one byte', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tc4-baseline-check-'));
+  try {
+    for (const sub of ['screens']) fs.cpSync(path.join(HERE, sub), path.join(dir, sub), { recursive: true });
+    assert.deepEqual(baselineProblems(manifest, dir), [], 'the copy passes before it is changed');
+    // The last byte of a PNG is the CRC of its IEND chunk: the file keeps its size and its
+    // IHDR, so only the hash can tell.
+    const png = path.join(dir, 'screens', 'about.png');
+    const bytes = fs.readFileSync(png);
+    bytes[bytes.length - 1] ^= 0xff;
+    fs.writeFileSync(png, bytes);
+    const problems = baselineProblems(manifest, dir);
+    const expected = [
+      /^about\.png has sha256 [0-9a-f]{64}, the manifest says [0-9a-f]{64}$/,
+    ];
+    assert.equal(problems.length, expected.length, problems.join('\n'));
+    for (const re of expected) assert.ok(problems.some((p) => re.test(p)), `no problem matches ${re}: ${problems.join(' | ')}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('the README lists every screen of the manifest in order, with its scenario, view, steps, what it shows and status', () => {
