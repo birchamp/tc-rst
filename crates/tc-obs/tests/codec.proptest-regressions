@@ -1,0 +1,10 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc c3136ac58f429fbc4d2266bb2e1152ffdce83ec69b861156a79d4a57e2142a5c # shrinks to g = Generated { number: 1, title: "", frames: [], reference: None, after_title: [], gaps: [], after_reference: [], final_newline: true }
+cc 0ece344e9b85abe9c29d895b160e855a92da16e177d02f09b0d7d5ca92f538cc # shrinks to g = Generated { number: 1, title: "", frames: [("![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg)", ["_x_"])], reference: Some("A"), after_title: [], gaps: [([], [])], after_reference: [], final_newline: false }
+cc f3305c6e34b1e59704c357aded01f62a668eb76e2104da3d7983abf3c45b22f2 # shrinks to g = Generated { number: 1, title: "", frames: [("![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg)", [])], reference: None, after_title: [], gaps: [([], [])], after_reference: [], final_newline: false }
+cc 94d04d56292a88a89f66be89b0c48da77f0b0e6e92f155ab67e8e1fdbd414e9b # shrinks to g = Generated { number: 1, title: "", frames: [("![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg)", ["_x_"]), ("![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-02.jpg)", ["#"])], reference: None, after_title: [], gaps: [([], []), ([" "], [])], after_reference: [], final_newline: true }

@@ -2868,6 +2868,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tc-obs"
+version = "0.1.0"
+dependencies = [
+ "md-5",
+ "proptest",
+ "serde_json",
+ "tc-helps",
+ "tc-resources",
+ "thiserror 2.0.21",
+ "url",
+ "zip",
+]
+
+[[package]]
 name = "tc-resources"
 version = "0.1.0"
 dependencies = [

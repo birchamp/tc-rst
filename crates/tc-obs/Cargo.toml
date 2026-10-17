@@ -1,0 +1,25 @@
+[package]
+name = "tc-obs"
+description = "Open Bible Stories: the story file codec, frames, pictures, the new-project template, progress and the print model."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tc-helps = { path = "../tc-helps" }
+serde_json.workspace = true
+thiserror.workspace = true
+# Picture file names are read from URLs the way the browser's URL parser reads them.
+url.workspace = true
+
+[dev-dependencies]
+md-5.workspace = true
+proptest.workspace = true
+# The default picture pack must stay the pin tc-resources ships.
+tc-resources = { path = "../tc-resources" }
+# The tests read the OBS exports in bundle/en.
+zip.workspace = true
+
+[lints]
+workspace = true
