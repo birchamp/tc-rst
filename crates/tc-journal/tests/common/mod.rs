@@ -18,7 +18,8 @@ use tc_journal::{
     BatchId, BatchRef, BookId, Cause, Change, ChangeBody, ChangeId, ChapterNo, CheckId, CheckKey,
     CheckTarget, CommentId, DeviceId, DeviceKind, DeviceSeq, ExternalSource, FrameNo, GitOid,
     ImportSource, Md5, MetaField, MetaPath, PinGroup, ProjectId, Record, RefPart, RepoPath,
-    SettingKey, ShortId, SlotName, StoryNo, SystemReason, ToolId, VerseNo, WallTime,
+    ResourcesKey, ResourcesLevel, SettingKey, ShortId, SlotName, StoryNo, SystemReason, ToolId,
+    VerseNo, WallTime,
 };
 
 pub fn fixtures() -> PathBuf {
@@ -641,6 +642,21 @@ pub fn arb_record() -> impl Strategy<Value = Record> {
             prop::option::of(arb_json())
         )
             .prop_map(|(key, value)| Record::Setting { key, value }),
+        (
+            prop::sample::select(vec![
+                ResourcesLevel::Top,
+                ResourcesLevel::LanguageSets,
+                ResourcesLevel::Resources,
+            ]),
+            arb_nfc(&[]),
+            prop::option::of(arb_json())
+        )
+            .prop_filter_map("a resources.json key", |(level, name, value)| {
+                Some(Record::ResourcesExtra {
+                    key: ResourcesKey::new(level, &name).ok()?,
+                    value,
+                })
+            }),
         (arb_meta_field(), prop::option::of(arb_json()))
             .prop_map(|(field, value)| Record::ProjectMeta { field, value }),
         (prop::option::of(arb_text()), arb_text()).prop_map(|(name, bytes)| {
@@ -731,7 +747,7 @@ pub fn arb_cause() -> impl Strategy<Value = Cause> {
 pub fn arb_body() -> impl Strategy<Value = ChangeBody> {
     let profile = (
         prop::option::of(arb_text()),
-        prop::option::of("[a-z0-9_]{1,12}"),
+        prop::option::of("[a-z0-9]{1,4}([-._][a-z0-9]{1,4}){0,2}"),
         prop::option::of(prop_oneof![
             arb_text().prop_map(|actor| LegacyIdentity::Tc4Actor {
                 actor: actor.into()
@@ -741,7 +757,7 @@ pub fn arb_body() -> impl Strategy<Value = ChangeBody> {
     )
         .prop_map(|(display_name, username, legacy)| DeviceProfileValue {
             display_name: display_name.map(Into::into),
-            door43_username: username.map(|u| Door43Username(u.into())),
+            door43_username: username.map(|u| Door43Username::parse(&u).unwrap()),
             legacy,
         });
     let record_and_device = prop_oneof![

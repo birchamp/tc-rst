@@ -168,8 +168,8 @@ fn sidecars_compute_validity_and_decode_to_the_same_records() {
     assert_eq!(stale_doc["verseEdits"], true);
     // One record per line.
     assert_eq!(text.lines().count(), 4, "{text}");
-    let decoded =
-        decode_decisions(tc_journal::ToolId::TranslationNotes, BOOK, &bytes).expect("decodes");
+    let decoded = decode_decisions(tc_journal::ToolId::TranslationNotes, Some(BOOK), &bytes)
+        .expect("decodes");
     let mut expected = vec![check(&key, good), check(&stale_key, stale)];
     let mut decoded = decoded;
     expected.sort_by_key(|r| format!("{:?}", r.key()));

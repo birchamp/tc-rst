@@ -243,7 +243,7 @@ proptest! {
 /// generated team history with conflicts.
 fn corpus_files() -> Vec<File> {
     let corpus =
-        Corpus::generate(&Spec::psalms(5).with_history(60, 0.1)).expect("the corpus builds");
+        Corpus::generate(&Spec::psalms(8).with_history(60, 0.1)).expect("the corpus builds");
     let mut files: Vec<File> = corpus
         .journal
         .packs
@@ -751,6 +751,7 @@ fn the_probe_covers_every_class() {
         "Check",
         "Comment",
         "Pins",
+        "ResourcesExtra",
         "Setting",
         "ProjectMeta",
         "Versification",
@@ -864,11 +865,18 @@ fn the_probe_covers_the_summary() {
 /// test makes the change seen.
 #[test]
 fn the_encoding_is_pinned() {
-    const PINNED: &[(u32, u64, &str)] = &[(
-        5,
-        0x45f9_9a8a_0cf9_8153,
-        "c347a50b9c98c4dfd86bee2bdaa44ce6e187b9b26fddfae4e7b295cb162283b5",
-    )];
+    const PINNED: &[(u32, u64, &str)] = &[
+        (
+            5,
+            0x45f9_9a8a_0cf9_8153,
+            "c347a50b9c98c4dfd86bee2bdaa44ce6e187b9b26fddfae4e7b295cb162283b5",
+        ),
+        (
+            6,
+            0xe9be_ed65_457e_0014,
+            "c6e74a64914c1415dec7298408188f0afe55b72c5cb30678ef83eed564b7070a",
+        ),
+    ];
     let changes = probe();
     let mut files = packs_of(&changes);
     files.push(pending_of(&changes, 3));

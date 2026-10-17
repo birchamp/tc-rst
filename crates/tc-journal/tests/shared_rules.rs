@@ -1,0 +1,541 @@
+//! The rules the domain crates share with the fold (`docs/STORAGE.md` §5.3, §5.4, §7.7,
+//! §8.5, §13.5): check identity as tC4 writes it, the no-text rule, the decision edit, the
+//! ladder over OBS slots, the OBS decision and comment files, `resources.json` members no pin
+//! group holds, person labels, the verse conflicts, an alignment's validity and order, and the
+//! aligned-USFM split.
+
+// Tests build fixed, known-valid values and may fail loudly.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+mod support;
+
+use support::*;
+use tc_journal::alignment::{AlignedRun, Stale, split_aligned};
+use tc_journal::command::{DecisionBasis, DecisionChange, DecisionEdit};
+use tc_journal::decision::{TargetText, assess, verse_text_md5_v1};
+use tc_journal::fold::{ConflictKind, DerivedFile, FoldInput, FoldState, PersonLabel, ProjectKind};
+use tc_journal::json::{Json, JsonMap};
+use tc_journal::record::{
+    CommentTarget, DeviceProfileValue, Door43Username, ResourceRef, Selection, TargetWord,
+    UserStatus,
+};
+use tc_journal::{
+    Cause, Change, CheckId, CheckKey, CheckTarget, FrameNo, PinGroup, Record, RefPart,
+    ResourcesKey, ResourcesLevel, StoryNo, ToolId, VerseNo,
+};
+
+fn tn_slot(pin: &ResourceRef, books: Option<&[&str]>) -> Json {
+    let mut fields = vec![
+        ("repoPath", Json::from(pin.repo_path.as_ref())),
+        ("sha", Json::from(pin.sha.to_hex())),
+        ("version", Json::from("v91")),
+    ];
+    if let Some(books) = books {
+        fields.push((
+            "books",
+            Json::Arr(books.iter().map(|b| Json::from(*b)).collect()),
+        ));
+    }
+    obj(&fields)
+}
+
+fn selection(text: &str, occurrences: u32) -> Selection {
+    Selection {
+        text: text.into(),
+        occurrence: 1,
+        occurrences,
+        extra: JsonMap::new(),
+    }
+}
+
+fn key_at(id: &str, chapter: &str, verse: &str) -> CheckKey {
+    CheckKey {
+        tool: ToolId::TranslationNotes,
+        check_id: CheckId::parse(id).unwrap(),
+        target: CheckTarget::Verse {
+            book: BOOK,
+            chapter: RefPart::parse(chapter).unwrap(),
+            verse: RefPart::parse(verse).unwrap(),
+        },
+        occurrence: 1,
+    }
+}
+
+fn decision_file(state: &FoldState) -> serde_json::Value {
+    rendered(
+        state,
+        &DerivedFile::Decisions(ToolId::TranslationNotes, BOOK),
+    )
+    .expect("the decision file")
+}
+
+fn flags(file: &serde_json::Value, id: &str) -> (bool, bool) {
+    let record = file["decisions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|d| d["contextId"]["checkId"] == id)
+        .unwrap_or_else(|| panic!("no decision {id}"));
+    (
+        record["invalidated"].as_bool().unwrap(),
+        record["verseEdits"].as_bool().unwrap(),
+    )
+}
+
+/// A decision made against `md5("x")`, with a selection that no verse below holds.
+fn stale_decision(id: &str) -> tc_journal::record::DecisionRecord {
+    let mut d = decision(Some(UserStatus::Valid), false, None);
+    d.context = JsonMap::from([("checkId".to_owned(), Json::from(id))]);
+    d.judgement.selections = Some(vec![selection("gone", 1)]);
+    d
+}
+
+/// en_tn's `sbh4` is a check on verse `1,3,8,12` of PSA 5, as tC4 keys it; such a target,
+/// a `front`, a span no run carries, and an undrafted verse name no text, so a decision on
+/// them is never invalidated by the text (tC4's `decisionIsStale` finds no draft text). A
+/// drafted verse, and a span a run carries, are read.
+#[test]
+fn the_no_text_rule_reads_only_the_texts_tc4_reads() {
+    let mut dev = Dev::new(1);
+    let mut changes = seed_book(&mut dev, &[4]);
+    let v = |n: u16| on(&changes, &verse_key(1, n)).id();
+    let edits = dev.batch(
+        vec![
+            (verse(1, 1, text("Paul, a servant of God", 1)), vec![v(1)]),
+            (verse(1, 2, text("in hope of eternal life", 3)), vec![v(2)]),
+            (verse(1, 3, covered(2)), vec![v(3)]),
+        ],
+        Cause::Edit,
+    );
+    changes.extend(edits);
+    let pin = tn_pin();
+    changes.push(dev.one(
+        pins(
+            PinGroup::Primary,
+            &[("translationNotes", tn_slot(&pin, None))],
+        ),
+        vec![],
+    ));
+    for (id, chapter, verse) in [
+        ("comma", "1", "1,3"),
+        ("front", "1", "front"),
+        ("loose", "1", "1-2"),
+        ("stub", "1", "4"),
+        ("drafted", "1", "1"),
+        ("member", "1", "3"),
+        ("span", "1", "2-3"),
+    ] {
+        changes.push(dev.one(
+            check(&key_at(id, chapter, verse), stale_decision(id)),
+            vec![],
+        ));
+    }
+    let state = fold(&changes);
+    let file = decision_file(&state);
+    for id in ["comma", "front", "loose", "stub"] {
+        assert_eq!(flags(&file, id), (false, false), "{id}");
+    }
+    for id in ["drafted", "member", "span"] {
+        assert_eq!(flags(&file, id), (true, true), "{id}");
+    }
+}
+
+/// §5.4: a judgement stamps the text's md5, clears an imported invalidation and records the
+/// pin of the list the person judged in; To do changes only the status; a bookmark only
+/// itself.
+#[test]
+fn a_rejudgement_records_the_current_resource_and_to_do_changes_only_the_status() {
+    let old = tn_pin();
+    let new = ResourceRef {
+        repo_path: old.repo_path.clone(),
+        sha: oid(9),
+    };
+    let mut stored = stale_decision("abcd");
+    stored.imported_invalid = true;
+    let edit = |changes: Vec<DecisionChange>| DecisionEdit {
+        basis: None,
+        resource: new.clone(),
+        changes,
+    };
+    let todo = edit(vec![DecisionChange::Status(Some(UserStatus::Todo))])
+        .apply(Some(&stored), Some("Paul"))
+        .unwrap();
+    assert_eq!(todo.judgement.status, Some(UserStatus::Todo));
+    assert_eq!(
+        todo.judgement.verse_text_md5,
+        stored.judgement.verse_text_md5
+    );
+    assert_eq!(todo.resource, old);
+    assert!(todo.imported_invalid);
+    let bookmark = edit(vec![DecisionChange::Bookmarked(true)])
+        .apply(Some(&stored), Some("Paul"))
+        .unwrap();
+    assert!(bookmark.bookmarked && bookmark.resource == old);
+    let valid = edit(vec![
+        DecisionChange::Selections(Some(vec![selection("Paul", 1)])),
+        DecisionChange::NothingToSelect(false),
+        DecisionChange::Status(Some(UserStatus::Valid)),
+    ])
+    .apply(Some(&stored), Some("Paul"))
+    .unwrap();
+    assert_eq!(valid.resource, new);
+    assert!(!valid.imported_invalid);
+    assert_eq!(valid.judgement.verse_text_md5, verse_text_md5_v1("Paul"));
+    // The re-judged decision holds against the new resolution, as the screen shows it.
+    let text = TargetText::new("Paul".into());
+    assert!(
+        assess(&valid, Some(&new), Some(&text))
+            .invalidation
+            .is_none()
+    );
+    assert!(
+        assess(&todo, Some(&new), Some(&text))
+            .invalidation
+            .is_some()
+    );
+    // A first decision needs the item's context.
+    let first = edit(vec![DecisionChange::Status(Some(UserStatus::Invalid))]);
+    assert!(first.apply(None, None).is_err());
+    let first = DecisionEdit {
+        basis: Some(DecisionBasis {
+            context: JsonMap::new(),
+            category: None,
+        }),
+        ..first
+    };
+    let made = first.apply(None, None).unwrap();
+    assert_eq!(made.judgement.verse_text_md5, verse_text_md5_v1(""));
+    assert_eq!(made.resource, new);
+}
+
+fn obs_changes() -> Vec<Change> {
+    let mut dev = Dev::new(2);
+    let story = StoryNo::new(1).unwrap();
+    let base = "# The Creation\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-01.jpg)\n\nThis is how God made everything.\n\n![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-02.jpg)\n\nThen God said.\n\n_A Bible story from: Genesis 1-2_\n";
+    let mut out = vec![dev.one(
+        Record::StoryBase {
+            story,
+            value: base.into(),
+        },
+        vec![],
+    )];
+    out.push(dev.one(
+        Record::Frame {
+            story,
+            frame: FrameNo(1),
+            value: "Así es como Dios hizo todo.".into(),
+        },
+        vec![],
+    ));
+    let pin = ResourceRef {
+        repo_path: "git.door43.org/es-419_gl/es-419_obs-tn".into(),
+        sha: oid(3),
+    };
+    out.push(dev.one(
+        pins(PinGroup::Primary, &[("obs-tn", tn_slot(&pin, None))]),
+        vec![],
+    ));
+    for (id, frame, words) in [("f1", 1, "Dios"), ("f2", 2, "Dios")] {
+        let key = CheckKey {
+            tool: ToolId::TranslationNotes,
+            check_id: CheckId::parse(id).unwrap(),
+            target: CheckTarget::Frame {
+                story,
+                frame: FrameNo(frame),
+            },
+            occurrence: 1,
+        };
+        let mut d = decision(Some(UserStatus::Valid), false, None);
+        d.context = JsonMap::from([
+            ("checkId".to_owned(), Json::from(id)),
+            ("occurrence".to_owned(), Json::from(1)),
+            (
+                "reference".to_owned(),
+                obj(&[("frame", Json::from(frame)), ("story", Json::from(1))]),
+            ),
+        ]);
+        d.resource = pin.clone();
+        d.judgement.verse_text_md5 = verse_text_md5_v1("Así es como Dios hizo todo.");
+        d.judgement.selections = Some(vec![selection(words, 1)]);
+        out.push(dev.one(check(&key, d), vec![]));
+        if frame == 1 {
+            out.push(dev.one(
+                comment(4, CommentTarget::Check(key), "¿Es la palabra correcta?"),
+                vec![],
+            ));
+        }
+    }
+    out.push(dev.one(
+        comment(
+            5,
+            CommentTarget::Frame {
+                story,
+                frame: FrameNo(2),
+            },
+            "Falta traducir",
+        ),
+        vec![],
+    ));
+    out
+}
+
+/// §3.2, §7.7: decisions on frames resolve over the `obs-` slots and project to
+/// `checking/<tool>/OBS.json`, each read against its frame's text (the frame's record, else
+/// the template's paragraph); comments on frames and frame checks project to
+/// `tc/comments/OBS.json`. The decision file decodes back to the same records.
+#[test]
+fn obs_decisions_and_comments_have_their_files() {
+    let changes = obs_changes();
+    let state = FoldState::fold(
+        ProjectKind::Stories,
+        changes.iter().cloned().map(FoldInput::from),
+    );
+    let files = state.derived_files();
+    let tn = DerivedFile::StoryDecisions(ToolId::TranslationNotes);
+    assert!(files.contains(&tn), "{files:?}");
+    assert!(files.contains(&DerivedFile::StoryComments));
+    assert_eq!(tn.path(), "ingredients/checking/translationNotes/OBS.json");
+    let doc = rendered(&state, &tn).unwrap();
+    assert_eq!(doc["book"], "OBS");
+    assert_eq!(doc["resource"]["languageSet"], "primary");
+    let decisions = doc["decisions"].as_array().unwrap();
+    assert_eq!(decisions.len(), 2);
+    // f1 was judged against frame 1's text; f2's frame still holds the template's text,
+    // which does not hold the selected word.
+    assert_eq!(decisions[0]["invalidated"], false);
+    assert_eq!(decisions[1]["invalidated"], true);
+    assert_eq!(decisions[1]["verseEdits"], true);
+    let comments = rendered(&state, &DerivedFile::StoryComments).unwrap();
+    let placed: Vec<&serde_json::Value> = comments["comments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| &c["placed"])
+        .collect();
+    assert_eq!(placed.len(), 2);
+    assert_eq!(placed[0]["frame"], 1);
+    assert!(placed[0]["check"].is_object());
+    assert_eq!(placed[1]["frame"], 2);
+    let bytes = state.render(&tn).unwrap();
+    let decoded =
+        tc_journal::fold::decode_decisions(ToolId::TranslationNotes, None, &bytes).unwrap();
+    let stored: Vec<Record> = changes
+        .iter()
+        .map(|c| c.body().record.clone())
+        .filter(|r| matches!(r, Record::Check { .. }))
+        .collect();
+    assert_eq!(decoded, stored);
+}
+
+/// A `resources.json` member no pin group holds is a record of its own, projected at its
+/// level after the modelled members, so no import or outside edit loses it.
+#[test]
+fn unknown_resources_members_are_kept_at_their_level() {
+    let mut dev = Dev::new(3);
+    let mut changes = seed_book(&mut dev, &[1]);
+    changes.push(dev.one(
+        pins(
+            PinGroup::Primary,
+            &[("translationNotes", tn_slot(&tn_pin(), None))],
+        ),
+        vec![],
+    ));
+    for (level, name, value) in [
+        (ResourcesLevel::Top, "translationCoreNext", Json::from(true)),
+        (ResourcesLevel::LanguageSets, "secondary", obj(&[])),
+        (ResourcesLevel::Resources, "glossary", Json::from("x")),
+    ] {
+        changes.push(dev.one(
+            Record::ResourcesExtra {
+                key: ResourcesKey::new(level, name).unwrap(),
+                value: Some(value),
+            },
+            vec![],
+        ));
+    }
+    let state = fold(&changes);
+    let doc = rendered(&state, &DerivedFile::Resources).unwrap();
+    assert_eq!(doc["translationCoreNext"], true);
+    assert!(doc["languageSets"]["secondary"].is_object());
+    assert!(doc["languageSets"]["primary"]["translationNotes"].is_object());
+    assert_eq!(doc["resources"]["glossary"], "x");
+    let keys: Vec<&String> = doc.as_object().unwrap().keys().collect();
+    assert_eq!(keys.last().map(|k| k.as_str()), Some("translationCoreNext"));
+    for owned in ["languageSets", "schemaVersion"] {
+        assert!(
+            ResourcesKey::new(ResourcesLevel::Top, owned).is_err(),
+            "{owned}"
+        );
+    }
+    assert!(ResourcesKey::new(ResourcesLevel::LanguageSets, "primary").is_err());
+    assert!(ResourcesKey::new(ResourcesLevel::Resources, "constructor").is_err());
+}
+
+fn profile(username: Option<&str>, display: Option<&str>) -> DeviceProfileValue {
+    DeviceProfileValue {
+        display_name: display.map(Into::into),
+        door43_username: username.map(|u| Door43Username::parse(u).unwrap()),
+        legacy: None,
+    }
+}
+
+/// §8.5: one label per person on the review and the sync result: Mine for this device and
+/// its Door43 user, the username, the display name, else Teammate n in id order.
+#[test]
+fn person_labels_name_each_person_once() {
+    let mut me = Dev::new(10);
+    let mut other_me = Dev::new(11);
+    let mut juan = Dev::new(12);
+    let mut ana = Dev::new(13);
+    let mut quiet = [Dev::new(14), Dev::new(15)];
+    let mut changes = Vec::new();
+    for (dev, value) in [
+        (&mut me, profile(Some("maria"), None)),
+        (
+            &mut other_me,
+            profile(Some("maria"), Some("Maria's laptop")),
+        ),
+        (&mut juan, profile(Some("juan"), Some("Juan"))),
+        (&mut ana, profile(None, Some("Ana"))),
+    ] {
+        let id = dev.id;
+        changes.push(dev.one(Record::DeviceProfile { device: id, value }, vec![]));
+    }
+    for dev in &mut quiet {
+        changes.push(dev.one(verse(1, 1, text("words", 1)), vec![]));
+    }
+    let labels = fold(&changes).person_labels(me.id);
+    assert_eq!(labels[&me.id], PersonLabel::Mine);
+    assert_eq!(labels[&other_me.id], PersonLabel::Mine);
+    assert_eq!(labels[&juan.id], PersonLabel::Username("juan".into()));
+    assert_eq!(labels[&ana.id], PersonLabel::DisplayName("Ana".into()));
+    let mut unnamed = [quiet[0].id, quiet[1].id];
+    unnamed.sort();
+    assert_eq!(labels[&unnamed[0]], PersonLabel::Teammate(1));
+    assert_eq!(labels[&unnamed[1]], PersonLabel::Teammate(2));
+}
+
+#[test]
+fn the_verse_conflicts_are_the_four_verse_kinds() {
+    let verse = [
+        ConflictKind::VerseText,
+        ConflictKind::VerseStructure,
+        ConflictKind::Passage,
+        ConflictKind::StructureIssue,
+    ];
+    for kind in verse {
+        assert!(kind.is_verse(), "{kind:?}");
+    }
+    for kind in [
+        ConflictKind::Alignment,
+        ConflictKind::Check,
+        ConflictKind::Pins,
+        ConflictKind::BookPresence,
+        ConflictKind::ChapterFront,
+    ] {
+        assert!(!kind.is_verse(), "{kind:?}");
+    }
+}
+
+fn word(text: &str, occurrence: u32, occurrences: u32) -> TargetWord {
+    TargetWord {
+        word: text.into(),
+        occurrence,
+        occurrences,
+        extra: JsonMap::new(),
+    }
+}
+
+/// §7.7: an alignment vouches for the run it is placed at when that run covers as many
+/// verses, counted from its start, as the alignment did from its anchor; a renumbered text
+/// keeps its alignment valid.
+#[test]
+fn alignment_validity_follows_the_anchor() {
+    let Record::Alignment { mut value, .. } = alignment(2, 4, 5, "words") else {
+        panic!("an alignment")
+    };
+    let at = |run_start, run_end| AlignedRun {
+        anchor: 4,
+        run_start,
+        run_end,
+        text_md5: md5("words"),
+        source_sha: None,
+    };
+    assert!(value.is_valid(&at(4, 5)));
+    assert!(value.is_valid(&at(7, 8)), "moved by a renumber");
+    assert_eq!(value.staleness(&at(7, 7)), vec![Stale::SpanChanged]);
+    value.marked_invalid = true;
+    assert_eq!(
+        value.staleness(&AlignedRun {
+            text_md5: md5("other"),
+            ..at(4, 5)
+        }),
+        vec![Stale::TextChanged, Stale::MarkedInvalid]
+    );
+}
+
+/// §5.3 (Q15, Q19): the bank and each card in verse order, a word the verse lacks last.
+#[test]
+fn a_saved_alignment_is_in_verse_order() {
+    let Record::Alignment { mut value, .. } = alignment(1, 1, 1, "x") else {
+        panic!("an alignment")
+    };
+    value.word_bank = vec![
+        word("cat", 1, 1),
+        word("gone", 1, 1),
+        word("the", 2, 2),
+        word("the", 1, 2),
+    ];
+    let verse = [("the", 1), ("cat", 1), ("saw", 1), ("the", 2)];
+    assert!(!value.in_verse_order(verse));
+    value.put_in_verse_order(verse);
+    let order: Vec<(&str, u32)> = value
+        .word_bank
+        .iter()
+        .map(|w| (w.word.as_str(), w.occurrence))
+        .collect();
+    assert_eq!(order, [("the", 1), ("cat", 1), ("the", 2), ("gone", 1)]);
+    assert!(value.in_verse_order(verse));
+}
+
+/// §13.5: every verse of en_ult Titus is aligned USFM written by tC4's export. Each splits
+/// into its plain text and an `Alignment` value that weaves back into the verse byte for
+/// byte, and the plain text holds the words that `plain_text_v1` reads.
+#[test]
+fn aligned_titus_verses_split_into_text_and_alignment() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/tc4/test-fixtures/en_ult/TIT.usfm");
+    let text = std::fs::read_to_string(path).unwrap();
+    let book = tc_usfm::Book::parse(&text);
+    let mut split = 0;
+    for unit in book.verses() {
+        let content = unit.body();
+        let last = VerseNo::new(1).unwrap();
+        let (plain, value) = split_aligned(content, last)
+            .unwrap_or_else(|| panic!("{:?}:{} did not split", unit.chapter(), unit.label()));
+        assert!(!plain.contains("\\zaln"), "{plain}");
+        assert!(
+            tc_usfm::plain_text_v1(content)
+                .chars()
+                .filter(|c| c.is_alphabetic())
+                .count()
+                < tc_usfm::plain_text_v1(&plain)
+                    .chars()
+                    .filter(|c| c.is_alphabetic())
+                    .count()
+        );
+        assert_eq!(value.target_verse_md5, verse_text_md5_v1(&plain));
+        assert_eq!(
+            tc_usfm::weave(&plain, &value.usfm_groups()).unwrap(),
+            content
+        );
+        assert!(value.source.is_none() && !value.marked_invalid);
+        split += 1;
+    }
+    assert_eq!(split, 46);
+    // Unaligned text is not split.
+    assert!(split_aligned("Paul, a servant of God", VerseNo::new(1).unwrap()).is_none());
+    // A verse whose `\w` words carry more than the occurrence attributes is kept as written.
+    let odd = "\\zaln-s |x-strong=\"G39720\" x-lemma=\"Παῦλος\" x-morph=\"Gr,N,,,,,NMS,\" x-occurrence=\"1\" x-occurrences=\"1\" x-content=\"Παῦλος\"\\*\\w Paul|x-occurrence=\"1\" x-occurrences=\"1\" x-lemma=\"p\"\\w*\\zaln-e\\*,";
+    assert!(split_aligned(odd, VerseNo::new(1).unwrap()).is_none());
+}

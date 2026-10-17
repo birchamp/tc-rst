@@ -134,13 +134,15 @@ pub struct AlignmentEdit {
     pub done: bool,
 }
 
-/// What the checker changed in one item (§5.4). The actor applies the changes to the
-/// displayed value, or to `basis` for a first decision.
+/// What the checker changed in one item (§5.4). [`DecisionEdit::apply`] applies the changes
+/// to the displayed value, or to `basis` for a first decision.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecisionEdit {
-    /// For a first decision: the derived check item's context, category and the tN or TWL
-    /// pin the item list came from.
+    /// For a first decision: the derived check item's context and category.
     pub basis: Option<DecisionBasis>,
+    /// The tN or TWL pin of the check list the person judged in: the (tool, book)'s current
+    /// resolution as the screen resolved it (§7.7). A judgement records it.
+    pub resource: ResourceRef,
     pub changes: Vec<DecisionChange>,
 }
 
@@ -148,7 +150,6 @@ pub struct DecisionEdit {
 pub struct DecisionBasis {
     pub context: JsonMap,
     pub category: Option<Box<str>>,
-    pub resource: ResourceRef,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

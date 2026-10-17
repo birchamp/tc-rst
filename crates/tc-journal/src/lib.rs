@@ -19,10 +19,12 @@
 //! - [`fold`] holds the fold's output types, [`token`] the shown tokens and [`command`] the
 //!   commands of §2.7.
 
+pub mod alignment;
 pub mod canon;
 pub mod change;
 pub mod command;
 pub mod consolidate;
+pub mod decision;
 pub mod fold;
 pub mod format;
 pub mod ids;
@@ -32,6 +34,7 @@ pub mod keys;
 pub mod line;
 pub mod pack;
 pub mod pending;
+pub mod pins;
 pub mod record;
 pub mod rules;
 mod sha;
@@ -49,8 +52,8 @@ pub use ids::{
 };
 pub use json::{Json, JsonMap};
 pub use keys::{
-    CheckId, CheckKey, CheckTarget, MetaField, MetaPath, PinGroup, RecordKey, RefPart, SettingKey,
-    SlotName, ToolId, UnknownKey,
+    CheckId, CheckKey, CheckTarget, MetaField, MetaPath, PinGroup, RecordKey, RefPart,
+    ResourcesKey, ResourcesLevel, SettingKey, SlotName, ToolId, UnknownKey,
 };
 pub use record::Record;
 pub use rules::{Rule, RuleViolation};

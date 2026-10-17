@@ -1051,7 +1051,7 @@ fn loss_carryover_keeps_comment_and_bookmark() {
     let state = assert_converges(&all_of(&[&book, &[base, note], &upgrade]));
     let file = DerivedFile::Decisions(ToolId::TranslationNotes, BOOK);
     let bytes = state.render(&file).expect("decisions");
-    let decoded = decode_decisions(ToolId::TranslationNotes, BOOK, &bytes).expect("decodes");
+    let decoded = decode_decisions(ToolId::TranslationNotes, Some(BOOK), &bytes).expect("decodes");
     assert_eq!(decoded.len(), 1, "the moved check projects nothing");
     assert_eq!(decoded[0].key(), RecordKey::Check(new.clone()));
     let doc: serde_json::Value = serde_json::from_slice(&bytes).expect("json");

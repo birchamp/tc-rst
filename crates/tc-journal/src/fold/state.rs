@@ -13,7 +13,7 @@ use super::value::{Stored, ValueAt, ValueSource};
 use super::{Anomaly, Conflict, ConflictId, Counter, CounterCells, Counters, Frontier};
 use crate::change::Verified;
 use crate::ids::{BatchId, ChangeId, DeviceId, DeviceKind, DeviceSeq, PackId};
-use crate::keys::RecordKey;
+use crate::keys::{CheckTarget, RecordKey};
 use crate::record::Record;
 use smallvec::SmallVec;
 use std::collections::{BTreeMap, BTreeSet};
@@ -407,6 +407,9 @@ pub struct FoldState {
     pub(crate) pin_keys: Arc<BTreeSet<KeyIdx>>,
     pub(crate) profile_keys: CowMap<DeviceId, KeyIdx>,
     pub(crate) story_keys: Arc<BTreeSet<KeyIdx>>,
+    /// Decisions on frames, and comments on frames or on frame checks: what the OBS
+    /// decision and comment files list (§3.2).
+    pub(crate) story_attached: Arc<BTreeSet<KeyIdx>>,
     pub(crate) setting_keys: Arc<BTreeSet<KeyIdx>>,
     /// Keys whose resolution met a value the source could not read (§2.6); judged again
     /// by [`FoldState::retry_unreadable`].
@@ -472,6 +475,7 @@ impl FoldState {
             pin_keys: Arc::new(BTreeSet::new()),
             profile_keys: CowMap::default(),
             story_keys: Arc::new(BTreeSet::new()),
+            story_attached: Arc::new(BTreeSet::new()),
             setting_keys: Arc::new(BTreeSet::new()),
             unreadable: CowMap::default(),
             conflicts: im::OrdMap::new(),
@@ -687,7 +691,7 @@ impl FoldState {
             RecordKey::CarriedFile(_) => {
                 Arc::make_mut(&mut self.carried_keys).insert(k);
             }
-            RecordKey::Pins(_) => {
+            RecordKey::Pins(_) | RecordKey::ResourcesExtra(_) => {
                 Arc::make_mut(&mut self.pin_keys).insert(k);
             }
             RecordKey::DeviceProfile(device) => {
@@ -698,6 +702,12 @@ impl FoldState {
             }
             RecordKey::Setting(_) => {
                 Arc::make_mut(&mut self.setting_keys).insert(k);
+            }
+            RecordKey::Check(check) if matches!(check.target, CheckTarget::Frame { .. }) => {
+                Arc::make_mut(&mut self.story_attached).insert(k);
+            }
+            RecordKey::Comment(_) if on_story(shape) => {
+                Arc::make_mut(&mut self.story_attached).insert(k);
             }
             _ => {}
         }
@@ -1681,7 +1691,8 @@ impl FoldState {
         dirty.changed.insert(k);
         let entry = self.entry(k);
         match &entry.key {
-            RecordKey::Pins(_) => dirty.pins = true,
+            // `resources.json` holds the extra keys too, so its projection is redone.
+            RecordKey::Pins(_) | RecordKey::ResourcesExtra(_) => dirty.pins = true,
             RecordKey::CarriedFile(_) => dirty.paths = true,
             _ => {}
         }
@@ -1958,6 +1969,20 @@ pub(crate) fn conflict_sort(conflict: &Conflict) -> ConflictSort {
 }
 
 /// The chapter a comment is filed under: its verse's, or its check's target chapter.
+/// Whether a comment targets a frame or a check on a frame.
+fn on_story(shape: &Shape) -> bool {
+    match shape {
+        Shape::Comment { target } => match &**target {
+            crate::record::CommentTarget::Frame { .. } => true,
+            crate::record::CommentTarget::Check(check) => {
+                matches!(check.target, CheckTarget::Frame { .. })
+            }
+            crate::record::CommentTarget::Verse { .. } => false,
+        },
+        _ => false,
+    }
+}
+
 fn comment_chapter(shape: &Shape) -> Option<u16> {
     match shape {
         Shape::Comment { target } => match &**target {

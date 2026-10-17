@@ -15,6 +15,7 @@ mod merge;
 pub(crate) mod meta;
 mod metadata;
 mod passage;
+mod people;
 mod project;
 mod reads;
 mod resolve;
@@ -23,6 +24,7 @@ mod state;
 pub(crate) mod value;
 
 pub use meta::ChangeIdx;
+pub use people::PersonLabel;
 pub use project::{CarriedPlacement, DerivedFile};
 pub use reads::{BookView, ChangeView, Placement};
 pub use resolve::ResolveError;
@@ -237,6 +239,16 @@ pub enum ConflictKind {
 }
 
 impl ConflictKind {
+    /// A verse conflict: verse text, verse structure, a passage or a structure issue. The
+    /// sync result counts these apart from the others, and its review link opens them
+    /// (tC4's toast, `docs/TC4-DELTA-2026-10-16.md` §3.9, §8.5).
+    pub fn is_verse(&self) -> bool {
+        matches!(
+            self,
+            Self::VerseText | Self::VerseStructure | Self::Passage | Self::StructureIssue
+        )
+    }
+
     /// The order of kinds within one key in the conflict list.
     pub fn order(&self) -> u8 {
         match self {

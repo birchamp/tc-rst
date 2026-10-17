@@ -10,7 +10,8 @@ use super::state::{Dirty, Fault, FoldState, Local, Owner, Projected};
 use super::{Candidate, Conflict, ConflictId, ConflictKind, Counter, Side};
 use crate::ids::{ChangeId, DeviceId, RepoPath};
 use crate::json::Json;
-use crate::keys::{CheckKey, CheckTarget, PinGroup, RecordKey, SlotName, ToolId};
+use crate::keys::{CheckKey, CheckTarget, PinGroup, RecordKey, ToolId};
+use crate::pins::{Answer, Collection, LanguageSets};
 use crate::record::{
     ChapterVerse, CheckValue, CommentTarget, DeviceProfileValue, PinGroupValue, Record,
     ResourceRef, VerseValue,
@@ -25,19 +26,16 @@ pub(crate) type Anchor = (u16, u16);
 /// The chapter a decision's target names, when it is a number.
 pub(crate) fn target_chapter(check: &CheckKey) -> Option<u16> {
     match &check.target {
-        CheckTarget::Verse { chapter, .. } => chapter.as_str().parse().ok(),
+        CheckTarget::Verse { chapter, .. } => chapter.number(),
         CheckTarget::Frame { .. } => None,
     }
 }
 
-/// The chapter and first verse a decision's target names, when both are numbers.
+/// The chapter and first verse a decision's target names, when the chapter is a number and
+/// the verse a number or a span of numbers.
 fn target_verse(check: &CheckKey) -> Option<(u16, u16)> {
     match &check.target {
-        CheckTarget::Verse { chapter, verse, .. } => {
-            let c = chapter.as_str().parse().ok()?;
-            let v = verse.as_str().split('-').next()?.parse().ok()?;
-            Some((c, v))
-        }
+        CheckTarget::Verse { chapter, verse, .. } => Some((chapter.number()?, verse.span()?.0)),
         CheckTarget::Frame { .. } => None,
     }
 }
@@ -660,7 +658,7 @@ pub(crate) fn author(state: &FoldState, device: DeviceId) -> Option<Box<str>> {
     else {
         return None;
     };
-    door43_username.map(|u| u.0).or(display_name)
+    door43_username.map(|u| u.as_str().into()).or(display_name)
 }
 
 /// A device profile changed: every candidate shows its author again.
@@ -742,12 +740,12 @@ pub(crate) fn target_exists(state: &FoldState, check: &CheckKey) -> bool {
     }
 }
 
-/// The projected pins, for `resolution(tool, book)` (§7.7).
+/// The projected pins, for `resolution(tool, collection)` (§7.7).
 #[derive(Debug, Clone, Default)]
 pub(crate) struct PinsView {
     pub groups: BTreeMap<PinGroup, PinGroupValue>,
-    /// `resolution(tool, book)` of every tool and book, by [`resolved_slot`].
-    resolved: Vec<Option<ResourceRef>>,
+    /// `resolution(tool, collection)` of every tool and collection, by [`resolved_slot`].
+    resolved: Vec<Option<Answer>>,
 }
 
 const TOOLS: [ToolId; 3] = [
@@ -756,13 +754,21 @@ const TOOLS: [ToolId; 3] = [
     ToolId::TranslationQuestions,
 ];
 
-fn resolved_slot(tool: ToolId, book: BookId) -> usize {
+/// A collection's place in the table: the books by ordinal, then the stories.
+fn collection_slot(collection: Collection) -> usize {
+    match collection {
+        Collection::Book(book) => usize::from(book.ordinal()).saturating_sub(1),
+        Collection::Stories => BookId::ALL.len(),
+    }
+}
+
+fn resolved_slot(tool: ToolId, collection: Collection) -> usize {
     let tool = match tool {
         ToolId::TranslationNotes => 0,
         ToolId::TranslationWords => 1,
         ToolId::TranslationQuestions => 2,
     };
-    tool * BookId::ALL.len() + usize::from(book.ordinal()).saturating_sub(1)
+    tool * (BookId::ALL.len() + 1) + collection_slot(collection)
 }
 
 impl PinsView {
@@ -778,77 +784,34 @@ impl PinsView {
                 groups.insert(group, value);
             }
         }
-        let mut view = Self {
-            groups,
-            resolved: Vec::new(),
+        let sets = LanguageSets {
+            primary: groups.get(&PinGroup::Primary).cloned(),
+            fallback: groups.get(&PinGroup::Fallback).cloned(),
         };
-        let mut resolved = vec![None; TOOLS.len() * BookId::ALL.len()];
+        let collections = BookId::ALL
+            .into_iter()
+            .map(Collection::Book)
+            .chain([Collection::Stories]);
+        let mut resolved = vec![None; TOOLS.len() * (BookId::ALL.len() + 1)];
         for tool in TOOLS {
-            for book in BookId::ALL {
-                if let Some(slot) = resolved.get_mut(resolved_slot(tool, book)) {
-                    *slot = view.resolution(tool, book).map(|r| r.0);
+            for collection in collections.clone() {
+                if let Some(slot) = resolved.get_mut(resolved_slot(tool, collection)) {
+                    *slot = sets.resolution(tool, collection);
                 }
             }
         }
-        view.resolved = resolved;
-        view
+        Self { groups, resolved }
     }
 
-    /// The pin `resolution(tool, book)` names, from the table [`PinsView::of`] fills.
-    pub(crate) fn resolved(&self, tool: ToolId, book: BookId) -> Option<&ResourceRef> {
-        self.resolved.get(resolved_slot(tool, book))?.as_ref()
+    /// `resolution(tool, collection)`, from the table [`PinsView::of`] fills: where tC4's D30
+    /// ladder stops over the projected pins alone ([`LanguageSets::resolution`]).
+    pub(crate) fn answer(&self, tool: ToolId, collection: Collection) -> Option<&Answer> {
+        self.resolved.get(resolved_slot(tool, collection))?.as_ref()
     }
 
-    /// tC4's D30 ladder: the primary group's pin for the tool when its recorded `books`
-    /// cover the book, else the fallback group's. A pin without `books` covers every book.
-    /// Returns the pin, its language set and its slot value.
-    pub(crate) fn resolution(
-        &self,
-        tool: ToolId,
-        book: BookId,
-    ) -> Option<(ResourceRef, &'static str, &Json)> {
-        let slot = match tool {
-            ToolId::TranslationNotes => "translationNotes",
-            ToolId::TranslationWords => "translationWordsLinks",
-            ToolId::TranslationQuestions => "translationQuestions",
-        };
-        for (group, set) in [
-            (PinGroup::Primary, "primary"),
-            (PinGroup::Fallback, "fallback"),
-        ] {
-            let Some(value) = self.groups.get(&group) else {
-                continue;
-            };
-            let Some(pin) = SlotName::parse(slot).ok().and_then(|s| value.0.get(&s)) else {
-                continue;
-            };
-            let Some(map) = pin.0.as_obj() else {
-                continue;
-            };
-            let covers = match map.get("books") {
-                Some(Json::Arr(books)) => books.iter().any(|b| b.as_str() == Some(book.code())),
-                _ => true,
-            };
-            if !covers {
-                continue;
-            }
-            let repo = map.get("repoPath").and_then(Json::as_str);
-            let sha = map
-                .get("sha")
-                .and_then(Json::as_str)
-                .and_then(crate::ids::GitOid::parse);
-            if let (Some(repo), Some(sha)) = (repo, sha) {
-                return Some((
-                    ResourceRef {
-                        repo_path: repo.into(),
-                        sha,
-                    },
-                    set,
-                    &pin.0,
-                ));
-            }
-        }
-        None
+    /// The usable pin `resolution(tool, collection)` names, which a decision must record.
+    pub(crate) fn resolved(&self, tool: ToolId, collection: Collection) -> Option<&ResourceRef> {
+        self.answer(tool, collection).and_then(Answer::resource)
     }
 
     /// The current original-language pin's sha for a book's testament.
@@ -858,18 +821,13 @@ impl PinsView {
             tc_core::Testament::Old => "ot",
             tc_core::Testament::New => "nt",
         };
-        let pin = value.0.get(&SlotName::parse(slot).ok()?)?;
-        pin.0
+        value
+            .slot(slot)?
             .as_obj()?
             .get("sha")
             .and_then(Json::as_str)
             .and_then(crate::ids::GitOid::parse)
     }
-}
-
-pub(crate) fn resource_ok(record: &ResourceRef, resolved: Option<&ResourceRef>) -> bool {
-    resolved
-        .is_some_and(|r| r.sha == record.sha && r.repo_path.eq_ignore_ascii_case(&record.repo_path))
 }
 
 pub(crate) fn stage_attached(state: &mut FoldState, dirty: &mut Dirty) {
@@ -983,8 +941,8 @@ fn detached(state: &FoldState, k: KeyIdx, chained_in: &mut Option<(BookId, bool)
             if dismissed || !projects(state, Some(book)) {
                 return false;
             }
-            let resolved = state.pins.resolved(check.tool, book);
-            !resource_ok(&resource, resolved) || !target_exists(state, check)
+            let resolved = state.pins.resolved(check.tool, Collection::Book(book));
+            !resolved.is_some_and(|r| r.same_resource(&resource)) || !target_exists(state, check)
         }
         RecordKey::Comment(_) => {
             let Shape::Comment { target } = shape else {

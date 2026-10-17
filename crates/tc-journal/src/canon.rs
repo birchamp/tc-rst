@@ -22,7 +22,7 @@ use crate::ids::{
 use crate::json::{self, Json, JsonInt, JsonMap, ObjIter, ObjView, View};
 use crate::keys::{
     CheckId, CheckKey, CheckTarget, KNOWN_KINDS, MetaField, MetaPath, PinGroup, RecordKey, RefPart,
-    SettingKey, SlotName, ToolId, UnknownKey,
+    ResourcesKey, ResourcesLevel, SettingKey, SlotName, ToolId, UnknownKey,
 };
 use crate::record::{
     AlignmentGroup, AlignmentValue, BatchReleaseValue, BookPresence, CarriedValue, ChapterFront,
@@ -546,6 +546,13 @@ macro_rules! wire_identity {
 }
 wire_identity!(CheckId, RefPart, SettingKey, SlotName, MetaPath);
 
+/// The key members of a `resourcesExtra` record: `level` and `name`.
+fn resources_key(o: &mut In<'_>) -> R<ResourcesKey> {
+    let level: ResourcesLevel = o.req("level")?;
+    let name: String = o.req("name")?;
+    ResourcesKey::new(level, &name).map_err(|e| DecodeError::identity(e).within("name"))
+}
+
 /// Enums whose variants carry no data: the camelCase name in a string.
 macro_rules! wire_names {
     ($t:ty, $what:literal, $($variant:ident = $name:literal),* $(,)?) => {
@@ -578,6 +585,13 @@ wire_names!(
     OriginalLanguage = "originalLanguage",
     Lexicon = "lexicon",
     ExtraScripture = "extraScripture",
+);
+wire_names!(
+    ResourcesLevel,
+    "resources.json level",
+    Top = "top",
+    LanguageSets = "languageSets",
+    Resources = "resources",
 );
 wire_names!(
     UserStatus,
@@ -824,6 +838,10 @@ fn key_fields(key: &RecordKey) -> Result<(String, Json), ChangeError> {
         RecordKey::Check(key) => Out::new().f("key", key).done(),
         RecordKey::Comment(id) => Out::new().f("id", id).done(),
         RecordKey::Pins(group) => Out::new().f("group", group).done(),
+        RecordKey::ResourcesExtra(key) => Out::new()
+            .f("level", &key.level())
+            .f("name", &key.name().to_owned())
+            .done(),
         RecordKey::Setting(key) => Out::new().f("key", key).done(),
         RecordKey::ProjectMeta(field) => Out::new().f("field", field).done(),
         RecordKey::Versification => Out::new().done(),
@@ -894,6 +912,7 @@ fn read_key(j: View<'_>) -> R<RecordKey> {
             "check" => RecordKey::Check(o.req("key")?),
             "comment" => RecordKey::Comment(o.req("id")?),
             "pins" => RecordKey::Pins(o.req("group")?),
+            "resourcesExtra" => RecordKey::ResourcesExtra(resources_key(&mut o)?),
             "setting" => RecordKey::Setting(o.req("key")?),
             "projectMeta" => RecordKey::ProjectMeta(o.req("field")?),
             "versification" => RecordKey::Versification,
@@ -1425,15 +1444,11 @@ impl Wire for VersificationValue {
 
 impl Wire for Door43Username {
     fn to_json(&self) -> Json {
-        Json::Str(self.0.to_string())
+        Json::Str(self.as_str().to_owned())
     }
 
     fn from_json(j: View<'_>, _: Cx) -> R<Self> {
-        let text = string(j)?;
-        if text.is_empty() {
-            return Err(DecodeError::shape("a Door43 user name is not empty"));
-        }
-        Ok(Self(text.into()))
+        Door43Username::parse(string(j)?).map_err(|e| DecodeError::shape(e.to_string()))
     }
 }
 
@@ -1565,7 +1580,9 @@ fn encode_record(record: &Record) -> Result<Json, ChangeError> {
         Record::Check { value, .. } => Some(value.to_json()),
         Record::Comment { value, .. } => Some(value.to_json()),
         Record::Pins { value, .. } => Some(value.to_json()),
-        Record::Setting { value, .. } | Record::ProjectMeta { value, .. } => value.clone(),
+        Record::Setting { value, .. }
+        | Record::ProjectMeta { value, .. }
+        | Record::ResourcesExtra { value, .. } => value.clone(),
         Record::Versification { value } => Some(value.to_json()),
         Record::DeviceProfile { value, .. } => Some(value.to_json()),
         Record::StoryBase { value, .. } | Record::Frame { value, .. } => Some(value.to_json()),
@@ -1645,6 +1662,10 @@ fn decode_record(j: View<'_>, cx: Cx) -> R<Record> {
             "pins" => Record::Pins {
                 group: o.req("group")?,
                 value: o.req("value")?,
+            },
+            "resourcesExtra" => Record::ResourcesExtra {
+                key: resources_key(&mut o)?,
+                value: o.opt("value")?,
             },
             "setting" => Record::Setting {
                 key: o.req("key")?,

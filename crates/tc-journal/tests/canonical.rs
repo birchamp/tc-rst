@@ -27,6 +27,7 @@ const KINDS: &[&str] = &[
     "check",
     "comment",
     "pins",
+    "resourcesExtra",
     "setting",
     "projectMeta",
     "versification",
@@ -267,7 +268,7 @@ fn every_kind_has_the_pinned_wire_form() {
         let mut kinds = std::collections::BTreeSet::new();
         let mut written = Vec::new();
         let mut count = 0;
-        while kinds.len() < 18 || count < 64 {
+        while kinds.len() < 19 || count < 64 {
             let body = arb_body().new_tree(&mut runner).unwrap().current();
             kinds.insert(body.record.key().kind_name().to_owned());
             let change = Change::new(body).unwrap();
@@ -294,7 +295,7 @@ fn every_kind_has_the_pinned_wire_form() {
             String::from_utf8_lossy(line)
         );
     }
-    assert_eq!(kinds.len(), 18, "{kinds:?}");
+    assert_eq!(kinds.len(), 19, "{kinds:?}");
 }
 
 #[test]

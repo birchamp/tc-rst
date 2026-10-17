@@ -10,10 +10,13 @@ use super::merge::{ancestors_or_self, record_arc, record_of};
 use super::meta::{ChangeIdx, KeyIdx, Shape, VerseShape};
 use super::state::{FoldState, Projected};
 use super::{Conflict, ConflictKind, Counter};
+use crate::alignment::AlignedRun;
 use crate::canon;
+use crate::decision::{self, TargetText};
 use crate::ids::{ChangeId, GitOid, RepoPath, StoryNo, WallTime};
 use crate::json::Json;
-use crate::keys::{CheckKey, CheckTarget, PinGroup, RecordKey, ToolId};
+use crate::keys::{CheckKey, CheckTarget, PinGroup, RecordKey, ResourcesLevel, ToolId};
+use crate::pins::{Answer, Collection};
 use crate::record::{
     AlignmentGroup, AlignmentValue, CarriedValue, ChapterFront, CheckValue, CommentTarget,
     DecisionRecord, LayoutItem, Record, SourceWord, TargetWord, UserStatus, VerseValue,
@@ -36,6 +39,10 @@ pub enum DerivedFile {
     Versification,
     Conflicts,
     Story(StoryNo),
+    /// `checking/<tool>/OBS.json`: the decisions on the stories of an OBS project (§3.2).
+    StoryDecisions(ToolId),
+    /// `tc/comments/OBS.json`: the comments on frames and on frame checks (§3.2).
+    StoryComments,
 }
 
 fn tool_name(tool: ToolId) -> &'static str {
@@ -78,6 +85,10 @@ impl DerivedFile {
             Self::Versification => "ingredients/vrs.json".into(),
             Self::Conflicts => "ingredients/tc/conflicts.json".into(),
             Self::Story(story) => format!("ingredients/content/{:02}.md", story.get()),
+            Self::StoryDecisions(tool) => {
+                format!("ingredients/checking/{}/OBS.json", tool_name(*tool))
+            }
+            Self::StoryComments => "ingredients/tc/comments/OBS.json".into(),
         }
     }
 
@@ -86,8 +97,8 @@ impl DerivedFile {
         match self {
             Self::Usfm(_) | Self::Versification | Self::Story(_) => None,
             Self::Alignments(_) => Some("x-alignment"),
-            Self::Decisions(..) => Some("x-check-decisions"),
-            Self::Comments(_) => Some("x-tc-comments"),
+            Self::Decisions(..) | Self::StoryDecisions(_) => Some("x-check-decisions"),
+            Self::Comments(_) | Self::StoryComments => Some("x-tc-comments"),
             Self::Resources => Some("x-resource-links"),
             Self::Settings => Some("x-check-settings"),
             Self::Conflicts => Some("x-tc-conflicts"),
@@ -236,17 +247,17 @@ pub(crate) struct BookText {
     pub chapters: BTreeMap<u16, ChapterText>,
     /// What alignments and decisions read of a text, by the text, so the files of a book,
     /// rendered on several threads, derive each verse's plain text once.
-    facts: std::sync::Mutex<HashMap<String, Arc<VerseFacts>>>,
+    facts: std::sync::Mutex<HashMap<String, Arc<TargetText>>>,
 }
 
 impl BookText {
-    pub(crate) fn facts(&self, content: String) -> Arc<VerseFacts> {
-        let cached = |map: &HashMap<String, Arc<VerseFacts>>| map.get(&content).cloned();
+    pub(crate) fn facts(&self, content: String) -> Arc<TargetText> {
+        let cached = |map: &HashMap<String, Arc<TargetText>>| map.get(&content).cloned();
         if let Some(facts) = self.facts.lock().ok().and_then(|map| cached(&map)) {
             return facts;
         }
         // Derived outside the lock: the other threads keep reading meanwhile.
-        let facts = Arc::new(VerseFacts::of(content.clone()));
+        let facts = Arc::new(TargetText::new(content.clone()));
         match self.facts.lock() {
             Ok(mut map) => map.entry(content).or_insert(facts).clone(),
             Err(_) => facts,
@@ -518,6 +529,18 @@ impl FoldState {
         if !self.conflicts.is_empty() {
             out.insert(DerivedFile::Conflicts);
         }
+        for k in self.story_attached.iter() {
+            let e = self.entry(*k);
+            match &e.key {
+                RecordKey::Check(check) if self.holds_decision(*k) => {
+                    out.insert(DerivedFile::StoryDecisions(check.tool));
+                }
+                RecordKey::Comment(_) if !matches!(e.projected, Projected::Nothing) => {
+                    out.insert(DerivedFile::StoryComments);
+                }
+                _ => {}
+            }
+        }
         for k in self.story_keys.iter() {
             if let RecordKey::StoryBase(story) = &self.entry(*k).key
                 && !matches!(self.entry(*k).projected, Projected::Nothing)
@@ -559,20 +582,7 @@ impl FoldState {
                     out.insert(DerivedFile::Alignments(book));
                 }
                 RecordKey::Check(check) => {
-                    let decision = match &e.projected {
-                        Projected::Change(c) => {
-                            matches!(self.meta(*c).shape, Shape::Decision { .. })
-                        }
-                        Projected::Merged(r) => matches!(
-                            &**r,
-                            Record::Check {
-                                value: CheckValue::Decision(_),
-                                ..
-                            }
-                        ),
-                        Projected::Nothing => false,
-                    };
-                    if decision {
+                    if self.holds_decision(*k) {
                         out.insert(DerivedFile::Decisions(check.tool, book));
                     }
                 }
@@ -581,6 +591,21 @@ impl FoldState {
                 }
                 _ => {}
             }
+        }
+    }
+
+    /// Whether check record `k` projects a decision (not a `MovedTo`, not nothing).
+    fn holds_decision(&self, k: KeyIdx) -> bool {
+        match &self.entry(k).projected {
+            Projected::Change(c) => matches!(self.meta(*c).shape, Shape::Decision { .. }),
+            Projected::Merged(r) => matches!(
+                &**r,
+                Record::Check {
+                    value: CheckValue::Decision(_),
+                    ..
+                }
+            ),
+            Projected::Nothing => false,
         }
     }
 
@@ -676,6 +701,8 @@ impl FoldState {
             }
             DerivedFile::Conflicts => self.conflicts_json(),
             DerivedFile::Story(story) => self.story_markdown(*story),
+            DerivedFile::StoryDecisions(tool) => self.story_decisions_json(*tool),
+            DerivedFile::StoryComments => self.story_comments_json(),
         }
     }
 
@@ -744,16 +771,16 @@ impl FoldState {
                     let chapter = text.chapters.get(&rc);
                     let end = chapter.and_then(|t| t.ends.get(&rv)).copied().unwrap_or(rv);
                     let content = chapter.and_then(|t| t.content(rv)).unwrap_or_default();
-                    let md5 = text.facts(content).md5;
                     // The alignment covers as many verses as it did where it was made: a
                     // text that moved keeps its alignment valid at its new number.
-                    let length = value.span_end.get().checked_sub(v);
-                    let label_end = length.map_or(rv, |l| rv.saturating_add(l));
-                    let valid = length.is_some()
-                        && end == label_end
-                        && md5 == value.target_verse_md5
-                        && value.source.as_ref().is_none_or(|s| Some(s.sha) == ol_sha)
-                        && !value.marked_invalid;
+                    let label_end = value.moved_span_end(v, rv).unwrap_or(rv);
+                    let valid = value.is_valid(&AlignedRun {
+                        anchor: v,
+                        run_start: rv,
+                        run_end: end,
+                        text_md5: text.facts(content).md5(),
+                        source_sha: ol_sha,
+                    });
                     taken.insert((rc, rv));
                     plan.push((
                         value,
@@ -863,8 +890,8 @@ impl FoldState {
             return None;
         }
         let text = text_of(book);
-        let resolution = self.pins.resolution(tool, book);
-        let resolved = resolution.as_ref().map(|r| r.0.clone());
+        let answer = self.pins.answer(tool, Collection::Book(book));
+        let resolved = answer.and_then(Answer::resource);
         let keys: Vec<KeyIdx> = self
             .books
             .get(&book)
@@ -891,7 +918,7 @@ impl FoldState {
         let chunks: Vec<&[Targeted<'_>]> = decisions.chunks(512).collect();
         let rendered = on_threads(&chunks, |chunk| {
             let mut out: Vec<(String, String)> = Vec::with_capacity(chunk.len());
-            let mut verse: Option<((&str, &str), Arc<VerseFacts>)> = None;
+            let mut verse: Option<(Target<'_>, Option<Arc<TargetText>>)> = None;
             for (target, k) in chunk.iter() {
                 let Some(record) = self.projected_arc(*k) else {
                     continue;
@@ -911,15 +938,22 @@ impl FoldState {
                     .max()
                     .unwrap_or(WallTime(0));
                 if verse.as_ref().is_none_or(|(t, _)| t != target) {
-                    verse = Some((*target, text.facts(target_text(text, check))));
+                    let facts = target_content(text, check).map(|c| text.facts(c));
+                    verse = Some((*target, facts));
                 }
                 let Some((_, facts)) = &verse else {
                     continue;
                 };
                 let mut context = String::new();
                 write_map(&decision.context, &mut context);
-                let record =
-                    decision_record(decision, &context, check, resolved.as_ref(), facts, newest);
+                let record = decision_record(
+                    decision,
+                    &context,
+                    check,
+                    resolved,
+                    facts.as_deref(),
+                    newest,
+                );
                 out.push((context, record.finish()));
             }
             out
@@ -930,21 +964,164 @@ impl FoldState {
         head.insert("schemaVersion".into(), Value::from(1));
         head.insert("tool".into(), Value::from(tool_name(tool)));
         head.insert("book".into(), Value::from(book.code()));
-        if let Some((pin, set, slot)) = &resolution {
-            let mut resource = Map::new();
-            resource.insert("repoPath".into(), Value::from(pin.repo_path.as_ref()));
-            if let Some(version) = slot.as_obj().and_then(|m| m.get("version")) {
-                resource.insert("version".into(), value(version));
-            }
-            resource.insert("sha".into(), Value::from(pin.sha.to_hex()));
-            resource.insert("languageSet".into(), Value::from(*set));
-            head.insert("resource".into(), Value::Object(resource));
+        if let Some(resource) = answer.map(resolution_record) {
+            head.insert("resource".into(), resource);
         }
         let mut head = compact(&Value::Object(head));
         head.pop();
         head.push_str(",\"decisions\":[");
         let records: Vec<String> = records.into_iter().map(|(_, r)| r).collect();
         Some(lines(&head, &records, "]}"))
+    }
+
+    /// The text of frame `frame` of `story` as the project holds it: the frame's record,
+    /// else the template's part; `None` when the story has no template. tC4 reads a story
+    /// decision's text from the open story's frames (`frameTextIndex`, `src/state.jsx` at
+    /// d310bf3), which holds a text for every frame.
+    pub(crate) fn frame_text(&self, story: StoryNo, frame: crate::ids::FrameNo) -> Option<String> {
+        if let Some(Record::Frame { value, .. }) = self
+            .key_idx(&RecordKey::Frame(story, frame))
+            .and_then(|k| self.projected_record(k))
+        {
+            return Some(value);
+        }
+        match self.projected_record(self.key_idx(&RecordKey::StoryBase(story))?)? {
+            Record::StoryBase { value, .. } => template_frame(&value, frame.0),
+            _ => None,
+        }
+    }
+
+    /// `checking/<tool>/OBS.json` (§3.2, §7.7): the decisions on frames, resolved over the
+    /// `obs-` slots of the ladder, each read against its frame's text.
+    fn story_decisions_json(&self, tool: ToolId) -> Option<Vec<u8>> {
+        let answer = self.pins.answer(tool, Collection::Stories);
+        let resolved = answer.and_then(Answer::resource);
+        let mut records: Vec<(String, String)> = Vec::new();
+        for k in self.story_attached.iter() {
+            let Some(record) = self.projected_arc(*k) else {
+                continue;
+            };
+            let Record::Check {
+                key: check,
+                value: CheckValue::Decision(decision),
+            } = &*record
+            else {
+                continue;
+            };
+            let CheckTarget::Frame { story, frame } = &check.target else {
+                continue;
+            };
+            if check.tool != tool {
+                continue;
+            }
+            let newest = self
+                .entry(*k)
+                .heads
+                .iter()
+                .map(|h| self.meta(*h).at)
+                .max()
+                .unwrap_or(WallTime(0));
+            let text = self.frame_text(*story, *frame).map(TargetText::new);
+            let mut context = String::new();
+            write_map(&decision.context, &mut context);
+            let record =
+                decision_record(decision, &context, check, resolved, text.as_ref(), newest);
+            records.push((context, record.finish()));
+        }
+        if records.is_empty() {
+            return None;
+        }
+        records.sort();
+        let mut head = Map::new();
+        head.insert("schemaVersion".into(), Value::from(1));
+        head.insert("tool".into(), Value::from(tool_name(tool)));
+        head.insert("book".into(), Value::from("OBS"));
+        if let Some(resource) = answer.map(resolution_record) {
+            head.insert("resource".into(), resource);
+        }
+        let mut head = compact(&Value::Object(head));
+        head.pop();
+        head.push_str(",\"decisions\":[");
+        let records: Vec<String> = records.into_iter().map(|(_, r)| r).collect();
+        Some(lines(&head, &records, "]}"))
+    }
+
+    /// `tc/comments/OBS.json` (§3.2, §7.7): the comments on frames and on frame checks,
+    /// sorted by (story, frame, at, id). A comment is placed at its frame while the frame is
+    /// in the project; a comment on a check, at the live check its `MovedTo` chain ends at.
+    fn story_comments_json(&self) -> Option<Vec<u8>> {
+        let mut records: Vec<((u16, u16, WallTime, ChangeId), String)> = Vec::new();
+        for k in self.story_attached.iter() {
+            let RecordKey::Comment(id) = &self.entry(*k).key else {
+                continue;
+            };
+            let Some(record) = self.projected_arc(*k) else {
+                continue;
+            };
+            let Record::Comment { value: comment, .. } = &*record else {
+                continue;
+            };
+            let (place, on_check) = match &comment.target {
+                CommentTarget::Frame { story, frame } => (Some((*story, *frame)), None),
+                CommentTarget::Check(check) => {
+                    let live = attach::follow_moves(self, check);
+                    match live.target {
+                        CheckTarget::Frame { story, frame } => (Some((story, frame)), Some(live)),
+                        CheckTarget::Verse { .. } => (None, None),
+                    }
+                }
+                CommentTarget::Verse { .. } => continue,
+            };
+            let placed = place.filter(|(story, frame)| self.frame_text(*story, *frame).is_some());
+            let head = match &self.entry(*k).projected {
+                Projected::Change(c) => *c,
+                _ => match self.entry(*k).heads.first() {
+                    Some(h) => *h,
+                    None => continue,
+                },
+            };
+            let meta = self.meta(head);
+            let order = place.map_or((0, 0), |(s, f)| (u16::from(s.get()), f.0));
+            let mut out = Map::new();
+            out.insert("id".into(), Value::from(id.to_hex()));
+            out.insert(
+                "target".into(),
+                canon::comment_target_json(&comment.target).map_or(Value::Null, |j| value(&j)),
+            );
+            out.insert(
+                "placed".into(),
+                placed.map_or(Value::Null, |(story, frame)| {
+                    let mut p = Map::new();
+                    if let Some(json) = on_check.as_ref().and_then(canon::check_key_json) {
+                        p.insert("check".into(), value(&json));
+                    }
+                    p.insert("frame".into(), Value::from(frame.0));
+                    p.insert("story".into(), Value::from(story.get()));
+                    Value::Object(p)
+                }),
+            );
+            out.insert("text".into(), Value::from(comment.text.as_str()));
+            out.insert(
+                "author".into(),
+                attach::author(self, self.device_of(meta))
+                    .map_or(Value::Null, |a| Value::from(a.as_ref())),
+            );
+            out.insert("at".into(), Value::from(rfc3339(meta.at)));
+            records.push((
+                (order.0, order.1, meta.at, meta.id),
+                compact(&Value::Object(out)),
+            ));
+        }
+        if records.is_empty() {
+            return None;
+        }
+        records.sort();
+        let records: Vec<String> = records.into_iter().map(|(_, r)| r).collect();
+        Some(lines(
+            "{\"schemaVersion\":1,\"book\":\"OBS\",\"comments\":[",
+            &records,
+            "]}",
+        ))
     }
 
     // ---------------------------------------------------------------------------------
@@ -1102,6 +1279,25 @@ impl FoldState {
             slots.sort_by_key(|(name, _)| (slot_rank(name), name.clone()));
             Some(Value::Object(slots.into_iter().collect()))
         };
+        // The members no pin group holds, by level, in name order after the modelled ones.
+        let mut extras: BTreeMap<ResourcesLevel, BTreeMap<String, Value>> = BTreeMap::new();
+        for k in self.pin_keys.iter() {
+            if let RecordKey::ResourcesExtra(key) = &self.entry(*k).key
+                && let Some(Record::ResourcesExtra {
+                    value: Some(json), ..
+                }) = self.projected_record(*k)
+            {
+                extras
+                    .entry(key.level())
+                    .or_default()
+                    .insert(key.name().to_owned(), value(&json));
+            }
+        }
+        let mut extra_of = |level: ResourcesLevel, map: &mut Map<String, Value>| {
+            for (name, v) in extras.remove(&level).unwrap_or_default() {
+                map.entry(name).or_insert(v);
+            }
+        };
         let mut doc = Map::new();
         doc.insert("schemaVersion".into(), Value::from(2));
         let mut sets = Map::new();
@@ -1111,6 +1307,7 @@ impl FoldState {
         if let Some(v) = group_json(PinGroup::Fallback) {
             sets.insert("fallback".into(), v);
         }
+        extra_of(ResourcesLevel::LanguageSets, &mut sets);
         doc.insert("languageSets".into(), Value::Object(sets));
         let mut resources = Map::new();
         if let Some(v) = group_json(PinGroup::OriginalLanguage) {
@@ -1119,6 +1316,7 @@ impl FoldState {
         if let Some(v) = group_json(PinGroup::Lexicon) {
             resources.insert("lexicon".into(), v);
         }
+        extra_of(ResourcesLevel::Resources, &mut resources);
         doc.insert("resources".into(), Value::Object(resources));
         if let Some(extra) = self.pin_group(PinGroup::ExtraScripture) {
             // One slot holds the ordered list.
@@ -1126,6 +1324,7 @@ impl FoldState {
                 doc.insert("extraScripture".into(), value(&slot.0));
             }
         }
+        extra_of(ResourcesLevel::Top, &mut doc);
         Some(pretty(&Value::Object(doc)))
     }
 
@@ -1222,72 +1421,47 @@ impl FoldState {
     }
 }
 
-pub(crate) fn md5_of(text: &str) -> crate::ids::Md5 {
-    crate::ids::Md5::from_bytes(tc_burrito::Md5::of(text.as_bytes()).bytes())
-}
-
 /// The numeric chapter and first verse of a check's target.
 fn check_verse(check: &CheckKey) -> Option<(u16, u16)> {
     match &check.target {
-        CheckTarget::Verse { chapter, verse, .. } => Some((
-            chapter.as_str().parse().ok()?,
-            verse.as_str().split('-').next()?.parse().ok()?,
-        )),
+        CheckTarget::Verse { chapter, verse, .. } => Some((chapter.number()?, verse.span()?.0)),
         CheckTarget::Frame { .. } => None,
     }
 }
 
 /// A decision's key and the (chapter, verse) its target names.
-type Targeted<'a> = ((&'a str, &'a str), KeyIdx);
+/// A check's target verse as its key writes it: (chapter, verse).
+type Target<'a> = (&'a str, &'a str);
+type Targeted<'a> = (Target<'a>, KeyIdx);
 
-/// What the decisions of one check target read of its verse text (§7.7).
-pub(crate) struct VerseFacts {
-    content: String,
-    /// md5 of `plain_text_v1(content)`.
-    md5: crate::ids::Md5,
-    /// Made when a decision's verse text changed and its selections must be checked.
-    selection: std::sync::OnceLock<tc_usfm::SelectionText>,
-}
-
-impl VerseFacts {
-    fn of(content: String) -> Self {
-        Self {
-            md5: md5_of(&tc_usfm::plain_text_v1(&content)),
-            content,
-            selection: std::sync::OnceLock::new(),
-        }
-    }
-}
-
-/// The text a decision's target names: the runs covering its verse or span.
-fn target_text(text: &BookText, check: &CheckKey) -> String {
+/// The content a decision's target names by the no-text rule of §7.7, as tC4's Check screen
+/// finds a check's draft text (`verseTextIndex` and `withSpanMembers`, `src/state.jsx` at
+/// d310bf3, and `decisionIsStale`, `src/data/revalidate.ts`): a numeric chapter, and a verse
+/// that is a number (the run that holds it) or a span label that a projected run carries
+/// exactly. A run whose content, trimmed, is empty or the stub `___` is not drafted and gives
+/// no text. Every other target (`front`, `intro`, a list such as `1,3,8,12`, a span no run
+/// carries) has none: it gives no evidence either way.
+pub(crate) fn target_content(text: &BookText, check: &CheckKey) -> Option<String> {
     let CheckTarget::Verse { chapter, verse, .. } = &check.target else {
-        return String::new();
+        return None;
     };
-    let Ok(c) = chapter.as_str().parse::<u16>() else {
-        return String::new();
+    let chapter = text.chapters.get(&chapter.number()?)?;
+    let start = match verse.number() {
+        Some(v) => *chapter.run_of.get(&v)?,
+        None => {
+            let (first, last) = verse.span()?;
+            let end = *chapter.ends.get(&first)?;
+            (end == last && codec::label(first, end) == verse.as_str()).then_some(first)?
+        }
     };
-    let mut bounds = verse.as_str().split('-');
-    let Some(first) = bounds.next().and_then(|v| v.parse::<u16>().ok()) else {
-        return String::new();
-    };
-    let last = bounds
-        .next()
-        .and_then(|v| v.parse::<u16>().ok())
-        .unwrap_or(first)
-        .max(first);
-    let Some(chapter) = text.chapters.get(&c) else {
-        return String::new();
-    };
-    let mut starts: Vec<u16> = (first..=last)
-        .filter_map(|v| chapter.run_of.get(&v).copied())
-        .collect();
-    starts.dedup();
-    starts
-        .into_iter()
-        .filter_map(|s| chapter.content(s))
-        .collect::<Vec<_>>()
-        .join("")
+    chapter.content(start).filter(|c| drafted(c))
+}
+
+/// tC4's draft test (`body !== '' && body !== '___'` after JavaScript's `trim`).
+pub(crate) fn drafted(content: &str) -> bool {
+    let body =
+        content.trim_matches(|c: char| (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}');
+    !body.is_empty() && body != "___"
 }
 
 /// A JSON object written as a preserve-order `serde_json::Map` serializes compactly:
@@ -1486,33 +1660,44 @@ fn status_name(s: UserStatus) -> &'static str {
     }
 }
 
-/// A tC4 §5.2 decision record with its flags computed (§7.7). `context` is the decision's
-/// context as JSON, written once by the caller, which also sorts the file by it.
+/// tC4's `resolutionRecord` of a decision file: the pin the (tool, collection) resolves to,
+/// its label and its language set. A pin without a commit has no `sha` (tC4 writes the
+/// record all the same, and no decision matches it).
+fn resolution_record(answer: &Answer) -> Value {
+    let mut resource = Map::new();
+    let (repo_path, sha) = match answer {
+        Answer::Pin { pin, .. } => (
+            Some(pin.resource.repo_path.to_string()),
+            Some(pin.resource.sha.to_hex()),
+        ),
+        Answer::Unusable { pin, .. } => (pin.repo_path.clone(), None),
+    };
+    if let Some(repo_path) = repo_path {
+        resource.insert("repoPath".into(), Value::from(repo_path));
+    }
+    if let Some(version) = answer.version() {
+        resource.insert("version".into(), Value::from(version));
+    }
+    if let Some(sha) = sha {
+        resource.insert("sha".into(), Value::from(sha));
+    }
+    resource.insert("languageSet".into(), Value::from(answer.rung().name()));
+    Value::Object(resource)
+}
+
+/// A tC4 §5.2 decision record with its flags computed (§7.7) by [`decision::assess`].
+/// `context` is the decision's context as JSON, written once by the caller, which also sorts
+/// the file by it.
 pub(crate) fn decision_record<'a>(
     d: &'a DecisionRecord,
     context: &str,
     check: &CheckKey,
     resolved: Option<&crate::record::ResourceRef>,
-    verse: &VerseFacts,
+    verse: Option<&TargetText>,
     newest: WallTime,
 ) -> Obj<'a> {
-    let resource_ok = attach::resource_ok(&d.resource, resolved);
-    let verse_changed = verse.md5 != d.judgement.verse_text_md5;
-    let selections_ok = !verse_changed
-        || d.judgement.selections.as_ref().is_none_or(|selections| {
-            let counts: Vec<tc_usfm::SelectionCount<'_>> = selections
-                .iter()
-                .map(|s| tc_usfm::SelectionCount {
-                    text: &s.text,
-                    occurrences: s.occurrences,
-                })
-                .collect();
-            verse
-                .selection
-                .get_or_init(|| tc_usfm::SelectionText::v1(&verse.content))
-                .fits(&counts)
-        });
-    let invalidated = !resource_ok || !selections_ok || d.imported_invalid;
+    let assessment = decision::assess(d, resolved, verse);
+    let invalidated = assessment.invalidation.is_some();
     let mut m = Obj::new();
     m.raw("contextId", |o| o.push_str(context));
     if let Some(category) = &d.category {
@@ -1537,17 +1722,12 @@ pub(crate) fn decision_record<'a>(
     }
     m.bool("reminders", d.bookmarked);
     m.bool("nothingToSelect", d.judgement.nothing_to_select);
-    m.bool("verseEdits", verse_changed);
+    m.bool("verseEdits", assessment.verse_edits);
     m.bool("invalidated", invalidated);
-    let status = match (invalidated, d.judgement.status) {
-        (true, Some(UserStatus::Todo)) => Some("todo"),
-        (true, _) => Some("invalid"),
-        (false, s) => s.map(status_name),
-    };
-    if let Some(status) = status {
-        m.str("status", status);
+    if let Some(status) = assessment.status {
+        m.str("status", status_name(status));
     }
-    if invalidated && d.judgement.status == Some(UserStatus::Invalid) {
+    if assessment.user_invalid {
         m.bool("userInvalid", true);
     }
     m.str("modifiedTimestamp", &rfc3339(newest));
@@ -1580,7 +1760,9 @@ pub(crate) fn decision_record<'a>(
     m
 }
 
-/// The check key a tC3 context names: its check id, reference and occurrence.
+/// The check key a tC3 or tC4 context names: its check id, reference and occurrence. A
+/// story reference (`{story, frame}`, tC4 §10.5) names a frame; any other names a verse of
+/// `book`.
 pub(crate) fn derive_key(
     tool: ToolId,
     book: Option<BookId>,
@@ -1599,14 +1781,26 @@ pub(crate) fn derive_key(
         Json::Int(n) => u32::try_from(n.get()).ok()?,
         _ => return None,
     };
-    Some(CheckKey {
-        tool,
-        check_id: crate::keys::CheckId::parse(context.get("checkId")?.as_str()?).ok()?,
-        target: CheckTarget::Verse {
+    let number = |key: &str| match reference.get(key)? {
+        Json::Int(n) => i64::try_from(n.get()).ok(),
+        _ => None,
+    };
+    let target = if reference.contains_key("story") && !reference.contains_key("bookId") {
+        CheckTarget::Frame {
+            story: StoryNo::new(u8::try_from(number("story")?).ok()?)?,
+            frame: crate::ids::FrameNo(u16::try_from(number("frame")?).ok()?),
+        }
+    } else {
+        CheckTarget::Verse {
             book: book?,
             chapter: part(reference.get("chapter")?)?,
             verse: part(reference.get("verse")?)?,
-        },
+        }
+    };
+    Some(CheckKey {
+        tool,
+        check_id: crate::keys::CheckId::parse(context.get("checkId")?.as_str()?).ok()?,
+        target,
         occurrence,
     })
 }
@@ -1734,6 +1928,59 @@ fn slot_json(j: &Json) -> Value {
 /// Splices a story's title, frames and reference into its template (see
 /// `FoldState::story_markdown`). Lines keep their terminators; a part with no record keeps
 /// the template's text.
+/// The template's text of frame `n` of a story, as [`splice_story`] cuts the template: frame
+/// 0 is its first `# ` line without the `# `, frame n the paragraph after its n-th image
+/// line, without the paragraph's last line ending.
+pub(crate) fn template_frame(base: &str, n: u16) -> Option<String> {
+    let lines: Vec<&str> = base.split_inclusive('\n').collect();
+    let body = |line: &str| line.trim_end_matches(['\n', '\r']).to_owned();
+    if n == 0 {
+        return lines
+            .iter()
+            .map(|l| body(l))
+            .find_map(|b| b.strip_prefix("# ").map(str::to_owned));
+    }
+    let reference_at = lines.iter().rposition(|l| {
+        let b = body(l);
+        b.starts_with('_') && b.ends_with('_') && b.len() > 1
+    });
+    let mut title_done = false;
+    let mut images = 0u16;
+    let mut i = 0;
+    while i < lines.len() {
+        let text = body(lines[i]);
+        if !title_done && text.starts_with("# ") {
+            title_done = true;
+            i += 1;
+            continue;
+        }
+        i += 1;
+        if Some(i - 1) == reference_at {
+            continue;
+        }
+        if text.starts_with("![") {
+            images += 1;
+            while i < lines.len() && body(lines[i]).trim().is_empty() {
+                i += 1;
+            }
+            let start = i;
+            while i < lines.len()
+                && !body(lines[i]).trim().is_empty()
+                && Some(i) != reference_at
+                && !body(lines[i]).starts_with("![")
+            {
+                i += 1;
+            }
+            if images == n {
+                let part: String = lines[start..i].concat();
+                let end = part.trim_end_matches(['\n', '\r']).len();
+                return Some(part[..end].to_owned());
+            }
+        }
+    }
+    None
+}
+
 pub(crate) fn splice_story(
     base: &str,
     frame: impl Fn(u16) -> Option<String>,

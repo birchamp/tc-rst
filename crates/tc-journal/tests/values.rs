@@ -39,7 +39,7 @@ impl ValueSource for Files {
 }
 
 fn corpus() -> Corpus {
-    Corpus::generate(&Spec::psalms(5).with_history(60, 0.1)).expect("the corpus builds")
+    Corpus::generate(&Spec::psalms(8).with_history(60, 0.1)).expect("the corpus builds")
 }
 
 /// The corpus's files read the way an open reads them: in memory, or by span.

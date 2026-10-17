@@ -210,28 +210,38 @@ fn v1_values_outside_their_grammar_are_refused() {
     }
     assert!(tc_journal::record::MarkerWs::new("", tc_journal::record::MarkerTerm::Space).is_none());
 
-    // A Door43 user name is never empty.
+    // A Door43 user name follows Door43's grammar: never empty, an email or a token.
     let mut profile = verse_body(local(1), 1, 1, "a");
     profile.record = Record::DeviceProfile {
         device: local(1),
         value: DeviceProfileValue {
             display_name: None,
-            door43_username: Some(Door43Username("maria".into())),
+            door43_username: Some(Door43Username::parse("maria").unwrap()),
             legacy: None,
         },
     };
-    let mut json = json_of(&profile);
-    set(
-        &mut json,
-        &["record", "deviceProfile", "value"],
-        "door43Username",
-        Json::from(""),
-    );
-    assert_eq!(quarantined(read(&json)).rule(), Rule::V1);
-    if let Record::DeviceProfile { value, .. } = &mut profile.record {
-        value.door43_username = Some(Door43Username("".into()));
+    assert!(matches!(read(&json_of(&profile)), Verified::Change(_)));
+    for bad in [
+        "",
+        "maria@example.org",
+        "-maria",
+        "maria_",
+        "ma..ria",
+        &"m".repeat(41),
+    ] {
+        let mut json = json_of(&profile);
+        set(
+            &mut json,
+            &["record", "deviceProfile", "value"],
+            "door43Username",
+            Json::from(bad),
+        );
+        assert_eq!(quarantined(read(&json)).rule(), Rule::V1, "{bad:?}");
+        assert!(Door43Username::parse(bad).is_err(), "{bad:?}");
     }
-    assert_eq!(refused(profile).rule(), Rule::V1);
+    for good in ["maria", "Maria.Lopez", "jdoe-2", "a_b.c-d", &"m".repeat(40)] {
+        assert!(Door43Username::parse(good).is_ok(), "{good:?}");
+    }
 
     // A resource pin always names its repository.
     let mut decision = verse_body(local(1), 1, 1, "a");
@@ -349,7 +359,8 @@ fn v2_identity_strings_are_refused_not_repaired() {
         r#"{"setting":{"key":"__proto__","value":1}}"#,
         "{\"setting\":{\"key\":\"cafe\u{301}\",\"value\":1}}",
         r#"{"setting":{"key":"","value":1}}"#,
-        r#"{"pins":{"group":"primary","value":{"translation-notes":{}}}}"#,
+        r#"{"pins":{"group":"primary","value":{"translation.notes":{}}}}"#,
+        r#"{"pins":{"group":"primary","value":{"-notes":{}}}}"#,
         r#"{"carriedFile":{"path":"ingredients/a b.wav","value":{"removed":{}}}}"#,
         r#"{"carriedFile":{"path":"ingredients/a&b.wav","value":{"removed":{}}}}"#,
         r#"{"projectMeta":{"field":{"extra":"languages"}}}"#,

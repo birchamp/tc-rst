@@ -93,6 +93,14 @@ impl SelectionText {
         Self(usfmjs::remove_marker(&js(text)).ok())
     }
 
+    /// How many times `selection` occurs in the text, as [`selections_v1`] counts it: the
+    /// `occurrences` a selection of it made now records, so that it fits until the text
+    /// changes. `None` when the library throws on the text, where any count fits.
+    pub fn occurrences(&self, selection: &str) -> Option<u32> {
+        let shown = self.0.as_ref()?;
+        Some(u32::try_from(count(shown, &js(selection))).unwrap_or(u32::MAX))
+    }
+
     /// [`selections_v1`] of the text this was made from.
     pub fn fits(&self, selections: &[SelectionCount<'_>]) -> bool {
         let Some(shown) = &self.0 else {

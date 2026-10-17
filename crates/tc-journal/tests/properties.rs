@@ -1351,7 +1351,7 @@ fn every_head_reachable_from_a_screen() {
             ] {
                 if let Some(bytes) = state.render(&DerivedFile::Decisions(tool, book)) {
                     decisions.extend(
-                        decode_decisions(tool, book, &bytes)
+                        decode_decisions(tool, Some(book), &bytes)
                             .expect("decodes")
                             .into_iter()
                             .map(|r| r.key()),
@@ -1849,7 +1849,7 @@ fn sidecar_decode_render() {
                     ))
                     .expect("decisions");
                 let got: BTreeMap<RecordKey, Record> =
-                    decode_decisions(ToolId::TranslationNotes, BookId::Titus, &bytes)
+                    decode_decisions(ToolId::TranslationNotes, Some(BookId::Titus), &bytes)
                         .expect("decodes")
                         .into_iter()
                         .map(|r| (r.key(), r))

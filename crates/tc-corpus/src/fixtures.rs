@@ -210,16 +210,20 @@ pub struct HelpsRow {
     pub note: String,
 }
 
-/// A reference part as a check key holds it: 1 to 32 ASCII letters, digits and `-`. A
-/// list (`1,3`) keeps its first item.
+/// A reference part as tC4 reads it (`refPart`, `src/data/derive.ts`): plain digits are a
+/// number, so leading zeros go; anything else is kept as written, a list such as `1,3,8,12`
+/// included. A part a check key cannot hold (empty, or holding `|` or `:`, STORAGE §2.2) is
+/// no reference.
 fn ref_part(text: &str) -> Option<String> {
-    let first = text.split(',').next().unwrap_or("").trim();
-    let ok = !first.is_empty()
-        && first.len() <= 32
-        && first
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'-');
-    ok.then(|| first.to_owned())
+    let part = if !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit()) {
+        let trimmed = text.trim_start_matches('0');
+        if trimmed.is_empty() { "0" } else { trimmed }
+    } else {
+        text
+    };
+    tc_journal::RefPart::parse(part)
+        .ok()
+        .map(|p| p.as_str().to_owned())
 }
 
 fn occurrence(text: &str) -> u32 {
@@ -498,7 +502,7 @@ mod tests {
         assert_eq!(rows[0].note, "# Intro\n");
         assert_eq!(rows[1].verse, "1-3");
         assert_eq!(rows[1].group, "figs-metaphor");
-        assert_eq!(rows[2].verse, "4");
+        assert_eq!(rows[2].verse, "4,6");
         assert_eq!(rows[2].occurrence, 0);
         let twl = "Reference\tID\tTags\tOrigWords\tOccurrence\tTWLink\n\
                    1:1\txlen\t\tעֵצָה\t1\trc://*/tw/dict/bible/other/counselor\n";

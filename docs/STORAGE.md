@@ -204,6 +204,7 @@ pub enum RecordKey {
     Comment(CommentId),
     // ---- project ----
     Pins(PinGroup),
+    ResourcesExtra(ResourcesKey),               // a resources.json member no pin group holds
     Setting(SettingKey),                        // one top-level key of settings.json
     ProjectMeta(MetaField),
     Versification,
@@ -232,8 +233,9 @@ pub struct CheckKey {
 pub enum ToolId { TranslationWords, TranslationNotes, TranslationQuestions }
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CheckTarget {
-    /// Chapter and verse are tC4's strings: "1", "9-10", "front". Compared as strings.
-    /// A `RefPart` is 1 to 32 ASCII letters, digits and `-`.
+    /// Chapter and verse are tC4's strings: "1", "9-10", "front", "1,3,8,12". Compared as
+    /// strings. A `RefPart` is tC4's identity part (`identityPartError`, `journal/grammar.mjs`
+    /// at d310bf3): not empty, no `|` and no `:`; and NFC (V2).
     Verse { book: BookId, chapter: RefPart, verse: RefPart },
     Frame { story: StoryNo, frame: FrameNo },
 }
@@ -256,10 +258,29 @@ pub struct MetaPath(Box<str>);
 /// The kind name and the canonical JSON of the key fields: every member of the record object
 /// except `value` (§2.8).
 pub struct UnknownKey { pub kind: Box<str>, pub key_json: Box<str> }
-/// A pin slot name such as `gatewayLanguage`: an ASCII letter, then ASCII letters, digits and
-/// `_`, at most 64 bytes, not `constructor` or `prototype`.
+/// A pin slot name such as `gatewayLanguage` or `obs-tn`: an ASCII letter, then ASCII
+/// letters, digits, `_` and `-`, at most 64 bytes, not `constructor` or `prototype`. tC4's
+/// slot grammar (`PIN_SLOT_RE`, `journal/grammar.mjs` at d310bf3) names `obs-tn`,
+/// `obs-twl`, `obs-tq` and `obs-images` and allows `-` in an `extraScripture` pane id.
 pub struct SlotName(Box<str>);
+/// A `resources.json` member that no pin group holds, kept so that an import or an outside
+/// edit never loses it (tC4 writes none; another tool or a newer app may). `name` is NFC, not
+/// empty, not `__proto__`, `constructor` or `prototype`, and not a member the projection
+/// writes at its level.
+pub struct ResourcesKey { pub level: ResourcesLevel, pub name: Box<str> }
+/// `Top`: beside `schemaVersion`, `languageSets`, `resources` and `extraScripture`.
+/// `LanguageSets`: beside `primary` and `fallback`. `Resources`: beside `originalLanguage` and
+/// `lexicon`.
+pub enum ResourcesLevel { Top, LanguageSets, Resources }
 ```
+
+**References as tC4 writes them.** A check's chapter and verse are kept as the resource writes
+them and tC4 reads them (`ref.split(':').map(refPart)`, `src/data/derive.ts` at d310bf3):
+digits become a number, and anything else stays a string, so en_tn's `sbh4` at `PSA 5:1,3,8,12`
+is a check on verse `"1,3,8,12"` of chapter 5, and a superscription row `N:front` is a check
+on verse `"front"` of chapter N. Such a target names no verse text the fold can read (§7.7, the
+no-text rule), so its decision is never invalidated by a text edit, as in tC4; it is
+invalidated when the resource changes, like every decision.
 
 Pane layouts and other per-person UI preferences are not records. They live in app data per
 device, so two translators' layouts never conflict. The `ui` key of an imported `settings.json`
@@ -281,6 +302,7 @@ pub enum Record {
     Check        { key: CheckKey, value: CheckValue },
     Comment      { id: CommentId, value: CommentValue },
     Pins         { group: PinGroup, value: PinGroupValue },
+    ResourcesExtra { key: ResourcesKey, value: Option<Json> }, // None = member removed
     Setting      { key: SettingKey, value: Option<Json> },   // None = key removed
     ProjectMeta  { field: MetaField, value: Option<Json> },
     Versification { value: VersificationValue },
@@ -414,10 +436,19 @@ pub struct ResourceRef { pub repo_path: Box<str>, pub sha: GitOid }   // repoPat
 pub struct VersificationValue { pub name: Option<Box<str>>, pub bytes: String }   // vrs.json verbatim
 pub struct DeviceProfileValue {
     pub display_name: Option<Box<str>>,
-    pub door43_username: Option<Door43Username>,   // only after the D98 consent notice
+    /// Written once per device, at its first sync, after the fetch succeeded with the token,
+    /// and only after the sign-in name notice (D98; tC4 `signIn.nameNotice`, test id
+    /// `signin-name-notice`). A sync refused before its fetch succeeds writes none. Never
+    /// changed later, even when another Door43 account signs in on that device: the first
+    /// stays and the sync goes on without an error (tC4's first-wins rule). For a tC4 actor:
+    /// the first `actor.name.set` username in `ts` order (§13.1 T5).
+    pub door43_username: Option<Door43Username>,
     pub legacy: Option<LegacyIdentity>,            // the tC4 actor or tC3 user a derived device stands for
 }
-pub struct Door43Username(Box<str>);               // not empty
+/// tC4's grammar (`door43UsernameError`, `journal/grammar.mjs` at d310bf3): an ASCII letter or
+/// digit, then letters, digits, `-`, `.` and `_`, never two of `-._` in a row or one last, at
+/// most 40 characters. So it is never an email address and never a token.
+pub struct Door43Username(Box<str>);
 pub enum LegacyIdentity { Tc4Actor { actor: Box<str> }, Tc3User { user: Box<str> } }
 
 pub enum CarriedValue {
@@ -800,8 +831,11 @@ other argument types:
 /// What the aligner made; the actor adds span end, text hash and source from the displayed
 /// verse and the pins (§5.3).
 pub struct AlignmentEdit { pub alignments: Vec<AlignmentGroup>, pub word_bank: Vec<TargetWord>, pub done: bool }
-/// What the checker changed (§5.4); `basis` (context, category, resource) for a first decision.
-pub struct DecisionEdit { pub basis: Option<DecisionBasis>, pub changes: Vec<DecisionChange> }
+/// What the checker changed (§5.4): `basis` (context, category) for a first decision, and
+/// `resource`, the pin of the check list the person judged in, which a judgement records.
+/// `DecisionEdit::apply` is the one implementation of §5.4; the Check screens build the edit.
+pub struct DecisionEdit { pub basis: Option<DecisionBasis>, pub resource: ResourceRef,
+                          pub changes: Vec<DecisionChange> }
 pub enum DecisionChange { Status(Option<UserStatus>), Selections(Option<Vec<Selection>>),
                           NothingToSelect(bool), Comment(Option<String>), Bookmarked(bool) }
 /// The literal source book a new book's stubs copy their structure from (§5.7).
@@ -831,7 +865,7 @@ it again.
 |---|---|
 | `ChangeBody` | `{"at", "batch", "cause", "device", "parents", "record", "seq", "v"}` |
 | `BatchRef` | `{"id", "n"}` |
-| `Record` | `{"<kind>": {<key members>, "value"?}}` with kinds and key members `bookPresence {book}`, `bookHeader {book}`, `chapterFront {book, chapter}`, `verse {book, chapter, verse}`, `bookLayout {book}`, `alignment {book, chapter, verse}`, `check {key}`, `comment {id}`, `pins {group}`, `setting {key}`, `projectMeta {field}`, `versification {}`, `deviceProfile {device}`, `storyBase {story}`, `frame {frame, story}`, `storyRef {story}`, `carriedFile {path}`, `batchRelease {batch}`; `value` is left out only for a `None` `BookLayout`, `Setting`, `ProjectMeta` or `StoryRef` value |
+| `Record` | `{"<kind>": {<key members>, "value"?}}` with kinds and key members `bookPresence {book}`, `bookHeader {book}`, `chapterFront {book, chapter}`, `verse {book, chapter, verse}`, `bookLayout {book}`, `alignment {book, chapter, verse}`, `check {key}`, `comment {id}`, `pins {group}`, `resourcesExtra {level, name}`, `setting {key}`, `projectMeta {field}`, `versification {}`, `deviceProfile {device}`, `storyBase {story}`, `frame {frame, story}`, `storyRef {story}`, `carriedFile {path}`, `batchRelease {batch}`; `value` is left out only for a `None` `BookLayout`, `ResourcesExtra`, `Setting`, `ProjectMeta` or `StoryRef` value; `ResourcesLevel`: `"top"`, `"languageSets"`, `"resources"` |
 | `RecordKey` | the record object without `value` (in shown tokens and `UnknownKey`) |
 | `BookPresence` | `{"present": {"how", "scope"}}`, `{"removed": {"seen": [..]}}` (sorted, no repeats) |
 | `PresentHow` | `"added"`, `"restoredText"`, `"startedEmpty"` |
@@ -1097,7 +1131,9 @@ would miss damage that keeps them.
 | `installation.json` | `{secret: 32 random bytes hex, created}`, written once |
 | `ledger.json` | per Local device: `{project, folder, lastSeq, lastAt}`, updated after every seal and at close (§6.3) |
 | `prefs/<projectId>.json` | pane layout and other per-person UI preferences |
-| `resources/<owner>--<repo>/<sha>/` | installed resources by full sha (`tc-resources`) |
+| `resources/dcs/<owner>/<repo>/<sha>/` | an installed Door43 resource at its full commit sha, with its `receipt.json` and `checked.json` and its files under `content/` (`tc-resources`, `ResourceStore`); owner and repository folders in lower case, as Door43 resolves names without regard to case (the receipt keeps the pin's casing); nested, not joined as `<owner>--<repo>`, because both names may hold `--` |
+| `resources/aquifer/<owner>/<repo>/<commit>/<lang>-<16 hex of the asset's SHA-256>/` | an installed Aquifer release asset, laid out the same way |
+| `resources/.partial/` | installs in progress; removed when the store opens |
 | OS keychain | the Door43 token, only when the person chose "Stay signed in" |
 
 ---
@@ -1508,7 +1544,16 @@ There is no structural action and no chain: a section save touches only the reco
    re-stamped silently.
 3. `source` = the current original-language pin of the book's testament (repoPath + sha),
    `source_version` = its tC4 label, `marked_invalid = false`, `done` as the aligner computed it
-   (D73), `extra` copied from the displayed value.
+   (D73), `extra` copied from the displayed value. The word bank and every group's target words
+   are put in the order they stand in the displayed verse (`AlignmentValue::put_in_verse_order`
+   over the verse's words and occurrences; a word the verse does not hold goes last), so every
+   value the rebuild saves is in verse order and two saves never differ by order alone
+   (owner rulings Q15 and Q19, `docs/TC4-DELTA-2026-10-16.md` §5). The aligner shows the bank
+   and each card in that order from the first view of a verse, after every edit and after
+   Clear (tC4 3d43f7c, 91131d9, 26aded2); opening a verse that only reorders writes nothing,
+   and the next edit or *Mark valid* saves the order. An imported value keeps the order it came
+   in until someone edits it: an alignment is compared as one whole value (§7.3), so
+   reordering it on import would turn equal tC4 values into a conflict.
 4. One `Alignment` change on the record keyed by the anchor of the run's first verse (§7.7),
    `parents = shown.heads`. `commit_batch`.
 
@@ -1523,9 +1568,19 @@ it (tC4 J5).
    the last change it sends `SaveDecision { shown, verse_shown, value }`.
 2. Starting from the displayed value (or, for a first decision, from the derived check item:
    `context`, `category`, and `resource` = the tN or TWL pin the item list came from), the actor
-   applies the edit. If selections, nothing-to-select or status changed, it sets
-   `judgement.verse_text_md5 = md5(plain_text_v1(displayed verse))` and `imported_invalid =
-   false`.
+   applies the edit with `DecisionEdit::apply` (`tc-journal`), the one implementation of this
+   step. A **judgement** (selections, nothing to select, or the status Valid or Invalid) is
+   made against what is in front of the person, so it sets
+   `judgement.verse_text_md5 = md5(plain_text_v1(text))`, where `text` is the target's text by
+   the no-text rule of §7.7 (the empty text when it has none), clears `imported_invalid`, and
+   sets `resource` to the edit's `resource`: the pin of the check list the person judged in, the
+   (tool, book)'s current resolution as the checking screen resolved it (§7.7; the screen and
+   the fold agree once the coverage backfill of §5.6 has recorded the pins' books). So a
+   decision re-judged after a resource upgrade is valid again in the file as on the screen.
+   **To do**, and clearing the status, change only the status, as tC4's To do button does
+   (`markTodo`, `src/views/Check.jsx` at d310bf3): it is not a judgement, so it stamps nothing,
+   and an invalidated check put back to do stays invalidated, its stale words never taken as a
+   judgement of the new text. A bookmark or a check comment changes only itself.
 3. One `Check` change with `Decision`, `parents = shown.heads`. `commit_batch`.
 
 A bookmark and a status set by two people merge without a conflict (different merge units,
@@ -1550,6 +1605,9 @@ is a new record kind that hides a comment from the default view and keeps it in 
 - Choosing or re-pinning resources outside an upgrade: one `Pins` change per group, with the new
   slot values, `parents = shown.heads`. A new pin always carries its `books` coverage, computed
   from the installed resource when it is installed.
+- `resources.json` members no pin group holds (`ResourcesExtra`, §2.2) are written only by an
+  import or a decoded outside edit of `resources.json`, never by a screen; they project at their
+  level, after the modelled members, in name order.
 - **Coverage backfill** (tC4 D41) for an imported pin without `books`: once, at open, when the
   group is settled and the resource is installed, a `Pins` change with `cause: System
   (PinCoverageBackfill)` adds `books` to that slot, `parents` = the group's heads. Every device
@@ -1582,7 +1640,8 @@ is a new record kind that hides a comment from the default view and keeps it in 
 
 1. **Outside the project.** Download every resource of the release into the machine store,
    verify each export's commit sha (tC4 `verifyExportRevision`, D23b, D71), write each to a
-   temp directory, fsync, rename into `resources/<owner>--<repo>/<sha>/`, fsync the parent. Any
+   temp directory under `resources/.partial/`, fsync, rename into
+   `resources/dcs/<owner>/<repo>/<sha>/` (§3.7), fsync the parent. Any
    failure leaves the project untouched (J12: a failed download changes nothing).
 2. **Plan, off the actor**, from an O(1) snapshot `S` of the fold:
    - the `Pins` changes: new group values, `parents` = the groups' heads in `S`;
@@ -2146,7 +2205,7 @@ together, because mixing them would make a state nobody chose.
 | `Verse` | If every head and every base is `Text` with equal `last`, `marker` and `from`: `words` and `layout`. Otherwise the whole value is one unit. So a paragraph break added by one person and a rewording by another merge; two rewordings of any part of the words conflict; a span against a text conflicts. A record that diverges from a passage batch is never merged by units (see "Passages"). |
 | `Check` with `Decision` values | `judgement` (selections, nothing to select, status, verse text md5, `imported_invalid`); `comment`; `bookmarked`; `dismissed`; `basis` (context, category, resource); each `extra` key. If any head or base is `MovedTo`, the whole value is one unit. |
 | `Pins` | each slot of the group (`gatewayLanguage`, `translationNotes`, …); `ExtraScripture` is one slot |
-| `Setting` | each leaf path of the JSON value (objects recurse; arrays and scalars are leaves); a removed key against a present one is the whole value. An object the merged leaves leave empty, which no head has empty, is left out: one head removed it and the others kept it unchanged |
+| `Setting`, `ResourcesExtra` | each leaf path of the JSON value (objects recurse; arrays and scalars are leaves); a removed key against a present one is the whole value. An object the merged leaves leave empty, which no head has empty, is left out: one head removed it and the others kept it unchanged. A `ResourcesExtra` conflict is listed as a `Pins` conflict |
 | `DeviceProfile` | `display_name`, `door43_username`, `legacy` |
 | `ProjectMeta` | as `Setting`: each leaf path of the JSON value (so two translators' `localizedNames` for different books merge) |
 | `Alignment` | `dismissed`; every other field together (two people's links are never mixed) |
@@ -2369,10 +2428,14 @@ The derivation functions live in `tc-usfm` and are versioned (§12):
   hashes and their validity. The md5 is taken over the UTF-8 bytes of the result.
 - `tokenize_v1(text)`: string-punctuation-tokenizer 2.0.0's default `tokenize`: the words and
   numbers, in order.
-- `selections_v1(text, selections)`: word-aligner-lib 1.0.1 `validateVerseSelections`
-  semantics: the text goes through usfm-js's `removeMarker`, and the selections still fit when
-  each one's `text` occurs in the result exactly `occurrences` times (non-overlapping; an empty
-  text occurs 0 times).
+- `selections_v1(content, selections)`: word-aligner-lib 1.0.1 `validateVerseSelections`
+  semantics. Its input is the raw content (`words + layout` of the run, markers and all), not
+  `plain_text_v1`'s output: it goes through usfm-js's `removeMarker`, and the selections still
+  fit when each one's `text` occurs in the result exactly `occurrences` times
+  (non-overlapping; an empty text occurs 0 times). The golden vectors are made this way, and
+  `plain_text_v1` would drop the words of `\w` and `\zaln` markup that `removeMarker` keeps.
+  A selection made now records as `occurrences` the count of its text in that same result
+  (`SelectionText::occurrences`), so it fits until the text changes.
 
 usfm-js throws a TypeError on a few malformed nestings (for example a `\zaln` milestone with no
 words inside another milestone, met by `removeMarker`). The library has no value there, so
@@ -2428,24 +2491,27 @@ valid = value.span_end >= a and run.end == end
 ```
 
 The record projects with `"invalid": !valid` under the label `label(v, end)`, with every stored
-field unchanged. (Comparing `run.end` with `span_end` itself would mark every alignment of a
+field unchanged. `AlignmentValue::staleness` (`tc_journal::alignment`) computes `valid` and
+says which part fails; the fold and the Align screens both call it. (Comparing `run.end` with `span_end` itself would mark every alignment of a
 renumbered verse invalid although its text and span are unchanged.) A record placed by rules 2 to 4, or a second record placed at a run
 whose own anchor record exists, projects under its key's own label as invalid. A JSON object
 holds one record per label, so a record whose own label another record already holds is left out
 of the sidecar; it stays in the journal, in History and in the Detached list.
 
-**Decisions** (`checking/<tool>/<BOOK>.json`, tC4 §5.2 shape):
+**Decisions** (`checking/<tool>/<BOOK>.json` and, for the stories, `checking/<tool>/OBS.json`,
+tC4 §5.2 shape):
 
 ```
-resolution(tool, book) = tC4's D30 ladder (primary, then fallback) over the projected pins only,
-                         using each pin's recorded `books` coverage (a pin without `books`,
-                         not yet backfilled, covers every book); no installed-resource input.
+resolution(tool, collection) = tC4's D30 ladder (primary, then fallback) over the projected
+                         pins only (`tc_journal::pins`); no installed-resource input.
                          The tool's slot: translationNotes, translationWordsLinks (for
-                         translationWords decisions), translationQuestions
-resource_ok   = record.resource == resolution(tool, book)   (repoPath case-insensitive, sha exact)
-verse_text    = plain_text_v1 of the projected verse or span the target names
-verse_changed = md5(verse_text) != judgement.verse_text_md5
-selections_ok = !verse_changed or selections_v1(verse_text, selections)
+                         translationWords decisions), translationQuestions; for the stories
+                         obs-tn, obs-twl, obs-tq
+resource_ok   = resolution is a usable pin and record.resource is the same resource
+                (repoPath equal ignoring ASCII case, sha equal)
+text          = the content the target names, by the no-text rule below; or none
+verse_changed = text is some and md5(plain_text_v1(text)) != judgement.verse_text_md5
+selections_ok = !verse_changed or selections_v1(text, selections)
 invalidated   = !resource_ok or !selections_ok or imported_invalid
 verseEdits    = verse_changed
 status        = invalidated ? (user status == Todo ? "todo" : "invalid") : user status (omitted if none)
@@ -2454,11 +2520,51 @@ comments      = the comment, or false;  reminders = bookmarked
 modifiedTimestamp = the newest head's `at` in RFC 3339
 ```
 
-The document's `resource` record is `resolution(tool, book)` with its `version` and
-`languageSet`. Decisions are sorted by the canonical JSON of `contextId` (tC4). `MovedTo` records
-project nothing at the old key. Restoring a verse's earlier text makes its decisions valid again;
-nothing was rewritten. A decision sidecar exists for a (tool, book) that has decisions; an
-alignment sidecar for a book that has alignments; a comments file for a book that has comments.
+`tc_journal::decision::assess` computes these flags; the fold and the Check screens both call it,
+so a screen and a decision file never disagree on the same inputs.
+
+**The ladder** (`tc_journal::pins`), every rule tC4's (`src/data/resolve.ts` at d310bf3):
+
+- A rung's slot answers a book when its pin covers the book; the first rung that answers is the
+  resolution. The next rung is tried only when the slot is empty (absent or `null`) or does not
+  cover the book (`resolveSetSlot`).
+- **Coverage** is the pin's `books` record when it is a non-empty list of strings: each code is
+  read in upper case, and `BIBLE` anywhere in the list covers every book (the whole-collection
+  form of a resource not divided into books, such as translationWords). A code that names no
+  book covers nothing. An empty list, a list holding anything but strings, or no `books` at all
+  records nothing (`coverageFor`): in the fold such a usable pin, not yet backfilled (§5.6),
+  covers every book, so the fold never reads what one computer has installed (I12). A screen
+  that opens a tool on this computer reads such a pin as tC4 does: the books its installed copy
+  holds, else none (`Unrecorded::Installed`); that rule never reaches a file.
+- **An unusable pin** (a slot value with no `repoPath`, or no 40-digit lowercase `sha`, such as a
+  pin with a tag and no commit) still answers the books it records, so the ladder stops there:
+  the next rung is never used in its place, which would check the book against another
+  language's list without saying so. No decision matches it, so every decision of that (tool,
+  book) is invalidated until the pins are repaired. Having no commit it has no installed copy,
+  so if it records no books it covers none and the next rung is tried.
+- **The stories** of an OBS project are not divided into books: the first rung whose slot holds
+  anything answers, usable or not (`resolveObsSetSlot`).
+
+**The no-text rule** (tC4's Check screen: `verseTextIndex` and `withSpanMembers`, `src/state.jsx`,
+and `decisionIsStale`, `src/data/revalidate.ts`, at d310bf3). A decision on a verse reads the
+content of a projected run only when its chapter is a number and its verse is a number (the run
+that holds that verse, a span included) or a span label `a-b` that a projected run carries
+exactly; and only when that content, trimmed as JavaScript trims, is neither empty nor the stub
+`___`. Every other target (`front`, `intro`, a list such as `1,3,8,12`, a span no run carries, an
+undrafted verse) has no text: the text gives no evidence either way, so it neither changes the
+verse nor loses the selections, as in tC4, where such a decision is never stale. A decision on a
+frame reads the frame's text: its `Frame` record, else the template's part of the story; a
+story with no template has no text.
+
+The document's `resource` record is tC4's `resolutionRecord`: the resolved pin's `repoPath`,
+`version` and `sha` (no `sha` for an unusable pin) and its `languageSet`. Decisions are sorted
+by the canonical JSON of `contextId` (tC4). `MovedTo` records project nothing at the old key.
+Restoring a verse's earlier text makes its decisions valid again; nothing was rewritten. A
+decision sidecar exists for a (tool, book) that has decisions, and `OBS.json` for a tool with
+decisions on frames; an alignment sidecar for a book that has alignments; a comments file for a
+book that has comments, and `tc/comments/OBS.json` when frames or frame checks have comments.
+A comment there is placed at its frame (`placed: {frame, story}`, plus `check` for a comment
+on a check) while the frame is in the project, else `null`, sorted by (story, frame, at, id).
 
 **Fields kept for decoding.** Every decoder is complete (§11.1 X2), so each sidecar record also
 holds what the journal stores beyond tC4's shape, after tC4's fields: an alignment's `done`,
@@ -2479,7 +2585,8 @@ and the record is not invalidated (§11.1 X3).
   in tC4's order (`gatewayLanguage`, `translationNotes`, `translationWordsLinks`,
   `translationWords`, `translationAcademy`, `translationQuestions`, `simplifiedText`, `nt`, `ot`,
   then the rest by name) and each slot's members in tC4's order (`languageId`, `owner`,
-  `repoPath`, `version`, `sha`, `flavor`, `books`, `id`, then the rest by name), two-space
+  `repoPath`, `version`, `sha`, `flavor`, `books`, `id`, then the rest by name); each
+  `ResourcesExtra` member at its level after the modelled members, in name order; two-space
   indentation.
 - `checking/settings.json`: `{"schemaVersion":1}` then the `Setting` records in key order,
   two-space indentation.
@@ -2561,6 +2668,10 @@ sync, an upgrade plan or an export is O(1).
 | `CarriedFile` | two versions of a file the app does not derive |
 | `PathCase` | two paths that differ only in letter case (§3.3) |
 | `Unknown` | two values of a record kind from a newer format; listed, resolved by the newer app |
+
+**Verse conflicts.** `VerseText`, `VerseStructure`, `Passage` and `StructureIssue` are the
+verse conflicts (`ConflictKind::is_verse`); every other kind is another conflict. A sync or a
+file import counts the two classes apart (§8.5, tC4's toast).
 
 **Grouping.** The review lists conflicts grouped by the set of batches that produced their
 heads. One upgrade against another becomes one row: "Maria upgraded translationNotes to v92 on
@@ -2685,10 +2796,16 @@ everything else.
   alignment or check item carries a "2 versions" marker in Translate, Align and Check.
 - The review screen has tabs by kind (Text, Alignments, Checks, Settings and sources, Detached,
   Notices), "Conflict n of m", Previous, Next and Back to work. Versions are coloured by person:
-  "Mine" light blue, teammates cream (tC4 #679). Each version shows the person (Door43 username,
-  else display name, else "Teammate n"), the computer when one person has two or when two
-  versions share one username (both are then labelled by computer, never both "Mine"), the
-  date, and "this computer's clock may be wrong" when `ClockAhead` applies.
+  "Mine" light blue, teammates cream (tC4 #679). Each version shows the person, the computer
+  when one person has two or when two versions share one username (both are then labelled by
+  computer, never both "Mine"), the date, and "this computer's clock may be wrong" when
+  `ClockAhead` applies. One function names the person on the review and on the sync result,
+  so one teammate has one name or one number in both (`FoldState::person_labels`): "Mine"
+  (`conflicts.mine`) for this device's person, that is this device and every device signed in
+  with its Door43 username; else the Door43 username, devices grouped by it; else the display
+  name; else "Teammate n" (`conflicts.teammate`), numbering the devices with neither in the
+  order of their ids, leaving this device out. Only Local, tC4-actor and tC3-user devices are
+  persons; a Door43 edit, an exchange-file edit or an import is named by its cause.
 - Every anomaly is one sentence and, where possible, one button: "1 file of changes from Juan's
   computer is damaged; 212 of 230 changes were recovered. A good copy from Door43 or any
   teammate repairs it; the recovered changes are kept either way." The words never promise a
@@ -3088,7 +3205,8 @@ X2  Decode b with the importer's decoder:
       USFM          → BookHeader, ChapterFront and Verse values (spans → Text + Covered; a verse
                       missing from the file → Absent)
       alignment and decision sidecars → one value per record
-      resources.json → Pins groups; settings.json → Setting per top-level key
+      resources.json → Pins groups, and a ResourcesExtra per member no group holds;
+                      settings.json → Setting per top-level key
       vrs.json      → Versification
       metadata.json → every field that is not derived: the modelled ProjectMeta fields,
                       localizedNames, other idAuthorities, other identification.primary
@@ -3374,8 +3492,13 @@ T3  Read tC4's derived files from the copied working tree, not from HEAD (tC4 re
 T4  ProjectId = UUID (version 8) from sha256("tc4-import\0" ‖ ts of the earliest event ‖
     sha256 of its segment file)[..16]. Every teammate's import of the same project gets the
     same id, so the imports merge.
-T5  One Tc4Actor device per tC4 actor, with a DeviceProfile (username from actor.name.set)
-    written by the Importer device.
+T5  One Tc4Actor device per tC4 actor, with a DeviceProfile written by the Importer device:
+    `legacy = Tc4Actor { actor }` and `door43_username` from the actor's v3 `actor.name.set`
+    events (`{v:3, op, actor, ts, base:null, username}`), the first in `ts` order, as tC4's
+    first-wins rule takes it. Later ones are listed in the import report, as tC4's
+    `namesRejected` lists them; they are never a conflict. A username that breaks the
+    Door43Username grammar (§2.3) is listed and not set. A project that was only shared has
+    no such event.
 T6  Convert the events in tC4 ts order. Each event is one batch (BatchId =
     sha256("tc4-batch\0" ‖ ts ‖ sha256 of its segment file)[..16], so two different events
     with one ts stay apart); device = Tc4Actor(actor); seq = index in the batch; at = the ts's
@@ -3420,7 +3543,7 @@ T10 Rename the staging folder into place. The original folder is left as it was.
 | `settings.set` (dotted path) | `Setting(top-level key)` with the path set in the replay's value |
 | `project.meta.set`, `project.vrs.set` | `ProjectMeta(Extra(path))`, `Versification` |
 | `text.frame.set`, `text.story.ref.set` | `Frame`, `StoryRef` |
-| `actor.name.set` | `DeviceProfile(Tc4Actor(actor)).door43_username` |
+| `actor.name.set` | `DeviceProfile(Tc4Actor(actor)).door43_username`, from the actor's first such event in `ts` order (T5); later ones are only reported |
 
 Alignment hashes: `plain_text_v1` is byte-compatible with tC4's `verseTextMd5`, so an alignment
 valid in tC4 is valid here, and one tC4 marked invalid stays invalid until it is aligned again.
@@ -3516,7 +3639,31 @@ The codec (`tc-usfm`) decomposes a book into records and recomposes it:
   USFM identity corpus.
 
 A raw USFM import makes a new project, one `Import` batch per book, the text taken as is (no
-stubs). A foreign Scripture Burrito is validated (§3.4 check); its text ingredients go through
+stubs), except for the alignment markup of an aligned book.
+
+**Aligned USFM** (a book tC4 or the ULT wrote with `\zaln-s … \zaln-e\*` milestones around `\w`
+words). Kept in the verse text, that markup would leave `plain_text_v1` only the punctuation of
+the verse, so no check could select a word and the aligner could not open it. Each verse that
+holds alignment markup is taken apart instead (`tc_journal::alignment::split_aligned`, over
+`tc_usfm::parse_aligned`):
+
+- When it reads apart and the alignment woven back into the plain verse (`tc_usfm::weave` of the
+  `Alignment` value's groups) gives the verse's content byte for byte, the import writes the
+  plain verse as the `Verse` value (`words` and `layout` split as in §2.4) and one `Alignment`
+  record keyed by the verse (its anchor, §7.7): `span_end` is the verse's `last`; each
+  `\zaln-s` is a source word (`x-content` is `word`; `x-strong`, `x-lemma`, `x-morph`,
+  `x-occurrence` and `x-occurrences` are the named fields; every other attribute is in `extra`
+  under its own name), each group's `\w` words are its target words, and the verse's words in
+  no group are the word bank, in verse order; `target_verse_md5` is the md5 of the plain
+  verse's `plain_text_v1`; `source` is none and `source_version` empty, since a USFM file names
+  no pin (validity then does not read the original-language pin, and the aligner checks the
+  source words against the pinned text when it opens the verse); `done` is set when every word
+  is placed (D73); `marked_invalid` is false. The P9 comparison of such a verse compares the
+  woven projection with the source.
+- Otherwise (malformed markup, a word that is not one word of the plain verse, attributes in
+  another order, renumbered occurrences: whatever `weave` would not give back exactly) the
+  verse is kept as written, markup and all, and the import report lists it. Nothing is lost
+  either way. A foreign Scripture Burrito is validated (§3.4 check); its text ingredients go through
 the codec; tC4-shaped `x-` sidecars become records as in §13.2. A burrito with
 `ingredients/tc/project.json` is an exchange file (§10.2); one with
 `ingredients/checking/journal/` is a tC4 project (§13.1).
@@ -3920,12 +4067,13 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | `tc-core` | `BookId`, references (exists) |
 | `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`, `PARA_MARKERS` and the layout rule), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1`, the OBS story splice |
 | `tc-burrito` | `build_metadata`, `check`, the vendored SB 1.0.0 schema, the extension table, `collision_form` (§3.3) |
-| `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the fold cache's codec (`index`: sections of prepared changes keyed by path, size and fingerprint), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking, the command types. No I/O. |
+| `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the fold cache's codec (`index`: sections of prepared changes keyed by path, size and fingerprint), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking, the command types. It is the one owner of the types and rules the domain crates share: `CheckKey`, `ResourceRef`, `GitOid`, `Md5`, `DecisionRecord`, `AlignmentValue`; the pin slots and the D30 ladder (`pins`); a decision's edit and computed state (`decision`); an alignment's validity, its verse order and the aligned-USFM split (`alignment`); person labels. No I/O. |
 | `tc-store` | `Vfs`, `FaultFs`, `atomic_write`, the project lock, `ProjectActor` and commands, open and recovery, reading and writing the fold cache `.tc/index.bin` (§6.1 O8), the fold's `ValueSource` over pack and pending files and their blobs, materialize, seal, consolidate, outside-edit detection and recording, drafts, identity, local git (tree build, commit, index, repack, object database access) |
 | `tc-door43` | the internet switch, the Gitea REST client, and git2 network calls (`fetch`, `push`, `list`) on a repository `tc-store` opened |
 | `tc-sync` | the Door43 sync (§9), the exchange file export and import (§10), the Door43 edit walk (§11.2), `ExchangeReport` |
 | `tc-import` | the tC4 4.0 converter and oracle check, the tC4 seed, tC3, raw USFM, foreign burritos |
-| `tc-check`, `tc-align` | building check items and alignments for the screens; they use the derivations of `tc-usfm` |
+| `tc-check`, `tc-align` | building check items and alignments for the screens, over `tc-journal`'s types and rules and the derivations of `tc-usfm`; they hold no second copy of a record type, a ladder or a validity rule |
+| `tc-resources` | installing, verifying, loading and upgrading resources; its pins read and write `tc-journal`'s `Pins` values, and it resolves with `tc-journal`'s ladder (with installed coverage only when it opens a tool on this computer) |
 | `tc-corpus` | the deterministic scale corpus of `docs/PERFORMANCE.md` (Psalms, ten times Psalms, the whole Bible of §14) as journal packs and pending files and as plain domain inputs, every part labelled; for tests and benchmarks only (`publish = false`) |
 
 Dependencies: `git2 =0.21.0` (default features off; `https`, `vendored-libgit2`;

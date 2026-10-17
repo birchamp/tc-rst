@@ -1765,7 +1765,7 @@ fn profile_value(d: usize) -> DeviceProfileValue {
     ];
     DeviceProfileValue {
         display_name: Some(NAMES[d % NAMES.len()].into()),
-        door43_username: Some(Door43Username(format!("corpus-translator-{d}").into())),
+        door43_username: Door43Username::parse(&format!("corpus-translator-{d}")).ok(),
         legacy: None,
     }
 }
@@ -1781,6 +1781,7 @@ fn record_kind(record: &Record) -> &'static str {
         Record::Check { .. } => "check",
         Record::Comment { .. } => "comment",
         Record::Pins { .. } => "pins",
+        Record::ResourcesExtra { .. } => "resourcesExtra",
         Record::Setting { .. } => "setting",
         Record::ProjectMeta { .. } => "projectMeta",
         Record::Versification { .. } => "versification",

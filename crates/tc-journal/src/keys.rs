@@ -30,6 +30,9 @@ pub enum RecordKey {
     Comment(CommentId),
     // ---- project ----
     Pins(PinGroup),
+    /// A key of `resources.json` that no pin group holds (§3.7 of the record list): kept so
+    /// an import or an outside edit never loses it.
+    ResourcesExtra(ResourcesKey),
     /// One top-level key of settings.json.
     Setting(SettingKey),
     ProjectMeta(MetaField),
@@ -79,6 +82,7 @@ impl RecordKey {
             Self::Check(_) => "check",
             Self::Comment(_) => "comment",
             Self::Pins(_) => "pins",
+            Self::ResourcesExtra(_) => "resourcesExtra",
             Self::Setting(_) => "setting",
             Self::ProjectMeta(_) => "projectMeta",
             Self::Versification => "versification",
@@ -104,6 +108,7 @@ pub const KNOWN_KINDS: &[&str] = &[
     "check",
     "comment",
     "pins",
+    "resourcesExtra",
     "setting",
     "projectMeta",
     "versification",
@@ -189,23 +194,49 @@ impl CheckId {
 }
 
 identity_string!(
-    /// A chapter or verse as tC4 writes it in a check's reference: `1`, `9-10`, `front`.
-    /// 1 to 32 ASCII letters, digits and `-`. Compared as a string.
+    /// A chapter or verse as tC4 writes it in a check's reference: `1`, `9-10`, `front`,
+    /// `1,3,8,12` (en_tn's sbh4 at PSA 5). Compared as a string. tC4's identity part grammar
+    /// (`identityPartError`, `journal/grammar.mjs` at d310bf3): not empty, no `|` (its
+    /// identity delimiter) and no `:` (its register delimiter); and NFC, as every identity
+    /// string here (rule V2).
     RefPart
 );
 
 impl RefPart {
     pub fn parse(text: &str) -> Result<Self, IdentityError> {
-        let ok = (1..=32).contains(&text.len())
-            && text.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-');
-        if !ok {
+        nfc_non_empty("a reference part", text)?;
+        if text.contains(['|', ':']) {
             return Err(IdentityError::Grammar {
                 what: "a reference part",
                 text: text.to_owned(),
-                rule: "1 to 32 ASCII letters, digits and '-'",
+                rule: "it may not contain '|' or ':'",
             });
         }
         Ok(Self(text.into()))
+    }
+
+    /// The number this part names, when it is one: plain ASCII digits, as tC4's `refPart`
+    /// reads a number (`derive.ts`).
+    pub fn number(&self) -> Option<u16> {
+        if self.0.bytes().all(|b| b.is_ascii_digit()) {
+            self.0.parse().ok()
+        } else {
+            None
+        }
+    }
+
+    /// The verse span this part names, when it is a number or `first-last` with numbers:
+    /// the keys of tC4's draft-text index (`state.jsx` `verseTextIndex`).
+    pub fn span(&self) -> Option<(u16, u16)> {
+        if let Some(n) = self.number() {
+            return Some((n, n));
+        }
+        let (first, last) = self.0.split_once('-')?;
+        let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+        if !digits(first) || !digits(last) {
+            return None;
+        }
+        Some((first.parse().ok()?, last.parse().ok()?))
     }
 }
 
@@ -230,8 +261,11 @@ impl SettingKey {
 }
 
 identity_string!(
-    /// A tC4 pin slot name such as `gatewayLanguage` or `translationNotes`: an ASCII letter,
-    /// then letters, digits and `_`, at most 64 bytes, not `constructor` or `prototype`.
+    /// A tC4 pin slot name such as `gatewayLanguage`, `translationNotes` or `obs-tn`: an
+    /// ASCII letter, then letters, digits, `_` and `-`, at most 64 bytes, not `constructor` or
+    /// `prototype`. tC4's slot grammar (`PIN_SLOT_RE`, `journal/grammar.mjs` at d310bf3)
+    /// names `obs-tn`, `obs-twl`, `obs-tq` and `obs-images`, and allows `-` in an
+    /// `extraScripture` pane id.
     SlotName
 );
 
@@ -242,16 +276,77 @@ impl SlotName {
             && bytes[0].is_ascii_alphabetic()
             && bytes
                 .iter()
-                .all(|b| b.is_ascii_alphanumeric() || *b == b'_')
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
             && !PROTOTYPE_NAMES.contains(&text);
         if !ok {
             return Err(IdentityError::Grammar {
                 what: "a pin slot name",
                 text: text.to_owned(),
-                rule: "an ASCII letter, then letters, digits and '_', at most 64 bytes, not a prototype name",
+                rule: "an ASCII letter, then letters, digits, '_' and '-', at most 64 bytes, not a prototype name",
             });
         }
         Ok(Self(text.into()))
+    }
+}
+
+/// Where in `resources.json` a key the pin groups do not hold stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ResourcesLevel {
+    /// Beside `schemaVersion`, `languageSets`, `resources` and `extraScripture`.
+    Top,
+    /// Under `languageSets`, beside `primary` and `fallback`.
+    LanguageSets,
+    /// Under `resources`, beside `originalLanguage` and `lexicon`.
+    Resources,
+}
+
+impl ResourcesLevel {
+    /// The members the projection writes at this level, which an extra key may not name.
+    pub fn owned(self) -> &'static [&'static str] {
+        match self {
+            Self::Top => &[
+                "schemaVersion",
+                "languageSets",
+                "resources",
+                "extraScripture",
+            ],
+            Self::LanguageSets => &["primary", "fallback"],
+            Self::Resources => &["originalLanguage", "lexicon"],
+        }
+    }
+}
+
+/// The key of a `resources.json` member no pin group holds: its level and its name. The
+/// name is NFC, not empty, not a prototype name, and not a member the projection writes at
+/// that level.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ResourcesKey {
+    level: ResourcesLevel,
+    name: Box<str>,
+}
+
+impl ResourcesKey {
+    pub fn new(level: ResourcesLevel, name: &str) -> Result<Self, IdentityError> {
+        nfc_non_empty("a resources.json key", name)?;
+        if PROTOTYPE_NAMES.contains(&name) || level.owned().contains(&name) {
+            return Err(IdentityError::Grammar {
+                what: "a resources.json key",
+                text: name.to_owned(),
+                rule: "not a prototype name nor a member the pin groups project",
+            });
+        }
+        Ok(Self {
+            level,
+            name: name.into(),
+        })
+    }
+
+    pub fn level(&self) -> ResourcesLevel {
+        self.level
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 
@@ -389,18 +484,49 @@ mod tests {
             CheckId::parse("e\u{301}"),
             Err(IdentityError::NotNfc { .. })
         ));
-        for ok in ["1", "9-10", "front", "intro"] {
+        // tC4 keys a check on the cell as written: a comma list, a space, a dash that is not
+        // ASCII, other digits (fixtures/check/reference-forms-vectors.json).
+        for ok in [
+            "1",
+            "9-10",
+            "front",
+            "intro",
+            "1,3,8,12",
+            "front ",
+            " 3",
+            "1\u{2013}3",
+            "\u{663}",
+            &"9".repeat(33),
+        ] {
             assert!(RefPart::parse(ok).is_ok(), "{ok}");
         }
-        for bad in ["", "1:2", "uno dos", "é", &"9".repeat(33)] {
+        for bad in ["", "1:2", "a|b", "e\u{301}"] {
             assert!(RefPart::parse(bad).is_err(), "{bad}");
+        }
+        let part = |s: &str| RefPart::parse(s).unwrap();
+        assert_eq!(part("12").number(), Some(12));
+        assert_eq!(part("9-10").span(), Some((9, 10)));
+        assert_eq!(part("4").span(), Some((4, 4)));
+        for none in ["1,3,8,12", "front", "1a", "-3", "3-", "\u{663}"] {
+            assert_eq!(part(none).span(), None, "{none}");
         }
         assert!(SettingKey::parse("checkCategories").is_ok());
         for bad in ["", "__proto__", "constructor", "prototype"] {
             assert!(SettingKey::parse(bad).is_err(), "{bad}");
         }
-        assert!(SlotName::parse("translationNotes").is_ok());
-        for bad in ["", "_x", "1x", "a-b", "constructor", &"a".repeat(65)] {
+        for ok in ["translationNotes", "obs-tn", "obs-images", "a-b"] {
+            assert!(SlotName::parse(ok).is_ok(), "{ok}");
+        }
+        for bad in [
+            "",
+            "_x",
+            "-x",
+            "1x",
+            "a b",
+            "a.b",
+            "constructor",
+            &"a".repeat(65),
+        ] {
             assert!(SlotName::parse(bad).is_err(), "{bad}");
         }
         assert!(MetaPath::parse("localizedNames").is_ok());

@@ -7,7 +7,9 @@ use crate::ids::{
     StoryNo, VerseNo,
 };
 use crate::json::{Json, JsonMap};
-use crate::keys::{CheckKey, MetaField, PinGroup, RecordKey, SettingKey, SlotName, UnknownKey};
+use crate::keys::{
+    CheckKey, MetaField, PinGroup, RecordKey, ResourcesKey, SettingKey, SlotName, UnknownKey,
+};
 use std::collections::BTreeMap;
 use tc_core::BookId;
 
@@ -56,6 +58,11 @@ pub enum Record {
     Pins {
         group: PinGroup,
         value: PinGroupValue,
+    },
+    /// A `resources.json` member no pin group holds; `None` = removed.
+    ResourcesExtra {
+        key: ResourcesKey,
+        value: Option<Json>,
     },
     /// `None` = the key was removed.
     Setting {
@@ -119,6 +126,7 @@ impl Record {
             Self::Check { key, .. } => RecordKey::Check(key.clone()),
             Self::Comment { id, .. } => RecordKey::Comment(*id),
             Self::Pins { group, .. } => RecordKey::Pins(*group),
+            Self::ResourcesExtra { key, .. } => RecordKey::ResourcesExtra(key.clone()),
             Self::Setting { key, .. } => RecordKey::Setting(key.clone()),
             Self::ProjectMeta { field, .. } => RecordKey::ProjectMeta(field.clone()),
             Self::Versification { .. } => RecordKey::Versification,
@@ -222,12 +230,28 @@ pub enum LayoutItem {
     Verse(ChapterNo, VerseNo),
 }
 
-/// A resource pin: the repository path and the commit sha. `repo_path` is compared
-/// case-insensitively.
+/// A resource pin: the repository path and the commit sha (D58). As a value it compares
+/// byte for byte, like every stored value (§7.3); as a resource's identity it compares the
+/// path ignoring ASCII case ([`ResourceRef::same_resource`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceRef {
     pub repo_path: Box<str>,
     pub sha: GitOid,
+}
+
+impl ResourceRef {
+    /// Whether `other` names the same resource at the same commit: the paths equal ignoring
+    /// ASCII case, as Door43 resolves them, and the shas equal (tC4 `samePath`,
+    /// `recordMatchesResolution`).
+    pub fn same_resource(&self, other: &ResourceRef) -> bool {
+        self.sha == other.sha && self.repo_path.eq_ignore_ascii_case(&other.repo_path)
+    }
+}
+
+impl std::fmt::Display for ResourceRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}@{}", self.repo_path, self.sha)
+    }
 }
 
 /// One source word of a tC4 §5.1 alignment group (`topWords`).
@@ -367,6 +391,14 @@ pub struct SlotValue(pub Json);
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PinGroupValue(pub BTreeMap<SlotName, SlotValue>);
 
+impl PinGroupValue {
+    /// The value of the slot named `name`.
+    pub fn slot(&self, name: &str) -> Option<&Json> {
+        let name = SlotName::parse(name).ok()?;
+        self.0.get(&name).map(|v| &v.0)
+    }
+}
+
 /// `vrs.json` verbatim.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VersificationValue {
@@ -374,9 +406,41 @@ pub struct VersificationValue {
     pub bytes: String,
 }
 
-/// A Door43 user name, as Door43 gave it.
+/// A Door43 user name, as Door43 gave it. tC4's grammar (`door43UsernameError`,
+/// `journal/grammar.mjs` at d310bf3, D98): an ASCII letter or digit, then letters, digits,
+/// `-`, `.` and `_`, never two of `-._` in a row or one at the end, at most 40 characters.
+/// So it is never an email address or a token.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Door43Username(pub Box<str>);
+pub struct Door43Username(Box<str>);
+
+impl Door43Username {
+    pub fn parse(text: &str) -> Result<Self, crate::keys::IdentityError> {
+        let bytes = text.as_bytes();
+        let separator = |b: &u8| matches!(b, b'-' | b'.' | b'_');
+        let ok = (1..=40).contains(&bytes.len())
+            && bytes[0].is_ascii_alphanumeric()
+            && bytes
+                .iter()
+                .all(|b| b.is_ascii_alphanumeric() || separator(b))
+            && !bytes
+                .windows(2)
+                .any(|w| separator(&w[0]) && separator(&w[1]))
+            && !bytes.last().is_some_and(separator);
+        if !ok {
+            return Err(crate::keys::IdentityError::Grammar {
+                what: "a Door43 user name",
+                text: text.to_owned(),
+                rule: "an ASCII letter or digit, then letters, digits, '-', '.' and '_', none of \
+                       those two in a row or last, at most 40 characters",
+            });
+        }
+        Ok(Self(text.into()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
 /// The tC4 actor or tC3 user a derived device stands for.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -388,7 +452,10 @@ pub enum LegacyIdentity {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DeviceProfileValue {
     pub display_name: Option<Box<str>>,
-    /// Only after the D98 consent notice.
+    /// Written once, at this device's first sync, after its fetch succeeded with the token,
+    /// and only after the sign-in name notice (D98, tC4 `signIn.nameNotice`); never changed
+    /// after, whoever signs in later (tC4's first-wins rule). For a tC4 actor, the first
+    /// `actor.name.set` username in `ts` order (§13.1 T5).
     pub door43_username: Option<Door43Username>,
     pub legacy: Option<LegacyIdentity>,
 }

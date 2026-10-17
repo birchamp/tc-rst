@@ -104,7 +104,7 @@ use tc_core::BookId;
 /// what the per-change rules decide changes for bytes the probe does not hold, a bug fix
 /// included. The test `the_encoding_is_pinned` also asks for a raise whenever the probe's
 /// sections change, so that every change of the encoding is seen in review.
-pub const INDEX_VERSION: u32 = 5;
+pub const INDEX_VERSION: u32 = 6;
 
 /// The probe (see the module documentation): a pending file of project [`PROBE_PROJECT`].
 /// Its bytes are fixed; the test `the_probe_is_what_the_generator_gives` writes them.

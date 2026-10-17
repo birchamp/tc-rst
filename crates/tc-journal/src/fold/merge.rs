@@ -488,7 +488,7 @@ pub(crate) fn units_for(key: &RecordKey, versions: &[Option<&Json>]) -> Vec<Unit
             Some(names) => names.iter().map(|n| Unit::at(&[n.as_str()])).collect(),
             None => vec![Unit::whole()],
         },
-        RecordKey::Setting(_) | RecordKey::ProjectMeta(_) => {
+        RecordKey::Setting(_) | RecordKey::ProjectMeta(_) | RecordKey::ResourcesExtra(_) => {
             if versions.iter().any(Option::is_none) {
                 return vec![Unit::whole()];
             }
@@ -714,7 +714,7 @@ pub(crate) fn conflict_kind(
             }
         }
         RecordKey::Comment(_) => ConflictKind::Comment,
-        RecordKey::Pins(_) => ConflictKind::Pins,
+        RecordKey::Pins(_) | RecordKey::ResourcesExtra(_) => ConflictKind::Pins,
         RecordKey::Setting(_) => ConflictKind::Setting,
         RecordKey::ProjectMeta(_) => ConflictKind::ProjectMeta,
         RecordKey::Versification => ConflictKind::Versification,

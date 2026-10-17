@@ -225,10 +225,11 @@ fn status(text: &str) -> Option<UserStatus> {
     }
 }
 
-/// Every decision record of a decisions sidecar.
+/// Every decision record of a decisions sidecar: `checking/<tool>/<BOOK>.json`, or
+/// `checking/<tool>/OBS.json` for the stories (`book` is then `None`).
 pub fn decode_decisions(
     tool: ToolId,
-    book: BookId,
+    book: Option<BookId>,
     bytes: &[u8],
 ) -> Result<Vec<Record>, SidecarError> {
     let doc: Value = serde_json::from_slice(bytes).map_err(|e| fail("the file", e.to_string()))?;
@@ -256,7 +257,7 @@ pub fn decode_decisions(
         let key: CheckKey = match m.get("checkKey") {
             Some(k) => canon::check_key_from_json(&json(k, &at)?)
                 .ok_or_else(|| fail(&at, "checkKey is not a check key"))?,
-            None => super::project::derive_key(tool, Some(book), &context)
+            None => super::project::derive_key(tool, book, &context)
                 .ok_or_else(|| fail(&at, "the contextId names no check"))?,
         };
         let selections = match m.get("selections") {
