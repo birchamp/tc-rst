@@ -110,6 +110,14 @@ fn decoding_and_rendering_a_story_reads_and_writes_it_and_its_base_once() {
                 2 * (lines(text) + lines(&records.base))
             );
             assert_eq!(&rendered, text);
+            // What the records decode to, which an outside edit is compared with, costs a
+            // render and a decode of this story.
+            let before = lines_touched();
+            assert_eq!(records.as_decoded().unwrap(), records);
+            assert_eq!(
+                lines_touched() - before,
+                2 * (lines(text) + lines(&records.base))
+            );
         }
     }
 }
