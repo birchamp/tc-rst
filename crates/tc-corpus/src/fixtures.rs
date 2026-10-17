@@ -18,12 +18,14 @@ pub const PSA_TWL: &str = "fixtures/scale/psa/en_twl/twl_PSA.tsv";
 pub const PSA_WEB: &str = "fixtures/scale/psa/web/web_psa.usx";
 pub const PSA_UHB: &str = "fixtures/scale/psa/hbo_uhb/19-PSA.usfm";
 
-/// The unfoldingWord releases of the bundled English suite, `bundle/en/`.
-pub const ULT_ZIP: &str = "bundle/en/en_ult-v91.zip";
-pub const TN_ZIP: &str = "bundle/en/en_tn-v91.zip";
-pub const TWL_ZIP: &str = "bundle/en/en_twl-v91.zip";
-pub const UHB_ZIP: &str = "bundle/en/hbo_uhb-v3.0.0.zip";
-pub const UGNT_ZIP: &str = "bundle/en/el-x-koine_ugnt-v0.34.zip";
+/// The unfoldingWord releases of the bundled English suite, `bundle/en/`: the DCS Scripture
+/// Burrito export of each pinned tag, the files the app ships. A book is
+/// `<repo>/ingredients/<BOOK>.usfm` or `.tsv`.
+pub const ULT_ZIP: &str = "bundle/en/en_ult_v91.sb.zip";
+pub const TN_ZIP: &str = "bundle/en/en_tn_v91.sb.zip";
+pub const TWL_ZIP: &str = "bundle/en/en_twl_v91.sb.zip";
+pub const UHB_ZIP: &str = "bundle/en/hbo_uhb_v3.0.0.sb.zip";
+pub const UGNT_ZIP: &str = "bundle/en/el-x-koine_ugnt_v0.34.sb.zip";
 
 /// The commits of the bundled releases (`bundle/en/README.md`), which the corpus pins.
 pub const TN_COMMIT: &str = "e586762e330f482a60c52aedd1c7b3a2f155df8a";
@@ -283,8 +285,11 @@ pub fn parse_twl(text: &str) -> Vec<HelpsRow> {
         if !valid_id(id) {
             continue;
         }
+        // `rc://*/tw/dict/bible/kt/god` in the repository, `./payload/kt/god.md` in the
+        // burrito export (`bundle/en/README.md`): the same article.
         let mut segments = link.rsplit('/');
-        let group = segments.next().unwrap_or("").to_owned();
+        let last = segments.next().unwrap_or("");
+        let group = last.strip_suffix(".md").unwrap_or(last).to_owned();
         let category = segments.next().unwrap_or("other").to_owned();
         out.push(HelpsRow {
             chapter,
@@ -413,11 +418,14 @@ pub struct Releases {
     pub originals: BTreeMap<BookId, String>,
 }
 
-/// Reads every file of a zip whose name matches, by book.
+/// Reads every book file of a burrito export, `<repo>/ingredients/<BOOK>.<extension>`, by
+/// book. Other entries are left alone: the export's front matter (`FRT.usfm`, no book of the
+/// canon) and the copy of the other resource that the TWL and tW exports carry under
+/// `ingredients/payload/` (`bundle/en/README.md`).
 fn zip_books(
     root: &Path,
     rel: &str,
-    book_of: impl Fn(&str) -> Option<BookId>,
+    extension: &str,
 ) -> Result<BTreeMap<BookId, String>, CorpusError> {
     let file = std::fs::File::open(root.join(rel)).map_err(|e| fixture_error(rel, e))?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| fixture_error(rel, e))?;
@@ -425,7 +433,7 @@ fn zip_books(
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).map_err(|e| fixture_error(rel, e))?;
         let name = entry.name().to_owned();
-        let Some(book) = name.rsplit('/').next().and_then(&book_of) else {
+        let Some(book) = export_book(&name, extension) else {
             continue;
         };
         let mut text = String::new();
@@ -437,28 +445,23 @@ fn zip_books(
     Ok(out)
 }
 
-/// `19-PSA.usfm` → Psalms.
-fn usfm_book(file: &str) -> Option<BookId> {
-    let stem = file.strip_suffix(".usfm")?;
-    let (_, code) = stem.split_once('-')?;
-    code.parse().ok()
+/// `en_ult/ingredients/PSA.usfm` → Psalms.
+fn export_book(name: &str, extension: &str) -> Option<BookId> {
+    let mut parts = name.split('/');
+    let (_repo, folder, file) = (parts.next()?, parts.next()?, parts.next()?);
+    if folder != "ingredients" || parts.next().is_some() {
+        return None;
+    }
+    file.strip_suffix(extension)?.parse().ok()
 }
 
-/// `tn_PSA.tsv` or `twl_PSA.tsv` → Psalms.
-fn tsv_book(prefix: &str, file: &str) -> Option<BookId> {
-    file.strip_prefix(prefix)?
-        .strip_suffix(".tsv")?
-        .parse()
-        .ok()
-}
-
-/// Reads the four release zips.
+/// Reads the five release exports.
 pub fn load_releases(root: &Path) -> Result<Releases, CorpusError> {
-    let ult = zip_books(root, ULT_ZIP, usfm_book)?;
-    let tn = zip_books(root, TN_ZIP, |f| tsv_book("tn_", f))?;
-    let twl = zip_books(root, TWL_ZIP, |f| tsv_book("twl_", f))?;
-    let mut originals = zip_books(root, UHB_ZIP, usfm_book)?;
-    originals.extend(zip_books(root, UGNT_ZIP, usfm_book)?);
+    let ult = zip_books(root, ULT_ZIP, ".usfm")?;
+    let tn = zip_books(root, TN_ZIP, ".tsv")?;
+    let twl = zip_books(root, TWL_ZIP, ".tsv")?;
+    let mut originals = zip_books(root, UHB_ZIP, ".usfm")?;
+    originals.extend(zip_books(root, UGNT_ZIP, ".usfm")?);
     let mut books = BTreeMap::new();
     for (book, text) in ult {
         let path = format!("{ULT_ZIP}#{}", book.code());
@@ -502,6 +505,40 @@ mod tests {
         let words = parse_twl(twl);
         assert_eq!(words[0].group, "counselor");
         assert_eq!(words[0].category, "other");
+        // The burrito export links the same article by its file in `payload/`.
+        let exported = twl.replace(
+            "rc://*/tw/dict/bible/other/counselor",
+            "./payload/other/counselor.md",
+        );
+        let from_export = parse_twl(&exported);
+        assert_eq!(
+            (
+                from_export[0].group.as_str(),
+                from_export[0].category.as_str()
+            ),
+            ("counselor", "other")
+        );
+    }
+
+    #[test]
+    fn only_the_book_files_of_an_export_are_books() {
+        assert_eq!(
+            export_book("en_ult/ingredients/PSA.usfm", ".usfm"),
+            Some(BookId::Psalms)
+        );
+        assert_eq!(
+            export_book("en_twl/ingredients/TIT.tsv", ".tsv"),
+            Some(BookId::Titus)
+        );
+        for (other, extension) in [
+            ("en_ult/ingredients/FRT.usfm", ".usfm"),
+            ("en_ult/ingredients/PSA.usfm", ".tsv"),
+            ("en_twl/ingredients/payload/kt/god.md", ".md"),
+            ("en_ult/PSA.usfm", ".usfm"),
+            ("en_ult/metadata.json", ".json"),
+        ] {
+            assert_eq!(export_book(other, extension), None, "{other}");
+        }
     }
 
     #[test]

@@ -49,13 +49,14 @@ unchanged, and nothing reads them. In the TWL export DCS also rewrites each `TWL
 both forms as the same article id, which is then looked up in the `en_tw` articles. The other
 TSV and USFM files are the same bytes in the export and in the repository.
 
-## Plain archives kept for the scale corpus
+## Read by the scale corpus
 
-`hbo_uhb-v3.0.0.zip`, `el-x-koine_ugnt-v0.34.zip`, `en_ult-v91.zip`, `en_ust-v91.zip`,
-`en_tn-v91.zip`, `en_twl-v91.zip`, `en_tw-v91.zip` and `en_ta-v91.zip` are Door43 git
-archives of the same commits: each zip comment is the commit. They are not shipped. The
-scale corpus generator (`tc-corpus`) reads them until it reads the exports instead, and then
-they are deleted.
+The scale corpus generator (`tc-corpus`, `docs/PERFORMANCE.md`) reads its real books from these
+exports: the ULT, tN and TWL v91 book files and the UHB and UGNT books, each
+`<repo>/ingredients/<BOOK>.<usfm|tsv>`. It reads a TWL link in either form, so the exported
+`./payload/<category>/<slug>.md` gives the same article as the repository's `rc://` link, and
+it skips the ULT's front matter (`FRT.usfm`) and everything under `ingredients/payload/`. The
+Door43 git archives of the same commits, which it read before, are gone from this folder.
 
 ## The git archive of each commit-only pin
 
