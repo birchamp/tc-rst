@@ -18,9 +18,10 @@
 //! `FOLDBENCH_CACHED_ONLY` stops after the opens with the cache, `FOLDBENCH_STREAM_ONLY` after
 //! the opens without it too (for a heap profile), and `FOLDBENCH_FOLD_ONLY` after the open's
 //! parts.
-//! `FOLDBENCH_PSALMS_ONLY` projects Psalms right after the opens with the cache, the app's
-//! case for memory: the whole Bible open, Psalms in use. `FOLDBENCH_NO_O7` drops each file's
-//! facts as it is read instead of holding them for O7's rules, to measure what holding costs.
+//! `FOLDBENCH_PSALMS_ONLY` projects Psalms right after the opens with the cache and stops: the
+//! whole Bible open, Psalms in use, without the steps `app` adds. `FOLDBENCH_NO_O7` drops each
+//! file's facts as it is read instead of holding them for O7's rules, to measure what holding
+//! costs.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
