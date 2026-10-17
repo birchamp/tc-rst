@@ -14,13 +14,16 @@ use tc_corpus::{Corpus, Spec};
 use tc_journal::consolidate::{consolidate, redundancy};
 use tc_journal::fold::{FoldInput, FoldState, ProjectKind, ValueAt, ValueSource};
 use tc_journal::index::{
-    Facts, FileKey, Fingerprinter, INDEX_VERSION, Index, IndexError, Loaded, Section, fingerprint,
-    load_pack, load_pending,
+    Facts, FileKey, Fingerprinter, INDEX_VERSION, Index, IndexError, Loaded, PROBE, PROBE_PROJECT,
+    Section, fingerprint, load_pack, load_pending, stamp,
 };
 use tc_journal::json::{self, Json};
 use tc_journal::pack::{PackFacts, PackPath, PackSpec, YearMonth, encode_pack, seal};
 use tc_journal::pending::{PendingHeader, PendingStatus, Purpose, encode_pending, read_pending};
-use tc_journal::{Change, ChangeId, PackId, ProjectId, Verified, WallTime, parse_change};
+use tc_journal::record::VerseValue;
+use tc_journal::{
+    Cause, Change, ChangeId, PackId, ProjectId, Record, Verified, WallTime, parse_change,
+};
 
 /// Whether a file of a project folder is a pack or a pending file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -628,42 +631,160 @@ fn the_open_s_rules_read_the_same_ids_from_a_read_and_from_the_cache() {
     }
 }
 
-/// The bytes of the cache of the pinned changes of every kind. Every build of the app reads a
-/// cache of its own `INDEX_VERSION`, so a change to what a prepared change keeps, or to how
-/// the cache writes it, must raise the version: it changes these bytes, and this test fails
-/// until the version is raised and the new digest pinned. The pinned changes hold every value
-/// of every field the summary keeps (`the_pinned_changes_cover_the_summary`).
+/// The changes of the probe (`tc_journal::index::PROBE`): the pinned change of every record
+/// kind and the values [`every_kind`] adds, each change again under the cause `Seed` (or
+/// `Edit`, for a seed), and a verse of every value class, seeded and edited. The fold's
+/// summary tells these classes apart (a seed stub is a `Seed` change on a verse with no
+/// words, `___`, a span's covered verse or an absent one, a header, a chapter front or a
+/// layout, §7.3), so a build that summarizes any class otherwise makes other sections.
+fn probe_changes() -> Vec<Verified> {
+    use support::{Dev, absent, covered, text, text_from, verse};
+    let mut out = every_kind();
+    for line in every_kind() {
+        let Verified::Change(change) = &line else {
+            panic!("{line:?}")
+        };
+        let Json::Obj(mut map) = json::parse(change.raw()).unwrap() else {
+            panic!("a change is an object")
+        };
+        let other = if matches!(change.body().cause, Cause::Seed) {
+            r#"{"edit":{}}"#
+        } else {
+            r#"{"seed":{}}"#
+        };
+        map.insert("cause".into(), json::parse(other.as_bytes()).unwrap());
+        let text = Json::Obj(map).to_canonical_string();
+        let again = parse_change(ChangeId::of(text.as_bytes()), Arc::from(text.as_bytes()));
+        assert!(matches!(again, Verified::Change(_)), "{again:?}");
+        out.push(again);
+    }
+    let mut dev = Dev::new(9);
+    for cause in [Cause::Seed, Cause::Edit] {
+        for (v, value) in [
+            (1, text("", 1)),
+            (2, text("___", 2)),
+            (3, text("___ words", 3)),
+            (4, text("words", 5)),
+            (6, text_from("moved", 6, (2, 3))),
+            (7, covered(4)),
+            (8, absent(None)),
+            (9, absent(Some((3, 1)))),
+        ] {
+            let record = verse(5, v, value);
+            out.push(Verified::Change(dev.with(record, vec![], cause.clone())));
+        }
+    }
+    out
+}
+
+/// The probe as the library holds it, read.
+fn probe() -> Vec<Verified> {
+    let read = read_pending(PROBE, ProjectId::from_bytes(PROBE_PROJECT));
+    assert_eq!(read.status, PendingStatus::Valid);
+    read.entries
+}
+
+/// The probe's bytes are what [`probe_changes`] gives. `TC_WRITE_PROBE=1` writes them; the
+/// stamp then changes, so every cache an earlier build wrote is read again once.
 #[test]
-fn the_encoding_is_pinned() {
-    let changes = every_kind();
-    let mut files = packs_of(&changes);
-    files.push(pending_of(&changes, 3));
-    let sections: Vec<Section> = files
-        .iter()
-        .enumerate()
-        .map(|(n, f)| f.section(project(), n as u32).unwrap())
-        .collect();
-    let bytes = Index::encode(project(), &sections);
-    let digest = PackId::of(&bytes).to_hex();
-    assert_eq!(
-        (INDEX_VERSION, digest.as_str()),
-        (
-            4,
-            "ba6342a04cc6edac1bc8def0be6f28f90b09d06d53e67885766186798e400423"
-        ),
-        "the cache's bytes changed: raise INDEX_VERSION and pin the new digest"
+fn the_probe_is_what_the_generator_gives() {
+    let encoded = encode_pending(
+        &PendingHeader {
+            device: local(3),
+            project: ProjectId::from_bytes(PROBE_PROJECT),
+            purpose: Purpose::Save,
+            reconciles: None,
+        },
+        &probe_changes(),
+    )
+    .unwrap();
+    if std::env::var_os("TC_WRITE_PROBE").is_some() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/index_probe.batch");
+        std::fs::write(path, &encoded.bytes).unwrap();
+        return;
+    }
+    assert!(
+        PROBE == encoded.bytes.as_slice(),
+        "the probe differs from the generator's: run with TC_WRITE_PROBE=1"
     );
 }
 
-/// The changes `the_encoding_is_pinned` caches give every field of the summary a prepared
-/// change keeps every value its type has (each cause, each shape and its parts, seed stubs and
-/// changes that are not, no parent, one and several, times before and after 1970, single
-/// and multi-change batches, every kind of key), so a change to how any of them is kept or
-/// written changes the pinned bytes.
+/// The class of a change that the summary's rules tell apart: its record's kind, whether its
+/// cause is `Seed`, and for a verse its value's class.
+fn class_of(line: &Verified) -> (String, bool, &'static str) {
+    let Verified::Change(change) = line else {
+        panic!("{line:?}")
+    };
+    let body = change.body();
+    let kind: String = format!("{:?}", body.record)
+        .chars()
+        .take_while(|c| c.is_alphanumeric())
+        .collect();
+    let value = match &body.record {
+        Record::Verse { value, .. } => match value {
+            VerseValue::Text { words, .. } if words.is_empty() => "no words",
+            VerseValue::Text { words, .. } if words == "___" => "___",
+            VerseValue::Text { .. } => "words",
+            VerseValue::Covered { .. } => "covered",
+            VerseValue::Absent { .. } => "absent",
+        },
+        _ => "",
+    };
+    (kind, matches!(body.cause, Cause::Seed), value)
+}
+
+/// The probe holds every class the summary tells apart: every record kind seeded and not,
+/// and every verse value class seeded and not. A build whose stub rule drops a class (a
+/// verse with no words, a layout) then makes other sections of the probe.
 #[test]
-fn the_pinned_changes_cover_the_summary() {
-    let changes = every_kind();
-    let file = pending_of(&changes, 3);
+fn the_probe_covers_every_class() {
+    let classes: std::collections::BTreeSet<(String, bool, &str)> =
+        probe().iter().map(class_of).collect();
+    let mut missing = Vec::new();
+    for kind in [
+        "BookPresence",
+        "BookHeader",
+        "ChapterFront",
+        "Verse",
+        "BookLayout",
+        "Alignment",
+        "Check",
+        "Comment",
+        "Pins",
+        "Setting",
+        "ProjectMeta",
+        "Versification",
+        "DeviceProfile",
+        "StoryBase",
+        "Frame",
+        "StoryRef",
+        "CarriedFile",
+        "BatchRelease",
+        "Unknown",
+    ] {
+        let values: &[&str] = if kind == "Verse" {
+            &["no words", "___", "words", "covered", "absent"]
+        } else {
+            &[""]
+        };
+        for seed in [true, false] {
+            for value in values {
+                if !classes.contains(&(kind.to_string(), seed, *value)) {
+                    missing.push((kind, seed, *value));
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "not in the probe: {missing:?}");
+}
+
+/// The probe's changes give every field of the summary a prepared change keeps every value
+/// its type has (each cause, each shape and its parts, seed stubs and changes that are not,
+/// no parent, one and several, times before and after 1970, single and multi-change batches,
+/// every kind of key), so a change to how any of them is kept or written changes its sections.
+#[test]
+fn the_probe_covers_the_summary() {
+    let file = pending_of(&probe(), 3);
     let text = format!("{:?}", file.read(project(), 0));
     let mut missing = Vec::new();
     for needle in [
@@ -733,6 +854,75 @@ fn the_pinned_changes_cover_the_summary() {
         }
     }
     assert!(missing.is_empty(), "not covered: {missing:?}");
+}
+
+/// The build's [`stamp`], and the digest of the index of the probe's changes in a pending
+/// file and in packs. Each encoding a released build wrote is pinned here with its
+/// `INDEX_VERSION`, newest last. A change to what a prepared change keeps of any class the
+/// probe holds, or to how the cache writes it, changes both: raise the version and add a
+/// row, never edit one. Builds are kept apart by the stamp whether or not this is done; the
+/// test makes the change seen.
+#[test]
+fn the_encoding_is_pinned() {
+    const PINNED: &[(u32, u64, &str)] = &[(
+        5,
+        0x45f9_9a8a_0cf9_8153,
+        "c347a50b9c98c4dfd86bee2bdaa44ce6e187b9b26fddfae4e7b295cb162283b5",
+    )];
+    let changes = probe();
+    let mut files = packs_of(&changes);
+    files.push(pending_of(&changes, 3));
+    let sections: Vec<Section> = files
+        .iter()
+        .enumerate()
+        .map(|(n, f)| f.section(project(), n as u32).unwrap())
+        .collect();
+    let bytes = Index::encode(project(), &sections);
+    let current = (stamp(), PackId::of(&bytes).to_hex());
+    assert!(
+        PINNED.windows(2).all(|pair| pair[0].0 < pair[1].0),
+        "versions only grow"
+    );
+    let (newest, ..) = *PINNED.last().unwrap();
+    assert_eq!(newest, INDEX_VERSION, "pin the encoding of INDEX_VERSION");
+    for (version, stamp, digest) in PINNED {
+        if (*stamp, *digest) == (current.0, current.1.as_str()) {
+            assert_eq!(
+                *version, INDEX_VERSION,
+                "this encoding was pinned for version {version}"
+            );
+        }
+    }
+    let (_, stamp, digest) = *PINNED.last().unwrap();
+    assert_eq!(
+        (stamp, digest),
+        (current.0, current.1.as_str()),
+        "the cache's bytes changed: raise INDEX_VERSION to {} and pin ({:#x}, {:?}) in a new row",
+        INDEX_VERSION + 1,
+        current.0,
+        current.1
+    );
+}
+
+/// The stamp is what this build makes of the probe: every index it writes carries it, and an
+/// index with another stamp, as a build that summarizes the probe otherwise writes, is not
+/// read.
+#[test]
+fn an_index_of_a_build_that_summarizes_otherwise_is_not_read() {
+    let file = pending_of(&every_kind(), 3);
+    let section = file.section(project(), 0).unwrap();
+    let bytes = Index::encode(project(), [&section]);
+    assert_eq!(bytes[14..22], stamp().to_le_bytes());
+    assert!(Index::parse(bytes.clone(), project()).is_ok());
+    for bit in 0..64 {
+        let mut other = bytes.clone();
+        other[14 + bit / 8] ^= 1 << (bit % 8);
+        assert_eq!(
+            Index::parse(other, project()).err(),
+            Some(IndexError::Stamp),
+            "bit {bit}"
+        );
+    }
 }
 
 #[test]

@@ -15,8 +15,9 @@
 //! 64-bit [`fingerprint`] of its whole content equal the section's [`FileKey`]. The open
 //! takes the fingerprint of the bytes it reads at that open; it trusts no time, name or inode.
 //! The index as a whole is read when its encoding version ([`INDEX_VERSION`]), the format
-//! minor and the project are this app's and this project's, by any build of the app: an update
-//! that does not change the encoding keeps the cache.
+//! minor, its [`stamp`] and the project are this app's and this project's, by any build of the
+//! app: an update that changes neither the encoding nor what the cache keeps of a change keeps
+//! the cache.
 //!
 //! Against accidental damage that is enough. The size catches every truncation, extension,
 //! insertion and deletion. The fingerprint catches every change within one aligned 8-byte
@@ -34,11 +35,19 @@
 //! It does not protect against a file made on purpose to have a cached file's path, size and
 //! fingerprint (the fingerprint is not a cryptographic hash; a collision is easy to compute),
 //! or against an index written on purpose. Whoever can write the project folder can write
-//! valid changes as well, and the format's hashes detect damage, not forgery (§18 item 3). Nor
-//! does it protect against a build whose [`FoldInput::prepare_at`] or per-change rules give
-//! other results for the same bytes without raising [`INDEX_VERSION`]: such a build would keep
-//! an older build's results until the file changes. The test `the_encoding_is_pinned` fails
-//! when any field the summary keeps changes for any kind of change.
+//! valid changes as well, and the format's hashes detect damage, not forgery (§18 item 3).
+//!
+//! A cache is only as good as the build that reads it agreeing with the build that wrote it
+//! on what the same bytes give. So the index is stamped with [`stamp`]: the fingerprint of the
+//! sections this build makes of the probe, a pending file and a pack of changes of every
+//! record kind under every cause, every verse value class seeded and edited, and every value
+//! of every field the summary keeps (`index_probe.batch`; the test
+//! `the_probe_covers_every_class` names the classes). A build whose [`FoldInput::prepare_at`],
+//! section encoding or per-change rules give other results for any of those changes has
+//! another stamp and never reads an older build's cache, whether or not anyone raised
+//! [`INDEX_VERSION`]. What the stamp cannot see is a change of behaviour on bytes the probe
+//! does not hold (a rule made stricter for some rare value): such a change must raise
+//! [`INDEX_VERSION`], or add a change to the probe that shows it.
 //!
 //! The remaining risk is acceptable. When a damaged file collides, the open takes the changes
 //! the file held when they were verified, so nothing is lost or altered in the fold; what is
@@ -50,7 +59,7 @@
 //! No I/O: `tc-store` reads the file, and writes it with `atomic_write`.
 //!
 //! ```text
-//! index   := "tc-index" | version u32 | minor u16 | project [16]
+//! index   := "tc-index" | version u32 | minor u16 | stamp u64 | project [16]
 //!            | count var | count × (len var | section of len bytes)
 //! section := fingerprint u64 of the rest | path str | size var | file fingerprint u64
 //!            | 0 | pending header, or 1 | the pack's id [32] | pack header
@@ -86,15 +95,65 @@ use crate::pending::{PendingFacts, PendingHeader, PendingStatus, Purpose, Reconc
 use crate::record::{ChapterVerse, CommentTarget, PresentHow, ResourceRef};
 use smallvec::SmallVec;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tc_core::BookId;
 
 /// The version of this encoding and of the summaries it holds. Every build of the app reads
-/// an index of its own version and format minor, so raise it whenever how a section is
-/// written here, what [`FoldInput::prepare_at`] keeps of a change, or what the per-change
-/// rules decide for any bytes changes, a bug fix included. The test `the_encoding_is_pinned`
-/// fails until it is raised for the first two.
-pub const INDEX_VERSION: u32 = 4;
+/// an index of its own version, format minor and [`stamp`]. Raise it whenever how the index or
+/// a section is laid out changes, or when what [`FoldInput::prepare_at`] keeps of a change or
+/// what the per-change rules decide changes for bytes the probe does not hold, a bug fix
+/// included. The test `the_encoding_is_pinned` also asks for a raise whenever the probe's
+/// sections change, so that every change of the encoding is seen in review.
+pub const INDEX_VERSION: u32 = 5;
+
+/// The probe (see the module documentation): a pending file of project [`PROBE_PROJECT`].
+/// Its bytes are fixed; the test `the_probe_is_what_the_generator_gives` writes them.
+pub const PROBE: &[u8] = include_bytes!("index_probe.batch");
+
+/// The project the probe's pending file names.
+pub const PROBE_PROJECT: [u8; 16] = [
+    0x6f, 0x1c, 0x0e, 0x9a, 0x2b, 0x7d, 0x4c, 0x3e, 0x8a, 0x5f, 0x0b, 0x1d, 0x2c, 0x3e, 0x4f, 0x50,
+];
+
+/// What this build makes of the probe: the fingerprint of the sections of the probe's pending
+/// file and of a pack sealed from its changes. Two builds with the same stamp make the same
+/// sections of every change of the probe. Computed once a process, in about a millisecond.
+pub fn stamp() -> u64 {
+    static STAMP: OnceLock<u64> = OnceLock::new();
+    *STAMP.get_or_init(probe_stamp)
+}
+
+fn probe_stamp() -> u64 {
+    let project = ProjectId::from_bytes(PROBE_PROJECT);
+    let pending = load_pending(".tc/pending/probe.batch", PROBE, project, 0);
+    let mut all = Fingerprinter::new();
+    let lines: Vec<Verified> = crate::pending::read_pending(PROBE, project).entries;
+    // The probe's changes, sealed by a device and at a time of its own.
+    let spec = crate::pack::PackSpec {
+        project,
+        sealer: DeviceId::local([0x70; 15]),
+        sealed: WallTime(1_760_000_000_000),
+    };
+    let packs = crate::pack::seal(&spec, &lines)
+        .map(|sealed| sealed.packs)
+        .unwrap_or_default();
+    let sections =
+        std::iter::once(pending.section).chain(packs.iter().enumerate().map(|(n, pack)| {
+            load_pack(&pack.path.to_string(), &pack.bytes, project, n as u32 + 1).section
+        }));
+    for section in sections {
+        // A probe file the cache cannot stand for (a probe change this build quarantines)
+        // still gives a stamp of its own.
+        match section {
+            Some(section) => {
+                all.update(&[1]);
+                all.update(section.body());
+            }
+            None => all.update(&[0]),
+        }
+    }
+    all.finish()
+}
 
 const MAGIC: &[u8; 8] = b"tc-index";
 
@@ -112,6 +171,8 @@ pub enum IndexError {
     Minor(u16),
     #[error("the index is of another project")]
     Project,
+    #[error("the index was written by a build that summarizes changes otherwise")]
+    Stamp,
     #[error("the index ends early or holds a value out of range")]
     Damaged,
     #[error("a section's fingerprint does not match its bytes")]
@@ -535,6 +596,7 @@ impl Index {
         out.bytes(MAGIC);
         out.bytes(&INDEX_VERSION.to_le_bytes());
         out.bytes(&FORMAT_MINOR.to_le_bytes());
+        out.bytes(&stamp().to_le_bytes());
         out.bytes(project.as_bytes());
         out.var(sections.len() as u64);
         for section in sections {
@@ -545,8 +607,8 @@ impl Index {
         out.0
     }
 
-    /// Reads an index of project `project`, written by any build of this [`INDEX_VERSION`]
-    /// and format minor. The sections' fingerprints are checked when they are loaded
+    /// Reads an index of project `project`, written by any build of this [`INDEX_VERSION`],
+    /// format minor and [`stamp`]. The sections' fingerprints are checked when they are loaded
     /// ([`Section::load`]), on the open's reading threads.
     pub fn parse(bytes: impl Into<Arc<[u8]>>, project: ProjectId) -> R<Self> {
         let bytes: Arc<[u8]> = bytes.into();
@@ -561,6 +623,9 @@ impl Index {
         let minor = u16::from_le_bytes(input.array()?);
         if minor != FORMAT_MINOR {
             return Err(IndexError::Minor(minor));
+        }
+        if u64::from_le_bytes(input.array()?) != stamp() {
+            return Err(IndexError::Stamp);
         }
         if ProjectId::from_bytes(input.array()?) != project {
             return Err(IndexError::Project);

@@ -1056,12 +1056,13 @@ None of these files is project data that another device needs. Each is written w
 | `external/<utc>-<escaped path>` | byte copies of files changed outside the app, and files moved out of `ingredients/` | kept until the person dismisses the notice |
 | `sync.json` | `{remoteUrl, branch, confirmed: {commit, at}}` | last confirmed Door43 state; rebuilds `.git` config after git damage (§6.4 G4) |
 | `drafts.json` | `[{shown, field, text, at}]` | unsaved editor text, written at most every second while text is unsaved (§5.14) |
-| `index.bin` | the fold cache (`tc_journal::index`): for each valid pack and pending file an open read in full, a section keyed by the file's path, size and 64-bit fingerprint, holding the file's header and the prepared changes the fold takes from it (each change's id, where its JSON lies in the file, the fingerprint of those bytes and its summary), so the facts O7's rules read of the file (its header, status and change ids) come from the section as from a read; stamped with the cache version (`INDEX_VERSION`), the format minor and the project | a cold open takes each unchanged file's changes from it instead of verifying and parsing the file again (§6.1 O8, §14). It never decides what exists: a missing or damaged cache, one of another version, minor or project, or a file it holds no section for, only means that file is read |
+| `index.bin` | the fold cache (`tc_journal::index`): for each valid pack and pending file an open read in full, a section keyed by the file's path, size and 64-bit fingerprint, holding the file's header and the prepared changes the fold takes from it (each change's id, where its JSON lies in the file, the fingerprint of those bytes and its summary), so the facts O7's rules read of the file (its header, status and change ids) come from the section as from a read; stamped with the cache version (`INDEX_VERSION`), the format minor, the build's probe stamp (below) and the project | a cold open takes each unchanged file's changes from it instead of verifying and parsing the file again (§6.1 O8, §14). It never decides what exists: a missing or damaged cache, one of another version, minor, stamp or project, or a file it holds no section for, only means that file is read |
 
 **What the fold cache trusts.** A section stands for a file when the file's path, its size and
 the 64-bit fingerprint (§2.6) of its whole content, taken from the bytes the open reads at that
 open, equal the section's key: no time, name or inode. Any build of the app reads a cache of its
-own `INDEX_VERSION` and format minor, so an update that changes neither keeps the cache. Against
+own `INDEX_VERSION`, format minor and probe stamp, so an update that changes none of them keeps
+the cache. Against
 accidental damage that is enough: the size catches every truncation, extension, insertion and
 deletion; the fingerprint catches every change within one aligned 8-byte word (each of its steps
 is one to one) and any other accidental change except with a chance of about 2⁻⁶⁴ for each
@@ -1070,10 +1071,18 @@ restored older copy). Each section carries a fingerprint of its own bytes, so a 
 loses sections and never gives other changes; and only a file whose every line verified and
 parsed has a section, so a damaged, newer or foreign file, or one with a quarantined line, is
 read and reported at every open. The cache does not protect against a file made on purpose to
-match a section's key (the fingerprint is not a cryptographic hash), a cache written on purpose,
-or a build whose summaries or per-change rules differ for the same bytes without a new
-`INDEX_VERSION` (the test `the_encoding_is_pinned` covers every field of the summary). The
-remaining risk is acceptable: a file whose damage collides still gives the changes it held when
+match a section's key (the fingerprint is not a cryptographic hash) or a cache written on
+purpose. **The probe stamp** keeps builds that summarize changes differently apart without
+anyone having to remember a version raise: the cache is stamped with the fingerprint of the
+sections the writing build makes of a fixed probe (`tc-journal/src/index_probe.batch`: every
+record kind seeded and not, every verse value class seeded and not, every value of every field
+the summary keeps; `the_probe_covers_every_class`), computed once a process in about a
+millisecond, and a build whose stamp differs does not read it. So a build that changes
+`FoldInput::prepare_at`, the section encoding or a per-change rule in a way any probe change
+shows never takes an older build's summaries; `the_encoding_is_pinned` also pins the stamp,
+so the change is seen in review and `INDEX_VERSION` raised. A change of behaviour on bytes the
+probe does not hold (a rule made stricter for a rare value) is not seen by the stamp: it must
+raise `INDEX_VERSION` or add a probe change that shows it. The remaining risk is acceptable: a file whose damage collides still gives the changes it held when
 they were verified, so nothing is lost or altered in the fold; what is missed is the notice that
 the file is damaged, and a value read from the damaged part fails its own fingerprint and is
 listed as unreadable (§2.6). Trusting size and modification time instead would spare reading
@@ -1802,8 +1811,8 @@ O7  Finish interrupted work:
     status and change ids; a pending file's header, status and change ids), which O8's read of
     the file gives, from its bytes or from its cache section alike, so no file is read twice.
 O8  Load: read the fold cache `.tc/index.bin` (§3.6; missing, damaged, of another project,
-    or of another cache version or format minor: no cache; any build of the app reads a cache
-    of its own version and minor). Read every pack and pending file in parallel (rayon)
+    or of another cache version, format minor or probe stamp: no cache; any build of the app
+    reads a cache of its own version, minor and stamp). Read every pack and pending file in parallel (rayon)
     and take its fingerprint. A file whose path, size and fingerprint equal a cache section's
     takes that section's prepared changes: those bytes passed P1 to P4 at that path when the
     section was made and give the same changes again, so they are not hashed, verified or
@@ -3190,7 +3199,7 @@ paths break the grammar or have a dot segment are foreign entries (§9.4), kept 
 | Pack | header `tcpack` | the pack framing changes (never so far) |
 | Exchange file | zip comment `tc-exchange <n>` | the comment changes |
 | tC4-shaped sidecars | their `schemaVersion` (1, and 2 for `resources.json`) | their shape changes |
-| Fold cache (`.tc/index.bin`, local) | `INDEX_VERSION` and the format minor; any other value makes it no cache. Not the app build: every build of one version and minor reads the cache, so an update keeps it | its encoding, what the fold keeps of a change, or what the per-change rules decide for any bytes changes, a bug fix included (the test `the_encoding_is_pinned` fails until `INDEX_VERSION` is raised for the first two) |
+| Fold cache (`.tc/index.bin`, local) | `INDEX_VERSION`, the format minor and the probe stamp (§3.6); any other value makes it no cache. Not the app build: every build of one version, minor and stamp reads the cache, so an update that changes none of them keeps it | its layout, or what the fold keeps of a change or what the per-change rules decide for bytes the probe does not hold, a bug fix included; a change the probe shows changes the stamp by itself, and the test `the_encoding_is_pinned` fails until `INDEX_VERSION` is raised and the new stamp pinned |
 
 ```json
 {"format":"tc-project","major":1,"minor":0,"minReaderMinor":0,
@@ -3804,6 +3813,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the fold cache's key (take a section by path alone, or by path and size) | `a_section_stands_only_for_the_bytes_it_was_made_from`, `an_open_from_the_cache_is_the_open_from_the_files`, `a_changed_byte_anywhere_opens_as_without_the_cache`, `a_file_replaced_by_one_of_the_same_size_opens_as_without_the_cache` |
 | the fold cache's validity (cache a damaged, foreign or newer file, or one with a quarantined line) | `a_file_the_cache_cannot_stand_for_has_no_section`, `a_changed_byte_anywhere_opens_as_without_the_cache` |
 | the fold cache's section fingerprint | `a_damaged_index_never_gives_other_changes` |
+| the fold cache's probe stamp (read a cache whatever summaries its build made) | `an_index_of_a_build_that_summarizes_otherwise_is_not_read`, `the_encoding_is_pinned` (a stub rule that drops a class: `the_probe_covers_every_class`) |
 | the change ids in a loaded file's facts (move the changes out of what the redundancy rule and O7 read) | `the_open_s_rules_read_the_same_ids_from_a_read_and_from_the_cache` |
 
 ---
