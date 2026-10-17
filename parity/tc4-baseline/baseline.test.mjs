@@ -1,6 +1,6 @@
-// Checks that the committed baseline agrees with itself: the screenshots, manifest.json, the
-// README and the owner's rulings in docs/PLAN.md. It needs no browser, no tC4 checkout and no
-// network, so CI runs it on every push:
+// Checks that the committed baseline agrees with itself: the screenshots, the DOM snapshots,
+// manifest.json, the README and the owner's rulings in docs/PLAN.md. It needs no browser, no
+// tC4 checkout and no network, so CI runs it on every push:
 //
 //   node --test parity/tc4-baseline/baseline.test.mjs
 import assert from 'node:assert/strict';
@@ -45,15 +45,33 @@ function pngSize(bytes) {
 
 const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 
+/** What is wrong with a DOM snapshot (capture.mjs, parity/app/observe.mjs `domSnapshot`). */
+function domProblems(name, dom) {
+  const problems = [];
+  if (dom.screen !== name) problems.push(`${name}: the DOM file is of screen ${dom.screen}`);
+  if (!/^<html .*\blang="[^"]+"/.test(dom.html ?? '')) problems.push(`${name}: the DOM file has no <html lang>`);
+  if (!Array.isArray(dom.outside) || dom.outside.length) problems.push(`${name}: the app draws outside #root: ${JSON.stringify(dom.outside)}`);
+  if (!Array.isArray(dom.root) || !/^<div [^>]*id="root"/.test(dom.root[0] ?? '')) problems.push(`${name}: the DOM file does not start at #root`);
+  const used = new Set((dom.root ?? []).flatMap((line) => [...line.matchAll(/ style=@([0-9a-f]{12})[ >]/g)].map((m) => m[1])));
+  const keys = Object.keys(dom.styles ?? {});
+  for (const key of used) if (!keys.includes(key)) problems.push(`${name}: style @${key} is not in the style table`);
+  for (const key of keys) {
+    if (!used.has(key)) problems.push(`${name}: style @${key} is in the table but no element has it`);
+    else if (sha256(dom.styles[key]).slice(0, 12) !== key) problems.push(`${name}: style @${key} is not the sha256 of its text`);
+  }
+  return problems;
+}
+
 /**
- * What is wrong with the screenshots under `dir` against `manifest`: each PNG must be listed,
- * at its window size, with its byte count and its sha256. Answers one line per problem.
+ * What is wrong with the screenshots and DOM snapshots under `dir` against `manifest`: each
+ * PNG must be listed, at its window size, with its byte count and its sha256, and each DOM
+ * snapshot must be listed with its sha256 and be whole. Answers one line per problem.
  */
 function baselineProblems(manifest, dir) {
   const problems = [];
   const listed = (ext) => manifest.screens.map((s) => `${s.name}.${ext}`).sort();
   const found = (sub, ext) => fs.readdirSync(path.join(dir, sub)).filter((f) => f.endsWith(`.${ext}`)).sort();
-  for (const [sub, ext] of [['screens', 'png']]) {
+  for (const [sub, ext] of [['screens', 'png'], ['dom', 'json']]) {
     const want = listed(ext);
     const have = found(sub, ext);
     for (const f of want) if (!have.includes(f)) problems.push(`${sub}/${f} is missing`);
@@ -71,6 +89,19 @@ function baselineProblems(manifest, dir) {
       if (bytes.length !== s.bytes) problems.push(`${s.name}.png has ${bytes.length} bytes, the manifest says ${s.bytes}`);
       if (sha256(bytes) !== s.sha256) problems.push(`${s.name}.png has sha256 ${sha256(bytes)}, the manifest says ${s.sha256}`);
     }
+    if (s.dom !== `dom/${s.name}.json`) problems.push(`${s.name}: the manifest names the DOM snapshot ${s.dom}`);
+    const domFile = path.join(dir, `dom/${s.name}.json`);
+    if (fs.existsSync(domFile)) {
+      const bytes = fs.readFileSync(domFile);
+      if (sha256(bytes) !== s.domSha256) problems.push(`dom/${s.name}.json has sha256 ${sha256(bytes)}, the manifest says ${s.domSha256}`);
+      let dom = null;
+      try {
+        dom = JSON.parse(bytes.toString('utf8'));
+      } catch (e) {
+        problems.push(`dom/${s.name}.json is not JSON: ${e.message}`);
+      }
+      if (dom) problems.push(...domProblems(s.name, dom));
+    }
   }
   const t = manifest.totals;
   const count = (status) => manifest.screens.filter((s) => s.status === status).length;
@@ -82,14 +113,14 @@ function baselineProblems(manifest, dir) {
   return problems;
 }
 
-test('every PNG is in the manifest, with its window size, byte count and sha256', () => {
+test('every PNG and DOM snapshot is in the manifest, with its window size, byte count and sha256', () => {
   assert.deepEqual(baselineProblems(manifest, HERE), []);
 });
 
-test('the check fails on a PNG that differs from the manifest by one byte', () => {
+test('the check fails on a PNG or a DOM snapshot that differs from the manifest by one byte', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tc4-baseline-check-'));
   try {
-    for (const sub of ['screens']) fs.cpSync(path.join(HERE, sub), path.join(dir, sub), { recursive: true });
+    for (const sub of ['screens', 'dom']) fs.cpSync(path.join(HERE, sub), path.join(dir, sub), { recursive: true });
     assert.deepEqual(baselineProblems(manifest, dir), [], 'the copy passes before it is changed');
     // The last byte of a PNG is the CRC of its IEND chunk: the file keeps its size and its
     // IHDR, so only the hash can tell.
@@ -97,9 +128,13 @@ test('the check fails on a PNG that differs from the manifest by one byte', () =
     const bytes = fs.readFileSync(png);
     bytes[bytes.length - 1] ^= 0xff;
     fs.writeFileSync(png, bytes);
+    const domFile = path.join(dir, 'dom', 'home.json');
+    fs.writeFileSync(domFile, fs.readFileSync(domFile, 'utf8').replace('"screen": "home"', '"screen": "homf"'));
     const problems = baselineProblems(manifest, dir);
     const expected = [
       /^about\.png has sha256 [0-9a-f]{64}, the manifest says [0-9a-f]{64}$/,
+      /^dom\/home\.json has sha256 [0-9a-f]{64}, the manifest says [0-9a-f]{64}$/,
+      /^home: the DOM file is of screen homf$/,
     ];
     assert.equal(problems.length, expected.length, problems.join('\n'));
     for (const re of expected) assert.ok(problems.some((p) => re.test(p)), `no problem matches ${re}: ${problems.join(' | ')}`);

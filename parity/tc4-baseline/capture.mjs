@@ -11,10 +11,10 @@
 //    (fixtures/build-state.mjs) and starts the mock server (mock-server/server.mjs), which
 //    serves both the Pankosmia API and the built client.
 // 3. Drives Chromium at 1280x800 through each screen of parity/app/screens.mjs and writes
-//    screens/<name>.png.
+//    screens/<name>.png and dom/<name>.json, the DOM at the shot.
 // 4. Writes manifest.json: every screenshot with its scenario, the app view it shows, the
 //    steps that reach it, whether it is complete, the server reads that came back absent, and
-//    the sha256 of its PNG.
+//    the sha256 of its PNG and of its DOM file.
 //
 // Every screen starts from a reload of Home with the per-client place records cleared, so a
 // screen never depends on where an earlier screen left the app. The screens, the driver and
@@ -33,6 +33,7 @@ import { ABSENT, SCENARIOS } from './fixtures/build-state.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SCREENS = path.join(HERE, 'screens');
+const DOM = path.join(HERE, 'dom');
 
 const argValue = (name) => {
   const at = process.argv.indexOf(name);
@@ -57,9 +58,11 @@ async function captureScenario(browser, scenario, screens, missingPinCount) {
     pageErrors.length = 0;
     process.stdout.write(`  ${screen.name} ... `);
     const file = path.join(SCREENS, `${screen.name}.png`);
-    const { error, homeCards, syncToast } = await captureScreen({ page, app, screen, inFlight, file });
+    const { error, homeCards, syncToast, dom } = await captureScreen({ page, app, screen, inFlight, file });
     // tC4 4.0 syncs Bible projects only, so every sync result is the Bible sample's.
     if (syncToast?.ok) syncToast.missingVersions = missingVersionsOf(missingPinCount, env.state, BIBLE);
+    const domFile = path.join(DOM, `${screen.name}.json`);
+    fs.writeFileSync(domFile, `${JSON.stringify({ screen: screen.name, ...dom }, null, 2)}\n`);
     console.log(error ? `FAILED: ${error}` : 'ok');
     results.push({
       name: screen.name,
@@ -82,6 +85,8 @@ async function captureScenario(browser, scenario, screens, missingPinCount) {
       absentReads: env.absentReads(mark),
       bytes: fs.statSync(file).size,
       sha256: sha256(fs.readFileSync(file)),
+      dom: `dom/${screen.name}.json`,
+      domSha256: sha256(fs.readFileSync(domFile)),
     });
   }
   await context.close();
@@ -98,6 +103,7 @@ async function main() {
   if (process.argv.includes('--build-only')) return;
   const missingPinCount = await tc4MissingPinCount();
   fs.mkdirSync(SCREENS, { recursive: true });
+  fs.mkdirSync(DOM, { recursive: true });
   const selected = SCREEN_LIST.filter((s) => !only || only.includes(s.name));
   const browser = await chromium.launch({ args: CHROMIUM_ARGS });
   const screens = [];
@@ -113,12 +119,17 @@ async function main() {
   const browserVersion = browser.version();
   await browser.close();
 
-  // A partial run (--only) updates its screens inside the existing manifest.
+  // A partial run (--only) updates its screens inside the existing manifest. A full run
+  // deletes the DOM files of screens that are no longer in the list.
   const manifestFile = path.join(HERE, 'manifest.json');
   const previous = only && fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile, 'utf8')).screens : [];
   const byName = new Map(previous.map((s) => [s.name, s]));
   for (const s of screens) byName.set(s.name, s);
   const ordered = SCREEN_LIST.map((s) => byName.get(s.name)).filter(Boolean);
+  if (!only) {
+    const kept = new Set(ordered.map((s) => `${s.name}.json`));
+    for (const f of fs.readdirSync(DOM)) if (!kept.has(f)) fs.rmSync(path.join(DOM, f));
+  }
   const stateDir = Object.keys(SCENARIOS).map((name) => path.join(HERE, '.state', name)).find((dir) => fs.existsSync(dir));
   const provenance = JSON.parse(fs.readFileSync(path.join(stateDir, 'provenance.json'), 'utf8'));
   const manifest = {

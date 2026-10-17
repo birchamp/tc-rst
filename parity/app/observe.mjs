@@ -1,6 +1,6 @@
 // How a screen is photographed and read, the same way for every app the driver runs: the
-// browser and its context, the wait for a quiet app, the screenshot, and what the DOM shows at
-// the shot (`observe`, for the manifest).
+// browser and its context, the wait for a quiet app, the screenshot, what the DOM shows at the
+// shot (`observe`, for the manifest) and the DOM itself (`domSnapshot`, rooted at #root).
 // No npm import: the entry that runs these brings Playwright.
 
 /** Rendering flags that keep repeated runs pixel-identical: without them a few rounded
@@ -74,8 +74,9 @@ export async function settle(page, inFlight, { quietMs = 800, deadlineMs = 30_00
 /**
  * Drives one screen and photographs it into `file`: the window size, the screen's steps, a
  * quiet app, the pointer at rest, a viewport screenshot with animations disabled. Then reads
- * what the DOM shows (`observe`). A step that fails, or a view error on screen, is the
- * screen's `error`; the shot is still taken, so the failure can be seen.
+ * what the DOM shows (`observe`) and the DOM itself (`domSnapshot`). A step that fails, or a
+ * view error on screen, is the screen's `error`; the shot is still taken, so the failure can
+ * be seen.
  */
 export async function captureScreen({ page, app, screen, inFlight, file }) {
   const size = screen.viewport ?? VIEWPORT;
@@ -93,7 +94,8 @@ export async function captureScreen({ page, app, screen, inFlight, file }) {
   await page.waitForTimeout(150);
   await page.screenshot({ path: file, animations: 'disabled' });
   const { homeCards, syncToast } = await observe(page);
-  return { error, homeCards, syncToast };
+  const dom = await page.evaluate(domSnapshot);
+  return { error, homeCards, syncToast, dom };
 }
 
 /**
@@ -156,3 +158,76 @@ export function observe(page) {
   });
 }
 
+/**
+ * Runs in the page: the app's DOM at the shot, in the line format of
+ * parity/ds-gallery/protocol.mjs `domSnapshot`, rooted at #root. `html` is the document
+ * element with its attributes (`lang` and `dir` live there); `root` is #root's subtree, one
+ * line per element or text run, with the sorted attributes, the inline style, input values and
+ * checked states, and the focused element; `outside` lists the elements of <body> other than
+ * #root and scripts, which an app that keeps its layers inside #root never has.
+ *
+ * An inline style is every longhand as the browser parsed it, sorted by name. Most of a
+ * screen's bytes are styles that many elements share, so a line names its style by the first
+ * 12 hex digits of the style's sha256 (`style=@…`) and `styles` holds each style once. Two
+ * lines are equal exactly when their elements are, styles included.
+ *
+ * Values are recorded as they are: generated ids, hashed asset names and project test ids are
+ * normalized by the comparison, not here.
+ */
+export async function domSnapshot() {
+  const attrsOf = (n) => Array.from(n.attributes)
+    .filter((a) => a.name !== 'style')
+    .map((a) => `${a.name}=${JSON.stringify(a.value)}`)
+    .sort();
+  // The walk is synchronous, so the app cannot change the DOM halfway through it; each line
+  // holds its style as text until the walk is done and the styles are keyed.
+  const lines = [];
+  const walk = (n, depth) => {
+    const pad = '  '.repeat(depth);
+    // Longhands sorted by name. React writes a shorthand's longhand in place where a parsed
+    // style attribute appends it, which reorders cssText without changing any value.
+    const decls = n.style ? Array.from(n.style, (p) => `${p}: ${n.style.getPropertyValue(p)}`).sort() : [];
+    const props = [];
+    if (n instanceof HTMLInputElement || n instanceof HTMLTextAreaElement || n instanceof HTMLSelectElement) {
+      props.push(`.value=${JSON.stringify(n.value)}`);
+      if (n.type === 'checkbox' || n.type === 'radio') props.push(`.checked=${n.checked}`, `.indeterminate=${n.indeterminate}`);
+    }
+    if (document.activeElement === n) props.push('.focused');
+    lines.push([`${pad}<${n.tagName.toLowerCase()} ${attrsOf(n).join(' ')}`, decls.join('; '), `${props.length ? ' ' + props.join(' ') : ''}>`]);
+    // Adjacent text nodes render as one run; compare their joined text. Comments take no
+    // part in layout.
+    let text = '';
+    const flush = () => {
+      if (text) lines.push([`${pad}  "${text}"`]);
+      text = '';
+    };
+    for (const c of n.childNodes) {
+      if (c.nodeType === Node.TEXT_NODE) text += c.data;
+      else if (c.nodeType === Node.ELEMENT_NODE) {
+        flush();
+        walk(c, depth + 1);
+      }
+    }
+    flush();
+  };
+  const root = document.getElementById('root');
+  walk(root, 0);
+  const html = `<html ${attrsOf(document.documentElement).join(' ')}>`;
+  const outside = Array.from(document.body.children)
+    .filter((el) => el !== root && el.tagName !== 'SCRIPT')
+    .map((el) => `<${el.tagName.toLowerCase()} ${attrsOf(el).join(' ')}>`);
+  const keys = new Map();
+  for (const [, style] of lines) {
+    if (!style || keys.has(style)) continue;
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(style)));
+    keys.set(style, Array.from(digest.slice(0, 6), (b) => b.toString(16).padStart(2, '0')).join(''));
+  }
+  const styles = [...keys].map(([style, key]) => [key, style]).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  if (new Set(styles.map(([key]) => key)).size !== styles.length) throw new Error('two styles share a key');
+  return {
+    html,
+    outside,
+    root: lines.map(([head, style, tail]) => (tail === undefined ? head : `${head}${style ? ` style=@${keys.get(style)}` : ''}${tail}`)),
+    styles: Object.fromEntries(styles),
+  };
+}

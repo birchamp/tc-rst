@@ -4,8 +4,8 @@ Reproducible screenshots of translationCore 4 (tC4), the React client that the R
 look like. tC4 normally runs against a Pankosmia server on `127.0.0.1:19998`. That server is not
 available here, so this directory holds a Node mock of the Pankosmia HTTP API, backed by
 fixtures on disk. A Playwright script drives the real tC4 client against the mock and writes one
-PNG per screen. The screens, the steps that reach them and the way each is photographed live in
-`parity/app`, which the Rust app's capture shares (see "The harness").
+PNG and one DOM snapshot per screen. The screens, the steps that reach them and the way each is
+photographed live in `parity/app`, which the Rust app's capture shares (see "The harness").
 
 - tC4 source: commit **`d310bf304cfee784f4ca45dee474a3faf0d5616e`** (2026-10-16, `main`,
   `package.json` version `4.0.0-rc.1`, clean tree), built from a separate clone of
@@ -23,6 +23,7 @@ PNG per screen. The screens, the steps that reach them and the way each is photo
   complete and 13 are incomplete. `manifest.json` lists each screenshot with the steps that
   reach it and its sha256. The 42 screens of the first baseline were captured again; 20 screens
   were added for `d310bf3` ("Screens added for d310bf3").
+- DOM snapshots: one per screen, in `dom/`, taken at the shot ("DOM snapshots").
 - Browser: Chromium 141.0.7390.37, headless, through Playwright 1.56.1. This Playwright version
   matches the Chromium build 1194 in `/opt/pw-browsers`.
 - Two consecutive full runs at `d310bf3` gave byte-identical PNGs, first for the 42 screens,
@@ -53,8 +54,8 @@ npm run capture      # build the client if needed, rebuild the state, capture ev
    `fixtures/vendor/` (`fixtures/build-state.mjs`).
 3. It starts the mock server (`mock-server/server.mjs`) on port 19998. The mock serves the API at
    `/api/...` and the built client at `/clients/uw-tc4/`.
-4. It drives each screen of `parity/app/screens.mjs`, writes `screens/<name>.png`, and writes
-   `manifest.json` with the sha256 of each PNG.
+4. It drives each screen of `parity/app/screens.mjs`, writes `screens/<name>.png` and
+   `dom/<name>.json`, and writes `manifest.json` with the sha256 of each.
 
 A full run took about 90 seconds after the first build at `d494a9d`. At `d310bf3`, with 62
 screens on 4 CPUs shared with other work, it took 3 to 5 minutes.
@@ -75,9 +76,10 @@ npm run check        # or, from the repository root: node --test parity/tc4-base
 ```
 
 The check needs no browser, no tC4 checkout and no network, and CI runs it. It fails when a
-screenshot is not in `manifest.json`, or differs from it in size, byte count or sha256, so a
-PNG changed by a single byte fails it; a test changes one byte of a copy to prove it. It fails
-when a cell of this README's screen
+screenshot or DOM snapshot is not in `manifest.json`, or differs from it in size, byte count or
+sha256, so a PNG changed by a single byte fails it; a test changes one byte of a copy to prove
+it. It fails when a DOM snapshot is not whole: another screen's, no `<html lang>`, an element
+outside `#root`, or a style that its table lacks. It fails when a cell of this README's screen
 table or a total differs from the manifest, or when the README does not record the tC4 commit.
 It fails when a tool's marking row lacks a screen in English or Arabic at 1280 or 620 px.
 
@@ -138,9 +140,10 @@ out byte for byte the same. The capture itself needs no network except the help-
 | `fixtures/build-state.mjs` | Builds a state directory, in the Pankosmia working-directory layout, from tC4's fixtures and `fixtures/vendor/`. |
 | `fixtures/vendor/` | Resource files that tC4 does not vendor, cut from published copies by `make-vendor.mjs`. `README.md` and `SOURCES.json` there give the source of each file and the licence. |
 | `capture.mjs` | The Playwright capture of tC4: the entry over `parity/app/env-tc4.mjs` (see "The harness"). |
-| `baseline.test.mjs` | Checks that the screenshots, `manifest.json`, this README and the rulings in `docs/PLAN.md` agree (see "Check"). |
-| `manifest.json` | Generated. Lists the tC4 commit, client build, browser, viewport, scenarios, installed resources (with substitutions), absent resources and every screen, with the sha256 of its PNG. |
+| `baseline.test.mjs` | Checks that the screenshots, the DOM snapshots, `manifest.json`, this README and the rulings in `docs/PLAN.md` agree (see "Check"). |
+| `manifest.json` | Generated. Lists the tC4 commit, client build, browser, viewport, scenarios, installed resources (with substitutions), absent resources and every screen, with the sha256 of its PNG and of its DOM snapshot. |
 | `screens/*.png` | Generated screenshots. |
+| `dom/*.json` | Generated DOM snapshots, one per screenshot (see "DOM snapshots"). |
 | `history/d494a9d/` | The `d494a9d` images of the screens that changed, and that commit's `manifest.json`. Kept by hand, not by the capture. |
 | `.cache/`, `.state/`, `node_modules/` | Regenerated by every run. Git-ignored. |
 
@@ -267,13 +270,13 @@ remembered. The pointer rests on an empty part of the title bar for every shot.
 Rust app is driven through the same screens and photographed the same way. The split changed
 no image. Before it, a control capture with the old `capture.mjs` reproduced every committed PNG
 on this machine. After it, every full capture gave the same sha256 for all 62 PNGs, and
-consecutive captures gave a byte-identical `manifest.json`.
+consecutive captures gave byte-identical DOM snapshots and `manifest.json`.
 
 | Path | Purpose |
 |---|---|
 | `parity/app/screens.mjs` | `SCREEN_LIST`: each screen's name, scenario, view, steps, what it shows, why it is incomplete, and `run`, the steps driven. |
 | `parity/app/driver.mjs` | `appDriver`: the clicks and waits that the runs share, over an environment (`AppEnv`) that loads Home, names the project test ids, gives the message catalog and changes Door43. |
-| `parity/app/observe.mjs` | The capture rules (browser flags, context, pointer rest), `trackRequests`, `settle`, `captureScreen` and `observe`. |
+| `parity/app/observe.mjs` | The capture rules (browser flags, context, pointer rest), `trackRequests`, `settle`, `captureScreen`, `observe` and `domSnapshot`. |
 | `parity/app/env-tc4.mjs` | The tC4 environment: the client build, the mock server on `.state/<scenario>`, Door43 faked in the browser, tC4's catalogs and journal writers. |
 
 `settle` now fails a screen whose app is not quiet for 800 ms within 30 s, and names the requests
@@ -286,6 +289,19 @@ with the new tracking. The images were right, because the app was idle by then.
 `trackRequests` now reads the DevTools protocol, where each request names the document that sent
 it, and forgets the requests of a page that was replaced. `parity/app/observe.test.mjs` tests
 this, and `settle`'s deadline, without a browser.
+
+### DOM snapshots
+
+`dom/<name>.json` is the DOM at the moment of the screenshot, in the line format of
+`parity/ds-gallery/protocol.mjs`: one line per element or text run, indented by depth, with the
+sorted attributes, every longhand of the inline style as the browser parsed it, input values,
+checked states and the focused element. `root` starts at `#root`; `html` holds the attributes of
+`<html>` (`lang`, `dir`); `outside` lists elements of `<body>` outside `#root`, and is empty,
+because tC4 draws its dialogs in place. A style is named by the first 12 hex digits of its
+sha256 (`style=@…`) and spelled out once in `styles`, because shared styles are most of a
+screen's bytes: the 62 snapshots hold 5.2 MB this way, and would hold 12.8 MB with each style
+on its line. Values are as tC4 renders them: generated ids, hashed asset names and project test
+ids are left for the comparison to normalize.
 
 ## The screenshots
 

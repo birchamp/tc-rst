@@ -1468,10 +1468,16 @@ The Rust environment's seams:
    platform lines in `feedback`, and the Q2 and Q3 text on the eight `rebuildDiffers` screens
    (`parity/tc4-baseline/README.md:380-402`).
 2. **DOM.** `domSnapshot` (`parity/ds-gallery/protocol.mjs:174-220`) rooted at `#root`. tC4's
-   snapshot per screen is recorded once and committed as `parity/tc4-baseline/dom/<screen>.json`.
-   Normalizations, each listed and tested: project test ids through the scenario map; generated
-   ids `tc-[fg]\d+` renumbered by first appearance; hashed asset names; picture `src` by file name;
-   comment nodes skipped (already).
+   snapshot per screen is recorded once and committed as `parity/tc4-baseline/dom/<screen>.json`,
+   with its sha256 in `manifest.json`. Beside `#root` it records the attributes of `<html>`
+   (`lang`, `dir`) and any element of `<body>` outside `#root`: none in tC4, whose layers render
+   in place because it never sets `window.ReactDOM`
+   (`tC4:src/ds/components/primitives/Layer.jsx:62-67`). A style is named by the first 12 hex
+   digits of its sha256 and spelled out once per file, which cuts the 62 files from 12.8 MB to
+   5.2 MB; two lines are equal exactly when their elements are. The snapshot records values as
+   rendered; the comparison applies the normalizations to both sides, each listed and tested:
+   project test ids through the scenario map; generated ids `tc-[fg]\d+` renumbered by first
+   appearance; hashed asset names; picture `src` by file name; comment nodes skipped (already).
 3. **Meaning.** `observe`'s `homeCards` and `syncToast` (`capture.mjs:914-960`) field by field.
    Declared difference: under Q2 the OBS card's action is `sync`, not `upload`.
 4. **Behaviour.** `scenarios.mjs`-style sequences on full screens: DOM, focus, scroll lock and node
