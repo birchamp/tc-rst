@@ -2562,7 +2562,9 @@ modifiedTimestamp = the newest head's `at` in RFC 3339
 so a screen and a decision file never disagree on the same inputs. A Check screen opens a session
 from `FoldState::decisions(tool, collection)`: each projected decision of the (tool, collection)
 with the flags its decision file carries and whether it is listed under Detached
-(`ProjectedDecision`). The session places them on the derived check list with the carry-over's
+(`ProjectedDecision`). A decision that was not dismissed is listed there when it was made against
+another resource than the resolution of its (tool, collection), a book's or the stories' alike,
+or when its verse is no longer in the text. The session places them on the derived check list with the carry-over's
 two passes (tC4 `completedCheckSession`); a decision placed on the check it is stored under shows
 the fold's flags, one shown on another check is assessed against that check's text with the same
 function, and one no check carries is listed off the list (`tc_check::session`). The texts a
@@ -2572,8 +2574,10 @@ the screen and the file read one text.
 **The ladder** (`tc_journal::pins`), every rule tC4's (`src/data/resolve.ts` at d310bf3):
 
 - A rung's slot answers a book when its pin covers the book; the first rung that answers is the
-  resolution. The next rung is tried only when the slot is empty (absent or `null`) or does not
-  cover the book (`resolveSetSlot`).
+  resolution. The next rung is tried only when the slot is empty or does not cover the book
+  (`resolveSetSlot`). A slot is empty when it is absent or holds a value JavaScript reads as
+  false (`null`, `false`, `0`, `""`): tC4 tests it with `if (pin)`. Any other value is a pin,
+  usable or not.
 - **Coverage** is the pin's `books` record when it is a non-empty list of strings: each code is
   read in upper case, and `BIBLE` anywhere in the list covers every book (the whole-collection
   form of a resource not divided into books, such as translationWords). A code that names no
@@ -2588,8 +2592,8 @@ the screen and the file read one text.
   language's list without saying so. No decision matches it, so every decision of that (tool,
   book) is invalidated until the pins are repaired. Having no commit it has no installed copy,
   so if it records no books it covers none and the next rung is tried.
-- **The stories** of an OBS project are not divided into books: the first rung whose slot holds
-  anything answers, usable or not (`resolveObsSetSlot`).
+- **The stories** of an OBS project are not divided into books: the first rung whose slot is
+  not empty answers, usable or not (`resolveObsSetSlot`).
 
 **The no-text rule** (tC4's Check screen: `verseTextIndex` and `withSpanMembers`, `src/state.jsx`,
 and `decisionIsStale`, `src/data/revalidate.ts`, at d310bf3). A decision on a verse reads the
@@ -2610,7 +2614,8 @@ decision sidecar exists for a (tool, book) that has decisions, and `OBS.json` fo
 decisions on frames; an alignment sidecar for a book that has alignments; a comments file for a
 book that has comments, and `tc/comments/OBS.json` when frames or frame checks have comments.
 A comment there is placed at its frame (`placed: {frame, story}`, plus `check` for a comment
-on a check) while the frame is in the project, else `null`, sorted by (story, frame, at, id).
+on a check) while the story holds a text for the frame (its `Frame` record, else the template's
+part), else `null` and listed under Detached; sorted by (story, frame, at, id).
 
 **Fields kept for decoding.** Every decoder is complete (§11.1 X2), so each sidecar record also
 holds what the journal stores beyond tC4's shape, after tC4's fields: an alignment's `done`,

@@ -555,10 +555,10 @@ impl FoldState {
         if !self.conflicts.is_empty() {
             out.insert(DerivedFile::Conflicts);
         }
-        for k in self.story_attached.iter() {
-            let e = self.entry(*k);
+        for k in self.story_attached() {
+            let e = self.entry(k);
             match &e.key {
-                RecordKey::Check(check) if self.holds_decision(*k) => {
+                RecordKey::Check(check) if self.holds_decision(k) => {
                     out.insert(DerivedFile::StoryDecisions(check.tool));
                 }
                 RecordKey::Comment(_) if !matches!(e.projected, Projected::Nothing) => {
@@ -1030,7 +1030,7 @@ impl FoldState {
                     .unwrap_or_default();
                 (keys, Some(self.book_text(book)))
             }
-            Collection::Stories => (self.story_attached.iter().copied().collect(), None),
+            Collection::Stories => (self.story_attached().collect(), None),
         };
         let resolved = self
             .pins
@@ -1094,8 +1094,8 @@ impl FoldState {
         let answer = self.pins.answer(tool, Collection::Stories);
         let resolved = answer.and_then(Answer::resource);
         let mut records: Vec<(String, String)> = Vec::new();
-        for k in self.story_attached.iter() {
-            let Some(record) = self.projected_arc(*k) else {
+        for k in self.story_attached() {
+            let Some(record) = self.projected_arc(k) else {
                 continue;
             };
             let Record::Check {
@@ -1112,7 +1112,7 @@ impl FoldState {
                 continue;
             }
             let newest = self
-                .entry(*k)
+                .entry(k)
                 .heads
                 .iter()
                 .map(|h| self.meta(*h).at)
@@ -1148,11 +1148,11 @@ impl FoldState {
     /// in the project; a comment on a check, at the live check its `MovedTo` chain ends at.
     fn story_comments_json(&self) -> Option<Vec<u8>> {
         let mut records: Vec<((u16, u16, WallTime, ChangeId), String)> = Vec::new();
-        for k in self.story_attached.iter() {
-            let RecordKey::Comment(id) = &self.entry(*k).key else {
+        for k in self.story_attached() {
+            let RecordKey::Comment(id) = &self.entry(k).key else {
                 continue;
             };
-            let Some(record) = self.projected_arc(*k) else {
+            let Some(record) = self.projected_arc(k) else {
                 continue;
             };
             let Record::Comment { value: comment, .. } = &*record else {
@@ -1170,9 +1170,9 @@ impl FoldState {
                 CommentTarget::Verse { .. } => continue,
             };
             let placed = place.filter(|(story, frame)| self.frame_text(*story, *frame).is_some());
-            let head = match &self.entry(*k).projected {
+            let head = match &self.entry(k).projected {
                 Projected::Change(c) => *c,
-                _ => match self.entry(*k).heads.first() {
+                _ => match self.entry(k).heads.first() {
                     Some(h) => *h,
                     None => continue,
                 },

@@ -22,8 +22,8 @@ use tc_journal::record::{
     UserStatus,
 };
 use tc_journal::{
-    Cause, Change, CheckId, CheckKey, CheckTarget, FrameNo, PinGroup, Record, RefPart,
-    ResourcesKey, ResourcesLevel, StoryNo, ToolId, VerseNo,
+    Cause, Change, CheckId, CheckKey, CheckTarget, CommentId, FrameNo, PinGroup, Record, RecordKey,
+    RefPart, ResourcesKey, ResourcesLevel, StoryNo, ToolId, VerseNo,
 };
 
 fn tn_slot(pin: &ResourceRef, books: Option<&[&str]>) -> Json {
@@ -348,6 +348,116 @@ fn obs_decisions_and_comments_have_their_files() {
         .filter(|r| matches!(r, Record::Check { .. }))
         .collect();
     assert_eq!(decoded, stored);
+}
+
+/// §7.7: a decision made against another resource than the resolution is listed under
+/// Detached, on a verse and on a frame alike, and the Check screen's session lists it. A
+/// comment on a frame is listed only when no screen places it: its story holds no text for
+/// that frame. An incremental fold lists the same records as a fold from scratch, whatever
+/// order the pins, the story and the records arrive in.
+#[test]
+fn decisions_against_another_resource_and_unplaced_frame_comments_are_detached() {
+    let other = |pin: &ResourceRef| ResourceRef {
+        repo_path: pin.repo_path.clone(),
+        sha: oid(9),
+    };
+    // A verse.
+    let mut dev = Dev::new(1);
+    let mut changes = seed_book(&mut dev, &[1]);
+    let pin = tn_pin();
+    changes.push(dev.one(
+        pins(
+            PinGroup::Primary,
+            &[("translationNotes", tn_slot(&pin, None))],
+        ),
+        vec![],
+    ));
+    for (id, resource) in [("same", pin.clone()), ("othr", other(&pin))] {
+        let mut d = decision(Some(UserStatus::Valid), false, None);
+        d.resource = resource;
+        changes.push(dev.one(check(&key_at(id, "1", "1"), d), vec![]));
+    }
+    let state = assert_converges(&changes);
+    let listed = |state: &FoldState, collection| -> Vec<(String, bool)> {
+        state
+            .decisions(ToolId::TranslationNotes, collection)
+            .iter()
+            .map(|d| (d.key.check_id.to_string(), d.detached))
+            .collect()
+    };
+    assert_eq!(
+        listed(&state, Collection::Book(BOOK)),
+        [("othr".to_owned(), true), ("same".to_owned(), false)]
+    );
+    // A frame.
+    let mut changes = obs_changes();
+    let mut dev = Dev::new(4);
+    let story = StoryNo::new(1).unwrap();
+    let obs_pin = ResourceRef {
+        repo_path: "git.door43.org/es-419_gl/es-419_obs-tn".into(),
+        sha: oid(3),
+    };
+    let mut d = decision(Some(UserStatus::Valid), false, None);
+    d.resource = other(&obs_pin);
+    let f3 = CheckKey {
+        tool: ToolId::TranslationNotes,
+        check_id: CheckId::parse("f3").unwrap(),
+        target: CheckTarget::Frame {
+            story,
+            frame: FrameNo(1),
+        },
+        occurrence: 1,
+    };
+    changes.push(dev.one(check(&f3, d), vec![]));
+    // The story's template holds two frames: a comment on a ninth has no place.
+    let nowhere = CommentTarget::Frame {
+        story,
+        frame: FrameNo(9),
+    };
+    changes.push(dev.one(comment(6, nowhere, "¿Dónde?"), vec![]));
+    let state = assert_converges_as(ProjectKind::Stories, &changes);
+    // The pins arrive last: every frame decision is placed again.
+    let (pinned, rest): (Vec<Change>, Vec<Change>) = changes
+        .iter()
+        .cloned()
+        .partition(|c| matches!(c.body().record, Record::Pins { .. }));
+    let mut late = FoldState::new(ProjectKind::Stories);
+    late.add(rest.into_iter().map(FoldInput::from));
+    late.add(pinned.into_iter().map(FoldInput::from));
+    same_fold(&state, &late, "pins last");
+    let decisions = state.decisions(ToolId::TranslationNotes, Collection::Stories);
+    assert_eq!(
+        listed(&state, Collection::Stories),
+        [
+            ("f1".to_owned(), false),
+            ("f2".to_owned(), false),
+            ("f3".to_owned(), true)
+        ]
+    );
+    let comments: Vec<&RecordKey> = state
+        .detached()
+        .filter(|k| matches!(k, RecordKey::Comment(_)))
+        .collect();
+    assert_eq!(
+        comments,
+        [&RecordKey::Comment(CommentId::from_bytes([6; 16]))]
+    );
+    let file = rendered(&state, &DerivedFile::StoryComments).unwrap();
+    let placed: Vec<bool> = file["comments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| !c["placed"].is_null())
+        .collect();
+    assert_eq!(placed, [true, true, false]);
+    // The Check screen lists what the fold lists.
+    let session = tc_check::session::open(vec![], &decisions, Some(&obs_pin), |_| None);
+    let shown: Vec<&str> = session
+        .detached
+        .iter()
+        .map(|&s| decisions[s].key.check_id.as_str())
+        .collect();
+    assert_eq!(shown, ["f3"]);
 }
 
 /// A `resources.json` member no pin group holds is a record of its own, projected at its

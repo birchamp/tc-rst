@@ -536,16 +536,23 @@ pub fn derived_bytes(state: &FoldState) -> BTreeMap<String, Vec<u8>> {
 /// checks that every way gives the same heads, conflicts, anomalies, Detached list and
 /// derived bytes. Returns the forward fold.
 pub fn assert_converges(changes: &[Change]) -> FoldState {
+    assert_converges_as(ProjectKind::Bible, changes)
+}
+
+/// [`assert_converges`] for a project of `kind`.
+pub fn assert_converges_as(kind: ProjectKind, changes: &[Change]) -> FoldState {
+    let fold =
+        |changes: &[Change]| FoldState::fold(kind, changes.iter().cloned().map(FoldInput::from));
     let forward = fold(changes);
     let mut reversed: Vec<Change> = changes.to_vec();
     reversed.reverse();
     same_fold(&forward, &fold(&reversed), "reversed");
-    let mut state = FoldState::new(ProjectKind::Bible);
+    let mut state = FoldState::new(kind);
     for change in &reversed {
         state.add([FoldInput::from(change.clone())]);
     }
     same_fold(&forward, &state, "one by one");
-    let mut state = FoldState::new(ProjectKind::Bible);
+    let mut state = FoldState::new(kind);
     let half = changes.len() / 2;
     state.add(changes[half..].iter().cloned().map(FoldInput::from));
     state.add(changes[..half].iter().cloned().map(FoldInput::from));

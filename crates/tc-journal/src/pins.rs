@@ -319,9 +319,18 @@ pub enum SlotPin {
 }
 
 impl SlotPin {
-    /// Reads a slot value; `None` for `null`, which is no pin (tC4 reads it as absent).
+    /// Reads a slot value; `None` for a value JavaScript reads as false (`null`, `false`,
+    /// `0`, `""`), which is no pin: tC4 tests a slot with `if (pin)` (`resolveSetSlot`,
+    /// `resolveObsSetSlot`), so the ladder goes on to the next rung.
     pub fn read(slot: &Json) -> Option<Self> {
-        if matches!(slot, Json::Null) {
+        let falsy = match slot {
+            Json::Null => true,
+            Json::Bool(b) => !b,
+            Json::Int(n) => n.get() == 0,
+            Json::Str(text) => text.is_empty(),
+            Json::Arr(_) | Json::Obj(_) => false,
+        };
+        if falsy {
             return None;
         }
         let coverage = Coverage::of_slot(slot);
@@ -594,12 +603,16 @@ mod tests {
                 "translationWordsLinks": {"repoPath": "git.door43.org/es-419_gl/es-419_twl", "version": "v2", "books": ["TIT"]},
                 "translationQuestions": {"repoPath": "git.door43.org/es-419_gl/es-419_tq", "version": "v2"},
                 "obs-tn": {"repoPath": "git.door43.org/es-419_gl/es-419_obs-tn", "version": "v2"},
+                "obs-twl": false,
+                "obs-tq": "",
             }))),
             fallback: Some(group(serde_json::json!({
                 "translationNotes": {"repoPath": "git.door43.org/unfoldingWord/en_tn", "sha": SHA_B},
                 "translationWordsLinks": {"repoPath": "git.door43.org/unfoldingWord/en_twl", "sha": SHA_B},
                 "translationQuestions": {"repoPath": "git.door43.org/unfoldingWord/en_tq", "sha": SHA_B},
                 "obs-tn": {"repoPath": "git.door43.org/unfoldingWord/en_obs-tn", "sha": SHA_B},
+                "obs-twl": {"repoPath": "git.door43.org/unfoldingWord/en_obs-twl", "sha": SHA_B},
+                "obs-tq": {"repoPath": "git.door43.org/unfoldingWord/en_obs-tq", "sha": SHA_B},
             }))),
         };
         let fold = |tool, collection| sets.resolution(tool, collection);
@@ -635,6 +648,43 @@ mod tests {
                 ..
             }
         ));
+        // A value JavaScript reads as false holds no pin (tC4's `if (pin)`): the next rung
+        // answers.
+        for tool in [ToolId::TranslationWords, ToolId::TranslationQuestions] {
+            let answer = fold(tool, Collection::Stories).unwrap();
+            assert!(
+                matches!(
+                    answer,
+                    Answer::Pin {
+                        rung: Rung::Fallback,
+                        ..
+                    }
+                ),
+                "{tool:?}: {answer:?}"
+            );
+        }
+        for falsy in [
+            serde_json::json!(null),
+            serde_json::json!(false),
+            serde_json::json!(0),
+            serde_json::json!(""),
+        ] {
+            assert_eq!(SlotPin::read(&json(falsy.clone())), None, "{falsy}");
+        }
+        for truthy in [
+            serde_json::json!(true),
+            serde_json::json!(1),
+            serde_json::json!("v2"),
+            serde_json::json!([]),
+        ] {
+            assert!(
+                matches!(
+                    SlotPin::read(&json(truthy.clone())),
+                    Some(SlotPin::Unusable(_))
+                ),
+                "{truthy}"
+            );
+        }
         // On a computer, a pin that records no books covers what its install holds.
         let none = |_: &ResourceRef| None;
         let local = sets.answer(

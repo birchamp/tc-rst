@@ -8,7 +8,7 @@ use super::meta::{ChangeIdx, KeyIdx, Shape, VerseShape};
 use super::passage::{local_projection, rewind};
 use super::state::{Dirty, Fault, FoldState, Local, Owner, Projected};
 use super::{Candidate, Conflict, ConflictId, ConflictKind, Counter, Side};
-use crate::ids::{ChangeId, DeviceId, RepoPath};
+use crate::ids::{ChangeId, DeviceId, RepoPath, StoryNo};
 use crate::json::Json;
 use crate::keys::{CheckKey, CheckTarget, PinGroup, RecordKey, ToolId};
 use crate::pins::{Answer, Collection, Ladder, LanguageSets};
@@ -835,11 +835,26 @@ pub(crate) fn stage_attached(state: &mut FoldState, dirty: &mut Dirty) {
         state.pins = Arc::new(PinsView::of(state));
     }
     if dirty.pins && !dirty.all {
-        for b in state.books.values() {
-            for k in &b.keys {
-                if matches!(state.entry(*k).key, RecordKey::Check(_)) {
-                    dirty.attached.insert(*k);
-                }
+        let books = state.books.values().flat_map(|b| b.keys.iter().copied());
+        for k in books.chain(state.story_attached()) {
+            if matches!(state.entry(k).key, RecordKey::Check(_)) {
+                dirty.attached.insert(k);
+            }
+        }
+    }
+    if !dirty.all {
+        // A story's text decides where its comments are placed.
+        let stories: BTreeSet<StoryNo> = dirty
+            .changed
+            .iter()
+            .filter_map(|k| match state.entry(*k).key {
+                RecordKey::StoryBase(story) | RecordKey::Frame(story, _) => Some(story),
+                _ => None,
+            })
+            .collect();
+        for story in stories {
+            if let Some(keys) = state.story_attached.get(&story) {
+                dirty.attached.extend(keys.iter().copied());
             }
         }
     }
@@ -935,13 +950,16 @@ fn detached(state: &FoldState, k: KeyIdx, chained_in: &mut Option<(BookId, bool)
             else {
                 return false;
             };
-            let Some(book) = check.book() else {
-                return false;
-            };
-            if dismissed || !projects(state, Some(book)) {
+            if dismissed {
                 return false;
             }
-            let resolved = state.pins.resolved(check.tool, Collection::Book(book));
+            let collection = check.target.collection();
+            if let Collection::Book(book) = collection
+                && !projects(state, Some(book))
+            {
+                return false;
+            }
+            let resolved = state.pins.resolved(check.tool, collection);
             !resolved.is_some_and(|r| r.same_resource(&resource)) || !target_exists(state, check)
         }
         RecordKey::Comment(_) => {
@@ -962,15 +980,18 @@ fn detached(state: &FoldState, k: KeyIdx, chained_in: &mut Option<(BookId, bool)
                     place == Place::Nowhere
                 }
                 CommentTarget::Check(check) => {
-                    if !projects(state, check.book()) {
-                        return false;
-                    }
                     let live = follow_moves(state, check);
-                    !target_exists(state, &live)
+                    match live.target {
+                        CheckTarget::Frame { story, frame } => {
+                            state.frame_text(story, frame).is_none()
+                        }
+                        CheckTarget::Verse { .. } => {
+                            projects(state, check.book()) && !target_exists(state, &live)
+                        }
+                    }
                 }
-                CommentTarget::Frame { story, frame } => state
-                    .key_idx(&RecordKey::Frame(*story, *frame))
-                    .is_none_or(|f| matches!(state.entry(f).projected, Projected::Nothing)),
+                // Placed where `tc/comments/OBS.json` places it: at a frame with a text.
+                CommentTarget::Frame { story, frame } => state.frame_text(*story, *frame).is_none(),
             }
         }
         _ => false,
