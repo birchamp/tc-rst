@@ -3,7 +3,9 @@
 mod common;
 
 use common::{client, repo, sha, tag};
-use tc_door43::{CatalogQuery, CatalogRef, Door43Error, ReleaseState, Stage, Visibility};
+use tc_door43::{
+    CatalogQuery, CatalogRef, Door43Error, DownloadTo, ReleaseState, Stage, Visibility,
+};
 use tc_door43_fake::{
     CommitSeed, FakeDoor43, Fault, FaultRule, ReleaseKind, RepoSeed, SeedFile, seeded,
 };
@@ -397,6 +399,7 @@ async fn one_unreadable_entry_is_set_aside_and_the_rest_are_kept() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_answer_about_another_tag_or_commit_is_refused() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let client = client(&fake);
     let tn = repo("unfoldingWord/en_tn");
@@ -420,7 +423,11 @@ async fn an_answer_about_another_tag_or_commit_is_refused() {
         serde_json::json!({ "sha": v91, "commit": { "tree": { "sha": tree } } }),
     );
     let result = client
-        .download_archive(&repo("uW/en_ugl"), &sha(&head))
+        .download_archive(
+            &repo("uW/en_ugl"),
+            &sha(&head),
+            DownloadTo::folder(dl.path()),
+        )
         .await;
     assert!(
         matches!(&result, Err(Door43Error::UnexpectedResponse { reason, .. }) if reason.contains(&v91)),

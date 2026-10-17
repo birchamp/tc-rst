@@ -2,16 +2,17 @@
 
 mod common;
 
-use common::{credentials, repo, sha, tag, token_name};
-use std::time::Duration;
+use common::{credentials, left_in, repo, sha, tag, token_name};
+use std::time::{Duration, Instant};
 use tc_door43::{
-    CatalogQuery, Door43Client, Door43Error, InternetSwitch, NewRepoOwner, Session, Token,
-    TokenScope, Visibility,
+    CatalogQuery, Door43Client, Door43Error, DownloadTo, InternetSwitch, NewRepoOwner, Session,
+    Token, TokenScope, Visibility,
 };
 use tc_door43_fake::{FakeDoor43, Fault, FaultRule};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn every_call_is_refused_before_anything_is_sent_while_the_switch_is_off() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let v86 = sha(&fake.resolve("unfoldingWord", "en_tn", "v86").await.unwrap());
     let client = Door43Client::new(fake.url().parse().unwrap(), InternetSwitch::new()).unwrap();
@@ -40,12 +41,15 @@ async fn every_call_is_refused_before_anything_is_sent_while_the_switch_is_off()
         ("latest_release", client.latest_release(&tn).await.map(drop)),
         (
             "download_archive",
-            client.download_archive(&tn, &v86).await.map(drop),
+            client
+                .download_archive(&tn, &v86, DownloadTo::folder(dl.path()))
+                .await
+                .map(drop),
         ),
         (
             "download_sb_export",
             client
-                .download_sb_export(&tn, &tag("v86"), &v86)
+                .download_sb_export(&tn, &tag("v86"), &v86, DownloadTo::folder(dl.path()))
                 .await
                 .map(drop),
         ),
@@ -104,20 +108,27 @@ async fn turning_the_switch_on_and_off_takes_effect_on_the_next_request() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_download_in_flight_stops_when_the_switch_goes_off() {
+async fn a_download_waiting_for_its_answer_stops_when_the_switch_goes_off() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let v86 = sha(&fake.resolve("unfoldingWord", "en_tn", "v86").await.unwrap());
     fake.inject(FaultRule::once(
         "GET",
         "/unfoldingWord/en_tn/sb/",
-        Fault::Delay(Duration::from_secs(2)),
+        Fault::Delay(Duration::from_secs(5)),
     ));
     let switch = InternetSwitch::new();
     switch.turn_on();
     let client = Door43Client::new(fake.url().parse().unwrap(), switch.clone()).unwrap();
+    let folder = dl.path().to_owned();
     let download = tokio::spawn(async move {
         client
-            .download_sb_export(&repo("unfoldingWord/en_tn"), &tag("v86"), &v86)
+            .download_sb_export(
+                &repo("unfoldingWord/en_tn"),
+                &tag("v86"),
+                &v86,
+                DownloadTo::folder(&folder),
+            )
             .await
     });
     // Wait until the request has reached the server, then turn the internet off while
@@ -126,8 +137,16 @@ async fn a_download_in_flight_stops_when_the_switch_goes_off() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     switch.turn_off();
-    assert!(matches!(
-        download.await.unwrap(),
-        Err(Door43Error::Offline { route }) if route.contains("/sb/v86.zip")
-    ));
+    let off = Instant::now();
+    let result = download.await.unwrap();
+    assert!(
+        matches!(&result, Err(Door43Error::Offline { route }) if route.contains("/sb/v86.zip")),
+        "{result:?}"
+    );
+    assert!(
+        off.elapsed() < Duration::from_secs(2),
+        "the download stopped {:?} after the switch went off, not within the check interval",
+        off.elapsed()
+    );
+    assert_eq!(left_in(dl.path()), Vec::<String>::new());
 }

@@ -96,12 +96,20 @@ async fn a_lexicon_pin_by_commit_installs_as_one_file_repackaged_from_the_checke
         ),
         "the archive's other files travel with the entries"
     );
+    let folder = tempfile::tempdir().unwrap();
     let (zip, _) = rig
         .client
-        .download_archive_zip(pin.repo.repo(), &pin.sha)
+        .download_archive_zip(
+            pin.repo.repo(),
+            &pin.sha,
+            tc_door43::DownloadTo::folder(folder.path()),
+        )
         .await
         .unwrap();
-    assert_eq!(lexicon.source().archive_sha256, Sha256::of(&zip));
+    assert_eq!(
+        lexicon.source().archive_sha256,
+        Sha256::of(&std::fs::read(zip.path()).unwrap())
+    );
     assert_eq!(lexicon.source().commit, pin.sha);
 }
 

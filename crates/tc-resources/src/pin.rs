@@ -306,6 +306,22 @@ impl Sha256 {
         Self(Sha256Hasher::digest(bytes).into())
     }
 
+    /// The digest of a file, read a block at a time.
+    pub(crate) fn of_file(path: &std::path::Path) -> std::io::Result<Self> {
+        use std::io::{ErrorKind, Read};
+        let mut file = std::fs::File::open(path)?;
+        let mut hasher = Sha256Hasher::new();
+        let mut block = vec![0; 64 << 10];
+        loop {
+            match file.read(&mut block) {
+                Ok(0) => return Ok(Self(hasher.finalize().into())),
+                Ok(read) => hasher.update(&block[..read]),
+                Err(e) if e.kind() == ErrorKind::Interrupted => {}
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
     pub fn to_hex(self) -> String {
         self.0.iter().map(|b| format!("{b:02x}")).collect()
     }

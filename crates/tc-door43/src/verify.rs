@@ -43,9 +43,10 @@
 use crate::error::VerificationError;
 use crate::git_tree::{ObjectId, tree_id};
 use crate::names::CommitSha;
-use crate::unpack::{FileMode, Layout, UnpackedFile, unpack};
+use crate::unpack::{FileMode, Layout, UnpackedFile, unpack_from};
 use md5::{Digest, Md5};
 use serde_json::Value;
+use std::io::{Cursor, Read, Seek};
 
 /// A Gitea archive whose files are the content of `commit`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,7 +84,17 @@ pub fn verify_archive(
     commit_tree: &ObjectId,
     max_unpacked: u64,
 ) -> Result<VerifiedArchive, VerificationError> {
-    let unpacked = unpack(zip, Layout::GitArchive, max_unpacked)?;
+    verify_archive_from(Cursor::new(zip), commit, commit_tree, max_unpacked)
+}
+
+/// [`verify_archive`] of a zip read from `zip`, such as a downloaded file.
+pub(crate) fn verify_archive_from<R: Read + Seek>(
+    zip: R,
+    commit: &CommitSha,
+    commit_tree: &ObjectId,
+    max_unpacked: u64,
+) -> Result<VerifiedArchive, VerificationError> {
+    let unpacked = unpack_from(zip, Layout::GitArchive, max_unpacked)?;
     let comment = String::from_utf8_lossy(&unpacked.comment);
     let comment = comment.trim();
     if comment.is_empty() {
@@ -117,7 +128,16 @@ pub fn verify_sb_export(
     expected: &CommitSha,
     max_unpacked: u64,
 ) -> Result<VerifiedSbExport, VerificationError> {
-    let unpacked = unpack(zip, Layout::Burrito, max_unpacked)?;
+    verify_sb_export_from(Cursor::new(zip), expected, max_unpacked)
+}
+
+/// [`verify_sb_export`] of a zip read from `zip`, such as a downloaded file.
+pub(crate) fn verify_sb_export_from<R: Read + Seek>(
+    zip: R,
+    expected: &CommitSha,
+    max_unpacked: u64,
+) -> Result<VerifiedSbExport, VerificationError> {
+    let unpacked = unpack_from(zip, Layout::Burrito, max_unpacked)?;
     // A burrito holds no links, and an installer that made one could write anywhere.
     if let Some(link) = unpacked.files.iter().find(|f| f.mode == FileMode::Symlink) {
         return Err(VerificationError::SymlinkInBurrito(link.path.clone()));

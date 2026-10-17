@@ -13,13 +13,20 @@
 //! ([`crate::repackage_lexicon`]), whether it is downloaded here or was bundled
 //! ([`install_lexicon_zip`]).
 //!
+//! A download streams to a file in the store's `.partial/` folder and is checked from there
+//! (tc-door43 `download`). [`install_dcs_watched`] reports its bytes and stops it when the
+//! caller cancels; a cancelled or failed download installs nothing and leaves no file.
+//!
 //! The pin's host is not compared with the client's server: reads go to the server the
 //! client was made for (production, or a test server), and the commit is the identity.
 
-use tc_door43::{Door43Client, FileMode, TagName, UnpackedFile, VerifiedArchive};
+use tc_door43::{
+    Door43Client, DownloadTo, DownloadWatch, DownloadedZip, FileMode, TagName, UnpackedFile,
+    Unwatched, VerifiedArchive,
+};
 use tc_helps::metadata::parse_burrito_metadata;
 
-use crate::error::{InstallError, LexiconError, Refusal};
+use crate::error::{InstallError, LexiconError, Refusal, StoreError};
 use crate::fetched::{FetchedLock, TreeCheck};
 use crate::layout;
 use crate::lexicon::{LEXICON_FILE, LEXICON_FLAVOR, is_lexicon_archive, repackage_lexicon};
@@ -82,13 +89,30 @@ pub async fn install_dcs_as(
     pin: &ResourcePin,
     packaging: Packaging,
 ) -> Result<Installed, InstallError> {
+    install_dcs_watched(store, client, pin, packaging, &Unwatched).await
+}
+
+/// [`install_dcs_as`] for a download job: `watch` hears the download's bytes as they arrive,
+/// and its cancel stops the download at its next chunk, or within tc-door43's stop-check
+/// interval while it waits. A cancel ends with `InstallError::Door43(Door43Error::Cancelled)`
+/// and installs nothing; a cancel that comes once the download is checked is too late, and
+/// the install, which is atomic, completes.
+pub async fn install_dcs_watched(
+    store: &ResourceStore,
+    client: &Door43Client,
+    pin: &ResourcePin,
+    packaging: Packaging,
+    watch: &dyn DownloadWatch,
+) -> Result<Installed, InstallError> {
     if let Some(installed) = store.dcs(pin)? {
         return Ok(installed);
     }
+    let folder = store.download_folder();
+    let to = DownloadTo::folder(&folder).watched_by(watch);
     let staged = match (packaging, &pin.version) {
         (Packaging::BurritoExport, Some(tag)) => {
             let export = client
-                .download_sb_export(pin.repo.repo(), tag, &pin.sha)
+                .download_sb_export(pin.repo.repo(), tag, &pin.sha, to)
                 .await?;
             from_export(
                 pin,
@@ -104,9 +128,9 @@ pub async fn install_dcs_as(
         }
         (Packaging::Archive | Packaging::Lexicon, _) => {
             let (zip, archive) = client
-                .download_archive_zip(pin.repo.repo(), &pin.sha)
+                .download_archive_zip(pin.repo.repo(), &pin.sha, to)
                 .await?;
-            from_archive(pin, archive, Sha256::of(&zip), packaging)?
+            from_archive(pin, archive, &zip, packaging)?
         }
     };
     store.install(staged)
@@ -277,7 +301,7 @@ fn from_export(
 fn from_archive(
     pin: &ResourcePin,
     archive: VerifiedArchive,
-    zip_sha256: Sha256,
+    zip: &DownloadedZip,
     packaging: Packaging,
 ) -> Result<Staged, InstallError> {
     let lexicon = packaging == Packaging::Lexicon
@@ -285,6 +309,8 @@ fn from_archive(
         || is_lexicon_archive(&archive.files);
     let pin = with_flavor(pin, &archive.files);
     if lexicon {
+        let zip_sha256 =
+            Sha256::of_file(zip.path()).map_err(|e| StoreError::io("read", zip.path(), e))?;
         return staged_lexicon(pin, &archive, zip_sha256).map(|(staged, _)| staged);
     }
     // A symbolic link's target can point anywhere; it is never written (tc-door43

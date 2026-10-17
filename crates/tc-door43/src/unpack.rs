@@ -12,7 +12,7 @@
 use crate::error::VerificationError;
 use icu_normalizer::ComposingNormalizerBorrowed;
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{Cursor, Read};
+use std::io::{Read, Seek};
 
 /// How a file is stored in git: the zip's unix mode, as `git archive` writes it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -63,14 +63,15 @@ struct RawEntry {
     bytes: Vec<u8>,
 }
 
-/// Unzip `bytes`, checking every entry. `max_unpacked` caps the total decompressed size.
-pub(crate) fn unpack(
-    bytes: &[u8],
+/// Unzip the zip `zip` reads, checking every entry. `max_unpacked` caps the total
+/// decompressed size. The zip itself is never read into memory whole.
+pub(crate) fn unpack_from<R: Read + Seek>(
+    zip: R,
     layout: Layout,
     max_unpacked: u64,
 ) -> Result<Unpacked, VerificationError> {
-    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))
-        .map_err(|e| VerificationError::NotAZip(e.to_string()))?;
+    let mut archive =
+        zip::ZipArchive::new(zip).map_err(|e| VerificationError::NotAZip(e.to_string()))?;
     let comment = archive.comment().to_vec();
     let mut entries = Vec::with_capacity(archive.len());
     let mut total: u64 = 0;
@@ -353,8 +354,16 @@ fn check_collisions(
 pub(crate) mod tests {
     use super::*;
     use proptest::prelude::*;
-    use std::io::Write;
+    use std::io::{Cursor, Write};
     use zip::write::SimpleFileOptions;
+
+    fn unpack(
+        bytes: &[u8],
+        layout: Layout,
+        max_unpacked: u64,
+    ) -> Result<Unpacked, VerificationError> {
+        unpack_from(Cursor::new(bytes), layout, max_unpacked)
+    }
 
     /// A zip with the given entries, in order. A name ending in `/` is a folder; a
     /// symlink's bytes are its UTF-8 target.
