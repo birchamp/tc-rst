@@ -95,7 +95,9 @@ shows a shared OBS card with "Upload changes" but does not cite Q2. The toast an
 read from the DOM at each shot (`syncToast` and `homeCards` in `manifest.json`).
 
 The check also starts the mock server and drives its sync routes and the fake Door43's branch
-check (`mock-server/server.test.mjs`). Run it after every capture.
+check (`mock-server/server.test.mjs`), and checks that the state built from this repository's
+copies of tC4's fixtures equals the state built from tC4 (`parity/app/state.test.mjs`). Run it
+after every capture.
 
 ### Capture another tC4 commit
 
@@ -278,6 +280,7 @@ consecutive captures gave byte-identical DOM snapshots and `manifest.json`.
 | `parity/app/driver.mjs` | `appDriver`: the clicks and waits that the runs share, over an environment (`AppEnv`) that loads Home, names the project test ids, gives the message catalog and changes Door43. |
 | `parity/app/observe.mjs` | The capture rules (browser flags, context, pointer rest), `trackRequests`, `settle`, `captureScreen`, `observe` and `domSnapshot`. |
 | `parity/app/env-tc4.mjs` | The tC4 environment: the client build, the mock server on `.state/<scenario>`, Door43 faked in the browser, tC4's catalogs and journal writers. |
+| `parity/app/state.mjs` | Builds a scenario's state with `fixtures/build-state.mjs` from this repository's copies of tC4's fixtures (`fixtures/tc4/`), so the Rust app's capture needs no tC4 checkout. `state.sha256.json` records the state built from tC4; `state.test.mjs` checks that both builds are byte-identical. |
 
 `settle` now fails a screen whose app is not quiet for 800 ms within 30 s, and names the requests
 still in flight; before the split it took the shot anyway. That showed a fault in the old request
@@ -546,7 +549,8 @@ The run also controls the following:
 ## Using the baseline for the Rust rebuild
 
 `.state/<scenario>/repos` uses the Pankosmia working-directory layout. Local projects are under
-`_local_/_local_/` and resources under `_local_/_sideloaded_/`. The install records are in
+`_local_/_local_/` and resources under `_local_/_sideloaded_/`. `node parity/app/state.mjs
+--scenario <name>` builds the same bytes from this repository alone. The install records are in
 `client_settings/uw-tc4.json`. A Rust build can therefore open the same projects and resources and
 render the same screens at 1280x800. For each screen, follow the `steps` in `manifest.json` from
 a fresh state of the same scenario (`npm run state -- --scenario <name>`). A step that starts

@@ -1449,7 +1449,10 @@ The Rust environment's seams:
   from `fixtures/tc4/sample-burrito*`. `build-state.mjs` reads only those and the vrs files
   (`parity/tc4-baseline/fixtures/build-state.mjs:41, 91, 214-215, 405`). The test
   `state_from_repo_equals_state_from_tc4` compares the two trees byte for byte. CI then needs no
-  tC4 checkout.
+  tC4 checkout: there the test is skipped, and a build from the repository is compared with
+  `parity/app/state.sha256.json`, the sha256 of every file as built from tC4 (A6a). The state's
+  `provenance.json` names fixtures by their tC4 path and no longer records the tC4 root, so the
+  two builds can be byte-identical.
 - `MemoryBackend` reads the same `.state/<scenario>`. Both apps start from the same bytes,
   substitutes and absences included.
 - Bundle seeding is off during captures (Q-11).
