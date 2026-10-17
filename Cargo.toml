@@ -1,6 +1,9 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# Throwaway spikes have their own Cargo.toml and Cargo.lock and are never built
+# with the workspace (spikes/electronite: the Electronite spike G0).
+exclude = ["spikes"]
 
 [workspace.package]
 version = "0.1.0"

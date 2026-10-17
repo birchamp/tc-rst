@@ -1,0 +1,74 @@
+@font-face {
+  font-family: "ProbeFont";
+  src: url("/ui/fonts/probe.woff2?probe=font") format("woff2");
+}
+
+@font-face {
+  font-family: "AwamiProbe";
+  src: url("/ui/fonts/awami.ttf?probe=graphite-font") format("truetype");
+}
+
+body {
+  margin: 16px;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+}
+
+.note {
+  color: #a33;
+}
+
+#bank .word {
+  display: inline-block;
+  margin: 2px;
+  padding: 2px 6px;
+  border: 1px solid #99a;
+  border-radius: 4px;
+}
+
+#bank .word.armed {
+  background: #ffd;
+}
+
+#cards .card {
+  display: inline-block;
+  margin: 2px;
+  padding: 4px;
+  border: 1px solid #ccd;
+}
+
+#cards .source {
+  direction: rtl;
+}
+
+#gallery img {
+  width: 160px;
+  height: 90px;
+  margin: 2px;
+}
+
+#help-slot iframe {
+  width: 480px;
+  height: 160px;
+}
+
+.probe-bg {
+  width: 64px;
+  height: 36px;
+  background-image: url("/media/probe-bg.png?probe=css-url");
+  background-size: cover;
+}
+
+#graphite {
+  font-family: "AwamiProbe", serif;
+  font-size: 32px;
+  line-height: 3;
+}
+
+.probe-pass {
+  color: #060;
+}
+
+.probe-fail {
+  color: #a00;
+}
