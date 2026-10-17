@@ -1,0 +1,13 @@
+{
+  "path": "app/clientError",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "02020202020202020202020202020202",
+    "view": "draft",
+    "project": "kr_ulb",
+    "message": "index out of bounds",
+    "at": 1792000000000
+  },
+  "ok": null
+}

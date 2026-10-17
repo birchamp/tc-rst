@@ -1,0 +1,9 @@
+{
+  "path": "account/profileLink",
+  "kind": "query",
+  "net": "profile",
+  "request": {},
+  "ok": {
+    "url": "https://git.door43.org/jdoe"
+  }
+}

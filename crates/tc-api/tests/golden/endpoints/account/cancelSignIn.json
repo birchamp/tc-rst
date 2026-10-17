@@ -1,0 +1,9 @@
+{
+  "path": "account/cancelSignIn",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"
+  },
+  "ok": null
+}

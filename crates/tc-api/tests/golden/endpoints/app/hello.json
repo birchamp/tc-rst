@@ -1,0 +1,44 @@
+{
+  "path": "app/hello",
+  "kind": "query",
+  "net": null,
+  "request": {},
+  "ok": {
+    "api": 1,
+    "build": {
+      "version": "0.1.0",
+      "commit": "b3b965f"
+    },
+    "instance": "abababababababababababababababab",
+    "internet": false,
+    "account": {
+      "user": "jdoe",
+      "kept": "kept",
+      "notice": null
+    },
+    "sessions": [
+      {
+        "at": {
+          "project": "kr_ulb",
+          "epoch": 3
+        },
+        "id": "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50",
+        "mode": {
+          "type": "readOnly",
+          "value": "cloudSynced"
+        },
+        "role": "screen"
+      }
+    ],
+    "prefs": {
+      "appLocale": "ar"
+    },
+    "startup": {
+      "type": "preparing",
+      "value": {
+        "done": 1200,
+        "total": 3739
+      }
+    }
+  }
+}

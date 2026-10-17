@@ -1,0 +1,98 @@
+[
+  {
+    "type": "opened"
+  },
+  {
+    "type": "closed"
+  },
+  {
+    "type": "mode",
+    "value": {
+      "type": "writable"
+    }
+  },
+  {
+    "type": "changed",
+    "value": {
+      "view": 43,
+      "scope": {
+        "type": "parts",
+        "value": {
+          "chapters": [
+            {
+              "book": "TIT",
+              "chapter": 1
+            }
+          ],
+          "books": [],
+          "stories": [],
+          "checks": [
+            {
+              "tool": "translationNotes",
+              "book": "TIT"
+            }
+          ],
+          "records": [
+            {
+              "record": "{\"book\":\"TIT\",\"chapter\":1,\"kind\":\"verse\",\"verse\":4}",
+              "by": {
+                "who": {
+                  "type": "teammate",
+                  "value": 2
+                },
+                "computer": "LAPTOP-7"
+              }
+            }
+          ],
+          "aspects": [
+            "conflicts"
+          ]
+        }
+      },
+      "cause": {
+        "type": "intake",
+        "value": {
+          "from": [
+            {
+              "who": {
+                "type": "username",
+                "value": "juan"
+              },
+              "computer": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "type": "checkpoint",
+    "value": {
+      "type": "failed",
+      "value": {
+        "reason": "the index is locked"
+      }
+    }
+  },
+  {
+    "type": "materializeBlocked",
+    "value": {
+      "paths": [
+        "ingredients/TIT.usfm"
+      ]
+    }
+  },
+  {
+    "type": "alignSave",
+    "value": {
+      "aligner": 5,
+      "state": {
+        "type": "failed",
+        "value": {
+          "type": "disk",
+          "value": "The disk is full."
+        }
+      }
+    }
+  }
+]

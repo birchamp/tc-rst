@@ -1,0 +1,9 @@
+{
+  "path": "app/quit",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "01010101010101010101010101010101"
+  },
+  "ok": null
+}

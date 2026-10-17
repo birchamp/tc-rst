@@ -1,0 +1,10 @@
+{
+  "path": "prefs/setLocale",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "03030303030303030303030303030303",
+    "locale": "pt-BR"
+  },
+  "ok": null
+}

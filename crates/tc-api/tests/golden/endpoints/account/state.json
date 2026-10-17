@@ -1,0 +1,11 @@
+{
+  "path": "account/state",
+  "kind": "query",
+  "net": null,
+  "request": {},
+  "ok": {
+    "user": "jdoe",
+    "kept": "kept",
+    "notice": null
+  }
+}

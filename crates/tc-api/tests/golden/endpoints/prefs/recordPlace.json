@@ -1,0 +1,23 @@
+{
+  "path": "prefs/recordPlace",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "request": "06060606060606060606060606060606",
+    "place": {
+      "unit": {
+        "type": "book",
+        "value": "TIT"
+      },
+      "mode": "check",
+      "chapter": 1,
+      "verse": 4,
+      "tool": "translationWords"
+    }
+  },
+  "ok": null
+}

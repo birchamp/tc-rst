@@ -1,0 +1,16 @@
+{
+  "path": "account/resume",
+  "kind": "command",
+  "net": "checkSignIn",
+  "request": {
+    "request": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"
+  },
+  "ok": {
+    "outcome": "refused",
+    "account": {
+      "user": null,
+      "kept": "notKept",
+      "notice": "savedRefused"
+    }
+  }
+}

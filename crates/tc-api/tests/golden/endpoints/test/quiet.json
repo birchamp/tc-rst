@@ -1,0 +1,9 @@
+{
+  "path": "test/quiet",
+  "kind": "query",
+  "net": null,
+  "request": {},
+  "ok": {
+    "busy": false
+  }
+}

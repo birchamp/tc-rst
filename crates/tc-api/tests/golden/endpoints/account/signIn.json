@@ -1,0 +1,16 @@
+{
+  "path": "account/signIn",
+  "kind": "command",
+  "net": "signIn",
+  "request": {
+    "request": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a",
+    "login": "jdoe",
+    "password": "correct horse",
+    "stay": true
+  },
+  "ok": {
+    "user": "jdoe",
+    "kept": "kept",
+    "notice": null
+  }
+}

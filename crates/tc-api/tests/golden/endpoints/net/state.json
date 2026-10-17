@@ -1,0 +1,9 @@
+{
+  "path": "net/state",
+  "kind": "query",
+  "net": null,
+  "request": {},
+  "ok": {
+    "on": true
+  }
+}

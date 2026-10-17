@@ -1,0 +1,15 @@
+{
+  "exchange.error.damaged": "This file is damaged. Ask for a new copy.",
+  "exchange.error.newerFormat": "This file was saved by a newer translationCore (project format {format}). Update translationCore, then receive the file again. Nothing was changed.",
+  "exchange.error.notWritten": "The file was not saved: {reason}",
+  "exchange.error.unreadable": "The file could not be read: {reason}",
+  "exchange.error.verifyFailed": "The file on the drive could not be read back correctly, so it was deleted. Save it again, or use another drive.",
+  "refusal.open.newer-format": "This project was saved by a newer translationCore (project format {format}). Update translationCore, then open the project again. Nothing was changed.",
+  "syncResult.error.keptStopped": "Your teammates' changes were received and kept, but the sync stopped: {reason}",
+  "syncResult.error.needsNewerApp": "A teammate uses a newer translationCore (project format {format}). Update translationCore, then sync again. Nothing changed.",
+  "syncResult.error.notSent": "Your teammates' changes were received and kept, but tC4 could not send your changes to Door43. Sync again.",
+  "syncResult.error.projectMismatch": "This Door43 repository holds a different project, so the sync stopped. Two projects are never combined. Nothing changed.",
+  "syncResult.error.readOnly": "This project is open read-only, so it cannot sync.",
+  "syncResult.error.tc4TeamRepository": "This project is shared by translationCore 4, so the sync stopped. Nothing changed. Move the team to the new translationCore first.",
+  "syncResult.receivedKept": "Your teammates' changes were received and kept."
+}

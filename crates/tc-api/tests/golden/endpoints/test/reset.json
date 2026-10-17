@@ -1,0 +1,9 @@
+{
+  "path": "test/reset",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "12121212121212121212121212121212"
+  },
+  "ok": null
+}

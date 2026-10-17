@@ -1,0 +1,11 @@
+{
+  "path": "test/crash",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e",
+    "at": "beforeReply",
+    "path": "test/fieldStore"
+  },
+  "ok": null
+}

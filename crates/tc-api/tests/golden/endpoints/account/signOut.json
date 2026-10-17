@@ -1,0 +1,13 @@
+{
+  "path": "account/signOut",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d"
+  },
+  "ok": {
+    "user": "jdoe",
+    "kept": "kept",
+    "notice": null
+  }
+}

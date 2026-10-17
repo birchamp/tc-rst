@@ -1,0 +1,10 @@
+{
+  "path": "jobs/cancel",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "08080808080808080808080808080808",
+    "job": 9
+  },
+  "ok": null
+}

@@ -1,0 +1,10 @@
+{
+  "path": "test/release",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "10101010101010101010101010101010",
+    "at": "save"
+  },
+  "ok": null
+}

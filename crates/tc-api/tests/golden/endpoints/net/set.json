@@ -1,0 +1,12 @@
+{
+  "path": "net/set",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "07070707070707070707070707070707",
+    "on": true
+  },
+  "ok": {
+    "on": true
+  }
+}

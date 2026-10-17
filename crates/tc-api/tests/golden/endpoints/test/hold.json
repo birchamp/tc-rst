@@ -1,0 +1,10 @@
+{
+  "path": "test/hold",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f",
+    "at": "save"
+  },
+  "ok": null
+}

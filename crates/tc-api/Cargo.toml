@@ -1,0 +1,34 @@
+[package]
+name = "tc-api"
+description = "The wire types the tC4 rebuild's server and UI share: requests, replies, errors, events and the endpoint list."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+# Making and reading token texts. Only the server side (tc-app) enables it; tc-ui never does,
+# so the UI's wasm32 build proves the UI cannot make, read or change a token (AD3).
+server = []
+# The `test` service, which exists only in test builds of the server (AD35).
+test-hooks = []
+# `proptest::arbitrary::Arbitrary` for every wire type, for property tests here and in the
+# crates that use these types.
+proptest = ["dep:proptest", "dep:proptest-derive"]
+
+[dependencies]
+tc-core = { path = "../tc-core" }
+serde.workspace = true
+thiserror.workspace = true
+proptest = { workspace = true, optional = true }
+proptest-derive = { workspace = true, optional = true }
+
+# proptest does not build for wasm32-unknown-unknown, where clippy --all-targets also runs, so
+# the tests that need it run on the host only.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tc-api = { path = ".", features = ["server", "test-hooks", "proptest"] }
+proptest.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

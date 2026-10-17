@@ -1,0 +1,14 @@
+{
+  "path": "prefs/setAlignSuggestions",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "request": "05050505050505050505050505050505",
+    "on": true
+  },
+  "ok": null
+}

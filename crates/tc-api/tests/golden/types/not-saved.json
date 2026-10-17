@@ -1,0 +1,26 @@
+[
+  {
+    "type": "refused",
+    "value": "incoherentView"
+  },
+  {
+    "type": "disk",
+    "value": "The disk is full."
+  },
+  {
+    "type": "readOnly",
+    "value": "secondWriter"
+  },
+  {
+    "type": "lookAgain"
+  },
+  {
+    "type": "planStale"
+  },
+  {
+    "type": "staleScope"
+  },
+  {
+    "type": "badToken"
+  }
+]
