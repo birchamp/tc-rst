@@ -5,21 +5,23 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;
+use tc_align::Alignment;
+use tc_align::bootstrap;
 
 use common::*;
 use tc_align::{
-    AlignmentValue, NoReflow, SourceVerse, SourceWord, TargetVerse, TargetWord, WordId, reflow,
+    AlignmentValue, NoReflow, SourceVerse, SourceWord, TargetVerse, TargetWord, reflow,
 };
 
 fn greek(text: &str, strong: &str, lemma: &str) -> SourceWord {
     SourceWord {
-        content: text.to_owned(),
+        word: text.to_owned(),
         strong: Some(strong.to_owned()),
         lemma: Some(lemma.to_owned()),
         morph: Some("Gr,N".to_owned()),
         occurrence: 1,
         occurrences: 1,
-        extra: Vec::new(),
+        extra: Default::default(),
     }
 }
 
@@ -33,12 +35,12 @@ fn linked() -> AlignmentValue {
         greek("θεοῦ", "G23160", "θεός"),
     ]);
     let verse = TargetVerse::new(TEXT);
-    let mut value = AlignmentValue::bootstrap(&source, &verse, basis(1));
+    let mut value = bootstrap(&source, &verse, basis(1));
     for (card, text, occurrence) in [(0, "Pablo", 1), (1, "siervo", 1), (2, "Dios", 2)] {
         let word = value
             .word_bank
             .iter()
-            .find(|w| w.text == text && w.occurrence == occurrence)
+            .find(|w| w.word == text && w.occurrence == occurrence)
             .cloned()
             .unwrap();
         value.link(card, &word).unwrap();
@@ -48,7 +50,11 @@ fn linked() -> AlignmentValue {
 }
 
 fn placed(value: &AlignmentValue) -> Vec<Vec<String>> {
-    value.alignments.iter().map(|g| show(&g.targets)).collect()
+    value
+        .alignments
+        .iter()
+        .map(|g| show(&g.bottom_words))
+        .collect()
 }
 
 #[test]
@@ -68,7 +74,7 @@ fn a_link_whose_target_word_is_still_present_is_kept_and_a_new_word_is_banked() 
     let sources = |v: &AlignmentValue| {
         v.alignments
             .iter()
-            .map(|g| g.sources.clone())
+            .map(|g| g.top_words.clone())
             .collect::<Vec<_>>()
     };
     assert_eq!(sources(&next.value), sources(&before));
@@ -94,8 +100,8 @@ fn a_changed_word_loses_its_link_and_its_replacement_is_banked() {
     // The dropped link is reported, with its card and source word.
     assert_eq!(next.dropped.len(), 1);
     assert_eq!(next.dropped[0].card, 1);
-    assert_eq!(next.dropped[0].sources[0].content, "δοῦλος");
-    assert_eq!(next.dropped[0].word.text, "siervo");
+    assert_eq!(next.dropped[0].top_words[0].word, "δοῦλος");
+    assert_eq!(next.dropped[0].word.word, "siervo");
 }
 
 #[test]
@@ -131,7 +137,7 @@ fn nothing_to_reflow_leaves_the_value_as_it_is() {
         Err(NoReflow::MarkedInvalid)
     );
     let source = SourceVerse::new(vec![greek("Παῦλος", "G39720", "Παῦλος")]);
-    let fresh = AlignmentValue::bootstrap(&source, &TargetVerse::new(TEXT), basis(1));
+    let fresh = bootstrap(&source, &TargetVerse::new(TEXT), basis(1));
     assert_eq!(
         reflow(&fresh, &TargetVerse::new("Pablo, siervo")),
         Err(NoReflow::NothingPlaced)
@@ -173,14 +179,16 @@ fn assert_no_loss(
     );
     for drop in &after.dropped {
         assert!(
-            before.alignments[drop.card].targets.contains(&drop.word),
+            before.alignments[drop.card]
+                .bottom_words
+                .contains(&drop.word),
             "{at}"
         );
         assert!(verse.position(&drop.word).is_none(), "{at}");
     }
     let mut held: Vec<TargetWord> = after.value.all_target_words().cloned().collect();
     let mut words = verse.words().to_vec();
-    let key = |w: &TargetWord| (w.text.clone(), w.occurrence);
+    let key = |w: &TargetWord| (w.word.clone(), w.occurrence);
     held.sort_by_key(key);
     words.sort_by_key(key);
     assert_eq!(held, words, "{at}");
@@ -235,8 +243,8 @@ fn a_word_held_on_two_cards_is_kept_on_the_first_and_reported_dropped_from_the_s
     // tC4 would keep both links; one word on two cards is one word aligned twice, which
     // the aligned USFM cannot write, so the second link is reported, not kept.
     let mut twice = linked();
-    let pablo = twice.alignments[0].targets[0].clone();
-    twice.alignments[2].targets.push(pablo.clone());
+    let pablo = twice.alignments[0].bottom_words[0].clone();
+    twice.alignments[2].bottom_words.push(pablo.clone());
     assert!(twice.well_formed().is_err());
     let next = reflow(
         &twice,
@@ -244,10 +252,10 @@ fn a_word_held_on_two_cards_is_kept_on_the_first_and_reported_dropped_from_the_s
     )
     .unwrap();
     assert_eq!(
-        next.value.alignments[0].targets,
+        next.value.alignments[0].bottom_words,
         std::slice::from_ref(&pablo)
     );
-    assert!(!next.value.alignments[2].targets.contains(&pablo));
+    assert!(!next.value.alignments[2].bottom_words.contains(&pablo));
     assert_eq!(next.dropped.len(), 1);
     assert_eq!((next.dropped[0].card, &next.dropped[0].word), (2, &pablo));
     assert_eq!(next.value.well_formed(), Ok(()));
@@ -257,10 +265,18 @@ fn a_word_held_on_two_cards_is_kept_on_the_first_and_reported_dropped_from_the_s
 #[test]
 fn a_word_keeps_its_extra_fields_across_a_reflow_while_it_stays_in_the_verse() {
     let mut before = linked();
-    let mut typed = serde_json::Map::new();
-    typed.insert("type".into(), "bottomWord".into());
-    for word in before.all_target_words().cloned().collect::<Vec<_>>() {
-        before.word_extra.insert(WordId::of(&word), typed.clone());
+    let typed = tc_journal::json::JsonMap::from([(
+        "type".to_owned(),
+        tc_journal::json::Json::from("bottomWord"),
+    )]);
+    let words = before.word_bank.iter_mut().chain(
+        before
+            .alignments
+            .iter_mut()
+            .flat_map(|g| g.bottom_words.iter_mut()),
+    );
+    for word in words {
+        word.extra = typed.clone();
     }
     // "siervo" is gone: its link drops and its fields go with it.
     let next = reflow(
@@ -269,9 +285,9 @@ fn a_word_keeps_its_extra_fields_across_a_reflow_while_it_stays_in_the_verse() {
     )
     .unwrap();
     let keys = |v: &AlignmentValue| -> Vec<String> {
-        v.word_extra
-            .keys()
-            .map(|k| format!("{}{}", k.text, k.occurrence))
+        v.all_target_words()
+            .filter(|w| w.extra == typed)
+            .map(|w| format!("{}{}", w.word, w.occurrence))
             .collect()
     };
     assert!(keys(&before).contains(&"siervo1".to_owned()));

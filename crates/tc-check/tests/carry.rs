@@ -5,19 +5,21 @@
 
 mod common;
 
-use common::{eng, notes, pin, resource, word_links};
+use common::{LanguageSet, Pins, Set, Slot, eng, notes, pin, projected, resource, t, word_links};
 use proptest::prelude::*;
 use tc_check::carry::{Match, Outcome, StoredDecision, Summary, plan, same_quote};
 use tc_check::change::{Unit, consequences};
 use tc_check::derive::{notes_for_book, word_links_for_book};
-use tc_check::resolve::LanguageSet;
 use tc_check::session::open;
-use tc_check::status::{CheckState, Edit, Triage, apply, assess};
+use tc_check::status::{CheckState, Edit, Triage, assess, decision_edit};
 use tc_check::{
-    CheckItem, Collection, Decision, Pins, ResourceRef, Selection, Slot, TextMd5, ToolId,
+    CheckItem, CheckTarget, Collection, DecisionRecord, Ladder, ResourceRef, Selection, TargetText,
+    ToolId,
 };
 use tc_core::BookId;
 use tc_helps::tsv::{TsvScope, parse_notes};
+use tc_journal::decision::verse_text_md5_v1;
+use tc_journal::json::JsonMap;
 
 const TN_HEADER: &str = "Reference\tID\tTags\tSupportReference\tQuote\tOccurrence\tNote";
 
@@ -45,13 +47,19 @@ fn decided(item: &CheckItem, against: &ResourceRef) -> StoredDecision {
         text: "ho".into(),
         occurrence: 1,
         occurrences: 1,
+        extra: JsonMap::new(),
     }];
-    StoredDecision {
-        key: item.key.clone(),
-        quote: item.quote.as_str().to_owned(),
-        group_id: item.group_id.clone(),
-        decision: apply(None, Edit::Triage(Triage::Valid(words)), "ho", against),
-    }
+    // As the Check screen records it, with the check's context, which names its quote and
+    // group id.
+    let decision = decision_edit(item, Edit::Triage(Triage::Valid(words)), against)
+        .apply(None, Some("ho"))
+        .unwrap();
+    let stored = StoredDecision::of(item.key.clone(), decision);
+    assert_eq!(
+        (stored.quote.as_str(), stored.group_id.as_str()),
+        (item.quote.as_str(), item.group_id.as_str())
+    );
+    stored
 }
 
 fn spanish() -> ResourceRef {
@@ -62,7 +70,7 @@ fn english() -> ResourceRef {
     pin("unfoldingWord/en_tn", "v89", &[]).resource
 }
 
-fn no_text(_: &tc_check::CheckTarget) -> Option<&'static str> {
+fn no_text(_: &CheckTarget) -> Option<&'static TargetText> {
     None
 }
 
@@ -279,10 +287,9 @@ fn decided_after_counts_what_the_check_screen_will_show() {
     ]);
     let mut stored: Vec<StoredDecision> = items.iter().map(|i| decided(i, &spanish())).collect();
     // The verse text of the second check changed and lost the selected word.
-    stored[1].decision.judgement.verse_text_md5 = TextMd5::of("ho hum");
-    let verse = |t: &tc_check::CheckTarget| -> Option<&'static str> {
-        Some(if t.locator() == "1:2" { "hum" } else { "ho" })
-    };
+    stored[1].decision.judgement.verse_text_md5 = verse_text_md5_v1("ho hum");
+    let (ho, hum) = (t("ho"), t("hum"));
+    let verse = |target: &CheckTarget| Some(if target.locator() == "1:2" { &hum } else { &ho });
     let p = plan(&items, &english(), &stored);
     let summary = p.summary(Some(&spanish()), verse);
     assert_eq!((summary.carried, summary.decided_after), (2, 1));
@@ -304,9 +311,8 @@ fn decided_after_reads_the_verse_a_decision_moves_to() {
         }
     ));
     // The words were selected on "ho", the text of the verse the check moves to.
-    let verse = |t: &tc_check::CheckTarget| -> Option<&'static str> {
-        Some(if t.locator() == "1:2" { "ho" } else { "hum" })
-    };
+    let (ho, hum) = (t("ho"), t("hum"));
+    let verse = |target: &CheckTarget| Some(if target.locator() == "1:2" { &ho } else { &hum });
     let summary = p.summary(Some(&spanish()), verse);
     assert_eq!((summary.carried, summary.decided_after), (1, 1));
 }
@@ -351,7 +357,8 @@ fn two_decisions_arriving_at_one_check_are_both_kept_as_a_conflict() {
     assert_eq!(summary.contested, 2);
 
     // Opening the English list shows the later decision and keeps the other reachable.
-    let session = open(en.clone(), &stored, Some(&english()), no_text);
+    let decisions = projected(&stored, Some(&english()), no_text);
+    let session = open(en.clone(), &decisions, Some(&english()), no_text);
     assert_eq!(session.placed, [vec![0, 1]]);
     assert_eq!(session.shown(0), Some(1));
     assert_eq!(session.contested().collect::<Vec<_>>(), [0]);
@@ -379,8 +386,8 @@ fn stored_against(book: BookId, against: &ResourceRef, n: usize) -> Vec<StoredDe
             d.key.check_id = tc_check::CheckId::parse(&format!("c{i}")).unwrap();
             d.key.target = tc_check::CheckTarget::Verse {
                 book,
-                chapter: tc_check::RefPart::number(1),
-                verse: tc_check::RefPart::number(1),
+                chapter: tc_check::RefPart::from_number(1),
+                verse: tc_check::RefPart::from_number(1),
             };
             d
         })
@@ -404,8 +411,8 @@ fn a_gateway_change_counts_the_decisions_it_puts_at_risk() {
         primary: Some(primary),
         fallback: Some(fallback),
     };
-    let es_tn = es().get(Slot::TranslationNotes).unwrap().resource.clone();
-    let en_tn = en().get(Slot::TranslationNotes).unwrap().resource.clone();
+    let es_tn = es().get(Slot::TranslationNotes).unwrap().resource;
+    let en_tn = en().get(Slot::TranslationNotes).unwrap().resource;
     let none = |_: &ResourceRef| None;
     let unit = |book, decisions| Unit {
         tool: ToolId::TranslationNotes,
@@ -474,8 +481,8 @@ fn a_decision_a_carry_over_left_behind_is_not_put_at_risk_again() {
         primary: Some(primary),
         fallback: Some(en()),
     };
-    let es_tn = es().get(Slot::TranslationNotes).unwrap().resource.clone();
-    let en_tn = en().get(Slot::TranslationNotes).unwrap().resource.clone();
+    let es_tn = es().get(Slot::TranslationNotes).unwrap().resource;
+    let en_tn = en().get(Slot::TranslationNotes).unwrap().resource;
     let mut titus_decisions = stored_against(BookId::Titus, &en_tn, 12);
     titus_decisions.extend(stored_against(BookId::Titus, &es_tn, 1));
     let units = [Unit {
@@ -513,8 +520,8 @@ fn a_change_back_to_the_resource_a_decision_was_made_against_revives_it() {
         primary: Some(primary),
         fallback: Some(en()),
     };
-    let es_tn = es().get(Slot::TranslationNotes).unwrap().resource.clone();
-    let en_tn = en().get(Slot::TranslationNotes).unwrap().resource.clone();
+    let es_tn = es().get(Slot::TranslationNotes).unwrap().resource;
+    let en_tn = en().get(Slot::TranslationNotes).unwrap().resource;
     let mut ruth = stored_against(BookId::Ruth, &es_tn, 3);
     ruth.extend(stored_against(BookId::Ruth, &en_tn, 2));
     let units = [Unit {
@@ -526,14 +533,10 @@ fn a_change_back_to_the_resource_a_decision_was_made_against_revives_it() {
     assert_eq!((c.at_risk(), c.revived, c.detached), (3, 2, 0));
     assert!(!c.blocked());
     // What the count says is what the decisions compute after the change.
-    let after = tc_check::resolve::resolve(
-        &pins(fr()),
-        ToolId::TranslationNotes,
-        Collection::Book(BookId::Ruth),
-    )
-    .unwrap()
-    .pin
-    .resource;
+    let after = pins(fr())
+        .resolution(ToolId::TranslationNotes, Collection::Book(BookId::Ruth))
+        .and_then(|a| a.resource().cloned())
+        .unwrap();
     let valid_after = ruth
         .iter()
         .filter(|d| {
@@ -550,7 +553,7 @@ fn a_change_onto_an_unusable_pin_is_blocked() {
     // The next primary pins tN for Titus with a tag and no commit: no rung would answer
     // Titus with a usable pin, so its decisions would match none.
     let en = || set("en", "unfoldingWord", "v89", &["TIT"]);
-    let en_tn = en().get(Slot::TranslationNotes).unwrap().resource.clone();
+    let en_tn = en().get(Slot::TranslationNotes).unwrap().resource;
     let tag_only = LanguageSet::from_json(&serde_json::json!({
         "translationNotes": {
             "repoPath": "git.door43.org/Xenizo/fr_tn",
@@ -559,7 +562,7 @@ fn a_change_onto_an_unusable_pin_is_blocked() {
         }
     }))
     .unwrap();
-    assert_eq!(tag_only.unusable().count(), 1);
+    assert_eq!(tag_only.unusable().len(), 1);
     let titus_decisions = stored_against(BookId::Titus, &en_tn, 2);
     let units = [Unit {
         tool: ToolId::TranslationNotes,
@@ -621,7 +624,7 @@ fn decision_of(
         key: entry_item.key.clone(),
         quote: entry_item.quote.as_str().to_owned(),
         group_id: entry_item.group_id.clone(),
-        decision: Decision {
+        decision: DecisionRecord {
             resource: resource.clone(),
             ..d.decision.clone()
         },
@@ -671,7 +674,8 @@ proptest! {
 
         // A session on the new list reaches every stored decision exactly once: placed
         // on one check, or listed off the list.
-        let session = open(new.clone(), &stored, Some(&english()), no_text);
+        let decisions = projected(&stored, Some(&english()), no_text);
+        let session = open(new.clone(), &decisions, Some(&english()), no_text);
         let mut reached: Vec<usize> = session.placed.iter().flatten().copied().collect();
         reached.extend(&session.off_list);
         reached.sort_unstable();
@@ -715,11 +719,12 @@ proptest! {
             if let Outcome::Stays { item, .. } = entry.outcome {
                 let after = decision_of(&items[item], d, &english());
                 prop_assert_eq!(&after.decision.judgement, &d.decision.judgement);
-                let state = CheckState::of(Some(&after.decision), Some(&english()), Some("ho"));
+                let ho = t("ho");
+                let state = CheckState::of(Some(&after.decision), Some(&english()), Some(&ho));
                 prop_assert!(state.invalidation().is_none());
                 // Before the change is written, the old decision computes as invalid
                 // against the new resolution, and is kept.
-                let before = CheckState::of(Some(&d.decision), Some(&english()), Some("ho"));
+                let before = CheckState::of(Some(&d.decision), Some(&english()), Some(&ho));
                 prop_assert!(before.invalidation().is_some_and(|i| i.resource_changed));
             }
         }

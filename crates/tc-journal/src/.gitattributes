@@ -1,0 +1,2 @@
+# The probe is hashed byte for byte (index.rs): never convert its line endings.
+index_probe.batch -text

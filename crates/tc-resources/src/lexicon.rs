@@ -43,7 +43,7 @@ use std::hash::{BuildHasherDefault, DefaultHasher, Hash, Hasher};
 use serde::Deserialize;
 use serde::de::{self, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Number, Value};
-use tc_door43::{CommitSha, FileMode, RepoRef, UnpackedFile, VerifiedArchive};
+use tc_door43::{FileMode, GitOid, RepoRef, UnpackedFile, VerifiedArchive};
 
 use crate::error::{LexiconError, LexiconUnavailable};
 use crate::pin::{ResourcePin, Sha256};
@@ -67,7 +67,7 @@ const CONTENT: &str = "ingredients/content/";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LexiconSource {
     pub repo: RepoRef,
-    pub commit: CommitSha,
+    pub commit: GitOid,
     /// Of the zip the archive's files came from.
     pub archive_sha256: Sha256,
 }
@@ -123,7 +123,7 @@ pub fn repackage_lexicon(
 
     let mut source = Map::new();
     source.insert("repo".into(), repo.to_string().into());
-    source.insert("commit".into(), archive.commit.as_str().into());
+    source.insert("commit".into(), archive.commit.to_hex().into());
     source.insert("archiveSha256".into(), archive_sha256.to_hex().into());
     let mut out = Map::new();
     out.insert("format".into(), LEXICON_FORMAT.into());
@@ -331,7 +331,7 @@ impl Lexicon {
                 .source
                 .commit
                 .parse()
-                .map_err(|e: tc_door43::ParseError| bad("source.commit", e.to_string()))?,
+                .map_err(|e: tc_core::DigestError| bad("source.commit", e.to_string()))?,
             archive_sha256: raw
                 .source
                 .archive_sha256

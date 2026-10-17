@@ -14,11 +14,7 @@ use tc_align::suggest::RawLink;
 use tc_align::{Aligner, Click, EditError, Occurrence, SourceWord, TargetVerse, TargetWord};
 
 fn w(text: &str, occurrence: u32) -> TargetWord {
-    TargetWord {
-        text: text.to_owned(),
-        occurrence,
-        occurrences: 1,
-    }
+    common::word(text, occurrence, 1)
 }
 
 fn bank() -> Vec<TargetWord> {
@@ -29,7 +25,7 @@ fn bank() -> Vec<TargetWord> {
 }
 
 fn words(selection: Option<Vec<TargetWord>>) -> Option<Vec<String>> {
-    selection.map(|s| s.into_iter().map(|w| w.text).collect())
+    selection.map(|s| s.into_iter().map(|w| w.word).collect())
 }
 
 fn click(armed: &[TargetWord], index: usize, click: Click) -> Option<Vec<String>> {
@@ -153,7 +149,7 @@ fn at(aligner: &Aligner, text: &str) -> usize {
     aligner
         .shown_bank()
         .iter()
-        .position(|w| w.text == text)
+        .position(|w| w.word == text)
         .unwrap_or_else(|| panic!("{text} is not shown in the bank"))
 }
 
@@ -165,7 +161,7 @@ fn select(aligner: &mut Aligner, texts: &[&str]) {
 }
 
 fn texts(words: &[TargetWord]) -> Vec<&str> {
-    words.iter().map(|w| w.text.as_str()).collect()
+    words.iter().map(|w| w.word.as_str()).collect()
 }
 
 /// A standing suggestion of `word` on `card`.
@@ -175,7 +171,7 @@ fn suggest(aligner: &mut Aligner, card: usize, word: &str) {
     let source = input
         .source()
         .iter()
-        .position(|s| s.text == aligner.value().alignments[card].sources[0].content)
+        .position(|s| s.text == aligner.value().alignments[card].top_words[0].word)
         .unwrap();
     aligner.show_suggestions(&[RawLink {
         source: vec![source],
@@ -194,7 +190,7 @@ fn a_card_click_places_the_whole_selection_in_one_edit_in_verse_order() {
     assert!(!aligner.is_changed(), "selecting writes nothing");
     assert_eq!(aligner.place_selection(1), Ok(3));
     assert_eq!(
-        texts(&aligner.value().alignments[1].targets),
+        texts(&aligner.value().alignments[1].bottom_words),
         ["a", "servant", "God"]
     );
     assert!(aligner.selection().is_empty() && !aligner.is_armed());
@@ -227,13 +223,16 @@ fn only_the_shown_selection_is_placed_and_the_cards_look_armed_only_while_it_is_
     suggest(&mut aligner, 0, "Paul");
     assert_eq!(texts(&aligner.selection()), ["servant"]);
     assert_eq!(aligner.place_selection(2), Ok(1));
-    assert_eq!(texts(&aligner.value().alignments[2].targets), ["servant"]);
+    assert_eq!(
+        texts(&aligner.value().alignments[2].bottom_words),
+        ["servant"]
+    );
     assert_eq!(
         aligner.proposals().len(),
         1,
         "the suggestion of Paul stands"
     );
-    assert!(aligner.value().word_bank.iter().any(|w| w.text == "Paul"));
+    assert!(aligner.value().word_bank.iter().any(|w| w.word == "Paul"));
 }
 
 #[test]
@@ -263,7 +262,10 @@ fn a_drag_carries_the_selection_or_the_word_and_its_drop_is_one_edit() {
     let mut payload = alone;
     payload.extend(aligner.dragged_words(at(&aligner, "apostle")));
     assert_eq!(aligner.place_many(3, &payload), Ok(1));
-    assert_eq!(texts(&aligner.value().alignments[3].targets), ["apostle"]);
+    assert_eq!(
+        texts(&aligner.value().alignments[3].bottom_words),
+        ["apostle"]
+    );
 }
 
 #[test]
@@ -317,7 +319,7 @@ fn another_verse_opens_with_nothing_selected() {
 fn a_repeated_word_shows_its_occurrence_and_is_named_word_n() {
     let verse = TargetVerse::new("Pablo, siervo de Dios y apóstol de Jesucristo, de la fe");
     let third_de = &verse.words()[8];
-    assert_eq!((third_de.text.as_str(), third_de.occurrence), ("de", 3));
+    assert_eq!((third_de.word.as_str(), third_de.occurrence), ("de", 3));
     assert_eq!(third_de.shown_occurrence(), Some(3));
     assert_eq!(third_de.occurrence_name().as_deref(), Some("de 3"));
     let pablo = &verse.words()[0];
@@ -325,13 +327,13 @@ fn a_repeated_word_shows_its_occurrence_and_is_named_word_n() {
     assert_eq!(pablo.occurrence_name(), None);
 
     let kai = |occurrence, occurrences| SourceWord {
-        content: "καὶ".to_owned(),
+        word: "καὶ".to_owned(),
         strong: None,
         lemma: None,
         morph: None,
         occurrence,
         occurrences,
-        extra: Vec::new(),
+        extra: tc_journal::json::JsonMap::new(),
     };
     assert_eq!(kai(2, 2).occurrence_name().as_deref(), Some("καὶ 2"));
     assert_eq!(kai(1, 1).shown_occurrence(), None);

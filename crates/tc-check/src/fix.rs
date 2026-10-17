@@ -7,13 +7,43 @@
 //! download it, move the pin to a version of the same repository that is installed, or
 //! install it from a file that declares that commit.
 
-use tc_helps::CommitSha;
+use tc_core::GitOid;
+use tc_journal::pins::{
+    Answer, Coverage, Ladder, Pin, Rung, SetSlot, SlotPin, Unrecorded, UnusablePin,
+};
+use tc_journal::record::ResourceRef;
 
 use crate::key::{Collection, ToolId};
-use crate::resolve::{
-    Answer, Coverage, Pin, Pins, Resolution, ResourceRef, Rung, Slot, SlotPin, UnusablePin,
-    answer_with, coverage_of,
-};
+
+/// The pin a (tool, collection) checks against, and the rung it came from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Resolution {
+    pub rung: Rung,
+    pub pin: Pin,
+}
+
+impl Resolution {
+    /// True when the primary set did not answer.
+    pub fn used_fallback(&self) -> bool {
+        self.rung == Rung::Fallback
+    }
+}
+
+/// `en_tn · v86`, or the first 12 digits of the commit when there is no tag (tC4's
+/// guided-fix label).
+pub fn pin_label(pin: &Pin) -> String {
+    let version = pin
+        .version
+        .clone()
+        .unwrap_or_else(|| pin.resource.sha.to_hex().chars().take(12).collect());
+    let repo = pin
+        .resource
+        .repo_path
+        .rsplit('/')
+        .next()
+        .unwrap_or(&pin.resource.repo_path);
+    format!("{repo} · {version}")
+}
 
 /// A resource installed on this computer: one repository at one commit.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,13 +64,15 @@ pub struct Machine<'a> {
 impl Machine<'_> {
     /// True when exactly this commit of the repository is installed.
     pub fn has(&self, resource: &ResourceRef) -> bool {
-        self.installed.iter().any(|i| i.resource == *resource)
+        self.installed
+            .iter()
+            .any(|i| i.resource.same_resource(resource))
     }
 
     fn local_coverage(&self, resource: &ResourceRef) -> Option<Coverage> {
         self.installed
             .iter()
-            .find(|i| i.resource == *resource)
+            .find(|i| i.resource.same_resource(resource))
             .map(|i| i.coverage.clone())
     }
 }
@@ -87,7 +119,7 @@ pub struct Preflight {
 /// Decides what opening the tool needs (tC4 `preflightToolBook`, `preflightObsTool`).
 /// `pins` is `None` when the project has no pins at all.
 pub fn preflight(
-    pins: Option<&Pins>,
+    pins: Option<&dyn Ladder>,
     tool: ToolId,
     collection: Collection,
     machine: &Machine<'_>,
@@ -105,14 +137,14 @@ pub fn preflight(
         unusable: Some((rung, pin.clone())),
         ..answer(PreflightState::UnusablePin, None, None, None)
     };
-    let Some(pins) = pins.filter(|p| p.primary.is_some() || p.fallback.is_some()) else {
+    let Some(pins) = pins else {
         return answer(PreflightState::Unpinned, None, None, None);
     };
-    let slot = Slot::of_tool(tool, collection);
-    if slot == Slot::TranslationWordsLinks
+    let slot = SetSlot::of_tool(tool, collection);
+    if slot == SetSlot::TranslationWordsLinks
         && Rung::LADDER.into_iter().any(|rung| {
             pins.pin(rung, slot)
-                .is_some_and(|p| !p.resource.repo_path.as_str().ends_with("_twl"))
+                .is_some_and(|p| !p.resource.repo_path.ends_with("_twl"))
         })
     {
         return answer(PreflightState::OldWordLinks, None, None, None);
@@ -129,18 +161,18 @@ pub fn preflight(
     };
     // A slot whose coverage nothing here can tell: a pin that records no books and is
     // not installed, or an unusable one that records none.
-    let unknown = |held: &&SlotPin| match held {
-        SlotPin::Usable(p) => !coverage_of(p, &local).is_recorded() && !machine.has(&p.resource),
+    let unknown = |held: &SlotPin| match held {
+        SlotPin::Usable(p) => !p.coverage_with(&local).is_recorded() && !machine.has(&p.resource),
         SlotPin::Unusable(u) => !u.coverage.is_recorded(),
     };
 
-    let resolution = match answer_with(pins, tool, collection, local) {
-        Some(Answer::Pin(resolution)) => resolution,
+    let resolution = match pins.answer(tool, collection, Unrecorded::Installed(&local)) {
+        Some(Answer::Pin { rung, pin }) => Resolution { rung, pin },
         Some(Answer::Unusable { rung, pin }) => return unusable(rung, &pin),
         None => {
-            let ladder: Vec<(Rung, &SlotPin)> = Rung::LADDER
+            let ladder: Vec<(Rung, SlotPin)> = Rung::LADDER
                 .into_iter()
-                .filter_map(|rung| Some((rung, pins.slot(rung, slot)?)))
+                .filter_map(|rung| Some((rung, pins.held(rung, slot)?)))
                 .collect();
             if ladder.is_empty() {
                 return answer(PreflightState::Unpinned, None, None, None);
@@ -148,12 +180,12 @@ pub fn preflight(
             // A slot that might cover the book: fetch it rather than say it does not.
             return match ladder.into_iter().find(|(_, held)| unknown(held)) {
                 Some((_, SlotPin::Usable(pin))) if machine.online => {
-                    answer(PreflightState::Fetch, None, Some(pin.clone()), None)
+                    answer(PreflightState::Fetch, None, Some(pin), None)
                 }
                 Some((_, SlotPin::Usable(_))) => {
                     answer(PreflightState::Unavailable, None, None, None)
                 }
-                Some((rung, SlotPin::Unusable(pin))) => unusable(rung, pin),
+                Some((rung, SlotPin::Unusable(pin))) => unusable(rung, &pin),
                 None => answer(PreflightState::NotCovered, None, None, None),
             };
         }
@@ -169,23 +201,22 @@ pub fn preflight(
 
     // The tW tool also reads the resolving set's articles.
     if let (ToolId::TranslationWords, Some(SlotPin::Unusable(pin))) =
-        (tool, pins.slot(resolution.rung, Slot::TranslationWords))
+        (tool, pins.held(resolution.rung, SetSlot::TranslationWords))
     {
-        return unusable(resolution.rung, pin);
+        return unusable(resolution.rung, &pin);
     }
     let missing = missing_pin(pins, tool, &resolution, machine);
     let state = missing.as_ref().map_or(PreflightState::Ready, availability);
     let unavailable_primary = pins
-        .slot(Rung::Primary, slot)
-        .filter(|held| resolution.used_fallback() && unknown(held))
-        .cloned();
+        .held(Rung::Primary, slot)
+        .filter(|held| resolution.used_fallback() && unknown(held));
     answer(state, Some(resolution), missing, unavailable_primary)
 }
 
 /// The pin a resolved tool still lacks: the resolved pin, or for tW the resolving set's
 /// translation words pin, which holds the articles (tC4 `missingPinOf`, #646).
 fn missing_pin(
-    pins: &Pins,
+    pins: &dyn Ladder,
     tool: ToolId,
     resolution: &Resolution,
     machine: &Machine<'_>,
@@ -196,9 +227,8 @@ fn missing_pin(
     if tool != ToolId::TranslationWords {
         return None;
     }
-    pins.pin(resolution.rung, Slot::TranslationWords)
+    pins.pin(resolution.rung, SetSlot::TranslationWords)
         .filter(|p| !machine.has(&p.resource))
-        .cloned()
 }
 
 /// What the guided fix screen offers.
@@ -218,11 +248,15 @@ pub struct GuidedFix {
 /// else the first pin of the ladder that records no books and is not installed (never a
 /// pin recorded as not covering the book). `None` when there is nothing to fix, or when
 /// the pin is unusable: getting another rung's resource would not repair it.
-pub fn guided_fix(pins: &Pins, preflight: &Preflight, machine: &Machine<'_>) -> Option<GuidedFix> {
+pub fn guided_fix(
+    pins: &dyn Ladder,
+    preflight: &Preflight,
+    machine: &Machine<'_>,
+) -> Option<GuidedFix> {
     if preflight.state == PreflightState::UnusablePin {
         return None;
     }
-    let slot = Slot::of_tool(preflight.tool, preflight.collection);
+    let slot = SetSlot::of_tool(preflight.tool, preflight.collection);
     let local = |r: &ResourceRef| machine.local_coverage(r);
     let pin = preflight
         .needs
@@ -232,8 +266,7 @@ pub fn guided_fix(pins: &Pins, preflight: &Preflight, machine: &Machine<'_>) -> 
             Rung::LADDER
                 .into_iter()
                 .filter_map(|rung| pins.pin(rung, slot))
-                .find(|p| !coverage_of(p, &local).is_recorded() && !machine.has(&p.resource))
-                .cloned()
+                .find(|p| !p.coverage_with(&local).is_recorded() && !machine.has(&p.resource))
         })?;
     // For tW the missing pin can be the resolving set's translation words pin, which
     // the tool's slot does not hold: it is on the rung that resolved.
@@ -245,7 +278,10 @@ pub fn guided_fix(pins: &Pins, preflight: &Preflight, machine: &Machine<'_>) -> 
         .installed
         .iter()
         .filter(|i| {
-            i.resource.repo_path == pin.resource.repo_path && i.resource.sha != pin.resource.sha
+            i.resource
+                .repo_path
+                .eq_ignore_ascii_case(&pin.resource.repo_path)
+                && i.resource.sha != pin.resource.sha
         })
         .cloned()
         .collect();
@@ -263,7 +299,7 @@ pub fn guided_fix(pins: &Pins, preflight: &Preflight, machine: &Machine<'_>) -> 
 pub struct Repin {
     pub rung: Rung,
     /// Every slot of the rung that pins the missing commit.
-    pub slots: Vec<Slot>,
+    pub slots: Vec<SetSlot>,
     pub from: Pin,
     /// The new pin: the installed commit, its tag if it has one, and no recorded
     /// coverage (the caller records the installed copy's books).
@@ -272,12 +308,12 @@ pub struct Repin {
 
 /// The re-pin from `from` to the installed `to`; `None` when the rung pins `from`
 /// nowhere.
-pub fn repin(pins: &Pins, rung: Rung, from: &Pin, to: &Installed) -> Option<Repin> {
-    let slots: Vec<Slot> = Slot::HELPS
+pub fn repin(pins: &dyn Ladder, rung: Rung, from: &Pin, to: &Installed) -> Option<Repin> {
+    let slots: Vec<SetSlot> = SetSlot::HELPS
         .into_iter()
         .filter(|s| {
             pins.pin(rung, *s)
-                .is_some_and(|p| p.resource == from.resource)
+                .is_some_and(|p| p.resource.same_resource(&from.resource))
         })
         .collect();
     (!slots.is_empty()).then(|| Repin {
@@ -287,7 +323,7 @@ pub fn repin(pins: &Pins, rung: Rung, from: &Pin, to: &Installed) -> Option<Repi
         to: Pin {
             resource: ResourceRef {
                 repo_path: from.resource.repo_path.clone(),
-                sha: to.resource.sha.clone(),
+                sha: to.resource.sha,
             },
             version: to.version.clone().filter(|v| !v.is_empty()),
             coverage: Coverage::Unrecorded,
@@ -304,22 +340,22 @@ pub enum SideloadRefusal {
         "the file is commit {found}, but the project pins {pinned} ({label}); it is not installed"
     )]
     OtherCommit {
-        found: CommitSha,
-        pinned: CommitSha,
+        found: GitOid,
+        pinned: GitOid,
         label: String,
     },
 }
 
 /// A file is installed only when it declares exactly the pinned commit (tC4
 /// `verifySideload`, D58).
-pub fn verify_sideload(pin: &Pin, revision: Option<&CommitSha>) -> Result<(), SideloadRefusal> {
+pub fn verify_sideload(pin: &Pin, revision: Option<&GitOid>) -> Result<(), SideloadRefusal> {
     match revision {
         None => Err(SideloadRefusal::NoRevision),
         Some(found) if *found == pin.resource.sha => Ok(()),
         Some(found) => Err(SideloadRefusal::OtherCommit {
-            found: found.clone(),
-            pinned: pin.resource.sha.clone(),
-            label: pin.label(),
+            found: *found,
+            pinned: pin.resource.sha,
+            label: pin_label(pin),
         }),
     }
 }

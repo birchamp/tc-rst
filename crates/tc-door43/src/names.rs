@@ -27,8 +27,6 @@ pub enum ParseError {
     InvalidNewRepoName { value: String },
     #[error("{0:?} is not a git tag name this client accepts")]
     InvalidTag(String),
-    #[error("{0:?} is not a full 40-character hexadecimal commit sha")]
-    InvalidCommitSha(String),
     #[error("{0:?} is not a token name: use 1 to 100 printable characters")]
     InvalidTokenName(String),
     #[error("the sign-in name must be non-empty and contain no ':' or control characters")]
@@ -302,30 +300,9 @@ impl FromStr for TagName {
 
 string_serde!(TagName);
 
-/// A full SHA-1 commit id, stored in lowercase. It is the identity of a pinned resource;
-/// a tag is only a label for it.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CommitSha(String);
-
-impl CommitSha {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl FromStr for CommitSha {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit()) {
-            Ok(Self(s.to_ascii_lowercase()))
-        } else {
-            Err(ParseError::InvalidCommitSha(s.to_owned()))
-        }
-    }
-}
-
-string_serde!(CommitSha);
+/// A full commit id: the identity of a pinned resource; a tag is only a label for it. One
+/// type with the journal's and the resource store's ([`tc_core::GitOid`]).
+pub use tc_core::GitOid;
 
 /// The name of an access token on the user's account. Door43 refuses a second token with
 /// the same name, so minting replaces the old one.
@@ -603,13 +580,18 @@ mod tests {
     }
 
     #[test]
-    fn commit_shas_are_full_and_lowercased() {
-        let sha: CommitSha = "C354B8AE66A23C485BF6F38FD35BD8F7EF81E4E5".parse().unwrap();
-        assert_eq!(sha.as_str(), "c354b8ae66a23c485bf6f38fd35bd8f7ef81e4e5");
-        assert!("c354b8ae".parse::<CommitSha>().is_err());
+    fn commit_shas_are_full_and_lowercase() {
+        let sha = GitOid::parse_any_case("C354B8AE66A23C485BF6F38FD35BD8F7EF81E4E5").unwrap();
+        assert_eq!(sha.to_hex(), "c354b8ae66a23c485bf6f38fd35bd8f7ef81e4e5");
+        assert!(
+            "C354B8AE66A23C485BF6F38FD35BD8F7EF81E4E5"
+                .parse::<GitOid>()
+                .is_err()
+        );
+        assert!("c354b8ae".parse::<GitOid>().is_err());
         assert!(
             "g354b8ae66a23c485bf6f38fd35bd8f7ef81e4e5"
-                .parse::<CommitSha>()
+                .parse::<GitOid>()
                 .is_err()
         );
     }
@@ -666,6 +648,6 @@ mod tests {
         let json = serde_json::to_string(&repo).unwrap();
         assert_eq!(json, r#"{"owner":"unfoldingWord","name":"en_tn"}"#);
         assert_eq!(serde_json::from_str::<RepoRef>(&json).unwrap(), repo);
-        assert!(serde_json::from_str::<CommitSha>(r#""abc""#).is_err());
+        assert!(serde_json::from_str::<GitOid>(r#""abc""#).is_err());
     }
 }

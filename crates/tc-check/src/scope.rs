@@ -403,7 +403,7 @@ mod tests {
     }
 
     fn part(text: &str) -> RefPart {
-        RefPart::new(text).unwrap()
+        RefPart::parse(text).unwrap()
     }
 
     #[test]

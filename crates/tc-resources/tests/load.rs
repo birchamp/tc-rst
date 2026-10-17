@@ -142,6 +142,7 @@ fn project(en: &English) -> ProjectPins {
             },
             bundled.extra_scripture[1].clone(),
         ],
+        unreadable_panes: Vec::new(),
         unknown: Default::default(),
     }
 }
@@ -184,7 +185,7 @@ fn a_book_loads_each_part_from_its_rung_and_states_what_is_missing() {
     assert!(loaded.helps.notes_for(reference("TIT 1:1")).count() > 0);
     assert_eq!(
         loaded.helps.source(HelpsPart::Notes).unwrap().to_string(),
-        format!("es-419_gl/es-419_tn v66 ({}…)", &en.es_tn.sha.as_str()[..7])
+        format!("es-419_gl/es-419_tn v66 ({}…)", &en.es_tn.sha.to_hex()[..7])
     );
 
     let links = &loaded.parts[&HelpsPart::WordLinks];

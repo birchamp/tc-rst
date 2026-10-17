@@ -100,7 +100,7 @@ fn replacing_one_verse_keeps_every_other_byte() {
     );
     let reparsed = Book::parse(&new_text);
     assert_eq!(
-        reparsed.verse(2, span("7")).unwrap().plain_text(),
+        reparsed.verse(2, span("7")).unwrap().display_text(),
         "In all things show yourself an example."
     );
     assert_eq!(reparsed.segments().len(), book.segments().len());
@@ -350,8 +350,8 @@ fn hebrew_alternate_chapter_number_leads_into_its_verse() {
     assert_eq!(v17.leading(), "\\ca 2\\ca*\n");
     assert_eq!(v17.marker(), "\\v 17\n");
     assert!(v17.body().starts_with("\\va 1\\va*\n"));
-    assert!(!v17.plain_text().contains('1'));
-    assert!(!v17.plain_text().contains('2'));
+    assert!(!v17.display_text().contains('1'));
+    assert!(!v17.display_text().contains('2'));
     let first_word = book.verse(1, span("1")).unwrap().words()[0];
     assert_eq!(first_word.text, "וַֽ\u{2060}יְהִי֙");
     // The maqaf (U+05BE) joins two words; it is not part of either.
@@ -359,7 +359,7 @@ fn hebrew_alternate_chapter_number_leads_into_its_verse() {
     let v1: Vec<&str> = unit.words().iter().map(|w| w.text).collect();
     assert!(v1.iter().all(|w| !w.contains('\u{05BE}')));
     assert!(
-        unit.plain_text()
+        unit.display_text()
             .contains(&format!("{}\u{05BE}{}", v1[1], v1[2]))
     );
     assert_eq!(v1.len(), 8);
@@ -371,7 +371,7 @@ fn span_verses_are_found_only_by_their_exact_span() {
     let text = read("tc4/test-fixtures/sample-burrito/JON.usfm");
     let book = Book::parse(&text);
     let unit = book.verse(2, span("9-10")).unwrap();
-    assert!(unit.plain_text().starts_with("Mas yo te ofreceré"));
+    assert!(unit.display_text().starts_with("Mas yo te ofreceré"));
     assert_eq!(
         book.verse(2, span("9")),
         Err(Error::VerseNotFound {
@@ -379,14 +379,14 @@ fn span_verses_are_found_only_by_their_exact_span() {
             verses: span("9")
         })
     );
-    assert_eq!(book.verse(1, span("6")).unwrap().plain_text(), "___");
+    assert_eq!(book.verse(1, span("6")).unwrap().display_text(), "___");
 }
 
 #[test]
 fn verse_text_leaves_out_notes_markup_and_headings() {
     let text = read("tc4/test-fixtures/usfm-corpus/exotic-poetry-footnotes.usfm");
     let book = Book::parse(&text);
-    let plain = |c: u16, v: &str| book.verse(c, span(v)).unwrap().plain_text();
+    let plain = |c: u16, v: &str| book.verse(c, span(v)).unwrap().display_text();
     assert_eq!(
         plain(1, "1"),
         "The first verse carries a footnote inside its body."
@@ -406,13 +406,13 @@ fn verse_text_leaves_out_notes_markup_and_headings() {
     let ult = read("tc4/test-fixtures/en_ult/TIT.usfm");
     let ult = Book::parse(&ult);
     assert_eq!(
-        ult.verse(1, span("1")).unwrap().plain_text(),
+        ult.verse(1, span("1")).unwrap().display_text(),
         "Paul, a servant of God and an apostle of Jesus Christ, for the faith of the chosen people of God and knowledge of the truth that agrees with godliness,"
     );
 }
 
-/// tC4 stores `targetVerseMd5`, the md5 of a verse's plain text, with each alignment. For
-/// a plain draft our verse text hashes to the same value.
+/// tC4 stores `targetVerseMd5`, the md5 of a verse's plain text, with each alignment;
+/// `plain_text_v1` of the verse's content hashes to the same value.
 #[test]
 fn verse_text_hashes_like_the_stored_alignment_records() {
     use md5::{Digest, Md5};
@@ -426,7 +426,7 @@ fn verse_text_hashes_like_the_stored_alignment_records() {
     for (chapter, verses) in records["chapters"].as_object().unwrap() {
         for (verse, record) in verses.as_object().unwrap() {
             let unit = book.verse(chapter.parse().unwrap(), span(verse)).unwrap();
-            let digest: String = Md5::digest(unit.plain_text().as_bytes())
+            let digest: String = Md5::digest(tc_usfm::plain_text_v1(unit.body()).as_bytes())
                 .iter()
                 .map(|b| format!("{b:02x}"))
                 .collect();
@@ -454,7 +454,7 @@ fn verse_text_matches_what_tc4_hashes() {
         let book = Book::parse(&text);
         let chapter: u16 = case["chapter"].as_str().unwrap().parse().unwrap();
         let verse = case["verse"].as_str().unwrap();
-        let ours = book.verse(chapter, span(verse)).unwrap().plain_text();
+        let ours = book.verse(chapter, span(verse)).unwrap().display_text();
         let tc4 = case["text"].as_str().unwrap();
         if ours == tc4 {
             same += 1;

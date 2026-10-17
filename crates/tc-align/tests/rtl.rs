@@ -7,10 +7,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;
+use tc_align::Alignment;
+use tc_align::bootstrap;
 
 use common::*;
 use tc_align::usfm::{from_aligned, weave_verse};
-use tc_align::{Aligner, AlignmentValue, Click, SourceVerse, TargetVerse, record, reflow};
+use tc_align::{Aligner, AlignmentValue, Click, SourceVerse, TargetVerse, reflow};
 
 /// Jonah 1's verses as tC4 hashed them, with their UHB words.
 fn jonah_1() -> Vec<(String, TargetVerse, SourceVerse)> {
@@ -28,15 +30,15 @@ fn jonah_1() -> Vec<(String, TargetVerse, SourceVerse)> {
 
 /// Every word placed on the card of the same Hebrew word.
 fn aligned_to_itself(verse: &TargetVerse, source: &SourceVerse) -> AlignmentValue {
-    let mut value = AlignmentValue::bootstrap(source, verse, basis(1));
+    let mut value = bootstrap(source, verse, basis(1));
     for card in 0..value.alignments.len() {
-        let wanted = value.alignments[card].sources[0].clone();
+        let wanted = value.alignments[card].top_words[0].clone();
         let word = value
             .word_bank
             .iter()
-            .find(|w| w.text == wanted.content && w.occurrence == wanted.occurrence)
+            .find(|w| w.word == wanted.word && w.occurrence == wanted.occurrence)
             .cloned()
-            .unwrap_or_else(|| panic!("{} is banked", wanted.content));
+            .unwrap_or_else(|| panic!("{} is banked", wanted.word));
         value.link(card, &word).unwrap();
     }
     value.settle(verse);
@@ -54,7 +56,7 @@ fn hebrew_verses_align_word_for_word_and_read_back_from_aligned_usfm() {
         // A phrase across the maqaf, such as דְּבַר־יְהוָ֔ה in 1:1.
         value.merge(1, 2).unwrap();
         value.settle(verse);
-        assert_eq!(value.alignments[1].sources.len(), 2, "{reference}");
+        assert_eq!(value.alignments[1].top_words.len(), 2, "{reference}");
         assert!(value.done, "{reference}");
 
         let woven = weave_verse(verse.text(), &value).unwrap();
@@ -63,9 +65,6 @@ fn hebrew_verses_align_word_for_word_and_read_back_from_aligned_usfm() {
         let back = from_aligned(&aligned, Some(source));
         assert_eq!(back.alignments, value.alignments, "{reference}");
         assert!(back.word_bank.is_empty(), "{reference}");
-
-        let json = record::to_record(&value, false);
-        assert_eq!(record::from_record(&json, basis(1)).unwrap(), value);
     }
 }
 
@@ -79,7 +78,7 @@ fn a_hebrew_verse_edited_keeps_its_other_links_and_reports_the_lost_one() {
     let next = reflow(&value, &TargetVerse::new(edited)).unwrap();
     assert_eq!(next.value.placed(), value.placed() - 1);
     assert_eq!(next.dropped.len(), 1);
-    assert_eq!(next.dropped[0].word.text, "לֵ\u{2060}אמֹֽר");
+    assert_eq!(next.dropped[0].word.word, "לֵ\u{2060}אמֹֽר");
     assert_eq!(next.dropped[0].card, value.alignments.len() - 1);
     assert!(
         !next.value.done,
@@ -109,14 +108,17 @@ fn a_hebrew_card_keeps_its_words_in_reading_order_however_they_are_dropped() {
         verse
             .words()
             .iter()
-            .find(|w| w.text == "אֶל" && w.occurrence == n)
+            .find(|w| w.word == "אֶל" && w.occurrence == n)
             .cloned()
             .unwrap()
     };
     let mut aligner = Aligner::open(None, verse.clone(), &source, basis(1)).unwrap();
     aligner.place(0, &el(3)).unwrap();
     aligner.place_many(0, &[el(2), el(1)]).unwrap();
-    assert_eq!(aligner.value().alignments[0].targets, [el(1), el(2), el(3)]);
+    assert_eq!(
+        aligner.value().alignments[0].bottom_words,
+        [el(1), el(2), el(3)]
+    );
     aligner.unplace(0, &el(2)).unwrap();
     let mut bank = verse.words().to_vec();
     bank.retain(|w| w != &el(1) && w != &el(3));
@@ -135,5 +137,5 @@ fn a_shift_click_on_a_hebrew_bank_selects_a_run_in_reading_order_either_way() {
     aligner.click_bank_word(7, Click::Range);
     assert_eq!(aligner.selection(), &words[2..=7]);
     assert_eq!(aligner.place_selection(3), Ok(6));
-    assert_eq!(aligner.value().alignments[3].targets, &words[2..=7]);
+    assert_eq!(aligner.value().alignments[3].bottom_words, &words[2..=7]);
 }

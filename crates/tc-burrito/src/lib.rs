@@ -22,6 +22,7 @@
 //! twice, a number an f64 cannot hold exactly, a lone surrogate escape. The writer refuses
 //! an `extra` map that repeats a modelled key.
 
+mod build;
 mod error;
 mod files;
 mod ingredient;
@@ -34,6 +35,10 @@ mod scope;
 mod time;
 mod validate;
 
+pub use build::{
+    DERIVED_FIELDS, IngredientEntry, MetadataSource, build_metadata, check_field,
+    check_relationship, check_scope, is_derived_field,
+};
 pub use error::{Error, ValueError};
 pub use files::{DirProject, FileState, MemProject, ProjectFiles};
 pub use ingredient::{FileFacts, Md5, MimeType};
@@ -47,7 +52,7 @@ pub use model::{
     TargetArea, TextStories, TextTranslation, TranslationType,
 };
 pub use open_enum::UnknownValue;
-pub use path::{IngredientPath, PathRule};
+pub use path::{IngredientPath, PathRule, collision_form};
 pub use schema::{SchemaLoadError, schema_ready};
 pub use scope::{Scope, ScopeBook, ScopeRange};
 pub use time::{Timestamp, TimestampError};

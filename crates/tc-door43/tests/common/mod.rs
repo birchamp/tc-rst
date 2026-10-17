@@ -5,7 +5,7 @@
 
 use std::path::Path;
 use tc_door43::{
-    CommitSha, Credentials, Door43Client, InternetSwitch, Limits, Password, RepoRef, TagName,
+    Credentials, Door43Client, GitOid, InternetSwitch, Limits, Password, RepoRef, TagName,
     TokenName,
 };
 use tc_door43_fake::{FakeDoor43, seeded};
@@ -30,7 +30,7 @@ pub fn tag(name: &str) -> TagName {
     name.parse().unwrap()
 }
 
-pub fn sha(hex: &str) -> CommitSha {
+pub fn sha(hex: &str) -> GitOid {
     hex.parse().unwrap()
 }
 

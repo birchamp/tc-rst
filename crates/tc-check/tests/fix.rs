@@ -4,14 +4,30 @@
 
 mod common;
 
-use common::{pin, sha40};
+use common::{LanguageSet, Pins, Set, Slot, pin, sha40};
 use tc_check::fix::{
     Installed, Machine, PreflightState, SideloadRefusal, guided_fix, preflight, repin,
     verify_sideload,
 };
-use tc_check::resolve::{Answer, LanguageSet, SlotPin, answer_with, resolve, resolve_with};
-use tc_check::{Collection, Coverage, Pin, Pins, Rung, Slot, ToolId};
+use tc_check::fix::{Resolution, pin_label};
+use tc_check::{Answer, Collection, Coverage, Ladder, Pin, Rung, SlotPin, ToolId, Unrecorded};
 use tc_core::BookId;
+use tc_journal::json::Json;
+
+/// Where the ladder stops on a computer with nothing installed, when a usable pin does.
+fn resolve(pins: &Pins, tool: ToolId, collection: Collection) -> Option<Resolution> {
+    match pins.answer(tool, collection, Unrecorded::Installed(&|_| None))? {
+        Answer::Pin { rung, pin } => Some(Resolution { rung, pin }),
+        Answer::Unusable { .. } => None,
+    }
+}
+
+fn all_pins(pins: &Pins) -> Vec<Pin> {
+    [&pins.primary, &pins.fallback]
+        .into_iter()
+        .flat_map(|s| s.as_ref().unwrap().pins())
+        .collect()
+}
 
 fn set(lang: &str, org: &str, v: &str, books: &[&str]) -> LanguageSet {
     let mut s = LanguageSet::default();
@@ -81,22 +97,33 @@ fn a_pin_s_own_coverage_outranks_what_is_installed() {
         .as_mut()
         .unwrap()
         .insert(Slot::TranslationNotes, es_tn.clone());
-    // The fold's resolution reads recorded coverage only: Titus falls to English.
+    let tn = ToolId::TranslationNotes;
+    let titus = book(BookId::Titus);
+    // The fold reads a pin that records no books as covering every book (STORAGE §7.7),
+    // so its result is the same on every computer: Spanish answers.
     assert_eq!(
-        resolve(&pins, ToolId::TranslationNotes, book(BookId::Titus))
-            .unwrap()
-            .rung,
-        Rung::Fallback
+        pins.resolution(tn, titus).map(|a| a.rung()),
+        Some(Rung::Primary)
     );
-    // With the installed copy's books, as tC4's screens resolve, Spanish answers.
-    let local =
-        |r: &tc_check::ResourceRef| (*r == es_tn.resource).then(|| Coverage::from_codes(["TIT"]));
-    assert_eq!(
-        resolve_with(&pins, ToolId::TranslationNotes, book(BookId::Titus), local)
-            .unwrap()
-            .rung,
-        Rung::Primary
-    );
+    // A screen on a computer with nothing installed cannot tell: Titus falls to English.
+    assert_eq!(resolve(&pins, tn, titus).unwrap().rung, Rung::Fallback);
+    // With the installed copy's books, as tC4's screens resolve, Spanish answers when the
+    // copy holds the book, and English when it does not.
+    let holds = |codes: &'static [&'static str]| {
+        let es_tn = es_tn.resource.clone();
+        move |r: &tc_check::ResourceRef| {
+            r.same_resource(&es_tn)
+                .then(|| Coverage::from_codes(codes.iter().copied()))
+        }
+    };
+    let titus_installed = holds(&["TIT"]);
+    let ruth_installed = holds(&["RUT"]);
+    let on = |local: &dyn Fn(&tc_check::ResourceRef) -> Option<Coverage>| {
+        pins.answer(tn, titus, Unrecorded::Installed(local))
+            .map(|a| a.rung())
+    };
+    assert_eq!(on(&titus_installed), Some(Rung::Primary));
+    assert_eq!(on(&ruth_installed), Some(Rung::Fallback));
 }
 
 #[test]
@@ -110,16 +137,18 @@ fn a_story_collection_resolves_to_its_first_pinned_rung() {
     let r = resolve(&pins, ToolId::TranslationNotes, Collection::Stories).unwrap();
     assert_eq!(r.pin.version.as_deref(), Some("v13"));
     assert!(resolve(&pins, ToolId::TranslationWords, Collection::Stories).is_none());
+    assert_eq!(
+        pins.resolution(ToolId::TranslationNotes, Collection::Stories)
+            .and_then(|a| a.version().map(str::to_owned)),
+        Some("v13".to_owned())
+    );
 }
 
 #[test]
 fn preflight_states_are_distinct() {
     let pins = spanish_and_english();
-    let all: Vec<&Pin> = [&pins.primary, &pins.fallback]
-        .into_iter()
-        .flat_map(|s| s.as_ref().unwrap().pins().map(|(_, p)| p))
-        .collect();
-    let everything = installed(&all);
+    let all = all_pins(&pins);
+    let everything = installed(&all.iter().collect::<Vec<_>>());
     let online = Machine {
         installed: &everything,
         online: true,
@@ -142,11 +171,7 @@ fn preflight_states_are_distinct() {
     // "not covered".
     let mut unknown = pins.clone();
     for s in [&mut unknown.primary, &mut unknown.fallback] {
-        for held in s.as_mut().unwrap().slots.values_mut() {
-            if let SlotPin::Usable(p) = held {
-                p.coverage = Coverage::Unrecorded;
-            }
-        }
+        s.as_mut().unwrap().forget_coverage();
     }
     let offline = Machine {
         installed: &[],
@@ -183,8 +208,7 @@ fn an_old_one_repository_word_links_pin_is_refused() {
         .as_ref()
         .unwrap()
         .get(Slot::TranslationWords)
-        .unwrap()
-        .clone();
+        .unwrap();
     pins.primary
         .as_mut()
         .unwrap()
@@ -274,7 +298,7 @@ fn the_tw_tool_needs_the_resolving_set_s_articles_too() {
     assert_eq!((both.state, both.needs), (PreflightState::Ready, None));
     // tN does not read translation words.
     let ar_tn = pins.pin(Rung::Primary, Slot::TranslationNotes).unwrap();
-    let i = installed(&[ar_tn]);
+    let i = installed(&[&ar_tn]);
     let tn = preflight(
         Some(&pins),
         ToolId::TranslationNotes,
@@ -320,10 +344,7 @@ fn a_fallback_used_because_the_primary_is_not_installed_is_warned() {
         .as_mut()
         .unwrap()
         .insert(Slot::TranslationNotes, es_tn.clone());
-    let en_tn = pins
-        .pin(Rung::Fallback, Slot::TranslationNotes)
-        .unwrap()
-        .clone();
+    let en_tn = pins.pin(Rung::Fallback, Slot::TranslationNotes).unwrap();
     let i = installed(&[&en_tn]);
     let pre = preflight(
         Some(&pins),
@@ -377,7 +398,7 @@ fn the_guided_fix_names_the_pin_its_rung_and_the_installed_alternatives() {
     assert_eq!(fix.pin.resource, ar_tw.resource);
     assert_eq!(fix.rung, Rung::Primary);
     assert_eq!(fix.candidates, std::slice::from_ref(&older_tw));
-    assert_eq!(fix.pin.label(), "ar_tw · v3");
+    assert_eq!(pin_label(&fix.pin), "ar_tw · v3");
 
     let offer = repin(&pins, fix.rung, &fix.pin, &older_tw).unwrap();
     assert_eq!(offer.slots, [Slot::TranslationWords]);
@@ -463,18 +484,18 @@ fn pins_read_from_tc4_json() {
         }
     });
     let set = LanguageSet::from_json(&json).unwrap();
-    assert_eq!(set.unusable().count(), 0);
-    assert_eq!(set.slots.len(), 2);
+    assert!(set.unusable().is_empty());
+    assert_eq!(set.slot_count(), 2);
     let tn = set.get(Slot::TranslationNotes).unwrap();
     assert!(tn.coverage.covers(BookId::Jonah) && !tn.coverage.covers(BookId::Ruth));
     assert_eq!(
         set.get(Slot::TranslationWords).unwrap().coverage,
         Coverage::Whole
     );
-    assert!(
-        Pin::from_json(&serde_json::json!({"repoPath": "git.door43.org/x/y", "version": "v1"}))
-            .is_err()
-    );
+    assert!(matches!(
+        read(&serde_json::json!({"repoPath": "git.door43.org/x/y", "version": "v1"})),
+        Some(SlotPin::Unusable(_))
+    ));
 }
 
 #[test]
@@ -495,25 +516,29 @@ fn one_unreadable_pin_leaves_the_rest_of_the_set_readable() {
     let pin = set.get(Slot::TranslationNotes).unwrap();
     assert_eq!(pin.coverage, Coverage::Unrecorded);
     assert_eq!(pin.version.as_deref(), Some("v91"));
-    let unusable: Vec<Slot> = set.unusable().map(|(slot, _)| slot).collect();
-    assert_eq!(unusable, [Slot::ObsImages]);
+    assert_eq!(set.unusable(), [Slot::ObsImages]);
     assert!(set.get(Slot::ObsImages).is_none());
     // A null slot is no pin (tC4 `if (pin)`).
-    assert!(!set.slots.contains_key(&Slot::ObsNotes));
-    assert!(LanguageSet::from_json(&serde_json::json!(["not", "a", "set"])).is_err());
+    assert!(set.held(Slot::ObsNotes).is_none());
+    assert!(LanguageSet::from_json(&serde_json::json!(["not", "a", "set"])).is_none());
     let books_not_a_list = serde_json::json!({
         "repoPath": "git.door43.org/unfoldingWord/en_tn",
         "sha": "e586762e330f482a60c52aedd1c7b3a2f155df8a",
         "books": "TIT"
     });
-    assert_eq!(
-        Pin::from_json(&books_not_a_list).unwrap().coverage,
-        Coverage::Unrecorded
-    );
+    match read(&books_not_a_list) {
+        Some(SlotPin::Usable(pin)) => assert_eq!(pin.coverage, Coverage::Unrecorded),
+        other => panic!("{other:?}"),
+    }
 }
 
-/// What a language set read from tC4 JSON holds for a pin with a tag and no commit.
-fn tag_only(slot: Slot, repo: &str, books: Option<&[&str]>) -> SlotPin {
+/// A slot value as the ladder reads it.
+fn read(value: &serde_json::Value) -> Option<SlotPin> {
+    SlotPin::read(&Json::try_from(value).unwrap())
+}
+
+/// A pin with a tag and no commit, as tC4 JSON writes it, and what the ladder reads of it.
+fn tag_only(repo: &str, books: Option<&[&str]>) -> (serde_json::Value, SlotPin) {
     let mut json = serde_json::json!({
         "repoPath": format!("git.door43.org/{repo}"),
         "version": "v66",
@@ -521,33 +546,22 @@ fn tag_only(slot: Slot, repo: &str, books: Option<&[&str]>) -> SlotPin {
     if let Some(books) = books {
         json["books"] = serde_json::json!(books);
     }
-    let mut set = serde_json::Map::new();
-    set.insert(slot.name().to_owned(), json);
-    let read = LanguageSet::from_json(&serde_json::Value::Object(set)).unwrap();
-    let held = read.slots[&slot].clone();
+    let held = read(&json).unwrap();
     assert!(matches!(held, SlotPin::Unusable(_)), "{held:?}");
-    held
+    (json, held)
 }
 
 #[test]
 fn an_unusable_primary_pin_is_not_replaced_by_the_fallback() {
     let mut pins = spanish_and_english();
-    let es_tn = tag_only(
-        Slot::TranslationNotes,
-        "Es-419_gl/es-419_tn",
-        Some(&["TIT", "JON"]),
-    );
+    let (json, es_tn) = tag_only("Es-419_gl/es-419_tn", Some(&["TIT", "JON"]));
     pins.primary
         .as_mut()
         .unwrap()
-        .slots
-        .insert(Slot::TranslationNotes, es_tn.clone());
+        .insert_json(Slot::TranslationNotes, &json);
     let tn = ToolId::TranslationNotes;
-    let all: Vec<&Pin> = [&pins.primary, &pins.fallback]
-        .into_iter()
-        .flat_map(|s| s.as_ref().unwrap().pins().map(|(_, p)| p))
-        .collect();
-    let everything = installed(&all);
+    let all = all_pins(&pins);
+    let everything = installed(&all.iter().collect::<Vec<_>>());
     let machine = Machine {
         installed: &everything,
         online: true,
@@ -556,7 +570,7 @@ fn an_unusable_primary_pin_is_not_replaced_by_the_fallback() {
     // tC4 resolves Titus to the primary pin, which no install satisfies; English is
     // not used in its place.
     let none = |_: &tc_check::ResourceRef| None;
-    match answer_with(&pins, tn, book(BookId::Titus), none) {
+    match pins.answer(tn, book(BookId::Titus), Unrecorded::Installed(&none)) {
         Some(Answer::Unusable { rung, pin }) => {
             assert_eq!(rung, Rung::Primary);
             assert_eq!(SlotPin::Unusable(pin), es_tn);
@@ -575,15 +589,10 @@ fn an_unusable_primary_pin_is_not_replaced_by_the_fallback() {
     // Nor does the guided fix offer English, whose coverage is unknown here: getting it
     // would not repair the Spanish pin.
     let mut unknown_english = pins.clone();
-    if let Some(SlotPin::Usable(p)) = unknown_english
-        .fallback
-        .as_mut()
-        .unwrap()
-        .slots
-        .get_mut(&Slot::TranslationNotes)
-    {
-        p.coverage = Coverage::Unrecorded;
-    }
+    let fallback = unknown_english.fallback.as_mut().unwrap();
+    let mut en_tn = fallback.get(Slot::TranslationNotes).unwrap();
+    en_tn.coverage = Coverage::Unrecorded;
+    fallback.insert(Slot::TranslationNotes, en_tn);
     let bare = Machine {
         installed: &[],
         online: true,
@@ -612,17 +621,13 @@ fn an_unusable_primary_pin_is_not_replaced_by_the_fallback() {
 #[test]
 fn an_unusable_primary_pin_that_records_no_books_warns_like_a_missing_one() {
     let mut pins = spanish_and_english();
-    let es_tn = tag_only(Slot::TranslationNotes, "Es-419_gl/es-419_tn", None);
+    let (json, es_tn) = tag_only("Es-419_gl/es-419_tn", None);
     pins.primary
         .as_mut()
         .unwrap()
-        .slots
-        .insert(Slot::TranslationNotes, es_tn.clone());
+        .insert_json(Slot::TranslationNotes, &json);
     let tn = ToolId::TranslationNotes;
-    let en_tn = pins
-        .pin(Rung::Fallback, Slot::TranslationNotes)
-        .unwrap()
-        .clone();
+    let en_tn = pins.pin(Rung::Fallback, Slot::TranslationNotes).unwrap();
     let i = installed(&[&en_tn]);
     let machine = Machine {
         installed: &i,
@@ -646,10 +651,7 @@ fn an_unusable_primary_pin_that_records_no_books_warns_like_a_missing_one() {
 fn an_unusable_story_pin_or_articles_pin_stops_the_tool() {
     // A story collection is answered by its first pinned rung, usable or not.
     let mut primary = LanguageSet::default();
-    primary.slots.insert(
-        Slot::ObsNotes,
-        tag_only(Slot::ObsNotes, "unfoldingWord/en_obs-tn", None),
-    );
+    primary.insert_json(Slot::ObsNotes, &tag_only("unfoldingWord/en_obs-tn", None).0);
     let mut fallback = LanguageSet::default();
     fallback.insert(Slot::ObsNotes, pin("unfoldingWord/en_obs-tn", "v13", &[]));
     let pins = Pins {
@@ -662,7 +664,11 @@ fn an_unusable_story_pin_or_articles_pin_stops_the_tool() {
     };
     let none = |_: &tc_check::ResourceRef| None;
     assert!(matches!(
-        answer_with(&pins, ToolId::TranslationNotes, Collection::Stories, none),
+        pins.answer(
+            ToolId::TranslationNotes,
+            Collection::Stories,
+            Unrecorded::Installed(&none)
+        ),
         Some(Answer::Unusable {
             rung: Rung::Primary,
             ..
@@ -679,9 +685,9 @@ fn an_unusable_story_pin_or_articles_pin_stops_the_tool() {
     // The tW tool reads the resolving set's articles; an unusable articles pin stops it
     // even when the word links are installed.
     let (mut pins, twl, _, en_tw) = arabic();
-    pins.primary.as_mut().unwrap().slots.insert(
+    pins.primary.as_mut().unwrap().insert_json(
         Slot::TranslationWords,
-        tag_only(Slot::TranslationWords, "ar_gt/ar_tw", Some(&["BIBLE"])),
+        &tag_only("ar_gt/ar_tw", Some(&["BIBLE"])).0,
     );
     let i = installed(&[&twl, &en_tw]);
     let pre = preflight(

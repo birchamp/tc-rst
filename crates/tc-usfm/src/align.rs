@@ -21,7 +21,8 @@
 //! # What [`weave`] writes
 //!
 //! - Every target word becomes `\w word|x-occurrence="n" x-occurrences="m"\w*`, counted
-//!   by [`target_words`]. Words in no group stay bare.
+//!   by [`target_words`]. A word in no group is written the same way, outside any
+//!   milestone.
 //! - A group's milestones open before its first word and close after its last word, with
 //!   the text between its words inside them. The group is cut into several runs, each
 //!   with its own copy of the milestones, where its words are not next to each other or
@@ -211,7 +212,8 @@ pub fn target_words(plain: &str) -> Result<Vec<TargetWord>, Error> {
 ///
 /// Every target of every group must be a word of the verse ([`target_words`]) with the
 /// same occurrence and occurrence count, and no word may belong to two groups that have
-/// sources. A group without sources aligns nothing, so its words stay bare; a group
+/// sources. A group without sources aligns nothing, so its words stand outside any
+/// milestone; a group
 /// without targets writes nothing. Each source word that is written needs an occurrence
 /// and a count of at least 1 and attributes that read back the same. An occurrence
 /// greater than the count is written as it stands, as [`parse_aligned`] reads it.

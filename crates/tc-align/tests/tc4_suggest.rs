@@ -6,6 +6,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;
+use tc_align::Alignment;
+use tc_align::bootstrap;
 
 use common::*;
 use serde_json::Value;
@@ -273,13 +275,13 @@ fn the_growth_bench_on_en_ult_and_en_ust_titus_gives_tc4s_recall() {
 
 fn g(text: &str, strong: &str, lemma: &str, morph: &str) -> SourceWord {
     SourceWord {
-        content: text.to_owned(),
+        word: text.to_owned(),
         strong: Some(strong.to_owned()),
         lemma: Some(lemma.to_owned()),
         morph: Some(morph.to_owned()),
         occurrence: 1,
         occurrences: 1,
-        extra: Vec::new(),
+        extra: tc_journal::json::JsonMap::new(),
     }
 }
 
@@ -304,17 +306,14 @@ fn orig14() -> Vec<SourceWord> {
 
 fn boot(text: &str, orig: Vec<SourceWord>) -> (AlignmentValue, TargetVerse) {
     let verse = TargetVerse::new(text);
-    (
-        AlignmentValue::bootstrap(&SourceVerse::new(orig), &verse, basis(1)),
-        verse,
-    )
+    (bootstrap(&SourceVerse::new(orig), &verse, basis(1)), verse)
 }
 
 fn place(value: &mut AlignmentValue, card: usize, text: &str) {
     let word = value
         .word_bank
         .iter()
-        .find(|w| w.text == text)
+        .find(|w| w.word == text)
         .cloned()
         .unwrap();
     value.link(card, &word).unwrap();
@@ -362,7 +361,7 @@ fn raw(source: &[usize], target: &[usize], confidence: f64) -> RawLink {
 fn shown(proposals: &[suggest::Proposal]) -> Vec<String> {
     proposals
         .iter()
-        .map(|p| format!("{}:{}", p.card, p.word.text))
+        .map(|p| format!("{}:{}", p.card, p.word.word))
         .collect()
 }
 
@@ -485,9 +484,9 @@ fn trained_on_two_verses_it_proposes_theou_to_dios_and_never_the_placed_padre() 
     let before = v.clone();
     let raw = trained.predict(&suggest::session_input(&v, &verse));
     let links = suggest::proposals(&v, &verse, &raw);
-    let dios = links.iter().find(|l| l.word.text == "Dios").unwrap();
+    let dios = links.iter().find(|l| l.word.word == "Dios").unwrap();
     assert_eq!(dios.card, 0, "the Θεοῦ card");
-    assert!(links.iter().all(|l| l.word.text != "Padre"));
+    assert!(links.iter().all(|l| l.word.word != "Padre"));
     // The value is untouched by any of this.
     assert_eq!(v, before);
 }
@@ -555,7 +554,7 @@ fn a_confirmed_save_joins_the_memory_at_once_and_a_resave_keeps_the_count() {
         &verse,
         &trained.predict(&suggest::session_input(&v, &verse)),
     );
-    assert!(links.iter().any(|l| l.word.text == "Tito"));
+    assert!(links.iter().any(|l| l.word.word == "Tito"));
     trained.append_verse(&tv14, false);
     assert_eq!(trained.verses(), 2);
 }

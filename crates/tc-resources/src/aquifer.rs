@@ -21,7 +21,7 @@ use reqwest::StatusCode;
 use reqwest::header::{ACCEPT, HeaderMap};
 use serde::Deserialize;
 use tc_core::BookId;
-use tc_door43::{CommitSha, InternetSwitch, TagName, UnreachableCause};
+use tc_door43::{GitOid, InternetSwitch, TagName, UnreachableCause};
 use tc_helps::HelpRef;
 use tc_helps::aquifer::{
     AquiferHelpsKind, academy_from_aquifer, notes_from_aquifer, parse_aquifer_articles,
@@ -353,7 +353,7 @@ impl AquiferClient {
         &self,
         repo: &AquiferRepo,
         tag: &TagName,
-    ) -> Result<CommitSha, AquiferError> {
+    ) -> Result<GitOid, AquiferError> {
         let mut rest = vec!["commits"];
         rest.extend(tag.as_str().split('/'));
         let url = self.repo_api(repo, &rest);

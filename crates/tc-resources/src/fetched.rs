@@ -24,7 +24,7 @@
 use std::collections::HashSet;
 
 use serde::Deserialize;
-use tc_door43::{CommitSha, ObjectId, RepoRef, VerifiedArchive, verify_archive};
+use tc_door43::{GitOid, ObjectId, RepoRef, VerifiedArchive, verify_archive};
 
 use crate::error::{ParseError, Refusal};
 use crate::pin::Sha256;
@@ -41,7 +41,7 @@ pub struct FetchedLock {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LockEntry {
     pub repo: RepoRef,
-    pub commit: CommitSha,
+    pub commit: GitOid,
     /// The commit's git tree id, as Door43 reported it.
     pub tree: ObjectId,
     /// The archive's file name in the lock's folder. `None` for an archive the packaging
@@ -131,7 +131,7 @@ impl FetchedLock {
     }
 
     /// The entry for `commit` of `repo`.
-    pub fn entry(&self, repo: &RepoRef, commit: &CommitSha) -> Option<&LockEntry> {
+    pub fn entry(&self, repo: &RepoRef, commit: &GitOid) -> Option<&LockEntry> {
         self.entries
             .iter()
             .find(|e| e.repo == *repo && e.commit == *commit)
@@ -143,7 +143,7 @@ impl FetchedLock {
     pub fn check(
         &self,
         repo: &RepoRef,
-        commit: &CommitSha,
+        commit: &GitOid,
         zip: &[u8],
         max_unpacked: u64,
     ) -> Result<TreeCheck, Refusal> {
@@ -182,7 +182,9 @@ impl RawEntry {
         }
         Ok(LockEntry {
             repo: self.repo.parse().map_err(|e| format!("repo: {e}"))?,
-            commit: self.commit.parse().map_err(|e| format!("commit: {e}"))?,
+            // The lock is written by hand; a commit pasted in upper case is the same commit.
+            commit: GitOid::parse_any_case(&self.commit)
+                .ok_or_else(|| format!("commit: {:?} is not a 40-digit commit sha", self.commit))?,
             tree: self
                 .tree
                 .parse()
@@ -285,7 +287,7 @@ mod tests {
         };
         assert_eq!(entry.repo.to_string(), "uW/en_ugl");
         assert_eq!(
-            entry.commit.as_str(),
+            &entry.commit.to_hex(),
             "d9d29e2d589258ce27f92b59f753a3af03ab7a72",
             "a commit is kept in lowercase"
         );

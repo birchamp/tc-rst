@@ -3,108 +3,19 @@
 //!
 //! Partial coverage needs no change: the ladder resolves per (tool, book), so a project
 //! pinned Spanish then English uses Spanish where it covers a book and English elsewhere.
-//! Only an explicit whole-project change moves which resource a checked book uses, so its
-//! consequences are counted here, before it is committed, and the person can decline.
-//! The change moves `primary` (and the source panes, when given); the English fallback
-//! never changes here. A book with stored decisions that neither rung would answer after
-//! the change blocks it.
-//!
-//! # How the stored records map to the input
-//!
-//! [`StoredDecisions`] is one (tool, unit) of `Check` records (STORAGE §2.2): `tool` from
-//! the `CheckKey`'s tool, `unit` from its target (a book, or the stories), and one
-//! [`ResourceRef`] per decision from its `DecisionRecord::resource`. `MovedTo` records
-//! are not decisions and are left out.
+//! Only an explicit whole-project change moves which resource a checked book uses. What it
+//! would cost (the decisions it would put back to work, and the books it would leave with no
+//! rung) is counted before it is committed by `tc-check`'s `change` module, over the
+//! journal's ladder; this module makes the pin edits. The change moves `primary` (and the
+//! source panes, when given); the English fallback never changes here.
 
 use tc_core::BookId;
 
 use crate::gateways::{self, Gateway, GatewayBibles};
 use crate::pin::ResourcePin;
-use crate::resolve::{CheckUnit, LocalCoverage, ResourceRef, covers, record_matches, resolve_unit};
-use crate::sets::{LanguageSet, PaneId, ProjectKind, ProjectPins, ScripturePane, SetSlot, Tool};
+use crate::resolve::{LocalCoverage, covers};
+use crate::sets::{LanguageSet, PaneId, ProjectKind, ProjectPins, ScripturePane, SetSlot};
 use crate::suite;
-
-/// The stored decisions of one (tool, unit), each by the resource it was made against.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoredDecisions {
-    pub tool: Tool,
-    pub unit: CheckUnit,
-    pub resources: Vec<ResourceRef>,
-}
-
-/// One (tool, unit) whose decisions were made against a resource it would no longer
-/// resolve to.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AffectedUnit {
-    pub tool: Tool,
-    pub unit: CheckUnit,
-    /// How many of its decisions would no longer match.
-    pub decisions: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChangeConsequences {
-    /// Units with decisions that keep resolving to what they were checked against.
-    pub unaffected: usize,
-    pub affected: Vec<AffectedUnit>,
-    /// Decisions made against a resource the change moves away from. Some carry over
-    /// (D36); the rest come back as work. None is deleted.
-    pub decisions_at_risk: usize,
-    /// Affected units that neither rung answers after the change. The change is refused
-    /// while any exists: their decisions would match no rung (tC4 review round 7).
-    pub uncovered: Vec<(Tool, CheckUnit)>,
-}
-
-impl ChangeConsequences {
-    /// Nothing at all would be disturbed: commit without ceremony.
-    pub fn harmless(&self) -> bool {
-        self.affected.is_empty()
-    }
-
-    pub fn blocked(&self) -> bool {
-        !self.uncovered.is_empty()
-    }
-}
-
-/// What the change to `next` would cost (tC4 `consequencesOfGatewayChange` and
-/// `uncoveredByChange`). A unit is affected when a decision was made against a resource
-/// that is not what the unit resolves to after the change; membership in the new pins is
-/// not enough, because a book the new primary covers moves to it even when the old
-/// resource stays pinned as the fallback.
-pub fn consequences_of_gateway_change(
-    stored: &[StoredDecisions],
-    next: &ProjectPins,
-    local: &dyn LocalCoverage,
-) -> ChangeConsequences {
-    let mut out = ChangeConsequences {
-        unaffected: 0,
-        affected: Vec::new(),
-        decisions_at_risk: 0,
-        uncovered: Vec::new(),
-    };
-    for entry in stored.iter().filter(|e| !e.resources.is_empty()) {
-        let after = resolve_unit(next, entry.tool, entry.unit, local);
-        let moved = entry
-            .resources
-            .iter()
-            .filter(|r| !record_matches(Some(r), after.as_ref()))
-            .count();
-        if moved == 0 {
-            out.unaffected += 1;
-            continue;
-        }
-        out.decisions_at_risk += moved;
-        out.affected.push(AffectedUnit {
-            tool: entry.tool,
-            unit: entry.unit,
-            decisions: moved,
-        });
-        if after.is_none() {
-            out.uncovered.push((entry.tool, entry.unit));
-        }
-    }
-    out
-}
 
 /// Pins with both language sets (D17): a missing `fallback` is the bundled English suite,
 /// and a missing `primary` starts equal to it (tC4 `completeLanguageSets`, #485).
@@ -234,7 +145,6 @@ mod tests {
 
     use super::*;
     use crate::pin::BookCoverage;
-    use crate::resolve::RecordedOnly;
     use crate::sets::GatewayLanguage;
 
     fn sha40(s: &str) -> String {
@@ -279,20 +189,6 @@ mod tests {
     fn es() -> LanguageSet {
         set("es-419", "Es-419_gl", "v66")
     }
-    fn en() -> LanguageSet {
-        set("en", "unfoldingWord", "v89")
-    }
-    fn fr() -> LanguageSet {
-        set("fr", "Xenizo", "v2.0")
-    }
-
-    fn pins(primary: LanguageSet, fallback: LanguageSet) -> ProjectPins {
-        ProjectPins {
-            primary: Some(primary),
-            fallback: Some(fallback),
-            ..ProjectPins::default()
-        }
-    }
 
     fn coverage(
         entries: &[(&ResourcePin, &[&str])],
@@ -310,153 +206,6 @@ mod tests {
             map.get(&format!("{}@{}", p.repo.to_string().to_lowercase(), p.sha))
                 .cloned()
         }
-    }
-
-    fn stored(book: BookId, repo: &str, version: &str, decisions: usize) -> StoredDecisions {
-        let r = ResourceRef::from(&pin(repo, version));
-        StoredDecisions {
-            tool: Tool::TranslationNotes,
-            unit: CheckUnit::Book(book),
-            resources: vec![r; decisions],
-        }
-    }
-
-    fn cov() -> impl Fn(&ResourcePin) -> Option<BookCoverage> {
-        let (fr, en) = (fr(), en());
-        coverage(&[
-            (fr.pin(SetSlot::TranslationNotes).unwrap(), &["TIT", "JON"]),
-            (
-                fr.pin(SetSlot::TranslationWordsLinks).unwrap(),
-                &["TIT", "JON"],
-            ),
-            (
-                en.pin(SetSlot::TranslationNotes).unwrap(),
-                &["TIT", "JON", "HEB", "PSA", "RUT"],
-            ),
-            (en.pin(SetSlot::TranslationWordsLinks).unwrap(), &["BIBLE"]),
-        ])
-    }
-
-    #[test]
-    fn a_change_that_disturbs_nothing_is_harmless() {
-        let c = consequences_of_gateway_change(
-            &[stored(BookId::Titus, "unfoldingWord/en_tn", "v89", 12)],
-            &pins(en(), en()),
-            &cov(),
-        );
-        assert!(c.harmless() && !c.blocked());
-        assert_eq!(c.decisions_at_risk, 0);
-    }
-
-    #[test]
-    fn decisions_that_would_need_review_are_counted_per_book() {
-        let c = consequences_of_gateway_change(
-            &[
-                stored(BookId::Titus, "Es-419_gl/es-419_tn", "v66", 30),
-                stored(BookId::Jonah, "Es-419_gl/es-419_tn", "v66", 17),
-            ],
-            &pins(fr(), en()),
-            &cov(),
-        );
-        assert!(!c.harmless());
-        let books: Vec<CheckUnit> = c.affected.iter().map(|a| a.unit).collect();
-        assert_eq!(
-            books,
-            [
-                CheckUnit::Book(BookId::Titus),
-                CheckUnit::Book(BookId::Jonah)
-            ]
-        );
-        assert_eq!(c.decisions_at_risk, 47);
-    }
-
-    #[test]
-    fn a_book_the_new_primary_does_not_cover_keeps_its_fallback() {
-        let c = consequences_of_gateway_change(
-            &[stored(BookId::Hebrews, "unfoldingWord/en_tn", "v89", 25)],
-            &pins(fr(), en()),
-            &cov(),
-        );
-        assert!(c.harmless());
-        assert_eq!(c.unaffected, 1);
-    }
-
-    #[test]
-    fn no_decisions_cost_nothing() {
-        let c = consequences_of_gateway_change(
-            &[stored(BookId::Titus, "Es-419_gl/es-419_tn", "v66", 0)],
-            &pins(fr(), en()),
-            &cov(),
-        );
-        assert!(c.harmless());
-        assert_eq!(c.unaffected, 0);
-    }
-
-    #[test]
-    fn an_affected_book_neither_rung_covers_blocks_the_change() {
-        let fr = fr();
-        let local = coverage(&[(fr.pin(SetSlot::TranslationNotes).unwrap(), &["TIT"])]);
-        let c = consequences_of_gateway_change(
-            &[
-                stored(BookId::Titus, "Es-419_gl/es-419_tn", "v66", 3),
-                stored(BookId::Ruth, "Es-419_gl/es-419_tn", "v66", 2),
-            ],
-            &pins(fr.clone(), fr),
-            &local,
-        );
-        assert!(c.blocked());
-        assert_eq!(
-            c.uncovered,
-            [(Tool::TranslationNotes, CheckUnit::Book(BookId::Ruth))]
-        );
-    }
-
-    #[test]
-    fn stories_are_resolved_by_presence_and_an_absent_primary_member_falls_back() {
-        let obs = |base: LanguageSet, token: &str| {
-            let owner = base.gateway.owner.to_string();
-            let lang = base.gateway.language.clone();
-            base.with(
-                SetSlot::ObsNotes,
-                pin(&format!("{owner}/{lang}_obs-tn"), token),
-            )
-        };
-        let old = obs(es(), "old");
-        let next = obs(fr(), "next");
-        let fallback = obs(en(), "fallback");
-        let prior = ResourceRef::from(old.pin(SetSlot::ObsNotes).unwrap());
-        let decisions = [StoredDecisions {
-            tool: Tool::TranslationNotes,
-            unit: CheckUnit::Stories,
-            resources: vec![prior; 3],
-        }];
-        let c = consequences_of_gateway_change(
-            &decisions,
-            &pins(next.clone(), fallback.clone()),
-            &RecordedOnly,
-        );
-        assert_eq!(c.decisions_at_risk, 3);
-        assert!(!c.blocked());
-        let mut no_notes = next.clone();
-        no_notes.pins.remove(&SetSlot::ObsNotes);
-        let mut fallback_no_notes = fallback.clone();
-        fallback_no_notes.pins.remove(&SetSlot::ObsNotes);
-        assert!(
-            !consequences_of_gateway_change(
-                &decisions,
-                &pins(no_notes.clone(), fallback),
-                &RecordedOnly
-            )
-            .blocked()
-        );
-        assert!(
-            consequences_of_gateway_change(
-                &decisions,
-                &pins(no_notes, fallback_no_notes),
-                &RecordedOnly
-            )
-            .blocked()
-        );
     }
 
     #[test]
@@ -606,7 +355,8 @@ mod tests {
             gateway: GatewayLanguage {
                 language: "es-419".to_owned(),
                 owner: "es-419_gl".parse().unwrap(),
-            },
+            }
+            .into(),
             ..suite::english_helps().clone()
         };
         let both = GatewayBibles {
@@ -721,7 +471,7 @@ mod tests {
         assert_eq!(
             keys(gateways_covering_project(
                 &no_ta,
-                &RecordedOnly,
+                &|_: &ResourcePin| None,
                 &[],
                 ProjectKind::Bible
             )),
@@ -730,7 +480,7 @@ mod tests {
         assert_eq!(
             keys(gateways_covering_project(
                 &installed,
-                &RecordedOnly,
+                &|_: &ResourcePin| None,
                 &[],
                 ProjectKind::Bible
             )),

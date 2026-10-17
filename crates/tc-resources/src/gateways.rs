@@ -231,7 +231,8 @@ pub fn find(language: &str, owner: &str) -> Option<&'static Gateway> {
 
 /// The gateway a language set names, when the registry has it.
 pub fn of_set(set: &LanguageSet) -> Option<&'static Gateway> {
-    find(&set.gateway.language, set.gateway.owner.as_str())
+    let gateway = set.gateway.named()?;
+    find(&gateway.language, gateway.owner.as_str())
 }
 
 /// English, the bundled suite's language and the fallback rung's (D30.2).
@@ -469,7 +470,7 @@ mod tests {
         ));
         let set = language_set_from_installed(&with_tn, hi, ProjectKind::Bible).unwrap();
         assert_eq!(
-            set.pin(SetSlot::TranslationNotes).unwrap().sha.as_str(),
+            set.pin(SetSlot::TranslationNotes).unwrap().sha.to_hex(),
             "e".repeat(40)
         );
         assert!(set.is_complete(ProjectKind::Bible));

@@ -1,5 +1,6 @@
 //! What a change of pins would cost, counted before the person confirms it (tC4
-//! `consequencesOfGatewayChange` and `uncoveredByChange`, D23a and D30.2).
+//! `consequencesOfGatewayChange` and `uncoveredByChange`, D23a and D30.2). This is the one
+//! counter of it: a gateway change, a release upgrade and a re-pin all count here.
 //!
 //! A decision is at risk when it holds against the resource its (tool, collection)
 //! resolves to now and the change moves that resolution elsewhere. A book the new
@@ -11,10 +12,15 @@
 //! to the resource it was made against and as detached otherwise. A change that would
 //! leave an affected unit with no usable resource is blocked, because its decisions
 //! would then match no rung.
+//!
+//! Both sides resolve with the journal's ladder ([`Ladder::answer`]) and compare resources
+//! as the fold does ([`ResourceRef::same_resource`]).
+
+use tc_journal::pins::{Coverage, Ladder, Unrecorded};
+use tc_journal::record::ResourceRef;
 
 use crate::carry::{StoredDecision, Summary};
 use crate::key::{Collection, ToolId};
-use crate::resolve::{Coverage, Pins, ResourceRef, resolve_with};
 
 /// The stored decisions of one (tool, collection).
 #[derive(Debug, Clone, Copy)]
@@ -75,22 +81,25 @@ impl Consequences {
 /// Counts what changing the pins from `current` to `next` would cost. `local` gives the
 /// books an installed copy of a pin holds, for pins that record none.
 pub fn consequences(
-    current: &Pins,
-    next: &Pins,
+    current: &dyn Ladder,
+    next: &dyn Ladder,
     units: &[Unit<'_>],
     local: impl Fn(&ResourceRef) -> Option<Coverage>,
 ) -> Consequences {
     let mut out = Consequences::default();
+    let resolve = |pins: &dyn Ladder, unit: &Unit<'_>| {
+        pins.answer(unit.tool, unit.collection, Unrecorded::Installed(&local))
+            .and_then(|a| a.resource().cloned())
+    };
     for unit in units {
         if unit.decisions.is_empty() {
             continue;
         }
-        let before =
-            resolve_with(current, unit.tool, unit.collection, &local).map(|r| r.pin.resource);
-        let after = resolve_with(next, unit.tool, unit.collection, &local);
-        let after_resource = after.as_ref().map(|r| &r.pin.resource);
-        let holds =
-            |d: &&StoredDecision, on: Option<&ResourceRef>| on == Some(&d.decision.resource);
+        let before = resolve(current, unit);
+        let after = resolve(next, unit);
+        let holds = |d: &&StoredDecision, on: Option<&ResourceRef>| {
+            on.is_some_and(|r| r.same_resource(&d.decision.resource))
+        };
         let holding = unit
             .decisions
             .iter()
@@ -99,11 +108,14 @@ pub fn consequences(
         let revived = unit
             .decisions
             .iter()
-            .filter(|d| !holds(d, before.as_ref()) && holds(d, after_resource))
+            .filter(|d| !holds(d, before.as_ref()) && holds(d, after.as_ref()))
             .count();
         out.revived += revived;
         out.detached += unit.decisions.len() - holding - revived;
-        let moves_away = after_resource != before.as_ref();
+        let moves_away = match (&before, &after) {
+            (Some(b), Some(a)) => !b.same_resource(a),
+            (b, a) => b.is_some() != a.is_some(),
+        };
         match before {
             Some(checked_against) if holding > 0 && moves_away => out.affected.push(Affected {
                 tool: unit.tool,

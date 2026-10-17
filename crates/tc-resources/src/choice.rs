@@ -24,8 +24,9 @@ use crate::error::ParseError;
 use crate::layout;
 use crate::pin::{AquiferPin, ResourcePin};
 use crate::resolve::{PreflightState, Resolution, preflight_tool_book};
-use crate::sets::{ProjectPins, SetSlot, Tool};
+use crate::sets::{ProjectPins, SetSlot};
 use crate::store::ResourceStore;
+use tc_journal::keys::ToolId;
 
 /// The project setting's key.
 pub const HELPS_SOURCE_SETTING: &str = "helpsSource";
@@ -123,7 +124,7 @@ pub enum CheckBlocker {
 /// What a check of one (tool, book) reads.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckSources {
-    pub tool: Tool,
+    pub tool: ToolId,
     pub book: BookId,
     /// The notes or words links the check list comes from (the D30 ladder).
     pub list: Resolution,
@@ -138,7 +139,7 @@ pub struct CheckSources {
 pub fn check_sources(
     store: &ResourceStore,
     pins: &ProjectPins,
-    tool: Tool,
+    tool: ToolId,
     book: BookId,
     online: bool,
 ) -> Result<CheckSources, Vec<CheckBlocker>> {
@@ -176,8 +177,8 @@ pub fn check_sources(
     };
     match (list, original) {
         (Some(list), Some(original_language)) if blockers.is_empty() => {
-            let articles = (tool == Tool::TranslationWords)
-                .then(|| pins.set(list.rung)?.pin(SetSlot::TranslationWords).cloned())
+            let articles = (tool == ToolId::TranslationWords)
+                .then(|| pins.set(list.rung)?.readable_pin(SetSlot::TranslationWords))
                 .flatten();
             Ok(CheckSources {
                 tool,

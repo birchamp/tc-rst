@@ -106,7 +106,7 @@ pub fn lock_from_the_zips() -> FetchedLock {
             let pin = lexicon.pin();
             LockEntry {
                 repo: pin.repo.repo().clone(),
-                commit: pin.sha.clone(),
+                commit: pin.sha,
                 tree: lexicon.zip_tree.parse().unwrap(),
                 file: Some(lexicon.file.to_owned()),
                 sha256: Sha256::of(&zip),

@@ -18,7 +18,10 @@ pub fn fixture(rel: &str) -> String {
 }
 
 pub fn md5_hex(text: &str) -> String {
-    format!("{:x}", Md5::digest(text.as_bytes()))
+    Md5::digest(text.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// The files of a burrito export in `bundle/en/`, by path inside the zip.
