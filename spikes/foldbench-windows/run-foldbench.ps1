@@ -332,8 +332,8 @@ if ($Phase -eq 'cold') {
     Add "## After a reboot ($stamp)"
     Add ''
     Add "Run $boot after the last boot, before anything else read the corpus: the open with the"
-    Add 'fold cache read `tc4-g0-corpus`, the first open without a cache read its copy'
-    Add '`tc4-g0-corpus-nocache`. One run each, so no median.'
+    Add "fold cache read ``$(Split-Path -Leaf $Corpus)``, the first open without a cache read its copy"
+    Add "``$(Split-Path -Leaf $coldCopy)``. One run each, so no median."
     Add ''
     Add '| Action | Wall | The fold after the last file | CPU, all threads | Peak working set | Peak private bytes | Working set with the fold open | Budget |'
     Add '|---|---:|---:|---:|---:|---:|---:|---|'

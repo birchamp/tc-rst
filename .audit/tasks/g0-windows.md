@@ -201,6 +201,8 @@ system asks for. Push only `g0-windows`. Never push `claude/focused-ride-5uzj7p`
 | foldbench fails while generating or opening | Keep the error text. Write it, the storage commit and the command into the report under a heading "What failed", commit, and tell the owner. |
 | The disk fills | Delete `C:\tc4-g0\tc4-g0-corpus-nocache` (only part 3 needs it) and run the step again. |
 | A window of the spike stays open for more than 20 minutes | Close it. The script records the case as not finished and goes on. |
+| `git push` asks for a sign-in | The owner signs in through the browser window Git opens. Never type or paste a token or a password into the chat. |
+| The report says "A token was found and removed" | Commit the report as it is and tell the owner: it is a bug in the spike, and the file no longer holds the token. |
 
 ## What the results decide
 
