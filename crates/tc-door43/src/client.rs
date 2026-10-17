@@ -325,13 +325,25 @@ impl Door43Client {
         repo: &RepoRef,
         commit: &CommitSha,
     ) -> Result<VerifiedArchive, Door43Error> {
+        Ok(self.download_archive_zip(repo, commit).await?.1)
+    }
+
+    /// [`Door43Client::download_archive`], also returning the zip as it was downloaded,
+    /// for a caller that records which download its files came from (a repackaged
+    /// lexicon names its archive's SHA-256).
+    pub async fn download_archive_zip(
+        &self,
+        repo: &RepoRef,
+        commit: &CommitSha,
+    ) -> Result<(Vec<u8>, VerifiedArchive), Door43Error> {
         let tree = self.commit_tree(repo, commit).await?;
         let file = format!("{commit}.zip");
         let url = self.repo_api(repo, &["archive", &file]);
         let route = route_of(&Method::GET, &url);
         let bytes = self.download(url).await?;
-        verify_archive(&bytes, commit, &tree, self.limits.max_unpacked_bytes)
-            .map_err(|source| Door43Error::Verification { route, source })
+        let archive = verify_archive(&bytes, commit, &tree, self.limits.max_unpacked_bytes)
+            .map_err(|source| Door43Error::Verification { route, source })?;
+        Ok((bytes, archive))
     }
 
     /// Download the DCS Scripture Burrito export of `tag` and return it only when its

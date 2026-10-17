@@ -10,8 +10,8 @@ use tc_core::BookId;
 use tc_door43::{Door43Error, VerificationError};
 use tc_door43_fake::{CommitSeed, Fault, FaultRule, RepoSeed, SeedFile, SeedMode};
 use tc_resources::{
-    BookCoverage, InstallError, Origin, Packaging, Refusal, ResourceStore, install_all,
-    install_dcs, install_dcs_as,
+    BookCoverage, InstallError, LEXICON_FILE, LexiconError, Origin, Packaging, Refusal,
+    ResourceStore, Sha256, install_all, install_dcs, install_dcs_as, open_lexicon,
 };
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -62,10 +62,11 @@ async fn a_tagged_pin_installs_from_the_burrito_export_and_is_never_fetched_agai
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_pin_by_commit_installs_from_the_archive_checked_against_the_tree() {
+async fn a_lexicon_pin_by_commit_installs_as_one_file_repackaged_from_the_checked_archive() {
     let rig = rig().await;
     let pin = commit_pin(&rig, "uW", "en_ugl", "HEAD").await;
     let installed = install_dcs(&rig.store, &rig.client, &pin).await.unwrap();
+    installed.verify().unwrap();
     let Origin::Dcs {
         pin: held,
         packaging,
@@ -74,14 +75,54 @@ async fn a_pin_by_commit_installs_from_the_archive_checked_against_the_tree() {
     else {
         panic!("a Door43 install");
     };
-    assert_eq!(*packaging, Packaging::Archive);
+    assert_eq!(*packaging, Packaging::Lexicon);
     assert_eq!(held.flavor.as_deref(), Some("peripheral/x-lexicon"));
     assert_eq!(installed.books(), Some(&BookCoverage::WholeCollection));
+    assert_eq!(installed.files().collect::<Vec<_>>(), [LEXICON_FILE]);
+
+    let lexicon = open_lexicon(&rig.store, &pin).unwrap();
+    let fixture: serde_json::Value = serde_json::from_slice(&common::fixture(
+        "tc4/test-fixtures/resources/en_ugl@d9d29e2d5892/1.json",
+    ))
+    .unwrap();
+    let one = lexicon.entry(1).unwrap();
+    assert_eq!(one.brief.as_deref(), fixture["brief"].as_str());
+    assert_eq!(one.long.as_deref(), fixture["long"].as_str());
+    assert_eq!(lexicon.len(), 1);
     assert_eq!(
-        installed.read("ingredients/content/1.json").unwrap(),
-        common::fixture("tc4/test-fixtures/resources/en_ugl@d9d29e2d5892/1.json")
+        lexicon.files().get("README.md").map(String::as_bytes),
+        Some(
+            common::fixture("tc4/test-fixtures/resources/en_ugl@d9d29e2d5892/README.md").as_slice()
+        ),
+        "the archive's other files travel with the entries"
     );
-    assert!(installed.has_file("README.md"));
+    let (zip, _) = rig
+        .client
+        .download_archive_zip(pin.repo.repo(), &pin.sha)
+        .await
+        .unwrap();
+    assert_eq!(lexicon.source().archive_sha256, Sha256::of(&zip));
+    assert_eq!(lexicon.source().commit, pin.sha);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_archive_that_is_not_a_lexicon_is_refused_as_one() {
+    let rig = rig().await;
+    let ult = release(&rig, "unfoldingWord/en_ult", "v89").await;
+    let err = install_dcs_as(&rig.store, &rig.client, &ult, Packaging::Lexicon)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(
+            &err,
+            InstallError::Lexicon {
+                problem: LexiconError::NotALexicon { .. },
+                ..
+            }
+        ),
+        "{err}"
+    );
+    nothing_installed(&rig.store);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

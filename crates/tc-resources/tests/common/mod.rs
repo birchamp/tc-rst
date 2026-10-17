@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 pub mod aquifer_fake;
+pub mod bundled;
 
 use std::io::Write;
 use std::path::PathBuf;

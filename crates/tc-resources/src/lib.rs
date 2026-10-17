@@ -21,7 +21,14 @@
 //! - **Installs.** [`install_dcs`] downloads an exact commit through tc-door43 and
 //!   [`install_aquifer`] an exact release asset from GitHub; nothing is kept unless it is
 //!   the pinned bytes. Zips at hand install with [`install_dcs_zip`] and
-//!   [`install_aquifer_zip`].
+//!   [`install_aquifer_zip`]. [`FetchedLock`] holds the Door43 facts recorded once for the
+//!   bundled and packaged archives, so they are checked offline.
+//! - **Lexicons.** A lexicon is installed as one JSON file, never as its thousands of
+//!   files: [`repackage_lexicon`] turns its verified archive into that file, both when the
+//!   app is packaged ([`install_lexicon_zip`], checked against [`FetchedLock`]) and when a
+//!   lexicon is downloaded later ([`install_dcs`]). [`Lexicons`] reads a project's two
+//!   lexicons once per session, and looks a word's `strong` attribute up in memory by
+//!   tC4's rule ([`strongs`]).
 //! - **Loading.** [`load_book`] and [`load_obs`] open what is installed as tc-helps
 //!   [`tc_helps::Helps`] and USFM texts, and say why each missing part is missing.
 //!   [`HelpsChoice`] picks Door43 or Aquifer for the helps tabs; [`check_sources`] says
@@ -37,14 +44,17 @@ mod aquifer;
 mod choice;
 mod dcs;
 mod error;
+mod fetched;
 pub mod gateway_change;
 pub mod gateways;
 mod layout;
+mod lexicon;
 mod load;
 mod pin;
 pub mod resolve;
 mod sets;
 mod store;
+pub mod strongs;
 pub mod suite;
 pub mod updates;
 
@@ -55,8 +65,19 @@ pub use aquifer::{
 pub use choice::{
     AquiferHelps, CheckBlocker, CheckSources, HELPS_SOURCE_SETTING, HelpsChoice, check_sources,
 };
-pub use dcs::{install_all, install_dcs, install_dcs_as, install_dcs_zip, pin_release};
-pub use error::{AquiferError, InstallError, ParseError, Refusal, StoreError, UnwritablePin};
+pub use dcs::{
+    LexiconInstall, install_all, install_dcs, install_dcs_as, install_dcs_zip, install_lexicon_zip,
+    pin_release,
+};
+pub use error::{
+    AquiferError, InstallError, LexiconError, LexiconUnavailable, ParseError, Refusal, StoreError,
+    UnwritablePin,
+};
+pub use fetched::{FetchedLock, LOCK_FORMAT, LOCK_VERSION, LockEntry, TreeCheck};
+pub use lexicon::{
+    LEXICON_FILE, LEXICON_FORMAT, LEXICON_VERSION, Lexicon, LexiconEntry, LexiconSource, Lexicons,
+    PartEntry, PartLookup, lexicon_entries_compared, open_lexicon, repackage_lexicon,
+};
 pub use load::{
     BookResources, Missing, ObsResources, PartStatus, SourceText, TextRole, TextStatus, load_book,
     load_obs,

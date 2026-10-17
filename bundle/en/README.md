@@ -57,10 +57,11 @@ archives of the same commits: each zip comment is the commit. They are not shipp
 scale corpus generator (`tc-corpus`) reads them until it reads the exports instead, and then
 they are deleted.
 
-## Shipped: the git archive of each commit-only pin
+## The git archive of each commit-only pin
 
-The two lexicons have no tag, so they ship as the Door43 git archive of their commit, as in
-tC4 (D71). Each zip comment is the pinned commit. The `en_ugl` archive's `metadata.json` and
+The two lexicons have no tag, so their source is the Door43 git archive of their commit, as in
+tC4 (D71); the installer ships each one repackaged as one JSON file (below). Each zip comment
+is the pinned commit. The `en_ugl` archive's `metadata.json` and
 first entry are byte-identical to tC4's fixture of the same commit
 (`fixtures/tc4/test-fixtures/resources/en_ugl@d9d29e2d5892`), which tC4 fetched and verified
 on 2026-10-02. The project owner supplied both archives on 2026-10-15.
@@ -84,6 +85,14 @@ it with the commit's tree. That needs the commit's tree id from Door43 once. The
 pipeline looks it up and records it in `fetched.lock`, and from then on the installer checks
 the tree offline.
 
+Until `fetched.lock` has an entry for a lexicon's commit, that lexicon is unconfirmed: the
+packaging step (`tc_resources::install_lexicon_zip`) installs nothing for it, and the app shows
+it as unavailable. A release build then lacks a pinned file and fails (see "Fetched when the
+app is packaged"). This folder has no `fetched.lock` yet, so both lexicons are unconfirmed
+today. Their zips' files hash to the trees `4d24ed9c8ceb768df1069feed0cc375d32cd93ce`
+(`en_ugl`) and `ad07f5e41f7052598d90eb8dc2b9ecad811b0b17` (`en_uhl`), which Door43 must confirm
+(`.audit/tasks/door43-facts.md`); nothing records them as confirmed.
+
 ### Repackaged as one JSON file per lexicon
 
 Thousands of tiny files are slow to install, copy and scan, so the lexicons are not installed
@@ -93,9 +102,20 @@ function runs when the app is packaged and whenever a lexicon is installed later
 one format and one code path. The installer ships only the JSON files; the archives above stay
 here as their verified source.
 
-The file is UTF-8 JSON, written in a fixed order so that repackaging the same archive always
-gives the same bytes. `fetched.lock` records each file's sha256 next to its archive's tree id,
-and the installer checks it.
+An installed lexicon is one content file, `lexicon.json`, and its receipt names the packaging
+`lexicon`. The file is UTF-8 JSON without spaces and with a final newline, its keys in the
+order below, so that repackaging the same archive always gives the same bytes.
+`fetched.lock` records each file's sha256 as `lexiconSha256` in its archive's entry, next to
+the tree id, and the packaging step refuses a repackaged file with another sha256, or an entry
+without one (it then names the sha256 it found). The repackaged files are:
+
+| Lexicon | Entries | Bytes | sha256 of the repackaged file |
+|---|---:|---:|---|
+| `en_ugl` | 5,408 | 500,021 | `7798835a14559f03b3d3e4b804b6d88f6118923fd07ff39c44e14258a9f3f094` |
+| `en_uhl` | 8,674 | 2,055,993 | `b3a002bbfe52720624b9e97a1130b138cfb4ecfc30a5d4111e7fa1f1581cc258` |
+
+A test repackages both archives and checks these values (`crates/tc-resources/tests/lexicon.rs`),
+and an independent writer in Python gave the same bytes.
 
 ```json
 {
@@ -109,8 +129,15 @@ and the installer checks it.
 }
 ```
 
+- `source.archiveSha256` is the sha256 of the zip the files came from: the bundled zip, or
+  the zip a later install downloaded.
+- `metadata` must declare the flavor `x-lexicon` (`type.flavorType.flavor.name`, the test tC4
+  `resourceArchive.mjs:20` makes); anything else is not repackaged as a lexicon.
 - `entries` holds every `ingredients/content/<n>.json` value unchanged, keyed by `<n>`, in
-  ascending numeric order. An entry with fields other than `brief` and `long` keeps them.
+  ascending numeric order. `<n>` is a decimal number without leading zeros that fits in 32
+  bits; another file in that folder is one of `files`. An entry is a JSON object, and its
+  `brief` and `long`, when present, are text; an entry with fields other than `brief` and
+  `long` keeps them. An archive without entries is refused.
 - `index` is `ingredients/index.json` unchanged, and is present only when the archive has
   one (`en_uhl`).
 - `files` holds every other file of the archive (today only `ingredients/README.md`) as its
@@ -119,8 +146,27 @@ and the installer checks it.
   makes the archive refused, in words. tC4 keeps every source file of a lexicon in its
   compact copy (#740); this is the same promise (the owner's ruling on Q26 in
   `docs/TC4-DELTA-2026-10-16.md`).
+- A JSON file with a key twice has no single value, so it is refused, in words, as is a
+  symbolic link.
 - A reader refuses a `format` it does not know or a `version` newer than it reads, in words,
   and the app shows the lexicon as unavailable rather than guessing.
+
+A lexicon installed later goes through the same function: `tc_resources::install_dcs`
+downloads the commit's archive, whose tree Door43 reports at that moment, and repackages it.
+A lexicon is always installed from its archive, even when its pin names a tag; a burrito export
+of a lexicon is refused, because its ingredient table vouches for none of its entries.
+
+The app reads a project's two lexicons once per session (`tc_resources::Lexicons`): `ugl` from
+the `lexicon.nt` pin and `uhl` from the `lexicon.ot` pin. A lookup reads no file. A word's
+`strong` attribute names its entries by tC4's rule, `lexiconHelpers` in word-aligner-lib 1.0.1
+(tC4 4.0 adds no lexicon reader of its own: tC4 `docs/PACKAGING.md:996-997`): the attribute
+splits at each `:`, a part that starts with `G` names `ugl` and any other part `uhl`, and the
+entry number is JavaScript's `parseInt` of the part without its first ASCII word character
+and, unless the part starts with `H`, without its last character (`G35880` is entry 3588 of
+`ugl`, `c:H1254a` is entry 1254 of `uhl`). With these two lexicons every numbered part of the
+UHB 3.0.0 finds its entry; in the UGNT 0.34, 54 words (18 attributes, such as `G40560`) name
+an entry that `en_ugl` at `d9d29e2d` lacks (`fixtures/lexicon/README.md`). Loading `en_uhl`
+and looking up every word of Psalms are measured in `docs/evidence/lexicon-2026-10-16.md`.
 
 ## Fetched when the app is packaged
 

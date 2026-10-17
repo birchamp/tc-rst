@@ -78,6 +78,10 @@ pub enum Packaging {
     /// `/archive/<sha>.zip`: the commit's own files, checked against its git tree, so the
     /// same sha always gives the same bytes.
     Archive,
+    /// A lexicon's archive, checked as [`Packaging::Archive`] is, then repackaged into one
+    /// file, [`crate::LEXICON_FILE`] ([`crate::repackage_lexicon`]). Every lexicon is
+    /// installed this way (owner ruling, 2026-10-15).
+    Lexicon,
 }
 
 /// Where an install came from.

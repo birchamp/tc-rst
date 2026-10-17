@@ -29,3 +29,8 @@ Real Psalms data for the performance budgets in `docs/PERFORMANCE.md` (the align
 UHB, the tN and TWL rows, and the WEB text). The unfoldingWord releases the corpus uses are
 the bundled English suite in `../bundle/en/`. Read `scale/README.md` for provenance and
 checksums.
+
+## `lexicon/`
+
+An excerpt of the bundled Hebrew lexicon as a `git archive` with its `fetched.lock`, and the
+Strong's vectors computed by tC4's rule. Read `lexicon/README.md`.
