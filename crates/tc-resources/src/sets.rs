@@ -18,8 +18,9 @@
 //! | `ExtraScripture` | [`ProjectPins::extra_scripture`] | one slot, `extraScripture`, holding the ordered list of `{id, ...pin}` |
 //!
 //! What this version does not know (a newer app's) is kept and written back unchanged: a
-//! slot in [`LanguageSet::extra`], a `gatewayLanguage` field in
-//! [`LanguageSet::gateway_extra`], a slot beside `nt` and `ot` in [`Testaments::extra`], a
+//! slot in [`LanguageSet::extra`], a `gatewayLanguage` field in [`SetGateway::Named`], a
+//! `gatewayLanguage` in another form in [`SetGateway::Unreadable`], a slot beside `nt` and
+//! `ot` in [`Testaments::extra`], a
 //! pin's or pane's field in [`ResourcePin::extra`], and a key of `resources.json` beside
 //! the five groups in [`ProjectPins::unknown`]. Writing
 //! refuses a pin that tC4's §5.3 grammar refuses: one without a flavor
@@ -60,12 +61,91 @@ pub struct GatewayLanguage {
     pub owner: AccountName,
 }
 
+/// What a language set's `gatewayLanguage` holds. tC4's journal treats it as one more slot
+/// of the set (`PIN_SLOT_RE`, `journal/grammar.mjs` at d310bf3), so a value in another
+/// form is kept as written like any other slot (STORAGE §5.6): it never refuses the set, and
+/// the pins beside it still resolve.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SetGateway {
+    /// tC4's `{languageId, owner}`, with the fields a newer app wrote beside them, kept as
+    /// they were read and written back. Those stay out of [`GatewayLanguage`], which
+    /// identifies a gateway and is compared and hashed as one.
+    Named {
+        gateway: GatewayLanguage,
+        extra: Map<String, Value>,
+    },
+    /// The set has no `gatewayLanguage`.
+    Absent,
+    /// A `gatewayLanguage` in another form: not an object, without a `languageId` or
+    /// `owner` string, or with an owner Door43 does not accept. Kept as it was read and
+    /// written back.
+    Unreadable(Value),
+}
+
+impl SetGateway {
+    /// The gateway language the set names, when it names one in tC4's form.
+    pub fn named(&self) -> Option<&GatewayLanguage> {
+        match self {
+            Self::Named { gateway, .. } => Some(gateway),
+            Self::Absent | Self::Unreadable(_) => None,
+        }
+    }
+
+    fn read(value: Option<&Value>) -> Self {
+        let Some(value) = value else {
+            return Self::Absent;
+        };
+        let named = value.as_object().and_then(|object| {
+            let text = |key: &str| object.get(key).and_then(Value::as_str);
+            let gateway = GatewayLanguage {
+                language: text(LANGUAGE_ID)?.to_owned(),
+                owner: text(OWNER)?.parse().ok()?,
+            };
+            let extra = object
+                .iter()
+                .filter(|(key, _)| !matches!(key.as_str(), LANGUAGE_ID | OWNER))
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect();
+            Some(Self::Named { gateway, extra })
+        });
+        named.unwrap_or_else(|| Self::Unreadable(value.clone()))
+    }
+
+    fn to_json(&self) -> Option<Value> {
+        match self {
+            Self::Named { gateway, extra } => {
+                let mut out = Map::new();
+                out.insert(
+                    LANGUAGE_ID.to_owned(),
+                    Value::from(gateway.language.as_str()),
+                );
+                out.insert(OWNER.to_owned(), Value::from(gateway.owner.as_str()));
+                for (key, value) in extra {
+                    out.entry(key.clone()).or_insert_with(|| value.clone());
+                }
+                Some(Value::Object(out))
+            }
+            Self::Absent => None,
+            Self::Unreadable(value) => Some(value.clone()),
+        }
+    }
+}
+
+impl From<GatewayLanguage> for SetGateway {
+    fn from(gateway: GatewayLanguage) -> Self {
+        Self::Named {
+            gateway,
+            extra: Map::new(),
+        }
+    }
+}
+
 /// One language set: the gateway language and the resources pinned for it. A set read
 /// from a project may be partial; [`LanguageSet::is_complete`] says whether it has what a
 /// Bible or OBS project needs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LanguageSet {
-    pub gateway: GatewayLanguage,
+    pub gateway: SetGateway,
     pub pins: BTreeMap<SetSlot, ResourcePin>,
     /// Known slots whose value tC4's §5.3 grammar refuses, such as a pin with a tag and no
     /// commit, kept as they were read and written back. The ladder still reads them by the
@@ -74,10 +154,6 @@ pub struct LanguageSet {
     pub unreadable: BTreeMap<SetSlot, Value>,
     /// Slots this version does not know, kept as they were read and written back.
     pub extra: Map<String, Value>,
-    /// Fields of the `gatewayLanguage` object beside `languageId` and `owner`, kept as
-    /// they were read and written back. They stay out of [`GatewayLanguage`], which
-    /// identifies a gateway and is compared and hashed as one.
-    pub gateway_extra: Map<String, Value>,
 }
 
 /// What a project is about, which decides the slots a complete set needs (D75).
@@ -90,11 +166,10 @@ pub enum ProjectKind {
 impl LanguageSet {
     pub fn new(gateway: GatewayLanguage) -> Self {
         Self {
-            gateway,
+            gateway: gateway.into(),
             pins: BTreeMap::new(),
             unreadable: BTreeMap::new(),
             extra: Map::new(),
-            gateway_extra: Map::new(),
         }
     }
 
@@ -169,17 +244,10 @@ impl LanguageSet {
     /// The tC4 §5.3 object: `gatewayLanguage`, then each pinned slot in tC4's order, then
     /// the slots this version does not know.
     pub fn to_json(&self) -> Result<Value, UnwritablePin> {
-        let mut gateway = Map::new();
-        gateway.insert(
-            LANGUAGE_ID.to_owned(),
-            Value::from(self.gateway.language.as_str()),
-        );
-        gateway.insert(OWNER.to_owned(), Value::from(self.gateway.owner.as_str()));
-        for (key, value) in &self.gateway_extra {
-            gateway.entry(key.clone()).or_insert_with(|| value.clone());
-        }
         let mut out = Map::new();
-        out.insert(GATEWAY_LANGUAGE.to_owned(), Value::Object(gateway));
+        if let Some(gateway) = self.gateway.to_json() {
+            out.insert(GATEWAY_LANGUAGE.to_owned(), gateway);
+        }
         for slot in SetSlot::ALL {
             if let Some(pin) = self.pins.get(&slot) {
                 out.insert(slot.name().to_owned(), pin_json(slot.name(), pin)?);
@@ -195,34 +263,19 @@ impl LanguageSet {
 
     /// Reads a tC4 §5.3 set object. A known slot whose value is not a pin this crate can
     /// install from (no commit, a malformed coverage record) is kept in
-    /// [`LanguageSet::unreadable`], not refused with the whole set; an unknown slot is kept
-    /// in [`LanguageSet::extra`].
+    /// [`LanguageSet::unreadable`], and a `gatewayLanguage` in another form in
+    /// [`SetGateway`], not refused with the whole set; an unknown slot is kept in
+    /// [`LanguageSet::extra`].
     pub fn from_json(value: &Value) -> Result<Self, ParseError> {
         let object = value
             .as_object()
             .ok_or_else(|| ParseError::Pins("a language set is not an object".to_owned()))?;
-        let gateway = object
-            .get(GATEWAY_LANGUAGE)
-            .ok_or_else(|| ParseError::Pins("a language set has no gatewayLanguage".to_owned()))?;
-        let gateway = gateway
-            .as_object()
-            .ok_or_else(|| ParseError::Pins("gatewayLanguage is not an object".to_owned()))?;
-        let text = |key: &str| {
-            gateway
-                .get(key)
-                .and_then(Value::as_str)
-                .ok_or_else(|| ParseError::Pins(format!("gatewayLanguage has no {key}")))
+        let mut set = LanguageSet {
+            gateway: SetGateway::read(object.get(GATEWAY_LANGUAGE)),
+            pins: BTreeMap::new(),
+            unreadable: BTreeMap::new(),
+            extra: Map::new(),
         };
-        let language = text(LANGUAGE_ID)?.to_owned();
-        let owner = text(OWNER)?
-            .parse()
-            .map_err(|_| ParseError::Pins(format!("gatewayLanguage owner {:?}", text(OWNER))))?;
-        let mut set = LanguageSet::new(GatewayLanguage { language, owner });
-        set.gateway_extra = gateway
-            .iter()
-            .filter(|(key, _)| !matches!(key.as_str(), LANGUAGE_ID | OWNER))
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect();
         for (key, value) in object {
             if key == GATEWAY_LANGUAGE {
                 continue;
@@ -637,27 +690,27 @@ impl ProjectPins {
                 })
                 .unwrap_or_default()
         };
-        let sets = value.get(LANGUAGE_SETS);
+        let sets = member(value, LANGUAGE_SETS, Value::is_object)?;
         if let Some(sets) = sets {
             for (rung, group) in [
                 ("primary", PinGroup::Primary),
                 ("fallback", PinGroup::Fallback),
             ] {
-                if let Some(set) = sets.get(rung) {
+                if let Some(set) = member(sets, rung, Value::is_object)? {
                     pins.set_group_json(group, set)?;
                 }
             }
         }
-        let resources = value.get(RESOURCES);
+        let resources = member(value, RESOURCES, Value::is_object)?;
         if let Some(resources) = resources {
-            if let Some(ol) = resources.get(ORIGINAL_LANGUAGE) {
+            if let Some(ol) = member(resources, ORIGINAL_LANGUAGE, Value::is_object)? {
                 pins.set_group_json(PinGroup::OriginalLanguage, ol)?;
             }
-            if let Some(lexicon) = resources.get(LEXICON) {
+            if let Some(lexicon) = member(resources, LEXICON, Value::is_object)? {
                 pins.set_group_json(PinGroup::Lexicon, lexicon)?;
             }
         }
-        if let Some(list) = value.get(EXTRA_SCRIPTURE) {
+        if let Some(list) = member(value, EXTRA_SCRIPTURE, Value::is_array)? {
             pins.set_group_json(
                 PinGroup::ExtraScripture,
                 &serde_json::json!({ EXTRA_SCRIPTURE: list }),
@@ -705,6 +758,24 @@ impl ProjectPins {
             );
         }
         Ok(Value::Object(out))
+    }
+}
+
+/// A member of `resources.json` that the pin groups hold: `None` when it is absent or
+/// `null`, which tC4 reads as absent (`resources.languageSets?.[rung]?.[slot]`). A value of
+/// another JSON type is refused, so the file is reported rather than read without it: the
+/// groups could not keep it, and writing them back would drop it.
+fn member<'a>(
+    parent: &'a Value,
+    name: &str,
+    is_kind: fn(&Value) -> bool,
+) -> Result<Option<&'a Value>, ParseError> {
+    match parent.get(name) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) if is_kind(value) => Ok(Some(value)),
+        Some(value) => Err(ParseError::Pins(format!(
+            "resources.json member {name} is {value}, which no pin group holds"
+        ))),
     }
 }
 
@@ -847,7 +918,7 @@ mod tests {
         let json = real_resources_json();
         let pins = ProjectPins::from_resources_json(&json).unwrap();
         let primary = pins.primary.as_ref().unwrap();
-        assert_eq!(primary.gateway.language, "es-419");
+        assert_eq!(primary.gateway.named().unwrap().language, "es-419");
         assert!(primary.extra.contains_key("x-futureSlot"));
         assert_eq!(pins.extra_scripture[0].id.as_str(), "ult");
         assert!(pins.lexicon.ot.is_some() && pins.lexicon.nt.is_none());
@@ -938,9 +1009,10 @@ mod tests {
     fn a_newer_apps_field_never_overrides_what_this_version_knows() {
         let mut pins = ProjectPins::from_resources_json(&real_resources_json()).unwrap();
         let primary = pins.primary.as_mut().unwrap();
-        primary
-            .gateway_extra
-            .insert("owner".to_owned(), serde_json::json!("someone-else"));
+        let SetGateway::Named { extra, .. } = &mut primary.gateway else {
+            panic!("a named gateway")
+        };
+        extra.insert("owner".to_owned(), serde_json::json!("someone-else"));
         primary
             .extra
             .insert("translationNotes".to_owned(), serde_json::json!(0));
@@ -1110,11 +1182,100 @@ mod tests {
             Some(SlotPin::Unusable(_))
         ));
         assert_eq!(pins.group_json(PinGroup::Primary).unwrap(), bad);
-        // A set with no gateway language is still refused, and changes nothing.
-        let before = pins.clone();
-        let no_gateway = serde_json::json!({"translationNotes": bad["translationNotes"].clone()});
-        assert!(pins.set_group_json(PinGroup::Primary, &no_gateway).is_err());
-        assert_eq!(pins, before);
+    }
+
+    /// tC4's journal treats `gatewayLanguage` as one more slot of a set (`PIN_SLOT_RE`): a
+    /// set without one, or with one in another form, still reads, keeps it as written and
+    /// resolves its pins as the journal's ladder does.
+    #[test]
+    fn a_gateway_language_in_another_form_is_kept_and_the_pins_still_resolve() {
+        let mut json = real_resources_json();
+        let tn = json["languageSets"]["primary"]["translationNotes"].clone();
+        for gateway in [
+            None,
+            Some(serde_json::json!(null)),
+            Some(serde_json::json!("es-419")),
+            Some(serde_json::json!({"languageId": "es-419"})),
+            Some(serde_json::json!({"languageId": "es-419", "owner": "not an owner!"})),
+        ] {
+            let mut primary = serde_json::json!({ "translationNotes": tn.clone() });
+            if let Some(gateway) = &gateway {
+                primary["gatewayLanguage"] = gateway.clone();
+            }
+            json["languageSets"]["primary"] = primary;
+            let pins = ProjectPins::from_resources_json(&json).unwrap();
+            let set = pins.primary.as_ref().unwrap();
+            assert_eq!(set.gateway.named(), None, "{gateway:?}");
+            assert_eq!(crate::gateways::of_set(set), None);
+            assert_eq!(pins.to_resources_json().unwrap(), json, "{gateway:?}");
+            let sets = tc_journal::pins::LanguageSets {
+                primary: Some(pins.group_value(PinGroup::Primary).unwrap()),
+                fallback: Some(pins.group_value(PinGroup::Fallback).unwrap()),
+            };
+            let tit = tc_journal::pins::Collection::Book(BookId::Titus);
+            let tool = tc_journal::ToolId::TranslationNotes;
+            assert_eq!(pins.resolution(tool, tit), sets.resolution(tool, tit));
+            assert_eq!(
+                pins.resolution(tool, tit).map(|a| a.rung()),
+                Some(Rung::Primary)
+            );
+        }
+    }
+
+    /// A member the pin groups hold with another JSON type is refused, so the import report
+    /// lists the file instead of reading it without the member; `null` is absent, as tC4
+    /// reads it.
+    #[test]
+    fn a_member_of_another_type_is_refused_and_null_is_absent() {
+        let real = real_resources_json();
+        let with = |path: &[&str], value: Value| {
+            let mut json = real.clone();
+            let mut at = &mut json;
+            for key in &path[..path.len() - 1] {
+                at = &mut at[*key];
+            }
+            at[path[path.len() - 1]] = value;
+            json
+        };
+        let members: [&[&str]; 7] = [
+            &["languageSets"],
+            &["languageSets", "primary"],
+            &["languageSets", "fallback"],
+            &["resources"],
+            &["resources", "originalLanguage"],
+            &["resources", "lexicon"],
+            &["extraScripture"],
+        ];
+        for path in members {
+            let other_container = if path == ["extraScripture"] {
+                serde_json::json!({"ult": 1})
+            } else {
+                serde_json::json!([1, 2])
+            };
+            for wrong in [
+                other_container,
+                serde_json::json!("x"),
+                serde_json::json!(3),
+            ] {
+                let json = with(path, wrong.clone());
+                assert!(
+                    ProjectPins::from_resources_json(&json).is_err(),
+                    "{path:?} = {wrong}"
+                );
+            }
+            let read = ProjectPins::from_resources_json(&with(path, Value::Null)).unwrap();
+            let mut absent = real.clone();
+            let mut at = &mut absent;
+            for key in &path[..path.len() - 1] {
+                at = &mut at[*key];
+            }
+            at.as_object_mut().unwrap().remove(path[path.len() - 1]);
+            assert_eq!(
+                read,
+                ProjectPins::from_resources_json(&absent).unwrap(),
+                "{path:?}"
+            );
+        }
     }
 
     #[test]

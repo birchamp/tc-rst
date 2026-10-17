@@ -11,7 +11,8 @@
 //! from the projected USFM and its original-language pin from `resources.json`. Every
 //! decision and alignment of every file must agree, over tC4's sample project, the aligned
 //! en_ult Titus, edits that change, join, renumber and clear verses, pins that record no
-//! books or name no commit, and the Psalms corpus with its team history.
+//! books or name no commit, a set without a gateway language, and the Psalms corpus with its
+//! team history.
 
 // Helpers outside `#[test]` functions build known-valid values and may fail loudly.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -563,6 +564,12 @@ fn edits_joins_renumbers_and_pins_change_files_and_screens_alike() {
     value
         .0
         .insert(slot, tc_journal::record::SlotValue(tag_only));
+    // A set without a gateway language still resolves its pins, on the screen as in the
+    // fold: tC4 treats `gatewayLanguage` as one more slot.
+    value
+        .0
+        .remove(&tc_journal::SlotName::parse("gatewayLanguage").unwrap())
+        .unwrap();
     // The fallback's notes record no books: in the fold they cover every book.
     let fallback = edited
         .projected(&RecordKey::Pins(PinGroup::Fallback))

@@ -1627,7 +1627,13 @@ is a new record kind that hides a comment from the default view and keeps it in 
   repository path with a scheme) is kept as it was read (`LanguageSet::unreadable`,
   `Testaments::unreadable`, `ProjectPins::unreadable_panes` in `tc-resources`) and written back
   unchanged with any edit of its group, never refused with the whole group; the ladder reads it
-  by the journal's rules (§7.7). The cost of a change of gateway language (§5.8) is counted by
+  by the journal's rules (§7.7). `gatewayLanguage` is one more slot of a set (tC4
+  `PIN_SLOT_RE`, `journal/grammar.mjs`): a set without one, or with one that is not
+  `{languageId, owner}` with an owner Door43 accepts, is kept the same way (`SetGateway`), and
+  its pins resolve as before. A member of `resources.json` that the groups hold
+  (`languageSets`, `primary`, `fallback`, `resources`, `originalLanguage`, `lexicon`,
+  `extraScripture`) with another JSON type than its own refuses the file, so the import report
+  lists it rather than read it without the member; `null` there is absent, as tC4 reads it. The cost of a change of gateway language (§5.8) is counted by
   `tc-check`'s `change` module over the journal's ladder; `tc-resources` only makes the pin
   edits.
 

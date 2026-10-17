@@ -8,7 +8,7 @@ use tc_core::BookId;
 use tc_resources::resolve::resolve_slot;
 use tc_resources::{
     BookCoverage, GatewayLanguage, LanguageSet, PinGroup, ProjectPins, ResourcePin, Rung,
-    ScripturePane, SetSlot, Sha256, Testaments,
+    ScripturePane, SetGateway, SetSlot, Sha256, Testaments,
 };
 use tc_resources::{Collection, Ladder, ToolId};
 
@@ -94,10 +94,36 @@ fn unreadable_slot() -> impl Strategy<Value = serde_json::Value> {
         })
 }
 
-fn language_set() -> impl Strategy<Value = LanguageSet> {
-    (
+/// A set's `gatewayLanguage`: tC4's `{languageId, owner}` with a newer app's fields, none,
+/// or a value in another form that a project keeps as written.
+fn set_gateway() -> impl Strategy<Value = SetGateway> {
+    let named = (
         "[a-z]{2}(-[0-9]{3})?",
         "[A-Za-z][A-Za-z0-9_-]{0,10}",
+        unknown_fields(),
+    )
+        .prop_map(|(language, owner, extra)| SetGateway::Named {
+            gateway: GatewayLanguage {
+                language,
+                owner: owner.parse().unwrap(),
+            },
+            extra,
+        });
+    let unreadable = prop_oneof![
+        Just(serde_json::json!(null)),
+        Just(serde_json::json!("en")),
+        Just(serde_json::json!([])),
+        Just(serde_json::json!({"languageId": "en"})),
+        Just(serde_json::json!({"owner": "unfoldingWord", "languageId": 5})),
+        Just(serde_json::json!({"languageId": "en", "owner": "not an owner!"})),
+    ]
+    .prop_map(SetGateway::Unreadable);
+    prop_oneof![4 => named, 1 => Just(SetGateway::Absent), 2 => unreadable]
+}
+
+fn language_set() -> impl Strategy<Value = LanguageSet> {
+    (
+        set_gateway(),
         proptest::collection::btree_map(
             (0usize..SetSlot::ALL.len()).prop_map(|i| SetSlot::ALL[i]),
             project_pin(),
@@ -109,23 +135,20 @@ fn language_set() -> impl Strategy<Value = LanguageSet> {
             0..3,
         ),
         unknown_fields(),
-        unknown_fields(),
     )
-        .prop_map(
-            |(language, owner, pins, mut unreadable, extra, gateway_extra)| {
-                unreadable.retain(|slot, _| !pins.contains_key(slot));
-                LanguageSet {
-                    gateway: GatewayLanguage {
-                        language,
-                        owner: owner.parse().unwrap(),
-                    },
-                    pins,
-                    unreadable,
-                    extra,
-                    gateway_extra,
-                }
-            },
-        )
+        .prop_map(|(gateway, pins, mut unreadable, mut extra)| {
+            unreadable.retain(|slot, _| !pins.contains_key(slot));
+            // An empty object is an unpinned group, not a set.
+            if gateway == SetGateway::Absent && pins.is_empty() && unreadable.is_empty() {
+                extra.insert("x-only".to_owned(), serde_json::Value::from(1));
+            }
+            LanguageSet {
+                gateway,
+                pins,
+                unreadable,
+                extra,
+            }
+        })
 }
 
 fn testaments() -> impl Strategy<Value = Testaments> {

@@ -90,7 +90,7 @@ pub use pin::{
 };
 pub use sets::{
     GatewayLanguage, GroupError, LanguageSet, PaneId, PinGroup, ProjectKind, ProjectPins, Rung,
-    ScripturePane, SetSlot, Testaments, UnknownKeys,
+    ScripturePane, SetGateway, SetSlot, Testaments, UnknownKeys,
 };
 pub use store::{
     FileRecord, Installed, Inventory, Origin, Packaging, Receipt, ResourceStore, SeedReport,

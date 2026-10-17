@@ -355,7 +355,8 @@ mod tests {
             gateway: GatewayLanguage {
                 language: "es-419".to_owned(),
                 owner: "es-419_gl".parse().unwrap(),
-            },
+            }
+            .into(),
             ..suite::english_helps().clone()
         };
         let both = GatewayBibles {
