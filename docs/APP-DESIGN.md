@@ -808,9 +808,12 @@ There is no `ProjectIndex` *(A-21)*: §4.3 says how each read finds its keys.
 - **The open** forwards tc-store's reports with no timer of its own
   (`app_forwards_open_reports_unchanged`).
 - **Cancel.** `jobs/cancel` sets the token. Jobs poll it between files of an install, between
-  books of a plan, per chunk of a download (`crates/tc-door43/src/client.rs:651` already re-reads
-  the internet switch per chunk), and in git2's transfer callbacks (STORAGE:2725, 2861). A
-  cancelled job reports `Cancelled` and changes no project data.
+  books of a plan, per chunk of a download and every 100 ms while a download waits for Door43
+  (A11: the job hands tc-door43 a `DownloadWatch` that answers from the token and keeps the byte
+  count; `crates/tc-door43/src/download.rs`), and in git2's transfer callbacks (STORAGE:2725,
+  2861). A cancelled job reports `Cancelled` and changes no project data. *(A11: the check while
+  a download waits is added to the check per chunk, because a stalled transfer would otherwise
+  hold a Cancel for up to the 60 s read timeout.)*
 
 | Job | Progress unit | Cancel leaves | Budget |
 |---|---|---|---|
@@ -818,7 +821,7 @@ There is no `ProjectIndex` *(A-21)*: §4.3 says how each read finds its keys.
 | `Create`, `Join`, `Import` | steps, bytes | the staging folder removed | import 2 min (PERF:95) |
 | `Sync` | objects, bytes | before integrate: nothing; after: the step finishes and says what arrived (Q8) | 3 s plus network (PERF:93) |
 | `ExchangeExport` | bytes, then verify | no file on the stick | 15 s on USB 2 (PERF:94) |
-| `Download`, `FixFetch` | per repository, bytes (after B9a streams) | the partial install removed | background |
+| `Download`, `FixFetch` | per repository, bytes (`DownloadWatch::received`, A11) | nothing: the part-downloaded file is removed and nothing is installed; a cancel that comes after the download is checked lets the atomic install finish | background |
 | `UpgradePlan`, `GatewayPlan` | books | nothing; plans are read-only | 2 s count, 5 s plan (PERF:81-82) |
 | `Export` | steps | no file | — |
 | `HomeSummary` | files | the card keeps "—" | background |
@@ -827,8 +830,20 @@ There is no `ProjectIndex` *(A-21)*: §4.3 says how each read finds its keys.
 
 - **Saves keep flowing** during every job (I9, STORAGE:2976-2984). tc-app holds no lock across a
   job.
-- **After a restart** import, seed and install resume from their own temporary state; training,
-  plans and summaries are computed again; nothing syncs at launch or while idle (DELTA:737).
+- **After a restart** import and seed resume from their own temporary state; a download starts
+  again from its first byte when it is next asked for, because opening the resource store clears
+  what an interrupted one left in `.partial/` *(A11)*; training, plans and summaries are computed
+  again; nothing syncs at launch or while idle (DELTA:737).
+- **Download memory.** A download streams to a file and is checked from it on the blocking pool,
+  but the check returns every unpacked file in memory and tc-resources holds them until the store
+  has written them: about 105 MiB peak for en_ust v91, of which the unpacked text is 89 MiB
+  (`docs/evidence/streaming-downloads-2026-10-17.md`). Unpacking each checked entry into the
+  store's staging folder would bound it by the largest file. Open after A11; it changes
+  tc-door43's verify and tc-resources' `Staged`.
+- **Aquifer downloads.** tc-resources' `AquiferClient` still reads an asset whole into memory,
+  with no byte progress and no cancel (`crates/tc-resources/src/aquifer.rs`,
+  `download_asset`); the English notes asset is 16.2 MB. A `Download` job for an Aquifer asset
+  needs A11's streaming there first. Open after A11; B9a's scope names it.
 
 ### 4.7 Services behind the screens
 
@@ -1009,9 +1024,10 @@ lifecycle.rs`): `closed_stdin_quits_within_5_s`, `second_instance_waits_then_nam
 3. The server refuses with `NeedsInternet` if the switch went off meanwhile; the UI asks once
    more. A job that loses the internet while it runs ends with its own refusal, for example
    `SyncRefusal::Offline`.
-4. Turning the switch off stops the very next request: tc-door43 checks it before every request
-   and every download chunk (`crates/tc-door43/src/client.rs:597, 651`). tC4 only blocked in the
-   client (`tC4:src/state.jsx:4296-4299`).
+4. Turning the switch off stops the very next request: tc-door43 checks it before every request,
+   before every download chunk is written and every 100 ms while a download waits
+   (`crates/tc-door43/src/client.rs:583-614, 685`). tC4 only blocked in the client
+   (`tC4:src/state.jsx:4296-4299`).
 5. Sign-in sends login and password once, in the body of `account/signIn`, over the local API.
    tc-app mints a Door43 token, keeps it in memory, and with "Stay signed in" in the keychain. The
    token never reaches the UI; `AccountView { user, kept }` does.
@@ -1760,7 +1776,7 @@ it today *(A-5)*.
 | R10 | Sync, share and join entry points with progress, cancel, `ExchangeReport`, and `NotShared` (DELTA:645) | X | yes (§9, §10) | `ScriptedSync` |
 | R11 | Import review as a dry run; import job with progress and cancel; tC3 version lookup | I | partly | `ScriptedImport` |
 | R12 | `tc-door43`: `count_repositories(owner, lang)` and a `repos/search` route in the fake | app track, B9b | — | — |
-| R13 | `tc-door43-fake`: a dropped-connection fault and a runnable binary; today's faults are statuses, delays, redirects and archive changes (`crates/tc-door43-fake/src/lib.rs:171-203`) | X or app track | no | scripted outcome |
+| R13 | `tc-door43-fake`: a dropped-connection fault and a runnable binary; today's faults are statuses, delays, redirects, archive changes and, for archive and export downloads only, a held, broken-off or unsized body (A11) (`crates/tc-door43-fake/src/lib.rs:171-214`); git smart HTTP has none | X or app track | no | scripted outcome |
 | R14 | tc-store counters reachable from tc-app tests (files opened, fsyncs, actor queue waits). The fold's half exists: `FoldState::counters` is public (`storage:…/fold/state.rs:1830`) | S1 | no | C0 counts commands, replies and waits itself; files opened are counted only if tc-store counts them *(A-5)* |
 | R15 | A `DraftField` for user comments (`command.rs:207-215` has none) | S1 | no | the browser buffer and the shell's mirror *(A-3, A-18)* |
 | R16 | `StoreReply.seq` for read-your-writes; typed notices for `SecondWriter`, `SavedWithDiskError`, a blocked materialize | S1, S2 | no | C0's own `seq`, raised with each published snapshot; notices mapped from tc-store's error types *(A-5)* |
@@ -1839,7 +1855,7 @@ This breakdown was checked again after the red team *(A-16, A-17)*:
 | A8 Door43 account and internet consent | `account` service: sign-in with `mint_token` against tc-door43-fake, keep, resume, forget; `cancelSignIn`; "no keychain"; M12; the internet question flow (`InternetFlow`, `Pending`) | A3, A5 | — | sign-in cases of J11; internet-consent a–j that need no project | DOM parity for `share-signin`, `share-internet-consent`, `open-door43-internet-consent` |
 | A9 First-launch seeding | **tc-resources**: progress and cancel hooks in bundle seeding, with that crate's own tests; the `Seed` job; `Startup` events; `/prepare.html` with English text and the other nine languages listed as pending (Q-10) *(A-17, A-32)* | A2, A3 | Q-10 for the translations | seeding count targets (PERF:133-138); cancel leaves a resumable state; tc-resources' tests stay green | Playwright: the window shows "Preparing resources: n of total" and Close cancels |
 | A10 tc-export print model *(A-17)* | the **new crate `tc-export`**, pure, over tc-usfm and tc-obs: ports of `printedItems` (`tC4:src/data/bookModel.js`), the print parts (`tC4:src/views/print/PrintBook.jsx:44-71`) and `PrintStories.jsx`, and the page setup; a typed model, no HTML yet | — | — | vectors recorded by running tC4's functions in node on the Titus and OBS samples; a proptest that every drafted verse appears once | the vectors are equal |
-| A11 Streaming downloads in tc-door43 *(A-17)* | **tc-door43**: `download` streams to a file with byte progress and a cancel check per chunk (today it returns one buffer, `crates/tc-door43/src/client.rs:520-526`); tc-resources installs use it | — | — | against tc-door43-fake: progress counts, cancel leaves no partial install, the internet switch stops the next chunk | the tests pass; tc-resources' install tests stay green |
+| A11 Streaming downloads in tc-door43 *(A-17)* | **tc-door43**: `download` streams to a file with byte progress and a cancel check per chunk, and every 100 ms while it waits (it returned one buffer, `crates/tc-door43/src/client.rs:520-526` at `21fef4a`); tc-resources installs use it. Built: `DownloadTo`, `DownloadWatch`, `DownloadedZip`, `Door43Error::{Cancelled, Disk}`, `install_dcs_watched`, the fake's `HoldBody`, `BreakOff` and `NoContentLength` | — | — | against tc-door43-fake: progress counts, cancel leaves no partial install, the internet switch stops the next chunk | the tests pass; tc-resources' install tests stay green |
 | G0 Electronite spike, run on Windows *(A-3, A-14, A-17)* | a throwaway Electronite v37 main script and page in `spikes/electronite/`, never shipped: start `tc4 serve`; the header filter of AD11 and a probe of every request type (image, iframe, download, print window, font); a `protocol.handle` prototype for Q-1; the aligner round trip with a 20 KB reply, alone and while OBS pictures and a help page load; supervision (end `tc4`: restart and reload; end the shell: `tc4` exits); what a hard kill leaves of `localStorage` and of the mirror file; the Chromium version | A2 | Q-26: a person or a Windows runner runs it (PLAN:151-152) | the probe table; the round trip p95 on the reference laptop or a named stand-in; the supervision cases | `docs/evidence/electronite-spike-<date>.md` holds the results; Q-1 and, on a miss, Q-13 are put to the owner with them |
 
 ### Phase 1: after unit C merges (MemoryBackend)
@@ -1859,7 +1875,7 @@ B1a starts now, on a branch cut from `storage`, because it needs tc-journal *(A-
 | B6 Align: read and session | `align/index`, `open`, `edit`, `keepReflow`, `flush` over a server `Aligner`; the click queue *(A-14)*; the server's save timer on scripted outcomes, `AlignSave` in the indicator and the close guard *(A-4)*; the pure view builder *(A-14)*; bank, cards, lenses, occurrence numbers, multi-select, drag; marking row; training job and `Suggest` events | B5a | G0's round trip before B6 merges; Q-13 if it misses 30 ms. B6 can start before G0 reports, because the pure view builder makes Q-13's fallback a switch | J5 steps that do not save; `align_open_touches_one_verse`; `align_click_round_trip_p95` within 30 ms; `fast_clicks_are_queued_not_refused`; `unsaved_links_hold_the_close_guard` | 6 Align screens |
 | B7 OBS | story rail; OBS Understand, Translate, Check; `/media/obs` | B3, B5a | — | `story_open_touches_one_story` | 6 OBS screens |
 | B8 Community Checking preview | the screen over A10's model; page setup; export items listed | B4a, B7, A10 | — | print preview scenarios on Titus and the OBS sample | `en-community-checking` |
-| B9a Settings, source texts, downloads | M7 (read, and `viewFromHome` per AD14); M8 steps 1 and 2; download jobs over A11's streaming | B2, B3, A11 | — | settings-contract (read part); cancel leaves no partial install | `project-settings`, `source-texts` |
+| B9a Settings, source texts, downloads | M7 (read, and `viewFromHome` per AD14); M8 steps 1 and 2; download jobs over A11's streaming (`install_dcs_watched`, with a `DownloadWatch` over the job's counters and cancel token); A11's streaming in tc-resources' `AquiferClient` before an Aquifer asset gets a `Download` job (§4.6). tC4 shows only the repository being fetched (`sources.progress`) and has no Cancel; a byte count or a Cancel button is a declared difference for the owner (AGENTS.md, "Matching tC4") | B2, B3, A11 | — | settings-contract (read part); cancel leaves no partial install | `project-settings`, `source-texts` |
 | B9b Share steps and Open from Door43 | share target and check steps against the fake; R12 (count and the fake's route); M6 form with `ScriptedOpenDoor43`; shared state on cards | A8, B2 | — | `openFromDoor43Dialog` port; internet-consent share and open cases | 6 screens (§7.6) |
 | B10 Scripted sync and conflict chips | `ScriptedSync`; `SyncResultView`; X10 toast; X12 chips and tile counts from fold conflicts | B9b | — | `syncButton` toast ports; sync refusal closed-set test through the UI | 7 screens; milestone: 62 of 62 in the report |
 | B11 Conflict review: read side | review tabs, grouping, labels, colours, clock warning; detail; History; Detached; Notices; "2 versions" markers in Translate, Align and Check; resolve on scripted outcomes with the double-submit rule *(A-27)* | B4a, B5b, B6 | — | `actorLabel` port; gallery case S4 Text tab against tC4's verse review; a second click gets the first reply | J18's UI steps on scripted outcomes |

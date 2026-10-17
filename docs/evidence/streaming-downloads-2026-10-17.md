@@ -3,7 +3,8 @@
 What streaming a Door43 download to a file saves, and what it costs. Unit A11 of
 `docs/APP-DESIGN.md` §10.
 
-- **Commit:** `2423123` (branch `p0-a11`).
+- **Commit:** the client at `2423123` (branch `p0-a11`); the program is in the commit that adds
+  this file.
 - **Machine:** this container, Intel Xeon @ 2.10 GHz, 4 vCPUs shared with other builds, with
   SHA and AVX-512 instructions. Not the reference laptop of `docs/PERFORMANCE.md`.
 - **Build:** release.
