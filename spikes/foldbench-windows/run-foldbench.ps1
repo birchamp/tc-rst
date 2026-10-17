@@ -267,7 +267,8 @@ function Invoke-CachedOpen([string]$Dir) {
     }
 }
 
-# The app's case for memory: the whole Bible open with the cache, then Psalms projected 20 times.
+# The whole Bible open with the cache, then Psalms projected 20 times (FOLDBENCH_PSALMS_ONLY),
+# without the steps `foldbench app` adds; the app's case for memory is Invoke-App.
 function Invoke-Psalms([string]$Dir) {
     $watch = @('RSS with the fold open', 'peak RSS while Psalms was projected')
     $run = Invoke-Foldbench @('run', $Dir, "$Threads") @{ FOLDBENCH_PSALMS_ONLY = '1'; FOLDBENCH_RUNS = '1' } $watch
@@ -290,6 +291,47 @@ function Invoke-Psalms([string]$Dir) {
         PeakPrivate   = $run.PeakPrivate
         Lines         = $run.Stdout
     }
+}
+
+# The app's case, the one the storage branch takes its memory budgets from: `foldbench app`
+# opens the project once with the fold cache in a process that has done nothing else, then a
+# person works in Psalms (saves, decisions, alignments, conflict lists, the book's projection,
+# snapshots). Measured from outside, like the rest; $null with the reason if this foldbench
+# has no `app`.
+function Invoke-App([string]$Dir) {
+    $watch = @('open with the fold cache', 'peak RSS of the incremental steps')
+    try {
+        $run = Invoke-Foldbench @('app', $Dir, "$Threads") @{} $watch
+    } catch {
+        return [pscustomobject]@{ Error = $_.Exception.Message }
+    }
+    $open = $run.Marks['open with the fold cache']
+    if (-not $open) {
+        return [pscustomobject]@{ Error = "foldbench app printed no open with the fold cache: $($run.Stdout -join ' / ')" }
+    }
+    $end = $run.Marks['peak RSS of the incremental steps']
+    return [pscustomobject]@{
+        Error       = $null
+        OpenSteady  = $open.WorkingSet
+        OpenPeak    = $open.PeakWorkingSet
+        EndSteady   = if ($end) { $end.WorkingSet } else { $null }
+        Peak        = if ($end) { $end.PeakWorkingSet } else { $run.PeakWorkingSet }
+        PeakPrivate = $run.PeakPrivate
+        Cpu         = $run.CpuMs
+        Wall        = $run.WallMs
+        Lines       = $run.Stdout
+    }
+}
+
+# foldbench's table rows; it prints no header before the app's steps, so one is added.
+function Add-TableRows([string[]]$Lines) {
+    $rows = @($Lines | Where-Object { $_.StartsWith('|') })
+    if ($rows.Count -eq 0) { return }
+    if (-not $rows[0].StartsWith('| Action')) {
+        Add '| Action | Runs | Median | p95 |'
+        Add '|---|---:|---:|---:|'
+    }
+    foreach ($row in $rows) { Add $row }
 }
 
 function Test-Corpus([string]$Dir) {
@@ -390,6 +432,7 @@ if (-not (Test-Corpus $coldCopy)) {
 $firsts = @()
 $cacheds = @()
 $psalms = @()
+$apps = @()
 $machineLine = $null
 for ($round = 1; $round -le $Rounds; $round++) {
     Say "Round $round of ${Rounds}: the first open without a cache"
@@ -411,6 +454,18 @@ for ($round = 1; $round -le $Rounds; $round++) {
     $p = Invoke-Psalms $Corpus
     $psalms += $p
     Add-Content -LiteralPath $rowsFile -Value ("$round`tpsalms`tmedian $(Fmt $p.Median '{0:0.0}')`tp95 $(Fmt $p.P95 '{0:0.0}')`tws_before $(Fmt (MiB $p.SteadyBefore))`tpeak $(Fmt (MiB $p.PeakAfter))`tws_after $(Fmt (MiB $p.SteadyAfter))")
+
+    Say "Round $round of ${Rounds}: the app's case (foldbench app): one open, then work in Psalms"
+    Read-Corpus $Corpus
+    $a = Invoke-App $Corpus
+    $apps += $a
+    if ($a.Error) {
+        Say "  the app's case did not run: $($a.Error)"
+        Add-Content -LiteralPath $rowsFile -Value "$round`tapp`terror`t$($a.Error -replace '\s+', ' ')"
+    } else {
+        Set-Content -LiteralPath (Join-Path $raw "app-$round.txt") -Value $a.Lines
+        Add-Content -LiteralPath $rowsFile -Value ("$round`tapp`tws_open $(Fmt (MiB $a.OpenSteady))`tpeak_open $(Fmt (MiB $a.OpenPeak))`tpeak $(Fmt (MiB $a.Peak))`tws_end $(Fmt (MiB $a.EndSteady))`tpeak_private $(Fmt (MiB $a.PeakPrivate))")
+    }
     Start-Sleep -Seconds 2
 }
 
@@ -483,10 +538,39 @@ foreach ($row in $rows) {
         "$(Get-Range @($runs | ForEach-Object { MiB $_.PeakWorkingSet }) 'MiB') | $(Get-Range @($runs | ForEach-Object { MiB $_.PeakPrivate }) 'MiB') | $steady | $($row.Budget) |")
 }
 Add ''
-Add '## Psalms in use'
+$appsRan = @($apps | Where-Object { -not $_.Error })
+Add '## The app''s case for memory'
+Add ''
+Add 'Each round runs `foldbench app` in a process of its own: one open of the whole Bible with the'
+Add 'fold cache, then a person working in Psalms (200 saves of a verse, decisions, alignments and'
+Add 'resolutions, the conflict lists, the book''s projection and 20 snapshots). This is the case'
+Add 'the storage branch takes the memory budgets from. Working sets are read when foldbench'
+Add 'reports the open and when it reports the end of the steps.'
+Add ''
+if ($appsRan.Count -gt 0) {
+    Add '| Figure | Value over the processes | Budget |'
+    Add '|---|---|---|'
+    Add "| Working set with the fold open, before the steps | $(Get-Range @($appsRan | ForEach-Object { MiB $_.OpenSteady }) 'MiB') | 150 MiB steady |"
+    Add "| Peak working set of the open | $(Get-Range @($appsRan | ForEach-Object { MiB $_.OpenPeak }) 'MiB') | 350 MiB peak |"
+    Add "| Peak working set of the process, the open and the steps | $(Get-Range @($appsRan | ForEach-Object { MiB $_.Peak }) 'MiB') | 350 MiB peak |"
+    Add "| Working set after the steps | $(Get-Range @($appsRan | ForEach-Object { MiB $_.EndSteady }) 'MiB') | 150 MiB steady |"
+    Add "| Peak private bytes | $(Get-Range @($appsRan | ForEach-Object { MiB $_.PeakPrivate }) 'MiB') | |"
+    Add "| CPU time of the process | $(Get-Range @($appsRan | ForEach-Object { $_.Cpu }) 'ms') | |"
+    Add ''
+    Add 'foldbench''s own step times from the first round (its memory figures read "unavailable" on'
+    Add 'Windows; the table above measures them):'
+    Add ''
+    Add-TableRows $appsRan[0].Lines
+} else {
+    Add "**The app's case did not run**: $(($apps | Select-Object -First 1).Error)"
+}
+Add ''
+Add '## Psalms in use, without the app''s steps'
 Add ''
 Add 'Each process opens the whole Bible with the fold cache, then projects every file of Psalms 20'
-Add 'times with the values read from disk (what materializing the book renders).'
+Add 'times with the values read from disk (what materializing the book renders), and stops'
+Add '(`FOLDBENCH_PSALMS_ONLY`): the projection times, and memory without the steps `foldbench app`'
+Add 'adds. The memory budgets apply to the app''s case above.'
 Add ''
 Add '| Figure | Value over the processes | Budget |'
 Add '|---|---|---|'
@@ -494,29 +578,47 @@ Add "| Psalms projection, median of 20 | $(Get-Range @($psalms | ForEach-Object 
 Add "| Psalms projection, p95 of 20 | $(Get-Range @($psalms | ForEach-Object { $_.P95 }) 'ms') | 300 ms |"
 Add "| Psalms USFM alone, median | $(Get-Range @($psalms | ForEach-Object { $_.UsfmMedian }) 'ms' '{0:0.0}') | 150 ms (open a book) |"
 Add "| One Psalms chapter's USFM, median | $(Get-Range @($psalms | ForEach-Object { $_.ChapterMedian }) 'ms' '{0:0.00}') | 50 ms (first chapter) |"
-Add "| Working set with the whole Bible open, before Psalms | $(Get-Range @($psalms | ForEach-Object { MiB $_.SteadyBefore }) 'MiB') | 150 MiB steady |"
-Add "| Peak working set of the process, the open and the projections | $(Get-Range @($psalms | ForEach-Object { MiB $_.PeakAfter }) 'MiB') | 350 MiB peak |"
-Add "| Working set after Psalms was projected | $(Get-Range @($psalms | ForEach-Object { MiB $_.SteadyAfter }) 'MiB') | 150 MiB steady |"
+Add "| Working set with the whole Bible open, before Psalms | $(Get-Range @($psalms | ForEach-Object { MiB $_.SteadyBefore }) 'MiB') | see the app's case |"
+Add "| Peak working set of the process, the open and the projections | $(Get-Range @($psalms | ForEach-Object { MiB $_.PeakAfter }) 'MiB') | see the app's case |"
+Add "| Working set after Psalms was projected | $(Get-Range @($psalms | ForEach-Object { MiB $_.SteadyAfter }) 'MiB') | see the app's case |"
 Add "| Peak private bytes | $(Get-Range @($psalms | ForEach-Object { MiB $_.PeakPrivate }) 'MiB') | |"
 Add ''
 Add 'Windows cannot reset a process''s peak, so the peak above covers the open and the projections'
 Add 'together; when the projections peak lower than the open, this shows the open''s peak.'
 Add ''
 if ($everything) {
+    # `foldbench run` ends by starting `foldbench app` as a child process that writes to the same
+    # output; its lines start at this one and belong to the app's case, not to this process.
+    $parent = @()
+    $child = @()
+    $inChild = $false
+    foreach ($line in $everything.Stdout) {
+        if ($line -like "the app's case, in a process of its own*") { $inChild = $true }
+        if ($inChild) { $child += $line } else { $parent += $line }
+    }
     Add '## Every part, one process'
     Add ''
     Add '`foldbench run CORPUS 4` with its defaults (5 runs of each open). Its memory and CPU columns'
     Add 'read "unavailable" on Windows. An open in a process that has already opened the project'
-    Add 'several times is not the app''s case; the tables above are.'
+    Add 'several times is not the app''s case; the app''s case is the table above and the next part.'
     Add ''
-    foreach ($line in $everything.Stdout) {
+    foreach ($line in $parent) {
         if ($line.StartsWith('|')) { Add $line }
     }
     Add ''
     if (-not $script:procZeros) {
-        foreach ($line in $everything.Stdout) {
+        foreach ($line in $parent) {
             if ($line -like 'corpus:*' -or $line -like 'fold cache:*' -or $line -like 'Psalms:*') { Add "- $line" }
         }
+        Add ''
+    }
+    if ($child.Count -gt 0) {
+        Add '## The app''s case, as `foldbench run` starts it'
+        Add ''
+        Add '`foldbench run` ends by starting `foldbench app` as a child process. These are that'
+        Add 'child''s rows; its memory is measured by the app''s-case table above, not here.'
+        Add ''
+        Add-TableRows $child
         Add ''
     }
 }
