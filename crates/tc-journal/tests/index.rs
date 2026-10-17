@@ -11,14 +11,14 @@ use common::{arb_body, fixtures, local, project, verse_change};
 use proptest::prelude::*;
 use std::sync::Arc;
 use tc_corpus::{Corpus, Spec};
-use tc_journal::consolidate::consolidate;
+use tc_journal::consolidate::{consolidate, redundancy};
 use tc_journal::fold::{FoldInput, FoldState, ProjectKind, ValueAt, ValueSource};
 use tc_journal::index::{
-    FileKey, Fingerprinter, INDEX_VERSION, Index, IndexError, Loaded, Section, fingerprint,
+    Facts, FileKey, Fingerprinter, INDEX_VERSION, Index, IndexError, Loaded, Section, fingerprint,
     load_pack, load_pending,
 };
 use tc_journal::json::{self, Json};
-use tc_journal::pack::{PackPath, PackSpec, YearMonth, seal};
+use tc_journal::pack::{PackFacts, PackPath, PackSpec, YearMonth, encode_pack, seal};
 use tc_journal::pending::{PendingHeader, PendingStatus, Purpose, encode_pending, read_pending};
 use tc_journal::{Change, ChangeId, PackId, ProjectId, Verified, WallTime, parse_change};
 
@@ -45,8 +45,8 @@ impl File {
     /// The file read in full at file number `file`, as an open without the cache reads it.
     fn load(&self, project: ProjectId, file: u32) -> Loaded {
         match self.kind {
-            FileKind::Pack => load_pack(&self.path, &self.bytes, project, file).1,
-            FileKind::Pending => load_pending(&self.path, &self.bytes, project, file).1,
+            FileKind::Pack => load_pack(&self.path, &self.bytes, project, file),
+            FileKind::Pending => load_pending(&self.path, &self.bytes, project, file),
         }
     }
 
@@ -179,9 +179,13 @@ fn every_kind() -> Vec<Verified> {
     out
 }
 
+/// The section gives what reading the file gives: the same facts and the same prepared
+/// changes.
 fn assert_same_inputs(file: &File, section: &Section, number: u32) {
-    let from_cache = section.inputs(number).unwrap();
-    assert_eq!(texts(&from_cache), texts(&file.read(project(), number)));
+    let from_cache = section.load(number).unwrap();
+    let read = file.load(project(), number);
+    assert_eq!(from_cache.facts, read.facts);
+    assert_eq!(texts(&from_cache.inputs), texts(&read.inputs));
 }
 
 #[test]
@@ -224,8 +228,10 @@ proptest! {
             let section = file_.section(project(), file).expect("the file can be cached");
             let bytes = Index::encode(project(), [&section]);
             let index = Index::parse(bytes, project()).unwrap();
-            let from_cache = index.section(&file_.key()).unwrap().inputs(file).unwrap();
-            prop_assert_eq!(texts(&from_cache), texts(&file_.read(project(), file)));
+            let from_cache = index.section(&file_.key()).unwrap().load(file).unwrap();
+            let read = file_.load(project(), file);
+            prop_assert_eq!(&from_cache.facts, &read.facts);
+            prop_assert_eq!(texts(&from_cache.inputs), texts(&read.inputs));
         }
     }
 }
@@ -274,11 +280,11 @@ fn open(files: &[File], index: Option<&Index>) -> (FoldState, usize) {
         let n = n as u32;
         match index
             .and_then(|i| i.section(&file.key()))
-            .map(|s| s.inputs(n))
+            .map(|s| s.load(n))
         {
             Some(Ok(from_cache)) => {
                 cached += 1;
-                inputs.extend(from_cache);
+                inputs.extend(from_cache.inputs);
             }
             _ => inputs.extend(file.read(project, n)),
         }
@@ -441,8 +447,8 @@ fn a_damaged_index_never_gives_other_changes() {
         let Some(section) = index.section(&file.key()) else {
             return;
         };
-        if let Ok(inputs) = section.inputs(0) {
-            assert_eq!(texts(&inputs), expected, "{how}");
+        if let Ok(loaded) = section.load(0) {
+            assert_eq!(texts(&loaded.inputs), expected, "{how}");
         }
     };
     let mut unused = 0;
@@ -453,7 +459,7 @@ fn a_damaged_index_never_gives_other_changes() {
             check(damaged.clone(), &format!("bit {bit} of byte {at}"));
             let used = Index::parse(damaged, project())
                 .ok()
-                .and_then(|i| i.section(&file.key()).map(|s| s.inputs(0).is_ok()))
+                .and_then(|i| i.section(&file.key()).map(|s| s.load(0).is_ok()))
                 .unwrap_or(false);
             unused += usize::from(!used);
         }
@@ -487,7 +493,7 @@ proptest! {
         };
         if let Ok(index) = Index::parse(input, project()) {
             for section in index.sections() {
-                let _ = section.inputs(0);
+                let _ = section.load(0);
             }
         }
     }
@@ -503,16 +509,19 @@ fn a_file_the_cache_cannot_stand_for_has_no_section() {
     assert!(matches!(quarantined, Verified::Quarantined(_)));
     let lines = [Verified::Change(good.clone()), quarantined];
     let file = pending_of(&lines, 3);
-    let (read, loaded) = load_pending(&file.path, &file.bytes, project(), 0);
-    assert_eq!(read.status, PendingStatus::Valid);
+    let loaded = load_pending(&file.path, &file.bytes, project(), 0);
+    let Facts::Pending(facts) = &loaded.facts else {
+        panic!("{:?}", loaded.facts)
+    };
+    assert_eq!(facts.status, PendingStatus::Valid);
     assert_eq!(loaded.inputs.len(), 2);
     assert!(
         loaded.section.is_none(),
         "a quarantined line keeps its bytes in memory"
     );
     for pack in packs_of(&lines) {
-        let (read, loaded) = load_pack(&pack.path, &pack.bytes, project(), 0);
-        assert!(read.is_valid());
+        let loaded = load_pack(&pack.path, &pack.bytes, project(), 0);
+        assert!(matches!(&loaded.facts, Facts::Pack(facts) if facts.is_valid()));
         assert!(loaded.section.is_none(), "a pack with a quarantined line");
     }
 
@@ -542,6 +551,83 @@ fn a_file_the_cache_cannot_stand_for_has_no_section() {
     }
 }
 
+/// The pack facts of a loaded file.
+fn pack_facts(loaded: &Loaded) -> PackFacts {
+    match &loaded.facts {
+        Facts::Pack(facts) => facts.clone(),
+        Facts::Pending(_) => panic!("a pack"),
+    }
+}
+
+/// The open's rules read a file's change ids from a read and from the cache alike: the
+/// redundancy rule (§4.7) keeps a pack whose replacing pack lacks one of its changes (O7
+/// would otherwise remove the only copy of that change from the working tree), and O7 sees
+/// every change of a pending file. A loader that moved the changes out of the facts it
+/// returned gave the redundancy rule an empty pack, which every pack that lists it holds.
+#[test]
+fn the_open_s_rules_read_the_same_ids_from_a_read_and_from_the_cache() {
+    let changes: Vec<Verified> = (1..=4)
+        .map(|seq| Verified::Change(verse_change(local(1), seq, seq as u16, "words")))
+        .collect();
+    let spec = |at: i64| PackSpec {
+        project: project(),
+        sealer: local(1),
+        sealed: WallTime(1_760_000_000_000 + at),
+    };
+    let pack_file = |pack: tc_journal::pack::EncodedPack| File {
+        kind: FileKind::Pack,
+        path: pack.path.to_string(),
+        bytes: pack.bytes,
+    };
+    let replaced = seal(&spec(0), &changes).unwrap().packs.remove(0);
+    let name = replaced.path.name;
+    let replaced = pack_file(replaced);
+    let lacking = pack_file(encode_pack(&spec(1), &changes[..3], &[name]).unwrap());
+    let holding = pack_file(encode_pack(&spec(2), &changes, &[name]).unwrap());
+    let mut ids: Vec<ChangeId> = changes.iter().map(Verified::id).collect();
+    ids.sort();
+    for (replacing, redundant) in [(lacking, false), (holding, true)] {
+        let files = [replaced.clone(), replacing];
+        let loaded: Vec<Loaded> = (0..2).map(|n| files[n].load(project(), n as u32)).collect();
+        let index = Index::parse(
+            Index::encode(project(), loaded.iter().filter_map(|l| l.section.as_ref())),
+            project(),
+        )
+        .unwrap();
+        let from_reads: Vec<PackFacts> = loaded.iter().map(pack_facts).collect();
+        let from_cache: Vec<PackFacts> = (0..2)
+            .map(|n| {
+                let section = index.section(&files[n].key()).unwrap();
+                pack_facts(&section.load(n as u32).unwrap())
+            })
+            .collect();
+        assert_eq!(from_reads[0].ids, ids);
+        assert_eq!(from_reads, from_cache);
+        for facts in [&from_reads, &from_cache] {
+            let result = redundancy(facts);
+            if redundant {
+                assert_eq!(result.redundant, vec![(0, 1)]);
+                assert!(result.kept.is_empty());
+            } else {
+                assert!(result.redundant.is_empty(), "{result:?}");
+                assert_eq!(result.kept.len(), 1);
+                assert_eq!(result.kept[0].missing, vec![changes[3].id()]);
+            }
+        }
+    }
+
+    let pending = pending_of(&changes, 3);
+    let loaded = pending.load(project(), 0);
+    let section = loaded.section.clone().unwrap();
+    for facts in [loaded.facts, section.load(0).unwrap().facts] {
+        let Facts::Pending(facts) = facts else {
+            panic!("a pending file")
+        };
+        assert_eq!(facts.ids, ids);
+        assert_eq!(facts.header.unwrap().device, local(3));
+    }
+}
+
 /// The bytes of the cache of the pinned changes of every kind. Every build of the app reads a
 /// cache of its own `INDEX_VERSION`, so a change to what a prepared change keeps, or to how
 /// the cache writes it, must raise the version: it changes these bytes, and this test fails
@@ -562,8 +648,8 @@ fn the_encoding_is_pinned() {
     assert_eq!(
         (INDEX_VERSION, digest.as_str()),
         (
-            3,
-            "2da67c1119030ef8668e99666f4bf74036490b8a8e82eb65c0967be7b7ce600b"
+            4,
+            "ba6342a04cc6edac1bc8def0be6f28f90b09d06d53e67885766186798e400423"
         ),
         "the cache's bytes changed: raise INDEX_VERSION and pin the new digest"
     );
@@ -697,12 +783,12 @@ proptest! {
 // Opens with a cache that no longer stands for the files
 // ---------------------------------------------------------------------------------------
 
-/// What an open of `files` gives: the fold, whether each file came from the cache, and what
-/// reading each file reported (a file from the cache was valid when its section was made).
+/// What an open of `files` gives: the fold, whether each file came from the cache, and the
+/// facts of each file, which the open's rules and notices read.
 struct Opened {
     fold: FoldState,
     from_cache: Vec<bool>,
-    reports: Vec<String>,
+    reports: Vec<Facts>,
 }
 
 fn open_with(files: &[File], project: ProjectId, index: Option<&Index>) -> Opened {
@@ -713,28 +799,11 @@ fn open_with(files: &[File], project: ProjectId, index: Option<&Index>) -> Opene
         let n = n as u32;
         let cached = index
             .and_then(|i| i.section(&file.key()))
-            .and_then(|s| s.inputs(n).ok());
+            .and_then(|s| s.load(n).ok());
         from_cache.push(cached.is_some());
-        match cached {
-            Some(cached) => {
-                inputs.extend(cached);
-                reports.push("Valid".to_string());
-            }
-            None => {
-                let (status, loaded) = match file.kind {
-                    FileKind::Pack => {
-                        let (read, loaded) = load_pack(&file.path, &file.bytes, project, n);
-                        (format!("{:?}", read.status), loaded)
-                    }
-                    FileKind::Pending => {
-                        let (read, loaded) = load_pending(&file.path, &file.bytes, project, n);
-                        (format!("{:?}", read.status), loaded)
-                    }
-                };
-                inputs.extend(loaded.inputs);
-                reports.push(status);
-            }
-        }
+        let loaded = cached.unwrap_or_else(|| file.load(project, n));
+        inputs.extend(loaded.inputs);
+        reports.push(loaded.facts);
     }
     let source: Arc<dyn ValueSource> =
         Arc::new(Files(files.iter().map(|f| f.bytes.clone()).collect()));
@@ -941,8 +1010,8 @@ fn added_removed_and_renamed_files_open_as_without_the_cache() {
     let from_cache = opens_as_without(&renamed, project(), &index, "files renamed");
     assert!(!from_cache[pending] && !from_cache[pack]);
     let opened = open_with(&renamed, project(), None);
-    assert_eq!(
-        opened.reports[pack], "Valid",
+    assert!(
+        matches!(&opened.reports[pack], Facts::Pack(facts) if facts.is_valid()),
         "a pack moved to another month is valid"
     );
 }

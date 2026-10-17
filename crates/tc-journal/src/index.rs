@@ -27,6 +27,9 @@
 //! against its type's grammar, so a damaged index loses sections and never gives other
 //! changes. Only a file whose every line verified and parsed has a section, so a damaged,
 //! newer or foreign file, or one with a quarantined line, is read and reported at every open.
+//! A section also keeps the file's header, so what the open's rules read of a file (its
+//! [`Facts`]: a pack's header, status and change ids for the redundancy rule of §4.7, a
+//! pending file's for §6.1 O7) comes from the section exactly as from a read.
 //!
 //! It does not protect against a file made on purpose to have a cached file's path, size and
 //! fingerprint (the fingerprint is not a cryptographic hash; a collision is easy to compute),
@@ -50,9 +53,13 @@
 //! index   := "tc-index" | version u32 | minor u16 | project [16]
 //!            | count var | count × (len var | section of len bytes)
 //! section := fingerprint u64 of the rest | path str | size var | file fingerprint u64
-//!            | pack: 0, or 1 and the pack's id [32]
+//!            | 0 | pending header, or 1 | the pack's id [32] | pack header
 //!            | devices: var n, n × [16] | resources: var n, n × (str | [20])
 //!            | entries: var n, n × entry
+//! pack header    := count var | project [16] | replaces: var n, n × [16] | sealed zigzag var
+//!                   | sealer [16]
+//! pending header := device [16] | project [16] | purpose u8 | reconciles: 0, or 1 | path str
+//!                   | md5 [16]
 //! entry   := id [32] | offset var | len var | fingerprint u64 | cause and stub u8
 //!            | device var | seq var | at zigzag var | batch [16] | batch n var
 //!            | parents: var n, n × [32] | key | shape
@@ -68,14 +75,14 @@ use crate::fold::meta::{CauseClass, Shape, Summary, VerseShape, book_of};
 use crate::fold::value::Stored;
 use crate::format::FORMAT_MINOR;
 use crate::ids::{
-    BatchId, ChangeId, ChapterNo, CommentId, DeviceId, DeviceSeq, FrameNo, GitOid, PackId,
-    ProjectId, StoryNo, VerseNo, WallTime,
+    BatchId, ChangeId, ChapterNo, CommentId, DeviceId, DeviceKind, DeviceSeq, FrameNo, GitOid, Md5,
+    PackId, PackName, ProjectId, RepoPath, StoryNo, VerseNo, WallTime,
 };
 use crate::json;
 use crate::keys::{CheckId, CheckKey, CheckTarget, RecordKey, RefPart, ToolId};
 use crate::line::Span;
-use crate::pack::PackRead;
-use crate::pending::{PendingRead, PendingStatus};
+use crate::pack::{PackFacts, PackHeader, PackPath, PackStatus};
+use crate::pending::{PendingFacts, PendingHeader, PendingStatus, Purpose, Reconciles};
 use crate::record::{ChapterVerse, CommentTarget, PresentHow, ResourceRef};
 use smallvec::SmallVec;
 use std::collections::HashMap;
@@ -87,7 +94,7 @@ use tc_core::BookId;
 /// written here, what [`FoldInput::prepare_at`] keeps of a change, or what the per-change
 /// rules decide for any bytes changes, a bug fix included. The test `the_encoding_is_pinned`
 /// fails until it is raised for the first two.
-pub const INDEX_VERSION: u32 = 3;
+pub const INDEX_VERSION: u32 = 4;
 
 const MAGIC: &[u8; 8] = b"tc-index";
 
@@ -147,76 +154,93 @@ pub fn fingerprint(bytes: &[u8]) -> u64 {
 
 pub use crate::fold::value::Fingerprinter;
 
-/// One pack or pending file an open read in full, without the cache.
+/// One pack or pending file of an open: read in full ([`load_pack`], [`load_pending`]) or
+/// taken from its section ([`Section::load`]), which give the same for the same bytes.
 #[derive(Debug)]
 pub struct Loaded {
-    /// The file's path, size and fingerprint, from the bytes read.
+    /// The file's path, size and fingerprint.
     pub key: FileKey,
+    /// What the open's rules and notices read of the file.
+    pub facts: Facts,
     /// Every change line the file holds (a damaged file's salvaged lines, §4.4), prepared
     /// with [`FoldInput::prepare_at`] at the loader's file number.
     pub inputs: Vec<FoldInput>,
-    /// What the cache keeps of the file: `None` unless the file is valid and every line is a
-    /// change that parsed. A damaged, newer or foreign file, or one with a quarantined line,
-    /// is read, and reported, at every open.
+    /// The section that stands for the file: the one it was taken from, or the one made of
+    /// it. `None` unless the file is valid and every line is a change that parsed: a damaged,
+    /// newer or foreign file, or one with a quarantined line, is read, and reported, at every
+    /// open.
     pub section: Option<Section>,
+}
+
+/// What the open's rules and notices read of a file: everything but its changes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Facts {
+    Pack(PackFacts),
+    Pending(PendingFacts),
+}
+
+/// The header of the valid file a section stands for.
+#[derive(Debug, Clone)]
+enum Head {
+    Pack { id: PackId, header: PackHeader },
+    Pending(PendingHeader),
 }
 
 /// Reads the pack at repository path `path` (§4.4) as an open does: verifies and salvages
 /// it, prepares its changes at file number `file`, and makes its section from the same
-/// bytes, so a section always holds every change of exactly the bytes it is keyed by. The
-/// pack's entries and spans are moved into [`Loaded::inputs`]; the rest of the read (its
-/// status, header and id) is for the open's notices.
-pub fn load_pack(path: &str, bytes: &[u8], project: ProjectId, file: u32) -> (PackRead, Loaded) {
-    let mut read = crate::pack::read_pack(path, bytes, project);
-    let pack = Some(read.id);
-    let inputs = prepare(&mut read.entries, &mut read.spans, pack, file);
+/// bytes, so a section always holds every change of exactly the bytes it is keyed by.
+pub fn load_pack(path: &str, bytes: &[u8], project: ProjectId, file: u32) -> Loaded {
+    let read = crate::pack::read_pack(path, bytes, project);
+    let facts = PackFacts::of(&read);
+    let inputs = prepare(read.entries, read.spans, Some(read.id), file);
     let key = FileKey::of(path, bytes);
-    let section = read
-        .is_valid()
-        .then(|| Section::make(key.clone(), pack, file, &inputs))
-        .flatten();
-    (
-        read,
-        Loaded {
-            key,
-            inputs,
-            section,
-        },
-    )
+    let section = match (read.status, read.header) {
+        (PackStatus::Valid, Some(header)) => {
+            let head = Head::Pack {
+                id: read.id,
+                header,
+            };
+            Section::make(key.clone(), head, file, &inputs)
+        }
+        _ => None,
+    };
+    Loaded {
+        key,
+        facts: Facts::Pack(facts),
+        inputs,
+        section,
+    }
 }
 
 /// [`load_pack`] for a pending file at `path` (`.tc/pending/<name>`, §4.2).
-pub fn load_pending(
-    path: &str,
-    bytes: &[u8],
-    project: ProjectId,
-    file: u32,
-) -> (PendingRead, Loaded) {
-    let mut read = crate::pending::read_pending(bytes, project);
-    let inputs = prepare(&mut read.entries, &mut read.spans, None, file);
+pub fn load_pending(path: &str, bytes: &[u8], project: ProjectId, file: u32) -> Loaded {
+    let read = crate::pending::read_pending(bytes, project);
+    let facts = PendingFacts::of(&read);
+    let inputs = prepare(read.entries, read.spans, None, file);
     let key = FileKey::of(path, bytes);
-    let section = (read.status == PendingStatus::Valid)
-        .then(|| Section::make(key.clone(), None, file, &inputs))
-        .flatten();
-    (
-        read,
-        Loaded {
-            key,
-            inputs,
-            section,
-        },
-    )
+    let section = match (read.status, read.header) {
+        (PendingStatus::Valid, Some(header)) => {
+            Section::make(key.clone(), Head::Pending(header), file, &inputs)
+        }
+        _ => None,
+    };
+    Loaded {
+        key,
+        facts: Facts::Pending(facts),
+        inputs,
+        section,
+    }
 }
 
 fn prepare(
-    entries: &mut Vec<Verified>,
-    spans: &mut Vec<Span>,
+    entries: Vec<Verified>,
+    spans: Vec<Span>,
     pack: Option<PackId>,
     file: u32,
 ) -> Vec<FoldInput> {
-    std::mem::take(entries)
+    entries
         .into_iter()
-        .zip(std::mem::take(spans))
+        .zip(spans)
         .map(|(entry, span)| FoldInput::new(entry, pack).prepare_at(ValueAt::new(file, span)))
         .collect()
 }
@@ -227,6 +251,8 @@ pub struct Section {
     key: FileKey,
     /// The id of the pack the file is, `None` for a pending file.
     pack: Option<PackId>,
+    /// The project of the index it is part of.
+    project: ProjectId,
     /// The section's bytes are `bytes[start..end]`: the bytes of the index it was read
     /// from, so taking a section copies nothing.
     bytes: Arc<[u8]>,
@@ -239,7 +265,11 @@ impl Section {
     /// values at file number `file`. `None` when the file cannot be cached: a line that is
     /// not a change that parsed (a quarantined change keeps its bytes in memory), or a value
     /// kept in memory (an offset beyond 4 GiB).
-    fn make(key: FileKey, pack: Option<PackId>, file: u32, inputs: &[FoldInput]) -> Option<Self> {
+    fn make(key: FileKey, head: Head, file: u32, inputs: &[FoldInput]) -> Option<Self> {
+        let (pack, project) = match &head {
+            Head::Pack { id, header } => (Some(*id), header.project),
+            Head::Pending(header) => (None, header.project),
+        };
         let mut devices: Vec<DeviceId> = Vec::new();
         let mut resources: Vec<Arc<ResourceRef>> = Vec::new();
         let mut entries = Out::default();
@@ -286,11 +316,15 @@ impl Section {
         rest.str(&key.path);
         rest.var(key.size);
         rest.bytes(&key.fingerprint.to_le_bytes());
-        match pack {
-            None => rest.u8(0),
-            Some(pack) => {
+        match &head {
+            Head::Pending(header) => {
+                rest.u8(0);
+                put_pending_header(&mut rest, header);
+            }
+            Head::Pack { id, header } => {
                 rest.u8(1);
-                rest.bytes(pack.as_bytes());
+                rest.bytes(id.as_bytes());
+                put_pack_header(&mut rest, header);
             }
         }
         rest.var(devices.len() as u64);
@@ -310,6 +344,7 @@ impl Section {
         Some(Self {
             key,
             pack,
+            project,
             bytes: body.into(),
             start: 0,
             end,
@@ -330,10 +365,10 @@ impl Section {
         &self.bytes[self.start..self.end]
     }
 
-    /// The file's prepared inputs, their values at the loader's file number `file`: what
-    /// reading the file's lines and [`FoldInput::prepare_at`] give. An error when the
-    /// section does not check; the open then reads the file.
-    pub fn inputs(&self, file: u32) -> R<Vec<FoldInput>> {
+    /// The file as [`load_pack`] or [`load_pending`] gives it, its values at the loader's file
+    /// number `file`: the facts and prepared changes reading the file's lines gives. An error
+    /// when the section does not check; the open then reads the file.
+    pub fn load(&self, file: u32) -> R<Loaded> {
         let body = self.body();
         let (stored, rest) = body.split_first_chunk::<8>().ok_or(IndexError::Damaged)?;
         if u64::from_le_bytes(*stored) != fingerprint(rest) {
@@ -344,6 +379,13 @@ impl Section {
         if key != self.key || pack != self.pack {
             return Err(IndexError::Damaged);
         }
+        let head = match pack {
+            Some(id) => Head::Pack {
+                id,
+                header: read_pack_header(&mut input)?,
+            },
+            None => Head::Pending(read_pending_header(&mut input)?),
+        };
         let devices = input
             .list(|i| DeviceId::from_bytes(i.array()?).ok_or(IndexError::Malformed("a device")))?;
         let resources = input.list(|i| {
@@ -359,68 +401,118 @@ impl Section {
         let count = input.var()?;
         let mut out = Vec::with_capacity(usize::try_from(count.min(1 << 20)).unwrap_or(0));
         for _ in 0..count {
-            let id = ChangeId::from_bytes(input.array()?);
-            let offset = input.var_u32()?;
-            let len = input.var_u32()?;
-            let value_fingerprint = u64::from_le_bytes(input.array()?);
-            let flags = input.u8()?;
-            if flags >> 5 != 0 {
-                return Err(IndexError::Malformed("a cause"));
-            }
-            let cause = cause_of(flags & 0x0f)?;
-            let stub = flags & 0x10 != 0;
-            let device = usize::try_from(input.var()?)
-                .ok()
-                .and_then(|d| devices.get(d))
-                .copied()
-                .ok_or(IndexError::Malformed("a device"))?;
-            let seq = DeviceSeq(input.var()?);
-            let at = WallTime(unzigzag(input.var()?));
-            let batch_id = BatchId::from_bytes(input.array()?);
-            let batch_n = input.var_u32()?;
-            if batch_n == 0 {
-                return Err(IndexError::Malformed("a batch size"));
-            }
-            let parent_count = input.var()?;
-            if parent_count > MAX_PARENTS {
-                return Err(IndexError::Malformed("the parents"));
-            }
-            let mut parents: SmallVec<[ChangeId; 1]> = SmallVec::new();
-            for _ in 0..parent_count {
-                let parent = ChangeId::from_bytes(input.array()?);
-                if parents.last().is_some_and(|last| *last >= parent) {
-                    return Err(IndexError::Malformed("the parents"));
-                }
-                parents.push(parent);
-            }
-            let key = read_key(&mut input)?;
-            let shape = read_shape(&mut input, &resources)?;
-            let book = book_of(&key, &shape);
-            let summary = Summary {
-                key,
-                parents,
-                device,
-                seq,
-                at,
-                batch: (batch_id, batch_n),
-                cause,
-                stub,
-                shape,
-                book,
-            };
-            let value = Stored::At {
-                file,
-                offset,
-                len,
-                fingerprint: value_fingerprint,
-            };
-            out.push(FoldInput::from_prepared(id, value, summary, pack));
+            out.push(read_entry(&mut input, &devices, &resources, pack, file)?);
         }
         if !input.is_empty() {
             return Err(IndexError::Damaged);
         }
-        Ok(out)
+        let mut ids: Vec<ChangeId> = out.iter().map(FoldInput::id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        let facts = match head {
+            Head::Pack { id, header } => {
+                // A section is made only of a pack that passed P1 to P4 at its path: its
+                // header counts its lines, and its sealer and name are its path's.
+                let path = PackPath::parse(&self.key.path)
+                    .filter(|path| path.sealer == header.sealer && path.name == id.name())
+                    .ok_or(IndexError::Malformed("a pack's path"))?;
+                if usize::try_from(header.count).ok() != Some(out.len())
+                    || header.project != self.project
+                {
+                    return Err(IndexError::Malformed("a pack's header"));
+                }
+                Facts::Pack(PackFacts {
+                    id,
+                    path: Some(path),
+                    header: Some(header),
+                    status: PackStatus::Valid,
+                    ids,
+                })
+            }
+            Head::Pending(header) => {
+                if header.project != self.project {
+                    return Err(IndexError::Malformed("a pending file's header"));
+                }
+                Facts::Pending(PendingFacts {
+                    header: Some(header),
+                    status: PendingStatus::Valid,
+                    ids,
+                })
+            }
+        };
+        Ok(Loaded {
+            key: self.key.clone(),
+            facts,
+            inputs: out,
+            section: Some(self.clone()),
+        })
     }
+}
+
+/// One entry of a section: a prepared change whose value lies in file `file`.
+fn read_entry(
+    input: &mut In<'_>,
+    devices: &[DeviceId],
+    resources: &[Arc<ResourceRef>],
+    pack: Option<PackId>,
+    file: u32,
+) -> R<FoldInput> {
+    let id = ChangeId::from_bytes(input.array()?);
+    let offset = input.var_u32()?;
+    let len = input.var_u32()?;
+    let value_fingerprint = u64::from_le_bytes(input.array()?);
+    let flags = input.u8()?;
+    if flags >> 5 != 0 {
+        return Err(IndexError::Malformed("a cause"));
+    }
+    let cause = cause_of(flags & 0x0f)?;
+    let stub = flags & 0x10 != 0;
+    let device = usize::try_from(input.var()?)
+        .ok()
+        .and_then(|d| devices.get(d))
+        .copied()
+        .ok_or(IndexError::Malformed("a device"))?;
+    let seq = DeviceSeq(input.var()?);
+    let at = WallTime(unzigzag(input.var()?));
+    let batch_id = BatchId::from_bytes(input.array()?);
+    let batch_n = input.var_u32()?;
+    if batch_n == 0 {
+        return Err(IndexError::Malformed("a batch size"));
+    }
+    let parent_count = input.var()?;
+    if parent_count > MAX_PARENTS {
+        return Err(IndexError::Malformed("the parents"));
+    }
+    let mut parents: SmallVec<[ChangeId; 1]> = SmallVec::new();
+    for _ in 0..parent_count {
+        let parent = ChangeId::from_bytes(input.array()?);
+        if parents.last().is_some_and(|last| *last >= parent) {
+            return Err(IndexError::Malformed("the parents"));
+        }
+        parents.push(parent);
+    }
+    let key = read_key(input)?;
+    let shape = read_shape(input, resources)?;
+    let book = book_of(&key, &shape);
+    let summary = Summary {
+        key,
+        parents,
+        device,
+        seq,
+        at,
+        batch: (batch_id, batch_n),
+        cause,
+        stub,
+        shape,
+        book,
+    };
+    let value = Stored::At {
+        file,
+        offset,
+        len,
+        fingerprint: value_fingerprint,
+    };
+    Ok(FoldInput::from_prepared(id, value, summary, pack))
 }
 
 /// The sections of an index file, by path.
@@ -454,8 +546,8 @@ impl Index {
     }
 
     /// Reads an index of project `project`, written by any build of this [`INDEX_VERSION`]
-    /// and format minor. The sections' fingerprints are checked when their inputs are taken
-    /// ([`Section::inputs`]), on the open's reading threads.
+    /// and format minor. The sections' fingerprints are checked when they are loaded
+    /// ([`Section::load`]), on the open's reading threads.
     pub fn parse(bytes: impl Into<Arc<[u8]>>, project: ProjectId) -> R<Self> {
         let bytes: Arc<[u8]> = bytes.into();
         let mut input = In::new(&bytes);
@@ -484,6 +576,7 @@ impl Index {
             let section = Section {
                 key,
                 pack,
+                project,
                 bytes: bytes.clone(),
                 start,
                 end: start + len,
@@ -531,6 +624,83 @@ fn read_file_key(input: &mut In<'_>) -> R<(FileKey, Option<PackId>)> {
         },
         pack,
     ))
+}
+
+fn put_pack_header(out: &mut Out, header: &PackHeader) {
+    out.var(u64::from(header.count));
+    out.bytes(header.project.as_bytes());
+    out.var(header.replaces.len() as u64);
+    for name in &header.replaces {
+        out.bytes(name.as_bytes());
+    }
+    out.var(zigzag(header.sealed.0));
+    out.bytes(header.sealer.as_bytes());
+}
+
+fn read_pack_header(input: &mut In<'_>) -> R<PackHeader> {
+    let count = input.var_u32()?;
+    let project = ProjectId::from_bytes(input.array()?);
+    let replaces = input.list(|i| Ok(PackName::from_bytes(i.array()?)))?;
+    if replaces.windows(2).any(|pair| pair[0] >= pair[1]) {
+        return Err(IndexError::Malformed("the packs a pack replaces"));
+    }
+    let sealed = WallTime(unzigzag(input.var()?));
+    let sealer = DeviceId::from_bytes(input.array()?)
+        .filter(|d| d.kind() == DeviceKind::Local)
+        .ok_or(IndexError::Malformed("a sealer"))?;
+    Ok(PackHeader {
+        count,
+        project,
+        replaces,
+        sealed,
+        sealer,
+    })
+}
+
+fn put_pending_header(out: &mut Out, header: &PendingHeader) {
+    out.bytes(header.device.as_bytes());
+    out.bytes(header.project.as_bytes());
+    out.u8(match header.purpose {
+        Purpose::Save => 0,
+        Purpose::Intake => 1,
+        Purpose::Salvage => 2,
+    });
+    match &header.reconciles {
+        None => out.u8(0),
+        Some(reconciles) => {
+            out.u8(1);
+            out.str(reconciles.path.as_str());
+            out.bytes(reconciles.seen_md5.as_bytes());
+        }
+    }
+}
+
+fn read_pending_header(input: &mut In<'_>) -> R<PendingHeader> {
+    let device = DeviceId::from_bytes(input.array()?)
+        .filter(|d| d.kind() == DeviceKind::Local)
+        .ok_or(IndexError::Malformed("a pending file's writer"))?;
+    let project = ProjectId::from_bytes(input.array()?);
+    let purpose = match input.u8()? {
+        0 => Purpose::Save,
+        1 => Purpose::Intake,
+        2 => Purpose::Salvage,
+        _ => return Err(IndexError::Malformed("a purpose")),
+    };
+    let reconciles = match input.u8()? {
+        0 => None,
+        1 => Some(Reconciles {
+            path: RepoPath::parse(input.str()?)
+                .map_err(|_| IndexError::Malformed("a reconciled path"))?,
+            seen_md5: Md5::from_bytes(input.array()?),
+        }),
+        _ => return Err(IndexError::Malformed("a reconciled file")),
+    };
+    Ok(PendingHeader {
+        device,
+        project,
+        purpose,
+        reconciles,
+    })
 }
 
 // ---------------------------------------------------------------------------------------

@@ -7,8 +7,8 @@ use crate::change::Verified;
 use crate::ids::{ChangeId, PackName};
 use crate::line::LINE_OVERHEAD;
 use crate::pack::{
-    EncodedPack, MAX_PACK_BYTES, PackRead, PackSpec, PackWriteError, YearMonth, encode_pack,
-    header_line,
+    EncodedPack, MAX_PACK_BYTES, PackFacts, PackRead, PackSpec, PackWriteError, YearMonth,
+    encode_pack, header_line,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -162,11 +162,10 @@ pub struct RedundancyDefect {
 /// directory passes P2 to P4 and lists F's name in `replaces`. When F is valid too, every
 /// change id of F must be in P; if one is missing, that P does not make F redundant, and the
 /// defect is reported. A function of the file set, so every device converges on the same
-/// tree.
-pub fn redundancy(packs: &[PackRead]) -> Redundancy {
+/// tree. It reads each pack's facts, from a read of the file or from the fold cache
+/// ([`PackFacts`]), never a read whose changes were moved out.
+pub fn redundancy(packs: &[PackFacts]) -> Redundancy {
     let mut result = Redundancy::default();
-    let ids =
-        |pack: &PackRead| -> BTreeSet<ChangeId> { pack.entries.iter().map(Verified::id).collect() };
     for (f_index, f) in packs.iter().enumerate() {
         let Some(f_path) = &f.path else { continue };
         let mut replaced_by = None;
@@ -183,9 +182,8 @@ pub fn redundancy(packs: &[PackRead]) -> Redundancy {
                 continue;
             }
             if f.is_valid() {
-                let held = ids(p);
                 let missing: Vec<ChangeId> =
-                    ids(f).into_iter().filter(|id| !held.contains(id)).collect();
+                    f.ids.iter().copied().filter(|id| !p.holds(*id)).collect();
                 if !missing.is_empty() {
                     defects.push(RedundancyDefect {
                         pack: f_index,

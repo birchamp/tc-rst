@@ -25,7 +25,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tc_corpus::{Corpus, Spec};
 use tc_journal::fold::{DerivedFile, FoldInput, FoldState, ProjectKind, ValueAt, ValueSource};
-use tc_journal::index::{FileKey, Fingerprinter, Index, Section};
+use tc_journal::index::{Facts, FileKey, Fingerprinter, Index, Section};
 use tc_journal::record::{CheckValue, VerseValue};
 use tc_journal::{
     BatchId, BatchRef, BookId, Cause, Change, ChangeBody, DeviceId, DeviceSeq, ProjectId, Record,
@@ -272,7 +272,7 @@ fn load_streamed(dir: &Path, threads: usize, index: Option<Arc<Index>>) -> Strea
                 };
                 let cached = index.as_ref().and_then(|index| {
                     let key = key_of(&cache_path, path, &mut buffer);
-                    let inputs = index.section(&key)?.inputs(*file).ok()?;
+                    let inputs = index.section(&key)?.load(*file).ok()?.inputs;
                     Some((key, inputs))
                 });
                 let (key, inputs, section) = match cached {
@@ -282,12 +282,16 @@ fn load_streamed(dir: &Path, threads: usize, index: Option<Arc<Index>>) -> Strea
                         // those fingerprinted if another program replaced the file since.
                         let bytes = std::fs::read(path).expect("read");
                         let loaded = if *is_pack {
-                            let (read, loaded) =
+                            let loaded =
                                 tc_journal::index::load_pack(&cache_path, &bytes, project, *file);
-                            assert!(read.is_valid(), "{cache_path}: {:?}", read.status);
+                            assert!(
+                                matches!(&loaded.facts, Facts::Pack(pack) if pack.is_valid()),
+                                "{cache_path}: {:?}",
+                                loaded.facts
+                            );
                             loaded
                         } else {
-                            tc_journal::index::load_pending(&cache_path, &bytes, project, *file).1
+                            tc_journal::index::load_pending(&cache_path, &bytes, project, *file)
                         };
                         (loaded.key, loaded.inputs, loaded.section)
                     }

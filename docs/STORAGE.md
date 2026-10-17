@@ -1056,7 +1056,7 @@ None of these files is project data that another device needs. Each is written w
 | `external/<utc>-<escaped path>` | byte copies of files changed outside the app, and files moved out of `ingredients/` | kept until the person dismisses the notice |
 | `sync.json` | `{remoteUrl, branch, confirmed: {commit, at}}` | last confirmed Door43 state; rebuilds `.git` config after git damage (§6.4 G4) |
 | `drafts.json` | `[{shown, field, text, at}]` | unsaved editor text, written at most every second while text is unsaved (§5.14) |
-| `index.bin` | the fold cache (`tc_journal::index`): for each valid pack and pending file an open read in full, a section keyed by the file's path, size and 64-bit fingerprint, holding the prepared changes the fold takes from it (each change's id, where its JSON lies in the file, the fingerprint of those bytes and its summary); stamped with the cache version (`INDEX_VERSION`), the format minor and the project | a cold open takes each unchanged file's changes from it instead of verifying and parsing the file again (§6.1 O8, §14). It never decides what exists: a missing or damaged cache, one of another version, minor or project, or a file it holds no section for, only means that file is read |
+| `index.bin` | the fold cache (`tc_journal::index`): for each valid pack and pending file an open read in full, a section keyed by the file's path, size and 64-bit fingerprint, holding the file's header and the prepared changes the fold takes from it (each change's id, where its JSON lies in the file, the fingerprint of those bytes and its summary), so the facts O7's rules read of the file (its header, status and change ids) come from the section as from a read; stamped with the cache version (`INDEX_VERSION`), the format minor and the project | a cold open takes each unchanged file's changes from it instead of verifying and parsing the file again (§6.1 O8, §14). It never decides what exists: a missing or damaged cache, one of another version, minor or project, or a file it holds no section for, only means that file is read |
 
 **What the fold cache trusts.** A section stands for a file when the file's path, its size and
 the 64-bit fingerprint (§2.6) of its whole content, taken from the bytes the open reads at that
@@ -1798,6 +1798,9 @@ O7  Finish interrupted work:
       restore it
       from a valid blob, with `PackRestored`;
     - materialize.intent.json → kept for O9's classification.
+    These rules read each file's facts (`tc_journal::index::Facts`: a pack's id, path, header,
+    status and change ids; a pending file's header, status and change ids), which O8's read of
+    the file gives, from its bytes or from its cache section alike, so no file is read twice.
 O8  Load: read the fold cache `.tc/index.bin` (§3.6; missing, damaged, of another project,
     or of another cache version or format minor: no cache; any build of the app reads a cache
     of its own version and minor). Read every pack and pending file in parallel (rayon)
@@ -3801,6 +3804,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the fold cache's key (take a section by path alone, or by path and size) | `a_section_stands_only_for_the_bytes_it_was_made_from`, `an_open_from_the_cache_is_the_open_from_the_files`, `a_changed_byte_anywhere_opens_as_without_the_cache`, `a_file_replaced_by_one_of_the_same_size_opens_as_without_the_cache` |
 | the fold cache's validity (cache a damaged, foreign or newer file, or one with a quarantined line) | `a_file_the_cache_cannot_stand_for_has_no_section`, `a_changed_byte_anywhere_opens_as_without_the_cache` |
 | the fold cache's section fingerprint | `a_damaged_index_never_gives_other_changes` |
+| the change ids in a loaded file's facts (move the changes out of what the redundancy rule and O7 read) | `the_open_s_rules_read_the_same_ids_from_a_read_and_from_the_cache` |
 
 ---
 

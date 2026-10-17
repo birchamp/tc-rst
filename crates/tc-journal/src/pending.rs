@@ -12,10 +12,12 @@
 
 use crate::canon::{HeaderReader, header_object, to_json};
 use crate::change::Verified;
-use crate::ids::{DeviceId, DeviceKind, Md5, ProjectId, RepoPath};
+use crate::ids::{ChangeId, DeviceId, DeviceKind, Md5, ProjectId, RepoPath};
 use crate::json::{self, Json};
 use crate::line::{RawLine, Span, encode_line, file_hash, frame, split_lines, verify_line};
-use crate::pack::{NotOurs, PackError, not_ours, parse_entries, salvage, verified_lines};
+use crate::pack::{
+    NotOurs, PackError, not_ours, parse_entries, salvage, sorted_ids, verified_lines,
+};
 use crate::text::hex;
 
 /// The pending-file framing version this app reads and writes.
@@ -80,6 +82,28 @@ pub struct PendingRead {
     pub entries: Vec<Verified>,
     /// Where each entry's JSON lies in the file: `spans[i]` is `entries[i]`'s.
     pub spans: Vec<Span>,
+}
+
+/// What the open's rules (§6.1 O7: a pending file all of whose changes a valid pack holds is
+/// removed; §11.1 X4) and notices read of a pending file: everything a read gives except the
+/// changes themselves. Made from a read ([`PendingFacts::of`]) or from the fold cache's
+/// section of the same bytes ([`crate::index::Section::load`]), which give the same facts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingFacts {
+    pub header: Option<PendingHeader>,
+    pub status: PendingStatus,
+    /// The id of every line read (a damaged file's salvaged lines), sorted, without repeats.
+    pub ids: Vec<ChangeId>,
+}
+
+impl PendingFacts {
+    pub fn of(read: &PendingRead) -> Self {
+        Self {
+            header: read.header.clone(),
+            status: read.status.clone(),
+            ids: sorted_ids(&read.entries),
+        }
+    }
 }
 
 /// Reads a pending file of project `project`. Never fails.

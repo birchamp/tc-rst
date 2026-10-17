@@ -10,12 +10,12 @@ use proptest::prelude::*;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use tc_journal::consolidate::{
-    OwnPack, SMALL_PACK_BYTES, consolidate, consolidation_groups, redundancy,
+    OwnPack, Redundancy, SMALL_PACK_BYTES, consolidate, consolidation_groups, redundancy,
 };
 use tc_journal::json::Json;
 use tc_journal::line::{LINE_OVERHEAD, encode_line};
 use tc_journal::pack::{
-    EncodedPack, MAX_PACK_BYTES, PackError, PackPath, PackRead, PackSpec, PackStatus,
+    EncodedPack, MAX_PACK_BYTES, PackError, PackFacts, PackPath, PackRead, PackSpec, PackStatus,
     PackWriteError, YearMonth, encode_pack, read_pack, seal,
 };
 use tc_journal::pending::{
@@ -944,6 +944,12 @@ fn a_consolidated_pack_holds_the_union_and_lists_what_it_replaces() {
     );
 }
 
+/// The redundancy rule over the facts of reads of `packs`.
+fn redundancy_of(packs: &[PackRead]) -> Redundancy {
+    let facts: Vec<PackFacts> = packs.iter().map(PackFacts::of).collect();
+    redundancy(&facts)
+}
+
 #[test]
 fn the_redundancy_rule_is_a_function_of_the_file_set() {
     let all = changes(6);
@@ -952,7 +958,7 @@ fn the_redundancy_rule_is_a_function_of_the_file_set() {
     let ab = reread(&consolidate(&spec(local(9)), &[&a, &b]).unwrap().remove(0));
 
     let set = vec![a.clone(), b.clone(), ab.clone()];
-    let result = redundancy(&set);
+    let result = redundancy_of(&set);
     assert_eq!(result.redundant, vec![(0, 2), (1, 2)]);
     assert!(result.kept.is_empty());
 
@@ -960,25 +966,28 @@ fn the_redundancy_rule_is_a_function_of_the_file_set() {
     let mut damaged_a = a.clone();
     damaged_a.status = PackStatus::Damaged(PackError::NameMismatch);
     damaged_a.entries.truncate(1);
-    assert_eq!(redundancy(&[damaged_a, ab.clone()]).redundant, vec![(0, 1)]);
+    assert_eq!(
+        redundancy_of(&[damaged_a, ab.clone()]).redundant,
+        vec![(0, 1)]
+    );
 
     // A valid pack holding a change the replacing pack lacks is kept and reported.
     let mut extra = a.clone();
     extra
         .entries
         .push(verse_change(local(2), 99, 1, "nuevo").into());
-    let result = redundancy(&[extra, ab.clone()]);
+    let result = redundancy_of(&[extra, ab.clone()]);
     assert!(result.redundant.is_empty());
     assert_eq!(result.kept.len(), 1);
     assert_eq!(result.kept[0].missing.len(), 1);
 
     // Only a valid pack in the same sealer folder replaces.
     let other = reread(&consolidate(&spec(local(8)), &[&a, &b]).unwrap().remove(0));
-    assert!(redundancy(&[a.clone(), other]).redundant.is_empty());
+    assert!(redundancy_of(&[a.clone(), other]).redundant.is_empty());
     let mut broken_ab = ab.clone();
     broken_ab.status = PackStatus::Damaged(PackError::NameMismatch);
-    assert!(redundancy(&[a.clone(), broken_ab]).redundant.is_empty());
-    assert!(redundancy(&[ab]).redundant.is_empty());
+    assert!(redundancy_of(&[a.clone(), broken_ab]).redundant.is_empty());
+    assert!(redundancy_of(&[ab]).redundant.is_empty());
 }
 
 /// What can happen to a pack's lines without damaging any byte of them.

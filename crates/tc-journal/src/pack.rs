@@ -214,6 +214,49 @@ impl PackRead {
     }
 }
 
+/// What the open's rules (§6.1 O7, the redundancy rule of §4.7) and notices read of a pack:
+/// everything a read gives except the changes themselves. Made from a read ([`PackFacts::of`])
+/// or from the fold cache's section of the same bytes ([`crate::index::Section::load`]), which
+/// give the same facts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PackFacts {
+    pub id: PackId,
+    pub path: Option<PackPath>,
+    pub header: Option<PackHeader>,
+    pub status: PackStatus,
+    /// The id of every line read (a damaged pack's salvaged lines), sorted, without repeats.
+    pub ids: Vec<ChangeId>,
+}
+
+impl PackFacts {
+    pub fn of(read: &PackRead) -> Self {
+        Self {
+            id: read.id,
+            path: read.path,
+            header: read.header.clone(),
+            status: read.status.clone(),
+            ids: sorted_ids(&read.entries),
+        }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.status == PackStatus::Valid
+    }
+
+    /// True when the pack holds a line of change `id`.
+    pub fn holds(&self, id: ChangeId) -> bool {
+        self.ids.binary_search(&id).is_ok()
+    }
+}
+
+/// The ids of `entries`, sorted, without repeats.
+pub(crate) fn sorted_ids(entries: &[Verified]) -> Vec<ChangeId> {
+    let mut ids: Vec<ChangeId> = entries.iter().map(Verified::id).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    ids
+}
+
 /// Why a file cannot be read here, decided from its first line alone before anything else,
 /// so that neither reason is ever reported as damage or salvaged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
