@@ -154,6 +154,7 @@ impl Actor {
                 reply.resolve(result);
             }
             Msg::StorageCheck(results) => {
+                let was_dirty = !self.project.dirty.is_empty();
                 if self.read_only().is_none()
                     && let Err(e) = self.project.apply_check(results)
                 {
@@ -165,8 +166,10 @@ impl Actor {
                         None,
                     );
                 }
-                if !self.project.dirty.is_empty() {
-                    self.due = Some(Instant::now());
+                // What the check found is written now, within this message, so `wait_idle`
+                // covers it; paths a save made dirty keep their own 3 s.
+                if !was_dirty && !self.project.dirty.is_empty() {
+                    let _ = self.materialize();
                 }
             }
             Msg::Sync { reply } => reply.resolve(()),

@@ -19,6 +19,11 @@ use tc_store::{OpenOptions, ProjectHandle, Stored};
 pub(crate) enum Outcome {
     /// "Saved" was shown.
     Saved,
+    /// "Saved, but the disk reported an error" (`SavedWithDiskError`, §5.0): the file is in
+    /// place, but a flush after its rename failed, so a power cut may still lose it.
+    /// [`kill_everywhere`] hands checks `Saved` for a row the save must survive and
+    /// `NotSaved` for a power cut under the strict model.
+    SavedWithDiskError,
     NotSaved,
 }
 
@@ -70,8 +75,10 @@ fn second_open_changes_nothing(rig: &Rig, handle: ProjectHandle, folder: &Path) 
     assert!(changed.is_empty(), "a second open changed {changed:?}");
 }
 
-/// Runs `action` killed before each of its write points in turn, under every crash
-/// model, and calls `check` on each reopened project.
+/// Runs `action` killed before each of its write points in turn, once under each
+/// power-loss model (the model decides what a flush makes durable while the action runs, so
+/// it is set before the action), and calls `check` on each reopened project: after the killed
+/// process, and after a power cut.
 pub(crate) fn kill_everywhere(
     base: &FaultFs,
     folder: &Path,
@@ -79,38 +86,51 @@ pub(crate) fn kill_everywhere(
     check: &dyn Fn(&ProjectHandle, Outcome),
 ) -> u64 {
     let mut points = 0;
-    for torn in [false, true] {
-        let mut k = 0;
-        loop {
-            let fs = base.copy();
-            let rig = rig_as(fs.clone(), APP, "host-1");
-            let handle = rig.store.open(folder, &OpenOptions::default()).unwrap();
-            handle.wait_idle();
-            fs.kill_before(k, torn);
-            let outcome = action(&handle);
-            let dead = fs.is_dead();
-            drop(handle);
-            drop(rig);
-            for (power_cut, model) in [
-                (false, PowerLoss::Strict),
-                (true, PowerLoss::Strict),
-                (true, PowerLoss::KeepSyncedNames),
-            ] {
+    for model in [PowerLoss::KeepSyncedNames, PowerLoss::Strict] {
+        for torn in [false, true] {
+            let mut k = 0;
+            loop {
+                let fs = base.copy();
                 fs.set_power_loss(model);
-                let after = fs.crash(power_cut);
-                let (rig2, reopened) = reopen_checked(after, folder);
-                check(&reopened, outcome);
-                second_open_changes_nothing(&rig2, reopened, folder);
+                let rig = rig_as(fs.clone(), APP, "host-1");
+                let handle = rig.store.open(folder, &OpenOptions::default()).unwrap();
+                handle.wait_idle();
+                fs.kill_before(k, torn);
+                let outcome = action(&handle);
+                let dead = fs.is_dead();
+                drop(handle);
+                drop(rig);
+                // A killed process leaves what the page cache holds, whatever the model.
+                let cuts: &[bool] = match model {
+                    PowerLoss::KeepSyncedNames => &[false, true],
+                    PowerLoss::Strict => &[true],
+                };
+                for &power_cut in cuts {
+                    let after = fs.crash(power_cut);
+                    let (rig2, reopened) = reopen_checked(after, folder);
+                    check(&reopened, row_outcome(outcome, model, power_cut));
+                    second_open_changes_nothing(&rig2, reopened, folder);
+                }
+                points += 1;
+                if !dead {
+                    break;
+                }
+                k += 1;
+                assert!(k < 500, "the action never ends");
             }
-            points += 1;
-            if !dead {
-                break;
-            }
-            k += 1;
-            assert!(k < 500, "the action never ends");
         }
     }
     points
+}
+
+/// What a check may assert of an outcome in one row: a save the disk warned about counts as
+/// saved unless a power cut under the strict model may have dropped its rename.
+fn row_outcome(outcome: Outcome, model: PowerLoss, power_cut: bool) -> Outcome {
+    match outcome {
+        Outcome::SavedWithDiskError if power_cut && model == PowerLoss::Strict => Outcome::NotSaved,
+        Outcome::SavedWithDiskError => Outcome::Saved,
+        other => other,
+    }
 }
 
 fn base_titus() -> (FaultFs, std::path::PathBuf) {
@@ -124,10 +144,12 @@ fn base_titus() -> (FaultFs, std::path::PathBuf) {
 
 pub(crate) fn outcome_of(result: Result<tc_store::StoreReply, tc_store::CommandError>) -> Outcome {
     match result {
-        Ok(reply) if matches!(reply.stored, Stored::Durable | Stored::WrittenNotDurable(_)) => {
-            Outcome::Saved
-        }
-        _ => Outcome::NotSaved,
+        Ok(reply) => match reply.stored {
+            Stored::Durable => Outcome::Saved,
+            Stored::WrittenNotDurable(_) => Outcome::SavedWithDiskError,
+            Stored::Unchanged => Outcome::NotSaved,
+        },
+        Err(_) => Outcome::NotSaved,
     }
 }
 
@@ -153,7 +175,7 @@ fn crash_save_verse_at_every_write_point() {
             let now = words(handle, 1, 2);
             match outcome {
                 Outcome::Saved => assert_eq!(now.as_deref(), Some(new)),
-                Outcome::NotSaved => assert!(
+                Outcome::NotSaved | Outcome::SavedWithDiskError => assert!(
                     now == before || now.as_deref() == Some(new),
                     "neither the before nor the after state: {now:?}"
                 ),
@@ -391,4 +413,67 @@ fn crash_during_open_repairs_lose_nothing() {
         k += 1;
         assert!(k < 2000);
     }
+}
+
+/// A seal killed after it renamed its pack into place and before it flushed the pack's
+/// folder leaves a pack only the page cache holds. The next open finds every change of the
+/// pending file in it and removes the pending file (O7); unless the open flushes the pack
+/// first, a power cut then takes both copies of the save.
+#[test]
+fn an_unflushed_pack_is_flushed_before_the_open_removes_what_it_holds() {
+    use tc_store::fault::OpKind;
+    let (base, folder) = base_titus();
+    base.set_power_loss(PowerLoss::Strict);
+    let seal_after_save = |fs: &FaultFs| {
+        let rig = rig_as(fs.clone(), APP, "host-1");
+        let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+        save_verse(&handle, 1, 3, "kept by the pack").unwrap();
+        handle.wait_idle();
+        (rig, handle)
+    };
+    // The write point of the flush of the pack's folder, from a run on a copy.
+    let probe = base.copy();
+    let (_rig, handle) = seal_after_save(&probe);
+    let start = probe.ops();
+    probe.clear_log();
+    handle
+        .checkpoint(tc_store::CheckpointReason::Periodic)
+        .wait()
+        .unwrap();
+    let log = probe.log();
+    drop(handle);
+    let changes = folder.join("ingredients/tc/changes");
+    let rename = log
+        .iter()
+        .position(|op| op.kind == OpKind::Rename && op.path.starts_with(&changes))
+        .unwrap();
+    let flush = &log[rename + 1];
+    assert_eq!(flush.kind, OpKind::SyncDir, "{log:#?}");
+    let fs = base.copy();
+    let (rig, handle) = seal_after_save(&fs);
+    fs.kill_before(flush.index - start, false);
+    let _ = handle
+        .checkpoint(tc_store::CheckpointReason::Periodic)
+        .wait();
+    assert!(fs.is_dead());
+    drop(handle);
+    drop(rig);
+    // The next process opens the folder and removes the pending file.
+    let next = fs.crash(false);
+    let rig = rig_as(next.clone(), APP, "host-1");
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    assert!(
+        pending_files(&next, &folder).is_empty(),
+        "O7 removed it {:?} {:?}",
+        files(&next, &folder).keys().collect::<Vec<_>>(),
+        handle.notices()
+    );
+    drop(handle);
+    drop(rig);
+    // A power cut.
+    let rig = rig_as(next.crash(true), APP, "host-1");
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    assert_eq!(words(&handle, 1, 3).as_deref(), Some("kept by the pack"));
+    handle.close().unwrap();
 }

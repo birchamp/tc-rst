@@ -166,9 +166,9 @@ fn md5_hex(bytes: &[u8]) -> String {
     Md5::of(bytes).to_hex()
 }
 
-/// Opens the project in `path` (see the module documentation). `identity` is the folder
-/// path the device fingerprint is taken of, when it is not `path` (a project being created
-/// in a staging folder is fingerprinted at its final path, §6.3).
+/// Opens the project in `path` (see the module documentation). `identity` is the canonical
+/// folder path the device fingerprint is taken of, when it is not `path`'s (a project being
+/// created in a staging folder is fingerprinted at its final path, §6.3).
 pub(crate) fn open_project(
     env: &Env,
     path: &Path,
@@ -219,9 +219,10 @@ fn open_inner(
     tracker.add(1, 0);
     // O6: device identity.
     let machine = env.platform.machine_id();
-    let canonical = vfs
-        .canonicalize(identity.unwrap_or(path))
-        .unwrap_or_else(|_| identity.unwrap_or(path).to_owned());
+    let canonical = match identity {
+        Some(canonical) => canonical.to_owned(),
+        None => vfs.canonicalize(path).unwrap_or_else(|_| path.to_owned()),
+    };
     let print = device::fingerprint(env.app.secret(), &machine, &canonical.to_string_lossy());
     let read_only = gates.read_only.is_some();
     let mut identity = device::identify(&*vfs, &folder, print, &*env.clock, read_only)?;
@@ -800,6 +801,7 @@ impl Project {
             .map(|(rel, p)| (p.id, rel.clone()))
             .collect();
         let mut dirs = DirSet::new();
+        let mut flushed: BTreeSet<String> = BTreeSet::new();
         // Pending files whose every change a valid pack holds: a seal that stopped after K3.
         let pending: Vec<(String, PendingInfo)> = self
             .journal
@@ -838,6 +840,7 @@ impl Project {
             if !whole {
                 continue;
             }
+            self.flush_holders(&holders, &mut flushed)?;
             if self.relocate_to_packs(&rel, JournalKind::Pending, info.number, &holders)? {
                 atomic_remove(
                     &*self.vfs,
@@ -884,6 +887,7 @@ impl Project {
                 }
                 let number = self.journal.packs.get(&rel).and_then(|p| p.number);
                 let holders = BTreeSet::from([by_rel.clone()]);
+                self.flush_holders(&holders, &mut flushed)?;
                 if self.relocate_to_packs(&rel, JournalKind::Pack, number, &holders)? {
                     atomic_remove(&*self.vfs, &abs, SyncDir::Deferred(&mut dirs))?;
                     self.journal.packs.remove(&rel);
@@ -899,6 +903,32 @@ impl Project {
         // The ids of the packs that list others are not needed any more.
         for pack in self.journal.packs.values_mut() {
             pack.ids = Vec::new();
+        }
+        Ok(())
+    }
+
+    /// Makes the packs `holders` durable, the file and the rename that named it, before a
+    /// file whose changes they hold goes: a crashed seal or consolidation may have renamed a
+    /// pack into place without flushing its folder, and a power cut after the removal would
+    /// then take both copies of those changes.
+    fn flush_holders(
+        &self,
+        holders: &BTreeSet<String>,
+        flushed: &mut BTreeSet<String>,
+    ) -> Result<(), StoreError> {
+        for holder in holders {
+            if !flushed.insert(holder.clone()) {
+                continue;
+            }
+            let abs = self.folder.path(holder);
+            self.vfs
+                .sync_file(&abs)
+                .map_err(|e| StoreError::io("flush", &abs, e))?;
+            if let Some(dir) = abs.parent() {
+                self.vfs
+                    .sync_dir(dir)
+                    .map_err(|e| StoreError::io("flush the folder", dir, e))?;
+            }
         }
         Ok(())
     }

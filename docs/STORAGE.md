@@ -1468,7 +1468,11 @@ filesystem (§10).
 
 **Cloud-synced folders** open read-only the same way, with "This folder is copied to other
 computers by OneDrive. Two computers saving into one project folder can lose work. Copy the
-project to a folder that is not synced?" (the copy keeps every pending save). A folder is
+project to a folder that is not synced?" (the copy keeps every pending save: it copies the
+pending files before the packs, then lists both again and copies what is new until a round
+finds nothing new, so a seal or consolidation the other writer runs meanwhile cannot take a
+change out of both places the copy reads, since a change leaves a file only after it is in a
+newer one). A folder is
 cloud-synced when it lies under a known sync root (the `OneDrive`, `OneDriveConsumer` and
 `OneDriveCommercial` environment variables; the Dropbox roots in its `info.json`;
 `~/Library/Mobile Documents` and `~/Library/CloudStorage/*` on macOS; a Google Drive root), when
@@ -2025,6 +2029,10 @@ O7  Finish interrupted work:
       restore it
       from a valid blob, with `PackRestored`;
     - materialize.intent.json → kept for O9's classification.
+    Before a pending file or a replaced pack goes, the pack that holds its changes is flushed,
+    the file and its folder: a seal or consolidation that stopped between its rename (K2, Q2)
+    and the folder flush leaves a pack only the page cache holds, and a power cut after the
+    removal would take both copies of those changes.
     These rules read each file's facts (`tc_journal::index::Facts`: a pack's id, path, header,
     status and change ids; a pending file's header, status and change ids), which O8's read of
     the file gives, from its bytes or from its cache section alike, so no file is read twice.
@@ -4150,7 +4158,7 @@ and are covered by the projection tests.
 | `outside_edit_reconcile_conserves` | random outside edits of USFM, sidecars, `metadata.json` and OBS stories: small edits, reverts to older values, verse deletions, more than 50 keys, line-ending and trailing-space rewrites, book files for absent books, unreadable files, edits racing a teammate's sync | no head lost; destructive and reverting edits are conflicts; whitespace-only rewrites record nothing; a book file adds its book; unreadable files keep a byte copy | a known-base edit replaces a value it did not see |
 | `door43_ingest_deterministic` | web-edit commits fetched by several devices in different orders, with lagging clocks | identical change ids on every device; no false conflict after a second web edit | ingestion reads the device or the commit date |
 | `exchange_idempotent_and_relayed` | exports and imports in random order, repeated, relayed A→B→C | importing twice equals importing once; a relay equals direct exchange | intake writes something that depends on the importer |
-| `consolidation_loses_nothing` | seals and consolidations interleaved with crashes, exchanges, and packs deleted or damaged in the working tree between steps | the union of change ids never shrinks; every tree holds the expected pack set and passes the redundancy rule's safety check | a replaced pack held an id the new pack lacks, or a tree is built from the working tree alone |
+| `consolidation_loses_nothing` | seals and consolidations interleaved with crashes, exchanges, and packs deleted or damaged in the working tree between steps; the census counts consolidations completed, kills between K2 and K4 and kills between Q2 and Q4 | the union of change ids never shrinks; every tree holds the expected pack set and passes the redundancy rule's safety check | a replaced pack held an id the new pack lacks, or a tree is built from the working tree alone |
 | `codec_round_trip` | the tC4 USFM identity corpus plus generated USFM (spans, poetry, headings, CRLF, tabs, odd marker whitespace, out-of-order verses) | `recompose(decompose(x)) == x`; `join_verse(split_verse(c)) == c` | a byte is normalized |
 | `canonical_change_round_trip` | arbitrary `ChangeBody` values | canonical bytes parse back to the same value and re-hash to the same id; the line verifies | the encoder and parser disagree |
 | `pack_round_trip_and_salvage` | packs with random bit flips | an intact pack passes P2–P4; a damaged one salvages exactly the lines whose bytes are intact; no salvaged change differs from what its author wrote | a damaged line is accepted |
@@ -4172,7 +4180,9 @@ and after each git2 call, and power loss for `.git` is simulated by restoring a 
 before the call or by truncating its newest loose objects.
 
 For each action below, kill at every point, with and without power loss, then open the project
-and assert: the state is the action's before or after state (§6.4); every save that returned
+and assert (the power-loss model decides what each flush makes durable, so it is set before the
+action runs, and the action runs once under each model; a save the disk answered with
+`WrittenNotDurable` counts as saved except after a power cut under the strict model): the state is the action's before or after state (§6.4); every save that returned
 "Saved" is present (the model drops an unflushed rename, so this fails if `atomic_write` skips
 the rename flush of §5.0 step 4 or open deletes a complete temp file); no batch is half applied;
 the folder passes `tc_burrito::check` after open, including after a crash inside every write

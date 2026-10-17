@@ -41,6 +41,9 @@ rustix.workspace = true
 # The crate's own tests run with the test holds.
 tc-store = { path = ".", features = ["test-hooks"] }
 proptest.workspace = true
+# A real folder for the tests of what `StdFs` and the operating system decide (a symlinked
+# projects folder, §6.3).
+tempfile.workspace = true
 tc-corpus = { path = "../tc-corpus" }
 tc-versification = { path = "../tc-versification" }
 

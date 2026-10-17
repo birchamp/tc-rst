@@ -1,7 +1,7 @@
 //! Holds a test places at named points (APP-DESIGN R8): before a book read, a draft write,
 //! the durability point of a save, a checkpoint, a materialization, a staging folder's
-//! removal and its rename. Only with the `test-hooks` feature; without it every point passes
-//! at once and the type holds nothing.
+//! removal and its rename, and a copy between its pending files and its packs. Only with the
+//! `test-hooks` feature; without it every point passes at once and the type holds nothing.
 
 /// A point a test can hold.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -17,6 +17,9 @@ pub enum Point {
     BeforeStagingRemoval,
     /// A create or copy is about to rename its staging folder into place (N2).
     BeforeStagingRename,
+    /// A copy has copied one journal folder (the pending files) and is about to list the
+    /// other (the packs) (§5.0).
+    CopyBetweenJournalFolders,
 }
 
 #[cfg(feature = "test-hooks")]

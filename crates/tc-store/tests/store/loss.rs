@@ -334,3 +334,101 @@ fn loss_bit_rot_not_recorded_as_edit() {
     );
     h.close().unwrap();
 }
+
+/// The copy offer is for a folder another writer may be using (§5.0: "the copy keeps every
+/// pending save"). A seal in that window between the copy's pending files and its packs moves
+/// the saves from the one to the other; the copy has them either way.
+#[test]
+fn a_copy_made_while_the_other_window_seals_keeps_every_save() {
+    let hooks = std::sync::Arc::new(tc_store::Hooks::default());
+    let rig = rig_with_hooks(FaultFs::new(), hooks.clone());
+    rig.store.wait_cleanup();
+    let folder = create_titus(&rig, "Titus");
+    let writer = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    for v in 1..=15 {
+        save_verse(&writer, 1, v, &format!("saved {v}")).unwrap();
+    }
+    writer.wait_idle();
+    assert_eq!(pending_files(&rig.fs, &folder).len(), 15);
+    hooks.hold(tc_store::Point::CopyBetweenJournalFolders);
+    let copy = std::thread::scope(|scope| {
+        let copying = scope.spawn(|| rig.store.copy_project(&folder, "Titus copy"));
+        hooks.wait_reached(tc_store::Point::CopyBetweenJournalFolders, 1);
+        writer
+            .checkpoint(tc_store::CheckpointReason::Periodic)
+            .wait()
+            .unwrap();
+        assert!(pending_files(&rig.fs, &folder).is_empty(), "the seal ran");
+        hooks.release(tc_store::Point::CopyBetweenJournalFolders);
+        copying.join().unwrap().unwrap()
+    });
+    writer.close().unwrap();
+    let handle = rig.store.open(&copy, &OpenOptions::default()).unwrap();
+    for v in 1..=15 {
+        assert_eq!(
+            words(&handle, 1, v).as_deref(),
+            Some(format!("saved {v}").as_str()),
+            "the copy lost the save of 1:{v}"
+        );
+    }
+    handle.close().unwrap();
+}
+
+/// The device fingerprint is of the folder's canonical path (§6.3). A create fingerprints its
+/// project before the folder exists, so it must take the same canonical path every later
+/// open takes: through a symlinked projects folder (and, on Windows, the `\\?\` prefix of
+/// every canonical path) the first open would otherwise mint a second device and tell the
+/// person the folder was copied.
+#[test]
+fn a_project_created_through_a_symlinked_projects_folder_keeps_its_device() {
+    use std::sync::Arc;
+    let dir = tempfile::tempdir().unwrap();
+    let real = dir.path().join("real");
+    std::fs::create_dir(&real).unwrap();
+    #[cfg(unix)]
+    let projects = {
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        link
+    };
+    #[cfg(not(unix))]
+    let projects = real.clone();
+    let store = Store::start(StoreConfig {
+        app_data: dir.path().join("app"),
+        projects,
+        vfs: Arc::new(tc_store::StdFs),
+        platform: Arc::new(FakePlatform::default()),
+        clock: Arc::new(tc_store::ManualClock::at(1_792_195_200_000)),
+        threads: 2,
+    })
+    .unwrap();
+    store.wait_cleanup();
+    let folder = store
+        .create(&tc_store::NewProject {
+            name: "Titus".into(),
+            kind: tc_journal::fold::ProjectKind::Bible,
+            records: first_records(),
+            books: vec![(
+                TIT,
+                tc_journal::record::Scope::Whole,
+                tc_journal::command::SeedSource { usfm: ult("TIT") },
+            )],
+        })
+        .unwrap();
+    let device_json: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(folder.join(".tc/device.json")).unwrap()).unwrap();
+    let handle = store.open(&folder, &OpenOptions::default()).unwrap();
+    assert_eq!(
+        handle.facts().device.to_string(),
+        device_json["device"].as_str().unwrap(),
+        "the first open kept the device the create made"
+    );
+    assert!(
+        !notices_of(&handle)
+            .iter()
+            .any(|n| matches!(n, Notice::DeviceRotated { .. })),
+        "{:?}",
+        notices_of(&handle)
+    );
+    handle.close().unwrap();
+}

@@ -749,7 +749,7 @@ fn crash_every_command_at_every_write_point() {
                 let got = written(name, &before, handle.snapshot().fold());
                 match outcome {
                     Outcome::Saved => assert_eq!(got, after, "{name}: a saved batch is gone"),
-                    Outcome::NotSaved => assert!(
+                    Outcome::NotSaved | Outcome::SavedWithDiskError => assert!(
                         got.is_empty() || got == after,
                         "{name}: neither before nor after: {got:?}"
                     ),
@@ -1437,7 +1437,9 @@ fn an_obs_frame_is_saved_by_tc4s_text_rules_and_whole_or_not_at_all() {
             let got = written("SaveFrame", &before, handle.snapshot().fold());
             match outcome {
                 Outcome::Saved => assert_eq!(got, vec!["Frame".to_owned()]),
-                Outcome::NotSaved => assert!(got.is_empty() || got == vec!["Frame".to_owned()]),
+                Outcome::NotSaved | Outcome::SavedWithDiskError => {
+                    assert!(got.is_empty() || got == vec!["Frame".to_owned()])
+                }
             }
         },
     );

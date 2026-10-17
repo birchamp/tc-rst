@@ -17,12 +17,14 @@ use crate::handle::{Mode, ProjectHandle};
 use crate::hooks::{Hooks, Point};
 use crate::layout::{
     DEVICE, FORMAT_JSON, Folder, GITATTRIBUTES, GITATTRIBUTES_BYTES, GITIGNORE, GITIGNORE_BYTES,
-    LOCK, PROJECT_JSON,
+    LOCK, PACKS, PENDING, PROJECT_JSON,
 };
+use crate::load::{JournalKind, list};
 use crate::open::{Env, OpenError, OpenOptions, ProjectJson, open_project};
 use crate::platform::Platform;
 use crate::reply::CommandError;
 use crate::vfs::{EntryKind, Vfs, is_not_found};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
 use tc_journal::command::{Command, PlannedChange, SeedSource, UpgradePlan};
@@ -335,7 +337,17 @@ impl Store {
             atomic_create_dirs(vfs, &dir)?;
             atomic_write(vfs, &dir, name, &bytes, SyncDir::Now).map_err(|e| e.into_inner())?;
         }
-        let handle = open_project(&self.env, staging, &OpenOptions::default(), Some(target))?;
+        // The fingerprint every later open takes is of the canonical path (§6.3). The target
+        // does not exist yet, so its canonical path is the projects folder's and the name:
+        // the raw path would differ from it through a symlink, or the `\\?\` prefix Windows
+        // gives every canonical path, and the first open would mint another device.
+        let identity = self
+            .env
+            .vfs
+            .canonicalize(&self.projects)
+            .map(|projects| projects.join(name_of(target)))
+            .unwrap_or_else(|_| target.to_owned());
+        let handle = open_project(&self.env, staging, &OpenOptions::default(), Some(&identity))?;
         if let Mode::ReadOnly(reason) = handle.facts().mode {
             return Err(CreateError::Store(StoreError::Other(format!(
                 "the projects folder cannot keep a project safe: {reason:?}"
@@ -386,7 +398,7 @@ impl Store {
             return Err(CreateError::NameExists(name.to_owned()));
         }
         let staging = self.staging(StagingKind::Copy);
-        if let Err(e) = copy_tree(&*self.env.vfs, from, &staging) {
+        if let Err(e) = copy_tree(&*self.env.vfs, from, &staging, &self.env.hooks) {
             let _ = self.env.vfs.remove_dir_all(&staging);
             return Err(e.into());
         }
@@ -399,6 +411,11 @@ impl Store {
         }
         self.place(&staging, name)
     }
+}
+
+/// The last component of a path.
+fn name_of(path: &Path) -> &std::ffi::OsStr {
+    path.file_name().unwrap_or(path.as_os_str())
 }
 
 /// A folder name the projects folder can hold on every platform.
@@ -439,10 +456,17 @@ fn remove_staging(vfs: &dyn Vfs, projects: &Path, hooks: &Hooks) -> Vec<RemovedS
 }
 
 /// Copies `from` to the new folder `to` file by file, each file written atomically; the
-/// directory flushes make the copy durable before it is renamed into place.
-fn copy_tree(vfs: &dyn Vfs, from: &Path, to: &Path) -> Result<(), StoreError> {
+/// directory flushes make the copy durable before it is renamed into place. The journal goes
+/// first, by [`copy_journal`]; every other file is copied as it is found, and one that went
+/// meanwhile (a derived file being rewritten) is left out: the copy's open rebuilds it.
+fn copy_tree(vfs: &dyn Vfs, from: &Path, to: &Path, hooks: &Hooks) -> Result<(), StoreError> {
     vfs.create_dir(to)
         .map_err(|e| StoreError::io("create", to, e))?;
+    copy_journal(vfs, from, to, hooks)?;
+    let skip = [
+        Folder::new(from).path(PACKS),
+        Folder::new(from).path(PENDING),
+    ];
     let mut stack = vec![(from.to_owned(), to.to_owned())];
     while let Some((src, dst)) = stack.pop() {
         let entries = vfs
@@ -452,7 +476,7 @@ fn copy_tree(vfs: &dyn Vfs, from: &Path, to: &Path) -> Result<(), StoreError> {
             let (s, d) = (src.join(&entry.name), dst.join(&entry.name));
             match entry.kind {
                 EntryKind::Dir => {
-                    if entry.name == ".git" {
+                    if entry.name == ".git" || skip.contains(&s) {
                         continue;
                     }
                     atomic_create_dirs(vfs, &d)?;
@@ -476,4 +500,59 @@ fn copy_tree(vfs: &dyn Vfs, from: &Path, to: &Path) -> Result<(), StoreError> {
         }
     }
     Ok(())
+}
+
+/// How many times [`copy_journal`] lists the journal again before it gives up on a folder
+/// that keeps changing.
+const COPY_ROUNDS: usize = 16;
+
+/// Copies every pack and pending file of `from` to `to` while another writer may be sealing
+/// or consolidating in `from` (the copy offer is for exactly that case, §5.0), so the copy
+/// keeps every change `from` held when it began.
+///
+/// A seal writes its pack before it removes the pending files the pack holds, and a
+/// consolidation writes its pack before it removes the packs it replaces (§5.11, §5.12): a
+/// change only ever leaves a file after it is in a newer one. So the pending files are
+/// copied first and the packs after them, and a file that went before it was read never
+/// counts as copied: the journal is listed again, and every file not copied yet is copied,
+/// until a whole round finds nothing new and nothing gone. Packs and pending files are named
+/// by their content, so a name copied once never needs a second read.
+fn copy_journal(vfs: &dyn Vfs, from: &Path, to: &Path, hooks: &Hooks) -> Result<(), StoreError> {
+    let (src, dst) = (Folder::new(from), Folder::new(to));
+    let mut copied: BTreeSet<String> = BTreeSet::new();
+    for _ in 0..COPY_ROUNDS {
+        let mut changed = false;
+        for (i, kind) in [JournalKind::Pending, JournalKind::Pack]
+            .into_iter()
+            .enumerate()
+        {
+            if i == 1 {
+                hooks.wait(Point::CopyBetweenJournalFolders);
+            }
+            let listed = list(vfs, &src).map_err(|e| StoreError::io("list", from, e))?;
+            for file in listed.into_iter().filter(|f| f.kind == kind) {
+                if copied.contains(&file.rel) {
+                    continue;
+                }
+                changed = true;
+                let bytes = match vfs.read(&file.abs) {
+                    Ok(bytes) => bytes,
+                    // Its changes are in a newer file: the next round lists it.
+                    Err(e) if is_not_found(&e) => continue,
+                    Err(e) => return Err(StoreError::io("read", &file.abs, e)),
+                };
+                let (dir, name) = dst.dir_and_name(&file.rel);
+                atomic_create_dirs(vfs, &dir)?;
+                atomic_write(vfs, &dir, name, &bytes, SyncDir::Now).map_err(|e| e.into_inner())?;
+                copied.insert(file.rel);
+            }
+        }
+        if !changed {
+            return Ok(());
+        }
+    }
+    Err(StoreError::Other(
+        "the project kept changing while it was copied; close the other window and copy it again"
+            .into(),
+    ))
 }
