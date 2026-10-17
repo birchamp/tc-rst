@@ -2,13 +2,13 @@
   "case": "inspect",
   "origin": "tc4://app",
   "localStorage": {
-    "n": 56,
-    "at": 1792240173577,
+    "n": 303,
+    "at": 1792259913580,
     "fields": 1
   },
   "mirror": {
-    "n": 56,
-    "at": 1792240173577,
+    "n": 303,
+    "at": 1792259913580,
     "entries": 1
   },
   "shell": {
@@ -31,7 +31,7 @@
     },
     "restarts": 0,
     "mirrorAtLaunch": {
-      "lines": 56,
+      "lines": 303,
       "torn": 0,
       "entries": 1
     }

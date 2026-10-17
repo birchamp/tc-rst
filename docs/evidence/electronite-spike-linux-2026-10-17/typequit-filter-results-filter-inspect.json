@@ -1,14 +1,14 @@
 {
   "case": "inspect",
-  "origin": "http://127.0.0.1:35113",
+  "origin": "http://127.0.0.1:37725",
   "localStorage": {
-    "n": 58,
-    "at": 1792240159771,
+    "n": 306,
+    "at": 1792259874776,
     "fields": 1
   },
   "mirror": {
-    "n": 58,
-    "at": 1792240159771,
+    "n": 306,
+    "at": 1792259874776,
     "entries": 1
   },
   "shell": {
@@ -31,7 +31,7 @@
     },
     "restarts": 0,
     "mirrorAtLaunch": {
-      "lines": 58,
+      "lines": 306,
       "torn": 0,
       "entries": 1
     }

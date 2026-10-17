@@ -1,4 +1,4 @@
-{"t":1792240133383,"ev":"shell-started","pid":20054,"versions":{"electron":"37.1.0","chrome":"138.0.7204.35","node":"22.16.0","v8":"13.8.258.18-electron.0"},"spawn":"job"}
-{"t":1792240133427,"ev":"server-started","pid":20153,"port":40321,"ms":36}
-{"t":1792240133802,"ev":"page-loaded"}
-{"t":1792240133811,"ev":"home-loaded","instance":"e0fbbab75853","port":40321,"serverPid":20153}
+{"t":1792259825261,"ev":"shell-started","pid":5820,"versions":{"electron":"37.1.0","chrome":"138.0.7204.35","node":"22.16.0","v8":"13.8.258.18-electron.0"},"spawn":"job"}
+{"t":1792259825288,"ev":"server-started","pid":5863,"port":40343,"ms":23}
+{"t":1792259825464,"ev":"home-loaded","instance":"d5466345d741","port":40343,"serverPid":5863}
+{"t":1792259825482,"ev":"page-loaded"}
