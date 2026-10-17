@@ -38,6 +38,7 @@ pub mod pins;
 pub mod record;
 pub mod rules;
 mod sha;
+mod short;
 mod text;
 pub mod token;
 

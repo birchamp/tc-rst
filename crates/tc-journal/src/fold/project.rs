@@ -7,7 +7,7 @@
 use super::attach::{self, ShownVerse, runs};
 use super::books::rewound_batches;
 use super::merge::{ancestors_or_self, record_arc, record_of};
-use super::meta::{ChangeIdx, KeyIdx, Shape, VerseShape};
+use super::meta::{ChangeIdx, Form, KeyIdx, VerseShape};
 use super::state::{FoldState, Projected};
 use super::{Conflict, ConflictKind, Counter};
 use crate::alignment::AlignedRun;
@@ -635,7 +635,7 @@ impl FoldState {
     /// Whether check record `k` projects a decision (not a `MovedTo`, not nothing).
     fn holds_decision(&self, k: KeyIdx) -> bool {
         match &self.entry(k).projected {
-            Projected::Change(c) => matches!(self.meta(*c).shape, Shape::Decision { .. }),
+            Projected::Change(c) => matches!(self.meta(*c).form, Form::Decision(_)),
             Projected::Merged(r) => matches!(
                 &**r,
                 Record::Check {

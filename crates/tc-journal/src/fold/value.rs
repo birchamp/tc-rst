@@ -158,8 +158,8 @@ impl fmt::Debug for Fingerprinter {
     }
 }
 
-/// A change's bytes as the fold keeps them: 24 bytes for each of hundreds of thousands of
-/// changes.
+/// A change's bytes as a loader hands them to the fold ([`super::FoldInput`]) and the fold
+/// cache keeps them; the change table keeps the same in 20 bytes ([`super::meta::ValueRef`]).
 #[derive(Debug, Clone)]
 pub(crate) enum Stored {
     /// In memory: a change added by a command, or a loader that keeps every value.

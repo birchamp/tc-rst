@@ -4,7 +4,7 @@
 
 use super::books::rewound_batches;
 use super::merge::{ancestry, conflict_kind, group_by_value, record_of, units_of_conflict};
-use super::meta::{ChangeIdx, KeyIdx, Shape, VerseShape};
+use super::meta::{ChangeIdx, Form, KeyIdx, Shape, VerseShape};
 use super::passage::{local_projection, rewind};
 use super::state::{Dirty, Fault, FoldState, Local, Owner, Projected};
 use super::{Candidate, Conflict, ConflictId, ConflictKind, Counter, Side};
@@ -61,7 +61,7 @@ pub(crate) fn rewound_here(
         .iter()
         .copied()
         .filter(|x| {
-            state.meta(*x).active && rewound.contains(&state.batch(state.meta(*x).batch).id)
+            state.meta(*x).active() && rewound.contains(&state.batch(state.meta(*x).batch).id)
         })
         .collect();
     if bad.is_empty() {
@@ -256,7 +256,7 @@ fn cohere(
             .front
             .is_some_and(|f| match &state.entry(f).projected {
                 Projected::Change(c) => {
-                    matches!(state.meta(*c).shape, Shape::Front { present: true })
+                    matches!(state.meta(*c).form, Form::Front { present: true })
                 }
                 Projected::Merged(record) => matches!(
                     &**record,
@@ -565,7 +565,7 @@ fn local_conflict(state: &FoldState, k: KeyIdx, local: &super::state::LocalConfl
                     .iter()
                     .copied()
                     .filter(|x| {
-                        state.meta(*x).active
+                        state.meta(*x).active()
                             && race.contains(&state.batch(state.meta(*x).batch).id)
                     })
                     .collect();
@@ -926,7 +926,7 @@ fn detached(state: &FoldState, k: KeyIdx, chained_in: &mut Option<(BookId, bool)
     state.count(Counter::AttachedPlaced, 1);
     let entry = state.entry(k);
     let shape = match &entry.projected {
-        Projected::Change(c) => state.meta(*c).shape.clone(),
+        Projected::Change(c) => state.shape(*c),
         Projected::Merged(record) => merged_shape(record),
         Projected::Nothing => return false,
     };
@@ -1023,8 +1023,8 @@ pub(crate) fn follow_moves(state: &FoldState, check: &CheckKey) -> CheckKey {
             break;
         };
         let next = match &state.entry(k).projected {
-            Projected::Change(c) => match &state.meta(*c).shape {
-                Shape::MovedTo { to } => Some((**to).clone()),
+            Projected::Change(c) => match state.shape(*c) {
+                Shape::MovedTo { to } => Some((*to).clone()),
                 _ => None,
             },
             Projected::Merged(record) => match &**record {
@@ -1136,12 +1136,12 @@ pub(crate) fn stage_paths(state: &mut FoldState, dirty: &mut Dirty) {
             .entry(*k)
             .heads
             .iter()
-            .any(|h| matches!(state.meta(*h).shape, Shape::Carried { oid: Some(_) }));
+            .any(|h| matches!(state.shape(*h), Shape::Carried { oid: Some(_) }));
         if !present {
             continue;
         }
         let shown = match &state.entry(*k).projected {
-            Projected::Change(c) => match state.meta(*c).shape {
+            Projected::Change(c) => match state.shape(*c) {
                 Shape::Carried { oid: Some(oid) } => Some(oid),
                 _ => None,
             },

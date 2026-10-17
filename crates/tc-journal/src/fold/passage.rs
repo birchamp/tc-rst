@@ -13,10 +13,9 @@ use tc_core::BookId;
 /// The verse records of `book` that batch `b` wrote (its passage).
 fn passage_records(state: &FoldState, b: BatchIdx, book: BookId) -> Vec<KeyIdx> {
     let mut out: Vec<KeyIdx> = state
-        .batch(b)
-        .members
+        .members(b)
         .iter()
-        .filter(|c| state.meta(**c).active)
+        .filter(|c| state.meta(**c).active())
         .map(|c| state.meta(*c).key)
         .filter(|k| matches!(state.entry(*k).key, RecordKey::Verse(bk, ..) if bk == book))
         .collect();
@@ -306,7 +305,7 @@ fn provisional_after_rewind(
         .changes
         .iter()
         .copied()
-        .filter(|c| state.meta(*c).active)
+        .filter(|c| state.meta(*c).active())
         .collect();
     let bad_roots: BTreeSet<ChangeIdx> = changes
         .iter()

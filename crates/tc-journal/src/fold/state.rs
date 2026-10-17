@@ -6,8 +6,8 @@
 
 use super::cow::{ChunkVec, CowMap, PosIndex};
 use super::meta::{
-    self, BatchIdx, CauseClass, ChangeIdx, DeviceIdx, KeyIdx, Meta, PackSlot, ParentRef, Parents,
-    Quarantined, Resources, Shape,
+    self, BatchIdx, CauseClass, ChangeIdx, ChangeList, DecisionForm, DeviceIdx, FirstParent, Form,
+    KeyIdx, Meta, PackSlot, ParentRef, Quarantined, ResourceTable, Resources, Shape, ValueRef,
 };
 use super::value::{Stored, ValueAt, ValueSource};
 use super::{Anomaly, Conflict, ConflictId, Counter, CounterCells, Counters, Frontier};
@@ -140,6 +140,22 @@ impl From<crate::change::Change> for FoldInput {
     }
 }
 
+/// A change to append to the change table ([`FoldState::push_meta`]).
+struct NewChange {
+    id: ChangeId,
+    key: KeyIdx,
+    batch: BatchIdx,
+    parents: SmallVec<[ParentRef; 2]>,
+    device: DeviceIdx,
+    seq: DeviceSeq,
+    at: crate::ids::WallTime,
+    cause: CauseClass,
+    stub: bool,
+    shape: Shape,
+    value: Stored,
+    pack: PackSlot,
+}
+
 /// How a record with several heads merged without disagreement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MergeHow {
@@ -199,9 +215,9 @@ pub(crate) struct KeyEntry {
     pub key: RecordKey,
     pub book: Option<BookId>,
     /// Every change of this key the fold holds, folded or held.
-    pub changes: SmallVec<[ChangeIdx; 2]>,
+    pub changes: ChangeList,
     /// Folded changes with no folded child on this key, sorted by id.
-    pub heads: SmallVec<[ChangeIdx; 1]>,
+    pub heads: ChangeList,
     pub local: Local,
     /// The passage group this record is in, named by its first record.
     pub group: Option<KeyIdx>,
@@ -210,15 +226,17 @@ pub(crate) struct KeyEntry {
     pub active: u32,
 }
 
-/// A batch (§7.4). Most batches hold one change, so what only a held batch needs lives in
-/// [`FoldState::held`].
+/// A batch (§7.4): 28 bytes for each of half a million batches. Most batches hold one
+/// change, so the members of a batch of several live in [`FoldState::members`], and what
+/// only a held batch needs in [`FoldState::held`].
 #[derive(Debug, Clone)]
 pub(crate) struct BatchEntry {
     pub id: BatchId,
     pub n: u32,
-    pub quarantined: u32,
-    /// Its valid changes, folded or held.
-    pub members: SmallVec<[ChangeIdx; 2]>,
+    /// Its one valid change, folded or held, while it has one ([`ChangeIdx::NONE`] before).
+    first: ChangeIdx,
+    /// Its valid changes are in [`FoldState::members`]: it has two or more.
+    many: bool,
     pub complete: bool,
     /// An entry in [`FoldState::held`] exists for it.
     pub held: bool,
@@ -227,6 +245,8 @@ pub(crate) struct BatchEntry {
 /// What the fold keeps of a batch that is, or was, held.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Held {
+    /// Its quarantined lines (§4.4): a batch with one is never complete.
+    pub quarantined: u32,
     /// The device of a quarantined member, when no valid member names one.
     pub quarantined_device: Option<DeviceId>,
     /// The `IncompleteBatch` anomaly listed for it.
@@ -364,6 +384,16 @@ pub(crate) struct Dirty {
 pub struct FoldState {
     pub(crate) kind: ProjectKind,
     pub(crate) metas: ChunkVec<Meta>,
+    /// The parents after the first of each change that names several.
+    pub(crate) more_parents: CowMap<ChangeIdx, SmallVec<[ParentRef; 2]>>,
+    /// The sequence numbers that do not fit in the change table ([`Meta::SEQ_APART`]).
+    pub(crate) seqs_apart: CowMap<ChangeIdx, DeviceSeq>,
+    /// The canonical bytes of the changes whose bytes the fold keeps ([`Meta::IN_MEMORY`]):
+    /// those a command added, or a loader handed over without a place to read them again.
+    pub(crate) kept: CowMap<ChangeIdx, Arc<[u8]>>,
+    /// The shapes of the changes whose [`Form`] keeps no payload: moves, comments, carried
+    /// files and releases.
+    pub(crate) shapes: CowMap<ChangeIdx, Shape>,
     /// The ids of parents the fold did not hold when a change named them (`ParentRef`).
     pub(crate) absent: ChunkVec<ChangeId>,
     /// The devices changes name, by [`DeviceIdx`].
@@ -384,6 +414,8 @@ pub struct FoldState {
     /// Keys by [`key_hash`]; the key table holds the only copy of each key.
     pub(crate) key_ids: PosIndex,
     pub(crate) batches: ChunkVec<BatchEntry>,
+    /// The valid changes of each batch that has two or more, in the order the fold met them.
+    pub(crate) members: CowMap<BatchIdx, Vec<ChangeIdx>>,
     /// Batches by id ([`batch_hash`]); one per `n` the changes of that id claim (F2).
     pub(crate) batch_ids: PosIndex,
     pub(crate) held: CowMap<BatchIdx, Held>,
@@ -434,7 +466,8 @@ pub struct FoldState {
     pub(crate) meta_choices: Arc<BTreeMap<KeyIdx, super::metadata::MetaChoice>>,
     /// Carried files placed at a `.case-` path (§3.3).
     pub(crate) case_moves: Arc<BTreeMap<crate::ids::RepoPath, String>>,
-    pub(crate) resources: Resources,
+    /// The resources decisions name, by the place a [`DecisionForm`] gives.
+    pub(crate) resources: ResourceTable,
     /// Reads the values the fold does not keep in memory.
     pub(crate) source: Option<Arc<dyn ValueSource>>,
     /// Records decoded ahead for one rendering (see [`FoldState::render_book`]); `None` in
@@ -449,6 +482,10 @@ impl FoldState {
         Self {
             kind,
             metas: ChunkVec::default(),
+            more_parents: CowMap::default(),
+            seqs_apart: CowMap::default(),
+            kept: CowMap::default(),
+            shapes: CowMap::default(),
             absent: ChunkVec::default(),
             devices: Arc::new(Vec::new()),
             device_index: CowMap::default(),
@@ -461,6 +498,7 @@ impl FoldState {
             divs: CowMap::default(),
             key_ids: PosIndex::default(),
             batches: ChunkVec::default(),
+            members: CowMap::default(),
             batch_ids: PosIndex::default(),
             held: CowMap::default(),
             passages: CowMap::default(),
@@ -492,7 +530,7 @@ impl FoldState {
             pins: Arc::new(super::attach::PinsView::default()),
             meta_choices: Arc::new(BTreeMap::new()),
             case_moves: Arc::new(BTreeMap::new()),
-            resources: Resources::default(),
+            resources: ResourceTable::default(),
             source: None,
             records: None,
             counters: Arc::new(CounterCells::default()),
@@ -544,12 +582,12 @@ impl FoldState {
             return;
         }
         for c in 0..self.metas.len() {
-            let parents = &self.metas[c].parents;
-            if parents.iter().all(|p| p.get().is_ok()) {
+            let c = ChangeIdx(c as u32);
+            if self.parents(c).all(|p| p.get().is_ok()) {
                 continue;
             }
-            let refs: SmallVec<[ParentRef; 2]> = parents
-                .iter()
+            let refs: SmallVec<[ParentRef; 2]> = self
+                .parents(c)
                 .map(|p| match p.get() {
                     Ok(_) => p,
                     Err(at) => self
@@ -557,8 +595,161 @@ impl FoldState {
                         .map_or(p, ParentRef::known),
                 })
                 .collect();
-            self.metas[c].parents = Parents::of(refs);
+            self.set_parents(c, refs);
         }
+    }
+
+    /// The parents change `c` names, in its own order.
+    pub(crate) fn parents(&self, c: ChangeIdx) -> impl Iterator<Item = ParentRef> + '_ {
+        let meta = self.meta(c);
+        let more = if meta.has(Meta::MORE_PARENTS) {
+            self.more_parents.get(&c).map_or(&[][..], |m| m.as_slice())
+        } else {
+            &[]
+        };
+        meta.first_parent
+            .get()
+            .into_iter()
+            .chain(more.iter().copied())
+    }
+
+    /// Whether change `c` names no parent.
+    pub(crate) fn has_no_parent(&self, c: ChangeIdx) -> bool {
+        self.meta(c).first_parent == FirstParent::NONE
+    }
+
+    /// Sets the parents change `c` names: the first in its table entry, the others beside.
+    fn set_parents(&mut self, c: ChangeIdx, refs: SmallVec<[ParentRef; 2]>) {
+        let mut refs = refs.into_iter();
+        let first = FirstParent::of(refs.next());
+        let more: SmallVec<[ParentRef; 2]> = refs.collect();
+        let meta = &mut self.metas[c.get()];
+        meta.first_parent = first;
+        if more.is_empty() {
+            meta.flags &= !Meta::MORE_PARENTS;
+            self.more_parents.remove(&c);
+        } else {
+            meta.flags |= Meta::MORE_PARENTS;
+            self.more_parents.insert(c, more);
+        }
+    }
+
+    /// The sequence number of change `c`.
+    pub(crate) fn seq_of(&self, c: ChangeIdx) -> DeviceSeq {
+        match self.meta(c).seq {
+            Meta::SEQ_APART => self
+                .seqs_apart
+                .get(&c)
+                .copied()
+                .unwrap_or(DeviceSeq(u64::from(Meta::SEQ_APART))),
+            seq => DeviceSeq(u64::from(seq)),
+        }
+    }
+
+    /// The shape of change `c`'s value.
+    pub(crate) fn shape(&self, c: ChangeIdx) -> Shape {
+        match self.meta(c).form {
+            Form::Other => Shape::Other,
+            Form::Verse(shape) => Shape::Verse(shape),
+            Form::Front { present } => Shape::Front { present },
+            Form::Presence(how) => Shape::Presence(how),
+            Form::Alignment { dismissed } => Shape::Alignment { dismissed },
+            // `push_meta` placed the resource in the table, which never forgets one.
+            Form::Decision(form) => match self.resources.get(form.resource()) {
+                Some(resource) => Shape::Decision {
+                    resource: resource.clone(),
+                    dismissed: form.dismissed(),
+                },
+                None => Shape::Other,
+            },
+            // `push_meta` kept the whole shape of these, and it never removes one.
+            Form::MovedTo | Form::Comment | Form::Carried | Form::Release => {
+                self.shapes.get(&c).cloned().unwrap_or(Shape::Other)
+            }
+        }
+    }
+
+    /// Where change `c`'s value is, as a loader hands it over.
+    fn stored(&self, c: ChangeIdx) -> Stored {
+        let meta = self.meta(c);
+        if meta.has(Meta::IN_MEMORY)
+            && let Some(bytes) = self.kept.get(&c)
+        {
+            return Stored::bytes(bytes.clone());
+        }
+        let value = meta.value;
+        Stored::At {
+            file: value.file,
+            offset: value.offset,
+            len: value.len,
+            fingerprint: value.fingerprint(),
+        }
+    }
+
+    /// Appends a change to the change table, and what few changes have beside it.
+    fn push_meta(&mut self, new: NewChange) -> ChangeIdx {
+        let c = ChangeIdx(self.metas.len() as u32);
+        let mut flags = if new.stub { Meta::STUB } else { 0 };
+        let seq = match u32::try_from(new.seq.0) {
+            Ok(seq) if seq != Meta::SEQ_APART => seq,
+            _ => {
+                self.seqs_apart.insert(c, new.seq);
+                Meta::SEQ_APART
+            }
+        };
+        let value = match new.value {
+            Stored::At {
+                file,
+                offset,
+                len,
+                fingerprint,
+            } => ValueRef::new(file, offset, len, fingerprint),
+            Stored::Bytes(bytes) => {
+                flags |= Meta::IN_MEMORY;
+                self.kept.insert(c, *bytes);
+                ValueRef::NONE
+            }
+        };
+        let form = match new.shape {
+            Shape::Other => Form::Other,
+            Shape::Verse(shape) => Form::Verse(shape),
+            Shape::Front { present } => Form::Front { present },
+            Shape::Presence(how) => Form::Presence(how),
+            Shape::Alignment { dismissed } => Form::Alignment { dismissed },
+            Shape::Decision {
+                resource,
+                dismissed,
+            } => Form::Decision(DecisionForm::new(
+                self.resources.place(&resource),
+                dismissed,
+            )),
+            shape => {
+                let form = match shape {
+                    Shape::MovedTo { .. } => Form::MovedTo,
+                    Shape::Comment { .. } => Form::Comment,
+                    Shape::Carried { .. } => Form::Carried,
+                    _ => Form::Release,
+                };
+                self.shapes.insert(c, shape);
+                form
+            }
+        };
+        self.metas.push(Meta {
+            id: new.id,
+            at: new.at,
+            key: new.key,
+            batch: new.batch,
+            first_parent: FirstParent::NONE,
+            device: new.device,
+            seq,
+            pack: new.pack,
+            form,
+            value,
+            cause: new.cause,
+            flags,
+        });
+        self.set_parents(c, new.parents);
+        c
     }
 
     /// Adds changes to the fold and updates what they touch (§7.8). Changes already held
@@ -583,30 +774,33 @@ impl FoldState {
     /// which no incremental stage undoes.
     fn rebuild(&mut self) -> super::Delta {
         let mut inputs = Vec::with_capacity(self.metas.len() + self.quarantined.len());
-        for meta in self.metas.iter() {
+        for c in 0..self.metas.len() {
+            let c = ChangeIdx(c as u32);
+            let meta = self.meta(c);
             let entry = self.entry(meta.key);
             let batch = self.batch(meta.batch);
             let summary = meta::Summary {
                 key: entry.key.clone(),
-                parents: self.parent_ids(meta),
+                parents: self.parent_ids(c),
                 device: self.device_of(meta),
-                seq: meta.seq,
+                seq: self.seq_of(c),
                 at: meta.at,
                 batch: (batch.id, batch.n),
                 cause: meta.cause,
-                stub: meta.stub,
-                shape: meta.shape.clone(),
+                stub: meta.stub(),
+                shape: self.shape(c),
                 book: entry.book,
             };
+            let value = self.stored(c);
             let input = |pack| FoldInput {
                 line: Line::Prepared {
                     id: meta.id,
-                    value: meta.value.clone(),
+                    value: value.clone(),
                     summary: summary.clone(),
                 },
                 pack,
             };
-            let packs = self.packs_of(meta);
+            let packs = self.packs_of(c);
             if packs.is_empty() {
                 inputs.push(input(None));
             } else {
@@ -674,8 +868,8 @@ impl FoldState {
         self.keys.push(KeyEntry {
             key,
             book,
-            changes: SmallVec::new(),
-            heads: SmallVec::new(),
+            changes: ChangeList::Empty,
+            heads: ChangeList::Empty,
             local: Local::Empty,
             group: None,
             projected: Projected::Nothing,
@@ -784,12 +978,51 @@ impl FoldState {
         self.batches.push(BatchEntry {
             id,
             n,
-            quarantined: 0,
-            members: SmallVec::new(),
+            first: ChangeIdx::NONE,
+            many: false,
             complete: false,
             held: false,
         });
         b
+    }
+
+    /// The valid changes of batch `b`, folded or held, in the order the fold met them.
+    pub(crate) fn members(&self, b: BatchIdx) -> &[ChangeIdx] {
+        let entry = self.batch(b);
+        if entry.many {
+            self.members.get(&b).map_or(&[], Vec::as_slice)
+        } else if entry.first == ChangeIdx::NONE {
+            &[]
+        } else {
+            std::slice::from_ref(&entry.first)
+        }
+    }
+
+    fn add_member(&mut self, b: BatchIdx, c: ChangeIdx) {
+        let entry = &mut self.batches[b.get()];
+        if entry.many {
+            self.members.entry_or(b, Vec::new).push(c);
+        } else if entry.first == ChangeIdx::NONE {
+            entry.first = c;
+        } else {
+            entry.many = true;
+            let first = entry.first;
+            self.members.insert(b, vec![first, c]);
+        }
+    }
+
+    /// The quarantined lines of batch `b`.
+    fn quarantined_of(&self, b: BatchIdx) -> u32 {
+        if self.batch(b).held {
+            self.held.get(&b).map_or(0, |h| h.quarantined)
+        } else {
+            0
+        }
+    }
+
+    /// F2: a batch is complete when every one of its `n` changes is valid and here.
+    fn is_complete(&self, b: BatchIdx) -> bool {
+        self.quarantined_of(b) == 0 && self.members(b).len() >= self.batch(b).n as usize
     }
 
     /// Book `book`'s entry, to change.
@@ -855,18 +1088,14 @@ impl FoldState {
     }
 
     /// The packs that hold a change, in the order the fold met them.
-    pub(crate) fn packs_of(&self, meta: &Meta) -> Vec<PackId> {
+    pub(crate) fn packs_of(&self, c: ChangeIdx) -> Vec<PackId> {
         let mut out = Vec::new();
-        if meta.pack == PackSlot::NONE {
+        let first = self.meta(c).pack;
+        if first == PackSlot::NONE {
             return out;
         }
-        let c = self.change_idx(&meta.id);
-        let slots = std::iter::once(meta.pack).chain(
-            c.and_then(|c| self.more_packs.get(&c))
-                .into_iter()
-                .flatten()
-                .copied(),
-        );
+        let slots =
+            std::iter::once(first).chain(self.more_packs.get(&c).into_iter().flatten().copied());
         for slot in slots {
             if let Some(pack) = self.packs.get(slot.0 as usize) {
                 out.push(*pack);
@@ -920,7 +1149,7 @@ impl FoldState {
         let mut batches: Vec<(BatchId, u32)> = Vec::with_capacity(inputs.len());
         for (input, new) in inputs.into_iter().zip(fresh) {
             let pack = input.pack;
-            let (id, value, mut summary) = match input.line {
+            let (id, value, summary) = match input.line {
                 Line::Verified(Verified::Quarantined(q)) => {
                     self.insert(
                         FoldInput {
@@ -935,9 +1164,6 @@ impl FoldState {
                 // A copy of a change already numbered; its pack is noted above.
                 Line::Prepared { .. } | Line::Verified(Verified::Change(_)) => continue,
             };
-            if let Shape::Decision { resource, .. } = &mut summary.shape {
-                *resource = self.resources.intern(resource);
-            }
             keys.push((key_hash(&summary.key), summary.key, summary.book));
             batches.push(summary.batch);
             let pack = pack.map_or(PackSlot::NONE, |p| self.intern_pack(p));
@@ -959,11 +1185,11 @@ impl FoldState {
                     }
                 })
                 .collect();
-            self.metas.push(Meta {
+            self.push_meta(NewChange {
                 id,
                 key: KeyIdx(u32::MAX),
                 batch: BatchIdx(u32::MAX),
-                parents: Parents::of(parents),
+                parents,
                 device,
                 seq: summary.seq,
                 at: summary.at,
@@ -972,7 +1198,6 @@ impl FoldState {
                 shape: summary.shape,
                 value,
                 pack,
-                active: false,
             });
         }
         let added = self.metas.len() - base;
@@ -980,7 +1205,7 @@ impl FoldState {
         self.key_ids.reserve(added / 2);
         for (i, (hash, key, book)) in keys.into_iter().enumerate() {
             let c = ChangeIdx((base + i) as u32);
-            let k = self.intern_hashed_key(key, hash, book, &self.metas[c.get()].shape.clone());
+            let k = self.intern_hashed_key(key, hash, book, &self.shape(c));
             self.metas[c.get()].key = k;
             self.keys[k.get()].changes.push(c);
             if self.keys[k.get()].changes.len() > 1 {
@@ -992,14 +1217,14 @@ impl FoldState {
             let c = ChangeIdx((base + i) as u32);
             let b = self.intern_batch(batch);
             self.metas[c.get()].batch = b;
-            self.batches[b.get()].members.push(c);
+            self.add_member(b, c);
         }
         self.seqs.reserve(added);
         for c in base..self.metas.len() {
             let c = ChangeIdx(c as u32);
             let (device, seq, id) = {
                 let m = self.meta(c);
-                (self.device_of(m), m.seq, m.id)
+                (self.device_of(m), self.seq_of(c), m.id)
             };
             if device.kind() == DeviceKind::Local {
                 self.note_seq(c, id, device, seq);
@@ -1017,7 +1242,7 @@ impl FoldState {
         let hash = seq_hash(device, seq);
         let found = self.seqs.find(hash, |x| {
             let meta = &self.metas[x as usize];
-            self.devices[meta.device.0 as usize] == device && meta.seq == seq
+            self.devices[meta.device.0 as usize] == device && self.seq_of(ChangeIdx(x)) == seq
         });
         let first = match found {
             None => {
@@ -1060,10 +1285,10 @@ impl FoldState {
                 if let Some(batch) = batch {
                     let b = self.intern_batch(batch);
                     if let Some(entry) = self.batches.get_mut(b.get()) {
-                        entry.quarantined += 1;
                         entry.held = true;
                     }
                     let held = self.held.entry_or(b, Held::default);
+                    held.quarantined += 1;
                     if held.quarantined_device.is_none() {
                         held.quarantined_device = q.device;
                     }
@@ -1085,7 +1310,7 @@ impl FoldState {
                 if self.change_idx(&change.id()).is_some() {
                     (change.id(), value, None)
                 } else {
-                    let summary = meta::summarize(change.body(), &mut self.resources);
+                    let summary = meta::summarize(change.body(), &mut Resources::default());
                     (change.id(), value, Some(summary))
                 }
             }
@@ -1099,13 +1324,10 @@ impl FoldState {
                     }
                     return;
                 }
-                let Some(mut summary) = summary else {
+                let Some(summary) = summary else {
                     return;
                 };
                 self.count(Counter::ChangesIndexed, 1);
-                if let Shape::Decision { resource, .. } = &mut summary.shape {
-                    *resource = self.resources.intern(resource);
-                }
                 let k = self.intern_key(summary.key, summary.book, &summary.shape);
                 let b = self.intern_batch(summary.batch);
                 let c = ChangeIdx(self.metas.len() as u32);
@@ -1122,11 +1344,11 @@ impl FoldState {
                         None => ParentRef::absent(self.absent.push(*p)),
                     })
                     .collect();
-                self.metas.push(Meta {
+                self.push_meta(NewChange {
                     id,
                     key: k,
                     batch: b,
-                    parents: Parents::of(parents),
+                    parents,
                     device,
                     seq: summary.seq,
                     at: summary.at,
@@ -1135,16 +1357,13 @@ impl FoldState {
                     shape: summary.shape,
                     value,
                     pack,
-                    active: false,
                 });
                 self.ids.insert(id_hash(&id), c.0);
                 self.entry_mut(k).changes.push(c);
                 if self.entry(k).changes.len() > 1 {
                     self.file_comment(k, c, dirty);
                 }
-                if let Some(entry) = self.batches.get_mut(b.get()) {
-                    entry.members.push(c);
-                }
+                self.add_member(b, c);
                 if dirty.all {
                     return;
                 }
@@ -1204,7 +1423,7 @@ impl FoldState {
         if !matches!(self.entry(k).key, RecordKey::Comment(_)) {
             return;
         }
-        let shape = self.meta(c).shape.clone();
+        let shape = self.shape(c);
         let book = meta::book_of(&self.entry(k).key, &shape);
         let active = self.entry(k).active > 0;
         if let Some(book) = book {
@@ -1239,8 +1458,8 @@ impl FoldState {
         let entry = self.entry(k);
         let mut out: SmallVec<[BookId; 1]> = entry.book.into_iter().collect();
         if matches!(entry.key, RecordKey::Comment(_)) && entry.changes.len() > 1 {
-            for c in &entry.changes {
-                if let Some(book) = meta::book_of(&entry.key, &self.meta(*c).shape)
+            for c in entry.changes.iter() {
+                if let Some(book) = meta::book_of(&entry.key, &self.shape(*c))
                     && !out.contains(&book)
                 {
                     out.push(book);
@@ -1280,11 +1499,8 @@ impl FoldState {
             dirty.batches.iter().copied().collect()
         };
         while let Some(b) = queue.pop() {
-            let (id, complete, size) = {
-                let entry = self.batch(b);
-                let complete = entry.quarantined == 0 && entry.members.len() >= entry.n as usize;
-                (entry.id, complete, entry.members.len())
-            };
+            let (id, complete, size) =
+                (self.batch(b).id, self.is_complete(b), self.members(b).len());
             let released = if self.released.len() == 0 {
                 None
             } else {
@@ -1293,11 +1509,11 @@ impl FoldState {
             let mut had_folded = false;
             let mut newly: SmallVec<[ChangeIdx; 2]> = SmallVec::new();
             for i in 0..size {
-                let c = self.batches[b.get()].members[i];
+                let c = self.members(b)[i];
                 let meta = self.meta(c);
-                had_folded |= meta.active;
+                had_folded |= meta.active();
                 let active = complete || released.as_ref().is_some_and(|r| r.contains(&meta.id));
-                if active == meta.active {
+                if active == meta.active() {
                     continue;
                 }
                 if !active {
@@ -1311,7 +1527,7 @@ impl FoldState {
             self.batches[b.get()].complete = complete;
             self.anomaly_for_batch(b);
             for &c in &newly {
-                self.metas[c.get()].active = true;
+                self.metas[c.get()].set_active(true);
             }
             if !newly.is_empty() {
                 let passage = self.passage_books(b);
@@ -1319,8 +1535,8 @@ impl FoldState {
                     // A release that grows the batch can make it a passage batch: every
                     // record it already wrote is judged again as part of its passage.
                     for i in 0..size {
-                        let c = self.batches[b.get()].members[i];
-                        if self.meta(c).active {
+                        let c = self.members(b)[i];
+                        if self.meta(c).active() {
                             let k = self.meta(c).key;
                             dirty.simple.remove(&k);
                             dirty.keys.insert(k);
@@ -1352,24 +1568,24 @@ impl FoldState {
     fn fold_complete_batches(&mut self, dirty: &mut Dirty) -> Vec<BatchIdx> {
         let mut queue: Vec<BatchIdx> = Vec::new();
         for b in 0..self.batches.len() {
-            let entry = &mut self.batches[b];
-            entry.complete = entry.quarantined == 0 && entry.members.len() >= entry.n as usize;
             let b = BatchIdx(b as u32);
-            if !self.batch(b).complete {
+            let complete = self.is_complete(b);
+            self.batches[b.get()].complete = complete;
+            if !complete {
                 queue.push(b);
             }
             self.anomaly_for_batch(b);
         }
         for c in 0..self.metas.len() {
             let c = ChangeIdx(c as u32);
-            if self.batch(self.meta(c).batch).complete && !self.meta(c).active {
-                self.metas[c.get()].active = true;
+            if self.batch(self.meta(c).batch).complete && !self.meta(c).active() {
+                self.metas[c.get()].set_active(true);
                 self.activate(c, dirty, &mut queue);
             }
         }
         for b in 0..self.batches.len() {
             let b = BatchIdx(b as u32);
-            if self.batch(b).complete && self.batch(b).members.len() >= 2 {
+            if self.batch(b).complete && self.members(b).len() >= 2 {
                 let passage = self.passage_books(b);
                 self.set_passage(b, passage);
             }
@@ -1413,30 +1629,29 @@ impl FoldState {
                 }
             }
             // Links to parents that are not folded yet wait for them.
-            let parents: SmallVec<[ParentRef; 2]> = self.meta(c).parents.iter().collect();
+            let parents: SmallVec<[ParentRef; 2]> = self.parents(c).collect();
             for p in parents {
-                let known_active = self.parent_idx(p).is_some_and(|pi| self.meta(pi).active);
+                let known_active = self.parent_idx(p).is_some_and(|pi| self.meta(pi).active());
                 if !known_active {
                     let id = self.parent_id(p);
                     self.waiting.entry_or(id, SmallVec::new).push(c);
                 }
             }
         }
-        if let Shape::Release { changes } = &self.meta(c).shape {
-            let changes = changes.clone();
-            if let RecordKey::BatchRelease(target) = &self.entry(k).key {
-                let target = *target;
-                let set =
-                    Arc::make_mut(self.released.entry_or(target, || Arc::new(BTreeSet::new())));
-                let before = set.len();
-                set.extend(changes.iter().copied());
-                if set.len() != before {
-                    let mut targets = self.batch_ids.find_all(batch_hash(&target), |b| {
-                        self.batches[b as usize].id == target
-                    });
-                    targets.sort_unstable();
-                    queue.extend(targets.into_iter().map(BatchIdx));
-                }
+        if self.meta(c).form == Form::Release
+            && let Shape::Release { changes } = self.shape(c)
+            && let RecordKey::BatchRelease(target) = &self.entry(k).key
+        {
+            let target = *target;
+            let set = Arc::make_mut(self.released.entry_or(target, || Arc::new(BTreeSet::new())));
+            let before = set.len();
+            set.extend(changes.iter().copied());
+            if set.len() != before {
+                let mut targets = self.batch_ids.find_all(batch_hash(&target), |b| {
+                    self.batches[b as usize].id == target
+                });
+                targets.sort_unstable();
+                queue.extend(targets.into_iter().map(BatchIdx));
             }
         }
     }
@@ -1448,9 +1663,9 @@ impl FoldState {
         if self.waiting.contains_key(&meta.id) {
             return false;
         }
-        meta.parents.iter().all(|p| {
+        self.parents(c).all(|p| {
             self.parent_idx(p)
-                .is_some_and(|pi| self.meta(pi).active && self.meta(pi).key == meta.key)
+                .is_some_and(|pi| self.meta(pi).active() && self.meta(pi).key == meta.key)
         })
     }
 
@@ -1464,8 +1679,7 @@ impl FoldState {
         let anomaly = if entry.complete {
             None
         } else {
-            entry
-                .members
+            self.members(b)
                 .iter()
                 .map(|c| {
                     let m = self.meta(*c);
@@ -1477,7 +1691,7 @@ impl FoldState {
                 .map(|device| Anomaly::IncompleteBatch {
                     batch: entry.id,
                     device,
-                    have: entry.members.len() as u32,
+                    have: self.members(b).len() as u32,
                     of: entry.n,
                 })
         };
@@ -1497,19 +1711,18 @@ impl FoldState {
     /// The books for which batch `b` is a passage batch (§7.3): it is not a seed batch and
     /// holds folded changes with parents to two or more verse records of the book.
     fn passage_books(&self, b: BatchIdx) -> SmallVec<[BookId; 1]> {
-        let entry = self.batch(b);
-        if entry.members.len() < 2
-            || entry
-                .members
+        let members = self.members(b);
+        if members.len() < 2
+            || members
                 .iter()
                 .any(|c| self.meta(*c).cause == CauseClass::Seed)
         {
             return SmallVec::new();
         }
         let mut books: SmallVec<[BookId; 8]> = SmallVec::new();
-        for c in &entry.members {
+        for c in members {
             let meta = self.meta(*c);
-            if !meta.active || meta.parents.is_empty() {
+            if !meta.active() || self.has_no_parent(*c) {
                 continue;
             }
             if let RecordKey::Verse(book, ..) = self.entry(meta.key).key {
@@ -1531,12 +1744,8 @@ impl FoldState {
         let simple: Vec<(KeyIdx, ChangeIdx)> = dirty.simple.iter().map(|(k, c)| (*k, *c)).collect();
         for (k, c) in simple {
             self.count(Counter::KeysUpdated, 1);
-            let parents: SmallVec<[ChangeIdx; 2]> = self
-                .meta(c)
-                .parents
-                .iter()
-                .filter_map(|p| self.parent_idx(p))
-                .collect();
+            let parents: SmallVec<[ChangeIdx; 2]> =
+                self.parents(c).filter_map(|p| self.parent_idx(p)).collect();
             let mut heads: SmallVec<[ChangeIdx; 1]> = self
                 .entry(k)
                 .heads
@@ -1546,7 +1755,7 @@ impl FoldState {
                 .collect();
             heads.push(c);
             self.sort_by_id(&mut heads);
-            self.entry_mut(k).heads = heads;
+            self.entry_mut(k).heads = heads.into_iter().collect();
             self.after_heads(k, dirty);
         }
         let keys: Vec<KeyIdx> = if dirty.all {
@@ -1589,13 +1798,13 @@ impl FoldState {
             .changes
             .iter()
             .copied()
-            .filter(|c| self.meta(*c).active)
+            .filter(|c| self.meta(*c).active())
             .collect();
         self.count(Counter::ChangesVisited, active.len() as u64);
         for &c in &active {
-            for p in self.meta(c).parents.iter() {
+            for p in self.parents(c) {
                 match self.parent_idx(p) {
-                    Some(pi) if self.meta(pi).active => {
+                    Some(pi) if self.meta(pi).active() => {
                         if self.meta(pi).key == k {
                             has_child.push(pi);
                         } else {
@@ -1621,7 +1830,7 @@ impl FoldState {
             let anomaly = link_anomaly(self.meta(*c).id, *p, *fault);
             self.list_anomaly(anomaly);
         }
-        self.entry_mut(k).heads = heads;
+        self.entry_mut(k).heads = heads.into_iter().collect();
         if !faults.is_empty() {
             self.faults.insert(k, faults);
         }
@@ -1645,8 +1854,8 @@ impl FoldState {
     }
 
     /// The ids of a change's parents, in the order it names them.
-    pub(crate) fn parent_ids(&self, meta: &Meta) -> SmallVec<[ChangeId; 1]> {
-        meta.parents.iter().map(|p| self.parent_id(p)).collect()
+    pub(crate) fn parent_ids(&self, c: ChangeIdx) -> SmallVec<[ChangeId; 1]> {
+        self.parents(c).map(|p| self.parent_id(p)).collect()
     }
 
     fn intern_device(&mut self, device: DeviceId) -> DeviceIdx {
@@ -1902,9 +2111,10 @@ impl FoldState {
 
     /// Whether change `c`'s bytes can be read: kept in memory, or read from the source.
     pub(crate) fn readable(&self, c: ChangeIdx) -> bool {
-        match &self.meta(c).value {
-            Stored::Bytes(_) => true,
-            Stored::At { .. } => self.bytes(c).is_some(),
+        if self.meta(c).has(Meta::IN_MEMORY) {
+            self.kept.contains_key(&c)
+        } else {
+            self.bytes(c).is_some()
         }
     }
 
@@ -1913,24 +2123,18 @@ impl FoldState {
     /// the source cannot read them, or reads other bytes.
     pub(crate) fn bytes(&self, c: ChangeIdx) -> Option<Arc<[u8]>> {
         let meta = self.meta(c);
-        match &meta.value {
-            Stored::Bytes(bytes) => Some((**bytes).clone()),
-            Stored::At {
-                file,
-                offset,
-                len,
-                fingerprint,
-            } => {
-                self.count(Counter::ValuesRead, 1);
-                let at = ValueAt {
-                    offset: u64::from(*offset),
-                    file: *file,
-                    len: *len,
-                };
-                let bytes = self.source.as_ref()?.read(at)?;
-                (super::value::fingerprint(&bytes) == *fingerprint).then(|| Arc::from(bytes))
-            }
+        if meta.has(Meta::IN_MEMORY) {
+            return self.kept.get(&c).cloned();
         }
+        self.count(Counter::ValuesRead, 1);
+        let value = meta.value;
+        let at = ValueAt {
+            offset: u64::from(value.offset),
+            file: value.file,
+            len: value.len,
+        };
+        let bytes = self.source.as_ref()?.read(at)?;
+        (super::value::fingerprint(&bytes) == value.fingerprint()).then(|| Arc::from(bytes))
     }
 }
 
@@ -2008,5 +2212,24 @@ fn comment_chapter(shape: &Shape) -> Option<u16> {
             crate::record::CommentTarget::Frame { .. } => None,
         },
         _ => None,
+    }
+}
+
+#[cfg(all(test, target_pointer_width = "64"))]
+mod tests {
+    use std::mem::size_of;
+
+    /// A whole Bible holds 620,000 changes, 550,000 batches and 280,000 records: every byte
+    /// of these entries is half a megabyte of the app's steady memory (docs/PERFORMANCE.md,
+    /// 150 MiB with the whole Bible open). A field that grows one of them fails here, so the
+    /// growth is weighed in review.
+    #[test]
+    fn the_tables_entries_keep_their_sizes() {
+        assert_eq!(size_of::<super::Meta>(), 96);
+        assert_eq!(size_of::<super::Form>(), 8);
+        assert_eq!(size_of::<super::BatchEntry>(), 28);
+        assert_eq!(size_of::<super::KeyEntry>(), 144);
+        assert_eq!(size_of::<super::ChangeList>(), 16);
+        assert_eq!(size_of::<crate::keys::RecordKey>(), 64);
     }
 }

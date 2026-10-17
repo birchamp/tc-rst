@@ -1,7 +1,7 @@
 //! F6 for one record (§7.3): equal values, the stub rules, divergence from a passage
 //! batch, and the three-way merge on merge units.
 
-use super::meta::{BatchIdx, ChangeIdx, KeyIdx, Shape, VerseShape};
+use super::meta::{BatchIdx, ChangeIdx, Form, KeyIdx, Shape, VerseShape};
 use super::state::{FoldState, Local, MergeHow};
 use super::{ConflictKind, UnitName, UnitValue};
 use crate::json::{Json, JsonMap};
@@ -14,12 +14,12 @@ use std::sync::Arc;
 /// The folded parents of `c` on its own key.
 pub(crate) fn key_parents(state: &FoldState, c: ChangeIdx) -> SmallVec<[ChangeIdx; 2]> {
     let meta = state.meta(c);
-    meta.parents
-        .iter()
+    state
+        .parents(c)
         .filter_map(|p| state.parent_idx(p))
         .filter(|p| {
             let pm = state.meta(*p);
-            pm.active && pm.key == meta.key
+            pm.active() && pm.key == meta.key
         })
         .collect()
 }
@@ -146,7 +146,7 @@ pub(crate) fn resolve_local(state: &FoldState, k: KeyIdx) -> (Local, SmallVec<[B
         // Grow-only: the union of what every release lists (§7.4).
         let mut changes: BTreeSet<crate::ids::ChangeId> = BTreeSet::new();
         for h in &heads {
-            if let Shape::Release { changes: listed } = &state.meta(*h).shape {
+            if let Shape::Release { changes: listed } = state.shape(*h) {
                 changes.extend(listed.iter().copied());
             }
         }
@@ -172,7 +172,7 @@ pub(crate) fn resolve_local(state: &FoldState, k: KeyIdx) -> (Local, SmallVec<[B
     let mut heads = heads;
     let mut values = values;
     if seed_stub_kind(&key) {
-        let stubs: Vec<bool> = heads.iter().map(|h| state.meta(*h).stub).collect();
+        let stubs: Vec<bool> = heads.iter().map(|h| state.meta(*h).stub()).collect();
         if stubs.iter().all(|s| *s) {
             return (Local::ByRule(heads[0]), SmallVec::new());
         }
@@ -706,7 +706,7 @@ pub(crate) fn conflict_kind(
         RecordKey::Check(_) => {
             let moved = heads
                 .iter()
-                .any(|h| matches!(state.meta(*h).shape, Shape::MovedTo { .. }));
+                .any(|h| matches!(state.meta(*h).form, Form::MovedTo));
             if moved {
                 ConflictKind::CheckMoved
             } else {

@@ -5,6 +5,7 @@
 
 use crate::ids::{BatchId, ChapterNo, CommentId, DeviceId, FrameNo, RepoPath, StoryNo, VerseNo};
 use crate::pins::Collection;
+use crate::short::ShortStr;
 use std::fmt;
 use tc_core::BookId;
 use unicode_normalization::is_nfc;
@@ -153,23 +154,23 @@ macro_rules! identity_string {
     ($(#[$doc:meta])* $name:ident) => {
         $(#[$doc])*
         #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-        pub struct $name(Box<str>);
+        pub struct $name(ShortStr);
 
         impl $name {
             pub fn as_str(&self) -> &str {
-                &self.0
+                self.0.as_str()
             }
         }
 
         impl fmt::Display for $name {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str(&self.0)
+                f.write_str(self.as_str())
             }
         }
 
         impl fmt::Debug for $name {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "{}({:?})", stringify!($name), self.0)
+                write!(f, "{}({:?})", stringify!($name), self.as_str())
             }
         }
     };
@@ -190,7 +191,7 @@ impl CheckId {
                 rule: "it may not contain '|' or ':'",
             });
         }
-        Ok(Self(text.into()))
+        Ok(Self(ShortStr::new(text)))
     }
 }
 
@@ -213,7 +214,7 @@ impl RefPart {
                 rule: "it may not contain '|' or ':'",
             });
         }
-        Ok(Self(text.into()))
+        Ok(Self(ShortStr::new(text)))
     }
 
     /// A part as tC4 reads it from a TSV reference cell with `refPart` (`derive.ts`): plain
@@ -228,14 +229,15 @@ impl RefPart {
 
     /// The part that names the number `n`.
     pub fn from_number(n: u16) -> Self {
-        Self(n.to_string().into())
+        Self(ShortStr::new(&n.to_string()))
     }
 
     /// The number this part names, when it is one: plain ASCII digits, as tC4's `refPart`
     /// reads a number (`derive.ts`).
     pub fn number(&self) -> Option<u16> {
-        if self.0.bytes().all(|b| b.is_ascii_digit()) {
-            self.0.parse().ok()
+        let text = self.as_str();
+        if text.bytes().all(|b| b.is_ascii_digit()) {
+            text.parse().ok()
         } else {
             None
         }
@@ -247,7 +249,7 @@ impl RefPart {
         if let Some(n) = self.number() {
             return Some((n, n));
         }
-        let (first, last) = self.0.split_once('-')?;
+        let (first, last) = self.as_str().split_once('-')?;
         let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
         if !digits(first) || !digits(last) {
             return None;
@@ -272,7 +274,7 @@ impl SettingKey {
                 rule: "__proto__, constructor and prototype are reserved",
             });
         }
-        Ok(Self(text.into()))
+        Ok(Self(ShortStr::new(text)))
     }
 }
 
@@ -301,7 +303,7 @@ impl SlotName {
                 rule: "an ASCII letter, then letters, digits, '_' and '-', at most 64 bytes, not a prototype name",
             });
         }
-        Ok(Self(text.into()))
+        Ok(Self(ShortStr::new(text)))
     }
 }
 
@@ -407,7 +409,7 @@ impl MetaPath {
                 "not a path a modelled project detail owns, nor one above or below it",
             ));
         }
-        Ok(Self(text.into()))
+        Ok(Self(ShortStr::new(text)))
     }
 }
 

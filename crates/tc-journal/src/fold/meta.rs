@@ -1,8 +1,9 @@
 //! What the fold keeps of each change: its links, its batch, its order key and a summary of
 //! its value's shape. The value itself stays in the change's stored bytes and is decoded on
-//! demand (§14: values are read on demand), so a whole-Bible fold holds about a hundred
-//! bytes per change besides the bytes.
+//! demand (§14: values are read on demand), so a whole-Bible fold holds 96 bytes per change
+//! in its change table.
 
+use super::cow::FxMap;
 use crate::canon;
 use crate::change::{Cause, ChangeBody};
 use crate::ids::{BatchId, ChangeId, DeviceId, DeviceSeq, GitOid, WallTime};
@@ -21,8 +22,55 @@ use tc_core::BookId;
 pub struct ChangeIdx(pub(crate) u32);
 
 impl ChangeIdx {
+    /// No change: the fold's tables never hold this many.
+    pub(crate) const NONE: Self = Self(u32::MAX);
+
     pub fn get(self) -> usize {
         self.0 as usize
+    }
+}
+
+/// A list of changes that most often holds one: a record's changes and its heads. 16 bytes,
+/// where a small vector with room for one took 24, and no allocation for one change.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) enum ChangeList {
+    #[default]
+    Empty,
+    One(ChangeIdx),
+    // A boxed Vec is a thin pointer, so the list stays 16 bytes.
+    #[allow(clippy::box_collection)]
+    Many(Box<Vec<ChangeIdx>>),
+}
+
+impl ChangeList {
+    pub(crate) fn push(&mut self, c: ChangeIdx) {
+        match self {
+            Self::Empty => *self = Self::One(c),
+            Self::One(first) => *self = Self::Many(Box::new(vec![*first, c])),
+            Self::Many(list) => list.push(c),
+        }
+    }
+}
+
+impl std::ops::Deref for ChangeList {
+    type Target = [ChangeIdx];
+
+    fn deref(&self) -> &[ChangeIdx] {
+        match self {
+            Self::Empty => &[],
+            Self::One(c) => std::slice::from_ref(c),
+            Self::Many(list) => list,
+        }
+    }
+}
+
+impl FromIterator<ChangeIdx> for ChangeList {
+    fn from_iter<I: IntoIterator<Item = ChangeIdx>>(iter: I) -> Self {
+        let mut list = Self::Empty;
+        for c in iter {
+            list.push(c);
+        }
+        list
     }
 }
 
@@ -64,42 +112,20 @@ impl ParentRef {
     }
 }
 
-/// The parents a change names, in its own order: most changes name one, so it is kept
-/// inline and the rest behind one pointer (16 bytes, where a list of ids took 48).
-#[derive(Debug, Clone)]
-pub(crate) struct Parents {
-    first: u32,
-    // A boxed Vec is a thin pointer (8 bytes, where a boxed slice takes 16): every change
-    // holds one, and only the few with a second parent pay the extra allocation.
-    #[allow(clippy::box_collection)]
-    more: Option<Box<Vec<ParentRef>>>,
-}
+/// The first parent a change names, or none; the change table keeps the others apart
+/// ([`super::FoldState::parents`]), since nearly every change names one at most.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FirstParent(u32);
 
-impl Parents {
-    pub(crate) fn of(refs: impl IntoIterator<Item = ParentRef>) -> Self {
-        let mut refs = refs.into_iter();
-        let Some(first) = refs.next() else {
-            return Self {
-                first: NO_PARENT,
-                more: None,
-            };
-        };
-        let more: Vec<ParentRef> = refs.collect();
-        Self {
-            first: first.0,
-            more: (!more.is_empty()).then(|| Box::new(more)),
-        }
+impl FirstParent {
+    pub(crate) const NONE: Self = Self(NO_PARENT);
+
+    pub(crate) fn of(first: Option<ParentRef>) -> Self {
+        first.map_or(Self::NONE, |p| Self(p.0))
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
-        self.first == NO_PARENT
-    }
-
-    pub(crate) fn iter(&self) -> impl Iterator<Item = ParentRef> + '_ {
-        (self.first != NO_PARENT)
-            .then_some(ParentRef(self.first))
-            .into_iter()
-            .chain(self.more.iter().flat_map(|m| m.iter().copied()))
+    pub(crate) fn get(self) -> Option<ParentRef> {
+        (self != Self::NONE).then_some(ParentRef(self.0))
     }
 }
 
@@ -197,28 +223,29 @@ pub(crate) enum Shape {
     },
 }
 
-/// What the fold keeps of one change.
+/// What the fold keeps of one change: 96 bytes for each of the 620,000 changes of a whole
+/// Bible. What few changes have (a second parent, a sequence number past `u32`, bytes kept
+/// in memory, the target of a move, a comment's target, a carried file's blob, a release's
+/// list) the fold keeps beside the table, so every change does not pay for it.
 #[derive(Debug, Clone)]
 pub(crate) struct Meta {
     pub id: ChangeId,
+    pub at: WallTime,
     pub key: KeyIdx,
     pub batch: BatchIdx,
-    pub parents: Parents,
+    pub(crate) first_parent: FirstParent,
     /// In [`super::FoldState`]'s device table.
     pub device: DeviceIdx,
-    pub seq: DeviceSeq,
-    pub at: WallTime,
-    pub cause: CauseClass,
-    /// A seed stub (§7.3): starting text no person wrote.
-    pub stub: bool,
-    pub shape: Shape,
-    /// The canonical JSON exactly as stored, or where to read it.
-    pub value: super::value::Stored,
+    /// The sequence number, or [`Meta::SEQ_APART`] when it does not fit in 32 bits.
+    pub(crate) seq: u32,
     /// The first pack that holds it, in [`super::FoldState`]'s pack table; others are in
     /// its `more_packs`.
     pub pack: PackSlot,
-    /// Folded: its batch is complete or a release lists it (F2).
-    pub active: bool,
+    pub form: Form,
+    /// Where to read its canonical JSON, unless [`Meta::IN_MEMORY`] says the fold keeps it.
+    pub(crate) value: ValueRef,
+    pub cause: CauseClass,
+    pub(crate) flags: u8,
 }
 
 /// A pack's place in the fold's pack table, or none (a change only in a pending file).
@@ -230,6 +257,37 @@ impl PackSlot {
 }
 
 impl Meta {
+    /// A seed stub (§7.3): starting text no person wrote.
+    pub(crate) const STUB: u8 = 1;
+    /// Folded: its batch is complete or a release lists it (F2).
+    pub(crate) const ACTIVE: u8 = 2;
+    /// It names more than one parent.
+    pub(crate) const MORE_PARENTS: u8 = 4;
+    /// Its bytes are kept in memory, not read from the fold's source.
+    pub(crate) const IN_MEMORY: u8 = 8;
+    /// The sequence number of a change whose number is kept apart.
+    pub(crate) const SEQ_APART: u32 = u32::MAX;
+
+    pub(crate) fn active(&self) -> bool {
+        self.flags & Self::ACTIVE != 0
+    }
+
+    pub(crate) fn set_active(&mut self, active: bool) {
+        if active {
+            self.flags |= Self::ACTIVE;
+        } else {
+            self.flags &= !Self::ACTIVE;
+        }
+    }
+
+    pub(crate) fn stub(&self) -> bool {
+        self.flags & Self::STUB != 0
+    }
+
+    pub(crate) fn has(&self, flag: u8) -> bool {
+        self.flags & flag != 0
+    }
+
     /// 0 for an outside change recorded without a base (§11.1 X3), 1 for every other: such
     /// a change is never chosen as provisional over another (F7).
     pub(crate) fn rank(&self) -> u8 {
@@ -245,14 +303,113 @@ impl Meta {
     }
 
     pub(crate) fn verse(&self) -> Option<VerseShape> {
-        match self.shape {
-            Shape::Verse(shape) => Some(shape),
+        match self.form {
+            Form::Verse(shape) => Some(shape),
             _ => None,
         }
     }
 }
 
-/// Interns resource refs so a hundred thousand decisions share a handful of values.
+/// What the change table keeps of a [`Shape`]: 8 bytes. A decision names its resource by
+/// its place in the fold's resource table; the kinds few changes have keep their whole shape
+/// beside the table ([`super::FoldState::shape`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Form {
+    Other,
+    Verse(VerseShape),
+    Front { present: bool },
+    Presence(Option<PresentHow>),
+    Alignment { dismissed: bool },
+    Decision(DecisionForm),
+    MovedTo,
+    Comment,
+    Carried,
+    Release,
+}
+
+/// A decision's resource, as its place in the fold's resource table, and whether it was
+/// dismissed, in one word: the table never holds 2³¹ resources.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DecisionForm(u32);
+
+const DISMISSED: u32 = 1 << 31;
+
+impl DecisionForm {
+    pub(crate) fn new(resource: u32, dismissed: bool) -> Self {
+        Self((resource & !DISMISSED) | if dismissed { DISMISSED } else { 0 })
+    }
+
+    pub(crate) fn resource(self) -> u32 {
+        self.0 & !DISMISSED
+    }
+
+    pub(crate) fn dismissed(self) -> bool {
+        self.0 & DISMISSED != 0
+    }
+}
+
+/// Where a change's canonical JSON lies in the fold's source (20 bytes): the loader's file,
+/// the span, and the [`super::value::fingerprint`] of the bytes it verified, in two halves so
+/// the change table needs no padding for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ValueRef {
+    pub file: u32,
+    pub offset: u32,
+    pub len: u32,
+    fingerprint: [u32; 2],
+}
+
+impl ValueRef {
+    /// The place of a value the fold keeps in memory.
+    pub(crate) const NONE: Self = Self {
+        file: 0,
+        offset: 0,
+        len: 0,
+        fingerprint: [0; 2],
+    };
+
+    pub(crate) fn new(file: u32, offset: u32, len: u32, fingerprint: u64) -> Self {
+        Self {
+            file,
+            offset,
+            len,
+            fingerprint: [fingerprint as u32, (fingerprint >> 32) as u32],
+        }
+    }
+
+    pub(crate) fn fingerprint(&self) -> u64 {
+        u64::from(self.fingerprint[0]) | (u64::from(self.fingerprint[1]) << 32)
+    }
+}
+
+/// The resources the fold's decisions name, each once, numbered in the order the fold met
+/// them: a whole Bible's 280,000 decisions name a handful. Shared, so a snapshot copies it
+/// only when a step meets a new resource.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ResourceTable {
+    list: Arc<Vec<Arc<ResourceRef>>>,
+    places: Arc<FxMap<Arc<ResourceRef>, u32>>,
+}
+
+impl ResourceTable {
+    /// The place of `resource`, numbered now if the table does not hold it yet.
+    pub(crate) fn place(&mut self, resource: &Arc<ResourceRef>) -> u32 {
+        if let Some(at) = self.places.get(resource) {
+            return *at;
+        }
+        let at = self.list.len() as u32;
+        Arc::make_mut(&mut self.list).push(resource.clone());
+        Arc::make_mut(&mut self.places).insert(resource.clone(), at);
+        at
+    }
+
+    pub(crate) fn get(&self, at: u32) -> Option<&Arc<ResourceRef>> {
+        self.list.get(at as usize)
+    }
+}
+
+/// Interns resource refs so the decisions of one file a loader reads share a handful of
+/// values; the fold keeps its own [`ResourceTable`].
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Resources(Vec<Arc<ResourceRef>>);
 

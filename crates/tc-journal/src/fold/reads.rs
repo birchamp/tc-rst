@@ -226,13 +226,13 @@ impl FoldState {
         ChangeView {
             id: meta.id,
             key: self.entry(meta.key).key.clone(),
-            parents: self.parent_ids(meta).to_vec(),
+            parents: self.parent_ids(c).to_vec(),
             device: self.device_of(meta),
-            seq: meta.seq,
+            seq: self.seq_of(c),
             at: meta.at,
             batch: self.batch(meta.batch).id,
-            folded: meta.active,
-            packs: self.packs_of(meta),
+            folded: meta.active(),
+            packs: self.packs_of(c),
         }
     }
 
@@ -257,7 +257,7 @@ impl FoldState {
             .entry(k)
             .changes
             .iter()
-            .filter(|c| self.meta(**c).active)
+            .filter(|c| self.meta(**c).active())
             .map(|c| (self.meta(*c).at, self.meta(*c).id))
             .collect();
         out.sort();

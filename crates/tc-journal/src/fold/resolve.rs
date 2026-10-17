@@ -218,7 +218,7 @@ impl FoldState {
                 .iter()
                 .copied()
                 .filter(|c| {
-                    self.meta(*c).active && losing.contains(&self.batch(self.meta(*c).batch).id)
+                    self.meta(*c).active() && losing.contains(&self.batch(self.meta(*c).batch).id)
                 })
                 .collect();
             let touched = heads
@@ -313,7 +313,7 @@ impl FoldState {
                 .changes
                 .iter()
                 .copied()
-                .filter(|c| self.meta(*c).active)
+                .filter(|c| self.meta(*c).active())
                 .collect();
             let bad: BTreeSet<ChangeIdx> = changes
                 .iter()
@@ -498,7 +498,7 @@ impl FoldState {
             let c = self.change_idx(head).ok_or(ResolveError::NotACandidate)?;
             let k = self.meta(c).key;
             let key = self.entry(k).key.clone();
-            if !keys.contains(&key) || !self.meta(c).active {
+            if !keys.contains(&key) || !self.meta(c).active() {
                 return Err(ResolveError::NotACandidate);
             }
             if out.insert(key, c).is_some() {
@@ -763,9 +763,7 @@ impl FoldState {
                     .heads
                     .iter()
                     .flat_map(|h| ancestors_or_self(self, *h))
-                    .filter(|c| {
-                        matches!(self.meta(*c).shape, super::meta::Shape::Presence(Some(_)))
-                    })
+                    .filter(|c| matches!(self.meta(*c).form, super::meta::Form::Presence(Some(_))))
                     .max_by_key(|c| (self.meta(*c).at, self.meta(*c).id))
                     .map(|c| self.meta(c).id)
             }
@@ -1063,10 +1061,10 @@ impl FoldState {
         let mut destinations: BTreeSet<crate::keys::CheckKey> = BTreeSet::new();
         let mut decided: Vec<ChangeIdx> = Vec::new();
         for h in &heads {
-            match &self.meta(*h).shape {
+            match self.shape(*h) {
                 super::meta::Shape::MovedTo { to } => {
                     moves.push(*h);
-                    destinations.insert((**to).clone());
+                    destinations.insert((*to).clone());
                 }
                 super::meta::Shape::Decision { .. } => decided.push(*h),
                 _ => {}
@@ -1085,7 +1083,7 @@ impl FoldState {
         let bases: Vec<Option<Json>> = super::merge::ancestry(self, &heads)
             .bases
             .iter()
-            .filter(|b| matches!(self.meta(**b).shape, super::meta::Shape::Decision { .. }))
+            .filter(|b| matches!(self.meta(**b).form, super::meta::Form::Decision(_)))
             .map(read)
             .collect::<Result<_, _>>()?;
         // The new key's value as the person sees it: settled or merged. A new key in

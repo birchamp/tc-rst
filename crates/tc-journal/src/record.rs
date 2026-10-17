@@ -233,7 +233,7 @@ pub enum LayoutItem {
 /// A resource pin: the repository path and the commit sha (D58). As a value it compares
 /// byte for byte, like every stored value (§7.3); as a resource's identity it compares the
 /// path ignoring ASCII case ([`ResourceRef::same_resource`]).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ResourceRef {
     pub repo_path: Box<str>,
     pub sha: GitOid,

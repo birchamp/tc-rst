@@ -2,7 +2,7 @@
 //! book, and the last-book rule.
 
 use super::merge::{ancestors_or_self, record_of};
-use super::meta::{ChangeIdx, KeyIdx, Shape};
+use super::meta::{ChangeIdx, Form, KeyIdx};
 use super::state::{BookStatus, Dirty, FoldState, Owner, ProjectKind};
 use super::{Anomaly, Conflict, ConflictId, ConflictKind, Counter};
 use crate::ids::{ChangeId, ShortId};
@@ -91,7 +91,7 @@ fn status_of(state: &mut FoldState, book: BookId, dirty: &mut Dirty) -> BookStat
     let present: Vec<ChangeIdx> = heads
         .iter()
         .copied()
-        .filter(|h| matches!(state.meta(*h).shape, Shape::Presence(Some(_))))
+        .filter(|h| matches!(state.meta(*h).form, Form::Presence(Some(_))))
         .collect();
     if let Some(scope) = present
         .iter()
@@ -125,7 +125,7 @@ fn nearest_present(state: &FoldState, heads: &[ChangeIdx]) -> Option<ChangeIdx> 
     let mut best: Option<ChangeIdx> = None;
     for h in heads {
         for a in ancestors_or_self(state, *h) {
-            if matches!(state.meta(a).shape, Shape::Presence(Some(_)))
+            if matches!(state.meta(a).form, Form::Presence(Some(_)))
                 && best.is_none_or(|b| {
                     (state.meta(a).at, state.meta(a).id) > (state.meta(b).at, state.meta(b).id)
                 })
@@ -170,11 +170,10 @@ fn unseen(
             .changes
             .iter()
             .copied()
-            .filter(|c| state.meta(*c).active)
+            .filter(|c| state.meta(*c).active())
             .filter(|c| {
                 !comment
-                    || super::meta::book_of(&state.entry(k).key, &state.meta(*c).shape)
-                        == Some(book)
+                    || super::meta::book_of(&state.entry(k).key, &state.shape(*c)) == Some(book)
             })
             .collect();
         if changes.is_empty() {
@@ -330,8 +329,8 @@ pub(crate) fn race_batches(state: &FoldState, book: BookId) -> Vec<crate::ids::B
     if heads.len() < 2
         || !heads.iter().any(|h| {
             matches!(
-                state.meta(*h).shape,
-                Shape::Presence(Some(PresentHow::RestoredText))
+                state.meta(*h).form,
+                Form::Presence(Some(PresentHow::RestoredText))
             )
         })
     {
@@ -340,8 +339,8 @@ pub(crate) fn race_batches(state: &FoldState, book: BookId) -> Vec<crate::ids::B
     let mut out: BTreeMap<crate::ids::BatchId, ()> = BTreeMap::new();
     for h in heads.iter() {
         if matches!(
-            state.meta(*h).shape,
-            Shape::Presence(Some(PresentHow::StartedEmpty))
+            state.meta(*h).form,
+            Form::Presence(Some(PresentHow::StartedEmpty))
         ) {
             out.insert(state.batch(state.meta(*h).batch).id, ());
         }
@@ -365,10 +364,10 @@ pub(crate) fn rewound_batches(state: &FoldState, book: BookId) -> Vec<crate::ids
         .heads
         .iter()
         .copied()
-        .filter(|h| matches!(state.meta(*h).shape, Shape::Presence(Some(_))))
+        .filter(|h| matches!(state.meta(*h).form, Form::Presence(Some(_))))
         .max_by_key(|h| (state.meta(*h).at, state.meta(*h).id));
-    match provisional.map(|h| &state.meta(h).shape) {
-        Some(Shape::Presence(Some(PresentHow::RestoredText))) => race,
+    match provisional.map(|h| state.meta(h).form) {
+        Some(Form::Presence(Some(PresentHow::RestoredText))) => race,
         _ => Vec::new(),
     }
 }
