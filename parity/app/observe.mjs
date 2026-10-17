@@ -13,6 +13,18 @@ export const CONTEXT_OPTIONS = { viewport: VIEWPORT, deviceScaleFactor: 1, local
  * for every screenshot, so no hover state leaks into an image. */
 export const POINTER_REST = { x: 1000, y: 28 };
 
+/** The tracked requests in flight, by request id, and `lastEnded`: the time the last of them
+ * finished, failed or was forgotten. */
+class InFlight extends Map {
+  lastEnded = -Infinity;
+
+  delete(requestId) {
+    const ended = super.delete(requestId);
+    if (ended) this.lastEnded = Date.now();
+    return ended;
+  }
+}
+
 /**
  * Every request in flight from the page's documents that `tracks(url)` counts, by request id,
  * with its method, URL and the time it started, so a screenshot waits until the app has
@@ -30,7 +42,7 @@ export const POINTER_REST = { x: 1000, y: 28 };
 export async function trackRequests(page, tracks) {
   const cdp = await page.context().newCDPSession(page);
   const documentOf = new Map();
-  const inFlight = new Map();
+  const inFlight = new InFlight();
   cdp.on('Page.frameNavigated', ({ frame }) => {
     documentOf.set(frame.id, frame.loaderId);
     for (const [id, r] of inFlight) if (r.frameId === frame.id && r.loaderId !== frame.loaderId) inFlight.delete(id);
@@ -54,13 +66,17 @@ export async function trackRequests(page, tracks) {
 
 /** Waits until no tracked request has been in flight for `quietMs`, then for the fonts and
  * two frames. A screen whose app is not quiet by `deadlineMs` fails: a shot taken then would
- * show a moment, not a state. */
+ * show a moment, not a state. `inFlight` is what `trackRequests` returns.
+ *
+ * The quiet counts from when the last request ended, as the tracker heard it, not from the
+ * loop's last look that saw the request: that look can be a whole wait earlier, and more when
+ * the event loop is busy. */
 export async function settle(page, inFlight, { quietMs = 800, deadlineMs = 30_000 } = {}) {
   const deadline = Date.now() + deadlineMs;
   let quietSince = Date.now();
   for (;;) {
     if (inFlight.size > 0) quietSince = Date.now();
-    else if (Date.now() - quietSince >= quietMs) break;
+    else if (Date.now() - Math.max(quietSince, inFlight.lastEnded) >= quietMs) break;
     if (Date.now() >= deadline) {
       const open = [...inFlight.values()].map((r) => `${r.method} ${r.url} (${Date.now() - r.at} ms)`);
       throw new Error(`the app did not go quiet for ${quietMs} ms within ${deadlineMs / 1000} s; in flight: ${open.join(', ') || 'nothing now'}`);

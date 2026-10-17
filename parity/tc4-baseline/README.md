@@ -300,8 +300,13 @@ them. They stayed "in flight" for good, and every later screen of the scenario w
 30 s: two of 62 screens in one run, and 4 of 20 forced reloads in a test, against none of 20
 with the new tracking. The images were right, because the app was idle by then.
 `trackRequests` now reads the DevTools protocol, where each request names the document that sent
-it, and forgets the requests of a page that was replaced. `parity/app/observe.test.mjs` tests
-this, and `settle`'s deadline, without a browser.
+it, and forgets the requests of a page that was replaced. `settle` counts the quiet from the
+moment the last tracked request ended, as the tracker heard it. It used to count from the last
+time its loop looked and saw the request, which can be 50 ms before the end, or more on a busy
+machine, so a shot could come before the app had been quiet for 800 ms. A full capture after
+that change gave byte-identical PNGs, DOM snapshots and `manifest.json`.
+`parity/app/observe.test.mjs` tests the tracking, the quiet and the deadline without a browser,
+on a clock that only the test moves.
 
 ### DOM snapshots
 
