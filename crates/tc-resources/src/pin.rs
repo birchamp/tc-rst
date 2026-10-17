@@ -25,7 +25,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256 as Sha256Hasher};
 use tc_core::BookId;
-use tc_door43::{AccountName, CommitSha, RepoName, RepoRef, TagName};
+use tc_door43::{AccountName, GitOid, RepoName, RepoRef, TagName};
 
 use crate::error::ParseError;
 
@@ -221,7 +221,7 @@ pub struct ResourcePin {
     pub repo: RepoPath,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<TagName>,
-    pub sha: CommitSha,
+    pub sha: GitOid,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub flavor: Option<String>,
     /// Recorded coverage. An empty list records nothing and reads as `None`, as tC4
@@ -248,7 +248,7 @@ fn recorded_books<'de, D: Deserializer<'de>>(d: D) -> Result<Option<BookCoverage
 }
 
 impl ResourcePin {
-    pub fn new(repo: RepoPath, sha: CommitSha) -> Self {
+    pub fn new(repo: RepoPath, sha: GitOid) -> Self {
         Self {
             repo,
             version: None,
@@ -293,7 +293,7 @@ impl fmt::Display for ResourcePin {
         if let Some(v) = &self.version {
             write!(f, " {v}")?;
         }
-        write!(f, " ({}…)", &self.sha.as_str()[..7])
+        write!(f, " ({}…)", &self.sha.to_hex()[..7])
     }
 }
 
@@ -573,7 +573,7 @@ impl<'de> Deserialize<'de> for AssetName {
 pub struct AquiferPin {
     pub repo: AquiferRepo,
     pub tag: TagName,
-    pub commit: CommitSha,
+    pub commit: GitOid,
     pub language: AquiferLanguage,
     pub asset: AssetName,
     pub sha256: Sha256,
@@ -588,7 +588,7 @@ impl fmt::Display for AquiferPin {
             self.repo,
             self.language,
             self.tag,
-            &self.commit.as_str()[..7]
+            &self.commit.to_hex()[..7]
         )
     }
 }

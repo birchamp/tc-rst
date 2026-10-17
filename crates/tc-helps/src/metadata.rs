@@ -11,7 +11,7 @@ use yaml_rust2::Yaml;
 use crate::Error;
 use crate::articles::{load_yaml, scalar, without_bom, word_article_id};
 use crate::error::{JsonFile, PinMismatch, YamlFile};
-use crate::ids::{CommitSha, Sha256Digest, WordArticleId};
+use crate::ids::{GitOid, Sha256Digest, WordArticleId};
 
 /// The kind of resource, from the repository name (`en_tn`, `en_obs-tn`) or the RC
 /// `identifier`.
@@ -55,7 +55,7 @@ impl ResourceKind {
 /// The revision a resource states for itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Revision {
-    Commit(CommitSha),
+    Commit(GitOid),
     /// Some burritos state a label instead of a commit, such as `1`.
     Label(String),
 }
@@ -165,9 +165,9 @@ pub fn parse_burrito_metadata(json: &str) -> Result<BurritoMetadata, Error> {
         entry
             .get("revision")
             .and_then(Value::as_str)
-            .map(|r| match CommitSha::parse(r) {
-                Ok(sha) => Revision::Commit(sha),
-                Err(_) => Revision::Label(r.to_owned()),
+            .map(|r| match GitOid::parse_any_case(r) {
+                Some(sha) => Revision::Commit(sha),
+                None => Revision::Label(r.to_owned()),
             });
     let language = v.pointer("/languages/0");
     let tag = language
@@ -308,7 +308,7 @@ pub struct DcsPin {
     pub owner: String,
     pub repo: String,
     pub tag: Option<String>,
-    pub commit: CommitSha,
+    pub commit: GitOid,
 }
 
 impl DcsPin {
@@ -348,7 +348,7 @@ pub struct AquiferPin {
     /// ISO 639-3, such as `eng` or `por`.
     pub language: String,
     pub tag: String,
-    pub commit: CommitSha,
+    pub commit: GitOid,
     pub asset_sha256: Option<Sha256Digest>,
 }
 
@@ -363,7 +363,7 @@ pub enum HelpsSource {
 /// (dbfb46e…)`: enough to tell two pins apart in a message.
 impl fmt::Display for HelpsSource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let short = |sha: &CommitSha| sha.as_str().chars().take(7).collect::<String>();
+        let short = |sha: &GitOid| sha.to_hex().chars().take(7).collect::<String>();
         match self {
             HelpsSource::Dcs(pin) => {
                 write!(f, "{}/{}", pin.owner, pin.repo)?;

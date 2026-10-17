@@ -10,7 +10,6 @@ rust-version.workspace = true
 tc-core = { path = "../tc-core" }
 tc-usfm = { path = "../tc-usfm" }
 tc-versification = { path = "../tc-versification" }
-md-5.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

@@ -13,7 +13,7 @@ use tc_usfm::{SelectionCount, SelectionText};
 /// verse it aligns: md5 of `plain_text_v1(content)`, over its UTF-8 bytes (§7.7). `content`
 /// is a verse value's `words + layout`, or a run's.
 pub fn verse_text_md5_v1(content: &str) -> Md5 {
-    Md5::from_bytes(tc_burrito::Md5::of(tc_usfm::plain_text_v1(content).as_bytes()).bytes())
+    Md5::of(tc_usfm::plain_text_v1(content).as_bytes())
 }
 
 /// The text a decision's target names, as the fold and the Check screens read it (§7.7):

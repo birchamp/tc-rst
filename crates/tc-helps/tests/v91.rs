@@ -20,7 +20,7 @@ use tc_helps::tsv::{
     parse_word_links, write_notes, write_word_links,
 };
 use tc_helps::{
-    BibleLocus, BibleRef, CheckReadiness, CommitSha, HelpItemId, HelpRef, Helps, Note, Occurrence,
+    BibleLocus, BibleRef, CheckReadiness, GitOid, HelpItemId, HelpRef, Helps, Note, Occurrence,
 };
 
 const PSA: TsvScope = TsvScope::Book(BookId::Psalms);
@@ -235,7 +235,7 @@ fn a_chapter_front_is_neither_a_verse_nor_an_introduction() {
         owner: "unfoldingWord".into(),
         repo: "en_tn".into(),
         tag: Some("v91".into()),
-        commit: CommitSha::parse("e586762e330f482a60c52aedd1c7b3a2f155df8a").unwrap(),
+        commit: GitOid::parse("e586762e330f482a60c52aedd1c7b3a2f155df8a").unwrap(),
     });
     helps.add_notes(&source, notes.clone()).unwrap();
     let ids = |found: Vec<&Note>| -> Vec<String> {

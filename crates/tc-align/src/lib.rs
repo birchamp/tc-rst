@@ -46,46 +46,23 @@ pub use aligner::{Aligner, MarkValidRefused, Unavailable};
 pub use edit::EditError;
 pub use reflow::{DroppedLink, NoReflow, Reflowed, reflow};
 pub use selection::Click;
+pub use tc_core::{GitOid, Md5};
 pub use tc_usfm::{SourceWord, TargetWord};
 pub use value::{
-    AlignmentValue, Basis, CommitSha, Current, Group, Malformed, ResourceRef, Stale, VerseState,
-    VerseStatus, verse_status,
+    AlignmentValue, Basis, Current, Group, Malformed, ResourceRef, Stale, VerseState, VerseStatus,
+    verse_status,
 };
-pub use words::{Occurrence, SourceVerse, TargetVerse, TextMd5, WordId};
+pub use words::{Occurrence, SourceVerse, TargetVerse, WordId};
 
 /// Errors reading external data into alignment values.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
-    #[error("{0:?} is not an md5: 32 lowercase hexadecimal digits")]
-    InvalidMd5(String),
-    #[error("{0:?} is not a commit sha: 40 lowercase hexadecimal digits")]
-    InvalidSha(String),
+    #[error(transparent)]
+    Digest(#[from] tc_core::DigestError),
     #[error("malformed USFM: {0}")]
     Usfm(tc_usfm::Error),
     #[error("malformed alignment record: {0}")]
     Record(String),
     #[error("malformed alignment record: {0}")]
     Malformed(#[from] value::Malformed),
-}
-
-/// Lowercase hexadecimal digits into `N` bytes.
-pub(crate) fn parse_hex<const N: usize>(s: &str) -> Option<[u8; N]> {
-    if s.len() != 2 * N {
-        return None;
-    }
-    let digit = |b: u8| match b {
-        b'0'..=b'9' => Some(b - b'0'),
-        b'a'..=b'f' => Some(b - b'a' + 10),
-        _ => None,
-    };
-    let mut bytes = [0u8; N];
-    for (byte, pair) in bytes.iter_mut().zip(s.as_bytes().chunks(2)) {
-        *byte = digit(pair[0])? << 4 | digit(pair[1])?;
-    }
-    Some(bytes)
-}
-
-/// `bytes` as lowercase hexadecimal digits.
-pub(crate) fn write_hex(f: &mut std::fmt::Formatter<'_>, bytes: &[u8]) -> std::fmt::Result {
-    bytes.iter().try_for_each(|b| write!(f, "{b:02x}"))
 }

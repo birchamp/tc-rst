@@ -1,6 +1,8 @@
 //! Identifiers (`docs/STORAGE.md` §2.1). Each one parses its text form strictly, so a value
 //! has exactly one text and the canonical bytes of a change are unique.
 
+pub use tc_core::{GitOid, Md5};
+
 use crate::sha::sha256;
 use crate::text::{base32, hex, unbase32, unhex};
 use std::fmt;
@@ -77,16 +79,6 @@ hex_id!(
     /// A user comment's identity, random at creation.
     CommentId,
     16
-);
-hex_id!(
-    /// An MD5 digest; lowercase hex on the wire.
-    Md5,
-    16
-);
-hex_id!(
-    /// A git object id; also the identity of a pinned resource version (a commit sha).
-    GitOid,
-    20
 );
 
 impl ChangeId {

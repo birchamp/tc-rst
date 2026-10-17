@@ -15,7 +15,7 @@
 //! coverage only: it passes [`RecordedOnly`].
 
 use tc_core::BookId;
-use tc_door43::{CommitSha, RepoRef};
+use tc_door43::{GitOid, RepoRef};
 
 use crate::pin::{BookCoverage, RepoPath, ResourcePin};
 use crate::sets::{ProjectPins, Rung, SetSlot, Tool};
@@ -92,7 +92,7 @@ impl Resolution {
         ResolutionRecord {
             repo_path: self.pin.repo.clone(),
             version: self.pin.version.as_ref().map(|v| v.as_str().to_owned()),
-            sha: self.pin.sha.clone(),
+            sha: self.pin.sha,
             language_set: self.rung,
         }
     }
@@ -104,7 +104,7 @@ impl Resolution {
 pub struct ResolutionRecord {
     pub repo_path: RepoPath,
     pub version: Option<String>,
-    pub sha: CommitSha,
+    pub sha: GitOid,
     pub language_set: Rung,
 }
 
@@ -112,14 +112,14 @@ pub struct ResolutionRecord {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceRef {
     pub repo_path: RepoPath,
-    pub sha: CommitSha,
+    pub sha: GitOid,
 }
 
 impl From<&ResourcePin> for ResourceRef {
     fn from(pin: &ResourcePin) -> Self {
         Self {
             repo_path: pin.repo.clone(),
-            sha: pin.sha.clone(),
+            sha: pin.sha,
         }
     }
 }

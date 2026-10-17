@@ -14,7 +14,7 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use tc_door43::{
-    CatalogQuery, CommitSha, Door43Client, InternetSwitch, Limits, RepoRef, ServerUrl, TagName,
+    CatalogQuery, Door43Client, GitOid, InternetSwitch, Limits, RepoRef, ServerUrl, TagName,
 };
 use tracing_subscriber::filter::Targets;
 use tracing_subscriber::layer::SubscriberExt;
@@ -101,7 +101,7 @@ async fn tag_commit(client: &Door43Client) -> Outcome {
 }
 
 async fn export(client: &Door43Client) -> Outcome {
-    let expected: CommitSha = TWL_V91.parse()?;
+    let expected: GitOid = TWL_V91.parse()?;
     let export = client
         .download_sb_export(&TWL.parse()?, &"v91".parse()?, &expected)
         .await?;
@@ -147,8 +147,8 @@ async fn catalog(client: &Door43Client) -> Outcome {
     ))
 }
 
-fn expect_commit(found: &CommitSha, expected: &str) -> Result<(), Box<dyn Error>> {
-    if found.as_str() == expected {
+fn expect_commit(found: &GitOid, expected: &str) -> Result<(), Box<dyn Error>> {
+    if found.to_hex() == expected {
         Ok(())
     } else {
         Err(format!("expected {expected}, found {found}").into())

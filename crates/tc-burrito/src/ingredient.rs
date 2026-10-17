@@ -6,75 +6,9 @@ use std::fmt;
 use std::io::{self, Read};
 use std::str::FromStr;
 
-/// An md5 digest, written as 32 lower-case hexadecimal digits.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Md5([u8; 16]);
-
-impl Md5 {
-    /// The digest of `bytes`, exactly as they are on disk.
-    pub fn of(bytes: &[u8]) -> Self {
-        Self(Md5Hasher::digest(bytes).into())
-    }
-
-    /// Accepts only lower-case hex, as the schema does.
-    pub fn parse(text: &str) -> Result<Self, ValueError> {
-        let bad = || ValueError::Md5(text.to_owned());
-        let bytes = text.as_bytes();
-        if bytes.len() != 32 {
-            return Err(bad());
-        }
-        let nibble = |b: u8| match b {
-            b'0'..=b'9' => Some(b - b'0'),
-            b'a'..=b'f' => Some(b - b'a' + 10),
-            _ => None,
-        };
-        let mut digest = [0; 16];
-        for (out, pair) in digest.iter_mut().zip(bytes.chunks_exact(2)) {
-            let (Some(high), Some(low)) = (nibble(pair[0]), nibble(pair[1])) else {
-                return Err(bad());
-            };
-            *out = high << 4 | low;
-        }
-        Ok(Self(digest))
-    }
-
-    pub fn bytes(&self) -> [u8; 16] {
-        self.0
-    }
-}
-
-impl fmt::Display for Md5 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.iter().try_for_each(|byte| write!(f, "{byte:02x}"))
-    }
-}
-
-impl fmt::Debug for Md5 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Md5({self})")
-    }
-}
-
-impl FromStr for Md5 {
-    type Err = ValueError;
-
-    fn from_str(text: &str) -> Result<Self, Self::Err> {
-        Self::parse(text)
-    }
-}
-
-impl Serialize for Md5 {
-    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        s.collect_str(self)
-    }
-}
-
-impl<'de> Deserialize<'de> for Md5 {
-    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let text = String::deserialize(d)?;
-        Self::parse(&text).map_err(serde::de::Error::custom)
-    }
-}
+/// An md5 digest, written as 32 lower-case hexadecimal digits: the one shared digest type
+/// ([`tc_core::Md5`]), so a burrito's checksums and the journal's hashes are one type.
+pub use tc_core::Md5;
 
 /// A media type in the form the schema accepts: `^[-a-z0-9]+/[-a-z0-9+]+$`. That excludes
 /// upper case, dots (so every `application/vnd.*` type) and parameters such as `charset`.
@@ -219,7 +153,7 @@ impl FileFacts {
             size += read as u64;
         }
         Ok(Self {
-            md5: Md5(hasher.finalize().into()),
+            md5: Md5::from_bytes(hasher.finalize().into()),
             size,
         })
     }
@@ -245,7 +179,7 @@ mod tests {
             "9e107d9d372bb6826bd81d3542a419dg",
             "",
         ] {
-            assert!(Md5::parse(bad).is_err(), "{bad}");
+            assert!(Md5::parse(bad).is_none(), "{bad}");
         }
     }
 

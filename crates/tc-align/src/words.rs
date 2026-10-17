@@ -5,10 +5,9 @@
 //! occurrences the way tC4 does, so a record made by tC4 names the same words here.
 
 use crate::Error;
-use md5::{Digest, Md5};
 use std::collections::HashMap;
 use std::fmt;
-use std::str::FromStr;
+use tc_core::Md5;
 use tc_core::VerseSpan;
 use tc_usfm::{Book, Document, Node, Segment, SegmentKind, SourceWord, Span, TargetWord};
 
@@ -327,7 +326,7 @@ fn source_word(span: &Span<'_>) -> Result<SourceWord, Error> {
 #[derive(Clone, PartialEq, Eq)]
 pub struct TargetVerse {
     text: String,
-    md5: TextMd5,
+    md5: Md5,
     words: Vec<TargetWord>,
     /// Each word text's places in the verse, by occurrence, so that a word's place is
     /// found without a scan: the verse-order sort runs after every edit.
@@ -350,7 +349,7 @@ impl TargetVerse {
         }
         Self {
             text: text.to_owned(),
-            md5: TextMd5::of(text),
+            md5: Md5::of(text.as_bytes()),
             words,
             places,
         }
@@ -360,7 +359,7 @@ impl TargetVerse {
         &self.text
     }
 
-    pub fn md5(&self) -> TextMd5 {
+    pub fn md5(&self) -> Md5 {
         self.md5
     }
 
@@ -483,49 +482,6 @@ fn number<'a>(texts: impl Iterator<Item = &'a str> + Clone) -> Vec<(u32, u32)> {
         .collect()
 }
 
-/// The md5 of a verse's plain text, as tC4 stores it in `targetVerseMd5`: 32 lowercase
-/// hexadecimal digits. Maps one to one to `tc-journal`'s `Md5`.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct TextMd5([u8; 16]);
-
-impl TextMd5 {
-    /// The md5 of the UTF-8 bytes of `text`.
-    pub fn of(text: &str) -> Self {
-        Self(Md5::digest(text.as_bytes()).into())
-    }
-
-    pub fn from_bytes(bytes: [u8; 16]) -> Self {
-        Self(bytes)
-    }
-
-    pub fn as_bytes(&self) -> &[u8; 16] {
-        &self.0
-    }
-}
-
-impl fmt::Display for TextMd5 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        crate::write_hex(f, &self.0)
-    }
-}
-
-impl fmt::Debug for TextMd5 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "TextMd5({self})")
-    }
-}
-
-impl FromStr for TextMd5 {
-    type Err = Error;
-
-    /// Exactly 32 lowercase hexadecimal digits, the only form tC4 writes.
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        crate::parse_hex(s)
-            .map(Self)
-            .ok_or_else(|| Error::InvalidMd5(s.to_owned()))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -550,12 +506,12 @@ mod tests {
 
     #[test]
     fn md5_reads_and_writes_lowercase_hex_only() {
-        let md5 = TextMd5::of("Pablo, siervo de Dios");
+        let md5 = Md5::of("Pablo, siervo de Dios".as_bytes());
         let text = md5.to_string();
         assert_eq!(text.len(), 32);
-        assert_eq!(text.parse::<TextMd5>().unwrap(), md5);
-        assert!(text.to_uppercase().parse::<TextMd5>().is_err());
-        assert!("abc".parse::<TextMd5>().is_err());
+        assert_eq!(text.parse::<Md5>().unwrap(), md5);
+        assert!(text.to_uppercase().parse::<Md5>().is_err());
+        assert!("abc".parse::<Md5>().is_err());
     }
 
     #[test]

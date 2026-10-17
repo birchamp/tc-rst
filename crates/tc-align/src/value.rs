@@ -26,12 +26,9 @@
 //! word is held once, in the bank or on one card, and every occurrence lies between 1
 //! and its count. That is what lets `word_extra` be keyed by the word.
 
-use crate::Error;
 use crate::words::{TargetVerse, WordId};
 use std::collections::{BTreeMap, HashSet};
-use std::fmt;
 use std::num::NonZeroU16;
-use std::str::FromStr;
 use tc_usfm::{SourceWord, TargetWord};
 
 /// One entry of a verse's `alignments`: original-language words joined into one card,
@@ -57,38 +54,14 @@ impl Group {
     }
 }
 
-/// A git commit id: 40 lowercase hexadecimal digits.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct CommitSha([u8; 20]);
-
-impl FromStr for CommitSha {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        crate::parse_hex(s)
-            .map(Self)
-            .ok_or_else(|| Error::InvalidSha(s.to_owned()))
-    }
-}
-
-impl fmt::Display for CommitSha {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        crate::write_hex(f, &self.0)
-    }
-}
-
-impl fmt::Debug for CommitSha {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "CommitSha({self})")
-    }
-}
+pub use tc_core::GitOid;
 
 /// A pinned resource: its repository path and commit. STORAGE.md's `ResourceRef`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ResourceRef {
     /// Such as `git.door43.org/unfoldingWord/el-x-koine_ugnt`. Compared case-insensitively.
     pub repo_path: String,
-    pub sha: CommitSha,
+    pub sha: GitOid,
 }
 
 /// What an alignment is made against besides the target text: the last verse of the span
@@ -109,7 +82,7 @@ pub struct AlignmentValue {
     pub alignments: Vec<Group>,
     pub word_bank: Vec<TargetWord>,
     /// The md5 of the verse's plain text when the alignment was made (I-3).
-    pub target_verse_md5: crate::TextMd5,
+    pub target_verse_md5: tc_core::Md5,
     pub source_version: String,
     pub source: Option<ResourceRef>,
     /// The translator's "this verse is done" (D73): set when every word is placed, or by
@@ -147,9 +120,9 @@ pub struct Current<'a> {
     /// The last verse of the projected run the record is placed at.
     pub run_end: NonZeroU16,
     /// The md5 of the run's plain text now.
-    pub text_md5: crate::TextMd5,
+    pub text_md5: tc_core::Md5,
     /// The sha of the current original-language pin for the book's testament, if pinned.
-    pub source_sha: Option<&'a CommitSha>,
+    pub source_sha: Option<&'a GitOid>,
 }
 
 /// Why an alignment no longer vouches for the verse. A record with any of these projects

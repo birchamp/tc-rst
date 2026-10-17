@@ -2886,7 +2886,6 @@ dependencies = [
 name = "tc-align"
 version = "0.1.0"
 dependencies = [
- "md-5",
  "proptest",
  "serde",
  "serde_json",
@@ -2934,6 +2933,7 @@ dependencies = [
 name = "tc-core"
 version = "0.1.0"
 dependencies = [
+ "md-5",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -2968,6 +2968,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha1",
+ "tc-core",
  "tc-door43-fake",
  "tempfile",
  "thiserror 2.0.21",

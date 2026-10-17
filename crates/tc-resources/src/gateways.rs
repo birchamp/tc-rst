@@ -469,7 +469,7 @@ mod tests {
         ));
         let set = language_set_from_installed(&with_tn, hi, ProjectKind::Bible).unwrap();
         assert_eq!(
-            set.pin(SetSlot::TranslationNotes).unwrap().sha.as_str(),
+            set.pin(SetSlot::TranslationNotes).unwrap().sha.to_hex(),
             "e".repeat(40)
         );
         assert!(set.is_complete(ProjectKind::Bible));

@@ -477,7 +477,7 @@ impl ResourceStore {
             .join(DCS)
             .join(folder_name(pin.repo.owner().as_str()))
             .join(folder_name(pin.repo.name().as_str()))
-            .join(pin.sha.as_str())
+            .join(pin.sha.to_hex())
     }
 
     fn aquifer_dir(&self, pin: &AquiferPin) -> PathBuf {
@@ -486,7 +486,7 @@ impl ResourceStore {
             .join(AQUIFER)
             .join(folder_name(pin.repo.owner.as_str()))
             .join(folder_name(pin.repo.name.as_str()))
-            .join(pin.commit.as_str())
+            .join(pin.commit.to_hex())
             .join(format!("{}-{}", pin.language, &digest[..16]))
     }
 

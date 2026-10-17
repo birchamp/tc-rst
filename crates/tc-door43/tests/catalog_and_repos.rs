@@ -361,7 +361,7 @@ async fn one_unreadable_entry_is_set_aside_and_the_rest_are_kept() {
     let skipped: Vec<&str> = found.skipped.iter().map(|s| s.entry.as_str()).collect();
     assert_eq!(skipped, ["someone/x v1", "someone/a/b v1", "?/no-owner ?"]);
     assert!(
-        found.skipped[0].reason.contains("commit sha"),
+        found.skipped[0].reason.contains("git object id"),
         "{:?}",
         found.skipped
     );

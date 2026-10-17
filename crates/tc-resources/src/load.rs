@@ -241,11 +241,7 @@ fn dcs_source(pin: &ResourcePin) -> HelpsSource {
         owner: pin.repo.owner().to_string(),
         repo: pin.repo.name().to_string(),
         tag: pin.version.as_ref().map(|v| v.as_str().to_owned()),
-        // A tc-door43 sha is 40 lower-case hex digits, which tc-helps accepts.
-        commit: match tc_helps::CommitSha::parse(pin.sha.as_str()) {
-            Ok(sha) => sha,
-            Err(_) => unreachable!("a commit sha is 40 hex digits"),
-        },
+        commit: pin.sha,
     })
 }
 
@@ -254,10 +250,7 @@ fn aquifer_source(pin: &AquiferPin) -> HelpsSource {
         resource_code: pin.repo.name.to_string(),
         language: pin.language.to_string(),
         tag: pin.tag.as_str().to_owned(),
-        commit: match tc_helps::CommitSha::parse(pin.commit.as_str()) {
-            Ok(sha) => sha,
-            Err(_) => unreachable!("a commit sha is 40 hex digits"),
-        },
+        commit: pin.commit,
         asset_sha256: tc_helps::Sha256Digest::parse(&pin.sha256.to_hex()).ok(),
     })
 }

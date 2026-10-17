@@ -9,7 +9,7 @@ mod common;
 use common::{basis, show};
 use std::num::NonZeroU16;
 use tc_align::{
-    AlignmentValue, CommitSha, Current, EditError, ResourceRef, SourceVerse, SourceWord, Stale,
+    AlignmentValue, Current, EditError, GitOid, ResourceRef, SourceVerse, SourceWord, Stale,
     TargetVerse, TargetWord, VerseState, verse_status,
 };
 
@@ -561,14 +561,14 @@ fn an_edit_clears_the_re_review_flag_tc3_or_tc4_set() {
 fn staleness_names_each_reason_a_done_value_no_longer_vouches_for_the_verse() {
     let (mut value, verse) = half_aligned();
     value.mark_done(&verse);
-    let pin: CommitSha = "0123456789abcdef0123456789abcdef01234567".parse().unwrap();
-    let upgrade: CommitSha = "89abcdef0123456789abcdef0123456789abcdef".parse().unwrap();
+    let pin: GitOid = "0123456789abcdef0123456789abcdef01234567".parse().unwrap();
+    let upgrade: GitOid = "89abcdef0123456789abcdef0123456789abcdef".parse().unwrap();
     value.source = Some(ResourceRef {
         repo_path: "git.door43.org/unfoldingWord/el-x-koine_ugnt".to_owned(),
         sha: pin,
     });
     let other = TargetVerse::new("Pablo siervo de Dios");
-    fn at<'a>(run_end: u16, text: &TargetVerse, sha: Option<&'a CommitSha>) -> Current<'a> {
+    fn at<'a>(run_end: u16, text: &TargetVerse, sha: Option<&'a GitOid>) -> Current<'a> {
         Current {
             run_end: NonZeroU16::new(run_end).unwrap(),
             text_md5: text.md5(),

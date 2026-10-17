@@ -12,7 +12,7 @@ use tc_check::{
 };
 use tc_core::{BookId, VerseSpan};
 use tc_helps::tsv::{TsvScope, parse_notes, parse_word_links};
-use tc_helps::{CommitSha, Note, WordLink};
+use tc_helps::{GitOid, Note, WordLink};
 use tc_usfm::Book;
 use tc_versification::{StandardScheme, Unplaceable};
 
@@ -96,15 +96,15 @@ pub fn checks_of(list: &CheckList) -> Vec<String> {
 }
 
 /// tC4's test helper: a deterministic fake commit per (repo, version) string.
-pub fn sha40(s: &str) -> CommitSha {
+pub fn sha40(s: &str) -> GitOid {
     let mut h: u32 = 5381;
     for c in s.encode_utf16() {
         h = h.wrapping_mul(33) ^ u32::from(c);
     }
-    CommitSha::parse(&format!("{h:08x}").repeat(5)).unwrap()
+    GitOid::parse(&format!("{h:08x}").repeat(5)).unwrap()
 }
 
-pub fn resource_ref(repo: &str, sha: CommitSha) -> ResourceRef {
+pub fn resource_ref(repo: &str, sha: GitOid) -> ResourceRef {
     ResourceRef {
         repo_path: RepoPath::parse(&format!("git.door43.org/{repo}")).unwrap(),
         sha,

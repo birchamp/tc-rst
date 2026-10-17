@@ -168,8 +168,11 @@ pub struct StoryNo(u8);            // 1..=50, checked at parse
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FrameNo(u16);           // 0 = the story title
 
-pub struct Md5([u8; 16]);          // lowercase hex on the wire
-pub struct GitOid([u8; 20]);       // git object id; also the pin identity (a commit sha)
+pub use tc_core::{GitOid, Md5};    // one type each for every crate (§17)
+// Md5([u8; 16]): lowercase hex on the wire.
+// GitOid([u8; 20]): git object id; also the pin identity (a commit sha). Text form 40
+// lowercase hex, tC4's SHA_RE (`journal/grammar.mjs`); `GitOid::parse_any_case` reads a
+// commit a person pasted in upper case, at the boundaries that take hand-written input.
 
 /// A path relative to the repository root, `/`-separated, obeying the ingredient path grammar
 /// (§3.3) for every segment. Parsed at the boundary; never constructed from unchecked strings.
@@ -4064,10 +4067,10 @@ For each mechanism, a mutation that removes it must turn a named test red:
 
 | Crate | Owns in this design |
 |---|---|
-| `tc-core` | `BookId`, references (exists) |
+| `tc-core` | `BookId`, references (exists); `GitOid` and `Md5`, the two digests every crate shares (the journal, the burrito, the Door43 client, the helps, the resource store and the screens hold one type each) |
 | `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`, `PARA_MARKERS` and the layout rule), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1`, the OBS story splice |
 | `tc-burrito` | `build_metadata`, `check`, the vendored SB 1.0.0 schema, the extension table, `collision_form` (§3.3) |
-| `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the fold cache's codec (`index`: sections of prepared changes keyed by path, size and fingerprint), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking, the command types. It is the one owner of the types and rules the domain crates share: `CheckKey`, `ResourceRef`, `GitOid`, `Md5`, `DecisionRecord`, `AlignmentValue`; the pin slots and the D30 ladder (`pins`); a decision's edit and computed state (`decision`); an alignment's validity, its verse order and the aligned-USFM split (`alignment`); person labels. No I/O. |
+| `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the fold cache's codec (`index`: sections of prepared changes keyed by path, size and fingerprint), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking, the command types. It is the one owner of the types and rules the domain crates share: `CheckKey`, `ResourceRef`, `DecisionRecord`, `AlignmentValue` (and it re-exports `tc-core`'s `GitOid` and `Md5`); the pin slots and the D30 ladder (`pins`); a decision's edit and computed state (`decision`); an alignment's validity, its verse order and the aligned-USFM split (`alignment`); person labels. No I/O. |
 | `tc-store` | `Vfs`, `FaultFs`, `atomic_write`, the project lock, `ProjectActor` and commands, open and recovery, reading and writing the fold cache `.tc/index.bin` (§6.1 O8), the fold's `ValueSource` over pack and pending files and their blobs, materialize, seal, consolidate, outside-edit detection and recording, drafts, identity, local git (tree build, commit, index, repack, object database access) |
 | `tc-door43` | the internet switch, the Gitea REST client, and git2 network calls (`fetch`, `push`, `list`) on a repository `tc-store` opened |
 | `tc-sync` | the Door43 sync (§9), the exchange file export and import (§10), the Door43 edit walk (§11.2), `ExchangeReport` |

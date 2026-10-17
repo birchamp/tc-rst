@@ -7,7 +7,7 @@
 //! download it, move the pin to a version of the same repository that is installed, or
 //! install it from a file that declares that commit.
 
-use tc_helps::CommitSha;
+use tc_helps::GitOid;
 
 use crate::key::{Collection, ToolId};
 use crate::resolve::{
@@ -287,7 +287,7 @@ pub fn repin(pins: &Pins, rung: Rung, from: &Pin, to: &Installed) -> Option<Repi
         to: Pin {
             resource: ResourceRef {
                 repo_path: from.resource.repo_path.clone(),
-                sha: to.resource.sha.clone(),
+                sha: to.resource.sha,
             },
             version: to.version.clone().filter(|v| !v.is_empty()),
             coverage: Coverage::Unrecorded,
@@ -304,21 +304,21 @@ pub enum SideloadRefusal {
         "the file is commit {found}, but the project pins {pinned} ({label}); it is not installed"
     )]
     OtherCommit {
-        found: CommitSha,
-        pinned: CommitSha,
+        found: GitOid,
+        pinned: GitOid,
         label: String,
     },
 }
 
 /// A file is installed only when it declares exactly the pinned commit (tC4
 /// `verifySideload`, D58).
-pub fn verify_sideload(pin: &Pin, revision: Option<&CommitSha>) -> Result<(), SideloadRefusal> {
+pub fn verify_sideload(pin: &Pin, revision: Option<&GitOid>) -> Result<(), SideloadRefusal> {
     match revision {
         None => Err(SideloadRefusal::NoRevision),
         Some(found) if *found == pin.resource.sha => Ok(()),
         Some(found) => Err(SideloadRefusal::OtherCommit {
-            found: found.clone(),
-            pinned: pin.resource.sha.clone(),
+            found: *found,
+            pinned: pin.resource.sha,
             label: pin.label(),
         }),
     }

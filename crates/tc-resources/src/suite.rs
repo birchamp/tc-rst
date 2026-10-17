@@ -303,7 +303,7 @@ mod tests {
         let helps = english_helps();
         assert_eq!(helps.pins.len(), 10);
         assert_eq!(
-            helps.pin(SetSlot::TranslationNotes).unwrap().sha.as_str(),
+            helps.pin(SetSlot::TranslationNotes).unwrap().sha.to_hex(),
             "e586762e330f482a60c52aedd1c7b3a2f155df8a"
         );
         assert_eq!(english_twl().repo.name().as_str(), "en_twl");

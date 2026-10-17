@@ -15,7 +15,7 @@ use std::fmt;
 
 use serde_json::Value;
 use tc_core::BookId;
-use tc_helps::CommitSha;
+use tc_helps::GitOid;
 
 use crate::Error;
 use crate::key::{Collection, ToolId};
@@ -65,7 +65,7 @@ impl fmt::Display for RepoPath {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ResourceRef {
     pub repo_path: RepoPath,
-    pub sha: CommitSha,
+    pub sha: GitOid,
 }
 
 impl fmt::Display for ResourceRef {
@@ -128,7 +128,7 @@ impl Pin {
         let version = self
             .version
             .clone()
-            .unwrap_or_else(|| self.resource.sha.as_str().chars().take(12).collect());
+            .unwrap_or_else(|| self.resource.sha.to_hex().chars().take(12).collect());
         format!("{} · {version}", self.resource.repo_path.repo())
     }
 }
@@ -335,7 +335,7 @@ impl Pin {
         let bad = || Error::Pin(value.to_string());
         let text = |key: &str| value.get(key).and_then(Value::as_str);
         let repo_path = RepoPath::parse(text("repoPath").ok_or_else(bad)?)?;
-        let sha = CommitSha::parse(text("sha").ok_or_else(bad)?).map_err(|_| bad())?;
+        let sha = GitOid::parse(text("sha").ok_or_else(bad)?).ok_or_else(bad)?;
         Ok(Self {
             resource: ResourceRef { repo_path, sha },
             version: text("version").map(str::to_owned),
