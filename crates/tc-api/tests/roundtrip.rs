@@ -127,6 +127,7 @@ fn every_shared_type_round_trips() {
             ImportRefusal,
             ExportRefusal,
             SyncFailure,
+            SyncBlock,
             SyncRefusal,
             ShareRefusal,
             OpenDoor43Refusal,

@@ -242,19 +242,53 @@ impl Message for ExportRefusal {
     }
 }
 
-/// A sync that did not complete.
+/// A sync that did not complete, by when it stopped. Whether the teammates' work had been
+/// received decides what the person reads (PLAN Q8), so a refusal that can only come before
+/// intake cannot be paired with "after intake", and no banner says both "Nothing changed"
+/// and "received and kept".
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
-pub struct SyncFailure {
-    pub refusal: SyncRefusal,
-    /// The teammates' work had already been received and kept when the sync stopped (PLAN
-    /// Q8). The person must not read "nothing changed" then.
-    pub after_intake: bool,
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum SyncFailure {
+    /// The project and the repository cannot sync as they are. Found at the gate or by
+    /// reading the repository's format and project, before anything is taken (STORAGE §9.1
+    /// S0, §9.2 N1, N2): nothing changed.
+    Blocked(SyncBlock),
+    /// A step failed before the teammates' work was received: nothing changed.
+    BeforeIntake(SyncRefusal),
+    /// A step failed after the teammates' work was received and integrated (STORAGE §9.3):
+    /// the person sees it and it stays.
+    AfterIntake(SyncRefusal),
 }
 
-/// Why a sync stopped (STORAGE §9.7, DELTA §3.15.2; tC4 `SYNC_REFUSALS`,
-/// `tC4:src/views/SyncResult.jsx:14-51`).
+/// Why a project and its repository cannot sync (DELTA §3.15.2; tC4 `SYNC_REFUSALS`,
+/// `tC4:src/views/SyncResult.jsx:14-51`). Each is found before intake.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum SyncBlock {
+    /// The project has no Door43 repository (S0).
+    NotShared,
+    /// The repository holds another project (N2).
+    ProjectMismatch,
+    /// A teammate uses a newer project format (N1).
+    NeedsNewerApp { major: u16, min_reader_minor: u16 },
+    /// The repository is still in tC4's team format; the team move is offered (N1).
+    Tc4TeamRepository,
+}
+
+/// Why a sync step failed, before or after intake (STORAGE §9.1, §9.5; DELTA §3.15.2; tC4
+/// `SYNC_REFUSALS`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(
@@ -267,7 +301,6 @@ pub enum SyncRefusal {
     Offline,
     NotSignedIn,
     AuthFailed,
-    NotShared,
     NoWriteAccess {
         server_message: String,
     },
@@ -280,15 +313,6 @@ pub enum SyncRefusal {
     },
     RemoteMissing,
     Unreachable,
-    /// The repository holds another project (STORAGE §9.2 N2).
-    ProjectMismatch,
-    /// A teammate uses a newer project format (N1).
-    NeedsNewerApp {
-        major: u16,
-        min_reader_minor: u16,
-    },
-    /// The repository is still in tC4's team format; the team move is offered (N1).
-    Tc4TeamRepository,
     ReadOnly,
     Io {
         reason: String,
@@ -304,31 +328,36 @@ impl SyncFailure {
             self.key(),
             "syncResult.error.notSent" | "syncResult.error.keptStopped"
         );
-        (self.after_intake && !says_kept).then_some("syncResult.receivedKept")
+        (matches!(self, Self::AfterIntake(_)) && !says_kept).then_some("syncResult.receivedKept")
+    }
+
+    /// The failed step's refusal and whether the received work was kept, or the block.
+    fn stage(&self) -> Result<(&SyncRefusal, bool), &SyncBlock> {
+        match self {
+            Self::Blocked(block) => Err(block),
+            Self::BeforeIntake(refusal) => Ok((refusal, false)),
+            Self::AfterIntake(refusal) => Ok((refusal, true)),
+        }
     }
 }
 
 impl Message for SyncFailure {
     fn code(&self) -> Option<&'static str> {
         use SyncRefusal as R;
-        match (&self.refusal, self.after_intake) {
-            (R::Offline, _) => Some("sync.offline"),
-            (R::AuthFailed, _) => Some("sync.auth-failed"),
-            (R::NotShared, _) => Some("sync.not-shared"),
-            (R::NoWriteAccess { .. }, _) => Some("sync.no-write-access"),
-            (R::Busy { .. }, _) => Some("sync.non-fast-forward"),
-            (R::Unreachable | R::RemoteMissing, false) => Some("sync.clone-failed"),
-            (R::Unreachable | R::RemoteMissing, true)
-            | (
-                R::NotSignedIn
-                | R::RefRejected { .. }
-                | R::ProjectMismatch
-                | R::NeedsNewerApp { .. }
-                | R::Tc4TeamRepository
-                | R::ReadOnly
-                | R::Io { .. },
-                _,
+        match self.stage() {
+            Err(SyncBlock::NotShared) => Some("sync.not-shared"),
+            Err(
+                SyncBlock::ProjectMismatch
+                | SyncBlock::NeedsNewerApp { .. }
+                | SyncBlock::Tc4TeamRepository,
             ) => None,
+            Ok((R::Offline, _)) => Some("sync.offline"),
+            Ok((R::AuthFailed, _)) => Some("sync.auth-failed"),
+            Ok((R::NoWriteAccess { .. }, _)) => Some("sync.no-write-access"),
+            Ok((R::Busy { .. }, _)) => Some("sync.non-fast-forward"),
+            Ok((R::Unreachable | R::RemoteMissing, false)) => Some("sync.clone-failed"),
+            Ok((R::Unreachable | R::RemoteMissing, true))
+            | Ok((R::NotSignedIn | R::RefRejected { .. } | R::ReadOnly | R::Io { .. }, _)) => None,
         }
     }
 
@@ -336,46 +365,50 @@ impl Message for SyncFailure {
     // gives way to one that says the received work was kept (PLAN Q8).
     fn key(&self) -> &'static str {
         use SyncRefusal as R;
-        match (&self.refusal, self.after_intake) {
-            (R::Offline, _) => "syncResult.error.offline",
-            (R::NotSignedIn | R::AuthFailed, _) => "syncResult.error.authFailed",
-            (R::NotShared, _) => "syncResult.error.notShared",
-            (R::NoWriteAccess { .. }, _) => "syncResult.error.noWriteAccess",
-            (R::Busy { .. }, _) => "syncResult.error.nonFastForward",
-            (R::Unreachable | R::RemoteMissing, false) => "syncResult.error.cloneFailed",
-            (R::Unreachable | R::RemoteMissing, true) => "syncResult.error.notSent",
-            (R::RefRejected { .. }, _) | (R::Io { .. }, false) => "syncResult.error.other",
-            (R::Io { .. }, true) => "syncResult.error.keptStopped",
-            (R::ProjectMismatch, _) => "syncResult.error.projectMismatch",
-            (R::NeedsNewerApp { .. }, _) => "syncResult.error.needsNewerApp",
-            (R::Tc4TeamRepository, _) => "syncResult.error.tc4TeamRepository",
-            (R::ReadOnly, _) => "syncResult.error.readOnly",
+        match self.stage() {
+            Err(SyncBlock::NotShared) => "syncResult.error.notShared",
+            Err(SyncBlock::ProjectMismatch) => "syncResult.error.projectMismatch",
+            Err(SyncBlock::NeedsNewerApp { .. }) => "syncResult.error.needsNewerApp",
+            Err(SyncBlock::Tc4TeamRepository) => "syncResult.error.tc4TeamRepository",
+            Ok((R::Offline, _)) => "syncResult.error.offline",
+            Ok((R::NotSignedIn | R::AuthFailed, _)) => "syncResult.error.authFailed",
+            Ok((R::NoWriteAccess { .. }, _)) => "syncResult.error.noWriteAccess",
+            Ok((R::Busy { .. }, _)) => "syncResult.error.nonFastForward",
+            Ok((R::Unreachable | R::RemoteMissing, false)) => "syncResult.error.cloneFailed",
+            Ok((R::Unreachable | R::RemoteMissing, true)) => "syncResult.error.notSent",
+            Ok((R::RefRejected { .. }, _)) | Ok((R::Io { .. }, false)) => "syncResult.error.other",
+            Ok((R::Io { .. }, true)) => "syncResult.error.keptStopped",
+            Ok((R::ReadOnly, _)) => "syncResult.error.readOnly",
         }
     }
 
     fn vars(&self) -> Vec<(&'static str, String)> {
         use SyncRefusal as R;
-        match &self.refusal {
-            R::RefRejected { server_message } => vec![("reason", server_message.clone())],
-            R::Io { reason } => vec![("reason", reason.clone())],
-            R::NeedsNewerApp { major, .. } => vec![("format", major.to_string())],
-            R::Offline
-            | R::NotSignedIn
-            | R::AuthFailed
-            | R::NotShared
-            | R::NoWriteAccess { .. }
-            | R::Busy { .. }
-            | R::RemoteMissing
-            | R::Unreachable
-            | R::ProjectMismatch
-            | R::Tc4TeamRepository
-            | R::ReadOnly => Vec::new(),
+        match self {
+            Self::Blocked(SyncBlock::NeedsNewerApp { major, .. }) => {
+                vec![("format", major.to_string())]
+            }
+            Self::Blocked(
+                SyncBlock::NotShared | SyncBlock::ProjectMismatch | SyncBlock::Tc4TeamRepository,
+            ) => Vec::new(),
+            Self::BeforeIntake(refusal) | Self::AfterIntake(refusal) => match refusal {
+                R::RefRejected { server_message } => vec![("reason", server_message.clone())],
+                R::Io { reason } => vec![("reason", reason.clone())],
+                R::Offline
+                | R::NotSignedIn
+                | R::AuthFailed
+                | R::NoWriteAccess { .. }
+                | R::Busy { .. }
+                | R::RemoteMissing
+                | R::Unreachable
+                | R::ReadOnly => Vec::new(),
+            },
         }
     }
 
     fn detail(&self) -> Option<&str> {
-        match &self.refusal {
-            SyncRefusal::NoWriteAccess { server_message } => Some(server_message),
+        match self.stage() {
+            Ok((SyncRefusal::NoWriteAccess { server_message }, _)) => Some(server_message),
             _ => None,
         }
     }

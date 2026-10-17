@@ -388,7 +388,7 @@ pub enum Refusal {
     Create(CreateRefusal),
     Import(ImportRefusal),      // refusal.import.*, importer.*
     Export(ExportRefusal),      // refusal.export.* (5 keys)
-    Sync(SyncFailure),          // { refusal: SyncRefusal, after_intake: bool } (Q8)
+    Sync(SyncFailure),          // Blocked(SyncBlock) | BeforeIntake(SyncRefusal) | AfterIntake(SyncRefusal) (Q8)
     Share(ShareRefusal),
     OpenDoor43(OpenDoor43Refusal),
     SignIn(SignInRefusal),      // signIn.error.*
@@ -397,10 +397,13 @@ pub enum Refusal {
     Feedback(FeedbackRefusal),
     Prefs(PrefsRefusal),        // a failed app-language save keeps the dialog (tC4:e2e/app-language.spec.ts:263)
 }
-pub enum SyncRefusal {          // DELTA:740-800; tC4 SYNC_REFUSALS (tC4:src/views/SyncResult.jsx:14-51)
-    Offline, NotSignedIn, AuthFailed, NotShared, NoWriteAccess { server_message: String },
+// DELTA:740-800; tC4 SYNC_REFUSALS (tC4:src/views/SyncResult.jsx:14-51)
+pub enum SyncBlock {            // found before intake (STORAGE §9.1 S0, §9.2 N1, N2) *(A1)*
+    NotShared, ProjectMismatch, NeedsNewerApp { major: u16, min_reader_minor: u16 }, Tc4TeamRepository,
+}
+pub enum SyncRefusal {          // a step that can fail before or after intake
+    Offline, NotSignedIn, AuthFailed, NoWriteAccess { server_message: String },
     RefRejected { server_message: String }, Busy { attempts: u8 }, RemoteMissing, Unreachable,
-    ProjectMismatch, NeedsNewerApp { major: u16, min_reader_minor: u16 }, Tc4TeamRepository,
     ReadOnly, Io { reason: String },
 }
 ```
@@ -420,7 +423,11 @@ yours was not sent, instead of `cloneFailed`'s "Nothing changed"; an `Io` shows 
 kept, but the sync stopped: {reason}"; every other refusal keeps its key and adds a second
 sentence, `SyncFailure::kept_note()`, "Your teammates' changes were received and kept." So no
 failure after intake says "nothing changed". `NotShared`, `ProjectMismatch`, `NeedsNewerApp`
-and `Tc4TeamRepository` are found before intake (STORAGE §9.1 S0, §9.2 N1, N2).
+and `Tc4TeamRepository` are found before intake (STORAGE §9.1 S0, §9.2 N1, N2), so they are
+`SyncBlock`s, which only `SyncFailure::Blocked` carries: three of their sentences say "Nothing
+changed", and the type cannot pair them with "after intake". *(A1: the first sketch,
+`{ refusal, after_intake: bool }`, could say "Nothing changed" and "received and kept" in one
+banner.)*
 
 The UI builds a sentence the way tC4's `failureText` does: diagnosis, then the recovery sentence
 (`tC4:src/state.jsx:1781-1788`). "Ask for help" shows when the sentence contains `feedback.ask`

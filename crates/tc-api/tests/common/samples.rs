@@ -4,7 +4,7 @@
 use tc_api::refusal::{
     CreateRefusal, ExchangeRefusal, ExportRefusal, FeedbackRefusal, ImportRefusal,
     OpenDoor43Refusal, OpenRefusal, PrefsRefusal, Refusal, ResourceRefusal, ShareRefusal,
-    SignInRefusal, SyncFailure, SyncRefusal,
+    SignInRefusal, SyncBlock, SyncFailure, SyncRefusal,
 };
 
 fn s(text: &str) -> String {
@@ -44,12 +44,23 @@ pub fn export() -> Vec<ExportRefusal> {
     ]
 }
 
+pub fn sync_blocks() -> Vec<SyncBlock> {
+    vec![
+        SyncBlock::NotShared,
+        SyncBlock::ProjectMismatch,
+        SyncBlock::NeedsNewerApp {
+            major: 2,
+            min_reader_minor: 0,
+        },
+        SyncBlock::Tc4TeamRepository,
+    ]
+}
+
 pub fn sync_refusals() -> Vec<SyncRefusal> {
     vec![
         SyncRefusal::Offline,
         SyncRefusal::NotSignedIn,
         SyncRefusal::AuthFailed,
-        SyncRefusal::NotShared,
         SyncRefusal::NoWriteAccess {
             server_message: s("user does not have write access"),
         },
@@ -59,12 +70,6 @@ pub fn sync_refusals() -> Vec<SyncRefusal> {
         SyncRefusal::Busy { attempts: 3 },
         SyncRefusal::RemoteMissing,
         SyncRefusal::Unreachable,
-        SyncRefusal::ProjectMismatch,
-        SyncRefusal::NeedsNewerApp {
-            major: 2,
-            min_reader_minor: 0,
-        },
-        SyncRefusal::Tc4TeamRepository,
         SyncRefusal::ReadOnly,
         SyncRefusal::Io {
             reason: s("No space left on device (os error 28)"),
@@ -72,17 +77,16 @@ pub fn sync_refusals() -> Vec<SyncRefusal> {
     ]
 }
 
-/// Every sync refusal, before and after the received work was kept.
+/// Every failure a sync can end with: each block, and each step's refusal before and after
+/// the received work was kept.
 pub fn sync() -> Vec<SyncFailure> {
-    sync_refusals()
+    let mut all: Vec<SyncFailure> = sync_blocks()
         .into_iter()
-        .flat_map(|refusal| {
-            [false, true].map(|after_intake| SyncFailure {
-                refusal: refusal.clone(),
-                after_intake,
-            })
-        })
-        .collect()
+        .map(SyncFailure::Blocked)
+        .collect();
+    all.extend(sync_refusals().into_iter().map(SyncFailure::BeforeIntake));
+    all.extend(sync_refusals().into_iter().map(SyncFailure::AfterIntake));
+    all
 }
 
 pub fn share() -> Vec<ShareRefusal> {

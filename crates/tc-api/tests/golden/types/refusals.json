@@ -149,100 +149,10 @@
     "wire": {
       "type": "sync",
       "value": {
-        "refusal": {
-          "type": "offline"
-        },
-        "afterIntake": false
-      }
-    },
-    "code": "sync.offline",
-    "key": "syncResult.error.offline",
-    "vars": {},
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
-          "type": "offline"
-        },
-        "afterIntake": true
-      }
-    },
-    "code": "sync.offline",
-    "key": "syncResult.error.offline",
-    "vars": {},
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
-          "type": "notSignedIn"
-        },
-        "afterIntake": false
-      }
-    },
-    "code": null,
-    "key": "syncResult.error.authFailed",
-    "vars": {},
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
-          "type": "notSignedIn"
-        },
-        "afterIntake": true
-      }
-    },
-    "code": null,
-    "key": "syncResult.error.authFailed",
-    "vars": {},
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
-          "type": "authFailed"
-        },
-        "afterIntake": false
-      }
-    },
-    "code": "sync.auth-failed",
-    "key": "syncResult.error.authFailed",
-    "vars": {},
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
-          "type": "authFailed"
-        },
-        "afterIntake": true
-      }
-    },
-    "code": "sync.auth-failed",
-    "key": "syncResult.error.authFailed",
-    "vars": {},
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
+        "type": "blocked",
+        "value": {
           "type": "notShared"
-        },
-        "afterIntake": false
+        }
       }
     },
     "code": "sync.not-shared",
@@ -254,197 +164,10 @@
     "wire": {
       "type": "sync",
       "value": {
-        "refusal": {
-          "type": "notShared"
-        },
-        "afterIntake": true
-      }
-    },
-    "code": "sync.not-shared",
-    "key": "syncResult.error.notShared",
-    "vars": {},
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
-          "type": "noWriteAccess",
-          "value": {
-            "serverMessage": "user does not have write access"
-          }
-        },
-        "afterIntake": false
-      }
-    },
-    "code": "sync.no-write-access",
-    "key": "syncResult.error.noWriteAccess",
-    "vars": {},
-    "detail": "user does not have write access"
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
-          "type": "noWriteAccess",
-          "value": {
-            "serverMessage": "user does not have write access"
-          }
-        },
-        "afterIntake": true
-      }
-    },
-    "code": "sync.no-write-access",
-    "key": "syncResult.error.noWriteAccess",
-    "vars": {},
-    "detail": "user does not have write access"
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
-          "type": "refRejected",
-          "value": {
-            "serverMessage": "protected branch hook declined"
-          }
-        },
-        "afterIntake": false
-      }
-    },
-    "code": null,
-    "key": "syncResult.error.other",
-    "vars": {
-      "reason": "protected branch hook declined"
-    },
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
-          "type": "refRejected",
-          "value": {
-            "serverMessage": "protected branch hook declined"
-          }
-        },
-        "afterIntake": true
-      }
-    },
-    "code": null,
-    "key": "syncResult.error.other",
-    "vars": {
-      "reason": "protected branch hook declined"
-    },
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
-          "type": "busy",
-          "value": {
-            "attempts": 3
-          }
-        },
-        "afterIntake": false
-      }
-    },
-    "code": "sync.non-fast-forward",
-    "key": "syncResult.error.nonFastForward",
-    "vars": {},
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
-          "type": "busy",
-          "value": {
-            "attempts": 3
-          }
-        },
-        "afterIntake": true
-      }
-    },
-    "code": "sync.non-fast-forward",
-    "key": "syncResult.error.nonFastForward",
-    "vars": {},
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
-          "type": "remoteMissing"
-        },
-        "afterIntake": false
-      }
-    },
-    "code": "sync.clone-failed",
-    "key": "syncResult.error.cloneFailed",
-    "vars": {},
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
-          "type": "remoteMissing"
-        },
-        "afterIntake": true
-      }
-    },
-    "code": null,
-    "key": "syncResult.error.notSent",
-    "vars": {},
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
-          "type": "unreachable"
-        },
-        "afterIntake": false
-      }
-    },
-    "code": "sync.clone-failed",
-    "key": "syncResult.error.cloneFailed",
-    "vars": {},
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
-          "type": "unreachable"
-        },
-        "afterIntake": true
-      }
-    },
-    "code": null,
-    "key": "syncResult.error.notSent",
-    "vars": {},
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
+        "type": "blocked",
+        "value": {
           "type": "projectMismatch"
-        },
-        "afterIntake": false
+        }
       }
     },
     "code": null,
@@ -456,29 +179,14 @@
     "wire": {
       "type": "sync",
       "value": {
-        "refusal": {
-          "type": "projectMismatch"
-        },
-        "afterIntake": true
-      }
-    },
-    "code": null,
-    "key": "syncResult.error.projectMismatch",
-    "vars": {},
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
+        "type": "blocked",
+        "value": {
           "type": "needsNewerApp",
           "value": {
             "major": 2,
             "minReaderMinor": 0
           }
-        },
-        "afterIntake": false
+        }
       }
     },
     "code": null,
@@ -492,20 +200,97 @@
     "wire": {
       "type": "sync",
       "value": {
-        "refusal": {
-          "type": "needsNewerApp",
+        "type": "blocked",
+        "value": {
+          "type": "tc4TeamRepository"
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.tc4TeamRepository",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "offline"
+        }
+      }
+    },
+    "code": "sync.offline",
+    "key": "syncResult.error.offline",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "notSignedIn"
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.authFailed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "authFailed"
+        }
+      }
+    },
+    "code": "sync.auth-failed",
+    "key": "syncResult.error.authFailed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "noWriteAccess",
           "value": {
-            "major": 2,
-            "minReaderMinor": 0
+            "serverMessage": "user does not have write access"
           }
-        },
-        "afterIntake": true
+        }
+      }
+    },
+    "code": "sync.no-write-access",
+    "key": "syncResult.error.noWriteAccess",
+    "vars": {},
+    "detail": "user does not have write access"
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "refRejected",
+          "value": {
+            "serverMessage": "protected branch hook declined"
+          }
+        }
       }
     },
     "code": null,
-    "key": "syncResult.error.needsNewerApp",
+    "key": "syncResult.error.other",
     "vars": {
-      "format": "2"
+      "reason": "protected branch hook declined"
     },
     "detail": null
   },
@@ -513,14 +298,17 @@
     "wire": {
       "type": "sync",
       "value": {
-        "refusal": {
-          "type": "tc4TeamRepository"
-        },
-        "afterIntake": false
+        "type": "beforeIntake",
+        "value": {
+          "type": "busy",
+          "value": {
+            "attempts": 3
+          }
+        }
       }
     },
-    "code": null,
-    "key": "syncResult.error.tc4TeamRepository",
+    "code": "sync.non-fast-forward",
+    "key": "syncResult.error.nonFastForward",
     "vars": {},
     "detail": null
   },
@@ -528,14 +316,14 @@
     "wire": {
       "type": "sync",
       "value": {
-        "refusal": {
-          "type": "tc4TeamRepository"
-        },
-        "afterIntake": true
+        "type": "beforeIntake",
+        "value": {
+          "type": "remoteMissing"
+        }
       }
     },
-    "code": null,
-    "key": "syncResult.error.tc4TeamRepository",
+    "code": "sync.clone-failed",
+    "key": "syncResult.error.cloneFailed",
     "vars": {},
     "detail": null
   },
@@ -543,10 +331,25 @@
     "wire": {
       "type": "sync",
       "value": {
-        "refusal": {
+        "type": "beforeIntake",
+        "value": {
+          "type": "unreachable"
+        }
+      }
+    },
+    "code": "sync.clone-failed",
+    "key": "syncResult.error.cloneFailed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "beforeIntake",
+        "value": {
           "type": "readOnly"
-        },
-        "afterIntake": false
+        }
       }
     },
     "code": null,
@@ -558,28 +361,13 @@
     "wire": {
       "type": "sync",
       "value": {
-        "refusal": {
-          "type": "readOnly"
-        },
-        "afterIntake": true
-      }
-    },
-    "code": null,
-    "key": "syncResult.error.readOnly",
-    "vars": {},
-    "detail": null
-  },
-  {
-    "wire": {
-      "type": "sync",
-      "value": {
-        "refusal": {
+        "type": "beforeIntake",
+        "value": {
           "type": "io",
           "value": {
             "reason": "No space left on device (os error 28)"
           }
-        },
-        "afterIntake": false
+        }
       }
     },
     "code": null,
@@ -593,13 +381,159 @@
     "wire": {
       "type": "sync",
       "value": {
-        "refusal": {
+        "type": "afterIntake",
+        "value": {
+          "type": "offline"
+        }
+      }
+    },
+    "code": "sync.offline",
+    "key": "syncResult.error.offline",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "notSignedIn"
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.authFailed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "authFailed"
+        }
+      }
+    },
+    "code": "sync.auth-failed",
+    "key": "syncResult.error.authFailed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "noWriteAccess",
+          "value": {
+            "serverMessage": "user does not have write access"
+          }
+        }
+      }
+    },
+    "code": "sync.no-write-access",
+    "key": "syncResult.error.noWriteAccess",
+    "vars": {},
+    "detail": "user does not have write access"
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "refRejected",
+          "value": {
+            "serverMessage": "protected branch hook declined"
+          }
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.other",
+    "vars": {
+      "reason": "protected branch hook declined"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "busy",
+          "value": {
+            "attempts": 3
+          }
+        }
+      }
+    },
+    "code": "sync.non-fast-forward",
+    "key": "syncResult.error.nonFastForward",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "remoteMissing"
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.notSent",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "unreachable"
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.notSent",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
+          "type": "readOnly"
+        }
+      }
+    },
+    "code": null,
+    "key": "syncResult.error.readOnly",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "sync",
+      "value": {
+        "type": "afterIntake",
+        "value": {
           "type": "io",
           "value": {
             "reason": "No space left on device (os error 28)"
           }
-        },
-        "afterIntake": true
+        }
       }
     },
     "code": null,

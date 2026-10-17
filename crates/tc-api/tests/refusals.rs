@@ -17,7 +17,7 @@ use tc_api::NetKind;
 use tc_api::account::AccountNotice;
 use tc_api::feedback::FeedbackCategory;
 use tc_api::ids::LOCALE_IDS;
-use tc_api::refusal::{FeedbackRefusal, Message, Refusal, SyncFailure, SyncRefusal};
+use tc_api::refusal::{FeedbackRefusal, Message, Refusal, SyncBlock, SyncFailure, SyncRefusal};
 
 /// tC4 refusal codes in the vendored catalogs that no rebuild refusal produces, each with
 /// the reason (DELTA §3.15.2 and the storage design they follow).
@@ -171,7 +171,9 @@ fn every_refusal_family_has_a_sample_of_every_variant() {
     assert_every_variant(&samples::create());
     assert_every_variant(&samples::import());
     assert_every_variant(&samples::export());
+    assert_every_variant(&samples::sync_blocks());
     assert_every_variant(&samples::sync_refusals());
+    assert_every_variant(&samples::sync());
     assert_every_variant(&samples::share());
     assert_every_variant(&samples::open_door43());
     assert_every_variant(&samples::sign_in());
@@ -281,7 +283,8 @@ fn no_two_sync_refusals_share_a_message() {
     let resolver = Resolver::load();
     let mut by_key: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
     for failure in samples::sync() {
-        let variant = common::variant_of(&serde_json::to_value(&failure.refusal).unwrap());
+        let wire = serde_json::to_value(&failure).unwrap();
+        let variant = common::variant_of(&wire["value"]);
         by_key.entry(failure.key()).or_default().insert(variant);
     }
     let allowed: BTreeMap<&str, BTreeSet<String>> = SHARED_SYNC_KEYS
@@ -309,52 +312,68 @@ fn no_two_sync_refusals_share_a_message() {
     }
 }
 
-/// Refusals a sync can meet once the teammates' work is kept (STORAGE §9.1 S6 to S9): the
-/// switch turned off, the push refused or cut off, a second writer, a local error.
-fn can_follow_intake(refusal: &SyncRefusal) -> bool {
-    !matches!(
-        refusal,
-        SyncRefusal::NotShared
-            | SyncRefusal::ProjectMismatch
-            | SyncRefusal::NeedsNewerApp { .. }
-            | SyncRefusal::Tc4TeamRepository
-    )
-}
+/// The words that tell the person nothing happened. tC4's sentences and the rebuild's say
+/// it in these forms (`syncResult.error.cloneFailed`, `pushFailed`, `needsNewerApp`).
+const NOTHING_CHANGED: &[&str] = &["nothing changed", "nothing was changed", "did not change"];
 
 #[test]
 fn a_failure_after_intake_never_says_nothing_changed_and_says_the_work_was_kept() {
     let resolver = Resolver::load();
     let kept = resolver.english("syncResult.receivedKept").unwrap();
+    let mut after = 0;
     for failure in samples::sync() {
-        if !failure.after_intake || !can_follow_intake(&failure.refusal) {
+        let SyncFailure::AfterIntake(_) = failure else {
             continue;
-        }
+        };
+        after += 1;
         let sentence = resolver.english(failure.key()).unwrap();
+        let note = failure
+            .kept_note()
+            .map(|note| resolver.english(note).unwrap());
+        let banner = format!("{sentence} {}", note.unwrap_or_default()).to_lowercase();
+        for words in NOTHING_CHANGED {
+            assert!(!banner.contains(words), "{failure:?} reads {banner:?}");
+        }
         assert!(
-            !sentence.to_lowercase().contains("nothing changed"),
-            "{failure:?} reads {sentence:?}"
-        );
-        let says_kept = sentence.contains("received and kept")
-            || failure
-                .kept_note()
-                .is_some_and(|note| resolver.english(note) == Some(kept));
-        assert!(
-            says_kept,
+            sentence.contains("received and kept") || note == Some(kept),
             "{failure:?} does not say the received work was kept"
         );
+        // One sentence says it, never two.
+        assert!(
+            !(sentence.contains("received and kept") && note.is_some()),
+            "{failure:?} says it twice"
+        );
     }
+    assert_eq!(after, samples::sync_refusals().len());
     // Before intake there is nothing to tell.
-    for failure in samples::sync().into_iter().filter(|f| !f.after_intake) {
-        assert_eq!(failure.kept_note(), None, "{failure:?}");
+    for failure in samples::sync() {
+        if !matches!(failure, SyncFailure::AfterIntake(_)) {
+            assert_eq!(failure.kept_note(), None, "{failure:?}");
+        }
+    }
+}
+
+#[test]
+fn a_block_is_always_a_failure_before_intake() {
+    // A block can only be a failure before intake, so its "Nothing changed" is true.
+    let resolver = Resolver::load();
+    for block in samples::sync_blocks() {
+        let failure = SyncFailure::Blocked(block);
+        assert_eq!(failure.kept_note(), None);
+        let wire = serde_json::to_value(&failure).unwrap();
+        assert_eq!(wire["type"], "blocked", "{wire}");
+        assert!(resolver.english(failure.key()).is_some(), "{failure:?}");
     }
 }
 
 #[test]
 fn sync_refusals_keep_delta_table_keys_and_tc4_codes() {
-    let before = |refusal| SyncFailure {
-        refusal,
-        after_intake: false,
-    };
+    let before = SyncFailure::BeforeIntake;
+    let not_shared = SyncFailure::Blocked(SyncBlock::NotShared);
+    assert_eq!(
+        (not_shared.key(), not_shared.code()),
+        ("syncResult.error.notShared", Some("sync.not-shared"))
+    );
     let cases = [
         (
             SyncRefusal::Offline,
@@ -365,11 +384,6 @@ fn sync_refusals_keep_delta_table_keys_and_tc4_codes() {
             SyncRefusal::AuthFailed,
             "syncResult.error.authFailed",
             Some("sync.auth-failed"),
-        ),
-        (
-            SyncRefusal::NotShared,
-            "syncResult.error.notShared",
-            Some("sync.not-shared"),
         ),
         (
             SyncRefusal::NoWriteAccess {
