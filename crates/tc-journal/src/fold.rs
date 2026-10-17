@@ -25,7 +25,7 @@ pub(crate) mod value;
 
 pub use meta::ChangeIdx;
 pub use people::PersonLabel;
-pub use project::{CarriedPlacement, DerivedFile, ProjectedDecision};
+pub use project::{CarriedPlacement, CheckTexts, DerivedFile, ProjectedDecision};
 pub use reads::{BookView, ChangeView, Placement};
 pub use resolve::ResolveError;
 pub use sidecar::{SidecarError, decode_alignments, decode_decisions, records_from_usfm};

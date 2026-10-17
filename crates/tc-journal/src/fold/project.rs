@@ -242,6 +242,31 @@ pub struct ProjectedDecision {
     pub detached: bool,
 }
 
+/// The texts the checks of one collection are read against, by the no-text rule of §7.7:
+/// what a Check screen assesses a decision with ([`FoldState::check_texts`]), the texts the
+/// decision files are computed from.
+pub struct CheckTexts<'a> {
+    state: &'a FoldState,
+    book: Option<(BookId, BookText)>,
+}
+
+impl CheckTexts<'_> {
+    /// The text `target` names, or `None` when it names no text (§7.7): the target gives
+    /// no evidence either way. A target of another collection has none here.
+    pub fn text(&self, target: &CheckTarget) -> Option<Arc<TargetText>> {
+        match (target, &self.book) {
+            (CheckTarget::Frame { story, frame }, None) => self
+                .state
+                .frame_text(*story, *frame)
+                .map(|t| Arc::new(TargetText::new(t))),
+            (CheckTarget::Verse { book, .. }, Some((ours, text))) if book == ours => {
+                verse_content(text, target).map(|c| text.facts(c))
+            }
+            _ => None,
+        }
+    }
+}
+
 /// The projected verse texts of a book, read once for a document.
 pub(crate) struct BookText {
     /// chapter → verse → what the verse shows.
@@ -975,6 +1000,19 @@ impl FoldState {
         Some(lines(&head, &records, "]}"))
     }
 
+    /// The texts the checks of `collection` are read against (§7.7), read once: a Check
+    /// screen assesses a decision it shows under another key than its own with them, as the
+    /// decision files are computed.
+    pub fn check_texts(&self, collection: Collection) -> CheckTexts<'_> {
+        CheckTexts {
+            state: self,
+            book: match collection {
+                Collection::Book(book) => Some((book, self.book_text(book))),
+                Collection::Stories => None,
+            },
+        }
+    }
+
     /// Every decision of `tool` on `collection` the projection holds, in key order, with the
     /// state its decision file carries (§7.7) and whether it is listed under Detached: what
     /// the Check screens open a session with ([`ProjectedDecision`]). Each target's text is
@@ -1501,7 +1539,11 @@ type Targeted<'a> = (Target<'a>, KeyIdx);
 /// no text. Every other target (`front`, `intro`, a list such as `1,3,8,12`, a span no run
 /// carries) has none: it gives no evidence either way.
 pub(crate) fn target_content(text: &BookText, check: &CheckKey) -> Option<String> {
-    let CheckTarget::Verse { chapter, verse, .. } = &check.target else {
+    verse_content(text, &check.target)
+}
+
+fn verse_content(text: &BookText, target: &CheckTarget) -> Option<String> {
+    let CheckTarget::Verse { chapter, verse, .. } = target else {
         return None;
     };
     let chapter = text.chapters.get(&chapter.number()?)?;

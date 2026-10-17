@@ -239,8 +239,8 @@ fn cards_without_words_write_nothing() {
     ));
 }
 
-/// The record reads into the journal's value; the journal projects it back (its byte-for-
-/// byte projection is checked against this file in tc-journal's `screens_and_fold` test).
+/// The record reads into the journal's value; the journal projects it back (its projection
+/// is checked against this file, field for field, in tc-journal's `screens_and_fold` test).
 #[test]
 fn the_sample_projects_record_reads_and_is_valid() {
     let file: Value = serde_json::from_str(&read(

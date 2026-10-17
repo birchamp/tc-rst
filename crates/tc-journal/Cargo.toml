@@ -29,6 +29,11 @@ proptest.workspace = true
 # The scale corpus of docs/PERFORMANCE.md, for the operation-count tests. It depends on
 # this crate; as a dev-dependency it links the same build of it.
 tc-corpus = { path = "../tc-corpus" }
+# The screens' crates, for the differential test of what they compute against the files the
+# fold writes (tests/screens_and_fold.rs). They depend on this crate, and link this build.
+tc-check = { path = "../tc-check" }
+tc-align = { path = "../tc-align" }
+tc-resources = { path = "../tc-resources" }
 
 [lints]
 workspace = true

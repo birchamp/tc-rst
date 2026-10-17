@@ -2565,7 +2565,9 @@ with the flags its decision file carries and whether it is listed under Detached
 (`ProjectedDecision`). The session places them on the derived check list with the carry-over's
 two passes (tC4 `completedCheckSession`); a decision placed on the check it is stored under shows
 the fold's flags, one shown on another check is assessed against that check's text with the same
-function, and one no check carries is listed off the list (`tc_check::session`).
+function, and one no check carries is listed off the list (`tc_check::session`). The texts a
+screen assesses with are the fold's (`FoldState::check_texts`, by the no-text rule below), so
+the screen and the file read one text.
 
 **The ladder** (`tc_journal::pins`), every rule tC4's (`src/data/resolve.ts` at d310bf3):
 
@@ -2620,7 +2622,10 @@ decision's `userStatus` (the person's status, which `status` hides once invalida
 `contextId` names (check id, reference and occurrence). Unknown fields of a record follow. A
 decoder ignores the computed flags (`invalid`, `invalidated`, `verseEdits`, `userInvalid`,
 `modifiedTimestamp`) and reads `status` as the person's only when no `userStatus` is written
-and the record is not invalidated (§11.1 X3).
+and the record is not invalidated (§11.1 X3). The document's `resource` is computed too: a
+decoder reads a decision's resource from its `pinnedResource`, else from the document's
+`resource` when that names a commit; when the resolution is an unusable pin it names none,
+and every decision carries its `pinnedResource`.
 
 **Other derived files.**
 
@@ -4101,6 +4106,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the scope digest from the fold (compare only the records the heads file lists) | `a_record_entering_a_files_scope_projects_it` |
 | holding a path clean by stat whose bytes differ (rebuild it) | `a_racy_or_mtime_restored_file_is_never_overwritten`, `loss_bit_rot_not_recorded_as_edit` |
 | the change ids in a loaded file's facts (move the changes out of what the redundancy rule and O7 read) | `the_open_s_rules_read_the_same_ids_from_a_read_and_from_the_cache` |
+| one owner of the validity rules (a screen that hashes its shown text, or reads a pin the ladder stops at as absent) | `the_psalms_corpus_files_are_what_the_screens_compute`, `edits_joins_renumbers_and_pins_change_files_and_screens_alike` (`tc-journal/tests/screens_and_fold.rs`: what `tc_check::status::CheckState` and `tc_align::verse_status` compute from the projected USFM and `resources.json`, read as the screens read them, equals every `invalidated`, `verseEdits`, `status`, `userInvalid` and `invalid` the fold writes, over tC4's sample project, the aligned en_ult Titus, joins, renumbers, cleared verses, unusable and unrecorded pins, and the Psalms corpus) |
 
 ---
 

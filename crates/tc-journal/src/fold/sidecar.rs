@@ -234,10 +234,11 @@ pub fn decode_decisions(
 ) -> Result<Vec<Record>, SidecarError> {
     let doc: Value = serde_json::from_slice(bytes).map_err(|e| fail("the file", e.to_string()))?;
     let doc = obj(&doc, "the file")?;
+    // The document's `resource` is the resolution, a computed field: an unusable pin has no
+    // sha there (§7.7), and then every decision carries its own `pinnedResource`.
     let document_resource = doc
         .get("resource")
-        .map(|r| resource(r, "resource"))
-        .transpose()?;
+        .and_then(|r| resource(r, "resource").ok());
     let decisions = doc
         .get("decisions")
         .and_then(Value::as_array)

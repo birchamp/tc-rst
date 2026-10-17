@@ -68,7 +68,8 @@ impl Session {
 
 /// Opens a session on `items` with the fold's `decisions` of the (tool, collection).
 /// `resolution` is the resource the (tool, collection) resolves to now and `text` the text
-/// of a check's target by the no-text rule of §7.7: they assess a decision shown on a check
+/// of a check's target by the no-text rule of §7.7, the fold's
+/// (`tc_journal::fold::FoldState::check_texts`): they assess a decision shown on a check
 /// under another key than its own.
 pub fn open<'t>(
     items: Vec<CheckItem>,
