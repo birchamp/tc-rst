@@ -34,3 +34,7 @@ checksums.
 
 An excerpt of the bundled Hebrew lexicon as a `git archive` with its `fetched.lock`, and the
 Strong's vectors computed by tC4's rule. Read `lexicon/README.md`.
+
+## `export/`
+
+What tC4's own print code answers, for `tc-export`'s print model. Read `export/README.md`.
