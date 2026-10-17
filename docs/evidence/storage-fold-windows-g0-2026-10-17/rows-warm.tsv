@@ -1,0 +1,21 @@
+round	mode	wall_ms	after_last_file_ms	cpu_ms	peak_ws_mib	peak_private_mib	ws_fold_open_mib	process_wall_ms
+1	c_nocache_warm	5852	508	22656	333	368	unavailable	6517
+1	a_cache_warm	1745	386	3500	270	266	116	2008
+1	psalms	median 352.4	p95 391.4	ws_before 189	peak 270	ws_after 83
+1	app	ws_open 192	peak_open 271	peak 273	ws_end 72	peak_private 282
+2	c_nocache_warm	5938	465	23125	332	368	unavailable	6331
+2	a_cache_warm	1843	423	3531	271	267	95	2082
+2	psalms	median 369.1	p95 406.3	ws_before 200	peak 270	ws_after 31
+2	app	ws_open 209	peak_open 270	peak 273	ws_end 48	peak_private 283
+3	c_nocache_warm	6288	512	24594	333	369	unavailable	6719
+3	a_cache_warm	1855	402	3500	270	266	86	2079
+3	psalms	median 377.5	p95 479.7	ws_before 191	peak 270	ws_after 79
+3	app	ws_open 201	peak_open 269	peak 273	ws_end 73	peak_private 283
+4	c_nocache_warm	6403	600	24469	333	368	unavailable	6807
+4	a_cache_warm	1987	476	3828	270	266	73	2263
+4	psalms	median 401.1	p95 490.3	ws_before 194	peak 270	ws_after 98
+4	app	ws_open 210	peak_open 270	peak 272	ws_end 114	peak_private 282
+5	c_nocache_warm	6543	522	25484	332	368	unavailable	6934
+5	a_cache_warm	1916	423	3594	270	266	42	2180
+5	psalms	median 397.5	p95 449.2	ws_before 200	peak 270	ws_after 118
+5	app	ws_open 202	peak_open 270	peak 270	ws_end 45	peak_private 282
