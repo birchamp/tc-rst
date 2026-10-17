@@ -77,7 +77,10 @@ function Get-MachineFacts([string]$CpuFeaturesJson) {
     }
     if ($features) {
         $facts.'SHA instructions' = "$($features.sha)"
-        $facts.'AVX-512 (F, BW, VL)' = "$($features.avx512f), $($features.avx512bw), $($features.avx512vl)"
+        $avx512 = @(foreach ($name in @('avx512f', 'avx512bw', 'avx512vl')) {
+                if ($null -ne $features.$name) { "$($name.Substring(6).ToUpper()) $($features.$name)" }
+            })
+        if ($avx512.Count) { $facts.'AVX-512' = $avx512 -join ', ' }
         $facts.AVX2 = "$($features.avx2)"
     }
     return $facts

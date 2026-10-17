@@ -192,6 +192,9 @@ function Invoke-Foldbench([string[]]$Arguments, [hashtable]$Variables, [string[]
     try { $cpu = $process.TotalProcessorTime.TotalMilliseconds } catch { $cpu = $null }
     if (-not $cpu) { $cpu = $cpuSeen }
     $stderr = $stderrTask.Result
+    # A foldbench from before the storage branch's 225091b prints the figures it reads from
+    # Linux's /proc as 0 where there is no /proc; a newer one prints "unavailable".
+    if (-not (Test-Path '/proc/self/status') -and ($lines -join "`n") -match ' 0 MiB') { $script:procZeros = $true }
     if ($process.ExitCode -ne 0) {
         throw "foldbench $($Arguments -join ' ') failed with exit code $($process.ExitCode): $stderr"
     }
@@ -297,6 +300,7 @@ function Get-CorpusSize([string]$Dir) {
     return "$($packs.Count) packs and $($pending.Count) pending files, $(Format-Invariant '{0:N0}' $bytes) bytes"
 }
 
+$script:procZeros = $false
 $machineFacts = Get-MachineFacts ''
 $storageCommit = Get-Commit $Storage
 $scriptCommit = Get-Commit $repo
@@ -408,7 +412,11 @@ if (-not $SkipEverything) {
     Say 'Every part once in one process (foldbench run); a few minutes'
     Read-Corpus $Corpus
     $everything = Invoke-Foldbench @('run', $Corpus, "$Threads") @{} @()
-    Set-Content -LiteralPath (Join-Path $raw 'everything.txt') -Value ($everything.Stdout + @('', '--- stderr ---', $everything.Stderr))
+    $note = @()
+    if ($script:procZeros) {
+        $note = @('NOTE: this foldbench prints the CPU and memory figures it reads from Linux''s /proc as 0 on this system. They are not measurements.', '')
+    }
+    Set-Content -LiteralPath (Join-Path $raw 'everything.txt') -Value ($note + $everything.Stdout + @('', '--- stderr ---', $everything.Stderr))
 }
 
 # ------------------------------------------------------------------ the report
@@ -436,6 +444,10 @@ Add "- Build: $toolchain, release profile; $buildNote"
 Add "- Corpus (``$Spec``): $corpusSize; $generated"
 Add ("- Run: {0} to {1} UTC; {2} rounds, {3} reading threads" -f $started.ToString('yyyy-MM-dd HH:mm'), $finished.ToString('HH:mm'), $Rounds, $Threads)
 Add "- foldbench's machine line: ``$machineLine``"
+if ($script:procZeros) {
+    Add '- This foldbench prints the figures it reads from Linux''s `/proc` as 0 here (the storage branch'
+    Add '  prints "unavailable" from `225091b` on); none of those zeros is used below.'
+}
 Add ('- Raw rows: `{0}`' -f ($raw.Replace($repo, '.').Replace('\', '/')))
 Add ''
 Add '## Machine'
@@ -494,10 +506,12 @@ if ($everything) {
         if ($line.StartsWith('|')) { Add $line }
     }
     Add ''
-    foreach ($line in $everything.Stdout) {
-        if ($line -like 'corpus:*' -or $line -like 'fold cache:*' -or $line -like 'Psalms:*') { Add "- $line" }
+    if (-not $script:procZeros) {
+        foreach ($line in $everything.Stdout) {
+            if ($line -like 'corpus:*' -or $line -like 'fold cache:*' -or $line -like 'Psalms:*') { Add "- $line" }
+        }
+        Add ''
     }
-    Add ''
 }
 Add '## What these results decide'
 Add ''
