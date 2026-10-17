@@ -350,9 +350,12 @@ impl Door43Client {
     ) -> Result<(DownloadedZip, VerifiedArchive), Door43Error> {
         let file = format!("{commit}.zip");
         let url = self.repo_api(repo, &["archive", &file]);
+        let route = route_of(&Method::GET, &url);
         // Before the commit lookup, so a cancelled download sends nothing.
-        self.check_stop(&route_of(&Method::GET, &url), to.watch)?;
-        let tree = self.commit_tree(repo, commit).await?;
+        self.check_stop(&route, to.watch)?;
+        // The lookup is part of the download: a stall here must not hold a Cancel either.
+        let looked_up = self.commit_tree(repo, commit);
+        let tree = self.unless_stopped(&route, to.watch, looked_up).await??;
         let (route, zip) = self.download(url, to).await?;
         let (commit, max) = (commit.clone(), self.limits.max_unpacked_bytes);
         let archive = check_in_background(&route, &zip, move |reader| {
