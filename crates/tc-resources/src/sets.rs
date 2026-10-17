@@ -38,154 +38,18 @@ use serde_json::{Map, Value};
 use tc_core::{BookId, Testament};
 use tc_door43::{AccountName, RepoRef};
 
+use tc_journal::json::Json;
+use tc_journal::keys::{ResourcesKey, ResourcesLevel, SlotName};
+use tc_journal::pins::{Ladder, SlotPin};
+use tc_journal::record::{PinGroupValue, SlotValue};
+
 use crate::error::{ParseError, UnwritablePin};
 use crate::pin::ResourcePin;
 
-/// The two rungs of the ladder (D30): exactly these, in this order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Rung {
-    Primary,
-    Fallback,
-}
-
-impl Rung {
-    pub const LADDER: [Rung; 2] = [Rung::Primary, Rung::Fallback];
-}
-
-impl fmt::Display for Rung {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Rung::Primary => "primary",
-            Rung::Fallback => "fallback",
-        })
-    }
-}
-
-/// STORAGE §2.2's `PinGroup`: the five records `resources.json` is projected from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum PinGroup {
-    Primary,
-    Fallback,
-    OriginalLanguage,
-    Lexicon,
-    ExtraScripture,
-}
-
-impl PinGroup {
-    pub const ALL: [PinGroup; 5] = [
-        PinGroup::Primary,
-        PinGroup::Fallback,
-        PinGroup::OriginalLanguage,
-        PinGroup::Lexicon,
-        PinGroup::ExtraScripture,
-    ];
-}
-
-impl From<Rung> for PinGroup {
-    fn from(rung: Rung) -> Self {
-        match rung {
-            Rung::Primary => PinGroup::Primary,
-            Rung::Fallback => PinGroup::Fallback,
-        }
-    }
-}
-
-/// A resource slot of a language set, with tC4's slot name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum SetSlot {
-    TranslationNotes,
-    TranslationWordsLinks,
-    TranslationWords,
-    TranslationAcademy,
-    TranslationQuestions,
-    /// The language's simplified Bible (`en_ust`, `<lang>_gst`): a gateway Bible, not a
-    /// help, so a help-set upgrade never offers it (D72).
-    SimplifiedText,
-    Obs,
-    ObsNotes,
-    ObsWordsLinks,
-    ObsQuestions,
-    ObsImages,
-}
-
-impl SetSlot {
-    /// Every slot, in tC4's fixed order for `resources.json`.
-    pub const ALL: [SetSlot; 11] = [
-        SetSlot::TranslationNotes,
-        SetSlot::TranslationWordsLinks,
-        SetSlot::TranslationWords,
-        SetSlot::TranslationAcademy,
-        SetSlot::TranslationQuestions,
-        SetSlot::SimplifiedText,
-        SetSlot::Obs,
-        SetSlot::ObsNotes,
-        SetSlot::ObsWordsLinks,
-        SetSlot::ObsQuestions,
-        SetSlot::ObsImages,
-    ];
-
-    /// The help slots an upgrade offers, in display order (tC4 `SET_SLOTS`).
-    pub const HELPS: [SetSlot; 9] = [
-        SetSlot::TranslationNotes,
-        SetSlot::TranslationWordsLinks,
-        SetSlot::TranslationWords,
-        SetSlot::TranslationAcademy,
-        SetSlot::TranslationQuestions,
-        SetSlot::Obs,
-        SetSlot::ObsNotes,
-        SetSlot::ObsWordsLinks,
-        SetSlot::ObsImages,
-    ];
-
-    /// tC4's slot name in `resources.json`.
-    pub fn name(self) -> &'static str {
-        match self {
-            SetSlot::TranslationNotes => "translationNotes",
-            SetSlot::TranslationWordsLinks => "translationWordsLinks",
-            SetSlot::TranslationWords => "translationWords",
-            SetSlot::TranslationAcademy => "translationAcademy",
-            SetSlot::TranslationQuestions => "translationQuestions",
-            SetSlot::SimplifiedText => "simplifiedText",
-            SetSlot::Obs => "obs",
-            SetSlot::ObsNotes => "obs-tn",
-            SetSlot::ObsWordsLinks => "obs-twl",
-            SetSlot::ObsQuestions => "obs-tq",
-            SetSlot::ObsImages => "obs-images",
-        }
-    }
-
-    /// The Bible-book slots whose coverage a resolution reads (tC4 `coverageBackfill`
-    /// `SET_SLOTS`). Open Bible Stories slots cover the whole collection.
-    pub fn is_per_book(self) -> bool {
-        matches!(
-            self,
-            SetSlot::TranslationNotes
-                | SetSlot::TranslationWordsLinks
-                | SetSlot::TranslationWords
-                | SetSlot::TranslationAcademy
-                | SetSlot::TranslationQuestions
-                | SetSlot::SimplifiedText
-        )
-    }
-}
-
-impl fmt::Display for SetSlot {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.name())
-    }
-}
-
-impl FromStr for SetSlot {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        SetSlot::ALL
-            .into_iter()
-            .find(|slot| slot.name() == s)
-            .ok_or_else(|| ParseError::Slot(s.to_owned()))
-    }
-}
+/// The rungs, the slots and the record groups are the journal's: one model of the pins for
+/// the fold, the screens and the resource store (STORAGE §17).
+pub use tc_journal::PinGroup;
+pub use tc_journal::pins::{Rung, SetSlot};
 
 /// A gateway language as a set names it: tC4's `gatewayLanguage: {languageId, owner}`.
 /// The owner matters: `fr` is published by both Xenizo and MVHS.
@@ -203,6 +67,11 @@ pub struct GatewayLanguage {
 pub struct LanguageSet {
     pub gateway: GatewayLanguage,
     pub pins: BTreeMap<SetSlot, ResourcePin>,
+    /// Known slots whose value tC4's §5.3 grammar refuses, such as a pin with a tag and no
+    /// commit, kept as they were read and written back. The ladder still reads them by the
+    /// journal's rules ([`LanguageSet::held`]): a value with no commit stops it for the books
+    /// it records, and no install can satisfy it.
+    pub unreadable: BTreeMap<SetSlot, Value>,
     /// Slots this version does not know, kept as they were read and written back.
     pub extra: Map<String, Value>,
     /// Fields of the `gatewayLanguage` object beside `languageId` and `owner`, kept as
@@ -223,6 +92,7 @@ impl LanguageSet {
         Self {
             gateway,
             pins: BTreeMap::new(),
+            unreadable: BTreeMap::new(),
             extra: Map::new(),
             gateway_extra: Map::new(),
         }
@@ -230,6 +100,24 @@ impl LanguageSet {
 
     pub fn pin(&self, slot: SetSlot) -> Option<&ResourcePin> {
         self.pins.get(&slot)
+    }
+
+    /// The pin to read and install from in `slot`: the pin, or, for a slot kept as written
+    /// that the ladder reads as a usable pin, a view of it that is never written back.
+    pub fn readable_pin(&self, slot: SetSlot) -> Option<ResourcePin> {
+        match self.pins.get(&slot) {
+            Some(pin) => Some(pin.clone()),
+            None => view_of(self.unreadable.get(&slot)?),
+        }
+    }
+
+    /// What this set holds in `slot` as the ladder reads it (`tc_journal::pins`): a pin, or
+    /// a value that is not a usable pin. `None` when the slot is absent or `null`.
+    pub fn held(&self, slot: SetSlot) -> Option<SlotPin> {
+        if let Some(pin) = self.pins.get(&slot) {
+            return Some(SlotPin::Usable(pin.journal_pin()));
+        }
+        read_slot(self.unreadable.get(&slot)?)
     }
 
     pub fn with(mut self, slot: SetSlot, pin: ResourcePin) -> Self {
@@ -295,6 +183,8 @@ impl LanguageSet {
         for slot in SetSlot::ALL {
             if let Some(pin) = self.pins.get(&slot) {
                 out.insert(slot.name().to_owned(), pin_json(slot.name(), pin)?);
+            } else if let Some(raw) = self.unreadable.get(&slot) {
+                out.insert(slot.name().to_owned(), raw.clone());
             }
         }
         for (key, value) in &self.extra {
@@ -303,8 +193,10 @@ impl LanguageSet {
         Ok(Value::Object(out))
     }
 
-    /// Reads a tC4 §5.3 set object. A malformed pin in a known slot is refused, so a bad
-    /// record is reported where it is read; an unknown slot is kept.
+    /// Reads a tC4 §5.3 set object. A known slot whose value is not a pin this crate can
+    /// install from (no commit, a malformed coverage record) is kept in
+    /// [`LanguageSet::unreadable`], not refused with the whole set; an unknown slot is kept
+    /// in [`LanguageSet::extra`].
     pub fn from_json(value: &Value) -> Result<Self, ParseError> {
         let object = value
             .as_object()
@@ -335,11 +227,17 @@ impl LanguageSet {
             if key == GATEWAY_LANGUAGE {
                 continue;
             }
-            match key.parse::<SetSlot>() {
-                Ok(slot) => {
-                    set.pins.insert(slot, read_pin(key, value)?);
-                }
-                Err(_) => {
+            match SetSlot::parse(key) {
+                // tC4 reads `null` as an empty slot; it is kept as written.
+                Some(slot) => match read_pin(key, value) {
+                    Ok(pin) => {
+                        set.pins.insert(slot, pin);
+                    }
+                    Err(_) => {
+                        set.unreadable.insert(slot, value.clone());
+                    }
+                },
+                None => {
                     set.extra.insert(key.clone(), value.clone());
                 }
             }
@@ -376,8 +274,46 @@ fn writable(slot: &str, pin: &ResourcePin) -> Result<(), UnwritablePin> {
     }
 }
 
+/// A slot's pin, when it is one this crate can install from and write back exactly as it
+/// was read: tC4's §5.3 form. A value in another form (no commit, a coverage record with a
+/// lower-case or unknown code or an empty list, a repository path with a scheme) is refused
+/// here and kept as written by the caller, so writing the pins never rewrites it.
 fn read_pin(slot: &str, value: &Value) -> Result<ResourcePin, ParseError> {
-    ResourcePin::deserialize(value).map_err(|e| ParseError::Pins(format!("slot {slot}: {e}")))
+    let pin = ResourcePin::deserialize(value)
+        .map_err(|e| ParseError::Pins(format!("slot {slot}: {e}")))?;
+    if serde_json::to_value(&pin).ok().as_ref() != Some(value) {
+        return Err(ParseError::Pins(format!(
+            "slot {slot}: the pin is not in tC4's §5.3 form"
+        )));
+    }
+    Ok(pin)
+}
+
+/// A slot value kept as written, read by the journal's rules. A number with a fraction,
+/// which no pin field holds, reads as `null`.
+fn read_slot(raw: &Value) -> Option<SlotPin> {
+    SlotPin::read(&lenient_json(raw))
+}
+
+fn lenient_json(value: &Value) -> Json {
+    match value {
+        Value::Array(items) => Json::Arr(items.iter().map(lenient_json).collect()),
+        Value::Object(map) => Json::Obj(
+            map.iter()
+                .map(|(k, v)| (k.clone(), lenient_json(v)))
+                .collect(),
+        ),
+        other => Json::try_from(other).unwrap_or(Json::Null),
+    }
+}
+
+/// The pin to read and install from for what the ladder read in a slot kept as written.
+fn view_of(raw: &Value) -> Option<ResourcePin> {
+    let SlotPin::Usable(pin) = read_slot(raw)? else {
+        return None;
+    };
+    let flavor = raw.get("flavor").and_then(Value::as_str).map(str::to_owned);
+    ResourcePin::from_journal(&pin, flavor)
 }
 
 /// A pin per testament: the original-language texts and the lexicons.
@@ -385,6 +321,9 @@ fn read_pin(slot: &str, value: &Value) -> Result<ResourcePin, ParseError> {
 pub struct Testaments {
     pub nt: Option<ResourcePin>,
     pub ot: Option<ResourcePin>,
+    /// `nt` or `ot` when its value is not a pin in tC4's §5.3 form, kept as it was read and
+    /// written back (see [`LanguageSet::unreadable`]).
+    pub unreadable: BTreeMap<Testament, Value>,
     /// Slots beside `nt` and `ot` this version does not know, kept as they were read and
     /// written back.
     pub extra: Map<String, Value>,
@@ -409,18 +348,35 @@ impl Testaments {
         }
     }
 
+    /// The commit this group pins for `testament` by the journal's rules, whether or not
+    /// the slot is in tC4's §5.3 form: what an alignment's validity compares its source with
+    /// (STORAGE §7.7).
+    pub fn sha(&self, testament: Testament) -> Option<tc_core::GitOid> {
+        if let Some(pin) = self.get(testament) {
+            return Some(pin.sha);
+        }
+        match read_slot(self.unreadable.get(&testament)?)? {
+            SlotPin::Usable(pin) => Some(pin.resource.sha),
+            SlotPin::Unusable(_) => None,
+        }
+    }
+
     /// Whether the group has anything to write: a pin or a slot a newer app added.
     fn is_empty(&self) -> bool {
-        self.nt.is_none() && self.ot.is_none() && self.extra.is_empty()
+        self.nt.is_none()
+            && self.ot.is_none()
+            && self.unreadable.is_empty()
+            && self.extra.is_empty()
     }
 
     fn to_json(&self) -> Result<Value, UnwritablePin> {
         let mut out = Map::new();
-        if let Some(pin) = &self.nt {
-            out.insert("nt".to_owned(), pin_json("nt", pin)?);
-        }
-        if let Some(pin) = &self.ot {
-            out.insert("ot".to_owned(), pin_json("ot", pin)?);
+        for (name, testament) in [("nt", Testament::New), ("ot", Testament::Old)] {
+            if let Some(pin) = self.get(testament) {
+                out.insert(name.to_owned(), pin_json(name, pin)?);
+            } else if let Some(raw) = self.unreadable.get(&testament) {
+                out.insert(name.to_owned(), raw.clone());
+            }
         }
         for (key, value) in &self.extra {
             out.entry(key.clone()).or_insert_with(|| value.clone());
@@ -434,11 +390,18 @@ impl Testaments {
             .ok_or_else(|| ParseError::Pins("a testament group is not an object".to_owned()))?;
         let mut out = Testaments::default();
         for (key, value) in object {
-            match key.as_str() {
-                "nt" => out.nt = Some(read_pin(key, value)?),
-                "ot" => out.ot = Some(read_pin(key, value)?),
+            let testament = match key.as_str() {
+                "nt" => Testament::New,
+                "ot" => Testament::Old,
                 _ => {
                     out.extra.insert(key.clone(), value.clone());
+                    continue;
+                }
+            };
+            match read_pin(key, value) {
+                Ok(pin) => out.set(testament, Some(pin)),
+                Err(_) => {
+                    out.unreadable.insert(testament, value.clone());
                 }
             }
         }
@@ -523,6 +486,9 @@ pub struct ProjectPins {
     pub original_language: Testaments,
     pub lexicon: Testaments,
     pub extra_scripture: Vec<ScripturePane>,
+    /// Entries of `extraScripture` that are not a pane in tC4's §5.3 form, each kept as it
+    /// was read with its place in the list, and written back there.
+    pub unreadable_panes: Vec<(usize, Value)>,
     pub unknown: UnknownKeys,
 }
 
@@ -598,6 +564,9 @@ impl ProjectPins {
                     // A pane is plain strings, lists and JSON values, which always serialize.
                     panes.push(serde_json::to_value(pane).unwrap_or(Value::Null));
                 }
+                for (at, raw) in &self.unreadable_panes {
+                    panes.insert((*at).min(panes.len()), raw.clone());
+                }
                 serde_json::json!({ EXTRA_SCRIPTURE: panes })
             }
         })
@@ -623,17 +592,27 @@ impl ProjectPins {
             PinGroup::OriginalLanguage => self.original_language = Testaments::from_json(value)?,
             PinGroup::Lexicon => self.lexicon = Testaments::from_json(value)?,
             PinGroup::ExtraScripture => {
-                let panes = match value.get(EXTRA_SCRIPTURE) {
-                    None if empty => Vec::new(),
+                let entries = match value.get(EXTRA_SCRIPTURE) {
+                    None if empty => &[][..],
                     None => {
                         return Err(ParseError::Pins(
                             "the extraScripture group has no extraScripture slot".to_owned(),
                         ));
                     }
-                    Some(list) => Vec::<ScripturePane>::deserialize(list)
-                        .map_err(|e| ParseError::Pins(format!("extraScripture: {e}")))?,
+                    Some(list) => list.as_array().map(Vec::as_slice).ok_or_else(|| {
+                        ParseError::Pins("extraScripture is not a list".to_owned())
+                    })?,
                 };
+                let mut panes = Vec::new();
+                let mut unreadable = Vec::new();
+                for (at, entry) in entries.iter().enumerate() {
+                    match read_pane(entry) {
+                        Some(pane) => panes.push(pane),
+                        None => unreadable.push((at, entry.clone())),
+                    }
+                }
                 self.extra_scripture = panes;
+                self.unreadable_panes = unreadable;
             }
         }
         Ok(())
@@ -719,13 +698,112 @@ impl ProjectPins {
             }
         }
         out.insert(RESOURCES.to_owned(), Value::Object(resources));
-        if !self.extra_scripture.is_empty() {
+        if !self.extra_scripture.is_empty() || !self.unreadable_panes.is_empty() {
             out.insert(
                 EXTRA_SCRIPTURE.to_owned(),
                 self.group_json(PinGroup::ExtraScripture)?[EXTRA_SCRIPTURE].clone(),
             );
         }
         Ok(Value::Object(out))
+    }
+}
+
+/// A pane in tC4's §5.3 form, which this crate can write back exactly as it was read.
+fn read_pane(entry: &Value) -> Option<ScripturePane> {
+    let pane = ScripturePane::deserialize(entry).ok()?;
+    (serde_json::to_value(&pane).ok().as_ref() == Some(entry)).then_some(pane)
+}
+
+/// The ladder over the project's two language sets, by the journal's rules: the one
+/// implementation the fold and the screens resolve with (STORAGE §7.7).
+impl Ladder for ProjectPins {
+    fn held(&self, rung: Rung, slot: SetSlot) -> Option<SlotPin> {
+        self.set(rung)?.held(slot)
+    }
+}
+
+/// Why a group of pins cannot be stored as a journal record: a slot name the journal's
+/// grammar refuses, or a number with a fraction, which no pin holds.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum GroupError {
+    #[error(transparent)]
+    Unwritable(#[from] UnwritablePin),
+    #[error("{0}")]
+    NotStorable(String),
+}
+
+impl ProjectPins {
+    /// The value of the `Pins` record of `group` (STORAGE §2.2): the group's slots under
+    /// the journal's slot grammar.
+    pub fn group_value(&self, group: PinGroup) -> Result<PinGroupValue, GroupError> {
+        let json = self.group_json(group)?;
+        let Value::Object(map) = &json else {
+            return Err(GroupError::NotStorable("a group is an object".to_owned()));
+        };
+        map.iter()
+            .map(|(name, slot)| {
+                let name =
+                    SlotName::parse(name).map_err(|e| GroupError::NotStorable(e.to_string()))?;
+                let slot = Json::try_from(slot)
+                    .map_err(|e| GroupError::NotStorable(format!("{name:?}: {e}")))?;
+                Ok((name, SlotValue(slot)))
+            })
+            .collect::<Result<_, _>>()
+            .map(PinGroupValue)
+    }
+
+    /// Replaces `group` from the value of its `Pins` record. Nothing changes when it is
+    /// refused.
+    pub fn set_group_value(
+        &mut self,
+        group: PinGroup,
+        value: &PinGroupValue,
+    ) -> Result<(), ParseError> {
+        let json: Map<String, Value> = value
+            .0
+            .iter()
+            .map(|(name, slot)| (name.as_str().to_owned(), Value::from(&slot.0)))
+            .collect();
+        self.set_group_json(group, &Value::Object(json))
+    }
+
+    /// The members of `resources.json` no pin group holds, as the journal's
+    /// `ResourcesExtra` records keep them (STORAGE §2.2): each by its level and name.
+    pub fn resources_extra(&self) -> Result<Vec<(ResourcesKey, Json)>, GroupError> {
+        let levels = [
+            (ResourcesLevel::Top, &self.unknown.top),
+            (ResourcesLevel::LanguageSets, &self.unknown.language_sets),
+            (ResourcesLevel::Resources, &self.unknown.resources),
+        ];
+        let mut out = Vec::new();
+        for (level, members) in levels {
+            for (name, value) in members {
+                let key = ResourcesKey::new(level, name)
+                    .map_err(|e| GroupError::NotStorable(e.to_string()))?;
+                let value = Json::try_from(value)
+                    .map_err(|e| GroupError::NotStorable(format!("{name:?}: {e}")))?;
+                out.push((key, value));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Sets a member of `resources.json` no pin group holds, from its `ResourcesExtra`
+    /// record; `None` removes it.
+    pub fn set_resources_extra(&mut self, key: &ResourcesKey, value: Option<&Json>) {
+        let members = match key.level() {
+            ResourcesLevel::Top => &mut self.unknown.top,
+            ResourcesLevel::LanguageSets => &mut self.unknown.language_sets,
+            ResourcesLevel::Resources => &mut self.unknown.resources,
+        };
+        match value {
+            Some(value) => {
+                members.insert(key.name().to_owned(), Value::from(value));
+            }
+            None => {
+                members.remove(key.name());
+            }
+        }
     }
 }
 
@@ -736,31 +814,6 @@ pub(crate) fn is_twl_repo(repo: &RepoRef) -> bool {
 /// A translation words articles repository: `en_tw`, `<lang>_tw`.
 pub(crate) fn is_tw_repo(repo: &RepoRef) -> bool {
     repo.name.as_str().to_ascii_lowercase().ends_with("_tw")
-}
-
-/// The tools that derive a check list, and the slot each derives from. Articles never
-/// drive resolution (tC4 `TOOL_SLOT`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Tool {
-    TranslationNotes,
-    TranslationWords,
-}
-
-impl Tool {
-    pub fn slot(self) -> SetSlot {
-        match self {
-            Tool::TranslationNotes => SetSlot::TranslationNotes,
-            Tool::TranslationWords => SetSlot::TranslationWordsLinks,
-        }
-    }
-
-    /// The slot the tool reads for Open Bible Stories (tC4 `OBS_TOOL_SLOT`).
-    pub fn obs_slot(self) -> SetSlot {
-        match self {
-            Tool::TranslationNotes => SetSlot::ObsNotes,
-            Tool::TranslationWords => SetSlot::ObsWordsLinks,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -799,6 +852,51 @@ mod tests {
         assert_eq!(pins.extra_scripture[0].id.as_str(), "ult");
         assert!(pins.lexicon.ot.is_some() && pins.lexicon.nt.is_none());
         assert_eq!(pins.to_resources_json().unwrap(), json);
+    }
+
+    #[test]
+    fn each_group_is_the_journals_record_and_the_tc4_obs_slots_are_slot_names() {
+        let mut json = real_resources_json();
+        json["x-top"] = serde_json::json!({"a": 1});
+        json["languageSets"]["fallback"]["obs-tn"] = serde_json::json!({
+            "repoPath": "git.door43.org/unfoldingWord/en_obs-tn", "version": "v9",
+            "sha": "c354b8a1d9a1c3c4f5f1a6bd5f8a6aa8d9e9f0a1", "flavor": "parascriptural/x-tsv"
+        });
+        // A pin with a tag and no commit: kept, not a reason to refuse the set.
+        json["languageSets"]["fallback"]["translationQuestions"] = serde_json::json!({
+            "repoPath": "git.door43.org/unfoldingWord/en_tq", "version": "v40",
+            "flavor": "parascriptural/x-tsv"
+        });
+        let pins = ProjectPins::from_resources_json(&json).unwrap();
+        let mut back = ProjectPins::default();
+        for group in PinGroup::ALL {
+            let value = pins.group_value(group).unwrap();
+            back.set_group_value(group, &value).unwrap();
+        }
+        for (key, value) in pins.resources_extra().unwrap() {
+            assert_eq!(key.level(), ResourcesLevel::Top);
+            back.set_resources_extra(&key, Some(&value));
+        }
+        assert_eq!(back, pins);
+        assert_eq!(back.to_resources_json().unwrap(), json);
+        // The journal's ladder reads the same groups the same way.
+        let sets = tc_journal::pins::LanguageSets {
+            primary: Some(pins.group_value(PinGroup::Primary).unwrap()),
+            fallback: Some(pins.group_value(PinGroup::Fallback).unwrap()),
+        };
+        for book in [BookId::Titus, BookId::Ruth, BookId::Revelation] {
+            for tool in [
+                tc_journal::ToolId::TranslationNotes,
+                tc_journal::ToolId::TranslationQuestions,
+            ] {
+                let unit = tc_journal::pins::Collection::Book(book);
+                assert_eq!(pins.resolution(tool, unit), sets.resolution(tool, unit));
+            }
+        }
+        assert!(matches!(
+            pins.held(Rung::Fallback, SetSlot::TranslationQuestions),
+            Some(SlotPin::Unusable(_))
+        ));
     }
 
     #[test]
@@ -854,17 +952,16 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_books_list_is_no_record_and_the_pins_still_read() {
+    fn an_empty_books_list_records_nothing_and_is_kept_as_written() {
         let mut json = real_resources_json();
         json["languageSets"]["primary"]["translationNotes"]["books"] = serde_json::json!([]);
         let pins = ProjectPins::from_resources_json(&json).unwrap();
-        let tn = pins
-            .primary
-            .as_ref()
-            .unwrap()
-            .pin(SetSlot::TranslationNotes)
-            .unwrap();
+        let primary = pins.primary.as_ref().unwrap();
+        // Not a pin this crate would write back the same way: kept as written.
+        assert!(primary.pin(SetSlot::TranslationNotes).is_none());
+        let tn = primary.readable_pin(SetSlot::TranslationNotes).unwrap();
         assert_eq!(tn.books, None);
+        assert_eq!(pins.to_resources_json().unwrap(), json);
     }
 
     /// tC4 `journal/grammar.mjs` `pinEntryError`, for a pin slot (not `gatewayLanguage`):
@@ -999,14 +1096,24 @@ mod tests {
     }
 
     #[test]
-    fn a_malformed_pin_is_refused_and_changes_nothing() {
+    fn a_malformed_pin_is_kept_as_written_and_the_set_still_reads() {
         let mut pins = ProjectPins::from_resources_json(&real_resources_json()).unwrap();
-        let before = pins.clone();
         let bad = serde_json::json!({
             "gatewayLanguage": {"languageId": "en", "owner": "unfoldingWord"},
             "translationNotes": {"repoPath": "git.door43.org/unfoldingWord/en_tn", "sha": "not-a-sha"}
         });
-        assert!(pins.set_group_json(PinGroup::Primary, &bad).is_err());
+        pins.set_group_json(PinGroup::Primary, &bad).unwrap();
+        let primary = pins.primary.as_ref().unwrap();
+        assert!(primary.pin(SetSlot::TranslationNotes).is_none());
+        assert!(matches!(
+            primary.held(SetSlot::TranslationNotes),
+            Some(SlotPin::Unusable(_))
+        ));
+        assert_eq!(pins.group_json(PinGroup::Primary).unwrap(), bad);
+        // A set with no gateway language is still refused, and changes nothing.
+        let before = pins.clone();
+        let no_gateway = serde_json::json!({"translationNotes": bad["translationNotes"].clone()});
+        assert!(pins.set_group_json(PinGroup::Primary, &no_gateway).is_err());
         assert_eq!(pins, before);
     }
 

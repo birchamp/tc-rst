@@ -546,6 +546,16 @@ pub enum PinGroup {
     ExtraScripture,
 }
 
+impl PinGroup {
+    pub const ALL: [PinGroup; 5] = [
+        PinGroup::Primary,
+        PinGroup::Fallback,
+        PinGroup::OriginalLanguage,
+        PinGroup::Lexicon,
+        PinGroup::ExtraScripture,
+    ];
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MetaField {
     Name,

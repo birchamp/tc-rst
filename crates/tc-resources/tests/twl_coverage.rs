@@ -12,11 +12,12 @@ use md5::{Digest, Md5};
 use serde_json::{Value, json};
 use tc_core::BookId;
 use tc_resources::resolve::{
-    PreflightState, backfill_coverage, preflight_tool_book, resolve_slot, resolve_tool_book,
+    PreflightState, Resolution, Resolved, backfill_coverage, preflight_tool_book, resolve_slot,
+    resolve_tool,
 };
 use tc_resources::{
-    BookCoverage, GatewayLanguage, HelpsChoice, LanguageSet, Missing, PartStatus, ProjectPins,
-    ResourcePin, ResourceStore, SetSlot, Tool, install_dcs_zip, load_book, suite,
+    BookCoverage, Collection, GatewayLanguage, HelpsChoice, LanguageSet, Missing, PartStatus,
+    ProjectPins, ResourcePin, ResourceStore, SetSlot, ToolId, install_dcs_zip, load_book, suite,
 };
 
 use common::{fixture, fixture_pin, zip};
@@ -152,19 +153,27 @@ fn a_book_the_primary_links_lack_falls_back_and_backfill_records_the_real_books(
     let psa = resolve_slot(
         &pins,
         SetSlot::TranslationWordsLinks,
-        BookId::Psalms,
+        Collection::Book(BookId::Psalms),
         &store,
     )
+    .and_then(Resolved::usable)
     .unwrap();
     assert_eq!(psa.rung, tc_resources::Rung::Fallback);
     assert!(psa.pin.same_identity(&v91));
-    let tit = resolve_slot(&pins, SetSlot::TranslationWordsLinks, BookId::Titus, &store).unwrap();
+    let tit = resolve_slot(
+        &pins,
+        SetSlot::TranslationWordsLinks,
+        Collection::Book(BookId::Titus),
+        &store,
+    )
+    .and_then(Resolved::usable)
+    .unwrap();
     assert_eq!(tit.rung, tc_resources::Rung::Primary);
 
     let installed = |p: &ResourcePin| store.has_dcs(p);
     let pre = preflight_tool_book(
         Some(&pins),
-        Tool::TranslationWords,
+        ToolId::TranslationWords,
         BookId::Psalms,
         &store,
         &installed,
@@ -213,12 +222,24 @@ fn unreleased_books_resolve_to_no_rung_for_tw() {
     for code in ["1CH", "2CH", "ECC", "EZK", "ISA", "JER", "NUM"] {
         let book: BookId = code.parse().unwrap();
         assert_eq!(
-            resolve_tool_book(&pins, Tool::TranslationWords, book, &store),
+            resolve_tool(
+                &pins,
+                ToolId::TranslationWords,
+                Collection::Book(book),
+                &store
+            ),
             None,
             "{code}"
         );
     }
-    let tit = resolve_tool_book(&pins, Tool::TranslationWords, BookId::Titus, &store).unwrap();
+    let tit: Resolution = resolve_tool(
+        &pins,
+        ToolId::TranslationWords,
+        Collection::Book(BookId::Titus),
+        &store,
+    )
+    .and_then(Resolved::usable)
+    .unwrap();
     assert!(tit.pin.same_identity(twl));
 
     // The coverage the project records is the 59 books, never the whole collection.

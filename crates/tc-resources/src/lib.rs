@@ -8,12 +8,14 @@
 //!   assets are pinned by repository, tag, commit, language and SHA-256 ([`AquiferPin`]).
 //! - **Gateway languages.** [`gateways`] holds tC4's registry of 18 (language, owner)
 //!   pairs and their naming quirks, and builds a language set from what is installed;
-//!   [`suite`] holds the bundled English pins; [`gateway_change`] counts what a change of
-//!   gateway language would cost before it is made.
-//! - **Resolution.** [`resolve`] ports the D30 ladder: which rung answers a (tool, book),
-//!   and what opening it requires (ready, fetch, unavailable, unpinned, not covered). It
-//!   also counts the pinned versions this computer lacks, and names the one a download of
-//!   a repository must fetch.
+//!   [`suite`] holds the bundled English pins; [`gateway_change`] makes the pin edits of a
+//!   change of gateway language (what it would cost is `tc-check`'s count).
+//! - **Resolution.** The D30 ladder is the journal's (`tc_journal::pins::Ladder`, which
+//!   [`ProjectPins`] implements), the one the fold and the Check screens resolve with.
+//!   [`resolve`] reads it on this computer: which rung answers a (tool, book), and what
+//!   opening it requires (ready, fetch, unavailable, unpinned, not covered, an unusable
+//!   pin). It also counts the pinned versions this computer lacks, and names the one a
+//!   download of a repository must fetch.
 //! - **Store.** [`ResourceStore`] keeps installed resources by source, owner, repository
 //!   and commit, each installed atomically and never modified after, with a receipt that
 //!   lets it be verified. A bundled store seeds a first run that is offline; each copy is
@@ -87,10 +89,12 @@ pub use pin::{
     GithubName, RepoPath, ResourcePin, Sha256,
 };
 pub use sets::{
-    GatewayLanguage, LanguageSet, PaneId, PinGroup, ProjectKind, ProjectPins, Rung, ScripturePane,
-    SetSlot, Testaments, Tool, UnknownKeys,
+    GatewayLanguage, GroupError, LanguageSet, PaneId, PinGroup, ProjectKind, ProjectPins, Rung,
+    ScripturePane, SetSlot, Testaments, UnknownKeys,
 };
 pub use store::{
     FileRecord, Installed, Inventory, Origin, Packaging, Receipt, ResourceStore, SeedReport,
     content_files_opened,
 };
+pub use tc_journal::keys::ToolId;
+pub use tc_journal::pins::{Collection, Ladder};

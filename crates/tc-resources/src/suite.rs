@@ -281,6 +281,7 @@ pub fn project_pins() -> ProjectPins {
         original_language: SUITE.original_language.clone(),
         lexicon: SUITE.lexicon.clone(),
         extra_scripture: SUITE.extra_scripture.clone(),
+        unreadable_panes: Vec::new(),
         unknown: UnknownKeys::default(),
     }
 }

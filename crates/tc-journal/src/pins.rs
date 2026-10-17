@@ -55,6 +55,15 @@ impl Rung {
     }
 }
 
+impl From<Rung> for crate::keys::PinGroup {
+    fn from(rung: Rung) -> Self {
+        match rung {
+            Rung::Primary => Self::Primary,
+            Rung::Fallback => Self::Fallback,
+        }
+    }
+}
+
 impl fmt::Display for Rung {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name())

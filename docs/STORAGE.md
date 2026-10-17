@@ -1612,10 +1612,24 @@ is a new record kind that hides a comment from the default view and keeps it in 
 - `resources.json` members no pin group holds (`ResourcesExtra`, §2.2) are written only by an
   import or a decoded outside edit of `resources.json`, never by a screen; they project at their
   level, after the modelled members, in name order.
-- **Coverage backfill** (tC4 D41) for an imported pin without `books`: once, at open, when the
-  group is settled and the resource is installed, a `Pins` change with `cause: System
-  (PinCoverageBackfill)` adds `books` to that slot, `parents` = the group's heads. Every device
-  with the same resource computes the same value, so two backfills merge.
+- **Coverage backfill** (tC4 D41, `backfillCoverage` in `src/data/coverageBackfill.ts:56` at
+  d310bf3): once, at open, when the group is settled, for each pin of a language set's Bible
+  slots and each `extraScripture` pane whose exact commit is installed, a `Pins` change with
+  `cause: System(PinCoverageBackfill)` records what the installed copy holds, `parents` = the
+  group's heads: `books` for a pin that records none (`["BIBLE"]` for a resource not divided
+  into books), and the missing codes appended to a recorded list that the sha-exact install
+  shows to be incomplete (a record captured from a partial install). A record is never shrunk
+  or replaced, a whole-collection record is never touched, and a code that is not a book
+  (`TRANSLATE`) is never written. Widening only adds facts about the same commit. Every
+  device with the same resource computes the same value, so two backfills merge.
+- A slot value that the resource store could not write back byte for byte (not in tC4's §5.3
+  form: a pin with a tag and no commit, a `books` code in lower case or an empty list, a
+  repository path with a scheme) is kept as it was read (`LanguageSet::unreadable`,
+  `Testaments::unreadable`, `ProjectPins::unreadable_panes` in `tc-resources`) and written back
+  unchanged with any edit of its group, never refused with the whole group; the ladder reads it
+  by the journal's rules (§7.7). The cost of a change of gateway language (§5.8) is counted by
+  `tc-check`'s `change` module over the journal's ladder; `tc-resources` only makes the pin
+  edits.
 
 ### 5.7 Add, remove and restore a book
 
@@ -4103,7 +4117,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | `tc-sync` | the Door43 sync (§9), the exchange file export and import (§10), the Door43 edit walk (§11.2), `ExchangeReport` |
 | `tc-import` | the tC4 4.0 converter and oracle check, the tC4 seed, tC3, raw USFM, foreign burritos |
 | `tc-check`, `tc-align` | building check items and alignments for the screens, over `tc-journal`'s types and rules and the derivations of `tc-usfm`; they hold no second copy of a record type, a ladder or a validity rule |
-| `tc-resources` | installing, verifying, loading and upgrading resources; its pins read and write `tc-journal`'s `Pins` values, and it resolves with `tc-journal`'s ladder (with installed coverage only when it opens a tool on this computer) |
+| `tc-resources` | installing, verifying, loading and upgrading resources; its pins read and write `tc-journal`'s `Pins` and `ResourcesExtra` values (`ProjectPins::group_value`, `resources_extra`), its rungs, slots and groups are `tc-journal`'s, and it resolves with `tc-journal`'s ladder (`impl Ladder for ProjectPins`; installed coverage only when it opens a tool on this computer). It counts no decision: the cost of a gateway change is `tc-check`'s |
 | `tc-corpus` | the deterministic scale corpus of `docs/PERFORMANCE.md` (Psalms, ten times Psalms, the whole Bible of §14) as journal packs and pending files and as plain domain inputs, every part labelled; for tests and benchmarks only (`publish = false`) |
 
 Dependencies: `git2 =0.21.0` (default features off; `https`, `vendored-libgit2`;

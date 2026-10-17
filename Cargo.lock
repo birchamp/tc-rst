@@ -3061,6 +3061,7 @@ dependencies = [
  "tc-door43",
  "tc-door43-fake",
  "tc-helps",
+ "tc-journal",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",

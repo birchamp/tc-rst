@@ -15,8 +15,9 @@
 //! | `books` | [`ResourcePin::books`] | recorded coverage: book codes, or `["BIBLE"]` for the whole collection |
 //!
 //! A decision's `resource` (STORAGE `ResourceRef { repo_path, sha }`) is the same identity
-//! without the label: [`ResourcePin::same_identity`] is the comparison the fold's
-//! `resource_ok` makes.
+//! without the label ([`ResourcePin::resource`]); the fold compares it with the journal's
+//! `ResourceRef::same_resource`, and [`ResourcePin::same_identity`] makes the same
+//! comparison between two pins.
 
 use std::fmt;
 use std::str::FromStr;
@@ -26,6 +27,8 @@ use serde_json::{Map, Value};
 use sha2::{Digest, Sha256 as Sha256Hasher};
 use tc_core::BookId;
 use tc_door43::{AccountName, GitOid, RepoName, RepoRef, TagName};
+use tc_journal::pins::{Coverage, Pin};
+use tc_journal::record::ResourceRef;
 
 use crate::error::ParseError;
 
@@ -167,6 +170,24 @@ impl BookCoverage {
         }
     }
 
+    /// What this record covers by the journal's rules (`tc_journal::pins::Coverage`, tC4's
+    /// `coverageFor`): the same books, read the same way the fold reads the slot.
+    pub fn coverage(&self) -> Coverage {
+        match self {
+            Self::Books(list) => Coverage::Books(list.iter().copied().collect()),
+            Self::WholeCollection => Coverage::Whole,
+        }
+    }
+
+    /// The record of a coverage the journal reads, if it records anything.
+    pub fn of_coverage(coverage: &Coverage) -> Option<Self> {
+        match coverage {
+            Coverage::Unrecorded => None,
+            Coverage::Whole => Some(Self::WholeCollection),
+            Coverage::Books(books) => Self::books(books.iter().copied()),
+        }
+    }
+
     /// Reads the stored form. `["BIBLE"]` alone is the whole collection; a marker beside
     /// book codes, an unknown code or an empty list is refused, so a malformed record is
     /// reported where it is read.
@@ -283,6 +304,44 @@ impl ResourcePin {
     /// Whether this pin is a commit of `repo`, at any commit.
     pub fn is_repo(&self, repo: &RepoRef) -> bool {
         self.repo.repo == *repo
+    }
+
+    /// The identity a decision or an alignment records of this pin (STORAGE §2.3).
+    pub fn resource(&self) -> ResourceRef {
+        ResourceRef {
+            repo_path: self.repo.to_string().into(),
+            sha: self.sha,
+        }
+    }
+
+    /// The books this pin records, by the journal's rules.
+    pub fn coverage(&self) -> Coverage {
+        self.books
+            .as_ref()
+            .map_or(Coverage::Unrecorded, BookCoverage::coverage)
+    }
+
+    /// This pin as the ladder reads it (`tc_journal::pins`).
+    pub fn journal_pin(&self) -> Pin {
+        Pin {
+            resource: self.resource(),
+            version: self.version.as_ref().map(|v| v.as_str().to_owned()),
+            coverage: self.coverage(),
+        }
+    }
+
+    /// A pin to read and install from, made from what the ladder read in a slot this crate
+    /// keeps as written ([`crate::LanguageSet::unreadable`]): `None` when its repository is
+    /// not a Door43 path. It is never written back: the slot keeps its own bytes.
+    pub fn from_journal(pin: &Pin, flavor: Option<String>) -> Option<Self> {
+        Some(Self {
+            repo: pin.resource.repo_path.parse().ok()?,
+            version: pin.version.as_deref().and_then(|v| v.parse().ok()),
+            sha: pin.resource.sha,
+            flavor,
+            books: BookCoverage::of_coverage(&pin.coverage),
+            extra: Map::new(),
+        })
     }
 }
 

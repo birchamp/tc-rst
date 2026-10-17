@@ -656,6 +656,7 @@ mod tests {
                 id: "ult".parse().unwrap(),
                 pin: pin("en_ult", "v89", '8', "scripture/textTranslation"),
             }],
+            unreadable_panes: Vec::new(),
             unknown: Default::default(),
         };
         let releases = latest(&[("unfoldingWord/en_tn", "v90", 'e')]);

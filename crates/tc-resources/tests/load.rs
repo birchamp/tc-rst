@@ -142,6 +142,7 @@ fn project(en: &English) -> ProjectPins {
             },
             bundled.extra_scripture[1].clone(),
         ],
+        unreadable_panes: Vec::new(),
         unknown: Default::default(),
     }
 }
