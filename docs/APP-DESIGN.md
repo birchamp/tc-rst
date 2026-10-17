@@ -10,8 +10,13 @@ what changed for each finding, which parts were done another way, and why.
 
 ## Owner's answers (2026-10-17)
 
-- **Q-6, alignment after a verse edit:** no automatic reflow write. A verse edit writes no
-  alignment; the aligner applies the lossless reflow when it opens the verse, as designed.
+- **Q-6, alignment after a verse edit:** adjust it right away and do not flag it for review
+  (the owner clarified that "no" meant no review flag, and that leaving it unadjusted seemed
+  dangerous). A verse save, and each changed verse of a section save, writes the reflowed
+  alignment in the same batch as the text, so both land or neither does: links whose words are
+  still in the verse are kept and the others return to the bank, as tC4 does (#213), but
+  atomically, where tC4 writes the reflow afterwards. A lossless reflow leaves the verse
+  aligned; a lossy one shows it partly aligned, as tC4 does. Requested from unit S1 as R25.
 - **Q-24, the Understand comment box:** (c). R24, a record that revises the comment the box
   showed and keeps the earlier text in History, is requested from unit S1.
 - **Q-4, projects folder:** `%USERPROFILE%\translationCore4\projects` (or
