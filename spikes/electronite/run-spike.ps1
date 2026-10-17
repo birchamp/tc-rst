@@ -15,7 +15,8 @@ Cases, in this order:
   endshell  end the shell's process; does the server exit within 5 s? Twice: the server
             started plainly, and started detached;
   hardkill  type, end the shell's process, then open the profile again and read what
-            localStorage and the shell's mirror file kept.
+            localStorage and the shell's mirror file kept; then the same with a normal quit,
+            as the control.
 
 .EXAMPLE
 powershell -ExecutionPolicy Bypass -File spikes\electronite\run-spike.ps1 -Electron C:\tc4-g0\electronite\electron.exe
@@ -351,50 +352,62 @@ if (Want 'endshell') {
 # ------------------------------------------------------------------ hardkill: typed text after a kill
 
 if (Want 'hardkill') {
+    # Each mode twice: a hard kill, and a normal quit as the control that shows the inspection
+    # can read what was kept.
     foreach ($mode in @('filter', 'protocol')) {
-        Say "Hard kill while typing, $mode mode"
-        $row = Invoke-Case "hardkill, $mode mode" (Join-Path $Out "hardkill-$mode") {
-            param($dir)
-            $tag = "$mode-type"
-            $shell = Start-Shell $dir $mode 'type' @{}
-            Track @($shell.Id)
-            $typing = Wait-ShellEvent $dir $tag 'typing-started' 1 60000
-            if (-not $typing) { throw 'typing did not start' }
-            $status = Read-Json (Join-Path $dir "status-$tag.json")
-            Track @($status.serverPid)
-            Start-Sleep -Milliseconds (2500 + (Get-Random -Minimum 0 -Maximum 1000))
-            $killed = Get-NowMs
-            Stop-Process -Id $shell.Id -Force
-            $serverMs = Wait-Gone $status.serverPid $killed 10000
-            Start-Sleep -Seconds 2
-            Stop-Leftovers @($status.serverPid)
-            $made = [math]::Floor(($killed - $typing.t0) / $typing.every)
-            $typedLog = Join-Path $dir "appdata-$tag/typed.log"
-            $serverSaw = 0
-            if (Test-Path -LiteralPath $typedLog) {
-                $last = Get-Content -LiteralPath $typedLog | Where-Object { $_ } | Select-Object -Last 1
-                if ($last) { $serverSaw = ($last | ConvertFrom-Json).n }
+        foreach ($end in @('kill', 'quit')) {
+            $what = if ($end -eq 'kill') { 'Hard kill' } else { 'Normal quit (the control)' }
+            Say "$what while typing, $mode mode"
+            $folder = if ($end -eq 'kill') { "hardkill-$mode" } else { "typequit-$mode" }
+            $row = Invoke-Case "hardkill, $mode mode, $end" (Join-Path $Out $folder) {
+                param($dir)
+                $tag = "$mode-type"
+                $shell = Start-Shell $dir $mode 'type' @{}
+                Track @($shell.Id)
+                $typing = Wait-ShellEvent $dir $tag 'typing-started' 1 60000
+                if (-not $typing) { throw 'typing did not start' }
+                $status = Read-Json (Join-Path $dir "status-$tag.json")
+                Track @($status.serverPid)
+                Start-Sleep -Milliseconds (2500 + (Get-Random -Minimum 0 -Maximum 1000))
+                $acted = Get-NowMs
+                if ($end -eq 'kill') {
+                    Stop-Process -Id $shell.Id -Force
+                } else {
+                    Send-Control $dir $tag 'quit'
+                    if (-not $shell.WaitForExit(15000)) { throw 'the shell did not quit' }
+                }
+                $serverMs = Wait-Gone $status.serverPid $acted 10000
+                Start-Sleep -Seconds 2
+                Stop-Leftovers @($status.serverPid)
+                $made = [math]::Floor(($acted - $typing.t0) / $typing.every)
+                $typedLog = Join-Path $dir "appdata-$tag/typed.log"
+                $serverSaw = 0
+                if (Test-Path -LiteralPath $typedLog) {
+                    $last = Get-Content -LiteralPath $typedLog | Where-Object { $_ } | Select-Object -Last 1
+                    if ($last) { $serverSaw = ($last | ConvertFrom-Json).n }
+                }
+                Say "  inspecting what the $mode profile kept"
+                $inspect = Start-Shell $dir $mode 'inspect' @{ port = $status.port }
+                Track @($inspect.Id)
+                if (-not $inspect.WaitForExit(60000)) { throw 'the inspection did not finish' }
+                $seen = Read-Json (Join-Path $dir "results-$mode-inspect.json")
+                if ($null -eq $seen) { throw 'the inspection wrote no results' }
+                [pscustomobject]@{
+                    Mode       = $mode
+                    End        = if ($end -eq 'kill') { 'hard kill' } else { 'normal quit (control)' }
+                    Made       = $made
+                    ServerSaw  = $serverSaw
+                    Local      = $seen.localStorage.n
+                    LocalError = $seen.localStorage.error
+                    Mirror     = $seen.mirror.n
+                    Torn       = $seen.shell.mirrorAtLaunch.torn
+                    Lines      = $seen.shell.mirrorAtLaunch.lines
+                    ServerMs   = $serverMs
+                    Why        = Get-ServerQuit $dir $tag
+                }
             }
-            Say "  inspecting what the $mode profile kept"
-            $inspect = Start-Shell $dir $mode 'inspect' @{ port = $status.port }
-            Track @($inspect.Id)
-            if (-not $inspect.WaitForExit(60000)) { throw 'the inspection did not finish' }
-            $seen = Read-Json (Join-Path $dir "results-$mode-inspect.json")
-            if ($null -eq $seen) { throw 'the inspection wrote no results' }
-            [pscustomobject]@{
-                Mode       = $mode
-                Made       = $made
-                ServerSaw  = $serverSaw
-                Local      = $seen.localStorage.n
-                LocalError = $seen.localStorage.error
-                Mirror     = $seen.mirror.n
-                Torn       = $seen.shell.mirrorAtLaunch.torn
-                Lines      = $seen.shell.mirrorAtLaunch.lines
-                ServerMs   = $serverMs
-                Why        = Get-ServerQuit $dir $tag
-            }
+            if ($row) { $kills += $row }
         }
-        if ($row) { $kills += $row }
     }
 }
 
@@ -548,15 +561,17 @@ if ($kills.Count -gt 0) {
     Add ''
     Add 'The page types one letter every 50 ms. Each keystroke is written to `localStorage` at once,'
     Add "sent to the shell, which appends it to its mirror file (synced at most once a second), and"
-    Add 'reported to the server. The script ends the shell''s process, then opens the same profile'
-    Add 'again (same origin) and reads what was kept. Counts are keystrokes.'
+    Add 'reported to the server. The script ends the shell''s process (or, as the control, asks the'
+    Add 'shell to quit normally), then opens the same profile again (same origin) and reads what was'
+    Add 'kept. Counts are keystrokes; "made" counts them from the clock up to the moment the script'
+    Add 'acted, so a normal quit can keep a few more.'
     Add ''
-    Add '| Mode | Made (from the clock) | The server saw | localStorage kept | The mirror kept | Mirror lines (torn) | Server after the kill |'
-    Add '|---|---:|---:|---:|---:|---|---|'
+    Add '| Mode | How the shell ended | Made (from the clock) | The server saw | localStorage kept | The mirror kept | Mirror lines (torn) | The server |'
+    Add '|---|---|---:|---:|---:|---:|---|---|'
     foreach ($k in $kills) {
         $local = if ($k.LocalError) { "error: $($k.LocalError)" } else { "$($k.Local)" }
         $server = if ($null -eq $k.ServerMs) { 'still running after 10 s' } else { "exited after $(Fmt $k.ServerMs) (quit: $($k.Why))" }
-        Add ("| $($k.Mode) | $($k.Made) | $($k.ServerSaw) | $local | $($k.Mirror) | $($k.Lines) ($($k.Torn)) | $server |")
+        Add ("| $($k.Mode) | $($k.End) | $($k.Made) | $($k.ServerSaw) | $local | $($k.Mirror) | $($k.Lines) ($($k.Torn)) | $server |")
     }
     Add ''
 }
