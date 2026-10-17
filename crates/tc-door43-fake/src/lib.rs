@@ -48,7 +48,7 @@ mod zipping;
 pub use git::SeedMode;
 
 use git::Git;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -203,7 +203,8 @@ pub enum Fault {
     SbCorruptFile { path: String },
     /// A download (an archive or a burrito export) sends its first `after` bytes, then
     /// nothing more until the test calls [`FakeDoor43::release_held`], then the rest. A
-    /// test can act between two chunks of a download and know which bytes arrived.
+    /// test can act between two chunks of a download and know which bytes arrived. Each
+    /// held download waits for a release of its own: see [`FakeDoor43::release_held`].
     HoldBody { after: usize },
     /// A download sends its first `after` bytes and then the connection breaks, though its
     /// `Content-Length` promised more.
@@ -426,8 +427,9 @@ pub(crate) struct Shared {
     state: Mutex<State>,
     pub git: Git,
     pub url: String,
-    /// Wakes a download held by [`Fault::HoldBody`].
-    pub held: tokio::sync::Notify,
+    /// The releases of the downloads [`Fault::HoldBody`] holds, oldest first: one per
+    /// download, so a release can never pass to a download that has not started yet.
+    held: Mutex<VecDeque<oneshot::Sender<()>>>,
 }
 
 impl Shared {
@@ -435,6 +437,17 @@ impl Shared {
         // A test that panicked while holding the lock must not hide the state from the
         // assertions that follow.
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// A new held download's release, which ends its wait when it fires or is dropped.
+    pub fn hold(&self) -> oneshot::Receiver<()> {
+        let (release, released) = oneshot::channel();
+        self.held().push_back(release);
+        released
+    }
+
+    fn held(&self) -> MutexGuard<'_, VecDeque<oneshot::Sender<()>>> {
+        self.held.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// The faults that apply to this request, consuming one use of each.
@@ -482,7 +495,7 @@ impl FakeDoor43 {
             state: Mutex::new(State::new()),
             git,
             url,
-            held: tokio::sync::Notify::new(),
+            held: Mutex::new(VecDeque::new()),
         });
         let app = api::router(shared.clone());
         let (shutdown, stopped) = oneshot::channel::<()>();
@@ -648,10 +661,19 @@ impl FakeDoor43 {
         self.shared.state().faults.push(rule);
     }
 
-    /// Lets one download held by [`Fault::HoldBody`] send the rest of its bytes. A release
-    /// that comes before the download reaches its hold is kept for it.
+    /// Lets the oldest download that [`Fault::HoldBody`] holds, and that no release has
+    /// freed yet, send the rest of its bytes. A release that comes after the fake began to
+    /// answer, but before the download reaches its hold, is kept for that download. A
+    /// release with no such download does nothing; it is never kept for a later download.
+    /// A download the client dropped counts until the server notices, so a release after
+    /// an abort frees that download or nothing.
     pub fn release_held(&self) {
-        self.shared.held.notify_one();
+        let mut held = self.shared.held();
+        while let Some(release) = held.pop_front() {
+            if release.send(()).is_ok() {
+                return;
+            }
+        }
     }
 
     pub fn requests(&self) -> Vec<RecordedRequest> {

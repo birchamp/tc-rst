@@ -15,6 +15,7 @@ use axum::routing::{delete, get, post};
 use base64::Engine;
 use serde_json::{Value, json};
 use std::sync::Arc;
+use tokio::sync::oneshot;
 
 type AppState = State<Arc<Shared>>;
 
@@ -1104,7 +1105,8 @@ fn download(
     let body = if hold.is_none() && cut.is_none() && announce {
         Body::from(bytes)
     } else {
-        shaped_body(shared.clone(), Bytes::from(bytes), hold, cut)
+        let hold = hold.map(|after| (after, shared.hold()));
+        shaped_body(Bytes::from(bytes), hold, cut)
     };
     let mut response = Response::new(body);
     let headers = response.headers_mut();
@@ -1175,12 +1177,16 @@ async fn sb_export(
 /// so a test that never releases cannot keep the server's task alive.
 const HOLD_LIMIT: std::time::Duration = std::time::Duration::from_secs(30);
 
-/// `bytes` sent in pieces: up to `hold`, then a wait for [`Shared::held`], then the rest;
-/// or, with `cut`, up to `cut` and then a broken connection.
-fn shaped_body(shared: Arc<Shared>, bytes: Bytes, hold: Option<usize>, cut: Option<usize>) -> Body {
+/// `bytes` sent in pieces: up to `hold`'s count, then a wait for its release, then the
+/// rest; or, with `cut`, up to `cut` and then a broken connection.
+fn shaped_body(
+    bytes: Bytes,
+    hold: Option<(usize, oneshot::Receiver<()>)>,
+    cut: Option<usize>,
+) -> Body {
     enum Step {
         Send(Bytes),
-        Wait,
+        Wait(oneshot::Receiver<()>),
         /// A moment in which nothing is ready, so the server sends what it holds.
         Flush,
         Break,
@@ -1188,38 +1194,35 @@ fn shaped_body(shared: Arc<Shared>, bytes: Bytes, hold: Option<usize>, cut: Opti
     let end = cut.map_or(bytes.len(), |c| c.min(bytes.len()));
     let mut steps = Vec::new();
     let mut at = 0;
-    if let Some(hold) = hold.filter(|h| *h < end) {
-        steps.push(Step::Send(bytes.slice(..hold)));
-        steps.push(Step::Wait);
-        at = hold;
+    if let Some((after, released)) = hold.filter(|(after, _)| *after < end) {
+        steps.push(Step::Send(bytes.slice(..after)));
+        steps.push(Step::Wait(released));
+        at = after;
     }
     steps.push(Step::Send(bytes.slice(at..end)));
     if cut.is_some() {
         steps.push(Step::Flush);
         steps.push(Step::Break);
     }
-    let pieces = futures_util::stream::unfold(
-        (steps.into_iter(), shared),
-        |(mut steps, shared)| async move {
-            loop {
-                match steps.next()? {
-                    Step::Send(piece) if piece.is_empty() => {}
-                    Step::Send(piece) => return Some((Ok(piece), (steps, shared))),
-                    Step::Wait => {
-                        let _ = tokio::time::timeout(HOLD_LIMIT, shared.held.notified()).await;
-                    }
-                    Step::Flush => tokio::time::sleep(std::time::Duration::from_millis(50)).await,
-                    Step::Break => {
-                        let broken = std::io::Error::new(
-                            std::io::ErrorKind::ConnectionAborted,
-                            "the fake broke the transfer off",
-                        );
-                        return Some((Err(broken), (steps, shared)));
-                    }
+    let pieces = futures_util::stream::unfold(steps.into_iter(), |mut steps| async move {
+        loop {
+            match steps.next()? {
+                Step::Send(piece) if piece.is_empty() => {}
+                Step::Send(piece) => return Some((Ok(piece), steps)),
+                Step::Wait(released) => {
+                    let _ = tokio::time::timeout(HOLD_LIMIT, released).await;
+                }
+                Step::Flush => tokio::time::sleep(std::time::Duration::from_millis(50)).await,
+                Step::Break => {
+                    let broken = std::io::Error::new(
+                        std::io::ErrorKind::ConnectionAborted,
+                        "the fake broke the transfer off",
+                    );
+                    return Some((Err(broken), steps));
                 }
             }
-        },
-    );
+        }
+    });
     Body::from_stream(pieces)
 }
 
