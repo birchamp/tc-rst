@@ -197,6 +197,72 @@ enum MarkerKind {
 }
 
 // ---------------------------------------------------------------------------------------
+// The draft test
+// ---------------------------------------------------------------------------------------
+
+/// The body tC4's indexer reads for a verse (`indexBook`, `src/data/usfm/indexer.ts` at
+/// d310bf3), out of the verse's content and the terminator of its marker. The body starts
+/// after the marker, or on the next line when the rest of the marker's line is blank, and
+/// ends where a line starts with a paragraph-level marker ([`PARA_MARKERS`]), `\v` or `\c`
+/// (an optional `+` before the name), with the line breaks before that line left out. So
+/// the text of a poetry verse whose first line is `\q1 …` is not in its body.
+pub fn indexer_body(term: MarkerTerm, content: &str) -> &str {
+    let first_line = content.find('\n').unwrap_or(content.len());
+    let (start, at_line_start) = match term {
+        MarkerTerm::Lf => (0, true),
+        _ if js_trim(&content[..first_line]).is_empty() => {
+            ((first_line + 1).min(content.len()), true)
+        }
+        _ => (0, false),
+    };
+    let mut end = content.len();
+    let mut line = start;
+    let mut check = at_line_start;
+    loop {
+        if check && ends_body(&content[line..]) {
+            end = line;
+            break;
+        }
+        match content[line..].find('\n') {
+            Some(at) => line += at + 1,
+            None => break,
+        }
+        check = true;
+    }
+    content[start..end].trim_end_matches(['\n', '\r'])
+}
+
+/// Whether tC4 reads a verse as drafted, and so gives it a text (`verseTextIndex`,
+/// `src/state.jsx:352` at d310bf3): the [`indexer_body`], trimmed as JavaScript trims, is
+/// neither empty nor the stub `___`. A verse such as `\v 1` then `\q1 Blessed is the man`
+/// on the next line is not drafted, as in tC4.
+pub fn is_drafted(term: MarkerTerm, content: &str) -> bool {
+    let body = js_trim(indexer_body(term, content));
+    !body.is_empty() && body != "___"
+}
+
+/// Whether a line opens with a marker that ends a verse's body in tC4's indexer
+/// (`LINE_MARKER` and `endsBody`).
+fn ends_body(line: &str) -> bool {
+    let Some(rest) = line.strip_prefix('\\') else {
+        return false;
+    };
+    let rest = rest.strip_prefix('+').unwrap_or(rest);
+    let len = rest
+        .bytes()
+        .take_while(|b| b.is_ascii_alphanumeric() || *b == b'-')
+        .count();
+    let tag = &rest[..len];
+    tag.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
+        && (tag == "v" || tag == "c" || is_para_marker(tag))
+}
+
+/// JavaScript's `String.prototype.trim`: Unicode `White_Space` but U+0085, and U+FEFF.
+fn js_trim(text: &str) -> &str {
+    text.trim_matches(|c: char| (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}')
+}
+
+// ---------------------------------------------------------------------------------------
 // Marker whitespace
 // ---------------------------------------------------------------------------------------
 

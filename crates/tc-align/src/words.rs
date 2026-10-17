@@ -327,9 +327,10 @@ fn source_word(span: &Span<'_>) -> Result<SourceWord, Error> {
 ///
 /// It is made from the verse's content (`words + layout` of its verse record, the USFM
 /// after `\v N `). The words are the words of the text tC4's aligner shows and banks
-/// (`tc_usfm::display_text`, tC4's `verseText` of `verseTextIndex`, `src/state.jsx:1183` at
-/// d310bf3), so a Psalm's superscription and its `\qs` Selah are words to align, as in
-/// tC4. The hash is the journal's ([`TargetText::md5`], md5 of `plain_text_v1`), the one the
+/// ([`TargetText::shown`], `tc_usfm::shown_text_v1`: tC4's `verseText` of
+/// `src/data/bookModel.js:15` through `verseTextIndex`, `src/state.jsx:1183` at d310bf3), so a
+/// Psalm's superscription and its `\qs` Selah are words to align, and a `\li` list item is
+/// not, as in tC4. The hash is the journal's ([`TargetText::md5`], md5 of `plain_text_v1`), the one the
 /// fold checks an alignment with (§7.7), so an alignment the aligner saves is valid in the
 /// alignment files. (tC4's aligner stamps the md5 of its shown text instead, which its own
 /// fold and export reject on every verse where the two texts differ, such as a verse with a

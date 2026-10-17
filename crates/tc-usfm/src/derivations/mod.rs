@@ -34,7 +34,7 @@ mod usfmjs;
 mod usfmjs_tables;
 
 use js::{JsStr, concat, js, to_string, trim};
-use usfmjs::{Key, truthy};
+use usfmjs::{Key, Ref, Val, truthy};
 
 /// The text tC4 hashes for a verse's content (`words + layout` of a verse value): see the
 /// module documentation. Total: every string has a value.
@@ -49,6 +49,46 @@ pub fn plain_text_v1(content: &str) -> String {
         for object in heap.elems(*verse) {
             if let Some(value) = heap.get(*object, &Key::Text).filter(|v| truthy(v)) {
                 text.extend(heap.string_of(Some(value)));
+            }
+        }
+    }
+    to_string(trim(&text))
+}
+
+/// The text tC4's Check screen shows and selects in, and its aligner splits into words, for
+/// a verse's content: `verseText` of `src/data/bookModel.js:15` at d310bf3 over usfm-js's verse
+/// objects (`verseTextIndex`, `src/state.jsx:352`). Each object gives its `text`, or else the
+/// `text` of its children one level down; the pieces are joined and trimmed with
+/// JavaScript's `trim`. So a footnote and the items of a `\li` list are not shown, while a
+/// superscription (`\d`), a `\qs` Selah and the words of `\add` or `\w` spans are. It is
+/// never hashed: hashes are of [`plain_text_v1`]. Where usfm-js throws, or an object's
+/// `children` is not a list (tC4's `map` throws), the value is the content trimmed, as for
+/// [`plain_text_v1`].
+pub fn shown_text_v1(content: &str) -> String {
+    let parsed = usfmjs::to_json_chunk(&concat(&[&js("\\v 1 "), &js(content)]));
+    let fallback = || to_string(trim(&js(content)));
+    if parsed.thrown {
+        return fallback();
+    }
+    let heap = &parsed.heap;
+    let text_of = |object: Ref| heap.get(object, &Key::Text).filter(|v| truthy(v));
+    let mut text: JsStr = Vec::new();
+    for (_, verse) in &parsed.verses {
+        for object in heap.elems(*verse) {
+            if let Some(value) = text_of(*object) {
+                text.extend(heap.string_of(Some(value)));
+                continue;
+            }
+            match heap.get(*object, &Key::Children) {
+                None => {}
+                Some(Val::Ref(list)) if heap.is_array(*list) => {
+                    for child in heap.elems(*list) {
+                        if let Some(value) = text_of(*child) {
+                            text.extend(heap.string_of(Some(value)));
+                        }
+                    }
+                }
+                Some(_) => return fallback(),
             }
         }
     }

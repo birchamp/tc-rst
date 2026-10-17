@@ -163,6 +163,137 @@ fn the_no_text_rule_reads_only_the_texts_tc4_reads() {
     );
 }
 
+/// §7.7: a verse is drafted when the body tC4's indexer reads for it, from after its marker
+/// to the first line that starts with a paragraph marker, holds more than the stub. A poetry
+/// verse whose first line is a `\q1` line of its own, the stub followed by poetry, and a
+/// verse that opens with a blank line have no text, as in tC4, though they hold words; a
+/// verse whose marker stands inside a line after `\q1 ` is read from its marker (tC4 does
+/// not index it at all).
+#[test]
+fn the_no_text_rule_reads_the_body_tc4s_indexer_reads() {
+    use tc_usfm::codec::{MarkerTerm, MarkerWs};
+    let mut dev = Dev::new(1);
+    let mut changes = seed_book(&mut dev, &[5]);
+    let laid = |words: &str, layout: &str, term: MarkerTerm| tc_journal::record::VerseValue::Text {
+        marker: MarkerWs::new(" ", term).unwrap(),
+        words: words.into(),
+        layout: layout.into(),
+        last: VerseNo::new(1).unwrap(),
+        from: None,
+    };
+    let at = |n: u16, value: tc_journal::record::VerseValue| match value {
+        tc_journal::record::VerseValue::Text {
+            marker,
+            words,
+            layout,
+            from,
+            ..
+        } => verse(
+            1,
+            n,
+            tc_journal::record::VerseValue::Text {
+                marker,
+                words,
+                layout,
+                last: VerseNo::new(n).unwrap(),
+                from,
+            },
+        ),
+        other => verse(1, n, other),
+    };
+    let v = |n: u16| on(&changes, &verse_key(1, n)).id();
+    let edits = dev.batch(
+        vec![
+            (
+                at(1, laid("\\q1 Paul a servant", "\n", MarkerTerm::Lf)),
+                vec![v(1)],
+            ),
+            (
+                at(2, laid("___\n\\q2 of God", "\n", MarkerTerm::Space)),
+                vec![v(2)],
+            ),
+            (
+                at(
+                    3,
+                    laid("\n\\b\n\\q1 and an apostle", "\n", MarkerTerm::Space),
+                ),
+                vec![v(3)],
+            ),
+            (
+                at(
+                    4,
+                    laid("of Jesus\n\\q2 Christ", "\n\\q1 ", MarkerTerm::Space),
+                ),
+                vec![v(4)],
+            ),
+            (
+                at(5, laid("for the faith", "\n", MarkerTerm::Space)),
+                vec![v(5)],
+            ),
+        ],
+        Cause::Edit,
+    );
+    changes.extend(edits);
+    let pin = tn_pin();
+    changes.push(dev.one(
+        pins(
+            PinGroup::Primary,
+            &[("translationNotes", tn_slot(&pin, None))],
+        ),
+        vec![],
+    ));
+    for (id, n) in [
+        ("lfq1", "1"),
+        ("stbq", "2"),
+        ("blnk", "3"),
+        ("text", "4"),
+        ("midl", "5"),
+    ] {
+        changes.push(dev.one(check(&key_at(id, "1", n), stale_decision(id)), vec![]));
+    }
+    let state = fold(&changes);
+    let usfm = usfm(&state);
+    assert!(
+        usfm.contains("\\v 1\n\\q1 Paul") && usfm.contains("\\q1 \\v 5 for"),
+        "{usfm}"
+    );
+    let file = decision_file(&state);
+    for id in ["lfq1", "stbq", "blnk"] {
+        assert_eq!(flags(&file, id), (false, false), "{id}");
+    }
+    for id in ["text", "midl"] {
+        assert_eq!(flags(&file, id), (true, true), "{id}");
+    }
+}
+
+/// §7.7: the text the Check screen shows and the aligner banks is tC4's `verseText` of its
+/// book model: the items of a `\li` list are not shown, as in tC4
+/// (`fixtures/usfm/check-text-vectors.json`), though the hash reads the content.
+#[test]
+fn the_shown_text_leaves_out_what_tc4_does_not_show() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/tc4/test-fixtures/usfm-corpus/exotic-poetry-footnotes.usfm");
+    let parts = tc_usfm::codec::decompose(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let tc_usfm::codec::VersePart::Text(verse) = &parts.chapters[&2].verses[&2] else {
+        panic!("2:2 holds text")
+    };
+    let content = tc_usfm::codec::join_verse(&verse.words, &verse.layout);
+    assert!(content.contains("\\li1 the first member"), "{content}");
+    let text = TargetText::new(content.clone());
+    assert_eq!(
+        text.shown(),
+        "The list has these members:\nThe list ends here."
+    );
+    let aligner = tc_align::TargetVerse::new(&content);
+    let words: Vec<&str> = aligner.words().iter().map(|w| w.word.as_str()).collect();
+    assert_eq!(
+        words,
+        [
+            "The", "list", "has", "these", "members", "The", "list", "ends", "here"
+        ]
+    );
+}
+
 /// §5.4: a judgement stamps the text's md5, clears an imported invalidation and records the
 /// pin of the list the person judged in; To do changes only the status; a bookmark only
 /// itself.

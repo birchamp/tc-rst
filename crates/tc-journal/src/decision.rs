@@ -55,11 +55,12 @@ impl TargetText {
         &self.plain
     }
 
-    /// The text a screen shows (`tc_usfm::display_text` of the content, tC4's `verseText`):
-    /// the Check screen's tappable words and the aligner's words are this text's words.
+    /// The text a screen shows ([`tc_usfm::shown_text_v1`] of the content, tC4's
+    /// `verseText` of `src/data/bookModel.js`): the Check screen's tappable words and the
+    /// aligner's words are this text's words.
     pub fn shown(&self) -> &str {
         self.shown
-            .get_or_init(|| tc_usfm::display_text(&self.content))
+            .get_or_init(|| tc_usfm::shown_text_v1(&self.content))
     }
 
     /// [`verse_text_md5_v1`] of the content.

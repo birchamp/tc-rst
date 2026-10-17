@@ -2462,10 +2462,15 @@ The derivation functions live in `tc-usfm` and are versioned (§12):
   (`SelectionText::occurrences`), so it fits until the text changes.
 
 **Shown text and hashed text.** tC4 reads a verse two ways, and so does the rebuild. The
-screens show, and split into words, the readable text `tc_usfm::display_text(content)`: tC4's
-`verseText` (`src/views/verseText.js:9` through `verseTextIndex`, `src/state.jsx:352`, at
-d310bf3), which the Check screen shows and taps and the aligner banks (`src/state.jsx:1183`), so
-a Psalm's superscription and its `\qs Selah\qs*` are words to check and to align. Every hash is
+screens show, and split into words, `tc_usfm::shown_text_v1(content)`: tC4's `verseText` of
+`src/data/bookModel.js:15` (through `verseTextIndex`, `src/state.jsx:352`, at d310bf3), which the
+Check screen shows and taps and the aligner banks (`src/state.jsx:1183`). It parses `"\v 1 " +
+content` with usfm-js 3.4.3 as `plain_text_v1` does and joins each verse object's `text`, or else
+the `text` of its children one level down, trimmed with JavaScript's `trim`. So a Psalm's
+superscription and its `\qs Selah\qs*` are words to check and to align, while a footnote and
+the items of a `\li` list are not shown, as in tC4. (`tc_usfm::display_text`, the readable text
+of `src/views/verseText.js`, which tC4's source panes show, keeps the list items; it is no
+verse's shown text.) Every hash is
 of `plain_text_v1`, never of the shown text (`TargetText::md5`, `TargetText::shown` in
 `tc_journal::decision`). The two texts differ on many verses: `plain_text_v1` keeps a poetry
 line break as a line break, drops the text of a `\qs` written over lines (the ULT's Selah)
@@ -2605,10 +2610,28 @@ the screen and the file read one text.
 and `decisionIsStale`, `src/data/revalidate.ts`, at d310bf3). A decision on a verse reads the
 content of a projected run only when its chapter is a number and its verse is a number (the run
 that holds that verse, a span included) or a span label `a-b` that a projected run carries
-exactly; and only when that content, trimmed as JavaScript trims, is neither empty nor the stub
-`___`. Every other target (`front`, `intro`, a list such as `1,3,8,12`, a span no run carries, an
-undrafted verse) has no text: the text gives no evidence either way, so it neither changes the
-verse nor loses the selections, as in tC4, where such a decision is never stale. A decision on a
+exactly; and only when the run is drafted as tC4 reads a draft (`tc_usfm::codec::is_drafted`):
+the body tC4's indexer reads for it (`indexBook`, `src/data/usfm/indexer.ts`), trimmed as
+JavaScript trims, is neither empty nor the stub `___`. That body runs from after the marker (from
+the next line when the rest of the marker's line is blank) to the first line that starts with a
+paragraph-level marker (`PARA_MARKERS`), `\v` or `\c`, without the line breaks before it. So a
+seeded poetry stub (`\v 2 ___` then a `\q2` line) is undrafted, and so are a verse whose text
+starts on a `\q1` line of its own (`\v 1` then `\q1 Blessed is the man`) and the stub followed by
+a line of text, though they hold words: tC4's Check screen shows them as not drafted, and the
+rebuild reads them the same way. Every other target (`front`, `intro`, a list such as
+`1,3,8,12`, a span no run carries, an undrafted verse) has no text: the text gives no evidence
+either way, so it neither changes the verse nor loses the selections, as in tC4, where such a
+decision is never stale. One difference is deliberate: tC4's indexer reads a `\v` only at the
+start of a line, so it indexes no verse whose marker stands inside a line (`\q1 \v 14 May
+Yahweh…`, the ULT's own layout, 5,138 lines of en_ult v89 by tC4's count in
+`src/data/seed.ts:9`), and such a verse has no text on its Check screen at all. The rebuild cuts
+verses at every marker (§13.5) and reads such a verse's body from its marker by the rule above,
+so its checks are shown and assessed like any other. tC4 writes every verse it seeds or edits as
+`\v N …` at the start of a line, so the two agree on every book tC4 wrote.
+`fixtures/usfm/check-text-vectors.json`, made by `crates/tc-usfm/tools/gen-check-text-vectors.mjs`
+with tC4's own `verseTextIndex`, checks the rule and the shown text on every verse of tC4's
+plain drafts and on drafts written for poetry, lists, notes, superscriptions, CRLF line ends
+and markers inside a line. A decision on a
 frame reads the frame's text: its `Frame` record, else the template's part of the story; a
 story with no template has no text.
 
@@ -4045,7 +4068,10 @@ Playwright drives the real UI against the real server for:
 4. **Derivations.** `plain_text_v1`, `tokenize_v1` and `selections_v1` against golden outputs
    produced once by usfm-js 3.4.3, string-punctuation-tokenizer 2.0.0 and word-aligner-lib over
    tC4's fixtures and a generated corpus, including tC4's sample hash
-   `f8aee622daff1496bccc7c2e3b358b43`.
+   `f8aee622daff1496bccc7c2e3b358b43`; the draft test (`codec::is_drafted`) and `shown_text_v1`
+   against tC4's own `verseTextIndex` run over every verse of its plain drafts and of drafts
+   written for poetry, lists, notes and markers inside a line
+   (`fixtures/usfm/check-text-vectors.json`).
 5. **Windows.** Rename and flush behaviour on NTFS with a real power cut, on the release
    pipeline's Windows machine: that `sync_all` on the directory handle opened with
    `FILE_FLAG_BACKUP_SEMANTICS` and on the renamed file makes the rename durable (§5.0 step 4).
@@ -4126,7 +4152,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | Crate | Owns in this design |
 |---|---|
 | `tc-core` | `BookId`, references (exists); `GitOid` and `Md5`, the two digests every crate shares (the journal, the burrito, the Door43 client, the helps, the resource store and the screens hold one type each) |
-| `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`, `PARA_MARKERS` and the layout rule), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1`, the OBS story splice |
+| `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`, `PARA_MARKERS` and the layout rule, the draft test `is_drafted`), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1` and the shown text `shown_text_v1`, the OBS story splice |
 | `tc-burrito` | `build_metadata`, `check`, the vendored SB 1.0.0 schema, the extension table, `collision_form` (§3.3) |
 | `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the fold cache's codec (`index`: sections of prepared changes keyed by path, size and fingerprint), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking, the command types. It is the one owner of the types and rules the domain crates share: `CheckKey`, `ResourceRef`, `DecisionRecord`, `AlignmentValue` (and it re-exports `tc-core`'s `GitOid` and `Md5`); the pin slots and the D30 ladder (`pins`); a decision's edit and computed state (`decision`); an alignment's validity, its verse order and the aligned-USFM split (`alignment`); person labels. No I/O. |
 | `tc-store` | `Vfs`, `FaultFs`, `atomic_write`, the project lock, `ProjectActor` and commands, open and recovery, reading and writing the fold cache `.tc/index.bin` (§6.1 O8), the fold's `ValueSource` over pack and pending files and their blobs, materialize, seal, consolidate, outside-edit detection and recording, drafts, identity, local git (tree build, commit, index, repack, object database access) |

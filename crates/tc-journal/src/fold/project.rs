@@ -311,6 +311,18 @@ impl ChapterText {
             _ => None,
         }
     }
+
+    /// The content of the run that starts at `start` when tC4 reads it as drafted
+    /// ([`codec::is_drafted`]); `None` for an undrafted run, which has no text.
+    pub fn drafted_content(&self, start: u16) -> Option<String> {
+        match self.verses.get(&start) {
+            Some(VersePart::Text(t)) => {
+                let content = format!("{}{}", t.words, t.layout);
+                codec::is_drafted(t.marker.term(), &content).then_some(content)
+            }
+            _ => None,
+        }
+    }
 }
 
 fn verse_text(record: &Record) -> Option<VerseText> {
@@ -1526,18 +1538,19 @@ fn check_verse(check: &CheckKey) -> Option<(u16, u16)> {
     }
 }
 
-/// A decision's key and the (chapter, verse) its target names.
 /// A check's target verse as its key writes it: (chapter, verse).
 type Target<'a> = (&'a str, &'a str);
+/// A decision's key and the (chapter, verse) its target names.
 type Targeted<'a> = (Target<'a>, KeyIdx);
 
 /// The content a decision's target names by the no-text rule of §7.7, as tC4's Check screen
 /// finds a check's draft text (`verseTextIndex` and `withSpanMembers`, `src/state.jsx` at
 /// d310bf3, and `decisionIsStale`, `src/data/revalidate.ts`): a numeric chapter, and a verse
 /// that is a number (the run that holds it) or a span label that a projected run carries
-/// exactly. A run whose content, trimmed, is empty or the stub `___` is not drafted and gives
-/// no text. Every other target (`front`, `intro`, a list such as `1,3,8,12`, a span no run
-/// carries) has none: it gives no evidence either way.
+/// exactly. A run tC4 does not read as drafted ([`codec::is_drafted`]: the body its indexer
+/// finds, trimmed, is empty or the stub `___`) gives no text. Every other target (`front`,
+/// `intro`, a list such as `1,3,8,12`, a span no run carries) has none: it gives no
+/// evidence either way.
 pub(crate) fn target_content(text: &BookText, check: &CheckKey) -> Option<String> {
     verse_content(text, &check.target)
 }
@@ -1555,14 +1568,7 @@ fn verse_content(text: &BookText, target: &CheckTarget) -> Option<String> {
             (end == last && codec::label(first, end) == verse.as_str()).then_some(first)?
         }
     };
-    chapter.content(start).filter(|c| drafted(c))
-}
-
-/// tC4's draft test (`body !== '' && body !== '___'` after JavaScript's `trim`).
-pub(crate) fn drafted(content: &str) -> bool {
-    let body =
-        content.trim_matches(|c: char| (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}');
-    !body.is_empty() && body != "___"
+    chapter.drafted_content(start)
 }
 
 /// A JSON object written as a preserve-order `serde_json::Map` serializes compactly:

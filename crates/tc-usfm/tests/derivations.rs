@@ -293,3 +293,99 @@ fn a_verse_of_several_megabytes_takes_seconds() {
     let took = time_derivations(&verse, 1);
     assert!(took < limit, "{} bytes took {took:?}", verse.len());
 }
+
+/// What tC4's Check screen and aligner read of each verse of a draft
+/// (`fixtures/usfm/check-text-vectors.json`, made by `tools/gen-check-text-vectors.mjs` with
+/// tC4's own `verseTextIndex`): whether the verse is drafted, by the body tC4's indexer finds
+/// ([`tc_usfm::codec::is_drafted`]), and the text it shows ([`tc_usfm::shown_text_v1`]), for
+/// every verse of tC4's plain drafts and of drafts written for poetry, superscriptions,
+/// lists, notes and CRLF line ends. The one difference is a verse whose `\v` stands inside a
+/// line, which tC4 does not index and the rebuild reads (§7.7).
+#[test]
+fn the_check_text_is_what_tc4_reads() {
+    use std::collections::BTreeMap;
+    use tc_usfm::codec;
+    let text = std::fs::read_to_string(fixtures().join("usfm/check-text-vectors.json")).unwrap();
+    let file: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let mut by_book: BTreeMap<&str, BTreeMap<(String, String), &serde_json::Value>> =
+        BTreeMap::new();
+    for case in file["cases"].as_array().unwrap() {
+        by_book
+            .entry(case["book"].as_str().unwrap())
+            .or_default()
+            .insert(
+                (
+                    case["chapter"].as_str().unwrap().to_owned(),
+                    case["verse"].as_str().unwrap().to_owned(),
+                ),
+                case,
+            );
+    }
+    let (mut drafted, mut undrafted, mut mid_line) = (0, 0, 0);
+    let mut wrong = Vec::new();
+    for (book, cases) in &by_book {
+        let raw = match file["drafts"].get(*book) {
+            Some(draft) => draft.as_str().unwrap().to_owned(),
+            None => std::fs::read_to_string(fixtures().join(book.trim_start_matches("fixtures/")))
+                .unwrap(),
+        };
+        let parts = codec::decompose(&raw).unwrap_or_else(|e| panic!("{book}: {e}"));
+        let mut seen = 0;
+        for (c, chapter) in &parts.chapters {
+            for (v, part) in &chapter.verses {
+                let codec::VersePart::Text(verse) = part else {
+                    continue;
+                };
+                let key = (c.to_string(), codec::label(*v, verse.last));
+                let content = codec::join_verse(&verse.words, &verse.layout);
+                let Some(case) = cases.get(&key) else {
+                    // tC4's indexer reads a `\v` only at the start of a line, so it indexes
+                    // no verse whose marker stands after `\q1 ` or after text; the rebuild
+                    // reads it from its marker (§7.7).
+                    let ours = codec::is_drafted(verse.marker.term(), &content)
+                        .then(|| tc_usfm::shown_text_v1(&content));
+                    let expected = match (*book, key.1.as_str()) {
+                        ("midline", "13") => {
+                            Some("He will bless those fearing Yahweh,\nthe small with the great.")
+                        }
+                        ("midline", "14") => None,
+                        ("midline", "15") => Some("May you be blessed"),
+                        ("midline", "16") => Some("by Yahweh."),
+                        _ => {
+                            wrong.push(format!("{book} {key:?}: tC4 does not index it"));
+                            continue;
+                        }
+                    };
+                    if ours.as_deref() != expected {
+                        wrong.push(format!("{book} {key:?}: {ours:?}"));
+                    }
+                    mid_line += 1;
+                    continue;
+                };
+                seen += 1;
+                let ours = codec::is_drafted(verse.marker.term(), &content);
+                if ours != case["drafted"].as_bool().unwrap() {
+                    wrong.push(format!("{book} {key:?}: drafted {ours} in {content:?}"));
+                    continue;
+                }
+                if !ours {
+                    undrafted += 1;
+                    continue;
+                }
+                drafted += 1;
+                let shown = tc_usfm::shown_text_v1(&content);
+                if shown != case["text"].as_str().unwrap() {
+                    wrong.push(format!("{book} {key:?}: {shown:?} != {}", case["text"]));
+                }
+            }
+        }
+        if seen != cases.len() {
+            wrong.push(format!(
+                "{book}: tC4 indexes {} verses, the codec {seen}",
+                cases.len()
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    assert_eq!((drafted, undrafted, mid_line), (99, 351, 4));
+}

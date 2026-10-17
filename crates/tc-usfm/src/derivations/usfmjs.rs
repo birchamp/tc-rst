@@ -250,7 +250,7 @@ impl Heap {
         self.items[r].elems.as_deref().unwrap_or(&[])
     }
 
-    fn is_array(&self, r: Ref) -> bool {
+    pub(super) fn is_array(&self, r: Ref) -> bool {
         self.items[r].elems.is_some()
     }
 

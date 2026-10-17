@@ -33,7 +33,7 @@ use tc_journal::fold::{
 };
 use tc_journal::json::Json;
 use tc_journal::pins::{Collection, Coverage, Ladder, Unrecorded};
-use tc_journal::record::{PinGroupValue, PresentHow, ResourceRef, UserStatus};
+use tc_journal::record::{PinGroupValue, PresentHow, ResourceRef, UserStatus, VerseValue};
 use tc_journal::{
     BookId, Cause, Change, CheckKey, CheckTarget, ImportSource, PinGroup, Record, RecordKey, ToolId,
 };
@@ -47,32 +47,154 @@ fn fixture(path: &str) -> String {
 
 // ---- What the screens read ----------------------------------------------------------
 
-/// tC4's draft index of a book's USFM (`verseTextIndex`, then `withSpanMembers`): each
-/// drafted run under `chapter:label`, and each member verse of a span under its own
-/// number when nothing else holds it. A run whose content, trimmed, is empty or the stub
-/// `___` is not drafted.
-fn draft_index(usfm: &str) -> HashMap<String, String> {
-    let parts = codec::decompose(usfm).expect("the projection decomposes");
-    let mut index = HashMap::new();
-    let mut spans = Vec::new();
-    for (&c, chapter) in &parts.chapters {
-        for (&v, part) in &chapter.verses {
-            let codec::VersePart::Text(text) = part else {
+/// JavaScript's `trim`.
+fn js_trim(text: &str) -> &str {
+    text.trim_matches(|c: char| (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}')
+}
+
+/// tC4's `indexBook` (`src/data/usfm/indexer.ts` at d310bf3), line by line over the whole
+/// book as tC4 runs it, not through the codec: each verse's chapter, key and body range. A
+/// body runs from after `\v N` (from the next line when the rest of the marker's line is
+/// blank) to the first line that starts with a paragraph-level marker, `\v` or `\c`, without
+/// the line breaks before that line. tC4 reads a `\v` only at the start of a line; this
+/// port also reads one inside a line, which ends the verse before it there, as §7.7 states
+/// (tC4 indexes no such verse, and the ULT's Psalms put every `\v` after a `\q1`).
+fn index_book(raw: &str) -> Vec<(String, String, usize, usize)> {
+    struct Open {
+        chapter: String,
+        key: String,
+        start: usize,
+        marker_end: usize,
+    }
+    let close = |open: &mut Option<Open>, boundary: usize, out: &mut Vec<_>| {
+        let Some(o) = open.take() else { return };
+        let mut end = boundary.max(o.start);
+        while end > o.start && matches!(raw.as_bytes()[end - 1], b'\n' | b'\r') {
+            end -= 1;
+        }
+        let mut start = o.start;
+        if end == start && o.marker_end < start {
+            start = o.marker_end;
+            end = start;
+        }
+        out.push((o.chapter, o.key, start, end));
+    };
+    // `\c` or `\v`, spaces or tabs, then a token: the token and where it ends.
+    let token = |text: &str, marker: &str| -> Option<(String, usize)> {
+        let rest = text.strip_prefix(marker)?;
+        let after = rest.trim_start_matches([' ', '\t']);
+        if after.len() == rest.len() {
+            return None;
+        }
+        let len = after
+            .find(|c: char| c.is_whitespace())
+            .unwrap_or(after.len());
+        (len > 0).then(|| (after[..len].to_owned(), text.len() - after.len() + len))
+    };
+    let mut out = Vec::new();
+    let mut chapter: Option<String> = None;
+    let mut open: Option<Open> = None;
+    let mut line_start = 0;
+    while line_start < raw.len() {
+        let line_end = raw[line_start..]
+            .find('\n')
+            .map_or(raw.len(), |at| line_start + at);
+        let line = &raw[line_start..line_end];
+        // LINE_MARKER: `\`, an optional `+`, a letter, then letters, digits and hyphens.
+        let tag = line.strip_prefix('\\').and_then(|rest| {
+            let rest = rest.strip_prefix('+').unwrap_or(rest);
+            let len = rest
+                .bytes()
+                .take_while(|b| b.is_ascii_alphanumeric() || *b == b'-')
+                .count();
+            rest.as_bytes()
+                .first()
+                .is_some_and(u8::is_ascii_alphabetic)
+                .then(|| &rest[..len])
+        });
+        match tag {
+            Some("c") => {
+                close(&mut open, line_start, &mut out);
+                if let Some((number, _)) = token(line, "\\c") {
+                    chapter = Some(number);
+                }
+            }
+            // A `\v` that opens no verse still ends the one before it.
+            Some("v") => close(&mut open, line_start, &mut out),
+            Some(tag) if codec::is_para_marker(tag) => close(&mut open, line_start, &mut out),
+            _ => {}
+        }
+        // Every `\v` of the line, at its start or not.
+        let mut from = 0;
+        while let Some(at) = line[from..].find("\\v").map(|at| from + at) {
+            from = at + 2;
+            let Some((key, after)) = token(&line[at..], "\\v") else {
                 continue;
             };
-            let content = codec::join_verse(&text.words, &text.layout);
-            let body = content.trim();
-            if body.is_empty() || body == "___" {
-                continue;
+            close(&mut open, line_start + at, &mut out);
+            let Some(c) = &chapter else { continue };
+            let mut marker_end = line_start + at + after;
+            if matches!(raw.as_bytes().get(marker_end), Some(b' ' | b'\t')) {
+                marker_end += 1;
             }
-            index.insert(
-                format!("{c}:{}", codec::label(v, text.last)),
-                content.clone(),
-            );
-            if text.last > v {
-                spans.push((c, v, text.last, content));
+            let mut start = marker_end;
+            if js_trim(&raw[start.min(line_end)..line_end]).is_empty() {
+                start = (line_end + 1).min(raw.len());
+            }
+            open = Some(Open {
+                chapter: c.clone(),
+                key,
+                start,
+                marker_end,
+            });
+            from = at + after;
+        }
+        line_start = line_end + 1;
+    }
+    close(&mut open, raw.len(), &mut out);
+    out
+}
+
+/// tC4's draft index of a book's USFM (`verseTextIndex`, then `withSpanMembers`,
+/// `src/state.jsx` at d310bf3): each verse [`index_book`] finds whose body, trimmed, is
+/// neither empty nor the stub `___`, under `chapter:key`, and each member verse of a span
+/// under its own number when nothing else holds it. The text the screens assess a drafted
+/// verse with is its whole content (the hash and the selections are of it), read here with
+/// the codec.
+fn draft_index(usfm: &str) -> HashMap<String, String> {
+    let parts = codec::decompose(usfm).expect("the projection decomposes");
+    let mut contents = HashMap::new();
+    for (&c, chapter) in &parts.chapters {
+        for (&v, part) in &chapter.verses {
+            if let codec::VersePart::Text(text) = part {
+                contents.insert(
+                    format!("{c}:{}", codec::label(v, text.last)),
+                    codec::join_verse(&text.words, &text.layout),
+                );
             }
         }
+    }
+    let mut index = HashMap::new();
+    let mut spans = Vec::new();
+    for (chapter, key, start, end) in index_book(usfm) {
+        let body = js_trim(&usfm[start..end]);
+        if body.is_empty() || body == "___" {
+            continue;
+        }
+        let at = format!("{chapter}:{key}");
+        let content = contents
+            .get(&at)
+            .unwrap_or_else(|| panic!("tC4 indexes {at}, which the projection does not hold"))
+            .clone();
+        if let Some((first, last)) = key.split_once('-') {
+            spans.push((
+                chapter.clone(),
+                first.parse::<u16>().unwrap(),
+                last.parse::<u16>().unwrap(),
+                content.clone(),
+            ));
+        }
+        index.insert(at, content);
     }
     for (c, first, last, content) in spans {
         for n in first..=last {
@@ -495,7 +617,49 @@ fn edits_joins_renumbers_and_pins_change_files_and_screens_alike() {
     // Clear 1:9 to the stub: its checks have no text and give no evidence.
     let v9 = on(&changes, &verse_key(1, 9));
     changes.push(ana.one(verse(1, 9, text("___", 9)), vec![v9.id()]));
+    // Lay 1:2 out as poetry whose first line is a `\q1` line of its own, and 1:3 as the stub
+    // with a poetry line after it: tC4's indexer reads neither as drafted, so their checks
+    // have no text either, though the verses hold words.
+    let poetry = |words: &str, last: u16, term: codec::MarkerTerm| VerseValue::Text {
+        marker: codec::MarkerWs::new(" ", term).unwrap(),
+        words: words.into(),
+        layout: "\n".into(),
+        last: tc_journal::VerseNo::new(last).unwrap(),
+        from: None,
+    };
+    let v2 = on(&changes, &verse_key(1, 2));
+    let v3 = on(&changes, &verse_key(1, 3));
+    changes.extend(ana.batch(
+        vec![
+            (
+                verse(
+                    1,
+                    2,
+                    poetry("\\q1 en la esperanza", 2, codec::MarkerTerm::Lf),
+                ),
+                vec![v2.id()],
+            ),
+            (
+                verse(
+                    1,
+                    3,
+                    poetry("___\n\\q2 a su debido tiempo", 3, codec::MarkerTerm::Space),
+                ),
+                vec![v3.id()],
+            ),
+        ],
+        Cause::Edit,
+    ));
     let edited = fold(&changes);
+    let laid_out = edited.check_texts(Collection::Book(BookId::Titus));
+    for v in ["2", "3"] {
+        let target = CheckTarget::Verse {
+            book: BookId::Titus,
+            chapter: tc_journal::RefPart::parse("1").unwrap(),
+            verse: tc_journal::RefPart::parse(v).unwrap(),
+        };
+        assert!(laid_out.text(&target).is_none(), "1:{v}");
+    }
     let after = compare(&edited);
     assert_eq!(after.decisions, before.decisions);
     // "apóstol" and the second "Dios" are gone from 1:1; "fe" is still there.
