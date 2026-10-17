@@ -111,7 +111,17 @@ git -C $S/tc4 checkout d310bf3
 ln -s /home/user/unfoldingword/translationcore4/node_modules $S/tc4/node_modules
 mkdir -p $S/tc4/public && cp -a /home/user/unfoldingword/translationcore4/public/help $S/tc4/public/
 TC4_ROOT=$S/tc4 npm run capture
+TC4_ROOT=$S/tc4 node ../app/state.mjs --record
+TC4_ROOT=$S/tc4 npm run check
 ```
+
+`state.mjs --record` writes `parity/app/state.sha256.json` again, from the fixtures of the
+commit just captured. The check fails until that file and `manifest.json` name the same tC4
+commit. If the check then reports that the state built from this repository differs from the
+recorded one, tC4's fixtures changed at that commit. Copy the folders that `REPO_COPIES` in
+`parity/app/state.mjs` lists from `$S/tc4` into `fixtures/tc4/`, record in `fixtures/README.md`
+which commit they now come from, and run the check again. The Rust crates' tests read the same
+copies, so run `cargo test --workspace` as well.
 
 The link to `node_modules` works only while the two commits have the same dependencies. From
 `d494a9d` to `d310bf3`, `package.json` changed only its `test:desktop` script. The copy of
@@ -280,7 +290,7 @@ consecutive captures gave byte-identical DOM snapshots and `manifest.json`.
 | `parity/app/driver.mjs` | `appDriver`: the clicks and waits that the runs share, over an environment (`AppEnv`) that loads Home, names the project test ids, gives the message catalog and changes Door43. |
 | `parity/app/observe.mjs` | The capture rules (browser flags, context, pointer rest), `trackRequests`, `settle`, `captureScreen`, `observe` and `domSnapshot`. |
 | `parity/app/env-tc4.mjs` | The tC4 environment: the client build, the mock server on `.state/<scenario>`, Door43 faked in the browser, tC4's catalogs and journal writers. |
-| `parity/app/state.mjs` | Builds a scenario's state with `fixtures/build-state.mjs` from this repository's copies of tC4's fixtures (`fixtures/tc4/`), so the Rust app's capture needs no tC4 checkout. `state.sha256.json` records the state built from tC4; `state.test.mjs` checks that both builds are byte-identical. |
+| `parity/app/state.mjs` | Builds a scenario's state with `fixtures/build-state.mjs` from this repository's copies of tC4's fixtures (`fixtures/tc4/`), so the Rust app's capture needs no tC4 checkout. `state.sha256.json` records the state built from tC4, and `state.mjs --record` writes it again after a capture at another tC4 commit ("Capture another tC4 commit"); `state.test.mjs` checks that both builds are byte-identical. |
 
 `settle` now fails a screen whose app is not quiet for 800 ms within 30 s, and names the requests
 still in flight; before the split it took the shot anyway. That showed a fault in the old request

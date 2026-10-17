@@ -30,8 +30,23 @@ function differences(want, got) {
 }
 
 test('state.sha256.json was recorded from the tC4 commit of the baseline, for every scenario', () => {
-  assert.equal(recorded.tc4, baseline.tc4.commit);
+  assert.equal(recorded.tc4, baseline.tc4.commit, `state.sha256.json is from tC4 ${recorded.tc4}, the baseline from ${baseline.tc4.commit}: `
+    + 'record it again from a checkout of the baseline\'s commit (parity/tc4-baseline/README.md, "Capture another tC4 commit")');
   assert.deepEqual(Object.keys(recorded.scenarios), Object.keys(SCENARIOS));
+});
+
+test('the procedure for capturing another tC4 commit records state.sha256.json from it and checks', () => {
+  const readme = fs.readFileSync(path.join(HERE, '..', 'tc4-baseline', 'README.md'), 'utf8');
+  const procedure = readme.split('\n### Capture another tC4 commit\n')[1]?.split(/\n#{2,3} /)[0];
+  assert.ok(procedure, 'the README has a section "Capture another tC4 commit"');
+  const commands = procedure.match(/```sh\n([^]*?)```/)[1].trim().split('\n');
+  const capture = commands.indexOf('TC4_ROOT=$S/tc4 npm run capture');
+  assert.notEqual(capture, -1, 'the procedure captures from $S/tc4');
+  // The procedure runs in parity/tc4-baseline, beside package.json.
+  const record = commands.findIndex((line, i) => i > capture && /^TC4_ROOT=\$S\/tc4 node \S+ --record$/.test(line));
+  assert.notEqual(record, -1, 'after the capture, the procedure records state.sha256.json from the same checkout');
+  assert.equal(path.resolve(HERE, '..', 'tc4-baseline', commands[record].split(' ')[2]), fileURLToPath(new URL('./state.mjs', import.meta.url)));
+  assert.equal(commands.at(-1), 'TC4_ROOT=$S/tc4 npm run check', 'the procedure ends with the check, against the same checkout');
 });
 
 test('the state built from this repository equals the state recorded from tC4', () => {
