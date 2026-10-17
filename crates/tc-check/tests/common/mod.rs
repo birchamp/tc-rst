@@ -6,13 +6,19 @@ use std::path::PathBuf;
 use serde_json::{Value, json};
 use tc_check::carry::StoredDecision;
 use tc_check::derive::{BookSpec, CheckList, DropReason};
+use tc_check::key::reference_json;
+use tc_check::status::{DecisionBasis, Edit};
 use tc_check::{
-    CheckId, CheckItem, CheckKey, CheckTarget, Coverage, Decision, Judgement, Pin, RefPart,
-    RepoPath, ResourceRef, Selection, TextMd5, ToolId, UserStatus,
+    CheckId, CheckItem, CheckKey, CheckTarget, Coverage, DecisionRecord, Judgement, LanguageSets,
+    Pin, RefPart, ResourceRef, Selection, SetSlot, SlotPin, TargetText, ToolId, UserStatus,
 };
-use tc_core::{BookId, VerseSpan};
+use tc_core::{BookId, GitOid, VerseSpan};
 use tc_helps::tsv::{TsvScope, parse_notes, parse_word_links};
-use tc_helps::{GitOid, Note, WordLink};
+use tc_helps::{Note, WordLink};
+use tc_journal::decision::verse_text_md5_v1;
+use tc_journal::json::{Json, JsonMap};
+use tc_journal::keys::SlotName;
+use tc_journal::record::{PinGroupValue, SlotValue};
 use tc_usfm::Book;
 use tc_versification::{StandardScheme, Unplaceable};
 
@@ -79,7 +85,7 @@ pub fn reason(reason: &DropReason) -> &'static str {
 /// `[checkId, chapter, verse, occurrence]` as tC4's `contextId` holds them: a part is a
 /// JSON number when it is digits.
 pub fn identity(item: &CheckItem) -> Vec<Value> {
-    let reference = item.key.target.to_json();
+    let reference = reference_json(&item.key.target);
     vec![
         json!(item.key.check_id.as_str()),
         reference["chapter"].clone(),
@@ -106,7 +112,7 @@ pub fn sha40(s: &str) -> GitOid {
 
 pub fn resource_ref(repo: &str, sha: GitOid) -> ResourceRef {
     ResourceRef {
-        repo_path: RepoPath::parse(&format!("git.door43.org/{repo}")).unwrap(),
+        repo_path: format!("git.door43.org/{repo}").into(),
         sha,
     }
 }
@@ -127,26 +133,64 @@ pub fn sample(rel: &str) -> String {
     fixture(&format!("tc4/sample-burrito/ingredients/{rel}"))
 }
 
-/// The plain text of a verse of a book.
-pub fn verse_text(usfm: &str, chapter: u16, verse: u16) -> String {
+/// The content of a verse of a book (its USFM after `\v N `), as a verse record holds it.
+pub fn verse_content(usfm: &str, chapter: u16, verse: u16) -> String {
     Book::parse(usfm)
         .verse(chapter, VerseSpan::single(verse))
         .unwrap()
-        .plain_text()
+        .body()
+        .to_owned()
 }
 
-/// A tC4 decision as an import would read it, stamped with the md5 of `text`.
-pub fn decision_of(json: &Value, resource: &ResourceRef, text: &str) -> Decision {
-    let selections = json["selections"].as_array().map(|list| {
-        list.iter()
-            .map(|s| Selection {
-                text: s["text"].as_str().unwrap().into(),
-                occurrence: u32::try_from(s["occurrence"].as_u64().unwrap()).unwrap(),
-                occurrences: u32::try_from(s["occurrences"].as_u64().unwrap()).unwrap(),
-            })
-            .collect()
-    });
-    Decision {
+/// The text of a verse of a book as the Check screens and the fold read it.
+pub fn verse_text(usfm: &str, chapter: u16, verse: u16) -> TargetText {
+    TargetText::new(verse_content(usfm, chapter, verse))
+}
+
+/// Selections as a tC4 decision writes them.
+pub fn selections_of(list: &Value) -> Vec<Selection> {
+    list.as_array()
+        .unwrap()
+        .iter()
+        .map(|s| Selection {
+            text: s["text"].as_str().unwrap().into(),
+            occurrence: u32::try_from(s["occurrence"].as_u64().unwrap()).unwrap(),
+            occurrences: u32::try_from(s["occurrences"].as_u64().unwrap()).unwrap(),
+            extra: JsonMap::new(),
+        })
+        .collect()
+}
+
+/// A decision with nothing else recorded: no context, category, comment or bookmark.
+pub fn decision(judgement: Judgement, resource: &ResourceRef) -> DecisionRecord {
+    DecisionRecord {
+        context: JsonMap::new(),
+        category: None,
+        judgement,
+        comment: None,
+        bookmarked: false,
+        resource: resource.clone(),
+        imported_invalid: false,
+        dismissed: false,
+        extra: JsonMap::new(),
+    }
+}
+
+/// A tC4 decision as an import would read it, stamped with the md5 of `content`.
+pub fn decision_of(json: &Value, resource: &ResourceRef, content: &str) -> DecisionRecord {
+    let selections = json
+        .get("selections")
+        .filter(|s| s.is_array())
+        .map(selections_of);
+    let context = match Json::try_from(&json["contextId"]) {
+        Ok(Json::Obj(map)) => map,
+        _ => JsonMap::new(),
+    };
+    DecisionRecord {
+        context,
+        category: json["category"].as_str().map(Into::into),
+        dismissed: false,
+        extra: JsonMap::new(),
         judgement: Judgement {
             selections,
             nothing_to_select: json["nothingToSelect"] == true,
@@ -156,7 +200,7 @@ pub fn decision_of(json: &Value, resource: &ResourceRef, text: &str) -> Decision
                 Some("todo") => Some(UserStatus::Todo),
                 _ => None,
             },
-            verse_text_md5: TextMd5::of(text),
+            verse_text_md5: verse_text_md5_v1(content),
         },
         comment: json["comments"].as_str().map(str::to_owned),
         bookmarked: json["reminders"] == true,
@@ -167,7 +211,10 @@ pub fn decision_of(json: &Value, resource: &ResourceRef, text: &str) -> Decision
 
 /// The resource a tC4 decisions file records.
 pub fn file_resource(file: &Value) -> ResourceRef {
-    Pin::from_json(&file["resource"]).unwrap().resource
+    match SlotPin::read(&Json::try_from(&file["resource"]).unwrap()) {
+        Some(SlotPin::Usable(pin)) => pin.resource,
+        other => panic!("not a pin: {other:?}"),
+    }
 }
 
 /// The decisions of a tC4 Bible decisions file, keyed as the journal keys them, each
@@ -181,12 +228,14 @@ pub fn stored_decisions(file: &Value, book: BookId, usfm: &str) -> Vec<StoredDec
         .map(|json| {
             let context = &json["contextId"];
             let part = |v: &Value| match v {
-                Value::Number(n) => RefPart::number(u16::try_from(n.as_u64().unwrap()).unwrap()),
-                other => RefPart::new(other.as_str().unwrap()).unwrap(),
+                Value::Number(n) => {
+                    RefPart::from_number(u16::try_from(n.as_u64().unwrap()).unwrap())
+                }
+                other => RefPart::parse(other.as_str().unwrap()).unwrap(),
             };
             let chapter = part(&context["reference"]["chapter"]);
             let verse = part(&context["reference"]["verse"]);
-            let text = verse_text(
+            let text = verse_content(
                 usfm,
                 chapter.as_str().parse().unwrap(),
                 verse.as_str().parse().unwrap(),
@@ -208,4 +257,117 @@ pub fn stored_decisions(file: &Value, book: BookId, usfm: &str) -> Vec<StoredDec
             }
         })
         .collect()
+}
+
+/// The text a target shows, from its content.
+pub fn t(content: &str) -> TargetText {
+    TargetText::new(content.to_owned())
+}
+
+/// The decision after the person's edit, shown `text`, through the journal's one rule
+/// (`DecisionEdit::apply`). A first decision starts from an empty context.
+pub fn apply(
+    decision: Option<&DecisionRecord>,
+    edit: Edit,
+    text: &str,
+    resource: &ResourceRef,
+) -> DecisionRecord {
+    let basis = DecisionBasis {
+        context: JsonMap::new(),
+        category: None,
+    };
+    edit.command(Some(basis), resource)
+        .apply(decision, Some(text))
+        .unwrap()
+}
+
+/// The decisions as the fold projects them for a session, each assessed against its own
+/// target's text: the fold's computation, made here without a journal.
+pub fn projected<'t>(
+    stored: &[StoredDecision],
+    resolution: Option<&ResourceRef>,
+    text: impl Fn(&CheckTarget) -> Option<&'t TargetText>,
+) -> Vec<tc_journal::fold::ProjectedDecision> {
+    stored
+        .iter()
+        .map(|s| tc_journal::fold::ProjectedDecision {
+            key: s.key.clone(),
+            record: s.decision.clone(),
+            assessment: tc_check::status::assess(&s.decision, resolution, text(&s.key.target)),
+            detached: !resolution.is_some_and(|r| r.same_resource(&s.decision.resource)),
+        })
+        .collect()
+}
+
+/// The text of a single-verse target of `usfm`, by the no-text rule: none for a verse whose
+/// content is empty or the stub `___`.
+pub fn target_text(usfm: &str, target: &CheckTarget) -> Option<TargetText> {
+    let (c, v) = target.parts();
+    let content = verse_content(usfm, c.parse().ok()?, v.parse().ok()?);
+    let body = content.trim();
+    (!body.is_empty() && body != "___").then(|| TargetText::new(content))
+}
+
+pub type LanguageSet = PinGroupValue;
+pub type Pins = LanguageSets;
+pub type Slot = SetSlot;
+
+/// What tests read and write of one language set.
+pub trait Set {
+    fn insert(&mut self, slot: SetSlot, pin: Pin);
+    /// Sets a slot to a value as tC4 JSON writes it, usable or not.
+    fn insert_json(&mut self, slot: SetSlot, value: &serde_json::Value);
+    fn get(&self, slot: SetSlot) -> Option<Pin>;
+    fn pins(&self) -> Vec<Pin>;
+    fn unusable(&self) -> Vec<SetSlot>;
+    fn slot_count(&self) -> usize;
+    /// Every usable pin as one that records no books.
+    fn forget_coverage(&mut self);
+}
+
+impl Set for PinGroupValue {
+    fn insert(&mut self, slot: SetSlot, pin: Pin) {
+        self.set_pin(slot, &pin);
+    }
+
+    fn insert_json(&mut self, slot: SetSlot, value: &serde_json::Value) {
+        self.0.insert(
+            SlotName::parse(slot.name()).unwrap(),
+            SlotValue(Json::try_from(value).unwrap()),
+        );
+    }
+
+    fn get(&self, slot: SetSlot) -> Option<Pin> {
+        self.held(slot)?.usable().cloned()
+    }
+
+    fn pins(&self) -> Vec<Pin> {
+        SetSlot::ALL
+            .into_iter()
+            .filter_map(|s| self.get(s))
+            .collect()
+    }
+
+    fn unusable(&self) -> Vec<SetSlot> {
+        SetSlot::ALL
+            .into_iter()
+            .filter(|s| matches!(self.held(*s), Some(SlotPin::Unusable(_))))
+            .collect()
+    }
+
+    fn slot_count(&self) -> usize {
+        SetSlot::ALL
+            .into_iter()
+            .filter(|s| self.held(*s).is_some())
+            .count()
+    }
+
+    fn forget_coverage(&mut self) {
+        for slot in SetSlot::ALL {
+            if let Some(mut pin) = self.get(slot) {
+                pin.coverage = Coverage::Unrecorded;
+                self.insert(slot, pin);
+            }
+        }
+    }
 }

@@ -354,11 +354,22 @@ pub struct Selection {
     pub extra: JsonMap,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UserStatus {
     Valid,
     Invalid,
     Todo,
+}
+
+impl UserStatus {
+    /// The status as tC4 files write it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Valid => "valid",
+            Self::Invalid => "invalid",
+            Self::Todo => "todo",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -396,6 +407,24 @@ impl PinGroupValue {
     pub fn slot(&self, name: &str) -> Option<&Json> {
         let name = SlotName::parse(name).ok()?;
         self.0.get(&name).map(|v| &v.0)
+    }
+
+    /// A group read from tC4's JSON object of its slots, such as `languageSets.primary` of
+    /// `resources.json`. `None` when the value is not an object, a key is not a slot name,
+    /// or a number in it is not an integer, which no tC4 pin holds.
+    pub fn from_json(value: &serde_json::Value) -> Option<Self> {
+        let serde_json::Value::Object(map) = value else {
+            return None;
+        };
+        map.iter()
+            .map(|(name, slot)| {
+                Some((
+                    SlotName::parse(name).ok()?,
+                    SlotValue(Json::try_from(slot).ok()?),
+                ))
+            })
+            .collect::<Option<_>>()
+            .map(Self)
     }
 }
 

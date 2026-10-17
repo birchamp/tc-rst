@@ -19,7 +19,7 @@ use crate::keys::{CheckKey, CheckTarget, PinGroup, RecordKey, ResourcesLevel, To
 use crate::pins::{Answer, Collection};
 use crate::record::{
     AlignmentGroup, AlignmentValue, CarriedValue, ChapterFront, CheckValue, CommentTarget,
-    DecisionRecord, LayoutItem, Record, SourceWord, TargetWord, UserStatus, VerseValue,
+    DecisionRecord, LayoutItem, Record, SourceWord, TargetWord, VerseValue,
 };
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -45,14 +45,6 @@ pub enum DerivedFile {
     StoryComments,
 }
 
-fn tool_name(tool: ToolId) -> &'static str {
-    match tool {
-        ToolId::TranslationWords => "translationWords",
-        ToolId::TranslationNotes => "translationNotes",
-        ToolId::TranslationQuestions => "translationQuestions",
-    }
-}
-
 impl DerivedFile {
     /// The book a file of one book belongs to.
     pub fn book(&self) -> Option<BookId> {
@@ -73,11 +65,7 @@ impl DerivedFile {
                 format!("ingredients/checking/alignments/{}.json", book.code())
             }
             Self::Decisions(tool, book) => {
-                format!(
-                    "ingredients/checking/{}/{}.json",
-                    tool_name(*tool),
-                    book.code()
-                )
+                format!("ingredients/checking/{}/{}.json", tool.name(), book.code())
             }
             Self::Comments(book) => format!("ingredients/tc/comments/{}.json", book.code()),
             Self::Resources => "ingredients/checking/resources.json".into(),
@@ -86,7 +74,7 @@ impl DerivedFile {
             Self::Conflicts => "ingredients/tc/conflicts.json".into(),
             Self::Story(story) => format!("ingredients/content/{:02}.md", story.get()),
             Self::StoryDecisions(tool) => {
-                format!("ingredients/checking/{}/OBS.json", tool_name(*tool))
+                format!("ingredients/checking/{}/OBS.json", tool.name())
             }
             Self::StoryComments => "ingredients/tc/comments/OBS.json".into(),
         }
@@ -239,6 +227,19 @@ fn lines(head: &str, records: &[String], tail: &str) -> Vec<u8> {
     out.push_str(tail);
     out.push('\n');
     out.into_bytes()
+}
+
+/// A projected decision of one (tool, collection), as the Check screens read it (§7.7).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectedDecision {
+    pub key: CheckKey,
+    pub record: DecisionRecord,
+    /// The state its decision file carries: [`decision::assess`] against the resolution of
+    /// the (tool, collection) and the target's text.
+    pub assessment: decision::Assessment,
+    /// Listed under Detached: made against another resource than the resolution, or on a
+    /// target the text no longer has.
+    pub detached: bool,
 }
 
 /// The projected verse texts of a book, read once for a document.
@@ -962,7 +963,7 @@ impl FoldState {
         records.sort();
         let mut head = Map::new();
         head.insert("schemaVersion".into(), Value::from(1));
-        head.insert("tool".into(), Value::from(tool_name(tool)));
+        head.insert("tool".into(), Value::from(tool.name()));
         head.insert("book".into(), Value::from(book.code()));
         if let Some(resource) = answer.map(resolution_record) {
             head.insert("resource".into(), resource);
@@ -972,6 +973,64 @@ impl FoldState {
         head.push_str(",\"decisions\":[");
         let records: Vec<String> = records.into_iter().map(|(_, r)| r).collect();
         Some(lines(&head, &records, "]}"))
+    }
+
+    /// Every decision of `tool` on `collection` the projection holds, in key order, with the
+    /// state its decision file carries (§7.7) and whether it is listed under Detached: what
+    /// the Check screens open a session with ([`ProjectedDecision`]). Each target's text is
+    /// read by the no-text rule, as the decision files read it.
+    pub fn decisions(&self, tool: ToolId, collection: Collection) -> Vec<ProjectedDecision> {
+        let (keys, text): (Vec<KeyIdx>, Option<BookText>) = match collection {
+            Collection::Book(book) => {
+                if !self.book(book).projects() {
+                    return Vec::new();
+                }
+                let keys = self
+                    .books
+                    .get(&book)
+                    .map(|b| b.keys.to_vec())
+                    .unwrap_or_default();
+                (keys, Some(self.book_text(book)))
+            }
+            Collection::Stories => (self.story_attached.iter().copied().collect(), None),
+        };
+        let resolved = self
+            .pins
+            .answer(tool, collection)
+            .and_then(Answer::resource);
+        let mut out = Vec::new();
+        for k in keys {
+            let Some(record) = self.projected_arc(k) else {
+                continue;
+            };
+            let Record::Check {
+                key,
+                value: CheckValue::Decision(decision),
+            } = &*record
+            else {
+                continue;
+            };
+            if key.tool != tool || key.target.collection() != collection {
+                continue;
+            }
+            let target = match (&key.target, &text) {
+                (CheckTarget::Frame { story, frame }, _) => self
+                    .frame_text(*story, *frame)
+                    .map(|t| Arc::new(TargetText::new(t))),
+                (CheckTarget::Verse { .. }, Some(text)) => {
+                    target_content(text, key).map(|c| text.facts(c))
+                }
+                (CheckTarget::Verse { .. }, None) => None,
+            };
+            out.push(ProjectedDecision {
+                key: key.clone(),
+                assessment: decision::assess(decision, resolved, target.as_deref()),
+                detached: self.detached.contains(&RecordKey::Check(key.clone())),
+                record: decision.clone(),
+            });
+        }
+        out.sort_by(|a, b| a.key.cmp(&b.key));
+        out
     }
 
     /// The text of frame `frame` of `story` as the project holds it: the frame's record,
@@ -1034,7 +1093,7 @@ impl FoldState {
         records.sort();
         let mut head = Map::new();
         head.insert("schemaVersion".into(), Value::from(1));
-        head.insert("tool".into(), Value::from(tool_name(tool)));
+        head.insert("tool".into(), Value::from(tool.name()));
         head.insert("book".into(), Value::from("OBS"));
         if let Some(resource) = answer.map(resolution_record) {
             head.insert("resource".into(), resource);
@@ -1652,14 +1711,6 @@ fn add_span_end(record: &mut Obj<'_>, end: u16) {
     record.int("spanEnd", end);
 }
 
-fn status_name(s: UserStatus) -> &'static str {
-    match s {
-        UserStatus::Valid => "valid",
-        UserStatus::Invalid => "invalid",
-        UserStatus::Todo => "todo",
-    }
-}
-
 /// tC4's `resolutionRecord` of a decision file: the pin the (tool, collection) resolves to,
 /// its label and its language set. A pin without a commit has no `sha` (tC4 writes the
 /// record all the same, and no decision matches it).
@@ -1725,7 +1776,7 @@ pub(crate) fn decision_record<'a>(
     m.bool("verseEdits", assessment.verse_edits);
     m.bool("invalidated", invalidated);
     if let Some(status) = assessment.status {
-        m.str("status", status_name(status));
+        m.str("status", status.name());
     }
     if assessment.user_invalid {
         m.bool("userInvalid", true);
@@ -1733,7 +1784,7 @@ pub(crate) fn decision_record<'a>(
     m.str("modifiedTimestamp", &rfc3339(newest));
     // What the journal stores beyond tC4's shape, so a decoder reads the record back.
     if let Some(s) = d.judgement.status {
-        m.str("userStatus", status_name(s));
+        m.str("userStatus", s.name());
     }
     m.str("verseTextMd5", &d.judgement.verse_text_md5.to_hex());
     if resolved.is_none_or(|r| *r != d.resource) {

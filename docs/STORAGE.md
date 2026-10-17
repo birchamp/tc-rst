@@ -622,6 +622,7 @@ impl FoldState {
     pub fn conflict_counts(&self) -> &BTreeMap<(Option<BookId>, u8), u32>;  // kept by every step
     pub fn anomalies(&self) -> impl Iterator<Item = &Anomaly>;     // sorted by kind, then key
     pub fn detached(&self) -> impl Iterator<Item = &RecordKey>;    // heads with no place on any screen (§7.7)
+    pub fn decisions(&self, tool: ToolId, collection: Collection) -> Vec<ProjectedDecision>; // a Check session's input (§7.7)
     pub fn frontier(&self) -> Frontier;                            // sha256 of the sorted set of all head ids
     pub fn shown_heads(&self, key: &RecordKey, displayed: Option<ChangeId>) -> Vec<ChangeId>;  // the token rule, §2.7
     pub fn unreadable_records(&self) -> Vec<RecordKey>;   // versions the source cannot read, below
@@ -2524,7 +2525,13 @@ modifiedTimestamp = the newest head's `at` in RFC 3339
 ```
 
 `tc_journal::decision::assess` computes these flags; the fold and the Check screens both call it,
-so a screen and a decision file never disagree on the same inputs.
+so a screen and a decision file never disagree on the same inputs. A Check screen opens a session
+from `FoldState::decisions(tool, collection)`: each projected decision of the (tool, collection)
+with the flags its decision file carries and whether it is listed under Detached
+(`ProjectedDecision`). The session places them on the derived check list with the carry-over's
+two passes (tC4 `completedCheckSession`); a decision placed on the check it is stored under shows
+the fold's flags, one shown on another check is assessed against that check's text with the same
+function, and one no check carries is listed off the list (`tc_check::session`).
 
 **The ladder** (`tc_journal::pins`), every rule tC4's (`src/data/resolve.ts` at d310bf3):
 

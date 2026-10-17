@@ -5,12 +5,12 @@
 
 mod common;
 
-use common::{eng, file_resource, notes, sample, stored_decisions, verse_text};
+use common::{eng, file_resource, notes, projected, sample, stored_decisions, target_text};
 use serde_json::Value;
 use tc_check::derive::notes_for_book;
 use tc_check::rail::{Filter, Progress, counts};
 use tc_check::session::open;
-use tc_check::{CheckTarget, Dot};
+use tc_check::{CheckTarget, Dot, TargetText};
 use tc_core::BookId;
 
 #[test]
@@ -24,22 +24,23 @@ fn the_sample_decisions_show_where_tc4_shows_them() {
     let file: Value = serde_json::from_str(&sample("checking/translationNotes/TIT.json")).unwrap();
     let stored = stored_decisions(&file, BookId::Titus, &usfm);
     let resource = file_resource(&file);
-    let text = |t: &CheckTarget| -> Option<String> {
-        let (c, v) = t.parts();
-        let text = verse_text(&usfm, c.parse().ok()?, v.parse().ok()?);
-        (text != "___").then_some(text)
-    };
-    let texts: Vec<(CheckTarget, Option<String>)> = items
+    let texts: Vec<(CheckTarget, Option<TargetText>)> = items
         .iter()
-        .map(|i| (i.key.target.clone(), text(&i.key.target)))
+        .map(|i| i.key.target.clone())
+        .chain(stored.iter().map(|s| s.key.target.clone()))
+        .map(|t| {
+            let text = target_text(&usfm, &t);
+            (t, text)
+        })
         .collect();
     let lookup = |t: &CheckTarget| {
         texts
             .iter()
             .find(|(target, _)| target == t)
-            .and_then(|(_, text)| text.as_deref())
+            .and_then(|(_, text)| text.as_ref())
     };
-    let session = open(items, &stored, Some(&resource), lookup);
+    let decisions = projected(&stored, Some(&resource), lookup);
+    let session = open(items, &decisions, Some(&resource), lookup);
 
     // tC4: swi9's decision (1:1, κατὰ πίστιν) shows on rtc9, and gr8c's (1:4, χάρις καὶ
     // εἰρήνη) on h93t, still invalidated; progress 1 of 112.
@@ -93,7 +94,9 @@ fn a_decision_no_check_carries_is_listed_not_lost() {
     let usfm = sample("TIT.usfm");
     let file: Value = serde_json::from_str(&sample("checking/translationNotes/TIT.json")).unwrap();
     let stored = stored_decisions(&file, BookId::Titus, &usfm);
-    let session = open(items, &stored, Some(&file_resource(&file)), |_| None);
+    let resource = file_resource(&file);
+    let decisions = projected(&stored, Some(&resource), |_| None);
+    let session = open(items, &decisions, Some(&resource), |_| None);
     // On the English list, κατὰ πίστιν alone is no check of 1:1 (en rtc9 quotes a longer
     // span) and en swi9 is another check, so swi9's decision is kept and listed.
     let off: Vec<String> = session

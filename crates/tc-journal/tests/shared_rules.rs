@@ -15,6 +15,7 @@ use tc_journal::command::{DecisionBasis, DecisionChange, DecisionEdit};
 use tc_journal::decision::{TargetText, assess, verse_text_md5_v1};
 use tc_journal::fold::{ConflictKind, DerivedFile, FoldInput, FoldState, PersonLabel, ProjectKind};
 use tc_journal::json::{Json, JsonMap};
+use tc_journal::pins::Collection;
 use tc_journal::record::{
     CommentTarget, DeviceProfileValue, Door43Username, ResourceRef, Selection, TargetWord,
     UserStatus,
@@ -138,6 +139,27 @@ fn the_no_text_rule_reads_only_the_texts_tc4_reads() {
     for id in ["drafted", "member", "span"] {
         assert_eq!(flags(&file, id), (true, true), "{id}");
     }
+    // What a Check screen opens a session with carries the file's flags, decision by
+    // decision.
+    let projected = state.decisions(ToolId::TranslationNotes, Collection::Book(BOOK));
+    assert_eq!(projected.len(), 7);
+    for d in &projected {
+        let id = d.key.check_id.as_str();
+        assert_eq!(
+            (
+                d.assessment.invalidation.is_some(),
+                d.assessment.verse_edits
+            ),
+            flags(&file, id),
+            "{id}"
+        );
+        assert!(!d.detached, "{id}: made against the resolution");
+    }
+    assert!(
+        state
+            .decisions(ToolId::TranslationWords, Collection::Book(BOOK))
+            .is_empty()
+    );
 }
 
 /// §5.4: a judgement stamps the text's md5, clears an imported invalidation and records the

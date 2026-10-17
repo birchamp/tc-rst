@@ -19,12 +19,13 @@
 
 use std::collections::HashMap;
 
+use tc_journal::json::Json;
+use tc_journal::record::ResourceRef;
 use tc_usfm::words::words;
 
 use crate::item::CheckItem;
 use crate::key::{CheckKey, CheckTarget};
-use crate::resolve::ResourceRef;
-use crate::status::{CheckState, Decision};
+use crate::status::{CheckState, DecisionRecord, TargetText};
 
 /// A stored decision with the two fields of its tC4 context the re-attach reads.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,7 +35,28 @@ pub struct StoredDecision {
     pub quote: String,
     /// The context's `groupId`.
     pub group_id: String,
-    pub decision: Decision,
+    pub decision: DecisionRecord,
+}
+
+impl StoredDecision {
+    /// The decision stored under `key`, with the quote and group id its context records
+    /// (empty when the context lacks them, as a tC3 context can).
+    pub fn of(key: CheckKey, decision: DecisionRecord) -> Self {
+        let text = |name: &str| {
+            decision
+                .context
+                .get(name)
+                .and_then(Json::as_str)
+                .unwrap_or_default()
+                .to_owned()
+        };
+        Self {
+            quote: text("quoteString"),
+            group_id: text("groupId"),
+            key,
+            decision,
+        }
+    }
 }
 
 /// How a decision was placed on the new list.
@@ -78,7 +100,7 @@ pub enum Outcome {
 pub struct Entry {
     pub key: CheckKey,
     /// The decision as stored, which a move writes whole at its new key.
-    pub decision: Decision,
+    pub decision: DecisionRecord,
     pub outcome: Outcome,
 }
 
@@ -314,12 +336,12 @@ pub struct Summary {
 
 impl Plan {
     /// The dialog's numbers. `current` is the resource the (tool, collection) resolves
-    /// to before the change; `verse_text` gives the plain text of a check's verse, so
-    /// `decided_after` counts what the check screen will show.
+    /// to before the change; `text` gives the text of a check's target by the no-text rule
+    /// (§7.7), so `decided_after` counts what the check screen will show.
     pub fn summary<'t>(
         &self,
         current: Option<&ResourceRef>,
-        verse_text: impl Fn(&CheckTarget) -> Option<&'t str>,
+        text: impl Fn(&CheckTarget) -> Option<&'t TargetText>,
     ) -> Summary {
         let mut out = Summary {
             undecided: self.undecided,
@@ -327,7 +349,7 @@ impl Plan {
         };
         for entry in &self.entries {
             let Some(at) = entry.placed_at() else {
-                if current == Some(&entry.decision.resource) {
+                if current.is_some_and(|c| c.same_resource(&entry.decision.resource)) {
                     out.invalidated += 1;
                 } else {
                     out.still_unplaced += 1;
@@ -344,11 +366,11 @@ impl Plan {
             ) {
                 out.contested += 1;
             }
-            let after = Decision {
+            let after = DecisionRecord {
                 resource: self.resource.clone(),
                 ..entry.decision.clone()
             };
-            let state = CheckState::of(Some(&after), Some(&self.resource), verse_text(&at.target));
+            let state = CheckState::of(Some(&after), Some(&self.resource), text(&at.target));
             if state.is_decided() {
                 out.decided_after += 1;
             }

@@ -11,7 +11,7 @@ use super::{Candidate, Conflict, ConflictId, ConflictKind, Counter, Side};
 use crate::ids::{ChangeId, DeviceId, RepoPath};
 use crate::json::Json;
 use crate::keys::{CheckKey, CheckTarget, PinGroup, RecordKey, ToolId};
-use crate::pins::{Answer, Collection, LanguageSets};
+use crate::pins::{Answer, Collection, Ladder, LanguageSets};
 use crate::record::{
     ChapterVerse, CheckValue, CommentTarget, DeviceProfileValue, PinGroupValue, Record,
     ResourceRef, VerseValue,
@@ -804,7 +804,7 @@ impl PinsView {
     }
 
     /// `resolution(tool, collection)`, from the table [`PinsView::of`] fills: where tC4's D30
-    /// ladder stops over the projected pins alone ([`LanguageSets::resolution`]).
+    /// ladder stops over the projected pins alone ([`Ladder::resolution`]).
     pub(crate) fn answer(&self, tool: ToolId, collection: Collection) -> Option<&Answer> {
         self.resolved.get(resolved_slot(tool, collection))?.as_ref()
     }

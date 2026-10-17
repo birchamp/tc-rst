@@ -8,7 +8,8 @@ use serde_json::Value;
 use tc_burrito::ScopeRange;
 use tc_check::item::quote_words;
 use tc_check::selection::{self, Selection};
-use tc_check::{RefPart, carry, rail, scope};
+use tc_check::{RefPart, TargetText, carry, rail, scope};
+use tc_journal::json::JsonMap;
 
 fn vectors() -> Value {
     serde_json::from_str(&common::fixture("check/check-vectors.json")).unwrap()
@@ -26,6 +27,7 @@ fn selections(v: &Value) -> Vec<Selection> {
             text: text(&s["text"]).to_owned(),
             occurrence: u32::try_from(s["occurrence"].as_u64().unwrap()).unwrap(),
             occurrences: u32::try_from(s["occurrences"].as_u64().unwrap()).unwrap(),
+            extra: JsonMap::new(),
         })
         .collect()
 }
@@ -38,6 +40,18 @@ fn indices(v: &Value) -> Vec<usize> {
         .collect()
 }
 
+/// `validateVerseSelections` as the journal answers it: whether any selection no longer
+/// fits `text`, and the ones that still do.
+fn validate(text: &str, selections: &[Selection]) -> (bool, Vec<Selection>) {
+    let target = TargetText::new(text.to_owned());
+    let valid: Vec<Selection> = selections
+        .iter()
+        .filter(|s| target.fits(std::slice::from_ref(s)))
+        .cloned()
+        .collect();
+    (valid.len() != selections.len(), valid)
+}
+
 #[test]
 fn scope_answers_match_bible_reference_range() {
     let v = vectors();
@@ -46,8 +60,8 @@ fn scope_answers_match_bible_reference_range() {
     let mut wrong = Vec::new();
     for case in cases {
         let range: ScopeRange = text(&case["range"]).parse().unwrap();
-        let chapter = RefPart::new(text(&case["chapter"])).unwrap();
-        let verse = RefPart::new(text(&case["verse"])).unwrap();
+        let chapter = RefPart::parse(text(&case["chapter"])).unwrap();
+        let verse = RefPart::parse(text(&case["verse"])).unwrap();
         let got = scope::in_scope(std::slice::from_ref(&range), &chapter, &verse);
         if got != case["inScope"].as_bool().unwrap() {
             wrong.push(format!("{range} contains {chapter}:{verse} -> {got}"));
@@ -65,7 +79,8 @@ fn selections_record_restore_and_revalidate_as_tc4_does() {
     let mut recounted = 0;
     for case in cases {
         let verse = text(&case["text"]);
-        let picked = selection::from_indices(verse, &indices(&case["indices"])).unwrap();
+        let target = TargetText::new(verse.to_owned());
+        let picked = selection::from_indices(&target, &indices(&case["indices"])).unwrap();
         let tc4 = selections(&case["selections"]);
         // The same words at the same occurrences as tC4 records, so the same words light
         // up when the decision is opened again.
@@ -83,29 +98,29 @@ fn selections_record_restore_and_revalidate_as_tc4_does() {
         for (ours, theirs) in picked.iter().zip(&tc4) {
             if ours.occurrences != theirs.occurrences {
                 assert!(ours.occurrences > theirs.occurrences);
-                assert!(selection::validate(verse, std::slice::from_ref(theirs)).changed);
+                assert!(!target.fits(std::slice::from_ref(theirs)));
                 recounted += 1;
             }
         }
-        assert!(!selection::validate(verse, &picked).changed, "{verse:?}");
+        assert!(target.fits(&picked), "{verse:?}");
         // The validator answers as the library does, on tC4's own records.
         for validation in case["validations"].as_array().unwrap() {
             let edited = text(&validation["text"]);
-            let got = selection::validate(edited, &tc4);
+            let (changed, valid) = validate(edited, &tc4);
             assert_eq!(
-                got.changed,
+                changed,
                 validation["changed"].as_bool().unwrap(),
                 "{} of {verse:?}",
                 text(&validation["edit"])
             );
-            assert_eq!(got.valid, selections(&validation["valid"]));
+            assert_eq!(valid, selections(&validation["valid"]));
             checked += 1;
         }
     }
     for case in v["validations"].as_array().unwrap() {
-        let got = selection::validate(text(&case["text"]), &selections(&case["selections"]));
-        assert_eq!(got.changed, case["changed"].as_bool().unwrap(), "{case}");
-        assert_eq!(got.valid, selections(&case["valid"]));
+        let (changed, valid) = validate(text(&case["text"]), &selections(&case["selections"]));
+        assert_eq!(changed, case["changed"].as_bool().unwrap(), "{case}");
+        assert_eq!(valid, selections(&case["valid"]));
         checked += 1;
     }
     assert!(checked > 600);

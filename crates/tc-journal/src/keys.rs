@@ -4,6 +4,7 @@
 //! its grammar is refused, never repaired.
 
 use crate::ids::{BatchId, ChapterNo, CommentId, DeviceId, FrameNo, RepoPath, StoryNo, VerseNo};
+use crate::pins::Collection;
 use std::fmt;
 use tc_core::BookId;
 use unicode_normalization::is_nfc;
@@ -215,6 +216,21 @@ impl RefPart {
         Ok(Self(text.into()))
     }
 
+    /// A part as tC4 reads it from a TSV reference cell with `refPart` (`derive.ts`): plain
+    /// ASCII digits are a number, so `05` is `5`; anything else is kept as written.
+    pub fn from_cell(cell: &str) -> Result<Self, IdentityError> {
+        if !cell.is_empty() && cell.bytes().all(|b| b.is_ascii_digit()) {
+            let trimmed = cell.trim_start_matches('0');
+            return Self::parse(if trimmed.is_empty() { "0" } else { trimmed });
+        }
+        Self::parse(cell)
+    }
+
+    /// The part that names the number `n`.
+    pub fn from_number(n: u16) -> Self {
+        Self(n.to_string().into())
+    }
+
     /// The number this part names, when it is one: plain ASCII digits, as tC4's `refPart`
     /// reads a number (`derive.ts`).
     pub fn number(&self) -> Option<u16> {
@@ -420,11 +436,54 @@ impl CheckKey {
     }
 }
 
+/// `translationNotes TIT 1:9-10 rtc9 #1`.
+impl fmt::Display for CheckKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} {} {} #{}",
+            self.tool, self.target, self.check_id, self.occurrence
+        )
+    }
+}
+
+/// The tool a check belongs to. Only translationWords and translationNotes derive check
+/// lists; translationQuestions is read-only help, but tC3 and tC4 files can hold decisions
+/// for it, so the identity carries it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ToolId {
     TranslationWords,
     TranslationNotes,
     TranslationQuestions,
+}
+
+impl ToolId {
+    pub const ALL: [ToolId; 3] = [
+        ToolId::TranslationWords,
+        ToolId::TranslationNotes,
+        ToolId::TranslationQuestions,
+    ];
+
+    /// The tool's name in tC4 files: `translationWords`, `translationNotes`,
+    /// `translationQuestions`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::TranslationWords => "translationWords",
+            Self::TranslationNotes => "translationNotes",
+            Self::TranslationQuestions => "translationQuestions",
+        }
+    }
+
+    /// The tool named `name` in a tC4 file.
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|tool| tool.name() == name)
+    }
+}
+
+impl fmt::Display for ToolId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -439,6 +498,41 @@ pub enum CheckTarget {
         story: StoryNo,
         frame: FrameNo,
     },
+}
+
+impl CheckTarget {
+    /// The two locator parts the screens show and sort by: chapter and verse, or story and
+    /// frame (tC4 `referenceParts`).
+    pub fn parts(&self) -> (String, String) {
+        match self {
+            Self::Verse { chapter, verse, .. } => (chapter.to_string(), verse.to_string()),
+            Self::Frame { story, frame } => (story.get().to_string(), frame.0.to_string()),
+        }
+    }
+
+    /// `c:v`, or `story:frame` (tC4 `locatorOf`).
+    pub fn locator(&self) -> String {
+        let (a, b) = self.parts();
+        format!("{a}:{b}")
+    }
+
+    /// The collection the target is in.
+    pub fn collection(&self) -> Collection {
+        match self {
+            Self::Verse { book, .. } => Collection::Book(*book),
+            Self::Frame { .. } => Collection::Stories,
+        }
+    }
+}
+
+/// `TIT 1:9-10`, or `OBS 1:0`.
+impl fmt::Display for CheckTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Verse { book, .. } => write!(f, "{} {}", book.code(), self.locator()),
+            Self::Frame { .. } => write!(f, "OBS {}", self.locator()),
+        }
+    }
 }
 
 /// `resources.json` is projected from five groups. A gateway change rewrites `Primary` and

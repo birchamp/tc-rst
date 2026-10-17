@@ -210,18 +210,11 @@ pub struct HelpsRow {
     pub note: String,
 }
 
-/// A reference part as tC4 reads it (`refPart`, `src/data/derive.ts`): plain digits are a
+/// A reference part as tC4 reads it ([`tc_journal::RefPart::from_cell`]): plain digits are a
 /// number, so leading zeros go; anything else is kept as written, a list such as `1,3,8,12`
-/// included. A part a check key cannot hold (empty, or holding `|` or `:`, STORAGE §2.2) is
-/// no reference.
+/// included. A part a check key cannot hold is no reference.
 fn ref_part(text: &str) -> Option<String> {
-    let part = if !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit()) {
-        let trimmed = text.trim_start_matches('0');
-        if trimmed.is_empty() { "0" } else { trimmed }
-    } else {
-        text
-    };
-    tc_journal::RefPart::parse(part)
+    tc_journal::RefPart::from_cell(text)
         .ok()
         .map(|p| p.as_str().to_owned())
 }

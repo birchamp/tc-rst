@@ -17,19 +17,22 @@ pub fn verse_text_md5_v1(content: &str) -> Md5 {
 }
 
 /// The text a decision's target names, as the fold and the Check screens read it (§7.7):
-/// its content, its hash, and the text the selection validator searches, made once for all
-/// the decisions of one target.
+/// its content, its plain text and hash, and the text the selection validator searches,
+/// made once for all the decisions of one target.
 #[derive(Debug)]
 pub struct TargetText {
     content: String,
+    plain: String,
     md5: Md5,
     selection: OnceLock<SelectionText>,
 }
 
 impl TargetText {
     pub fn new(content: String) -> Self {
+        let plain = tc_usfm::plain_text_v1(&content);
         Self {
-            md5: verse_text_md5_v1(&content),
+            md5: Md5::of(plain.as_bytes()),
+            plain,
             content,
             selection: OnceLock::new(),
         }
@@ -37,6 +40,12 @@ impl TargetText {
 
     pub fn content(&self) -> &str {
         &self.content
+    }
+
+    /// `plain_text_v1` of the content: the text the Check screen shows and the checker
+    /// selects words in, and the text the hash is of.
+    pub fn plain(&self) -> &str {
+        &self.plain
     }
 
     /// [`verse_text_md5_v1`] of the content.

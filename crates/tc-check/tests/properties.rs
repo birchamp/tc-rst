@@ -3,7 +3,8 @@
 
 use proptest::prelude::*;
 use tc_burrito::ScopeRange;
-use tc_check::{RefPart, scope, selection};
+use tc_check::key::part_json;
+use tc_check::{RefPart, TargetText, scope, selection};
 
 fn verse_text() -> impl Strategy<Value = String> {
     let word = prop::sample::select(vec![
@@ -18,19 +19,21 @@ fn verse_text() -> impl Strategy<Value = String> {
 proptest! {
     #[test]
     fn tapped_words_restore_to_the_same_words(text in verse_text(), picks in prop::collection::vec(any::<prop::sample::Index>(), 0..5)) {
-        let count = selection::target_words(&text).len();
+        let target = TargetText::new(text.clone());
+        let shown = target.plain();
+        let count = selection::target_words(shown).len();
         let mut indices: Vec<usize> = picks.iter().map(|p| p.index(count)).collect();
-        let picked = selection::from_indices(&text, &indices).unwrap();
+        let picked = selection::from_indices(&target, &indices).unwrap();
         indices.sort_unstable();
         indices.dedup();
-        prop_assert_eq!(selection::indices(&text, &picked), indices.clone());
-        let joined: String = selection::pieces(&text, &picked).iter().map(|p| p.text).collect();
-        prop_assert_eq!(joined, text.clone());
-        prop_assert_eq!(selection::selected_text(&text, &picked).is_some(), !indices.is_empty());
+        prop_assert_eq!(selection::indices(shown, &picked), indices.clone());
+        let joined: String = selection::pieces(shown, &picked).iter().map(|p| p.text).collect();
+        prop_assert_eq!(joined, shown);
+        prop_assert_eq!(selection::selected_text(shown, &picked).is_some(), !indices.is_empty());
         // Every word holds on the text it was picked on, and on an edit elsewhere.
-        prop_assert!(!selection::validate(&text, &picked).changed);
-        let edited = format!("{text}!");
-        prop_assert!(!selection::validate(&edited, &picked).changed);
+        prop_assert!(target.fits(&picked));
+        let edited = TargetText::new(format!("{text}!"));
+        prop_assert!(edited.fits(&picked));
     }
 
     #[test]
@@ -58,10 +61,10 @@ proptest! {
         ];
         for (range, expected) in text.iter().zip(model) {
             let range: ScopeRange = range.parse().unwrap();
-            let got = scope::in_scope(&[range], &RefPart::number(c), &RefPart::number(v));
+            let got = scope::in_scope(&[range], &RefPart::from_number(c), &RefPart::from_number(v));
             prop_assert_eq!(got, expected, "{} contains {}:{}", range, c, v);
         }
-        prop_assert!(scope::in_scope(&[], &RefPart::number(c), &RefPart::number(v)));
+        prop_assert!(scope::in_scope(&[], &RefPart::from_number(c), &RefPart::from_number(v)));
     }
 
     #[test]
@@ -70,10 +73,10 @@ proptest! {
         if cell.bytes().all(|b| b.is_ascii_digit()) {
             let n: u64 = cell.parse().unwrap();
             prop_assert_eq!(part.as_str(), n.to_string());
-            prop_assert_eq!(part.to_json(), serde_json::Value::from(n));
+            prop_assert_eq!(part_json(&part), serde_json::Value::from(n));
         } else {
             prop_assert_eq!(part.as_str(), cell.as_str());
-            prop_assert_eq!(part.to_json(), serde_json::Value::from(cell.as_str()));
+            prop_assert_eq!(part_json(&part), serde_json::Value::from(cell.as_str()));
         }
     }
 }

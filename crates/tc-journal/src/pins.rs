@@ -5,7 +5,9 @@
 //! projected `Primary` and `Fallback` groups and nothing else ([`Unrecorded::CoversEveryBook`]);
 //! a screen that opens a tool on this computer resolves with it too, reading a pin that
 //! records no books with the books of its installed copy ([`Unrecorded::Installed`]), as
-//! tC4's `coverageFor` does (`src/data/resolve.ts` at d310bf3, lines 84-113).
+//! tC4's `coverageFor` does (`src/data/resolve.ts` at d310bf3, lines 84-113). The ladder is
+//! the provided methods of [`Ladder`]: the journal's [`LanguageSets`] and the resource
+//! store's typed pins implement [`Ladder::held`] and share everything else.
 //!
 //! The rules, all tC4's (`resolve.ts`):
 //!
@@ -27,9 +29,9 @@
 //!   ignoring ASCII case and the shas are equal (`samePath`, `recordMatchesResolution`).
 
 use crate::ids::GitOid;
-use crate::json::Json;
-use crate::keys::ToolId;
-use crate::record::{PinGroupValue, ResourceRef};
+use crate::json::{Json, JsonMap};
+use crate::keys::{SlotName, ToolId};
+use crate::record::{PinGroupValue, ResourceRef, SlotValue};
 use std::collections::BTreeSet;
 use std::fmt;
 use tc_core::BookId;
@@ -76,17 +78,108 @@ impl fmt::Display for Collection {
     }
 }
 
-/// The language-set slot a tool's check list comes from (tC4 `TOOL_SLOT`,
-/// `OBS_HELP_SLOT`): `translationWordsLinks` for translationWords, and the `obs-` slots for
-/// the stories.
-pub fn tool_slot(tool: ToolId, collection: Collection) -> &'static str {
-    match (collection, tool) {
-        (Collection::Book(_), ToolId::TranslationWords) => "translationWordsLinks",
-        (Collection::Book(_), ToolId::TranslationNotes) => "translationNotes",
-        (Collection::Book(_), ToolId::TranslationQuestions) => "translationQuestions",
-        (Collection::Stories, ToolId::TranslationWords) => "obs-twl",
-        (Collection::Stories, ToolId::TranslationNotes) => "obs-tn",
-        (Collection::Stories, ToolId::TranslationQuestions) => "obs-tq",
+/// A slot of a language set, by tC4's slot name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum SetSlot {
+    TranslationNotes,
+    TranslationWordsLinks,
+    TranslationWords,
+    TranslationAcademy,
+    TranslationQuestions,
+    /// The language's simplified Bible (`en_ust`, `<lang>_gst`): a gateway Bible, not a
+    /// help, so a help-set upgrade never offers it (D72).
+    SimplifiedText,
+    Obs,
+    ObsNotes,
+    ObsWordsLinks,
+    ObsQuestions,
+    ObsImages,
+}
+
+impl SetSlot {
+    /// Every slot, in tC4's order for `resources.json`.
+    pub const ALL: [SetSlot; 11] = [
+        SetSlot::TranslationNotes,
+        SetSlot::TranslationWordsLinks,
+        SetSlot::TranslationWords,
+        SetSlot::TranslationAcademy,
+        SetSlot::TranslationQuestions,
+        SetSlot::SimplifiedText,
+        SetSlot::Obs,
+        SetSlot::ObsNotes,
+        SetSlot::ObsWordsLinks,
+        SetSlot::ObsQuestions,
+        SetSlot::ObsImages,
+    ];
+
+    /// The help slots a release upgrade or a re-pin moves, in tC4's display order
+    /// (`SET_SLOTS` of `upgrade.ts`).
+    pub const HELPS: [SetSlot; 9] = [
+        SetSlot::TranslationNotes,
+        SetSlot::TranslationWordsLinks,
+        SetSlot::TranslationWords,
+        SetSlot::TranslationAcademy,
+        SetSlot::TranslationQuestions,
+        SetSlot::Obs,
+        SetSlot::ObsNotes,
+        SetSlot::ObsWordsLinks,
+        SetSlot::ObsImages,
+    ];
+
+    /// tC4's slot name in `resources.json`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::TranslationNotes => "translationNotes",
+            Self::TranslationWordsLinks => "translationWordsLinks",
+            Self::TranslationWords => "translationWords",
+            Self::TranslationAcademy => "translationAcademy",
+            Self::TranslationQuestions => "translationQuestions",
+            Self::SimplifiedText => "simplifiedText",
+            Self::Obs => "obs",
+            Self::ObsNotes => "obs-tn",
+            Self::ObsWordsLinks => "obs-twl",
+            Self::ObsQuestions => "obs-tq",
+            Self::ObsImages => "obs-images",
+        }
+    }
+
+    /// The slot named `name`, if it is one.
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|slot| slot.name() == name)
+    }
+
+    /// The Bible-book slots, whose coverage a resolution reads (tC4 `coverageBackfill`
+    /// `SET_SLOTS`). The stories' slots cover the whole collection.
+    pub fn is_per_book(self) -> bool {
+        matches!(
+            self,
+            Self::TranslationNotes
+                | Self::TranslationWordsLinks
+                | Self::TranslationWords
+                | Self::TranslationAcademy
+                | Self::TranslationQuestions
+                | Self::SimplifiedText
+        )
+    }
+
+    /// The slot a tool's check list (or, for questions, its help list) of `collection`
+    /// comes from (tC4 `TOOL_SLOT`, `OBS_HELP_SLOT`): `translationWordsLinks` for
+    /// translationWords, and the `obs-` slots for the stories.
+    pub fn of_tool(tool: ToolId, collection: Collection) -> Self {
+        match (collection, tool) {
+            (Collection::Book(_), ToolId::TranslationWords) => Self::TranslationWordsLinks,
+            (Collection::Book(_), ToolId::TranslationNotes) => Self::TranslationNotes,
+            (Collection::Book(_), ToolId::TranslationQuestions) => Self::TranslationQuestions,
+            (Collection::Stories, ToolId::TranslationWords) => Self::ObsWordsLinks,
+            (Collection::Stories, ToolId::TranslationNotes) => Self::ObsNotes,
+            (Collection::Stories, ToolId::TranslationQuestions) => Self::ObsQuestions,
+        }
+    }
+}
+
+impl fmt::Display for SetSlot {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
     }
 }
 
@@ -151,6 +244,39 @@ pub struct Pin {
     /// The release tag, a label for people (D58).
     pub version: Option<String>,
     pub coverage: Coverage,
+}
+
+impl Pin {
+    /// The slot value tC4 writes for this pin: `repoPath`, `version` when it has one, `sha`
+    /// and `books` when it records them.
+    pub fn to_json(&self) -> Json {
+        let mut map = JsonMap::new();
+        map.insert("repoPath".into(), Json::from(&*self.resource.repo_path));
+        if let Some(version) = &self.version {
+            map.insert("version".into(), Json::from(version.as_str()));
+        }
+        map.insert("sha".into(), Json::Str(self.resource.sha.to_hex()));
+        let codes: Option<Vec<Json>> = match &self.coverage {
+            Coverage::Unrecorded => None,
+            Coverage::Whole => Some(vec![Json::from(WHOLE_COLLECTION)]),
+            Coverage::Books(books) => Some(books.iter().map(|b| Json::from(b.code())).collect()),
+        };
+        if let Some(codes) = codes {
+            map.insert("books".into(), Json::Arr(codes));
+        }
+        Json::Obj(map)
+    }
+
+    /// The books this pin covers on this computer (tC4 `coverageFor`): its own record, else
+    /// the books its installed copy holds, else none.
+    pub fn coverage_with(&self, installed: &dyn Fn(&ResourceRef) -> Option<Coverage>) -> Coverage {
+        if self.coverage.is_recorded() {
+            return self.coverage.clone();
+        }
+        installed(&self.resource)
+            .filter(Coverage::is_recorded)
+            .unwrap_or(Coverage::Unrecorded)
+    }
 }
 
 /// Why a slot's value is not a usable pin.
@@ -296,6 +422,73 @@ impl Answer {
     }
 }
 
+/// A project's two language sets as the ladder reads them. Implementors say what a rung
+/// holds in a slot; the ladder itself is the provided methods, so every reader of pins
+/// resolves the same way.
+pub trait Ladder {
+    /// What `rung` holds in `slot`; `None` when the slot is absent or `null`.
+    fn held(&self, rung: Rung, slot: SetSlot) -> Option<SlotPin>;
+
+    /// The usable pin `rung` holds in `slot`.
+    fn pin(&self, rung: Rung, slot: SetSlot) -> Option<Pin> {
+        match self.held(rung, slot)? {
+            SlotPin::Usable(pin) => Some(pin),
+            SlotPin::Unusable(_) => None,
+        }
+    }
+
+    /// The first rung that pins exactly `resource` in `slot`: a pin both rungs carry is
+    /// pinned by the primary (tC4 `rungPinning`, D97).
+    fn rung_pinning(&self, slot: SetSlot, resource: &ResourceRef) -> Option<Rung> {
+        Rung::LADDER.into_iter().find(|rung| {
+            self.pin(*rung, slot)
+                .is_some_and(|p| p.resource.same_resource(resource))
+        })
+    }
+
+    /// Where the ladder stops for `slot` and `collection` (tC4 `resolveSetSlot`,
+    /// `resolveObsSetSlot`). See the module documentation for the rules.
+    fn answer_slot(
+        &self,
+        slot: SetSlot,
+        collection: Collection,
+        unrecorded: Unrecorded<'_>,
+    ) -> Option<Answer> {
+        Rung::LADDER.into_iter().find_map(|rung| {
+            let held = self.held(rung, slot)?;
+            let covers = match collection {
+                Collection::Stories => true,
+                Collection::Book(book) => match &held {
+                    SlotPin::Usable(pin) if !pin.coverage.is_recorded() => match unrecorded {
+                        Unrecorded::CoversEveryBook => true,
+                        Unrecorded::Installed(local) => pin.coverage_with(local).covers(book),
+                    },
+                    held => held.coverage().covers(book),
+                },
+            };
+            covers.then_some(match held {
+                SlotPin::Usable(pin) => Answer::Pin { rung, pin },
+                SlotPin::Unusable(pin) => Answer::Unusable { rung, pin },
+            })
+        })
+    }
+
+    /// Where the ladder stops for a tool's check list of `collection`.
+    fn answer(
+        &self,
+        tool: ToolId,
+        collection: Collection,
+        unrecorded: Unrecorded<'_>,
+    ) -> Option<Answer> {
+        self.answer_slot(SetSlot::of_tool(tool, collection), collection, unrecorded)
+    }
+
+    /// The fold's resolution of a (tool, collection) (§7.7): the ladder over the pins alone.
+    fn resolution(&self, tool: ToolId, collection: Collection) -> Option<Answer> {
+        self.answer(tool, collection, Unrecorded::CoversEveryBook)
+    }
+}
+
 /// The project's language sets: the projected `Primary` and `Fallback` pin groups.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LanguageSets {
@@ -311,61 +504,29 @@ impl LanguageSets {
         }
     }
 
-    /// What `rung` holds in the slot named `slot`; `None` when the slot is absent or `null`.
-    pub fn slot(&self, rung: Rung, slot: &str) -> Option<SlotPin> {
-        SlotPin::read(self.set(rung)?.slot(slot)?)
+    /// Whether the project pins any language set (tC4: `languageSets` present).
+    pub fn is_empty(&self) -> bool {
+        self.primary.is_none() && self.fallback.is_none()
+    }
+}
+
+impl Ladder for LanguageSets {
+    fn held(&self, rung: Rung, slot: SetSlot) -> Option<SlotPin> {
+        self.set(rung)?.held(slot)
+    }
+}
+
+impl PinGroupValue {
+    /// What this language set holds in `slot`; `None` when the slot is absent or `null`.
+    pub fn held(&self, slot: SetSlot) -> Option<SlotPin> {
+        SlotPin::read(self.slot(slot.name())?)
     }
 
-    /// The usable pin `rung` holds in `slot`.
-    pub fn pin(&self, rung: Rung, slot: &str) -> Option<Pin> {
-        match self.slot(rung, slot)? {
-            SlotPin::Usable(pin) => Some(pin),
-            SlotPin::Unusable(_) => None,
+    /// Pins `pin` in `slot`, written as tC4 writes a pin ([`Pin::to_json`]).
+    pub fn set_pin(&mut self, slot: SetSlot, pin: &Pin) {
+        if let Ok(name) = SlotName::parse(slot.name()) {
+            self.0.insert(name, SlotValue(pin.to_json()));
         }
-    }
-
-    /// The first rung that pins exactly `resource` in `slot`: a pin both rungs carry is
-    /// pinned by the primary (tC4 `rungPinning`, D97).
-    pub fn rung_pinning(&self, slot: &str, resource: &ResourceRef) -> Option<Rung> {
-        Rung::LADDER.into_iter().find(|rung| {
-            self.pin(*rung, slot)
-                .is_some_and(|p| p.resource.same_resource(resource))
-        })
-    }
-
-    /// Where the ladder stops for a tool's check list of `collection`. See the module
-    /// documentation for the rules.
-    pub fn answer(
-        &self,
-        tool: ToolId,
-        collection: Collection,
-        unrecorded: Unrecorded<'_>,
-    ) -> Option<Answer> {
-        let slot = tool_slot(tool, collection);
-        Rung::LADDER.into_iter().find_map(|rung| {
-            let held = self.slot(rung, slot)?;
-            let covers = match collection {
-                Collection::Stories => true,
-                Collection::Book(book) => match &held {
-                    SlotPin::Usable(pin) if !pin.coverage.is_recorded() => match unrecorded {
-                        Unrecorded::CoversEveryBook => true,
-                        Unrecorded::Installed(local) => {
-                            local(&pin.resource).is_some_and(|c| c.covers(book))
-                        }
-                    },
-                    held => held.coverage().covers(book),
-                },
-            };
-            covers.then_some(match held {
-                SlotPin::Usable(pin) => Answer::Pin { rung, pin },
-                SlotPin::Unusable(pin) => Answer::Unusable { rung, pin },
-            })
-        })
-    }
-
-    /// The fold's resolution of a (tool, collection) (§7.7): the ladder over the pins alone.
-    pub fn resolution(&self, tool: ToolId, collection: Collection) -> Option<Answer> {
-        self.answer(tool, collection, Unrecorded::CoversEveryBook)
     }
 }
 
@@ -380,8 +541,6 @@ pub fn resource_ok(record: &ResourceRef, answer: Option<&Answer>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::keys::SlotName;
-    use crate::record::SlotValue;
 
     fn json(v: serde_json::Value) -> Json {
         Json::try_from(&v).unwrap()

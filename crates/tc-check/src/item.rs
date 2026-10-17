@@ -5,6 +5,7 @@ use std::fmt;
 use serde_json::{Map, Value};
 use tc_helps::highlight::{AlignedVerse, gateway_quote};
 use tc_helps::{HelpItemId, HelpRef, Occurrence, Quote, WordCategory};
+use tc_journal::json::{Json, JsonMap};
 
 use crate::js;
 use crate::key::{CheckKey, ToolId};
@@ -238,7 +239,10 @@ impl CheckItem {
         if let Some(note) = &self.note {
             map.insert("occurrenceNote".into(), note.as_str().into());
         }
-        map.insert("reference".into(), self.key.target.to_json());
+        map.insert(
+            "reference".into(),
+            crate::key::reference_json(&self.key.target),
+        );
         map.insert("tool".into(), self.key.tool.name().into());
         map.insert("groupId".into(), self.group_id.as_str().into());
         let quote = match self.key.tool {
@@ -259,6 +263,16 @@ impl CheckItem {
         map.insert("quoteString".into(), self.quote.as_str().into());
         map.insert("occurrence".into(), self.key.occurrence.into());
         map
+    }
+
+    /// [`CheckItem::context`] as the journal's decision record holds it.
+    pub fn journal_context(&self) -> JsonMap {
+        self.context()
+            .iter()
+            // The context holds strings, whole numbers and lists of objects of them, all of
+            // which the journal's JSON holds, so no member is left out.
+            .filter_map(|(k, v)| Some((k.clone(), Json::try_from(v).ok()?)))
+            .collect()
     }
 
     /// The original-language quote the screens fall back to: a tN quote's words joined
