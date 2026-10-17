@@ -1,0 +1,57 @@
+cpu: sha false, avx2 true, avx512f false, avx512bw false, avx512vl false; 4 threads; load unavailable
+probe stamp 0xe9beed65457e0014 computed in 7.1357ms
+RSS before the first open unavailable
+fold cache: 64525623 bytes for 317 files; peak RSS of each cold open with the cache ["unavailable", "unavailable", "unavailable", "unavailable", "unavailable"], RSS with the fold open unavailable
+peak RSS during the streamed cold opens unavailable; while every prepared change was collected and folded unavailable
+corpus: 617086 lines, 283606 records, 119 conflicts, 65 anomalies; RSS with the fold open unavailable
+| Action | Runs | Median | p95 |
+|---|---:|---:|---:|
+| Read, verify and prepare | 5 | 6172.084 ms | 6488.279 ms |
+| SHA-256 of every file once (one of the load's two passes) | 3 | 813.139 ms | 892.104 ms |
+| Full fold of the prepared changes | 5 | 1335.708 ms | 1357.108 ms |
+| Cold open with the fold cache: read the cache, read and fingerprint every file, take each file's changes from the cache, fold as they arrive | 5 | 1901.863 ms | 2020.331 ms |
+| Cold open with the fold cache: the fold's work after the last file | 5 | 444.354 ms | 478.507 ms |
+| Cold open without a cache: read, verify, prepare and fold, the fold indexing as files are read | 5 | 6820.028 ms | 7231.007 ms |
+| Cold open without a cache: the fold's work after the last file is read (stages F2 to F10) | 5 | 491.527 ms | 513.215 ms |
+this process, after its opens and the parts: resident memory by kind unavailable
+the app's case, in a process of its own: RSS before the open unavailable
+open with the fold cache 1.9174472s, peak RSS unavailable; RSS with the fold open unavailable
+resident memory by kind unavailable
+| Incremental step: save one Psalms verse | 200 | 0.040 ms | 0.151 ms |
+| Incremental step: record one Psalms decision | 200 | 0.013 ms | 0.021 ms |
+| Incremental step: save one Psalms alignment | 200 | 0.013 ms | 0.018 ms |
+| Conflict counts after a save (incremental) | 200 | 0.000 ms | 0.000 ms |
+| Incremental step with a live snapshot: save one Psalms verse | 200 | 0.145 ms | 0.285 ms |
+| Incremental step with a live snapshot: record one Psalms decision | 200 | 0.055 ms | 0.120 ms |
+| Incremental step: resolve one Psalms conflict | 100 | 0.045 ms | 0.088 ms |
+| Conflict list and counts from scratch (every record's conflict built again) | 20 | 19.739 ms | 22.541 ms |
+| Psalms projection: every file of the book (values read from disk) | 20 | 382.617 ms | 427.196 ms |
+| Psalms USFM alone | 20 | 39.529 ms | 50.814 ms |
+| One Psalms chapter's USFM | 20 | 0.290 ms | 0.896 ms |
+Psalms: 5 files, 18699843 bytes; CPU time of a projection, all threads: median unavailable
+| Snapshot (clone of the fold) | 20 | 0.106 ms | 0.240 ms |
+resident memory by kind unavailable
+peak RSS of the incremental steps, conflict lists, Psalms projections and snapshots unavailable; RSS with the fold open after Psalms was projected unavailable
+
+--- stderr ---
+cold open with the cache 1.7351535s, the fold after the last file 395.687ms, cpu over all threads unavailable, O7's rules 1.3901ms
+cold open with the cache 1.8112397s, the fold after the last file 462.7615ms, cpu over all threads unavailable, O7's rules 1.8028ms
+cold open with the cache 2.020335s, the fold after the last file 478.5073ms, cpu over all threads unavailable, O7's rules 1.9287ms
+cold open with the cache 1.9439895s, the fold after the last file 432.3207ms, cpu over all threads unavailable, O7's rules 2.0159ms
+cold open with the cache 1.9018682s, the fold after the last file 444.3542ms, cpu over all threads unavailable, O7's rules 1.7062ms
+cold open 6.5213698s, the fold after the last file 513.2153ms, cpu over all threads unavailable
+cold open 6.8451128s, the fold after the last file 475.8399ms, cpu over all threads unavailable
+cold open 6.6236597s, the fold after the last file 459.2555ms, cpu over all threads unavailable
+cold open 7.2310076s, the fold after the last file 491.527ms, cpu over all threads unavailable
+cold open 6.8200312s, the fold after the last file 494.7017ms, cpu over all threads unavailable
+load 6.1720843s, cpu over all threads unavailable
+fold 1.3571095s, cpu unavailable, minor faults unavailable
+load 6.1018609s, cpu over all threads unavailable
+fold 1.3448418s, cpu unavailable, minor faults unavailable
+load 6.4882786s, cpu over all threads unavailable
+fold 1.3357088s, cpu unavailable, minor faults unavailable
+load 6.1935975s, cpu over all threads unavailable
+fold 1.2821053s, cpu unavailable, minor faults unavailable
+load 6.1609039s, cpu over all threads unavailable
+fold 1.2715114s, cpu unavailable, minor faults unavailable
+
