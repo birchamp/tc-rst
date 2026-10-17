@@ -474,11 +474,27 @@ const derive = bundledModule('src/data/derive.ts');
 const TQ_HEADER = 'Reference\tID\tTags\tQuote\tOccurrence\tQuestion\tResponse';
 const tqTable = (rows, eol = '\n') =>
   [TQ_HEADER, ...rows.map(([ref, id]) => `${ref}\t${id}\t\t\t1\tQ ${id}?\tR ${id}.`)].join(eol) + eol;
+// A good row 1:1 and, at 1:2, a row tc-helps refuses on its own and tC4 reads.
+const rawTable = (rows, eol = '\n') => [TQ_HEADER, ...rows].join(eol) + eol;
+const GOOD = '1:1\tabcd\t\t\t1\tQ abcd?\tR abcd.';
+const ROWS_TC_HELPS_REFUSES = [
+  { name: 'a row of six cells', rows: ['1:2\tbbbb\t\t\t1\tQ bbbb?'] },
+  { name: 'a row of eight cells', rows: ['1:2\tbbbb\t\t\t1\tQ bbbb?\tR bbbb.\textra'] },
+  { name: 'rows of five, two and one cells', rows: ['1:2\tbbbb\t\t\t1', '1:3\tcccc', '1:4'] },
+  { name: 'an occurrence that is not a count', rows: ['1:2\tbbbb\t\t\tx\tQ bbbb?\tR bbbb.', '1:3\tcccc\t\t\t 1\tQ cccc?\tR cccc.', '1:4\tdddd\t\t\t1.5\tQ dddd?\tR dddd.'] },
+  { name: 'an ID that is not a row id', rows: ['1:2\tnot an id\t\t\t1\tQ bad?\tR bad.'] },
+  { name: 'an empty ID', rows: ['1:2\t\t\t\t1\tQ none?\tR none.'] },
+  { name: 'a bad ID and a bad occurrence on one row', rows: ['1:2\tb-b\t\t\tx\tQ both?\tR both.'] },
+].flatMap(({ name, rows }) => [
+  { name, tsv: rawTable([GOOD, ...rows, '2:1\tefgh\t\t\t1\tQ efgh?\tR efgh.']) },
+  { name: `${name}, CRLF`, tsv: rawTable([GOOD, ...rows, '2:1\tefgh\t\t\t1\tQ efgh?\tR efgh.'], '\r\n') },
+]);
 const QUESTION_TABLES = [
   { name: 'drops a row whose locator is not two integers, keeps the rest', tsv: tqTable([['1:1', 'aaaa'], ['front:intro', 'bbbb'], ['1:x', 'cccc'], ['2:3', 'dddd']]) },
   { name: 'title rows, leading zeros, empty and spaced locators', tsv: tqTable([['1:0', 'aaaa'], ['01:02', 'bbbb'], ['1:', 'cccc'], [' 1:1', 'dddd'], ['', 'eeee'], ['intro:1', 'ffff'], ['50:18', 'gggg'], ['2:1 ', 'hhhh'], ['1:1-2', 'iiii']]) },
   { name: 'CRLF line ends and blank lines', tsv: `\r\n${tqTable([['1:1', 'aaaa'], ['front:intro', 'bbbb'], ['2:3', 'dddd']], '\r\n')}\r\n \r\n` },
   { name: 'only rows that address no frame', tsv: tqTable([['front:intro', 'aaaa'], ['1:intro', 'bbbb']]) },
+  ...ROWS_TC_HELPS_REFUSES,
 ];
 const questions = QUESTION_TABLES.flatMap(({ name, tsv }) => [null, 1, 2].map((story) => ({
   name,

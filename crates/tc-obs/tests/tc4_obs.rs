@@ -13,7 +13,7 @@ use common::{bundle_file, stories};
 use serde_json::json;
 use tc_helps::obs::ObsStory;
 use tc_helps::tsv::{TsvScope, parse_notes, parse_word_links};
-use tc_helps::{HelpRef, ObsRef};
+use tc_helps::{HelpRef, ObsRef, Occurrence};
 use tc_obs::frame_set::frame_set_mismatch;
 use tc_obs::images::{
     DEFAULT_PACK_REPO, DEFAULT_PACK_SHA, ImageAsset, ImagePack, ImagePins, ImageResolution,
@@ -833,10 +833,55 @@ fn a_question_row_whose_locator_is_not_two_integers_is_dropped_and_the_rest_kept
         ids_and_frames(&questions),
         [("aaaa".to_owned(), 1, 1), ("dddd".to_owned(), 2, 3)]
     );
-    // A row that is broken in another way still refuses the table, at its line.
-    let broken = format!("{tsv}front:intro\tbbbb\n2:4\tdddd\n");
-    let refused = parse_story_questions(&broken).unwrap_err().to_string();
-    assert!(refused.contains("line 7"), "{refused}");
+}
+
+/// tC4 reads every row past one tc-helps cannot read on its own (`derive.ts:323-348`); a
+/// table of 672 questions must not show none for one such row.
+#[test]
+fn a_row_tc_helps_refuses_alone_does_not_cost_the_table_its_questions() {
+    let tsv = format!(
+        "{TQ_HEADER}\n1:1\taaaa\t\t\t1\tQ?\tR.\n\
+         1:2\tbbbb\n\
+         1:3\tcccc\t\t\tx\tQ3?\tR3.\textra\n\
+         1:4\tnot an id\t\t\t1\tQ4?\tR4.\n\
+         1:5\t\t\t\t1\tQ5?\tR5.\n\
+         2:3\tdddd\t\t\t1\tQ?\tR.\n"
+    );
+    let questions = parse_story_questions(&tsv).unwrap();
+    assert_eq!(
+        ids_and_frames(&questions),
+        [
+            ("aaaa".to_owned(), 1, 1),
+            ("bbbb".to_owned(), 1, 2),
+            ("cccc".to_owned(), 1, 3),
+            ("dddd".to_owned(), 2, 3),
+        ]
+    );
+    // Missing cells are empty, as tC4's `?? ''` reads them.
+    assert_eq!(
+        (
+            questions[1].question.as_str(),
+            questions[1].response.as_str()
+        ),
+        ("", "")
+    );
+    assert_eq!(questions[1].occurrence, Occurrence::Unrecorded);
+    // An occurrence that is not a count is unrecorded (tC4: NaN); the eighth cell is not read.
+    assert_eq!(questions[2].occurrence, Occurrence::Unrecorded);
+    assert_eq!(questions[2].response, "R3.");
+    assert_eq!(questions[0].occurrence, Occurrence::nth(1).unwrap());
+
+    // Only a header that is not the questions header refuses the table.
+    let other = tsv.replacen("Response", "Answer", 1);
+    assert!(matches!(
+        parse_story_questions(&other),
+        Err(tc_helps::Error::TsvHeader { .. })
+    ));
+    assert!(matches!(
+        parse_story_questions(" \n"),
+        Err(tc_helps::Error::TsvHeader { .. })
+    ));
+    assert_eq!(parse_story_questions(TQ_HEADER).unwrap(), []);
 }
 
 /// tC4 keeps these three rows (as frame 2 of story 1, story 0 and story 51); no project

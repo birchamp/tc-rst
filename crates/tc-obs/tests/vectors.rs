@@ -609,10 +609,14 @@ fn localized_names_is_added_as_tc4_adds_it() {
     }
 }
 
+/// Every row tC4 derives is a question here too, with its frame, question and response,
+/// except a row whose ID a tc-helps question cannot hold: that row is left out and the
+/// rest kept (`parse_story_questions`).
 #[test]
 fn story_questions_keep_the_rows_tc4_derives() {
     let cases = vectors()["questions"].as_array().unwrap();
-    assert!(cases.len() >= 12);
+    assert!(cases.len() >= 54);
+    let mut left_out = Vec::new();
     for case in cases {
         let questions = parse_story_questions(case["tsv"].as_str().unwrap()).unwrap();
         let story = case["story"]
@@ -633,14 +637,26 @@ fn story_questions_keep_the_rows_tc4_derives() {
                 })
             })
             .collect();
-        assert_eq!(
-            Value::Array(ours),
-            case["items"],
-            "{} (story {})",
-            case["name"],
-            case["story"]
-        );
+        let (theirs, unheld): (Vec<Value>, Vec<Value>) = case["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .cloned()
+            .partition(|item| {
+                item["id"]
+                    .as_str()
+                    .is_some_and(|id| tc_helps::RowId::parse(id).is_ok())
+            });
+        left_out.extend(unheld.iter().map(|item| item["id"].clone()));
+        assert_eq!(ours, theirs, "{} (story {})", case["name"], case["story"]);
     }
+    // The rows left out: tC4's ID `not an id`, an empty ID, `b-b`, and none at all (a row
+    // of one cell), each in an LF and a CRLF table, for all stories and for story 1.
+    let mut ids: Vec<String> = left_out.iter().map(Value::to_string).collect();
+    ids.sort();
+    ids.dedup();
+    assert_eq!(ids, ["\"\"", "\"b-b\"", "\"not an id\"", "null"]);
+    assert_eq!(left_out.len(), 4 * 2 * 2);
 }
 
 #[test]
