@@ -124,6 +124,8 @@ test("AD11's filter spares only its JS listener: the page's /api/ requests wait 
     assert.ok(hop.busy.p95 - hop.idle.p95 > 50, hop.detail);
   } finally {
     if (alive(shell.pid)) shell.kill('SIGKILL');
+    // The profile held the launch's token.
+    fs.rmSync(out, { recursive: true, force: true });
   }
 });
 
@@ -162,6 +164,8 @@ for (const end of ['kill', 'quit']) {
     } finally {
       if (alive(shell.pid)) shell.kill('SIGKILL');
       if (serverPid && alive(serverPid)) process.kill(serverPid, 'SIGKILL');
+      await sleep(500);
+      fs.rmSync(out, { recursive: true, force: true });
     }
   });
 }

@@ -42,9 +42,13 @@ const AFTER_COMMIT_S = 1;
 
 let report = '';
 let order = [];
+let dir = null;
+test.after(() => {
+  if (dir) fs.rmSync(dir, { recursive: true, force: true });
+});
 test.before(() => {
   if (SKIP) return;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tc4-spike-driver-'));
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tc4-spike-driver-'));
   const node = process.execPath;
   const electron = executable(path.join(dir, 'electron'), `#!/bin/sh\nexec "${node}" "${path.join(__dirname, 'fake-shell.cjs')}" "$@"\n`);
   const server = executable(path.join(dir, 'tc4-standin'), `#!/bin/sh\necho '{"sha":false,"avx2":true,"avx512f":false}'\n`);
