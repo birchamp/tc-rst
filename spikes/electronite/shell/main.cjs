@@ -14,8 +14,8 @@
 // It never writes the token anywhere.
 //
 //   electron main.cjs --spike-mode=filter --spike-case=run --spike-out=DIR --spike-server=EXE
-//                     [--spike-clicks=200] [--spike-warmup=20] [--spike-port=N]
-//                     [--spike-spawn=job|detached]
+//                     [--spike-clicks=200] [--spike-warmup=20] [--spike-spawn=job|detached]
+//                     [--spike-port=N]   (inspect: the port of the launch that was killed)
 
 const { app, BrowserWindow, ipcMain, net, protocol, session } = require('electron');
 const { spawn } = require('node:child_process');

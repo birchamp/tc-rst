@@ -9,7 +9,7 @@
 //! shipped, and its loopback cost is not `tc4 serve`'s: unit A2 measures that.
 //!
 //! ```text
-//! tc4-standin serve --app-data DIR [--port N] [--reply-bytes N]
+//! tc4-standin serve --app-data DIR [--reply-bytes N]
 //! tc4-standin machine
 //! ```
 
@@ -34,7 +34,6 @@ enum Command {
 
 struct ServeOptions {
     app_data: PathBuf,
-    port: u16,
     reply_bytes: usize,
 }
 
@@ -43,14 +42,12 @@ fn parse(args: &[String]) -> Result<Command, String> {
         Some("machine") => Ok(Command::Machine),
         Some("serve") => {
             let mut app_data = None;
-            let mut port = 0;
             let mut reply_bytes = content::REPLY_BYTES;
             let mut rest = args.iter().skip(1);
             while let Some(flag) = rest.next() {
                 let value = rest.next().ok_or_else(|| format!("{flag} needs a value"))?;
                 match flag.as_str() {
                     "--app-data" => app_data = Some(PathBuf::from(value)),
-                    "--port" => port = value.parse().map_err(|_| "--port needs a number")?,
                     "--reply-bytes" => {
                         reply_bytes = value.parse().map_err(|_| "--reply-bytes needs a number")?;
                     }
@@ -60,14 +57,10 @@ fn parse(args: &[String]) -> Result<Command, String> {
             let app_data = app_data.ok_or("serve needs --app-data DIR")?;
             Ok(Command::Serve(ServeOptions {
                 app_data,
-                port,
                 reply_bytes,
             }))
         }
-        _ => Err(
-            "usage: tc4-standin serve --app-data DIR [--port N] [--reply-bytes N] | machine"
-                .to_owned(),
-        ),
+        _ => Err("usage: tc4-standin serve --app-data DIR [--reply-bytes N] | machine".to_owned()),
     }
 }
 
@@ -124,9 +117,9 @@ fn serve(options: ServeOptions) -> Result<(), String> {
 }
 
 async fn run(options: ServeOptions) -> Result<(), String> {
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", options.port))
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
         .await
-        .map_err(|e| format!("cannot bind 127.0.0.1:{}: {e}", options.port))?;
+        .map_err(|e| format!("cannot bind 127.0.0.1: {e}"))?;
     let port = listener
         .local_addr()
         .map_err(|e| format!("no local address: {e}"))?

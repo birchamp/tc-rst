@@ -440,26 +440,3 @@ fn the_token_is_never_written_to_app_data() {
     let typed = std::fs::read_to_string(server.app_data.join("typed.log")).unwrap();
     assert!(typed.contains("\"n\":3"), "{typed}");
 }
-
-#[test]
-fn a_given_port_is_bound_again() {
-    let first = Server::start("port");
-    let port = first.port;
-    drop(first);
-    let app_data = std::env::temp_dir().join(format!("tc4-standin-port2-{}", std::process::id()));
-    let mut child = Command::new(env!("CARGO_BIN_EXE_tc4-standin"))
-        .args(["serve", "--port", &port.to_string(), "--app-data"])
-        .arg(&app_data)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
-    let mut line = String::new();
-    BufReader::new(child.stdout.take().unwrap())
-        .read_line(&mut line)
-        .unwrap();
-    let _ = child.kill();
-    let _ = child.wait();
-    let _ = std::fs::remove_dir_all(&app_data);
-    assert!(line.contains(&format!("127.0.0.1:{port}/")), "{line}");
-}
