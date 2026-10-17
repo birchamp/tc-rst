@@ -201,6 +201,16 @@ pub enum Fault {
     /// The burrito export holds altered bytes for this path (relative to the burrito
     /// root), so it no longer matches its metadata.
     SbCorruptFile { path: String },
+    /// A download (an archive or a burrito export) sends its first `after` bytes, then
+    /// nothing more until the test calls [`FakeDoor43::release_held`], then the rest. A
+    /// test can act between two chunks of a download and know which bytes arrived.
+    HoldBody { after: usize },
+    /// A download sends its first `after` bytes and then the connection breaks, though its
+    /// `Content-Length` promised more.
+    BreakOff { after: usize },
+    /// A download comes without `Content-Length`, as an answer built while it is sent
+    /// does.
+    NoContentLength,
 }
 
 impl Fault {
@@ -211,6 +221,9 @@ impl Fault {
                 | Fault::ArchiveExtraFile { .. }
                 | Fault::SbRevision(_)
                 | Fault::SbCorruptFile { .. }
+                | Fault::HoldBody { .. }
+                | Fault::BreakOff { .. }
+                | Fault::NoContentLength
         )
     }
 }
@@ -413,6 +426,8 @@ pub(crate) struct Shared {
     state: Mutex<State>,
     pub git: Git,
     pub url: String,
+    /// Wakes a download held by [`Fault::HoldBody`].
+    pub held: tokio::sync::Notify,
 }
 
 impl Shared {
@@ -467,6 +482,7 @@ impl FakeDoor43 {
             state: Mutex::new(State::new()),
             git,
             url,
+            held: tokio::sync::Notify::new(),
         });
         let app = api::router(shared.clone());
         let (shutdown, stopped) = oneshot::channel::<()>();
@@ -630,6 +646,12 @@ impl FakeDoor43 {
 
     pub fn inject(&self, rule: FaultRule) {
         self.shared.state().faults.push(rule);
+    }
+
+    /// Lets one download held by [`Fault::HoldBody`] send the rest of its bytes. A release
+    /// that comes before the download reaches its hold is kept for it.
+    pub fn release_held(&self) {
+        self.shared.held.notify_one();
     }
 
     pub fn requests(&self) -> Vec<RecordedRequest> {

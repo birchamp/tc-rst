@@ -1068,21 +1068,49 @@ async fn archive(
         .await
         .map_err(|_| ApiError::not_found())?;
     let mut bytes = shared.git.archive(&dir, &commit, format, &rec.name).await?;
-    for fault in shared.take_faults(method.as_str(), uri.path(), false) {
+    let faults = shared.take_faults(method.as_str(), uri.path(), false);
+    for fault in &faults {
         match fault {
-            Fault::ArchiveComment(comment) => bytes = zipping::with_comment(bytes, &comment)?,
+            Fault::ArchiveComment(comment) => bytes = zipping::with_comment(bytes, comment)?,
             Fault::ArchiveExtraFile { path, bytes: extra } => {
-                bytes = zipping::with_extra_file(bytes, &format!("{}/{path}", rec.name), &extra)?;
+                bytes = zipping::with_extra_file(bytes, &format!("{}/{path}", rec.name), extra)?;
             }
             _ => {}
         }
     }
-    Ok(download(bytes, content_type, &file))
+    Ok(download(&shared, bytes, content_type, &file, &faults))
 }
 
-fn download(bytes: Vec<u8>, content_type: &str, file: &str) -> Response {
-    let mut response = Response::new(Body::from(bytes));
+/// A download answer, its body sent as the faults among `faults` shape it.
+fn download(
+    shared: &Arc<Shared>,
+    bytes: Vec<u8>,
+    content_type: &str,
+    file: &str,
+    faults: &[Fault],
+) -> Response {
+    let mut hold = None;
+    let mut cut = None;
+    let mut announce = true;
+    for fault in faults {
+        match fault {
+            Fault::HoldBody { after } => hold = Some(*after),
+            Fault::BreakOff { after } => cut = Some(*after),
+            Fault::NoContentLength => announce = false,
+            _ => {}
+        }
+    }
+    let length = bytes.len();
+    let body = if hold.is_none() && cut.is_none() && announce {
+        Body::from(bytes)
+    } else {
+        shaped_body(shared.clone(), Bytes::from(bytes), hold, cut)
+    };
+    let mut response = Response::new(body);
     let headers = response.headers_mut();
+    if announce {
+        headers.insert(header::CONTENT_LENGTH, HeaderValue::from(length));
+    }
     headers.insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("application/octet-stream"),
@@ -1118,10 +1146,11 @@ async fn sb_export(
     let archive = shared.git.archive(&dir, &commit, "zip", &rec.name).await?;
     let mut revision = commit.clone();
     let mut corrupt = Vec::new();
-    for fault in shared.take_faults(method.as_str(), uri.path(), false) {
+    let faults = shared.take_faults(method.as_str(), uri.path(), false);
+    for fault in &faults {
         match fault {
-            Fault::SbRevision(r) => revision = r,
-            Fault::SbCorruptFile { path } => corrupt.push(path),
+            Fault::SbRevision(r) => revision = r.clone(),
+            Fault::SbCorruptFile { path } => corrupt.push(path.clone()),
             _ => {}
         }
     }
@@ -1139,7 +1168,59 @@ async fn sb_export(
             "the fake exports only repositories that hold a metadata.json",
         )
     })?;
-    Ok(download(bytes, "application/zip", &file))
+    Ok(download(&shared, bytes, "application/zip", &file, &faults))
+}
+
+/// How long a [`Fault::HoldBody`] waits for its release before it sends the rest anyway,
+/// so a test that never releases cannot keep the server's task alive.
+const HOLD_LIMIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// `bytes` sent in pieces: up to `hold`, then a wait for [`Shared::held`], then the rest;
+/// or, with `cut`, up to `cut` and then a broken connection.
+fn shaped_body(shared: Arc<Shared>, bytes: Bytes, hold: Option<usize>, cut: Option<usize>) -> Body {
+    enum Step {
+        Send(Bytes),
+        Wait,
+        /// A moment in which nothing is ready, so the server sends what it holds.
+        Flush,
+        Break,
+    }
+    let end = cut.map_or(bytes.len(), |c| c.min(bytes.len()));
+    let mut steps = Vec::new();
+    let mut at = 0;
+    if let Some(hold) = hold.filter(|h| *h < end) {
+        steps.push(Step::Send(bytes.slice(..hold)));
+        steps.push(Step::Wait);
+        at = hold;
+    }
+    steps.push(Step::Send(bytes.slice(at..end)));
+    if cut.is_some() {
+        steps.push(Step::Flush);
+        steps.push(Step::Break);
+    }
+    let pieces = futures_util::stream::unfold(
+        (steps.into_iter(), shared),
+        |(mut steps, shared)| async move {
+            loop {
+                match steps.next()? {
+                    Step::Send(piece) if piece.is_empty() => {}
+                    Step::Send(piece) => return Some((Ok(piece), (steps, shared))),
+                    Step::Wait => {
+                        let _ = tokio::time::timeout(HOLD_LIMIT, shared.held.notified()).await;
+                    }
+                    Step::Flush => tokio::time::sleep(std::time::Duration::from_millis(50)).await,
+                    Step::Break => {
+                        let broken = std::io::Error::new(
+                            std::io::ErrorKind::ConnectionAborted,
+                            "the fake broke the transfer off",
+                        );
+                        return Some((Err(broken), (steps, shared)));
+                    }
+                }
+            }
+        },
+    );
+    Body::from_stream(pieces)
 }
 
 // ---------------------------------------------------------------- catalog
