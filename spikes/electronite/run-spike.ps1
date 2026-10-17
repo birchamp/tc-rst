@@ -47,6 +47,7 @@ $started = (Get-Date).ToUniversalTime()
 $stamp = $started.ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
 if (-not $Report) { $Report = Join-Path $repo "docs/evidence/electronite-spike-$stamp.md" }
 if (-not $Out) { $Out = Join-Path $PSScriptRoot ('out/' + $started.ToString('yyyyMMdd-HHmmss', [Globalization.CultureInfo]::InvariantCulture)) }
+$Report = Resolve-FullPath $Report
 $Electron = (Resolve-Path $Electron).Path
 $shellMain = Join-Path $PSScriptRoot 'shell/main.cjs'
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
@@ -104,7 +105,7 @@ function Read-Events([string]$Dir, [string]$Tag) {
     $file = Join-Path $Dir "events-$Tag.jsonl"
     if (-not (Test-Path -LiteralPath $file)) { return @() }
     $events = @()
-    foreach ($line in (Get-Content -LiteralPath $file)) {
+    foreach ($line in (Get-Content -LiteralPath $file -Encoding UTF8)) {
         if (-not $line) { continue }
         try { $events += ($line | ConvertFrom-Json) } catch { }
     }
@@ -123,7 +124,7 @@ function Wait-ShellEvent([string]$Dir, [string]$Tag, [string]$Name, [int]$Count,
 
 function Read-Json([string]$File) {
     if (-not (Test-Path -LiteralPath $File)) { return $null }
-    return (Get-Content -LiteralPath $File -Raw | ConvertFrom-Json)
+    return (Get-Content -LiteralPath $File -Raw -Encoding UTF8 | ConvertFrom-Json)
 }
 
 function Test-Alive([int]$ProcessId) {
@@ -431,9 +432,9 @@ $platform = if ($onWindows) { 'Windows' } else { 'Linux' }
 Add "# Electronite spike G0 on $platform ($stamp)"
 Add ''
 Add 'This file was written by `spikes/electronite/run-spike.ps1`. The spike is throwaway and never'
-Add 'shipped (docs/APP-DESIGN.md §10, unit G0). **The server is a stand-in**: `tc4-standin`'
+Add 'shipped (docs/APP-DESIGN.md section 10, unit G0). **The server is a stand-in**: `tc4-standin`'
 Add '(`spikes/electronite/src`), a small axum server on 127.0.0.1 with the per-launch token, the'
-Add 'Host, Origin and X-Tc-Api checks of §5.2, an address line on stdout and a quit on a closed stdin,'
+Add 'Host, Origin and X-Tc-Api checks of section 5.2, an address line on stdout and a quit on a closed stdin,'
 Add 'because the real `tc4 serve` (unit A2) is being built at the same time. Its loopback cost is not'
 Add "tc4 serve's: unit A2 measures that. What this file measures is the shell, the browser engine and"
 Add 'the operating system around a server of the same kind.'
@@ -506,7 +507,7 @@ if ($results.Count -gt 0) {
     Add 'JSON, parses it and rebuilds the word bank and the cards. "Reply" ends when the JSON is'
     Add 'parsed, "rendered" when the DOM is rebuilt, "frame" at the start of the next animation frame,'
     Add 'which paints it. Times in ms, nearest-rank, after the warm-up clicks. While loading: a'
-    Add "story's 15 OBS-sized pictures (640×360, about 70 KB) every 500 ms, the help page every second,"
+    Add "story's 15 OBS-sized pictures (640x360, about 70 KB) every 500 ms, the help page every second,"
     Add 'and the event stream open. The budget is 30 ms (PERFORMANCE.md, Aligning).'
     Add ''
     Add '| Mode | While | Clicks | Reply median | Reply p95 | Rendered p95 | Frame median | Frame p95 | Frames missed | Loaded meanwhile |'
@@ -583,7 +584,7 @@ if ($anyRun -and $anyRun.graphite) {
 Add '## What these results decide'
 Add ''
 Add '- **AD11 and capability URLs.** A request type that fails under `filter` above is one that'
-Add '  the header filter misses; §5.2 then moves `/media`, `/download` and `/print` to capability'
+Add '  the header filter misses; section 5.2 then moves `/media`, `/download` and `/print` to capability'
 Add '  URLs. A failure under `filter` that also fails under `filter-all` is not the filter''s list.'
 Add '- **Q-1, the custom scheme.** The design''s rule: take `protocol.handle` if it adds less to'
 Add '  the aligner''s round trip than the filter, otherwise the filter. Compare the frame p95 of'

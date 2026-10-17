@@ -45,6 +45,8 @@ $started = (Get-Date).ToUniversalTime()
 $stamp = $started.ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
 if (-not $Report) { $Report = Join-Path $repo "docs/evidence/storage-fold-windows-$stamp.md" }
 if (-not $Corpus) { $Corpus = Join-Path (Split-Path -Parent $Storage) 'tc4-g0-corpus' }
+$Report = Resolve-FullPath $Report
+$Corpus = Resolve-FullPath $Corpus
 $coldCopy = "$Corpus-nocache"
 $exe = if ($onWindows) { 'foldbench.exe' } else { 'foldbench' }
 $target = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $Storage 'target' }
@@ -69,14 +71,14 @@ function MiB([object]$Bytes) {
     return [double]$Bytes / 1MB
 }
 
-# A Rust Duration as foldbench prints it with {:?} ("1.634s", "499.1ms", "812µs"), in ms.
+# A Rust Duration as foldbench prints it with {:?} ("1.634s", "499.1ms", "812us" with a micro
+# sign), in ms. The script stays ASCII because Windows PowerShell 5.1 reads it as ANSI.
 function ConvertFrom-Duration([string]$Text) {
-    $m = [regex]::Match($Text, '^([0-9.]+)(ns|µs|us|ms|s)$')
+    $m = [regex]::Match($Text, '^([0-9.]+)(ns|\u00B5s|us|ms|s)$')
     if (-not $m.Success) { return $null }
     $value = [double]::Parse($m.Groups[1].Value, [Globalization.CultureInfo]::InvariantCulture)
-    switch ($m.Groups[2].Value) {
+    switch ($m.Groups[2].Value -replace '\u00B5', 'u') {
         'ns' { return $value / 1e6 }
-        'µs' { return $value / 1e3 }
         'us' { return $value / 1e3 }
         'ms' { return $value }
         's' { return $value * 1e3 }
@@ -101,7 +103,7 @@ function Get-Range([object[]]$Values, [string]$Unit, [string]$Format = '{0:0}') 
     $low = ($numbers | Measure-Object -Minimum).Minimum
     $high = ($numbers | Measure-Object -Maximum).Maximum
     if ((Fmt $low $Format) -eq (Fmt $high $Format)) { return "$(Fmt $low $Format) $Unit" }
-    return "$(Fmt $low $Format)–$(Fmt $high $Format) $Unit"
+    return "$(Fmt $low $Format)-$(Fmt $high $Format) $Unit"
 }
 
 function With-Unit([object]$Value, [string]$Unit, [string]$Format = '{0:0}') {
@@ -156,6 +158,8 @@ function Invoke-Foldbench([string[]]$Arguments, [hashtable]$Variables, [string[]
     $info.RedirectStandardOutput = $true
     $info.RedirectStandardError = $true
     $info.CreateNoWindow = $true
+    $info.StandardOutputEncoding = [Text.Encoding]::UTF8
+    $info.StandardErrorEncoding = [Text.Encoding]::UTF8
     foreach ($name in $foldbenchVariables) {
         if ($info.EnvironmentVariables.ContainsKey($name)) { $info.EnvironmentVariables.Remove($name) }
     }
@@ -426,10 +430,10 @@ $finished = (Get-Date).ToUniversalTime()
 $platform = if ($onWindows) { 'Windows' } else { 'Linux' }
 Add "# The fold at Bible scale on $platform ($stamp)"
 Add ''
-Add 'Written by `spikes/foldbench-windows/run-foldbench.ps1` (unit G0, docs/APP-DESIGN.md §10). It'
+Add 'Written by `spikes/foldbench-windows/run-foldbench.ps1` (unit G0, docs/APP-DESIGN.md section 10). It'
 Add 'runs the release `foldbench` of `tc-corpus` from the storage branch on the corpus of STORAGE.md'
-Add '§14 as `docs/evidence/storage-fold-2026-10-16.md` on that branch does on Linux: one open per'
-Add 'process, the rounds interleaved. Only O8 of §6.1 is measured, so the 3 s cold open is not shown'
+Add 'section 14 as `docs/evidence/storage-fold-2026-10-16.md` on that branch does on Linux: one open per'
+Add 'process, the rounds interleaved. Only O8 of section 6.1 is measured, so the 3 s cold open is not shown'
 Add 'end to end (it needs `tc-store`).'
 Add ''
 Add 'foldbench reads CPU time and memory from Linux''s `/proc`; on Windows it prints them as'

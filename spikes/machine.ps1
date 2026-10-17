@@ -144,6 +144,13 @@ function Write-Utf8File([string]$Path, [string]$Text) {
     [IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding $false))
 }
 
+# A path as given, made absolute against PowerShell's location: .NET calls resolve a relative
+# path against the process's directory, which is not always that location.
+function Resolve-FullPath([string]$Path) {
+    if ([IO.Path]::IsPathRooted($Path)) { return [IO.Path]::GetFullPath($Path) }
+    return [IO.Path]::GetFullPath((Join-Path (Get-Location).Path $Path))
+}
+
 function Get-NowMs {
     return [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 }
