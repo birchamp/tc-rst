@@ -1721,6 +1721,16 @@ pub(crate) fn comment_target_json(target: &CommentTarget) -> Option<Json> {
     Some(target.to_json())
 }
 
+/// A comment target in its wire form (§2.8), as a draft of the comment box keeps it.
+pub fn encode_comment_target(target: &CommentTarget) -> Json {
+    target.to_json()
+}
+
+/// Reads a comment target written by [`encode_comment_target`].
+pub fn decode_comment_target(j: &Json) -> Option<CommentTarget> {
+    CommentTarget::from_json(View::Owned(j), STRICT).ok()
+}
+
 /// The wire form of a check key (§2.8).
 pub(crate) fn check_key_json(key: &CheckKey) -> Option<Json> {
     Some(key.to_json())
@@ -1729,6 +1739,30 @@ pub(crate) fn check_key_json(key: &CheckKey) -> Option<Json> {
 /// Reads a check key from its wire form.
 pub(crate) fn check_key_from_json(j: &Json) -> Option<CheckKey> {
     CheckKey::from_json(View::Owned(j), STRICT).ok()
+}
+
+/// A draft's unsaved links (§5.14): `{"alignments", "done", "wordBank"}` in the wire form of
+/// §2.8, canonical.
+pub(crate) fn alignment_edit_json(edit: &crate::command::AlignmentEdit) -> String {
+    Out::new()
+        .f("alignments", &edit.alignments)
+        .f("done", &edit.done)
+        .f("wordBank", &edit.word_bank)
+        .done()
+        .to_canonical_string()
+}
+
+/// Reads what [`alignment_edit_json`] wrote.
+pub(crate) fn alignment_edit_from_json(text: &str) -> Option<crate::command::AlignmentEdit> {
+    let j = json::parse(text.as_bytes()).ok()?;
+    let mut o = In::new(View::Owned(&j), STRICT).ok()?;
+    let edit = crate::command::AlignmentEdit {
+        alignments: o.req("alignments").ok()?,
+        done: o.req("done").ok()?,
+        word_bank: o.req("wordBank").ok()?,
+    };
+    o.finish().ok()?;
+    Some(edit)
 }
 
 /// The canonical JSON of a record (key and value), as a change stores it.

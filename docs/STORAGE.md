@@ -750,6 +750,14 @@ pub enum Notice {
     /// a program that put an older mtime back. The file is held, unchanged and unrecorded,
     /// until the person takes it in as an edit or restores it (§6.2).
     StorageDamage { path: RepoPath, copy: Box<str> },
+    /// A derived file changed outside the app, held unchanged and unrecorded with a copy kept,
+    /// until it is recorded as changes (§11.1) or restored from the project (I8).
+    OutsideEditHeld { path: RepoPath, copy: Box<str> },
+    /// A derived file's rename kept failing for 2 s (another program has it open, §5.10).
+    WriteBlocked { path: RepoPath },
+    /// An expected pack (§4.4) is missing and no copy could be restored: nothing derived is
+    /// removed and no tree is built until it is back.
+    PackMissing { path: RepoPath },
     /// Line-ending or trailing-whitespace differences in an outside edit, not recorded (§11.1).
     WhitespaceOnlyEdit { path: RepoPath, keys: u32 },
     /// Another installation writes into this folder (a cloud-synced folder, §5.0).
@@ -780,13 +788,25 @@ changes a record must carry the token of what was displayed. This is how I4 hold
 /// bytes, under a key derived from the installation secret (§3.7) and the project id, so a token
 /// held in the browser-side draft buffer survives a restart. The key never leaves the server.
 /// The core rejects a token with a bad MAC, so a screen cannot construct "the current heads".
-pub struct ShownToken { key: RecordKey, heads: SmallVec<[ChangeId; 2]>, mac: [u8; 16] }
+pub struct ShownToken { kind: TokenKind, key: RecordKey, heads: SmallVec<[ChangeId; 2]>, mac: [u8; 16] }
+pub enum TokenKind { Edit, Review }
 ```
 
 Byte form: base64url without padding of `payload ‖ mac`. `payload` is the canonical JSON
-`{"heads":[…],"key":{…}}`, heads sorted without repeats and the key as in §2.8; `mac` is the
-first 16 bytes of HMAC-SHA256 of `payload` under the token key, and the token key is
-HMAC-SHA256 under the installation secret of `"tc4-shown-token\0" ‖ the project id's 16 bytes`.
+`{"heads":[…],"key":{…},"kind":"edit"|"review"}`, heads sorted without repeats and the key as
+in §2.8; `mac` is the first 16 bytes of HMAC-SHA256 of `payload` under the token key, and the
+token key is HMAC-SHA256 under the installation secret of `"tc4-shown-token\0" ‖ the project
+id's 16 bytes`. A payload that is not canonical, or whose heads are not sorted without repeats,
+is refused even under a good MAC.
+
+The kind is under the MAC (APP-DESIGN R19). An **edit** token lists the heads by the table
+below and is what a save takes; a **review** token lists every head of the record and is what
+only a resolution (`Resolve`, `ResolveBulk`, §5.9) takes. The actor refuses a review token in a
+save and an edit token in a resolution (`Refusal::WrongTokenKind`), so a resolution screen's
+token can never be replayed as an edit that silently resolves, nor an editor's as a resolution
+of versions it never showed. A token whose MAC this installation can no longer check (a new
+installation secret) is read only to offer a draft's text (§5.14, `parse_unverified`), never
+as a base.
 
 What `heads` holds depends on the record's state when it was displayed:
 
@@ -818,14 +838,24 @@ pub enum Command {
     RestoreBook  { book: BookId, presence_shown: ShownToken, mode: RestoreMode },  // KeepText | StartEmpty
     SaveFrame    { shown: ShownToken, text: String },                  // OBS; StoryRef the same
     ApplyUpgrade { plan: UpgradePlan },                                // §5.8
-    Resolve      { conflict: ConflictId, shown: Vec<ShownToken>, choice: Choice },
+    Resolve      { conflict: ConflictId, shown: Vec<ShownToken>, choice: Choice }, // review tokens
+    /// One candidate per conflict, made on a computer of `devices` (§5.9); review tokens.
+    ResolveBulk  { devices: BTreeSet<DeviceId>, conflicts: Vec<(ConflictId, Vec<ShownToken>)> },
+    /// Re-key a decision a carry-over could not place (§8.3).
+    MoveCheck    { shown: ShownToken, to: CheckKey, to_shown: ShownToken },
     Restore      { shown: ShownToken, from: ChangeId },
     RemoveCarriedFile { shown: ShownToken },
     SetBookScope { presence_shown: ShownToken, scope: Scope },          // a passage set (D26)
     ReleaseBatch { batch: BatchId },                                   // "Apply what was recovered" (§7.4)
     Dismiss      { shown: ShownToken },                                // a Detached alignment or decision (§7.7)
-    Draft        { shown: ShownToken, field: DraftField, text: String }, // §5.14; writes no change
+    ReviseComment{ shown: ShownToken, text: String },                  // §5.5
+    Draft        (Draft),                                              // §5.14; writes no change
+    /// *Keep* a draft offered at open (§5.14); `section` holds a section draft's values.
+    KeepDraft    { draft: Draft, section: Vec<(ShownToken, Option<SectionValue>)> },
 }
+/// Unsaved editor text: the tokens of every record the editor displayed (a section draft
+/// carries one per displayed verse and chapter front, APP-DESIGN R6; a new comment none).
+pub struct Draft { pub field: DraftField, pub shown: Vec<ShownToken>, pub text: String }
 ```
 
 `SectionValue` is a `VerseValue` or a `ChapterFront` value for the record its token names. The
@@ -851,8 +881,15 @@ pub struct UpgradePlan { pub changes: Vec<PlannedChange> }
 pub struct PlannedChange { pub record: Record, pub parents: Vec<ChangeId>, pub cause: Cause }
 /// §8.3: keep one candidate (and its side, for a grouped conflict), or values the person
 /// edited, combined or chose unit by unit, one per record.
-pub enum Choice { Candidate { head: ChangeId }, Values(Vec<Record>) }
-pub enum DraftField { Words, Layout, Section, Frame, StoryRef, CheckComment }
+pub enum Choice { Candidate { head: ChangeId }, Values(Vec<Record>),
+                  KeepPassage { heads: Vec<ChangeId> }, KeepSeparate { heads: Vec<ChangeId> },
+                  KeepJoined { heads: Vec<ChangeId> }, ApplyToMovedCheck,
+                  RenameCarried { from: RepoPath, to: RepoPath } }
+/// `UserComment` is the comment box (a new comment on `target`, or a revision of the comment
+/// its one token names, APP-DESIGN R15); `Alignment` the aligner's unsaved links as
+/// `AlignmentEdit::to_json` writes them (R23).
+pub enum DraftField { Words, Layout, Section { book: BookId }, Frame, StoryRef, CheckComment,
+                      UserComment { target: CommentTarget }, Alignment }
 ```
 
 The reply to every command carries the new tokens and the new conflicts it caused, so the screen
@@ -1318,8 +1355,9 @@ that breaks one is a **quarantined change**: kept in its file, not folded, liste
   device for a Tc4Actor or Tc3User profile.
 - **V5 parents.** Sorted, unique, at most 4,096.
 - **V6 grow-only records.** A `BatchRelease` change has no parents. A `Comment` change has no
-  parents unless its cause is `Resolve`: two changes under one comment id are a `Comment`
-  conflict, and its resolution names both (§8.3).
+  parents unless its cause is `Edit` (a revision of the text the comment box showed, §5.5),
+  `Restore` (a version from History) or `Resolve`: two changes under one comment id are a
+  `Comment` conflict, and its resolution names both (§8.3).
 - **V7 limits.** JSON nesting depth ≤ 64; a change line ≤ 4 MiB, counting its tab, hash and
   line feed.
 - **V8 carried paths.** A `CarriedFile` path is not a path the app derives or owns (anything
@@ -1600,6 +1638,13 @@ when 5 becomes part of `4-5`, when 1:5 is renumbered, or when a carry-over moves
 (§7.7). Because comments cannot conflict, this following is what keeps a comment made
 concurrently with a structure change on a screen. (Retracting a comment, if it is added later,
 is a new record kind that hides a comment from the default view and keeps it in History.)
+
+`ReviseComment { shown, text }` (APP-DESIGN R24) writes a new version of the comment its edit
+token names, with the token's heads as parents and cause `Edit`: same id, same target,
+the new text NFC. The earlier text stays in the comment's History, as every version of every
+record does. A revision on one computer and another revision of the same comment on
+another are two heads of one comment: a `Comment` conflict, resolved as any other (§8.3), so
+neither text is lost. An empty text is refused (a retraction is the record kind above).
 
 ### 5.6 Settings, project details and pins
 
@@ -2020,17 +2065,32 @@ stat and no entry settles: each path is read. A program that puts an older mtime
 edit of the same size (some sync clients, `rsync -t`, `cp -p`, archive extractors) can leave an
 edited file clean by stat; the storage check (O14) reads it, and it is held (below).
 
-**The scope digest.** Each manifest entry keeps `scope`: the SHA-256 of the records the
-projection of `p` reads, in key order, each as its canonical key followed by the ids of the
-heads the written bytes stand for, by the token rule of §2.7 (what its heads file lists). O9
-computes the same digest from the fold in memory. The scope is the fold's own list of the
-records the projection of `p` reads (for a book's files, the book's records of each kind from
-the fold's per-book key lists, and the project records the file lists), never the heads file's
-record list: a record that entered the scope since the file was written (the first comment on
-a book, a teammate's new check decision) or left it changes the digest, as a new head does. The
-digests cost one pass over the fold's records in memory (about 283,600 for a whole Bible, every
-path together; to be measured in S2) and no file read: a heads file is read only when an
-outside edit needs its base (§11.1 X3).
+**The scope digest.** Each manifest entry keeps `scope`: the SHA-256 of what the projection of
+`p` reads (`FoldState::scope_digest`). O9 computes the same digest from the fold in memory. The
+scope is the fold's own list of the records the projection of `p` reads (for a book's files,
+the book's records of each kind from the fold's per-book key lists, and the project records the
+file lists), never the heads file's record list: a record that entered the scope since the file
+was written (the first comment on a book, a teammate's new check decision) or left it changes
+the digest, as a new head does. The scope is cut into parts that several files share (a book's
+text, its alignments, the decisions of one tool in one book, its comments, the pins, the
+settings, the versification, a story, the conflicts, the project details), and the digest of
+`p` is the SHA-256 of its parts' digests in a fixed order. A part's digest takes, for each of
+its records in key order, the canonical key, a zero byte, the record's heads, then **every**
+folded version of the record, not only the heads the token rule lists: a projection reads more
+than the displayed candidate (the newest time of a decision file over every head, which head is
+provisional, the bases of a merge, a passage's sides, the newest text of an incoherent verse
+among its ancestors), and a parent that arrives after its child changes those while the heads
+stay. A book's text part also takes the fold's view of the book (presence, scope, the last-book
+rule), and the comments part the authors' device profiles and the chain of moved checks a
+comment follows. A digest that changes when nothing written would change costs only one
+projection of that file; the property
+`a_file_whose_scope_digest_is_unchanged_renders_the_same_bytes` (`tc-journal/tests/scope.rs`)
+checks the other direction over random team histories. The heads file keeps the token rule's
+heads (`FoldState::file_heads`), since it is the base of an outside edit (§11.1 X3) and an
+outside editor saw only the provisional text. The digests cost one pass over the fold's records
+in memory and no file read: a heads file is read only when an outside edit needs its base.
+`metadata.json`'s entry keeps the digest of every project detail, book presence and pin group
+(`FoldState::metadata_scope_digest`), and the store adds the ingredient table it lists.
 
 **Converged without reading** (O9): clean by stat, named by no `materialize.intent.json`, its
 `scope` equal to the fold's, and the manifest's `minor` and `derivations` this app's. The
@@ -4156,7 +4216,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | `tc-core` | `BookId`, references (exists); `GitOid` and `Md5`, the two digests every crate shares (the journal, the burrito, the Door43 client, the helps, the resource store and the screens hold one type each) |
 | `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`, `PARA_MARKERS` and the layout rule, the draft test `is_drafted`), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1` and the shown text `shown_text_v1`, the OBS story splice |
 | `tc-burrito` | `build_metadata`, `check`, the vendored SB 1.0.0 schema, the extension table, `collision_form` (§3.3) |
-| `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the fold cache's codec (`index`: sections of prepared changes keyed by path, size and fingerprint), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking, the command types. It is the one owner of the types and rules the domain crates share: `CheckKey`, `ResourceRef`, `DecisionRecord`, `AlignmentValue` (and it re-exports `tc-core`'s `GitOid` and `Md5`); the pin slots and the D30 ladder (`pins`); a decision's edit and computed state (`decision`); an alignment's validity, its verse order and the aligned-USFM split (`alignment`); person labels. No I/O. |
+| `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the fold cache's codec (`index`: sections of prepared changes keyed by path, size and fingerprint), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking (edit and review kinds), the command types, the scope digests and heads lists of derived files (§6.2), the per-chapter range reads the screens and the store use (`chapters_of`, `chapter_keys`, `decisions_of`, `alignments_of`, `comments_of`, `book_keys`, APP-DESIGN R1), each costing what it returns. It is the one owner of the types and rules the domain crates share: `CheckKey`, `ResourceRef`, `DecisionRecord`, `AlignmentValue` (and it re-exports `tc-core`'s `GitOid` and `Md5`); the pin slots and the D30 ladder (`pins`); a decision's edit and computed state (`decision`); an alignment's validity, its verse order and the aligned-USFM split (`alignment`); person labels. No I/O. |
 | `tc-store` | `Vfs`, `FaultFs`, `atomic_write`, the project lock, `ProjectActor` and commands, open and recovery, reading and writing the fold cache `.tc/index.bin` (§6.1 O8), the fold's `ValueSource` over pack and pending files and their blobs, materialize, seal, consolidate, outside-edit detection and recording, drafts, identity, local git (tree build, commit, index, repack, object database access) |
 | `tc-door43` | the internet switch, the Gitea REST client, and git2 network calls (`fetch`, `push`, `list`) on a repository `tc-store` opened |
 | `tc-sync` | the Door43 sync (§9), the exchange file export and import (§10), the Door43 edit walk (§11.2), `ExchangeReport` |

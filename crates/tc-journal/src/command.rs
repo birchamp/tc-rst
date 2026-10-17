@@ -4,8 +4,9 @@
 
 use crate::change::Cause;
 use crate::fold::ConflictId;
-use crate::ids::{BatchId, ChangeId};
+use crate::ids::{BatchId, ChangeId, DeviceId, RepoPath};
 use crate::json::{Json, JsonMap};
+use crate::keys::CheckKey;
 use crate::record::{
     AlignmentGroup, ChapterFront, CommentTarget, PinGroupValue, Record, ResourceRef, Scope,
     Selection, TargetWord, UserStatus, VerseValue,
@@ -46,6 +47,12 @@ pub enum Command {
         target: CommentTarget,
         text: String,
     },
+    /// A new version of the comment the comment box showed (§5.5, APP-DESIGN R24): the same
+    /// comment record, its earlier text kept in History. The target stays.
+    ReviseComment {
+        shown: ShownToken,
+        text: String,
+    },
     SetSetting {
         shown: ShownToken,
         value: Option<Json>,
@@ -82,12 +89,28 @@ pub enum Command {
     ApplyUpgrade {
         plan: UpgradePlan,
     },
-    /// §5.9, §8.3: one token per record involved, each listing every head as the
+    /// §5.9, §8.3: one review token per record involved, each listing every head as the
     /// resolution screen displayed it.
     Resolve {
         conflict: ConflictId,
         shown: Vec<ShownToken>,
         choice: Choice,
+    },
+    /// A bulk choice (§5.9): for each conflict listed, the one candidate made on a computer
+    /// of `devices`, all in one batch. Each conflict carries its review tokens; a conflict
+    /// two or more candidates of the set, or none, come from is left out and stays listed.
+    ResolveBulk {
+        devices: std::collections::BTreeSet<DeviceId>,
+        conflicts: Vec<(ConflictId, Vec<ShownToken>)>,
+    },
+    /// Re-key a decision a carry-over could not place (§8.3, APP-DESIGN R7): the old key
+    /// gets `MovedTo { to }` with the heads `shown` lists, and `to` gets the decision the
+    /// screen showed, with the heads `to_shown` lists (none for a check never decided), so a
+    /// decision already at `to` is a visible conflict, never replaced.
+    MoveCheck {
+        shown: ShownToken,
+        to: CheckKey,
+        to_shown: ShownToken,
     },
     Restore {
         shown: ShownToken,
@@ -109,12 +132,31 @@ pub enum Command {
     Dismiss {
         shown: ShownToken,
     },
-    /// §5.14; writes no change.
-    Draft {
-        shown: ShownToken,
-        field: DraftField,
-        text: String,
+    /// §5.14: kept in `.tc/drafts.json`, beside the actor; writes no change.
+    Draft(Draft),
+    /// *Keep* a draft offered at open (§5.14): the draft saved with its tokens, as the save of
+    /// its field would be. A token this installation can no longer verify (a new
+    /// installation secret, APP-DESIGN R20) is no base: the draft's value is written with no
+    /// parents, so it stands as a conflict with what the record holds unless the values are
+    /// equal. A section draft's values are given in `section`, read from its buffer by the
+    /// section editor, with the tokens of `draft.shown`.
+    KeepDraft {
+        draft: Draft,
+        section: Vec<(ShownToken, Option<SectionValue>)>,
     },
+}
+
+/// Unsaved editor text (§5.14).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Draft {
+    pub field: DraftField,
+    /// The tokens of what the editor displayed: the field's record, every record the section
+    /// editor displayed (APP-DESIGN R6), the comment a revision continues, or none for a new
+    /// comment.
+    pub shown: Vec<ShownToken>,
+    /// The editor's text: the field's text, the section buffer, or, for an alignment, the
+    /// unsaved links as [`AlignmentEdit::to_json`] writes them.
+    pub text: String,
 }
 
 /// A new value for the record a section token names.
@@ -132,6 +174,19 @@ pub struct AlignmentEdit {
     pub word_bank: Vec<TargetWord>,
     /// D73, as the aligner computed it.
     pub done: bool,
+}
+
+impl AlignmentEdit {
+    /// The canonical JSON of the edit, as a draft keeps it: `{"alignments", "done",
+    /// "wordBank"}` with groups and words in the wire form of §2.8.
+    pub fn to_json(&self) -> String {
+        crate::canon::alignment_edit_json(self)
+    }
+
+    /// Reads what [`AlignmentEdit::to_json`] wrote; `None` for anything else.
+    pub fn from_json(text: &str) -> Option<Self> {
+        crate::canon::alignment_edit_from_json(text)
+    }
 }
 
 /// What the checker changed in one item (§5.4). [`DecisionEdit::apply`] applies the changes
@@ -191,26 +246,48 @@ pub struct PlannedChange {
     pub cause: Cause,
 }
 
-/// A person's choice in a conflict (§8.3). Either way the batch writes one change per
-/// record of the conflict, with every current head of that record as parents.
+/// A person's choice in a conflict (§8.3). The batch writes one change per record the
+/// choice decides, with every current head of that record as parents.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Choice {
     /// Keep one candidate: its value on its record, and for a grouped conflict its side's
-    /// value on every record of the group.
+    /// value on every record of the group. For a book's presence race, *Restore the text*
+    /// also restores every verse *Start empty* blanked (§7.6).
     Candidate { head: ChangeId },
     /// Values the person edited, combined or chose unit by unit, and confirmed: one per
     /// record of the conflict.
     Values(Vec<Record>),
+    /// *Keep Maria's passage*: the first head names the side, each picks its record's
+    /// version (`FoldState::keep_passage`).
+    KeepPassage { heads: Vec<ChangeId> },
+    /// *Keep 4 and 5 separate*, with the versions picked where a verse holds several.
+    KeepSeparate { heads: Vec<ChangeId> },
+    /// *Keep the joined verses*, with the span picked where there are several.
+    KeepJoined { heads: Vec<ChangeId> },
+    /// *Apply Pedro's change to the moved check*: writes the moved check's new key too.
+    ApplyToMovedCheck,
+    /// *Rename* one file of a path-case conflict: writes the new path's record too.
+    RenameCarried { from: RepoPath, to: RepoPath },
 }
 
 /// Which editor field a draft belongs to (§5.14).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DraftField {
     Words,
     Layout,
-    /// The section editor's whole buffer, with the tokens of every displayed record.
-    Section,
+    /// The section editor's whole buffer of `book`, with the tokens of every displayed
+    /// record (APP-DESIGN R6).
+    Section {
+        book: BookId,
+    },
     Frame,
     StoryRef,
     CheckComment,
+    /// The comment box (APP-DESIGN R15): a new comment on `target`, or a revision of the
+    /// comment its one token names.
+    UserComment {
+        target: CommentTarget,
+    },
+    /// The aligner's unsaved links (APP-DESIGN R23).
+    Alignment,
 }

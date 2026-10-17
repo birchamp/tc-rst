@@ -340,7 +340,17 @@ impl FoldState {
         out
     }
 
-    /// A token for a record as a screen displays it.
+    /// A review token for a record (§2.7, APP-DESIGN R19): every head, as a resolution
+    /// screen displays them. Only a resolution takes it.
+    pub fn review_token(
+        &self,
+        signing: &TokenKey,
+        key: &RecordKey,
+    ) -> Result<ShownToken, TokenError> {
+        ShownToken::mint_review(signing, key.clone(), self.heads(key))
+    }
+
+    /// An edit token for a record as a screen displays it.
     pub fn token(
         &self,
         signing: &TokenKey,

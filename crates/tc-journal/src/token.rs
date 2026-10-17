@@ -4,8 +4,15 @@
 //! screen from constructing "the current heads".
 //!
 //! Byte form: base64url (no padding) of `payload ‖ mac`, where `payload` is the canonical
-//! JSON `{"heads":[…],"key":{…}}` (the key as in a record object, without its value) and
-//! `mac` is HMAC-SHA256 of the payload, truncated to 16 bytes, under the [`TokenKey`].
+//! JSON `{"heads":[…],"key":{…},"kind":"edit"|"review"}` (the key as in a record object,
+//! without its value) and `mac` is HMAC-SHA256 of the payload, truncated to 16 bytes, under
+//! the [`TokenKey`].
+//!
+//! The kind is under the MAC: an **edit** token lists the heads by the token rule (a
+//! conflicted record's displayed candidate only), and a save takes it; a **review** token
+//! lists every head of the record, and only a resolution takes it. So a resolution screen's
+//! token can never be replayed as an edit that silently resolves, nor an editor's as a
+//! resolution of versions it never showed (APP-DESIGN R19).
 
 use crate::canon::{decode_key, encode_key};
 use crate::ids::{ChangeId, ProjectId};
@@ -49,9 +56,28 @@ fn mac_with(key: &[u8; 32]) -> HmacSha256 {
     HmacSha256::new(&block.into())
 }
 
+/// What a token was minted for (see the module documentation).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TokenKind {
+    /// The heads a screen displayed by the token rule of §2.7: what an edit continues.
+    Edit,
+    /// Every head of the record, as a resolution screen displays them.
+    Review,
+}
+
+impl TokenKind {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Edit => "edit",
+            Self::Review => "review",
+        }
+    }
+}
+
 /// What a record looked like when it was displayed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShownToken {
+    kind: TokenKind,
     key: RecordKey,
     heads: SmallVec<[ChangeId; 2]>,
     mac: [u8; MAC_LEN],
@@ -72,19 +98,46 @@ pub enum TokenError {
 }
 
 impl ShownToken {
-    /// A token for `key` displayed as standing for `heads` (the token rule of §2.7 decides
-    /// which heads those are).
+    /// An edit token for `key` displayed as standing for `heads` (the token rule of §2.7
+    /// decides which heads those are).
     pub fn mint(
         signing: &TokenKey,
+        key: RecordKey,
+        heads: impl IntoIterator<Item = ChangeId>,
+    ) -> Result<Self, TokenError> {
+        Self::mint_kind(signing, TokenKind::Edit, key, heads)
+    }
+
+    /// A review token: `heads` are every head of the record.
+    pub fn mint_review(
+        signing: &TokenKey,
+        key: RecordKey,
+        heads: impl IntoIterator<Item = ChangeId>,
+    ) -> Result<Self, TokenError> {
+        Self::mint_kind(signing, TokenKind::Review, key, heads)
+    }
+
+    pub fn mint_kind(
+        signing: &TokenKey,
+        kind: TokenKind,
         key: RecordKey,
         heads: impl IntoIterator<Item = ChangeId>,
     ) -> Result<Self, TokenError> {
         let mut heads: SmallVec<[ChangeId; 2]> = heads.into_iter().collect();
         heads.sort();
         heads.dedup();
-        let payload = payload(&key, &heads)?;
+        let payload = payload(kind, &key, &heads)?;
         let mac = sign(signing, &payload);
-        Ok(Self { key, heads, mac })
+        Ok(Self {
+            kind,
+            key,
+            heads,
+            mac,
+        })
+    }
+
+    pub fn kind(&self) -> TokenKind {
+        self.kind
     }
 
     pub fn key(&self) -> &RecordKey {
@@ -99,7 +152,7 @@ impl ShownToken {
     /// The opaque text the UI holds.
     pub fn to_text(&self) -> String {
         // The key encoded when the token was minted, so it encodes now.
-        let mut bytes = payload(&self.key, &self.heads).unwrap_or_default();
+        let mut bytes = payload(self.kind, &self.key, &self.heads).unwrap_or_default();
         bytes.extend_from_slice(&self.mac);
         base64url(&bytes)
     }
@@ -116,12 +169,36 @@ impl ShownToken {
         check
             .verify_truncated_left(mac)
             .map_err(|_| TokenError::BadMac)?;
+        Self::read_payload(payload, mac)
+    }
+
+    /// What a token says, without checking its MAC: the record and heads of a draft whose
+    /// token this installation can no longer verify (a new installation secret, R20), so its
+    /// text is offered and kept as a change with no parents, never trusted as a base.
+    pub fn parse_unverified(text: &str) -> Result<Self, TokenError> {
+        let bytes = unbase64url(text).ok_or(TokenError::NotBase64)?;
+        if bytes.len() <= MAC_LEN {
+            return Err(TokenError::TooShort);
+        }
+        let (payload, mac) = bytes.split_at(bytes.len() - MAC_LEN);
+        Self::read_payload(payload, mac)
+    }
+
+    fn read_payload(payload: &[u8], mac: &[u8]) -> Result<Self, TokenError> {
         let malformed = |text: String| TokenError::Malformed(text);
         let value = json::parse(payload).map_err(|e| malformed(e.to_string()))?;
+        if value.to_canonical() != payload {
+            return Err(malformed("the payload is not canonical JSON".into()));
+        }
         let map = value
             .as_obj()
-            .filter(|map| map.len() == 2)
-            .ok_or_else(|| malformed("expected heads and key".into()))?;
+            .filter(|map| map.len() == 3)
+            .ok_or_else(|| malformed("expected heads, key and kind".into()))?;
+        let kind = match map.get("kind").and_then(Json::as_str) {
+            Some("edit") => TokenKind::Edit,
+            Some("review") => TokenKind::Review,
+            _ => return Err(malformed("kind is not edit or review".into())),
+        };
         let heads = match map.get("heads") {
             Some(Json::Arr(items)) => items
                 .iter()
@@ -134,9 +211,13 @@ impl ShownToken {
             .get("key")
             .ok_or_else(|| malformed("no key".into()))
             .and_then(|k| decode_key(k).map_err(|e| malformed(e.to_string())))?;
+        if heads.windows(2).any(|w| w[0] >= w[1]) {
+            return Err(malformed("heads are not sorted without repeats".into()));
+        }
         let mut out = [0u8; MAC_LEN];
         out.copy_from_slice(mac);
         Ok(Self {
+            kind,
             key,
             heads,
             mac: out,
@@ -144,7 +225,7 @@ impl ShownToken {
     }
 }
 
-fn payload(key: &RecordKey, heads: &[ChangeId]) -> Result<Vec<u8>, TokenError> {
+fn payload(kind: TokenKind, key: &RecordKey, heads: &[ChangeId]) -> Result<Vec<u8>, TokenError> {
     let mut map = JsonMap::new();
     map.insert(
         "heads".into(),
@@ -154,6 +235,7 @@ fn payload(key: &RecordKey, heads: &[ChangeId]) -> Result<Vec<u8>, TokenError> {
         "key".into(),
         encode_key(key).map_err(|e| TokenError::BadKey(e.to_string()))?,
     );
+    map.insert("kind".into(), Json::from(kind.name()));
     Ok(Json::Obj(map).to_canonical())
 }
 

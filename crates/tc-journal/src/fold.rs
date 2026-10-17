@@ -17,8 +17,10 @@ mod metadata;
 mod passage;
 mod people;
 mod project;
+mod ranges;
 mod reads;
 mod resolve;
+mod scope;
 mod sidecar;
 mod state;
 pub(crate) mod value;
@@ -26,8 +28,10 @@ pub(crate) mod value;
 pub use meta::ChangeIdx;
 pub use people::PersonLabel;
 pub use project::{CarriedPlacement, CheckTexts, DerivedFile, ProjectedDecision};
+pub use ranges::{ChapterKeys, DeviceStat};
 pub use reads::{BookView, ChangeView, Placement};
 pub use resolve::ResolveError;
+pub use scope::ScopeDigest;
 pub use sidecar::{SidecarError, decode_alignments, decode_decisions, records_from_usfm};
 pub use state::{FoldInput, FoldState, MergeHow, ProjectKind};
 pub use value::{ValueAt, ValueSource};
@@ -581,6 +585,23 @@ pub enum Notice {
     StorageDamage {
         path: RepoPath,
         copy: Box<str>,
+    },
+    /// A derived file changed outside the app. It is held, unchanged and unrecorded, and a
+    /// copy is kept, until the edit is recorded as changes (§11.1) or the person restores
+    /// the file from the project; nothing is written over it meanwhile (I8).
+    OutsideEditHeld {
+        path: RepoPath,
+        copy: Box<str>,
+    },
+    /// "translationCore can't update TIT.usfm because another program has it open. Your
+    /// work is saved." (§5.10): the rename kept failing for 2 s; the path stays dirty.
+    WriteBlocked {
+        path: RepoPath,
+    },
+    /// An expected pack (§4.4) is missing from the working tree and no copy of it could be
+    /// restored: nothing derived from it is removed, and no tree is built, until it is back.
+    PackMissing {
+        path: RepoPath,
     },
     /// Line-ending or trailing-whitespace differences in an outside edit, not recorded.
     WhitespaceOnlyEdit {
