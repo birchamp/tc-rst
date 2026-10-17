@@ -50,7 +50,7 @@ Check each with the command in brackets. Install only what is missing.
 
    ```powershell
    mkdir C:\tc4-g0 -Force; cd C:\tc4-g0
-   Invoke-WebRequest -Uri https://github.com/unfoldingWord/electronite/releases/download/v37.1.0-graphite/electronite-v37.1.0-graphite-win32-x64.zip -OutFile electronite.zip
+   curl.exe -L --fail -o electronite.zip https://github.com/unfoldingWord/electronite/releases/download/v37.1.0-graphite/electronite-v37.1.0-graphite-win32-x64.zip
    (Get-FileHash electronite.zip -Algorithm SHA256).Hash
    ```
 
@@ -86,7 +86,8 @@ checkout with `git -C C:\tc4-g0\storage checkout --detach origin/storage`. The s
 is detached on purpose: it creates no local branch, so nothing can be pushed from it.
 
 Confirm that `spikes\electronite\run-spike.ps1` and `spikes\foldbench-windows\run-foldbench.ps1`
-exist. If they do not, `claude/focused-ride-5uzj7p` does not have G0 yet: stop and tell the owner.
+exist. If they do not, `claude/focused-ride-5uzj7p` does not have G0 yet: tell the owner, and
+use the branch the owner names instead (G0 was built on `p0-g0` and merges through `phase0`).
 
 ## How to run the commands
 
@@ -130,7 +131,7 @@ What the script does, so you can explain it: it builds nothing else and changes 
 probes every request type, then times 200 aligner clicks alone and 200 while pictures and a
 help page load. Then it ends the server, closes the window, ends the shell's process (twice:
 with the server started plainly and detached), and ends the shell while the page types, to see
-what was kept.
+what was kept, with a normal quit while typing as the control.
 
 ## Part 2: the storage benchmark (about 30 minutes)
 
