@@ -42,10 +42,10 @@ commands and check their output every few minutes. Each script prints one line p
   change a script so that a result looks better.
 - Do not change the storage branch, `claude/focused-ride-5uzj7p` or anything under `crates/`.
 - Keep Windows Defender real-time protection on. The only exclusions allowed are the build
-  `target` folders that `windows-track.md` (setup, step 4) allows. Never exclude the
-  repository, `C:\tc4-g0`, a corpus or an app data folder. The reports' machine tables record
-  how many folders are excluded; if the count is not 0, write under the report's title which
-  folders they are. Do not change the power plan. These are the conditions the budgets are for.
+  `target` folders that `windows-track.md` (setup, step 4) allows. Never exclude the whole
+  repository, the whole of `C:\tc4-g0`, a corpus or an app data folder. The reports' machine
+  tables record how many folders are excluded; if the count is not 0, write under the report's
+  title which folders they are (ask the owner if Windows lets only an administrator read them). Do not change the power plan. These are the conditions the budgets are for.
 - Never record a token or a password, in a file, a commit or a message. The scripts never
   write the server's token. Never commit `spikes/electronite/out/`: its Electronite profiles
   hold the session's token (it is useless after the run, but it stays private).
