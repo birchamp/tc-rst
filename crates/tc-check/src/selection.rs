@@ -1,7 +1,7 @@
 //! The checker's selection: the words of their own verse that render a check's quote.
 //!
-//! The words are the words of the target's plain text (`plain_text_v1` of its content,
-//! [`TargetText::plain`]), split with tC4's tokenizer ([`tc_usfm::words::words`]), the one
+//! The words are the words of the target's shown text (tC4's `verseText` of its content,
+//! [`TargetText::shown`]), split with tC4's tokenizer ([`tc_usfm::words::words`]), the one
 //! the Check screen renders as tappable words, so an index on the screen and an index here
 //! are the same word. A selection records each word's text, which occurrence of that word
 //! it is among the verse's words, and how many times its text occurs in the verse (tC4
@@ -28,16 +28,16 @@ pub use tc_journal::decision::TargetText;
 pub use tc_journal::record::Selection;
 
 /// The verse's words in order: the tappable words of the Check screen. `shown` is the
-/// target's plain text ([`TargetText::plain`]).
+/// target's shown text ([`TargetText::shown`]).
 pub fn target_words(shown: &str) -> Vec<WordToken<'_>> {
     words(shown)
 }
 
 /// The selection the checker made by tapping the words at `indices` (into
-/// [`target_words`] of the target's plain text), in verse order. An index can repeat; one
+/// [`target_words`] of the target's shown text), in verse order. An index can repeat; one
 /// past the last word is refused.
 pub fn from_indices(text: &TargetText, indices: &[usize]) -> Result<Vec<Selection>, Error> {
-    let shown = text.plain();
+    let shown = text.shown();
     let tokens = target_words(shown);
     let chosen: BTreeSet<usize> = indices.iter().copied().collect();
     if let Some(&index) = chosen.iter().find(|&&i| i >= tokens.len()) {
@@ -164,7 +164,7 @@ mod tests {
         let verse = TargetText::new("the theory of the law".into());
         let the = from_indices(&verse, &[3]).unwrap();
         assert_eq!(the, [selection("the", 2, 3)]);
-        assert_eq!(indices(verse.plain(), &the), [3]);
+        assert_eq!(indices(verse.shown(), &the), [3]);
         assert!(verse.fits(&the));
         assert!(TargetText::new("the theory of the law!".into()).fits(&the));
         assert!(!TargetText::new("the theory of law".into()).fits(&the));
@@ -172,7 +172,7 @@ mod tests {
         let verse = TargetText::new("בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ".into());
         let et = from_indices(&verse, &[3]).unwrap();
         assert_eq!((et[0].occurrence, et[0].occurrences), (1, 2));
-        assert_eq!(indices(verse.plain(), &et), [3]);
+        assert_eq!(indices(verse.shown(), &et), [3]);
         assert!(verse.fits(&et));
     }
 

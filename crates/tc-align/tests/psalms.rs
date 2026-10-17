@@ -10,6 +10,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;
+use tc_align::Alignment;
+use tc_align::bootstrap;
 
 use common::{basis, read};
 use std::time::{Duration, Instant};
@@ -49,14 +51,14 @@ fn psalms(file: &str) -> Vec<Verse> {
 /// order, as old tC4 saves and imports have.
 fn stored(verse: &Verse) -> (AlignmentValue, TargetVerse) {
     let aligned = tc_usfm::parse_aligned(&verse.body).unwrap();
-    let target = TargetVerse::new(&tc_usfm::plain_text(&aligned.plain));
+    let target = TargetVerse::new(&aligned.plain);
     let extracted = from_aligned(&aligned, Some(&verse.source));
-    let mut value = AlignmentValue::bootstrap(&verse.source, &target, basis(1));
+    let mut value = bootstrap(&verse.source, &target, basis(1));
     value.alignments = extracted.alignments;
     value.word_bank = extracted.word_bank;
     value.word_bank.reverse();
     for group in &mut value.alignments {
-        group.targets.reverse();
+        group.bottom_words.reverse();
     }
     (value, target)
 }
@@ -73,7 +75,7 @@ fn shown_in_verse_order(aligner: &Aligner) -> bool {
         && value
             .alignments
             .iter()
-            .all(|g| in_verse_order(verse, &g.targets))
+            .all(|g| in_verse_order(verse, &g.bottom_words))
 }
 
 #[test]
@@ -102,7 +104,7 @@ fn every_hebrew_verse_as_the_translation_opens_and_edits_in_reading_order() {
     let (mut regrouped, mut repeated) = (0, 0);
     for verse in &verses {
         let at = &verse.reference;
-        let target = TargetVerse::new(&tc_usfm::plain_text(&verse.body));
+        let target = TargetVerse::new(&verse.body);
         let words = target.words().to_vec();
         if target.bank_order() != words {
             regrouped += 1;
@@ -118,7 +120,7 @@ fn every_hebrew_verse_as_the_translation_opens_and_edits_in_reading_order() {
         let mut reversed = words.clone();
         reversed.reverse();
         assert_eq!(aligner.place_many(0, &reversed), Ok(words.len()), "{at}");
-        assert_eq!(aligner.value().alignments[0].targets, words, "{at}");
+        assert_eq!(aligner.value().alignments[0].bottom_words, words, "{at}");
 
         // Every other word back to the bank, last word first.
         for word in reversed.iter().skip(1).step_by(2) {
@@ -176,13 +178,13 @@ fn opening_editing_and_reflowing_the_longest_psalms_verse_meet_the_budgets() {
     let placed: Vec<TargetWord> = stored
         .alignments
         .iter()
-        .flat_map(|g| g.targets.clone())
+        .flat_map(|g| g.bottom_words.clone())
         .collect();
     let (edit_median, edit_p95) = time(runs, || {
         let mut aligner = open();
         timed(|| {
             for (card, group) in stored.alignments.iter().enumerate() {
-                for word in &group.targets {
+                for word in &group.bottom_words {
                     aligner.unplace(card, word).unwrap();
                 }
             }

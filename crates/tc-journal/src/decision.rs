@@ -16,15 +16,22 @@ pub fn verse_text_md5_v1(content: &str) -> Md5 {
     Md5::of(tc_usfm::plain_text_v1(content).as_bytes())
 }
 
-/// The text a decision's target names, as the fold and the Check screens read it (§7.7):
-/// its content, its plain text and hash, and the text the selection validator searches,
-/// made once for all the decisions of one target.
+/// The text a decision's target or an alignment's verse names, as the fold, the Check
+/// screens and the aligner read it (§7.7): its content, the hash of its plain text, the text
+/// the selection validator searches, and the text a screen shows, the last two made on first
+/// use, once for all the decisions of one target.
+///
+/// The shown text and the hashed text are tC4's two texts and differ on many verses (a
+/// poetry line break inside the verse, `\qs` Selah, a heading): the screens show and split
+/// into words what tC4 shows (`verseText`), and the hash is of what tC4's fold and export
+/// hash (`verseTextMd5`).
 #[derive(Debug)]
 pub struct TargetText {
     content: String,
     plain: String,
     md5: Md5,
     selection: OnceLock<SelectionText>,
+    shown: OnceLock<String>,
 }
 
 impl TargetText {
@@ -35,6 +42,7 @@ impl TargetText {
             plain,
             content,
             selection: OnceLock::new(),
+            shown: OnceLock::new(),
         }
     }
 
@@ -42,10 +50,16 @@ impl TargetText {
         &self.content
     }
 
-    /// `plain_text_v1` of the content: the text the Check screen shows and the checker
-    /// selects words in, and the text the hash is of.
+    /// `plain_text_v1` of the content: the text the hash is of. A screen does not show it.
     pub fn plain(&self) -> &str {
         &self.plain
+    }
+
+    /// The text a screen shows (`tc_usfm::display_text` of the content, tC4's `verseText`):
+    /// the Check screen's tappable words and the aligner's words are this text's words.
+    pub fn shown(&self) -> &str {
+        self.shown
+            .get_or_init(|| tc_usfm::display_text(&self.content))
     }
 
     /// [`verse_text_md5_v1`] of the content.

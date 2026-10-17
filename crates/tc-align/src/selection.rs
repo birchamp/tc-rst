@@ -13,7 +13,7 @@
 
 use crate::words::same_word;
 use std::collections::HashSet;
-use tc_usfm::TargetWord;
+use tc_journal::record::TargetWord;
 
 /// What a click on a bank word does, from the keys held with it. Enter or Space on a
 /// focused word is a click too.
@@ -45,11 +45,11 @@ impl Click {
 pub fn shown_selection(shown_bank: &[TargetWord], armed: &[TargetWord]) -> Vec<TargetWord> {
     let keys: HashSet<(&str, u32)> = armed
         .iter()
-        .map(|w| (w.text.as_str(), w.occurrence))
+        .map(|w| (w.word.as_str(), w.occurrence))
         .collect();
     shown_bank
         .iter()
-        .filter(|w| keys.contains(&(w.text.as_str(), w.occurrence)))
+        .filter(|w| keys.contains(&(w.word.as_str(), w.occurrence)))
         .cloned()
         .collect()
 }

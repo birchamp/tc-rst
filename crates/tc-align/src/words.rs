@@ -9,7 +9,11 @@ use std::collections::HashMap;
 use std::fmt;
 use tc_core::Md5;
 use tc_core::VerseSpan;
-use tc_usfm::{Book, Document, Node, Segment, SegmentKind, SourceWord, Span, TargetWord};
+use tc_journal::alignment::VerseOrder;
+use tc_journal::decision::TargetText;
+use tc_journal::json::{Json, JsonMap};
+use tc_journal::record::{SourceWord, TargetWord};
+use tc_usfm::{Book, Document, Node, Segment, SegmentKind, Span};
 
 /// The original-language words of one verse, in verse order, numbered by occurrence.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -77,7 +81,7 @@ impl SourceVerse {
 
     /// Words given in verse order. Their occurrences are renumbered by text.
     pub fn new(mut words: Vec<SourceWord>) -> Self {
-        let counted = number(words.iter().map(|w| w.content.as_str()));
+        let counted = number(words.iter().map(|w| w.word.as_str()));
         for (word, (occurrence, occurrences)) in words.iter_mut().zip(counted) {
             word.occurrence = occurrence;
             word.occurrences = occurrences;
@@ -291,13 +295,13 @@ fn source_word(span: &Span<'_>) -> Result<SourceWord, Error> {
         }
     }
     let mut word = SourceWord {
-        content,
+        word: content,
         strong: None,
         lemma: None,
         morph: None,
         occurrence: 0,
         occurrences: 0,
-        extra: Vec::new(),
+        extra: JsonMap::new(),
     };
     if let Some(attributes) = &span.attributes {
         for attribute in attributes.parse().map_err(Error::Usfm)? {
@@ -309,20 +313,27 @@ fn source_word(span: &Span<'_>) -> Result<SourceWord, Error> {
                 }
                 Some("morph" | "x-morph") => word.morph = Some(value),
                 Some("occurrence" | "x-occurrence" | "occurrences" | "x-occurrences") => {}
-                Some(key) => word.extra.push((key.to_owned(), value)),
+                Some(key) => {
+                    word.extra.insert(key.to_owned(), Json::Str(value));
+                }
             }
         }
     }
     Ok(word)
 }
 
-/// The target-language verse an alignment is made against: its plain text, the text's
-/// hash, and its words numbered by occurrence.
+/// The target-language verse an alignment is made against: the text the aligner shows, its
+/// words numbered by occurrence, and the hash an alignment records of it.
 ///
-/// The text is the verse's plain text as STORAGE.md §7.7 defines it for alignment hashes
-/// (`plain_text_v1` of the verse content, tC4's `verseTextMd5` input). Both the words and
-/// the hash come from that one text, exactly as tC4's aligner tokenizes and hashes its
-/// `targetText`, so the words a record names and the hash it carries always agree.
+/// It is made from the verse's content (`words + layout` of its verse record, the USFM
+/// after `\v N `). The words are the words of the text tC4's aligner shows and banks
+/// (`tc_usfm::display_text`, tC4's `verseText` of `verseTextIndex`, `src/state.jsx:1183` at
+/// d310bf3), so a Psalm's superscription and its `\qs` Selah are words to align, as in
+/// tC4. The hash is the journal's ([`TargetText::md5`], md5 of `plain_text_v1`), the one the
+/// fold checks an alignment with (§7.7), so an alignment the aligner saves is valid in the
+/// alignment files. (tC4's aligner stamps the md5 of its shown text instead, which its own
+/// fold and export reject on every verse where the two texts differ, such as a verse with a
+/// poetry line break.)
 #[derive(Clone, PartialEq, Eq)]
 pub struct TargetVerse {
     text: String,
@@ -334,27 +345,32 @@ pub struct TargetVerse {
 }
 
 impl TargetVerse {
-    pub fn new(text: &str) -> Self {
-        let words: Vec<TargetWord> = tc_usfm::words::words(text)
+    /// The verse whose content is `content`.
+    pub fn new(content: &str) -> Self {
+        let derived = TargetText::new(content.to_owned());
+        let text = derived.shown().to_owned();
+        let words: Vec<TargetWord> = tc_usfm::words::words(&text)
             .into_iter()
             .map(|w| TargetWord {
-                text: w.text.to_owned(),
+                word: w.text.to_owned(),
                 occurrence: w.occurrence,
                 occurrences: w.occurrences,
+                extra: JsonMap::new(),
             })
             .collect();
         let mut places: HashMap<String, Vec<usize>> = HashMap::new();
         for (at, word) in words.iter().enumerate() {
-            places.entry(word.text.clone()).or_default().push(at);
+            places.entry(word.word.clone()).or_default().push(at);
         }
         Self {
-            text: text.to_owned(),
-            md5: Md5::of(text.as_bytes()),
+            md5: derived.md5(),
+            text,
             words,
             places,
         }
     }
 
+    /// The shown text: what the aligner shows and splits into words.
     pub fn text(&self) -> &str {
         &self.text
     }
@@ -371,15 +387,20 @@ impl TargetVerse {
     /// Where `word` stands in the verse, by text and occurrence.
     pub fn position(&self, word: &TargetWord) -> Option<usize> {
         let index = usize::try_from(word.occurrence.checked_sub(1)?).ok()?;
-        self.places.get(word.text.as_str())?.get(index).copied()
+        self.places.get(word.word.as_str())?.get(index).copied()
     }
 
-    /// Put `words` in the order they stand in this verse, by text and occurrence, as
-    /// tC4's `inVerseOrder` does (#734): a repeated word by its occurrence, and a word the
-    /// verse does not have after the others, in the order it was in. Right-to-left text
-    /// is in reading order here too: the order is the text's, not the screen's.
+    /// The verse's order of words, for the journal's sort (§5.3, tC4's `inVerseOrder`,
+    /// #734): a repeated word by its occurrence, and a word the verse does not have after
+    /// the others, in the order it was in. Right-to-left text is in reading order here too:
+    /// the order is the text's, not the screen's.
+    pub fn order(&self) -> VerseOrder<'_> {
+        VerseOrder::new(self.words.iter().map(|w| (w.word.as_str(), w.occurrence)))
+    }
+
+    /// Put `words` in the order they stand in this verse ([`TargetVerse::order`]).
     pub fn sort_in_verse_order(&self, words: &mut [TargetWord]) {
-        words.sort_by_cached_key(|w| self.position(w).unwrap_or(usize::MAX));
+        self.order().sort(words);
     }
 
     /// The verse's words in the order tC4's bootstrap banks them: grouped by occurrence
@@ -388,8 +409,8 @@ impl TargetVerse {
     /// word-aligner's `unmerge`, which tC4 calls to start an unaligned verse, files each
     /// unaligned word under an empty alignment keyed by its occurrence, then concatenates
     /// those alignments' words, so "the cat saw the dog" banks as `the cat saw dog the`.
-    /// [`AlignmentValue::bootstrap`](crate::AlignmentValue::bootstrap) keeps this order so
-    /// that it equals tC4's record; the aligner shows the bank in verse order.
+    /// [`bootstrap`](crate::edit::bootstrap) keeps this order so that it equals tC4's
+    /// record; the aligner shows the bank in verse order.
     pub fn bank_order(&self) -> Vec<TargetWord> {
         let mut words = self.words.clone();
         words.sort_by_key(|w| w.occurrence);
@@ -411,7 +432,7 @@ impl fmt::Debug for TargetVerse {
 
 /// Identity of a target word inside one verse: its text plus its occurrence.
 pub(crate) fn same_word(a: &TargetWord, b: &TargetWord) -> bool {
-    a.text == b.text && a.occurrence == b.occurrence
+    a.word == b.word && a.occurrence == b.occurrence
 }
 
 /// How the Align workspace tells a repeated word apart (tC4 #735, as tC3's
@@ -434,7 +455,7 @@ impl Occurrence for TargetWord {
 
     fn occurrence_name(&self) -> Option<String> {
         let n = self.shown_occurrence()?;
-        Some(format!("{} {n}", self.text))
+        Some(format!("{} {n}", self.word))
     }
 }
 
@@ -445,7 +466,7 @@ impl Occurrence for SourceWord {
 
     fn occurrence_name(&self) -> Option<String> {
         let n = self.shown_occurrence()?;
-        Some(format!("{} {n}", self.content))
+        Some(format!("{} {n}", self.word))
     }
 }
 
@@ -459,7 +480,7 @@ pub struct WordId {
 impl WordId {
     pub fn of(word: &TargetWord) -> Self {
         Self {
-            text: word.text.clone(),
+            text: word.word.clone(),
             occurrence: word.occurrence,
         }
     }
@@ -493,14 +514,14 @@ mod tests {
         let words: Vec<_> = verse
             .words()
             .iter()
-            .map(|w| (w.content.as_str(), w.occurrence, w.occurrences))
+            .map(|w| (w.word.as_str(), w.occurrence, w.occurrences))
             .collect();
         assert_eq!(words, vec![("καὶ", 1, 2), ("καὶ", 2, 2)]);
         assert_eq!(verse.words()[0].morph.as_deref(), Some("Gr,CC,,,,,,,,"));
         assert_eq!(verse.words()[0].strong.as_deref(), Some("G25320"));
         assert_eq!(
             verse.words()[1].extra,
-            vec![("x-tw".to_owned(), "rc://x".to_owned())]
+            JsonMap::from([("x-tw".to_owned(), Json::from("rc://x"))])
         );
     }
 
@@ -520,7 +541,7 @@ mod tests {
         let order: Vec<_> = verse
             .bank_order()
             .into_iter()
-            .map(|w| format!("{}{}", w.text, w.occurrence))
+            .map(|w| format!("{}{}", w.word, w.occurrence))
             .collect();
         assert_eq!(order, ["the1", "cat1", "saw1", "dog1", "the2"]);
     }

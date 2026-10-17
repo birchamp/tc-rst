@@ -20,7 +20,7 @@ proptest! {
     #[test]
     fn tapped_words_restore_to_the_same_words(text in verse_text(), picks in prop::collection::vec(any::<prop::sample::Index>(), 0..5)) {
         let target = TargetText::new(text.clone());
-        let shown = target.plain();
+        let shown = target.shown();
         let count = selection::target_words(shown).len();
         let mut indices: Vec<usize> = picks.iter().map(|p| p.index(count)).collect();
         let picked = selection::from_indices(&target, &indices).unwrap();

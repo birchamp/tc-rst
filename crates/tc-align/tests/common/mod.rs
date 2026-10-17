@@ -5,10 +5,11 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, dead_code)]
 
 use serde_json::Value;
-use std::num::NonZeroU16;
 use std::path::PathBuf;
 use tc_align::{AlignmentValue, Basis, SourceVerse, SourceWord, TargetWord, record};
 use tc_core::VerseSpan;
+use tc_journal::ids::VerseNo;
+use tc_journal::json::{Json, JsonMap};
 use tc_usfm::Book;
 
 pub fn fixture(rel: &str) -> PathBuf {
@@ -68,11 +69,23 @@ pub fn source_verse(file: &str, reference: &str) -> SourceVerse {
     SourceVerse::from_book(&Book::parse(&text), chapter, verses).unwrap()
 }
 
+/// A verse or span from verse 1 to `span_end`, not renumbered.
 pub fn basis(span_end: u16) -> Basis {
-    Basis {
-        span_end: NonZeroU16::new(span_end).unwrap(),
-        source_version: SOURCE_NT.to_owned(),
-        source: None,
+    Basis::run(
+        VerseNo::new(1).unwrap(),
+        VerseNo::new(span_end).unwrap(),
+        SOURCE_NT.to_owned(),
+        None,
+    )
+}
+
+/// A target word with no other field.
+pub fn word(text: &str, occurrence: u32, occurrences: u32) -> TargetWord {
+    TargetWord {
+        word: text.to_owned(),
+        occurrence,
+        occurrences,
+        extra: JsonMap::new(),
     }
 }
 
@@ -87,9 +100,16 @@ pub fn target_words(list: &Value) -> Vec<TargetWord> {
         .unwrap()
         .iter()
         .map(|w| TargetWord {
-            text: w["word"].as_str().unwrap().to_owned(),
+            word: w["word"].as_str().unwrap().to_owned(),
             occurrence: u32::try_from(w["occurrence"].as_u64().unwrap()).unwrap(),
             occurrences: u32::try_from(w["occurrences"].as_u64().unwrap()).unwrap(),
+            extra: w
+                .as_object()
+                .unwrap()
+                .iter()
+                .filter(|(k, _)| !matches!(k.as_str(), "word" | "occurrence" | "occurrences"))
+                .map(|(k, v)| (k.clone(), Json::try_from(v).unwrap()))
+                .collect(),
         })
         .collect()
 }
@@ -107,7 +127,7 @@ pub type SourceFacts = (
 
 pub fn source_facts(word: &SourceWord) -> SourceFacts {
     (
-        word.content.clone(),
+        word.word.clone(),
         word.occurrence,
         word.occurrences,
         word.strong.clone(),
@@ -135,8 +155,8 @@ pub fn cards(value: &AlignmentValue) -> Vec<(Vec<SourceFacts>, Vec<TargetWord>)>
         .iter()
         .map(|g| {
             (
-                g.sources.iter().map(source_facts).collect(),
-                g.targets.clone(),
+                g.top_words.iter().map(source_facts).collect(),
+                g.bottom_words.clone(),
             )
         })
         .collect()
@@ -165,6 +185,6 @@ pub fn json_cards(alignments: &Value) -> Vec<(Vec<SourceFacts>, Vec<TargetWord>)
 pub fn show(words: &[TargetWord]) -> Vec<String> {
     words
         .iter()
-        .map(|w| format!("{}/{}/{}", w.text, w.occurrence, w.occurrences))
+        .map(|w| format!("{}/{}/{}", w.word, w.occurrence, w.occurrences))
         .collect()
 }

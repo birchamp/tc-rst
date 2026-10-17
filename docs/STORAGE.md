@@ -2441,6 +2441,26 @@ The derivation functions live in `tc-usfm` and are versioned (§12):
   A selection made now records as `occurrences` the count of its text in that same result
   (`SelectionText::occurrences`), so it fits until the text changes.
 
+**Shown text and hashed text.** tC4 reads a verse two ways, and so does the rebuild. The
+screens show, and split into words, the readable text `tc_usfm::display_text(content)`: tC4's
+`verseText` (`src/views/verseText.js:9` through `verseTextIndex`, `src/state.jsx:352`, at
+d310bf3), which the Check screen shows and taps and the aligner banks (`src/state.jsx:1183`), so
+a Psalm's superscription and its `\qs Selah\qs*` are words to check and to align. Every hash is
+of `plain_text_v1`, never of the shown text (`TargetText::md5`, `TargetText::shown` in
+`tc_journal::decision`). The two texts differ on many verses: `plain_text_v1` keeps a poetry
+line break as a line break, drops the text of a `\qs` written over lines (the ULT's Selah)
+and runs a verse's slot on into a heading. So an edit of a word the hash leaves out keeps the
+hash: the aligner opens a stored value as it is only when its hash matches and it holds
+exactly the shown verse's words, and otherwise carries it over (`tc_align::Aligner::open`).
+tC4's aligner stamps `targetVerseMd5` with the md5 of its shown text (`stampTargetVerse`,
+`src/data/align/edit.ts:230`), while its fold (`journal/fold.mjs:934`) and export
+(`src/data/export/weave.mjs:23`) compare it with `verseTextMd5`, so on such a verse tC4's
+files mark invalid an alignment its aligner has just saved, and its rail shows it valid. The
+rebuild stamps the md5 of `plain_text_v1` wherever it stamps (§5.3, §5.4), so the rail and the
+files agree. A record tC4's aligner stamped on such a verse is imported invalid, as tC4's files
+say; opening it, the aligner carries every link whose word is still in the verse over to the
+current text (`tc_align::reflow`) and the next save makes it valid.
+
 usfm-js throws a TypeError on a few malformed nestings (for example a `\zaln` milestone with no
 words inside another milestone, met by `removeMarker`). The library has no value there, so
 version 1 defines one: `plain_text_v1` is the content trimmed, which changes with every edit,

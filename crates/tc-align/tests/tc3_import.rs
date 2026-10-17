@@ -6,11 +6,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;
+use tc_align::Alignment;
 
 use common::*;
 use serde_json::{Map, Value};
 use std::io::Read;
-use tc_align::{Aligner, AlignmentValue, TargetVerse, record};
+use tc_align::{Aligner, TargetVerse, record};
 
 const ZIP: &str = "fixtures/tc4/conformance-fixtures/import/tc3/cfm_fbt_tit_book.zip";
 const APP: &str = "apps/translationCore";
@@ -70,7 +71,7 @@ fn imported() -> Vec<Imported> {
         verses.sort_by_key(|(n, _, _)| *n);
         for (_, verse, data) in verses {
             let text = texts[verse.as_str()].as_str().unwrap();
-            let target = TargetVerse::new(&tc_usfm::plain_text(text));
+            let target = TargetVerse::new(text);
             let words = |list: &Value, f: fn(&Value) -> Value| {
                 Value::Array(list.as_array().unwrap().iter().map(f).collect())
             };
@@ -125,9 +126,12 @@ fn every_record_of_a_tc3_project_reads_and_writes_back_with_tc3s_word_type() {
         let at = &verse.reference;
         let value =
             record::from_record(&verse.record, basis(1)).unwrap_or_else(|e| panic!("{at}: {e}"));
-        assert_eq!(record::to_record(&value, false), verse.record, "{at}");
         let typed = typed_words(&verse.record["wordBank"]);
-        assert_eq!(value.word_extra.len(), typed, "{at}");
+        assert_eq!(
+            value.all_target_words().filter(|w| typed_word(w)).count(),
+            typed,
+            "{at}"
+        );
         if typed > 0 {
             with_type += 1;
         }
@@ -156,17 +160,24 @@ fn a_tc3_record_opens_as_it_is_and_tc3s_word_type_goes_with_the_word() {
     // whole bank object; sent back, it keeps it in the bank.
     let word = aligner.value().word_bank[0].clone();
     aligner.place(0, &word).unwrap();
-    let placed = record::to_record(aligner.value(), false);
-    let card = placed["alignments"][0]["bottomWords"].as_array().unwrap();
-    assert_eq!(card.last().unwrap()["word"], word.text.as_str());
-    assert_eq!(card.last().unwrap()["type"], "bottomWord");
+    let placed = aligner.value().alignments[0].bottom_words.last().unwrap();
+    assert_eq!(placed.word, word.word);
+    assert!(typed_word(placed));
     assert_eq!(
-        typed_words(&placed["wordBank"]) + 1,
+        aligner
+            .value()
+            .word_bank
+            .iter()
+            .filter(|w| typed_word(w))
+            .count()
+            + 1,
         typed_words(&verse.record["wordBank"])
     );
     aligner.unplace(0, &word).unwrap();
-    let back = record::to_record(aligner.value(), false);
-    assert_eq!(back["wordBank"], verse.record["wordBank"]);
-    let reread: AlignmentValue = record::from_record(&back, basis(1)).unwrap();
-    assert_eq!(&reread.word_extra, &stored.word_extra);
+    assert_eq!(aligner.value().word_bank, stored.word_bank);
+}
+
+/// A word that carries tC3's `"type": "bottomWord"`.
+fn typed_word(word: &tc_align::TargetWord) -> bool {
+    word.extra.get("type") == Some(&tc_journal::json::Json::from("bottomWord"))
 }

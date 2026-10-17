@@ -382,7 +382,7 @@ fn every_word_of_the_sample_titus_holds_through_an_edit_elsewhere_in_its_verse()
         let content = verse.body();
         let text = t(content);
         let edited = t(&format!("{}!", content.trim_end()));
-        for i in 0..selection::target_words(text.plain()).len() {
+        for i in 0..selection::target_words(text.shown()).len() {
             let picked = selection::from_indices(&text, &[i]).unwrap();
             let d = valid_on(content, picked.clone());
             let a = assess(&d, Some(&resource()), Some(&edited));

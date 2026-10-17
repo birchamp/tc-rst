@@ -82,21 +82,20 @@ impl AlignmentValue {
     /// in this order, so two saves never differ by order alone; an imported value keeps its
     /// order until someone edits it.
     pub fn put_in_verse_order<'a>(&mut self, verse: impl IntoIterator<Item = (&'a str, u32)>) {
-        let rank: std::collections::HashMap<(&str, u32), usize> = verse
-            .into_iter()
-            .enumerate()
-            .map(|(i, word)| (word, i))
-            .collect();
-        let sort = |words: &mut Vec<TargetWord>| {
-            words.sort_by_key(|w| {
-                rank.get(&(w.word.as_str(), w.occurrence))
-                    .copied()
-                    .unwrap_or(usize::MAX)
-            });
-        };
-        sort(&mut self.word_bank);
+        let order = VerseOrder::new(verse);
+        self.sort_bank_by(&order);
+        self.sort_cards_by(&order);
+    }
+
+    /// The word bank alone in verse order (tC4 `inVerseOrder`, #734).
+    pub fn sort_bank_by(&mut self, order: &VerseOrder<'_>) {
+        order.sort(&mut self.word_bank);
+    }
+
+    /// Each card's target words alone in verse order (tC4 `cardsInVerseOrder`, #754).
+    pub fn sort_cards_by(&mut self, order: &VerseOrder<'_>) {
         for group in &mut self.alignments {
-            sort(&mut group.bottom_words);
+            order.sort(&mut group.bottom_words);
         }
     }
 
@@ -105,6 +104,37 @@ impl AlignmentValue {
         let mut sorted = self.clone();
         sorted.put_in_verse_order(verse);
         sorted == *self
+    }
+}
+
+/// Where each word of a verse stands, by its text and occurrence: the order §5.3 keeps the
+/// bank and the cards in.
+#[derive(Debug, Clone, Default)]
+pub struct VerseOrder<'a> {
+    rank: std::collections::HashMap<(&'a str, u32), usize>,
+}
+
+impl<'a> VerseOrder<'a> {
+    /// The order of `verse`, its target words in order, each with its occurrence.
+    pub fn new(verse: impl IntoIterator<Item = (&'a str, u32)>) -> Self {
+        Self {
+            rank: verse
+                .into_iter()
+                .enumerate()
+                .map(|(i, word)| (word, i))
+                .collect(),
+        }
+    }
+
+    /// Where `word` stands in the verse, by its text and occurrence.
+    pub fn position(&self, word: &str, occurrence: u32) -> Option<usize> {
+        self.rank.get(&(word, occurrence)).copied()
+    }
+
+    /// Puts `words` in verse order: a word the verse does not hold goes last, keeping the
+    /// order it had. The sort is stable.
+    pub fn sort(&self, words: &mut [TargetWord]) {
+        words.sort_by_cached_key(|w| self.position(&w.word, w.occurrence).unwrap_or(usize::MAX));
     }
 }
 
@@ -173,10 +203,12 @@ impl TargetWord {
 
 impl AlignmentValue {
     /// The groups as aligned USFM writes them (`tc_usfm::weave`): what an export of the
-    /// verse, and the aligned-USFM split's check, weave.
+    /// verse, and the aligned-USFM split's check, weave. A card with no source word or no
+    /// placed word aligns nothing and writes nothing.
     pub fn usfm_groups(&self) -> Vec<tc_usfm::AlignmentGroup> {
         self.alignments
             .iter()
+            .filter(|g| !g.top_words.is_empty() && !g.bottom_words.is_empty())
             .map(|g| tc_usfm::AlignmentGroup {
                 sources: g.top_words.iter().map(SourceWord::to_usfm).collect(),
                 targets: g.bottom_words.iter().map(TargetWord::to_usfm).collect(),

@@ -3,23 +3,24 @@
 //!
 //! - [`words`]: the two sides. [`SourceVerse`] holds the original-language words with
 //!   their Strong's number, lemma, morphology and occurrence, read from a book as tC4
-//!   cuts a verse; [`TargetVerse`] holds the translation's plain verse text, its md5 and
-//!   its words. A word is its text plus its occurrence in the verse, numbered as tC4
+//!   cuts a verse; [`TargetVerse`] holds the translation's verse as the aligner shows it,
+//!   its words, and the md5 an alignment records of it (STORAGE.md §7.7). A word is its text plus its occurrence in the verse, numbered as tC4
 //!   numbers it.
-//! - [`value`]: [`AlignmentValue`], the stored alignment of one verse or span with the
-//!   fields of STORAGE.md §2.3, what it was made against, the rules every value keeps
-//!   (each target word in one place), and its computed validity (STORAGE.md §7.7) and
-//!   Align-rail status.
+//! - [`value`]: the stored alignment of one verse or span is the journal's
+//!   [`AlignmentValue`] (STORAGE.md §2.3); this module holds what it is made against
+//!   ([`Basis`]), the rules every value keeps (each target word in one place), and the
+//!   Align-rail status, which reads the journal's validity (STORAGE.md §7.7).
 //! - [`edit`]: bootstrap, place and unplace words, move them, merge and split cards, clear,
 //!   the bank and each card in verse order, and the `done` rule (D73), with tC4's
-//!   invariants.
+//!   invariants: the [`Alignment`] trait on the journal's value.
 //! - [`selection`]: which bank words a click, Ctrl or Cmd click, Shift click or drag
 //!   selects, for placing several on one card in one edit.
 //! - [`usfm`]: cards to and from aligned USFM through `tc-usfm`, for the aligned USFM
 //!   export in en_ult's layout.
 //! - [`reflow`]: carrying an alignment over an edit of its verse text, reporting every
 //!   link it drops.
-//! - [`record`]: tC4's §5.1 record JSON, for imports and the derived sidecar.
+//! - [`record`]: reading tC3's and tC4's §5.1 record JSON, for imports. The derived
+//!   sidecar is the journal's projection (STORAGE.md §7.7).
 //! - [`frame`]: which original-language verse stands behind a project verse.
 //! - [`suggest`]: links proposed from the project's own alignments with tC4's engine
 //!   (wordMAP 0.6.2 and uw-wordmapbooster 1.0.5's `MorphJLBoostWordMap`).
@@ -29,7 +30,8 @@
 //!   does not open.
 //!
 //! Everything here is pure: no file or network access. A value is written by `tc-store`
-//! as one `Alignment` change (STORAGE.md §5.3).
+//! as one `Alignment` change (STORAGE.md §5.3). The value, its validity and its verse
+//! order are `tc-journal`'s; this crate holds no second copy of them (STORAGE.md §17).
 
 pub mod aligner;
 pub mod edit;
@@ -43,15 +45,13 @@ pub mod value;
 pub mod words;
 
 pub use aligner::{Aligner, MarkValidRefused, Unavailable};
-pub use edit::EditError;
+pub use edit::{Alignment, EditError, bootstrap};
 pub use reflow::{DroppedLink, NoReflow, Reflowed, reflow};
 pub use selection::Click;
 pub use tc_core::{GitOid, Md5};
-pub use tc_usfm::{SourceWord, TargetWord};
-pub use value::{
-    AlignmentValue, Basis, Current, Group, Malformed, ResourceRef, Stale, VerseState, VerseStatus,
-    verse_status,
-};
+pub use tc_journal::alignment::{AlignedRun, Stale};
+pub use tc_journal::record::{AlignmentGroup, AlignmentValue, ResourceRef, SourceWord, TargetWord};
+pub use value::{Basis, Malformed, VerseState, VerseStatus, verse_status};
 pub use words::{Occurrence, SourceVerse, TargetVerse, WordId};
 
 /// Errors reading external data into alignment values.

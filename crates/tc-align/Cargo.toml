@@ -10,6 +10,8 @@ rust-version.workspace = true
 tc-core = { path = "../tc-core" }
 tc-usfm = { path = "../tc-usfm" }
 tc-versification = { path = "../tc-versification" }
+# The alignment value, its validity and its verse order.
+tc-journal = { path = "../tc-journal" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

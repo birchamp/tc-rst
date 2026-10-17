@@ -5,14 +5,17 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;
+use tc_align::Alignment;
+use tc_align::bootstrap;
 
 use common::*;
 use serde_json::Value;
-use std::num::NonZeroU16;
 use tc_align::usfm::{from_aligned, usfm_groups, weave_verse};
 use tc_align::{
-    AlignmentValue, Current, Group, Malformed, TargetVerse, VerseState, record, verse_status,
+    AlignedRun, AlignmentGroup, AlignmentValue, Malformed, TargetVerse, VerseState, record,
+    verse_status,
 };
+use tc_journal::json::Json;
 use tc_usfm::parse_aligned;
 
 #[test]
@@ -26,7 +29,7 @@ fn bootstrap_matches_tc4_for_greek_and_hebrew_verses_and_a_span() {
         let source = source_verse(file, reference);
         let verse = TargetVerse::new(case["text"].as_str().unwrap());
         let span_end = parse_ref(reference).1.end();
-        let value = AlignmentValue::bootstrap(&source, &verse, basis(span_end));
+        let value = bootstrap(&source, &verse, basis(span_end));
         let expected = &case["record"];
         let at = format!("{file} {reference}");
         assert_eq!(cards(&value), json_cards(&expected["alignments"]), "{at}");
@@ -40,14 +43,11 @@ fn bootstrap_matches_tc4_for_greek_and_hebrew_verses_and_a_span() {
             hebrew += 1;
             // Right to left, with word joiners inside words, on both sides.
             assert!(
-                value.word_bank.iter().any(|w| w.text.contains('\u{2060}')),
+                value.word_bank.iter().any(|w| w.word.contains('\u{2060}')),
                 "{at}"
             );
             assert!(
-                source
-                    .words()
-                    .iter()
-                    .any(|w| w.content.contains('\u{2060}')),
+                source.words().iter().any(|w| w.word.contains('\u{2060}')),
                 "{at}"
             );
         }
@@ -88,7 +88,7 @@ fn assert_bootstrap_cards(cases: &[Value]) {
         let source = source_verse(case["source"].as_str().unwrap(), reference);
         let verse = TargetVerse::new(case["text"].as_str().unwrap());
         let span_end = parse_ref(reference).1.end();
-        let value = AlignmentValue::bootstrap(&source, &verse, basis(span_end));
+        let value = bootstrap(&source, &verse, basis(span_end));
         assert_eq!(
             cards(&value),
             json_cards(&case["record"]["alignments"]),
@@ -151,8 +151,8 @@ fn weave_cases() -> Vec<Value> {
     v["cases"].as_array().unwrap().clone()
 }
 
-fn with(alignments: Vec<Group>, word_bank: Vec<tc_align::TargetWord>) -> AlignmentValue {
-    let mut value = AlignmentValue::bootstrap(
+fn with(alignments: Vec<AlignmentGroup>, word_bank: Vec<tc_align::TargetWord>) -> AlignmentValue {
+    let mut value = bootstrap(
         &tc_align::SourceVerse::default(),
         &TargetVerse::new(""),
         basis(1),
@@ -226,7 +226,7 @@ fn links(groups: &[tc_usfm::AlignmentGroup]) -> Vec<(WordId, Vec<WordId>)> {
 fn cards_without_words_write_nothing() {
     let source = source_verse(UGNT, "1:1");
     let verse = TargetVerse::new("Paul, a servant of God");
-    let mut value = AlignmentValue::bootstrap(&source, &verse, basis(1));
+    let mut value = bootstrap(&source, &verse, basis(1));
     assert!(usfm_groups(&value).is_empty());
     let paul = value.word_bank[0].clone();
     value.link(0, &paul).unwrap();
@@ -239,8 +239,10 @@ fn cards_without_words_write_nothing() {
     ));
 }
 
+/// The record reads into the journal's value; the journal projects it back (its byte-for-
+/// byte projection is checked against this file in tc-journal's `screens_and_fold` test).
 #[test]
-fn the_sample_projects_record_reads_writes_back_byte_for_byte_and_is_valid() {
+fn the_sample_projects_record_reads_and_is_valid() {
     let file: Value = serde_json::from_str(&read(
         "fixtures/tc4/sample-burrito/ingredients/checking/alignments/TIT.json",
     ))
@@ -250,15 +252,14 @@ fn the_sample_projects_record_reads_writes_back_byte_for_byte_and_is_valid() {
     assert_eq!(value.alignments.len(), 10);
     assert_eq!(value.word_bank.len(), 21);
     assert!(!value.done && !value.marked_invalid);
-    assert_eq!(
-        serde_json::to_string(&record::to_record(&value, false)).unwrap(),
-        serde_json::to_string(stored).unwrap()
-    );
-    // Its hash is the md5 of the verse's plain text, so it is valid for that verse.
+    // Its hash is the md5 of the verse's plain text (plain_text_v1 of its content), so it is
+    // valid for that verse.
     let body = verse_body("fixtures/tc4/sample-burrito/ingredients/TIT.usfm", "1:1");
-    let verse = TargetVerse::new(&tc_usfm::plain_text(&body));
-    let now = Current {
-        run_end: NonZeroU16::MIN,
+    let verse = TargetVerse::new(&body);
+    let now = AlignedRun {
+        anchor: 1,
+        run_start: 1,
+        run_end: 1,
         text_md5: verse.md5(),
         source_sha: None,
     };
@@ -270,8 +271,8 @@ fn the_sample_projects_record_reads_writes_back_byte_for_byte_and_is_valid() {
     // Its words are the verse's words.
     let mut held: Vec<_> = value.all_target_words().cloned().collect();
     let mut words = verse.words().to_vec();
-    held.sort_by(|a, b| (&a.text, a.occurrence).cmp(&(&b.text, b.occurrence)));
-    words.sort_by(|a, b| (&a.text, a.occurrence).cmp(&(&b.text, b.occurrence)));
+    held.sort_by(|a, b| (&a.word, a.occurrence).cmp(&(&b.word, b.occurrence)));
+    words.sort_by(|a, b| (&a.word, a.occurrence).cmp(&(&b.word, b.occurrence)));
     assert_eq!(held, words);
 }
 
@@ -289,8 +290,6 @@ fn a_record_that_breaks_the_rules_is_refused_and_nothing_it_holds_is_dropped() {
     };
     refused(&|r| r["alignments"][0]["bottomWords"][0]["occurrence"] = Value::from(0));
     refused(&|r| r["targetVerseMd5"] = Value::from("F8AEE622DAFF1496BCCC7C2E3B358B43"));
-    // A field on an alignment: a merge or split could not keep it with its card.
-    refused(&|r| r["alignments"][0]["note"] = Value::from("x"));
     // A word placed and banked at once, or past its count.
     assert!(matches!(
         refused(&|r| {
@@ -309,19 +308,25 @@ fn a_record_that_breaks_the_rules_is_refused_and_nothing_it_holds_is_dropped() {
     ));
 
     // Strings of digits are occurrences, as tC4 normalizes them; unknown fields are kept,
-    // on the record and on a target word, and the word's go with it to a card.
+    // on the record, on a card and on a target word, and the word's go with it to a card.
     let mut stored = original.clone();
     stored["alignments"][0]["topWords"][0]["occurrence"] = Value::from("1");
     stored["note"] = Value::from("kept");
+    stored["alignments"][0]["note"] = Value::from("kept");
     stored["wordBank"][0]["disabled"] = Value::Bool(true);
     let mut value = record::from_record(&stored, basis(1)).unwrap();
-    assert_eq!(value.alignments[0].sources[0].occurrence, 1);
-    let back = record::to_record(&value, true);
-    assert_eq!(back["note"], "kept");
-    assert_eq!(back["wordBank"][0]["disabled"], true);
+    assert_eq!(value.alignments[0].top_words[0].occurrence, 1);
+    assert_eq!(value.extra.get("note"), Some(&Json::from("kept")));
+    assert_eq!(
+        value.alignments[0].extra.get("note"),
+        Some(&Json::from("kept"))
+    );
+    assert_eq!(
+        value.word_bank[0].extra.get("disabled"),
+        Some(&Json::Bool(true))
+    );
     let word = value.word_bank[0].clone();
     value.link(1, &word).unwrap();
-    let back = record::to_record(&value, true);
-    let placed = back["alignments"][1]["bottomWords"].as_array().unwrap();
-    assert_eq!(placed.last().unwrap()["disabled"], true);
+    let placed = value.alignments[1].bottom_words.last().unwrap();
+    assert_eq!(placed.extra.get("disabled"), Some(&Json::Bool(true)));
 }
