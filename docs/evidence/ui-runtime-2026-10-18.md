@@ -110,3 +110,26 @@ no long task. Raw samples' summaries are in `ui-runtime-2026-10-18/results-relea
   the first one's time is reported apart.
 - A rule 5 note: this is a release build of the wasm and of `tc4`, 20 runs, median and p95, the
   machine and the commit. CI does not gate these numbers; PERFORMANCE has no budget for them.
+
+## The smoke's last run
+
+The full smoke ran at `9dd13b6`, the unit's last code commit after phase0 (unit A9) merged in.
+The commit that adds this section changes only this file.
+
+- Command, from the worktree:
+  `crates/tc-ui/build-app.sh && cargo build -p tc4 -j 6 && node crates/tc-ui/app/smoke.mjs
+  --tc4 target/debug/tc4 --ui target/tc-ui-app`, with `PLAYWRIGHT_MODULE` set to an npx copy of
+  Playwright 1.56.1. These are dev builds: the wasm (build `45a904a0b4623a99`, 8.0 MB) and the
+  debug `tc4`.
+- Result: **93 checks, `failed: []`, exit code 0**, in 26 s (23:02:29 to 23:02:55 UTC). That is
+  every group: the proxy self-test, the app's basics A to H (case A now also fetches
+  `/prepare.html` and checks it is `app/prepare.html`), a server of another build or API version
+  (I, J), jobs when the stream has a gap (K), and the quit (G). The run's boot marks, from one
+  load and not a measurement: `tc4:hello` 110.4 ms, `tc4:catalogs` 142.6 ms, `tc4:mounted`
+  151.0 ms.
+- Machine: the owner's Linux PC, 12th Gen Intel Core i7-12700, 20 CPUs, 61 GB of memory,
+  Ubuntu 26.04.1 LTS (kernel 7.0.0-38), shared with up to three other agents' builds. Load
+  average (1, 5, 15 min) before and after: 1.91, 4.02, 6.28 and 1.34, 3.72, 6.12. Chromium
+  141.0.7390.37 (build 1194), headless, with Playwright's Ubuntu 24.04 build; Node 22.23.3.
+- The measurements above were taken earlier, in the 4 vCPU container, and were not repeated
+  here.
