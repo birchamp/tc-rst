@@ -1,0 +1,26 @@
+{
+  "path": "prefs/setDraftUnit",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "request": "04040404040404040404040404040404",
+    "unit": "verse"
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "path": "test/reset",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "12121212121212121212121212121212"
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

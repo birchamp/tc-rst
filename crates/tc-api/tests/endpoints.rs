@@ -1,0 +1,95 @@
+//! The endpoint list (APP-DESIGN §3.3, §3.9): one row per endpoint, the phase-0 set.
+#![cfg(not(target_arch = "wasm32"))]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+use std::collections::BTreeSet;
+
+use tc_api::{ALL, Endpoint, Kind, NetKind};
+
+/// The endpoints of phase 0 (APP-DESIGN §3.9 and §10): those of the app, prefs, net, jobs,
+/// account and feedback services that units A2 to A9 serve, and the test hooks they use.
+const PHASE_0: &[&str] = &[
+    "app/hello",
+    "app/quit",
+    "app/clientError",
+    "prefs/setLocale",
+    "prefs/setDraftUnit",
+    "prefs/setAlignSuggestions",
+    "prefs/recordPlace",
+    "net/state",
+    "net/set",
+    "jobs/get",
+    "jobs/cancel",
+    "account/state",
+    "account/signIn",
+    "account/cancelSignIn",
+    "account/resume",
+    "account/signOut",
+    "account/profileLink",
+    "account/helpLink",
+    "feedback/compose",
+    "test/quiet",
+    "test/crash",
+    "test/hold",
+    "test/release",
+    "test/fieldStore",
+    "test/fieldLog",
+    "test/reset",
+];
+
+#[test]
+fn the_list_is_the_phase_0_endpoints_each_once() {
+    let paths: Vec<&str> = ALL.iter().map(|e| e.path).collect();
+    let unique: BTreeSet<&str> = paths.iter().copied().collect();
+    assert_eq!(unique.len(), paths.len(), "a path is listed twice");
+    assert_eq!(unique, PHASE_0.iter().copied().collect());
+}
+
+#[test]
+fn every_path_is_service_slash_name() {
+    for endpoint in ALL {
+        let (service, name) = endpoint.path.split_once('/').unwrap();
+        assert!(
+            !service.is_empty()
+                && service
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()),
+            "{}",
+            endpoint.path
+        );
+        assert!(
+            name.chars().next().is_some_and(|c| c.is_ascii_lowercase())
+                && name.chars().all(|c| c.is_ascii_alphanumeric()),
+            "{}",
+            endpoint.path
+        );
+    }
+}
+
+#[test]
+fn the_list_and_the_impls_agree() {
+    use tc_api::account::{HelpLink, ProfileLink, Resume, SignIn};
+    assert_eq!(<SignIn as Endpoint>::NET, Some(NetKind::SignIn));
+    assert_eq!(<Resume as Endpoint>::NET, Some(NetKind::CheckSignIn));
+    assert_eq!(<ProfileLink as Endpoint>::NET, Some(NetKind::Profile));
+    assert_eq!(<HelpLink as Endpoint>::NET, Some(NetKind::HelpLink));
+    assert_eq!(<tc_api::app::Hello as Endpoint>::KIND, Kind::Query);
+    for endpoint in ALL {
+        let asks = endpoint.net.is_some();
+        let expected = matches!(
+            endpoint.path,
+            "account/signIn" | "account/resume" | "account/profileLink" | "account/helpLink"
+        );
+        assert_eq!(
+            asks, expected,
+            "{} asks the internet question",
+            endpoint.path
+        );
+    }
+}
+
+#[test]
+fn no_endpoint_asks_the_upload_question() {
+    // The owner's ruling Q2 removed the Upload changes dialog; tC4's key stays.
+    assert!(ALL.iter().all(|e| e.net != Some(NetKind::Upload)));
+}

@@ -95,11 +95,15 @@ fn every_vendored_file_has_the_bytes_tc4_has() {
     );
 }
 
+/// The rebuild's own interface text, beside tC4's catalogs (`assets/i18n-rebuild/README.md`).
+const REBUILD_TEXT: &str = "i18n-rebuild/";
+
 #[test]
 fn assets_hold_only_the_vendored_files() {
     let assets = crate_dir().join("assets");
     let mut on_disk = BTreeSet::new();
     files_under(&assets, &assets, &mut on_disk);
+    on_disk.retain(|path| !path.starts_with(REBUILD_TEXT));
     let listed: BTreeSet<String> = vendored().into_iter().map(|(_, p)| p).collect();
     let unlisted: Vec<_> = on_disk.difference(&listed).collect();
     assert!(

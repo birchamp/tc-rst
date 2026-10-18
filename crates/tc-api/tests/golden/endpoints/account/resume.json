@@ -1,0 +1,26 @@
+{
+  "path": "account/resume",
+  "kind": "command",
+  "net": "checkSignIn",
+  "request": {
+    "request": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "outcome": "refused",
+      "account": {
+        "user": null,
+        "kept": "notKept",
+        "notice": "savedRefused"
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "checkSignIn"
+    }
+  }
+}
