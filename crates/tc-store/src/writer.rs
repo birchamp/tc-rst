@@ -131,6 +131,9 @@ pub(crate) struct Writer {
     pub open_intent: Option<Intent>,
     /// The open's first job runs: a long one shows progress.
     pub opening: bool,
+    /// The writer's own handle on the project's repository: blobs, trees and commit objects.
+    #[allow(dead_code)] // the checkpoint of the next commit builds trees with it
+    pub git: Option<crate::git::Git>,
     pub actor: Sender<Msg>,
 }
 
@@ -514,6 +517,7 @@ mod tests {
             values_told: None,
             open_intent: None,
             opening: false,
+            git: None,
             actor,
         }
     }

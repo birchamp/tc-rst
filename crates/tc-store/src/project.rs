@@ -229,6 +229,10 @@ pub(crate) struct Project {
     pub shared: Arc<Shared>,
     /// The writer's queue (§5.0 "One writer per project").
     pub writer: Option<Sender<Job>>,
+    /// The actor's handle on the project's repository: it moves the branch and reads the
+    /// objects a command asks about. `None` when the session has no history (§6.1 O3).
+    #[allow(dead_code)] // the checkpoint of the next commit moves the branch with it
+    pub git: Option<crate::git::Git>,
 }
 
 impl Project {

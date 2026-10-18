@@ -97,6 +97,13 @@ counters! {
     /// Nanoseconds the writer waited for saves in flight before a flush or a rename
     /// (PERFORMANCE.md: derived-file flushes are paced behind saves).
     writer_yield_ns,
+    /// Blobs written to the object database (packs, derived files, carried files).
+    git_blobs_written,
+    /// Their bytes.
+    git_blob_bytes,
+    /// Trees written: the directories on the paths a commit changed, and the root.
+    git_trees_written,
+    git_commits_written,
 }
 
 impl Counters {
@@ -273,6 +280,10 @@ impl Vfs for CountingVfs {
             Ordering::Relaxed,
         );
         self.inner.wait_held(delay);
+    }
+
+    fn outside_dir(&self, folder: &Path) -> io::Result<PathBuf> {
+        self.inner.outside_dir(folder)
     }
 
     fn secure_dir_chain(&self, dir: &Path, made: &[PathBuf]) -> io::Result<()> {

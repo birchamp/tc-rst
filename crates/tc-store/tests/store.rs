@@ -51,3 +51,6 @@ mod writer;
 
 #[path = "store/groups.rs"]
 mod groups;
+
+#[path = "store/git.rs"]
+mod git;

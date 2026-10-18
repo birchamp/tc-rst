@@ -106,6 +106,10 @@ pub trait Vfs: Send + Sync + fmt::Debug {
     fn wait_held(&self, delay: Duration) {
         std::thread::sleep(delay);
     }
+    /// The real folder libgit2 works in for the project at `folder`, which libgit2 reaches
+    /// through the operating system and not through this trait (§9, §16.2): the folder itself
+    /// for a real filesystem, a real mirror folder for the test filesystem.
+    fn outside_dir(&self, folder: &Path) -> io::Result<PathBuf>;
 }
 
 /// The error of a rename or removal that another program's open handle refused. A
@@ -353,6 +357,10 @@ impl Vfs for StdFs {
 
     fn canonicalize(&self, path: &Path) -> io::Result<PathBuf> {
         std::fs::canonicalize(path)
+    }
+
+    fn outside_dir(&self, folder: &Path) -> io::Result<PathBuf> {
+        Ok(folder.to_owned())
     }
 }
 

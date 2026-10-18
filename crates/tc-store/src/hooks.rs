@@ -23,11 +23,28 @@ pub enum Point {
     /// A copy has copied one journal folder (the pending files) and is about to list the
     /// other (the packs) (§5.0).
     CopyBetweenJournalFolders,
+    /// The open is about to open the project's git repository (§6.1 O3); a test fails it
+    /// with [`Failure::Owner`].
+    GitOpen,
+    /// A checkpoint's commit object is written and the branch is about to move (§5.13 C5);
+    /// a test stops it with [`Failure::Stop`].
+    BeforeHeadUpdate,
+    /// The writer has planned an outside edit and is about to send it to the actor (§11.1).
+    BeforeRecordOutside,
+}
+
+/// What a test makes a [`Point`] do instead of passing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Failure {
+    /// libgit2 refuses the folder because another account owns it.
+    Owner,
+    /// The step stops here, as if the process had died: nothing after it happens.
+    Stop,
 }
 
 #[cfg(feature = "test-hooks")]
 mod imp {
-    use super::Point;
+    use super::{Failure, Point};
     use std::collections::BTreeMap;
     use std::sync::{Condvar, Mutex};
 
@@ -35,10 +52,39 @@ mod imp {
     #[derive(Debug, Default)]
     pub struct Hooks {
         held: Mutex<BTreeMap<Point, (bool, u64)>>,
+        failing: Mutex<BTreeMap<Point, Failure>>,
         changed: Condvar,
     }
 
     impl Hooks {
+        /// From now on, `point` fails with `failure` until [`Hooks::heal`].
+        pub fn fail(&self, point: Point, failure: Failure) {
+            self.failing
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(point, failure);
+        }
+
+        /// Ends the failure placed at `point`.
+        pub fn heal(&self, point: Point) {
+            self.failing
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&point);
+        }
+
+        pub(crate) fn check(&self, point: Point) -> Result<(), Failure> {
+            match self
+                .failing
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&point)
+            {
+                Some(failure) => Err(*failure),
+                None => Ok(()),
+            }
+        }
+
         /// From now on, the store's threads wait at `point` until it is released.
         pub fn hold(&self, point: Point) {
             let mut held = self.held.lock().unwrap_or_else(|e| e.into_inner());
@@ -89,7 +135,7 @@ mod imp {
 
 #[cfg(not(feature = "test-hooks"))]
 mod imp {
-    use super::Point;
+    use super::{Failure, Point};
 
     /// Without the `test-hooks` feature: no hold.
     #[derive(Debug, Default)]
@@ -97,6 +143,10 @@ mod imp {
 
     impl Hooks {
         pub(crate) fn wait(&self, _point: Point) {}
+
+        pub(crate) fn check(&self, _point: Point) -> Result<(), Failure> {
+            Ok(())
+        }
     }
 }
 

@@ -26,7 +26,9 @@ pub mod device;
 pub mod drafts;
 pub mod error;
 pub mod fault;
+pub mod git;
 pub mod handle;
+mod history;
 pub mod hooks;
 pub mod layout;
 pub mod load;
@@ -58,7 +60,7 @@ pub use handle::{
     BookRead, CheckpointReason, Leave, Mode, Pending, ProjectFacts, ProjectHandle, Snapshot,
     StoreEvent, Work,
 };
-pub use hooks::{Hooks, Point};
+pub use hooks::{Failure, Hooks, Point};
 pub use notices::StoreNotice;
 pub use open::{LockHolder, OpenError, OpenOptions};
 pub use platform::{FakePlatform, FolderFacts, Platform, StdPlatform, UnsafeFolder};

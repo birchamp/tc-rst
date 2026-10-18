@@ -312,6 +312,19 @@ fn open_inner(
         }
     }
     tracker.add(1, 0);
+    // O3: the project's repository (§6.1).
+    let mut notices: Vec<(Notice, Option<String>)> = Vec::new();
+    let writable = !read_only && write_failed.is_none();
+    let (git, git_failed) = match crate::history::open(env, &*vfs, path, writable, &counters) {
+        Ok(opened) => {
+            notices.extend(opened.notices);
+            (opened.git, None)
+        }
+        Err(e) => (None, Some(e.to_string())),
+    };
+    if writable && let Some(reason) = git_failed {
+        write_failed = Some(reason);
+    }
     // O8: the journal, in parallel, from the fold cache where it stands.
     let files = list(&*vfs, &folder)
         .map_err(|e| OpenError::Unreadable(StoreError::io("list", &folder.path(PACKS), e)))?;
@@ -346,7 +359,6 @@ fn open_inner(
             })
         },
     );
-    let mut notices: Vec<(Notice, Option<String>)> = Vec::new();
     for read in &reads {
         if let Ok(facts) = &read.outcome {
             counters.add(&counters.journal_files_read, 1);
@@ -497,6 +509,7 @@ fn open_inner(
         dirty: Dirty::default(),
         shared: shared.clone(),
         writer: None,
+        git: git.as_ref().and_then(|g| g.another().ok()),
     };
     let mut writer = Writer {
         // Its flushes and renames wait for the saves in flight, a little (PERFORMANCE.md).
@@ -527,6 +540,7 @@ fn open_inner(
         values_told: None,
         open_intent: None,
         opening: false,
+        git,
         actor: actor_tx.clone(),
     };
     for (notice, copy) in notices {

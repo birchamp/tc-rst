@@ -194,6 +194,10 @@ impl Vfs for PacedVfs {
     fn wait_held(&self, delay: Duration) {
         self.inner.wait_held(delay);
     }
+
+    fn outside_dir(&self, folder: &Path) -> io::Result<PathBuf> {
+        self.inner.outside_dir(folder)
+    }
 }
 
 #[cfg(test)]

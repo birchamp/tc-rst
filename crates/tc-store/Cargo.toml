@@ -31,6 +31,13 @@ getrandom.workspace = true
 postcard.workspace = true
 machine-uid.workspace = true
 sysinfo.workspace = true
+# The project's local repository: checkpoint commits, carried files' blobs, repack
+# (docs/STORAGE.md §9).
+git2.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# libgit2's TLS on Linux is OpenSSL, built from source so the app needs none installed.
+git2 = { workspace = true, features = ["vendored-openssl"] }
 
 [target.'cfg(unix)'.dependencies]
 # renameat2(RENAME_NOREPLACE) and its macOS twin, through a safe wrapper: a staging folder
@@ -44,6 +51,8 @@ proptest.workspace = true
 # A real folder for the tests of what `StdFs` and the operating system decide (a symlinked
 # projects folder, §6.3).
 tempfile.workspace = true
+# The tests read the repository as git does.
+git2.workspace = true
 tc-corpus = { path = "../tc-corpus" }
 tc-versification = { path = "../tc-versification" }
 

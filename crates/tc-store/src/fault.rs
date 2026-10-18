@@ -124,6 +124,131 @@ struct Model {
     tick_ns: i64,
     /// Each write point moves the clock forward this much.
     step_ns: i64,
+    /// The real folder libgit2 works in, made when the first project asks for it.
+    mirror: Mirror,
+}
+
+/// The real folder beside the model where libgit2 keeps a project's `.git` (D3): git is outside
+/// the `Vfs` (§16.2), so its files are real, one mirror for each independent filesystem. The
+/// folder is removed when the last filesystem that uses it is dropped, and a folder left by
+/// a process that no longer exists is removed by the next process that makes one.
+#[derive(Debug, Clone)]
+enum Mirror {
+    /// Not made yet: no project asked for a repository.
+    None,
+    Made(Arc<MirrorDir>),
+    /// A copy of the mirror could not be made; every use says why.
+    Failed(Arc<str>),
+}
+
+#[derive(Debug)]
+struct MirrorDir {
+    root: PathBuf,
+}
+
+impl Drop for MirrorDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+/// Where the mirrors of all filesystems in this process live.
+fn mirrors_root() -> PathBuf {
+    std::env::temp_dir().join("tc-faultfs")
+}
+
+/// Removes the folders of processes that ended without dropping their filesystems (a test
+/// that aborted, a static corpus that is never dropped). Only on Linux, where `/proc` says
+/// whether a process lives.
+fn sweep_dead_mirrors(root: &Path) {
+    if !cfg!(target_os = "linux") {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(pid) = name.to_string_lossy().split('-').next().map(str::to_owned) else {
+            continue;
+        };
+        if !pid.is_empty()
+            && pid.bytes().all(|b| b.is_ascii_digit())
+            && !Path::new("/proc").join(&pid).exists()
+        {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
+}
+
+impl MirrorDir {
+    fn make() -> io::Result<Arc<Self>> {
+        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        static SWEPT: std::sync::Once = std::sync::Once::new();
+        let base = mirrors_root();
+        SWEPT.call_once(|| sweep_dead_mirrors(&base));
+        let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let root = base.join(format!("{}-{n}", std::process::id()));
+        std::fs::create_dir_all(&root)?;
+        Ok(Arc::new(Self { root }))
+    }
+
+    /// The mirror of the project folder `folder`.
+    fn at(&self, folder: &Path) -> PathBuf {
+        let mut out = self.root.clone();
+        for component in folder.components() {
+            if let Component::Normal(part) = component {
+                out.push(part);
+            }
+        }
+        out
+    }
+
+    /// An independent copy: git's objects never change once written, so they are hard-linked
+    /// (a copy where the filesystem will not link); every other file is copied.
+    fn duplicate(&self) -> io::Result<Arc<Self>> {
+        let copy = Self::make()?;
+        fn walk(from: &Path, to: &Path, objects: bool) -> io::Result<()> {
+            std::fs::create_dir_all(to)?;
+            for entry in std::fs::read_dir(from)? {
+                let entry = entry?;
+                let (src, dst) = (entry.path(), to.join(entry.file_name()));
+                let kind = entry.file_type()?;
+                if kind.is_dir() {
+                    let inside = objects || entry.file_name() == "objects";
+                    walk(&src, &dst, inside)?;
+                } else if objects && std::fs::hard_link(&src, &dst).is_ok() {
+                    continue;
+                } else {
+                    std::fs::copy(&src, &dst)?;
+                }
+            }
+            Ok(())
+        }
+        walk(&self.root, &copy.root, false)?;
+        Ok(copy)
+    }
+}
+
+impl Mirror {
+    /// The mirror of an independent filesystem made from this one's files.
+    fn duplicated(&self) -> Self {
+        match self {
+            Self::None => Self::None,
+            Self::Failed(why) => Self::Failed(why.clone()),
+            Self::Made(dir) => match dir.duplicate() {
+                Ok(copy) => Self::Made(copy),
+                Err(e) => Self::Failed(format!("the mirror of git's files: {e}").into()),
+            },
+        }
+    }
+
+    fn dir(&self) -> Option<&Arc<MirrorDir>> {
+        match self {
+            Self::Made(dir) => Some(dir),
+            _ => None,
+        }
+    }
 }
 
 const ROOT: Ino = 0;
@@ -194,6 +319,7 @@ impl Model {
             now_ns: START_NS,
             tick_ns: 1,
             step_ns: 1_000_000,
+            mirror: Mirror::None,
         }
     }
 
@@ -411,6 +537,7 @@ impl FaultFs {
     /// An independent copy of the files as they are now, with no fault armed.
     pub fn copy(&self) -> Self {
         let mut model = self.model().clone();
+        model.mirror = model.mirror.duplicated();
         model.faults = Faults::default();
         model.log.clear();
         model.opened.clear();
@@ -430,6 +557,7 @@ impl FaultFs {
             model.clone()
         };
         drop(model);
+        next.mirror = next.mirror.duplicated();
         next.faults = Faults::default();
         next.log.clear();
         next.opened.clear();
@@ -938,6 +1066,15 @@ impl Vfs for FaultFs {
         model.step(OpKind::Rename, to)?;
         model.unlink(from_dir, &from_name);
         model.link(to_dir, to_name, ino);
+        if let Some(dir) = model.mirror.dir() {
+            let (src, dst) = (dir.at(from), dir.at(to));
+            if src.exists() {
+                if let Some(parent) = dst.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let _ = std::fs::rename(src, dst);
+            }
+        }
         Ok(())
     }
 
@@ -964,6 +1101,9 @@ impl Vfs for FaultFs {
         model.resolve(path)?;
         model.step(OpKind::RemoveDir, path)?;
         model.unlink(dir, &name);
+        if let Some(dir) = model.mirror.dir() {
+            let _ = std::fs::remove_dir_all(dir.at(path));
+        }
         Ok(())
     }
 
@@ -1051,6 +1191,20 @@ impl Vfs for FaultFs {
 
     fn wait_held(&self, delay: Duration) {
         self.model().faults.held_waits.push(delay);
+    }
+
+    fn outside_dir(&self, folder: &Path) -> io::Result<PathBuf> {
+        let mut model = self.model();
+        if matches!(model.mirror, Mirror::None) {
+            model.mirror = Mirror::Made(MirrorDir::make()?);
+        }
+        let dir = match &model.mirror {
+            Mirror::Made(dir) => dir.at(folder),
+            Mirror::Failed(why) => return Err(io::Error::other(why.to_string())),
+            Mirror::None => return Err(io::Error::other("no mirror")),
+        };
+        std::fs::create_dir_all(&dir)?;
+        Ok(dir)
     }
 }
 
@@ -1142,5 +1296,56 @@ mod tests {
         fs.advance(Duration::from_secs(3));
         write(&fs, "/b", b"1", true);
         assert!(fs.metadata(&p("/b")).unwrap().mtime_ns > first);
+    }
+
+    /// Git's files live in a real folder beside the model. A copy and a crash get a folder of
+    /// their own with the same files; a renamed or removed folder takes its git files along;
+    /// and the folder goes when the filesystem does.
+    #[test]
+    fn the_mirror_follows_copy_crash_rename_and_removal() {
+        let fs = FaultFs::new();
+        fs.create_dir(&p("/projects")).unwrap();
+        fs.create_dir(&p("/projects/.staging-x")).unwrap();
+        let outside = fs.outside_dir(&p("/projects/.staging-x")).unwrap();
+        std::fs::create_dir_all(outside.join(".git/objects/ab")).unwrap();
+        std::fs::write(outside.join(".git/objects/ab/cdef"), b"object").unwrap();
+        std::fs::write(outside.join(".git/HEAD"), b"ref: refs/heads/main").unwrap();
+        assert_eq!(fs.outside_dir(&p("/projects/.staging-x")).unwrap(), outside);
+        // A rename of the project folder moves its git files.
+        fs.rename_dir_noreplace(&p("/projects/.staging-x"), &p("/projects/Titus"))
+            .unwrap();
+        let moved = fs.outside_dir(&p("/projects/Titus")).unwrap();
+        assert_eq!(
+            std::fs::read(moved.join(".git/objects/ab/cdef")).unwrap(),
+            b"object"
+        );
+        assert!(!outside.exists());
+        // A copy has a folder of its own: changes to either do not reach the other.
+        let copy = fs.copy();
+        let copied = copy.outside_dir(&p("/projects/Titus")).unwrap();
+        assert_ne!(copied, moved);
+        assert_eq!(
+            std::fs::read(copied.join(".git/objects/ab/cdef")).unwrap(),
+            b"object"
+        );
+        std::fs::write(moved.join(".git/HEAD"), b"changed").unwrap();
+        assert_eq!(
+            std::fs::read(copied.join(".git/HEAD")).unwrap(),
+            b"ref: refs/heads/main"
+        );
+        // So does a crash, power cut or not.
+        for cut in [false, true] {
+            let after = fs.crash(cut);
+            let kept = after.outside_dir(&p("/projects/Titus")).unwrap();
+            assert_ne!(kept, moved);
+            assert_eq!(std::fs::read(kept.join(".git/HEAD")).unwrap(), b"changed");
+        }
+        // A removal takes the git files along.
+        copy.remove_dir_all(&p("/projects/Titus")).unwrap();
+        assert!(!copied.exists());
+        // The folders go with their filesystems.
+        drop(copy);
+        drop(fs);
+        assert!(!moved.exists());
     }
 }
