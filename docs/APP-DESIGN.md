@@ -28,6 +28,9 @@ what changed for each finding, which parts were done another way, and why.
 - **A rule for every unit:** where tC4's behavior works against what a feature is for, follow
   what the translator needs and record the difference with its reason (AGENTS.md, "Matching
   tC4").
+- **Single instance (2026-10-18):** translationCore runs as a single instance on a machine, so a
+  second launch is blocked; people work on one project at the same time from separate machines.
+  tC4 4.0 already works this way (D39, `tC4:docs/DECISIONS.md:458-474`).
 - The other questions follow their recommendations in §12.
 
 ## G0 results on the reference laptop (2026-10-17)
@@ -174,7 +177,7 @@ Evidence: `docs/evidence/electronite-spike-2026-10-17.md` and
 | AD10 | Events come on one SSE stream, `GET /api/v1/events`, read with `fetch` and the token header. Frames carry a sequence number; a ring of 4,096 frames serves reconnects; a gap gives `Resync`. | Works the same in the shell, in Playwright and in a developer's browser, whether or not header injection reaches it. | `EventSource` (needs injection or a cookie); WebSocket (no headers; opaque to Playwright); polling. |
 | AD11 | ARCH:42-44 stays as written. The shell adds `X-Tc-Token` through `session.webRequest.onBeforeSendHeaders`, with a URL filter that lists only the server's paths outside `/api/`: `/`, `/ui/*`, `/help/*`, `/media/*`, `/download/*`, `/print/*` and `/prepare.html`. The UI's own `fetch` calls set the header themselves, so no API request or event-stream read runs the filter's JS listener. Every request the window makes, `/api/` included, still crosses Electron's request proxy on the main process's UI thread, with or without the filter, so a busy main thread delays every API call: the shell keeps synchronous work off that thread (AD21, G1), and G0 measures the delay. Playwright uses `extraHTTPHeaders`. Only debug builds accept a one-time `?dev-token=` cookie. Capability URLs are the fallback if Electronite misses a request type (G0 probes every type). *(A-14)* | No amendment to the fixed security decision; images, iframes, downloads and the print window carry the header, and the aligner's round trip does not pay for the filter's JS callback. It still waits for the main process's UI thread, as every request in an Electronite window does; Q-1 and Q-13 are decided from G0's measurements of that round trip. | A production launch cookie (core-first); public static files plus capability URLs (slice-first); a filter over every request. |
 | AD12 | A project is named by `ProjectRef`, its folder under the projects root. `ProjectId` is data. Scopes, sessions, Home cards and summaries are keyed by folder. `prefs/<projectId>.json` stays as STORAGE §3.7 lists it. | Two imports of one tC4 project get one id (STORAGE:3374, T4), and a copied folder is expected (STORAGE:2015-2036, `FolderCopied`). Two folders must be two cards. | Keying by `ProjectId`. |
-| AD13 | Home never folds a project. A card reads `metadata.json`, `.tc/sync.json`, `ingredients/tc/conflicts.json` and a summary file stamped by the names of the pack and pending files. A missing or stale summary is rebuilt in the background from the derived USFM files and `conflicts.json`, with no lock and no fold, one project at a time, cancelled when the person opens any project. | PERF rule 1. tC4 computes the drafted percent from USFM too (`tC4:src/state.jsx:2742-2752`). Reading derived files needs no `.tc/lock`, so a person's open is never pushed into read-only mode by a background job (STORAGE:1790). | A background read-only fold (it holds the lock and a whole project's memory); a lockless "peek" open requested from S1 (not needed). |
+| AD13 | Home never folds a project. A card reads `metadata.json`, `.tc/sync.json`, `ingredients/tc/conflicts.json` and a summary file stamped by the names of the pack and pending files. A missing or stale summary is rebuilt in the background from the derived USFM files and `conflicts.json`, with no lock and no fold, one project at a time, cancelled when the person opens any project. | PERF rule 1. tC4 computes the drafted percent from USFM too (`tC4:src/state.jsx:2742-2752`). Reading derived files needs no `.tc/lock`, so a background job never holds the lock against a person's open (STORAGE §6.1 O1). | A background read-only fold (it holds the lock and a whole project's memory); a lockless "peek" open requested from S1 (not needed). |
 | AD14 | Settings opened from Home show values from the derived files. Save opens the project with progress, checks that the fold's projected values equal what the dialog showed, mints tokens for those values, and saves. A difference shows "This project changed. Look again." The open goes through the registry's single open per folder (AD38), so a card click during the save shares the session instead of finding the lock held. *(A-8)* | The dialog does not fold a whole Bible to appear. The equality check keeps I4: the minted heads stand for exactly what was shown. | `session.open{purpose: Settings}`. |
 | AD15 | A bulk resolution is one batch, confirmed with its count first, or it is not offered. Until the command exists (R7), the review offers only the choices the command set carries, and "Later". | STORAGE:1619-1626. | One `Resolve` per conflict: partial results, and tc-app would reimplement the device-set rule. |
 | AD16 | Switching chapter sends no request. `editor/book` returns the book head with the focus chapter; `editor/chapters` returns the rest. Events re-query only the chapters they name. | PERF:73, 75. A 16 ms switch cannot include a round trip and a render. | A request per chapter. |
@@ -199,7 +202,7 @@ Evidence: `docs/evidence/electronite-spike-2026-10-17.md` and
 | AD35 | Test hooks exist only under the cargo features `test-hooks` and `fixture-backend`. `release_has_no_test_hooks` checks the release binary. | No hook may ship. | Runtime flags. |
 | AD36 | Teammate changes in parity scenarios are written only through tc-journal's encoders (phase 1) and the store's sealing API (from C1a), never by hand. | The scenario must exercise the real format. | Hand-made packs. |
 | AD37 | An open editor holds its value and its token as one pair, taken when it opened. A refresh replaces the pair only while the editor has had no input and no composition since then; otherwise the field keeps its text and token and shows the "changed while you were typing" notice. A `Changed` whose cause is the field's own request shows nothing. Nothing is ever written into a focused field, and texts are compared in NFC. *(A-6)* | A value and a token that come apart make the next save conflict with itself, or revert a change unseen (STORAGE:1449-1453). The `Ack` and the `Changed` event of one write may arrive in either order (§5.4). NFC reorders Hebrew points and Arabic marks (STORAGE:1445), and writing into a focused field moves the caret and breaks an IME composition. | Following the query in an open editor; never refreshing an open editor. |
-| AD38 | `SessionRegistry` runs one open per folder at a time; a second caller waits for it and shares the session. The screen session closes when the person goes Home, with tC4's "leaving the project" checkpoint. *(A-8, A-25)* | A second open finds `.tc/lock` held and opens read-only with a false message (STORAGE:1790). tC4 closes the project at Home (`tC4:src/state.jsx:7286-7328`), and J8 asserts that commit. | Waiting only for a running leave-checkpoint; closing the session only when another project opens. |
+| AD38 | `SessionRegistry` runs one open per folder at a time; a second caller waits for it and shares the session. The screen session closes when the person goes Home, with tC4's "leaving the project" checkpoint. *(A-8, A-25)* | A second open finds `.tc/lock` held by this same `tc4` and is refused, with `tc4` itself as the holder (STORAGE §6.1 O1). tC4 closes the project at Home (`tC4:src/state.jsx:7286-7328`), and J8 asserts that commit. | Waiting only for a running leave-checkpoint; closing the session only when another project opens. |
 | AD39 | The shell supervises `tc4`. When `tc4` exits without being asked, the shell starts it again and loads Home at the new address; the new page reads the shell's buffer mirror (AD21). `tc4` treats a closed stdin as a quit. The shell starts `tc4` with `detached: true` and `windowsHide: true`: on Windows, Node's plain `spawn` puts the child in libuv's job object, which ends it the moment the shell's process ends, before it can read its closed stdin and quit (G0's "end the shell" rows measure both). A `tc4` that finds `app.lock` held waits up to 10 s for the old process to finish closing, then names it (the lock records its pid). *(A-3)* | Every launch has a new port, so the old page cannot reach a restarted server (§5.2). An orphaned `tc4` would hold `app.lock` and `.tc/lock` and refuse the next launch. When the shell dies, the pipe to `tc4`'s stdin closes. | A quit endpoint for orphans (it would need the old token); restarting in place. |
 
 ### 2.2 Disagreements and how they were resolved
@@ -356,7 +359,7 @@ pub struct ConflictBrief { pub conflict: ConflictRef, pub record: RecordRef, pub
 pub enum NotSaved {                       // the text stays in the editor: "Not saved: <reason>. Retry"
     Refused(SaveRefusal),                 // B1 (STORAGE:1411-1413)
     Disk(String),                         // B3 NotWritten (STORAGE:1422-1424)
-    ReadOnly(ReadOnlyReason),             // O1, O4, O5, SecondWriter
+    ReadOnly(ReadOnlyReason),             // O4, O5, SecondWriter
     LookAgain,                            // Resolve over moved heads (STORAGE:1615-1616)
     PlanStale,                            // an upgrade or gateway plan over moved heads (STORAGE:1603-1606)
     StaleScope,                           // the project was closed or reopened under the field; the
@@ -390,7 +393,7 @@ pub enum ApiError {
 /// Closed, grouped by family. Each family enum implements `code()` (tC4's code where one
 /// exists), `key()` (the catalog key) and `vars()` (placeholder values).
 pub enum Refusal {
-    Open(OpenRefusal),          // NewerFormat, NotAProject, Unreadable
+    Open(OpenRefusal),          // NewerFormat, NotAProject, Unreadable, project lock held (names the holder)
     Create(CreateRefusal),
     Import(ImportRefusal),      // refusal.import.*, importer.*
     Export(ExportRefusal),      // refusal.export.* (5 keys)
@@ -774,7 +777,14 @@ case is named after the rule it protects.
   as a shared future. A second caller (a card click while a Home sync or a Settings-from-Home
   save is opening the project, or the reverse) waits for it and becomes another user of the
   same session; it never calls `ProjectStore::open` a second time, which would find `.tc/lock`
-  held and open read-only with a false message (STORAGE:1790). *(A-8)*
+  held by this same `tc4` and be refused, with `tc4` itself as the holder (STORAGE §6.1 O1).
+  *(A-8)*
+- **A project lock held by another process** refuses the open with a message that names the
+  holder's process (a `tc4` left running after a crash, or another program). Inside one `tc4`
+  the registry above is the only opener, so it never meets its own lock, and nothing opens
+  read-only for this reason. The cases of another computer are unchanged: a lock that names
+  another computer, a second writer, and a cloud-synced folder (owner's ruling of 2026-10-18;
+  STORAGE §6.1 O1).
 - One screen session at a time, as in tC4. Going Home closes the screen session with the
   "leaving the project" checkpoint, as tC4's `backToProjects` does
   (`tC4:src/state.jsx:7286-7328`) and J8 asserts; opening another project from Home therefore
@@ -920,7 +930,7 @@ The shell's `drafts-buffer.log` is not among them: the shell writes it (AD21).
 | `summaries/<folder hash>.json` | §4.5 |
 | `reports.json` | the last 50 operation reports, for Feedback and the dev Inspector |
 | `uploads/`, `downloads/` | temporary; emptied at start and after use |
-| `app.lock` | single-instance lock of `tc4`; holds its pid, so a new `tc4` that waits for it can name the process *(A-3)* |
+| `app.lock` | `tc4 serve`'s guard for the restart case: an old `tc4` still exiting after a crash (AD39). It holds the pid, so a new `tc4` that waits for it can name the holder's process. The single instance on a machine is the shell's lock (§5.1) *(A-3)* |
 | `drafts-buffer.log` | written by the shell, not by `tc4`: the mirror of the browser buffer, one appended line per change, a clean field written as a removal line (AD21) *(A-3)* |
 
 `lastEdit` (the Resume card) is recorded on each acknowledged save and when an editor loses
@@ -935,13 +945,19 @@ sees, and typing no longer costs an fsynced app-data write each second *(A-20)*.
 
 ### 5.1 Start, address and one instance
 
+- translationCore is a single instance on a machine (owner's ruling of 2026-10-18; tC4 D39). The
+  shell takes Electronite's single-instance lock, as tC4 does (`app.requestSingleInstanceLock()`,
+  `tC4:scripts/desktop-main.cjs:108-111`). A second launch does not get it: it quits at once and
+  starts no `tc4` server, and the running copy's window is brought to the front, restored if it
+  was minimized, on `second-instance` (`tC4:scripts/desktop-main.cjs:134-140`). People work on
+  one project at the same time from separate machines.
 - `tc4 serve --app-data <dir> --projects <dir> --ui <dir> [--door43 <url>]`
   `[--backend memory --scenario <dir>] [--test-hooks]`. The last three exist only with their
   cargo features.
-- It takes `app.lock` in app data and writes its pid into it. If another `tc4` holds the lock,
-  it waits up to 10 s for it (an old `tc4` may still be closing after its shell died), then
-  exits with a message that names the process. The shell also holds Electronite's
-  single-instance lock, as tC4 does (`tC4:scripts/desktop-main.cjs:108-111`). *(A-3)*
+- It takes `app.lock` in app data and writes its pid into it. The lock is only its guard for the
+  restart case: an old `tc4` may still be closing after a crash or after its shell died (AD39).
+  If that `tc4` holds the lock, the new one waits up to 10 s for it, then exits with a message
+  that names the holder's process. *(A-3)*
 - It binds `127.0.0.1:0` and prints one JSON line before anything else:
   `{"url":"http://127.0.0.1:PORT/","token":"<43 chars base64url>"}`. The token is never logged.
 - On stdin `{"quit":true}`, and when stdin closes (the shell died; on Windows this needs the
@@ -984,8 +1000,10 @@ Headers on `index.html`: `Content-Security-Policy: default-src 'self'; script-sr
 Tests (`tc-server/tests/security.rs`): `request_without_token_is_401`, `foreign_host_is_403`,
 `foreign_origin_post_is_403`, `no_cors_headers_ever`, `binds_loopback_only`,
 `dev_cookie_only_in_debug_builds`, `help_never_redirects`. Lifecycle tests (`tc-server/tests/
-lifecycle.rs`): `closed_stdin_quits_within_5_s`, `second_instance_waits_then_names_the_holder`
-*(A-3)*.
+lifecycle.rs`): `closed_stdin_quits_within_5_s`,
+`new_tc4_waits_for_the_old_one_then_names_the_holder` (the `app.lock` wait for the restart case)
+*(A-3)*. The second launch is G1's test, in the shell:
+`second_launch_focuses_the_running_window_and_starts_no_server`.
 
 ### 5.3 Routes
 
@@ -1143,10 +1161,9 @@ show a 401 page.
   as empty (DELTA:625-626). `Resync` refreshes every query. The check rail is the exception: it
   is patched by row (AD17), and a `Changed` after a `LocalSave` whose `Ack` already carried the
   rows sends no request *(A-12)*.
-- In a browser (development, Playwright), one app tab talks to one server: at boot a
-  `BroadcastChannel` check finds an older tab, and the newer tab shows "translationCore is open in
-  another tab" and sends nothing. Two tabs would otherwise close each other's sessions and
-  answer each other's writes with `StaleScope` *(A-19)*.
+- A browser tab cannot carry the per-launch token that the shell adds (§5.2), so outside the
+  shell only the dev server and Playwright open the page, and tC4 removed its tab guard as dead
+  code (D39). The one-tab check of RT-19 is removed by the owner's ruling of 2026-10-18 *(A-19)*.
 - Shared reads are shared: Understand and Translate use one helps query, as tC4 shares
   `useLoadHelps` (`tC4:src/views/HelpsPanel.jsx:474-480`).
 - `window.__tcIdle` is true when no fetch, save or job is in flight.
@@ -1878,9 +1895,9 @@ This breakdown was checked again after the red team *(A-16, A-17)*:
 | Unit | Scope | Depends on | Waits for | Tests | Done when |
 |---|---|---|---|---|---|
 | A1 tc-api foundations | the crate; ids; `Scope`; `Endpoint`, `endpoints!`, `ALL`; tokens with their prefixes *(A-7)*; `Shown`; `Ack` with `Stored` and rail patches; `NotSaved` with `StaleScope` *(A-19)*; `ApiError` with `RequestReused` *(A-2)*; `Refusal` families, `SyncRefusal`; events (`ChangeScope` as an enum, `Aspect`, `AlignSave`), jobs, progress; the state enums of §3.7 *(A-30)*; `depends_on`; the endpoints of phase 0; rebuild key files (English, with the nine other languages listed as pending) *(A-32)* | — | — | serde proptest; golden JSON per endpoint (rewritten only with `UPDATE_GOLDEN=1`); the four refusal tests and `release_has_no_pending_translation` (§3.5); a token text with the wrong prefix does not parse | builds and lints for wasm32; every phase-0 endpoint has golden JSON |
-| A2 tc-server and `tc4 serve` | axum on loopback; address line; `app.lock` with its pid and the 10 s wait; quit on `{"quit":true}` and on a closed stdin *(A-3)*; security layer; CSP; static routes; `hello`; event stream with ring, heartbeat, `Resync`, coalesced progress; uploads with per-flow caps *(A-28)*; downloads registry; `test-hooks` feature with `test/crash`; the loopback spike, also through a header-adding proxy *(A-14)* | A1 | — | §5.2 security tests; `closed_stdin_quits_within_5_s`, `second_instance_waits_then_names_the_holder`; replay and `Resync`; a 513 MiB import upload is 413 and a 1 GiB exchange upload streams to disk; `every_endpoint_is_routed_once`; `tokio_never_blocked` | the tests pass; the spike's two p95 figures are in `docs/evidence/` |
+| A2 tc-server and `tc4 serve` | axum on loopback; address line; `app.lock` with its pid and the 10 s wait, only for the restart case (the single instance is G1's lock); tc-api's `ReadOnlyReason::OpenElsewhere` ("another translationCore window holds the project's lock", `crates/tc-api/src/write.rs` on branch p0-a1) is removed, and a held project lock is a refusal that names the holder's process (ruling of 2026-10-18); quit on `{"quit":true}` and on a closed stdin *(A-3)*; security layer; CSP; static routes; `hello`; event stream with ring, heartbeat, `Resync`, coalesced progress; uploads with per-flow caps *(A-28)*; downloads registry; `test-hooks` feature with `test/crash`; the loopback spike, also through a header-adding proxy *(A-14)* | A1 | — | §5.2 security tests; `closed_stdin_quits_within_5_s`, `new_tc4_waits_for_the_old_one_then_names_the_holder`; replay and `Resync`; a 513 MiB import upload is 413 and a 1 GiB exchange upload streams to disk; `every_endpoint_is_routed_once`; `tokio_never_blocked` | the tests pass; the spike's two p95 figures are in `docs/evidence/` |
 | A3 tc-app foundations | `App`, `AppConfig`; `JobRegistry` with reporter (100 ms, or 1 s for jobs no screen shows *(A-29)*) and cancel; `EventBus`; `FlowGate`, with USB export and receive per project *(A-31)*; `PrefsWriter` (memory) with the `lastEdit` rule *(A-20)*; `ReportLog`; internet wiring; `Keychain` trait with `MemKeychain`; `ReplyCache` with body digests and in-flight waits *(A-2)*; `test/fieldStore`, a test-only write endpoint that goes through the reply cache and records every text it stores, so A4b can prove its no-loss rules before any real save exists; `app`, `prefs`, `net`, `jobs` handlers | A1 | — | `job_reports_nothing_before_300ms_then_every_100ms`; `unseen_jobs_report_once_a_second`; `counts_only_grow`; `cancel_stops_at_next_chunk`; flow-gate tests, including `receive_and_sync_of_one_project_never_overlap`; reply-cache tests for a finished request, one in flight, and another body | `tc4 serve` answers `hello` with real state |
-| A4a tc-ui runtime: transport, cache, language | feature `app`; API client with scope drop; SSE-over-fetch reader; `QueryCache`; `Load<T>`; the one-tab check *(A-19)*; `t()` with generated keys and rebuild keys; all ten catalogs at boot *(A-23)*; `<html lang dir>`; `build-app.sh`; web-sys features (`Storage`, `Headers`, `Request`, `RequestInit`, `ReadableStream`, `ReadableStreamDefaultReader`, `TextDecoder`, `AbortController`, `BroadcastChannel`, `File`, `Blob`, `DragEvent`, `DataTransfer`, `HtmlAnchorElement`, `HtmlIFrameElement`, `PerformanceObserver`); vendor tC4's `src/ui.css` again | A1, A2 | — | host tests of the SSE parser and `t()`; `i18n-keys` port with floors; Playwright smoke: boot, `hello`, a locale switch with no request after boot, a second tab refused | the smoke passes in this container |
+| A4a tc-ui runtime: transport, cache, language | feature `app`; API client with scope drop; SSE-over-fetch reader; `QueryCache`; `Load<T>`; no tab guard, because the ruling of 2026-10-18 removed the one-tab check *(A-19)*; `t()` with generated keys and rebuild keys; all ten catalogs at boot *(A-23)*; `<html lang dir>`; `build-app.sh`; web-sys features (`Storage`, `Headers`, `Request`, `RequestInit`, `ReadableStream`, `ReadableStreamDefaultReader`, `TextDecoder`, `AbortController`, `File`, `Blob`, `DragEvent`, `DataTransfer`, `HtmlAnchorElement`, `HtmlIFrameElement`, `PerformanceObserver`); vendor tC4's `src/ui.css` again | A1, A2 | — | host tests of the SSE parser and `t()`; `i18n-keys` port with floors; Playwright smoke: boot, `hello`, a locale switch with no request after boot | the smoke passes in this container |
 | A4b ◆ tc-ui no-loss core: saves, buffer, panics | the save machine (§6.5: `sent`, the NFC clean rule, retries with the first body *(A-2)*, `StaleScope` *(A-19)*); the refresh rule for open editors (AD37) *(A-6)*; the draft buffer v2 keyed by folder and project id *(A-9)*, with the bridge calls `bufferChanged` and `takeBuffered` *(A-3)*; `boot.js`: capture listener, reload, panic counting by page load, static callout, drafts posted with `fetch` *(A-15)*; panic hook and crash marker; the navigation gate and close guard *(A-26)*; `try_` forms and `clippy::indexing_slicing` in app modules *(A-15)* | A1, A2, A3, A4a | — | port of tC4's scheduler tests; proptest: no `current` dropped; `reload_anywhere_stores_the_last_text_once` against `test/fieldStore`, with reloads and `test/crash` at every point; the AD37 refresh cases; Playwright: a panic in an input handler keeps the keystroke, one panic with trapping closures reloads once, three panics show the static callout and post the drafts | the tests pass and the adversarial review's findings are fixed |
 | A5 Shell chrome and static surfaces | `App`, TopBar (X1), save indicator (X2), account menu (X6), M15, M16 with preview, M17 with License, M14 compose, S13 with vendored help pages (AD29) and the page-swap shim, S15 | A3, A4a, A4b, A6b | — | scenarios: account-menu keyboard, M16 preview and restore, help a–i (no internet case yet) | dialog DOM parity for `account-menu`, `app-language`, `help`, `about`, `feedback` (layer 2, through A6b) |
 | A6a Parity harness: tC4 side *(A-17)* | the `capture.mjs` split (`screens`, `driver`, `observe`, `env-tc4`); sha256 per PNG in `manifest.json` and its check; tC4 DOM snapshots for all 62 screens; `state.mjs` from the repository's fixtures | — (the tC4 checkout) | — | `state_from_repo_equals_state_from_tc4`; the baseline test fails on a changed PNG | a tC4 recapture after the split has identical hashes; the 62 DOM snapshots are committed |
@@ -1955,7 +1972,7 @@ B1a starts now, on a branch cut from `storage`, because it needs tc-journal *(A-
 
 | Unit | Scope | Depends on | Waits for | Tests | Done when |
 |---|---|---|---|---|---|
-| G1 Electronite shell | main script: start `tc4` detached from libuv's job object (AD39), read the address line, the header filter of AD11 for paths outside `/api/` *(A-14)*; supervision: restart `tc4` and reload Home when it exits *(A-3)*; the buffer mirror (`bufferChanged`, `takeBuffered`, fsync at most once a second; appends and fsync off the main thread, which every request waits for, AD11) *(A-3)*; single-instance lock; the prep window; close guard and quit; `printToPDF`; file and folder dialogs; `openExternal` and the same-origin rule *(A-33)*; keychain or feedback per Q-2 and Q-3; `protocol.handle` if Q-1 says so | A2, A4b, A9, C1b, D2, G0 | Q-1, Q-2, Q-3; a Windows runner (Q-26) | port of `scripts/desktop-prepare.test.cjs` (DELTA:1127-1131); end `tc4` while typing, relaunch, the text is offered; end the shell, `tc4` exits within 5 s and the next launch starts; a same-origin help link stays in the app | the tests pass on the release pipeline's Windows runner; the code is written and linted here |
+| G1 Electronite shell | main script: start `tc4` detached from libuv's job object (AD39), read the address line, the header filter of AD11 for paths outside `/api/` *(A-14)*; supervision: restart `tc4` and reload Home when it exits *(A-3)*; the buffer mirror (`bufferChanged`, `takeBuffered`, fsync at most once a second; appends and fsync off the main thread, which every request waits for, AD11) *(A-3)*; the single-instance lock (`app.requestSingleInstanceLock()`): a second launch quits at once and starts no `tc4`, and the running copy's window is restored if minimized and focused on `second-instance`, as `tC4:scripts/desktop-main.cjs:108-111, 134-140`; the prep window; close guard and quit; `printToPDF`; file and folder dialogs; `openExternal` and the same-origin rule *(A-33)*; keychain or feedback per Q-2 and Q-3; `protocol.handle` if Q-1 says so | A2, A4b, A9, C1b, D2, G0 | Q-1, Q-2, Q-3; a Windows runner (Q-26) | port of `scripts/desktop-prepare.test.cjs` (DELTA:1127-1131); end `tc4` while typing, relaunch, the text is offered; end the shell, `tc4` exits within 5 s and the next launch starts; `second_launch_focuses_the_running_window_and_starts_no_server`; a release smoke test that a second launch exits without starting a second server, as `tC4:scripts/package-desktop.zsh:936-946` does; a same-origin help link stays in the app | the tests pass on the release pipeline's Windows runner; the code is written and linted here |
 | G2 Budgets and the P7 report | `appbench`; Playwright perf specs on the whole-Bible project; memory with a side session; the `app-e2e` CI job; the 62-screen report in `en` and `ar`; one capture run inside Electronite on the release pipeline *(A-34)* | P, every unit | Q-28 | §8.2 green at the 3× tolerance | `docs/evidence/app-budgets-<date>.md`; a person reviewed the residuals |
 
 **Order and parallelism.** In phase 0, A1 comes first, and A6a, A10 and A11 need nothing and can
@@ -2125,7 +2142,7 @@ Figures marked "estimate" are worked out from sizes, not measured.
 | RT-5 | High | Storage scope | R1, R4, R5, R14 and R16 are in no storage unit's task, and four of them have no fallback. |
 | RT-6 | Medium | No loss, RTL | An open editor whose row is refreshed underneath has no rule. |
 | RT-7 | Medium | Tokens | Review tokens and edit tokens are one type below tc-api. |
-| RT-8 | Medium | No loss | Two opens of one folder at once make one of them read-only. |
+| RT-8 | Medium | No loss | Two opens of one folder at once make one of them fail. |
 | RT-9 | Medium | No loss | Drafts whose token no longer verifies are dropped as bugs. |
 | RT-10 | Medium | No loss | Check-comment drafts and the read-only copy drop typed text. |
 | RT-11 | Medium | Performance | A checkpoint at every mode switch holds the actor for up to 500 ms. |
@@ -2296,17 +2313,20 @@ Figures marked "estimate" are worked out from sizes, not measured.
   to STORAGE §2.7. Give the wire form a fixed prefix, so the DOM scan matches exactly. Add a
   contract case through HTTP: editing a verse in conflict keeps the conflict.
 
-### RT-8 (Medium) Two opens of one folder at once make one of them read-only
+### RT-8 (Medium) Two opens of one folder at once make one of them fail
 
 - **Where:** §4.3 first bullet; AD14; side sessions (§4.3, Q-15).
 - **Evidence:** §4.3 makes an open wait only for a running leave-checkpoint. A second
-  `ProjectStore::open` of the same folder finds `.tc/lock` held and opens read-only with "This
-  project is open in another translationCore window" (STORAGE:1790).
+  `ProjectStore::open` of the same folder finds `.tc/lock` held by this same `tc4` and is
+  refused, with `tc4` itself as the holder (STORAGE §6.1 O1).
 - **What breaks:** The person clicks a card while a Home sync's side session is opening, or while
-  the Settings-from-Home save opens the project. One of the two becomes read-only with a false
-  message, or the sync refuses with `ReadOnly`.
+  the Settings-from-Home save opens the project. One of the two is refused with a false holder,
+  or the sync's open fails.
 - **Change:** `SessionRegistry` keeps one in-flight open per folder. Later callers wait for it
-  and share the session. Test both orders.
+  and share the session. Test both orders. A `.tc/lock` held by another process (a `tc4` left
+  running after a crash, or another program) refuses the open with a message that names the
+  holder, and nothing opens read-only for that reason (owner's ruling of 2026-10-18). The cases
+  of another computer are unchanged.
 
 ### RT-9 (Medium) Drafts whose token no longer verifies are dropped as bugs
 
@@ -2472,12 +2492,13 @@ Figures marked "estimate" are worked out from sizes, not measured.
 
 - **Where:** §3.5 (`StaleScope`: "drop the reply"); §4.3; §6.2.
 - **What breaks:** A write answered with `StaleScope` gets neither an `Ack` nor a failure, so the
-  field stays `Saving` or is cleared. It happens with two tabs on one server in development
-  and in Playwright (the second tab's open closes the first tab's session, §4.3), after a
-  reopen, and after a server restart.
+  field stays `Saving` or is cleared. It happens after a reopen and after a server restart.
 - **Change:** For a write, `StaleScope` becomes `NotSaved(StaleScope)`. The field keeps its text;
-  the UI reattaches or reopens and resends with its base token. A browser allows one app tab
-  (a `BroadcastChannel` check).
+  the UI reattaches or reopens and resends with its base token. A browser tab cannot carry the
+  per-launch token that the shell adds (§5.2), so outside the shell only the dev server and
+  Playwright open the page, and tC4 removed its tab guard as dead code (D39). The one-tab check
+  (a `BroadcastChannel` check) that this finding first asked for is removed by the owner's ruling
+  of 2026-10-18.
 
 ### RT-20 (Medium) Typing causes two fsynced writes a second, one of them on the actor
 
@@ -2609,7 +2630,7 @@ part was done another way or not taken, and the last column says why, with the e
 | RT-5 | Accepted, as an owner question | §9.2 gains an "In a task text" column for every request; Q-23 asks the owner to add R1, R4, R5, R14, R16 and R19 to R23 to the task texts; C0, a unit of its own, adapts S1's actor and builds R4, R5, R14 and R16 itself if S1 lacks them (§4.2); risk 18 | (1) "Put them into S1's task text now": this revision may change only this file, and the task texts belong to the owner's workflow, so it became Q-23. (2) R14 is half met already: `FoldState::counters` is public (`storage:crates/tc-journal/src/fold/state.rs:1830`); only tc-store's counters remain. (3) C0 cannot build two things around the actor: an O(1) snapshot and each command's `Delta`. Without them phase 2 waits, and §4.2 and C0 now say so. |
 | RT-6 | Accepted | AD37: an editor's value and token are one pair, replaced together only before any input or composition and never while focused; own-request `Changed` shows nothing; comparisons in NFC (§6.3, §6.4, §5.4); B4a's tests, including an Arabic IME case | — |
 | RT-7 | Accepted, and taken further | AD3: the seam returns two types, `EditToken` and `ReviewToken` (§4.2), so the conversion slip the finding describes needs a type error; wire prefixes `st1.` and `rt1.` (§3.4); the DOM test looks for the prefixes (§6.4); R19 asks tc-journal for a kind under the MAC; three contract cases, one through HTTP | — |
-| RT-8 | Accepted | AD38; §4.3: one open per folder, later callers share it; AD14; `opens_of_one_folder_share_one_session` in both orders; C6's card-click case | — |
+| RT-8 | Accepted | AD38; §4.3: one open per folder, later callers share it; AD14; `opens_of_one_folder_share_one_session` in both orders; C6's card-click case; a `.tc/lock` held by another process refuses the open and names the holder, and nothing opens read-only for that reason (owner's ruling of 2026-10-18, §4.3) | — |
 | RT-9 | Accepted | §6.6: a draft whose token fails its MAC is offered as text, "Keep it as a separate version" writes a change with no parents (R20), "Copy text" until then; `NotSaved::BadToken` no longer covers drafts (§3.4); `offered_drafts` returns `Unverifiable` (§4.2); buffer keys include the project id; C1b | — |
 | RT-10 | Accepted | §6.5: a check comment saves on Done and on leaving the item, with a buffer entry and a `Draft` while open, declared as a difference from tC4 (Q-25); §6.4 and §6.6: the copy of a read-only project carries the folder's drafts; B5b, C1b, C4 | — |
 | RT-11 | Accepted | AD34: mode-switch checkpoints are adopted only after unit P measures saves during a checkpoint (R9); R21 asks to keep the checkpoint's long work off the actor; Q-5 offers one mode-switch checkpoint every two minutes at most; D1; risk 4 | Splitting the checkpoint is a change to STORAGE's actor, so it is a request (R21), not a decision of this design. |
@@ -2620,7 +2641,7 @@ part was done another way or not taken, and the last column says why, with the e
 | RT-16 | Accepted | B1a, the seed spike, starts now on a branch cut from `storage`; B1b holds the seam, the memory backend, sessions, probes and counters. The reply cache moved to A3, and each screen's `wire` conversions moved to that screen's unit; Q-16 | — |
 | RT-17 | Accepted, with one ordering change | A4a and A4b; A6a and A6b; B4a and B4b; C7a and C7b, with C7b after Q-9's sign-off; E1a and E1b; G0, the Electronite spike; A9 names its tc-resources work; B8's crate became A10 and B9a's tc-door43 streaming became A11, both in phase 0. The re-check also split C1 into C1a and C1b and moved the shared models from A1 to the units that use them (§10) | "Run the spike before A4 and B6": G0 must report before B6 merges, not before A4 or B6 start. A4's code does not depend on the header probe, because the UI's own `fetch` sets the header (AD11), and the mirror (A-3) takes Q-1 off A4's path. B6 can start first because the pure view builder makes Q-13's fallback a switch, and gating its start would also hold B11, C5, C7a and E1a behind a Windows run. |
 | RT-18 | Accepted in part | §6.5: a user comment saves on blur, and a pause writes only its draft (R15); the box's rule and the clear refusal are written down; R24 and Q-24 offer a way to revise a comment; C3's tests | The box rule as worded, "the newest note of the unit plus a count of the others", is not tC4's. `displayedUnitNote` shows the note at the unit's head verse, or the unit's only note, or none, and says "never a timestamp pick" (`tC4:src/views/Understand.jsx:40-56`). The design keeps tC4's rule and takes the newest only where one target has several comments, which tC4's per-target notes could not have. |
-| RT-19 | Accepted | `NotSaved::StaleScope` for writes (§3.4, §3.5); the field keeps its text and resends with its base token (§6.5); one app tab per server in a browser (§6.2); A1, A4a, A4b | — |
+| RT-19 | Accepted | `NotSaved::StaleScope` for writes (§3.4, §3.5); the field keeps its text and resends with its base token (§6.5); no tab guard in a browser, because the owner's ruling of 2026-10-18 removed the one-tab check (§6.2); A1, A4a, A4b | — |
 | RT-20 | Accepted | R22 asks that a draft write never delay a command; `saves_waiting_behind_a_draft_write` is counted (§8.1, §8.2); `lastEdit` is recorded on save and blur and written after 5 s or at leave (§4.9); risk 4 | — |
 | RT-21 | Accepted, and taken further | §4.3: no `ProjectIndex`. Verses come from `chapter_usfm`, alignments and decisions from probes, detached decisions from `FoldState::detached()`, and a book's comments from its projected comments file; `probe_finds_every_key_a_scan_finds`; `open_lists_no_key`; §4.4, §4.7, §8.1; R1 stays as the cheaper path | The proposed source, "verse and alignment keys from the versification", would miss a verse the project has beyond its versification, and so hide work. `chapter_usfm` holds every verse the chapter projects. The proposed "scan only for comments and detached records" is still a whole-project scan; the comments file costs one book, and `detached()` already exists (`storage:crates/tc-journal/src/fold/reads.rs:215`). |
 | RT-22 | Accepted | §6.3: a port of `OpenProgressView` with its own 300 ms timer; tC4's three stages with indeterminate bars until a stage has a count; Q-7; B3 | — |
