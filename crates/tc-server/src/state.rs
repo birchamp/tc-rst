@@ -30,7 +30,7 @@ pub(crate) struct Shared {
 
 impl Shared {
     pub(crate) fn is_closing(&self) -> bool {
-        self.closing.load(Ordering::Acquire)
+        self.closing.load(Ordering::SeqCst)
     }
 }
 

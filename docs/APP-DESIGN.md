@@ -1141,10 +1141,16 @@ sees, and typing no longer costs an fsynced app-data write each second *(A-20)*.
   that names the holder's process. *(A-3)*
 - It binds `127.0.0.1:0` and prints one JSON line before anything else:
   `{"url":"http://127.0.0.1:PORT/","token":"<43 chars base64url>"}`. The token is never logged.
-- On stdin `{"quit":true}`, and when stdin closes (the shell died; on Windows this needs the
-  shell to start it detached, AD39), it quits: it saves every
-  aligner session's unsaved links (AD18), checkpoints every session within 5 s, closes the
-  actors, answers `{"closed":true}` if stdin is still open, and exits. *(A-3, A-4)*
+- On stdin `{"quit":true}`, when stdin closes (the shell died; on Windows this needs the shell
+  to start it detached, AD39), on Ctrl+C or SIGTERM, and when the UI calls `app/quit`, it quits:
+  new requests get 503; requests being answered get up to 1 s to finish, and a call whose client
+  went away still runs to its end; then it saves every aligner session's unsaved links (AD18),
+  checkpoints every session and closes the actors. The whole close takes at most 5 s: what was
+  written stays, and work still running then is cut (a cut checkpoint runs again at the next
+  open). It then ends the event streams, answers `{"closed":true}` if stdin is still open, and
+  exits. *(A-3, A-4; A2: the drain comes before the quit work, so a save accepted before the
+  quit reaches an open backend and its reply reaches the UI. The first draft quit first and
+  drained after, which let a save in flight meet a closing backend.)*
 
 ### 5.2 Security
 
@@ -1204,7 +1210,9 @@ lifecycle.rs`): `closed_stdin_quits_within_5_s`,
 | `GET /download/{id}/{name}` | media | a finished export, `Content-Disposition: attachment` |
 | `GET /print/{job}` | media | print HTML for the shell's `printToPDF` and for `page.pdf()` |
 
-`every_endpoint_is_routed_once` checks the router serves exactly `tc_api::ALL`.
+`every_endpoint_is_routed_once` checks the router serves exactly `tc_api::ALL`. Each API call runs
+on a task of its own, so a client that goes away (a reload, a closed window) never cuts a call
+short, and the quit waits for calls still running (§5.1). *(A2)*
 
 ### 5.4 The event channel
 

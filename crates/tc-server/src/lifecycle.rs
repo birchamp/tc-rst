@@ -35,17 +35,20 @@ struct Control {
     quit: bool,
 }
 
-/// Reads stdin until it says to quit or ends.
+/// Reads stdin until it says to quit or ends. Lines are read as bytes: a line that is not
+/// UTF-8 is an ignored line, not a failed read, which would look like a closed stdin and
+/// quit the app.
 pub(crate) async fn watch_stdin<R>(mut input: R) -> Exit
 where
     R: AsyncBufRead + Unpin,
 {
-    let mut line = String::new();
+    let mut line = Vec::new();
     loop {
         line.clear();
-        match input.read_line(&mut line).await {
+        match input.read_until(b'\n', &mut line).await {
             Ok(0) | Err(_) => return Exit::StdinClosed,
-            Ok(_) => match serde_json::from_str::<Control>(line.trim()) {
+            // A last line without its newline still arrives here, before the end.
+            Ok(_) => match serde_json::from_slice::<Control>(line.trim_ascii()) {
                 Ok(Control { quit: true }) => return Exit::QuitMessage,
                 Ok(Control { quit: false }) => {}
                 // The line may be anything; it is not echoed.
@@ -90,14 +93,19 @@ pub(crate) async fn gate(
     request: Request,
     next: Next,
 ) -> Response {
+    let path = request.uri().path();
+    if path == tc_api::endpoint::EVENTS_PATH || path == tc_api::upload::UPLOADS_PATH {
+        if shared.is_closing() {
+            return closing_response();
+        }
+        return next.run(request).await;
+    }
+    // Counted before the closing flag is read, and both with `SeqCst`: a request that sees
+    // "not closing" is then always seen by the drain, so none slips between the two.
+    let _in_flight = InFlight::enter(Arc::clone(&shared));
     if shared.is_closing() {
         return closing_response();
     }
-    let path = request.uri().path();
-    if path == tc_api::endpoint::EVENTS_PATH || path == tc_api::upload::UPLOADS_PATH {
-        return next.run(request).await;
-    }
-    let _in_flight = InFlight::enter(&shared);
     next.run(request).await
 }
 
@@ -109,28 +117,29 @@ pub(crate) fn closing_response() -> Response {
     response
 }
 
-/// Counts a request until its response is built, however the request ends.
-struct InFlight<'a>(&'a Shared);
+/// Counts a request, or a backend call, until it ends however it ends. It owns its
+/// `Arc`, so a call that runs on a task of its own stays counted after its client is gone.
+pub(crate) struct InFlight(Arc<Shared>);
 
-impl<'a> InFlight<'a> {
-    fn enter(shared: &'a Shared) -> Self {
-        shared.in_flight.fetch_add(1, Ordering::AcqRel);
+impl InFlight {
+    pub(crate) fn enter(shared: Arc<Shared>) -> Self {
+        shared.in_flight.fetch_add(1, Ordering::SeqCst);
         Self(shared)
     }
 }
 
-impl Drop for InFlight<'_> {
+impl Drop for InFlight {
     fn drop(&mut self) {
-        self.0.in_flight.fetch_sub(1, Ordering::AcqRel);
+        self.0.in_flight.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
-/// Waits up to `within` for the requests being answered to finish. Returns whether there
-/// were any.
+/// Waits up to `within` for the requests being answered, and the backend calls still
+/// running, to finish. Returns whether there were any.
 pub(crate) async fn drain(shared: &Shared, within: Duration) -> bool {
     let began = tokio::time::Instant::now();
     let mut any = false;
-    while shared.in_flight.load(Ordering::Acquire) > 0 && began.elapsed() < within {
+    while shared.in_flight.load(Ordering::SeqCst) > 0 && began.elapsed() < within {
         any = true;
         tokio::time::sleep(Duration::from_millis(5)).await;
     }

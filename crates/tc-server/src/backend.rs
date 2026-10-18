@@ -16,7 +16,8 @@ pub trait Backend: Send + Sync + 'static {
 
     /// One API request. `path` is `service/name`, always a row of tc-api's tables: the server
     /// answers 404 for any other path before it calls this. `body` is at most
-    /// [`Limits::api_body`](crate::Limits::api_body) bytes.
+    /// [`Limits::api_body`](crate::Limits::api_body) bytes. The server runs it on a task of
+    /// its own: it runs to its end even when the client goes away.
     fn call(&self, path: &'static str, body: Bytes) -> impl Future<Output = Answer> + Send;
 
     /// The event stream after `after` (0: the reader holds no frame). The ring, replay,
@@ -24,7 +25,8 @@ pub trait Backend: Send + Sync + 'static {
     fn subscribe(&self, after: u64) -> Self::Events;
 
     /// The quit work of §5.1 before the process exits: aligner links, checkpoints, actors.
-    /// It may run after `app/quit` already ran it, so it must be safe to run twice.
+    /// It may run after `app/quit` already ran it, so it must be safe to run twice. The server
+    /// calls it after the drain, but a call that outlasted the drain may still be running.
     fn quit(&self) -> impl Future<Output = ()> + Send;
 
     /// Resolves once the application asked to quit (`app/quit`).

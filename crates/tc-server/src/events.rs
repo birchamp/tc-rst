@@ -16,6 +16,7 @@ use tokio::sync::watch;
 use tokio::time::{Interval, MissedTickBehavior};
 
 use crate::backend::{Backend, EventSource, Next};
+use crate::log::warn;
 use crate::state::AppState;
 
 #[derive(Deserialize)]
@@ -71,8 +72,13 @@ async fn step<E: EventSource>(mut open: Open<E>) -> Option<(Chunk, Open<E>)> {
     let chunk = tokio::select! {
         next = open.events.next() => match next {
             Next::Frame(frame) => {
-                // serde_json writes no raw newline, so the frame is one `data:` line.
-                let data = serde_json::to_string(&frame).ok()?;
+                // serde_json writes no raw newline, so the frame is one `data:` line. A frame
+                // that cannot be written ends the stream, so the UI reconnects and gets the
+                // replay; skipping it would drop a frame on a stream that stays open.
+                let Ok(data) = serde_json::to_string(&frame) else {
+                    warn("a frame could not be written; the stream ends");
+                    return None;
+                };
                 Bytes::from(format!("id: {}\ndata: {data}\n\n", frame.seq))
             }
             Next::Lagged | Next::Closed => return None,

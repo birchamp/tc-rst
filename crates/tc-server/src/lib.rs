@@ -58,11 +58,12 @@ pub struct Limits {
     pub api_body: usize,
     /// How long a quiet event stream waits before it writes a comment line: 15 s.
     pub heartbeat: Duration,
-    /// How long the backend gets to finish its quit work: 5 s. The cap exists so a hung disk
-    /// never keeps the process of a dead shell alive holding the locks; what the store
-    /// wrote is durable.
+    /// The whole close: the drain of requests being answered and the backend's quit work
+    /// share this one budget, 5 s. The cap exists so a hung disk never keeps the process of
+    /// a dead shell alive holding the locks; what the store wrote is durable.
     pub close_within: Duration,
-    /// How long requests being answered get to finish once closing began: 1 s.
+    /// How long requests being answered, and backend calls still running, get to finish once
+    /// closing began, before the backend's quit work starts: 1 s.
     pub drain_within: Duration,
 }
 
@@ -186,10 +187,13 @@ impl Server {
         self
     }
 
-    /// Serves until the shell, the application or a signal says to quit, then closes: new
-    /// requests get 503, the backend gets [`Limits::close_within`] to finish, the event
-    /// streams end, requests being answered get [`Limits::drain_within`], and unless stdin
-    /// had closed, `{"closed":true}` goes to the shell. The caller then ends the process.
+    /// Serves until the shell, the application or a signal says to quit, then closes, all
+    /// within [`Limits::close_within`]: new requests get 503; requests being answered and
+    /// backend calls still running get [`Limits::drain_within`] to finish, so a save accepted
+    /// before the quit reaches a backend that is still open and its reply reaches the UI;
+    /// then the backend's quit work runs with what is left of the budget; the event streams
+    /// end; and unless stdin had closed, `{"closed":true}` goes to the shell. The caller then
+    /// ends the process.
     pub async fn run<B, R, W>(
         self,
         backend: Arc<B>,
@@ -234,19 +238,21 @@ impl Server {
             }
         };
 
-        shared.closing.store(true, Ordering::Release);
-        if tokio::time::timeout(shared.limits.close_within, backend.quit())
+        shared.closing.store(true, Ordering::SeqCst);
+        let deadline = tokio::time::Instant::now() + shared.limits.close_within;
+        let drain_within = shared.limits.drain_within.min(shared.limits.close_within);
+        if lifecycle::drain(&shared, drain_within).await {
+            // The replies that just finished are handed to their sockets by tasks of
+            // their own; let them run before the backend closes.
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        if tokio::time::timeout_at(deadline, backend.quit())
             .await
             .is_err()
         {
             log::warn("the app did not finish closing in time; what it wrote is kept");
         }
         shared.streams_end.send_replace(true);
-        if lifecycle::drain(&shared, shared.limits.drain_within).await {
-            // The replies that just finished are handed to their sockets by tasks of
-            // their own; let them run before the process can end.
-            tokio::time::sleep(Duration::from_millis(25)).await;
-        }
         if cause != Exit::StdinClosed {
             lifecycle::say_closed(&mut output).await;
         }

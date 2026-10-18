@@ -2,18 +2,19 @@
 //! (APP-DESIGN §3.3, §5.3).
 
 use std::collections::HashSet;
-use std::panic::AssertUnwindSafe;
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use axum::body::{Body, Bytes};
 use axum::extract::{Path, Request, State};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use futures_util::FutureExt as _;
 use futures_util::StreamExt as _;
 use tc_api::{ApiError, Reply};
 
 use crate::backend::{Answer, Backend, Then};
+use crate::lifecycle::InFlight;
+use crate::log::warn;
 use crate::state::AppState;
 
 macro_rules! paths {
@@ -149,14 +150,21 @@ pub(crate) async fn api<B: Backend>(
         Err(BodyError::TooLarge) => return too_large(),
         Err(BodyError::Broken) => return StatusCode::BAD_REQUEST.into_response(),
     };
-    // A panic in the application must not end the server; the person sees an internal error.
-    let answer = AssertUnwindSafe(state.backend.call(path, body))
-        .catch_unwind()
-        .await;
-    match answer {
+    // hyper drops this future when the connection dies (a reload, a closed window). The call
+    // runs on a task of its own, which holds the in-flight count, so a save is never cut half
+    // way and the quit waits for it. A panic ends only that task: it is an internal error.
+    let backend = Arc::clone(&state.backend);
+    let in_flight = InFlight::enter(Arc::clone(&state.shared));
+    let call = tokio::spawn(async move {
+        let _in_flight = in_flight;
+        backend.call(path, body).await
+    });
+    match call.await {
         Ok(answer) => answer_response(answer),
-        Err(_) => {
-            eprintln!("tc4: a request to {path} panicked");
+        Err(error) => {
+            if error.is_panic() {
+                warn(format_args!("a request to {path} panicked"));
+            }
             (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
         }
     }

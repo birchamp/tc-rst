@@ -179,7 +179,12 @@ impl Backend for Stub {
 
     async fn call(&self, path: &'static str, body: Bytes) -> Answer {
         // `test/quiet` asks whether anything else is being answered, so it does not count.
-        let _busy = (path != "test/quiet").then(|| Busy::enter(&self.busy));
+        // Without the hooks there is no such row, and no such text in the binary.
+        #[cfg(feature = "test-hooks")]
+        let counted = path != "test/quiet";
+        #[cfg(not(feature = "test-hooks"))]
+        let counted = true;
+        let _busy = counted.then(|| Busy::enter(&self.busy));
         match self.handle(path, &body) {
             Some(body) => Answer::Reply {
                 body,

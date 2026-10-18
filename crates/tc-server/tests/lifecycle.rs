@@ -25,6 +25,10 @@ struct Observed {
     quit_hangs: bool,
     /// `call` waits this long before it answers.
     call_takes: Duration,
+    /// When `call` last returned its answer.
+    call_finished: Mutex<Option<Instant>>,
+    /// When `quit` was last entered.
+    quit_started: Mutex<Option<Instant>>,
 }
 
 impl Observed {
@@ -36,7 +40,17 @@ impl Observed {
             quit_waits_for: None,
             quit_hangs: false,
             call_takes: Duration::ZERO,
+            call_finished: Mutex::new(None),
+            quit_started: Mutex::new(None),
         }
+    }
+
+    fn call_finished(&self) -> Option<Instant> {
+        *self.call_finished.lock().unwrap()
+    }
+
+    fn quit_started(&self) -> Option<Instant> {
+        *self.quit_started.lock().unwrap()
     }
 }
 
@@ -45,13 +59,16 @@ impl Backend for Observed {
 
     async fn call(&self, path: &'static str, body: Bytes) -> Answer {
         tokio::time::sleep(self.call_takes).await;
-        self.inner.call(path, body).await
+        let answer = self.inner.call(path, body).await;
+        *self.call_finished.lock().unwrap() = Some(Instant::now());
+        answer
     }
     fn subscribe(&self, after: u64) -> StubEvents {
         self.inner.subscribe(after)
     }
     async fn quit(&self) {
         self.quit_calls.fetch_add(1, Ordering::SeqCst);
+        *self.quit_started.lock().unwrap() = Some(Instant::now());
         if self.quit_hangs {
             std::future::pending::<()>().await;
         }
@@ -242,4 +259,133 @@ fn an_open_stream_does_not_hold_the_run_up() {
     server.quit_message();
     assert_eq!(server.join(), Exit::QuitMessage);
     assert!(began.elapsed() < Duration::from_secs(2));
+}
+
+#[test]
+fn quit_work_begins_after_the_requests_being_answered() {
+    let backend = Arc::new(Observed {
+        call_takes: Duration::from_millis(300),
+        ..Observed::new()
+    });
+    let mut server = TestServer::start(Arc::clone(&backend));
+    let mut stream = server.connect();
+    stream
+        .write_all(&server.api_req("app/hello", "{}").to_bytes())
+        .unwrap();
+    std::thread::sleep(Duration::from_millis(100));
+    server.quit_message();
+    let response = common::read_response(&mut stream);
+    assert_eq!(response.status, 200, "{}", response.text());
+    assert_eq!(server.join(), Exit::QuitMessage);
+    let finished = backend.call_finished().expect("the call finished");
+    let started = backend.quit_started().expect("the quit ran");
+    assert!(
+        finished <= started,
+        "the quit work began {:?} before the request being answered finished",
+        finished.duration_since(started)
+    );
+}
+
+#[test]
+fn a_call_whose_client_went_away_runs_to_its_end() {
+    let backend = Arc::new(Observed {
+        call_takes: Duration::from_millis(300),
+        ..Observed::new()
+    });
+    let server = TestServer::start(Arc::clone(&backend));
+    let mut stream = server.connect();
+    stream
+        .write_all(&server.api_req("app/hello", "{}").to_bytes())
+        .unwrap();
+    std::thread::sleep(Duration::from_millis(50));
+    stream.shutdown(std::net::Shutdown::Both).unwrap();
+    drop(stream);
+    let until = Instant::now() + Duration::from_secs(1);
+    while backend.call_finished().is_none() {
+        assert!(
+            Instant::now() < until,
+            "a call was cut short when its client went away"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn quit_waits_for_a_call_whose_client_went_away() {
+    let backend = Arc::new(Observed {
+        call_takes: Duration::from_millis(300),
+        ..Observed::new()
+    });
+    let mut server = TestServer::start(Arc::clone(&backend));
+    let mut stream = server.connect();
+    stream
+        .write_all(&server.api_req("app/hello", "{}").to_bytes())
+        .unwrap();
+    std::thread::sleep(Duration::from_millis(50));
+    stream.shutdown(std::net::Shutdown::Both).unwrap();
+    drop(stream);
+    std::thread::sleep(Duration::from_millis(50));
+    server.quit_message();
+    assert_eq!(server.join(), Exit::QuitMessage);
+    let finished = backend
+        .call_finished()
+        .expect("the quit waited for the call");
+    let started = backend.quit_started().expect("the quit ran");
+    assert!(
+        finished <= started,
+        "the quit work began before the call finished"
+    );
+}
+
+#[test]
+fn the_whole_close_fits_in_close_within() {
+    let backend = Arc::new(Observed {
+        call_takes: Duration::from_secs(30),
+        quit_hangs: true,
+        ..Observed::new()
+    });
+    let mut server = TestServer::start_with(
+        Arc::clone(&backend),
+        |config| {
+            config.limits.drain_within = Duration::from_millis(400);
+            config.limits.close_within = Duration::from_millis(600);
+        },
+        true,
+    );
+    let mut stream = server.connect();
+    stream
+        .write_all(&server.api_req("app/hello", "{}").to_bytes())
+        .unwrap();
+    std::thread::sleep(Duration::from_millis(100));
+    let began = Instant::now();
+    server.quit_message();
+    assert_eq!(server.join(), Exit::QuitMessage);
+    assert!(
+        began.elapsed() < Duration::from_secs(1),
+        "the close took {:?}",
+        began.elapsed()
+    );
+    assert_eq!(backend.quit_calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_line_that_is_not_utf8_is_ignored() {
+    let backend = Arc::new(Observed::new());
+    let mut server = TestServer::start(backend);
+    server.write_stdin(b"\xff\xfe\n");
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(!server.finished(), "a stray byte ended the run");
+    assert_eq!(server.get("/").status, 200);
+    server.quit_message();
+    assert_eq!(server.join(), Exit::QuitMessage);
+}
+
+#[test]
+fn a_last_quit_line_without_a_newline_still_quits() {
+    let backend = Arc::new(Observed::new());
+    let mut server = TestServer::start(backend);
+    server.write_stdin(b"{\"quit\":true}");
+    server.close_stdin();
+    assert_eq!(server.join(), Exit::QuitMessage);
+    assert_eq!(server.stdout.text(), "{\"closed\":true}\n");
 }
