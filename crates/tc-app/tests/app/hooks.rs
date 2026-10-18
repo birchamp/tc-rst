@@ -1,0 +1,355 @@
+//! The `test` service as a whole: it answers only when switched on, every row answers, an
+//! arm that could never fire is refused, `test/quiet` sees what is in flight, and
+//! `test/reset` starts the next scenario from a launch's state.
+
+use std::time::Duration;
+
+use serde_json::Value;
+use tc_api::ALL;
+use tc_api::event::Event;
+use tc_api::ids::{LocaleId, WallMs};
+use tc_api::jobs::{JobKind, JobOutcome, Phase};
+use tc_api::net::Set;
+use tc_api::prefs::SetLocale;
+use tc_api::test::{Crash, CrashPoint, Hold, HoldPoint, Release, Reset};
+use tc_api::{ApiError, Reply};
+use tc_app::Answer;
+use tc_app::events::Next;
+use tc_app::hooks::CRASH_EXIT_CODE;
+use tc_app::jobs::JobSpec;
+use tc_app::reports::{ReportOp, ReportOutcome, facts};
+
+use super::common::{
+    ManualJob, Parts, TestApp, answer, field_log, field_token, hello_value, is_busy, post, rid,
+    store, store_req, try_start, until_held_count, until_quiet,
+};
+
+fn crash(id: u8, at: CrashPoint, path: Option<&str>) -> Crash {
+    Crash {
+        request: rid(id),
+        at,
+        path: path.map(str::to_owned),
+    }
+}
+
+fn hold(id: u8, at: HoldPoint) -> Hold {
+    Hold {
+        request: rid(id),
+        at,
+    }
+}
+
+fn release(id: u8, at: HoldPoint) -> Release {
+    Release {
+        request: rid(id),
+        at,
+    }
+}
+
+fn net(id: u8, on: bool) -> Set {
+    Set {
+        request: rid(id),
+        on,
+    }
+}
+
+async fn started() -> (tempfile::TempDir, TestApp) {
+    let dir = tempfile::tempdir().unwrap();
+    let t = TestApp::start_in(dir.path(), |_, _| {}).await;
+    (dir, t)
+}
+
+#[test]
+fn a_test_crash_exits_with_the_code_the_server_uses() {
+    assert_eq!(CRASH_EXIT_CODE, 86);
+}
+
+#[tokio::test]
+async fn test_hooks_are_not_found_when_switched_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let t = TestApp::start_in(dir.path(), |config, _| config.test_hooks = false).await;
+    for info in ALL.iter().filter(|info| info.path.starts_with("test/")) {
+        assert_eq!(
+            t.app.call(info.path, b"{}").await,
+            Answer::NotFound,
+            "{}",
+            info.path
+        );
+    }
+    assert!(
+        !t.app_data.join("test-hooks").exists(),
+        "no test-hooks folder without the flag"
+    );
+    // The product endpoints still answer.
+    assert!(matches!(
+        t.app.call("app/hello", b"{}").await,
+        Answer::Reply { .. }
+    ));
+}
+
+#[tokio::test]
+async fn test_hooks_make_their_folder_when_switched_on() {
+    let (_dir, t) = started().await;
+    assert!(t.app_data.join("test-hooks").join("fields.json").is_file());
+}
+
+#[tokio::test]
+async fn an_unreadable_fields_file_stops_the_start_and_is_never_overwritten() {
+    let dir = tempfile::tempdir().unwrap();
+    let t = TestApp::start_in(dir.path(), |_, _| {}).await;
+    let file = t.app_data.join("test-hooks").join("fields.json");
+    std::fs::write(&file, b"{ not json").unwrap();
+    let again = try_start(dir.path(), &Parts::new(), |_, _| {}).await;
+    assert!(
+        matches!(again, Err(tc_app::StartError::TestFields(_))),
+        "{:?}",
+        again.map(|_| ())
+    );
+    assert_eq!(std::fs::read(&file).unwrap(), b"{ not json");
+}
+
+/// Every row answers its golden request with a well-formed reply, the test hooks too.
+#[tokio::test]
+async fn every_endpoint_answers_its_golden_request() {
+    let golden = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../tc-api/tests/golden/endpoints/"
+    );
+    for info in ALL {
+        let text = std::fs::read_to_string(format!("{golden}{}.json", info.path)).unwrap();
+        let file: Value = serde_json::from_str(&text).unwrap();
+        // A fresh app for each: `app/quit`, `net/set` and `test/crash` change state.
+        let (_dir, t) = started().await;
+        if info.net.is_some() {
+            post(
+                &t.app,
+                &Set {
+                    request: rid(200),
+                    on: true,
+                },
+            )
+            .await
+            .unwrap();
+        }
+        let body = serde_json::to_vec(&file["request"]).unwrap();
+        let answered = t.app.call(info.path, &body).await;
+        let Answer::Reply { body, .. } = answered else {
+            panic!("{}: {answered:?}", info.path)
+        };
+        let reply: Reply<Value> = serde_json::from_slice(&body)
+            .unwrap_or_else(|e| panic!("{}: {e}: {}", info.path, String::from_utf8_lossy(&body)));
+        if [
+            "app/hello",
+            "net/state",
+            "account/state",
+            "account/helpLink",
+            "test/quiet",
+            "test/hold",
+            "test/release",
+            "test/reset",
+            "test/crash",
+            "test/fieldLog",
+        ]
+        .contains(&info.path)
+        {
+            assert!(matches!(reply, Reply::Ok(_)), "{}: {reply:?}", info.path);
+        }
+    }
+}
+
+#[tokio::test]
+async fn arming_a_crash_that_can_never_fire_is_a_bad_request() {
+    let (_dir, t) = started().await;
+    let paths = [
+        "app/hello",
+        "test/crash",
+        "test/hold",
+        "test/release",
+        "test/reset",
+        "nope/nope",
+        "net/state",
+        "test/fieldLog",
+        "",
+    ];
+    for (n, path) in paths.into_iter().enumerate() {
+        let id = 10 + u8::try_from(n).unwrap();
+        let armed = post(&t.app, &crash(id, CrashPoint::BeforeStore, Some(path))).await;
+        assert!(
+            matches!(&armed, Err(ApiError::BadRequest { field, .. }) if field == "path"),
+            "{path:?}: {armed:?}"
+        );
+    }
+    // Nothing was armed: the next write runs.
+    post(&t.app, &net(2, true)).await.unwrap();
+    assert!(t.app.internet().is_on());
+    assert!(t.ender.ended().is_empty());
+}
+
+#[tokio::test]
+async fn a_crash_for_any_write_is_taken_by_the_first_write_and_not_by_the_arming_hooks() {
+    let (_dir, t) = started().await;
+    // Hold, release and a second arm do not take the crash.
+    post(&t.app, &crash(1, CrashPoint::BeforeStore, None))
+        .await
+        .unwrap();
+    post(&t.app, &hold(2, HoldPoint::Checkpoint)).await.unwrap();
+    post(&t.app, &release(3, HoldPoint::Checkpoint))
+        .await
+        .unwrap();
+    post(&t.app, &crash(4, CrashPoint::BeforeStore, None))
+        .await
+        .unwrap();
+    assert!(t.ender.ended().is_empty());
+    assert_eq!(answer(&t.app, &net(5, true)).await, Answer::Ended);
+    assert_eq!(t.ender.ended(), vec![CrashPoint::BeforeStore]);
+}
+
+#[tokio::test]
+async fn quiet_follows_jobs() {
+    let (_dir, t) = started().await;
+    assert!(!is_busy(&t.app).await, "idle");
+    let job = ManualJob::start(t.app.jobs(), JobSpec::new(JobKind::Download, Phase::Seed)).await;
+    assert!(is_busy(&t.app).await, "a job is live");
+    job.finish(Ok(JobOutcome::Finished));
+    until_quiet(&t.app).await;
+    // `test/quiet` does not count itself.
+    assert_eq!(
+        t.app.call("test/quiet", b"{}").await,
+        t.app.call("test/quiet", b"{}").await
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn quiet_follows_writes_and_holds() {
+    let (_dir, t) = started().await;
+    let token = field_token(&t.app, "title").await;
+    post(&t.app, &hold(1, HoldPoint::Save)).await.unwrap();
+    let held = {
+        let app = t.app.clone();
+        let body = serde_json::to_vec(&store_req(2, "title", &token, "x")).unwrap();
+        tokio::spawn(async move { app.call("test/fieldStore", &body).await })
+    };
+    until_held_count(&t.app, 1).await;
+    assert!(is_busy(&t.app).await, "a held store is in flight");
+    post(&t.app, &release(3, HoldPoint::Save)).await.unwrap();
+    held.await.unwrap();
+    until_quiet(&t.app).await;
+    assert!(!is_busy(&t.app).await);
+}
+
+/// A write whose task is gone is not in flight, or every capture would wait for it for ever.
+#[tokio::test]
+async fn quiet_ignores_a_request_that_has_ended() {
+    let (_dir, t) = started().await;
+    for n in 0..3 {
+        post(&t.app, &net(n + 1, n % 2 == 0)).await.unwrap();
+        assert!(!is_busy(&t.app).await, "after write {n}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn reset_restores_default_prefs_clears_reports_releases_holds_and_turns_the_internet_off() {
+    let (_dir, t) = started().await;
+    let mut events = t.app.events().subscribe(t.app.events().head());
+
+    let french = SetLocale {
+        request: rid(1),
+        locale: LocaleId::parse("fr").unwrap(),
+    };
+    post(&t.app, &french).await.unwrap();
+    t.app.reports().add(
+        ReportOp::Open,
+        ReportOutcome::Ok,
+        facts(serde_json::json!({})),
+        WallMs(1),
+        WallMs(2),
+    );
+    post(&t.app, &net(2, true)).await.unwrap();
+    // A store waits at its hold when the reset comes.
+    let token = field_token(&t.app, "title").await;
+    post(&t.app, &hold(4, HoldPoint::Save)).await.unwrap();
+    let waiting = {
+        let app = t.app.clone();
+        let body = serde_json::to_vec(&store_req(5, "title", &token, "Waits")).unwrap();
+        tokio::spawn(async move { app.call("test/fieldStore", &body).await })
+    };
+    until_held_count(&t.app, 1).await;
+    // Armed after the store passed its crash point, so it waits for the next write.
+    post(&t.app, &crash(3, CrashPoint::BeforeStore, None))
+        .await
+        .unwrap();
+    while events.try_next().is_some() {}
+
+    post(&t.app, &Reset { request: rid(6) }).await.unwrap();
+
+    let hello = hello_value(&t.app).await;
+    assert_eq!(hello["prefs"]["appLocale"], "en");
+    assert_eq!(hello["internet"], false);
+    assert!(t.app.reports().all().is_empty());
+    // The held store finished.
+    let stored = tokio::time::timeout(Duration::from_secs(5), waiting)
+        .await
+        .expect("the held store was released")
+        .unwrap();
+    assert!(matches!(stored, Answer::Reply { .. }));
+    // The crash is disarmed: a write runs.
+    let current = field_token(&t.app, "title").await;
+    store(&t.app, 7, "title", &current, "After").await.unwrap();
+    assert!(t.ender.ended().is_empty());
+    // The switch going off was announced; a second reset says nothing new.
+    let mut seen = Vec::new();
+    while let Some(Next::Frame(frame)) = events.try_next() {
+        if let Event::Internet { on } = frame.event {
+            seen.push(on);
+        }
+    }
+    assert_eq!(seen, vec![false]);
+    post(&t.app, &Reset { request: rid(8) }).await.unwrap();
+    while let Some(Next::Frame(frame)) = events.try_next() {
+        assert!(!matches!(frame.event, Event::Internet { .. }), "{frame:?}");
+    }
+    // The test fields are kept: tests name their own.
+    assert_eq!(field_log(&t.app, "title").await.stores.len(), 2);
+    until_quiet(&t.app).await;
+}
+
+#[tokio::test]
+async fn holds_at_the_other_points_are_accepted_and_nothing_reaches_them() {
+    let (_dir, t) = started().await;
+    let points = [
+        HoldPoint::BookRead,
+        HoldPoint::Checkpoint,
+        HoldPoint::Materialize,
+        HoldPoint::DraftWrite,
+    ];
+    for (n, at) in points.into_iter().enumerate() {
+        post(&t.app, &hold(10 + u8::try_from(n).unwrap(), at))
+            .await
+            .unwrap();
+    }
+    post(&t.app, &crash(2, CrashPoint::DuringDraftWrite, None))
+        .await
+        .unwrap();
+    // No phase-0 write reaches any of them.
+    post(&t.app, &net(3, true)).await.unwrap();
+    assert!(!is_busy(&t.app).await);
+    assert_eq!(t.app.holding(), 0);
+    assert!(t.ender.ended().is_empty());
+}
+
+#[tokio::test]
+async fn a_release_with_nothing_held_does_nothing() {
+    let (_dir, t) = started().await;
+    post(&t.app, &release(1, HoldPoint::Save)).await.unwrap();
+    // And an armed hold is removed by a release before anything reached it.
+    post(&t.app, &hold(2, HoldPoint::Save)).await.unwrap();
+    post(&t.app, &release(3, HoldPoint::Save)).await.unwrap();
+    let token = field_token(&t.app, "title").await;
+    let stored = tokio::time::timeout(
+        Duration::from_secs(5),
+        store(&t.app, 4, "title", &token, "x"),
+    )
+    .await
+    .expect("the store was not held");
+    assert!(stored.is_ok());
+}

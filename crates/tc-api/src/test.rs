@@ -132,8 +132,9 @@ pub enum TokenBase {
     Stale,
 }
 
-/// `test/reset`: prefs, summaries and reports back to the scenario's seed; the parity
-/// harness's `home()`.
+/// `test/reset`: prefs, summaries and reports back to the scenario's seed, every hold
+/// released, the armed crash disarmed, and the internet switch off as a launch finds it; the
+/// parity harness's `home()`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

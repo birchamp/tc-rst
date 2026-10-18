@@ -5,13 +5,13 @@ use std::sync::atomic::Ordering;
 
 use serde_json::Value;
 use tc_api::account::{AccountView, KeepState};
+use tc_app::App;
 use tc_app::StartError;
 use tc_app::account::{MemKeychain, MemKeychainMode};
 use tc_app::config::{ConfigError, HostEnv, HostOs, ProjectsFolder, RootChoice};
 use tc_app::reports::{OperationReport, ReportOp, ReportOutcome};
-use tc_app::{App, AppDeps};
 
-use super::common::{CountingKeychain, Parts, TestApp, hello_value, token};
+use super::common::{CountingKeychain, Parts, TestApp, hello_value, token, try_start};
 
 fn reports_of(app: &App, op: ReportOp) -> Vec<OperationReport> {
     app.reports()
@@ -153,7 +153,7 @@ async fn a_given_projects_folder_that_does_not_exist_is_a_start_error() {
     let dir = tempfile::tempdir().unwrap();
     let given = dir.path().join("typo");
     let parts = Parts::new();
-    let result = start_result(dir.path(), &parts, |config, _| {
+    let result = try_start(dir.path(), &parts, |config, _| {
         config.projects = ProjectsFolder::Given(given.clone());
     })
     .await;
@@ -167,48 +167,10 @@ async fn a_given_projects_folder_that_does_not_exist_is_a_start_error() {
     assert!(!given.exists(), "an empty folder was not made in its place");
 }
 
-/// `TestApp::start_with` panics on an error; this keeps it.
-async fn start_result(
-    dir: &std::path::Path,
-    parts: &Parts,
-    edit: impl FnOnce(&mut tc_app::config::AppConfig, &mut AppDeps),
-) -> Result<App, StartError> {
-    let app_data = dir.join("app-data");
-    let home = dir.join("home");
-    std::fs::create_dir_all(&home).unwrap();
-    let host = HostEnv::new(
-        HostOs::Linux,
-        [
-            ("HOME".to_owned(), home.clone().into_os_string()),
-            (
-                "XDG_DATA_HOME".to_owned(),
-                dir.join("local").into_os_string(),
-            ),
-        ],
-    );
-    let mut config = tc_app::config::AppConfig {
-        app_data,
-        projects: ProjectsFolder::Default,
-        door43: "http://127.0.0.1:9".parse().unwrap(),
-        build: super::common::build(),
-        test_hooks: true,
-    };
-    let mut deps = AppDeps {
-        clock: parts.clock.clone(),
-        keychain: parts.keychain.clone(),
-        folders: Arc::new(tc_app::folders::HostFolders::new(host.clone())),
-        host,
-        files: parts.files.clone(),
-        sessions: parts.sessions.clone(),
-    };
-    edit(&mut config, &mut deps);
-    App::start(config, deps).await
-}
-
 #[tokio::test]
 async fn no_home_is_a_start_error() {
     let dir = tempfile::tempdir().unwrap();
-    let result = start_result(dir.path(), &Parts::new(), |_, deps| {
+    let result = try_start(dir.path(), &Parts::new(), |_, deps| {
         deps.host = HostEnv::new(HostOs::Windows, []);
     })
     .await;
@@ -229,7 +191,7 @@ async fn an_app_data_folder_that_cannot_be_made_is_a_start_error() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("a file");
     std::fs::write(&file, b"x").unwrap();
-    let result = start_result(dir.path(), &Parts::new(), |config, _| {
+    let result = try_start(dir.path(), &Parts::new(), |config, _| {
         config.app_data = file.join("inside");
     })
     .await;

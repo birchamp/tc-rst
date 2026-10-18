@@ -14,6 +14,8 @@ pub mod events;
 pub mod flows;
 pub mod folders;
 mod handlers;
+#[cfg(feature = "test-hooks")]
+pub mod hooks;
 pub mod jobs;
 pub mod prefs;
 pub mod replies;

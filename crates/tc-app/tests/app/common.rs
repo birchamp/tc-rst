@@ -8,16 +8,21 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use serde::de::DeserializeOwned;
 use tc_api::app::{BuildInfo, OpenSession, SessionRole};
 use tc_api::event::{Event, SessionMode};
 use tc_api::ids::{Epoch, JobId, ProjectId, ProjectRef, RequestId, Scope, ServerInstance, WallMs};
 use tc_api::jobs::{JobKind, JobOutcome, JobState, JobView, Phase, Progress};
 use tc_api::prefs::PlaceMode;
+use tc_api::test::{FieldLog, FieldLogView, FieldStore};
+use tc_api::write::Ack;
+use tc_api::{ApiError, Endpoint, Reply, ShownToken};
 use tc_app::account::{Keychain, KeychainError, MemKeychain};
 use tc_app::clock::ManualClock;
 use tc_app::config::{AppConfig, HostEnv, HostOs, ProjectsFolder};
 use tc_app::events::{EventBus, Next, Subscription};
 use tc_app::folders::{FolderCheck, HostFolders};
+use tc_app::hooks::RecordingEnder;
 use tc_app::jobs::{JobCtx, JobEnd, JobRegistry, JobSpec};
 use tc_app::prefs::{EditUnit, LastEdit, MemoryFiles, PrefsWriter};
 use tc_app::reports::ReportLog;
@@ -264,6 +269,7 @@ pub struct Parts {
     pub keychain: Arc<MemKeychain>,
     pub sessions: Arc<FakeSessions>,
     pub clock: Arc<ManualClock>,
+    pub ender: Arc<RecordingEnder>,
 }
 
 impl Parts {
@@ -273,6 +279,7 @@ impl Parts {
             keychain: Arc::new(MemKeychain::new()),
             sessions: Arc::new(FakeSessions::default()),
             clock: Arc::new(ManualClock::new(1_000_000)),
+            ender: Arc::new(RecordingEnder::default()),
         }
     }
 }
@@ -294,6 +301,7 @@ pub struct TestApp {
     pub keychain: Arc<MemKeychain>,
     pub sessions: Arc<FakeSessions>,
     pub clock: Arc<ManualClock>,
+    pub ender: Arc<RecordingEnder>,
 }
 
 impl TestApp {
@@ -313,45 +321,17 @@ impl TestApp {
         parts: &Parts,
         edit: impl FnOnce(&mut AppConfig, &mut AppDeps),
     ) -> TestApp {
-        let app_data = dir.join("app-data");
-        let home = dir.join("home");
-        let local = dir.join("local");
-        std::fs::create_dir_all(&home).unwrap();
-        std::fs::create_dir_all(&local).unwrap();
-        let host = env(
-            HostOs::Linux,
-            &[
-                ("HOME", home.to_str().unwrap()),
-                ("USERPROFILE", home.to_str().unwrap()),
-                ("XDG_DATA_HOME", local.to_str().unwrap()),
-            ],
-        );
-        let mut config = AppConfig {
-            app_data: app_data.clone(),
-            projects: ProjectsFolder::Default,
-            door43: "http://127.0.0.1:9".parse().unwrap(),
-            build: build(),
-            test_hooks: true,
-        };
-        let mut deps = AppDeps {
-            clock: parts.clock.clone(),
-            keychain: parts.keychain.clone(),
-            folders: Arc::new(HostFolders::new(host.clone())),
-            host,
-            files: parts.files.clone(),
-            sessions: parts.sessions.clone(),
-        };
-        edit(&mut config, &mut deps);
-        let app = App::start(config, deps).await.unwrap();
+        let app = try_start(dir, parts, edit).await.unwrap();
         TestApp {
             app,
-            app_data,
-            home,
-            local,
+            app_data: dir.join("app-data"),
+            home: dir.join("home"),
+            local: dir.join("local"),
             files: parts.files.clone(),
             keychain: parts.keychain.clone(),
             sessions: parts.sessions.clone(),
             clock: parts.clock.clone(),
+            ender: parts.ender.clone(),
         }
     }
 }
@@ -407,4 +387,136 @@ pub fn last_edit() -> LastEdit {
         snippet: "Paul".to_owned(),
         at: WallMs(5),
     }
+}
+
+/// The request as the body the server receives.
+pub fn body_of<E: Endpoint>(req: &E) -> Vec<u8> {
+    serde_json::to_vec(req).unwrap()
+}
+
+/// The raw answer to a request.
+pub async fn answer<E: Endpoint>(app: &App, req: &E) -> tc_app::Answer {
+    app.call(E::PATH, &body_of(req)).await
+}
+
+/// The typed reply inside an answer that has one.
+pub fn reply_in<T: DeserializeOwned>(answer: &tc_app::Answer) -> Reply<T> {
+    match answer {
+        tc_app::Answer::Reply { body, .. } => serde_json::from_slice(body).unwrap(),
+        other => panic!("{other:?}"),
+    }
+}
+
+/// A request and its reply, as a result.
+pub async fn post<E: Endpoint>(app: &App, req: &E) -> Result<E::Ok, ApiError> {
+    app.request(req).await.unwrap().into_result()
+}
+
+pub async fn field_log(app: &App, field: &str) -> FieldLogView {
+    post(
+        app,
+        &FieldLog {
+            field: field.to_owned(),
+        },
+    )
+    .await
+    .unwrap()
+}
+
+/// The token of a field's current version.
+pub async fn field_token(app: &App, field: &str) -> ShownToken {
+    field_log(app, field).await.current.token
+}
+
+pub fn store_req(id: u8, field: &str, token: &ShownToken, text: &str) -> FieldStore {
+    FieldStore {
+        request: rid(id),
+        field: field.to_owned(),
+        shown: token.clone(),
+        text: text.to_owned(),
+    }
+}
+
+pub async fn store(
+    app: &App,
+    id: u8,
+    field: &str,
+    token: &ShownToken,
+    text: &str,
+) -> Result<Ack, ApiError> {
+    post(app, &store_req(id, field, token, text)).await
+}
+
+/// Waits, in real time, until `cond` holds.
+pub async fn until(what: &str, mut cond: impl FnMut() -> bool) {
+    for _ in 0..5000 {
+        if cond() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+    panic!("never happened: {what}");
+}
+
+pub async fn is_busy(app: &App) -> bool {
+    post(app, &tc_api::test::Quiet {}).await.unwrap().busy
+}
+
+/// Waits until `test/quiet` says nothing is in flight.
+pub async fn until_quiet(app: &App) {
+    for _ in 0..5000 {
+        if !is_busy(app).await {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+    panic!("the app never went quiet");
+}
+
+/// The bytes of the test fields' file.
+pub fn fields_file(app_data: &Path) -> Vec<u8> {
+    std::fs::read(app_data.join("test-hooks").join("fields.json")).unwrap()
+}
+
+/// Waits until exactly `count` operations are held.
+pub async fn until_held_count(app: &App, count: usize) {
+    until("an operation reaches its hold", || app.holding() == count).await;
+}
+
+/// Starts an app as `TestApp::start_with` does, and keeps a start error.
+pub async fn try_start(
+    dir: &Path,
+    parts: &Parts,
+    edit: impl FnOnce(&mut AppConfig, &mut AppDeps),
+) -> Result<App, tc_app::StartError> {
+    let home = dir.join("home");
+    let local = dir.join("local");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&local).unwrap();
+    let host = env(
+        HostOs::Linux,
+        &[
+            ("HOME", home.to_str().unwrap()),
+            ("USERPROFILE", home.to_str().unwrap()),
+            ("XDG_DATA_HOME", local.to_str().unwrap()),
+        ],
+    );
+    let mut config = AppConfig {
+        app_data: dir.join("app-data"),
+        projects: ProjectsFolder::Default,
+        door43: "http://127.0.0.1:9".parse().unwrap(),
+        build: build(),
+        test_hooks: true,
+    };
+    let mut deps = AppDeps {
+        clock: parts.clock.clone(),
+        keychain: parts.keychain.clone(),
+        folders: Arc::new(HostFolders::new(host.clone())),
+        host,
+        files: parts.files.clone(),
+        sessions: parts.sessions.clone(),
+        ender: parts.ender.clone(),
+    };
+    edit(&mut config, &mut deps);
+    App::start(config, deps).await
 }

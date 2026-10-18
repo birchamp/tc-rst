@@ -7,9 +7,11 @@ mod app {
     pub mod common;
     mod dispatch;
     mod events;
+    mod field_store;
     mod flows;
     mod folders;
     mod hello;
+    mod hooks;
     mod internet;
     mod jobs;
     mod keychain;

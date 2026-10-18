@@ -26,6 +26,8 @@ use crate::config::{
 use crate::events::EventBus;
 use crate::flows::FlowGate;
 use crate::folders::{FolderCheck, HostFolders};
+#[cfg(feature = "test-hooks")]
+use crate::hooks::{Ender, ExitProcess, TestHooks};
 use crate::jobs::JobRegistry;
 use crate::prefs::{AppDataFiles, MemoryFiles, PrefsWriter};
 use crate::replies::ReplyCache;
@@ -45,12 +47,15 @@ pub struct AppDeps {
     /// The app-data files `PrefsWriter` writes.
     pub files: Arc<dyn AppDataFiles>,
     pub sessions: Arc<dyn SessionDirectory>,
+    /// What ends the process at a test crash point.
+    #[cfg(feature = "test-hooks")]
+    pub ender: Arc<dyn Ender>,
 }
 
 impl AppDeps {
     /// This computer's clock, folders and variables; an in-memory keychain (the operating
-    /// system's comes with unit E1a, Q-3); in-memory app data (§4.9: before unit S1); and no
-    /// sessions (before unit B1b).
+    /// system's comes with unit E1a, Q-3); in-memory app data (§4.9: before unit S1); no
+    /// sessions (before unit B1b); and, with test hooks, an ender that ends the process.
     pub fn production() -> Self {
         let host = HostEnv::current();
         Self {
@@ -60,6 +65,8 @@ impl AppDeps {
             host,
             files: Arc::new(MemoryFiles::new()),
             sessions: Arc::new(NoSessions),
+            #[cfg(feature = "test-hooks")]
+            ender: Arc::new(ExitProcess),
         }
     }
 }
@@ -75,6 +82,9 @@ pub enum StartError {
     AppData { path: PathBuf, reason: String },
     #[error("this computer gave no random bytes")]
     Random,
+    #[cfg(feature = "test-hooks")]
+    #[error("the test fields cannot be read: {0}")]
+    TestFields(String),
 }
 
 /// Why a typed call through [`App::request`] has no reply.
@@ -137,6 +147,9 @@ pub(crate) struct Inner {
     /// Calls in flight, for `test/quiet`.
     pub(crate) calls: AtomicUsize,
     quit: watch::Sender<bool>,
+    /// `Some` only when `tc4 serve` was started with `--test-hooks`.
+    #[cfg(feature = "test-hooks")]
+    pub(crate) hooks: Option<TestHooks>,
 }
 
 pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -173,6 +186,8 @@ impl App {
             host,
             files,
             sessions,
+            #[cfg(feature = "test-hooks")]
+            ender,
         } = deps;
 
         std::fs::create_dir_all(&config.app_data).map_err(|e| StartError::AppData {
@@ -230,6 +245,14 @@ impl App {
             );
         }
 
+        // Without the flag no `test-hooks/` folder is made.
+        #[cfg(feature = "test-hooks")]
+        let hooks = if config.test_hooks {
+            Some(TestHooks::new(&config.app_data, ender).map_err(StartError::TestFields)?)
+        } else {
+            None
+        };
+
         let prefs = PrefsWriter::start(files, reports.clone(), clock.clone());
         let jobs = JobRegistry::new(bus.clone(), reports.clone(), clock.clone());
         let inner = Inner {
@@ -250,6 +273,8 @@ impl App {
             startup: Mutex::new(StartupState::Ready),
             calls: AtomicUsize::new(0),
             quit: watch::channel(false).0,
+            #[cfg(feature = "test-hooks")]
+            hooks,
         };
         Ok(App {
             inner: Arc::new(inner),
@@ -258,11 +283,21 @@ impl App {
 
     /// One request, as tc-server receives it: `path` is `service/name`, without `/api/v1/`.
     pub async fn call(&self, path: &str, body: &[u8]) -> Answer {
-        let _in_flight = (path != "test/quiet").then(|| InFlight::enter(&self.inner.calls));
-        match self.route_product(path, body).await {
-            Some(answer) => answer,
-            None => Answer::NotFound,
+        #[cfg(feature = "test-hooks")]
+        if self.is_dead() {
+            return Answer::Ended;
         }
+        let _in_flight = (path != "test/quiet").then(|| InFlight::enter(&self.inner.calls));
+        if let Some(answer) = self.route_product(path, body).await {
+            return answer;
+        }
+        #[cfg(feature = "test-hooks")]
+        if self.inner.hooks.is_some()
+            && let Some(answer) = self.route_test_hooks(path, body).await
+        {
+            return answer;
+        }
+        Answer::NotFound
     }
 
     /// The typed form of [`App::call`], through the same bytes: what tests and later units

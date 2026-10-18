@@ -28,6 +28,8 @@ use crate::app::{Answer, App, Then};
 use crate::jobs::stop_reason;
 use crate::replies::{BodyDigest, CacheAnswer, Outcome};
 use crate::reports::facts;
+#[cfg(feature = "test-hooks")]
+use tc_api::test::CrashPoint;
 
 /// What the app does for one endpoint. Impls write `async fn handle(&self, req: X) ->
 /// Result<…, ApiError>`, which satisfies this signature while the body holds nothing that is
@@ -65,6 +67,8 @@ macro_rules! router {
 }
 
 tc_api::endpoint_table!(router fn route_product);
+#[cfg(feature = "test-hooks")]
+tc_api::test_hook_table!(router fn route_test_hooks);
 
 impl App {
     /// Parses a request body. The reason is cut, so a body cannot make a long reply.
@@ -94,6 +98,10 @@ impl App {
             return self.error_answer(error);
         }
         let reply = Reply::from(self.handle(req).await);
+        #[cfg(feature = "test-hooks")]
+        if self.is_dead() {
+            return Answer::Ended;
+        }
         Answer::Reply {
             body: self.reply_bytes(&reply, E::PATH),
             then: Then::Continue,
@@ -130,6 +138,10 @@ impl App {
 
         let app = self.clone();
         let work = async move {
+            #[cfg(feature = "test-hooks")]
+            if let Some(ended) = app.crash_at(CrashPoint::BeforeStore, path) {
+                return ended;
+            }
             // The handler runs on a task of its own, so a panic in it becomes an `Internal`
             // reply that is cached like any other, never a write that vanished.
             let handled = tokio::spawn({
@@ -144,11 +156,22 @@ impl App {
                     facts(json!({"path": path, "stopped": stop_reason(stopped)})),
                 )),
             };
-            Outcome::Reply(app.reply_bytes(&reply, path).into())
+            // A write that ran on past the end of a test app never answers: the process that
+            // answered it is gone.
+            #[cfg(feature = "test-hooks")]
+            if app.is_dead() {
+                return Outcome::Ended;
+            }
+            let bytes = app.reply_bytes(&reply, path);
+            #[cfg(feature = "test-hooks")]
+            if let Some(ended) = app.crash_at(CrashPoint::BeforeReply, path) {
+                return ended;
+            }
+            Outcome::Reply(bytes.into())
         };
 
         match self.inner.replies.run(id, digest, work).await {
-            CacheAnswer::Fresh(outcome) => self.write_answer(outcome, Then::Continue),
+            CacheAnswer::Fresh(outcome) => self.write_answer(outcome, self.then_after(path)),
             CacheAnswer::Repeat(outcome) => self.write_answer(outcome, Then::Continue),
             CacheAnswer::Reused => self.error_answer(ApiError::RequestReused),
             CacheAnswer::Lost => {
@@ -159,6 +182,17 @@ impl App {
                 self.error_answer(error)
             }
         }
+    }
+
+    /// What the server does once a first attempt's reply is sent. Only a first attempt can end
+    /// the process after its reply: a retry's reply is a copy.
+    fn then_after(&self, path: &str) -> Then {
+        #[cfg(feature = "test-hooks")]
+        if self.crash_after_reply(path) {
+            return Then::EndProcess;
+        }
+        let _ = path;
+        Then::Continue
     }
 
     fn write_answer(&self, outcome: Outcome, then: Then) -> Answer {
