@@ -378,6 +378,14 @@ impl Installed {
         }
     }
 
+    /// How a seeding reports this bundled install when copying it was refused.
+    fn refused(&self, why: InstallError) -> StoreError {
+        StoreError::BadReceipt {
+            path: self.dir.clone(),
+            problem: why.to_string(),
+        }
+    }
+
     /// Whether `checked.json` names this receipt. A missing or unreadable record is no
     /// check.
     fn is_checked(&self) -> bool {
@@ -486,7 +494,8 @@ impl SeedPlan {
     }
 
     /// What is known before anything is done: the copies already trusted
-    /// (`already_installed`) and the bundled folders that could not be read (`refused`).
+    /// (`already_installed`), and in `refused` the bundled folders that could not be read
+    /// and the bundled installs whose receipt names a path an install refuses.
     pub fn report(&self) -> &SeedReport {
         &self.report
     }
@@ -722,7 +731,10 @@ impl ResourceStore {
     /// What [`ResourceStore::seed`] would do, found without opening a content file: a
     /// repeat start reads receipts and check records only (tC4 #740). An install this
     /// store holds whose receipt cannot be read or names another resource stops the plan
-    /// with its error, before anything is copied.
+    /// with its error, before anything is copied. A bundled install to copy whose receipt
+    /// names a path an install refuses is refused here, as the install would refuse it,
+    /// before any of its files is opened: on Windows a device name would open the device,
+    /// and a `../` path would read a file outside the bundle.
     pub fn seed_plan(&self, bundled: &ResourceStore) -> Result<SeedPlan, StoreError> {
         let inventory = bundled.installed()?;
         let mut plan = SeedPlan::default();
@@ -739,10 +751,19 @@ impl ResourceStore {
                     plan.files += copy.receipt.files.len() as u64;
                     plan.steps.push(SeedStep::Check { copy, name });
                 }
-                None => {
-                    plan.files += install.receipt.files.len() as u64;
-                    plan.steps.push(SeedStep::Copy { install, name });
-                }
+                None => match check_paths(install.files()) {
+                    Ok(()) => {
+                        plan.files += install.receipt.files.len() as u64;
+                        plan.steps.push(SeedStep::Copy { install, name });
+                    }
+                    Err(refusal) => {
+                        let refused = install.refused(InstallError::Refused {
+                            what: name.clone(),
+                            refusal,
+                        });
+                        plan.report.refused.push((name, refused));
+                    }
+                },
             }
         }
         Ok(plan)
@@ -812,13 +833,7 @@ impl ResourceStore {
                     match installed {
                         Ok(_) => report.added.push(name),
                         Err(InstallError::Store(e)) => return Err(e),
-                        Err(other) => report.refused.push((
-                            name,
-                            StoreError::BadReceipt {
-                                path: install.dir.clone(),
-                                problem: other.to_string(),
-                            },
-                        )),
+                        Err(other) => report.refused.push((name, install.refused(other))),
                     }
                 }
             }
@@ -854,9 +869,11 @@ impl ResourceStore {
         }
         let mut files = staged.files;
         files.sort_by(|a, b| a.0.cmp(&b.0));
-        check_paths(&files).map_err(|refusal| InstallError::Refused {
-            what: staged.origin.describe(),
-            refusal,
+        check_paths(files.iter().map(|(path, _)| path.as_str())).map_err(|refusal| {
+            InstallError::Refused {
+                what: staged.origin.describe(),
+                refusal,
+            }
         })?;
         let receipt = Receipt {
             receipt_version: RECEIPT_VERSION,
@@ -1051,18 +1068,19 @@ fn dirs_at_depth(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) -> Result<(),
 /// Refuses a path that could leave the content folder, that Windows would write under
 /// another name, or that a case-insensitive file system would merge with another.
 /// Downloads were checked already; this guards every write, whatever its source.
-fn check_paths(files: &[(String, Vec<u8>)]) -> Result<(), Refusal> {
-    for (path, _) in files {
+fn check_paths<'a>(paths: impl IntoIterator<Item = &'a str>) -> Result<(), Refusal> {
+    let paths: Vec<&str> = paths.into_iter().collect();
+    for path in &paths {
         let bad = path.is_empty()
             || path.contains(['\\', ':', '\0'])
             || path
                 .split('/')
                 .any(|segment| segment.is_empty() || segment.chars().all(|c| c == '.'));
         if bad {
-            return Err(Refusal::EscapesRoot(path.clone()));
+            return Err(Refusal::EscapesRoot((*path).to_owned()));
         }
     }
-    Ok(check_names(files.iter().map(|(path, _)| path.as_str()))?)
+    Ok(check_names(paths)?)
 }
 
 fn create_dirs(dir: &Path) -> Result<(), StoreError> {
@@ -1517,13 +1535,52 @@ mod tests {
         let machine_dir = tempfile::tempdir().unwrap();
         let machine = ResourceStore::open(machine_dir.path()).unwrap();
 
+        let opened = content_files_opened();
         let report = machine.seed_from(&bundled).unwrap();
 
+        assert_eq!(
+            content_files_opened() - opened,
+            0,
+            "the names are refused before a file is opened"
+        );
         assert!(report.added.is_empty(), "{:?}", report.added);
         assert_eq!(report.refused.len(), 1, "{:?}", report.refused);
         assert!(
             report.refused[0].1.to_string().contains("ABCDEF~1.JSN"),
             "the refusal names the file: {}",
+            report.refused[0].1
+        );
+        assert!(machine.installed().unwrap().installs.is_empty());
+        no_staging_folder_left(&machine);
+    }
+
+    #[test]
+    fn seeding_opens_no_file_of_a_bundled_install_whose_receipt_names_a_path_outside_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let bundled_dir = dir.path().join("bundle");
+        // Six folders up from the content folder (`dcs/<owner>/<repo>/<sha>/content`) is
+        // `dir`, outside the bundle. The file moved there keeps the receipt's size and
+        // SHA-256, so reading it would pass the check of its bytes.
+        let escaping = "../../../../../../outside.json";
+        bundled_with_file_named(&bundled_dir, escaping);
+        assert!(dir.path().join("outside.json").is_file());
+        let bundled = ResourceStore::open_read_only(&bundled_dir).unwrap();
+        let machine_dir = tempfile::tempdir().unwrap();
+        let machine = ResourceStore::open(machine_dir.path()).unwrap();
+
+        let opened = content_files_opened();
+        let report = machine.seed_from(&bundled).unwrap();
+
+        assert_eq!(
+            content_files_opened() - opened,
+            0,
+            "the path is refused before a file is opened"
+        );
+        assert!(report.added.is_empty(), "{:?}", report.added);
+        assert_eq!(report.refused.len(), 1, "{:?}", report.refused);
+        assert!(
+            report.refused[0].1.to_string().contains(escaping),
+            "the refusal names the path: {}",
             report.refused[0].1
         );
         assert!(machine.installed().unwrap().installs.is_empty());
