@@ -16,7 +16,8 @@
       "stores": [
         {
           "request": "11111111111111111111111111111111",
-          "text": "Paul, a servant of God"
+          "text": "Paul, a servant of God",
+          "base": "current"
         }
       ]
     }

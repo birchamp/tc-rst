@@ -2,9 +2,9 @@
 //! variants serde knows, so a new variant fails the tests until it has a sample here.
 
 use tc_api::refusal::{
-    CreateRefusal, ExchangeRefusal, ExportRefusal, FeedbackRefusal, ImportRefusal,
+    CreateRefusal, ExchangeRefusal, ExportRefusal, FeedbackRefusal, ImportRefusal, LockHolder,
     OpenDoor43Refusal, OpenRefusal, PrefsRefusal, Refusal, ResourceRefusal, ShareRefusal,
-    SignInRefusal, SyncBlock, SyncFailure, SyncRefusal,
+    SignInRefusal, SyncBlock, SyncFailure, SyncRefusal, UploadRefusal,
 };
 
 fn s(text: &str) -> String {
@@ -18,6 +18,13 @@ pub fn open() -> Vec<OpenRefusal> {
         OpenRefusal::Unreadable {
             reason: s("Access is denied. (os error 5)"),
         },
+        OpenRefusal::LockHeld {
+            holder: Some(LockHolder {
+                host: s("DESKTOP-7Q2"),
+                pid: 4242,
+            }),
+        },
+        OpenRefusal::LockHeld { holder: None },
     ]
 }
 
@@ -177,6 +184,12 @@ pub fn prefs() -> Vec<PrefsRefusal> {
     vec![PrefsRefusal::LocaleNotSaved]
 }
 
+pub fn upload() -> Vec<UploadRefusal> {
+    vec![UploadRefusal::NotWritten {
+        reason: s("No space left on device (os error 28)"),
+    }]
+}
+
 /// Every refusal of every family.
 pub fn refusals() -> Vec<Refusal> {
     let mut all = Vec::new();
@@ -192,5 +205,6 @@ pub fn refusals() -> Vec<Refusal> {
     all.extend(exchange().into_iter().map(Refusal::Exchange));
     all.extend(feedback().into_iter().map(Refusal::Feedback));
     all.extend(prefs().into_iter().map(Refusal::Prefs));
+    all.extend(upload().into_iter().map(Refusal::Upload));
     all
 }

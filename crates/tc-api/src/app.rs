@@ -6,6 +6,19 @@ use crate::account::AccountView;
 use crate::event::{SessionMode, StartupState};
 use crate::ids::{LocaleId, ProjectId, ProjectRef, RequestId, Scope, ServerInstance, WallMs};
 
+/// The version the About dialog shows: the workspace's package version.
+pub const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The commit this build was made from: the release pipeline sets `TC4_BUILD_COMMIT` for the
+/// server and the wasm build alike, and `dev` stands when it is not set. The UI compares
+/// `hello.build.commit` with its own copy of this constant and reloads once on a difference
+/// (§3.10), so both sides read this one definition. Cargo builds again when the variable
+/// changes.
+pub const BUILD_COMMIT: &str = match option_env!("TC4_BUILD_COMMIT") {
+    Some(commit) => commit,
+    None => "dev",
+};
+
 /// `app/hello`: everything the UI needs before its first render, and after a reload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]

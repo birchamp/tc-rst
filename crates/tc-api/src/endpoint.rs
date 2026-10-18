@@ -18,6 +18,13 @@ pub const API_VERSION: u32 = 1;
 /// The header that carries [`API_VERSION`].
 pub const API_VERSION_HEADER: &str = "X-Tc-Api";
 
+/// The header that carries the launch's token on every request (APP-DESIGN §5.2).
+pub const TOKEN_HEADER: &str = "X-Tc-Token";
+
+/// `GET`, the event stream of §5.4: `?after=<seq>` asks for the frames after one the reader
+/// holds.
+pub const EVENTS_PATH: &str = "/api/v1/events";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Kind {

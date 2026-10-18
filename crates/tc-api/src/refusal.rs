@@ -51,6 +51,7 @@ pub enum Refusal {
     Exchange(ExchangeRefusal),
     Feedback(FeedbackRefusal),
     Prefs(PrefsRefusal),
+    Upload(UploadRefusal),
 }
 
 impl Refusal {
@@ -68,6 +69,7 @@ impl Refusal {
             Self::Exchange(r) => r,
             Self::Feedback(r) => r,
             Self::Prefs(r) => r,
+            Self::Upload(r) => r,
         }
     }
 }
@@ -87,8 +89,9 @@ impl Message for Refusal {
     }
 }
 
-/// Opening a project refuses only for these (STORAGE §6.1); a held lock or an unsafe
-/// folder opens read-only instead.
+/// Opening a project refuses only for these (STORAGE §6.1). A lock another process holds
+/// refuses the open and names the holder (O1; translationCore runs once per computer, so
+/// no other window of this app can hold it); an unsafe folder opens read-only instead.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(
@@ -107,13 +110,29 @@ pub enum OpenRefusal {
     Unreadable {
         reason: String,
     },
+    /// Another process holds the project's lock (O1). `holder` is the process the lock
+    /// names, or `None` when the platform will not read the lock's record. tC4 has no such
+    /// state: it runs once per computer and has no project lock.
+    LockHeld {
+        holder: Option<LockHolder>,
+    },
+}
+
+/// The process that holds a project's lock, as the lock names it (tc-store's
+/// `LockHolder`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct LockHolder {
+    pub host: String,
+    pub pid: u32,
 }
 
 impl Message for OpenRefusal {
     fn code(&self) -> Option<&'static str> {
         match self {
             Self::NotAProject => Some("open.not-a-project"),
-            Self::NewerFormat { .. } | Self::Unreadable { .. } => None,
+            Self::NewerFormat { .. } | Self::Unreadable { .. } | Self::LockHeld { .. } => None,
         }
     }
     fn key(&self) -> &'static str {
@@ -121,18 +140,28 @@ impl Message for OpenRefusal {
             Self::NewerFormat { .. } => "refusal.open.newer-format",
             Self::NotAProject => "refusal.open.not-a-project",
             Self::Unreadable { .. } => "home.openError",
+            Self::LockHeld { holder: Some(_) } => "refusal.open.lock-held",
+            Self::LockHeld { holder: None } => "refusal.open.lock-held-unnamed",
         }
     }
     fn vars(&self) -> Vec<(&'static str, String)> {
         match self {
             Self::NewerFormat { format } => vec![("format", format.to_string())],
-            Self::NotAProject | Self::Unreadable { .. } => Vec::new(),
+            Self::LockHeld {
+                holder: Some(holder),
+            } => vec![
+                ("pid", holder.pid.to_string()),
+                ("host", holder.host.clone()),
+            ],
+            Self::NotAProject | Self::Unreadable { .. } | Self::LockHeld { holder: None } => {
+                Vec::new()
+            }
         }
     }
     fn detail(&self) -> Option<&str> {
         match self {
             Self::Unreadable { reason } => Some(reason),
-            Self::NewerFormat { .. } | Self::NotAProject => None,
+            Self::NewerFormat { .. } | Self::NotAProject | Self::LockHeld { .. } => None,
         }
     }
 }
@@ -724,5 +753,36 @@ impl Message for PrefsRefusal {
     }
     fn vars(&self) -> Vec<(&'static str, String)> {
         Vec::new()
+    }
+}
+
+/// A file the UI uploaded could not be stored (APP-DESIGN §5.5). The server keeps no part
+/// of it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum UploadRefusal {
+    /// The disk refused the bytes: full, read-only or gone.
+    NotWritten { reason: String },
+}
+
+impl Message for UploadRefusal {
+    fn code(&self) -> Option<&'static str> {
+        None
+    }
+    fn key(&self) -> &'static str {
+        match self {
+            Self::NotWritten { .. } => "upload.notWritten",
+        }
+    }
+    fn vars(&self) -> Vec<(&'static str, String)> {
+        match self {
+            Self::NotWritten { reason } => vec![("reason", reason.clone())],
+        }
     }
 }

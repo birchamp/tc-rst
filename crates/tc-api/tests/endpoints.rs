@@ -29,6 +29,7 @@ const PHASE_0: &[&str] = &[
     "account/helpLink",
     "feedback/compose",
     "test/quiet",
+    "test/echo",
     "test/crash",
     "test/hold",
     "test/release",

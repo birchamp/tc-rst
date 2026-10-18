@@ -4,6 +4,8 @@
   "exchange.error.notWritten",
   "exchange.error.unreadable",
   "exchange.error.verifyFailed",
+  "refusal.open.lock-held",
+  "refusal.open.lock-held-unnamed",
   "refusal.open.newer-format",
   "syncResult.error.keptStopped",
   "syncResult.error.needsNewerApp",
@@ -11,5 +13,6 @@
   "syncResult.error.projectMismatch",
   "syncResult.error.readOnly",
   "syncResult.error.tc4TeamRepository",
-  "syncResult.receivedKept"
+  "syncResult.receivedKept",
+  "upload.notWritten"
 ]
