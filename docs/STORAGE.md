@@ -1178,8 +1178,33 @@ would miss damage that keeps them.
 | `prefs/<projectId>.json` | pane layout and other per-person UI preferences |
 | `resources/dcs/<owner>/<repo>/<sha>/` | an installed Door43 resource at its full commit sha, with its `receipt.json` and `checked.json` and its files under `content/` (`tc-resources`, `ResourceStore`); owner and repository folders in lower case, as Door43 resolves names without regard to case (the receipt keeps the pin's casing); nested, not joined as `<owner>--<repo>`, because both names may hold `--` |
 | `resources/aquifer/<owner>/<repo>/<commit>/<lang>-<16 hex of the asset's SHA-256>/` | an installed Aquifer release asset, laid out the same way |
-| `resources/.partial/` | installs in progress; removed when the store opens (on Windows, a leftover that another program such as a virus scanner still holds open is kept until a later open) |
+| `resources/.partial/` | installs and downloads in progress; removed when the store opens (on Windows, a rename or removal that another program such as a virus scanner blocks is tried again for about two seconds, and a leftover it still holds open is kept until a later open) |
 | OS keychain | the Door43 token, only when the person chose "Stay signed in" |
+
+**Names inside an installed resource.** A resource is installed only if every name in it can be
+written, and be told apart from every other, on Linux, macOS and Windows alike. The same check
+(`tc_door43::check_names`) runs on a Door43 archive or export, on an Aquifer asset and on every
+file the store stages, and it refuses and never repairs, because repairing could merge two files:
+
+- a path that leaves the content folder: absolute, a drive prefix such as `C:`, a backslash or
+  NUL, an empty segment, `.` or `..` (or dots and spaces that Windows reads as `..`);
+- a segment Windows cannot write as it is named: a C0 control character or one of
+  `< > : " | ? *` (`:` would write an NTFS alternate stream), a name of only dots and spaces, a
+  name that ends in a dot or space (Windows strips it, so the file lands under another name,
+  for a file as for a folder), a device name (`CON PRN AUX NUL COM0-9 LPT0-9 CONIN$ CONOUT$`, any
+  case, with or without an extension) and the shape of an 8.3 short name (`PROGRA~1`,
+  `IMG~1.JPG`: at most one dot, one to six characters then `~` and digits before it, at most
+  three after it), through which Windows can open another file. The 8.3 rule applies on every
+  platform, so that one resource is the same bytes everywhere; `notes~1.json` is not refused;
+- two names that Windows or macOS would store as one: they differ only in letter case, in
+  Unicode normalization, or in a letter that macOS folds (`σ` and `ς`, `ſ` and `s`, `µ` and
+  `μ`), a file and a folder of one folded name (`A` and `a/x`), and folders that a path implies
+  (`Notes/a` and `notes/b`). `ı` and `i` are not folded: no supported file system merges them.
+
+One such name refuses the whole resource: the Door43 download, the Aquifer asset or the
+export installs nothing, and the error names the path. A file is staged with `create_new`, so a
+name the volume merges despite these checks (an 8.3 alias that exists only on that volume) stops
+the install instead of overwriting the earlier file.
 
 ---
 

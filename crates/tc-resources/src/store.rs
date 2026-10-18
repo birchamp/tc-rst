@@ -51,13 +51,14 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tc_core::BookId;
 use tc_door43::check_names;
 
 use crate::error::{InstallError, Refusal, StoreError};
+use crate::held;
 use crate::pin::{AquiferPin, BookCoverage, ResourcePin, Sha256};
 use crate::resolve::LocalCoverage;
 
@@ -453,8 +454,8 @@ impl ResourceStore {
         fs::create_dir_all(&store.root).map_err(|e| StoreError::io("create", &store.root, e))?;
         let partial = store.root.join(PARTIAL);
         if partial.exists()
-            && let Err(e) = retry_while_held(|| fs::remove_dir_all(&partial))
-            && !is_held(&e)
+            && let Err(e) = held::remove_dir_all(&partial)
+            && !held::is_held(&e)
         {
             return Err(StoreError::io("clear", &partial, e));
         }
@@ -655,6 +656,17 @@ impl ResourceStore {
         staged: Staged,
         crash: &mut dyn FnMut(Step) -> bool,
     ) -> Result<Installed, InstallError> {
+        self.install_in(staged, &staging_name(), crash)
+    }
+
+    /// [`ResourceStore::install_until`] writing into the staging folder `staging_name`,
+    /// which must be new.
+    fn install_in(
+        &self,
+        staged: Staged,
+        staging_name: &str,
+        crash: &mut dyn FnMut(Step) -> bool,
+    ) -> Result<Installed, InstallError> {
         let target = self.dir_of(&staged.origin);
         if let Some(existing) = self.find(&staged.origin)? {
             return Ok(existing);
@@ -681,7 +693,7 @@ impl ResourceStore {
 
         let partial = self.root.join(PARTIAL);
         create_dirs(&partial)?;
-        let staging = partial.join(staging_name());
+        let staging = partial.join(staging_name);
         // Not `create_dirs`: a staging name already taken must fail here, before any file
         // is written into the other install's folder.
         fs::create_dir(&staging).map_err(|e| StoreError::io("create", &staging, e))?;
@@ -697,7 +709,7 @@ impl ResourceStore {
                 Err(StoreError::Io { source, .. })
                     if source.kind() == io::ErrorKind::AlreadyExists =>
                 {
-                    let _ = retry_while_held(|| fs::remove_dir_all(&staging));
+                    let _ = held::remove_dir_all(&staging);
                     return Err(InstallError::Refused {
                         what: receipt.origin.describe(),
                         refusal: Refusal::DuplicateEntry(path.clone()),
@@ -734,7 +746,7 @@ impl ResourceStore {
 
         let parent = target.parent().unwrap_or(&self.root);
         create_dirs(parent)?;
-        let renamed = retry_while_held(|| match fs::rename(&staging, &target) {
+        let renamed = held::retry_while_held(|| match held::try_rename(&staging, &target) {
             // Some Windows versions answer a rename onto a folder that exists with "access
             // denied", which looks like a file held open. Waiting would not help.
             Err(e) if target.exists() => Err(io::Error::new(io::ErrorKind::AlreadyExists, e)),
@@ -743,7 +755,7 @@ impl ResourceStore {
         if let Err(e) = renamed {
             // Another install of the same identity may have landed first.
             if let Some(existing) = self.find(&receipt.origin)? {
-                let _ = fs::remove_dir_all(&staging);
+                let _ = held::try_remove_dir_all(&staging);
                 return Ok(existing);
             }
             return Err(StoreError::io("move into place", &target, e).into());
@@ -881,44 +893,8 @@ fn replace_synced(dir: &Path, name: &str, bytes: &[u8]) -> Result<(), StoreError
     let temporary = dir.join(format!("{name}.partial"));
     write_synced(&temporary, bytes)?;
     let target = dir.join(name);
-    retry_while_held(|| fs::rename(&temporary, &target))
-        .map_err(|e| StoreError::io("replace", &target, e))?;
+    held::rename(&temporary, &target).map_err(|e| StoreError::io("replace", &target, e))?;
     sync_dir(dir)
-}
-
-/// Whether `error` says that another program holds a file open, as Windows does with
-/// "access denied", a sharing violation or a lock violation. Elsewhere the same numbers
-/// mean other things, so no error is a held file.
-fn is_held(error: &io::Error) -> bool {
-    const ACCESS_DENIED: i32 = 5;
-    const SHARING_VIOLATION: i32 = 32;
-    const LOCK_VIOLATION: i32 = 33;
-    cfg!(windows)
-        && matches!(
-            error.raw_os_error(),
-            Some(ACCESS_DENIED | SHARING_VIOLATION | LOCK_VIOLATION)
-        )
-}
-
-/// Runs `op` again while it fails because a file is held ([`is_held`]), for up to two
-/// seconds: Defender, the Search indexer or OneDrive briefly hold a file that was just
-/// written, and Windows refuses to rename or remove it until they let go. Any other result,
-/// and every result on another platform, is returned after one call.
-fn retry_while_held<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
-    const LONGEST_PAUSE: Duration = Duration::from_millis(500);
-    const GIVE_UP_AFTER: Duration = Duration::from_secs(2);
-    let mut pause = Duration::from_millis(10);
-    let mut slept = Duration::ZERO;
-    loop {
-        match op() {
-            Err(e) if is_held(&e) && slept < GIVE_UP_AFTER => {
-                std::thread::sleep(pause);
-                slept += pause;
-                pause = (pause * 2).min(LONGEST_PAUSE);
-            }
-            result => return result,
-        }
-    }
 }
 
 /// Writes `path` anew or over what is there: a crash can leave the temporary of
@@ -963,6 +939,7 @@ fn sync_dir(_: &Path) -> Result<(), StoreError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     fn pin(sha: char) -> ResourcePin {
         ResourcePin::new(
@@ -1394,6 +1371,195 @@ mod tests {
             ),
             "{result:?}"
         );
+    }
+
+    #[test]
+    fn an_install_never_writes_into_a_staging_folder_that_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ResourceStore::open(dir.path()).unwrap();
+        let taken = dir.path().join(PARTIAL).join("taken");
+        fs::create_dir_all(&taken).unwrap();
+        fs::write(taken.join("other"), b"another install's file").unwrap();
+        let result = store.install_in(staged('a'), "taken", &mut |_| false);
+        assert!(
+            matches!(
+                &result,
+                Err(InstallError::Store(StoreError::Io { action: "create", source, .. }))
+                    if source.kind() == io::ErrorKind::AlreadyExists
+            ),
+            "{result:?}"
+        );
+        let names: Vec<_> = fs::read_dir(&taken)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(
+            names,
+            ["other"],
+            "nothing was written beside the other file"
+        );
+        assert_eq!(
+            fs::read(taken.join("other")).unwrap(),
+            b"another install's file"
+        );
+        assert!(store.installed().unwrap().installs.is_empty());
+    }
+
+    /// The Windows tests below hold real files. These hold them in a simulated scanner
+    /// (`crate::held::scanner`), so every platform runs the same retries.
+    mod a_scanner_holds_files {
+        use super::*;
+        use crate::held::scanner::Scanner;
+
+        fn ms(waits: &[u64]) -> Vec<Duration> {
+            waits.iter().map(|w| Duration::from_millis(*w)).collect()
+        }
+
+        fn staged_metadata(root: &Path) -> PathBuf {
+            the_staging_folder(root).join(CONTENT).join("metadata.json")
+        }
+
+        /// A leftover of a crashed install, with a file in it.
+        fn leftover_file(root: &Path) -> PathBuf {
+            let content = root.join(PARTIAL).join("1-2-3").join(CONTENT);
+            fs::create_dir_all(&content).unwrap();
+            let file = content.join("metadata.json");
+            fs::write(&file, b"{}").unwrap();
+            file
+        }
+
+        #[test]
+        fn an_install_waits_for_a_scanner_to_let_go_of_a_staged_file() {
+            let dir = tempfile::tempdir().unwrap();
+            let store = ResourceStore::open(dir.path()).unwrap();
+            let scanner = Scanner::new();
+            let installed = store
+                .install_until(staged('a'), &mut |step| {
+                    if step == Step::ReceiptWritten {
+                        scanner.holds_for(&staged_metadata(dir.path()), 3);
+                    }
+                    false
+                })
+                .unwrap();
+            installed.verify().unwrap();
+            assert_eq!(scanner.waited(), ms(&[2, 4, 8]));
+            no_staging_folder_left(&store);
+        }
+
+        #[test]
+        fn an_install_gives_up_after_the_last_wait_and_the_next_open_clears_what_it_left() {
+            let dir = tempfile::tempdir().unwrap();
+            let store = ResourceStore::open(dir.path()).unwrap();
+            let scanner = Scanner::new();
+            let mut held_file = PathBuf::new();
+            let result = store.install_until(staged('a'), &mut |step| {
+                if step == Step::ReceiptWritten {
+                    held_file = staged_metadata(dir.path());
+                    scanner.holds(&held_file);
+                }
+                false
+            });
+            let source = match result {
+                Err(InstallError::Store(StoreError::Io {
+                    action: "move into place",
+                    source,
+                    ..
+                })) => source,
+                other => panic!("{other:?}"),
+            };
+            assert!(held::is_held(&source), "{source:?}");
+            let waited: Duration = scanner.waited().iter().sum();
+            assert_eq!(waited, Duration::from_millis(2_004));
+            assert!(store.dcs(&pin('a')).unwrap().is_none());
+            scanner.lets_go(&held_file);
+            let store = ResourceStore::open(dir.path()).unwrap();
+            assert!(!dir.path().join(PARTIAL).exists());
+            store.install(staged('a')).unwrap().verify().unwrap();
+        }
+
+        #[test]
+        fn an_install_that_lost_the_race_does_not_wait_for_a_scanner() {
+            let dir = tempfile::tempdir().unwrap();
+            let store = ResourceStore::open(dir.path()).unwrap();
+            let scanner = Scanner::new();
+            let mut held_file = PathBuf::new();
+            // The scanner holds a staged file while the same install lands first. Whatever
+            // error the rename reports, the folder it was renamed onto exists, so waiting
+            // for the scanner would not help.
+            let installed = store
+                .install_until(staged('a'), &mut |step| {
+                    if step == Step::ReceiptWritten {
+                        held_file = staged_metadata(dir.path());
+                        scanner.holds(&held_file);
+                        store.install(staged('a')).unwrap();
+                    }
+                    false
+                })
+                .unwrap();
+            installed.verify().unwrap();
+            assert!(scanner.waited().is_empty(), "{:?}", scanner.waited());
+            // The loser's staging folder was held, so it stays until the next open.
+            assert_eq!(fs::read_dir(dir.path().join(PARTIAL)).unwrap().count(), 1);
+            scanner.lets_go(&held_file);
+            ResourceStore::open(dir.path()).unwrap();
+            assert!(!dir.path().join(PARTIAL).exists());
+        }
+
+        #[test]
+        fn opening_waits_for_a_scanner_to_let_go_of_a_leftover() {
+            let dir = tempfile::tempdir().unwrap();
+            let file = leftover_file(dir.path());
+            let scanner = Scanner::new();
+            scanner.holds_for(&file, 3);
+            ResourceStore::open(dir.path()).unwrap();
+            assert!(!dir.path().join(PARTIAL).exists());
+            assert_eq!(scanner.waited(), ms(&[2, 4, 8]));
+        }
+
+        #[test]
+        fn opening_succeeds_when_a_scanner_holds_a_leftover_throughout() {
+            let dir = tempfile::tempdir().unwrap();
+            let file = leftover_file(dir.path());
+            let scanner = Scanner::new();
+            scanner.holds(&file);
+            let store = ResourceStore::open(dir.path()).unwrap();
+            assert!(file.exists(), "a held leftover stays");
+            let waited: Duration = scanner.waited().iter().sum();
+            assert_eq!(waited, Duration::from_millis(2_004));
+            store.install(staged('a')).unwrap().verify().unwrap();
+            scanner.lets_go(&file);
+            ResourceStore::open(dir.path()).unwrap();
+            assert!(!dir.path().join(PARTIAL).exists());
+        }
+
+        #[test]
+        fn seeding_records_a_check_when_a_scanner_briefly_holds_the_old_record() {
+            let bundled_dir = tempfile::tempdir().unwrap();
+            let bundled = ResourceStore::open(bundled_dir.path()).unwrap();
+            bundled.install(staged('a')).unwrap();
+            let read_only = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+            let machine_dir = tempfile::tempdir().unwrap();
+            let machine = ResourceStore::open(machine_dir.path()).unwrap();
+            machine.seed_from(&read_only).unwrap();
+            let record = machine.dcs(&pin('a')).unwrap().unwrap().dir().join(CHECKED);
+            let recorded = fs::read(&record).unwrap();
+            // A record that names no receipt: the copy is checked again and the record
+            // replaced, while the scanner still has the old one open.
+            fs::write(&record, b"stale").unwrap();
+            let scanner = Scanner::new();
+            scanner.holds_for(&record, 3);
+            let report = machine.seed_from(&read_only).unwrap();
+            assert_eq!(report.checked_again.len(), 1);
+            assert_eq!(fs::read(&record).unwrap(), recorded);
+            assert_eq!(scanner.waited(), ms(&[2, 4, 8]));
+            assert!(
+                machine
+                    .seed_from(&read_only)
+                    .unwrap()
+                    .checked_again
+                    .is_empty()
+            );
+        }
     }
 
     #[cfg(windows)]
