@@ -1,7 +1,13 @@
 //! The server's state that events carry whole (APP-DESIGN 6.1, plan D3).
 //!
-//! `app/hello` seeds these values, events update them, and a `Resync` reads `hello` again.
-//! They are signals of their own, not entries of the query cache, because they arrive whole in
+//! `app/hello` seeds what it holds (the internet switch, the account, the startup state, the
+//! open sessions, the saved language), events update all of it, and a `Resync` reads `hello`
+//! again. Jobs come from events and are read again with `jobs/get` after a gap. The last
+//! checkpoint outcome, the files a materialize cannot write and the aligner save states come
+//! from events alone: no read restores them after a gap until the units that emit them make
+//! them readable (D1, B6, section 5.4), so a `Resync` keeps them.
+//!
+//! These are signals of their own, not entries of the query cache, because they arrive whole in
 //! frames and must exist before any screen holds them: a cache entry with no holder is
 //! forgotten. Every signal is reference counted, so a late completion never meets a disposed
 //! one.
@@ -15,6 +21,8 @@ use tc_api::app::{HelloView, OpenSession};
 use tc_api::event::{CheckpointOutcome, SessionMode, StartupState};
 use tc_api::ids::{AlignerId, JobId, LocaleId, Scope, ServerInstance};
 use tc_api::jobs::JobView;
+
+use crate::app::effects::retain_open;
 
 #[derive(Clone)]
 pub struct ServerState {
@@ -53,13 +61,17 @@ impl ServerState {
     }
 
     /// Replaces what `hello` holds. Not the shown language, which may be a preview, and not
-    /// what only events carry.
+    /// what only events carry: those stay, except what belonged to an open that `hello` no
+    /// longer lists.
     pub(super) fn reseed(&self, hello: &HelloView) {
         self.instance.set(hello.instance);
         self.internet.set(hello.internet);
         self.account.set(hello.account.clone());
         self.startup.set(hello.startup.clone());
         self.sessions.set(hello.sessions.clone());
+        self.checkpoints
+            .update(|map| retain_open(map, &hello.sessions));
+        self.blocked.update(|map| retain_open(map, &hello.sessions));
         self.saved_locale.set(hello.prefs.app_locale);
     }
 

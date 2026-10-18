@@ -1,21 +1,22 @@
 //! What the runtime does for each delivery (APP-DESIGN 6.3): every frame has an effect, and
 //! the job map and the busy count follow their rules.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use proptest::prelude::*;
 use proptest::test_runner::{Config, TestCaseError, TestRunner};
 use tc_api::account::{AccountView, KeepState};
+use tc_api::app::{OpenSession, SessionRole};
 use tc_api::event::{
     ChangeCause, ChangeParts, ChangeScope, CheckpointOutcome, Event, EventFrame, SessionEvent,
     SessionMode, StartupState,
 };
-use tc_api::ids::{AlignerId, Epoch, JobId, ProjectRef, Scope, ServerInstance, ViewSeq};
+use tc_api::ids::{AlignerId, Epoch, JobId, ProjectId, ProjectRef, Scope, ServerInstance, ViewSeq};
 use tc_api::jobs::{JobKind, JobState, JobView, Progress};
 use tc_ui::app::cache::AppTopic;
 use tc_ui::app::effects::{
     BusyCount, Effect, FINISHED_JOBS_KEPT, active_jobs, apply_reread, is_active, jobs_to_reread,
-    merge_job, react,
+    merge_job, react, retain_open,
 };
 use tc_ui::app::events::Incoming;
 
@@ -326,4 +327,47 @@ fn the_page_is_idle_only_when_nothing_is_in_flight() {
         }
         .is_idle()
     );
+}
+
+fn open_session(at: Scope) -> OpenSession {
+    OpenSession {
+        at,
+        id: ProjectId::parse("6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50").unwrap(),
+        mode: SessionMode::Writable,
+        role: SessionRole::Screen,
+    }
+}
+
+#[test]
+fn a_resync_forgets_what_was_held_for_an_open_that_hello_no_longer_lists() {
+    // `hello` holds no checkpoint outcome and no blocked file, so a `Resync` cannot restore
+    // them; it can say which opens are gone. A `Closed` frame lost in the gap must not leave
+    // a failed checkpoint standing for a project that is closed.
+    let still_open = at();
+    let closed = Scope {
+        project: ProjectRef::parse("PSA").unwrap(),
+        epoch: Epoch::new(1),
+    };
+    let reopened = Scope {
+        epoch: Epoch::new(3),
+        ..still_open.clone()
+    };
+    let failed = CheckpointOutcome::Failed {
+        reason: "disk full".into(),
+    };
+    let mut held: HashMap<Scope, CheckpointOutcome> = HashMap::from([
+        (still_open.clone(), failed.clone()),
+        (closed, failed.clone()),
+        (reopened, failed.clone()),
+    ]);
+    retain_open(&mut held, &[open_session(still_open.clone())]);
+    assert_eq!(
+        held,
+        HashMap::from([(still_open.clone(), failed)]),
+        "the open that is listed keeps its failure; another epoch of its folder is another open"
+    );
+
+    // No open at all: nothing is held.
+    retain_open(&mut held, &[]);
+    assert!(held.is_empty());
 }

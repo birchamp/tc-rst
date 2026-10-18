@@ -5,10 +5,11 @@
 //! `Event` or `SessionEvent` does not compile here until it is handled, so a new kind of
 //! frame cannot be silently ignored. The browser glue only executes the [`Effect`]s.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use tc_api::account::AccountView;
 use tc_api::align::AlignSave;
+use tc_api::app::OpenSession;
 use tc_api::event::{
     ChangeScope, CheckpointOutcome, Event, SessionEvent, SessionMode, StartupState,
 };
@@ -164,6 +165,15 @@ pub fn apply_reread(jobs: &mut BTreeMap<JobId, JobView>, held: &JobView, reply: 
             jobs.remove(&held.id);
         }
     }
+}
+
+/// Forgets what is held for an open that `hello` no longer lists. `hello` holds no checkpoint
+/// outcome and no blocked file (only events carry them, APP-DESIGN 6.1), so a `Resync` cannot
+/// restore them. It can say which opens are gone: a `Closed` frame lost in the gap would leave
+/// the outcome and the files of an open that no longer exists, and nothing else removes them.
+/// What is held for an open that is still listed stays: a failure is never cleared by a gap.
+pub fn retain_open<V>(held: &mut HashMap<Scope, V>, sessions: &[OpenSession]) {
+    held.retain(|at, _| sessions.iter().any(|session| session.at == *at));
 }
 
 pub fn active_jobs(jobs: &BTreeMap<JobId, JobView>) -> usize {
