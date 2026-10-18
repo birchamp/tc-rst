@@ -423,10 +423,27 @@ fn sync_refusals_keep_delta_table_keys_and_tc4_codes() {
         server_message: "hook declined".into(),
     });
     assert_eq!(refused.vars(), vec![("reason", "hook declined".to_owned())]);
-    let no_access = before(SyncRefusal::NoWriteAccess {
-        server_message: "user does not have write access".into(),
-    });
-    assert_eq!(no_access.detail(), Some("user does not have write access"));
+}
+
+#[test]
+fn no_sync_or_share_banner_shows_door43s_words_before_its_sentence() {
+    // tC4's failed sync toast shows the code's sentence alone: "The diagnosis never shows"
+    // (DELTA §3.15.2; `tC4:src/views/SyncResult.jsx:47-51`). Its share dialog does the same
+    // (`tC4:src/views/modals/ShareDialog.jsx:28-29`). Door43's message reaches a banner only
+    // through a `{reason}` placeholder, which `vars()` carries.
+    for failure in samples::sync() {
+        assert_eq!(failure.detail(), None, "{failure:?}");
+    }
+    for refusal in samples::share() {
+        assert_eq!(refusal.detail(), None, "{refusal:?}");
+    }
+    let rejected = SyncRefusal::RefRejected {
+        server_message: "hook declined".into(),
+    };
+    assert_eq!(
+        SyncFailure::BeforeIntake(rejected).vars(),
+        vec![("reason", "hook declined".to_owned())]
+    );
 }
 
 #[test]

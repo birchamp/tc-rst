@@ -436,6 +436,14 @@ The UI builds a sentence the way tC4's `failureText` does: diagnosis, then the r
 (`tC4:src/state.jsx:1781-1788`). "Ask for help" shows when the sentence contains `feedback.ask`
 (`tC4:src/state.jsx:1792-1793`).
 
+The sync toast and the share dialog are the exceptions, and they follow tC4: they show the code's
+sentence alone ("The diagnosis never shows", DELTA §3.15.2; `tC4:src/views/SyncResult.jsx:47-51`,
+`tC4:src/views/modals/ShareDialog.jsx:28-29`). So no `SyncFailure` and no `ShareRefusal` has a
+`detail()`. Door43's words reach a banner only through a `{reason}` placeholder (`RefRejected`, `Io`,
+`PushFailed`); the `server_message` of `NoWriteAccess` and `CreateRejected` stays in the refusal
+for the operation report (`ReportLog`) that "Ask for help" attaches. *(A1: the first build showed
+both before the sentence, which tC4 never does.)*
+
 Tests in `tc-api`:
 
 - `every_refusal_has_a_key_in_every_locale`: each variant's key resolves in all 10 vendored

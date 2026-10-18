@@ -22,7 +22,8 @@ pub trait Message {
     fn key(&self) -> &'static str;
     /// The values of the sentence's `{name}` placeholders.
     fn vars(&self) -> Vec<(&'static str, String)>;
-    /// The diagnosis shown before the sentence, when the sentence has no place for it.
+    /// The diagnosis shown before the sentence, when the sentence has no place for it. A flow
+    /// whose tC4 banner shows the sentence alone, sync and share, has none.
     fn detail(&self) -> Option<&str> {
         None
     }
@@ -302,6 +303,8 @@ pub enum SyncRefusal {
     NotSignedIn,
     AuthFailed,
     NoWriteAccess {
+        /// Door43's words, for the operation report. No banner shows them: tC4's sync toast shows the
+        /// code's sentence alone (`tC4:src/views/SyncResult.jsx:47-51`, DELTA §3.15.2).
         server_message: String,
     },
     RefRejected {
@@ -405,13 +408,6 @@ impl Message for SyncFailure {
             },
         }
     }
-
-    fn detail(&self) -> Option<&str> {
-        match self.stage() {
-            Ok((SyncRefusal::NoWriteAccess { server_message }, _)) => Some(server_message),
-            _ => None,
-        }
-    }
 }
 
 /// The first share of a project (STORAGE §9.6; units B9b and E1b).
@@ -427,8 +423,14 @@ pub enum ShareRefusal {
     NameExists,
     Offline,
     AuthFailed,
-    CreateRejected { server_message: String },
-    PushFailed { reason: String },
+    CreateRejected {
+        /// Door43's words, for the operation report. The dialog shows the code's sentence alone
+        /// (`tC4:src/views/modals/ShareDialog.jsx:28-29`).
+        server_message: String,
+    },
+    PushFailed {
+        reason: String,
+    },
 }
 
 impl Message for ShareRefusal {
@@ -456,12 +458,6 @@ impl Message for ShareRefusal {
             Self::NameExists | Self::Offline | Self::AuthFailed | Self::CreateRejected { .. } => {
                 Vec::new()
             }
-        }
-    }
-    fn detail(&self) -> Option<&str> {
-        match self {
-            Self::CreateRejected { server_message } => Some(server_message),
-            _ => None,
         }
     }
 }

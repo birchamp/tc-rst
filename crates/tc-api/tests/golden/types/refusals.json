@@ -272,7 +272,7 @@
     "code": "sync.no-write-access",
     "key": "syncResult.error.noWriteAccess",
     "vars": {},
-    "detail": "user does not have write access"
+    "detail": null
   },
   {
     "wire": {
@@ -438,7 +438,7 @@
     "code": "sync.no-write-access",
     "key": "syncResult.error.noWriteAccess",
     "vars": {},
-    "detail": "user does not have write access"
+    "detail": null
   },
   {
     "wire": {
@@ -592,7 +592,7 @@
     "code": "share.create-rejected",
     "key": "shareDialog.error.create-rejected",
     "vars": {},
-    "detail": "repository quota exceeded"
+    "detail": null
   },
   {
     "wire": {
