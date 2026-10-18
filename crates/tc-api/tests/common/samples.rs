@@ -2,7 +2,7 @@
 //! variants serde knows, so a new variant fails the tests until it has a sample here.
 
 use tc_api::refusal::{
-    CreateRefusal, ExchangeRefusal, ExportRefusal, FeedbackRefusal, ImportRefusal,
+    CreateRefusal, ExchangeRefusal, ExportRefusal, FeedbackRefusal, ImportRefusal, LockHolder,
     OpenDoor43Refusal, OpenRefusal, PrefsRefusal, Refusal, ResourceRefusal, ShareRefusal,
     SignInRefusal, SyncBlock, SyncFailure, SyncRefusal,
 };
@@ -18,6 +18,13 @@ pub fn open() -> Vec<OpenRefusal> {
         OpenRefusal::Unreadable {
             reason: s("Access is denied. (os error 5)"),
         },
+        OpenRefusal::LockHeld {
+            holder: Some(LockHolder {
+                host: s("DESKTOP-7Q2"),
+                pid: 4242,
+            }),
+        },
+        OpenRefusal::LockHeld { holder: None },
     ]
 }
 

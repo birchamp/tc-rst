@@ -45,6 +45,42 @@
   },
   {
     "wire": {
+      "type": "open",
+      "value": {
+        "type": "lockHeld",
+        "value": {
+          "holder": {
+            "host": "DESKTOP-7Q2",
+            "pid": 4242
+          }
+        }
+      }
+    },
+    "code": null,
+    "key": "refusal.open.lock-held",
+    "vars": {
+      "pid": "4242",
+      "host": "DESKTOP-7Q2"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "open",
+      "value": {
+        "type": "lockHeld",
+        "value": {
+          "holder": null
+        }
+      }
+    },
+    "code": null,
+    "key": "refusal.open.lock-held-unnamed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
       "type": "create",
       "value": {
         "type": "nameInUse",

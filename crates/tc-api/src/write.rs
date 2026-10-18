@@ -116,8 +116,6 @@ pub enum SaveRefusal {
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub enum ReadOnlyReason {
-    /// O1: another translationCore window holds the project's lock.
-    OpenElsewhere,
     /// O4: the project needs a newer app to write it.
     NeedsNewerApp,
     /// O5: a FAT32 or exFAT drive, which cannot keep a rename safe through a power cut.

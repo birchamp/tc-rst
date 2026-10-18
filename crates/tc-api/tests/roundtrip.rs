@@ -127,6 +127,7 @@ fn every_shared_type_round_trips() {
             NetKind,
             Refusal,
             OpenRefusal,
+            LockHolder,
             CreateRefusal,
             ImportRefusal,
             ExportRefusal,
