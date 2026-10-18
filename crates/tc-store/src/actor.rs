@@ -446,6 +446,7 @@ impl Actor {
     /// lock's content and release the lock (§3.6). The pending files hold every save
     /// already.
     fn close(&mut self) -> Result<(), StoreError> {
+        self.project.shared.begin_closing();
         let mut result = Ok(());
         if self.read_only().is_none() {
             let (done, resolver) = pending(|| {

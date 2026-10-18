@@ -16,7 +16,7 @@ use crate::reply::{CommandError, ReadOnlyReason, StoreReply, Stored};
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::task::{Context, Poll, Waker};
@@ -287,6 +287,8 @@ pub(crate) struct Shared {
     /// Write groups the actor has opened that the writer has not closed: a checkpoint's seal
     /// writes packs that `metadata.json` lists only after the files that follow it (I7).
     open_groups: AtomicU32,
+    /// The project is closing: background maintenance (a repack) stops and does not start.
+    closing: Arc<AtomicBool>,
 }
 
 impl Shared {
@@ -318,7 +320,22 @@ impl Shared {
             jobs_done: Condvar::new(),
             traffic: AtomicU64::new(0),
             open_groups: AtomicU32::new(0),
+            closing: Arc::default(),
         }
+    }
+
+    /// The project closes: maintenance that runs on a thread of its own is told to stop.
+    pub(crate) fn begin_closing(&self) {
+        self.closing.store(true, Ordering::Release);
+    }
+
+    pub(crate) fn is_closing(&self) -> bool {
+        self.closing.load(Ordering::Acquire)
+    }
+
+    /// The flag a long step of libgit2 asks about while it runs.
+    pub(crate) fn stop_flag(&self) -> Arc<AtomicBool> {
+        self.closing.clone()
     }
 
     /// A seal is about to write packs that `metadata.json` does not list yet.
@@ -966,6 +983,8 @@ impl ProjectHandle {
     /// actor.
     pub fn close(self) -> Result<(), StoreError> {
         self.stop_watching();
+        // A repack stops and none starts: closing never waits for maintenance (§9.8).
+        self.shared.begin_closing();
         // The open's background work ends first, while the actor can still answer it; the
         // actor stops the draft writer and releases the lock last, so nothing is written
         // into the folder after the lock is gone (§5.0).
@@ -986,6 +1005,7 @@ impl Drop for ProjectHandle {
         // A handle dropped without close still stops its actor; what was saved is in
         // pending files, and the next open seals and materializes it.
         self.stop_watching();
+        self.shared.begin_closing();
         self.shared.wait_jobs();
         let (_pending, resolver) = pending(|| Ok(()));
         self.send(Msg::Close { reply: resolver });

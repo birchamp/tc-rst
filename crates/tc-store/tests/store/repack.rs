@@ -341,3 +341,60 @@ fn crash_r1_pack_written_loose_not_removed() {
     handle.close().unwrap();
     assert_commits_valid(&rig.fs, &folder);
 }
+
+/// §9.8: a repack never delays the close. The one that runs when the project closes is
+/// stopped after its pack is written, removes no loose object (R1 leaves them twice), and the
+/// close ends without waiting for the rest of the work; the next open's repack removes the
+/// duplicates.
+#[test]
+fn a_close_stops_the_repack_that_runs_and_the_next_repack_finishes_it() {
+    let (rig, folder) = titus();
+    repack_always(&rig);
+    rig.store.hooks().hold(Point::AfterPackWritten);
+    // No `wait_idle`: the repack of the open is held.
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    rig.store.hooks().wait_reached(Point::AfterPackWritten, 1);
+    let releaser = {
+        let hooks = rig.store.hooks().clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(200));
+            hooks.release(Point::AfterPackWritten);
+        })
+    };
+    let started = std::time::Instant::now();
+    handle.close().unwrap();
+    releaser.join().unwrap();
+    assert!(started.elapsed() < Duration::from_secs(10));
+    let packs = packed(&rig, &folder);
+    assert_eq!(packs.len(), 1, "the pack was written");
+    let in_pack: BTreeSet<[u8; 20]> = packs.iter().flatten().copied().collect();
+    let still_loose = loose(&rig, &folder)
+        .iter()
+        .filter(|p| in_pack.contains(<&[u8; 20]>::try_from(oid_of(p).as_bytes()).unwrap()))
+        .count();
+    assert!(still_loose > 0, "a stopped run removed nothing");
+
+    let handle = open(&rig, &folder);
+    assert!(handle.counters().git_loose_removed > 0);
+    let all: Vec<[u8; 20]> = packed(&rig, &folder).into_iter().flatten().collect();
+    let unique: BTreeSet<[u8; 20]> = all.iter().copied().collect();
+    assert_eq!(all.len(), unique.len(), "no object is in two packs");
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
+}
+
+/// A closing project starts no repack at all: what the close's own checkpoint wrote stays
+/// loose until the next open.
+#[test]
+fn a_closing_project_starts_no_repack() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    repack_always(&rig);
+    handle.close().unwrap();
+    assert!(
+        packed(&rig, &folder).is_empty(),
+        "nothing was packed while closing"
+    );
+    assert!(!loose(&rig, &folder).is_empty());
+}

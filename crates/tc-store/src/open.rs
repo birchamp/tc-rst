@@ -635,6 +635,7 @@ fn open_inner(
         device,
         recover: broken_git,
         loose: None,
+        repack: None,
         carried_kept: None,
         wrote_group: false,
         pending_record: BTreeMap::new(),

@@ -201,6 +201,8 @@ pub(crate) struct Writer {
     pub recover: Option<std::path::PathBuf>,
     /// How many loose objects the repository held when they were last counted (§9.8).
     pub loose: Option<crate::repack::LooseCount>,
+    /// The repack that runs on a thread of its own, if one does (§9.8).
+    pub repack: Option<crate::repack::Run>,
     /// The blobs `refs/tc/carried` is known to keep (§9.8), once the writer has read or
     /// written it.
     pub carried_kept: Option<BTreeSet<tc_journal::GitOid>>,
@@ -476,6 +478,7 @@ impl Writer {
             Job::Repack => self.maybe_repack(),
             Job::Sync { reply } => reply.resolve(()),
             Job::Close { reply } => {
+                self.stop_repack();
                 reply.resolve(());
                 return false;
             }
@@ -668,6 +671,7 @@ mod tests {
             device: DeviceId::local([9; 15]),
             recover: None,
             loose: None,
+            repack: None,
             carried_kept: None,
             wrote_group: false,
             pending_record: BTreeMap::new(),

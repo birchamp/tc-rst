@@ -1607,7 +1607,7 @@ error: <reason>. Your work may not survive a power cut. Check the disk."). The a
 
 **Closing.** A close runs a checkpoint (§5.13; the actor serves the writer's messages until the
 checkpoint ends, so neither waits for the other), writes the fold cache,
-stops the draft writer and waits for it, and only then clears `.tc/lock`'s content and releases
+stops the draft writer and waits for it, stops a repack that runs (§9.8), and only then clears `.tc/lock`'s content and releases
 the lock: nothing is written into the folder after the lock is gone, so the next open (after a
 restart, or by a program that takes the lock as this session ends) never races a late
 `drafts.json`. The open's background work (O8's cache write
@@ -3643,8 +3643,14 @@ libgit2 has no `gc`. When `.git/objects` holds more than 2,000 loose objects or 
 writer (§5.0) repacks: once after the open, and after a checkpoint's commit is reachable (the
 actor moved the branch, §5.13 C5), never during a sync. The loose objects are counted by listing
 the object folders once, at the first check of a session; what the writer writes after is added,
-so a checkpoint does not list them again. The task runs on the writer's thread, so a save never
-waits for it.
+so a checkpoint does not list them again. The repack runs on a thread of its own: neither a save
+nor a materialization waits for it, and the project's close never does. It starts only when the
+project is not closing, and a run that is going when the person closes is stopped (libgit2 asks
+a progress callback twice a second while it looks for deltas), removes nothing it has not
+packed, and is finished by the next repack. One run packs at most 96 MiB of loose objects
+(counted before compression) with two threads; the rest is still due at the next check. The
+search for deltas between the versions of a derived file is what keeps three years of history
+near 400 MiB, and it took 26 s for the loose objects of 250 checkpoints of a whole Bible.
 
 1. Walk every reference under `refs/heads/`, `refs/remotes/` and `refs/tc/` (and a detached
    HEAD), and collect the commits, trees and blobs they reach. A walk that fails (a reference that

@@ -49,10 +49,11 @@ fn main() {
         Some("close") => close_case(&dir),
         Some("outside") => outside_case(&dir),
         Some("memory") => memory_case(&dir),
+        Some("repack") => repack_case(&dir),
         _ => {
             eprintln!(
                 "storebench setup DIR | open DIR CASE | run DIR [runs] | saves DIR | \
-                 materialize DIR | whole DIR | checkpoint DIR | close DIR | outside DIR | memory DIR"
+                 materialize DIR | whole DIR | checkpoint DIR | close DIR | outside DIR | memory DIR | repack DIR"
             );
             std::process::exit(2);
         }
@@ -71,6 +72,9 @@ fn store(dir: &Path) -> Store {
     })
     .expect("store");
     store.wait_cleanup();
+    // The cases measure one thing each: a repack (docs/STORAGE.md §9.8) runs only in the
+    // case that asks for it.
+    store.hooks().repack_after(u64::MAX, u64::MAX);
     store
 }
 
@@ -1047,5 +1051,68 @@ fn memory_case(dir: &Path) {
         started.elapsed().as_secs_f64(),
         private_mib().0,
         status_mib("VmHWM:")
+    );
+}
+
+/// "Repack" (docs/STORAGE.md §9.8) must never hold the close back: with a repack due at every
+/// check, a Psalms save and a checkpoint 20 times, the repack runs on its own thread, saves
+/// stay fast, and the close that follows ends within the close budget.
+fn repack_case(dir: &Path) {
+    println!("{}", machine_line());
+    let store = store(dir);
+    store.hooks().repack_after(0, 0);
+    let started = Instant::now();
+    let handle = store
+        .open(&folder(dir), &OpenOptions::default())
+        .expect("open");
+    let usable = started.elapsed().as_secs_f64() * 1000.0;
+    handle.wait_idle();
+    println!(
+        "open: usable {usable:.0} ms, with the repack of the open {:.0} ms",
+        started.elapsed().as_secs_f64() * 1000.0
+    );
+    let verses = verses_of(&handle, BookId::Psalms, 40);
+    let run = run_id();
+    let (mut saves, mut checkpoints) = (Vec::new(), Vec::new());
+    for i in 0..20usize {
+        save_one(
+            &handle,
+            &verses[i % verses.len()],
+            format!("Repack save {i} of run {run}"),
+        );
+        let started = Instant::now();
+        handle
+            .checkpoint(CheckpointReason::LeavingTranslate)
+            .wait()
+            .expect("checkpoint");
+        checkpoints.push(started.elapsed().as_secs_f64() * 1000.0);
+        // Saves while the repack runs.
+        for j in 0..10usize {
+            saves.push(save_one(
+                &handle,
+                &verses[(i + j) % verses.len()],
+                format!("Repack save {i} {j} of run {run}"),
+            ));
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+    stats("checkpoint with a repack due", checkpoints);
+    stats("verse saves beside a repack", saves);
+    let c = handle.counters();
+    println!(
+        "  repacks {}, objects packed {}, loose files removed {}",
+        c.git_repacks, c.git_objects_packed, c.git_loose_removed
+    );
+    // The close with a checkpoint that makes a repack due and one maybe still running.
+    save_one(
+        &handle,
+        &verses[0],
+        format!("Repack save last of run {run}"),
+    );
+    let started = Instant::now();
+    handle.close().expect("close");
+    println!(
+        "close right after a checkpoint with a repack due: {:.0} ms",
+        started.elapsed().as_secs_f64() * 1000.0
     );
 }

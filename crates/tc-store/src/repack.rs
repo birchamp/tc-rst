@@ -6,21 +6,33 @@
 //!
 //! Only the loose objects are packed, not the whole history again: a repack that wrote
 //! every reachable object each time would add the history's size to the disk at each run.
-//! Nothing is removed before the pack and its index are on disk (libgit2 flushes both and
-//! the folder when `core.fsyncObjectFiles` is on, `pack-objects.c` `git_packbuilder_write`),
-//! and the index is read back to confirm that it names every object about to lose its loose
-//! file. A repack that stops anywhere in between leaves objects twice, never fewer (§6.4 R1);
-//! the next one finds them in a pack and removes the loose copies.
+//! A run packs at most [`MAX_RAW`] bytes (before compression) of them, and the next check
+//! finds the rest still due: the search for deltas between the versions of a derived file
+//! (they are what keeps the history of a whole Bible in a few hundred MiB) took 26 s for the
+//! loose objects of 250 checkpoints. It runs on a thread of its own, never on the writer
+//! (a materialization waits for it otherwise), and it stops when the project closes: libgit2
+//! asks the progress callback twice a second whether to go on, and a stopped run removes
+//! nothing. Nothing is removed before the pack and its index are on disk (libgit2 flushes
+//! both and the folder when `core.fsyncObjectFiles` is on, `pack-objects.c`
+//! `git_packbuilder_write`), and the index is read back to confirm that it names every object
+//! about to lose its loose file. A repack that stops anywhere in between leaves objects
+//! twice, never fewer (§6.4 R1); the next one finds them in a pack and removes the loose
+//! copies, and a half-written `objects/pack/tmp_*` is removed by the next open (§6.1 O2).
 //!
 //! Callers must not repack during a sync (§9.8).
 
 use crate::counters::StoreCounters;
+#[cfg(test)]
+use crate::git::to_oid;
 use crate::git::{Git, GitError, at};
 use crate::hooks::{Hooks, Point};
 use crate::writer::Writer;
 use git2::{ErrorCode, ObjectType, Oid, Repository, Sort};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime};
 
 /// A loose object nothing reaches is removed once it is this old.
@@ -29,6 +41,9 @@ pub const PRUNE_AFTER: Duration = Duration::from_secs(14 * 24 * 60 * 60);
 pub const REPACK_OBJECTS: u64 = 2_000;
 /// Or when they take more than this many bytes.
 pub const REPACK_BYTES: u64 = 64 * 1024 * 1024;
+/// One run packs the loose objects that take this many bytes before compression, at most
+/// (one object that is larger runs alone). The rest waits for the next run.
+pub const MAX_RAW: u64 = 96 * 1024 * 1024;
 
 /// What a repack did.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -69,16 +84,32 @@ pub(crate) struct LooseCount {
     at: Written,
 }
 
+/// A repack that runs on a thread of its own.
+pub(crate) struct Run {
+    done: Arc<AtomicBool>,
+    thread: JoinHandle<()>,
+}
+
 impl Writer {
     /// §9.8: after a checkpoint moved the branch, and once after the open, the repository is
-    /// repacked when it holds more than 2,000 loose objects or 64 MiB of them. A repack that
-    /// fails loses nothing and is tried again at the next checkpoint. Never call it during
-    /// a sync.
+    /// repacked when it holds more than 2,000 loose objects or 64 MiB of them. The repack runs
+    /// on a thread of its own (the writer goes on with its jobs), never starts while the
+    /// project closes, and loses nothing if it fails: the next check tries again. Never call
+    /// it during a sync.
     pub(crate) fn maybe_repack(&mut self) {
-        if self.read_only().is_some() {
+        if let Some(run) = self.repack.take() {
+            if !run.done.load(Ordering::Acquire) {
+                self.repack = Some(run);
+                return;
+            }
+            let _ = run.thread.join();
+            // The run changed the folders: they are counted again.
+            self.loose = None;
+        }
+        if self.read_only().is_some() || self.shared.is_closing() {
             return;
         }
-        let Some(git) = self.git.take() else {
+        let Some(git) = &self.git else {
             return;
         };
         let now = written(&self.counters.read());
@@ -95,14 +126,7 @@ impl Writer {
         if due(objects, bytes, after) {
             counted = git.loose_objects();
             if due(counted.0, counted.1, after) {
-                if git.repack(SystemTime::now(), &self.shared.hooks).is_ok() {
-                    counted = git.loose_objects();
-                } else {
-                    // Retried at the next checkpoint.
-                    self.loose = None;
-                    self.git = Some(git);
-                    return;
-                }
+                self.start_repack();
             }
         }
         self.loose = Some(LooseCount {
@@ -110,7 +134,37 @@ impl Writer {
             bytes: counted.1,
             at: now,
         });
-        self.git = Some(git);
+    }
+
+    fn start_repack(&mut self) {
+        let Some(Ok(git)) = self.git.as_ref().map(Git::another) else {
+            return;
+        };
+        let done = Arc::new(AtomicBool::new(false));
+        let (flag, shared, hooks) = (done.clone(), self.shared.clone(), self.shared.hooks.clone());
+        shared.job_started();
+        let spawned = std::thread::Builder::new()
+            .name("tc-store repack".into())
+            .spawn(move || {
+                // A failed or stopped run loses nothing and is tried again at the next check.
+                let _ = git.repack(SystemTime::now(), &hooks, &shared.stop_flag(), MAX_RAW);
+                flag.store(true, Ordering::Release);
+                shared.job_done();
+            });
+        match spawned {
+            Ok(thread) => self.repack = Some(Run { done, thread }),
+            Err(_) => self.shared.job_done(),
+        }
+    }
+
+    /// The project closes: a repack that runs is stopped (its progress callback sees the
+    /// flag) and waited for, which takes the time of one step of libgit2's, never the time of
+    /// the repack.
+    pub(crate) fn stop_repack(&mut self) {
+        self.shared.begin_closing();
+        if let Some(run) = self.repack.take() {
+            let _ = run.thread.join();
+        }
     }
 }
 
@@ -183,8 +237,16 @@ struct Reach {
 
 impl Git {
     /// The repack (§9.8). `now` is the time the 14 days are counted to; the files' own times
-    /// are the operating system's.
-    pub fn repack(&self, now: SystemTime, hooks: &Hooks) -> Result<Repacked, GitError> {
+    /// are the operating system's. `stop` is raised when the project closes: the run ends at
+    /// the next step, and removes nothing it has not packed. One run packs at most `max_raw`
+    /// bytes of loose objects (before compression).
+    pub fn repack(
+        &self,
+        now: SystemTime,
+        hooks: &Hooks,
+        stop: &Arc<AtomicBool>,
+        max_raw: u64,
+    ) -> Result<Repacked, GitError> {
         let repo = self.repo();
         let objects = repo.path().join("objects");
         let loose = list_loose(&objects)?;
@@ -199,18 +261,30 @@ impl Git {
         let reached: HashSet<Oid> = reach.set.intersection(&wanted).copied().collect();
         let packed = packed_among(&objects.join("pack"), &reached)?;
         let plan = classify(&loose, &reach.set, &packed, now);
+        if stop.load(Ordering::Acquire) {
+            return Ok(done);
+        }
 
-        if !plan.to_pack.is_empty() {
-            done.pack = Some(self.write_pack(&reach, &plan.to_pack, &objects.join("pack"))?);
-            done.packed = plan.to_pack.len() as u64;
+        let chosen = self.within(&reach, &plan.to_pack, max_raw)?;
+        if !chosen.is_empty() {
+            let Some(name) = self.write_pack(&reach, &chosen, &objects.join("pack"), stop)? else {
+                return Ok(done);
+            };
+            done.pack = Some(name);
+            done.packed = chosen.len() as u64;
             hooks.wait(Point::AfterPackWritten);
             hooks
                 .check(Point::AfterPackWritten)
                 .map_err(|_| GitError::Other("stopped after the pack was written".into()))?;
+            if stop.load(Ordering::Acquire) {
+                // The objects are in the pack and still loose: the next repack removes the
+                // loose copies (§6.4 R1).
+                return Ok(done);
+            }
         }
 
         let by_oid: HashMap<Oid, &Loose> = loose.iter().map(|l| (l.oid, l)).collect();
-        let packed_now = plan.to_pack.iter().chain(plan.duplicates.iter());
+        let packed_now = chosen.iter().chain(plan.duplicates.iter());
         for oid in packed_now {
             if remove_loose(&by_oid[oid].path) {
                 done.removed += 1;
@@ -230,20 +304,63 @@ impl Git {
         Ok(done)
     }
 
-    /// Writes `to_pack` as one pack in `pack_dir` and checks its index names them all.
+    /// Of `to_pack`, the first objects (in the order of a good pack: commits, trees, blobs)
+    /// whose sizes add up to `max_raw`; at least one.
+    fn within(
+        &self,
+        reach: &Reach,
+        to_pack: &HashSet<Oid>,
+        max_raw: u64,
+    ) -> Result<HashSet<Oid>, GitError> {
+        let odb = at("open its objects", self.repo().odb())?;
+        let mut chosen = HashSet::new();
+        let mut total = 0u64;
+        for oid in reach.ordered.iter().filter(|oid| to_pack.contains(oid)) {
+            let size = odb.read_header(*oid).map_or(0, |(size, _)| size as u64);
+            if !chosen.is_empty() && total + size > max_raw {
+                break;
+            }
+            total += size;
+            chosen.insert(*oid);
+        }
+        Ok(chosen)
+    }
+
+    /// Writes `to_pack` as one pack in `pack_dir` and checks its index names them all. `None`
+    /// when `stop` was raised first (libgit2 asks twice a second while it looks for deltas).
     fn write_pack(
         &self,
         reach: &Reach,
         to_pack: &HashSet<Oid>,
         pack_dir: &Path,
-    ) -> Result<String, GitError> {
+        stop: &Arc<AtomicBool>,
+    ) -> Result<Option<String>, GitError> {
         let repo = self.repo();
         let mut builder = at("start a pack", repo.packbuilder())?;
+        // Two threads look for deltas: the run is background work beside a person typing.
+        builder.set_threads(2);
+        let flag = stop.clone();
+        at(
+            "watch a pack",
+            builder.set_progress_callback(move |_, _, _| !flag.load(Ordering::Acquire)),
+        )?;
         for oid in reach.ordered.iter().filter(|oid| to_pack.contains(oid)) {
             let name = reach.names.get(oid).map(String::as_str);
             at("add to a pack", builder.insert_object(*oid, name))?;
         }
-        at("write a pack", builder.write(pack_dir, 0o644))?;
+        if stop.load(Ordering::Acquire) {
+            return Ok(None);
+        }
+        if let Err(e) = builder.write(pack_dir, 0o644) {
+            // A stopped run is no failure; the half-written pack is removed by the next open.
+            if stop.load(Ordering::Acquire) {
+                return Ok(None);
+            }
+            return Err(GitError::Git {
+                what: "write a pack",
+                source: e,
+            });
+        }
         let name = match at("name a pack", builder.name())? {
             Some(hash) => format!("pack-{hash}"),
             None => return Err(GitError::Other("the pack has no name".into())),
@@ -269,7 +386,7 @@ impl Git {
             "refresh its objects",
             repo.odb().and_then(|odb| odb.refresh()),
         )?;
-        Ok(name)
+        Ok(Some(name))
     }
 }
 
@@ -508,6 +625,97 @@ mod tests {
         let plan = classify(&files, &reachable, &packed, now);
         assert!(plan.to_pack.is_empty());
         assert_eq!(plan.duplicates, vec![files[0].oid]);
+    }
+
+    #[test]
+    fn a_stopped_repack_packs_and_removes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let git = Git::init(dir.path(), Arc::default()).unwrap();
+        let blob = git.write_blob(b"loose, reachable").unwrap();
+        let tree = git
+            .update_tree(None, &[("f".into(), blob, crate::git::MODE_BLOB)], &[])
+            .unwrap();
+        let author = crate::git::Author {
+            name: "a".into(),
+            time_ms: 1_000,
+        };
+        let commit = git.write_commit(tree, &[], &author, "m").unwrap();
+        git.move_branch(None, commit).unwrap();
+        let stop = Arc::new(AtomicBool::new(true));
+        let done = git
+            .repack(SystemTime::now(), &Hooks::default(), &stop, MAX_RAW)
+            .unwrap();
+        assert_eq!(done, Repacked::default());
+        assert!(git.has(blob));
+        assert!(
+            !list_loose(&git.git_dir().join("objects"))
+                .unwrap()
+                .is_empty()
+        );
+        // The same repository repacks when nothing stops it, and keeps the object.
+        stop.store(false, Ordering::Release);
+        let done = git
+            .repack(SystemTime::now(), &Hooks::default(), &stop, MAX_RAW)
+            .unwrap();
+        assert!(done.packed >= 3 && done.removed >= 3, "{done:?}");
+        assert!(git.has(blob));
+        // What a branch reaches is no longer loose (the empty tree `update_tree` starts from
+        // is unreachable and young, so it stays).
+        let left = list_loose(&git.git_dir().join("objects")).unwrap();
+        for oid in [
+            to_oid(commit).unwrap(),
+            to_oid(tree).unwrap(),
+            to_oid(blob).unwrap(),
+        ] {
+            assert!(left.iter().all(|l| l.oid != oid), "{oid} is still loose");
+        }
+    }
+
+    /// One run packs the objects that fit in `max_raw`, in the order of a good pack, and the
+    /// next run takes the rest.
+    #[test]
+    fn a_run_packs_no_more_than_its_share() {
+        let dir = tempfile::tempdir().unwrap();
+        let git = Git::init(dir.path(), Arc::default()).unwrap();
+        let mut entries = Vec::new();
+        for n in 0..6u8 {
+            let bytes = vec![n; 1_000];
+            let blob = git.write_blob(&bytes).unwrap();
+            entries.push((format!("f{n}"), blob, crate::git::MODE_BLOB));
+        }
+        let tree = git.update_tree(None, &entries, &[]).unwrap();
+        let author = crate::git::Author {
+            name: "a".into(),
+            time_ms: 1_000,
+        };
+        let commit = git.write_commit(tree, &[], &author, "m").unwrap();
+        git.move_branch(None, commit).unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let first = git
+            .repack(SystemTime::now(), &Hooks::default(), &stop, 2_500)
+            .unwrap();
+        // The commit and the tree come first, then blobs of 1,000 bytes: 2,500 bytes hold the
+        // commit, the tree and two blobs.
+        assert!(
+            first.packed >= 2 && first.packed < 8,
+            "a share of the 8 objects: {first:?}"
+        );
+        let mut runs = 1;
+        loop {
+            let more = git
+                .repack(SystemTime::now(), &Hooks::default(), &stop, 2_500)
+                .unwrap();
+            runs += 1;
+            if more.packed == 0 {
+                break;
+            }
+            assert!(runs < 10, "the runs end");
+        }
+        let left = list_loose(&git.git_dir().join("objects")).unwrap();
+        for (_, blob, _) in &entries {
+            assert!(git.has(*blob));
+            assert!(left.iter().all(|l| l.oid != to_oid(*blob).unwrap()));
+        }
     }
 
     #[test]

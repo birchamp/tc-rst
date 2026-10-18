@@ -69,7 +69,7 @@ pub(crate) fn at<T>(what: &'static str, result: Result<T, git2::Error>) -> Resul
     result.map_err(|source| GitError::Git { what, source })
 }
 
-fn to_oid(oid: GitOid) -> Result<Oid, GitError> {
+pub(crate) fn to_oid(oid: GitOid) -> Result<Oid, GitError> {
     at("read an object id", Oid::from_bytes(oid.as_bytes()))
 }
 
