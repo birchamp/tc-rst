@@ -367,6 +367,40 @@ async fn reset_forgets_the_finished_replies_so_a_request_id_can_be_used_again() 
     assert_eq!(other.map(|view| view.on), Ok(false));
 }
 
+/// The parity harness numbers its request ids from 1 in every scenario and sends the reset
+/// first, so the second scenario's reset carries the id of the first one's. It must run: a
+/// reply kept for the reset would answer it without resetting anything, and every scenario
+/// from the second on would start with what the one before it left.
+#[tokio::test]
+async fn a_reset_with_the_id_of_an_earlier_reset_resets_again() {
+    let (_dir, t) = started().await;
+    let french = SetLocale {
+        request: rid(3),
+        locale: LocaleId::parse("fr").unwrap(),
+    };
+
+    // Scenario one.
+    post(&t.app, &Reset { request: rid(1) }).await.unwrap();
+    post(&t.app, &net(2, true)).await.unwrap();
+    post(&t.app, &french).await.unwrap();
+    assert!(t.app.internet().is_on());
+
+    // Scenario two starts with the same reset.
+    post(&t.app, &Reset { request: rid(1) }).await.unwrap();
+    assert!(!t.app.internet().is_on(), "the switch was not turned off");
+    assert_eq!(hello_value(&t.app).await["prefs"]["appLocale"], "en");
+
+    // The ids of scenario one are free in scenario two.
+    post(&t.app, &net(2, true)).await.unwrap();
+    assert!(
+        t.app.internet().is_on(),
+        "the write was served from a cache"
+    );
+    post(&t.app, &Reset { request: rid(1) }).await.unwrap();
+    assert!(!t.app.internet().is_on(), "a third reset did not run");
+    until_quiet(&t.app).await;
+}
+
 /// A write still running is not a finished reply: dropping it would let its retry run the
 /// write a second time.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

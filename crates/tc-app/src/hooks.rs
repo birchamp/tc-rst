@@ -642,7 +642,8 @@ impl Handle<Reset> for App {
     /// disarmed, every hold released, the kept replies forgotten (a write still running is
     /// kept, so its retry waits for it) and the internet off as a launch finds it (tC4's
     /// switch is page state that a reload turns off). The test fields are kept: tests name
-    /// their own.
+    /// their own. The reset's own reply is not kept either (`dispatch::kept_reply`), so the
+    /// next scenario's reset may carry the same id and still run.
     async fn handle(&self, _req: Reset) -> Result<(), ApiError> {
         let hooks = self.hooks()?;
         *lock(&hooks.crash) = None;

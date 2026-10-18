@@ -993,7 +993,7 @@ case is named after the rule it protects.
 | `SuggestModel` | (project, testament) | trainer thread | background training from one snapshot (DELTA:627-629) | a save appends its verse (`crates/tc-align/src/suggest/engine.rs:218`) | 50 ms (PERF:84) |
 | `DraftedCounts` | book | session | at open, background | each delta | 1 ms (PERF:76) |
 | `SummaryCache` | folder | app, persisted | while open, from deltas; on a miss, from derived files | stamp change | Home costs O(projects) |
-| `ReplyCache` | `RequestId`, with a SHA-256 of the request body | session; until B1b one app-wide cache serves every write (A3) | when a write starts (in flight), then its reply | bounded at 1,024 finished replies; in-flight entries are never evicted *(A-2)* | — |
+| `ReplyCache` | `RequestId`, with a SHA-256 of the request body | session; until B1b one app-wide cache serves every write (A3) | when a write starts (in flight), then its reply | bounded at 1,024 finished replies; in-flight entries are never evicted *(A-2)*; `test/reset` keeps no reply (§5.8) | — |
 
 There is no `ProjectIndex` *(A-21)*: §4.3 says how each read finds its keys.
 
@@ -1340,7 +1340,7 @@ show a 401 page.
 | `test/inspect` | fold facts journeys assert: heads, values, conflicts, commits, `.tc/` files |
 | `test/writeTeammate` | teammate changes through tc-journal and the store's sealing API (AD36) |
 | `test/counters` | operation counters |
-| `test/reset` | reset prefs, summaries and reports to the scenario seed, release every hold, disarm the crash, and turn the internet switch off as a launch finds it (tC4's switch is page state that a reload turns off, `tC4:e2e/helpers/door43Share.ts:21-25`), and forget the kept replies, so a request id may be used again in the next scenario (a write still running is kept, so its retry still waits for it); the harness's `home()` |
+| `test/reset` | reset prefs, summaries and reports to the scenario seed, release every hold, disarm the crash, and turn the internet switch off as a launch finds it (tC4's switch is page state that a reload turns off, `tC4:e2e/helpers/door43Share.ts:21-25`), and forget the kept replies, so a request id may be used again in the next scenario (a write still running is kept, so its retry still waits for it); the harness's `home()`. The reset keeps no reply of its own either: running it again changes nothing, and a harness whose ids restart with each scenario sends it first with the id it used before, which a kept reply would answer without resetting anything |
 
 ---
 

@@ -14,7 +14,9 @@
 //!   save is never stopped half way;
 //! - a request can be refused before its work starts, but only when its id is new: an id the
 //!   cache knows was sent, so its retry gets its own reply and never a refusal that says
-//!   nothing was sent.
+//!   nothing was sent;
+//! - a write whose caller says [`Keep::Nothing`] leaves no reply behind: it is waited for
+//!   while it runs, and its id is free the moment it ends.
 //!
 //! Replies are kept for the last [`ReplyCache::FINISHED`] requests; a request in flight is
 //! never dropped.
@@ -45,6 +47,18 @@ impl BodyDigest {
         out.copy_from_slice(context.finish().as_ref());
         Self(out)
     }
+}
+
+/// What the cache keeps of a write once it has finished.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Keep {
+    /// The reply, for the retries of its id: what every write needs, because a retry after a
+    /// lost reply must not run the write again.
+    Reply,
+    /// Nothing, for a write that does the same when it runs again, such as `test/reset`. A
+    /// kept reply would answer the next request that carries the id, without running it, and
+    /// a harness restarts its ids with every scenario.
+    Nothing,
 }
 
 /// What a write produced.
@@ -124,6 +138,8 @@ impl ReplyCache {
     /// task, so a caller that goes away does not stop it; a second caller with the same id
     /// and digest waits for it.
     ///
+    /// `keep` is what stays of the write when it ends.
+    ///
     /// `refuse` is the answer for a request that cannot start now, for example because the
     /// internet switch is off. It applies only when `id` is new: the cache looks the id up
     /// first, so a request that was sent (finished, or still running) is answered from its
@@ -132,6 +148,7 @@ impl ReplyCache {
     /// id that falls out of the cache between them cannot start work that `refuse` forbade.
     pub async fn run<W>(
         self: &Arc<Self>,
+        keep: Keep,
         id: RequestId,
         digest: BodyDigest,
         refuse: Option<ApiError>,
@@ -166,7 +183,7 @@ impl ReplyCache {
                         let cache = Arc::clone(self);
                         tokio::spawn(async move {
                             let outcome = work.await;
-                            cache.finish(id, &outcome);
+                            cache.finish(id, keep, &outcome);
                             sender.send_replace(Some(outcome));
                         });
                         Plan::Wait(waiting, true)
@@ -193,8 +210,13 @@ impl ReplyCache {
     }
 
     /// Records the outcome, and forgets the oldest finished replies past the cap.
-    fn finish(&self, id: RequestId, outcome: &Outcome) {
+    fn finish(&self, id: RequestId, keep: Keep, outcome: &Outcome) {
         let mut state = self.state();
+        if keep == Keep::Nothing {
+            // Callers already waiting hold the write's channel, so they still get the outcome.
+            state.entries.remove(&id);
+            return;
+        }
         if let Some(entry) = state.entries.get_mut(&id) {
             entry.slot = Slot::Finished(outcome.clone());
         }

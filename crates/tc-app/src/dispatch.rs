@@ -20,7 +20,8 @@
 //! 4. a write goes through the [`ReplyCache`](crate::replies::ReplyCache): the first attempt
 //!    runs on a task of its own, so a dropped connection never stops it half way, and a retry
 //!    gets that attempt's reply. Every answer of a write is cached, refusals included: a
-//!    retry after a lost reply must get the same refusal, not run the write again.
+//!    retry after a lost reply must get the same refusal, not run the write again. The one
+//!    exception is `test/reset` ([`kept_reply`]).
 
 use std::future::Future;
 
@@ -29,16 +30,29 @@ use tc_api::{ApiError, Endpoint, Reply, Write};
 
 use crate::app::{Answer, App, Then};
 use crate::jobs::stop_reason;
-use crate::replies::{BodyDigest, CacheAnswer, Outcome};
+use crate::replies::{BodyDigest, CacheAnswer, Keep, Outcome};
 use crate::reports::facts;
 #[cfg(feature = "test-hooks")]
-use tc_api::test::CrashPoint;
+use tc_api::test::{CrashPoint, Reset};
 
 /// What the app does for one endpoint. Impls write `async fn handle(&self, req: X) ->
 /// Result<…, ApiError>`, which satisfies this signature while the body holds nothing that is
 /// not `Send` across an await.
 pub trait Handle<E: Endpoint> {
     fn handle(&self, req: E) -> impl Future<Output = Result<E::Ok, ApiError>> + Send;
+}
+
+/// What the reply cache keeps of the write at `path`. A reply is kept for every write but
+/// `test/reset`: it sets the app back to a launch's state, so running it again changes
+/// nothing, and the parity harness sends it first in every scenario with the id it used in
+/// the one before. A kept reply would answer that reset without resetting anything.
+fn kept_reply(path: &str) -> Keep {
+    #[cfg(feature = "test-hooks")]
+    if path == Reset::PATH {
+        return Keep::Nothing;
+    }
+    let _ = path;
+    Keep::Reply
 }
 
 /// The longest reason of a `BadRequest`: serde's message can repeat a key the body sent.
@@ -172,7 +186,12 @@ impl App {
             Outcome::Reply(bytes.into())
         };
 
-        match self.inner.replies.run(id, digest, refuse, work).await {
+        match self
+            .inner
+            .replies
+            .run(kept_reply(path), id, digest, refuse, work)
+            .await
+        {
             CacheAnswer::Fresh(outcome) => self.write_answer(outcome, true, path),
             CacheAnswer::Repeat(outcome) => self.write_answer(outcome, false, path),
             CacheAnswer::Reused => self.error_answer(ApiError::RequestReused),
