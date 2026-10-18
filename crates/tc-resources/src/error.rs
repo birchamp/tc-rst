@@ -106,6 +106,8 @@ pub enum Refusal {
     Symlink(String),
     #[error("two entries unpack to {0:?}")]
     DuplicateEntry(String),
+    #[error("entry {path:?} cannot be written on every platform: {reason}")]
+    NotPortable { path: String, reason: &'static str },
     #[error("the unpacked files exceed the {limit}-byte limit")]
     TooLargeUnpacked { limit: u64 },
     #[error("the archive is not an Aquifer release: {0}")]

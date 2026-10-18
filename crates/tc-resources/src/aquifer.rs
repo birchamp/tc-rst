@@ -31,7 +31,7 @@ use url::Url;
 
 use crate::error::{AquiferError, InstallError, Refusal};
 use crate::pin::{AquiferLanguage, AquiferPin, AquiferRepo, AssetName, BookCoverage, Sha256};
-use crate::store::{Installed, Origin, ResourceStore, Staged};
+use crate::store::{Installed, Origin, ResourceStore, Staged, collision_key, unportable_segment};
 
 const USER_AGENT: &str = concat!("tc-resources/", env!("CARGO_PKG_VERSION"));
 const GITHUB: &str = "https://github.com";
@@ -669,9 +669,10 @@ pub(crate) fn canonical_book(path: &str) -> Option<BookId> {
 }
 
 /// Unpacks a release zip. Every entry is read in full, which checks its CRC-32; a name
-/// that could leave the folder, a symbolic link or two names one file system would merge
-/// is refused, never repaired. macOS Finder debris is dropped. When the root holds no
-/// `metadata.json` and every entry shares one top folder, that folder is removed.
+/// that could leave the folder, a name Windows would write under another name, a symbolic
+/// link or two names one file system would merge is refused, never repaired. macOS Finder
+/// debris is dropped. When the root holds no `metadata.json` and every entry shares one top
+/// folder, that folder is removed.
 fn unpack(bytes: &[u8], max_unpacked: u64) -> Result<Vec<(String, Vec<u8>)>, Refusal> {
     let mut archive =
         zip::ZipArchive::new(Cursor::new(bytes)).map_err(|e| Refusal::NotAZip(e.to_string()))?;
@@ -708,7 +709,10 @@ fn unpack(bytes: &[u8], max_unpacked: u64) -> Result<Vec<(String, Vec<u8>)>, Ref
         if name.split('/').any(str::is_empty) {
             return Err(Refusal::EscapesRoot(name));
         }
-        if !seen.insert(name.to_lowercase()) {
+        if let Some(reason) = name.split('/').find_map(unportable_segment) {
+            return Err(Refusal::NotPortable { path: name, reason });
+        }
+        if !seen.insert(collision_key(&name)) {
             return Err(Refusal::DuplicateEntry(name));
         }
         let mut body = Vec::new();
@@ -800,10 +804,36 @@ mod tests {
                 "{name}"
             );
         }
-        assert!(matches!(
-            unpack(&zip(&[("a.json", b"x"), ("A.json", b"y")]), 1 << 20),
-            Err(Refusal::DuplicateEntry(_))
-        ));
+        for name in [
+            "notes./x",
+            "x/a ",
+            "x/a.",
+            "PROGRA~1.json",
+            "x/abcdef~1.json",
+            "A~9",
+        ] {
+            assert!(
+                matches!(
+                    unpack(&zip(&[(name, b"x")]), 1 << 20),
+                    Err(Refusal::NotPortable { .. })
+                ),
+                "{name}"
+            );
+        }
+        for pair in [["a.json", "A.json"], ["σ.json", "ς.json"]] {
+            assert!(
+                matches!(
+                    unpack(&zip(&[(pair[0], b"x"), (pair[1], b"y")]), 1 << 20),
+                    Err(Refusal::DuplicateEntry(_))
+                ),
+                "{pair:?}"
+            );
+        }
+        let allowed = unpack(&zip(&[("notes~2024-draft.md", b"x")]), 1 << 20).unwrap();
+        assert_eq!(
+            allowed,
+            vec![("notes~2024-draft.md".to_owned(), b"x".to_vec())]
+        );
         assert!(matches!(
             unpack(&zip(&[("a.json", &[0u8; 100])]), 10),
             Err(Refusal::TooLargeUnpacked { .. })
