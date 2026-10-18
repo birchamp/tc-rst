@@ -35,10 +35,19 @@ fn ok_null() -> serde_json::Value {
     serde_json::json!({"type": "ok", "value": null})
 }
 
-/// Gives the recorder a moment: the end after a reply is asked for from the connection's
-/// task, a hair after the client has the body.
+/// Gives the recorder a moment, for a check that nothing was asked for.
 fn settle() {
     std::thread::sleep(Duration::from_millis(150));
+}
+
+/// Waits until the recorder holds `n` calls. The end after a reply is asked for from the
+/// connection's task, a hair after the client has the body, and on a loaded machine that hair
+/// outlasted a fixed wait (2026-10-18).
+fn wait_for_calls(ender: &RecordingEnder, n: usize) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while ender.calls().len() < n && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }
 
 /// Answers every call with a body of `size` bytes and a request to end the process after it.
@@ -77,7 +86,7 @@ fn after_reply_crash_ends_only_after_the_body() {
     let read_at = Instant::now();
     assert_eq!(response.status, 200);
     assert_eq!(response.body.len(), 20_000, "the whole body arrived");
-    settle();
+    wait_for_calls(&ender, 1);
     let calls = ender.calls();
     assert_eq!(calls.len(), 1, "{calls:?}");
     assert_eq!(calls[0].0, Ended::AfterReply);
@@ -112,7 +121,7 @@ fn after_reply_crash_waits_for_a_slow_reader() {
     );
     let response = common::read_response(&mut stream);
     assert_eq!(response.body.len(), 48 * 1024 * 1024);
-    settle();
+    wait_for_calls(&ender, 1);
     assert_eq!(ender.calls().len(), 1);
 }
 
@@ -160,7 +169,7 @@ fn crash_after_reply_answers_then_ends() {
     let response = server.api("app/clientError", REPORT);
     assert_eq!(response.status, 200);
     assert_eq!(response.json(), ok_null(), "the reply is whole");
-    settle();
+    wait_for_calls(&ender, 1);
     let calls = ender.calls();
     assert_eq!(calls.len(), 1, "{calls:?}");
     assert_eq!(calls[0].0, Ended::AfterReply);
