@@ -25,4 +25,5 @@ can show that a budget is met.
 Git for Windows was installed with its default `core.autocrlf=true`, so the checkout has
 CRLF line endings in its text files, as most Windows developers' checkouts do.
 
-No Defender exclusion was added, for any folder.
+Defender excludes no folder: none was added for this work, and the owner confirmed on
+2026-10-18 that there are none (only an administrator can read the list).

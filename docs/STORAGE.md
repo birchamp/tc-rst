@@ -2340,13 +2340,26 @@ change, so every device applies the same changes, and a later arrival of the ful
 the rest. Releases of one batch are grow-only: the fold applies the union of the changes they
 list.
 
-**Incomplete history.** A head with a `MissingParent` link (its parent is held or was lost)
-continues a version this device cannot see. A conflict that involves such a head is marked
-`incomplete_history`: the review says "Juan's version continues a change that has not arrived
-(or was damaged). It is not a rival of the older text." When the missing parent is in a held
-batch, the only choice offered is *Apply what was recovered*, and the conflict usually disappears
-once it is applied. When the parent is in no batch this device holds, the usual choices are
-offered with the continuation listed first, because that parent may never come.
+**Incomplete history.** Sometimes a version builds on a change this computer does not have:
+that change is in a batch that has only partly arrived (held, above), or it was lost. In the
+fold, the version is a head with a `MissingParent` link. Such a version is not a rival of the
+text before it; it continues a change that is missing here. A conflict that offers such a
+version as one of its choices is marked `incomplete_history`, and the review says so beside
+that version: "Juan's version continues a change that has not arrived (or was damaged). It is
+not a rival of the older text." The choices include a verse that a book's restore race lists
+(§7.6).
+
+What the review offers depends on where the missing change is and what the conflict is about:
+
+- **The missing change is in a held batch, and the conflict is about the record the version
+  is on** (for example, a verse conflict about that verse). The only choice is *Apply what was
+  recovered*. It brings in what arrived of the batch, and the conflict usually disappears.
+- **The missing change is in a held batch, and the version is a verse that a book's restore
+  race lists.** The race's own choices stay offered: *Restore the text*, *Start empty*, or one of
+  the listed verses. Applying the recovered changes would not decide which way the book goes.
+  The held batch keeps its own row in the listing, with *Apply what was recovered*.
+- **The missing change is in no batch this computer holds.** The usual choices are offered,
+  with the continuing version listed first, because the missing change may never come.
 
 ### 7.5 Verse coherence and the USFM projection
 

@@ -158,11 +158,13 @@ shell (TC4-DELTA §3.15.10) will.
   about one script in eighteen reaches a missing parent, so 64 cases miss it about one run in
   forty, on any platform. `concurrent_differences_are_visible` already runs 256 cases for
   that reason; the other properties that count it run 64.
-- From the review of the `incomplete_history` fix, for the owner: §7.4 says a conflict marked
-  incomplete offers only *Apply what was recovered*, which read literally would now block a
-  restore race's own choices (nothing enforces it today); a *Start empty* verse head with a
-  missing parent marks its verse conflict, not the presence conflict; the property counts
-  unreadable bases as heads; and a conflict's `batches` leave out the race verse heads.
+- From the review of the `incomplete_history` fix: a *Start empty* verse head with a missing
+  parent marks its verse conflict, not the presence conflict; the property counts unreadable
+  bases as heads; and a conflict's `batches` leave out the race verse heads. The review's
+  question about §7.4, whose rule that an incomplete conflict offers only *Apply what was
+  recovered* would have blocked a restore race's own choices, is settled: at the owner's
+  request §7.4 now says, case by case, what the review offers, and a restore race keeps its
+  choices.
 
 ## The last run
 
