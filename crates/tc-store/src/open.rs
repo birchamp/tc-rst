@@ -199,7 +199,8 @@ fn open_inner(
 ) -> Result<ProjectHandle, OpenError> {
     tracker.phase(Phase::Finishing, 6, 0);
     let counters = Arc::new(Counters::default());
-    let vfs: Arc<dyn Vfs> = Arc::new(CountingVfs::new(env.vfs.clone(), counters.clone()));
+    let vfs: Arc<dyn Vfs> =
+        Arc::new(CountingVfs::new(env.vfs.clone(), counters.clone()).for_project(path.to_owned()));
     let folder = Folder::new(path);
     vfs.metadata(path)
         .map_err(|e| OpenError::Unreadable(StoreError::io("stat", path, e)))?;
@@ -265,6 +266,9 @@ fn open_inner(
         // O4's repair: unit S1 has no HEAD to restore `format.json` from, so a missing or
         // damaged one is written as this app's; a newer one was never damaged here.
         let repaired = finish_temps(&*vfs, &folder, id).and_then(|()| {
+            // The folder every save goes into is made durable now (once, §5.0), not by the
+            // first save.
+            atomic_create_dirs(&*vfs, &folder.path(PENDING))?;
             if gates.format.is_some() {
                 return Ok(());
             }

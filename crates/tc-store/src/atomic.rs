@@ -139,7 +139,12 @@ pub fn atomic_write(
     Ok(())
 }
 
-/// Creates each missing directory of `path`, flushing its parent after each one.
+/// Creates each missing directory of `path`, flushing its parent after each one. A
+/// directory that already exists is not trusted to be durable: its creator may have stopped
+/// before it flushed the parent, and a seal that wrote a pack into it would then remove the
+/// pending files that pack holds while a power cut could still take the folder and the pack
+/// with it. A filesystem that remembers what it has flushed ([`Vfs::secure_dir_chain`])
+/// flushes the entries of the directories found, once.
 pub fn atomic_create_dirs(vfs: &dyn Vfs, path: &Path) -> Result<(), StoreError> {
     let mut missing = Vec::new();
     let mut at = Some(path);
@@ -150,6 +155,7 @@ pub fn atomic_create_dirs(vfs: &dyn Vfs, path: &Path) -> Result<(), StoreError> 
         missing.push(dir.to_owned());
         at = dir.parent();
     }
+    let mut made = Vec::new();
     for dir in missing.into_iter().rev() {
         match vfs.create_dir(&dir) {
             Ok(()) => {}
@@ -159,8 +165,10 @@ pub fn atomic_create_dirs(vfs: &dyn Vfs, path: &Path) -> Result<(), StoreError> 
         if let Some(parent) = dir.parent() {
             vfs.sync_dir(parent).at("flush the folder", parent)?;
         }
+        made.push(dir);
     }
-    Ok(())
+    vfs.secure_dir_chain(path, &made)
+        .at("flush the folder", path)
 }
 
 /// Removes a file and flushes its directory, now or once for a batch.
@@ -242,6 +250,51 @@ mod tests {
         let result = atomic_write(&fs, Path::new("/p/.tc"), "f", b"x", SyncDir::Now);
         assert!(matches!(result, Err(WriteError::WrittenNotDurable(_))));
         assert_eq!(fs.peek(Path::new("/p/.tc/f")), Some(b"x".to_vec()));
+    }
+
+    /// A directory a writer made and stopped before it flushed the parent exists in the page
+    /// cache only. `atomic_create_dirs` on the project's filesystem flushes its entry (once,
+    /// whatever the folders below it): a power cut afterwards keeps the folder, and what was
+    /// written into it.
+    #[test]
+    fn a_directory_found_existing_is_made_durable_once() {
+        use crate::counters::{Counters, CountingVfs};
+        use std::sync::Arc;
+        let fs = FaultFs::new();
+        fs.set_power_loss(PowerLoss::Strict);
+        fs.create_dir(Path::new("/p")).unwrap();
+        fs.sync_dir(Path::new("/")).unwrap();
+        // The writer stopped here: both folders exist, neither entry was flushed.
+        fs.create_dir(Path::new("/p/a")).unwrap();
+        fs.create_dir(Path::new("/p/a/b")).unwrap();
+        let counters = Arc::new(Counters::default());
+        let project = CountingVfs::new(Arc::new(fs.clone()), counters.clone())
+            .for_project(Path::new("/p").to_owned());
+        atomic_create_dirs(&project, Path::new("/p/a/b")).unwrap();
+        atomic_write(&project, Path::new("/p/a/b"), "f", b"saved", SyncDir::Now).unwrap();
+        assert_eq!(
+            fs.crash(true).peek(Path::new("/p/a/b/f")),
+            Some(b"saved".to_vec()),
+            "the folders that hold the file are durable"
+        );
+        // Remembered: the same folders cost no flush again.
+        let flushes = counters.read().fsyncs;
+        atomic_create_dirs(&project, Path::new("/p/a/b")).unwrap();
+        atomic_create_dirs(&project, Path::new("/p/a")).unwrap();
+        assert_eq!(counters.read().fsyncs, flushes);
+        // A filesystem that remembers nothing does not flush (the default).
+        let plain = FaultFs::new();
+        plain.create_dir(Path::new("/p")).unwrap();
+        plain.create_dir(Path::new("/p/a")).unwrap();
+        atomic_create_dirs(&plain, Path::new("/p/a")).unwrap();
+        assert_eq!(
+            plain
+                .log()
+                .iter()
+                .filter(|o| o.kind == crate::fault::OpKind::SyncDir)
+                .count(),
+            0
+        );
     }
 
     #[test]

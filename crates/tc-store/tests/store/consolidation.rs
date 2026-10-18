@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tc_journal::{ChangeId, ProjectId};
+use tc_journal::ChangeId;
 use tc_store::fault::{FaultFs, OpKind, PowerLoss};
 use tc_store::{Clock, ManualClock, OpenOptions, Store};
 
@@ -22,38 +22,6 @@ fn store_on(fs: &FaultFs, clock: &Arc<ManualClock>) -> Store {
     let store = Store::start(config).unwrap();
     store.wait_cleanup();
     store
-}
-
-fn project_of(fs: &FaultFs, folder: &Path) -> ProjectId {
-    let bytes = fs
-        .peek(&folder.join("ingredients/tc/project.json"))
-        .unwrap();
-    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    ProjectId::parse(json["projectId"].as_str().unwrap()).unwrap()
-}
-
-/// Every change a verified line of a pack or pending file in the folder holds.
-fn ids_on_disk(fs: &FaultFs, folder: &Path) -> BTreeSet<ChangeId> {
-    let project = project_of(fs, folder);
-    let mut out = BTreeSet::new();
-    for (rel, bytes) in files(fs, folder) {
-        // A complete temporary file is what the next open's O2 renames into place.
-        let rel = match rel.rsplit_once("/.~") {
-            Some((dir, name)) => match tc_store::atomic::temp_target(&format!(".~{name}")) {
-                Some(target) => format!("{dir}/{target}"),
-                None => continue,
-            },
-            None => rel,
-        };
-        if rel.starts_with("ingredients/tc/changes/") {
-            let read = tc_journal::pack::read_pack(&rel, &bytes, project);
-            out.extend(read.entries.iter().map(|e| e.id()));
-        } else if rel.starts_with(".tc/pending/") {
-            let read = tc_journal::pending::read_pending(&bytes, project);
-            out.extend(read.entries.iter().map(|e| e.id()));
-        }
-    }
-    out
 }
 
 /// Where a checkpoint's kill point lies: anywhere in its write points, or inside a window
@@ -330,7 +298,10 @@ fn run(steps: &[Step], model: PowerLoss, census: &Census) {
 fn consolidation_loses_nothing() {
     let census = Census::default();
     let config = ProptestConfig {
-        cases: 32,
+        cases: std::env::var("PROPTEST_CASES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(32),
         max_shrink_iters: 200,
         failure_persistence: None,
         ..ProptestConfig::default()

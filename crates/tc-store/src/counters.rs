@@ -6,10 +6,11 @@
 //! budget of its own.
 
 use crate::vfs::{DirEntry, FileMeta, LockHandle, ReadHandle, Vfs, WriteHandle};
+use std::collections::BTreeSet;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 macro_rules! counters {
     ($($(#[$doc:meta])* $name:ident),* $(,)?) => {
@@ -99,16 +100,33 @@ impl Counters {
     }
 }
 
-/// A [`Vfs`] that counts what passes through it.
+/// A [`Vfs`] that counts what passes through it and, for a project folder, remembers which
+/// of its directories this session has made durable ([`Vfs::secure_dir_chain`]).
 #[derive(Debug, Clone)]
 pub struct CountingVfs {
     inner: Arc<dyn Vfs>,
     counters: Arc<Counters>,
+    /// The project folder: its own entry in the projects folder was flushed when it was
+    /// placed (§6.4 N2). Directories below it are flushed once per session.
+    root: Option<PathBuf>,
+    secured: Arc<Mutex<BTreeSet<PathBuf>>>,
 }
 
 impl CountingVfs {
     pub fn new(inner: Arc<dyn Vfs>, counters: Arc<Counters>) -> Self {
-        Self { inner, counters }
+        Self {
+            inner,
+            counters,
+            root: None,
+            secured: Arc::default(),
+        }
+    }
+
+    /// Makes this the filesystem of the project folder `root`.
+    #[must_use]
+    pub fn for_project(mut self, root: PathBuf) -> Self {
+        self.root = Some(root);
+        self
     }
 
     pub fn counters(&self) -> &Arc<Counters> {
@@ -231,5 +249,41 @@ impl Vfs for CountingVfs {
 
     fn canonicalize(&self, path: &Path) -> io::Result<PathBuf> {
         self.inner.canonicalize(path)
+    }
+
+    fn secure_dir_chain(&self, dir: &Path, made: &[PathBuf]) -> io::Result<()> {
+        let Some(root) = self
+            .root
+            .as_deref()
+            .filter(|r| dir.starts_with(r) && dir != *r)
+        else {
+            return self.inner.secure_dir_chain(dir, made);
+        };
+        let todo: Vec<PathBuf> = {
+            let mut secured = self.secured.lock().unwrap_or_else(|e| e.into_inner());
+            secured.extend(made.iter().cloned());
+            let mut todo = Vec::new();
+            let mut at = dir;
+            while at != root && !secured.contains(at) {
+                todo.push(at.to_owned());
+                match at.parent() {
+                    Some(parent) => at = parent,
+                    None => break,
+                }
+            }
+            todo
+        };
+        // Outermost first; a directory is remembered only once its entry was flushed, so a
+        // failed flush is tried again.
+        for d in todo.iter().rev() {
+            if let Some(parent) = d.parent() {
+                self.sync_dir(parent)?;
+            }
+            self.secured
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(d.clone());
+        }
+        Ok(())
     }
 }

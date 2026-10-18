@@ -1,13 +1,15 @@
 //! What every test of the store uses: a store on a `FaultFs`, a Titus project created
 //! through the real create path, and short ways to save, read and check.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tc_journal::command::{Command, SeedSource};
 use tc_journal::fold::ProjectKind;
 use tc_journal::record::{Scope, VerseValue, VersificationValue};
-use tc_journal::{BookId, ChapterNo, MetaField, MetaPath, Record, RecordKey, VerseNo};
+use tc_journal::{
+    BookId, ChangeId, ChapterNo, MetaField, MetaPath, ProjectId, Record, RecordKey, VerseNo,
+};
 use tc_store::fault::FaultFs;
 use tc_store::{
     CommandError, FakePlatform, Hooks, ManualClock, NewProject, ProjectHandle, Store, StoreConfig,
@@ -24,8 +26,23 @@ pub struct Rig {
     pub store: Store,
 }
 
+thread_local! {
+    /// How far every store this test thread makes starts past the usual start time.
+    static CLOCK_OFFSET_MS: std::cell::Cell<i64> = const { std::cell::Cell::new(0) };
+}
+
+/// Runs `f` with every store it makes (a reopen included) one month later than the project
+/// was made: a seal then writes its pack into a month folder that does not exist yet.
+pub fn in_a_later_month<T>(f: impl FnOnce() -> T) -> T {
+    CLOCK_OFFSET_MS.with(|c| c.set(31 * 24 * 60 * 60 * 1000));
+    let out = f();
+    CLOCK_OFFSET_MS.with(|c| c.set(0));
+    out
+}
+
 pub fn config(fs: &FaultFs, app: &str, host: &str) -> (StoreConfig, Arc<ManualClock>) {
-    let clock = Arc::new(ManualClock::at(1_792_195_200_000));
+    let offset = CLOCK_OFFSET_MS.with(std::cell::Cell::get);
+    let clock = Arc::new(ManualClock::at(1_792_195_200_000 + offset));
     let platform = FakePlatform {
         host: host.to_owned(),
         machine: format!("machine-of-{host}"),
@@ -203,4 +220,36 @@ pub fn packs(fs: &FaultFs, folder: &Path) -> Vec<String> {
         .into_keys()
         .filter(|p| p.starts_with("ingredients/tc/changes/") && !p.contains(".~"))
         .collect()
+}
+
+pub fn project_of(fs: &FaultFs, folder: &Path) -> ProjectId {
+    let bytes = fs
+        .peek(&folder.join("ingredients/tc/project.json"))
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    ProjectId::parse(json["projectId"].as_str().unwrap()).unwrap()
+}
+
+/// Every change a verified line of a pack or pending file in the folder holds.
+pub fn ids_on_disk(fs: &FaultFs, folder: &Path) -> BTreeSet<ChangeId> {
+    let project = project_of(fs, folder);
+    let mut out = BTreeSet::new();
+    for (rel, bytes) in files(fs, folder) {
+        // A complete temporary file is what the next open's O2 renames into place.
+        let rel = match rel.rsplit_once("/.~") {
+            Some((dir, name)) => match tc_store::atomic::temp_target(&format!(".~{name}")) {
+                Some(target) => format!("{dir}/{target}"),
+                None => continue,
+            },
+            None => rel,
+        };
+        if rel.starts_with("ingredients/tc/changes/") {
+            let read = tc_journal::pack::read_pack(&rel, &bytes, project);
+            out.extend(read.entries.iter().map(|e| e.id()));
+        } else if rel.starts_with(".tc/pending/") {
+            let read = tc_journal::pending::read_pending(&bytes, project);
+            out.extend(read.entries.iter().map(|e| e.id()));
+        }
+    }
+    out
 }

@@ -1461,6 +1461,17 @@ pub enum SyncDir<'a> { Now, Deferred(&'a mut DirSet) }   // Deferred collects di
 `atomic_create_dirs` creates each missing directory and fsyncs its parent. `atomic_remove`
 unlinks and fsyncs the parent.
 
+**A directory found existing is not trusted.** Its creator may have stopped between the `mkdir`
+and the flush of its parent: a killed process leaves the folder in the page cache, and a seal
+that then wrote a pack into it, removed the pending files the pack holds and was followed by a
+power cut would lose the folder, the pack and the saves with it (the crash matrix found this:
+a seal into a month folder that did not exist yet; after a consolidation the folder held the
+whole journal). On a project's filesystem (`Vfs::secure_dir_chain`) the first time a session
+creates or finds a directory below the project folder, `atomic_create_dirs` flushes the entry
+of every directory on the way to it that the session has not flushed yet; the session
+remembers them, so each directory costs its flushes once, and the open does it for `.tc` and
+`.tc/pending`, so the first save pays nothing.
+
 **Filesystems.** A project on FAT32 or exFAT opens read-only with "This drive cannot keep the
 project safe if the power fails. Copy the project to this computer?": those filesystems do not
 make rename atomic. The type is read from `sysinfo::Disks`. Exchange files may live on any
@@ -2375,6 +2386,7 @@ next starts, so power loss is covered by the same rows (the row says where a los
 | K2 | seal | pack renamed, before the re-read | pack + pending files | O7: pending ids all in a valid pack → removed | after |
 | K3 | seal | some pending files removed | pack + some pending files | as K2 | after |
 | K4 | seal | pending removed, before materialize | the pack is not listed in `metadata.json` | O10 materializes | after |
+| K0 | seal | the pack folder of a new month made, its entry in the parent not flushed | the folder only in the page cache; no pack | the next seal flushes the entry of the folder it finds (§5.0) before it writes the pack into it and removes the pending files | before or after; a power cut after the restart's seal keeps the pack |
 | Q1 | consolidate | new pack temp | temp + old packs | O2 (rename if it verifies, then as Q2; else remove) | before or after |
 | Q2 | consolidate | new pack renamed, old packs not removed | both | O7 removes redundant packs | after |
 | M1 | materialize | intent written | intent, old files | O9: `d ∈ {o}` → rewrite | after |
@@ -4256,7 +4268,11 @@ action runs, and the action runs once under each model; a save the disk answered
 the rename flush of §5.0 step 4 or open deletes a complete temp file); no batch is half applied;
 the folder passes `tc_burrito::check` after open, including after a crash inside every write
 group of I7 (seal, consolidation, intake packs, materialization); no intent file is left; a
-second open changes nothing.
+second open changes nothing. The restart's own work must survive a power cut as well: after
+each kill the project is opened again and closed (which seals and materializes what the kill
+left), and a power cut is taken after that; every change the folder held before the close must
+still be held (a kill between the creation of a folder and the flush of its entry, then a
+restart that writes into it, then a power cut).
 
 | Action | Crash rows (§6.4) |
 |---|---|
@@ -4385,6 +4401,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the known key for newer fields (parse as `Unknown`) | `mixed_minor_versions_converge` |
 | total `build_metadata` (check the whole document only) | `arbitrary_meta_never_blocks_commit` |
 | the rename flush and the roll-forward of complete temp files | `crash_lost_rename_rolled_forward` |
+| the flush of a directory found existing (trust it) | `crash_checkpoint_into_a_months_folder_that_does_not_exist_yet`, `a_directory_found_existing_is_made_durable_once` (`atomic.rs`) |
 | the compare-and-swap before each rename retry | `loss_rename_retry_never_overwrites_outside_save` |
 | anchors and Detached (place attached records by number) | `every_head_reachable_from_a_screen` |
 | foreign entries (build merge trees from owned paths only) | `loss_foreign_entries_kept_on_tip` |

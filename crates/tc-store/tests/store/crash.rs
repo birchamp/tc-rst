@@ -109,7 +109,19 @@ pub(crate) fn kill_everywhere(
                     let after = fs.crash(power_cut);
                     let (rig2, reopened) = reopen_checked(after, folder);
                     check(&reopened, row_outcome(outcome, model, power_cut));
+                    let held = ids_on_disk(&rig2.fs, folder);
                     second_open_changes_nothing(&rig2, reopened, folder);
+                    // A restart finishes the work the kill left (its close seals and
+                    // materializes): a power cut after that loses no change. A process killed
+                    // between a folder's creation and the flush of its entry leaves a folder
+                    // that only the page cache holds, which the restart must not trust.
+                    let cut = rig2.fs.crash(true);
+                    let kept = ids_on_disk(&cut, folder);
+                    let lost: Vec<_> = held.difference(&kept).collect();
+                    assert!(
+                        lost.is_empty(),
+                        "a power cut after the restart lost {lost:?} (killed before write point {k}, {model:?}, torn {torn})"
+                    );
                 }
                 points += 1;
                 if !dead {
@@ -295,6 +307,67 @@ fn crash_checkpoint_seal_and_materialize_lose_nothing() {
                 "a sealed save was lost"
             );
         }
+    });
+    assert!(points > 10, "{points}");
+}
+
+/// A seal in a month that has no pack folder yet makes the folder, and a process killed
+/// between its creation and the flush of its entry leaves a folder only the page cache holds.
+/// The restart's seal must not trust it: it writes its pack there, removes the pending files
+/// the pack holds, and a power cut would take the folder, the pack and with them the saves
+/// (the crash matrix found this under load: a kill between `create_dir` and the flush of its
+/// parent, then a restart that finishes the seal, then a power cut).
+#[test]
+fn crash_checkpoint_into_a_months_folder_that_does_not_exist_yet() {
+    let (base, folder) = base_titus();
+    let fs = base.copy();
+    let rig = rig_as(fs.clone(), APP, "host-1");
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    for v in 2..=5 {
+        save_verse(&handle, 1, v, &format!("sealed {v}")).unwrap();
+    }
+    handle.wait_idle();
+    let base = fs.crash(false);
+    drop(handle);
+    let action = |handle: &ProjectHandle| {
+        let _ = handle
+            .checkpoint(tc_store::CheckpointReason::LeavingProject)
+            .wait();
+        Outcome::NotSaved
+    };
+    let points = in_a_later_month(|| {
+        // The month folder is made by the checkpoint under test, not by the project's first.
+        let probe = base.copy();
+        let rig = rig_as(probe.clone(), APP, "host-1");
+        let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+        handle.wait_idle();
+        probe.clear_log();
+        action(&handle);
+        let made = probe
+            .log()
+            .iter()
+            .filter(|op| {
+                op.kind == tc_store::fault::OpKind::CreateDir
+                    && op
+                        .path
+                        .to_string_lossy()
+                        .contains("/ingredients/tc/changes/")
+            })
+            .count();
+        assert!(
+            made > 0,
+            "the checkpoint made no pack folder: the test proves nothing"
+        );
+        drop(handle);
+        kill_everywhere(&base, &folder, &action, &|handle, _| {
+            for v in 2..=5 {
+                assert_eq!(
+                    words(handle, 1, v).as_deref(),
+                    Some(format!("sealed {v}").as_str()),
+                    "a sealed save was lost"
+                );
+            }
+        })
     });
     assert!(points > 10, "{points}");
 }

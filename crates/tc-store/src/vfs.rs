@@ -85,6 +85,15 @@ pub trait Vfs: Send + Sync + fmt::Debug {
     /// `None` when another process holds it.
     fn lock(&self, path: &Path) -> io::Result<Option<Box<dyn LockHandle>>>;
     fn canonicalize(&self, path: &Path) -> io::Result<PathBuf>;
+    /// Called by [`crate::atomic::atomic_create_dirs`] once `dir` exists; `made` lists the
+    /// directories that call created and flushed. A filesystem that remembers which
+    /// directories it has made durable flushes the entry of every other directory on the
+    /// way to `dir` that it has not flushed yet: a directory found existing may have been
+    /// made by a process that stopped before it flushed its parent, and only the page cache
+    /// holds its entry (§5.0). The default does nothing.
+    fn secure_dir_chain(&self, _dir: &Path, _made: &[PathBuf]) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 /// The real filesystem.
