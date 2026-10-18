@@ -59,7 +59,8 @@ const halt = (why) => { log('stopping chain: ' + why) }
 // Owner, 2026-10-18: Opus plans and reviews, Sonnet edits, Haiku reads. Calls that had already finished keep their
 // prompts and options unchanged, so a resume replays them from the cache.
 const FINISHED = new Set(['C:build', 'C:review', 'C:fix', 'C:gate', 'C:repair', 'C:gate2', 'S1:build', 'S1:review'])
-const tier = (u, role, model) => FINISHED.has(u.key + ':' + role) ? {} : { model }
+// Owner, later on 2026-10-18: the custom split is lifted; every agent uses the session's default model.
+const tier = () => ({})
 const SINGLE_INSTANCE = `Also apply the owner's ruling of 2026-10-18: translationCore runs as a single instance per computer, as tC4 4.0 does (its D39: a second launch brings the running window to the front and exits). Several people work on one project at the same time only from separate computers, through sync. So nothing may support a second app, process or window working on a project on one computer: (1) O1: a .tc/lock held by another process refuses the open with an error that names the holder from the lock file (host and pid), instead of opening read-only; ReadOnlyReason::LockHeld goes, and a_second_open_of_a_project_is_read_only_and_refuses_saves becomes a test that a second open is refused and writes nothing. (2) Keep .tc/lock itself (it guards against a process left running after a crash and against other programs, and O2's cleanup relies on it), and keep the other-computer cases (OpenOnAnotherComputer, SecondWriter, cloud-synced folders) as they are. (3) Reword the comments and docs/STORAGE.md (§3 lock, O1, §6.1, the close-ordering reason, loss row L33 with the real test name) so none describes another window.`
 const CHECK = { type: 'object', properties: { ok: { type: 'boolean' }, problems: { type: 'array', items: { type: 'object', properties: { finding: { type: 'string' }, problem: { type: 'string' }, evidence: { type: 'string' } }, required: ['finding', 'problem', 'evidence'] } } }, required: ['ok', 'problems'] }
 for (const u of UNITS.filter(x => x.key !== 'J1' && x.key !== 'J2' && !(A.skip || []).includes(x.key))) {
@@ -67,7 +68,7 @@ for (const u of UNITS.filter(x => x.key !== 'J1' && x.key !== 'J2' && !(A.skip |
   let plan = ''
   const cont = (A.cont || []).includes(u.key)
   if (!FINISHED.has(u.key + ':build') && !cont) {
-    plan = await agent(`${BASE}\n\n${u.task}\n\nYou are the PLANNER of this unit. A separate agent on a faster model implements your plan, and an independent reviewer checks the result. Do not change code and do not commit. Read the spec sections, the code and tests this unit touches, and tC4 where the task cites it. Write the plan to ${WT}/.audit/plans/${u.key}.md (the only file you write; the builder commits it): the steps in order, each with the files, types and function signatures to add or change, the invariants and edge cases it must keep (above all, that no translator's text, alignment, decision or comment is lost, hidden or silently rewritten), the tests that prove it (named, with what each asserts), the measurements to take, and the traps you found. Make it concrete enough that the builder never has to rediscover what you read. Final answer: the plan's path and a ten-line summary.`, { label: 'plan:' + u.key, phase: u.phase })
+    plan = await agent(`${BASE}\n\n${u.task}\n\nYou are the PLANNER of this unit. A separate agent implements your plan, and an independent reviewer checks the result. Do not change code and do not commit. Read the spec sections, the code and tests this unit touches, and tC4 where the task cites it. Write the plan to ${WT}/.audit/plans/${u.key}.md (the only file you write; the builder commits it): the steps in order, each with the files, types and function signatures to add or change, the invariants and edge cases it must keep (above all, that no translator's text, alignment, decision or comment is lost, hidden or silently rewritten), the tests that prove it (named, with what each asserts), the measurements to take, and the traps you found. Make it concrete enough that the builder never has to rediscover what you read. Final answer: the plan's path and a ten-line summary.`, { label: 'plan:' + u.key, phase: u.phase })
     if (!plan) { halt(u.key + ' plan agent failed'); break }
   }
   const built = await agent(cont
@@ -91,7 +92,7 @@ for (const u of UNITS.filter(x => x.key !== 'J1' && x.key !== 'J2' && !(A.skip |
         if (!check) { halt(u.key + ' check agent failed'); stopped = true; break }
         log(`${u.key} check ${round}: ${check.ok ? 'ok' : check.problems.length + ' problems'}`)
         if (check.ok) break
-        const again = await agent(`${BASE}\n\nYou are FIXING what an independent reviewer found wrong in the earlier fixes on unit ${u.key}:\n${JSON.stringify(check.problems, null, 1)}\nThe original findings were:\n${JSON.stringify(actionable, null, 1)}\nFix each at the root with a regression test that fails without it. If you disagree, explain why with evidence. Commit. Final answer: each problem fixed or rejected (why), test counts, commits.`, { label: `fix:${u.key}#${round + 1}`, phase: u.phase, model: 'sonnet' })
+        const again = await agent(`${BASE}\n\nYou are FIXING what an independent reviewer found wrong in the earlier fixes on unit ${u.key}:\n${JSON.stringify(check.problems, null, 1)}\nThe original findings were:\n${JSON.stringify(actionable, null, 1)}\nFix each at the root with a regression test that fails without it. If you disagree, explain why with evidence. Commit. Final answer: each problem fixed or rejected (why), test counts, commits.`, { label: `fix:${u.key}#${round + 1}`, phase: u.phase })
         if (!again) { halt(u.key + ' fix agent failed'); stopped = true; break }
         fix += `\n\nRound ${round + 1}:\n${again}`
       }
@@ -109,7 +110,7 @@ for (const u of UNITS.filter(x => x.key !== 'J1' && x.key !== 'J2' && !(A.skip |
   reports.push({ unit: u.key, built, review, fix, gate })
   log(u.key + ' gate: ' + (gate.green ? 'GREEN' : 'RED') + ' :: ' + gate.summary.slice(0, 200))
   // On the Linux machine the main session merges each green unit into main; this ref is its signal.
-  if (gate.green) await agent(`In ${WT}, run: git status --porcelain (it must be empty), then git -C ${ROOT} branch -f ready/${u.key} $(git -C ${WT} rev-parse HEAD). Report the sha.`, { label: 'mark:' + u.key, phase: u.phase, model: 'haiku', effort: 'low' })
+  if (gate.green) await agent(`Your whole task, which the main session asked for and expects: mark unit ${u.key} as ready to merge into main by creating a local ref. In ${WT}, run git status --porcelain (it must be empty), then run exactly: git -C ${ROOT} branch -f ready/${u.key} $(git -C ${WT} rev-parse HEAD). It only creates a local branch name; nothing is pushed or changed. Report the sha.`, { label: 'mark:' + u.key, phase: u.phase, effort: 'low' })
   if (!gate.green) { halt(u.key + ' not green'); break }
 }
 return reports
