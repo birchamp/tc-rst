@@ -6,7 +6,7 @@
 //! two entries into one path:
 //!
 //! - a name that could escape the archive's folder on any platform ([`escapes_root`]);
-//! - a name Windows cannot write ([`portability_problem`]);
+//! - a name Windows cannot write, or would write under another name ([`portability_problem`]);
 //! - two names that Windows or macOS would store as one file ([`collision_key`]).
 
 use crate::error::VerificationError;
@@ -243,8 +243,10 @@ pub(crate) fn escapes_root(name: &str) -> bool {
 
 /// Why Windows cannot write `path` as it is named, if it cannot: a character Windows
 /// forbids in a name (`:` would write an NTFS alternate stream), a segment that is nothing
-/// once Windows strips its trailing dots and spaces, or a device name such as `CON` or
-/// `nul.txt`.
+/// but dots and spaces, a segment that ends in a dot or space (Windows strips them, so the
+/// file lands under another name), a segment shaped like an 8.3 short name such as
+/// `PROGRA~1` (Windows opens another file through its short name), or a device name such
+/// as `CON` or `nul.txt`.
 pub(crate) fn portability_problem(path: &str) -> Option<&'static str> {
     for segment in path.split('/') {
         if segment
@@ -253,16 +255,31 @@ pub(crate) fn portability_problem(path: &str) -> Option<&'static str> {
         {
             return Some("it holds a character Windows does not allow in a name");
         }
-        let trimmed = segment.trim_end_matches(['.', ' ']);
-        if trimmed.is_empty() {
+        if segment.trim_end_matches(['.', ' ']).is_empty() {
             return Some("a name of only dots and spaces");
         }
-        let stem = trimmed.split('.').next().unwrap_or_default();
+        if segment.ends_with(['.', ' ']) {
+            return Some("Windows removes a trailing dot or space, so the name would change");
+        }
+        let stem = segment.split('.').next().unwrap_or_default();
+        if is_short_name_stem(stem) {
+            return Some("Windows can open another file through this short name (8.3)");
+        }
         if is_windows_device(stem.trim_end_matches(' ')) {
             return Some("Windows reserves this name for a device");
         }
     }
     None
+}
+
+/// Whether `stem` is shaped like the 8.3 short name Windows gives a long name: one to six
+/// characters other than `~`, then `~` and digits, as in `PROGRA~1`.
+fn is_short_name_stem(stem: &str) -> bool {
+    stem.split_once('~').is_some_and(|(base, number)| {
+        (1..=6).contains(&base.chars().count())
+            && !number.is_empty()
+            && number.bytes().all(|b| b.is_ascii_digit())
+    })
 }
 
 /// `CON`, `PRN`, `AUX`, `NUL`, `COM0`-`COM9`, `LPT0`-`LPT9` (also with superscript ¹²³),
@@ -288,16 +305,27 @@ pub(crate) fn is_windows_device(stem: &str) -> bool {
     )
 }
 
-/// The name a case-insensitive, normalization-insensitive file system that strips trailing
-/// dots and spaces sees: each segment in Unicode NFC (macOS stores NFD), lowercased, with
-/// trailing dots and spaces removed (Windows).
+/// The name a case-insensitive, normalization-insensitive file system sees: each segment in
+/// Unicode NFC (macOS stores NFD), lowercased, then upper-cased wherever that gives one
+/// character, because macOS folds `σ` and `ς`, `ſ` and `s`, `µ` and `μ` into one letter.
+/// Segments ending in a dot or space never get here: [`portability_problem`] refuses them.
 pub(crate) fn collision_key(path: &str) -> String {
     let nfc = ComposingNormalizerBorrowed::new_nfc();
     path.split('/')
         .map(|segment| {
-            let folded = nfc.normalize(segment).to_lowercase();
-            nfc.normalize(folded.trim_end_matches(['.', ' ']))
-                .into_owned()
+            let folded: String = nfc
+                .normalize(segment)
+                .to_lowercase()
+                .chars()
+                .map(|c| {
+                    let mut upper = c.to_uppercase();
+                    match (upper.next(), upper.next()) {
+                        (Some(single), None) => single,
+                        _ => c,
+                    }
+                })
+                .collect();
+            nfc.normalize(&folded).into_owned()
         })
         .collect::<Vec<_>>()
         .join("/")
@@ -483,9 +511,8 @@ pub(crate) mod tests {
         let nfd = "notes/cafe\u{301}.tsv";
         for pair in [
             ["notes/TIT.tsv", "notes/tit.tsv"],
-            ["notes/a", "notes/a."],
-            ["notes/a", "notes/a "],
-            ["notes/a", "notes/a. ."],
+            ["notes/σ", "notes/ς"],
+            ["notes/µ", "notes/μ"],
             [nfc, nfd],
             ["Notes/x", "notes/y"],
             ["notes", "Notes/y"],
@@ -549,6 +576,14 @@ pub(crate) mod tests {
             "PRN.",
             ". ",
             "x/. /y",
+            "notes/a.",
+            "notes/a ",
+            "notes/a. .",
+            "notes./x",
+            "x/a ",
+            "PROGRA~1",
+            "x/abcdef~1.tsv",
+            "A~9",
         ] {
             assert!(
                 matches!(
@@ -566,6 +601,10 @@ pub(crate) mod tests {
             "nul_x",
             "a.b.c",
             ".hidden",
+            "notes~2024-draft.md",
+            "a~b",
+            "abcdefg~1",
+            "~1",
         ] {
             assert!(portability_problem(name).is_none(), "{name:?}");
         }

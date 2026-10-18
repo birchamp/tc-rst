@@ -121,8 +121,8 @@ pub enum VerificationError {
     #[error("two entries unpack to {0:?}")]
     DuplicateEntry(String),
     /// The names differ, but a case-insensitive or normalization-insensitive file system
-    /// (the Windows and macOS defaults), or Windows' removal of trailing dots and spaces,
-    /// would make them one file or folder, and writing both would lose one.
+    /// (the Windows and macOS defaults) would make them one file or folder, and writing
+    /// both would lose one.
     #[error("entries {first:?} and {second:?} would be one file on Windows or macOS")]
     CollidingNames { first: String, second: String },
     #[error("entry {path:?} cannot be written on every platform: {reason}")]

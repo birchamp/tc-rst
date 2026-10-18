@@ -832,9 +832,9 @@ fn dirs_at_depth(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) -> Result<(),
     Ok(())
 }
 
-/// Refuses a path that could leave the content folder or that a case-insensitive file
-/// system would merge with another. Downloads were checked already; this guards every
-/// write, whatever its source.
+/// Refuses a path that could leave the content folder, that Windows would write under
+/// another name, or that a case-insensitive file system would merge with another.
+/// Downloads were checked already; this guards every write, whatever its source.
 fn check_paths(files: &[(String, Vec<u8>)]) -> Result<(), Refusal> {
     let mut seen = BTreeSet::new();
     for (path, _) in files {
@@ -846,14 +846,53 @@ fn check_paths(files: &[(String, Vec<u8>)]) -> Result<(), Refusal> {
         if bad {
             return Err(Refusal::EscapesRoot(path.clone()));
         }
+        if let Some(reason) = path.split('/').find_map(unportable_segment) {
+            return Err(Refusal::NotPortable {
+                path: path.clone(),
+                reason,
+            });
+        }
         if path == RECEIPT {
             continue;
         }
-        if !seen.insert(path.to_lowercase()) {
+        if !seen.insert(collision_key(path)) {
             return Err(Refusal::DuplicateEntry(path.clone()));
         }
     }
     Ok(())
+}
+
+/// Why Windows would write a file with this name under another, or open another file
+/// through it, if it would: the name ends in a dot or space (Windows strips them), or its
+/// stem is shaped like an 8.3 short name such as `PROGRA~1`. Device names and forbidden
+/// characters are not checked here.
+pub(crate) fn unportable_segment(segment: &str) -> Option<&'static str> {
+    if segment.ends_with(['.', ' ']) {
+        return Some("Windows removes a trailing dot or space, so the name would change");
+    }
+    let stem = segment.split('.').next().unwrap_or_default();
+    let short_name = stem.split_once('~').is_some_and(|(base, number)| {
+        (1..=6).contains(&base.chars().count())
+            && !number.is_empty()
+            && number.bytes().all(|b| b.is_ascii_digit())
+    });
+    short_name.then_some("Windows can open another file through this short name (8.3)")
+}
+
+/// The name a case-insensitive file system sees: lowercased, then upper-cased wherever that
+/// gives one character, because macOS folds `σ` and `ς`, `ſ` and `s`, `µ` and `μ` into one
+/// letter.
+pub(crate) fn collision_key(path: &str) -> String {
+    path.to_lowercase()
+        .chars()
+        .map(|c| {
+            let mut upper = c.to_uppercase();
+            match (upper.next(), upper.next()) {
+                (Some(single), None) => single,
+                _ => c,
+            }
+        })
+        .collect()
 }
 
 fn create_dirs(dir: &Path) -> Result<(), StoreError> {
@@ -1121,13 +1160,47 @@ mod tests {
                 "{bad:?}"
             );
         }
-        let mut s = staged('a');
-        s.files.push(("METADATA.json".to_owned(), Vec::new()));
-        assert!(matches!(
-            store.install(s),
-            Err(InstallError::Refused { .. })
-        ));
+        for unportable in [
+            "notes./x",
+            "x/a ",
+            "x/a.",
+            "PROGRA~1",
+            "x/abcdef~1.tsv",
+            "A~9",
+        ] {
+            let mut s = staged('a');
+            s.files.push((unportable.to_owned(), Vec::new()));
+            assert!(
+                matches!(
+                    store.install(s),
+                    Err(InstallError::Refused {
+                        refusal: Refusal::NotPortable { .. },
+                        ..
+                    })
+                ),
+                "{unportable:?}"
+            );
+        }
+        // `σ` and `ς` are one letter to macOS, which folds them as it folds case.
+        for added in [&["METADATA.json"][..], &["σ", "ς"][..]] {
+            let mut s = staged('a');
+            s.files
+                .extend(added.iter().map(|path| ((*path).to_owned(), Vec::new())));
+            assert!(
+                matches!(
+                    store.install(s),
+                    Err(InstallError::Refused {
+                        refusal: Refusal::DuplicateEntry(_),
+                        ..
+                    })
+                ),
+                "{added:?}"
+            );
+        }
         assert!(store.installed().unwrap().installs.is_empty());
+        let mut s = staged('a');
+        s.files.push(("notes~2024-draft.md".to_owned(), Vec::new()));
+        store.install(s).unwrap().verify().unwrap();
     }
 
     #[test]
