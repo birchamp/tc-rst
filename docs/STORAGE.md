@@ -3074,6 +3074,8 @@ cb.push_update_reference(|_refname, status| {
     if let Some(msg) = status { *rejected.borrow_mut() = Some(msg.to_owned()); }
     Ok(())
 });
+let remote_text = RefCell::new(String::new());
+cb.sideband_progress(|text| { remote_text.borrow_mut().push_str(&String::from_utf8_lossy(text)); true });
 cb.push_transfer_progress(|cur, total, bytes| progress_push(cur, total, bytes));
 let mut po = PushOptions::new();
 po.remote_callbacks(cb).proxy_options(proxy_auto());
@@ -3086,9 +3088,13 @@ let res = origin.push(&[format!("refs/heads/{b}:refs/heads/{b}")], Some(&mut po)
   with other syncs. Your work is saved on this computer. Try again in a minute."). Otherwise wait
   `min(2^attempt, 16) s × U(0.7, 1.3)` and go back to S3. A retry costs one incremental fetch,
   the intake of the few new packs and one tree build, about a second, not a new clone.
-- Any other rejection text (protected branch, server hook) → `sync.ref-rejected` with Door43's
-  own text. HTTP 403 → `sync.no-write-access`, offering "Save an exchange file instead" (§10).
-  `ErrorCode::Auth` → `sync.auth-failed`.
+- Any other rejection goes through `tc_door43::refused_push(repo, status, &remote_text)`.
+  Door43 refuses a push without write access with HTTP 200, never 403: the ref's status is
+  `pre-receive hook declined` and the side band says `User permission denied for writing.`
+  (measured 2026-10-18, `docs/evidence/door43-live-2026-10-17.md` step 6). That is
+  `Door43Error::NoWriteAccess` → `sync.no-write-access`, offering "Save an exchange file
+  instead" (§10). Any other text (protected branch, another hook) is `RefRejected` →
+  `sync.ref-rejected` with Door43's own text. `ErrorCode::Auth` → `sync.auth-failed`.
 - Never a force push.
 
 **Confirm** (tC4 F11): `origin.connect_auth(Direction::Fetch, Some(cb), Some(proxy))`, then
@@ -3867,7 +3873,7 @@ and the on-disk end state, not only what the fold returns.
 | L31 | Private repositories cannot sync (sync-design §9.1) | the clone sent no credentials | fetch and join send the token | `sync_private_repository` |
 | L32 | OBS projects refused by sync; no USB exchange (sync-design §9.1, sync-design §10) | refused | OBS syncs like Bible projects; USB exchange is §10 | `team_sync_obs_project`, journey `usb_both_directions` |
 | L33 | Locks only in-process; a second app window (sync-design §6.3, D39) | unprotected | `.tc/lock` is an OS lock; a second window opens read-only | `open_second_process_read_only` |
-| L34 | A 403 or protected branch unmeasured (sync-design §9.1) | heuristic | `NoWriteAccess` and `RefRejected` carry Door43's own text; the exchange file is offered | `sync_protected_branch_reported` |
+| L34 | A protected branch unmeasured (sync-design §9.1); no write access is measured: HTTP 200 and a declined ref, not 403 (§9.5) | heuristic for the protected branch | `NoWriteAccess` and `RefRejected` carry Door43's own text; the exchange file is offered | `sync_protected_branch_reported` |
 
 ### 15.2 Cases found by the design panel
 

@@ -340,6 +340,71 @@ async fn git_pushes_with_a_token_and_is_refused_without_one() {
     );
 }
 
+/// As Door43 (docs/evidence/door43-live-2026-10-17.md, step 6): HTTP 200 throughout, and the
+/// refusal inside git's report.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_push_without_write_access_is_declined_by_the_pre_receive_hook() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    let token = fake
+        .issue_token(seeded::USER, "push", &["write:repository"])
+        .unwrap();
+    let (status, headers, _) = get(
+        &fake,
+        &format!(
+            "/{}/es-419_tn.git/info/refs?service=git-receive-pack",
+            seeded::READ_ONLY_ORG
+        ),
+        Some(&token),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(
+        headers["content-type"],
+        "application/x-git-receive-pack-advertisement"
+    );
+
+    let work = tempfile::tempdir().unwrap();
+    let repo = work.path().join("project");
+    std::fs::create_dir(&repo).unwrap();
+    run(git(&repo, work.path()).args(["init", "--quiet", "--initial-branch", "main"])).await;
+    std::fs::write(repo.join("README.md"), "hello\n").unwrap();
+    run(git(&repo, work.path()).args(["add", "README.md"])).await;
+    run(git(&repo, work.path()).args(["commit", "--quiet", "-m", "first"])).await;
+    let helper = "!f() { echo username=$FAKE_USER; echo password=$FAKE_TOKEN; }; f";
+    let refused = git(&repo, work.path())
+        .env("FAKE_USER", seeded::USER)
+        .env("FAKE_TOKEN", &token)
+        .args([
+            "-c",
+            "credential.helper=",
+            "-c",
+            &format!("credential.helper={helper}"),
+        ])
+        .args([
+            "push",
+            &fake.clone_url(seeded::READ_ONLY_ORG, "es-419_tn"),
+            "main:refs/heads/tc-probe",
+        ])
+        .output()
+        .await
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(!refused.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("remote: error: User permission denied for writing."),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("[remote rejected] main -> tc-probe (pre-receive hook declined)"),
+        "{stderr}"
+    );
+    assert!(
+        fake.resolve(seeded::READ_ONLY_ORG, "es-419_tn", "refs/heads/tc-probe")
+            .await
+            .is_err()
+    );
+}
+
 /// `git clone` of `owner/name` with `login` and `secret` given by a credential helper.
 async fn clone_as(
     fake: &FakeDoor43,
