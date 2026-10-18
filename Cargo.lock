@@ -2969,6 +2969,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "tc-app"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "proptest",
+ "ring",
+ "serde",
+ "serde_json",
+ "tc-api",
+ "tc-app",
+ "tc-core",
+ "tc-door43",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "tc-burrito"
 version = "0.1.0"
 dependencies = [
