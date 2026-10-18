@@ -171,8 +171,8 @@ impl App {
         };
 
         match self.inner.replies.run(id, digest, work).await {
-            CacheAnswer::Fresh(outcome) => self.write_answer(outcome, self.then_after(path)),
-            CacheAnswer::Repeat(outcome) => self.write_answer(outcome, Then::Continue),
+            CacheAnswer::Fresh(outcome) => self.write_answer(outcome, true, path),
+            CacheAnswer::Repeat(outcome) => self.write_answer(outcome, false, path),
             CacheAnswer::Reused => self.error_answer(ApiError::RequestReused),
             CacheAnswer::Lost => {
                 let error = self.internal(
@@ -195,11 +195,15 @@ impl App {
         Then::Continue
     }
 
-    fn write_answer(&self, outcome: Outcome, then: Then) -> Answer {
+    fn write_answer(&self, outcome: Outcome, first_attempt: bool, path: &str) -> Answer {
         match outcome {
             Outcome::Reply(bytes) => Answer::Reply {
                 body: bytes.to_vec(),
-                then,
+                then: if first_attempt {
+                    self.then_after(path)
+                } else {
+                    Then::Continue
+                },
             },
             #[cfg(feature = "test-hooks")]
             Outcome::Ended => Answer::Ended,
