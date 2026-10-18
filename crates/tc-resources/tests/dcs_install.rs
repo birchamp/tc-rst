@@ -371,7 +371,7 @@ async fn installing_a_release_stops_at_the_first_failure_and_names_it() {
     let mut missing = release(&rig, "unfoldingWord/en_twl", "v86").await;
     missing.sha = "1".repeat(40).parse().unwrap();
     let ult = release(&rig, "unfoldingWord/en_ult", "v89").await;
-    let (failed, err) = install_all(
+    let (failed, err) = *install_all(
         &rig.store,
         &rig.client,
         &[tn.clone(), missing.clone(), ult.clone()],

@@ -122,6 +122,34 @@ to know they are reasonable next to programs a translator already runs. Read
    every reading, and one table: program, what was open, private working set) and push
    `windows-memory`.
 
+## Task 6: fix the Windows hazards your build report found (added 2026-10-18)
+
+Branch: `windows-hazards`, from `origin/claude/focused-ride-5uzj7p` (it now holds your
+`windows-fixes` and `door43-facts`). Do task 5 first. Fix each at its root with a test that
+fails without the fix, on Windows where the hazard is Windows-only (mark such tests
+`#[cfg(windows)]` and say so); keep Linux green.
+
+1. Hazard 1: retry renames and removals of staged resource files on errors 5, 32 and 33 with a
+   bounded back-off (`tc-resources` `store.rs`), with a Windows test that holds a staged file
+   open without `FILE_SHARE_DELETE` during the install.
+2. Hazards 3 and 4: create staged files with `create_new`, so any name the volume merges (NTFS
+   case folding such as σ and ς, 8.3 short names) stops the install with a clear error instead
+   of overwriting; add the uppercase fold to the collision key (`tc-door43` `unpack.rs`,
+   `tc-resources` `store.rs` and `aquifer.rs`).
+3. Hazard 5: refuse a folder name that ends in a space or a dot, at the same three places.
+4. Hazard 6: one shared HTTP client constructor for `tc-door43` and `tc-resources` that asks
+   WinHTTP for each origin's proxy (WPAD and PAC included) on Windows, still behind the
+   internet switch; test it against a local PAC file and a local proxy, never the network.
+5. `a_refused_connection_is_unreachable` fails in about half your runs: find why on Windows and
+   fix the cause (in the test only if the code is right).
+6. Raise the case count of every team property that counts the missing-parent case to 256, as
+   `concurrent_differences_are_visible` does, so the census stops missing it.
+7. Write what you changed into your build report's "Open" section, rerun the full steps, push
+   `windows-hazards`, and tell the owner it is ready.
+
+Hazard 2 (a save's rename blocked by a scanner) belongs to `tc-store` on the `storage` branch;
+the storage team handles it.
+
 ## When everything is done
 
 Tell the owner which branches are ready. The cloud session merges them after running its own

@@ -1,0 +1,4 @@
+# Tests hash, measure and write back fixture and bundle bytes exactly, and the app compiles
+# some of these files into itself. Git must hand every file over byte for byte on every
+# platform, so it never converts line endings, whatever core.autocrlf says.
+* -text

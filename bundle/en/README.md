@@ -82,9 +82,12 @@ These are Scripture Burritos (flavor `peripheral/x-lexicon`, made by Burrito Tru
   accept the resource anyway.
 
 So the archive's whole file tree is what gets checked: `tc_door43::verify_archive` compares
-it with the commit's tree. That needs the commit's tree id from Door43 once. The release
-pipeline looks it up and records it in `fetched.lock`, and from then on the installer checks
-the tree offline.
+it with the commit's tree. Each commit's tree id was looked up on Door43 on 2026-10-17, through
+its API and again with a shallow `git fetch` of the commit, and is recorded in `fetched.lock`
+with the archive's sha256 and size. From then on everything checks offline: the test
+`the_bundled_lexicons_match_the_trees_door43_reported` in
+`crates/tc-resources/tests/fetched_lock.rs` checks both archives against the lock, and fails
+when a commit archive in this directory has no entry.
 
 Until `fetched.lock` has an entry for a lexicon's commit, that lexicon is unconfirmed: the
 packaging step (`tc_resources::install_lexicon_zip`) installs nothing for it, and the app shows
@@ -181,9 +184,10 @@ seeds it into the resource store like every file above.
 
 - The packaging step downloads the archive of exactly that commit. The release pipeline
   runs it, because this build environment cannot reach Door43.
-- The first download records the archive's sha256 and size in `fetched.lock` in this
-  directory (beside the lexicons' tree ids), and that file is committed. Every later download must match it, or the build
-  fails. A changed pin means a new commit and a new lock entry, made on purpose.
+- The first download, on 2026-10-17, recorded the archive's sha256 and size and the commit's
+  tree id in `fetched.lock` in this directory (beside the lexicons' entries), and that file is
+  committed. Every later download must match it, or the build fails. A changed pin means a new
+  commit and a new lock entry, made on purpose.
 - A build whose installer lacks a pinned file fails. The app never falls back to
   downloading a bundled file.
 

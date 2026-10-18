@@ -97,7 +97,11 @@ impl Git {
         for var in INHERITED_GIT_VARS {
             command.env_remove(var);
         }
+        // Door43 runs on Linux. Git for Windows turns core.protectNTFS on by default, and then
+        // `update-index --index-info` skips names such as `a.` or `x:y` with only a warning, so
+        // the fake would hold a different tree than the seed names.
         command
+            .args(["-c", "core.protectNTFS=false"])
             .env("HOME", &self.home)
             .env("XDG_CONFIG_HOME", &self.home)
             .env("GIT_CONFIG_NOSYSTEM", "1")
