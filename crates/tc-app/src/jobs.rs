@@ -455,8 +455,10 @@ impl JobRegistry {
             job.ended = Some(Instant::now());
         }
         job.state = to;
-        job.state_tx.send_replace(job.state.clone());
         self.inner.bus.publish(Event::Job(job.view(id)));
+        // After the frame, so whoever follows the state (the first-launch window's mirror)
+        // always sees it after the frame that announced it.
+        job.state_tx.send_replace(job.state.clone());
         true
     }
 

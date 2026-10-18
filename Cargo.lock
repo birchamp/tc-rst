@@ -3067,6 +3067,7 @@ dependencies = [
  "tc-app",
  "tc-core",
  "tc-door43",
+ "tc-resources",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",

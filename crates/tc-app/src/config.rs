@@ -26,9 +26,16 @@ pub struct AppConfig {
     /// The Door43 server (`--door43`); tests give the fake's address.
     pub door43: ServerUrl,
     pub build: BuildInfo,
+    /// `--bundle <dir>`: the bundled resource store the installer ships, read only. `None`:
+    /// nothing is seeded (development, tests, the parity captures, Q-11).
+    pub bundle: Option<PathBuf>,
     /// `tc4 serve --test-hooks`: whether the `test` service answers.
     #[cfg(feature = "test-hooks")]
     pub test_hooks: bool,
+    /// `--test-seed-pace <ms>`: the seed waits this long before each file, so a test can
+    /// watch it and close it on any disk.
+    #[cfg(feature = "test-hooks")]
+    pub seed_pace: Option<std::time::Duration>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

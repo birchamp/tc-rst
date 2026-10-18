@@ -13,9 +13,10 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use ring::rand::{SecureRandom, SystemRandom};
 use serde_json::{Map, Value, json};
 use tc_api::event::{Event, StartupState};
-use tc_api::ids::ServerInstance;
+use tc_api::ids::{JobId, ServerInstance};
 use tc_api::{ApiError, Endpoint, Reply, ReplyOf};
 use tc_door43::InternetSwitch;
+use tc_resources::ResourceStore;
 use tokio::sync::watch;
 
 use crate::account::{AccountState, Keychain, MemKeychain};
@@ -32,6 +33,7 @@ use crate::jobs::JobRegistry;
 use crate::prefs::{AppDataFiles, MemoryFiles, PrefsWriter};
 use crate::replies::ReplyCache;
 use crate::reports::{ReportLog, ReportOp, ReportOutcome, facts};
+use crate::seed::{self, RESOURCES_FOLDER};
 use crate::sessions::{NoSessions, SessionDirectory};
 use crate::startup::Startup;
 
@@ -145,6 +147,10 @@ pub(crate) struct Inner {
     pub(crate) replies: Arc<ReplyCache>,
     pub(crate) sessions: Arc<dyn SessionDirectory>,
     pub(crate) startup: Startup,
+    /// This machine's resource store, under app data (STORAGE §3.7).
+    pub(crate) resources: ResourceStore,
+    /// The `Seed` job, when this launch started one.
+    pub(crate) seed_job: Mutex<Option<JobId>>,
     /// Calls in flight, for `test/quiet`.
     pub(crate) calls: AtomicUsize,
     quit: watch::Sender<bool>,
@@ -178,7 +184,9 @@ impl Drop for InFlight<'_> {
 
 impl App {
     /// Starts the app: chooses and, at a first launch, creates the projects folder (Q-4),
-    /// reads the kept sign-in once, and starts the writers. Must run inside a tokio runtime.
+    /// reads the kept sign-in once, opens the machine's resource store and plans its seeding
+    /// from receipts alone, and starts the writers and, if the plan says so, the `Seed` job.
+    /// Must run inside a tokio runtime.
     pub async fn start(config: AppConfig, deps: AppDeps) -> Result<App, StartError> {
         let AppDeps {
             clock,
@@ -254,9 +262,19 @@ impl App {
             None
         };
 
+        // Opening the store clears what an interrupted install left in `.partial/`. The plan
+        // reads receipts and check records, never a content file, so `hello` is exact from
+        // the first request (unit A9).
+        let resources_dir = config.app_data.join(RESOURCES_FOLDER);
+        let resources = ResourceStore::open(&resources_dir).map_err(|e| StartError::AppData {
+            path: resources_dir,
+            reason: e.to_string(),
+        })?;
+        let seed_start = seed::plan(&resources, config.bundle.as_deref());
+
         let prefs = PrefsWriter::start(files, reports.clone(), clock.clone());
         let jobs = JobRegistry::new(bus.clone(), reports.clone(), clock.clone());
-        let startup = Startup::new(StartupState::Ready, bus.clone());
+        let startup = Startup::new(seed::initial_state(&seed_start), bus.clone());
         let inner = Inner {
             config,
             projects,
@@ -273,14 +291,18 @@ impl App {
             replies: ReplyCache::new(ReplyCache::FINISHED),
             sessions,
             startup,
+            resources,
+            seed_job: Mutex::new(None),
             calls: AtomicUsize::new(0),
             quit: watch::channel(false).0,
             #[cfg(feature = "test-hooks")]
             hooks,
         };
-        Ok(App {
+        let app = App {
             inner: Arc::new(inner),
-        })
+        };
+        app.begin_seed(seed_start);
+        Ok(app)
     }
 
     /// One request, as tc-server receives it: `path` is `service/name`, without `/api/v1/`.
@@ -368,11 +390,14 @@ impl App {
         self.inner.startup.get()
     }
 
-    /// What `app/quit`, a quit line and a closed stdin do: writes what is pending, then
-    /// resolves [`App::quitting`]. Safe to call more than once (the server calls it after
+    /// What `app/quit`, a quit line and a closed stdin do: stops the first-launch seed and
+    /// waits for it, writes what is pending, then resolves [`App::quitting`]. Safe to call more than once (the server calls it after
     /// `app/quit` did). Later units save aligner links and checkpoint their sessions first
     /// (§5.1).
     pub async fn quit(&self) {
+        // Close is a quit, and a quit stops the seed first: the process lets go of
+        // `app.lock` only when no seed writer runs (unit A9).
+        self.stop_seed().await;
         self.inner.prefs.flush().await;
         self.inner.quit.send_replace(true);
     }

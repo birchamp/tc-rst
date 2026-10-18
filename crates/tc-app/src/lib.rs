@@ -20,10 +20,10 @@ pub mod jobs;
 pub mod prefs;
 pub mod replies;
 pub mod reports;
+mod seed;
 pub mod sessions;
-// The seed job (unit A9, next commit) is what updates the state outside the tests.
-#[allow(dead_code)]
 mod startup;
 
 pub use app::{Answer, App, AppDeps, CallFailure, StartError, Then};
 pub use dispatch::Handle;
+pub use seed::RESOURCES_FOLDER;
