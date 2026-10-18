@@ -182,6 +182,7 @@ struct CheckRecord {
 
 thread_local! {
     static CONTENT_FILES_OPENED: Cell<u64> = const { Cell::new(0) };
+    static CONTENT_FILES_WRITTEN: Cell<u64> = const { Cell::new(0) };
 }
 
 /// How many installed content files this thread has opened since it started, in any
@@ -189,6 +190,13 @@ thread_local! {
 /// Receipts and check records are not content files.
 pub fn content_files_opened() -> u64 {
     CONTENT_FILES_OPENED.with(Cell::get)
+}
+
+/// How many content files this thread has written into any store since it started: with
+/// [`content_files_opened`], the counts the start-up tests assert (docs/PERFORMANCE.md
+/// "Start-up"). Receipts and check records are not content files.
+pub fn content_files_written() -> u64 {
+    CONTENT_FILES_WRITTEN.with(Cell::get)
 }
 
 fn read_content(path: &Path) -> std::io::Result<Vec<u8>> {
@@ -303,10 +311,25 @@ impl Installed {
     /// (`scripts/desktop-bootstrap.cjs:164-176`) checks only its inventory's files, so a
     /// file manager's leftover such as `.DS_Store` never stops a start.
     fn check_listed(&self) -> Result<(), StoreError> {
+        self.check_listed_watched(&NoWatch, &mut 0).map(|_| ())
+    }
+
+    /// [`Installed::check_listed`] that counts each file into `done` and tells `watch`, and
+    /// stops with `Ok(false)` when `watch` asks, before the next file.
+    fn check_listed_watched(
+        &self,
+        watch: &dyn SeedWatch,
+        done: &mut u64,
+    ) -> Result<bool, StoreError> {
         for record in &self.receipt.files {
+            if watch.cancelled() {
+                return Ok(false);
+            }
             self.read_checked(record)?;
+            *done += 1;
+            watch.done(*done);
         }
-        Ok(())
+        Ok(true)
     }
 
     /// The bytes of every file the receipt lists, checked as [`Installed::check_listed`]
@@ -417,6 +440,76 @@ pub struct SeedReport {
     pub refused: Vec<(String, StoreError)>,
 }
 
+/// Who watches a seeding (APP-DESIGN §4.6): hears how many content files are done, and is
+/// asked whether to stop.
+pub trait SeedWatch {
+    /// After each content file is checked or written: the files done so far. It only
+    /// grows, and reaches [`SeedPlan::files`] when the seeding finishes.
+    fn done(&self, files: u64);
+
+    /// Whether to stop. Asked before each install is copied and before each of the files
+    /// of a copy or of a check, once per file. Never asked between the last file of a copy
+    /// and its receipt: a copy whose files are all written is finished.
+    fn cancelled(&self) -> bool;
+}
+
+/// What seeding must do, found from receipts and check records alone.
+#[derive(Debug, Default)]
+pub struct SeedPlan {
+    steps: Vec<SeedStep>,
+    files: u64,
+    /// The copies already checked and the unreadable bundled folders are known now.
+    report: SeedReport,
+}
+
+#[derive(Debug)]
+enum SeedStep {
+    /// The store lacks this bundled install: read it from the bundle, check it, copy it.
+    Copy { install: Installed, name: String },
+    /// The store's copy was not checked against its present receipt: check it again.
+    Check { copy: Installed, name: String },
+}
+
+impl SeedPlan {
+    /// The content files seeding will open: each file of every install to copy and of
+    /// every copy to check again.
+    pub fn files(&self) -> u64 {
+        self.files
+    }
+
+    /// Nothing to copy or check. The report may still list refused bundled folders.
+    pub fn is_empty(&self) -> bool {
+        self.steps.is_empty()
+    }
+
+    /// What is known before anything is done: the copies already trusted
+    /// (`already_installed`) and the bundled folders that could not be read (`refused`).
+    pub fn report(&self) -> &SeedReport {
+        &self.report
+    }
+}
+
+/// How a seeding ended.
+#[derive(Debug)]
+pub enum Seeding {
+    Finished(SeedReport),
+    /// The watch asked to stop. Every install in `added` is whole and checked. The copy
+    /// being made is not in the store; its files are under `.partial/`, which the next
+    /// [`ResourceStore::open`] removes. Seeding again copies what is missing.
+    Cancelled(SeedReport),
+}
+
+/// The watch of [`ResourceStore::seed_from`]: it hears nothing and never stops.
+struct NoWatch;
+
+impl SeedWatch for NoWatch {
+    fn done(&self, _: u64) {}
+
+    fn cancelled(&self) -> bool {
+        false
+    }
+}
+
 /// Points an install can stop at, for crash tests.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Step {
@@ -445,13 +538,32 @@ impl ResourceStore {
     /// Opens the store at `root`, creating it when missing, and removes whatever an
     /// interrupted install left behind.
     pub fn open(root: impl Into<PathBuf>) -> Result<Self, StoreError> {
+        match Self::open_keeping_leftovers(root)? {
+            (store, None) => Ok(store),
+            (_, Some(left)) => Err(left),
+        }
+    }
+
+    /// [`ResourceStore::open`] for the app, which must start although something an
+    /// interrupted install left in `.partial/` cannot be removed (on Windows a scanner may
+    /// hold one of its files). An install lands only by renaming a staging folder with a
+    /// name of its own, so the leftovers cannot reach an install; they come back as the
+    /// second value for the caller to report, and the next open tries again. Only a store
+    /// folder that cannot be made is an error.
+    pub fn open_keeping_leftovers(
+        root: impl Into<PathBuf>,
+    ) -> Result<(Self, Option<StoreError>), StoreError> {
         let store = Self { root: root.into() };
         fs::create_dir_all(&store.root).map_err(|e| StoreError::io("create", &store.root, e))?;
         let partial = store.root.join(PARTIAL);
-        if partial.exists() {
-            fs::remove_dir_all(&partial).map_err(|e| StoreError::io("clear", &partial, e))?;
-        }
-        Ok(store)
+        let left = if partial.exists() {
+            fs::remove_dir_all(&partial)
+                .err()
+                .map(|e| StoreError::io("clear", &partial, e))
+        } else {
+            None
+        };
+        Ok((store, left))
     }
 
     /// Opens a store only to read it, such as the bundled store an installer ships in a
@@ -591,50 +703,120 @@ impl ResourceStore {
     /// as tC4 stops its start (`scripts/desktop-resources.test.cjs:453-463, 586-589`): a
     /// copy whose files fail that check, or whose receipt cannot be read or names another
     /// resource. The copy is left as it is, never overwritten from the bundle.
+    ///
+    /// [`ResourceStore::seed_plan`] and [`ResourceStore::seed`] are the same seeding in two
+    /// steps, with progress and a stop.
     pub fn seed_from(&self, bundled: &ResourceStore) -> Result<SeedReport, StoreError> {
+        match self.seed(self.seed_plan(bundled)?, &NoWatch)? {
+            Seeding::Finished(report) | Seeding::Cancelled(report) => Ok(report),
+        }
+    }
+
+    /// What [`ResourceStore::seed`] would do, found without opening a content file: a
+    /// repeat start reads receipts and check records only (tC4 #740). An install this
+    /// store holds whose receipt cannot be read or names another resource stops the plan
+    /// with its error, before anything is copied.
+    pub fn seed_plan(&self, bundled: &ResourceStore) -> Result<SeedPlan, StoreError> {
         let inventory = bundled.installed()?;
-        let mut report = SeedReport::default();
+        let mut plan = SeedPlan::default();
         for e in inventory.unreadable {
-            report
+            plan.report
                 .refused
                 .push(("an unreadable bundled install".to_owned(), e));
         }
         for install in inventory.installs {
             let name = install.origin().describe();
-            if let Some(copy) = self.find(install.origin())? {
-                if !copy.is_checked() {
-                    copy.check_listed()?;
-                    copy.record_check()?;
-                    report.checked_again.push(name.clone());
+            match self.find(install.origin())? {
+                Some(copy) if copy.is_checked() => plan.report.already_installed.push(name),
+                Some(copy) => {
+                    plan.files += copy.receipt.files.len() as u64;
+                    plan.steps.push(SeedStep::Check { copy, name });
                 }
-                report.already_installed.push(name);
-                continue;
-            }
-            let files = match install.read_all_checked() {
-                Ok(files) => files,
-                Err(e) => {
-                    report.refused.push((name, e));
-                    continue;
+                None => {
+                    plan.files += install.receipt.files.len() as u64;
+                    plan.steps.push(SeedStep::Copy { install, name });
                 }
-            };
-            let staged = Staged {
-                origin: install.receipt.origin.clone(),
-                books: install.receipt.books.clone(),
-                files,
-            };
-            match self.install(staged) {
-                Ok(_) => report.added.push(name),
-                Err(InstallError::Store(e)) => return Err(e),
-                Err(other) => report.refused.push((
-                    name,
-                    StoreError::BadReceipt {
-                        path: install.dir.clone(),
-                        problem: other.to_string(),
-                    },
-                )),
             }
         }
-        Ok(report)
+        Ok(plan)
+    }
+
+    /// Does what `plan` says, telling `watch` after each content file and stopping when it
+    /// asks. Errors as [`ResourceStore::seed_from`] errs: a copy that cannot be trusted
+    /// stops the seeding with its error, and a bundled install that fails its own check is
+    /// left out and named in the report's `refused`. Install by install, a copy is in the
+    /// store whole and checked or not at all, so a stop at any point leaves only whole
+    /// installs.
+    pub fn seed(&self, plan: SeedPlan, watch: &dyn SeedWatch) -> Result<Seeding, StoreError> {
+        let SeedPlan {
+            steps, mut report, ..
+        } = plan;
+        let mut done = 0u64;
+        for step in steps {
+            match step {
+                SeedStep::Check { copy, name } => {
+                    if !copy.check_listed_watched(watch, &mut done)? {
+                        return Ok(Seeding::Cancelled(report));
+                    }
+                    copy.record_check()?;
+                    report.checked_again.push(name.clone());
+                    report.already_installed.push(name);
+                }
+                SeedStep::Copy { install, name } => {
+                    if watch.cancelled() {
+                        return Ok(Seeding::Cancelled(report));
+                    }
+                    let count = install.receipt.files.len() as u64;
+                    let base = done;
+                    done = base + count;
+                    let files = match install.read_all_checked() {
+                        Ok(files) => files,
+                        Err(e) => {
+                            report.refused.push((name, e));
+                            watch.done(done);
+                            continue;
+                        }
+                    };
+                    let staged = Staged {
+                        origin: install.receipt.origin.clone(),
+                        books: install.receipt.books.clone(),
+                        files,
+                    };
+                    let mut reported = base;
+                    let mut stopped = false;
+                    let installed = self.install_until(staged, &mut |step| {
+                        let Step::FileWritten(n) = step else {
+                            return false;
+                        };
+                        reported = base + n as u64;
+                        watch.done(reported);
+                        // The last file is never a place to stop: a copy with all its
+                        // files written is finished.
+                        stopped = reported < done && watch.cancelled();
+                        stopped
+                    });
+                    if stopped {
+                        return Ok(Seeding::Cancelled(report));
+                    }
+                    if reported < done {
+                        // Nothing was written: the copy was refused, or landed already.
+                        watch.done(done);
+                    }
+                    match installed {
+                        Ok(_) => report.added.push(name),
+                        Err(InstallError::Store(e)) => return Err(e),
+                        Err(other) => report.refused.push((
+                            name,
+                            StoreError::BadReceipt {
+                                path: install.dir.clone(),
+                                problem: other.to_string(),
+                            },
+                        )),
+                    }
+                }
+            }
+        }
+        Ok(Seeding::Finished(report))
     }
 
     pub(crate) fn install(&self, staged: Staged) -> Result<Installed, InstallError> {
@@ -684,6 +866,7 @@ impl ResourceStore {
                 folders.insert(parent.to_path_buf());
             }
             write_synced(&full, bytes)?;
+            CONTENT_FILES_WRITTEN.with(|count| count.set(count.get() + 1));
             if crash(Step::FileWritten(written + 1)) {
                 return Err(InstallError::Interrupted);
             }

@@ -72,8 +72,11 @@ fn app_config(args: &Args) -> AppConfig {
             version: BUILD_VERSION.to_owned(),
             commit: BUILD_COMMIT.to_owned(),
         },
+        bundle: args.bundle.clone(),
         #[cfg(feature = "test-hooks")]
         test_hooks: args.test_hooks,
+        #[cfg(feature = "test-hooks")]
+        seed_pace: args.seed_pace,
     }
 }
 

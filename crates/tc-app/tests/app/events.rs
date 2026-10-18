@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use proptest::prelude::*;
-use tc_api::event::{Event, EventFrame};
+use tc_api::event::{Event, EventFrame, StartupProgress, StartupState};
 use tc_api::jobs::JobState;
 use tc_app::events::{EventBus, Next, RING_FRAMES, Subscription};
 
@@ -163,6 +163,69 @@ fn state_frames_other_than_progress_are_never_coalesced() {
     let mut late = bus.subscribe(0);
     // Queued is a state of the job and stays; the progress frame went when Cancelling came.
     assert_eq!(seqs(&drain(&mut late)), [1, 3, 4]);
+}
+
+fn preparing(done: u64) -> Event {
+    Event::Startup(StartupState::Preparing(StartupProgress { done, total: 10 }))
+}
+
+#[test]
+fn only_the_newest_startup_progress_stays_in_the_ring() {
+    let bus = bus();
+    let mut reader = bus.subscribe(0);
+    bus.publish(Event::Internet { on: true });
+    bus.publish(preparing(1));
+    // A reader that holds the first count is behind the second, and gets it live.
+    assert_eq!(seqs(&drain(&mut reader)), [1, 2]);
+    bus.publish(preparing(2));
+    assert_eq!(
+        seqs(&drain(&mut reader)),
+        [3],
+        "coalescing leaves live delivery alone"
+    );
+
+    let mut late = bus.subscribe(0);
+    let frames = drain(&mut late);
+    assert_eq!(seqs(&frames), [1, 3]);
+    assert_eq!(frames[0].event, Event::Internet { on: true });
+    assert_eq!(frames[1].event, preparing(2));
+
+    // The end removes the last count and is itself never removed.
+    bus.publish(Event::Startup(StartupState::Ready));
+    let frames = drain(&mut bus.subscribe(0));
+    assert_eq!(seqs(&frames), [1, 4]);
+    assert_eq!(frames[1].event, Event::Startup(StartupState::Ready));
+    bus.publish(Event::Internet { on: false });
+    assert_eq!(seqs(&drain(&mut bus.subscribe(0))), [1, 4, 5]);
+}
+
+#[test]
+fn a_failed_startup_replays_as_its_end_and_the_ring_forgets_a_dropped_count() {
+    let bus = bus();
+    bus.publish(preparing(1));
+    bus.publish(Event::Startup(StartupState::Failed {
+        reason: "disk full".to_owned(),
+    }));
+    let frames = drain(&mut bus.subscribe(0));
+    assert_eq!(seqs(&frames), [2]);
+
+    // A count the ring dropped for room is not remembered: the next one does not blank
+    // whatever frame now has that slot's number.
+    let other = self::bus();
+    other.publish(preparing(1));
+    for _ in 0..RING_FRAMES {
+        other.publish(Event::ProjectsChanged);
+    }
+    other.publish(preparing(2));
+    let frames = drain(&mut other.subscribe(other.head() - 1));
+    assert_eq!(frames.len(), 1);
+    assert_eq!(frames[0].event, preparing(2));
+    let frames = drain(&mut other.subscribe(other.head() - 2));
+    assert_eq!(
+        frames.len(),
+        2,
+        "the frame before the count is still in the ring"
+    );
 }
 
 #[test]
