@@ -1716,6 +1716,12 @@ Publish` with tC4's string values; `MainView` is a port of `tC4:src/App.jsx:192-
   language preview (M16) changes language in one render without remounting, and a fetch
   failure shows the boot error instead of English in the middle of a preview. *(A-23; A4a:
   only the nine are fetched.)*
+- Changing the language sends no request and remounts nothing: every text is a closure that
+  reads the shown language, so a switch updates text nodes in place. The smoke counts the
+  app's own requests (`fetch`, XHR, document, script, style sheet) and fails on any after boot;
+  it lists font loads apart, because the browser itself loads the Arabic faces of tC4's fonts the
+  first time Arabic is shown, as it does in tC4 (its app-language case j paints with the bundled
+  Noto Sans Arabic). *(A4a)*
 - Rebuild-only keys live in `assets/i18n-rebuild/<id>.json`, merged after the vendored catalog
   without overriding it. The vendored files stay byte-identical (DELTA:532-536).
 - `<html lang dir>` comes from `LOCALES` (`crates/tc-ui/src/i18n.rs:41-92`) and is set before the
