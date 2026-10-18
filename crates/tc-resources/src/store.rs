@@ -685,7 +685,17 @@ impl ResourceStore {
                 create_dirs(parent)?;
                 folders.insert(parent.to_path_buf());
             }
-            write_synced(&full, bytes)?;
+            match write_new_synced(&full, bytes) {
+                Err(StoreError::Io { source, .. })
+                    if source.kind() == io::ErrorKind::AlreadyExists =>
+                {
+                    return Err(InstallError::Refused {
+                        what: receipt.origin.describe(),
+                        refusal: Refusal::DuplicateEntry(path.clone()),
+                    });
+                }
+                result => result?,
+            }
             if crash(Step::FileWritten(written + 1)) {
                 return Err(InstallError::Interrupted);
             }
@@ -695,11 +705,11 @@ impl ResourceStore {
                 path: staging.clone(),
                 problem: e.to_string(),
             })?;
-        write_synced(&staging.join(RECEIPT), &receipt_bytes)?;
+        write_new_synced(&staging.join(RECEIPT), &receipt_bytes)?;
         // The files were checked before they were staged, and are written from the
         // checked bytes.
         let receipt_sha256 = Sha256::of(&receipt_bytes);
-        write_synced(
+        write_new_synced(
             &staging.join(CHECKED),
             &check_record(&staging, receipt_sha256)?,
         )?;
@@ -902,8 +912,26 @@ fn retry_while_held<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
     op()
 }
 
+/// Writes `path` anew or over what is there: a crash can leave the temporary of
+/// [`replace_synced`] behind.
 fn write_synced(path: &Path, bytes: &[u8]) -> Result<(), StoreError> {
-    let mut file = fs::File::create(path).map_err(|e| StoreError::io("create", path, e))?;
+    let file = fs::File::create(path).map_err(|e| StoreError::io("create", path, e))?;
+    write_all_synced(file, path, bytes)
+}
+
+/// Writes a file that must not exist yet. A name the volume folds into one already written
+/// (an 8.3 alias, a stripped trailing dot, macOS normalization) fails with `AlreadyExists`
+/// instead of overwriting that file.
+fn write_new_synced(path: &Path, bytes: &[u8]) -> Result<(), StoreError> {
+    let file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|e| StoreError::io("create", path, e))?;
+    write_all_synced(file, path, bytes)
+}
+
+fn write_all_synced(mut file: fs::File, path: &Path, bytes: &[u8]) -> Result<(), StoreError> {
     file.write_all(bytes)
         .map_err(|e| StoreError::io("write", path, e))?;
     file.sync_all().map_err(|e| StoreError::io("sync", path, e))
@@ -1193,6 +1221,43 @@ mod tests {
         ));
     }
 
+    /// The one staging folder of an install that has started and not finished.
+    fn the_staging_folder(root: &Path) -> PathBuf {
+        let mut stagings = fs::read_dir(root.join(PARTIAL)).unwrap();
+        let staging = stagings.next().unwrap().unwrap().path();
+        assert!(stagings.next().is_none());
+        staging
+    }
+
+    #[test]
+    fn a_staged_file_never_overwrites_a_name_the_volume_already_holds() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ResourceStore::open(dir.path()).unwrap();
+        let mut planted = None;
+        // Stands in for a volume that shows an earlier file under this file's name: the
+        // second file's name exists before the install creates it.
+        let result = store.install_until(staged('a'), &mut |step| {
+            if step == Step::FileWritten(1) {
+                let file = the_staging_folder(dir.path())
+                    .join(CONTENT)
+                    .join("ingredients/TIT.tsv");
+                fs::write(&file, b"planted").unwrap();
+                planted = Some(file);
+            }
+            false
+        });
+        assert!(
+            matches!(
+                &result,
+                Err(InstallError::Refused { refusal: Refusal::DuplicateEntry(path), .. })
+                    if path == "ingredients/TIT.tsv"
+            ),
+            "{result:?}"
+        );
+        assert_eq!(fs::read(planted.unwrap()).unwrap(), b"planted");
+        assert!(store.dcs(&pin('a')).unwrap().is_none());
+    }
+
     #[cfg(windows)]
     const FILE_SHARE_READ: u32 = 1;
     #[cfg(windows)]
@@ -1227,10 +1292,11 @@ mod tests {
         let installed = store
             .install_until(staged('a'), &mut |step| {
                 if step == Step::ReceiptWritten {
-                    let mut stagings = fs::read_dir(dir.path().join(PARTIAL)).unwrap();
-                    let staging = stagings.next().unwrap().unwrap().path();
-                    assert!(stagings.next().is_none());
-                    let held = held_like_a_scanner(&staging.join(CONTENT).join("metadata.json"));
+                    let held = held_like_a_scanner(
+                        &the_staging_folder(dir.path())
+                            .join(CONTENT)
+                            .join("metadata.json"),
+                    );
                     scanner = Some(release_after(held, std::time::Duration::from_millis(300)));
                 }
                 false
