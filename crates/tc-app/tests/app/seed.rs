@@ -623,3 +623,108 @@ async fn a_leftover_that_cannot_be_removed_stops_neither_the_start_nor_the_seed(
     assert!(resources_reports(&last.app).is_empty());
     last.app.quit().await;
 }
+
+/// A copy of the test bundle in `to`, without its `nth` install.
+fn bundle_without_install(to: &Path, nth: usize) -> String {
+    copy_tree(bundle(), to);
+    let inventory = ResourceStore::open_read_only(to)
+        .unwrap()
+        .installed()
+        .unwrap();
+    let lost = &inventory.installs[nth];
+    let name = lost.dcs_pin().unwrap().to_string();
+    fs::remove_dir_all(lost.dir()).unwrap();
+    assert_eq!(
+        ResourceStore::open_read_only(to)
+            .unwrap()
+            .installed()
+            .unwrap()
+            .installs
+            .len(),
+        3
+    );
+    name
+}
+
+#[tokio::test]
+async fn a_bundle_that_lost_an_install_fails_the_startup_at_once_and_copies_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let damaged = dir.path().join("damaged-bundle");
+    let name = bundle_without_install(&damaged, 1);
+
+    let t = start(dir.path(), &damaged, None).await;
+
+    let StartupState::Failed { reason } = t.app.startup() else {
+        panic!(
+            "a bundle with a lost install did not fail the start: {:?}",
+            t.app.startup()
+        )
+    };
+    assert!(reason.contains("incomplete"), "{reason}");
+    assert!(reason.contains(&name), "{reason} does not name {name}");
+    assert_eq!(hello_value(&t.app).await["startup"]["type"], "failed");
+    assert_eq!(
+        t.app.jobs().live(),
+        0,
+        "no copy is begun from a damaged bundle"
+    );
+    assert!(t.app.jobs().view(JobId::new(1)).is_none());
+    assert_eq!(
+        startup_frames(&t.app),
+        [StartupState::Failed {
+            reason: reason.clone()
+        }]
+    );
+    assert!(t.app.resources().installed().unwrap().installs.is_empty());
+    let reports = seed_reports(&t.app);
+    assert_eq!(reports.len(), 1);
+    assert!(matches!(&reports[0].outcome, ReportOutcome::Failed { reason: r } if *r == reason));
+    assert_eq!(reports[0].facts["missing"], serde_json::json!([name]));
+    t.app.quit().await;
+}
+
+#[tokio::test]
+async fn a_folder_that_is_no_bundle_fails_the_startup() {
+    let dir = tempfile::tempdir().unwrap();
+    let empty = dir.path().join("empty-bundle");
+    fs::create_dir_all(&empty).unwrap();
+    let unlisted = dir.path().join("unlisted-bundle");
+    copy_tree(bundle(), &unlisted);
+    fs::remove_file(unlisted.join(tc_app::bundle::MANIFEST)).unwrap();
+
+    for folder in [&empty, &unlisted] {
+        let t = start(dir.path(), folder, None).await;
+        let StartupState::Failed { reason } = t.app.startup() else {
+            panic!(
+                "{} did not fail the start: {:?}",
+                folder.display(),
+                t.app.startup()
+            )
+        };
+        assert!(reason.contains("no manifest"), "{reason}");
+        assert_eq!(t.app.jobs().live(), 0);
+        assert!(t.app.resources().installed().unwrap().installs.is_empty());
+        t.app.quit().await;
+    }
+}
+
+#[tokio::test]
+async fn an_install_the_bundle_lost_is_no_loss_when_this_computer_has_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let first = start(dir.path(), bundle(), None).await;
+    assert_eq!(until_startup_ends(&first.app).await, StartupState::Ready);
+    first.app.quit().await;
+    let damaged = dir.path().join("damaged-bundle");
+    bundle_without_install(&damaged, 2);
+
+    let second = start(dir.path(), &damaged, None).await;
+
+    assert_eq!(second.app.startup(), StartupState::Ready);
+    assert_eq!(second.app.jobs().live(), 0);
+    assert!(seed_reports(&second.app).is_empty());
+    assert_eq!(
+        second.app.resources().installed().unwrap().installs.len(),
+        4
+    );
+    second.app.quit().await;
+}

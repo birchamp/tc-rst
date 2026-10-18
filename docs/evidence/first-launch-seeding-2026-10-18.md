@@ -116,6 +116,13 @@ on this machine:
   opens and writes no content file, plans in 4.1 ms (the receipts and check records of 15
   installs), starts no job and sends no frame. The expanded bundle here stands in for the
   archives; "each shipped archive once" waits for the packaging step (DELTA §3.6 item 3).
+  After the plan began to compare the bundle's manifest with its folders (the bundle that lost
+  an install, D12 in the A9 row) the same bench, run again with 3 first launches, 20 repeat
+  launches and 3 closes, gave a plan of 9.2 ms, a repeat launch of 4.6 ms, a first launch of
+  15.4 s (3 runs) and the same counts (0 and 0 on a repeat launch). The check reads the
+  manifest and one receipt for each install the manifest lists, which are not content files;
+  the machine was loaded (load average 4.6 to 7.6), so the 0.5 to 2 ms more is within the noise
+  of the table above.
 - **Close is quick because a seed asks to stop between files.** `App::quit` returned in 0.6 to
   39 ms, and the slowest is a stop that fell on a larger file. The longest a close can wait is
   the install being read and checked: 277 ms for `en_ust` from the disk here. On a disk or a

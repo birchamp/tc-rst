@@ -7,6 +7,7 @@
 
 pub mod account;
 pub mod app;
+pub mod bundle;
 pub mod clock;
 pub mod config;
 pub mod dispatch;

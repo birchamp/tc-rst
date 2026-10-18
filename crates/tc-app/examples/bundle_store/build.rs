@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
+use tc_app::bundle::BundleManifest;
 use tc_resources::{
     FetchedLock, LexiconInstall, ResourcePin, ResourceStore, Sha256, install_dcs_zip,
     install_lexicon_zip, suite,
@@ -29,7 +30,8 @@ pub struct Built {
 /// Builds the bundled store in `out` from the archives in `from` (`bundle/en`), for each
 /// bundled pin that `wanted` keeps. A pin whose file is not in `from` (the OBS pictures,
 /// fetched when the app is packaged) is skipped and named. Installing is idempotent: an
-/// install already in `out` is kept.
+/// install already in `out` is kept. The build ends by writing `BUNDLE-MANIFEST.json`, naming
+/// the installs this run made or kept: the list a start compares the folders with.
 pub fn build_bundle(
     from: &Path,
     out: &Path,
@@ -42,6 +44,7 @@ pub fn build_bundle(
     let lock = FetchedLock::parse(&lock_bytes).map_err(|e| format!("fetched.lock: {e}"))?;
     let store = ResourceStore::open(out).map_err(|e| e.to_string())?;
     let mut built = Built::default();
+    let mut promised = Vec::new();
 
     for pin in suite::bundled_pins().iter().filter(|pin| wanted(pin)) {
         let name = pin.to_string();
@@ -96,7 +99,13 @@ pub fn build_bundle(
         };
         built.files += installed.files().count() as u64;
         built.installed.push(name);
+        promised.push(pin.clone());
     }
+    // The list the start compares the folders with, so an install that goes missing later
+    // stops the start.
+    BundleManifest::new(promised)
+        .write(out)
+        .map_err(|e| e.to_string())?;
     Ok(built)
 }
 

@@ -292,3 +292,34 @@ fn a_damaged_bundle_fails_the_start_and_says_why() {
     assert_eq!(verified_installs(&resources(&dirs)), 3);
     assert_eq!(tc4.quit().code(), Some(0));
 }
+
+#[test]
+fn a_bundle_that_lost_an_install_fails_the_start_at_its_first_answer() {
+    let dirs = dirs();
+    let damaged = dirs.app_data.path().join("damaged-bundle");
+    copy_tree(bundle(), &damaged);
+    let inventory = ResourceStore::open_read_only(&damaged)
+        .unwrap()
+        .installed()
+        .unwrap();
+    let lost = &inventory.installs[2];
+    let name = lost.dcs_pin().unwrap().repo.name().as_str().to_owned();
+    fs::remove_dir_all(lost.dir()).unwrap();
+
+    let mut tc4 = start(&dirs, &damaged, &[]);
+
+    // Known from the plan, so no seed ran: the first answer is the failure.
+    let startup = hello(&tc4)["startup"].clone();
+    assert_eq!(startup["type"], "failed", "{startup}");
+    let reason = startup["value"]["reason"].as_str().unwrap();
+    assert!(
+        reason.contains("incomplete") && reason.contains(&name),
+        "{reason}"
+    );
+    assert_eq!(
+        verified_installs(&resources(&dirs)),
+        0,
+        "nothing was copied"
+    );
+    assert_eq!(tc4.quit().code(), Some(0));
+}

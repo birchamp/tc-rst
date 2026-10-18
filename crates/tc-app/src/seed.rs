@@ -7,7 +7,8 @@
 //! - **Plan.** [`plan`] runs inline in `App::start`. It reads receipts and check records and
 //!   never a content file, so `hello.startup` is exact from the first request: `Ready` when
 //!   there is nothing to copy or check, `Preparing { done: 0, total }` with `total` in content
-//!   files when there is, and `Failed` when the plan cannot be made.
+//!   files when there is, and `Failed` when the plan cannot be made or the bundle lacks an
+//!   install its manifest lists ([`crate::bundle`]).
 //! - **Job.** The `Seed` job does the plan on the blocking pool. Its reports become `Startup`
 //!   events through [`JobRegistry::watch`](crate::jobs::JobRegistry::watch). The job sets
 //!   `Ready` or `Failed` itself before it returns, so `Ready` means every bundled install is
@@ -34,6 +35,7 @@ use tc_resources::{
 };
 
 use crate::app::{App, lock};
+use crate::bundle::BundleManifest;
 use crate::jobs::{CancelToken, JobCtx, JobEnd, JobRegistry, JobSpec, ProgressSink};
 use crate::reports::{ReportOp, ReportOutcome, facts};
 use crate::startup::{StartupEnd, Update};
@@ -52,7 +54,7 @@ pub(crate) enum SeedStart {
         bundle: PathBuf,
         plan: SeedPlan,
     },
-    /// The plan could not be made, or only unreadable bundled folders were found: `Failed`.
+    /// The plan could not be made, or the bundle lacks an install: `Failed`.
     Failed {
         reason: String,
         facts: Map<String, Value>,
@@ -74,10 +76,34 @@ pub(crate) fn plan(store: &ResourceStore, bundle: Option<&Path>) -> SeedStart {
         Ok(bundled) => bundled,
         Err(e) => return failed(format!("the bundled resources cannot be read: {e}")),
     };
+    let manifest = match BundleManifest::read(bundle) {
+        Ok(manifest) => manifest,
+        Err(e) => return failed(format!("the bundled resources cannot be used: {e}")),
+    };
     let plan = match store.seed_plan(&bundled) {
         Ok(plan) => plan,
         Err(e) => return failed(e.to_string()),
     };
+    // Each promised install is in the bundle or already on this computer, as tC4 finds a
+    // resource it has installed before it reads an archive (`desktop-bootstrap.cjs:230-290`).
+    // A bundle that lacks one is damaged, and nothing is copied from it: the start says so
+    // at once, not after the copies.
+    let missing: Vec<String> = manifest
+        .missing(|pin| bundled.has_dcs(pin) || store.has_dcs(pin))
+        .iter()
+        .map(|pin| pin.to_string())
+        .collect();
+    if !missing.is_empty() {
+        let mut facts = facts_of(bundle, 0, plan.report(), 0, 0, Duration::ZERO);
+        facts.insert("missing".to_owned(), json!(missing));
+        return SeedStart::Failed {
+            reason: format!(
+                "the bundled resources are incomplete; missing: {}",
+                missing.join("; ")
+            ),
+            facts,
+        };
+    }
     if plan.is_empty() {
         return match end_of(plan.report()) {
             StartupEnd::Ready => SeedStart::Nothing,
