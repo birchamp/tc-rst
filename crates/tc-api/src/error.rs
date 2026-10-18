@@ -84,7 +84,8 @@ pub enum Flow {
     ExchangeReceive,
 }
 
-/// What the backend cannot do yet, by the unit that brings it (APP-DESIGN AD6).
+/// What the backend cannot do yet, by the unit that brings it (APP-DESIGN AD6). The units that
+/// bring a feature delete its variant when nothing answers `Unavailable` with it any more.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
@@ -101,4 +102,9 @@ pub enum Feature {
     Import,
     /// Export files: D2.
     Export,
+    /// Door43 sign-in, resume, sign-out and the profile link: unit A8. Until it lands, the
+    /// account service answers only what needs no Door43 step.
+    Account,
+    /// The Feedback dialog's attachment: unit A5.
+    Feedback,
 }

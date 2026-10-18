@@ -115,6 +115,21 @@ pub struct FieldLogView {
 pub struct StoredText {
     pub request: RequestId,
     pub text: String,
+    /// Which version of the field the request's token named.
+    pub base: TokenBase,
+}
+
+/// What the token of a stored text named.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum TokenBase {
+    /// The field's current version.
+    Current,
+    /// An earlier version. On a real project the new text would stand beside the newer
+    /// version as a conflict (STORAGE:1449-1453); in a test of the save machine it is a
+    /// conflict with the person's own earlier save, which AD4 exists to prevent.
+    Stale,
 }
 
 /// `test/reset`: prefs, summaries and reports back to the scenario's seed; the parity
