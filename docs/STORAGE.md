@@ -34,7 +34,11 @@ Words used here: a **change** is one immutable version of one record (tC4 called
    decides, the text shows the whole passage from one side, so no word is shown twice or lost.
 4. **Invalidation is computed.** An alignment or check decision stores what it was made against
    (verse text hash, resource sha). The fold computes "invalid, kept" from the current text and
-   pins. A text edit or resource upgrade writes nothing on alignments or decisions.
+   pins. A resource upgrade writes nothing on alignments, and a text edit nothing on
+   decisions. A text edit carries the verse's alignment over to the new text in the same batch
+   (`tc_align::reflow`: links to words the verse still has are kept, the others go back to the
+   bank), so a verse and its alignment are never seen apart; the earlier alignment stays in
+   History (§5.1).
 5. **Storage.** A save is one atomic file in `.tc/pending/`, outside the burrito, named by its
    device and its content hash, so no other save can ever replace it. A **seal**
    moves pending changes into an immutable NDJSON pack under `ingredients/tc/changes/`, which is
@@ -750,6 +754,14 @@ pub enum Notice {
     /// a program that put an older mtime back. The file is held, unchanged and unrecorded,
     /// until the person takes it in as an edit or restores it (§6.2).
     StorageDamage { path: RepoPath, copy: Box<str> },
+    /// A derived file changed outside the app, held unchanged and unrecorded with a copy kept,
+    /// until it is recorded as changes (§11.1) or restored from the project (I8).
+    OutsideEditHeld { path: RepoPath, copy: Box<str> },
+    /// A derived file's rename kept failing for 2 s (another program has it open, §5.10).
+    WriteBlocked { path: RepoPath },
+    /// An expected pack (§4.4) is missing and no copy could be restored: nothing derived is
+    /// removed and no tree is built until it is back.
+    PackMissing { path: RepoPath },
     /// Line-ending or trailing-whitespace differences in an outside edit, not recorded (§11.1).
     WhitespaceOnlyEdit { path: RepoPath, keys: u32 },
     /// Another installation writes into this folder (a cloud-synced folder, §5.0).
@@ -780,13 +792,25 @@ changes a record must carry the token of what was displayed. This is how I4 hold
 /// bytes, under a key derived from the installation secret (§3.7) and the project id, so a token
 /// held in the browser-side draft buffer survives a restart. The key never leaves the server.
 /// The core rejects a token with a bad MAC, so a screen cannot construct "the current heads".
-pub struct ShownToken { key: RecordKey, heads: SmallVec<[ChangeId; 2]>, mac: [u8; 16] }
+pub struct ShownToken { kind: TokenKind, key: RecordKey, heads: SmallVec<[ChangeId; 2]>, mac: [u8; 16] }
+pub enum TokenKind { Edit, Review }
 ```
 
 Byte form: base64url without padding of `payload ‖ mac`. `payload` is the canonical JSON
-`{"heads":[…],"key":{…}}`, heads sorted without repeats and the key as in §2.8; `mac` is the
-first 16 bytes of HMAC-SHA256 of `payload` under the token key, and the token key is
-HMAC-SHA256 under the installation secret of `"tc4-shown-token\0" ‖ the project id's 16 bytes`.
+`{"heads":[…],"key":{…},"kind":"edit"|"review"}`, heads sorted without repeats and the key as
+in §2.8; `mac` is the first 16 bytes of HMAC-SHA256 of `payload` under the token key, and the
+token key is HMAC-SHA256 under the installation secret of `"tc4-shown-token\0" ‖ the project
+id's 16 bytes`. A payload that is not canonical, or whose heads are not sorted without repeats,
+is refused even under a good MAC.
+
+The kind is under the MAC (APP-DESIGN R19). An **edit** token lists the heads by the table
+below and is what a save takes; a **review** token lists every head of the record and is what
+only a resolution (`Resolve`, `ResolveBulk`, §5.9) takes. The actor refuses a review token in a
+save and an edit token in a resolution (`Refusal::WrongTokenKind`), so a resolution screen's
+token can never be replayed as an edit that silently resolves, nor an editor's as a resolution
+of versions it never showed. A token whose MAC this installation can no longer check (a new
+installation secret) is read only to offer a draft's text (§5.14, `parse_unverified`), never
+as a base.
 
 What `heads` holds depends on the record's state when it was displayed:
 
@@ -818,14 +842,24 @@ pub enum Command {
     RestoreBook  { book: BookId, presence_shown: ShownToken, mode: RestoreMode },  // KeepText | StartEmpty
     SaveFrame    { shown: ShownToken, text: String },                  // OBS; StoryRef the same
     ApplyUpgrade { plan: UpgradePlan },                                // §5.8
-    Resolve      { conflict: ConflictId, shown: Vec<ShownToken>, choice: Choice },
+    Resolve      { conflict: ConflictId, shown: Vec<ShownToken>, choice: Choice }, // review tokens
+    /// One candidate per conflict, made on a computer of `devices` (§5.9); review tokens.
+    ResolveBulk  { devices: BTreeSet<DeviceId>, conflicts: Vec<(ConflictId, Vec<ShownToken>)> },
+    /// Re-key a decision a carry-over could not place (§8.3).
+    MoveCheck    { shown: ShownToken, to: CheckKey, to_shown: ShownToken },
     Restore      { shown: ShownToken, from: ChangeId },
     RemoveCarriedFile { shown: ShownToken },
     SetBookScope { presence_shown: ShownToken, scope: Scope },          // a passage set (D26)
     ReleaseBatch { batch: BatchId },                                   // "Apply what was recovered" (§7.4)
     Dismiss      { shown: ShownToken },                                // a Detached alignment or decision (§7.7)
-    Draft        { shown: ShownToken, field: DraftField, text: String }, // §5.14; writes no change
+    ReviseComment{ shown: ShownToken, text: String },                  // §5.5
+    Draft        (Draft),                                              // §5.14; writes no change
+    /// *Keep* a draft offered at open (§5.14); `section` holds a section draft's values.
+    KeepDraft    { draft: Draft, section: Vec<(ShownToken, Option<SectionValue>)> },
 }
+/// Unsaved editor text: the tokens of every record the editor displayed (a section draft
+/// carries one per displayed verse and chapter front, APP-DESIGN R6; a new comment none).
+pub struct Draft { pub field: DraftField, pub shown: Vec<ShownToken>, pub text: String }
 ```
 
 `SectionValue` is a `VerseValue` or a `ChapterFront` value for the record its token names. The
@@ -851,8 +885,15 @@ pub struct UpgradePlan { pub changes: Vec<PlannedChange> }
 pub struct PlannedChange { pub record: Record, pub parents: Vec<ChangeId>, pub cause: Cause }
 /// §8.3: keep one candidate (and its side, for a grouped conflict), or values the person
 /// edited, combined or chose unit by unit, one per record.
-pub enum Choice { Candidate { head: ChangeId }, Values(Vec<Record>) }
-pub enum DraftField { Words, Layout, Section, Frame, StoryRef, CheckComment }
+pub enum Choice { Candidate { head: ChangeId }, Values(Vec<Record>),
+                  KeepPassage { heads: Vec<ChangeId> }, KeepSeparate { heads: Vec<ChangeId> },
+                  KeepJoined { heads: Vec<ChangeId> }, ApplyToMovedCheck,
+                  RenameCarried { from: RepoPath, to: RepoPath } }
+/// `UserComment` is the comment box (a new comment on `target`, or a revision of the comment
+/// its one token names, APP-DESIGN R15); `Alignment` the aligner's unsaved links as
+/// `AlignmentEdit::to_json` writes them (R23).
+pub enum DraftField { Words, Layout, Section { book: BookId }, Frame, StoryRef, CheckComment,
+                      UserComment { target: CommentTarget }, Alignment }
 ```
 
 The reply to every command carries the new tokens and the new conflicts it caused, so the screen
@@ -1084,18 +1125,18 @@ None of these files is project data that another device needs. Each is written w
 
 | File | Content | Purpose |
 |---|---|---|
-| `lock` | `{host, pid, device, at}` | exclusive advisory lock (`fd-lock`) while the project is open; the content only names the holder in messages |
+| `lock` | `{host, pid, device, at}` | exclusive advisory lock (`std::fs::File::try_lock`) while the project is open. It guards the folder against a process a crash left running and against other programs; translationCore itself runs once per computer (§5.0). A lock another process holds refuses the open (O1), and the content names the holder in the error. It is written through the locked handle (truncate, write, flush), never with `atomic_write`: a new file renamed over it would be a file whose lock nobody holds, and another process could take it |
 | `device.json` | `{device, fingerprint, created}` | this folder's Local device (§6.3) |
 | `pending/<device>-<hash32>.batch` | header + change lines (§4.2) | saves not yet sealed: the commit point of every save |
-| `materialized.json` | `{minor, derivations, paths: {<path>: {md5, size, mtimeNs, settled, scope, held, oid}}, packs: {<path>: {md5, size, fingerprint}}}`: the format minor and derivation versions (§12.1) the files were projected with; per derived or carried path what was written (md5, size, mtime), whether its bytes were read back after its timestamp tick was over (`settled`), the digest of the heads its projection stands for (`scope`), and the md5 of bytes the app holds there without writing over them (`held`), §6.2; per pack the md5 that `metadata.json` lists | the manifest: what the app last wrote (§5.10). Its own mtime, which the filesystem sets when it is written, is a time stamp that settles entries (§6.2) |
+| `materialized.json` | `{minor, derivations, paths: {<path>: {md5, size, mtimeNs, settled, scope, held, oid, nfc}}, packs: {<path>: {md5, size, fingerprint}}}`: the format minor and derivation versions (§12.1) the files were projected with; per derived or carried path what was written (md5, size, mtime), whether its bytes were read back after its timestamp tick was over (`settled`), the digest of the heads its projection stands for (`scope`), and the bytes the app holds there without writing over them (`held`: their md5, why they are held, and the path of their copy in `.tc/external/`), §6.2; for a USFM or story file whether its bytes are NFC (`nfc`), so `metadata.json` states its `normalization` without projecting every book again; per pack the md5 that `metadata.json` lists, which also makes the manifest's pack list the expected pack set unit S1 checks at open (§4.4: a listed pack that is gone and that no valid pack's `replaces` names is missing) | the manifest: what the app last wrote (§5.10). Its own mtime, which the filesystem sets when it is written, is a time stamp that settles entries (§6.2) |
 | `heads/<escaped path>.bin` | postcard `HeadsFile`: for every record the file was built from, the heads the written bytes stand for, by the token rule of §2.7 (every head of a settled or merged record; only the provisional candidate and its equal heads for a conflict) | the base of an outside edit (§11.1); an outside editor saw only the provisional text, so its edit never resolves a conflict |
 | `materialize.intent.json` | `{writes: [{path, oldMd5, newMd5}], removes: [path]}` | present only during a materialization |
 | `quarantine/…` | damaged pending files, byte copies; change lines too long for any pack (§5.11 K1) | kept until the person dismisses the notice |
 | `quarantine.json` | blob ids of damaged or unreadable incoming files already reported | each damaged file is reported once, not at every sync |
 | `intake.json` | `{source, started}` | present only while an exchange-file import writes (§10.2 R7); at open it means the import did not finish |
-| `external/<utc>-<escaped path>` | byte copies of files changed outside the app, and files moved out of `ingredients/` | kept until the person dismisses the notice |
+| `external/<utc>-<escaped path>` | byte copies of files changed outside the app, and files moved out of `ingredients/`; a second copy of the same path in the same second is `…-2`, `…-3`: no copy replaces another | kept until the person dismisses the notice, and while the file they were taken of is held (§6.2) |
 | `sync.json` | `{remoteUrl, branch, confirmed: {commit, at}}` | last confirmed Door43 state; rebuilds `.git` config after git damage (§6.4 G4) |
-| `drafts.json` | `[{shown, field, text, at}]` | unsaved editor text, written at most every second while text is unsaved (§5.14) |
+| `drafts.json` | `[{field, shown: [token text], text, at}]` | unsaved editor text, written at most every second while text is unsaved, by a writer beside the actor (§5.14) |
 | `index.bin` | the fold cache (`tc_journal::index`): for each valid pack and pending file an open read in full, a section keyed by the file's path, size and 64-bit fingerprint, holding the file's header and the prepared changes the fold takes from it (each change's id, where its JSON lies in the file, the fingerprint of those bytes and its summary), so the facts O7's rules read of the file (its header, status and change ids) come from the section as from a read; stamped with the cache version (`INDEX_VERSION`), the format minor, the build's probe stamp (below) and the project | a cold open takes each unchanged file's changes from it instead of verifying and parsing the file again (§6.1 O8, §14). It never decides what exists: a missing or damaged cache, one of another version, minor, stamp or project, or a file it holds no section for, only means that file is read |
 
 **What the fold cache trusts.** A section stands for a file when the file's path, its size and
@@ -1318,8 +1359,9 @@ that breaks one is a **quarantined change**: kept in its file, not folded, liste
   device for a Tc4Actor or Tc3User profile.
 - **V5 parents.** Sorted, unique, at most 4,096.
 - **V6 grow-only records.** A `BatchRelease` change has no parents. A `Comment` change has no
-  parents unless its cause is `Resolve`: two changes under one comment id are a `Comment`
-  conflict, and its resolution names both (§8.3).
+  parents unless its cause is `Edit` (a revision of the text the comment box showed, §5.5),
+  `Restore` (a version from History) or `Resolve`: two changes under one comment id are a
+  `Comment` conflict, and its resolution names both (§8.3).
 - **V7 limits.** JSON nesting depth ≤ 64; a change line ≤ 4 MiB, counting its tab, hash and
   line feed.
 - **V8 carried paths.** A `CarriedFile` path is not a path the app derives or owns (anything
@@ -1377,11 +1419,16 @@ tree, and a damaged copy of a replaced pack disappears with it.
 owns the in-memory `FoldState` and is the only code that writes files in the project folder.
 Commands, sync results and import results are messages to it. Network, parsing, validation and
 fold snapshots run on other threads and hand finished data to the actor. An exclusive advisory
-lock on `.tc/lock` (`fd-lock`) refuses a second process, and the app is single-instance (tC4
-D39). That lock is local to one machine. A folder that a cloud client (OneDrive, Dropbox,
-iCloud Drive, Google Drive, Syncthing) replicates to another machine can get a second writer the
-lock cannot see, so such folders are gated below, and a second writer that slips past the gate is
-detected and stopped before it can do harm.
+lock on `.tc/lock` (`std::fs::File::try_lock`, stable since Rust 1.89, so no `fd-lock`) refuses
+the open of a project another process holds. translationCore runs as a single instance per
+computer, as tC4 4.0 does (its D39: a second launch brings the running window to the front and
+exits), so nothing supports a second app, process or window working on a project on one
+computer; the lock guards against a process a crash left running and against other programs,
+and O2's cleanup of temporary files relies on it. Several people work on one project at the same
+time only from separate computers, through sync. The lock is local to one machine. A folder that a
+cloud client (OneDrive, Dropbox, iCloud Drive, Google Drive, Syncthing) replicates to another
+machine can get a second writer the lock cannot see, so such folders are gated below, and a
+second writer that slips past the gate is detected and stopped before it can do harm.
 
 **All file I/O goes through the `Vfs` trait** in `tc-store` (`std` in production, `FaultFs` in
 tests, §16.2). Only these helpers write project files:
@@ -1419,6 +1466,17 @@ pub enum SyncDir<'a> { Now, Deferred(&'a mut DirSet) }   // Deferred collects di
 `atomic_create_dirs` creates each missing directory and fsyncs its parent. `atomic_remove`
 unlinks and fsyncs the parent.
 
+**A directory found existing is not trusted.** Its creator may have stopped between the `mkdir`
+and the flush of its parent: a killed process leaves the folder in the page cache, and a seal
+that then wrote a pack into it, removed the pending files the pack holds and was followed by a
+power cut would lose the folder, the pack and the saves with it (the crash matrix found this:
+a seal into a month folder that did not exist yet; after a consolidation the folder held the
+whole journal). On a project's filesystem (`Vfs::secure_dir_chain`) the first time a session
+creates or finds a directory below the project folder, `atomic_create_dirs` flushes the entry
+of every directory on the way to it that the session has not flushed yet; the session
+remembers them, so each directory costs its flushes once, and the open does it for `.tc` and
+`.tc/pending`, so the first save pays nothing.
+
 **Filesystems.** A project on FAT32 or exFAT opens read-only with "This drive cannot keep the
 project safe if the power fails. Copy the project to this computer?": those filesystems do not
 make rename atomic. The type is read from `sysinfo::Disks`. Exchange files may live on any
@@ -1426,7 +1484,11 @@ filesystem (§10).
 
 **Cloud-synced folders** open read-only the same way, with "This folder is copied to other
 computers by OneDrive. Two computers saving into one project folder can lose work. Copy the
-project to a folder that is not synced?" (the copy keeps every pending save). A folder is
+project to a folder that is not synced?" (the copy keeps every pending save: it copies the
+pending files before the packs, then lists both again and copies what is new until a round
+finds nothing new, so a seal or consolidation the other writer runs meanwhile cannot take a
+change out of both places the copy reads, since a change leaves a file only after it is in a
+newer one). A folder is
 cloud-synced when it lies under a known sync root (the `OneDrive`, `OneDriveConsumer` and
 `OneDriveCommercial` environment variables; the Dropbox roots in its `info.json`;
 `~/Library/Mobile Documents` and `~/Library/CloudStorage/*` on macOS; a Google Drive root), when
@@ -1443,7 +1505,9 @@ other than this folder's means another installation is saving into this folder n
 close) means the same unless the person confirms that the other computer is closed. Either way
 the project switches to read-only with `SecondWriter` and the copy offer above. Every change
 already written by either installation is kept: pending names never collide (§4.2), and the fold
-takes both.
+takes both. Unit S1 has no watcher (§11.1 is unit S2's): a checkpoint lists the journal folders
+before it seals, and a file this session does not know is folded and turns the project
+read-only.
 
 **`commit_batch`**, used by every write path below:
 
@@ -1467,12 +1531,50 @@ the counter advances, and the person sees `SavedWithDiskError` ("Saved, but the 
 error: <reason>. Your work may not survive a power cut. Check the disk."). The app never reports
 "Not saved" for a file that exists, so a retry can never reuse its seq.
 
+**Closing.** A close seals and materializes what is due (§5.13 C1, C2), writes the fold cache,
+stops the draft writer and waits for it, and only then clears `.tc/lock`'s content and releases
+the lock: nothing is written into the folder after the lock is gone, so the next open (after a
+restart, or by a program that takes the lock as this session ends) never races a late
+`drafts.json`. The open's background work (O8's cache write
+and O14) ends before the actor closes, while the actor can still answer it.
+
 **`commit_received`** writes changes whose bytes were fixed elsewhere: deterministic ingests of
 Door43 and exchange-file edits (§11.2, §11.3) and salvaged lines of another device's damaged pack
 (§4.4, §10.2 R4). It runs B1 with the rules of §4.5 only (no command rules), skips B2 (no seq,
 `at` or batch is assigned; the raw lines are written exactly as received, never re-serialized,
 §2.5), then B3 with purpose `intake` or `salvage`, B4 and B5. A salvaged part of a batch stays an
 `IncompleteBatch` (§7.4) under its original batch ref.
+
+**The handle** (`tc-store`'s `ProjectHandle`, APP-DESIGN R4, R5, R14, R16). The application
+layer holds an open project as a handle:
+
+- `snapshot()` is the fold the actor published after its last batch, with its sequence
+  number: an `Arc` clone, never waiting behind the actor (R5), since the actor publishes a
+  clone of its fold (a few hundred pointer copies, §2.6) after each batch. Tokens are minted
+  from the snapshot the screen read (`Snapshot::token`, `review_token`) and parsed back by kind
+  (`parse_edit`, `parse_review`); the actor refuses a review token in a save and an edit token
+  in a resolution (§2.7, R19).
+- `submit(command)` returns at once with a value the caller waits on or awaits; it resolves
+  after B6 with `StoreReply { tokens, new_conflicts, stored, seq, changes, skipped }`, where
+  `stored` is `Durable`, `WrittenNotDurable(reason)` or `Unchanged`, and `seq` is the first
+  published snapshot that holds the batch (R16). A refused command resolves with its reason;
+  every command of a read-only project resolves with `ReadOnly(reason)`. A `Draft` goes to the
+  draft writer, not the queue (§5.14).
+- `subscribe()` gives typed events: `Committed { seq, delta, changes }` for every batch,
+  `Notice` (typed: `SecondWriter`, `SavedWithDiskError`, `WriteBlocked`, `OutsideEditHeld`,
+  `StorageDamage`, …), `Mode` when the project turns read-only, `Materialized { paths }`.
+- `read_book` reads a book's text from one snapshot off the caller's thread: a pending read the
+  screen waits for, never an empty book (`docs/TC4-DELTA-2026-10-16.md` §3.10).
+  `Snapshot::training_input` gives the aligner's training input, each verse's text and
+  alignment from that one snapshot (§3.10 item 3).
+- `leave`, `checkpoint`, `restore_held`, `dismiss_notice`, `offered_drafts`, `discard_draft`,
+  `wait_idle`, `close`, and `counters()`: files opened, created, read and written, fsyncs,
+  renames, listings, derived files read (by the open's classification and by compare-and-swaps,
+  `derived_read`, and apart, by the storage check O14, `check_read`), projected and written,
+  heads files read, journal files read and how many of them came from the fold cache, and the
+  time commands waited in the queue (R14). Tests hold the store at named points (before a book read, a draft write,
+  the durability point of a save, a checkpoint, a materialization, a staging removal and
+  rename; R8).
 
 ### 5.1 Save one verse (Translate, verse by verse)
 
@@ -1486,7 +1588,18 @@ Door43 and exchange-file edits (§11.2, §11.3) and salvaged lines of another de
    checked.
 4. If the new value equals the displayed value, nothing is written. A no-op save after a sync
    must not replace a teammate's newer version.
-5. One `Verse` change, `parents = shown.heads`, `cause: Edit`. `commit_batch`.
+5. One `Verse` change, `parents = shown.heads`, `cause: Edit`. In the same batch, the verse's
+   alignment carried over to the new text (APP-DESIGN R25): when the alignment keyed by the
+   run's anchor (§7.7) is not in conflict, covers this run's span, is not marked invalid, has a
+   card, and its text hash no longer matches, `tc_align::reflow` keeps on each card the target
+   words the new text still has, at their new occurrences, sends new words to the bank and drops
+   words that are gone; the change has `parents` = the alignment's heads in the actor's fold and
+   `cause: Edit`. tC4 reflows when the aligner next opens the verse; writing the reflow with the
+   verse keeps the two in one batch, so no crash, sync or reader ever sees a verse beside an
+   alignment of words it no longer has. A teammate's alignment edit that arrives later is a
+   second head of the alignment, a visible conflict, never a lost edit. An alignment in
+   conflict, made for another span or marked invalid is not written and shows as needing
+   review (§7.7). `commit_batch`.
 6. If a head that the token does not list was added after the verse was displayed (a teammate's
    change arrived by sync), the new change and that head are both heads: a conflict. The reply
    says "Juan changed this verse while you were editing; both versions are kept" and the verse
@@ -1520,9 +1633,10 @@ makes the span `4-5`; dragging a number past text breaks one (tC4 J2).
    `Passage` conflict (§7.3), never a refusal the author cannot clear.
 3. One batch, one change per changed record, each with `parents` = its own token's heads. A
    batch that writes two or more verses is a **passage batch** (§7.3).
-4. Nothing is written on alignments or decisions of 4 and 5. Their validity is computed (§7.7):
-   the alignment of 4 was made for a span ending at 4 and its text hash no longer matches, so
-   it shows "needs review" and is kept (tC4 J2 end state).
+4. Each verse whose words or layout changed and whose span did not gets its alignment
+   reflowed in the same batch, as in §5.1 step 5. Nothing is written on the alignment of a verse
+   whose span changed, nor on any decision: the alignment of 4 was made for a span ending at 4,
+   its text hash no longer matches, so it shows "needs review" and is kept (tC4 J2 end state).
 5. While the section editor holds unsaved text, its whole buffer is kept as one draft
    (`DraftField::Section`, §5.14), so a refused save or a reload never loses typed text.
 
@@ -1543,7 +1657,9 @@ There is no structural action and no chain: a section save touches only the reco
    displayed (`verse_shown`). On leaving the verse, or 2 s after the last link change, it sends
    `SaveAlignment { shown, verse_shown, value }`.
 2. The actor computes from the **displayed** verse value, not the current one:
-   `span_end = last`, `target_verse_md5 = md5(plain_text_v1(words + layout))`. If the verse
+   `span_end` = the anchor's verse plus the run's length (`last` minus the run's first verse),
+   the run's end in the anchor's numbering, so a renumbered verse's alignment covers the verses
+   it covered where it was made (§7.7); `target_verse_md5 = md5(plain_text_v1(words + layout))`. If the verse
    changed meanwhile, the saved alignment is stale at once and is shown so; it is never
    re-stamped silently.
 3. `source` = the current original-language pin of the book's testament (repoPath + sha),
@@ -1600,6 +1716,13 @@ when 5 becomes part of `4-5`, when 1:5 is renumbered, or when a carry-over moves
 (§7.7). Because comments cannot conflict, this following is what keeps a comment made
 concurrently with a structure change on a screen. (Retracting a comment, if it is added later,
 is a new record kind that hides a comment from the default view and keeps it in History.)
+
+`ReviseComment { shown, text }` (APP-DESIGN R24) writes a new version of the comment its edit
+token names, with the token's heads as parents and cause `Edit`: same id, same target,
+the new text NFC. The earlier text stays in the comment's History, as every version of every
+record does. A revision on one computer and another revision of the same comment on
+another are two heads of one comment: a `Comment` conflict, resolved as any other (§8.3), so
+neither text is lost. An empty text is refused (a retraction is the record kind above).
 
 ### 5.6 Settings, project details and pins
 
@@ -1726,9 +1849,11 @@ intake, and at close. It writes only dirty paths.
 M0  D = dirty derived and carried paths, with their new bytes computed in memory (carried bytes
     come from the git object database, §11.4; a carried head whose blob is missing keeps the
     file on disk as it is and reports CarriedBytesMissing); X = derived or carried paths to
-    remove (a removed book, a removed carried file). Nothing in X is removed while an expected
-    pack is missing or unreadable (§4.4). A held path (§6.2) is in neither: it stays dirty and
-    unwritten until the person chooses.
+    remove (a removed book, a carried file a settled `Removed` record names whose manifest entry
+    names its blob, §5.16). Nothing in X is removed while an expected pack is missing or
+    unreadable (§4.4). A held path (§6.2) is in neither: it is left as it is until the person
+    chooses. A held path whose file is gone ends its hold first, and joins D (a deletion is
+    never an edit, §6.2).
 M1  Compare-and-swap check. For each p in D ∪ X present on disk: d = md5(disk). The bytes are
     always read: size and mtime never stand for them here, because an open may have taken p as
     converged by its size and mtime alone (§6.2), and a program can change a file and put its
@@ -1740,7 +1865,12 @@ M1  Compare-and-swap check. For each p in D ∪ X present on disk: d = md5(disk)
     ends: a file no decoder reads (§11.1 X2) is kept as a byte copy with a notice, and the write
     proceeds.
 M2  Build metadata.json for the planned result (total, §3.4) and run tc_burrito::check on it in
-    memory. A failure is a bug report; nothing is written.
+    memory. A failure is a bug report; nothing is written. Every file is listed as its bytes
+    are on disk (I7): a derived file by the manifest or the planned bytes, and the fixed files
+    (`project.json`, `format.json`), the carried files and the held files by the manifest while
+    they are clean by stat and otherwise by a read; bytes there that the app did not write are
+    held with a copy and a notice (§6.2) and listed as they are, so the list never states the
+    md5 and size of bytes that are not in the folder.
 M3  atomic_write(.tc, "materialize.intent.json", {writes: [{path, oldMd5, newMd5}], removes: X})
 M4  For each p in D: write a temp, fsync, rename (directory fsync deferred); then atomic_write
     its heads file. For each p in X: unlink (directory fsync deferred).
@@ -1755,15 +1885,34 @@ M8  atomic_remove(.tc/materialize.intent.json).
 ```
 
 The burrito is valid before M4 and after M6; in between, `metadata.json` lags by milliseconds. A
-crash there is repaired at open (§6.4, rows M1 to M6). If a rename in M4 fails because another
-program holds the file open (Windows: Paratext, an indexer), a program is probably writing that
-file right now. The actor retries for 2 s, and **before each retry it repeats M1 for that path**
-(the md5 of its bytes): if `d` is neither the manifest md5 nor the new md5, the
-write of that path is abandoned, the file is recorded (§11.1), and the materialization restarts
-at M0. After 2 s the path stays dirty and the person sees "translationCore can't update TIT.usfm
-because another program has it open. Your work is saved." While a path waits for a retry, the
-watcher does not treat the intent's new md5 as the app's own write for that path. Writes of
-pending files are never blocked by a derived file.
+crash there is repaired at open (§6.4, rows M1 to M6).
+
+A project with no book yet (a create before its first book is added, §6.4 N1) has no valid
+`metadata.json` (`currentScope` needs a book): M2 fails, nothing is written, and the paths stay
+dirty until a book is there. `metadata.json` itself is always rewritten at M6, since it must
+list the files as they are; bytes there that neither the manifest nor the intent names (project
+details edited in a text editor, or any bytes when the manifest is gone or does not parse, so
+that nothing names what is on disk) are first copied to `.tc/external/` with a
+`MetadataEditedOutside` notice, once for each version of the bytes, so nothing a person wrote is
+lost (I8). Until unit S2 records outside edits (§11.1), M1 holds every changed path, clean by
+stat or not: copied, left as it is, dropped from D and X, with an `OutsideEditHeld` or
+`StorageDamage` notice. If a rename in M4 fails because another program holds the file open
+(Windows: Paratext, an indexer), a program is probably writing that file right now, and the
+actor **does not wait for it**: the write of that path is skipped, the path stays dirty,
+`metadata.json` lists the file as it is, and a timer of the actor tries again after 200 ms, then
+after as long as the path has waited so far, up to 3 s. Commands are served between the tries,
+so a save never waits for a derived file. **Every try starts at M0 and so repeats M1 for that
+path** (the md5 of its bytes): if `d` is neither the manifest md5 nor the new md5, the file was
+saved by the other program while the app waited, and it is held (unit S1) or recorded (§11.1)
+instead of written over. After 2 s the path stays dirty and the person sees "translationCore
+can't update TIT.usfm because another program has it open. Your work is saved."
+(`WriteBlocked`). A file the open cannot read, or a compare-and-swap that cannot read the file,
+is treated the same way: nothing is written over it, and it is tried again. While a path waits
+for a retry, the watcher does not treat the intent's new md5 as the app's own write for that
+path. Writes of pending files are never blocked by a derived file. A checkpoint
+materializes after its seal even when the seal failed, because a pack the seal renamed before
+it failed must be listed (I7); a path that stays dirty after any materialization, or a
+materialization that fails, is tried again 3 s later.
 
 The residual race: a program that writes `p` between the last compare-and-swap check and the
 rename that follows it is overwritten. That window is milliseconds on every attempt, and the
@@ -1832,14 +1981,39 @@ a power cut means the next checkpoint commits again, and a damaged `.git` is reb
 
 ### 5.14 Drafts
 
-While an editor holds unsaved text, the UI sends `Draft { shown, field, text }` at most once a
-second; the actor writes `.tc/drafts.json` with `atomic_write`. A successful save of that field
-removes its entry. The section editor's draft (`DraftField::Section`) holds its whole buffer with
-the tokens of every displayed record, so after a refusal, a reload or a crash it is offered whole
-and saved as a `SaveSection` with those tokens. At open (§6.1 O12), a draft whose text differs from the value its token
-stands for is offered: "Unsaved text from your last session was found for Titus 1:4. Keep it /
-Discard." *Keep* saves it with the draft's token, so if the verse changed since, the result is a
-conflict, not a revert.
+While an editor holds unsaved text, the UI sends `Draft { field, shown, text }`: the field, the
+token of every record the editor displayed, and its text. A draft never goes through the
+actor's queue: a writer thread of its own keeps the newest draft of each field and writes
+`.tc/drafts.json` with `atomic_write` at most once a second, so a draft write never delays a
+save (APP-DESIGN R22). A draft is best effort; after a crash the file holds the old list or the
+new one (crash row D1). A successful save of that field removes its entry. The fields:
+
+| Field | Text | Tokens |
+|---|---|---|
+| `Words`, `Layout` | the verse's words or layout | the verse's |
+| `Section { book }` | the section editor's whole buffer | every verse and chapter front it displayed (APP-DESIGN R6) |
+| `Frame`, `StoryRef` | the frame's or the reference line's text | the record's |
+| `CheckComment` | the decision's comment | the decision's |
+| `UserComment { target }` | the comment box (APP-DESIGN R15) | none for a new comment; the comment's for a revision (§5.5) |
+| `Alignment` | the aligner's unsaved links, as `AlignmentEdit::to_json` writes them (APP-DESIGN R23) | the alignment's, then the verse's it displayed, so *Keep* saves it as `SaveAlignment` would, a verse's first alignment included |
+
+An entry of `drafts.json` is `{field, shown: [token text], text, at}`.
+
+At open (§6.1 O12), a draft is offered when its text differs both from the value its token
+stands for and from what the record holds now: "Unsaved text from your last session was found
+for Titus 1:4. Keep it / Discard." A draft whose text equals either was saved or is
+superseded, and goes. *Keep* sends `KeepDraft`, which saves the draft as the save of its field
+would, with the draft's tokens, so if the record changed since, the result is a conflict, not a
+revert; a section draft's values come in `KeepDraft.section`, read from its buffer by the
+section editor. A token whose MAC this installation can no longer check (the installation
+secret was lost and made again) still names its record and heads: the draft is offered as
+text, marked unverified, and *Keep* writes its value with no parents, so it stands as a
+conflict with what the record holds unless the two are equal (APP-DESIGN R20); a section draft
+is checked for coherence against the records' current values, since the draft's tokens are no
+base, so a span the draft keeps is coherent against the verses it covers, and a verse the draft
+leaves unchanged is not written again. A read-only open
+offers nothing and writes no draft; a copy of the project (§5.0) carries its `drafts.json`, and
+the copy's first open offers them.
 
 ### 5.15 OBS frames
 
@@ -1853,8 +2027,11 @@ Door43) is recorded as an External change on `StoryBase` (§11.1 X2).
 ### 5.16 Carried files
 
 `RemoveCarriedFile { shown }` writes `CarriedValue::Removed` with `parents = shown.heads`. The
-next materialization removes the file (compare-and-swap first). A file that merely went missing
-is never recorded as removed (I11; §11.4).
+next materialization removes the file (compare-and-swap first): a carried path whose manifest
+entry names its blob, and whose record is a settled `Removed` (a conflict between a removal and
+an edit removes nothing), is in X (§5.10 M0), so the folder is a valid burrito again at M6. A
+file the app did not write (its md5 is neither the entry's nor the intent's) is held, not
+removed. A file that merely went missing is never recorded as removed (I11; §11.4).
 
 ---
 
@@ -1870,10 +2047,15 @@ it (tC4 F10).
 ### 6.1 The open sequence
 
 ```
-O1  Take .tc/lock (exclusive, non-blocking). Held → open read-only: "This project is open in
-    another translationCore window." Taken: if its content names another host, the folder may
-    be open on that computer (§5.0, second writer); otherwise write {host, pid, device, at}
-    into it, and clear it at close.
+O1  Take .tc/lock (exclusive, non-blocking). Held → refuse the open with `OpenError::LockHeld`,
+    which names the holder from the lock file's content (host and pid; unnamed when the holder
+    wrote none or the platform will not read a locked file). The open writes nothing: the
+    lock is only tried, and an existing file is not changed. translationCore runs once per
+    computer (§5.0), so a holder is a process a crash left running or another program.
+    Taken: if its content names another host, the folder may be open on that computer (§5.0,
+    second writer) and the project opens read-only (`OpenOnAnotherComputer`); otherwise write
+    {host, pid, device, at} into it, and clear it at close. A project that opens read-only
+    for another reason (O4, O5) takes no lock.
 O2  Finish or remove temporary files. A `.tc/pending/` or `ingredients/tc/changes/` temp file
     whose bytes verify (every line; for a pack, P2 to P4 with the name in the temp name) is
     complete: rename it into place durably (§5.0 step 4), never delete it (on Windows a power
@@ -1899,6 +2081,10 @@ O7  Finish interrupted work:
       restore it
       from a valid blob, with `PackRestored`;
     - materialize.intent.json → kept for O9's classification.
+    Before a pending file or a replaced pack goes, the pack that holds its changes is flushed,
+    the file and its folder: a seal or consolidation that stopped between its rename (K2, Q2)
+    and the folder flush leaves a pack only the page cache holds, and a power cut after the
+    removal would take both copies of those changes.
     These rules read each file's facts (`tc_journal::index::Facts`: a pack's id, path, header,
     status and change ids; a pending file's header, status and change ids), which O8's read of
     the file gives, from its bytes or from its cache section alike, so no file is read twice.
@@ -1946,11 +2132,51 @@ O14 The storage check, in the background (PERFORMANCE.md rule 4): read every pat
     with its manifest entry (§6.2): equal settles the entry once its tick is over; different is
     classified by the table of §6.2, which holds a path that was clean by stat, so nothing is
     written over and nothing is recorded without the person. Saves and every screen go on
-    meanwhile; a path a command must rewrite first is read by M1 (§5.10) anyway.
+    meanwhile; a path a command must rewrite first is read by M1 (§5.10) anyway. **Its cost
+    is every derived file, once per open**: for a whole Bible 334 files and 290 MB (277 MiB,
+    measured: `docs/evidence/storage-open-save-2026-10-17.md`), read after the project is
+    usable on one thread of its own, 0.5 to 1.0 s after it. The counters report these reads as
+    `check_read`, apart from `derived_read` (the open's own classification and the
+    compare-and-swaps), so "an open after no change reads no derived file" is true of the
+    open itself and the check's cost is not hidden in it. On Windows with Defender on, every
+    file opened is scanned (§14), so those 334 opens are paid in the background after each
+    open, in competition with the saves: that is the price of reading what O9 spared, and
+    the reason the check is the only place a stat that lies is found.
 ```
 
-Open refuses only for: the lock is held (read-only instead), the folder cannot be read, the
-format major is newer, or the folder is not a project. It never refuses because of content.
+Open refuses only for: another process holds the lock (`LockHeld`, which names the holder),
+the folder cannot be read, the format major is newer, or the folder is not a project. It never
+refuses because of content.
+A journal file that cannot be read is listed (`FileUnreadable`) and never removed; so is one
+whose stat fails (a cloud placeholder, a delete-pending file on Windows): it is listed with
+size 0, read like any other, and reported when the read fails too. The open fails as
+"cannot be read" only when `project.json` can no longer be read either, so a cloud placeholder
+never stops an open and a folder that went away does. A derived file that cannot be read
+(another program holds it) is neither damaged nor gone: it is reported (`FileUnreadable`),
+left as it is and kept dirty, so the next materialization reads it again (M1) and writes it
+when it can. **Every write of the open is best effort** (the lock's content, O2, O4's repair,
+O6's device file, O7, O9, O10 and the manifest): the first write that fails (a full disk, a
+folder that became read-only) ends the open's writes, and the project opens read-only with
+`WriteFailed(reason)` and the lock released, showing everything it holds, instead of being
+refused; the next open finishes the work (the tests `an_open_on_a_full_disk_is_read_only_and_never_refused`
+and `a_disk_that_fills_during_the_opens_materialization_leaves_a_read_only_project`).
+
+**What unit S1 does of this sequence.** S1 has no git, so O3, the blobs of O8 and every restore
+from HEAD are unit S2's; O4 writes this app's `format.json` when it is missing or damaged, and
+O7's expected pack set is the manifest's pack list (§3.6): a listed pack that is gone, and that
+no valid pack's `replaces` names, is missing (`PackMissing`), and nothing derived is removed
+while it is. A damaged pending file is salvaged at O7: its verified lines, byte for byte, go into
+a new pending file of this device (purpose `salvage`) and the file moves to `.tc/quarantine/`
+(`QuarantinedPending`); a pending file of another project moves there unread. The second half
+of O6 runs after O8, because it needs the fold: the ledger's `lastSeq` above this device's
+largest seq in the folder (a backup put back, `RestoredBackup`), or a `DuplicateDevice` anomaly
+naming this device, or a pending file of the folder that could not be read (`PendingUnreadable`,
+§6.3), mints a new device before anything is written, and the new device's profile copies the
+old one's names. Outside edits are held (§6.2) rather than recorded until
+S2. Each journal file is opened once per open: the reading thread hands its handle to the
+fold's `ValueSource`, which reads values on demand through it (§2.6), so a value the fold reads
+during or after the open never opens the file again. O8's cache write and O14 run on one
+background thread after the project is usable; `wait_idle` waits for them.
 
 **Progress.** The open shows determinate progress within 300 ms of the person's action
 (PERFORMANCE.md rule 4), as tC4's open does (its J15, `e2e/j15-slow-open.spec.ts`). An open
@@ -1965,8 +2191,10 @@ moves. Counts only grow within a phase. The last report comes before the project
 an open that fails ends with its error after its last report. Neither leaves an indicator
 standing.
 
-The test `open_shows_determinate_progress_by_300_ms` (unit S1) opens the whole-Bible corpus
-through a `FaultFs` that delays every read so that the open lasts several seconds, and asserts:
+The test `open_shows_determinate_progress_by_300_ms` (unit S1) opens a corpus project through a
+`FaultFs` that delays every read so that the open lasts several seconds (the Psalms corpus in
+the debug test run, where generating the whole Bible would take minutes; the whole Bible's open
+is measured in release builds, `docs/evidence/storage-open-save-2026-10-17.md`), and asserts:
 the first report, with a phase and a total, is sent no earlier than 300 ms and no later than
 400 ms after the open command; no report is sent from the caller's thread; counts never fall
 within a phase, and each phase's last count is its total; the last report precedes "usable".
@@ -1984,8 +2212,8 @@ another writer's temporary files or lock files, or rename a `.git` that another 
 
 ### 6.2 Telling the app's interrupted writes from someone else's edits
 
-An open must not read and project every derived file: for a whole Bible that is about 210 MiB
-to read and about 10 s of projection (`docs/JOURNAL-DECISION-2026-10-16.md` §2). So each path
+An open must not read and project every derived file: for a whole Bible that is 210 to 277 MiB
+to read (the memo's estimate, and 334 files of 290 MB on the corpus unit S1 measured) and about 10 s of projection (`docs/JOURNAL-DECISION-2026-10-16.md` §2). So each path
 is first tested without reading any file, and read only when that test fails.
 
 **Settled entries.** A program that changes a file within the same timestamp tick as the app's
@@ -2020,17 +2248,32 @@ stat and no entry settles: each path is read. A program that puts an older mtime
 edit of the same size (some sync clients, `rsync -t`, `cp -p`, archive extractors) can leave an
 edited file clean by stat; the storage check (O14) reads it, and it is held (below).
 
-**The scope digest.** Each manifest entry keeps `scope`: the SHA-256 of the records the
-projection of `p` reads, in key order, each as its canonical key followed by the ids of the
-heads the written bytes stand for, by the token rule of §2.7 (what its heads file lists). O9
-computes the same digest from the fold in memory. The scope is the fold's own list of the
-records the projection of `p` reads (for a book's files, the book's records of each kind from
-the fold's per-book key lists, and the project records the file lists), never the heads file's
-record list: a record that entered the scope since the file was written (the first comment on
-a book, a teammate's new check decision) or left it changes the digest, as a new head does. The
-digests cost one pass over the fold's records in memory (about 283,600 for a whole Bible, every
-path together; to be measured in S2) and no file read: a heads file is read only when an
-outside edit needs its base (§11.1 X3).
+**The scope digest.** Each manifest entry keeps `scope`: the SHA-256 of what the projection of
+`p` reads (`FoldState::scope_digest`). O9 computes the same digest from the fold in memory. The
+scope is the fold's own list of the records the projection of `p` reads (for a book's files,
+the book's records of each kind from the fold's per-book key lists, and the project records the
+file lists), never the heads file's record list: a record that entered the scope since the file
+was written (the first comment on a book, a teammate's new check decision) or left it changes
+the digest, as a new head does. The scope is cut into parts that several files share (a book's
+text, its alignments, the decisions of one tool in one book, its comments, the pins, the
+settings, the versification, a story, the conflicts, the project details), and the digest of
+`p` is the SHA-256 of its parts' digests in a fixed order. A part's digest takes, for each of
+its records in key order, the canonical key, a zero byte, the record's heads, then **every**
+folded version of the record, not only the heads the token rule lists: a projection reads more
+than the displayed candidate (the newest time of a decision file over every head, which head is
+provisional, the bases of a merge, a passage's sides, the newest text of an incoherent verse
+among its ancestors), and a parent that arrives after its child changes those while the heads
+stay. A book's text part also takes the fold's view of the book (presence, scope, the last-book
+rule), and the comments part the authors' device profiles and the chain of moved checks a
+comment follows. A digest that changes when nothing written would change costs only one
+projection of that file; the property
+`a_file_whose_scope_digest_is_unchanged_renders_the_same_bytes` (`tc-journal/tests/scope.rs`)
+checks the other direction over random team histories. The heads file keeps the token rule's
+heads (`FoldState::file_heads`), since it is the base of an outside edit (§11.1 X3) and an
+outside editor saw only the provisional text. The digests cost one pass over the fold's records
+in memory and no file read: a heads file is read only when an outside edit needs its base.
+`metadata.json`'s entry keeps the digest of every project detail, book presence and pin group
+(`FoldState::metadata_scope_digest`), and the store adds the ingredient table it lists.
 
 **Converged without reading** (O9): clean by stat, named by no `materialize.intent.json`, its
 `scope` equal to the fold's, and the manifest's `minor` and `derivations` this app's. The
@@ -2070,9 +2313,23 @@ the project]". *Take in the file as an edit* records the file by §11.1 in unkno
 the hold ends. *Restore from the project* rewrites the file from the fold, through M1 with `d`
 as the md5 it expects, and the hold ends; the copy stays until the notice is dismissed. While
 the path is held, another save of the file ends the hold: its bytes are recorded by §11.1 in
-unknown-base mode, since the file no longer held what its heads file describes. A deletion
-ends it too, and the file is rebuilt; so does a projection that comes to equal the held bytes
-(`d == e`). A held path is never converged without reading: each open reads it again.
+unknown-base mode, since the file no longer held what its heads file describes (unit S1, which
+does not record, holds the new bytes in their turn: a second copy, never replacing the first,
+and `metadata.json` lists the bytes that are now in the folder). A deletion ends it too, and the
+file is rebuilt (O9 reads a held path that is gone as gone: `MissingFileRebuilt`; M0 releases it
+for a path being written, so `metadata.json` never lists a file that is not there); so does a
+projection that comes to equal the held bytes (`d == e`). A held path is never converged
+without reading: each open reads it again.
+
+**The hold outlives the session; so does its notice.** The manifest entry keeps the held
+bytes' md5, the cause (an edit, or damage) and the path of the copy in `.tc/external/`. The
+notices live in memory, so every open lists again the notice of every hold the manifest keeps,
+with its own words and its copy, until the hold ends: the file does not silently stop
+following the project because the app was restarted, and *Take in the file as an edit* and
+*Restore from the project* stay reachable. Dismissing the notice of a hold that stands hides it
+for the session and keeps the copy, which is the other trace of the person's bytes. When the
+hold ends (the person's choice, a deletion, equal bytes) its notice goes, and the copy stays
+in `.tc/external/` for the person to open there.
 
 For each path `p` that is read, with `d` = md5 of the disk bytes, `m` = the manifest md5,
 `o`/`n` = the intent's old and new md5 when `materialize.intent.json` exists, and `e` = the md5 of
@@ -2115,6 +2372,12 @@ edit is recorded.
   saving as this one in this project. Both computers' work is kept; anything both changed is
   listed as a conflict." Nothing else changes: the fold never treats two changes of one device
   specially, so their concurrent edits are ordinary conflicts.
+- A pending file of the folder that cannot be read at open (another program holds it, a
+  placeholder) may hold seq numbers this device already used, and the fold does not count it.
+  The open mints a new device before the first write (`DeviceRotated`, reason
+  `PendingUnreadable`; a device minted by this same open has none to fear), so a save cannot
+  reuse a seq, and when the file can be read again nothing says another computer saved as
+  this one. The file is never removed or sealed while it cannot be read (§4.4).
 - The next seq is one more than the largest seq of this device among its changes in the folder.
 - A new device copies the display name and Door43 username into its own `DeviceProfile`, so
   screens group one person's devices by username.
@@ -2136,6 +2399,7 @@ next starts, so power loss is covered by the same rows (the row says where a los
 | K2 | seal | pack renamed, before the re-read | pack + pending files | O7: pending ids all in a valid pack → removed | after |
 | K3 | seal | some pending files removed | pack + some pending files | as K2 | after |
 | K4 | seal | pending removed, before materialize | the pack is not listed in `metadata.json` | O10 materializes | after |
+| K0 | seal | the pack folder of a new month made, its entry in the parent not flushed | the folder only in the page cache; no pack | the next seal flushes the entry of the folder it finds (§5.0) before it writes the pack into it and removes the pending files | before or after; a power cut after the restart's seal keeps the pack |
 | Q1 | consolidate | new pack temp | temp + old packs | O2 (rename if it verifies, then as Q2; else remove) | before or after |
 | Q2 | consolidate | new pack renamed, old packs not removed | both | O7 removes redundant packs | after |
 | M1 | materialize | intent written | intent, old files | O9: `d ∈ {o}` → rewrite | after |
@@ -2162,9 +2426,15 @@ next starts, so power loss is covered by the same rows (the row says where a los
 | X2 | outside-edit record | batch written, file not rewritten | disk differs, a batch with `reconciles {path, seenMd5}` exists | not recorded twice; rewrite | after |
 | A1 | upgrade | inside the resource store temp directory | temp directory | deleted at app start | before; pins unchanged |
 | A2 | upgrade | resources installed, batch not written | new resources unused | nothing | before; the person runs the upgrade again |
-| N1 | create, import or join | inside `<projects>/.staging-<uuid>/` | staging folder | deleted at app start | before |
+| N1 | create, import or join | inside `<projects>/.staging-<kind>-<16 hex>/` (`kind`: `create`, `copy`, `join`, `import`) | staging folder | deleted at app start, by a cleanup that ends before the first create, import or join starts (tC4 #676), so it never deletes the staging folder of an operation that is running; the store says which folders it deleted and of what kind, so a join that did not finish is told with `refusal.open-door43.removed` (`docs/TC4-DELTA-2026-10-16.md` §3.3) | before |
 | N2 | create, import or join | after the folder rename | complete project | normal open | after |
 | R1 | repack | pack and index written, loose objects not removed | duplicates | the next repack removes them | after |
+
+The rename of N2 never replaces anything at the name: `rename_dir_noreplace` (Linux
+`renameat2(RENAME_NOREPLACE)`, macOS `renamex_np(RENAME_EXCL)` through `rustix`; elsewhere
+`std::fs::rename`, which refuses a non-empty target, after a check that the name is free). On a
+collision only the staging folder is deleted and the person sees the name-exists message; the
+destination is never touched (`docs/TC4-DELTA-2026-10-16.md` §3.10).
 
 The crash tests kill the writer at every write, fsync, rename and unlink of these rows, with and
 without power-loss semantics (§16.2).
@@ -3119,7 +3389,7 @@ Refusals: the name exists; offline; auth failed; create rejected (with Door43's 
 
 **Join** ("Get a project from Door43"):
 
-1. In `<projects>/.staging-<uuid>/`: `Repository::init`, set `core.autocrlf=false`,
+1. In `<projects>/.staging-join-<16 hex>/` (§6.4 N1): `Repository::init`, set `core.autocrlf=false`,
    `core.fsyncObjectFiles=true`, add `origin`, fetch the remote's HEAD branch with credentials,
    set `tc.branch`. Full history by default; a depth-1 fetch only after the probe of §16.5 shows
    fetch, commit and push from a shallow clone working against Gitea.
@@ -3549,7 +3819,7 @@ any app or person, so matching must take polynomial time.
 
 Common rules for every importer (`tc-import`):
 
-- The source is never modified. The new project is built in `<projects>/.staging-<uuid>/` and
+- The source is never modified. The new project is built in `<projects>/.staging-import-<16 hex>/` (§6.4 N1) and
   renamed into place at the end (§6.4 N1, N2). Any failure deletes the staging folder.
 - After conversion the importer materializes, runs `tc_burrito::check`, and compares the text
   byte for byte with the source, and every non-derived field of the source's `metadata.json`
@@ -3785,9 +4055,9 @@ days a year.
 | Derived files | ≈ 400 | 66 USFM, 66 alignment, 132 decision, 66 comment, 6 project files |
 | Files under `ingredients/` | ≈ 600 | |
 | `metadata.json` | ≈ 120 KB | 600 entries × ≈ 200 B, pretty-printed |
-| Working tree | ≈ 880 MiB | packs 674 MiB (measured) + derived ≈ 210 MiB (compact sidecars: alignments ≈ 90 MiB, decisions ≈ 110 MiB, USFM ≈ 5 MiB) |
+| Working tree | ≈ 880 MiB | packs 674 MiB (measured) + derived ≈ 210 MiB (compact sidecars: alignments ≈ 90 MiB, decisions ≈ 110 MiB, USFM ≈ 5 MiB; the corpus of unit S1's benchmark has 334 derived files of 277 MiB) |
 | `.git` after 3 years | ≈ 250–400 MiB | packs ≈ 70 MiB zlib, stored two to three times because consolidation writes new blobs; derived file history ≈ 110 MiB as deltas; ≈ 7,500 commits of ≈ 15 KB trees |
-| Cold open, 4 cores, SSD | budget 3 s with a usable fold cache, 10 s without one or with a cold disk cache; only load and fold (O8, with O7's rules on the files' facts) measured, the rest of the open (O1 to O6, the rest of O7, O9 to O13) needs `tc-store`, so the 3 s is not shown end to end: with the fold cache 1.6 s (median of 9, p95 1.7 s) with the files in the page cache and 1.7 s (p95 1.9 s) with the guest's page cache cold, 2.5 to 2.6 s of CPU over all threads, on a 4-vCPU VM without SHA instructions and no other job running; as fast with a cache another build of the same `INDEX_VERSION` and probe stamp wrote; the first open without a cache (§18 item 15) 5.4 to 5.5 s (p95 5.4 to 5.6 s; 5.9 to 6.3 s the evening before), 19 s of CPU with glibc malloc and 13.5 s with jemalloc: within the 10 s budget of an open without a usable cache; on the owner's Ice Lake laptop with SHA instructions 3.8 s (median of 5, p95 3.9 s) | with the fold cache (§3.6, §6.1 O8) the open reads and fingerprints every file (705 MB) and takes each file's prepared changes from its section instead of hashing and parsing its lines; the fold indexes them as they arrive, and its work after the last file is 0.5 to 0.6 s; O7's rules take 1 to 2 ms. Without the cache every byte is hashed once (P4, with `ring`: one pass over every file takes 1 s of the four threads' time) and every change is parsed and checked; `docs/evidence/storage-fold-2026-10-16.md`. A corpus of 277,880 changes (the size of the probe's 278,041 actions, which it folded in 1.13 s) folds in 0.92 s (0.59 s on a faster VM) |
+| Cold open, 4 cores, SSD | budget 3 s with a usable fold cache, 10 s without one or with a cold disk cache; the whole open (O1 to O13) measured by unit S1 (`docs/evidence/storage-open-save-2026-10-17.md`, a 4-vCPU VM **with** SHA instructions, other jobs running, load 1.5 to 5): with the fold cache 1.6 s median, p95 2.1 s with the page cache warm (the p95 is the first open after a session that wrote files, whose unsettled entries it reads), 1.7 s median, p95 1.8 s with the guest's dropped, and as fast with a cache another build of the same encoding wrote (1.6 s, p95 1.7 s); without a cache 3.4 s median, p95 3.5 s, about 3.8 to 4.3 s estimated for a CPU of that speed without SHA instructions; first progress report at 300 to 308 ms; an open after no change opens 132 to 133 files and projects and reads no derived file before the project is usable; its storage check (O14, §6.1) then reads every derived file once, in the background: on a whole Bible 466 files opened and 1,062 MB read by the end, against 133 files and 771 MB when the project is usable, so the check is 334 derived files and 290 MB (0.5 to 0.6 s later with the page cache warm, 0.8 to 1.0 s after it was dropped); on the Psalms corpus 143 files and 72 MB against 133 and 54 MB. On Windows with Defender that is 334 file scans per open, after the project is usable (not measured here). Earlier, load and fold alone (O8, with O7's rules on the files' facts): with the fold cache 1.6 s (median of 9, p95 1.7 s) with the files in the page cache and 1.7 s (p95 1.9 s) with the guest's page cache cold, 2.5 to 2.6 s of CPU over all threads, on a 4-vCPU VM without SHA instructions and no other job running; as fast with a cache another build of the same `INDEX_VERSION` and probe stamp wrote; the first open without a cache (§18 item 15) 5.4 to 5.5 s (p95 5.4 to 5.6 s; 5.9 to 6.3 s the evening before), 19 s of CPU with glibc malloc and 13.5 s with jemalloc: within the 10 s budget of an open without a usable cache; on the owner's Ice Lake laptop with SHA instructions 3.8 s (median of 5, p95 3.9 s) | with the fold cache (§3.6, §6.1 O8) the open reads and fingerprints every file (705 MB) and takes each file's prepared changes from its section instead of hashing and parsing its lines; the fold indexes them as they arrive, and its work after the last file is 0.5 to 0.6 s; O7's rules take 1 to 2 ms. Without the cache every byte is hashed once (P4, with `ring`: one pass over every file takes 1 s of the four threads' time) and every change is parsed and checked; `docs/evidence/storage-fold-2026-10-16.md`. A corpus of 277,880 changes (the size of the probe's 278,041 actions, which it folded in 1.13 s) folds in 0.92 s (0.59 s on a faster VM) |
 | Save one verse | 1–10 ms | one `atomic_write` of ≈ 1 KB (measured 0.41 ms on the VM, fsyncbench) |
 | Materialize one book | 20–60 ms estimated; measured projection of Psalms 150 to 164 ms (medians of 20 in each of 5 processes, p95 177 to 195 ms) on the VM with no other job running, 205 to 217 ms (p95 247 to 278 ms) with one other job, within the 300 ms budget; 348 to 376 ms when other jobs loaded it (the build before `1665eba`: 341 to 521 ms in the same rounds); not measured on the reference laptop | projecting every Psalms file (USFM, alignments, tN and TWL decisions, comments; 18.7 MB) with values read from disk and checked against their fingerprints (§2.6), on 4 threads, about 0.5 s of CPU (2.3 G instructions), about half of it decoding the book's records from JSON; the book's files are listed from its own records, and decisions and alignments are decoded, written and freed in chunks on the fold's one worker pool (rayon), however the steps nest; the USFM alone 16 ms, one chapter 0.13 ms; the write and `metadata.json` are `tc-store`'s, and with §6.2 an open after no change projects no file |
 | Checkpoint | 0.1–0.5 s | seal ≤ 1 MiB, materialize, tree of changed directories, one commit |
@@ -3852,7 +4122,7 @@ and the on-disk end state, not only what the fold returns.
 | L30 | A default branch other than `main` refused forever (sync-design §9.2) | `sync.not-main` | `tc.branch` records the branch at share or join | `sync_master_branch` |
 | L31 | Private repositories cannot sync (sync-design §9.1) | the clone sent no credentials | fetch and join send the token | `sync_private_repository` |
 | L32 | OBS projects refused by sync; no USB exchange (sync-design §9.1, sync-design §10) | refused | OBS syncs like Bible projects; USB exchange is §10 | `team_sync_obs_project`, journey `usb_both_directions` |
-| L33 | Locks only in-process; a second app window (sync-design §6.3, D39) | unprotected | `.tc/lock` is an OS lock; a second window opens read-only | `open_second_process_read_only` |
+| L33 | Locks only in-process (sync-design §6.3); tC4 4.0 runs once per computer (D39) | a process left running after a crash, or another program, could write into the folder | `.tc/lock` is an OS lock that refuses the open of a project another process holds, naming the holder; translationCore runs once per computer, so no second app, process or window works on a project on one computer (several people work only from separate computers, through sync: L64, `OpenOnAnotherComputer`, `SecondWriter`) | `a_second_open_of_a_project_is_refused_and_writes_nothing`, `a_lock_another_program_holds_refuses_the_open_without_a_name` |
 | L34 | A 403 or protected branch unmeasured (sync-design §9.1) | heuristic | `NoWriteAccess` and `RefRejected` carry Door43's own text; the exchange file is offered | `sync_protected_branch_reported` |
 
 ### 15.2 Cases found by the design panel
@@ -3982,7 +4252,7 @@ and are covered by the projection tests.
 | `outside_edit_reconcile_conserves` | random outside edits of USFM, sidecars, `metadata.json` and OBS stories: small edits, reverts to older values, verse deletions, more than 50 keys, line-ending and trailing-space rewrites, book files for absent books, unreadable files, edits racing a teammate's sync | no head lost; destructive and reverting edits are conflicts; whitespace-only rewrites record nothing; a book file adds its book; unreadable files keep a byte copy | a known-base edit replaces a value it did not see |
 | `door43_ingest_deterministic` | web-edit commits fetched by several devices in different orders, with lagging clocks | identical change ids on every device; no false conflict after a second web edit | ingestion reads the device or the commit date |
 | `exchange_idempotent_and_relayed` | exports and imports in random order, repeated, relayed A→B→C | importing twice equals importing once; a relay equals direct exchange | intake writes something that depends on the importer |
-| `consolidation_loses_nothing` | seals and consolidations interleaved with crashes, exchanges, and packs deleted or damaged in the working tree between steps | the union of change ids never shrinks; every tree holds the expected pack set and passes the redundancy rule's safety check | a replaced pack held an id the new pack lacks, or a tree is built from the working tree alone |
+| `consolidation_loses_nothing` | seals and consolidations interleaved with crashes, exchanges, and packs deleted or damaged in the working tree between steps; the census counts consolidations completed, kills between K2 and K4 and kills between Q2 and Q4 | the union of change ids never shrinks; every tree holds the expected pack set and passes the redundancy rule's safety check | a replaced pack held an id the new pack lacks, or a tree is built from the working tree alone |
 | `codec_round_trip` | the tC4 USFM identity corpus plus generated USFM (spans, poetry, headings, CRLF, tabs, odd marker whitespace, out-of-order verses) | `recompose(decompose(x)) == x`; `join_verse(split_verse(c)) == c` | a byte is normalized |
 | `canonical_change_round_trip` | arbitrary `ChangeBody` values | canonical bytes parse back to the same value and re-hash to the same id; the line verifies | the encoder and parser disagree |
 | `pack_round_trip_and_salvage` | packs with random bit flips | an intact pack passes P2–P4; a damaged one salvages exactly the lines whose bytes are intact; no salvaged change differs from what its author wrote | a damaged line is accepted |
@@ -4004,12 +4274,18 @@ and after each git2 call, and power loss for `.git` is simulated by restoring a 
 before the call or by truncating its newest loose objects.
 
 For each action below, kill at every point, with and without power loss, then open the project
-and assert: the state is the action's before or after state (§6.4); every save that returned
+and assert (the power-loss model decides what each flush makes durable, so it is set before the
+action runs, and the action runs once under each model; a save the disk answered with
+`WrittenNotDurable` counts as saved except after a power cut under the strict model): the state is the action's before or after state (§6.4); every save that returned
 "Saved" is present (the model drops an unflushed rename, so this fails if `atomic_write` skips
 the rename flush of §5.0 step 4 or open deletes a complete temp file); no batch is half applied;
 the folder passes `tc_burrito::check` after open, including after a crash inside every write
 group of I7 (seal, consolidation, intake packs, materialization); no intent file is left; a
-second open changes nothing.
+second open changes nothing. The restart's own work must survive a power cut as well: after
+each kill the project is opened again and closed (which seals and materializes what the kill
+left), and a power cut is taken after that; every change the folder held before the close must
+still be held (a kill between the creation of a folder and the flush of its entry, then a
+restart that writes into it, then a power cut).
 
 | Action | Crash rows (§6.4) |
 |---|---|
@@ -4096,11 +4372,16 @@ on the corpus ten times larger:
 
 | Test | Asserts |
 |---|---|
-| `an_open_after_no_change_projects_no_file_and_reads_no_derived_file` | open, close, open, close, open: the second open reads at most the files the first session's last materialization wrote (their entries are unsettled), projects none of them, settles them and writes the manifest again; the third open projects 0 files, reads 0 bytes of derived files and 0 heads files, on both corpora; its storage check (O14) then reads each derived file once |
+| `an_open_after_no_change_projects_no_file_and_reads_no_derived_file` | open, close, open, close, open: the second open reads at most the files the first session's last materialization wrote (their entries are unsettled), projects none of them, settles them and writes the manifest again; the third open, counted at the moment it is usable, projects 0 files and reads 0 derived files (`derived_read`) and 0 heads files, on both corpora; its storage check (O14) then reads each derived file once (`check_read` equals the number of derived files). A `clean_by_stat` that is never true, which reads every derived file at open, fails it |
 | `a_record_entering_a_files_scope_projects_it` | the first comment on a book and a teammate's new check decision, folded from a pack received between two opens, whose files on disk are clean by stat: the next open projects that book's comment and decision files and no other file |
 | `an_open_after_one_save_projects_only_that_books_files` | a verse saved and materialized before close: the next open projects nothing; a verse saved but not materialized (a crash after B3): the next open projects only that book's files and `metadata.json`, the same count on both corpora |
 | `a_racy_or_mtime_restored_file_is_never_overwritten` | on a `FaultFs` with 2 s mtimes: a same-size edit within the tick of the app's write; the same edit followed, before the next open, by another book's materialization that writes the manifest again; and an edit whose old mtime is put back after its entry settled. The first two are read at the next open (and at window focus) and recorded as outside edits; the third is read by the storage check and held: the file keeps its bytes, nothing is recorded, a materialization of that book leaves it, *Take in the file as an edit* records it as a conflict, *Restore from the project* rewrites it. No file is written over before it is recorded or the person chooses |
-| `an_open_reads_each_pack_once` | every pack and pending file is read once per open, with or without the fold cache |
+| `an_open_reads_each_pack_once` | every pack and pending file is opened once per open, with or without the fold cache: the reading thread hands its handle to the fold's `ValueSource`, so a value the fold reads later never opens the file again |
+| `a_save_reads_no_pack_and_writes_a_bounded_number_of_files` | a verse save opens no file, reads only the values of the records it changes from where they lie (under 64 KiB, never a whole pack), creates one pending file and flushes twice (the file and its folder), the same write points on both corpora |
+
+Unit S1 records no outside edit (§11.1 is S2's): where the table above says "recorded", S1
+holds the file (§6.2) and the test asserts that its bytes stay and nothing is written over
+them. A pack a teammate sealed is put into the folder between two opens, since S1 has no sync.
 
 ### 16.6 Burrito validity everywhere (P5)
 
@@ -4133,6 +4414,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the known key for newer fields (parse as `Unknown`) | `mixed_minor_versions_converge` |
 | total `build_metadata` (check the whole document only) | `arbitrary_meta_never_blocks_commit` |
 | the rename flush and the roll-forward of complete temp files | `crash_lost_rename_rolled_forward` |
+| the flush of a directory found existing (trust it) | `crash_checkpoint_into_a_months_folder_that_does_not_exist_yet`, `a_directory_found_existing_is_made_durable_once` (`atomic.rs`) |
 | the compare-and-swap before each rename retry | `loss_rename_retry_never_overwrites_outside_save` |
 | anchors and Detached (place attached records by number) | `every_head_reachable_from_a_screen` |
 | foreign entries (build merge trees from owned paths only) | `loss_foreign_entries_kept_on_tip` |
@@ -4147,6 +4429,19 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the change ids in a loaded file's facts (move the changes out of what the redundancy rule and O7 read) | `the_open_s_rules_read_the_same_ids_from_a_read_and_from_the_cache` |
 | one owner of the validity rules (a screen that hashes its shown text, or reads a pin the ladder stops at as absent) | `the_psalms_corpus_files_are_what_the_screens_compute`, `edits_joins_renumbers_and_pins_change_files_and_screens_alike` (`tc-journal/tests/screens_and_fold.rs`: what `tc_check::status::CheckState` and `tc_align::verse_status` compute from the projected USFM and `resources.json`, read as the screens read them, equals every `invalidated`, `verseEdits`, `status`, `userInvalid` and `invalid` the fold writes, over tC4's sample project, the aligned en_ult Titus, joins, renumbers, cleared verses, unusable and unrecorded pins, and the Psalms corpus) |
 
+| settled entries read by O9 (a `clean_by_stat` that is never true: every derived file read before the open is usable) | `an_open_after_no_change_projects_no_file_and_reads_no_derived_file` |
+| the release of a hold whose file is gone (M0, O9) | `a_held_file_deleted_while_the_project_is_closed_is_rebuilt`, `a_held_file_deleted_while_the_project_is_open_is_rebuilt` |
+| a removed carried file in X | `a_removed_carried_file_leaves_the_folder_and_the_burrito_stays_valid`, `a_removed_carried_file_that_was_edited_outside_is_not_deleted` |
+| listing fixed, carried and held files from their bytes | `a_carried_file_edited_outside_is_listed_as_it_is_and_held`, `a_fixed_file_edited_outside_is_listed_as_it_is`, `a_held_file_that_changes_again_is_listed_as_it_is_and_both_copies_stay` |
+| no copy replaces another in `.tc/external/` | `two_outside_edits_in_one_second_keep_two_copies` |
+| the copy of outside bytes in `metadata.json` when no manifest entry names them | `an_outside_edit_of_metadata_json_is_copied_when_the_manifest_is_gone`, `an_outside_edit_of_metadata_json_is_copied_when_the_manifest_does_not_parse` |
+| a best-effort open (a write failure → read-only, an unreadable derived file reported, a failed stat listed) | `an_open_on_a_full_disk_is_read_only_and_never_refused`, `a_disk_that_fills_during_the_opens_materialization_leaves_a_read_only_project`, `an_open_goes_on_when_a_derived_file_cannot_be_read`, `loss_pack_cloud_placeholder_unreadable_not_damaged` |
+| no wait on the actor for a derived file another program holds | `a_derived_file_another_program_holds_never_stalls_a_save` |
+| the notices of holds listed again at open | `a_held_files_notice_comes_back_after_a_restart`, `a_dismissed_notice_of_a_held_file_keeps_its_copy` |
+| a new device when a pending file cannot be read | `an_unreadable_pending_file_makes_this_device_start_a_new_one` |
+| the materialization after a failed seal | `a_seal_that_fails_after_its_pack_leaves_a_valid_burrito` |
+| the draft writer ending before the lock is released | `nothing_is_written_into_the_folder_after_the_lock_is_released` |
+| the coherence view of an unverified section draft (current values, no parents) | `an_unverified_section_draft_that_holds_a_span_can_be_kept` |
 ---
 
 ## 17. Crates
@@ -4156,8 +4451,8 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | `tc-core` | `BookId`, references (exists); `GitOid` and `Md5`, the two digests every crate shares (the journal, the burrito, the Door43 client, the helps, the resource store and the screens hold one type each) |
 | `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`, `PARA_MARKERS` and the layout rule, the draft test `is_drafted`), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1` and the shown text `shown_text_v1`, the OBS story splice |
 | `tc-burrito` | `build_metadata`, `check`, the vendored SB 1.0.0 schema, the extension table, `collision_form` (§3.3) |
-| `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the fold cache's codec (`index`: sections of prepared changes keyed by path, size and fingerprint), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking, the command types. It is the one owner of the types and rules the domain crates share: `CheckKey`, `ResourceRef`, `DecisionRecord`, `AlignmentValue` (and it re-exports `tc-core`'s `GitOid` and `Md5`); the pin slots and the D30 ladder (`pins`); a decision's edit and computed state (`decision`); an alignment's validity, its verse order and the aligned-USFM split (`alignment`); person labels. No I/O. |
-| `tc-store` | `Vfs`, `FaultFs`, `atomic_write`, the project lock, `ProjectActor` and commands, open and recovery, reading and writing the fold cache `.tc/index.bin` (§6.1 O8), the fold's `ValueSource` over pack and pending files and their blobs, materialize, seal, consolidate, outside-edit detection and recording, drafts, identity, local git (tree build, commit, index, repack, object database access) |
+| `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the fold cache's codec (`index`: sections of prepared changes keyed by path, size and fingerprint), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking (edit and review kinds), the command types, the scope digests and heads lists of derived files (§6.2), the per-chapter range reads the screens and the store use (`chapters_of`, `chapter_keys`, `decisions_of`, `alignments_of`, `comments_of`, `book_keys`, APP-DESIGN R1), each costing what it returns. It is the one owner of the types and rules the domain crates share: `CheckKey`, `ResourceRef`, `DecisionRecord`, `AlignmentValue` (and it re-exports `tc-core`'s `GitOid` and `Md5`); the pin slots and the D30 ladder (`pins`); a decision's edit and computed state (`decision`); an alignment's validity, its verse order and the aligned-USFM split (`alignment`); person labels. No I/O. |
+| `tc-store` | `Vfs`, `StdFs`, `FaultFs`, `atomic_write`, the project lock, the device identity and the ledger, `Store` (open, create in a staging folder renamed without replacing, the start cleanup, a copy of a read-only project), the project actor and its commands, the `ProjectHandle` surface (§5.0), the draft writer, open and recovery, reading and writing the fold cache `.tc/index.bin` (§6.1 O8), the fold's `ValueSource` over pack and pending files and their blobs, materialize, seal, consolidate, outside-edit detection and recording, drafts, identity, local git (tree build, commit, index, repack, object database access) |
 | `tc-door43` | the internet switch, the Gitea REST client, and git2 network calls (`fetch`, `push`, `list`) on a repository `tc-store` opened |
 | `tc-sync` | the Door43 sync (§9), the exchange file export and import (§10), the Door43 edit walk (§11.2), `ExchangeReport` |
 | `tc-import` | the tC4 4.0 converter and oracle check, the tC4 seed, tC3, raw USFM, foreign burritos |
@@ -4167,7 +4462,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 
 Dependencies: `git2 =0.21.0` (default features off; `https`, `vendored-libgit2`;
 `vendored-openssl` on Linux only), `jsonschema =0.58.6` (default features off), `sha2`, `md-5`,
-`hmac`, `im`, `smallvec`, `rayon`, `postcard`, `zip`, `fd-lock`, `notify`, `machine-uid`,
+`hmac`, `im`, `smallvec`, `rayon`, `postcard`, `zip`, `getrandom`, `notify`, `machine-uid`,
 `sysinfo`, `uuid`, `unicode-normalization`, `caseless` or an equivalent default case folding
 (path collisions, §3.3), `rustix` (cache-bypassing reads, §10.1 E5), `similar` (display-only
 word diffs). Shared versions
@@ -4218,6 +4513,12 @@ go in `[workspace.dependencies]`. No CRDT library and no git content merge (`.au
     and 5.4 to 6.3 s of wall time on the quiet VM (§14), within the 10 s budget for such an
     open (§14, PERFORMANCE.md); 3.8 s on the owner's laptop with SHA instructions. It shows determinate progress and writes the cache, so the
     next open's load and fold take about 1.7 s.
+16. **A whole Bible open keeps 270 to 330 MiB resident**, against the 150 MiB steady budget
+    (`docs/evidence/storage-open-save-2026-10-17.md`; the 350 MiB peak is met). The fold holds
+    an entry for every change and record of the project's history (about 170 MB of tables for
+    617,000 changes, §14), and glibc keeps each worker thread's heap at its high-water mark.
+    Meeting the budget needs the fold to keep only the heads and the open books' histories in
+    memory and read the rest on demand, a change to `tc-journal`'s tables.
 
 ---
 

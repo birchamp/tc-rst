@@ -51,6 +51,14 @@ unicode-general-category = "1.1.0"
 unicode-normalization = "0.1.25"
 url = "2.5.8"
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# tc-store: random installation secrets, devices, batches and temp names; the heads files;
+# the machine id of a device's fingerprint; the filesystem of a project folder; and the
+# no-replace rename of a staging folder (docs/STORAGE.md §17).
+getrandom = "0.3.4"
+postcard = { version = "1.1.3", default-features = false, features = ["alloc"] }
+machine-uid = "0.6.0"
+sysinfo = { version = "0.39.6", default-features = false, features = ["disk", "system"] }
+rustix = { version = "1.1.5", features = ["fs"] }
 
 # Full debug info made each agent worktree's target dir several GB and filled the disk.
 [profile.dev]

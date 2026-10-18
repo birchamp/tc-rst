@@ -1,0 +1,51 @@
+[package]
+name = "tc-store"
+description = "The project folder of the tC4 rebuild: atomic writes, the project lock, the project actor and its commands, open and recovery, seal, consolidation, materialization, drafts and device identity (docs/STORAGE.md)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+# Holds the tests place before a book read, a draft write and the durability point of a
+# save (APP-DESIGN R8). Never in a release build.
+test-hooks = []
+
+[dependencies]
+tc-core = { path = "../tc-core" }
+tc-usfm = { path = "../tc-usfm" }
+tc-burrito = { path = "../tc-burrito" }
+tc-journal = { path = "../tc-journal" }
+# The reflow of a verse's alignment in the batch of its text (R25).
+tc-align = { path = "../tc-align" }
+# tC4's frame text rules (§5.15).
+tc-obs = { path = "../tc-obs" }
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rayon.workspace = true
+sha2.workspace = true
+sha1.workspace = true
+unicode-normalization.workspace = true
+getrandom.workspace = true
+postcard.workspace = true
+machine-uid.workspace = true
+sysinfo.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+# renameat2(RENAME_NOREPLACE) and its macOS twin, through a safe wrapper: a staging folder
+# never replaces a folder that appeared at its name (docs/TC4-DELTA-2026-10-16.md §3.10).
+rustix.workspace = true
+
+[dev-dependencies]
+# The crate's own tests run with the test holds.
+tc-store = { path = ".", features = ["test-hooks"] }
+proptest.workspace = true
+# A real folder for the tests of what `StdFs` and the operating system decide (a symlinked
+# projects folder, §6.3).
+tempfile.workspace = true
+tc-corpus = { path = "../tc-corpus" }
+tc-versification = { path = "../tc-versification" }
+
+[lints]
+workspace = true

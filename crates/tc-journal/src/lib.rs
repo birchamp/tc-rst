@@ -59,4 +59,4 @@ pub use keys::{
 pub use record::Record;
 pub use rules::{Rule, RuleViolation};
 pub use tc_core::BookId;
-pub use token::{ShownToken, TokenKey};
+pub use token::{ShownToken, TokenKey, TokenKind};

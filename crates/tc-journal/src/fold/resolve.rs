@@ -103,6 +103,11 @@ impl FoldState {
                     .ok_or(ResolveError::NotACandidate)?;
                 self.keep_candidate(&conflict, &candidate)
             }
+            Choice::KeepPassage { heads } => self.keep_passage(id, heads),
+            Choice::KeepSeparate { heads } => self.keep_separate(id, heads),
+            Choice::KeepJoined { heads } => self.keep_joined(id, heads),
+            Choice::ApplyToMovedCheck => self.apply_to_moved_check(id),
+            Choice::RenameCarried { from, to } => self.rename_carried(id, from, to.clone()),
         }
     }
 

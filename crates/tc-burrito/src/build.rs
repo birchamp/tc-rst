@@ -330,10 +330,28 @@ pub fn check_scope(kind: ProjectKind, book: &str, ranges: &[String]) -> Result<(
     let mut source = baseline(kind);
     let mut scope = Map::new();
     scope.insert(book.to_owned(), json!(ranges));
-    source.scope = Value::Object(scope);
+    source.scope = Value::Object(scope.clone());
+    // The book's own text ingredient covers the scope, as a projected book's does: against
+    // the baseline's Titus ingredient every other book's scope would fail coverage.
+    let ingredient = match kind {
+        ProjectKind::BibleText => IngredientPath::parse(&format!("ingredients/{book}.usfm"))
+            .map_err(|e| format!("{book} cannot be a book's file name: {e}"))?,
+        ProjectKind::OpenBibleStories => {
+            return first_problem(validate_metadata(&document(
+                &source,
+                &baseline_ingredient(),
+            )));
+        }
+    };
     first_problem(validate_metadata(&document(
         &source,
-        &baseline_ingredient(),
+        &[IngredientEntry {
+            path: ingredient,
+            md5: Md5::of(b""),
+            size: 0,
+            role: None,
+            scope: Some(Value::Object(scope)),
+        }],
     )))
 }
 
@@ -378,5 +396,9 @@ mod tests {
         assert!(check_field(ProjectKind::BibleText, "meta.generator", &json!({})).is_err());
         assert!(check_scope(ProjectKind::BibleText, "TIT", &["1:1-9".into()]).is_ok());
         assert!(check_scope(ProjectKind::BibleText, "TIT", &["one".into()]).is_err());
+        // Every book's scope is checked against its own text, not Titus's.
+        assert!(check_scope(ProjectKind::BibleText, "PHM", &[]).is_ok());
+        assert!(check_scope(ProjectKind::BibleText, "GEN", &["1:1-2:3".into()]).is_ok());
+        assert!(check_scope(ProjectKind::BibleText, "XYZ", &[]).is_err());
     }
 }

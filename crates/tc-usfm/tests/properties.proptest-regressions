@@ -12,3 +12,4 @@ cc 629dd6c8ba55cf841783a78f4ece46a25346189020931b74aa9328901e20c6bb # shrinks to
 cc c86d108e2a2a4a2f1fb7212916df34c1ef703674db0ea40008729997bd7754a6 # shrinks to src = "\\id TIT x\n\\h T\n\\c 1\n\\v 1 \\v*\n"
 cc d79dad91cbe9602db3203c25ee9ff69b06536a25d7c48dcf3a6477c8f9b4fff9 # shrinks to src = "\\s1 \\fqa \\w \\fqa*"
 cc f46d34bdba2ab41abd77566f4f0986d4055c5ea13942ba7bc08531a830c03bd5 # shrinks to src = "\\id TIT x\n\\h T\n\\c 1\n\\v 1\u{c}\n"
+cc 39a0dbe55e7780c71acba4b6fd54243bb9db41fad92dcb8ea6b7f1a391a5c1da # shrinks to src = "\\v\t\nabc"

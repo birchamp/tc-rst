@@ -229,10 +229,20 @@ fn check_parents(body: &ChangeBody) -> Result<(), RuleViolation> {
             problem: "the parents are not sorted, or one is named twice".into(),
         });
     }
-    // Two changes under one comment id (a forgery or a broken random source) are a
-    // conflict, and its resolution names both: the only comment change with parents.
+    // A comment is added with no parents. Its later versions name the version they replace:
+    // a revision of the text the comment box showed (§5.5, APP-DESIGN R24), a restore from
+    // History, and the resolution of two changes under one comment id (a forgery or a broken
+    // random source), which names both.
+    use crate::change::Cause;
     let grow_only = match &body.record {
-        Record::Comment { .. } if body.cause != crate::change::Cause::Resolve => Some("comment"),
+        Record::Comment { .. }
+            if !matches!(
+                body.cause,
+                Cause::Resolve | Cause::Edit | Cause::Restore { .. }
+            ) =>
+        {
+            Some("comment")
+        }
         Record::BatchRelease { .. } => Some("batch release"),
         _ => None,
     };
