@@ -85,6 +85,43 @@ The cloud session is finishing this package now and will merge it into
 task 3 is done, point to its evidence file instead of running it again. If that file is not
 there yet, wait, and do tasks 1 to 3 meanwhile.
 
+## Task 5: how much memory other programs use with Psalms open (added 2026-10-18)
+
+Branch: `windows-memory`, from `origin/claude/focused-ride-5uzj7p`. The owner accepted new memory
+limits (`docs/PERFORMANCE.md`: the whole app 1 GiB steady; the project store 400 MiB) and wants
+to know they are reasonable next to programs a translator already runs. Read
+`docs/BUDGET-REVIEW-2026-10-17.md`, section 2, first.
+
+1. Measure every program the same way the limit does: its **private working set** (Task
+   Manager's Memory column), summed over all of its processes, read a minute after the last
+   action, three readings a minute apart (give the median). In PowerShell:
+   `(Get-Counter '\Process(WINWORD*)\Working Set - Private').CounterSamples` (change the name
+   for each program; sum the samples). Defender stays on. Close other programs first, except
+   where a step says otherwise.
+2. **Microsoft Word with Psalms.** Make a document of the whole of Psalms from the bundled ULT:
+   expand `bundle/en/en_ult_v91.sb.zip` (`Expand-Archive`) to a folder outside the repository,
+   take `19-PSA.usfm`, and turn it into plain text: one paragraph per verse with its number,
+   chapter headings, and no USFM markers or alignment data (drop `\zaln-s ... \*`, `\zaln-e\*`
+   and the attributes of `\w word|...\w*`, keep the words). Check a few verses against the
+   USFM by eye. Open it in Word, save it as `.docx`, close Word, open the `.docx` again, scroll
+   to the end and back, wait a minute, measure. Record the file size and page count.
+3. **A web browser with Psalms.** Edge or Chrome with the ULT Psalms page on git.door43.org
+   (internet on; read only) or the same text as a local HTML file; sum every browser process.
+4. **tC4 4.0 and Paratext, if installed.** Do not install either without the owner's yes. If
+   tC4 4.0 is installed, open a project with Psalms in the translationWords check, wait,
+   measure (sum every process of the app). If Paratext 9 is installed, open a project with
+   Psalms, measure.
+5. **The rebuild's window.** Start the G0 spike's Electronite shell with its page, as part 1 of
+   `.audit/tasks/g0-windows.md` does, leave it idle a minute, measure every Electronite process.
+   This is the Windows figure the budget review only estimated.
+6. **Everything together.** With Word (Psalms), the browser (Psalms) and, if installed, tC4 4.0
+   all open, record `(Get-Counter '\Memory\Available MBytes')` and
+   `(Get-Counter '\Memory\Committed Bytes')`, and the laptop's total RAM. This says how much
+   room an 8 GB laptop has left for our app.
+7. Write `docs/evidence/memory-compare-windows-<date>.md` (the machine, each program's version,
+   every reading, and one table: program, what was open, private working set) and push
+   `windows-memory`.
+
 ## When everything is done
 
 Tell the owner which branches are ready. The cloud session merges them after running its own

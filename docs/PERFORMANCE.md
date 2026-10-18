@@ -98,12 +98,17 @@ show that a budget is met.
 | Resources | Load a lexicon (one JSON file per lexicon) and look up an entry | the Hebrew lexicon, 8,674 entries | 100 ms to load once per session; lookups in memory, under 1 ms |
 | Project | Cold open with a usable fold cache | whole Bible | 3 s; determinate progress within 300 ms |
 | Project | Cold open with no usable fold cache (a project received from a teammate or imported, or after the cache encoding changes), or the first open after a restart, when the disk cache is cold | whole Bible | 10 s (owner ruling, 2026-10-16); determinate progress within 300 ms |
-| Project | Materialize one book | Psalms | 300 ms, in the background |
+| Project | Save a verse, record a decision or save an alignment while a materialize, checkpoint, merge commit or upgrade write runs, a whole-project materialize included (owner ruling, 2026-10-18: saving never interrupts the person) | Psalms in the whole Bible | 25 ms p95 including fsync |
+| Project | Materialize one book, off the project actor, from a snapshot | Psalms | 1 s p95 on the reference laptop; it shows no indicator and nothing waits for it (an exemption from rule 4); open a book, open Check and the chapter budgets hold while it runs; a count test shows it projects and reads back only that book's files, on the corpus and on the corpus ten times larger |
+| Project | Materialize many or all derived files: a book added, removed, restored or rescoped, a pins change, a resource upgrade or gateway change, a sync intake, a derivation update | whole Bible | background work under rule 4 with a progress bar (owner ruling, 2026-10-18: people expect adding a book to take time); saves continue; off the actor, one book at a time, within the project store's memory peak |
+| Project | Close a project | whole Bible, Psalms changed | 3 s on the reference laptop |
 | Project | Checkpoint | whole Bible | 500 ms |
 | Project | Daily sync | whole Bible | 3 s plus network |
 | Project | Save work for a teammate (USB export) | whole Bible | 15 s on USB 2, with progress |
 | Project | Import a tC4 project | whole Bible | 2 min, with progress, cancellable |
-| Project | Memory | whole Bible open, Psalms in use | 350 MiB peak; 150 MiB steady |
+| App | Memory: the summed private working set of `tc4 serve` and every Electronite process (Task Manager's Memory column; summed USS on Linux), read a minute after the last action | whole Bible open, Psalms in use | 1 GiB steady; 1.25 GiB peak with a side session (a sync or export from Home beside another open whole Bible) (owner ruling, 2026-10-18) |
+| Project | Memory of the project store (the fold and `tc-store`, without resources): private bytes, read a minute after the last action, never just before exit | whole Bible open, Psalms in use: open, saves and decisions, leaving Psalms, close | 400 MiB steady; 450 MiB peak, the close and the first open without a cache included (owner ruling, 2026-10-18) |
+| Project | Memory growth with history | whole Bible at twice today's history (1.2 million changes) | steady memory grows by at most 300 B per added change with one heap, under 350 B with the default Linux heap (owner ruling, 2026-10-18) |
 | UI | Long lists (the Psalms check rail, chapter views) | Psalms | virtualized; 16 ms per frame while scrolling |
 | UI | Typing in a verse, input to paint | Psalms | 16 ms |
 | App | First launch: from the shortcut click to a visible, usable Home | a signed, installed Windows build with Defender on; an empty profile, and the first launch after an upgrade, measured apart | under 60 s each, with determinate progress (rule 4); see "Start-up" |
@@ -158,11 +163,11 @@ also follows rule 4: it shows "Preparing resources: n of total", and Close cance
 | Crate | Budgets |
 |---|---|
 | `tc-journal` | fold, incremental fold, conflict list, the corpus generator |
-| `tc-store` | open, save, materialize, checkpoint, memory |
+| `tc-store` | open, save, save during background work, materialize, close, checkpoint, project store memory and its growth |
 | `tc-sync` | daily sync, export, import of exchange files |
 | `tc-import` | tC4 import |
 | `tc-check` | Check screen, rail, decisions, re-assessment, carry-over |
 | `tc-align` | aligner, suggestions, reflow |
 | `tc-resources` | loading installed resources, first-launch seeding, the repeat-launch count test |
 | `tc-ui`, `tc-app` | lists, typing, never blocking the UI thread |
-| `tc4` (the desktop shell) | first launch and repeat launch to a usable Home |
+| `tc4` (the desktop shell) | first launch and repeat launch to a usable Home; the whole app's memory, with `tc-app` |

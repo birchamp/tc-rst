@@ -204,7 +204,12 @@ The Checkpoint row (PERF:102, 500 ms) has the same cause: 319-694 ms median on t
 - **The exit explanation is unconfirmed.** The explanation of the laptop's 45-114 MiB has not been checked on the laptop itself.
 - **The Linux heap costs more.** A Linux build with the default heap carries about 65 MiB more.
 
-## What the owner is asked
+## Owner's ruling (2026-10-18)
+
+1. **Materialize: yes.** "Adding a book is a task that people expect to take time, and a progress bar makes sense. Autosave needs to happen in a way that doesn't interrupt the user." Rows A, B, D and E and count test C replace the 300 ms row in `docs/PERFORMANCE.md`; a whole-project materialize shows a progress bar and saves continue meanwhile.
+2. **Memory: yes.** Rows M1-M3 replace the 350/150 MiB row. The owner asked to compare the limits with other programs a translator uses (for example Microsoft Word with Psalms open) on the reference laptop, so we know they are reasonable: task 5 of `.audit/tasks/windows-track.md`.
+
+## What the owner was asked
 
 1. **Materialize.** Should "Materialize one book | Psalms | 300 ms" be replaced with rows A-E? Under those rows, a save waits at most 25 ms while background work runs, and a book's files are written off the actor within 1 s on the laptop. The condition is that the storage team moves that work off the actor (R21). Yes or no?
 2. **Memory.** Should "350 MiB peak; 150 MiB steady" be replaced with rows M1-M3? Those rows set the whole app at 1 GiB steady (1.25 GiB with a side session), the project store at 400 MiB steady and 450 MiB peak in private bytes, and growth at most 300 B per change. Yes or no?
