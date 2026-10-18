@@ -237,3 +237,39 @@ async fn an_unwatched_install_leaves_no_download_behind() {
     assert_eq!(rig.store.installed().unwrap().installs.len(), 3);
     no_partial_files(&rig.store);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_crash_part_way_leaves_the_download_in_partial_for_the_next_open_to_clear() {
+    let rig = rig().await;
+    let root = rig.store.root().to_owned();
+    for (pin, packaging, path) in cases(&rig).await {
+        rig.fake.inject(hold(path));
+        let watch = Recorder::new(AtFirstReport::Nothing);
+        let mut install = Box::pin(install_dcs_watched(
+            &rig.store,
+            &rig.client,
+            &pin,
+            packaging,
+            &*watch,
+        ));
+        tokio::select! {
+            () = watch.wait_for(HELD_AT) => {}
+            result = &mut install => panic!("{path}: the held install ended: {result:?}"),
+        }
+        // A crash runs no destructor, so the part-written download stays where it is.
+        std::mem::forget(install);
+        let partial = root.join(".partial");
+        let left: Vec<_> = std::fs::read_dir(&partial)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(
+            left.len(),
+            1,
+            "{path}: the download is in .partial/: {left:?}"
+        );
+
+        let reopened = ResourceStore::open(&root).unwrap();
+        nothing_installed(&reopened);
+    }
+}

@@ -300,12 +300,10 @@ async fn a_cancel_while_the_server_stalls_stops_within_the_check_interval() {
 async fn a_cancel_after_the_last_chunk_still_keeps_nothing() {
     /// Cancels once the whole download has arrived.
     struct CancelAtEnd {
-        seen: Mutex<Vec<u64>>,
         done: AtomicBool,
     }
     impl DownloadWatch for CancelAtEnd {
         fn received(&self, received: u64, announced: Option<u64>) {
-            self.seen.lock().unwrap().push(received);
             if Some(received) == announced {
                 self.done.store(true, Ordering::SeqCst);
             }
@@ -315,25 +313,39 @@ async fn a_cancel_after_the_last_chunk_still_keeps_nothing() {
         }
     }
     let fake = FakeDoor43::start_seeded().await.unwrap();
-    let dl = tempfile::tempdir().unwrap();
-    let watch = CancelAtEnd {
-        seen: Mutex::new(Vec::new()),
-        done: AtomicBool::new(false),
-    };
-    let commit = sha(&fake
+    let client = client(&fake);
+    let ult = sha(&fake
         .resolve("unfoldingWord", "en_ult", "v89")
         .await
         .unwrap());
-    let to = DownloadTo::folder(dl.path()).watched_by(&watch);
-    let result = client(&fake)
-        .download_archive_zip(&repo("unfoldingWord/en_ult"), &commit, to)
-        .await;
-    assert!(watch.done.load(Ordering::SeqCst), "the whole zip arrived");
-    assert!(
-        matches!(&result, Err(Door43Error::Cancelled { .. })),
-        "{result:?}"
-    );
-    assert_eq!(left_in(dl.path()), Vec::<String>::new());
+    let tn = sha(&fake.resolve("unfoldingWord", "en_tn", "v86").await.unwrap());
+    for path in [ARCHIVE, EXPORT] {
+        let dl = tempfile::tempdir().unwrap();
+        let watch = CancelAtEnd {
+            done: AtomicBool::new(false),
+        };
+        let to = DownloadTo::folder(dl.path()).watched_by(&watch);
+        let result = if path == ARCHIVE {
+            client
+                .download_archive_zip(&repo("unfoldingWord/en_ult"), &ult, to)
+                .await
+                .map(drop)
+        } else {
+            client
+                .download_sb_export(&repo("unfoldingWord/en_tn"), &tag("v86"), &tn, to)
+                .await
+                .map(drop)
+        };
+        assert!(
+            watch.done.load(Ordering::SeqCst),
+            "{path}: the whole zip arrived"
+        );
+        assert!(
+            matches!(&result, Err(Door43Error::Cancelled { .. })),
+            "{path}: {result:?}"
+        );
+        assert_eq!(left_in(dl.path()), Vec::<String>::new(), "{path}");
+    }
 }
 
 /// The commit lookup an archive download makes before it asks for the archive.
