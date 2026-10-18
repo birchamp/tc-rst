@@ -17,8 +17,9 @@ pub struct Offline;
 /// hands clones to every network client.
 #[derive(Debug, Clone, Default)]
 pub struct InternetSwitch {
-    /// Twice the number of times the switch was turned on, plus one while it is on: the
-    /// state and the count change together, so a reader never sees one without the other.
+    /// With n the number of times the switch was turned on, 2n - 1 while it is on and 2n
+    /// while it is off: the state and the count change together, so a reader never sees one
+    /// without the other.
     state: Arc<AtomicU64>,
 }
 
@@ -49,7 +50,19 @@ impl InternetSwitch {
 
     /// `Ok` while the switch is on. A network client calls this before it sends anything.
     pub fn check(&self) -> Result<(), Offline> {
-        if self.is_on() { Ok(()) } else { Err(Offline) }
+        self.turn_on_count().map(|_| ())
+    }
+
+    /// While the switch is on, which turn-on it is in: [`InternetSwitch::times_turned_on`],
+    /// read in the same step as the state. A client that does something slow between two
+    /// reads sees from the pair whether the switch went off, or off and on, meanwhile.
+    pub fn turn_on_count(&self) -> Result<u64, Offline> {
+        let state = self.state.load(Ordering::SeqCst);
+        if state & 1 == 1 {
+            Ok(state.div_ceil(2))
+        } else {
+            Err(Offline)
+        }
     }
 
     /// Moves to the other state when the switch is in `from_on`'s state; otherwise does
@@ -88,6 +101,18 @@ mod tests {
         let clone = switch.clone();
         clone.turn_on();
         assert_eq!((switch.is_on(), switch.times_turned_on()), (true, 2));
+    }
+
+    #[test]
+    fn the_turn_on_count_is_read_with_the_state() {
+        let switch = InternetSwitch::new();
+        assert_eq!(switch.turn_on_count(), Err(Offline));
+        switch.turn_on();
+        assert_eq!(switch.turn_on_count(), Ok(1));
+        switch.turn_off();
+        assert_eq!(switch.turn_on_count(), Err(Offline));
+        switch.turn_on();
+        assert_eq!(switch.turn_on_count(), Ok(2));
     }
 
     #[test]

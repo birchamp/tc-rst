@@ -132,3 +132,86 @@ async fn a_server_on_this_computer_never_sees_a_proxy() {
     assert!(finder.asked().is_empty());
     assert!(proxy.requests().is_empty());
 }
+
+/// Names no proxy for any origin, as a finder does when the system has none for it.
+struct Nothing;
+
+impl ProxyFinder for Nothing {
+    fn proxy_for(&self, _: &Url) -> Option<Url> {
+        None
+    }
+}
+
+/// Set in the copy of this test binary that the next test starts.
+const CHILD: &str = "TC_PROXY_TEST_CHILD";
+
+/// The client reads `HTTPS_PROXY` when it is built, and a test cannot set a variable in its
+/// own process without `unsafe`, so [`the_system_proxy_serves_an_origin_the_finder_names_none_for`]
+/// runs this one in a copy of the binary that has the variable. Run alone it does nothing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_request_of_the_system_proxy_test() {
+    if std::env::var_os(CHILD).is_none() {
+        return;
+    }
+    let switch = InternetSwitch::new();
+    switch.turn_on();
+    let client = Door43Client::with_proxy_finder(
+        "https://door43.test".parse().unwrap(),
+        switch,
+        Limits::default(),
+        Some(Arc::new(Nothing)),
+    )
+    .unwrap();
+    let error = ask(&client).await;
+    assert!(
+        matches!(
+            &error,
+            Door43Error::Unreachable {
+                cause: UnreachableCause::Connect,
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_system_proxy_serves_an_origin_the_finder_names_none_for() {
+    let proxy = FakeProxy::start().await.unwrap();
+    let mut command = tokio::process::Command::new(std::env::current_exe().unwrap());
+    command
+        .args([
+            "--exact",
+            "the_request_of_the_system_proxy_test",
+            "--nocapture",
+        ])
+        .env(CHILD, "1");
+    // Removed before `HTTPS_PROXY` is set: Windows treats variable names without regard to
+    // case, so `https_proxy` would remove it again.
+    for other in [
+        "https_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+        "REQUEST_METHOD",
+    ] {
+        command.env_remove(other);
+    }
+    let output = command
+        .env("HTTPS_PROXY", proxy.url())
+        .output()
+        .await
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        proxy.requests(),
+        ["CONNECT door43.test:443 HTTP/1.1"],
+        "the request did not go through the proxy that HTTPS_PROXY names"
+    );
+}

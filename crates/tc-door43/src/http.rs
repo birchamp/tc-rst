@@ -11,6 +11,9 @@
 //!   off to on, because the computer may have joined another network meanwhile.
 //! - A proxy the finder names is used for that origin. For every other origin the system's
 //!   own settings apply: the `*_PROXY` variables, and on Windows the manual proxy setting.
+//!   reqwest drops its system proxy as soon as the client has a proxy of its own, so
+//!   [`Http`] reads those settings itself, once when the client is built, with the matcher
+//!   reqwest uses (`SystemProxy`), and falls back to them when the finder names none.
 //!
 //! reqwest's system proxy on Windows reads only the manual proxy setting. A school or
 //! office network that hands out a PAC script or a WPAD host (hazard 6 of
@@ -24,15 +27,20 @@ use std::fmt;
 use std::sync::{Arc, PoisonError, RwLock};
 use std::time::Duration;
 
+use base64::Engine as _;
+use base64::prelude::BASE64_STANDARD;
+use hyper_util::client::proxy::matcher::Matcher;
 use url::Url;
 
 use crate::internet::{InternetSwitch, Offline};
 
 /// Asks the system which proxy serves a server.
 pub trait ProxyFinder: Send + Sync + 'static {
-    /// The proxy that serves `origin` (a scheme, host and port), or `None` when the system
-    /// names none. This blocks, may take seconds and may use the network, so it runs on the
-    /// blocking pool, and only while the internet switch is on.
+    /// The proxy that serves `origin` (a scheme, host and port), or `None` when this finder
+    /// names none. Then the system's own settings decide (the `*_PROXY` variables, and on
+    /// Windows and macOS the manual proxy setting), so a finder need not repeat them. This
+    /// blocks, may take seconds and may use the network, so it runs on the blocking pool,
+    /// and only while the internet switch is on.
     fn proxy_for(&self, origin: &Url) -> Option<Url>;
 }
 
@@ -77,7 +85,8 @@ impl fmt::Debug for Http {
 }
 
 impl Http {
-    /// A client whose proxies `finder` names. Nothing is asked of it here.
+    /// A client whose proxies `finder` names, and the system's own settings for any origin
+    /// it names none for. Nothing is asked of the finder here.
     pub fn with_finder(
         spec: HttpSpec,
         internet: InternetSwitch,
@@ -97,10 +106,11 @@ impl Http {
             if let Some(finder) = finder {
                 let found = Arc::new(RwLock::new(Found::default()));
                 let lookup = found.clone();
-                // Ahead of the system's own proxy, which reqwest adds last.
+                // Any proxy of its own makes reqwest leave out the system's, so the
+                // closure falls back to it.
+                let system = SystemProxy::from_system();
                 builder = builder.proxy(reqwest::Proxy::custom(move |url| {
-                    let found = lookup.read().unwrap_or_else(PoisonError::into_inner);
-                    found.proxies.get(&origin_key(url)).cloned()
+                    choose(&lookup, &system, url)
                 }));
                 routes = Some(Arc::new(Routes {
                     finder,
@@ -119,11 +129,68 @@ impl Http {
     /// The client to send with, or [`Offline`] while the internet switch is off. The
     /// proxies are found here, so nothing looks for one while the switch is off.
     pub async fn client(&self) -> Result<&reqwest::Client, Offline> {
-        self.internet.check()?;
-        if let Some(routes) = &self.routes {
-            routes.find(self.internet.times_turned_on()).await;
+        let Some(routes) = &self.routes else {
+            self.internet.check()?;
+            return Ok(&self.client);
+        };
+        loop {
+            let turn_on = self.internet.turn_on_count()?;
+            routes.find(turn_on).await;
+            // The lookup can take seconds. A switch turned off meanwhile refuses this
+            // request, and one turned off and on has moved the computer to a network the
+            // answers may not fit.
+            if self.internet.turn_on_count()? == turn_on {
+                return Ok(&self.client);
+            }
         }
-        Ok(&self.client)
+    }
+}
+
+/// The proxy for `url`: the one the finder named for its origin, else the system's.
+fn choose(found: &RwLock<Found>, system: &SystemProxy, url: &Url) -> Option<Url> {
+    let named = found
+        .read()
+        .unwrap_or_else(PoisonError::into_inner)
+        .proxies
+        .get(&origin_key(url))
+        .cloned();
+    named.or_else(|| system.proxy_for(url))
+}
+
+/// The system's own proxy settings: what reqwest's system proxy would apply, were it not
+/// dropped for a client that has a proxy of its own. They are read when this is made.
+struct SystemProxy(Matcher);
+
+impl SystemProxy {
+    /// The `*_PROXY` and `NO_PROXY` variables and, where hyper-util reads it, the system's
+    /// manual proxy setting (the variables win).
+    fn from_system() -> Self {
+        Self(Matcher::from_system())
+    }
+
+    /// The proxy that serves `url`, with its user name and password in the URL, which is
+    /// how a proxy is handed to reqwest.
+    fn proxy_for(&self, url: &Url) -> Option<Url> {
+        let served = self.0.intercept(&url.as_str().parse().ok()?)?;
+        let mut proxy: Url = served.uri().to_string().parse().ok()?;
+        let credentials = match (served.basic_auth(), served.raw_auth()) {
+            (Some(basic), _) => {
+                // hyper-util wrote this header itself, from a user name and a password.
+                let basic = basic.to_str().ok()?.strip_prefix("Basic ")?;
+                let text = String::from_utf8(BASE64_STANDARD.decode(basic).ok()?).ok()?;
+                let (user, password) = text.split_once(':')?;
+                Some((user.to_owned(), password.to_owned()))
+            }
+            (None, Some((user, password))) => Some((user.to_owned(), password.to_owned())),
+            (None, None) => None,
+        };
+        if let Some((user, password)) = credentials {
+            proxy.set_username(&user).ok()?;
+            proxy
+                .set_password((!password.is_empty()).then_some(&password[..]))
+                .ok()?;
+        }
+        Some(proxy)
     }
 }
 
@@ -300,6 +367,142 @@ mod tests {
         http.client().await.unwrap();
         assert_eq!(finder.calls(), 0);
         assert!(http.routes.is_none());
+    }
+
+    /// A finder that changes the switch during its first lookup, as a person can while a
+    /// slow PAC lookup runs, and names no proxy.
+    struct Interrupted {
+        switch: InternetSwitch,
+        on_again: bool,
+        calls: AtomicUsize,
+    }
+
+    impl ProxyFinder for Interrupted {
+        fn proxy_for(&self, _: &Url) -> Option<Url> {
+            if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                self.switch.turn_off();
+                if self.on_again {
+                    self.switch.turn_on();
+                }
+            }
+            None
+        }
+    }
+
+    fn interrupted(on_again: bool) -> (Http, Arc<Interrupted>) {
+        let switch = InternetSwitch::new();
+        switch.turn_on();
+        let finder = Arc::new(Interrupted {
+            switch: switch.clone(),
+            on_again,
+            calls: AtomicUsize::new(0),
+        });
+        let http = Http::with_finder(
+            spec(&["https://a.test"], false),
+            switch,
+            Some(finder.clone()),
+        )
+        .unwrap();
+        (http, finder)
+    }
+
+    #[tokio::test]
+    async fn a_request_is_refused_when_the_internet_goes_off_during_the_lookup() {
+        let (http, finder) = interrupted(false);
+        assert!(http.client().await.is_err());
+        assert_eq!(finder.calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn the_lookup_is_repeated_when_the_internet_goes_off_and_on_during_it() {
+        let (http, finder) = interrupted(true);
+        http.client().await.unwrap();
+        assert_eq!(
+            finder.calls.load(Ordering::SeqCst),
+            2,
+            "the first answers were found for the network before"
+        );
+        http.client().await.unwrap();
+        assert_eq!(finder.calls.load(Ordering::SeqCst), 2);
+    }
+
+    fn system(https: &str, no: &str) -> SystemProxy {
+        SystemProxy(Matcher::builder().https(https).no(no).build())
+    }
+
+    fn found_with(origin: &str, proxy: &str) -> RwLock<Found> {
+        RwLock::new(Found {
+            for_turn_on: Some(1),
+            proxies: BTreeMap::from([(origin.to_owned(), proxy.parse().unwrap())]),
+        })
+    }
+
+    fn url(text: &str) -> Url {
+        text.parse().unwrap()
+    }
+
+    #[test]
+    fn the_proxy_the_finder_names_comes_before_the_systems() {
+        let found = found_with("https://a.test", "http://finder.test:8080");
+        let system = system("http://system.test:3128", "");
+        assert_eq!(
+            choose(&found, &system, &url("https://a.test/x")),
+            Some(url("http://finder.test:8080"))
+        );
+    }
+
+    #[test]
+    fn the_systems_proxy_serves_an_origin_the_finder_names_none_for() {
+        let found = found_with("https://a.test", "http://finder.test:8080");
+        let system = system("http://system.test:3128", "");
+        assert_eq!(
+            choose(&found, &system, &url("https://b.test/x")),
+            Some(url("http://system.test:3128"))
+        );
+    }
+
+    #[test]
+    fn no_proxy_still_excludes_a_host_from_the_systems_proxy() {
+        let found = RwLock::new(Found::default());
+        let system = system("http://system.test:3128", "b.test");
+        assert_eq!(choose(&found, &system, &url("https://b.test/x")), None);
+        assert_eq!(
+            choose(&found, &system, &url("https://a.test/x")),
+            Some(url("http://system.test:3128"))
+        );
+    }
+
+    #[test]
+    fn the_systems_proxy_keeps_its_user_name_and_password() {
+        let found = RwLock::new(Found::default());
+        let system = system("http://us%40er:p%3Ass%25@system.test:3128", "");
+        let proxy = choose(&found, &system, &url("https://a.test/x")).unwrap();
+        // reqwest hands this URL to the same matcher, which must read the same header.
+        let rebuilt = Matcher::builder().all(proxy.as_str()).build();
+        let asked = rebuilt
+            .intercept(&"https://a.test/x".parse().unwrap())
+            .unwrap();
+        let original = system
+            .0
+            .intercept(&"https://a.test/x".parse().unwrap())
+            .unwrap();
+        assert_eq!(asked.uri(), original.uri());
+        assert!(original.basic_auth().is_some());
+        assert_eq!(asked.basic_auth(), original.basic_auth());
+    }
+
+    #[test]
+    fn a_proxy_user_without_a_password_is_kept() {
+        let found = RwLock::new(Found::default());
+        let system = system("http://user@system.test:3128", "");
+        let proxy = choose(&found, &system, &url("https://a.test/x")).unwrap();
+        let asked = Matcher::builder()
+            .all(proxy.as_str())
+            .build()
+            .intercept(&"https://a.test/x".parse().unwrap())
+            .unwrap();
+        // "user:" in base64.
+        assert_eq!(asked.basic_auth().unwrap(), "Basic dXNlcjo=");
     }
 
     #[tokio::test]

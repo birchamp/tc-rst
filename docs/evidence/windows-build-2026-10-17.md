@@ -172,19 +172,29 @@ Also on the branch: the census properties that count a missing parent run 256 ca
 (`team()` owns the count); `a_refused_connection_is_unreachable` became
 `a_connection_that_cannot_be_made_is_unreachable` (below); and one shared HTTP client
 constructor, `tc_door43::Http`, builds both network clients and asks a proxy finder only while
-the internet switch is on (hazard 6, below).
+the internet switch is on, and keeps the system's own proxy settings for any origin the finder
+names none for (hazard 6, below).
 
 ## Open
 
 - **Hazard 2** (a save's rename blocked by a scanner): `tc-store`, on the `storage` branch.
   The held-file helper there and the one in `tc-resources` follow one policy and become one
   helper when `storage` lands.
-- **Hazard 6, proxy auto-configuration: not fixed.** The constructor and the rules around
-  it are done and tested on Linux against a local proxy that refuses every request
-  (`tests/proxy.rs` in `tc-door43`, `tests/aquifer_proxy.rs` in `tc-resources`): one `Http`
-  builds both clients, a server on this computer is never proxied, a finder is asked only
-  while the internet switch is on, once for each origin, and again after the switch went off
-  and on. What is missing is the finder for Windows, which asks WinHTTP
+- **Hazard 6, proxy auto-configuration: not fixed, so task 6 is not done.** The constructor
+  and the rules around it are done and tested on Linux against a local proxy that refuses
+  every request (`tests/proxy.rs` in `tc-door43`, `tests/aquifer_proxy.rs` in
+  `tc-resources`): one `Http` builds both clients, a server on this computer is never
+  proxied, a finder is asked only while the internet switch is on, once for each origin, and
+  again after the switch went off and on, also when that happens during a slow lookup (a
+  request that finds the switch off after the lookup is refused). A proxy the finder names is
+  used for its origin; for every other origin the `*_PROXY` variables and the manual proxy
+  setting still apply. The first version of the constructor lost them as soon as a finder
+  was given, because reqwest drops its system proxy for a client that has a proxy of its
+  own; it now reads them itself (hyper-util's matcher, which reqwest uses) and falls back to
+  them, and `tests/proxy.rs` runs a copy of its binary with `HTTPS_PROXY` set to check it.
+  The first commit message of the constructor (`f02d606`) said that a finder's proxy was
+  used "ahead of the system's own settings"; that is true only since this fix. What is
+  missing is the finder for Windows, which asks WinHTTP
   (`WinHttpGetIEProxyConfigForCurrentUser`, `WinHttpGetProxyForUrl`). It needs FFI, and
   `AGENTS.md` forbids `unsafe`, so the owner must choose: a crate that opts out of the
   workspace's `forbid(unsafe_code)` for that one call (a few dozen lines over `windows-sys`,
