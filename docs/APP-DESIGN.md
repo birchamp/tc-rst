@@ -1181,8 +1181,11 @@ fields of `test/fieldStore` (§5.8), written atomically before each `Ack`.
   waits longer than that for the address line; then it prints
   `{"error":{"type":"appLockHeld","value":{"pid":<pid or null>}}}` as its only line, names the
   process on stderr, and exits with code 3. A start that fails otherwise prints
-  `{"error":{"type":"start","value":{"reason":"…"}}}` and exits with code 4. *(A-3; A2: the pid
-  is beside the lock, and the two error lines are what the shell reads.)*
+  `{"error":{"type":"start","value":{"reason":"…"}}}` and exits with code 4. The app starts
+  before the address line is printed, so a start that fails (a `--projects` folder that is not
+  there) prints that one line and never an address the shell would go to. *(A-3; A2: the pid
+  is beside the lock, and the two error lines are what the shell reads; the join: the order of
+  the app and the address line.)*
 - It binds `127.0.0.1:0` and prints one JSON line before anything else:
   `{"url":"http://127.0.0.1:PORT/","token":"<43 chars base64url>"}`. The token is never logged.
 - On stdin `{"quit":true}`, when stdin closes (the shell died; on Windows this needs the shell
@@ -2266,8 +2269,14 @@ tc-server's `Backend` for tc-app's `App`, `tc4 serve` starts the `App` from its 
 API, the event stream and quit to it, ending the process after a reply whose `then` is `EndProcess`,
 and `tc4_serve_answers_hello_with_real_state` proves it. If neither could, A9 or A4b, whichever starts
 first, does it. The ring, `hello`'s state and the crash points before the store and the reply are
-tc-app's (§4.1, §5.8); the join deletes any copy in the server. *(A3: the row's first "done when",
-`tc4 serve` answers `hello`, needed A2.)* A4a after A2; A4b after A3 and A4a;
+tc-app's (§4.1, §5.8); `tc4 serve` uses none of the server's copies of them. *(A3: the row's first
+"done when", `tc4 serve` answers `hello`, needed A2. Done: A3 merged second, so its merge into
+`phase0` joined them, in `crates/tc4/src/join.rs`. The server's stand-in, `Stub`, stays as the
+backend of tc-server's own tests, which prove routing, security, streams and quit without an
+application, and `tc4 serve` does not use it. The crash tests of the program stored a text with
+`test/fieldStore` and read `test-hooks/fields.json` after the crash, because the stand-in's one
+write, `app/clientError`, left a stderr line and the application's leaves a report in memory,
+which a crash takes with it.)* A4a after A2; A4b after A3 and A4a;
 A6b after A6a, A2 and A4a; A5 after A4b and A6b; A7 after A6b; A8 after A5; A9 after A2 and A3. G0 is written now,
 with a stand-in server, and must report before B6 merges. B1a starts now on its storage branch.
 

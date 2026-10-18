@@ -14,6 +14,8 @@ use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use tempfile::TempDir;
+
 use tc_api::endpoint::{API_VERSION_HEADER, TOKEN_HEADER};
 
 pub use http::{Req, Response};
@@ -38,6 +40,8 @@ pub struct Tc4 {
     stderr_reader: Option<std::thread::JoinHandle<()>>,
     pub address: Option<Address>,
     started: Instant,
+    /// The projects folder a test was given, kept until the process is gone.
+    projects: Option<TempDir>,
 }
 
 /// The binary, with the hooks the test build carries.
@@ -46,17 +50,11 @@ pub fn binary() -> &'static str {
 }
 
 impl Tc4 {
-    /// `tc4 serve --app-data <app_data> --ui <ui> <extra>` with piped stdio.
+    /// `tc4 serve --app-data <app_data> --ui <ui> <extra>` with piped stdio. A test that does
+    /// not name a `--projects` folder gets an empty one of its own: the app would otherwise
+    /// make its default folder under the home folder of whoever runs the tests.
     pub fn spawn(app_data: &Path, ui: &Path, extra: &[&str]) -> Tc4 {
-        let mut args = vec![
-            "serve".to_owned(),
-            "--app-data".to_owned(),
-            app_data.display().to_string(),
-            "--ui".to_owned(),
-            ui.display().to_string(),
-        ];
-        args.extend(extra.iter().map(|arg| (*arg).to_owned()));
-        Self::spawn_args(&args)
+        Self::spawn_binary(Path::new(binary()), app_data, ui, extra)
     }
 
     /// As `spawn`, for another build of the binary.
@@ -69,16 +67,44 @@ impl Tc4 {
             ui.display().to_string(),
         ];
         args.extend(extra.iter().map(|arg| (*arg).to_owned()));
-        Self::spawn_command(binary, &args)
+        let projects = (!args.iter().any(|arg| arg == "--projects")).then(|| {
+            let folder = TempDir::new().unwrap();
+            args.push("--projects".to_owned());
+            args.push(folder.path().display().to_string());
+            folder
+        });
+        let mut tc4 = Self::spawn_command(binary, &args, &[]);
+        tc4.projects = projects;
+        tc4
     }
 
+    /// As `spawn`, but with these environment variables set to folders, and the default
+    /// projects folder: how the app finds the home folder of a computer.
+    pub fn spawn_at_home(app_data: &Path, ui: &Path, extra: &[&str], home: &Path) -> Tc4 {
+        let mut args = vec![
+            "serve".to_owned(),
+            "--app-data".to_owned(),
+            app_data.display().to_string(),
+            "--ui".to_owned(),
+            ui.display().to_string(),
+        ];
+        args.extend(extra.iter().map(|arg| (*arg).to_owned()));
+        let env: Vec<(&str, &Path)> = ["HOME", "USERPROFILE", "XDG_DATA_HOME", "LOCALAPPDATA"]
+            .into_iter()
+            .map(|name| (name, home))
+            .collect();
+        Self::spawn_command(Path::new(binary()), &args, &env)
+    }
+
+    /// The raw command line, as a test of the usage errors needs it.
     pub fn spawn_args(args: &[String]) -> Tc4 {
-        Self::spawn_command(Path::new(binary()), args)
+        Self::spawn_command(Path::new(binary()), args, &[])
     }
 
-    fn spawn_command(binary: &Path, args: &[String]) -> Tc4 {
+    fn spawn_command(binary: &Path, args: &[String], env: &[(&str, &Path)]) -> Tc4 {
         let mut child = Command::new(binary)
             .args(args)
+            .envs(env.iter().copied())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -112,6 +138,7 @@ impl Tc4 {
             stderr_reader: Some(stderr_reader),
             address: None,
             started: Instant::now(),
+            projects: None,
         }
     }
 

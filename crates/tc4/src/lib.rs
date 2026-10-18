@@ -7,6 +7,7 @@
 //! lock is held; 4 the start failed; 86 a test crash.
 
 mod args;
+mod join;
 
 use std::ffi::OsString;
 use std::io::Write as _;
@@ -14,10 +15,13 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tc_server::stub::Stub;
+use tc_api::app::{BUILD_COMMIT, BUILD_VERSION, BuildInfo};
+use tc_app::config::{AppConfig, ProjectsFolder};
+use tc_app::{App, AppDeps};
 use tc_server::{AppLock, AppLockError, Server, ServerConfig, Stdio};
 
 use args::{Args, USAGE};
+use join::AppBackend;
 
 /// How long a new `tc4` waits for an old one that is still closing (AD39).
 const LOCK_WAIT: Duration = Duration::from_secs(10);
@@ -52,6 +56,25 @@ fn start_failed(reason: impl std::fmt::Display) -> ExitCode {
         serde_json::json!({"error": {"type": "start", "value": {"reason": reason.to_string()}}});
     let _ = say(&line);
     ExitCode::from(EXIT_START_FAILED)
+}
+
+/// What the app is told at start. Without `--projects` the app chooses its default folder
+/// (Q-4).
+fn app_config(args: &Args) -> AppConfig {
+    AppConfig {
+        app_data: args.app_data.clone(),
+        projects: args
+            .projects
+            .clone()
+            .map_or(ProjectsFolder::Default, ProjectsFolder::Given),
+        door43: args.door43.clone(),
+        build: BuildInfo {
+            version: BUILD_VERSION.to_owned(),
+            commit: BUILD_COMMIT.to_owned(),
+        },
+        #[cfg(feature = "test-hooks")]
+        test_hooks: args.test_hooks,
+    }
 }
 
 fn serve(args: &Args) -> ExitCode {
@@ -96,6 +119,13 @@ fn serve(args: &Args) -> ExitCode {
     } else {
         server
     };
+    // The app starts before the address line, so a start that fails (a `--projects` folder
+    // that is not there, say) prints its one error line and nothing else: the shell reads the
+    // first line, and an address followed by an error would send it to a server that is gone.
+    let app = match runtime.block_on(App::start(app_config(args), AppDeps::production())) {
+        Ok(app) => app,
+        Err(error) => return start_failed(error),
+    };
     // Nothing else may be on stdout before this line, and the token is in no other place.
     if say(&serde_json::json!({"url": server.address().url, "token": server.address().token}))
         .is_err()
@@ -106,21 +136,14 @@ fn serve(args: &Args) -> ExitCode {
     eprintln!(
         "tc4: serving {} (projects: {}, Door43: {})",
         server.address().url,
-        args.projects.as_ref().map_or_else(
-            || "the default folder".to_owned(),
-            |p| p.display().to_string()
-        ),
+        app.projects_root().path.display(),
         args.door43
     );
-    let stub = match Stub::new() {
-        Ok(stub) => stub,
-        Err(error) => return start_failed(error),
-    };
     let stdio = Stdio {
         input: tokio::io::BufReader::new(tokio::io::stdin()),
         output: tokio::io::stdout(),
     };
-    let result = runtime.block_on(server.run(Arc::new(stub), stdio));
+    let result = runtime.block_on(server.run(Arc::new(AppBackend(app)), stdio));
     // The lock is held to here. The process ends by `exit`, not by dropping the runtime:
     // tokio reads stdin on a blocking-pool thread that stays in `read()` while the shell keeps
     // stdin open, and dropping the runtime waits for blocking tasks, so it would never return.
