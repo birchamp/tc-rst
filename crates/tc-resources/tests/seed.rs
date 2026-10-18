@@ -714,6 +714,58 @@ fn c29_a_stop_inside_a_copy_keeps_whole_installs_and_the_next_seed_finishes() {
     }
 }
 
+#[test]
+fn c29_a_stop_asked_at_the_last_file_of_a_copy_leaves_that_copy_finished() {
+    let (bundled_dir, _) = bundle();
+    let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+    let in_order: Vec<(String, u64)> = bundled
+        .installed()
+        .unwrap()
+        .installs
+        .iter()
+        .map(|install| (name_of(install), file_count(install)))
+        .collect();
+    assert_eq!(in_order.len(), 3);
+
+    let mut through = 0;
+    for (index, (_, files)) in in_order.iter().enumerate() {
+        through += files;
+        // The watch asks to stop as soon as this install's last file is done.
+        let machine_dir = tempfile::tempdir().unwrap();
+        let machine = ResourceStore::open(machine_dir.path()).unwrap();
+        let plan = machine.seed_plan(&bundled).unwrap();
+        let watch = Recorder::new(Some(through));
+
+        let (opens, written, seeding) = counted(|| machine.seed(plan, &watch).unwrap());
+
+        let last = index + 1 == in_order.len();
+        let report = if last {
+            // Nothing is left to stop: the seeding is over.
+            finished(seeding)
+        } else {
+            cancelled(seeding)
+        };
+        let expected: Vec<String> = in_order[..=index]
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+        assert_eq!(
+            report.added, expected,
+            "the copy whose last file was written is finished, not thrown away (stop at {through})"
+        );
+        assert_eq!((opens, written), (through, through));
+        let installs = machine.installed().unwrap().installs;
+        assert_eq!(installs.len(), index + 1);
+        for install in &installs {
+            install.verify().unwrap();
+        }
+        assert!(
+            tree(&machine_dir.path().join(".partial")).is_empty(),
+            "no finished copy is left in the staging folder"
+        );
+    }
+}
+
 proptest::proptest! {
     #![proptest_config(proptest::prelude::ProptestConfig::with_cases(12))]
 
