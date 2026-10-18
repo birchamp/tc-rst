@@ -2055,6 +2055,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "proptest-derive"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "587d11bad8340bf431e47b2ca2a3f11ecac3b09ecbf2f6e17dcf6655eead1ca9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3029,6 +3040,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "tc-api"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "proptest-derive",
+ "serde",
+ "serde_json",
+ "tc-api",
+ "tc-check",
+ "tc-core",
+ "tc-helps",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "tc-burrito"
 version = "0.1.0"
 dependencies = [
@@ -3118,6 +3144,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
+ "futures-util",
  "reqwest",
  "serde",
  "serde_json",
@@ -3125,6 +3152,18 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "zip",
+]
+
+[[package]]
+name = "tc-export"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "serde_json",
+ "tc-helps",
+ "tc-obs",
+ "tc-usfm",
  "zip",
 ]
 

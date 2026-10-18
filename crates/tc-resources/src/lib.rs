@@ -22,9 +22,11 @@
 //!   checked once, so a repeat start opens no resource file.
 //! - **Installs.** [`install_dcs`] downloads an exact commit through tc-door43 and
 //!   [`install_aquifer`] an exact release asset from GitHub; nothing is kept unless it is
-//!   the pinned bytes. Zips at hand install with [`install_dcs_zip`] and
-//!   [`install_aquifer_zip`]. [`FetchedLock`] holds the Door43 facts recorded once for the
-//!   bundled and packaged archives, so they are checked offline.
+//!   the pinned bytes. A Door43 download streams to a file, and [`install_dcs_watched`]
+//!   reports its bytes and can be cancelled. Zips at hand install with
+//!   [`install_dcs_zip`] and [`install_aquifer_zip`]. [`FetchedLock`] holds the Door43
+//!   facts recorded once for the bundled and packaged archives, so they are checked
+//!   offline.
 //! - **Lexicons.** A lexicon is installed as one JSON file, never as its thousands of
 //!   files: [`repackage_lexicon`] turns its verified archive into that file, both when the
 //!   app is packaged ([`install_lexicon_zip`], checked against [`FetchedLock`]) and when a
@@ -68,8 +70,8 @@ pub use choice::{
     AquiferHelps, CheckBlocker, CheckSources, HELPS_SOURCE_SETTING, HelpsChoice, check_sources,
 };
 pub use dcs::{
-    LexiconInstall, install_all, install_dcs, install_dcs_as, install_dcs_zip, install_lexicon_zip,
-    pin_release,
+    LexiconInstall, install_all, install_dcs, install_dcs_as, install_dcs_watched, install_dcs_zip,
+    install_lexicon_zip, pin_release,
 };
 pub use error::{
     AquiferError, InstallError, LexiconError, LexiconUnavailable, ParseError, Refusal, StoreError,

@@ -1,0 +1,23 @@
+{
+  "path": "test/crash",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e",
+    "at": "beforeReply",
+    "path": "test/fieldStore"
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

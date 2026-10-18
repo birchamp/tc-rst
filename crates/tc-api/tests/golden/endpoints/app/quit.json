@@ -1,0 +1,21 @@
+{
+  "path": "app/quit",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "01010101010101010101010101010101"
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

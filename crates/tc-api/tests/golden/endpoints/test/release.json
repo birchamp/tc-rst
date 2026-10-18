@@ -1,0 +1,22 @@
+{
+  "path": "test/release",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "10101010101010101010101010101010",
+    "at": "save"
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

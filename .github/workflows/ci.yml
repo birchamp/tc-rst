@@ -23,10 +23,14 @@ jobs:
       # tc-ui's components compile for wasm32 only, so the host steps above never see them.
       - run: cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings
       - run: cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets --features gallery -- -D warnings
+      # tc-api's types are the UI's too, so they must build for wasm32 as well.
+      - run: cargo clippy -p tc-api --target wasm32-unknown-unknown --all-targets -- -D warnings
 
-  # The tC4 visual-parity baseline: its screenshots, manifest, README and the owner's rulings in
-  # docs/PLAN.md must agree, and the mock server must answer the sync transport as the platform
-  # does. Node built-ins only, so no install step.
+  # The tC4 visual-parity baseline: its screenshots (by sha256), DOM snapshots, manifest, README
+  # and the owner's rulings in docs/PLAN.md must agree, the mock server must answer the sync
+  # transport as the platform does, the parity state built from this repository's copies of
+  # tC4's fixtures must equal the one recorded from tC4, and the capture's request tracking and
+  # settle must hold. Node built-ins only, so no install step.
   parity-baseline:
     runs-on: ubuntu-latest
     steps:
@@ -34,4 +38,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --test parity/tc4-baseline/baseline.test.mjs parity/tc4-baseline/mock-server/server.test.mjs
+      - run: node --test parity/tc4-baseline/baseline.test.mjs parity/tc4-baseline/mock-server/server.test.mjs parity/app/state.test.mjs parity/app/observe.test.mjs

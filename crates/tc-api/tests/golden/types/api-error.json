@@ -1,0 +1,62 @@
+[
+  {
+    "type": "version",
+    "value": {
+      "server": 2
+    }
+  },
+  {
+    "type": "badRequest",
+    "value": {
+      "field": "locale",
+      "reason": "not one of the interface languages"
+    }
+  },
+  {
+    "type": "staleScope",
+    "value": {
+      "current": 4
+    }
+  },
+  {
+    "type": "staleSession"
+  },
+  {
+    "type": "requestReused"
+  },
+  {
+    "type": "notSaved",
+    "value": {
+      "type": "staleScope"
+    }
+  },
+  {
+    "type": "refused",
+    "value": {
+      "type": "prefs",
+      "value": "localeNotSaved"
+    }
+  },
+  {
+    "type": "needsInternet",
+    "value": "sync"
+  },
+  {
+    "type": "needsSignIn",
+    "value": "privateRepository"
+  },
+  {
+    "type": "busy",
+    "value": "sync"
+  },
+  {
+    "type": "unavailable",
+    "value": "writes"
+  },
+  {
+    "type": "internal",
+    "value": {
+      "report": 17
+    }
+  }
+]
