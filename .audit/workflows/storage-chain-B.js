@@ -51,24 +51,50 @@ const GATE = { type: 'object', properties: { green: { type: 'boolean' }, summary
 const reports = []
 // agent() returns null when an agent dies (e.g. a usage limit); stop the chain so a resume can pick up from the cache.
 const halt = (why) => { log('stopping chain: ' + why) }
+// Owner, 2026-10-18: Opus plans and reviews, Sonnet edits, Haiku reads. Calls that had already finished keep their
+// prompts and options unchanged, so a resume replays them from the cache.
+const FINISHED = new Set(['C:build', 'C:review', 'C:fix', 'C:gate', 'C:repair', 'C:gate2', 'S1:build', 'S1:review'])
+const tier = (u, role, model) => FINISHED.has(u.key + ':' + role) ? {} : { model }
+const CHECK = { type: 'object', properties: { ok: { type: 'boolean' }, problems: { type: 'array', items: { type: 'object', properties: { finding: { type: 'string' }, problem: { type: 'string' }, evidence: { type: 'string' } }, required: ['finding', 'problem', 'evidence'] } } }, required: ['ok', 'problems'] }
 for (const u of UNITS.filter(x => x.key !== 'J1' && x.key !== 'J2')) {
   phase(u.phase)
-  const built = await agent(`${BASE}\n\n${u.task}\n\nFinal answer: commits made, public API summary, test counts by kind, spec changes made, open issues.`, { label: 'build:' + u.key, phase: u.phase })
+  let plan = ''
+  if (!FINISHED.has(u.key + ':build')) {
+    plan = await agent(`${BASE}\n\n${u.task}\n\nYou are the PLANNER of this unit. A separate agent on a faster model implements your plan, and an independent reviewer checks the result. Do not change code and do not commit. Read the spec sections, the code and tests this unit touches, and tC4 where the task cites it. Write the plan to ${WT}/.audit/plans/${u.key}.md (the only file you write; the builder commits it): the steps in order, each with the files, types and function signatures to add or change, the invariants and edge cases it must keep (above all, that no translator's text, alignment, decision or comment is lost, hidden or silently rewritten), the tests that prove it (named, with what each asserts), the measurements to take, and the traps you found. Make it concrete enough that the builder never has to rediscover what you read. Final answer: the plan's path and a ten-line summary.`, { label: 'plan:' + u.key, phase: u.phase })
+    if (!plan) { halt(u.key + ' plan agent failed'); break }
+  }
+  const built = await agent(plan
+    ? `${BASE}\n\n${u.task}\n\nA planner wrote the plan for this unit in ${WT}/.audit/plans/${u.key}.md. Its summary:\n<<<\n${plan}\n>>>\nRead the plan in full and follow it. Where the code or the spec proves the plan wrong, do what the spec requires and say so in your final answer. Commit the plan file with your first commit.\n\nFinal answer: commits made, public API summary, test counts by kind, spec changes made, where you departed from the plan and why, open issues.`
+    : `${BASE}\n\n${u.task}\n\nFinal answer: commits made, public API summary, test counts by kind, spec changes made, open issues.`,
+    { label: 'build:' + u.key, phase: u.phase, ...tier(u, 'build', 'sonnet') })
   if (!built) { halt(u.key + ' build agent failed'); break }
   const review = await agent(`You are an independent, adversarial REVIEWER of unit ${u.key} of the storage core of a Rust rebuild of a Bible translation app (losing or silently changing a translator's work is unacceptable). Work in ${WT} (cd there). Read AGENTS.md and the parts of docs/STORAGE.md this unit implements:\n<<<\n${u.task}\n>>>\nThe builder reported:\n<<<\n${built}\n>>>\nRead the new code and tests in full (git log and git diff against the commit before this unit). Run the tests. Then try to BREAK it against the spec: write throwaway tests (do not commit them; restore the tree with git checkout -- . and git clean -fd for files you added before you finish) for spec scenarios the builder did not test, for every crash point, for every invariant I1-I12 that this unit touches, for malformed and adversarial input, and for the named silent-loss scenarios in §15. Check that property-test generators really reach the states they claim (look at the counters), that tests would fail if the behavior broke (try reverting a line), and that no code path reads the clock, device or map iteration order where I3 forbids it. Report only findings you verified by running code or citing specific lines.`, { label: 'review:' + u.key, phase: u.phase, schema: FINDINGS })
   if (!review) { halt(u.key + ' review agent failed'); reports.push({ unit: u.key, built }); break }
   const actionable = review.findings.filter(f => f.severity !== 'minor' || f.fix)
   let fix = 'no findings'
   if (actionable.length) {
-    fix = await agent(`${BASE}\n\nYou are FIXING verified review findings on unit ${u.key}. Unit scope:\n<<<\n${u.task}\n>>>\nFindings (verified by an independent reviewer):\n${JSON.stringify(review.findings, null, 1)}\n\nFix every blocker and major at the root and every minor that is cheap; add a regression test for each fix that fails without it (check by reverting). If you disagree with a finding, explain why with evidence instead of changing code. Commit. Final answer: each finding with fixed / rejected (why), test counts, commits.`, { label: 'fix:' + u.key, phase: u.phase })
+    fix = await agent(`${BASE}\n\nYou are FIXING verified review findings on unit ${u.key}. Unit scope:\n<<<\n${u.task}\n>>>\nFindings (verified by an independent reviewer):\n${JSON.stringify(review.findings, null, 1)}\n\nFix every blocker and major at the root and every minor that is cheap; add a regression test for each fix that fails without it (check by reverting). If you disagree with a finding, explain why with evidence instead of changing code. Commit.${FINISHED.has(u.key + ':fix') ? '' : ' A previous fixer may have been stopped part way (a usage limit): if commits after the review already exist, read them and the working tree, keep what is sound, and continue.'} Final answer: each finding with fixed / rejected (why), test counts, commits.`, { label: 'fix:' + u.key, phase: u.phase, ...tier(u, 'fix', 'sonnet') })
     if (!fix) { halt(u.key + ' fix agent failed'); reports.push({ unit: u.key, built, review }); break }
+    if (!FINISHED.has(u.key + ':fix')) {
+      let stopped = false
+      for (let round = 1; round <= 2; round++) {
+        const check = await agent(`You are an independent, skeptical REVIEWER of the fixes made on unit ${u.key} of the storage core of a Rust rebuild of a Bible translation app (losing, hiding or silently rewriting a translator's work is unacceptable). Work in ${WT} (cd there); do not commit, and leave the tree as you found it (git status, HEAD unchanged). The verified findings were:\n${JSON.stringify(actionable, null, 1)}\nThe fixer reported:\n<<<\n${fix}\n>>>\nFor each finding, read the fix and its regression test; revert the fix and confirm the test fails, then restore. Check that each fix is at the root, keeps the spec, and loses or rewrites nothing. Run cargo test for the touched crates (-j 2). ok = true only if every blocker and major is fixed correctly or rejected with sound evidence. Report only problems you verified by running code.`, { label: `check:${u.key}#${round}`, phase: u.phase, schema: CHECK })
+        if (!check) { halt(u.key + ' check agent failed'); stopped = true; break }
+        log(`${u.key} check ${round}: ${check.ok ? 'ok' : check.problems.length + ' problems'}`)
+        if (check.ok) break
+        const again = await agent(`${BASE}\n\nYou are FIXING what an independent reviewer found wrong in the earlier fixes on unit ${u.key}:\n${JSON.stringify(check.problems, null, 1)}\nThe original findings were:\n${JSON.stringify(actionable, null, 1)}\nFix each at the root with a regression test that fails without it. If you disagree, explain why with evidence. Commit. Final answer: each problem fixed or rejected (why), test counts, commits.`, { label: `fix:${u.key}#${round + 1}`, phase: u.phase, model: 'sonnet' })
+        if (!again) { halt(u.key + ' fix agent failed'); stopped = true; break }
+        fix += `\n\nRound ${round + 1}:\n${again}`
+      }
+      if (stopped) { reports.push({ unit: u.key, built, review, fix }); break }
+    }
   }
-  let gate = await agent(`In ${WT} (cd there), run: cargo fmt --all -- --check; cargo clippy --workspace --all-targets -j 2 -- -D warnings; cargo test --workspace -j 2. Also run git status --porcelain (must be empty: everything committed). Report green=true only if all four are clean. In summary give the test counts and any failures verbatim (first 40 lines).${u.gateExtra ? ' ' + u.gateExtra : ''}`, { label: 'gate:' + u.key, phase: u.phase, schema: GATE, effort: 'low' })
+  let gate = await agent(`In ${WT} (cd there), run: cargo fmt --all -- --check; cargo clippy --workspace --all-targets -j 2 -- -D warnings; cargo test --workspace -j 2. Also run git status --porcelain (must be empty: everything committed). Report green=true only if all four are clean. In summary give the test counts and any failures verbatim (first 40 lines).${u.gateExtra ? ' ' + u.gateExtra : ''}`, { label: 'gate:' + u.key, phase: u.phase, schema: GATE, effort: 'low', ...tier(u, 'gate', 'haiku') })
   if (!gate) { halt(u.key + ' gate agent failed'); reports.push({ unit: u.key, built, review, fix }); break }
   if (!gate.green) {
-    const repaired = await agent(`${BASE}\n\nThe gate for unit ${u.key} failed:\n${gate.summary}\nFix the cause (not the symptom), commit, and make fmt, clippy and the whole workspace test suite pass.`, { label: 'repair:' + u.key, phase: u.phase })
+    const repaired = await agent(`${BASE}\n\nThe gate for unit ${u.key} failed:\n${gate.summary}\nFix the cause (not the symptom), commit, and make fmt, clippy and the whole workspace test suite pass.`, { label: 'repair:' + u.key, phase: u.phase, ...tier(u, 'repair', 'sonnet') })
     if (!repaired) { halt(u.key + ' repair agent failed'); reports.push({ unit: u.key, built, review, fix, gate }); break }
-    gate = await agent(`In ${WT} (cd there), run: cargo fmt --all -- --check; cargo clippy --workspace --all-targets -j 2 -- -D warnings; cargo test --workspace -j 2; git status --porcelain. Report green=true only if all are clean, with test counts.${u.gateExtra ? ' ' + u.gateExtra : ''}`, { label: 'gate2:' + u.key, phase: u.phase, schema: GATE, effort: 'low' })
+    gate = await agent(`In ${WT} (cd there), run: cargo fmt --all -- --check; cargo clippy --workspace --all-targets -j 2 -- -D warnings; cargo test --workspace -j 2; git status --porcelain. Report green=true only if all are clean, with test counts.${u.gateExtra ? ' ' + u.gateExtra : ''}`, { label: 'gate2:' + u.key, phase: u.phase, schema: GATE, effort: 'low', ...tier(u, 'gate2', 'haiku') })
     if (!gate) { halt(u.key + ' gate2 agent failed'); reports.push({ unit: u.key, built, review, fix }); break }
   }
   reports.push({ unit: u.key, built, review, fix, gate })
