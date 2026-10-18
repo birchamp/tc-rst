@@ -3,9 +3,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use serde::de::IgnoredAny;
 use tc_api::Endpoint;
-use tc_api::app::BUILD_COMMIT;
 use tc_api::endpoint::{API_VERSION, API_VERSION_HEADER, EVENTS_PATH, TOKEN_HEADER};
 use wasm_bindgen::JsCast as _;
 use wasm_bindgen::JsValue;
@@ -13,8 +11,8 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{AbortSignal, Headers, ReadableStreamDefaultReader, Request, RequestInit, Response};
 
 use super::js;
-use crate::app::boot::{BuildCheck, RELOADED_FOR_KEY, Token, check_build};
-use crate::app::client::{CallError, Transport, api_url, interpret};
+use crate::app::boot::{BuildAction, RELOADED_FOR_KEY, Token, version_error_action};
+use crate::app::client::{CallError, Transport, api_url, interpret, refused_stream};
 use crate::app::effects::BusyCount;
 
 /// The work in flight, for `window.__tcIdle`. It changes the flag at every change.
@@ -87,13 +85,7 @@ impl Api {
             .fetch("POST", &api_url::<E>(), Some(&body), None)
             .await?;
         let (status, text) = read_text(response).await?;
-        let result = interpret::<E::Ok>(status, &text);
-        if let Err(error) = &result
-            && let Some(server) = error.version_mismatch()
-        {
-            reload_once_for(BUILD_COMMIT, server);
-        }
-        result
+        reload_on_version_error(interpret::<E::Ok>(status, &text))
     }
 
     /// A file of the UI, such as a catalog.
@@ -114,14 +106,20 @@ impl Api {
         after: u64,
         signal: &AbortSignal,
     ) -> Result<ReadableStreamDefaultReader, CallError> {
+        reload_on_version_error(self.open_events_once(after, signal).await)
+    }
+
+    async fn open_events_once(
+        &self,
+        after: u64,
+        signal: &AbortSignal,
+    ) -> Result<ReadableStreamDefaultReader, CallError> {
         let url = format!("{EVENTS_PATH}?after={after}");
         let response = self.fetch("GET", &url, None, Some(signal)).await?;
         let status = response.status();
         if status != 200 {
             let (_, text) = read_text(response).await?;
-            return Err(interpret::<IgnoredAny>(status, &text)
-                .err()
-                .unwrap_or(CallError::Transport(Transport::Status(status))));
+            return Err(refused_stream(status, &text));
         }
         let body = response
             .body()
@@ -177,16 +175,21 @@ async fn read_text(response: Response) -> Result<(u16, String), CallError> {
     Ok((status, text.as_string().unwrap_or_default()))
 }
 
-/// The server speaks another build or API version: reload once (APP-DESIGN 3.10), keeping a
-/// marker so that the same mismatch after the reload is shown instead of reloading again.
-pub(super) fn reload_once_for(server_commit: &str, server_api: u32) {
-    let kept = js::session_get(RELOADED_FOR_KEY);
-    if let BuildCheck::ReloadOnce { marker } =
-        check_build(server_commit, server_api, kept.as_deref())
-        // Without the marker the page after the reload would reload again, for ever.
-        && js::session_set(RELOADED_FOR_KEY, &marker)
-        && let Ok(window) = js::window()
-    {
-        let _ = window.location().reload();
+/// Every call's result and the event stream's open pass through here. A server that refuses
+/// the API version is another build than this page (APP-DESIGN 3.10): the page reloads once,
+/// whichever request it was that found out. [`version_error_action`] decides, and what it needs
+/// of the page is the marker, which the reload must be able to keep.
+fn reload_on_version_error<T>(result: Result<T, CallError>) -> Result<T, CallError> {
+    if let Err(error) = &result {
+        let kept = js::session_get(RELOADED_FOR_KEY);
+        let action = version_error_action(error, kept.as_deref(), |marker| {
+            js::session_set(RELOADED_FOR_KEY, marker)
+        });
+        if action == Some(BuildAction::Reload)
+            && let Ok(window) = js::window()
+        {
+            let _ = window.location().reload();
+        }
     }
+    result
 }

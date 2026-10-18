@@ -1,16 +1,19 @@
 //! The errors of a call, the page's token and build checks, and `Load` (APP-DESIGN 6.2, 3.10,
 //! 5.2).
 
+use std::cell::RefCell;
 use tc_api::app::{BUILD_COMMIT, Hello};
 use tc_api::endpoint::EVENTS_PATH;
 use tc_api::error::Flow;
 use tc_api::net::NetView;
 use tc_api::upload::UPLOADS_PATH;
 use tc_api::{ALL, API_VERSION, ApiError, Reply};
+
 use tc_ui::app::boot::{
-    BuildCheck, RELOADED_FOR_KEY, TOKEN_KEY, Token, check_build, token_from, unkept_marker,
+    BuildAction, BuildCheck, RELOADED_FOR_KEY, TOKEN_KEY, Token, build_action, check_build,
+    token_from, version_error_action,
 };
-use tc_ui::app::client::{API_ROOT, CallError, Transport, api_url, interpret};
+use tc_ui::app::client::{API_ROOT, CallError, Transport, api_url, interpret, refused_stream};
 use tc_ui::app::load::Load;
 
 const TOKEN: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP-";
@@ -242,29 +245,152 @@ fn another_api_version_reloads_once_then_stops() {
     );
 }
 
+/// A `keep` that records the markers it is asked to write, and answers `kept`.
+fn keeper(asked: &RefCell<Vec<String>>, kept: bool) -> impl FnOnce(&str) -> bool + '_ {
+    move |marker| {
+        asked.borrow_mut().push(marker.to_owned());
+        kept
+    }
+}
+
+#[test]
+fn the_action_for_a_build_keeps_the_marker_before_it_reloads() {
+    let asked = RefCell::new(Vec::new());
+    assert_eq!(
+        build_action(BUILD_COMMIT, API_VERSION, None, keeper(&asked, true)),
+        BuildAction::Proceed
+    );
+    assert!(
+        asked.borrow().is_empty(),
+        "no marker for a build that agrees"
+    );
+
+    // A different build: the marker is written, and only then does the page reload.
+    assert_eq!(
+        build_action("0123abc", API_VERSION, None, keeper(&asked, true)),
+        BuildAction::Reload
+    );
+    assert_eq!(*asked.borrow(), vec![format!("0123abc/{API_VERSION}")]);
+
+    // The reload left it, and the builds still differ: stop, and write nothing.
+    asked.borrow_mut().clear();
+    let marker = format!("0123abc/{API_VERSION}");
+    assert_eq!(
+        build_action("0123abc", API_VERSION, Some(&marker), keeper(&asked, true)),
+        BuildAction::Stop {
+            ui: format!("{BUILD_COMMIT} (API {API_VERSION})"),
+            server: format!("0123abc (API {API_VERSION})"),
+        }
+    );
+    assert!(asked.borrow().is_empty());
+}
+
 #[test]
 fn a_page_that_cannot_keep_the_marker_does_not_reload_for_ever() {
     // sessionStorage is blocked: the marker of the reload cannot be written, so the page after
     // the reload would see none and reload again. The mismatch is a stale page at once.
-    let BuildCheck::ReloadOnce { .. } = check_build("0123abc", API_VERSION, None) else {
-        panic!("the first look reloads");
-    };
+    for (commit, api) in [
+        ("0123abc", API_VERSION),
+        (BUILD_COMMIT, API_VERSION + 1),
+        ("0123abc", API_VERSION + 1),
+    ] {
+        let asked = RefCell::new(Vec::new());
+        assert_eq!(
+            build_action(commit, api, None, keeper(&asked, false)),
+            BuildAction::Stop {
+                ui: format!("{BUILD_COMMIT} (API {API_VERSION})"),
+                server: format!("{commit} (API {api})"),
+            },
+            "{commit} {api}"
+        );
+        assert_eq!(*asked.borrow(), vec![format!("{commit}/{api}")], "it tried");
+    }
+}
+
+#[test]
+fn the_event_stream_refused_for_the_version_follows_the_same_rule_as_a_call() {
+    // `GET /api/v1/events` with another X-Tc-Api is answered like any /api/ path: 409 with the
+    // version error. It is the first request of a page, so it is the one that finds out.
+    let newer = API_VERSION + 1;
+    let body = json(&Reply::<()>::Err(ApiError::Version { server: newer }));
+    let refused = refused_stream(409, &body);
+    assert_eq!(refused, CallError::Api(ApiError::Version { server: newer }));
     assert_eq!(
-        unkept_marker("0123abc", API_VERSION),
-        check_build(
-            "0123abc",
-            API_VERSION,
-            Some(&format!("0123abc/{API_VERSION}"))
-        )
+        refused,
+        interpret::<NetView>(409, &body).unwrap_err(),
+        "the stream's refusal and a call's are one error"
     );
+
+    let asked = RefCell::new(Vec::new());
+    assert_eq!(
+        version_error_action(&refused, None, keeper(&asked, true)),
+        Some(BuildAction::Reload)
+    );
+    let marker = format!("{BUILD_COMMIT}/{newer}");
+    assert_eq!(*asked.borrow(), vec![marker.clone()]);
+
+    // After that reload the same refusal stops the page, whichever request meets it, and a
+    // stream that is retried every few seconds never reloads again.
+    let asked = RefCell::new(Vec::new());
+    for _ in 0..3 {
+        assert!(matches!(
+            version_error_action(&refused, Some(&marker), keeper(&asked, true)),
+            Some(BuildAction::Stop { .. })
+        ));
+    }
+    assert!(asked.borrow().is_empty());
+
+    // Storage that refuses the marker: stop at once.
     assert!(matches!(
-        unkept_marker("0123abc", API_VERSION),
-        BuildCheck::Stale { .. }
+        version_error_action(&refused, None, keeper(&RefCell::new(Vec::new()), false)),
+        Some(BuildAction::Stop { .. })
     ));
-    assert!(matches!(
-        unkept_marker(BUILD_COMMIT, API_VERSION + 1),
-        BuildCheck::Stale { .. }
-    ));
+    // Another server API version is worth a reload of its own.
+    let other = refused_stream(
+        409,
+        &json(&Reply::<()>::Err(ApiError::Version { server: newer + 1 })),
+    );
+    assert_eq!(
+        version_error_action(
+            &other,
+            Some(&marker),
+            keeper(&RefCell::new(Vec::new()), true)
+        ),
+        Some(BuildAction::Reload)
+    );
+}
+
+#[test]
+fn a_refused_stream_that_is_not_a_version_refusal_never_reloads() {
+    let asked = RefCell::new(Vec::new());
+    for (status, body) in [
+        (401, "unauthorized"),
+        (403, "forbidden"),
+        (503, ""),
+        (500, "internal error"),
+        // A 409 that is not the version reply.
+        (409, "conflict"),
+        (409, r#"{"type":"ok","value":null}"#),
+    ] {
+        let refused = refused_stream(status, body);
+        assert_eq!(
+            refused,
+            CallError::Transport(Transport::Status(status)),
+            "{status} {body:?}"
+        );
+        assert_eq!(
+            version_error_action(&refused, None, keeper(&asked, true)),
+            None
+        );
+    }
+    // Nor do the other API errors.
+    for error in [CallError::Dropped, CallError::Api(ApiError::StaleSession)] {
+        assert_eq!(
+            version_error_action(&error, None, keeper(&asked, true)),
+            None
+        );
+    }
+    assert!(asked.borrow().is_empty());
 }
 
 #[test]

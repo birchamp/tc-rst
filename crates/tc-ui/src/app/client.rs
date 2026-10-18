@@ -77,3 +77,12 @@ pub fn interpret<T: DeserializeOwned>(status: u16, body: &str) -> Result<T, Call
         other => Err(CallError::Transport(Transport::Status(other))),
     }
 }
+
+/// The answer of the event stream's open when its status is not 200. The server checks the
+/// token, the Host and Origin, and the API version of every `/api/` path, the stream's too, so
+/// a page of another API version is refused here with the same 409 as in a call.
+pub fn refused_stream(status: u16, body: &str) -> CallError {
+    interpret::<IgnoredAny>(status, body)
+        .err()
+        .unwrap_or(CallError::Transport(Transport::Status(status)))
+}

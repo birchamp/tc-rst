@@ -6,6 +6,8 @@ use std::fmt;
 use tc_api::API_VERSION;
 use tc_api::app::BUILD_COMMIT;
 
+use super::client::CallError;
+
 /// `sessionStorage` key of the launch's token, which a reload of the page keeps.
 pub const TOKEN_KEY: &str = "tc4.token";
 /// `sessionStorage` key of what the last reload for a build mismatch was for.
@@ -72,14 +74,6 @@ fn describe(commit: &str, api: u32) -> String {
     format!("{commit} (API {api})")
 }
 
-/// The verdict when the page cannot keep the marker of a reload (`sessionStorage` is blocked):
-/// the next load would see no marker and reload again, for ever, so the mismatch is a stale
-/// page at once. Always [`BuildCheck::Stale`] for a mismatch, and [`BuildCheck::Same`] for none.
-pub fn unkept_marker(server_commit: &str, server_api: u32) -> BuildCheck {
-    let marker = format!("{server_commit}/{server_api}");
-    check_build(server_commit, server_api, Some(&marker))
-}
-
 /// Compares the server's build and API version (`app/hello`) with this build's. `reloaded_for`
 /// is the marker a reload left in [`RELOADED_FOR_KEY`], if any.
 pub fn check_build(server_commit: &str, server_api: u32, reloaded_for: Option<&str>) -> BuildCheck {
@@ -95,4 +89,58 @@ pub fn check_build(server_commit: &str, server_api: u32, reloaded_for: Option<&s
     } else {
         BuildCheck::ReloadOnce { marker }
     }
+}
+
+/// What the page does about a server of another build or API version (APP-DESIGN 3.10).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BuildAction {
+    /// The builds agree.
+    Proceed,
+    /// Reload the page, once: the marker that tells the page after the reload it has already
+    /// tried was kept.
+    Reload,
+    /// Show the boot error naming both builds. The page already reloaded for this mismatch, or
+    /// it could not keep the marker, so a reload would repeat for ever.
+    Stop { ui: String, server: String },
+}
+
+/// [`check_build`], and the one rule about the marker that no caller may get wrong. `keep` writes
+/// the marker of a reload and says whether it was written: when the page cannot keep it
+/// (`sessionStorage` is blocked) the page after the reload would see none and reload again, for
+/// ever, so the mismatch is a stale page at once.
+///
+/// The boot after `hello`, a call refused for the version and the event stream's open all decide
+/// through this one function.
+pub fn build_action(
+    server_commit: &str,
+    server_api: u32,
+    reloaded_for: Option<&str>,
+    keep: impl FnOnce(&str) -> bool,
+) -> BuildAction {
+    match check_build(server_commit, server_api, reloaded_for) {
+        BuildCheck::Same => BuildAction::Proceed,
+        BuildCheck::ReloadOnce { marker } if keep(&marker) => BuildAction::Reload,
+        BuildCheck::ReloadOnce { .. } => stale(server_commit, server_api),
+        BuildCheck::Stale { ui, server } => BuildAction::Stop { ui, server },
+    }
+}
+
+fn stale(server_commit: &str, server_api: u32) -> BuildAction {
+    BuildAction::Stop {
+        ui: describe(BUILD_COMMIT, API_VERSION),
+        server: describe(server_commit, server_api),
+    }
+}
+
+/// The action for a call, or the event stream's open, that failed. `Some` only when the server
+/// refused the API version: the server answers every `/api/` path with 409 first, the stream's
+/// included. That error names the server's API version and not its commit, so the commit
+/// compared is this page's own.
+pub fn version_error_action(
+    error: &CallError,
+    reloaded_for: Option<&str>,
+    keep: impl FnOnce(&str) -> bool,
+) -> Option<BuildAction> {
+    let server_api = error.version_mismatch()?;
+    Some(build_action(BUILD_COMMIT, server_api, reloaded_for, keep))
 }

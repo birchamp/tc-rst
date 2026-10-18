@@ -32,9 +32,7 @@ pub use api::Api;
 pub use query::QueryCache;
 pub use state::ServerState;
 
-use crate::app::boot::{
-    BuildCheck, RELOADED_FOR_KEY, TOKEN_KEY, check_build, token_from, unkept_marker,
-};
+use crate::app::boot::{BuildAction, RELOADED_FOR_KEY, TOKEN_KEY, build_action, token_from};
 use crate::app::cache::CachedQuery;
 use crate::app::client::CallError;
 use crate::app::effects::{Effect, active_jobs, apply_reread, jobs_to_reread, merge_job, react};
@@ -384,24 +382,17 @@ async fn boot(base: &str, busy: &Rc<api::Busy>) -> Result<(), String> {
         .map_err(|error| format!("app/hello: {error}"))?;
     js::mark("tc4:hello");
 
-    let mut check = check_build(
-        &hello.build.commit,
-        hello.api,
-        js::session_get(RELOADED_FOR_KEY).as_deref(),
-    );
-    if let BuildCheck::ReloadOnce { marker } = &check
-        && !js::session_set(RELOADED_FOR_KEY, marker)
-    {
-        // Without the marker the page after the reload would reload again, for ever.
-        check = unkept_marker(&hello.build.commit, hello.api);
-    }
-    match check {
-        BuildCheck::Same => js::session_remove(RELOADED_FOR_KEY),
-        BuildCheck::ReloadOnce { .. } => {
+    let kept = js::session_get(RELOADED_FOR_KEY);
+    let action = build_action(&hello.build.commit, hello.api, kept.as_deref(), |marker| {
+        js::session_set(RELOADED_FOR_KEY, marker)
+    });
+    match action {
+        BuildAction::Proceed => js::session_remove(RELOADED_FOR_KEY),
+        BuildAction::Reload => {
             let _ = window.location().reload();
             return Ok(());
         }
-        BuildCheck::Stale { ui, server } => {
+        BuildAction::Stop { ui, server } => {
             return Err(format!(
                 "this page is from build {ui}, but the app's server is build {server}"
             ));
