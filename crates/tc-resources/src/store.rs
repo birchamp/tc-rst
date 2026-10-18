@@ -506,8 +506,12 @@ impl SeedPlan {
 pub enum Seeding {
     Finished(SeedReport),
     /// The watch asked to stop. Every install in `added` is whole and checked. The copy
-    /// being made is not in the store; its files are under `.partial/`, which the next
-    /// [`ResourceStore::open`] removes. Seeding again copies what is missing.
+    /// being made is not in the store; its files stay under `.partial/`, and the next
+    /// [`ResourceStore::open`] removes them, waiting while a scanner holds one. What a
+    /// scanner still holds after the waits stays until a later open:
+    /// [`ResourceStore::open`] keeps it, and [`ResourceStore::open_keeping_leftovers`],
+    /// which the app uses, also returns it to be reported. A leftover never reaches an
+    /// install. Seeding again copies what is missing.
     Cancelled(SeedReport),
 }
 
