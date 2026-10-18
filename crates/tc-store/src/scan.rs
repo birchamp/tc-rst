@@ -176,7 +176,13 @@ impl Writer {
             }
         }
         let from = self.folder.path(rel);
-        match self.vfs.rename(&from, &external.join(&name)) {
+        let moved = crate::atomic::rename_held(
+            &*self.vfs,
+            &from,
+            &external.join(&name),
+            &crate::atomic::HeldRetry::BACKGROUND,
+        );
+        match moved {
             Ok(()) => {}
             Err(e) if self.vfs.is_held(&e) => return Ok(None),
             Err(e) if crate::vfs::is_not_found(&e) => return Ok(None),
