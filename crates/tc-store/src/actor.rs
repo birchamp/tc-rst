@@ -10,13 +10,14 @@
 use crate::commands;
 use crate::drafts::{DraftWriter, cleared_by};
 use crate::error::StoreError;
-use crate::handle::{Mode, Msg, ProjectHandle, StoreEvent};
+use crate::handle::{Mode, Msg, ProjectHandle, Resolver, StoreEvent, pending};
 use crate::layout::{INDEX, TC};
 use crate::load::JournalKind;
 use crate::project::{PackInfo, PendingInfo, Project};
 use crate::reply::{CommandError, ReadOnlyReason};
 use crate::vfs::LockHandle;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use crate::writer::{Job, Origin};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tc_journal::fold::Notice;
@@ -38,17 +39,32 @@ struct Actor {
     last_checkpoint: Instant,
     /// Held while `.tc/index.bin` is written, by the background job or at close.
     index_lock: Arc<Mutex<()>>,
+    /// The writer's thread, joined at close.
+    writer_thread: Option<std::thread::JoinHandle<()>>,
 }
 
-/// Starts the actor of an opened project and returns its handle.
+/// Starts the actor of an opened project and returns its handle. `writer` is the queue of
+/// the writer thread, which the open has started (§6.1 O10: its first job is the open's
+/// materialization).
 pub(crate) fn spawn(
-    project: Project,
+    mut project: Project,
     lock: Option<Box<dyn LockHandle>>,
     drafts: Arc<DraftWriter>,
+    writer: Sender<Job>,
+    writer_thread: Option<std::thread::JoinHandle<()>>,
+    actor_tx: Sender<Msg>,
+    rx: Receiver<Msg>,
 ) -> ProjectHandle {
-    let (tx, rx) = mpsc::channel();
+    let tx = actor_tx;
+    project.writer = Some(writer.clone());
     let shared = project.shared.clone();
     let index_lock = Arc::new(Mutex::new(()));
+    // O10: the open's materialization is the writer's first job, and the open does not wait
+    // for it (a failure of it turns the project read-only, §6.1).
+    if matches!(shared.facts().mode, Mode::Writable) {
+        let job = project.materialize_job(Origin::Open, Ok(()), None);
+        let _ = writer.send(Job::Materialize(Box::new(job)));
+    }
     let dirty = !project.dirty.is_empty();
     let actor = Actor {
         project,
@@ -58,6 +74,7 @@ pub(crate) fn spawn(
         due: dirty.then(|| Instant::now() + MATERIALIZE_AFTER),
         last_checkpoint: Instant::now(),
         index_lock: index_lock.clone(),
+        writer_thread,
     };
     let thread = std::thread::Builder::new()
         .name("tc-store actor".into())
@@ -66,6 +83,7 @@ pub(crate) fn spawn(
     ProjectHandle {
         shared,
         tx: Mutex::new(tx),
+        writer: Mutex::new(writer),
         drafts,
         actor: Mutex::new(thread),
         index_lock,
@@ -135,42 +153,15 @@ impl Actor {
                 }
                 reply.resolve(result);
             }
-            Msg::Materialize { reply } => {
-                let result = self.materialize();
-                if let Some(reply) = reply {
-                    reply.resolve(result);
-                }
-            }
-            Msg::Checkpoint { reply } => {
-                let result = self.checkpoint();
-                reply.resolve(result);
-            }
-            Msg::DismissNotice { id, reply } => {
-                let result = self.dismiss(id);
-                reply.resolve(result);
-            }
-            Msg::RestoreHeld { rel, reply } => {
-                let result = self.restore_held(&rel);
-                reply.resolve(result);
-            }
-            Msg::StorageCheck(results) => {
-                let was_dirty = !self.project.dirty.is_empty();
-                if self.read_only().is_none()
-                    && let Err(e) = self.project.apply_check(results)
-                {
-                    self.project.notice(
-                        Notice::FileUnreadable {
-                            path: ".tc/materialized.json".into(),
-                            reason: e.to_string().into(),
-                        },
-                        None,
-                    );
-                }
-                // What the check found is written now, within this message, so `wait_idle`
-                // covers it; paths a save made dirty keep their own 3 s.
-                if !was_dirty && !self.project.dirty.is_empty() {
-                    let _ = self.materialize();
-                }
+            Msg::Materialize { reply } => self.materialize(Origin::Leave, Ok(()), reply),
+            Msg::Checkpoint { reply } => self.checkpoint(Some(reply)),
+            Msg::WritesFailed { reason } => {
+                // The open's first materialization failed: the writer made the project
+                // read-only; a project that cannot be written holds no lock.
+                self.project.dirty = Default::default();
+                self.due = None;
+                self.lock = None;
+                let _ = reason;
             }
             Msg::Sync { reply } => reply.resolve(()),
             Msg::Close { reply } => {
@@ -182,53 +173,59 @@ impl Actor {
 
     fn on_timer(&mut self) {
         if self.due.is_some_and(|d| d <= Instant::now()) {
-            let _ = self.materialize();
+            self.materialize(Origin::Timer, Ok(()), None);
         }
         if self.last_checkpoint.elapsed() >= CHECKPOINT_EVERY {
             self.last_checkpoint = Instant::now();
             if !self.project.journal.pending.is_empty() {
-                let _ = self.checkpoint();
+                self.checkpoint(None);
             }
         }
     }
 
-    /// §5.10. A path another program refused, or a write that failed, stays dirty and is
-    /// tried again: the actor never waits for it, so commands go on being served.
-    fn materialize(&mut self) -> Result<(), StoreError> {
+    /// §5.10. Hands the dirty paths to the writer with the newest snapshot, and goes on: the
+    /// actor never waits for a derived file. `reply` resolves when the writer is done.
+    fn materialize(
+        &mut self,
+        origin: Origin,
+        sealed: Result<(), StoreError>,
+        reply: Option<Resolver<Result<(), StoreError>>>,
+    ) {
         self.due = None;
         if self.read_only().is_some() {
-            return Ok(());
+            if let Some(reply) = reply {
+                reply.resolve(sealed);
+            }
+            return;
         }
-        let result = self.project.materialize();
-        if !self.project.dirty.is_empty() {
-            let wait = match &result {
-                Ok(_) => self.project.retry_delay().unwrap_or(MATERIALIZE_AFTER),
-                Err(_) => MATERIALIZE_AFTER,
-            };
-            self.due = Some(Instant::now() + wait);
+        let job = self.project.materialize_job(origin, sealed, reply);
+        if let Some(writer) = &self.project.writer {
+            // A writer that is gone drops the job, and its reply resolves as closed.
+            let _ = writer.send(Job::Materialize(Box::new(job)));
         }
-        result.map(|_| ())
     }
 
     /// §5.13 C1 and C2 (the commit is unit S2's), after the listing that finds a second
-    /// writer.
-    fn checkpoint(&mut self) -> Result<(), StoreError> {
+    /// writer. The seal runs here; the materialization that follows it runs on the writer.
+    fn checkpoint(&mut self, reply: Option<Resolver<Result<(), StoreError>>>) {
         self.last_checkpoint = Instant::now();
+        let done = |reply: Option<Resolver<Result<(), StoreError>>>, result| {
+            if let Some(reply) = reply {
+                reply.resolve(result);
+            }
+        };
         if self.read_only().is_some() {
-            return Ok(());
+            return done(reply, Ok(()));
         }
-        if self.second_writer()? {
-            return Ok(());
+        match self.second_writer() {
+            Ok(false) => {}
+            Ok(true) => return done(reply, Ok(())),
+            Err(e) => return done(reply, Err(e)),
         }
-        self.project
-            .shared
-            .hooks
-            .wait(crate::hooks::Point::BeforeCheckpoint);
         // A seal that failed after it renamed a pack leaves `metadata.json` without that
         // pack (I7), so the materialization runs anyway; the seal's error comes first.
-        let sealed = self.project.seal();
-        let materialized = self.materialize();
-        sealed.map(|_| ()).and(materialized)
+        let sealed = self.project.seal().map(|_| ());
+        self.materialize(Origin::Checkpoint, sealed, reply);
     }
 
     /// Folds journal files another installation wrote into this folder while it was open,
@@ -281,7 +278,6 @@ impl Actor {
                     );
                 }
             }
-            self.project.prerendered.clear();
             let delta = self.project.fold.add(loaded.inputs);
             let (fold, kind) = (&self.project.fold, self.project.kind);
             self.project.dirty.mark(fold, kind, &delta);
@@ -300,78 +296,15 @@ impl Actor {
         Ok(true)
     }
 
-    fn dismiss(&mut self, id: u64) -> Result<(), StoreError> {
-        let Some(notice) = self.project.shared.remove_notice(id) else {
-            return Ok(());
-        };
-        if self.read_only().is_some() {
-            return Ok(());
-        }
-        // The copy of a hold that stands is the only other trace of the person's bytes, and
-        // the notice comes back at the next open (§6.2): dismissing it hides it for this
-        // session and keeps the copy.
-        let held = self.project.manifest.paths.values().any(|e| {
-            e.held
-                .as_ref()
-                .is_some_and(|h| Some(&h.copy) == notice.copy.as_ref())
-        });
-        if held {
-            return Ok(());
-        }
-        if let Some(copy) = notice.copy {
-            let path = self.project.folder.path(&copy);
-            if self.project.vfs.metadata(&path).is_ok() {
-                crate::atomic::atomic_remove(
-                    &*self.project.vfs,
-                    &path,
-                    crate::atomic::SyncDir::Now,
-                )?;
-            }
-        }
-        Ok(())
-    }
-
-    /// *Restore from the project* for a held path (§6.2): the file is written from the
-    /// fold, with the held bytes as the ones the compare-and-swap expects.
-    fn restore_held(&mut self, rel: &str) -> Result<(), StoreError> {
-        if let Some(reason) = self.read_only() {
-            return Err(StoreError::Other(format!(
-                "the project is read-only: {reason:?}"
-            )));
-        }
-        let Some(file) = self
-            .project
-            .fold
-            .derived_files()
-            .into_iter()
-            .find(|f| f.path() == rel)
-        else {
-            return Ok(());
-        };
-        // The held bytes are the ones the compare-and-swap expects to find (§6.2); the hold
-        // and its notice end, the copy stays.
-        let held = self
-            .project
-            .manifest
-            .paths
-            .get(rel)
-            .and_then(|e| e.held.as_ref().map(|h| h.md5.clone()));
-        if let Some(held) = held {
-            self.project.end_hold(rel);
-            if let Some(entry) = self.project.manifest.paths.get_mut(rel) {
-                entry.md5 = held;
-            }
-        }
-        self.project.dirty.files.insert(file);
-        self.materialize()
-    }
-
-    /// Seal and materialize what is due, write the fold cache, clear the lock's content and
-    /// release the lock (§3.6). The pending files hold every save already.
+    /// Seal and materialize what is due, write the fold cache, stop the writer, clear the
+    /// lock's content and release the lock (§3.6). The pending files hold every save
+    /// already.
     fn close(&mut self) -> Result<(), StoreError> {
         let mut result = Ok(());
         if self.read_only().is_none() {
-            result = self.checkpoint();
+            let (done, resolver) = pending(|| Ok(()));
+            self.checkpoint(Some(resolver));
+            result = done.wait();
             if self.read_only().is_none() {
                 let bytes = self.project.index_bytes();
                 if let Some(bytes) = bytes {
@@ -387,8 +320,9 @@ impl Actor {
                 }
             }
         }
+        self.stop_writer();
         // Everything the project folder gets from this session is written before the lock
-        // is released: the draft writer ends first (§5.0).
+        // is released: the writer and the draft writer end first (§5.0).
         self.drafts.stop();
         if self.read_only().is_none()
             && let Some(lock) = self.lock.as_mut()
@@ -397,5 +331,18 @@ impl Actor {
         }
         self.lock = None;
         result
+    }
+
+    /// Ends the writer thread after the jobs already sent.
+    fn stop_writer(&mut self) {
+        if let Some(writer) = self.project.writer.take() {
+            let (done, resolver) = pending(|| ());
+            if writer.send(Job::Close { reply: resolver }).is_ok() {
+                done.wait();
+            }
+        }
+        if let Some(thread) = self.writer_thread.take() {
+            let _ = thread.join();
+        }
     }
 }

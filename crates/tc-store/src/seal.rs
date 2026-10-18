@@ -350,7 +350,6 @@ impl Project {
                         SyncDir::Deferred(&mut dirs),
                     )?;
                     self.journal.packs.remove(rel);
-                    self.manifest.packs.remove(rel);
                     if self.index.sections.remove(rel).is_some() {
                         self.index.changed = true;
                     }

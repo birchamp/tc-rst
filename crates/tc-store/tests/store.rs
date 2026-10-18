@@ -45,3 +45,6 @@ mod review;
 
 #[path = "store/held.rs"]
 mod held;
+
+#[path = "store/writer.rs"]
+mod writer;

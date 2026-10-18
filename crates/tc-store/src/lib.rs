@@ -18,6 +18,7 @@
 pub mod actor;
 pub mod appdata;
 pub mod atomic;
+mod classify;
 pub mod clock;
 mod commands;
 pub mod counters;
@@ -45,6 +46,7 @@ pub mod store;
 mod temps;
 pub mod training;
 pub mod vfs;
+mod writer;
 
 pub use atomic::{DirSet, SyncDir, WriteError, atomic_create_dirs, atomic_remove, atomic_write};
 pub use clock::{Clock, ManualClock, SystemClock};

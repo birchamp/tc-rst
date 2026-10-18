@@ -9,10 +9,13 @@ pub enum Point {
     BeforeBookRead,
     BeforeDraftWrite,
     BeforeDurablePending,
-    /// The actor is about to seal and materialize for a checkpoint (§5.13).
+    /// The writer has been handed a checkpoint's work, after the seal (§5.13, R21).
     BeforeCheckpoint,
-    /// The actor is about to write derived files (§5.10).
+    /// The writer is about to write derived files (§5.10).
     BeforeMaterialize,
+    /// The writer has a complete temp file of a derived file and is about to look at the
+    /// target one last time and rename (§5.10 M4, I8).
+    BeforeRename,
     /// The start cleanup is about to remove a staging folder (N1).
     BeforeStagingRemoval,
     /// A create or copy is about to rename its staging folder into place (N2).

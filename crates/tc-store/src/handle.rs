@@ -452,15 +452,10 @@ pub(crate) enum Msg {
     Checkpoint {
         reply: Resolver<Result<(), StoreError>>,
     },
-    DismissNotice {
-        id: u64,
-        reply: Resolver<Result<(), StoreError>>,
+    /// The writer's first job failed: the project is read-only and holds no lock (§6.1).
+    WritesFailed {
+        reason: String,
     },
-    RestoreHeld {
-        rel: String,
-        reply: Resolver<Result<(), StoreError>>,
-    },
-    StorageCheck(Vec<crate::open::CheckResult>),
     Sync {
         reply: Resolver<()>,
     },
@@ -473,6 +468,9 @@ pub(crate) enum Msg {
 pub struct ProjectHandle {
     pub(crate) shared: Arc<Shared>,
     pub(crate) tx: Mutex<Sender<Msg>>,
+    /// The writer's queue: the actor never stands between a person and a derived file's
+    /// notice or a held file's restore.
+    pub(crate) writer: Mutex<Sender<crate::writer::Job>>,
     pub(crate) drafts: Arc<DraftWriter>,
     pub(crate) actor: Mutex<Option<std::thread::JoinHandle<()>>>,
     /// Held while `.tc/index.bin` is written.
@@ -482,6 +480,7 @@ pub struct ProjectHandle {
 /// The work an open leaves to a background thread (§6.1 O8, O14): writing the fold cache,
 /// and reading the paths O9 took as converged without reading them.
 pub(crate) struct Background {
+    pub writer: Sender<crate::writer::Job>,
     pub vfs: Arc<dyn crate::vfs::Vfs>,
     pub counters: Arc<Counters>,
     pub folder: crate::layout::Folder,
@@ -503,6 +502,14 @@ impl ProjectHandle {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .send(msg)
+            .is_ok()
+    }
+
+    fn send_writer(&self, job: crate::writer::Job) -> bool {
+        self.writer
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .send(job)
             .is_ok()
     }
 
@@ -604,7 +611,7 @@ impl ProjectHandle {
     pub fn dismiss_notice(&self, id: u64) -> Pending<Result<(), StoreError>> {
         let (pending, resolver) =
             pending(|| Err(StoreError::Other("the project is closed".into())));
-        self.send(Msg::DismissNotice {
+        self.send_writer(crate::writer::Job::DismissNotice {
             id,
             reply: resolver,
         });
@@ -616,7 +623,7 @@ impl ProjectHandle {
     pub fn restore_held(&self, path: &str) -> Pending<Result<(), StoreError>> {
         let (pending, resolver) =
             pending(|| Err(StoreError::Other("the project is closed".into())));
-        self.send(Msg::RestoreHeld {
+        self.send_writer(crate::writer::Job::RestoreHeld {
             rel: path.to_owned(),
             reply: resolver,
         });
@@ -625,7 +632,6 @@ impl ProjectHandle {
 
     /// Starts the open's background work (see [`Background`]).
     pub(crate) fn start_background(&self, job: Background) {
-        let tx = self.tx.lock().unwrap_or_else(|e| e.into_inner()).clone();
         let shared = self.shared.clone();
         let index_lock = self.index_lock.clone();
         shared.job_started();
@@ -653,9 +659,13 @@ impl ProjectHandle {
                         &job.check,
                         job.stamp_ns,
                     );
-                    let _ = tx.send(Msg::StorageCheck(results));
+                    let _ = job.writer.send(crate::writer::Job::StorageCheck(results));
                     let (pending, resolver) = pending(|| ());
-                    if tx.send(Msg::Sync { reply: resolver }).is_ok() {
+                    if job
+                        .writer
+                        .send(crate::writer::Job::Sync { reply: resolver })
+                        .is_ok()
+                    {
                         pending.wait();
                     }
                 }
@@ -723,9 +733,14 @@ impl ProjectHandle {
     /// Waits until the actor's queue is empty and no background job of the store runs:
     /// tests use it before they count operations or stop the writer.
     pub fn wait_idle(&self) {
-        let (pending, resolver) = pending(|| ());
+        let (idle, resolver) = pending(|| ());
         if self.send(Msg::Sync { reply: resolver }) {
-            pending.wait();
+            idle.wait();
+        }
+        // The writer after the actor: what the actor sent it is in its queue by now.
+        let (idle, resolver) = pending(|| ());
+        if self.send_writer(crate::writer::Job::Sync { reply: resolver }) {
+            idle.wait();
         }
         self.shared.wait_jobs();
         self.drafts.flush();

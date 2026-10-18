@@ -8,12 +8,13 @@ use crate::commands::{Ctx, Plan};
 use crate::counters::Counters;
 use crate::handle::{Shared, StoreEvent};
 use crate::layout::{Folder, PENDING};
-use crate::manifest::Manifest;
 use crate::reply::{CommandError, Refusal, StoreReply, Stored};
 use crate::source::FileSource;
 use crate::vfs::Vfs;
+use crate::writer::{Job, PackFacts};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 use tc_journal::command::PlannedChange;
 use tc_journal::fold::{Delta, DerivedFile, FoldInput, FoldState, ProjectKind};
 use tc_journal::index::Section;
@@ -87,6 +88,13 @@ pub(crate) struct Dirty {
 impl Dirty {
     pub fn is_empty(&self) -> bool {
         self.files.is_empty() && !self.everything && !self.metadata
+    }
+
+    /// Adds what `other` marks.
+    pub fn absorb(&mut self, other: Dirty) {
+        self.files.extend(other.files);
+        self.everything |= other.everything;
+        self.metadata |= other.metadata;
     }
 
     /// Marks what a fold step changed.
@@ -164,29 +172,51 @@ pub(crate) struct Project {
     pub source: Arc<FileSource>,
     pub clock: Arc<dyn Clock>,
     pub app: Arc<AppData>,
-    /// On a network drive no entry is clean by stat (§6.2).
-    pub network: bool,
     pub journal: Journal,
     pub index: IndexCache,
-    pub manifest: Manifest,
+    /// What changed since the last job sent to the writer (§5.0 B5).
     pub dirty: Dirty,
-    /// The newest time stamp (§6.2): `.tc/lock` at O1, `materialized.json` at each M7.
-    pub stamp_ns: i64,
     pub shared: Arc<Shared>,
-    /// Manifest entries were refreshed or settled since it was last written.
-    pub manifest_changed: bool,
-    /// Bytes O9 projected to classify a path, kept for the materialization that follows it
-    /// with the same fold, so the open projects each file once. Cleared when the fold
-    /// changes.
-    pub prerendered: BTreeMap<String, Vec<u8>>,
-    /// Derived paths another program refused the app (§5.10), by path.
-    pub busy: BTreeMap<String, crate::materialize::Busy>,
-    /// The md5 of each outside version of `metadata.json` already copied to `.tc/external/`
-    /// this session, so a blocked write that is tried again copies it once.
-    pub copied_outside: BTreeSet<String>,
+    /// The writer's queue (§5.0 "One writer per project").
+    pub writer: Option<Sender<Job>>,
 }
 
 impl Project {
+    /// What the writer needs of the packs the actor knows.
+    pub fn pack_facts(&self) -> BTreeMap<String, PackFacts> {
+        self.journal
+            .packs
+            .iter()
+            .map(|(rel, p)| {
+                (
+                    rel.clone(),
+                    PackFacts {
+                        size: p.size,
+                        fingerprint: p.fingerprint,
+                    },
+                )
+            })
+            .collect()
+    }
+
+    /// The job that hands the dirty paths to the writer with the newest snapshot.
+    pub fn materialize_job(
+        &mut self,
+        origin: crate::writer::Origin,
+        sealed: Result<(), crate::error::StoreError>,
+        reply: Option<crate::handle::Resolver<Result<(), crate::error::StoreError>>>,
+    ) -> crate::writer::MaterializeJob {
+        crate::writer::MaterializeJob {
+            snapshot: self.shared.snapshot(),
+            dirty: std::mem::take(&mut self.dirty),
+            packs: self.pack_facts(),
+            complete: self.journal.complete(),
+            origin,
+            sealed,
+            reply,
+        }
+    }
+
     pub fn ctx(&self) -> Ctx<'_> {
         Ctx {
             fold: &self.fold,
@@ -226,7 +256,6 @@ impl Project {
         self.next_seq += changes.len() as u64;
         let ids: Vec<ChangeId> = changes.iter().map(Change::id).collect();
         let keys: Vec<RecordKey> = changes.iter().map(|c| c.body().record.key()).collect();
-        self.prerendered.clear();
         let delta = self.fold.add(changes.into_iter().map(FoldInput::from));
         self.dirty.mark(&self.fold, self.kind, &delta);
         let seq = self.publish();

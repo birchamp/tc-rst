@@ -15,13 +15,14 @@
 
 use crate::appdata::utc_stamp;
 use crate::atomic::{
-    DirSet, HeldRetry, SyncDir, atomic_create_dirs, atomic_remove, atomic_write, atomic_write_with,
+    DirSet, HeldRetry, SyncDir, Written, atomic_create_dirs, atomic_remove, atomic_write,
+    atomic_write_checked,
 };
 use crate::error::StoreError;
 use crate::layout::{self, EXTERNAL, HEADS, INTENT, MANIFEST, METADATA, TC};
 use crate::manifest::{Entry, HeadsFile, Held, HeldCause, Intent, IntentWrite, PackEntry};
-use crate::project::Project;
-use crate::vfs::is_not_found;
+use crate::vfs::{FileMeta, is_not_found};
+use crate::writer::Writer;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -52,6 +53,16 @@ pub(crate) enum Disk {
     Missing,
     Unreadable,
     Bytes(Vec<u8>),
+}
+
+/// What the write of one derived file did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Wrote {
+    Done,
+    /// Another program holds the file.
+    Busy,
+    /// The file is not as M1 found it.
+    Refused,
 }
 
 /// What one materialization did.
@@ -89,7 +100,7 @@ pub(crate) fn obs_scope() -> serde_json::Value {
     tc_obs::template::template_current_scope()
 }
 
-impl Project {
+impl Writer {
     /// A read of `rel` that tells a file gone from a file that cannot be read now.
     pub(crate) fn read_disk(&self, rel: &str) -> Disk {
         let path = self.folder.path(rel);
@@ -384,7 +395,7 @@ impl Project {
     /// The facts `metadata.json` lists for a pack: from the manifest when its size and
     /// fingerprint are the ones recorded, else read once.
     fn pack_entry(&mut self, rel: &str) -> Result<Option<PackEntry>, StoreError> {
-        let Some(info) = self.journal.packs.get(rel).cloned() else {
+        let Some(info) = self.packs.get(rel).cloned() else {
             return Ok(None);
         };
         let fingerprint = format!("{:016x}", info.fingerprint);
@@ -443,7 +454,7 @@ impl Project {
                 .collect()
         };
         let mut removes: Vec<String> = Vec::new();
-        if self.journal.complete() {
+        if self.complete {
             for (path, entry) in &self.manifest.paths {
                 let ours = path != METADATA
                     && !FIXED.contains(&path.as_str())
@@ -463,6 +474,8 @@ impl Project {
         let rendered = self.render(&dirty);
         // M1: compare and swap.
         let mut writes: Vec<(String, DerivedFile, Vec<u8>)> = Vec::new();
+        // What each path looked like when M1 read it, which M4 checks again at the rename.
+        let mut seen: BTreeMap<String, Option<FileMeta>> = BTreeMap::new();
         let mut converged: BTreeMap<String, (DerivedFile, String, bool)> = BTreeMap::new();
         for (path, (file, bytes)) in rendered {
             if self
@@ -476,6 +489,7 @@ impl Project {
                 continue;
             }
             let new = md5_hex(&bytes);
+            let stat = self.vfs.metadata(&self.folder.path(&path)).ok();
             let disk = match self.read_disk(&path) {
                 Disk::Unreadable => {
                     report.blocked.push(path);
@@ -487,7 +501,10 @@ impl Project {
             self.counters
                 .add(&self.counters.derived_read, u64::from(disk.is_some()));
             match disk {
-                None => writes.push((path, file, bytes)),
+                None => {
+                    seen.insert(path.clone(), None);
+                    writes.push((path, file, bytes));
+                }
                 Some(disk) => {
                     let d = md5_hex(&disk);
                     let ours = self.manifest.paths.get(&path).map(|e| e.md5.as_str());
@@ -497,6 +514,7 @@ impl Project {
                     } else if ours == Some(d.as_str())
                         || intent_now.md5s_of(&path).contains(&d.as_str())
                     {
+                        seen.insert(path.clone(), stat);
                         writes.push((path, file, bytes));
                     } else {
                         let damage = self.clean_by_stat(&path);
@@ -579,9 +597,36 @@ impl Project {
         for ((path, file, bytes), digest) in writes.into_iter().zip(digests) {
             let (dir, name) = self.folder.dir_and_name(&path);
             atomic_create_dirs(&*self.vfs, &dir)?;
-            if !self.write_once(&dir, name, &bytes, &mut dirs)? {
-                report.blocked.push(path);
-                continue;
+            let mut outside: Option<Vec<u8>> = None;
+            let wrote = self.write_once(
+                &dir,
+                name,
+                &bytes,
+                &mut dirs,
+                &path,
+                seen.get(&path).copied().flatten(),
+                &intent_now,
+                &mut outside,
+            )?;
+            match wrote {
+                Wrote::Done => {}
+                Wrote::Busy => {
+                    report.blocked.push(path);
+                    continue;
+                }
+                Wrote::Refused => {
+                    // The file changed after M1 read it: bytes the app did not write are an
+                    // outside edit, held with a copy (I8); a file that cannot be read now
+                    // waits.
+                    match outside {
+                        Some(disk) => {
+                            self.hold(&path, &disk, false)?;
+                            report.held.push(path);
+                        }
+                        None => report.blocked.push(path),
+                    }
+                    continue;
+                }
             }
             let heads = HeadsFile::of(&self.fold.file_heads(&file));
             let heads_name = layout::heads_file(&path);
@@ -757,7 +802,7 @@ impl Project {
         }
         // The packs as this session knows them: a pack sealed or received since the last
         // write of `metadata.json` changes the digest.
-        for (path, pack) in &self.journal.packs {
+        for (path, pack) in &self.packs {
             hash.update(path.as_bytes());
             hash.update([0]);
             hash.update(pack.size.to_le_bytes());
@@ -766,32 +811,76 @@ impl Project {
         crate::random::to_hex(&hash.finalize())
     }
 
-    /// Writes one derived file. `false` when a program holds the file and the rename was
-    /// refused (a sharing violation, Windows): the actor does not wait for it. The path
+    /// Writes one derived file. [`Wrote::Busy`] when a program holds the file and the rename
+    /// was refused (a sharing violation, Windows): the writer does not wait for it. The path
     /// stays dirty, and the next attempt starts at M0 and so repeats the compare-and-swap
-    /// (§5.10).
+    /// (§5.10). Just before the rename the file is looked at again (I8): when it is not as M1
+    /// found it and its bytes are none the app wrote, nothing is renamed over it
+    /// ([`Wrote::Refused`], the bytes in `outside`).
+    #[allow(clippy::too_many_arguments)]
     fn write_once(
         &self,
         dir: &std::path::Path,
         name: &str,
         bytes: &[u8],
         dirs: &mut DirSet,
-    ) -> Result<bool, StoreError> {
+        rel: &str,
+        seen: Option<FileMeta>,
+        intent: &Intent,
+        outside: &mut Option<Vec<u8>>,
+    ) -> Result<Wrote, StoreError> {
+        let abs = self.folder.path(rel);
+        let ours: Vec<String> = self
+            .manifest
+            .paths
+            .get(rel)
+            .map(|e| e.md5.clone())
+            .into_iter()
+            .chain(intent.md5s_of(rel).into_iter().map(str::to_owned))
+            .chain([md5_hex(bytes)])
+            .collect();
+        let mut look = || -> Result<bool, StoreError> {
+            self.shared.hooks.wait(crate::hooks::Point::BeforeRename);
+            let now = self.vfs.metadata(&abs).ok();
+            let unchanged = match (&seen, &now) {
+                (None, None) => true,
+                (Some(a), Some(b)) => a.len == b.len && a.mtime_ns == b.mtime_ns,
+                _ => false,
+            };
+            if unchanged {
+                return Ok(true);
+            }
+            match self.vfs.read(&abs) {
+                Ok(disk) => {
+                    if ours.contains(&md5_hex(&disk)) {
+                        Ok(true)
+                    } else {
+                        *outside = Some(disk);
+                        Ok(false)
+                    }
+                }
+                // Gone meanwhile: a deletion is never read as an edit (§6.2).
+                Err(e) if is_not_found(&e) => Ok(true),
+                Err(_) => Ok(false),
+            }
+        };
         // Three short retries: the file is tried again by the next run, and one held file
         // must not stall the other files of its book.
-        match atomic_write_with(
+        match atomic_write_checked(
             &*self.vfs,
             dir,
             name,
             bytes,
             SyncDir::Deferred(dirs),
             &HeldRetry::BACKGROUND,
+            &mut look,
         ) {
-            Ok(()) => Ok(true),
+            Ok(Written::Renamed) => Ok(Wrote::Done),
+            Ok(Written::Refused) => Ok(Wrote::Refused),
             Err(crate::atomic::WriteError::NotWritten(e))
                 if e.io_error().is_some_and(|io| self.vfs.is_held(io)) =>
             {
-                Ok(false)
+                Ok(Wrote::Busy)
             }
             Err(e) => Err(e.into_inner()),
         }
@@ -867,6 +956,9 @@ impl Project {
         let mut out = BTreeMap::new();
         let mut books: BTreeSet<tc_journal::BookId> = BTreeSet::new();
         let mut prerendered = std::mem::take(&mut self.prerendered);
+        if self.prerendered_seq != self.seq {
+            prerendered.clear();
+        }
         let mut left: BTreeSet<&DerivedFile> = BTreeSet::new();
         for file in files {
             match prerendered.remove(&file.path()) {
@@ -998,7 +1090,7 @@ impl Project {
                 listed.insert(fixed.to_owned());
             }
         }
-        let packs: Vec<String> = self.journal.packs.keys().cloned().collect();
+        let packs: Vec<String> = self.packs.keys().cloned().collect();
         for rel in packs {
             if let Some(entry) = self.pack_entry(&rel)?
                 && let Some(md5) = Md5::parse(&entry.md5)
@@ -1038,7 +1130,7 @@ impl Project {
                 e.held.is_some()
                     && p.starts_with("ingredients/")
                     && !listed.contains(*p)
-                    && !self.journal.packs.contains_key(*p)
+                    && !self.packs.contains_key(*p)
             })
             .map(|(p, _)| p.clone())
             .collect();

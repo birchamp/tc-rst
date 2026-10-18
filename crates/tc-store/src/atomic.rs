@@ -195,6 +195,30 @@ pub fn atomic_write_with(
     sync_dir: SyncDir<'_>,
     retry: &HeldRetry,
 ) -> Result<(), WriteError> {
+    atomic_write_checked(vfs, dir, name, bytes, sync_dir, retry, &mut || Ok(true)).map(|_| ())
+}
+
+/// What [`atomic_write_checked`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Written {
+    Renamed,
+    /// The last look refused the rename: the temp file is removed and the target unchanged.
+    Refused,
+}
+
+/// [`atomic_write_with`] with a last look before the rename: `before_rename` runs once, after
+/// the temp file is complete and flushed, and `Ok(false)` removes the temp file and leaves
+/// the target as it is (the compare-and-swap of §5.10 M4 looks at the file again at the
+/// moment that matters, I8).
+pub fn atomic_write_checked(
+    vfs: &dyn Vfs,
+    dir: &Path,
+    name: &str,
+    bytes: &[u8],
+    sync_dir: SyncDir<'_>,
+    retry: &HeldRetry,
+    before_rename: &mut dyn FnMut() -> Result<bool, StoreError>,
+) -> Result<Written, WriteError> {
     let temp = dir.join(temp_name(name));
     let target = dir.join(name);
     let written = (|| {
@@ -202,12 +226,24 @@ pub fn atomic_write_with(
         file.write_all(bytes).at("write", &temp)?;
         file.sync_all().at("flush", &temp)?;
         drop(file);
-        rename_held(vfs, &temp, &target, retry).at("rename", &target)
+        if !before_rename()? {
+            return Ok(false);
+        }
+        rename_held(vfs, &temp, &target, retry).at("rename", &target)?;
+        Ok(true)
     })();
-    if let Err(error) = written {
-        // A temp that cannot be removed stays; a temp that was never created is not there.
-        let _ = remove_held(vfs, &temp, retry);
-        return Err(WriteError::NotWritten(error));
+    match written {
+        Ok(true) => {}
+        Ok(false) => {
+            let _ = remove_held(vfs, &temp, retry);
+            return Ok(Written::Refused);
+        }
+        Err(error) => {
+            // A temp that cannot be removed stays; a temp that was never created is not
+            // there.
+            let _ = remove_held(vfs, &temp, retry);
+            return Err(WriteError::NotWritten(error));
+        }
     }
     match sync_dir {
         SyncDir::Now => {
@@ -222,7 +258,7 @@ pub fn atomic_write_with(
         }
         SyncDir::Deferred(set) => set.add_renamed(dir, &target),
     }
-    Ok(())
+    Ok(Written::Renamed)
 }
 
 /// Creates each missing directory of `path`, flushing its parent after each one. A

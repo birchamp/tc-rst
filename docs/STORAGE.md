@@ -82,7 +82,7 @@ Each invariant is proven by the tests named in §16.
 | I6 | **Atomic files.** Every file the app writes in a project goes through `atomic_write` (§5.0). No project file is written in place. |
 | I7 | **Valid burrito.** Every commit tree, exchange file and export is built in memory and validated before it is written. The working folder is a valid burrito except inside a **write group** and, after a crash inside one, until the next open repairs it. A write group is a materialization (§5.10), a seal and consolidation (§5.11, §5.12, closed by the checkpoint's materialization), or the pack writes of an intake (§9.3 T1, §10.2 R7): it starts at its first rename under `ingredients/` and ends with the `metadata.json` rewrite that lists the result. A materialization lasts milliseconds; a large intake can last seconds. |
 | I8 | **Nothing overwritten that someone else wrote.** Before the app replaces or removes a derived or carried file, it checks that the bytes on disk are the bytes it last wrote. Different bytes are recorded as changes first. |
-| I9 | **No editing lock.** Sync and exchange read snapshots and add immutable files. Saves continue during them. |
+| I9 | **No editing lock.** Sync and exchange read snapshots and add immutable files. Saves continue during them. Materialization and the long part of a checkpoint run on the writer from a snapshot; a save waits for none of them (PERFORMANCE.md: 25 ms p95 while background work runs). |
 | I10 | **Newer data is refused in words or carried, never destroyed.** |
 | I11 | **Deletions are deliberate.** A missing file is never read as a deletion. Removals and deletions that come from outside tools become conflicts, not replacements. A book removal never hides work its author had not seen. |
 | I12 | **No machine input.** Derived bytes never depend on installed resources, the clock or the machine. |
@@ -1415,10 +1415,21 @@ tree, and a damaged copy of a replaced pack disappears with it.
 
 ### 5.0 Primitives
 
-**One writer per project.** Each open project has one `ProjectActor` thread in `tc-store`. It
-owns the in-memory `FoldState` and is the only code that writes files in the project folder.
-Commands, sync results and import results are messages to it. Network, parsing, validation and
-fold snapshots run on other threads and hand finished data to the actor. An exclusive advisory
+**One writer per project.** Each open project has two writing threads in `tc-store`, each the
+only code that writes its own files in the project folder. The `ProjectActor` owns the
+in-memory `FoldState`, the journal (pending files, packs), the device and its sequence counter:
+it commits batches, publishes snapshots and seals. The **writer** owns everything about
+derived and carried files: the manifest, the holds and busy paths, the byte copies in
+`.tc/external/`, the heads files, the materialize intent, `metadata.json` and, later, the
+git objects. Commands, sync results and import results are messages to the actor. The actor
+hands the writer jobs (a dirty set, the newest snapshot, the packs it knows) and never waits
+for one except at close; the writer never waits for the actor (it sends it a message when the
+open's first job fails). So **a save never waits for a derived file or for the long part of a
+checkpoint**, however long a book takes or however slowly a scanner lets go of a file (owner
+ruling 2026-10-18). A job runs with the snapshot it was sent, or a newer one when the writer
+has already run on a newer one: it never writes older bytes over newer. Network, parsing,
+validation and fold snapshots run on other threads and hand finished data to the actor. An
+exclusive advisory
 lock on `.tc/lock` (`std::fs::File::try_lock`, stable since Rust 1.89, so no `fd-lock`) refuses
 the open of a project another process holds. translationCore runs as a single instance per
 computer, as tC4 4.0 does (its D39: a second launch brings the running window to the front and
@@ -1596,7 +1607,11 @@ layer holds an open project as a handle:
   `Snapshot::training_input` gives the aligner's training input, each verse's text and
   alignment from that one snapshot (§3.10 item 3).
 - `leave`, `checkpoint`, `restore_held`, `dismiss_notice`, `offered_drafts`, `discard_draft`,
-  `wait_idle`, `close`, and `counters()`: files opened, created, read and written, fsyncs,
+  `wait_idle`, `close`, and `counters()`. `leave` and `checkpoint` resolve when the writer has
+  finished the job they sent it (`checkpoint` carries the seal's error first); the actor serves
+  commands meanwhile. `restore_held` and `dismiss_notice` go to the writer. `wait_idle` waits
+  for the actor's queue, then the writer's (not for a retry it has scheduled), then the
+  background jobs and the drafts. The counters are: files opened, created, read and written, fsyncs,
   renames, listings, derived files read (by the open's classification and by compare-and-swaps,
   `derived_read`, and apart, by the storage check O14, `check_read`), projected and written,
   heads files read, journal files read and how many of them came from the fold cache, and the
@@ -1870,8 +1885,9 @@ displayed alignment or decision with `dismissed: true`, `parents = shown.heads`.
 
 ### 5.10 Materialize derived and carried files
 
-Runs 3 s after the last batch, on leaving a book or mode, before a checkpoint or export, after an
-intake, and at close. It writes only dirty paths.
+Runs on the writer thread (§5.0) 3 s after the last batch, on leaving a book or mode, after a
+checkpoint's seal, after an intake, at close, and as the open's first job (O10). It writes only
+dirty paths, from the snapshot the actor sent with them.
 
 ```
 M0  D = dirty derived and carried paths, with their new bytes computed in memory (carried bytes
@@ -1900,8 +1916,16 @@ M2  Build metadata.json for the planned result (total, §3.4) and run tc_burrito
     held with a copy and a notice (§6.2) and listed as they are, so the list never states the
     md5 and size of bytes that are not in the folder.
 M3  atomic_write(.tc, "materialize.intent.json", {writes: [{path, oldMd5, newMd5}], removes: X})
-M4  For each p in D: write a temp, fsync, rename (directory fsync deferred); then atomic_write
-    its heads file. For each p in X: unlink (directory fsync deferred).
+M4  For each p in D: write a temp, fsync, then **look at p once more** and rename (directory
+    fsync deferred); then atomic_write its heads file. For each p in X: unlink (directory
+    fsync deferred). The last look (I8) is a stat of p and a comparison with the stat M1
+    took when it read p (or with "missing"): if it differs, p is read again, and bytes that
+    are none of the manifest md5, the new md5 and the intent's md5s are an outside edit made in
+    the window between M1 and the rename: the temp is removed, p is not renamed over, and p is
+    treated as M1 treats it (held while §11.1 recording is not in place). A file that is gone
+    by then is written (a deletion is never an edit, §6.2). The look happens once, before
+    the first try of a rename a scanner holds; a retry that follows (§5.0 step 3) does not
+    repeat it, because the file is the one the look saw.
 M5  fsync every touched directory once.
 M6  Rebuild metadata.json from the files as they now are (a path skipped in M4 keeps its old
     bytes), check it again, atomic_write(<root>, "metadata.json", …, SyncDir::Now).
@@ -1926,10 +1950,11 @@ lost (I8). Until unit S2 records outside edits (§11.1), M1 holds every changed 
 stat or not: copied, left as it is, dropped from D and X, with an `OutsideEditHeld` or
 `StorageDamage` notice. If a rename in M4 fails because another program holds the file open
 (Windows: Paratext, an indexer), a program is probably writing that file right now, and the
-actor **does not wait for it**: the write of that path is skipped, the path stays dirty,
-`metadata.json` lists the file as it is, and a timer of the actor tries again after 200 ms, then
-after as long as the path has waited so far, up to 3 s. Commands are served between the tries,
-so a save never waits for a derived file. **Every try starts at M0 and so repeats M1 for that
+writer **does not wait for it** beyond the short retries of §5.0 step 3 (`HeldRetry::BACKGROUND`,
+35 ms, so one held file never stalls the other files of its book): the write of that path is
+skipped, the path stays dirty, `metadata.json` lists the file as it is, and a timer of the
+writer tries again after 200 ms, then after as long as the path has waited so far, up to 3 s.
+The actor serves commands meanwhile, so a save never waits for a derived file. **Every try starts at M0 and so repeats M1 for that
 path** (the md5 of its bytes): if `d` is neither the manifest md5 nor the new md5, the file was
 saved by the other program while the app waited, and it is held (unit S1) or recorded (§11.1)
 instead of written over. After 2 s the path stays dirty and the person sees "translationCore
@@ -1940,7 +1965,7 @@ for a retry, the watcher does not treat the intent's new md5 as the app's own wr
 path. Writes of pending files are never blocked by a derived file. A checkpoint
 materializes after its seal even when the seal failed, because a pack the seal renamed before
 it failed must be listed (I7); a path that stays dirty after any materialization, or a
-materialization that fails, is tried again 3 s later.
+materialization that fails, is tried again by the writer (200 ms to 3 s, above).
 
 The residual race: a program that writes `p` between the last compare-and-swap check and the
 rename that follows it is overwritten. That window is milliseconds on every attempt, and the
@@ -2171,7 +2196,10 @@ O9  Classify every derived and carried path (§6.2), reading and projecting only
 O10 Materialize every path whose disk bytes differ from the projection, except held paths, and
     metadata.json if it is missing, damaged or stale. Remove materialize.intent.json. If O9
     settled or refreshed entries, write the manifest again, so the next open takes them by
-    stat.
+    stat. This is the writer's first job: the open does not wait for it, the project is
+    usable while it runs, and saves go on. If it fails (a full disk, a folder that went
+    read-only), the project turns read-only with `WriteFailed`, the lock is released, and the
+    next open finishes the work (every write of the open is best effort).
 O11 Schedule pin coverage backfill (§5.6) if a group needs it.
 O12 Offer drafts (§5.14).
 O13 Report: conflicts, anomalies, recorded outside edits, identity notices. The project is usable.
