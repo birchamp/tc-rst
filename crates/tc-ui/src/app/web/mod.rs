@@ -15,6 +15,7 @@ mod state;
 mod stream;
 
 use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use js_sys::Array;
@@ -23,6 +24,7 @@ use send_wrapper::SendWrapper;
 use tc_api::app::{Hello, HelloView};
 use tc_api::event::EventFrame;
 use tc_api::ids::{LocaleId, Scope};
+use tc_api::jobs::Get as JobsGet;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise, spawn_local};
 
@@ -30,10 +32,12 @@ pub use api::Api;
 pub use query::QueryCache;
 pub use state::ServerState;
 
-use crate::app::boot::{BuildCheck, RELOADED_FOR_KEY, TOKEN_KEY, check_build, token_from};
+use crate::app::boot::{
+    BuildCheck, RELOADED_FOR_KEY, TOKEN_KEY, check_build, token_from, unkept_marker,
+};
 use crate::app::cache::CachedQuery;
 use crate::app::client::CallError;
-use crate::app::effects::{Effect, active_jobs, merge_job, react};
+use crate::app::effects::{Effect, active_jobs, apply_reread, jobs_to_reread, merge_job, react};
 use crate::app::events::{EventReader, Incoming};
 use crate::attrs::Attrs;
 use crate::ds::{Button, ButtonVariant, Callout, CalloutTone, Size};
@@ -180,11 +184,15 @@ impl Runtime {
         }
         match effect {
             Effect::ReadHello => self.read_hello(),
+            Effect::ReadJobs => self.read_jobs(),
             Effect::ReadEverything => self.0.cache.resync(),
             Effect::Restarted(instance) => {
                 self.0.cache.restarted();
                 state.restarted.set(true);
                 state.instance.set(instance);
+                // The new run numbers its jobs from the start: an old id may name another job.
+                state.jobs.set(BTreeMap::new());
+                self.0.busy.set_jobs(0);
             }
             Effect::Topic(topic) => self.0.cache.topic(&topic),
             Effect::Changed { at, scope } => self.0.cache.changed(&at, &scope),
@@ -237,6 +245,31 @@ impl Runtime {
                 }
             }
             runtime.0.hello_running.set(false);
+        });
+    }
+
+    /// Reads each job held as active with `jobs/get`, after a gap in the stream. The final frame
+    /// of a job may have been in the gap, and `hello` has no jobs.
+    fn read_jobs(&self) {
+        let held = self.0.state.jobs.with_untracked(jobs_to_reread);
+        if held.is_empty() {
+            return;
+        }
+        let runtime = self.clone();
+        spawn_local(async move {
+            for before in held {
+                // A read that fails leaves the job as the frames left it; the next gap tries
+                // again.
+                let Ok(reply) = runtime.0.api.call(&JobsGet { job: before.id }).await else {
+                    continue;
+                };
+                let mut active = 0;
+                runtime.0.state.jobs.update(|jobs| {
+                    apply_reread(jobs, &before, reply);
+                    active = active_jobs(jobs);
+                });
+                runtime.0.busy.set_jobs(active);
+            }
         });
     }
 
@@ -351,14 +384,20 @@ async fn boot(base: &str, busy: &Rc<api::Busy>) -> Result<(), String> {
         .map_err(|error| format!("app/hello: {error}"))?;
     js::mark("tc4:hello");
 
-    match check_build(
+    let mut check = check_build(
         &hello.build.commit,
         hello.api,
         js::session_get(RELOADED_FOR_KEY).as_deref(),
-    ) {
+    );
+    if let BuildCheck::ReloadOnce { marker } = &check
+        && !js::session_set(RELOADED_FOR_KEY, marker)
+    {
+        // Without the marker the page after the reload would reload again, for ever.
+        check = unkept_marker(&hello.build.commit, hello.api);
+    }
+    match check {
         BuildCheck::Same => js::session_remove(RELOADED_FOR_KEY),
-        BuildCheck::ReloadOnce { marker } => {
-            js::session_set(RELOADED_FOR_KEY, &marker);
+        BuildCheck::ReloadOnce { .. } => {
             let _ = window.location().reload();
             return Ok(());
         }

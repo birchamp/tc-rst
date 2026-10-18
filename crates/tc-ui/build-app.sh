@@ -35,6 +35,10 @@ done
 
 BINDGEN="$(command -v wasm-bindgen || echo "$HOME/.cargo/bin/wasm-bindgen")"
 want="wasm-bindgen 0.2.129"
+if [ ! -x "$BINDGEN" ]; then
+  echo "need $want on PATH or in ~/.cargo/bin: cargo install wasm-bindgen-cli --version 0.2.129 --locked" >&2
+  exit 1
+fi
 have="$("$BINDGEN" --version)"
 if [ "$have" != "$want" ]; then
   echo "need $want (the crate pins wasm-bindgen =0.2.129), found $have" >&2

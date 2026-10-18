@@ -72,6 +72,14 @@ fn describe(commit: &str, api: u32) -> String {
     format!("{commit} (API {api})")
 }
 
+/// The verdict when the page cannot keep the marker of a reload (`sessionStorage` is blocked):
+/// the next load would see no marker and reload again, for ever, so the mismatch is a stale
+/// page at once. Always [`BuildCheck::Stale`] for a mismatch, and [`BuildCheck::Same`] for none.
+pub fn unkept_marker(server_commit: &str, server_api: u32) -> BuildCheck {
+    let marker = format!("{server_commit}/{server_api}");
+    check_build(server_commit, server_api, Some(&marker))
+}
+
 /// Compares the server's build and API version (`app/hello`) with this build's. `reloaded_for`
 /// is the marker a reload left in [`RELOADED_FOR_KEY`], if any.
 pub fn check_build(server_commit: &str, server_api: u32, reloaded_for: Option<&str>) -> BuildCheck {

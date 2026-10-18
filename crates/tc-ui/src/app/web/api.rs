@@ -183,10 +183,10 @@ pub(super) fn reload_once_for(server_commit: &str, server_api: u32) {
     let kept = js::session_get(RELOADED_FOR_KEY);
     if let BuildCheck::ReloadOnce { marker } =
         check_build(server_commit, server_api, kept.as_deref())
+        // Without the marker the page after the reload would reload again, for ever.
+        && js::session_set(RELOADED_FOR_KEY, &marker)
+        && let Ok(window) = js::window()
     {
-        js::session_set(RELOADED_FOR_KEY, &marker);
-        if let Ok(window) = js::window() {
-            let _ = window.location().reload();
-        }
+        let _ = window.location().reload();
     }
 }

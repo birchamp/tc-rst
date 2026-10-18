@@ -31,10 +31,10 @@ pub(super) fn session_get(key: &str) -> Option<String> {
     session_storage()?.get_item(key).ok().flatten()
 }
 
-pub(super) fn session_set(key: &str, value: &str) {
-    if let Some(storage) = session_storage() {
-        let _ = storage.set_item(key, value);
-    }
+/// True when the entry was written. A caller whose rule needs the entry to be there next time
+/// (the marker of a reload) must check.
+pub(super) fn session_set(key: &str, value: &str) -> bool {
+    session_storage().is_some_and(|storage| storage.set_item(key, value).is_ok())
 }
 
 pub(super) fn session_remove(key: &str) {

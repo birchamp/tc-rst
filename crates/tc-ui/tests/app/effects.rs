@@ -14,7 +14,8 @@ use tc_api::ids::{AlignerId, Epoch, JobId, ProjectRef, Scope, ServerInstance, Vi
 use tc_api::jobs::{JobKind, JobState, JobView, Progress};
 use tc_ui::app::cache::AppTopic;
 use tc_ui::app::effects::{
-    BusyCount, Effect, FINISHED_JOBS_KEPT, active_jobs, is_active, merge_job, react,
+    BusyCount, Effect, FINISHED_JOBS_KEPT, active_jobs, apply_reread, is_active, jobs_to_reread,
+    merge_job, react,
 };
 use tc_ui::app::events::Incoming;
 
@@ -51,8 +52,8 @@ fn job(id: u64, state: JobState) -> JobView {
 }
 
 #[test]
-fn a_resync_and_an_unreadable_frame_refresh_everything_and_read_hello() {
-    let both = vec![Effect::ReadEverything, Effect::ReadHello];
+fn a_resync_and_an_unreadable_frame_refresh_everything_and_read_hello_and_the_jobs() {
+    let both = vec![Effect::ReadEverything, Effect::ReadHello, Effect::ReadJobs];
     assert_eq!(react(&frame(Event::Resync)), both);
     let unreadable = Incoming::Unreadable {
         seq: Some(3),
@@ -245,6 +246,67 @@ fn finished_jobs_are_bounded_and_active_jobs_never_dropped() {
     // The ones kept are the newest.
     assert!(jobs.contains_key(&JobId::new(1 + total)));
     assert!(!jobs.contains_key(&JobId::new(2)));
+}
+
+#[test]
+fn only_the_jobs_held_as_active_are_read_again() {
+    let mut jobs = BTreeMap::new();
+    merge_job(&mut jobs, job(1, running()));
+    merge_job(&mut jobs, job(2, JobState::Cancelled));
+    merge_job(&mut jobs, job(3, JobState::Queued));
+    let ids: Vec<JobId> = jobs_to_reread(&jobs).iter().map(|j| j.id).collect();
+    assert_eq!(ids, vec![JobId::new(1), JobId::new(3)]);
+}
+
+#[test]
+fn a_job_whose_end_frame_was_lost_is_not_left_running() {
+    // The page saw the job run; the frame that ended it was in the gap a Resync names.
+    let mut jobs = BTreeMap::new();
+    merge_job(&mut jobs, job(1, running()));
+    let held = job(1, running());
+    assert_eq!(active_jobs(&jobs), 1);
+    // The server still has the job, and it is done.
+    apply_reread(&mut jobs, &held, Some(job(1, JobState::Cancelled)));
+    assert_eq!(active_jobs(&jobs), 0);
+    assert_eq!(
+        jobs.get(&JobId::new(1)).map(|j| j.state.clone()),
+        Some(JobState::Cancelled),
+        "a finished job stays readable"
+    );
+}
+
+#[test]
+fn a_job_the_server_no_longer_knows_is_forgotten() {
+    let mut jobs = BTreeMap::new();
+    merge_job(&mut jobs, job(1, running()));
+    merge_job(&mut jobs, job(2, running()));
+    apply_reread(&mut jobs, &job(1, running()), None);
+    assert!(!jobs.contains_key(&JobId::new(1)));
+    assert!(jobs.contains_key(&JobId::new(2)), "only that job");
+    assert_eq!(active_jobs(&jobs), 1);
+}
+
+#[test]
+fn a_frame_that_came_during_the_call_is_newer_than_its_reply() {
+    // The call was sent while the job ran; a frame then said it was cancelling; the reply
+    // (computed before that frame) still says running. The frame stands.
+    let mut jobs = BTreeMap::new();
+    merge_job(&mut jobs, job(1, running()));
+    let held = job(1, running());
+    merge_job(&mut jobs, job(1, JobState::Cancelling));
+    apply_reread(&mut jobs, &held, Some(job(1, running())));
+    assert_eq!(
+        jobs.get(&JobId::new(1)).map(|j| j.state.clone()),
+        Some(JobState::Cancelling)
+    );
+    // The same holds for "unknown": a job a frame has since changed is not forgotten by a
+    // reply made before it.
+    apply_reread(&mut jobs, &held, None);
+    assert!(jobs.contains_key(&JobId::new(1)));
+    // And a job a frame removed from the map is not put back.
+    let mut gone = BTreeMap::new();
+    apply_reread(&mut gone, &held, Some(job(1, running())));
+    assert!(gone.is_empty());
 }
 
 #[test]

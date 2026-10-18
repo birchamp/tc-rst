@@ -24,6 +24,10 @@ pub enum Effect {
     /// Read `app/hello` again and replace what it holds: the internet switch, the account,
     /// the startup state, the open sessions and the saved language.
     ReadHello,
+    /// Read each job held as active with `jobs/get`. `hello` carries no jobs, and the frame
+    /// that ended one may be among those a gap lost; a job left as running would leave its
+    /// progress standing for ever (PERFORMANCE rule 4).
+    ReadJobs,
     /// Every live read fetches again.
     ReadEverything,
     /// The server started again: every open is gone (APP-DESIGN 3.10).
@@ -63,10 +67,12 @@ pub fn react(incoming: &Incoming) -> Vec<Effect> {
     match incoming {
         // A change the build cannot read may be a teammate's: refresh everything, and read the
         // values that only events carry.
-        Incoming::Unreadable { .. } => vec![Effect::ReadEverything, Effect::ReadHello],
+        Incoming::Unreadable { .. } => {
+            vec![Effect::ReadEverything, Effect::ReadHello, Effect::ReadJobs]
+        }
         Incoming::Restart(instance) => vec![Effect::Restarted(*instance), Effect::ReadHello],
         Incoming::Frame(frame) => match &frame.event {
-            Event::Resync => vec![Effect::ReadEverything, Effect::ReadHello],
+            Event::Resync => vec![Effect::ReadEverything, Effect::ReadHello, Effect::ReadJobs],
             Event::Internet { on } => vec![Effect::Internet(*on)],
             Event::Account(account) => vec![Effect::Account(account.clone())],
             Event::Job(job) => vec![Effect::Job(job.clone())],
@@ -129,6 +135,34 @@ pub fn merge_job(jobs: &mut BTreeMap<JobId, JobView>, view: JobView) {
     let excess = finished.len().saturating_sub(FINISHED_JOBS_KEPT);
     for id in finished.into_iter().take(excess) {
         jobs.remove(&id);
+    }
+}
+
+/// The jobs to read again after frames may have been lost: each one held as active, as it is
+/// held now, so the reply can be told from a frame that came after the call was sent.
+pub fn jobs_to_reread(jobs: &BTreeMap<JobId, JobView>) -> Vec<JobView> {
+    jobs.values()
+        .filter(|job| is_active(&job.state))
+        .cloned()
+        .collect()
+}
+
+/// Applies the reply of `jobs/get` for `held`, the view the job had when the call was sent.
+///
+/// - A frame came meanwhile (the job is no longer as `held`): the frame is newer than a reply
+///   that may have been computed before it, so the reply is dropped.
+/// - The server knows the job: its view replaces the held one.
+/// - The server does not: the job ended and its outcome is older than the server keeps. Nothing
+///   can show it, and it is not left active.
+pub fn apply_reread(jobs: &mut BTreeMap<JobId, JobView>, held: &JobView, reply: Option<JobView>) {
+    if jobs.get(&held.id) != Some(held) {
+        return;
+    }
+    match reply {
+        Some(view) => merge_job(jobs, view),
+        None => {
+            jobs.remove(&held.id);
+        }
     }
 }
 

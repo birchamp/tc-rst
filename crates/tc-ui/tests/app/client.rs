@@ -7,7 +7,9 @@ use tc_api::error::Flow;
 use tc_api::net::NetView;
 use tc_api::upload::UPLOADS_PATH;
 use tc_api::{ALL, API_VERSION, ApiError, Reply};
-use tc_ui::app::boot::{BuildCheck, RELOADED_FOR_KEY, TOKEN_KEY, Token, check_build, token_from};
+use tc_ui::app::boot::{
+    BuildCheck, RELOADED_FOR_KEY, TOKEN_KEY, Token, check_build, token_from, unkept_marker,
+};
 use tc_ui::app::client::{API_ROOT, CallError, Transport, api_url, interpret};
 use tc_ui::app::load::Load;
 
@@ -238,6 +240,31 @@ fn another_api_version_reloads_once_then_stops() {
             server: format!("{BUILD_COMMIT} (API {newer})"),
         }
     );
+}
+
+#[test]
+fn a_page_that_cannot_keep_the_marker_does_not_reload_for_ever() {
+    // sessionStorage is blocked: the marker of the reload cannot be written, so the page after
+    // the reload would see none and reload again. The mismatch is a stale page at once.
+    let BuildCheck::ReloadOnce { .. } = check_build("0123abc", API_VERSION, None) else {
+        panic!("the first look reloads");
+    };
+    assert_eq!(
+        unkept_marker("0123abc", API_VERSION),
+        check_build(
+            "0123abc",
+            API_VERSION,
+            Some(&format!("0123abc/{API_VERSION}"))
+        )
+    );
+    assert!(matches!(
+        unkept_marker("0123abc", API_VERSION),
+        BuildCheck::Stale { .. }
+    ));
+    assert!(matches!(
+        unkept_marker(BUILD_COMMIT, API_VERSION + 1),
+        BuildCheck::Stale { .. }
+    ));
 }
 
 #[test]

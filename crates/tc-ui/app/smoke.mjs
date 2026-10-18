@@ -10,8 +10,9 @@
 //
 // With `--measure N --out FILE` it measures instead (see measure() below).
 //
-// Playwright comes from PLAYWRIGHT_MODULE (default: the parity harness's copy, whose Chromium
-// build is installed under PLAYWRIGHT_BROWSERS_PATH).
+// Playwright comes from PLAYWRIGHT_MODULE (default: parity/ds-gallery/node_modules/playwright
+// in this repository), and its Chromium build (1194) from PLAYWRIGHT_BROWSERS_PATH or
+// Playwright's own cache folder.
 //
 // How the page is driven, because the checks mean nothing otherwise. The shell opens the window
 // at `<url>#t=<token>` and adds `X-Tc-Token` to the requests the browser makes by itself (the
@@ -41,8 +42,13 @@ const buildName = fs.readdirSync(path.join(uiDir, 'ui'))[0];
 const crateDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 
 const require = createRequire(import.meta.url);
-const playwrightDir = process.env.PLAYWRIGHT_MODULE ?? '/home/user/tc-rst/parity/ds-gallery/node_modules/playwright';
-const { chromium } = require(playwrightDir);
+const playwrightDir = process.env.PLAYWRIGHT_MODULE ?? path.join(crateDir, '../../parity/ds-gallery/node_modules/playwright');
+let chromium;
+try {
+  ({ chromium } = require(playwrightDir));
+} catch (error) {
+  throw new Error(`Playwright 1.56.1 is not at ${playwrightDir}; set PLAYWRIGHT_MODULE to its folder (${error.code ?? error.message})`);
+}
 
 const LOCALES = ['en', 'es-419', 'fr', 'hi', 'pt-BR', 'id', 'uk', 'ru', 'vi', 'ar'];
 const catalog = (id) => JSON.parse(fs.readFileSync(path.join(crateDir, 'assets/i18n', `${id}.json`), 'utf8'));
