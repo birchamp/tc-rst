@@ -19,6 +19,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # The server and the program without test hooks, as a release builds them; the workspace
+      # build always has them through the dev-dependencies.
+      - run: cargo clippy -p tc-server -p tc4 --lib --bins -- -D warnings
       - run: cargo test --workspace
       # tc-ui's components compile for wasm32 only, so the host steps above never see them.
       - run: cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings
