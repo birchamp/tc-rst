@@ -17,7 +17,7 @@ use tc_journal::record::{
 use tc_journal::rules::{MAX_LINE_BYTES, MAX_PARENTS, Rule};
 use tc_journal::{
     BatchId, BookId, Cause, Change, ChangeBody, ChangeError, ChangeId, CommentId, DeviceId,
-    DeviceKind, Record, RuleViolation, SettingKey, Verified, parse_change,
+    DeviceKind, ImportSource, Record, RuleViolation, SettingKey, Verified, parse_change,
 };
 
 fn json_of(body: &ChangeBody) -> Json {
@@ -767,12 +767,31 @@ fn v6_comments_and_releases_are_grow_only() {
             text: "¿Por qué?".into(),
         },
     };
-    assert_eq!(
-        refused(body.clone()),
-        RuleViolation::GrowOnly {
-            kind: "comment".into()
-        }
-    );
+    // A comment is added without parents: an import, a seed or an outside edit names none.
+    for cause in [
+        Cause::Seed,
+        Cause::StartOver,
+        Cause::Import(ImportSource::Tc4Reconcile),
+    ] {
+        body.cause = cause;
+        assert_eq!(
+            refused(body.clone()),
+            RuleViolation::GrowOnly {
+                kind: "comment".into()
+            }
+        );
+    }
+    // A revision of the text the comment box showed names the version it replaces (§5.5,
+    // APP-DESIGN R24), and so does a restore from History.
+    for cause in [
+        Cause::Edit,
+        Cause::Restore {
+            from: ChangeId::from_bytes([1; 32]),
+        },
+    ] {
+        body.cause = cause;
+        assert!(Change::new(body.clone()).is_ok());
+    }
     // The resolution of two changes under one comment id names both (§8.3).
     let mut resolution = body.clone();
     resolution.cause = Cause::Resolve;

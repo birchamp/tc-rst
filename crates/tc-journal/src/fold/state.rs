@@ -312,6 +312,11 @@ pub(crate) struct BookEntry {
     pub chapters: BTreeSet<u16>,
     /// Decisions whose target chapter is not a number (`front`).
     pub other_checks: Vec<KeyIdx>,
+    /// Comments of the book filed under no chapter: on a check whose target chapter is not
+    /// a number.
+    pub other_comments: Vec<KeyIdx>,
+    /// Every chapter with a [`ChapterEntry`] of this book: its range reads (R1) visit these.
+    pub filed: BTreeSet<u16>,
     /// Every key that belongs to the book (§7.6), for removal visibility.
     pub keys: Vec<KeyIdx>,
     /// Keys of the book with a folded change.
@@ -323,6 +328,11 @@ pub(crate) struct BookEntry {
 }
 
 impl BookEntry {
+    /// The chapters this book files records under, ascending.
+    pub(crate) fn chapters_with_records(&self) -> impl Iterator<Item = u16> + '_ {
+        self.filed.iter().copied()
+    }
+
     fn new() -> Self {
         Self {
             presence: None,
@@ -330,6 +340,8 @@ impl BookEntry {
             layout: None,
             chapters: BTreeSet::new(),
             other_checks: Vec::new(),
+            other_comments: Vec::new(),
+            filed: BTreeSet::new(),
             keys: Vec::new(),
             records: 0,
             status: BookStatus::Unknown,
@@ -549,6 +561,22 @@ impl FoldState {
         source: Option<Arc<dyn ValueSource>>,
         changes: impl IntoIterator<Item = FoldInput>,
     ) -> Self {
+        Self::fold_from_with_steps(kind, source, changes, &mut |_, _| {})
+    }
+
+    /// The stages a fold from scratch runs after the last change is indexed: what
+    /// [`FoldState::fold_from_with_steps`] counts.
+    pub const FOLD_STEPS: u32 = 11;
+
+    /// [`FoldState::fold_from`] that calls `step(done, total)` after each stage it runs once
+    /// the last change is indexed, so an open can show how much of the fold is done (§6.1
+    /// "Progress"). `total` is [`FoldState::FOLD_STEPS`].
+    pub fn fold_from_with_steps(
+        kind: ProjectKind,
+        source: Option<Arc<dyn ValueSource>>,
+        changes: impl IntoIterator<Item = FoldInput>,
+        step: &mut dyn FnMut(u32, u32),
+    ) -> Self {
         let mut state = Self::new(kind);
         state.source = source;
         let mut dirty = Dirty {
@@ -567,10 +595,12 @@ impl FoldState {
         }
         state.index_all(&mut chunk, &mut dirty);
         state.resolve_absent_parents();
-        state.run(&mut dirty);
+        step(1, Self::FOLD_STEPS);
+        state.run_counted(&mut dirty, &mut |n| step(1 + n, Self::FOLD_STEPS));
         if dirty.rebuild {
             state.rebuild();
         }
+        step(Self::FOLD_STEPS, Self::FOLD_STEPS);
         state
     }
 
@@ -921,6 +951,17 @@ impl FoldState {
         };
         let entry = self.book_or_new(book);
         entry.keys.push(k);
+        let filed_under = match key {
+            RecordKey::ChapterFront(_, c)
+            | RecordKey::Verse(_, c, _)
+            | RecordKey::Alignment(_, c, _) => Some(c.get()),
+            RecordKey::Check(check) => super::attach::target_chapter(check),
+            RecordKey::Comment(_) => comment_chapter(shape),
+            _ => None,
+        };
+        if let Some(c) = filed_under {
+            entry.filed.insert(c);
+        }
         match key {
             RecordKey::BookPresence(_) => entry.presence = Some(k),
             RecordKey::BookHeader(_) => entry.header = Some(k),
@@ -952,14 +993,14 @@ impl FoldState {
                     .push(k),
                 None => entry.other_checks.push(k),
             },
-            RecordKey::Comment(_) => {
-                if let Some(c) = comment_chapter(shape) {
-                    self.chapters
-                        .entry_or((book, c), ChapterEntry::default)
-                        .comments
-                        .push(k);
-                }
-            }
+            RecordKey::Comment(_) => match comment_chapter(shape) {
+                Some(c) => self
+                    .chapters
+                    .entry_or((book, c), ChapterEntry::default)
+                    .comments
+                    .push(k),
+                None => entry.other_comments.push(k),
+            },
             _ => {}
         }
     }
@@ -1480,18 +1521,32 @@ impl FoldState {
     // ---------------------------------------------------------------------------------
 
     fn run(&mut self, dirty: &mut Dirty) {
+        self.run_counted(dirty, &mut |_| {});
+    }
+
+    /// The stages, calling `done(n)` after the n-th.
+    fn run_counted(&mut self, dirty: &mut Dirty, done: &mut dyn FnMut(u32)) {
         self.stage_batches(dirty);
+        done(1);
         if dirty.rebuild {
             return;
         }
         self.stage_keys(dirty);
+        done(2);
         super::passage::stage_groups(self, dirty);
+        done(3);
         super::attach::stage_local(self, dirty);
+        done(4);
         self.stage_meta(dirty);
+        done(5);
         super::books::stage_books(self, dirty);
+        done(6);
         super::attach::stage_chapters(self, dirty);
+        done(7);
         super::attach::stage_attached(self, dirty);
+        done(8);
         super::attach::stage_paths(self, dirty);
+        done(9);
         if dirty.unknown {
             self.stage_unknown();
         }

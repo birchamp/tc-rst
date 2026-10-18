@@ -657,6 +657,12 @@ impl Index {
         self.sections.get(&key.path).filter(|s| s.key == *key)
     }
 
+    /// The section of the file at `path`, whatever bytes it stands for: an open asks first
+    /// whether the size matches, and fingerprints the file only then.
+    pub fn section_at(&self, path: &str) -> Option<&Section> {
+        self.sections.get(path)
+    }
+
     pub fn sections(&self) -> impl Iterator<Item = &Section> {
         self.sections.values()
     }

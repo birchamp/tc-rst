@@ -274,6 +274,13 @@ impl FoldState {
     /// ingredient table to `tc_burrito::build_metadata`. For an OBS project the caller sets
     /// `scope` to the template table.
     pub fn metadata_source(&self, format: (u64, u64)) -> MetadataSource {
+        self.metadata_source_nfc(format, self.text_is_nfc())
+    }
+
+    /// [`Self::metadata_source`] with `nfc` given by the caller: whether every USFM and story
+    /// file is in NFC. A store knows it from the bytes it wrote, so it never projects every
+    /// book again to build `metadata.json` (§5.10 M2, §6.2).
+    pub fn metadata_source_nfc(&self, format: (u64, u64), nfc: bool) -> MetadataSource {
         let mut fields: BTreeMap<String, Value> = BTreeMap::new();
         let mut scope = serde_json::Map::new();
         let mut groups: BTreeMap<PinGroup, Vec<Value>> = BTreeMap::new();
@@ -322,7 +329,7 @@ impl FoldState {
                 ProjectKind::Stories => Value::Null,
             },
             relationships,
-            nfc: self.text_is_nfc(),
+            nfc,
         }
     }
 

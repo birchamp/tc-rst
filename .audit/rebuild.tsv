@@ -75,3 +75,7 @@ ts	phase	decision	why	evidence	result
 2026-10-17T18:19Z	merge	p0-g0 into claude/focused-ride-5uzj7p (464c209): G0 package, 9 review findings fixed; stand-in 12/12, shell 8/8, page 4/4, fmt clean	owner runs .audit/tasks/g0-windows.md at 20:00 UTC
 2026-10-17T19:44Z	merge	p0-g0 again (69991ff): spike mirror writes off the main thread (AD21), shell tests in Electronite 3/3, driver+task 23/23 with pwsh, page 4/4	before the owner runs G0 at 20:00 UTC
 2026-10-18T07:30Z	merge	windows-fixes + door43-facts into main via merge-win; Linux gates green except one merge interaction (lexicon lock entries lacked lexiconSha256), fixed; tc-resources 90+ tests pass	CI was red on clippy 1.99 lints before this
+2026-10-18T10:56Z	merge	storage (S1, tc-store) into main at 2d0cb2b; gates green (one disk-full run of tc-resources reran green)	single-instance ruling included
+2026-10-18T11:25Z	decision	worktrees build in their own target again (.claude/worktrees/.cargo/config.toml), dev and test profiles with line-tables-only debug info	the shared target let worktrees overwrite each other's workspace crates (cargo names them by path inside the workspace): the phase0 merge compiled tc-store against another worktree's tc-journal
+2026-10-18T11:58Z	merge	phase0 (A1 tc-api, A6a parity tC4 side, A10 tc-export, A11 streaming downloads) into main; full gates green in an isolated target	
+2026-10-18T13:25Z	ruling	tC4 poetry alignment stamps: re-stamp on import only when the aligned words match the verse word for word, recorded in History; tC4 imports are rare, keep unit I lean	owner

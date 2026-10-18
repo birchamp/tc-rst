@@ -8,8 +8,10 @@ export const meta = {
   ],
 }
 
-const MAIN = '/home/user/tc-rst'
-const TC4 = '/home/user/unfoldingword/translationcore4'
+// On another machine pass { root, tc4, onMain: [unit keys], cont: [unit keys] } as the Workflow call's args.
+const A = (typeof args === 'object' && args) || {}
+const MAIN = A.root || '/home/user/tc-rst'
+const TC4 = A.tc4 || '/home/user/unfoldingword/translationcore4'
 const MAINBR = 'claude/focused-ride-5uzj7p'
 const INT = 'phase0'
 const INTWT = `${MAIN}/.claude/worktrees/phase0`
@@ -92,18 +94,25 @@ async function verifyAndFix(u, report) {
 
 const done = {}
 const byKey = Object.fromEntries(UNITS.map(u => [u.key, u]))
+// Units already merged into phase0 and from there into main (2026-10-18): no more agents for them.
+const ON_MAIN = new Set(A.onMain || ['a1', 'a6a', 'a10', 'a11'])
 function run(u) {
   if (done[u.key]) return done[u.key]
+  if (ON_MAIN.has(u.key)) return (done[u.key] = Promise.resolve({ key: u.key, merged: true, head: 'on main' }))
+  if (u.key === 'g0') return (done[u.key] = Promise.resolve({ key: u.key, merged: false, skipped: true }))
   done[u.key] = (async () => {
     const deps = await Promise.all(u.deps.map(k => run(byKey[k])))
     const failed = u.deps.filter((k, i) => !deps[i] || !deps[i].merged)
     if (failed.length) { log(`${u.id}: skipped, dependencies not merged: ${failed.join(', ')}`); return { key: u.key, merged: false, skipped: true } }
     let plan = ''
-    if (!FINISHED.has(`build:${u.id}`)) {
+    const cont = (A.cont || []).includes(u.key)
+    if (!FINISHED.has(`build:${u.id}`) && !cont) {
       plan = await agent(`${COMMON}\n\nYou are the PLANNER of design unit ${u.id}. A separate agent on a faster model implements your plan, and independent verifiers check the result. First create the unit's worktree from the integration branch: if branch ${INT} does not exist yet, create it from ${MAINBR} (git -C ${MAIN} branch ${INT} ${MAINBR}); then git -C ${MAIN} worktree add -b ${br(u)} ${wt(u)} ${INT} (if it exists, use it). Do not change code and do not commit. Read the unit's row in docs/APP-DESIGN.md §10 and every section it cites, the code it builds on, and tC4's source where it matters. Write the plan to ${wt(u)}/.audit/plans/${u.id}.md (the only file you write; the builder commits it): the steps in order, each with the files, types and function signatures to add or change, the invariants and edge cases it must keep (above all, that no translator's work is lost, hidden or silently rewritten, and that the screens match tC4 4.0 where the row says so), the tests that prove the row's "done when" (named, with what each asserts), the measurements to take, and the traps you found. Make it concrete enough that the builder never has to rediscover what you read.\n\nYOUR UNIT (${u.id}):\n${u.task}\n\nFinal answer: the plan's path and a ten-line summary.`, { label: `plan:${u.id}`, phase: 'Build' })
       if (!plan) { log(`${u.id}: planner died`); return { key: u.key, merged: false } }
     }
-    const report = await agent(plan
+    const report = await agent(cont
+      ? `${COMMON}\n\nThis unit was in progress when the work moved to another machine; its branch ${br(u)} holds the planner's plan (.audit/plans/${u.id}.md) and the builder's commits. Create the worktree from that branch (git -C ${MAIN} fetch origin ${br(u)} if it is not local; git -C ${MAIN} worktree add ${wt(u)} ${br(u)}; if it exists, use it), cd there, read the plan, git log and git status, keep what is sound, and finish the plan.\n\nYOUR UNIT (${u.id}):\n${u.task}\n\n${ATTR} Final answer: what you built (files, public API), how it meets the row's "done when", test counts, measured numbers, design text you changed and why, where you departed from the plan and why, and anything left open.`
+      : plan
       ? `${COMMON}\n\nYour worktree ${wt(u)} (branch ${br(u)}, from ${INT}) was created by the planner; cd there and work only there. The planner's plan is ${wt(u)}/.audit/plans/${u.id}.md; its summary:\n<<<\n${plan}\n>>>\nRead the plan in full and follow it. Where the code or the design proves the plan wrong, do what the design requires and say so in your final answer. Commit the plan file with your first commit.\n\nYOUR UNIT (${u.id}):\n${u.task}\n\n${ATTR} Final answer: what you built (files, public API), how it meets the row's "done when", test counts, measured numbers, design text you changed and why, where you departed from the plan and why, and anything left open.`
       : `${COMMON}\n\nCreate your worktree from the integration branch: if branch ${INT} does not exist yet, create it from ${MAINBR} first (git -C ${MAIN} branch ${INT} ${MAINBR}); then git -C ${MAIN} worktree add -b ${br(u)} ${wt(u)} ${INT}, cd ${wt(u)} and work only there.\n\nYOUR UNIT (${u.id}):\n${u.task}\n\n${ATTR} Final answer: what you built (files, public API), how it meets the row's "done when", test counts, measured numbers, design text you changed and why, and anything left open.`,
       { label: `build:${u.id}`, phase: 'Build', ...tier(`build:${u.id}`, 'sonnet') })

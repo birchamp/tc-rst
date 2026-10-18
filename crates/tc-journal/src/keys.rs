@@ -568,6 +568,21 @@ pub enum MetaField {
     Extra(MetaPath),
 }
 
+impl MetaField {
+    /// The dotted `metadata.json` path of the field (§3.4): `identification.name`,
+    /// `languages`, or the path an `Extra` field names.
+    pub fn path(&self) -> String {
+        match self {
+            Self::Name => "identification.name".into(),
+            Self::Abbreviation => "identification.abbreviation".into(),
+            Self::Description => "identification.description".into(),
+            Self::Languages => "languages".into(),
+            Self::Copyright => "copyright".into(),
+            Self::Extra(path) => path.as_str().to_owned(),
+        }
+    }
+}
+
 /// The key of a record kind from a newer minor format: its kind name and the canonical
 /// JSON of its key fields (every member of the record object except `value`).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

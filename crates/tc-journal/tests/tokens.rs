@@ -12,7 +12,7 @@ use tc_journal::keys::UnknownKey;
 use tc_journal::token::TokenError;
 use tc_journal::{
     BookId, ChangeId, CheckId, CheckKey, CheckTarget, PackId, RecordKey, RefPart, ShownToken,
-    TokenKey, ToolId,
+    TokenKey, TokenKind, ToolId,
 };
 
 fn signing() -> TokenKey {
@@ -98,14 +98,104 @@ fn tokens_have_the_pinned_byte_form_and_key() {
         [ChangeId::of(b"a")],
     )
     .unwrap();
-    let pinned = "eyJoZWFkcyI6WyJjYTk3ODExMmNhMWJiZGNhZmFjMjMxYjM5YTIzZGM0ZGE3ODZlZmY4MTQ3YzRlNzJiOTgwNzc4NWFmZWU0OGJiIl0sImtleSI6eyJ2ZXJzZSI6eyJib29rIjoiVElUIiwiY2hhcHRlciI6MSwidmVyc2UiOjR9fX09rvbaRBHqUkSG5mlkaSPA";
+    let pinned = "eyJoZWFkcyI6WyJjYTk3ODExMmNhMWJiZGNhZmFjMjMxYjM5YTIzZGM0ZGE3ODZlZmY4MTQ3YzRlNzJiOTgwNzc4NWFmZWU0OGJiIl0sImtleSI6eyJ2ZXJzZSI6eyJib29rIjoiVElUIiwiY2hhcHRlciI6MSwidmVyc2UiOjR9fSwia2luZCI6ImVkaXQifU7bjZZdVLjQi8dQnjJR_lY";
     assert_eq!(verse.to_text(), pinned);
     assert_eq!(ShownToken::parse(&signing(), pinned), Ok(verse));
     let empty = ShownToken::mint(&signing(), RecordKey::Versification, []).unwrap();
     assert_eq!(
         empty.to_text(),
-        "eyJoZWFkcyI6W10sImtleSI6eyJ2ZXJzaWZpY2F0aW9uIjp7fX199MzG6ZEyr2_zopX8XmltSw"
+        "eyJoZWFkcyI6W10sImtleSI6eyJ2ZXJzaWZpY2F0aW9uIjp7fX0sImtpbmQiOiJlZGl0In2NOId6AXdwh3QwAG_iZLmr"
     );
+    let review = ShownToken::mint_review(
+        &signing(),
+        RecordKey::Verse(BookId::Titus, chapter(1), verse_no(4)),
+        [ChangeId::of(b"a")],
+    )
+    .unwrap();
+    let pinned = "eyJoZWFkcyI6WyJjYTk3ODExMmNhMWJiZGNhZmFjMjMxYjM5YTIzZGM0ZGE3ODZlZmY4MTQ3YzRlNzJiOTgwNzc4NWFmZWU0OGJiIl0sImtleSI6eyJ2ZXJzZSI6eyJib29rIjoiVElUIiwiY2hhcHRlciI6MSwidmVyc2UiOjR9fSwia2luZCI6InJldmlldyJ91diRlNpaTLx-N3MKnqefJQ";
+    assert_eq!(review.to_text(), pinned);
+    assert_eq!(
+        ShownToken::parse(&signing(), pinned).unwrap().kind(),
+        TokenKind::Review
+    );
+}
+
+/// The kind is under the MAC (APP-DESIGN R19): an edit token's text with its kind changed
+/// to review, or the reverse, does not verify, so a screen cannot turn one into the other.
+#[test]
+fn a_token_s_kind_cannot_be_changed() {
+    let key = RecordKey::Verse(BookId::Titus, chapter(1), verse_no(4));
+    let heads = [ChangeId::of(b"a")];
+    let edit = ShownToken::mint(&signing(), key.clone(), heads).unwrap();
+    let review = ShownToken::mint_review(&signing(), key, heads).unwrap();
+    assert_eq!(edit.kind(), TokenKind::Edit);
+    assert_eq!(review.kind(), TokenKind::Review);
+    assert_ne!(edit.to_text(), review.to_text());
+    for (from, to) in [(&edit, "review"), (&review, "edit")] {
+        let text = from.to_text();
+        let bytes = tc_journal_text_bytes(&text);
+        let mac = &bytes[bytes.len() - 16..];
+        let payload = String::from_utf8(bytes[..bytes.len() - 16].to_vec()).unwrap();
+        let swapped = payload.replace(
+            &format!(
+                "\"kind\":\"{}\"",
+                if to == "review" { "edit" } else { "review" }
+            ),
+            &format!("\"kind\":\"{to}\""),
+        );
+        let mut forged = swapped.into_bytes();
+        forged.extend_from_slice(mac);
+        let forged = base64url_text(&forged);
+        assert_eq!(
+            ShownToken::parse(&signing(), &forged),
+            Err(TokenError::BadMac)
+        );
+        // Read without the MAC, the forged text says what it says; nothing trusts that.
+        assert_eq!(
+            ShownToken::parse_unverified(&forged).unwrap().kind(),
+            if to == "review" {
+                TokenKind::Review
+            } else {
+                TokenKind::Edit
+            }
+        );
+    }
+}
+
+fn tc_journal_text_bytes(text: &str) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut buffer = 0u32;
+    let mut bits = 0;
+    for c in text.bytes() {
+        let v = match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'-' => 62,
+            _ => 63,
+        };
+        buffer = buffer << 6 | u32::from(v);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buffer >> bits) as u8);
+            buffer &= (1 << bits) - 1;
+        }
+    }
+    out
+}
+
+fn base64url_text(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let n =
+            chunk.iter().fold(0u32, |acc, b| acc << 8 | u32::from(*b)) << (8 * (3 - chunk.len()));
+        for i in 0..=chunk.len() {
+            out.push(ALPHABET[(n >> (18 - 6 * i) & 63) as usize] as char);
+        }
+    }
+    out
 }
 
 /// Any change to a token's text is refused, in its content or in its MAC: a screen cannot

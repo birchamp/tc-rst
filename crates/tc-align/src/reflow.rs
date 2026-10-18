@@ -6,15 +6,15 @@
 //! touches a card's source words or makes a link. It reports each dropped link in
 //! [`Reflowed::dropped`].
 //!
-//! Nothing here writes. tC4 writes the reflow of every edited verse at draft save, so a
-//! dropped link is gone without a word. Here a text save writes nothing on alignments
-//! (STORAGE.md §5.1, §5.2): the stored value stays as it was and computes invalid, since
-//! its hash no longer matches (§7.7). The aligner opens the verse with the reflowed value
-//! ([`crate::Aligner::open`]). When the reflow is [lossless](Reflowed::is_lossless) it is
-//! saved on leaving the verse, as tC4 would have saved it. When it dropped links, the
-//! aligner shows them and saves only after the translator edits the verse or keeps the
-//! reflow; until then the stored value, with every link, stays as it is, and after that
-//! it stays in History as the parent of the new change.
+//! Nothing here writes. tC4 writes the reflow of every edited verse at draft save. Here the
+//! store writes it in the batch of the verse save (APP-DESIGN R25, STORAGE.md §5.1 step 5,
+//! §5.2): the reflowed value, lossless or not, becomes the alignment's head, and the value
+//! with every link stays in History as its parent, so a dropped link is never gone. A save
+//! does not reflow an alignment in conflict, one made for another span or one marked
+//! invalid; such a value keeps computing invalid, since its hash no longer matches (§7.7),
+//! and the aligner opens the verse with its reflowed value ([`crate::Aligner::open`]),
+//! showing the links the reflow would drop, and saves only when the translator edits the
+//! verse or keeps the reflow.
 use std::collections::HashMap;
 
 use crate::edit::Alignment;

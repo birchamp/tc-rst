@@ -571,6 +571,8 @@ fn is_zaln(m: &Milestone<'_>) -> bool {
 struct Strip {
     plain: String,
     last_is_text: bool,
+    /// Where the last piece of markup copied to `plain` starts and ends.
+    raw_at: (usize, usize),
     flow: Flow,
     /// Open `\zaln-s` milestones: an id, the source word, and whether any word sits inside.
     open: Vec<(usize, SourceWord, bool)>,
@@ -666,16 +668,36 @@ impl Strip {
     }
 
     fn raw(&mut self, s: &str) {
+        let start = self.plain.len();
         self.plain.push_str(s);
+        self.raw_at = (start, self.plain.len());
         self.last_is_text = false;
     }
 
     /// The inverse of the layout rule: a line break right before a word or a run is a
-    /// space. A CRLF line end was never a space, so it stays.
+    /// space. A CRLF line end was never a space, so it stays; nor does a line break right
+    /// after markup that a space would join, such as a `\v` without its number: weave
+    /// never wrote that line break for a space, because such a space was part of the
+    /// marker and not text, so it was in the plain verse as it is.
     fn item_start(&mut self) {
         if self.last_is_text && self.plain.ends_with('\n') && !self.plain.ends_with("\r\n") {
+            let at = self.plain.len() - 1;
+            if at == self.raw_at.1 && self.space_joins_markup() {
+                return;
+            }
             self.plain.pop();
             self.plain.push(' ');
+        }
+    }
+
+    /// Whether a space and a word after the last markup would be read as part of it.
+    fn space_joins_markup(&self) -> bool {
+        let (start, end) = self.raw_at;
+        let markup = &self.plain[start..end];
+        let probe = format!("{markup} x");
+        match Document::parse(&probe).nodes().first() {
+            Some(Node::Marker(marker)) => marker.raw() != markup,
+            _ => false,
         }
     }
 
@@ -913,6 +935,21 @@ mod tests {
         assert_eq!(parsed.plain, "a servant, of God.\n");
         assert_eq!(parsed.groups, groups);
         assert_eq!(parsed.words.len(), 4);
+    }
+
+    /// A line break after a `\v` that has no number was never a space: a space there
+    /// would be read as the marker's separator, and the word after it as its number.
+    #[test]
+    fn a_line_break_a_space_would_join_to_a_marker_reads_back_as_written() {
+        for plain in ["\\v\t\nabc", "\\v \nabc", "\\c\t\nabc"] {
+            let woven = weave(plain, &[]).unwrap();
+            let parsed = parse_aligned(&woven).unwrap();
+            assert_eq!(parsed.plain, plain, "{woven:?}");
+            assert_eq!(parsed.words, target_words(plain).unwrap());
+        }
+        // A space after a marker that it would not join is still written as a line break.
+        let woven = weave("\\p  abc", &[]).unwrap();
+        assert_eq!(parse_aligned(&woven).unwrap().plain, "\\p  abc");
     }
 
     #[test]
