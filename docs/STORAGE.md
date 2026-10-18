@@ -1178,7 +1178,7 @@ would miss damage that keeps them.
 | `prefs/<projectId>.json` | pane layout and other per-person UI preferences |
 | `resources/dcs/<owner>/<repo>/<sha>/` | an installed Door43 resource at its full commit sha, with its `receipt.json` and `checked.json` and its files under `content/` (`tc-resources`, `ResourceStore`); owner and repository folders in lower case, as Door43 resolves names without regard to case (the receipt keeps the pin's casing); nested, not joined as `<owner>--<repo>`, because both names may hold `--` |
 | `resources/aquifer/<owner>/<repo>/<commit>/<lang>-<16 hex of the asset's SHA-256>/` | an installed Aquifer release asset, laid out the same way |
-| `resources/.partial/` | installs in progress; removed when the store opens |
+| `resources/.partial/` | installs in progress; removed when the store opens (on Windows, a leftover that another program such as a virus scanner still holds open is kept until a later open) |
 | OS keychain | the Door43 token, only when the person chose "Stay signed in" |
 
 ---
