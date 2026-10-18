@@ -606,7 +606,8 @@ import and export; `JobOutcome::Finished` ends a job whose end is its whole resu
 download, a summary, a training). The change parts are named structs, not tuples, so their JSON
 names its fields. A checkpoint failure carries its reason, not a `Refusal`: no refusal family
 describes one, and the UI shows tC4's "Checkpoint not saved" with Retry and the reason as its
-diagnosis (`tC4:src/App.jsx:63-67`). `QueryKey::depends_on` errs toward a refresh: a chapter
+diagnosis (`tC4:src/App.jsx:63-67`). An event that carries a value whole must also have a read
+that returns it, or a gap loses it (§5.4). `QueryKey::depends_on` errs toward a refresh: a chapter
 follows its own edits and its book; a book any of its chapters; a check list its rows, its unit
 and the pins (the unit of a book's list is the book; of the stories' list, any story, because
 `ChangeParts.stories` names a story whether it was added, removed or edited); a record, a story
@@ -786,11 +787,29 @@ answered Q-2 with (a), so the shell sends the report and the server only compose
 ### 3.10 Versioning
 
 - `API_VERSION = 1`, paths under `/api/v1/`, header `X-Tc-Api: 1`.
-- The UI and the server ship as one build. `index.html` is `no-store`; every other UI file has a
-  content-hashed name. A `build.commit` in `hello` that differs from the wasm's compile-time
-  commit forces one reload. Both read `tc_api::app::BUILD_COMMIT`, which is the environment
-  variable `TC4_BUILD_COMMIT` at build time, or `dev` when it is not set; the release pipeline
-  sets it for the server and the wasm build alike.
+- The UI and the server ship as one build. `index.html` is `no-store`; every other UI file is in
+  a folder named by a hash, `ui/<build>/`, where `<build>` is 16 hex digits of a SHA-256 over every
+  file's path and bytes. *(A4a: a hashed folder, not hashed file names, because tC4's CSS imports
+  `tokens/*.css` and its fonts by relative URL, which a renamed file would break.)* A
+  `build.commit` in `hello` that differs from the wasm's compile-time commit forces one reload.
+  Both read `tc_api::app::BUILD_COMMIT`, which is the environment variable `TC4_BUILD_COMMIT` at
+  build time, or `dev` when it is not set; the release pipeline sets it for the server and the
+  wasm build alike. *(A4a: so do a `hello.api` that differs from `API_VERSION` and any reply that
+  is `ApiError::Version`, whether it answers a call or the open of the event stream. The server
+  checks the version of every `/api/` path, and the stream's open is the page's first request,
+  so it meets the refusal before `hello` does; so does a reconnect in the middle of a session.
+  The page keeps a marker in `sessionStorage`, `tc4.reloadedFor`, naming the server's commit and
+  API version it reloaded for. The same mismatch after that reload shows the boot error naming
+  both builds, instead of reloading for ever; a different mismatch gets one reload of its own. A
+  page whose `sessionStorage` refuses the marker does not reload at all: with no marker the next
+  load would reload again, for ever, so it shows the boot error at once. One function,
+  `tc_ui::app::boot::build_action`, decides all of this for `hello`, for a call and for the
+  stream, and writes the marker before it says to reload. A session that meets the refusal in
+  the middle, in a reconnect or a call, does the same: the reload happens, or the boot error
+  replaces the app on the page at once, naming both builds. When several requests find out
+  together the first decision stands (`boot::Fate`), so there is no second reload, no boot error
+  while the page leaves and no reload of a page that has stopped, and the event stream stops
+  reconnecting behind the page's new state.)*
 - A new `ServerInstance` means the server restarted. The UI drops every scope, sends nothing
   again, keeps every buffered entry and goes Home; the entries are offered when their project
   next opens (AD4). In the shell this happens on a fresh page, because the shell reloads the
@@ -1309,7 +1328,7 @@ drives the quit sequence in process): `closed_stdin_quits_within_5_s`,
 | Method, path | Kind | Notes |
 |---|---|---|
 | `GET /` | static | `index.html`, `no-store`, with `boot.js` |
-| `GET /ui/*` | static | hashed wasm, JS glue, CSS (tC4's `styles.css`, tokens, `ui.css`), fonts, catalogs; immutable |
+| `GET /ui/<build>/*` | static | wasm, JS glue, `boot.js`, CSS (tC4's `styles.css`, tokens, `ui.css`), fonts, catalogs, in a folder named by a hash of its files (§3.10); immutable |
 | `GET /help/*` | static | vendored help pages as `text/html`, never a redirect (Q28, DELTA:928-944), with the page-swap shim |
 | `GET /prepare.html` | static | first-launch window: tC4's `scripts/desktop-preparing.html` with its words in the saved app language (DELTA Q25; English until translated, Q-10). One file, `crates/tc-ui/app/prepare.html`, with its own CSP (the server sends none for this route); it reads `app/hello` and the event stream and goes to `/` at `Ready` *(A9)* |
 | `GET /api/v1/events` | stream | §5.4 |
@@ -1349,6 +1368,39 @@ in Chromium against the real `tc4`, with the request filter of AD11
 - Each connection has a bounded queue. A reader too slow for it is disconnected and reconnects.
 - The UI reads the stream with `fetch` and a `ReadableStream` reader, and parses the frames in
   `tc_ui::app::events`, a host-tested parser.
+- **The UI's reading rules** *(A4a)*. Its first connection asks `?after=0`, so the bus replays
+  every frame since launch, or sends one `Resync` if the ring has wrapped, and applying the
+  frames in order converges on the current state (none is suppressed as old). It reads
+  `app/hello` only after the stream's response head has arrived, so the subscription is made
+  before `hello`'s snapshot and no frame can fall between them. A `Resync` is numbered like the
+  newest frame, which may be lower than the reader's `after`, so it is never skipped as a repeat
+  and sets `after` to its own number; any other frame with `seq <= after` is a repeat and is
+  skipped. A frame that does not parse is handled as a `Resync` (every live query is read
+  again), never dropped, and `after` moves past its `id`. A frame of another `ServerInstance` is
+  a restart (§3.10); the jobs the UI holds are forgotten, because the new run numbers its jobs
+  from the start, and so are the aligner save states, the checkpoint outcomes and the blocked
+  files (`effects::forget_run`), because the new run numbers its aligners the same way and its
+  opens from epoch 1 again, so an entry under one of those keys would belong to another thing. The reader aborts a connection that sends no byte for 45 s (three heartbeats)
+  and reconnects after 250 ms, doubling to 5 s, with the last `after`. After a `Resync` or a frame
+  it could not read, the UI also reads each job it holds as active with `jobs/get`: `hello`
+  carries no jobs, and the frame that ended one may have been in the gap. A reply replaces the
+  held view unless a frame changed the job while the call was on its way (the frame is newer); a
+  job the server no longer knows is forgotten. Without this a lost final frame would leave a
+  progress indicator standing for ever, which PERFORMANCE rule 4 forbids.
+- **What only events carry needs a read** *(A4a)*. The two repairs above work because a call
+  returns the value: `hello` returns the internet switch, the account, the startup state, the
+  open sessions and the saved language, and `jobs/get` a job. A value that an event carries whole
+  and no call returns cannot be repaired after a gap: a lost `Checkpoint(Failed)` hides
+  "Checkpoint not saved" from the translator, a lost `AlignSave` leaves the indicator on
+  "Saving", and a lost `MaterializeBlocked` hides the file that was not updated. The rule for
+  every unit that adds such an event is that the same unit makes the value readable, with a test
+  that a `Resync` restores it, and says how in its row. Until then the UI keeps what it holds,
+  and drops what belonged to an open that `hello` no longer lists. Phase 0's server emits none
+  of these frames. D1 adds the last `CheckpointOutcome` and the blocked paths to `OpenSession`
+  in `hello`, which the UI already reads after every gap. B6 reads the aligner view's `save`
+  with each refresh of the view, which a `Resync` makes. `Notice` is readable through
+  `session/notices`. `Received` and `Suggest` follow the same rule, and E2 and B6, which add
+  them, say in their rows how each is repaired.
 - **Ordering.** The server publishes a command's events before it sends the command's reply. An
   `Ack` and a `Changed` event for the same write may still arrive in either order at the UI; both
   carry a `ViewSeq`, and the UI keeps the newer. A `Changed` whose cause is
@@ -1474,8 +1526,24 @@ show a 401 page.
   `actions.open_project_at`, `actions.record_decision`), so each tC4 view file becomes one Rust
   module read top to bottom.
 - Behind `s` there are three sources, and each value has one owner:
-  1. **Server state** in a `QueryCache`: projects, cards, the book model, helps, the check session,
-     the aligner view, jobs, internet, account, prefs. These fields of `s` are read-only signals.
+  1. **Server state**, from two places. Reads that screens hold, refcounted and shared by request,
+     are in a `QueryCache`: projects, cards, the book model, helps, the check session, the aligner
+     view. Values that arrive whole in `hello` and in events live in `ServerState` signals that
+     exist for the life of the page. `hello` holds five of them: the internet switch, the
+     account, the startup state, the open sessions and the saved app language. Events update
+     them, and a `Resync` reads `hello` again. Jobs are in no read of `hello`: events carry
+     them, and a `Resync` reads each job held as active with `jobs/get` (§5.4). The last
+     checkpoint outcome, the files a materialize cannot write and the aligner save states are
+     in neither: **only events carry them**, so no read restores one that a gap lost. A `Resync`
+     keeps what the page holds of them, because a failure is never cleared by a gap, and drops
+     what belonged to an open that `hello` no longer lists. A restart is not a gap: the new run
+     numbers its opens and aligners again, so the page forgets them with its jobs (§5.4). The units that emit these events
+     make them readable (§5.4): D1 for the checkpoint outcome and the blocked files, B6 for the
+     aligner save state. These fields of `s` are read-only signals. *(A4a: the first draft put all
+     of them in the cache. A cache entry with no holder is forgotten, and these values must exist
+     before any screen holds them. It also said that `hello` seeds all of them; the review of the
+     runtime found that `hello` holds none of the last three, so a `Resync` could not restore a
+     "Checkpoint not saved", a "can't update TIT.usfm" or an aligner's "Saving" lost in a gap.)*
   2. **Drafts**: typed text not yet acknowledged, in the save machine and the browser buffer.
   3. **View state**, the "memory only" slices of tC4 (`tC4:src/state.jsx:408-588`): view and
      dialogs, rail and helps visibility and width, tabs, filter and sort, `toolPos`, page setup,
@@ -1489,10 +1557,18 @@ show a 401 page.
 
 ### 6.2 Reading
 
-- `api.query::<E>(req).await -> ReplyOf<E>`. A screen holds `Load<T> { Loading, Ready(T),
-  Refreshing(T), Failed(ApiError) }`. "Failed" is never drawn as "absent".
-- A reply is dropped when its scope is no longer current, or when its `ViewSeq` is older than the
-  cached one.
+- `api.call(&req).await -> Result<E::Ok, CallError>`, with `CallError { Api(ApiError), Dropped,
+  Transport(Transport) }` and `Transport { Unreachable(String), Status(u16), Unreadable(String) }`.
+  A screen holds `Load<T> { Loading, Ready(T), Refreshing(T), Failed(CallError) }`. "Failed" is
+  never drawn as "absent". *(A4a: the first draft had `-> ReplyOf<E>` and `Failed(ApiError)`.
+  AD9 keeps HTTP statuses and network failures below the API, so a refused token, a proxy's
+  page or a server that is gone are not `ApiError`s; and a reply dropped because its project
+  closed must not look like a refusal.)*
+- A *read's* reply is dropped when its scope is no longer current, when the server answered it
+  with `ApiError::StaleScope`, or when its `ViewSeq` is older than the cached one. The query cache
+  and `Runtime::read_once` (a read an action makes itself) apply the rule. **A write's reply is
+  never dropped**: the save machine needs every `Ack` and every `NotSaved::StaleScope` (§6.5,
+  A-19). *(A4a)*
 - A `Session::Changed` event whose scope a query `depends_on` moves it to `Refreshing` and fetches
   it again. The old data stays on screen; a book waiting behind a commit shows as pending, never
   as empty (DELTA:625-626). `Resync` refreshes every query. The check rail is the exception: it
@@ -1502,7 +1578,13 @@ show a 401 page.
   shell only the dev server and Playwright open the page, and tC4 removed its tab guard as dead
   code (D39). The one-tab check of RT-19 is removed by the owner's ruling of 2026-10-18 *(A-19)*.
 - Shared reads are shared: Understand and Translate use one helps query, as tC4 shares
-  `useLoadHelps` (`tC4:src/views/HelpsPanel.jsx:474-480`).
+  `useLoadHelps` (`tC4:src/views/HelpsPanel.jsx:474-480`). *(A4a: within one server run. A restart
+  numbers the opens again, so the same request, with `TIT` at epoch 1 in its body, names another
+  open in the new run. The registry keys a read of a project by its run as well as its request
+  (`ReadId`, which `hold` hands to the holder), so a screen of the new run gets a new read and
+  a fetch while a screen of the old run still holds the dead one, and the old screen's release
+  cannot take a holder from the new read. A read of the app has no run: a restart does not end
+  it.)*
 - `window.__tcIdle` is true when no fetch, save or job is in flight.
 
 ### 6.3 Subscribing
@@ -1530,7 +1612,8 @@ One task reads the stream and dispatches:
     `Ack` arrive.
 - A `Changed` event with `scope.conflicts`, and `new_conflicts` in an `Ack`, update the markers
   and chips at once.
-- `Checkpoint(Failed)` sets "Checkpoint not saved" with Retry (`tC4:src/App.jsx:63-67`).
+- `Checkpoint(Failed)` sets "Checkpoint not saved" with Retry (`tC4:src/App.jsx:63-67`). The
+  last outcome is also in `hello`'s `OpenSession` (D1, §5.4), so a `Resync` brings it back.
 - `Job` events feed the open overlay and the busy labels. The overlay (S14) is a port of tC4's
   `OpenProgressView`: its own timer shows it 300 ms after the person's action
   (`SHOW_THRESHOLD_MS`, `tC4:src/views/OpenProgress.jsx:16-40`), whether or not a progress event
@@ -1735,16 +1818,36 @@ Publish` with tC4's string values; `MainView` is a port of `tC4:src/App.jsx:192-
 
 ### 6.9 Language and right-to-left
 
-- `t(key, vars)`, `t_or` port `tC4:src/i18n/index.js:76-95`: English fallback per key; an unknown
-  key warns once and shows the key; an explicit fallback wins; `{name}` is replaced.
+- `t(key, vars)` and `t_dyn(key, vars, fallback)` port `tC4:src/i18n/index.js:76-95`: a target
+  entry that is missing, empty or not a string falls back to English per key; an unknown key
+  warns once (`[i18n] missing key: <key>`) and shows the key; an explicit fallback wins and is
+  returned as given; each `{name}` is replaced, the variables one after another in the order
+  given, as tC4's loop does. *(A4a: one declared difference. tC4's `replaceAll` also reads
+  `$&` and `$$` in a value as patterns, so a project named `Cost $$` would show `Cost $`; `t()`
+  puts a value in as it is.)* `show_locale` ports `setLocale`: a language that is not
+  installed, or the one already shown, changes nothing.
 - `build.rs` generates key constants from `assets/i18n/en.json` and
-  `assets/i18n-rebuild/en.json`, so a misspelled static key does not compile. The port of
+  `assets/i18n-rebuild/en.json`, so a misspelled static key does not compile. The constants are
+  nested modules, `keys::app::SAVED`, `keys::net::ask::SIGN_IN`,
+  `keys::refusal::open::LOCK_HELD`: flat names collide in tC4's own catalog
+  (`upgrade.text.gateway` and `upgrade.textGateway` would both be `UPGRADE_TEXT_GATEWAY`), and the
+  build fails on a key that gives another key's path. *(A4a)* The port of
   `test/i18n-keys.test.ts`, with floors, covers dynamic keys such as `net.ask.<kind>` and
   `syncResult.error.*` (DELTA:525-531).
-- English is built in. All ten catalogs (about 0.94 MB) are fetched in parallel before the first
-  render, as tC4 bundles all ten (`tC4:src/i18n/index.js:12-21`), so the App language preview
-  (M16) changes language in one render without remounting, and a fetch failure shows at boot
-  instead of as English in the middle of a preview. *(A-23)*
+- English is built in: tC4's `en.json` and the rebuild's ten key files are compiled into the
+  wasm, because `t()` needs English as the fallback of every key even when a fetch fails, and
+  `build.rs` reads both English files anyway; the rebuild files hold a few hundred bytes each.
+  The nine other tC4 catalogs (870,974 bytes of the 943,433) are fetched in parallel before
+  the first render, where tC4 bundles all ten (`tC4:src/i18n/index.js:12-21`), so the App
+  language preview (M16) changes language in one render without remounting, and a fetch
+  failure shows the boot error instead of English in the middle of a preview. *(A-23; A4a:
+  only the nine are fetched.)*
+- Changing the language sends no request and remounts nothing: every text is a closure that
+  reads the shown language, so a switch updates text nodes in place. The smoke counts the
+  app's own requests (`fetch`, XHR, document, script, style sheet) and fails on any after boot;
+  it lists font loads apart, because the browser itself loads the Arabic faces of tC4's fonts the
+  first time Arabic is shown, as it does in tC4 (its app-language case j paints with the bundled
+  Noto Sans Arabic). *(A4a)*
 - Rebuild-only keys live in `assets/i18n-rebuild/<id>.json`, merged after the vendored catalog
   without overriding it. The vendored files stay byte-identical (DELTA:532-536).
 - `<html lang dir>` comes from `LOCALES` (`crates/tc-ui/src/i18n.rs:41-92`) and is set before the
@@ -1808,14 +1911,19 @@ so the rebuild must keep its keyboard contract by itself *(A-24)*:
 | `views/dev/Inspector.jsx` | `views/dev/inspector.rs` (dev only) | late |
 
 Rebuild-only screens with no tC4 view: the review tabs beyond Text, History, Detached, Notices,
-the received-work sheet, the draft offer, the read-only banner with the copy offer, the USB flows
-and the first-launch window (Q-9). The window is a port of tC4's preparation page
-(`scripts/desktop-preparing.html`, `desktop-prepare.cjs`), with its markup, CSS, title and
-English words unchanged and its words as rebuild keys (`prepare.*`) in the saved app language
-(nine languages pending, Q-10). Only its failure state is new design: tC4 shows a native error box
-and exits (`scripts/desktop-main.cjs:175-181`), while here the server seeds and the window shows
-tC4's failure words with the reason under them, so the owner reviews it under Q-9 with
-`docs/evidence/first-launch-seeding-2026-10-18/prepare-failed.png` *(A9)*.
+the received-work sheet, the draft offer, the read-only banner with the copy offer, the USB flows,
+the first-launch window (Q-9), and the boot error *(A4a)*. The window is a port of tC4's
+preparation page (`scripts/desktop-preparing.html`, `desktop-prepare.cjs`), with its markup, CSS,
+title and English words unchanged and its words as rebuild keys (`prepare.*`) in the saved app
+language (nine languages pending, Q-10). Only its failure state is new design: tC4 shows a native
+error box and exits (`scripts/desktop-main.cjs:175-181`), while here the server seeds and the
+window shows tC4's failure words with the reason under them, so the owner reviews it under Q-9
+with `docs/evidence/first-launch-seeding-2026-10-18/prepare-failed.png` *(A9)*. tC4 bundles
+everything and cannot fail to boot; the rebuild can: a catalog that does not load, a page opened
+without its key, or a page and a server of two builds. The boot error is tC4's view-error callout
+(`data-testid="boot-error"`, tone warn, `role="alert"`): `app.viewError`, the technical reason,
+and a Retry button (`app.retry`) that reloads. It is shown in the saved language when its catalog
+is installed, else in English.
 
 ---
 
@@ -2266,14 +2374,14 @@ This breakdown was checked again after the red team *(A-16, A-17)*:
 | A1 tc-api foundations | the crate; ids; `Scope`; `Endpoint`, `endpoints!`, `ALL`; tokens with their prefixes *(A-7)*; `Shown`; `Ack` with `Stored` and rail patches; `NotSaved` with `StaleScope` *(A-19)*; `ApiError` with `RequestReused` *(A-2)*; `Refusal` families, `SyncRefusal`; events (`ChangeScope` as an enum, `Aspect`, `AlignSave`), jobs, progress; the state enums of §3.7 *(A-30)*; `depends_on`; the endpoints of phase 0; rebuild key files (English, with the nine other languages listed as pending) *(A-32)* | — | — | serde proptest; golden JSON per endpoint (rewritten only with `UPDATE_GOLDEN=1`); the four refusal tests and `release_has_no_pending_translation` (§3.5); a token text with the wrong prefix does not parse | builds and lints for wasm32; every phase-0 endpoint has golden JSON |
 | A2 tc-server and `tc4 serve` | axum on loopback; address line; `app.lock`, with its holder's pid in `app-lock.json` beside it (§5.1), and the 10 s wait, only for the restart case (the single instance is G1's lock); tc-api's `ReadOnlyReason::OpenElsewhere` ("another translationCore window holds the project's lock", `crates/tc-api/src/write.rs` on branch p0-a1) is removed, and a held project lock is a refusal that names the holder's process (ruling of 2026-10-18); quit on `{"quit":true}` and on a closed stdin *(A-3)*; security layer; CSP; static routes; `hello` from a stand-in backend until the join with A3 (order paragraph); the event stream: the frames of tc-app's `EventBus` as server-sent events, with the heartbeat, ending a connection whose subscription lags (the ring, `Resync` and coalesced progress are tc-app's, §4.1); uploads with per-flow caps *(A-28)*; downloads registry; `test-hooks` feature with `test/crash`; the loopback spike, also through a header-adding proxy *(A-14)* *(A2: §4.1 gives the ring to tc-app, which A3 builds at the same time; a second ring in tc-server would be thrown away at the join.)* | A1 | — | §5.2 security tests; `closed_stdin_quits_within_5_s`, `new_tc4_waits_for_the_old_one_then_names_the_holder`; replay and `Resync` through HTTP (a scripted event source until the join); a 513 MiB import upload is 413 and a 1 GiB exchange upload streams to disk; `every_endpoint_is_routed_once`; `tokio_never_blocked` | the tests pass; the spike's two p95 figures are in `docs/evidence/` |
 | A3 tc-app foundations | `App`, `AppConfig`; `JobRegistry` with reporter (100 ms, or 1 s for jobs no screen shows *(A-29)*) and cancel; `EventBus`; `FlowGate`, with USB export and receive per project *(A-31)*; `PrefsWriter` (memory) with the `lastEdit` rule *(A-20)*; `ReportLog`; internet wiring; `Keychain` trait with `MemKeychain`; `ReplyCache` with body digests and in-flight waits *(A-2)*; `test/fieldStore`, a test-only write endpoint that goes through the reply cache and records every text it stores, so A4b can prove its no-loss rules before any real save exists; `app`, `prefs`, `net`, `jobs` handlers; `App::call`, the transport-free entry the server routes to; the projects folder of Q-4 (§4.9) | A1 | — | `job_reports_nothing_before_300ms_then_every_100ms`; `unseen_jobs_report_once_a_second`; `counts_only_grow`; `cancel_stops_at_next_chunk`; flow-gate tests, including `receive_and_sync_of_one_project_never_overlap`; reply-cache tests for a finished request, one in flight, and another body; `hello_answers_real_state`; the `test/fieldStore` crash, hold and retry tests | `App::call("app/hello")` answers with real state (this launch's instance, the internet switch, the kept sign-in, the saved app language, the open sessions and the startup state), in the bytes `tc4 serve` sends; `tc4 serve` answers it over HTTP once A2 and A3 are joined (order paragraph) |
-| A4a tc-ui runtime: transport, cache, language | feature `app`; API client with scope drop; SSE-over-fetch reader; `QueryCache`; `Load<T>`; no tab guard, because the ruling of 2026-10-18 removed the one-tab check *(A-19)*; `t()` with generated keys and rebuild keys; all ten catalogs at boot *(A-23)*; `<html lang dir>`; `build-app.sh`; web-sys features (`Storage`, `Headers`, `Request`, `RequestInit`, `ReadableStream`, `ReadableStreamDefaultReader`, `TextDecoder`, `AbortController`, `File`, `Blob`, `DragEvent`, `DataTransfer`, `HtmlAnchorElement`, `HtmlIFrameElement`, `PerformanceObserver`); vendor tC4's `src/ui.css` again | A1, A2 | — | host tests of the SSE parser and `t()`; `i18n-keys` port with floors; Playwright smoke: boot, `hello`, a locale switch with no request after boot | the smoke passes in this container |
+| A4a tc-ui runtime: transport, cache, language | feature `app`; API client with scope drop; SSE-over-fetch reader; `QueryCache`; `Load<T>`; no tab guard, because the ruling of 2026-10-18 removed the one-tab check *(A-19)*; `t()` with generated keys and rebuild keys; all ten catalogs at boot *(A-23)*; `<html lang dir>`; `build-app.sh`; web-sys features (`Storage`, `Headers`, `Request`, `RequestInit`, `ReadableStream`, `ReadableStreamDefaultReader`, `TextDecoder`, `AbortController`, `File`, `Blob`, `DragEvent`, `DataTransfer`, `HtmlAnchorElement`, `HtmlIFrameElement`, `PerformanceObserver`); vendor tC4's `src/ui.css` again *(A4a: built as the row says, with these refinements, each with its reason where the design text names it. `api.call` returns `Result<_, CallError>` and `Load::Failed` holds a `CallError`, because HTTP statuses and network failures are not `ApiError`s (§6.2, D1). Scope drop is for reads; a write's reply is never dropped, because A4b's save machine needs every `Ack` and `NotSaved::StaleScope` (§6.2, D2). Internet, account, startup, the open sessions, the saved language, jobs and the last checkpoint outcome are `ServerState` signals, not cache entries, because they arrive whole and must exist before any screen holds them (§6.1, D3). The event reader asks `?after=0`, reads `hello` only after the stream's head, never skips a `Resync`, treats a frame it cannot read as a `Resync`, reads each job it holds as active with `jobs/get` after one, and reconnects after 45 s of silence (§5.4, D4). English and the rebuild's key files are compiled in and only the nine other catalogs are fetched, because `t()` needs English even when a fetch fails (§6.9, D5). Key constants are nested modules, because flat names collide in tC4's catalog (§6.9, D6). The UI files are in a folder named by a hash, because tC4's CSS imports by relative URL (§3.10, D7). A different build or API version reloads once, whichever request finds out (`hello`, a call, or the open or reconnect of the event stream, which meets it first), and the same mismatch after that, or a page that cannot keep the marker of its reload, shows the boot error; `boot::build_action` is the one decision, host-tested, and the same decision is carried out in the middle of a session: the boot error replaces the app, the first decision of several requests stands, and the event stream reads no more (§3.10, D8). The boot error is a rebuild-only screen (§6.12, D9). The smoke's "no request after boot" leaves out font files, which the browser loads when Arabic first shows (§6.9, D10). Until A5 ports `App.jsx`, the page mounts a stand-in root: a sample line, the language picker, which calls the `show_locale` that the language dialog will, and the internet state (D11). `hello` holds no checkpoint outcome, no blocked file and no aligner save state, so a `Resync` cannot restore what events alone carry: the page keeps what it holds, drops what belonged to an open `hello` no longer lists, and D1 and B6 make the rest readable; a restart forgets them, with the jobs, because the new run numbers its aligners and opens again (§5.4, §6.1, D12). A read of a project is keyed by its server run as well as its request, so the new run fetches a request that a dead read of the old run still holds (§6.2, D13). `build-app.sh` also puts A9's first-launch window, `app/prepare.html`, beside `index.html`, where `tc4 serve` serves `/prepare.html`, because A4a merged after A9 (A9's row). A host test of the event stream's parser and reader, of the cache's decisions, of what each frame does, and of `t()` and the key scan stands behind each; `docs/evidence/ui-runtime-2026-10-18.md` has the numbers and the smoke's last run.)* | A1, A2 | — | host tests of the SSE parser and `t()`; `i18n-keys` port with floors; Playwright smoke: boot, `hello`, a locale switch with no request after boot, a server of another API version or build (one reload, then the boot error; none with `sessionStorage` blocked), a `Resync` and a restart while a job is held | the smoke passes in this container |
 | A4b ◆ tc-ui no-loss core: saves, buffer, panics | the join of A2 and A3 (order paragraph), if no earlier unit made it; the save machine (§6.5: `sent`, the NFC clean rule, retries with the first body *(A-2)*, `StaleScope` *(A-19)*); the refresh rule for open editors (AD37) *(A-6)*; the draft buffer v2 keyed by folder and project id *(A-9)*, with the bridge calls `bufferChanged` and `takeBuffered` *(A-3)*; `boot.js`: capture listener, reload, panic counting by page load, static callout, drafts posted with `fetch` *(A-15)*; panic hook and crash marker; the navigation gate and close guard *(A-26)*; `try_` forms and `clippy::indexing_slicing` in app modules *(A-15)* | A1, A2, A3, A4a | — | port of tC4's scheduler tests; proptest: no `current` dropped; `reload_anywhere_stores_the_last_text_once` against `test/fieldStore`, with reloads and `test/crash` at every point; the AD37 refresh cases; Playwright: a panic in an input handler keeps the keystroke, one panic with trapping closures reloads once, three panics show the static callout and post the drafts | the tests pass and the adversarial review's findings are fixed |
 | A5 Shell chrome and static surfaces | `App`, TopBar (X1), save indicator (X2), account menu (X6), M15, M16 with preview, M17 with License, M14 compose, S13 with vendored help pages (AD29) and the page-swap shim, S15 | A3, A4a, A4b, A6b | — | scenarios: account-menu keyboard, M16 preview and restore, help a–i (no internet case yet) | dialog DOM parity for `account-menu`, `app-language`, `help`, `about`, `feedback` (layer 2, through A6b) |
 | A6a Parity harness: tC4 side *(A-17)* | the `capture.mjs` split (`screens`, `driver`, `observe`, `env-tc4`); sha256 per PNG in `manifest.json` and its check; tC4 DOM snapshots for all 62 screens; `state.mjs` from the repository's fixtures | — (the tC4 checkout) | — | `state_from_repo_equals_state_from_tc4`; the baseline test fails on a changed PNG | a tC4 recapture after the split has identical hashes; the 62 DOM snapshots are committed |
 | A6b Parity harness: Rust side and gate *(A-17)* | `env-rust.mjs` (`tc4 serve`, token header, `test/reset`, `test/quiet`, event stream left out of `trackRequests`); the four-layer compare tool; `masks.json`, `report.json`, `residuals.json`; `screen_record.rs` | A6a, A2, A4a | — | the gate fails on a planted pixel, DOM and meaning difference; a screen that reaches the settle deadline fails | the gate runs in `cargo test`, and the planted differences fail it |
 | A7 tC4 view-state gallery | Vite app with the `state.jsx` stub; case format; action recorder; the §7.4 cases | A6a, A6b | — | every case renders with no console error; two runs are byte-identical | the cases are rows in `report.json` |
 | A8 Door43 account and internet consent | `account` service: sign-in with `mint_token` against tc-door43-fake, keep, resume, forget; `cancelSignIn`; "no keychain"; M12; the internet question flow (`InternetFlow`, `Pending`) | A3, A5 | — | sign-in cases of J11; internet-consent a–j that need no project | DOM parity for `share-signin`, `share-internet-consent`, `open-door43-internet-consent` |
-| A9 First-launch seeding | the join of A2 and A3 (order paragraph), if no earlier unit made it; **tc-resources**: progress and cancel hooks in bundle seeding, with that crate's own tests; the `Seed` job; `Startup` events; `/prepare.html` with English text and the other nine languages listed as pending (Q-10) *(A-17, A-32)* *(A9: built. D1: the plan is made at start, from receipts alone, inline in `App::start`, so `hello.startup` is exact from the first request (`Ready`, with no job, frame or report, when nothing is missing; `Preparing { 0, total }`; `Failed`), and without `--bundle` nothing is seeded. D2: tc-resources gets `seed_plan`, `seed(plan, &dyn SeedWatch)`, `Seeding::{Finished, Cancelled}` and `content_files_written()`; `seed_from` is the same two steps with a watch that never stops. D3: the count is content files, not tC4's 16 resources (declared difference, §3.6). D4: the `Startup` frames follow the `Seed` job's reports through `JobRegistry::watch` and only move forward, and the ring keeps the newest `Startup(Preparing)`. D5: Close is a quit, and `App::quit` cancels the seed and waits for it; a stop leaves whole copies, and the copy being made stays in `.partial/` until the next start. D6: a bundled install that fails its own check, a copy that cannot be trusted, a bundle that cannot be read and a bundle that lacks an install its manifest lists (D12) end the start `Failed`, and the window shows tC4's failure words with the reason; tC4 shows a native error box and exits, so this is a declared difference, and the screenshot goes to the owner under Q-9; tc-resources keeps its rule that a refused install does not stop `seed_from`. D7: `/prepare.html` is one file, `crates/tc-ui/app/prepare.html`, holding the `prepare.*` text of all ten languages (nine pending, Q-10) and one script that its own CSP allows by hash; `crates/tc-ui/tests/prepare_page.rs` keeps both equal to the rebuild files. D8: `tc4 serve --bundle <dir>`, and with `test-hooks` `--test-seed-pace <ms>`. D9: the installer still ships an expanded store, built from `bundle/en` by `crates/tc-app/examples/bundle_store`, which also writes the store's `BUNDLE-MANIFEST.json` (D12); seeding from the archives stays DELTA §3.6 item 3. D10: the shell (G1) opens the window only when `hello.startup` is still `Preparing` 300 ms after launch, so a repeat launch shows none, a declared difference from tC4, which shows it on every launch; A5's `App` sends a page that boots while it is not `Ready` to `/prepare.html` (§5.3). D11 *(added after the first verification)*: `App::start` opens the resource store with `ResourceStore::open_keeping_leftovers`, so a `.partial/` leftover that cannot be removed is a `resources` report and not a refusal to start (§4.9); `ResourceStore::open` still refuses it for other callers, except a leftover that a scanner still holds after the waits of STORAGE §3.7, which it keeps for the next open. D12 *(added after the first verification)*: a bundle says what it holds. The build of the bundle writes `BUNDLE-MANIFEST.json`, naming each install by repository and commit, and the plan compares it with the folders (§4.6): a listed install that is neither in the bundle nor on this computer, or a folder with no usable manifest, ends the start `Failed` at once and copies nothing. tC4 does the same with its `BUILD-MANIFEST.json` (`tC4:scripts/desktop-bootstrap.cjs:230-290`), so this is no declared difference; without it a lost install folder, or a `--bundle` that named the wrong folder, ended `Ready` and opened projects that could not find their helps. D13 *(added when A9 merged with windows-hazards)*: a seeded copy is an install like a download, through the same `install_until`: every file name is checked by `tc_door43::check_names` (STORAGE §3.7), a file is written with `create_new`, and the rename into place waits while a scanner holds a file, unless the same install has landed meanwhile. A bundled install with a file name Windows would rename or merge is therefore refused, left out of the store and named in `refused`, which ends the start `Failed` (D6). `seed_plan` runs the same check of paths and names on the receipt of each bundled install it will copy, and refuses it the same way before any of its files is read, so a device name in a receipt is never opened as the device and a `../` path never reads a file outside the bundle. The staging folder of an install that `create_new` refuses is removed with the same waits as the rename. An install that finds the same install landed first tries once to remove its staging folder and does not wait, since the install it lost to is in place; what a scanner holds then stays in `.partial/` until a later open removes it. `open_keeping_leftovers` removes `.partial/` with the same waits, and a leftover a scanner holds even then comes back as a `resources` report (D11). Evidence: `docs/evidence/first-launch-seeding-2026-10-18.md` (on the Linux PC: first launch 14.8 s median, repeat launch 4.1 ms, `App::quit` in a seed 4.6 ms; the Windows figure is G1's and G2's) and `crates/tc-ui/app/prepare-smoke.mjs`. A4a had not merged when A9 was done: whichever of A4a and A9 merges second adds to `crates/tc-ui/build-app.sh` a copy of `app/prepare.html` to `OUT/prepare.html`, and counts that page as a user of the `prepare.*` rebuild keys.)* | A2, A3 | Q-10 for the translations | seeding count targets (PERF:133-138); cancel leaves a resumable state; tc-resources' tests stay green | Playwright: the window shows "Preparing resources: n of total" and Close cancels |
+| A9 First-launch seeding | the join of A2 and A3 (order paragraph), if no earlier unit made it; **tc-resources**: progress and cancel hooks in bundle seeding, with that crate's own tests; the `Seed` job; `Startup` events; `/prepare.html` with English text and the other nine languages listed as pending (Q-10) *(A-17, A-32)* *(A9: built. D1: the plan is made at start, from receipts alone, inline in `App::start`, so `hello.startup` is exact from the first request (`Ready`, with no job, frame or report, when nothing is missing; `Preparing { 0, total }`; `Failed`), and without `--bundle` nothing is seeded. D2: tc-resources gets `seed_plan`, `seed(plan, &dyn SeedWatch)`, `Seeding::{Finished, Cancelled}` and `content_files_written()`; `seed_from` is the same two steps with a watch that never stops. D3: the count is content files, not tC4's 16 resources (declared difference, §3.6). D4: the `Startup` frames follow the `Seed` job's reports through `JobRegistry::watch` and only move forward, and the ring keeps the newest `Startup(Preparing)`. D5: Close is a quit, and `App::quit` cancels the seed and waits for it; a stop leaves whole copies, and the copy being made stays in `.partial/` until the next start. D6: a bundled install that fails its own check, a copy that cannot be trusted, a bundle that cannot be read and a bundle that lacks an install its manifest lists (D12) end the start `Failed`, and the window shows tC4's failure words with the reason; tC4 shows a native error box and exits, so this is a declared difference, and the screenshot goes to the owner under Q-9; tc-resources keeps its rule that a refused install does not stop `seed_from`. D7: `/prepare.html` is one file, `crates/tc-ui/app/prepare.html`, holding the `prepare.*` text of all ten languages (nine pending, Q-10) and one script that its own CSP allows by hash; `crates/tc-ui/tests/prepare_page.rs` keeps both equal to the rebuild files. D8: `tc4 serve --bundle <dir>`, and with `test-hooks` `--test-seed-pace <ms>`. D9: the installer still ships an expanded store, built from `bundle/en` by `crates/tc-app/examples/bundle_store`, which also writes the store's `BUNDLE-MANIFEST.json` (D12); seeding from the archives stays DELTA §3.6 item 3. D10: the shell (G1) opens the window only when `hello.startup` is still `Preparing` 300 ms after launch, so a repeat launch shows none, a declared difference from tC4, which shows it on every launch; A5's `App` sends a page that boots while it is not `Ready` to `/prepare.html` (§5.3). D11 *(added after the first verification)*: `App::start` opens the resource store with `ResourceStore::open_keeping_leftovers`, so a `.partial/` leftover that cannot be removed is a `resources` report and not a refusal to start (§4.9); `ResourceStore::open` still refuses it for other callers, except a leftover that a scanner still holds after the waits of STORAGE §3.7, which it keeps for the next open. D12 *(added after the first verification)*: a bundle says what it holds. The build of the bundle writes `BUNDLE-MANIFEST.json`, naming each install by repository and commit, and the plan compares it with the folders (§4.6): a listed install that is neither in the bundle nor on this computer, or a folder with no usable manifest, ends the start `Failed` at once and copies nothing. tC4 does the same with its `BUILD-MANIFEST.json` (`tC4:scripts/desktop-bootstrap.cjs:230-290`), so this is no declared difference; without it a lost install folder, or a `--bundle` that named the wrong folder, ended `Ready` and opened projects that could not find their helps. D13 *(added when A9 merged with windows-hazards)*: a seeded copy is an install like a download, through the same `install_until`: every file name is checked by `tc_door43::check_names` (STORAGE §3.7), a file is written with `create_new`, and the rename into place waits while a scanner holds a file, unless the same install has landed meanwhile. A bundled install with a file name Windows would rename or merge is therefore refused, left out of the store and named in `refused`, which ends the start `Failed` (D6). `seed_plan` runs the same check of paths and names on the receipt of each bundled install it will copy, and refuses it the same way before any of its files is read, so a device name in a receipt is never opened as the device and a `../` path never reads a file outside the bundle. The staging folder of an install that `create_new` refuses is removed with the same waits as the rename. An install that finds the same install landed first tries once to remove its staging folder and does not wait, since the install it lost to is in place; what a scanner holds then stays in `.partial/` until a later open removes it. `open_keeping_leftovers` removes `.partial/` with the same waits, and a leftover a scanner holds even then comes back as a `resources` report (D11). Evidence: `docs/evidence/first-launch-seeding-2026-10-18.md` (on the Linux PC: first launch 14.8 s median, repeat launch 4.1 ms, `App::quit` in a seed 4.6 ms; the Windows figure is G1's and G2's) and `crates/tc-ui/app/prepare-smoke.mjs`. A4a merged after A9 and added to `crates/tc-ui/build-app.sh` the copy of `app/prepare.html` to `OUT/prepare.html`, which A4a's smoke checks byte for byte through `tc4 serve`; A4a's key scan checks only that each key the Rust source names exists, never that each rebuild key is used, so the page's `prepare.*` keys need no entry there, and `prepare_page.rs` keeps them equal to the rebuild files.)* | A2, A3 | Q-10 for the translations | seeding count targets (PERF:133-138); cancel leaves a resumable state; tc-resources' tests stay green | Playwright: the window shows "Preparing resources: n of total" and Close cancels |
 | A10 tc-export print model *(A-17)* | the **new crate `tc-export`**, pure, over tc-obs: ports of `printedItems` (`tC4:src/data/bookModel.js`), the print parts (`tC4:src/views/print/PrintBook.jsx:44-71`) and `PrintStories.jsx`, and the page setup; a typed model, no HTML yet. A book's input is its verse rows (label, drafted, shown text), the rows the editor's `VerseRow` is built from, not a second reading of the USFM: tC4 builds the editor and the PDF from one `bookModel` so that both state a verse the same way (`tC4:src/data/bookModel.js:1-4`), and the port of tC4's shown text is tc-usfm's `shown_text_v1`. tc-usfm joins with D2's USFM producers. Declared difference: the "Incomplete draft" notice shows whenever a verse prints as not yet drafted (`has_undrafted`); tC4 asks only for an undrafted verse (`tC4:src/views/CommunityChecking.jsx:182`), so a verse drafted with a footnote alone prints "[ verse not yet drafted ]" with no notice to explain it | — | — | vectors recorded by running tC4's functions in node on the Titus, Jonah and OBS samples, tC4's PDF test cases and generated books and story sets, compared as the markup tC4's print components render, the preview's split pages included; a proptest that every drafted verse appears once, and one for frames | the vectors are equal |
 | A11 Streaming downloads in tc-door43 *(A-17)* | **tc-door43**: `download` streams to a file with byte progress and a cancel check per chunk, and every 100 ms while it waits, the commit lookup that comes before an archive included (it returned one buffer, `crates/tc-door43/src/client.rs:520-526` at `21fef4a`); tc-resources installs use it. Built: `DownloadTo`, `DownloadWatch`, `DownloadedZip`, `Door43Error::{Cancelled, Disk}`, `install_dcs_watched`, the fake's `HoldBody`, `BreakOff` and `NoContentLength` | — | — | against tc-door43-fake: progress counts, cancel leaves no partial install, the internet switch stops the next chunk | the tests pass; tc-resources' install tests stay green |
 | G0 Electronite spike, run on Windows *(A-3, A-14, A-17)* | a throwaway Electronite v37 main script and page in `spikes/electronite/`, never shipped: start a stand-in for `tc4 serve` (`tc4-standin`: axum on loopback, the token, the §5.2 checks, the address line, a quit on a closed stdin), because A2 is built at the same time; the header filter of AD11 and a probe of every request type (fetch, image, iframe, download, print window, web font, CSS `url()`, the event stream, a same-origin child window); a `protocol.handle` prototype for Q-1; whether the page's `/api/` requests wait for a busy main thread; the aligner round trip with a 20 KB reply, up to the painted frame, alone and while OBS pictures and a help page load, in two passes of alternating order; supervision (end `tc4`: restart and reload; end the shell: `tc4` exits, with `tc4` started plainly and detached); what a hard kill leaves of `localStorage` and of the mirror file; the Chromium version; a PowerShell driver that writes the results; the task `.audit/tasks/g0-windows.md`, which also runs the storage benchmark on the same laptop | — (the stand-in; A2 measures `tc4 serve`'s own loopback cost) | Q-26: a person or a Windows runner runs it (PLAN:151-152) | the stand-in's tests; the page's probes in Chromium through Playwright, which fail when nothing adds the token; the whole driver run here with Electronite's Linux build; the probe table; the round trip p95 on the reference laptop or a named stand-in; the supervision cases | `docs/evidence/electronite-spike-<date>.md` holds the Windows results; Q-1 and, on a miss, Q-13 are put to the owner with them |
@@ -2292,7 +2400,7 @@ B1a starts now, on a branch cut from `storage`, because it needs tc-journal *(A-
 | B4b ◆ Section editor *(A-1, A-17)* | `model::SectionBuffer` (port of `sectionDraft.js`); the section card with Type and Place, pins and the "To place" bank; Save only, Cancel, the #600 question; section drafts (the envelope of §6.6 until R6); the editing lock for sections | B4a | R6 (fallback: the envelope) | `sectionDraftExits` port; section buffer proptest and its tc-app differential test; `section_editor_saves_only_on_save` (typing, placing pins and blurring send no `editor/saveSection`); Cancel leaves no buffer entry and no draft; the #600 question | `en-translate-section-editor`; J2's section steps on scripted saves |
 | B5a Check: picker and rail | preflight; picker progress; `CheckListCache` with per-row `ViewSeq`; `check/open { since }` and `check/rows { since }` *(A-12)*; `model::rail` (mask, one-pass groups *(A-13)*, patch); the virtual list with two heights and a mounted tab-stop row *(A-24)*; M11 view | B3, C | — | `check_open_cached_derives_nothing`; `check_open_cached_sends_changed_rows_only`; the rail differential test against `tc_check::rail::groups`; `rail_groups_visit_each_row_once`; check-keyboard on the Psalms rail; rail perf spec | `check-picker`, `en-check-picker`, `guided-fix` |
 | B5b Check: item detail | `check/item`; compare card; target words with drag-select (`model::drag_range`); marks; the check comment saved on Done and on leaving the item, on scripted outcomes *(A-10)*; Academy drawer; notices; M8 entry | B5a | — | check-keyboard and item-navigation (navigation parts); `drag_range` differential test; `check_comment_saved_on_leaving_the_item` | 12 session screens |
-| B6 Align: read and session | `align/index`, `open`, `edit`, `keepReflow`, `flush` over a server `Aligner`; the click queue *(A-14)*; the server's save timer on scripted outcomes, `AlignSave` in the indicator and the close guard *(A-4)*; the pure view builder *(A-14)*; bank, cards, lenses, occurrence numbers, multi-select, drag; marking row; training job and `Suggest` events | B5a | G0's round trip before B6 merges; Q-13 if it misses 30 ms. B6 can start before G0 reports, because the pure view builder makes Q-13's fallback a switch | J5 steps that do not save; `align_open_touches_one_verse`; `align_click_round_trip_p95` within 30 ms; `fast_clicks_are_queued_not_refused`; `unsaved_links_hold_the_close_guard` | 6 Align screens |
+| B6 Align: read and session | `align/index`, `open`, `edit`, `keepReflow`, `flush` over a server `Aligner`; the click queue *(A-14)*; the server's save timer on scripted outcomes, `AlignSave` in the indicator and the close guard *(A-4)*, read again from the view's `save` with each refresh, so a `Resync` cannot leave "Saving" standing (§5.4); the pure view builder *(A-14)*; bank, cards, lenses, occurrence numbers, multi-select, drag; marking row; training job and `Suggest` events, with the status read again after a `Resync` (§5.4) | B5a | G0's round trip before B6 merges; Q-13 if it misses 30 ms. B6 can start before G0 reports, because the pure view builder makes Q-13's fallback a switch | J5 steps that do not save; `align_open_touches_one_verse`; `align_click_round_trip_p95` within 30 ms; `fast_clicks_are_queued_not_refused`; `unsaved_links_hold_the_close_guard`; `resync_restores_the_align_save_state` | 6 Align screens |
 | B7 OBS | story rail; OBS Understand, Translate, Check; `/media/obs` | B3, B5a | — | `story_open_touches_one_story` | 6 OBS screens |
 | B8 Community Checking preview | the screen over A10's model; page setup; export items listed; the preview's pages: tC4 measures and splits them in the view (`tC4:src/views/print/PrintPages.jsx`), so the UI applies the page setup to each page's parts with `model::print_parts`, the twin of `tc_export::book::print_parts` (§3.8) | B4a, B7, A10 | — | print preview scenarios on Titus and the OBS sample; the `print_parts` differential test | `en-community-checking` |
 | B9a Settings, source texts, downloads | M7 (read, and `viewFromHome` per AD14); M8 steps 1 and 2; download jobs over A11's streaming (`install_dcs_watched`, with a `DownloadWatch` over the job's counters and cancel token); A11's streaming in tc-resources' `AquiferClient` before an Aquifer asset gets a `Download` job (§4.6). tC4 shows only the repository being fetched (`sources.progress`) and has no Cancel; a byte count or a Cancel button is a declared difference for the owner (AGENTS.md, "Matching tC4") | B2, B3, A11 | — | settings-contract (read part); cancel leaves no partial install | `project-settings`, `source-texts` |
@@ -2320,7 +2428,7 @@ B1a starts now, on a branch cut from `storage`, because it needs tc-journal *(A-
 
 | Unit | Scope | Depends on | Waits for | Tests | Done when |
 |---|---|---|---|---|---|
-| D1 Checkpoints and outside edits | leave triggers; the checkpoint at Home *(A-25)*; mode-switch checkpoints by Q-5's ruling *(A-11)*; "Checkpoint not saved" with Retry; materialize-blocked message; outside-edit toast with Undo and grouped rows; held-file actions as R7 allows; window focus check; quit flow (aligner links, then checkpoints) | S2, C2, C5 | R9's numbers and Q-5 (fallback: STORAGE's rule today); R17, R21 | J8; no commit when nothing changed; `save_latency_while_a_checkpoint_runs` within 25 ms, or Q-5's limit applies | green |
+| D1 Checkpoints and outside edits | leave triggers; the checkpoint at Home *(A-25)*; mode-switch checkpoints by Q-5's ruling *(A-11)*; "Checkpoint not saved" with Retry; materialize-blocked message; the last checkpoint outcome and the blocked paths in `OpenSession`, so a `Resync` restores both (§5.4); outside-edit toast with Undo and grouped rows; held-file actions as R7 allows; window focus check; quit flow (aligner links, then checkpoints) | S2, C2, C5 | R9's numbers and Q-5 (fallback: STORAGE's rule today); R17, R21 | J8; no commit when nothing changed; `save_latency_while_a_checkpoint_runs` within 25 ms, or Q-5's limit applies; a `Resync` after a failed checkpoint and after a blocked file shows both again | green |
 | D2 Exports | tc-export producers on A10's model: aligned and plain USFM, OBS Markdown, print HTML; export jobs; `/download`, `/print`; PDF through the shell; conflict warning; checkpoint first | S2, B8 | — | J7, J23 except the Burrito zip; every Burrito output validated | green |
 
 ### Phase 4: after X
@@ -2329,7 +2437,7 @@ B1a starts now, on a branch cut from `storage`, because it needs tc-journal *(A-
 |---|---|---|---|---|---|
 | E1a Sync *(A-17)* | the real `SyncPort` for sync; OS keychain (Q-3); the sync button flow (DELTA:717-738); R13's dropped connection | X, B10, C7a, D1 | R13 (fallback: scripted outcome); Q-3 | J26 with three app-data folders (its check-conflict step once C7b has landed); sync-button; `sync-failed` on a dropped connection | `shared-home`, `sync-failed`, `sync-ok`, `sync-ok-teammates` and `sync-ok-restored` recaptured on real data |
 | E1b Share and open from Door43 *(A-17)* | share create, push, done; open with sign-in on 401 or 404 (Q3) | X, B9b, E1a | Q-21 for the refused sentence | J11, J17, J24 | `share-dialog`, `share-dialog-check` and `open-door43-refused` recaptured on real data |
-| E2 USB exchange | Save work for a teammate (folder, progress, verify, "You can remove the stick"); Receive work from a file (identify, confirm, job, report), never beside a sync of the same project *(A-31)*; the J7 Burrito zip as the exchange file; browser uploads up to 4 GiB *(A-28)* | X, C1a, D2 | — | USB journey both ways, then a relay through a third person (STORAGE:3819) | green |
+| E2 USB exchange | Save work for a teammate (folder, progress, verify, "You can remove the stick"); Receive work from a file (identify, confirm, job, report), never beside a sync of the same project *(A-31)*; the J7 Burrito zip as the exchange file; browser uploads up to 4 GiB *(A-28)*; the `Received` sheet readable again after a `Resync` (§5.4) | X, C1a, D2 | — | USB journey both ways, then a relay through a third person (STORAGE:3819) | green |
 
 ### Phase 5: after I
 
@@ -3029,7 +3137,7 @@ part was done another way or not taken, and the last column says why, with the e
 | RT-20 | Accepted | R22 asks that a draft write never delay a command; `saves_waiting_behind_a_draft_write` is counted (§8.1, §8.2); `lastEdit` is recorded on save and blur and written after 5 s or at leave (§4.9); risk 4 | — |
 | RT-21 | Accepted, and taken further | §4.3: no `ProjectIndex`. Verses come from `chapter_usfm`, alignments and decisions from probes, detached decisions from `FoldState::detached()`, and a book's comments from its projected comments file; `probe_finds_every_key_a_scan_finds`; `open_lists_no_key`; §4.4, §4.7, §8.1; R1 stays as the cheaper path | The proposed source, "verse and alignment keys from the versification", would miss a verse the project has beyond its versification, and so hide work. `chapter_usfm` holds every verse the chapter projects. The proposed "scan only for comments and detached records" is still a whole-project scan; the comments file costs one book, and `detached()` already exists (`storage:crates/tc-journal/src/fold/reads.rs:215`). |
 | RT-22 | Accepted | §6.3: a port of `OpenProgressView` with its own 300 ms timer; tC4's three stages with indeterminate bars until a stage has a count; Q-7; B3 | — |
-| RT-23 | Accepted | §6.9: all ten catalogs (943,433 bytes in tC4) at boot; A4a | — |
+| RT-23 | Accepted | §6.9: all ten catalogs (943,433 bytes in tC4) at boot; A4a | — *(A4a: English is compiled in and the other nine, 870,974 bytes, are fetched before the first render; a failed fetch shows the boot error.)* |
 | RT-24 | Accepted | §6.11: two fixed heights, the tab-stop row kept mounted, computed scroll offsets, `check-keyboard` on Psalms; B5a | — |
 | RT-25 | Accepted | `home_costs_projects_not_history` runs on the store only (§4.2, §8.2, C1a); the screen session closes at Home with tC4's leave checkpoint (AD38, §4.3, J8) | — |
 | RT-26 | Accepted | §6.5: the navigation gate also covers going Home and the gateway-change and upgrade previews; C8's test | — |

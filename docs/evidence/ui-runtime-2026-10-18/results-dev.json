@@ -1,0 +1,102 @@
+{
+  "build": "309fe071cf73d0ea",
+  "runs": 20,
+  "machine": {
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "vcpus": 4,
+    "sha_ni": true,
+    "avx512f": true,
+    "loadBefore": [
+      2.74,
+      3.55,
+      4.68
+    ],
+    "loadAfter": [
+      3.09,
+      3.6,
+      4.69
+    ]
+  },
+  "browser": "141.0.7390.37",
+  "playwright": "1.56.1",
+  "bytes": {
+    "wasm": 8117569,
+    "glue": 43699,
+    "folder": 11900547,
+    "fetchedAtBoot": 9103655,
+    "fontsAtBoot": 29968,
+    "requestsAtBoot": 32
+  },
+  "bootMs": {
+    "wasmReady": {
+      "n": 20,
+      "median": 174,
+      "p95": 218.3,
+      "min": 147.9,
+      "max": 259.2
+    },
+    "hello": {
+      "n": 20,
+      "median": 253,
+      "p95": 328.9,
+      "min": 213.7,
+      "max": 347.9
+    },
+    "catalogsFetched": {
+      "n": 20,
+      "median": 254,
+      "p95": 333.8,
+      "min": 217.6,
+      "max": 348.3
+    },
+    "catalogs": {
+      "n": 20,
+      "median": 316.3,
+      "p95": 407.9,
+      "min": 264.7,
+      "max": 412.9
+    },
+    "catalogParse": {
+      "n": 20,
+      "median": 58.7,
+      "p95": 80.6,
+      "min": 47.1,
+      "max": 97.9
+    },
+    "mounted": {
+      "n": 20,
+      "median": 329,
+      "p95": 418.3,
+      "min": 283.8,
+      "max": 429.1
+    },
+    "domContentLoaded": {
+      "n": 20,
+      "median": 83.4,
+      "p95": 118.5,
+      "min": 66.5,
+      "max": 137.2
+    }
+  },
+  "switchMs": {
+    "toTextChange": {
+      "n": 20,
+      "median": 0.8,
+      "p95": 1.1,
+      "min": 0.5,
+      "max": 1.7
+    },
+    "toNextFrame": {
+      "n": 20,
+      "median": 16.6,
+      "p95": 16.8,
+      "min": 15.1,
+      "max": 18.1
+    },
+    "coldFirstArabic": {
+      "toTextChange": 3.5,
+      "toNextFrame": 13
+    }
+  },
+  "longTasksMs": []
+}

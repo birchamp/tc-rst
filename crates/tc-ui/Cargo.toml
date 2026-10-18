@@ -11,32 +11,57 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 # The design-system gallery: renders every case of parity/ds-gallery/gallery-spec.json.
-gallery = ["dep:serde_json", "dep:wasm-bindgen-futures", "dep:console_error_panic_hook"]
+gallery = ["dep:wasm-bindgen-futures", "dep:console_error_panic_hook"]
+# The application's runtime and page (APP-DESIGN section 6): the API client, the event stream,
+# the query cache, the server state and the language. Until unit A5 it mounts a stand-in root.
+app = ["dep:wasm-bindgen-futures", "dep:console_error_panic_hook"]
 
-# The UI only runs in a browser. On the host the crate compiles its pure parts (the style
-# builder, the token enums, the layout arithmetic), so `cargo test --workspace` stays fast and
-# still tests them.
+# Every target: the pure parts (the style builder, the token enums, the layout arithmetic, and
+# the app's event parser, cache bookkeeping, call errors and language) compile on the host, so
+# `cargo test --workspace`, which enables no feature, stays fast and still tests them. The
+# components and the browser runtime compile for wasm32 only.
+[dependencies]
+# The wire types. tc-ui never enables tc-api's `server` feature, so UI code cannot make or read
+# a shown token (APP-DESIGN AD3).
+tc-api = { path = "../tc-api" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[build-dependencies]
+serde_json = { workspace = true }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 leptos = { version = "=0.8.22", features = ["csr"] }
 wasm-bindgen = "=0.2.129"
 js-sys = "0.3.106"
 send_wrapper = "0.6.0"
 web-sys = { version = "0.3.106", features = [
+  "AbortController",
+  "AbortSignal",
   "AddEventListenerOptions",
+  "Blob",
   "console",
   "CssStyleDeclaration",
+  "DataTransfer",
   "Document",
   "DomRect",
+  "DragEvent",
   "Element",
   "Event",
   "EventTarget",
+  "File",
   "FocusEvent",
   "FocusOptions",
   "FontFace",
   "FontFaceSet",
+  "Headers",
+  "HtmlAnchorElement",
   "HtmlElement",
   "HtmlFormElement",
+  "HtmlIFrameElement",
   "HtmlInputElement",
+  "HtmlSelectElement",
   "HtmlTextAreaElement",
   "KeyboardEvent",
   "Location",
@@ -47,22 +72,32 @@ web-sys = { version = "0.3.106", features = [
   "MutationRecord",
   "Node",
   "NodeList",
+  "Performance",
+  "PerformanceObserver",
   "PointerEvent",
+  "ReadableStream",
+  "ReadableStreamDefaultReader",
+  "Request",
+  "RequestInit",
   "Response",
   "ScrollIntoViewOptions",
   "ScrollLogicalPosition",
+  "Storage",
+  "TextDecoder",
   "UrlSearchParams",
   "Window",
 ] }
-serde_json = { workspace = true, optional = true }
 wasm-bindgen-futures = { version = "0.4.79", optional = true }
 console_error_panic_hook = { version = "0.1.7", optional = true }
 
 # proptest does not build for wasm32-unknown-unknown, where clippy --all-targets also runs.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+# The event frames of tc-api, generated for the stream round trip.
+tc-api = { path = "../tc-api", features = ["proptest"] }
+tc-core = { path = "../tc-core" }
 base64 = { workspace = true }
 proptest = { workspace = true }
-serde_json = { workspace = true }
+regex = { workspace = true }
 sha1 = { workspace = true }
 sha2 = { workspace = true }
 unicode-general-category = { workspace = true }

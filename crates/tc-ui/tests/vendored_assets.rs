@@ -18,6 +18,9 @@ fn crate_dir() -> PathBuf {
 
 /// tC4's path of a vendored file -> its path under `assets/`, as `vendor-tc4.sh` places it.
 fn asset_path(tc4_path: &str) -> String {
+    if tc4_path == "src/ui.css" {
+        return "ui.css".into();
+    }
     for (from, to) in [
         ("src/ds/", "ds/"),
         ("src/i18n/", "i18n/"),
