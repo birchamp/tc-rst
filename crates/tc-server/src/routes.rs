@@ -150,6 +150,13 @@ pub(crate) async fn api<B: Backend>(
         Err(BodyError::TooLarge) => return too_large(),
         Err(BodyError::Broken) => return StatusCode::BAD_REQUEST.into_response(),
     };
+    // The body can take longer than the drain: a request that was accepted before the quit
+    // began but is complete only now must not run against a backend that is closing, so the
+    // UI keeps its text dirty. The gate still counts this request, so the drain cannot end
+    // between this check and the call's own count below.
+    if state.shared.is_closing() {
+        return crate::lifecycle::closing_response();
+    }
     // hyper drops this future when the connection dies (a reload, a closed window). The call
     // runs on a task of its own, which holds the in-flight count, so a save is never cut half
     // way and the quit waits for it. A panic ends only that task: it is an internal error.

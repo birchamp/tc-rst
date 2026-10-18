@@ -389,3 +389,39 @@ fn a_last_quit_line_without_a_newline_still_quits() {
     assert_eq!(server.join(), Exit::QuitMessage);
     assert_eq!(server.stdout.text(), "{\"closed\":true}\n");
 }
+
+#[test]
+fn a_request_whose_body_arrives_after_the_quit_began_is_not_run() {
+    let gate = Arc::new(Notify::new());
+    let backend = Arc::new(Observed {
+        quit_waits_for: Some(Arc::clone(&gate)),
+        ..Observed::new()
+    });
+    let mut server = TestServer::start_with(
+        Arc::clone(&backend),
+        |config| config.limits.drain_within = Duration::from_millis(100),
+        true,
+    );
+    // The head of an API call whose body is still on its way.
+    let mut stream = server.connect();
+    stream
+        .write_all(&server.api_req("app/hello", "{}").head_bytes())
+        .unwrap();
+    std::thread::sleep(Duration::from_millis(50));
+    server.quit_message();
+    let until = Instant::now() + Duration::from_secs(5);
+    while backend.quit_calls.load(Ordering::SeqCst) == 0 {
+        assert!(Instant::now() < until, "the quit never began");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    // The drain gave up on it and the backend is closing; now the body arrives.
+    stream.write_all(b"{}").unwrap();
+    let response = common::read_response(&mut stream);
+    assert_eq!(response.status, 503, "{}", response.text());
+    assert!(
+        backend.call_finished().is_none(),
+        "the call ran against a closing backend"
+    );
+    gate.notify_one();
+    assert_eq!(server.join(), Exit::QuitMessage);
+}
