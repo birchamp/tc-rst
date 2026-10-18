@@ -11,16 +11,21 @@ to 4.0 for work on one), and leaves Defender's scan of new files out.
 
 ## Verdicts
 
+Nine rounds of each case ran over the day on three builds of this branch, with other jobs on the
+machine and its drive (load average 3 to 14); the ranges below are over the rounds. A round that
+the drive stalled in (a flush that waited for another process's journal commit) is named, not
+dropped.
+
 | Budget (PERFORMANCE.md) | This machine | Laptop, estimated | Verdict |
 |---|---|---|---|
-| Save a verse, record a decision or save an alignment while a materialize, checkpoint or whole-project materialize runs: 25 ms p95 | during a whole-project materialize: verse 14.2 to 22.5 ms p95 and decision 14.1 to 22.1 ms (five rounds of 238 to 331 saves each; the worst save 235 ms); during a checkpoint (413 to 527 saves per round over ten checkpoints, a save about every 15 ms): 19.7 to 44.9 ms p95 over ten rounds, **23.9 to 26.3 ms in the last three**, after the seal was split into steps; beside a repack 14.9 ms; with nothing running 13.9 to 15.7 ms (the median is 7.5 to 8.7 ms: two fsyncs) | not estimated: a save is two fsyncs, which no ratio scales | **met during a whole-project job; at the edge during a checkpoint** (below); not shown on the laptop |
-| Materialize one book: 1 s p95 on the reference laptop, no indicator | Psalms after one verse save 190 to 240 ms median, p95 231 to 307 ms (three rounds of 20); after one decision 198 to 242 ms, p95 215 to 281 ms; Jude after one verse save 59 to 63 ms, p95 71 to 74 ms | p95 0.5 to 1.2 s by the two bounds, about 0.6 to 0.9 s with the mix of a materialize (a third of it on four threads) | **not shown**: the estimate is under 1 s in its middle and over it at its top |
-| Materialize many or all files (a book added, pins changed, an upgrade): background, progress bar, saves continue | pins change over the whole Bible: 2.8 to 4.7 s (five runs in each of two rounds); first progress report 316 to 325 ms after the job began, 366 to 407 ms after the command; 24 to 34 progress events | 6 to 19 s (the budget review estimated 10 to 25 s for the same work on the actor) | **met** (no number is budgeted; progress and saves are) |
-| Close a project: 3 s on the laptop (whole Bible, Psalms changed) | 1.0 s median, p95 1.1 to 1.4 s (five runs in each of two rounds) | 2.9 to 4.1 s median | **not shown**: the estimate straddles 3 s |
-| Checkpoint: 500 ms (whole Bible) | after one Psalms save 475 to 590 ms median, p95 586 to 761 ms (the files, the tree and the commit); after the materialization already ran 295 to 319 ms median, p95 337 to 525 ms; the first one after a whole-project job 0.65 to 4.3 s | 0.9 to 1.2 s (already materialized), 1.3 to 2.0 s (Psalms dirty) | **missed by the estimate**; reported to the orchestrator for the owner |
-| Memory of the project store: 400 MiB steady, 450 MiB peak, private bytes a minute after the last action; the close and the whole-project materialize included | one heap (`MALLOC_ARENA_MAX=1`, as the review's ratios assume): steady 302 MiB, peak 323 MiB. glibc's default heap: steady 404 MiB, peak 440 MiB at the materialize and 457 MiB at the close | the review measured the laptop at 0.97 to 1.07 of the one-heap figure | **met with one heap**; the default glibc heap misses by 4 and 7 MiB |
-| Open with a usable fold cache: 3 s; without: 10 s; progress within 300 ms | 0.78 to 0.86 s median (p95 0.80 to 1.05 s); without a cache 1.12 to 1.41 s | not re-estimated (unit S1's figures: 1.6 s and 3.4 s on a slower VM) | **no regression** |
-| Outside edit of three verses, no budget | file written to the notice 30 to 38 ms median, p95 46 to 62 ms | | |
+| Save a verse, record a decision or save an alignment while a materialize, checkpoint or whole-project materialize runs: 25 ms p95 | during a whole-project materialize: verse 14 to 24 ms p95 and decision 14 to 22 ms in eight of ten rounds (238 to 331 saves each), **190 to 244 ms in the two rounds whose jobs the drive stalled** (two of five jobs took 10 s, not 3); during a checkpoint (413 to 531 saves per round over ten checkpoints, one about every 15 ms): 19.7 to 26.8 ms p95 in ten of thirteen rounds and 29.8 to 44.9 ms in three, **23.9 to 26.8 ms in the last five**, after the seal was split into steps; beside a repack 14.9 to 16.2 ms; with nothing running 13.3 to 17.6 ms (median 7.4 to 8.7 ms: two flushes) | not estimated: a save is two flushes, which no ratio scales | **met in a quiet round, at the edge during a checkpoint, missed in a stalled one**; not shown on the laptop |
+| Materialize one book: 1 s p95 on the reference laptop, no indicator | Psalms after one verse save 185 to 257 ms median, p95 231 to 333 ms in eight rounds of nine (1.28 s in one stalled round); after one decision 184 to 259 ms, p95 215 to 305 ms (1.19 s in one); Jude after one verse save 57 to 81 ms, p95 63 to 84 ms (0.98 s in one) | p95 0.5 to 1.3 s by the two bounds, about 0.6 to 1.0 s with the mix of a materialize (a third of it on four threads) | **not shown**: the estimate straddles 1 s |
+| Materialize many or all files (a book added, pins changed, an upgrade): background, progress bar, saves continue | pins change over the whole Bible: 2.8 to 4.7 s median (five runs in each of eight rounds; 10 to 11 s for the stalled runs); first progress report 315 to 325 ms after the job began, 366 to 407 ms after the command; 23 to 43 progress events | 6 to 19 s (the budget review estimated 10 to 25 s for the same work on the actor) | **met** (no number is budgeted; progress and saves are) |
+| Close a project: 3 s on the laptop (whole Bible, Psalms changed) | 0.92 to 1.05 s median, p95 1.0 to 1.4 s (five runs in each of seven rounds); 26 s once, before the repack ran on its own thread | 2.7 to 4.2 s median | **not shown**: the estimate straddles 3 s |
+| Checkpoint: 500 ms (whole Bible) | after one Psalms save 460 to 591 ms median, p95 586 to 761 ms in nine rounds of thirteen and 1.1 to 3.4 s in four (a stalled drive, or the first checkpoint after a whole-project job); after the materialization already ran 266 to 319 ms median, p95 316 to 525 ms; the first one after a whole-project job 0.46 to 6.7 s | 0.8 to 1.3 s (already materialized), 1.3 to 2.4 s (Psalms dirty) | **missed by the estimate**; reported to the orchestrator for the owner |
+| Memory of the project store: 400 MiB steady, 450 MiB peak, private bytes a minute after the last action; the close and the whole-project materialize included | one heap (`MALLOC_ARENA_MAX=1`, as the review's ratios assume): steady 302 to 305 MiB, peak 321 to 326 MiB. glibc's default heap: steady 403 to 405 MiB, peak 437 to 445 MiB at the materialize and 457 to 461 MiB at the close | the review measured the laptop at 0.97 to 1.07 of the one-heap figure | **met with one heap**; the default glibc heap misses by 3 to 5 MiB steady and 7 to 11 MiB at the close |
+| Open with a usable fold cache: 3 s; without: 10 s; progress within 300 ms | 0.72 to 0.86 s median (p95 0.80 to 1.05 s); without a cache 0.90 to 1.41 s | not re-estimated (unit S1: 1.6 s and 3.4 s on a slower VM) | **no regression** |
+| Outside edit of three verses, no budget | file written to the notice 30 to 49 ms median, p95 46 to 78 ms | | |
 
 ## What each action did
 
@@ -130,10 +135,14 @@ default-heap row is the time estimate for this machine only.
   277 MiB, 147 journal files of 674 MB, written by `storebench setup target/bench-s2`; the
   `.git` after the setup's checkpoint 167 MiB. Each case then wrote to the same project, so the
   later rounds ran on a project with a few hundred extra saves.
-- Commits: the cases ran on builds of this branch from `d4649c7` to `e0ed96d` (release,
-  `CARGO_PROFILE_RELEASE_DEBUG=line-tables-only`, which changes no code); the later commits
-  change the repack and the cache write, and the cases they touch (`close`, `memory`, `repack`)
-  were run on them.
+- Commits: three passes, on `d4649c7`, on `e0ed96d` and on `7f58505` (release,
+  `CARGO_PROFILE_RELEASE_DEBUG=line-tables-only`, which changes no code). Only the last had the
+  file watcher running: the first two opened a relative folder name, which the watcher then did not
+  match (fixed in `7f58505`), so the earlier rounds ran without it; a comparison of the whole-project
+  case at a load of 3, once with the watcher telling and once with its word held back for an hour
+  (`STOREBENCH_NO_WATCH=1`), gave 3.1 to 3.2 s with it and 3.4 to 3.7 s without, saves at p95 20 ms
+  and 21 to 24 ms: the watcher costs nothing there. Its echo of the app's own writes is one read of
+  each file the job wrote (6.3 MB after a Psalms materialize).
 - Commands: `storebench materialize|whole|checkpoint|close|outside|memory|repack DIR` and
   `storebench run DIR 7` for the opens and the idle saves; `memory` once with
   `MALLOC_ARENA_MAX=1`. Rounds: materialize 3, whole 2, checkpoint 3, close 2 (5 runs each),

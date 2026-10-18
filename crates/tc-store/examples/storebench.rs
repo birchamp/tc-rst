@@ -70,7 +70,13 @@ fn store(dir: &Path) -> Store {
         platform: Arc::new(StdPlatform),
         clock: Arc::new(SystemClock),
         threads: std::thread::available_parallelism().map_or(2, |n| n.get()),
-        watch_debounce: std::time::Duration::from_secs(1),
+        // STOREBENCH_NO_WATCH=1: the watcher's word of a change comes an hour late (a
+        // comparison of the cases with and without what the watcher makes the writer do).
+        watch_debounce: if std::env::var_os("STOREBENCH_NO_WATCH").is_some() {
+            std::time::Duration::from_secs(3600)
+        } else {
+            std::time::Duration::from_secs(1)
+        },
     })
     .expect("store");
     store.wait_cleanup();
