@@ -1055,9 +1055,19 @@ mod tests {
         }
     }
 
+    /// A name the store accepts. `[a-z]{1,6}` alone makes `prn`, `con`, `aux` and `nul` now
+    /// and then, which are device names on Windows, and the store refuses them.
+    fn portable_name() -> impl proptest::strategy::Strategy<Value = String> {
+        use proptest::prelude::*;
+        "[a-z]{1,6}".prop_filter("a name Windows accepts", |name| {
+            check_names([name.as_str()]).is_ok()
+        })
+    }
+
     fn file_tree() -> impl proptest::strategy::Strategy<Value = Vec<(String, Vec<u8>)>> {
         use proptest::prelude::*;
-        let path = proptest::collection::vec("[a-z]{1,6}", 1..4).prop_map(|parts| parts.join("/"));
+        let path =
+            proptest::collection::vec(portable_name(), 1..4).prop_map(|parts| parts.join("/"));
         proptest::collection::btree_map(path, proptest::collection::vec(any::<u8>(), 0..64), 1..12)
             .prop_map(|tree| {
                 // A file and a folder of one name cannot both exist.
@@ -1066,6 +1076,21 @@ mod tests {
                     .filter(|(p, _)| !paths.iter().any(|q| q.starts_with(&format!("{p}/"))))
                     .collect()
             })
+    }
+
+    /// A fixed sequence of trees, drawn as the two properties below draw them. Before the
+    /// names were filtered, about one property run in twenty-five drew a device name and
+    /// failed; this sequence draws one in its 4,933rd tree.
+    #[test]
+    fn the_generated_trees_are_never_refused_for_their_names() {
+        use proptest::strategy::{Strategy, ValueTree};
+        let mut runner = proptest::test_runner::TestRunner::deterministic();
+        let strategy = file_tree();
+        for _ in 0..10_000 {
+            let files = strategy.new_tree(&mut runner).unwrap().current();
+            let names = files.iter().map(|(path, _)| path.as_str());
+            assert_eq!(check_names(names), Ok(()), "{files:?}");
+        }
     }
 
     proptest::proptest! {
