@@ -20,6 +20,9 @@
 //!   and commit, each installed atomically and never modified after, with a receipt that
 //!   lets it be verified. A bundled store seeds a first run that is offline; each copy is
 //!   checked once, so a repeat start opens no resource file.
+//!   [`ResourceStore::seed_plan`] says from receipts alone what a first run must copy, and
+//!   [`ResourceStore::seed`] does it with a [`SeedWatch`] that hears each file and can stop
+//!   it.
 //! - **Installs.** [`install_dcs`] downloads an exact commit through tc-door43 and
 //!   [`install_aquifer`] an exact release asset from GitHub; nothing is kept unless it is
 //!   the pinned bytes. A Door43 download streams to a file, and [`install_dcs_watched`]
@@ -96,8 +99,8 @@ pub use sets::{
     ScripturePane, SetGateway, SetSlot, Testaments, UnknownKeys,
 };
 pub use store::{
-    FileRecord, Installed, Inventory, Origin, Packaging, Receipt, ResourceStore, SeedReport,
-    content_files_opened,
+    FileRecord, Installed, Inventory, Origin, Packaging, Receipt, ResourceStore, SeedPlan,
+    SeedReport, SeedWatch, Seeding, content_files_opened, content_files_written,
 };
 pub use tc_journal::keys::ToolId;
 pub use tc_journal::pins::{Collection, Ladder};

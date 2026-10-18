@@ -10,14 +10,15 @@
 //! holds and then the live ones, with none lost or repeated between them. When the ring no
 //! longer holds every frame after `after`, or `after` is a number this run never reached
 //! (another server run's), it gets one `Resync` frame first, and the UI reads every live query
-//! again. A job's progress frames are coalesced in the ring: only the newest one of each job
-//! stays, because the newest count replaces the older ones. Every other frame stays until the
-//! ring is full.
+//! again. Progress frames are coalesced in the ring: only the newest `Running` frame of each
+//! job stays, and only the newest `Startup(Preparing)` frame, because the newest count
+//! replaces the older ones (a `Startup(Ready)` or `Startup(Failed)` frame removes the last
+//! one and is itself kept). Every other frame stays until the ring is full.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use tc_api::event::{Event, EventFrame};
+use tc_api::event::{Event, EventFrame, StartupState};
 use tc_api::ids::{JobId, ServerInstance};
 use tc_api::jobs::JobState;
 use tokio::sync::broadcast;
@@ -48,6 +49,8 @@ struct Ring {
     floor: u64,
     /// The number of the newest `Running` frame of each job that is still in the ring.
     latest_progress: HashMap<JobId, u64>,
+    /// The number of the newest `Startup(Preparing)` frame, while it is in the ring.
+    latest_startup: Option<u64>,
 }
 
 impl Ring {
@@ -70,6 +73,9 @@ impl Ring {
             {
                 self.latest_progress.remove(&view.id);
             }
+            if self.latest_startup == Some(seq) {
+                self.latest_startup = None;
+            }
             self.floor = seq;
             self.first_seq += 1;
         }
@@ -88,6 +94,7 @@ impl EventBus {
                     slots: VecDeque::new(),
                     floor: 0,
                     latest_progress: HashMap::new(),
+                    latest_startup: None,
                 }),
                 live,
             }),
@@ -122,6 +129,16 @@ impl EventBus {
             }
             if matches!(view.state, JobState::Running(_)) {
                 ring.latest_progress.insert(view.id, seq);
+            }
+        }
+        if let Event::Startup(state) = &event {
+            if let Some(older) = ring.latest_startup.take()
+                && let Some(slot) = ring.slot_mut(older)
+            {
+                *slot = None;
+            }
+            if matches!(state, StartupState::Preparing(_)) {
+                ring.latest_startup = Some(seq);
             }
         }
         let frame = EventFrame {

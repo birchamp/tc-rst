@@ -3067,6 +3067,7 @@ dependencies = [
  "tc-app",
  "tc-core",
  "tc-door43",
+ "tc-resources",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
@@ -3317,6 +3318,7 @@ dependencies = [
 name = "tc-ui"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "console_error_panic_hook",
  "js-sys",
  "leptos",
@@ -3324,6 +3326,7 @@ dependencies = [
  "send_wrapper",
  "serde_json",
  "sha1",
+ "sha2 0.11.1",
  "unicode-general-category",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -3362,6 +3365,7 @@ dependencies = [
  "tc-api",
  "tc-app",
  "tc-door43",
+ "tc-resources",
  "tc-server",
  "tc4",
  "tempfile",

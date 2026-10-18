@@ -506,7 +506,9 @@ pub async fn try_start(
         projects: ProjectsFolder::Default,
         door43: "http://127.0.0.1:9".parse().unwrap(),
         build: build(),
+        bundle: None,
         test_hooks: true,
+        seed_pace: None,
     };
     let mut deps = AppDeps {
         clock: parts.clock.clone(),

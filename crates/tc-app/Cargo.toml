@@ -15,6 +15,7 @@ test-hooks = ["tc-api/test-hooks"]
 tc-api = { path = "../tc-api", features = ["server"] }
 tc-core = { path = "../tc-core" }
 tc-door43 = { path = "../tc-door43" }
+tc-resources = { path = "../tc-resources" }
 base64.workspace = true
 ring.workspace = true
 serde.workspace = true

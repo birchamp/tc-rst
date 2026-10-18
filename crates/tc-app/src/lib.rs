@@ -7,6 +7,7 @@
 
 pub mod account;
 pub mod app;
+pub mod bundle;
 pub mod clock;
 pub mod config;
 pub mod dispatch;
@@ -20,7 +21,10 @@ pub mod jobs;
 pub mod prefs;
 pub mod replies;
 pub mod reports;
+mod seed;
 pub mod sessions;
+mod startup;
 
 pub use app::{Answer, App, AppDeps, CallFailure, StartError, Then};
 pub use dispatch::Handle;
+pub use seed::RESOURCES_FOLDER;

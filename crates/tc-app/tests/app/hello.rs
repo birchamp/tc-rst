@@ -6,11 +6,12 @@ use serde_json::{Value, json};
 use tc_api::Reply;
 use tc_api::account::{AccountView, KeepState};
 use tc_api::app::{AppPrefsView, Hello, HelloView};
-use tc_api::event::{Event, StartupProgress, StartupState};
-use tc_api::ids::LocaleId;
+use tc_api::event::{Event, StartupState};
+use tc_api::ids::{JobId, LocaleId};
 use tc_api::net::Set;
 use tc_api::prefs::SetLocale;
 use tc_app::events::Next;
+use tc_app::reports::{ReportOp, ReportOutcome};
 use tc_app::{Answer, App, Then};
 
 use super::common::{Parts, TestApp, build, hello_value, open_session, rid, token};
@@ -96,15 +97,6 @@ async fn hello_answers_real_state() {
     .unwrap();
     assert_eq!(hello_value(app).await["prefs"]["appLocale"], "ar");
 
-    app.set_startup(StartupState::Preparing(StartupProgress {
-        done: 1,
-        total: 10,
-    }));
-    assert_eq!(
-        hello_value(app).await["startup"],
-        json!({"type": "preparing", "value": {"done": 1, "total": 10}})
-    );
-
     // Another launch is another instance, and the switch is never stored (§5.6).
     let second = TestApp::start_with(dir.path(), &Parts::new(), |_, _| {}).await;
     assert_ne!(second.app.instance(), app.instance());
@@ -131,23 +123,50 @@ async fn hello_through_the_typed_call_matches_the_bytes() {
 }
 
 #[tokio::test]
-async fn set_startup_is_announced_and_in_hello() {
+async fn a_bundle_that_cannot_be_read_fails_the_startup_and_says_so() {
     let dir = tempfile::tempdir().unwrap();
-    let t = TestApp::start_in(dir.path(), |_, _| {}).await;
-    let mut events = t.app.events().subscribe(t.app.events().head());
-    t.app.set_startup(StartupState::Failed {
-        reason: "disk full".to_owned(),
-    });
-    let Some(Next::Frame(frame)) = events.try_next() else {
-        panic!("no frame")
-    };
+    let missing = dir.path().join("no-such-bundle");
+    let t = TestApp::start_in(dir.path(), |config, _| {
+        config.bundle = Some(missing.clone());
+    })
+    .await;
+
+    // Exact from the first request, with the path in the reason.
+    let startup = hello_value(&t.app).await["startup"].clone();
+    assert_eq!(startup["type"], "failed");
+    let reason = startup["value"]["reason"].as_str().unwrap().to_owned();
+    assert!(reason.contains("no-such-bundle"), "{reason}");
     assert_eq!(
-        frame.event,
-        Event::Startup(StartupState::Failed {
-            reason: "disk full".to_owned()
-        })
+        t.app.startup(),
+        StartupState::Failed {
+            reason: reason.clone()
+        }
     );
-    assert_eq!(hello_value(&t.app).await["startup"]["type"], "failed");
+
+    // A page that subscribes from the start sees why.
+    let mut events = t.app.events().subscribe(0);
+    let mut startup_frames = Vec::new();
+    while let Some(Next::Frame(frame)) = events.try_next() {
+        if let Event::Startup(state) = frame.event {
+            startup_frames.push(state);
+        }
+    }
+    assert_eq!(
+        startup_frames,
+        [StartupState::Failed {
+            reason: reason.clone()
+        }]
+    );
+
+    // One report, no job, and nothing under the machine's store.
+    let reports = t.app.reports().all();
+    let seed: Vec<_> = reports.iter().filter(|r| r.op == ReportOp::Seed).collect();
+    assert_eq!(seed.len(), 1);
+    assert_eq!(seed[0].outcome, ReportOutcome::Failed { reason });
+    assert_eq!(t.app.jobs().live(), 0);
+    assert!(t.app.jobs().view(JobId::new(1)).is_none());
+    let store = t.app_data.join(tc_app::RESOURCES_FOLDER);
+    assert_eq!(std::fs::read_dir(store).unwrap().count(), 0);
 }
 
 /// Compile-time: tc-server's `Backend` needs a `Send` call future and an `App` it can share.
