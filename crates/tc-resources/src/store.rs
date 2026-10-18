@@ -26,9 +26,9 @@
 //! An install writes every file and then the receipt into a new folder under
 //! `.partial/`, fsyncing each file and folder, then renames that folder to its key and
 //! fsyncs the parent. A crash at any point leaves either no install or the complete one;
-//! [`ResourceStore::open`] removes what a crash left in `.partial/`. An existing install's
-//! content and receipt are never written again: a second install of the same identity
-//! finds it and stops.
+//! [`ResourceStore::open`] removes what a crash left in `.partial/`, or leaves what it
+//! cannot remove for the next open. An existing install's content and receipt are never
+//! written again: a second install of the same identity finds it and stops.
 //!
 //! # Checked once
 //!
@@ -47,7 +47,7 @@
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -442,14 +442,16 @@ pub struct ResourceStore {
 }
 
 impl ResourceStore {
-    /// Opens the store at `root`, creating it when missing, and removes whatever an
-    /// interrupted install left behind.
+    /// Opens the store at `root`, creating it when missing, and tries to remove whatever
+    /// an interrupted install left behind. A leftover that cannot be removed (a scanner
+    /// holds a file in it) stays for the next open: staging names are unique, so it never
+    /// meets a new install.
     pub fn open(root: impl Into<PathBuf>) -> Result<Self, StoreError> {
         let store = Self { root: root.into() };
         fs::create_dir_all(&store.root).map_err(|e| StoreError::io("create", &store.root, e))?;
         let partial = store.root.join(PARTIAL);
         if partial.exists() {
-            fs::remove_dir_all(&partial).map_err(|e| StoreError::io("clear", &partial, e))?;
+            let _ = retry_while_held(|| fs::remove_dir_all(&partial));
         }
         Ok(store)
     }
@@ -713,7 +715,7 @@ impl ResourceStore {
 
         let parent = target.parent().unwrap_or(&self.root);
         create_dirs(parent)?;
-        if let Err(e) = fs::rename(&staging, &target) {
+        if let Err(e) = retry_while_held(|| fs::rename(&staging, &target)) {
             // Another install of the same identity may have landed first.
             if let Some(existing) = self.find(&receipt.origin)? {
                 let _ = fs::remove_dir_all(&staging);
@@ -861,8 +863,43 @@ fn replace_synced(dir: &Path, name: &str, bytes: &[u8]) -> Result<(), StoreError
     let temporary = dir.join(format!("{name}.partial"));
     write_synced(&temporary, bytes)?;
     let target = dir.join(name);
-    fs::rename(&temporary, &target).map_err(|e| StoreError::io("replace", &target, e))?;
+    retry_while_held(|| fs::rename(&temporary, &target))
+        .map_err(|e| StoreError::io("replace", &target, e))?;
     sync_dir(dir)
+}
+
+/// Defender, the Search indexer or OneDrive briefly hold a file that was just written, and
+/// Windows refuses to rename or remove it until they let go.
+#[cfg(windows)]
+fn retry_while_held<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
+    use std::time::Duration;
+    const ACCESS_DENIED: i32 = 5;
+    const SHARING_VIOLATION: i32 = 32;
+    const LOCK_VIOLATION: i32 = 33;
+    const LONGEST_PAUSE: Duration = Duration::from_millis(500);
+    const GIVE_UP_AFTER: Duration = Duration::from_secs(2);
+    let mut pause = Duration::from_millis(10);
+    let mut slept = Duration::ZERO;
+    loop {
+        match op() {
+            Err(e)
+                if matches!(
+                    e.raw_os_error(),
+                    Some(ACCESS_DENIED | SHARING_VIOLATION | LOCK_VIOLATION)
+                ) && slept < GIVE_UP_AFTER =>
+            {
+                std::thread::sleep(pause);
+                slept += pause;
+                pause = (pause * 2).min(LONGEST_PAUSE);
+            }
+            result => return result,
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn retry_while_held<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
+    op()
 }
 
 fn write_synced(path: &Path, bytes: &[u8]) -> Result<(), StoreError> {
@@ -1154,6 +1191,86 @@ mod tests {
             installed.verify(),
             Err(StoreError::Damaged { .. })
         ));
+    }
+
+    #[cfg(windows)]
+    const FILE_SHARE_READ: u32 = 1;
+    #[cfg(windows)]
+    const FILE_SHARE_WRITE: u32 = 2;
+
+    /// Opens `path` as a scanner does: others may still read and write it, but a folder
+    /// that holds it cannot be renamed or deleted.
+    #[cfg(windows)]
+    fn held_like_a_scanner(path: &Path) -> fs::File {
+        use std::os::windows::fs::OpenOptionsExt;
+        fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .open(path)
+            .unwrap()
+    }
+
+    #[cfg(windows)]
+    fn release_after(file: fs::File, pause: std::time::Duration) -> std::thread::JoinHandle<()> {
+        std::thread::spawn(move || {
+            std::thread::sleep(pause);
+            drop(file);
+        })
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn an_install_succeeds_when_a_scanner_briefly_holds_a_staged_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ResourceStore::open(dir.path()).unwrap();
+        let mut scanner = None;
+        let installed = store
+            .install_until(staged('a'), &mut |step| {
+                if step == Step::ReceiptWritten {
+                    let mut stagings = fs::read_dir(dir.path().join(PARTIAL)).unwrap();
+                    let staging = stagings.next().unwrap().unwrap().path();
+                    assert!(stagings.next().is_none());
+                    let held = held_like_a_scanner(&staging.join(CONTENT).join("metadata.json"));
+                    scanner = Some(release_after(held, std::time::Duration::from_millis(300)));
+                }
+                false
+            })
+            .unwrap();
+        installed.verify().unwrap();
+        scanner.unwrap().join().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn opening_clears_a_leftover_that_a_scanner_releases_soon() {
+        let dir = tempfile::tempdir().unwrap();
+        let leftover = dir.path().join(PARTIAL).join("1-2-3").join(CONTENT);
+        fs::create_dir_all(&leftover).unwrap();
+        let file = leftover.join("metadata.json");
+        fs::write(&file, b"{}").unwrap();
+        let scanner = release_after(
+            held_like_a_scanner(&file),
+            std::time::Duration::from_millis(300),
+        );
+        ResourceStore::open(dir.path()).unwrap();
+        scanner.join().unwrap();
+        assert!(!dir.path().join(PARTIAL).exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn opening_succeeds_when_a_scanner_holds_a_leftover_throughout() {
+        let dir = tempfile::tempdir().unwrap();
+        let leftover = dir.path().join(PARTIAL).join("1-2-3").join(CONTENT);
+        fs::create_dir_all(&leftover).unwrap();
+        let file = leftover.join("metadata.json");
+        fs::write(&file, b"{}").unwrap();
+        let held = held_like_a_scanner(&file);
+        let store = ResourceStore::open(dir.path()).unwrap();
+        store.install(staged('a')).unwrap().verify().unwrap();
+        drop(held);
+        ResourceStore::open(dir.path()).unwrap();
+        assert!(!dir.path().join(PARTIAL).exists());
     }
 
     #[test]
