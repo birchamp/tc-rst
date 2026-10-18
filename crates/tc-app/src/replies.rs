@@ -1,0 +1,201 @@
+//! The reply cache (APP-DESIGN §4.4, AD4, A-2): a retry of a write gets the first attempt's
+//! reply instead of running again.
+//!
+//! A write carries a [`RequestId`]. The cache keys each id with a digest of the request, and
+//! runs the write's work once per id, on a task of its own:
+//!
+//! - a retry of a finished request gets the first reply;
+//! - a retry of a request that is still running waits for the first attempt's reply, so a
+//!   reload that retries while a save waits behind a checkpoint never saves twice;
+//! - a retry whose request differs from the first is [`CacheAnswer::Reused`], never the first
+//!   reply: the UI marks a field clean only when the reply's text equals its own, and a reply
+//!   to other text would mark newer typing as saved;
+//! - the work runs to its end when its caller goes away (a reload, a dropped connection), so a
+//!   save is never stopped half way.
+//!
+//! Replies are kept for the last [`ReplyCache::FINISHED`] requests; a request in flight is
+//! never dropped.
+
+use std::collections::{HashMap, VecDeque};
+use std::future::Future;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+
+use ring::digest;
+use tc_api::ids::RequestId;
+use tokio::sync::watch;
+
+/// SHA-256 of an endpoint path and its request, as serde writes the request again after it
+/// was parsed. The same request digests the same whatever its spacing or key order in the
+/// body, and one id used for another endpoint differs.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct BodyDigest([u8; 32]);
+
+impl BodyDigest {
+    pub fn of(path: &str, canonical_body: &[u8]) -> Self {
+        let mut context = digest::Context::new(&digest::SHA256);
+        context.update(path.as_bytes());
+        // A path never holds a zero byte, so this separates "a"+"bc" from "ab"+"c".
+        context.update(&[0]);
+        context.update(canonical_body);
+        let mut out = [0u8; 32];
+        out.copy_from_slice(context.finish().as_ref());
+        Self(out)
+    }
+}
+
+/// What a write produced.
+#[derive(Clone, Debug)]
+pub enum Outcome {
+    /// The bytes of the HTTP body: a serialized `Reply`.
+    Reply(Arc<[u8]>),
+    /// A test hook ended the process before the reply: there is none (D5).
+    #[cfg(feature = "test-hooks")]
+    Ended,
+}
+
+#[derive(Clone, Debug)]
+pub enum CacheAnswer {
+    /// This call ran the work.
+    Fresh(Outcome),
+    /// A retry: the first attempt's outcome, finished or waited for.
+    Repeat(Outcome),
+    /// The id came with another request. Nothing ran.
+    Reused,
+    /// The task that ran the work ended without an outcome. The request may have been
+    /// partly carried out, so it is not run again under this id.
+    Lost,
+}
+
+type Waiting = watch::Receiver<Option<Outcome>>;
+
+enum Slot {
+    Running(Waiting),
+    Finished(Outcome),
+}
+
+struct Entry {
+    digest: BodyDigest,
+    slot: Slot,
+}
+
+#[derive(Default)]
+struct CacheState {
+    entries: HashMap<RequestId, Entry>,
+    /// Finished ids, oldest first.
+    finished: VecDeque<RequestId>,
+}
+
+pub struct ReplyCache {
+    state: Mutex<CacheState>,
+    finished_cap: usize,
+}
+
+enum Plan {
+    Reused,
+    Done(Outcome),
+    Wait(Waiting, bool),
+}
+
+impl ReplyCache {
+    /// The finished replies kept (AD4).
+    pub const FINISHED: usize = 1024;
+
+    pub fn new(finished_cap: usize) -> Arc<Self> {
+        Arc::new(Self {
+            state: Mutex::new(CacheState::default()),
+            finished_cap,
+        })
+    }
+
+    fn state(&self) -> MutexGuard<'_, CacheState> {
+        // Every change below is a few map operations that cannot panic part way.
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Runs `work` once for `id`, or answers from the first attempt. The work runs on its own
+    /// task, so a caller that goes away does not stop it; a second caller with the same id
+    /// and digest waits for it.
+    pub async fn run<W>(self: &Arc<Self>, id: RequestId, digest: BodyDigest, work: W) -> CacheAnswer
+    where
+        W: Future<Output = Outcome> + Send + 'static,
+    {
+        let plan = {
+            let mut state = self.state();
+            match state.entries.get(&id) {
+                Some(entry) if entry.digest != digest => Plan::Reused,
+                Some(Entry {
+                    slot: Slot::Finished(outcome),
+                    ..
+                }) => Plan::Done(outcome.clone()),
+                Some(Entry {
+                    slot: Slot::Running(waiting),
+                    ..
+                }) => Plan::Wait(waiting.clone(), false),
+                None => {
+                    let (sender, waiting) = watch::channel(None);
+                    state.entries.insert(
+                        id,
+                        Entry {
+                            digest,
+                            slot: Slot::Running(waiting.clone()),
+                        },
+                    );
+                    let cache = Arc::clone(self);
+                    tokio::spawn(async move {
+                        let outcome = work.await;
+                        cache.finish(id, &outcome);
+                        sender.send_replace(Some(outcome));
+                    });
+                    Plan::Wait(waiting, true)
+                }
+            }
+        };
+        match plan {
+            Plan::Reused => CacheAnswer::Reused,
+            Plan::Done(outcome) => CacheAnswer::Repeat(outcome),
+            Plan::Wait(mut waiting, fresh) => {
+                let outcome = match waiting.wait_for(Option::is_some).await {
+                    Ok(ready) => ready.clone(),
+                    Err(_) => return CacheAnswer::Lost,
+                };
+                match outcome {
+                    Some(outcome) if fresh => CacheAnswer::Fresh(outcome),
+                    Some(outcome) => CacheAnswer::Repeat(outcome),
+                    None => CacheAnswer::Lost,
+                }
+            }
+        }
+    }
+
+    /// Records the outcome, and forgets the oldest finished replies past the cap.
+    fn finish(&self, id: RequestId, outcome: &Outcome) {
+        let mut state = self.state();
+        if let Some(entry) = state.entries.get_mut(&id) {
+            entry.slot = Slot::Finished(outcome.clone());
+        }
+        state.finished.push_back(id);
+        while state.finished.len() > self.finished_cap {
+            let Some(oldest) = state.finished.pop_front() else {
+                break;
+            };
+            if matches!(
+                state.entries.get(&oldest),
+                Some(Entry {
+                    slot: Slot::Finished(_),
+                    ..
+                })
+            ) {
+                state.entries.remove(&oldest);
+            }
+        }
+    }
+
+    /// The writes still running, for `test/quiet`.
+    pub fn running(&self) -> usize {
+        self.state()
+            .entries
+            .values()
+            .filter(|entry| matches!(entry.slot, Slot::Running(_)))
+            .count()
+    }
+}

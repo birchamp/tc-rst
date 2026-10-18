@@ -12,4 +12,5 @@ pub mod events;
 pub mod flows;
 pub mod folders;
 pub mod jobs;
+pub mod replies;
 pub mod reports;

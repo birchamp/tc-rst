@@ -10,5 +10,6 @@ mod app {
     mod jobs;
     mod keychain;
     mod projects_root;
+    mod replies;
     mod reports;
 }
