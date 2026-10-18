@@ -3,9 +3,8 @@
 //! release build for the figures:
 //! `cargo test --release -p tc-export --test performance -- --nocapture`.
 //!
-//! The rows come from tc-usfm's plain text of each verse. The rebuild's editor rows use
-//! tC4's shown text, which differs from it in a few verses but not in size, so the cost is
-//! the same.
+//! The rows come from tc-usfm's `shown_text_v1` of each verse, the text the editor's rows
+//! show.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -39,7 +38,7 @@ fn psalms() -> Vec<BookChapter> {
                 label: unit.label().to_owned(),
                 drafted,
                 text: if drafted {
-                    unit.plain_text()
+                    tc_usfm::shown_text_v1(unit.body())
                 } else {
                     String::new()
                 },
