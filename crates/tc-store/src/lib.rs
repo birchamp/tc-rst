@@ -56,7 +56,7 @@ pub use handle::{
 };
 pub use hooks::{Hooks, Point};
 pub use notices::StoreNotice;
-pub use open::{OpenError, OpenOptions};
+pub use open::{LockHolder, OpenError, OpenOptions};
 pub use platform::{FakePlatform, FolderFacts, Platform, StdPlatform, UnsafeFolder};
 pub use progress::{Phase, Progress, ProgressSink};
 pub use reply::{CommandError, ReadOnlyReason, Refusal, StoreReply, Stored};

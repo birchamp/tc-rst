@@ -82,12 +82,32 @@ pub enum OpenError {
     NotAProject,
     #[error("the project folder cannot be read: {0}")]
     Unreadable(StoreError),
+    /// O1: another process holds `.tc/lock`. translationCore runs once per computer (tC4
+    /// D39), so the holder is a process a crash left running or another program; the open is
+    /// refused and writes nothing.
+    #[error("this project is already open: {}", holder_words(.holder))]
+    LockHeld { holder: Option<LockHolder> },
     #[error("this project was made by a newer translationCore (format {major}); update to open it")]
     NewerMajor { major: String },
     #[error("this project's format {major} needs a migration first")]
     NeedsMigration { major: String },
     #[error(transparent)]
     Store(#[from] StoreError),
+}
+
+/// Who `.tc/lock` names as its holder (§3.6): the process that wrote its name there after
+/// it took the lock.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LockHolder {
+    pub host: String,
+    pub pid: u32,
+}
+
+fn holder_words(holder: &Option<LockHolder>) -> String {
+    match holder {
+        Some(h) => format!("process {} on {} holds it", h.pid, h.host),
+        None => "another program holds it".to_owned(),
+    }
 }
 
 /// `ingredients/tc/project.json` (§3.5).
@@ -480,7 +500,8 @@ fn open_inner(
     } else {
         project.renew_hold_notices();
     }
-    // A project that cannot be written holds no lock: another window may open it.
+    // A project that cannot be written holds no lock: it writes nothing, so there is
+    // nothing to guard, and the person can open it again once the disk works.
     let read_only = read_only || write_failed.is_some();
     if write_failed.is_some() {
         gates.lock = None;
@@ -600,7 +621,15 @@ fn gates(
             .read(&folder.path(LOCK))
             .ok()
             .and_then(|b| serde_json::from_slice::<LockContent>(&b).ok());
-        let taken = atomic_create_dirs(vfs, &folder.path(TC))
+        // A folder that holds `.tc` is not touched before the lock is ours: a refused open
+        // writes nothing, not even a directory flush.
+        let tc = folder.path(TC);
+        let made = if vfs.metadata(&tc).is_ok() {
+            Ok(())
+        } else {
+            atomic_create_dirs(vfs, &tc)
+        };
+        let taken = made
             .map_err(|e| e.to_string())
             .and_then(|()| vfs.lock(&folder.path(LOCK)).map_err(|e| e.to_string()));
         match taken {
@@ -616,7 +645,20 @@ fn gates(
                     None => lock = Some(handle),
                 }
             }
-            Ok(None) => read_only = Some(ReadOnlyReason::LockHeld),
+            Ok(None) => {
+                // The holder wrote its name after it took the lock, so this read is the
+                // holder's. Unnamed when it wrote none, or when the platform will not let
+                // another handle read a locked file.
+                let holder = vfs
+                    .read(&folder.path(LOCK))
+                    .ok()
+                    .and_then(|b| serde_json::from_slice::<LockContent>(&b).ok())
+                    .map(|c| LockHolder {
+                        host: c.host,
+                        pid: c.pid,
+                    });
+                return Err(OpenError::LockHeld { holder });
+            }
             Err(reason) => read_only = Some(ReadOnlyReason::WriteFailed(reason)),
         }
     }

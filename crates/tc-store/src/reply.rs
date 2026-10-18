@@ -40,8 +40,6 @@ pub struct StoreReply {
 /// Why a project is read-only (§5.0, §6.1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReadOnlyReason {
-    /// "This project is open in another translationCore window."
-    LockHeld,
     /// The lock names another computer: the folder may be open there (§5.0).
     OpenOnAnotherComputer { host: String },
     /// Another installation is writing into this folder (§5.0, `SecondWriter`).

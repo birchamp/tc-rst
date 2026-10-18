@@ -1125,7 +1125,7 @@ None of these files is project data that another device needs. Each is written w
 
 | File | Content | Purpose |
 |---|---|---|
-| `lock` | `{host, pid, device, at}` | exclusive advisory lock (`std::fs::File::try_lock`) while the project is open; the content only names the holder in messages. It is written through the locked handle (truncate, write, flush), never with `atomic_write`: a new file renamed over it would be a file whose lock nobody holds, and a second process could take it |
+| `lock` | `{host, pid, device, at}` | exclusive advisory lock (`std::fs::File::try_lock`) while the project is open. It guards the folder against a process a crash left running and against other programs; translationCore itself runs once per computer (§5.0). A lock another process holds refuses the open (O1), and the content names the holder in the error. It is written through the locked handle (truncate, write, flush), never with `atomic_write`: a new file renamed over it would be a file whose lock nobody holds, and another process could take it |
 | `device.json` | `{device, fingerprint, created}` | this folder's Local device (§6.3) |
 | `pending/<device>-<hash32>.batch` | header + change lines (§4.2) | saves not yet sealed: the commit point of every save |
 | `materialized.json` | `{minor, derivations, paths: {<path>: {md5, size, mtimeNs, settled, scope, held, oid, nfc}}, packs: {<path>: {md5, size, fingerprint}}}`: the format minor and derivation versions (§12.1) the files were projected with; per derived or carried path what was written (md5, size, mtime), whether its bytes were read back after its timestamp tick was over (`settled`), the digest of the heads its projection stands for (`scope`), and the bytes the app holds there without writing over them (`held`: their md5, why they are held, and the path of their copy in `.tc/external/`), §6.2; for a USFM or story file whether its bytes are NFC (`nfc`), so `metadata.json` states its `normalization` without projecting every book again; per pack the md5 that `metadata.json` lists, which also makes the manifest's pack list the expected pack set unit S1 checks at open (§4.4: a listed pack that is gone and that no valid pack's `replaces` names is missing) | the manifest: what the app last wrote (§5.10). Its own mtime, which the filesystem sets when it is written, is a time stamp that settles entries (§6.2) |
@@ -1419,11 +1419,16 @@ tree, and a damaged copy of a replaced pack disappears with it.
 owns the in-memory `FoldState` and is the only code that writes files in the project folder.
 Commands, sync results and import results are messages to it. Network, parsing, validation and
 fold snapshots run on other threads and hand finished data to the actor. An exclusive advisory
-lock on `.tc/lock` (`std::fs::File::try_lock`, stable since Rust 1.89, so no `fd-lock`) refuses a second process, and the app is single-instance (tC4
-D39). That lock is local to one machine. A folder that a cloud client (OneDrive, Dropbox,
-iCloud Drive, Google Drive, Syncthing) replicates to another machine can get a second writer the
-lock cannot see, so such folders are gated below, and a second writer that slips past the gate is
-detected and stopped before it can do harm.
+lock on `.tc/lock` (`std::fs::File::try_lock`, stable since Rust 1.89, so no `fd-lock`) refuses
+the open of a project another process holds. translationCore runs as a single instance per
+computer, as tC4 4.0 does (its D39: a second launch brings the running window to the front and
+exits), so nothing supports a second app, process or window working on a project on one
+computer; the lock guards against a process a crash left running and against other programs,
+and O2's cleanup of temporary files relies on it. Several people work on one project at the same
+time only from separate computers, through sync. The lock is local to one machine. A folder that a
+cloud client (OneDrive, Dropbox, iCloud Drive, Google Drive, Syncthing) replicates to another
+machine can get a second writer the lock cannot see, so such folders are gated below, and a
+second writer that slips past the gate is detected and stopped before it can do harm.
 
 **All file I/O goes through the `Vfs` trait** in `tc-store` (`std` in production, `FaultFs` in
 tests, §16.2). Only these helpers write project files:
@@ -1528,8 +1533,9 @@ error: <reason>. Your work may not survive a power cut. Check the disk."). The a
 
 **Closing.** A close seals and materializes what is due (§5.13 C1, C2), writes the fold cache,
 stops the draft writer and waits for it, and only then clears `.tc/lock`'s content and releases
-the lock: nothing is written into the folder after the lock is gone, so another window that
-takes the lock never races a late `drafts.json`. The open's background work (O8's cache write
+the lock: nothing is written into the folder after the lock is gone, so the next open (after a
+restart, or by a program that takes the lock as this session ends) never races a late
+`drafts.json`. The open's background work (O8's cache write
 and O14) ends before the actor closes, while the actor can still answer it.
 
 **`commit_received`** writes changes whose bytes were fixed elsewhere: deterministic ingests of
@@ -2041,10 +2047,15 @@ it (tC4 F10).
 ### 6.1 The open sequence
 
 ```
-O1  Take .tc/lock (exclusive, non-blocking). Held → open read-only: "This project is open in
-    another translationCore window." Taken: if its content names another host, the folder may
-    be open on that computer (§5.0, second writer); otherwise write {host, pid, device, at}
-    into it, and clear it at close.
+O1  Take .tc/lock (exclusive, non-blocking). Held → refuse the open with `OpenError::LockHeld`,
+    which names the holder from the lock file's content (host and pid; unnamed when the holder
+    wrote none or the platform will not read a locked file). The open writes nothing: the
+    lock is only tried, and an existing file is not changed. translationCore runs once per
+    computer (§5.0), so a holder is a process a crash left running or another program.
+    Taken: if its content names another host, the folder may be open on that computer (§5.0,
+    second writer) and the project opens read-only (`OpenOnAnotherComputer`); otherwise write
+    {host, pid, device, at} into it, and clear it at close. A project that opens read-only
+    for another reason (O4, O5) takes no lock.
 O2  Finish or remove temporary files. A `.tc/pending/` or `ingredients/tc/changes/` temp file
     whose bytes verify (every line; for a pack, P2 to P4 with the name in the temp name) is
     complete: rename it into place durably (§5.0 step 4), never delete it (on Windows a power
@@ -2132,8 +2143,9 @@ O14 The storage check, in the background (PERFORMANCE.md rule 4): read every pat
     the reason the check is the only place a stat that lies is found.
 ```
 
-Open refuses only for: the lock is held (read-only instead), the folder cannot be read, the
-format major is newer, or the folder is not a project. It never refuses because of content.
+Open refuses only for: another process holds the lock (`LockHeld`, which names the holder),
+the folder cannot be read, the format major is newer, or the folder is not a project. It never
+refuses because of content.
 A journal file that cannot be read is listed (`FileUnreadable`) and never removed; so is one
 whose stat fails (a cloud placeholder, a delete-pending file on Windows): it is listed with
 size 0, read like any other, and reported when the read fails too. The open fails as
@@ -4109,7 +4121,7 @@ and the on-disk end state, not only what the fold returns.
 | L30 | A default branch other than `main` refused forever (sync-design §9.2) | `sync.not-main` | `tc.branch` records the branch at share or join | `sync_master_branch` |
 | L31 | Private repositories cannot sync (sync-design §9.1) | the clone sent no credentials | fetch and join send the token | `sync_private_repository` |
 | L32 | OBS projects refused by sync; no USB exchange (sync-design §9.1, sync-design §10) | refused | OBS syncs like Bible projects; USB exchange is §10 | `team_sync_obs_project`, journey `usb_both_directions` |
-| L33 | Locks only in-process; a second app window (sync-design §6.3, D39) | unprotected | `.tc/lock` is an OS lock; a second window opens read-only | `open_second_process_read_only` |
+| L33 | Locks only in-process (sync-design §6.3); tC4 4.0 runs once per computer (D39) | a process left running after a crash, or another program, could write into the folder | `.tc/lock` is an OS lock that refuses the open of a project another process holds, naming the holder; translationCore runs once per computer, so no second app, process or window works on a project on one computer (several people work only from separate computers, through sync: L64, `OpenOnAnotherComputer`, `SecondWriter`) | `a_second_open_of_a_project_is_refused_and_writes_nothing`, `a_lock_another_program_holds_refuses_the_open_without_a_name` |
 | L34 | A 403 or protected branch unmeasured (sync-design §9.1) | heuristic | `NoWriteAccess` and `RefRejected` carry Door43's own text; the exchange file is offered | `sync_protected_branch_reported` |
 
 ### 15.2 Cases found by the design panel

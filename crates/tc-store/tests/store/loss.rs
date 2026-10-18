@@ -391,11 +391,12 @@ fn loss_bit_rot_not_recorded_as_edit() {
     h.close().unwrap();
 }
 
-/// The copy offer is for a folder another writer may be using (§5.0: "the copy keeps every
-/// pending save"). A seal in that window between the copy's pending files and its packs moves
+/// The copy offer is for a folder another writer may be using: another computer whose
+/// saves a cloud client brings in, or a second installation (§5.0: "the copy keeps every
+/// pending save"). That writer's seal between the copy's pending files and its packs moves
 /// the saves from the one to the other; the copy has them either way.
 #[test]
-fn a_copy_made_while_the_other_window_seals_keeps_every_save() {
+fn a_copy_made_while_the_other_writer_seals_keeps_every_save() {
     let hooks = std::sync::Arc::new(tc_store::Hooks::default());
     let rig = rig_with_hooks(FaultFs::new(), hooks.clone());
     rig.store.wait_cleanup();

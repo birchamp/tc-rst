@@ -759,7 +759,8 @@ fn a_seal_that_fails_after_its_pack_leaves_a_valid_burrito() {
 // ---------------------------------------------------------------------------------------
 
 /// The draft writer is a thread beside the actor. A close waits for it before it releases
-/// the lock, so another window that takes the lock never races a late `drafts.json`.
+/// the lock, so the next open of the project (after a restart, or by a program that takes the
+/// lock as this session ends) never races a late `drafts.json`.
 #[test]
 fn nothing_is_written_into_the_folder_after_the_lock_is_released() {
     let (rig, folder) = titus();

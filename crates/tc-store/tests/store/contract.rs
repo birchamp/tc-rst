@@ -4,7 +4,7 @@
 use crate::common::*;
 use tc_journal::command::{Command, Draft, DraftField};
 use tc_store::fault::FaultFs;
-use tc_store::{CommandError, Mode, OpenOptions, ReadOnlyReason, Refusal, StoreEvent, Stored};
+use tc_store::{CommandError, Mode, OpenError, OpenOptions, Refusal, StoreEvent, Stored};
 
 #[test]
 fn a_created_project_is_a_valid_burrito_with_its_book() {
@@ -108,28 +108,74 @@ fn a_review_token_cannot_save_and_an_edit_token_cannot_resolve() {
     handle.close().unwrap();
 }
 
+/// O1, tC4 D39: translationCore runs once per computer, so a project whose `.tc/lock`
+/// another process holds is not opened at all. The open is refused with the holder the lock
+/// file names, writes nothing, and leaves the holder's session as it was.
 #[test]
-fn a_second_open_of_a_project_is_read_only_and_refuses_saves() {
+fn a_second_open_of_a_project_is_refused_and_writes_nothing() {
     let (rig, folder) = titus();
     let first = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    let second = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    assert_eq!(
-        second.facts().mode,
-        Mode::ReadOnly(ReadOnlyReason::LockHeld)
-    );
+    first.wait_idle();
     let before = files(&rig.fs, &folder);
-    let refused = save_verse(&second, 1, 1, "x");
-    assert!(matches!(
-        refused,
-        Err(CommandError::ReadOnly(ReadOnlyReason::LockHeld))
-    ));
-    second.close().unwrap();
+    rig.fs.clear_log();
+    let Err(refused) = rig.store.open(&folder, &OpenOptions::default()) else {
+        panic!("a second open of a project that is open is refused");
+    };
+    match &refused {
+        OpenError::LockHeld {
+            holder: Some(holder),
+        } => {
+            assert_eq!(holder.host, "host-1");
+            assert_eq!(holder.pid, 4242, "the pid the lock file names");
+        }
+        other => panic!("{other:?}"),
+    }
+    let message = refused.to_string();
+    assert!(
+        message.contains("host-1") && message.contains("4242"),
+        "the error names the holder: {message}"
+    );
     assert_eq!(
         files(&rig.fs, &folder),
         before,
-        "a read-only open writes nothing"
+        "a refused open writes nothing"
     );
+    assert!(
+        rig.fs.log().is_empty(),
+        "a refused open changed the folder: {:?}",
+        rig.fs.log()
+    );
+    // The first session is as it was, and a close frees the project for the next open.
+    save_verse(&first, 1, 1, "still writable").unwrap();
     first.close().unwrap();
+    let again = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    assert_eq!(again.facts().mode, Mode::Writable);
+    assert_eq!(words(&again, 1, 1).as_deref(), Some("still writable"));
+    again.close().unwrap();
+}
+
+/// O1: a program that holds the lock without writing its name (or a platform that does not
+/// let another handle read a locked file) still refuses the open; the error says no one by
+/// name.
+#[test]
+fn a_lock_another_program_holds_refuses_the_open_without_a_name() {
+    let (rig, folder) = titus();
+    let held = tc_store::Vfs::lock(&rig.fs, &folder.join(".tc/lock"))
+        .unwrap()
+        .expect("the lock is free");
+    rig.fs.clear_log();
+    let Err(refused) = rig.store.open(&folder, &OpenOptions::default()) else {
+        panic!("the open is refused");
+    };
+    assert!(
+        matches!(refused, OpenError::LockHeld { holder: None }),
+        "{refused:?}"
+    );
+    assert!(refused.to_string().contains("another program"));
+    assert!(rig.fs.log().is_empty(), "{:?}", rig.fs.log());
+    drop(held);
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.close().unwrap();
 }
 
 #[test]

@@ -315,9 +315,14 @@ fn a_copy_of_a_read_only_project_carries_its_drafts() {
         "typed before the copy",
     );
     writer.wait_idle();
-    // A second window: read-only, and the person copies the project.
-    let reader = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    assert!(matches!(reader.facts().mode, tc_store::Mode::ReadOnly(_)));
+    // The folder reaches another computer that finds the lock naming this one: read-only,
+    // and the person copies the project.
+    let other = rig_as(rig.fs.other_machine(), "/app-desktop", "host-2");
+    let reader = other.store.open(&folder, &OpenOptions::default()).unwrap();
+    assert!(matches!(
+        reader.facts().mode,
+        tc_store::Mode::ReadOnly(tc_store::ReadOnlyReason::OpenOnAnotherComputer { .. })
+    ));
     assert!(
         reader.offered_drafts().is_empty(),
         "a read-only open offers nothing"

@@ -552,7 +552,7 @@ fn copy_journal(vfs: &dyn Vfs, from: &Path, to: &Path, hooks: &Hooks) -> Result<
         }
     }
     Err(StoreError::Other(
-        "the project kept changing while it was copied; close the other window and copy it again"
+        "the project kept changing while it was copied; wait until the other computer has stopped saving and copy it again"
             .into(),
     ))
 }

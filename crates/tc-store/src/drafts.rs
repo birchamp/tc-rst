@@ -274,7 +274,7 @@ impl DraftWriter {
         read_only: bool,
     ) -> Self {
         // A read-only open offers nothing (§5.14): keeping a draft would write, and the
-        // window that holds the project may still be writing the same drafts.
+        // computer that holds the project may still be writing the same drafts.
         let entries = if read_only {
             Vec::new()
         } else {

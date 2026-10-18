@@ -1287,9 +1287,13 @@ fn a_dismissed_alignment_is_kept_with_its_flag() {
 fn read_only_refuses_every_command_and_writes_nothing() {
     let (fs, folder) = rich();
     let (_rig, writer) = open(&fs, &folder);
-    let other = rig_as(fs.clone(), APP, "host-1");
+    // The folder on another computer, whose open finds the lock naming this one.
+    let other = rig_as(fs.other_machine(), "/app-desktop", "host-2");
     let reader = other.store.open(&folder, &OpenOptions::default()).unwrap();
-    assert!(matches!(reader.facts().mode, tc_store::Mode::ReadOnly(_)));
+    assert!(matches!(
+        reader.facts().mode,
+        tc_store::Mode::ReadOnly(tc_store::ReadOnlyReason::OpenOnAnotherComputer { .. })
+    ));
     let before = files(&fs, &folder);
     for (name, command) in every_command(&reader) {
         let result = submit(&reader, command);
