@@ -11,8 +11,9 @@
 //
 // The page is served the way the shell serves it (AD11): a request filter adds the token to what
 // the browser loads by itself, and leaves `/api/` out, where the page sends the token itself.
-// Playwright comes from PLAYWRIGHT_MODULE (default: the parity harness's copy), its Chromium
-// from PLAYWRIGHT_BROWSERS_PATH. Every wait has a timeout, and a `finally` quits or kills `tc4`.
+// Playwright 1.56.1 comes from PLAYWRIGHT_MODULE (default: the parity harness's copy, after `npm
+// ci` in parity/ds-gallery), its Chromium (build 1194) from PLAYWRIGHT_BROWSERS_PATH. Every wait
+// has a timeout, and a `finally` quits or kills `tc4`.
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -43,7 +44,7 @@ const pace = Number(args.pace ?? 4);
 
 const require = createRequire(import.meta.url);
 const playwrightDir =
-  process.env.PLAYWRIGHT_MODULE ?? '/home/user/tc-rst/parity/ds-gallery/node_modules/playwright';
+  process.env.PLAYWRIGHT_MODULE ?? path.join(root, 'parity/ds-gallery/node_modules/playwright');
 const { chromium } = require(playwrightDir);
 const playwrightVersion = JSON.parse(fs.readFileSync(path.join(playwrightDir, 'package.json'), 'utf8')).version;
 

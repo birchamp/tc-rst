@@ -1,10 +1,10 @@
 {
-  "when": "2026-10-18T19:40:15.628Z",
+  "when": "2026-10-18T21:03:08.642Z",
   "machine": {
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
-    "cpus": 4,
-    "platform": "linux 6.18.44-fc-v139",
-    "node": "v22.22.0"
+    "cpu": "12th Gen Intel(R) Core(TM) i7-12700",
+    "cpus": 20,
+    "platform": "linux 7.0.0-38-generic",
+    "node": "v22.23.3"
   },
   "playwright": "1.56.1",
   "bundle": {
@@ -15,20 +15,20 @@
   "steps": {
     "1-first-launch": {
       "total": 1085,
-      "first": "Preparing resources: 37 of 1085",
-      "later": "Preparing resources: 80 of 1085"
+      "first": "Preparing resources: 39 of 1085",
+      "later": "Preparing resources: 67 of 1085"
     },
     "2-saved-language": {
       "lang": [
         "ar",
         "rtl"
       ],
-      "first": "Preparing resources: 90 of 1085",
-      "later": "Preparing resources: 143 of 1085"
+      "first": "Preparing resources: 79 of 1085",
+      "later": "Preparing resources: 117 of 1085"
     },
     "3-close": {
-      "closedMs": 20,
-      "exitMs": 24,
+      "closedMs": 3,
+      "exitMs": 4,
       "exitCode": 0,
       "wholeInstalls": 4,
       "ofInstalls": 5,
@@ -43,7 +43,7 @@
       "earlierCopiesUnchanged": 4
     },
     "5-repeat-launch": {
-      "handoffMs": 94,
+      "handoffMs": 30,
       "statusTexts": [
         "Starting preparation…",
         "Starting…"
