@@ -322,6 +322,68 @@ async fn a_work_that_vanishes_is_lost_and_never_runs_again() {
     assert_eq!(runs.load(Ordering::SeqCst), 1);
 }
 
+/// `test/quiet` counts the writes still running. A write whose task ended without an outcome
+/// is not running, or every capture's settle would wait for it until the process ends.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_lost_write_is_not_counted_as_running() {
+    let cache = ReplyCache::new(ReplyCache::FINISHED);
+    let runs = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&runs);
+    let first = cache
+        .run(id(1), digest("a"), async move {
+            counted.fetch_add(1, Ordering::SeqCst);
+            panic!("the work stopped");
+        })
+        .await;
+    assert!(matches!(first, CacheAnswer::Lost), "{first:?}");
+    assert_eq!(cache.running(), 0);
+
+    let counted = Arc::clone(&runs);
+    let again = cache
+        .run(id(1), digest("a"), async move {
+            counted.fetch_add(1, Ordering::SeqCst);
+            reply("B")
+        })
+        .await;
+    assert!(
+        matches!(again, CacheAnswer::Lost),
+        "a retry still gets Lost: {again:?}"
+    );
+    assert_eq!(runs.load(Ordering::SeqCst), 1, "the work did not run again");
+    assert_eq!(cache.running(), 0);
+}
+
+/// The other side of the same rule: a write that is really running still counts, and stops
+/// counting when it ends.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_running_write_is_counted_until_it_ends() {
+    let cache = ReplyCache::new(ReplyCache::FINISHED);
+    let gate = Arc::new(Notify::new());
+    let held = Arc::clone(&gate);
+    let waiting = {
+        let cache = Arc::clone(&cache);
+        tokio::spawn(async move {
+            cache
+                .run(id(1), digest("a"), async move {
+                    held.notified().await;
+                    reply("done")
+                })
+                .await
+        })
+    };
+    for _ in 0..2000 {
+        if cache.running() == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+    assert_eq!(cache.running(), 1);
+    gate.notify_one();
+    let answer = waiting.await.unwrap();
+    assert_eq!(answered(answer), (b"done".to_vec(), true));
+    assert_eq!(cache.running(), 0);
+}
+
 #[derive(Debug, Clone)]
 struct Call {
     id: u8,

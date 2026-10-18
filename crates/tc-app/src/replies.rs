@@ -190,12 +190,19 @@ impl ReplyCache {
         }
     }
 
-    /// The writes still running, for `test/quiet`.
+    /// The writes still running, for `test/quiet`. A write whose task ended without an outcome
+    /// is not running: it stays in the cache so a retry gets [`CacheAnswer::Lost`] instead of
+    /// running again, but `test/quiet` must not wait for it until the process ends.
     pub fn running(&self) -> usize {
         self.state()
             .entries
             .values()
-            .filter(|entry| matches!(entry.slot, Slot::Running(_)))
+            .filter(|entry| match &entry.slot {
+                // `has_changed` fails only once the sender is dropped, which the task does
+                // when it ends; a running write's value is `None` too, so that cannot tell.
+                Slot::Running(waiting) => waiting.has_changed().is_ok(),
+                Slot::Finished(_) => false,
+            })
             .count()
     }
 }
