@@ -1625,6 +1625,29 @@ impl FoldState {
         out.sort();
         out
     }
+
+    /// The blob of every version of every carried file the fold holds, the earlier ones a
+    /// later change replaced included, in blob order (§9.8): the versions `refs/tc/carried`
+    /// keeps reachable, so a repack never prunes one that was replaced before a checkpoint
+    /// committed it (L73).
+    pub fn carried_versions(&self) -> Vec<GitOid> {
+        let mut out = BTreeSet::new();
+        for k in self.carried_keys.iter() {
+            for c in self.entry(*k).changes.iter() {
+                if !self.meta(*c).active() {
+                    continue;
+                }
+                if let Some(Record::CarriedFile {
+                    value: CarriedValue::Present { oid, .. },
+                    ..
+                }) = record_of(self, *c)
+                {
+                    out.insert(oid);
+                }
+            }
+        }
+        out.into_iter().collect()
+    }
 }
 
 /// The numeric chapter and first verse of a check's target.

@@ -46,6 +46,7 @@ pub mod platform;
 pub mod progress;
 mod project;
 pub mod random;
+mod repack;
 pub mod reply;
 mod scan;
 pub mod seal;

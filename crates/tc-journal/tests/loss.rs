@@ -1251,6 +1251,21 @@ fn loss_carried_file_two_versions_both_kept() {
     );
 }
 
+/// L73: every version of a carried file the history names is listed for `refs/tc/carried`,
+/// the replaced ones included.
+#[test]
+fn carried_versions_lists_every_blob_the_history_names() {
+    let mut maria = Dev::new(1);
+    let book = imported_book(&mut maria, &[1]);
+    let first = maria.one(carried("audio/01.mp3", 1), vec![]);
+    let second = maria.one(carried("audio/01.mp3", 2), vec![first.id()]);
+    let other = maria.one(carried("audio/02.mp3", 3), vec![]);
+    let state = assert_converges(&all_of(&[&book, &[first, second, other]]));
+    assert_eq!(state.carried_files().len(), 2, "two files are placed");
+    let versions: BTreeSet<_> = state.carried_versions().into_iter().collect();
+    assert_eq!(versions, [oid(1), oid(2), oid(3)].into());
+}
+
 /// L50: open span conflicts never drop a verse's words from the provisional USFM.
 #[test]
 fn loss_span_conflict_never_drops_words() {

@@ -58,12 +58,7 @@ fn packed(rig: &Rig, folder: &Path) -> Vec<Vec<[u8; 20]>> {
             assert_eq!(&bytes[..8], &[0xff, b't', b'O', b'c', 0, 0, 0, 2]);
             let count = u32::from_be_bytes(bytes[8 + 1020..8 + 1024].try_into().unwrap()) as usize;
             let names = &bytes[8 + 1024..8 + 1024 + count * 20];
-            out.push(
-                names
-                    .chunks_exact(20)
-                    .map(|n| <[u8; 20]>::try_from(n).unwrap())
-                    .collect(),
-            );
+            out.push(names.as_chunks::<20>().0.to_vec());
         }
     }
     out
@@ -98,7 +93,12 @@ fn loose_path(rig: &Rig, folder: &Path, oid: git2::Oid) -> PathBuf {
 fn oid_of(loose: &Path) -> git2::Oid {
     let hex = format!(
         "{}{}",
-        loose.parent().unwrap().file_name().unwrap().to_string_lossy(),
+        loose
+            .parent()
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_string_lossy(),
         loose.file_name().unwrap().to_string_lossy()
     );
     git2::Oid::from_str(&hex).unwrap()
@@ -158,7 +158,10 @@ fn repack_keeps_every_reachable_object() {
         .filter(|oid| reached.contains(oid))
         .map(|oid| oid.to_string())
         .collect();
-    assert!(left.is_empty(), "what a branch reaches is packed: {left:#?}");
+    assert!(
+        left.is_empty(),
+        "what a branch reaches is packed: {left:#?}"
+    );
     let packs = packed(&rig, &folder);
     assert!(!packs.is_empty());
     let all: Vec<[u8; 20]> = packs.into_iter().flatten().collect();
@@ -182,7 +185,8 @@ fn repack_prunes_unreachable_objects_by_age_and_keeps_what_a_ref_reaches() {
     let mut builder = repo.treebuilder(None).unwrap();
     builder.insert("note.txt", blob, 0o100_644).unwrap();
     let tree = builder.write().unwrap();
-    let signature = git2::Signature::new("Juan", "juan@example.org", &git2::Time::new(0, 0)).unwrap();
+    let signature =
+        git2::Signature::new("Juan", "juan@example.org", &git2::Time::new(0, 0)).unwrap();
     let commit = repo
         .commit(
             None,
@@ -307,7 +311,10 @@ fn crash_r1_pack_written_loose_not_removed() {
         .iter()
         .filter(|oid| objects_in_pack.contains(<&[u8; 20]>::try_from(oid.as_bytes()).unwrap()))
         .count();
-    assert!(duplicates > 0, "the objects are in the pack and still loose");
+    assert!(
+        duplicates > 0,
+        "the objects are in the pack and still loose"
+    );
     assert_eq!(handle.counters().git_loose_removed, 0);
 
     rig.store.hooks().heal(Point::AfterPackWritten);

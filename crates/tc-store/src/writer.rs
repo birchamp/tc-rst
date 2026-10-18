@@ -109,6 +109,9 @@ pub(crate) enum Job {
         rel: String,
         reply: Resolver<Result<crate::reply::TakenIn, StoreError>>,
     },
+    /// The branch moved: the objects of the commit are reachable now, so a repack due may
+    /// run (§9.8).
+    Repack,
     /// Resolves when every job sent before it has finished.
     Sync {
         reply: Resolver<()>,
@@ -192,9 +195,15 @@ pub(crate) struct Writer {
     pub git: Option<crate::git::Git>,
     /// This computer's device, for the trailers of a commit.
     pub device: tc_journal::DeviceId,
-    /// A damaged repository was replaced at the open: its first commit is the project as it
-    /// is (§6.4 G4), made once the open's files are written.
-    pub recover: bool,
+    /// A damaged repository was replaced at the open and set aside here: the new one's first
+    /// commit is the project as it is (§6.4 G4), made once the open's files are written, and
+    /// the carried blobs and packs of the old one are copied first.
+    pub recover: Option<std::path::PathBuf>,
+    /// How many loose objects the repository held when they were last counted (§9.8).
+    pub loose: Option<crate::repack::LooseCount>,
+    /// The blobs `refs/tc/carried` is known to keep (§9.8), once the writer has read or
+    /// written it.
+    pub carried_kept: Option<BTreeSet<tc_journal::GitOid>>,
     /// Paths examined and sent to the actor, not yet recorded: nothing is written to them
     /// until the actor answers (D7).
     pub pending_record: BTreeMap<String, (tc_journal::Md5, Vec<u8>)>,
@@ -284,8 +293,12 @@ impl Writer {
                 )));
             let _ = self.actor.send(Msg::WritesFailed { reason });
         }
-        if origin == Origin::Open && self.recover && result.is_ok() {
+        if origin == Origin::Open && self.recover.is_some() && result.is_ok() {
             self.recover_history();
+        }
+        if origin == Origin::Open && result.is_ok() {
+            // Counted once here; what the writer writes after is added (§9.8).
+            self.maybe_repack();
         }
         if let Some(checkpoint) = checkpoint {
             self.finish_checkpoint(checkpoint, result);
@@ -459,6 +472,7 @@ impl Writer {
                 // The batch is durable: the file is written again from the project now.
                 self.retry();
             }
+            Job::Repack => self.maybe_repack(),
             Job::Sync { reply } => reply.resolve(()),
             Job::Close { reply } => {
                 reply.resolve(());
@@ -632,7 +646,9 @@ mod tests {
             opening: false,
             git: None,
             device: DeviceId::local([9; 15]),
-            recover: false,
+            recover: None,
+            loose: None,
+            carried_kept: None,
             pending_record: BTreeMap::new(),
             metadata_heads_written: None,
             pending_carried: BTreeMap::new(),

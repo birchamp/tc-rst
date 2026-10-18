@@ -104,6 +104,12 @@ counters! {
     /// Trees written: the directories on the paths a commit changed, and the root.
     git_trees_written,
     git_commits_written,
+    /// Repacks of the project's objects (§9.8).
+    git_repacks,
+    /// Objects a repack wrote into its pack.
+    git_objects_packed,
+    /// Loose object files a repack removed.
+    git_loose_removed,
     /// Bytes of rendered USFM the per-record digests of the heads files were taken of
     /// (§11.1 X3: the base of an outside edit).
     digest_bytes,

@@ -65,7 +65,7 @@ impl From<GitError> for crate::error::StoreError {
     }
 }
 
-fn at<T>(what: &'static str, result: Result<T, git2::Error>) -> Result<T, GitError> {
+pub(crate) fn at<T>(what: &'static str, result: Result<T, git2::Error>) -> Result<T, GitError> {
     result.map_err(|source| GitError::Git { what, source })
 }
 
@@ -263,6 +263,84 @@ impl Git {
             .ok()?
             .get_bool(name)
             .ok()
+    }
+
+    /// Adds `origin` and the branch the project syncs (`tc.branch`) to a repository made after
+    /// the old one was lost (§6.4 G4, §9.6). The address carries no credentials.
+    pub fn set_origin(&self, url: &str, branch: &str) -> Result<(), GitError> {
+        if self.repo.find_remote("origin").is_err() {
+            at("add the remote", self.repo.remote("origin", url))?;
+        }
+        let config = at("read its configuration", self.repo.config())?;
+        let mut local = at(
+            "read its own configuration",
+            config.open_level(ConfigLevel::Local),
+        )?;
+        at(
+            "write its configuration",
+            local.set_str("tc.branch", branch),
+        )
+    }
+
+    /// Copies the blobs of `wanted` that this repository lacks from the `objects` folder of
+    /// another one (a damaged repository set aside, §6.4 G4). The folder is read through an
+    /// object database of its own, never attached to this repository: libgit2 treats an
+    /// object an attached alternate holds as already stored and writes nothing. A loose blob
+    /// streams; a packed one is read whole (libgit2 streams loose objects only). Returns how
+    /// many blobs were copied.
+    pub fn adopt_blobs(&self, from_objects: &Path, wanted: &[GitOid]) -> Result<u32, GitError> {
+        let missing: Vec<Oid> = wanted
+            .iter()
+            .filter(|oid| !self.has(**oid))
+            .map(|oid| to_oid(*oid))
+            .collect::<Result<_, _>>()?;
+        let Some(from) = from_objects.to_str().filter(|_| !missing.is_empty()) else {
+            return Ok(0);
+        };
+        let source = at("read the damaged repository", git2::Odb::new())?;
+        at(
+            "read the damaged repository",
+            source.add_disk_alternate(from),
+        )?;
+        let odb = at("open its objects", self.repo.odb())?;
+        let mut copied = 0;
+        for id in missing {
+            if self.adopt_one(&source, &odb, id)? {
+                copied += 1;
+            }
+        }
+        Ok(copied)
+    }
+
+    /// One blob of `source` into `odb`. `false`: the source has no such blob, or one that does
+    /// not hash to its name.
+    fn adopt_one(
+        &self,
+        source: &git2::Odb<'_>,
+        odb: &git2::Odb<'_>,
+        id: Oid,
+    ) -> Result<bool, GitError> {
+        if let Ok((mut reader, len, ObjectType::Blob)) = source.reader(id) {
+            let mut writer = at("store a file", odb.writer(len, ObjectType::Blob))?;
+            io::copy(&mut reader, &mut writer).map_err(|e| GitError::Other(e.to_string()))?;
+            let stored = at("store a file", writer.finalize())?;
+            self.count_blob(len as u64);
+            return Ok(stored == id);
+        }
+        // A packed object has no stream.
+        match source.read(id) {
+            Ok(object) if object.kind() == ObjectType::Blob => {
+                let stored = at("store a file", odb.write(ObjectType::Blob, object.data()))?;
+                self.count_blob(object.len() as u64);
+                Ok(stored == id)
+            }
+            Ok(_) => Ok(false),
+            Err(e) if e.code() == ErrorCode::NotFound => Ok(false),
+            Err(source) => Err(GitError::Git {
+                what: "read the damaged repository",
+                source,
+            }),
+        }
     }
 
     /// Another handle on the same repository, for another thread.
@@ -693,9 +771,13 @@ impl Git {
     }
 
     /// The underlying repository, for the rebuild and the repack of this crate.
-    #[allow(dead_code)] // the rebuild and the repack of the next commits
     pub(crate) fn repo(&self) -> &Repository {
         &self.repo
+    }
+
+    /// The store's counters, which this repository's work is counted in.
+    pub(crate) fn counters(&self) -> &Counters {
+        &self.counters
     }
 }
 
@@ -934,6 +1016,63 @@ mod tests {
         git.write_index(tree).unwrap();
         // No reflog keeps the machine's identity in the project.
         assert!(!git.git_dir().join("logs").exists());
+    }
+
+    /// §6.4 G4: blobs a lost repository held, loose or packed, are copied into a new one from
+    /// its objects, and only into the new repository's own objects.
+    #[test]
+    fn blobs_are_adopted_from_a_repositorys_objects() {
+        let (old_dir, old) = fresh();
+        let loose = old.write_blob(b"a loose recording").unwrap();
+        let packed = old.write_blob(b"a packed recording").unwrap();
+        let mut builder = old.repo().packbuilder().unwrap();
+        builder
+            .insert_object(to_oid(packed).unwrap(), None)
+            .unwrap();
+        builder
+            .write(&old_dir.path().join(".git/objects/pack"), 0o644)
+            .unwrap();
+        let hex = packed.to_hex();
+        std::fs::remove_file(
+            old_dir
+                .path()
+                .join(".git/objects")
+                .join(&hex[..2])
+                .join(&hex[2..]),
+        )
+        .unwrap();
+        let (new_dir, new) = fresh();
+        let unknown = GitOid::from_bytes([9; 20]);
+        assert!(!new.has(loose) && !new.has(packed));
+        let copied = new
+            .adopt_blobs(
+                &old_dir.path().join(".git/objects"),
+                &[loose, packed, unknown],
+            )
+            .unwrap();
+        assert_eq!(copied, 2, "the unknown blob is not there to copy");
+        for (oid, bytes) in [
+            (loose, &b"a loose recording"[..]),
+            (packed, b"a packed recording"),
+        ] {
+            let hex = oid.to_hex();
+            assert!(
+                new_dir
+                    .path()
+                    .join(".git/objects")
+                    .join(&hex[..2])
+                    .join(&hex[2..])
+                    .exists(),
+                "written into the new repository's own objects"
+            );
+            assert_eq!(new.read_blob(oid).unwrap(), Some(bytes.to_vec()));
+        }
+        // Nothing is left to copy the second time.
+        assert_eq!(
+            new.adopt_blobs(&old_dir.path().join(".git/objects"), &[loose, packed])
+                .unwrap(),
+            0
+        );
     }
 
     /// A name cannot break the object it is in.

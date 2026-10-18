@@ -11,7 +11,8 @@
 
 use crate::error::StoreError;
 use crate::git::{
-    Author, Git, Head, MODE_BLOB, TRAILER_DEVICE, TRAILER_FORMAT, TRAILER_FRONTIER, TreeEntry,
+    Author, CARRIED_REF, Git, Head, MODE_BLOB, TRAILER_DEVICE, TRAILER_FORMAT, TRAILER_FRONTIER,
+    TreeEntry,
 };
 use crate::handle::{CheckpointReport, CheckpointSkip, Msg};
 use crate::layout::{
@@ -114,6 +115,7 @@ impl Writer {
             device,
             reply,
         } = job;
+        self.keep_carried_versions(device);
         let outcome = sealed.and_then(|sealed| {
             materialized?;
             let mut report = CheckpointReport {
@@ -152,10 +154,72 @@ impl Writer {
         let _ = self.actor.send(message);
     }
 
+    /// §9.8, §11.4: `refs/tc/carried` is a commit with no parent whose tree names, by blob id,
+    /// every version of every carried file the history holds and the object database has.
+    /// Superseded versions and ones no checkpoint committed are reachable through it, so a
+    /// repack never prunes a version a person may restore (L73). The set only grows. A
+    /// reference that cannot be written is tried again at the next checkpoint: the bytes are
+    /// in the object database either way.
+    pub(crate) fn keep_carried_versions(&mut self, device: DeviceId) {
+        if self.read_only().is_some() {
+            return;
+        }
+        let Some(git) = self.git.take() else {
+            return;
+        };
+        let _ = self.keep_carried_versions_with(&git, device);
+        self.git = Some(git);
+    }
+
+    fn keep_carried_versions_with(
+        &mut self,
+        git: &Git,
+        device: DeviceId,
+    ) -> Result<(), StoreError> {
+        let mut wanted: BTreeSet<GitOid> = self
+            .fold
+            .carried_versions()
+            .into_iter()
+            .filter(|oid| git.has(*oid))
+            .collect();
+        if self.carried_kept.is_none() {
+            let kept: BTreeSet<GitOid> = match git.find_ref(CARRIED_REF)? {
+                Some(commit) => git
+                    .tree_entries(git.tree_of(commit)?)?
+                    .keys()
+                    .filter_map(|name| GitOid::parse(name))
+                    .collect(),
+                None => BTreeSet::new(),
+            };
+            self.carried_kept = Some(kept);
+        }
+        let kept = self.carried_kept.clone().unwrap_or_default();
+        if wanted.is_subset(&kept) {
+            return Ok(());
+        }
+        wanted.extend(kept);
+        let entries: Vec<(String, GitOid, u32)> = wanted
+            .iter()
+            .map(|oid| (oid.to_hex(), *oid, MODE_BLOB))
+            .collect();
+        let tree = git.update_tree(None, &entries, &[])?;
+        let author = Author {
+            name: self.author_name(device),
+            time_ms: self.clock.now().0,
+        };
+        let commit = git.write_commit(tree, &[], &author, "Carried files (tC)")?;
+        git.set_ref(CARRIED_REF, commit)?;
+        self.carried_kept = Some(wanted);
+        Ok(())
+    }
+
     /// The first commit of a repository that replaced a damaged one (§6.4 G4): the tree the
     /// project makes now, with no parent. The actor moves the branch as for a checkpoint.
     pub(crate) fn recover_history(&mut self) {
-        self.recover = false;
+        let Some(broken) = self.recover.take() else {
+            return;
+        };
+        self.adopt_old_objects(&broken);
         let device = self.device;
         let (_unused, reply) = crate::handle::pending(|| {
             Err(StoreError::Other(
@@ -177,6 +241,41 @@ impl Writer {
             Ok(Outcome::Skip(_)) | Err(_) => return,
         };
         let _ = self.actor.send(message);
+    }
+
+    /// §6.4 G4: the blobs the old repository held that the project still needs go into the new
+    /// one: every version of every carried file the history names and every pack's blob, copied
+    /// from the old repository's objects; then the carried files in the working tree whose
+    /// bytes are a recorded version are stored as blobs. A blob that is nowhere is left out of
+    /// the commit with `CarriedBytesMissing`, never a reason to refuse it (§9.4).
+    fn adopt_old_objects(&mut self, broken: &std::path::Path) {
+        let Some(git) = self.git.take() else {
+            return;
+        };
+        let mut wanted: BTreeSet<GitOid> = self.fold.carried_versions().into_iter().collect();
+        wanted.extend(
+            self.manifest
+                .packs
+                .values()
+                .filter_map(|p| p.blob.as_deref().and_then(GitOid::parse)),
+        );
+        wanted.extend(self.packs.values().filter_map(|p| p.blob));
+        let wanted: Vec<GitOid> = wanted.into_iter().collect();
+        // A damaged object database may have lost any of them: what is missing is looked for
+        // in the working tree next.
+        let _ = git.adopt_blobs(&broken.join("objects"), &wanted);
+        for placement in self.fold.carried_files() {
+            if git.has(placement.oid) {
+                continue;
+            }
+            let Ok((md5, size)) = self.hash_file(&placement.path) else {
+                continue;
+            };
+            if md5 == placement.md5 && size == placement.size {
+                let _ = self.store_file_as_blob(&git, &placement.path, placement.oid);
+            }
+        }
+        self.git = Some(git);
     }
 
     /// C3 to C5 up to the commit object.

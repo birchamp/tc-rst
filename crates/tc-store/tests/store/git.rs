@@ -184,3 +184,119 @@ fn a_damaged_repository_is_kept_aside_and_replaced() {
     assert_eq!(report.skipped, Some(tc_store::CheckpointSkip::NoChanges));
     handle.close().unwrap();
 }
+
+/// L84, G4: a damaged repository is replaced without losing the carried blobs. Version 1 of a
+/// file was committed and version 2 recorded after it; the open copies version 1 from the
+/// repository it set aside and stores version 2 again from the file in the folder (its object
+/// was lost with the damage), the first commit lists the file, the address of Door43 comes
+/// back from `.tc/sync.json`, and *Restore* of version 1 is accepted.
+#[test]
+fn crash_g4_rebuild_keeps_carried_blobs() {
+    use tc_journal::command::Command;
+    use tc_journal::{RecordKey, RepoPath};
+
+    const SONG: &str = "ingredients/audio/song.mp3";
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    let first = b"my first recording of the song".to_vec();
+    let second = b"my second recording of the song, longer".to_vec();
+    for (n, bytes) in [&first, &second].into_iter().enumerate() {
+        rig.fs.put_unseen(&folder.join(SONG), bytes, None);
+        handle.focus().wait().unwrap();
+        handle.wait_idle();
+        if n == 0 {
+            // Version 1 is committed; version 2 is recorded after it.
+            handle
+                .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+                .wait()
+                .unwrap();
+            handle.wait_idle();
+        }
+    }
+    handle.close().unwrap();
+    let v1 = git2::Oid::hash_object(git2::ObjectType::Blob, &first).unwrap();
+    let v2 = git2::Oid::hash_object(git2::ObjectType::Blob, &second).unwrap();
+
+    // The damage: HEAD no longer reads, and version 2's object is gone with it.
+    let dir = git_dir(&rig.fs, &folder);
+    let loose = |oid: git2::Oid| {
+        let hex = oid.to_string();
+        dir.join("objects").join(&hex[..2]).join(&hex[2..])
+    };
+    assert!(loose(v1).exists() && loose(v2).exists());
+    std::fs::write(dir.join("HEAD"), b"garbage that is no reference").unwrap();
+    std::fs::remove_file(loose(v2)).unwrap();
+    rig.fs.put_unseen(
+        &folder.join(".tc/sync.json"),
+        br#"{"remoteUrl":"https://door43.example/org/project.git","branch":"main"}"#,
+        None,
+    );
+
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    let notices: Vec<Notice> = handle.notices().into_iter().map(|n| n.notice).collect();
+    assert!(
+        notices
+            .iter()
+            .any(|n| matches!(n, Notice::HistoryRebuilt { .. })),
+        "{notices:?}"
+    );
+    assert!(
+        !notices
+            .iter()
+            .any(|n| matches!(n, Notice::CarriedBytesMissing { .. })),
+        "no blob is missing: {notices:?}"
+    );
+    let repo = repo_of(&rig.fs, &folder);
+    assert!(
+        repo.odb().unwrap().exists(v1),
+        "copied from the old objects"
+    );
+    assert!(repo.odb().unwrap().exists(v2), "stored again from the file");
+    let remote = repo.find_remote("origin").unwrap();
+    assert_eq!(
+        remote.url().unwrap(),
+        "https://door43.example/org/project.git"
+    );
+    assert_eq!(
+        repo.config().unwrap().get_string("tc.branch").unwrap(),
+        "main"
+    );
+    let commits = commits_of(&repo);
+    assert_eq!(commits.len(), 1);
+    assert_eq!(
+        commit_files(&repo, commits[0]).get(SONG),
+        Some(&second),
+        "the first commit lists the file as the project has it"
+    );
+    assert!(commit_problems(&repo, commits[0]).is_empty());
+
+    // A checkpoint finds nothing to add, and the earlier version can come back.
+    let report = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert_eq!(report.skipped, Some(tc_store::CheckpointSkip::NoChanges));
+    let key = RecordKey::CarriedFile(RepoPath::parse(SONG).unwrap());
+    let history = handle.snapshot().fold().history(&key);
+    assert_eq!(history.len(), 2);
+    let shown = handle.mint(&key, None).unwrap();
+    handle
+        .submit(Command::Restore {
+            shown,
+            from: history[0],
+        })
+        .wait()
+        .unwrap();
+    handle.wait_idle();
+    let placed = handle.snapshot().fold().carried_files();
+    assert_eq!(placed.len(), 1);
+    assert_eq!(
+        placed[0].oid,
+        tc_journal::GitOid::parse(&v1.to_string()).unwrap()
+    );
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
+    assert_valid_burrito(&rig.fs, &folder);
+}

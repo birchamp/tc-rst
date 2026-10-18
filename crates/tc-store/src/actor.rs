@@ -343,6 +343,11 @@ impl Actor {
         self.project
             .shared
             .emit(StoreEvent::Checkpointed { commit });
+        // The commit's objects are reachable now: the writer repacks if the loose ones are
+        // many (§9.8).
+        if let Some(writer) = &self.project.writer {
+            let _ = writer.send(Job::Repack);
+        }
         Ok(report)
     }
 

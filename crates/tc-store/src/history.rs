@@ -11,7 +11,7 @@ use crate::error::StoreError;
 use crate::git::{Git, Opened, remove_stale_locks};
 use crate::open::Env;
 use crate::vfs::Vfs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tc_journal::fold::Notice;
 
@@ -20,9 +20,9 @@ pub(crate) struct History {
     /// The repository, when this session has one.
     pub git: Option<Git>,
     pub notices: Vec<(Notice, Option<String>)>,
-    /// A damaged repository was replaced: the first commit of the new one is the project as
-    /// it is (§6.4 G4).
-    pub rebuilt: bool,
+    /// A damaged repository was replaced, and set aside here (absolute): the first commit of
+    /// the new one is the project as it is (§6.4 G4).
+    pub broken: Option<PathBuf>,
 }
 
 /// O2's lock files and O3: opens, makes or replaces the repository of the project at `path`.
@@ -44,7 +44,7 @@ pub(crate) fn open(
             },
             None,
         )],
-        rebuilt: false,
+        broken: None,
     };
     let outside = match vfs.outside_dir(path) {
         Ok(outside) => outside,
@@ -53,7 +53,7 @@ pub(crate) fn open(
     if writable {
         remove_stale_locks(&outside).map_err(|e| StoreError::io("clean", &outside, e))?;
     }
-    let mut rebuilt = false;
+    let mut broken = None;
     let git = match Git::open(&outside, !writable, counters.clone(), &env.hooks) {
         Opened::Existing(git) | Opened::Created(git) => Some(git),
         Opened::Absent => None,
@@ -62,14 +62,15 @@ pub(crate) fn open(
         Opened::Broken { reason } => {
             let stamp = utc_stamp(env.clock.now());
             match rebuild(&outside, &stamp, counters) {
-                Ok((git, kept)) => {
+                Ok((git, kept, aside)) => {
                     notices.push((
                         Notice::HistoryRebuilt {
                             broken: kept.into(),
                         },
                         None,
                     ));
-                    rebuilt = true;
+                    broken = Some(aside);
+                    restore_origin(&git, vfs, path);
                     Some(git)
                 }
                 Err(e) => return Ok(unavailable(format!("{reason}; {e}"))),
@@ -79,17 +80,39 @@ pub(crate) fn open(
     Ok(History {
         git,
         notices,
-        rebuilt,
+        broken,
     })
 }
 
+/// G4: `origin` and `tc.branch` come back from `.tc/sync.json` when it reads (§3.6); the
+/// address in it carries no credentials. A project that was never shared has none, and a
+/// file that does not read leaves the new repository as it is.
+fn restore_origin(git: &Git, vfs: &dyn Vfs, path: &Path) {
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct SyncJson {
+        remote_url: String,
+        branch: String,
+    }
+    let Ok(bytes) = vfs.read(&path.join(".tc").join("sync.json")) else {
+        return;
+    };
+    if let Ok(sync) = serde_json::from_slice::<SyncJson>(&bytes)
+        && !sync.remote_url.is_empty()
+        && !sync.branch.is_empty()
+    {
+        let _ = git.set_origin(&sync.remote_url, &sync.branch);
+    }
+}
+
 /// G4: the damaged `.git` is kept in `.tc/broken-git-<utc>` and a new repository takes its
-/// place. Returns it and where the damaged one is, relative to the project folder.
+/// place. Returns it, where the damaged one is relative to the project folder, and where it
+/// is on the disk.
 fn rebuild(
     outside: &Path,
     stamp: &str,
     counters: &Arc<Counters>,
-) -> Result<(Git, String), StoreError> {
+) -> Result<(Git, String, PathBuf), StoreError> {
     let kept = format!(".tc/broken-git-{stamp}");
     let to = outside.join(&kept);
     let tc = outside.join(".tc");
@@ -109,5 +132,5 @@ fn rebuild(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    Ok((git, format!(".tc/{name}")))
+    Ok((git, format!(".tc/{name}"), to))
 }

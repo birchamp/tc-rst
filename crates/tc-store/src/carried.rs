@@ -14,6 +14,7 @@
 
 use crate::atomic::{HeldRetry, SyncDir, Written, atomic_write_streamed};
 use crate::error::StoreError;
+use crate::git::Git;
 use crate::handle::Msg;
 use crate::manifest::Entry;
 use crate::materialize::MaterializeReport;
@@ -218,24 +219,10 @@ impl Writer {
         let Some(git) = &self.git else {
             return Ok(false);
         };
-        let Ok(file) = self.vfs.open(&self.folder.path(rel)) else {
+        let Some((oid, stored_md5, len)) = self.store_file(git, rel)? else {
             return Ok(false);
         };
-        let len = file.len();
-        let mut stream = Md5Stream::new();
-        let mut at = 0u64;
-        let stored = git.write_blob_from(&mut |buffer: &mut [u8]| {
-            if at >= len {
-                return Ok(0);
-            }
-            let n = usize::try_from((len - at).min(buffer.len() as u64)).unwrap_or(buffer.len());
-            file.read_at(&mut buffer[..n], at)?;
-            stream.update(&buffer[..n]);
-            at += n as u64;
-            Ok(n)
-        });
-        let oid = stored?;
-        if stream.finish() != md5 || len != size {
+        if stored_md5 != md5 || len != size {
             // The file changed while it was read: the next look finds it again.
             return Ok(false);
         }
@@ -277,6 +264,42 @@ impl Writer {
             return Ok(false);
         }
         Ok(true)
+    }
+
+    /// Stores the file at `rel` as a blob, read in chunks, taking its md5 in the same pass:
+    /// the blob, the md5 and the size of the bytes that were stored. `None` when the file
+    /// cannot be opened.
+    fn store_file(&self, git: &Git, rel: &str) -> Result<Option<(GitOid, Md5, u64)>, StoreError> {
+        let Ok(file) = self.vfs.open(&self.folder.path(rel)) else {
+            return Ok(None);
+        };
+        let len = file.len();
+        let mut stream = Md5Stream::new();
+        let mut at = 0u64;
+        let oid = git.write_blob_from(&mut |buffer: &mut [u8]| {
+            if at >= len {
+                return Ok(0);
+            }
+            let n = usize::try_from((len - at).min(buffer.len() as u64)).unwrap_or(buffer.len());
+            file.read_at(&mut buffer[..n], at)?;
+            stream.update(&buffer[..n]);
+            at += n as u64;
+            Ok(n)
+        })?;
+        Ok(Some((oid, stream.finish(), len)))
+    }
+
+    /// Stores the file at `rel` as the blob `expected`, when its bytes are that version's
+    /// (§6.4 G4). `false` when they are not.
+    pub(crate) fn store_file_as_blob(
+        &self,
+        git: &Git,
+        rel: &str,
+        expected: GitOid,
+    ) -> Result<bool, StoreError> {
+        Ok(self
+            .store_file(git, rel)?
+            .is_some_and(|(oid, _, _)| oid == expected))
     }
 
     /// *Take in the file as an edit* for a held carried file (§6.2): its bytes become a new

@@ -169,11 +169,7 @@ pub(crate) fn index_oids(bytes: &[u8]) -> Option<impl Iterator<Item = [u8; 20]> 
     let last = &bytes[8 + FANOUT - 4..8 + FANOUT];
     let count = u32::from_be_bytes([last[0], last[1], last[2], last[3]]) as usize;
     let names = bytes.get(8 + FANOUT..8 + FANOUT + count.checked_mul(20)?)?;
-    Some(names.chunks_exact(20).map(|name| {
-        let mut oid = [0u8; 20];
-        oid.copy_from_slice(name);
-        oid
-    }))
+    Some(names.as_chunks::<20>().0.iter().copied())
 }
 
 /// What the refs reach, newest first: commits, then trees, then blobs (the order a pack
@@ -253,9 +249,8 @@ impl Git {
             None => return Err(GitError::Other("the pack has no name".into())),
         };
         // The pack is trusted only as far as its index says it holds every object.
-        let index = std::fs::read(pack_dir.join(format!("{name}.idx"))).map_err(|e| {
-            GitError::Other(format!("the pack's index cannot be read: {e}"))
-        })?;
+        let index = std::fs::read(pack_dir.join(format!("{name}.idx")))
+            .map_err(|e| GitError::Other(format!("the pack's index cannot be read: {e}")))?;
         let Some(listed) = index_oids(&index) else {
             return Err(GitError::Other("the pack's index is not readable".into()));
         };
@@ -270,7 +265,10 @@ impl Git {
             }
         }
         // libgit2 lists its packs once; the new one is made known to it.
-        at("refresh its objects", repo.odb().and_then(|odb| odb.refresh()))?;
+        at(
+            "refresh its objects",
+            repo.odb().and_then(|odb| odb.refresh()),
+        )?;
         Ok(name)
     }
 }
@@ -281,7 +279,11 @@ fn list_loose(objects: &Path) -> Result<Vec<Loose>, GitError> {
     let folders = match std::fs::read_dir(objects) {
         Ok(folders) => folders,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(out),
-        Err(e) => return Err(GitError::Other(format!("the objects cannot be listed: {e}"))),
+        Err(e) => {
+            return Err(GitError::Other(format!(
+                "the objects cannot be listed: {e}"
+            )));
+        }
     };
     for folder in folders.flatten() {
         let prefix = folder.file_name().to_string_lossy().into_owned();
@@ -370,12 +372,10 @@ fn reachable(repo: &Repository, wanted: &HashSet<Oid>) -> Result<Reach, GitError
                 let entry_path = format!("{path}{}", String::from_utf8_lossy(entry.name_bytes()));
                 match entry.kind() {
                     Some(ObjectType::Tree) => stack.push((entry.id(), format!("{entry_path}/"))),
-                    Some(ObjectType::Blob) => {
-                        if set.insert(entry.id()) {
-                            blobs.push(entry.id());
-                            if wanted.contains(&entry.id()) {
-                                names.insert(entry.id(), entry_path);
-                            }
+                    Some(ObjectType::Blob) if set.insert(entry.id()) => {
+                        blobs.push(entry.id());
+                        if wanted.contains(&entry.id()) {
+                            names.insert(entry.id(), entry_path);
                         }
                     }
                     // A submodule's commit lives in another repository.

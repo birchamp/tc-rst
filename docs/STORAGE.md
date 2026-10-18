@@ -2596,7 +2596,7 @@ next starts, so power loss is covered by the same rows (the row says where a los
 | G1 | commit | objects written, ref not moved | HEAD old, loose orphans | the next checkpoint commits again; repack drops orphans | after (git is not the truth) |
 | G2 | commit | ref lock file left | `refs/heads/<b>.lock` | O2 removes it | after |
 | G3 | commit | power loss loses the ref rename | HEAD at the previous commit | the next checkpoint commits again | after |
-| G4 | any git step | power loss damaged `.git` | git2 cannot open it or HEAD does not read (not: libgit2 refuses the folder because another account owns it, which rebuilds nothing, §6.1 O3) | rename `.git` to `.tc/broken-git-<utc>`; `git init`; restore `origin` and `tc.branch` from `.tc/sync.json`; add the broken repository's `objects` directory as a disk alternate (`Odb::add_disk_alternate`), copy every blob a `CarriedFile` change names and every pack blob it can read into the new object database, then drop the alternate; store as blobs the carried files in the working tree whose md5 and oid match a recorded version; commit the tree built from the fold (a carried head whose blob is still missing is left out with `CarriedBytesMissing`, §9.4), "Recovered history (tC)". The next sync merges with Door43 as an unrelated history (§9.4) | after; the packs never depended on git |
+| G4 | any git step | power loss damaged `.git` | git2 cannot open it or HEAD does not read (not: libgit2 refuses the folder because another account owns it, which rebuilds nothing, §6.1 O3) | rename `.git` to `.tc/broken-git-<utc>`; `git init`; restore `origin` and `tc.branch` from `.tc/sync.json`; read the broken repository's `objects` directory through an object database of its own (`Odb::new` and `Odb::add_disk_alternate`; attached to the new repository, an alternate would make libgit2 count its objects as stored and write nothing) and copy into the new object database every blob a `CarriedFile` change names and every pack blob it can read; store as blobs the carried files in the working tree whose md5 and oid match a recorded version; commit the tree built from the fold (a carried head whose blob is still missing is left out with `CarriedBytesMissing`, §9.4), "Recovered history (tC)". The next sync merges with Door43 as an unrelated history (§9.4) | after; the packs never depended on git |
 | Y1 | sync | during fetch | libgit2 temp pack | O2; the next fetch redoes it | before |
 | Y2 | sync | some received packs written (§9.3 T1) | some new packs, each valid alone | folded; a partly received batch waits (§7.4); the next sync fetches R again and takes the rest | after for what arrived; nothing half-applied |
 | Y3 | sync | packs written, intake batch not written | packs, no ingested Door43 edits | the next sync's walk computes the same deterministic changes | after |
@@ -3637,18 +3637,35 @@ pub enum Refusal {
 
 ### 9.8 Repack
 
-libgit2 has no `gc`. When `.git/objects` holds more than 2,000 loose objects or 64 MiB of them,
-after a sync and never during one, a background task:
+libgit2 has no `gc`. When `.git/objects` holds more than 2,000 loose objects or 64 MiB of them, the
+writer (§5.0) repacks: once after the open, and after a checkpoint's commit is reachable (the
+actor moved the branch, §5.13 C5), never during a sync. The loose objects are counted by listing
+the object folders once, at the first check of a session; what the writer writes after is added,
+so a checkpoint does not list them again. The task runs on the writer's thread, so a save never
+waits for it.
 
-1. `repo.packbuilder()`; `insert_walk` from every ref under `refs/heads/`, `refs/remotes/` and
-   `refs/tc/`; write the pack and index into `.git/objects/pack/`. `refs/tc/carried` is a
-   commit, updated at every seal, whose tree holds every carried blob that a `CarriedFile`
-   change in the fold names and the object database has (entries named by oid), so a version
-   superseded between two checkpoints is never pruned (§11.4).
-2. `sync_all` the `.pack` and `.idx` files and fsync the directory (libgit2 does not, because
-   the gitdir fsync option is not reachable safely).
-3. Delete the loose objects that are now in the pack, and unreachable loose objects older than
-   14 days.
+1. Walk every reference under `refs/heads/`, `refs/remotes/` and `refs/tc/` (and a detached
+   HEAD), and collect the commits, trees and blobs they reach. A walk that fails (a reference that
+   does not read, an object that is missing) stops the repack: nothing is pruned unless every
+   reference was read. `refs/tc/carried` is a commit with no parent that the writer sets at every
+   checkpoint when the set changed: its tree names, by blob id, every version of every carried
+   file that a `CarriedFile` change in the fold names and the object database has, the
+   superseded ones included, so a version replaced between two checkpoints is never pruned
+   (§11.4, L73). The set only grows.
+2. `repo.packbuilder()`; insert the loose objects the walk reached that no pack holds, and write
+   the pack and its index into `.git/objects/pack/`. The history already in packs is not written
+   again, so a repack adds the size of the new objects to the disk, not the size of the history.
+   With `core.fsyncObjectFiles=true` (§6.1 O3) libgit2 flushes the `.pack`, the `.idx` and their
+   folder itself (`git_packbuilder_write`, `indexer.c`), so the app flushes nothing here. The
+   index is read back and must name every object about to lose its loose file.
+3. Delete the loose objects that are now in a pack (and the loose copies of objects a pack held
+   already), and the unreachable loose objects older than 14 days; remove the two-letter folders
+   this empties. A file that cannot be removed now (Windows keeps loose objects read-only, and a
+   scanner may hold one) is removed by a later repack.
+
+A repack that stops between steps 2 and 3 leaves objects twice and never fewer (§6.4 R1): the
+next repack finds them in a pack and only removes the loose copies. An unreachable object younger
+than 14 days is neither packed nor removed.
 
 ### 9.9 Editing during a sync
 

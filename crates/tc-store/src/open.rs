@@ -388,13 +388,13 @@ fn open_inner(
     // O3: the project's repository (§6.1).
     let mut notices: Vec<(Notice, Option<String>)> = Vec::new();
     let writable = !read_only && write_failed.is_none();
-    let (git, git_failed, rebuilt) =
+    let (git, git_failed, broken_git) =
         match crate::history::open(env, &*vfs, path, writable, &counters) {
             Ok(opened) => {
                 notices.extend(opened.notices);
-                (opened.git, None, opened.rebuilt)
+                (opened.git, None, opened.broken)
             }
-            Err(e) => (None, Some(e.to_string()), false),
+            Err(e) => (None, Some(e.to_string()), None),
         };
     if writable && let Some(reason) = git_failed {
         write_failed = Some(reason);
@@ -632,7 +632,9 @@ fn open_inner(
         opening: false,
         git,
         device,
-        recover: rebuilt,
+        recover: broken_git,
+        loose: None,
+        carried_kept: None,
         pending_record: BTreeMap::new(),
         metadata_heads_written: None,
         pending_carried: BTreeMap::new(),
