@@ -28,6 +28,11 @@ what changed for each finding, which parts were done another way, and why.
 - **A rule for every unit:** where tC4's behavior works against what a feature is for, follow
   what the translator needs and record the difference with its reason (AGENTS.md, "Matching
   tC4").
+- **tC4 alignment stamps on import (2026-10-18):** tC4 stamps an alignment with the hash of the
+  verse as displayed but checks another hash, so poetry alignments look stale. The importer
+  re-stamps an alignment only when its aligned words still match the verse word for word, and
+  records each re-stamp in History; any other stays flagged. tC4 imports will be rare, so the
+  import stays lean.
 - **Single instance (2026-10-18):** translationCore runs as a single instance on a machine, so a
   second launch is blocked; people work on one project at the same time from separate machines.
   tC4 4.0 already works this way (D39, `tC4:docs/DECISIONS.md:458-474`).

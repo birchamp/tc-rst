@@ -109,11 +109,13 @@ All are in the documents; this is where to find them.
   (`docs/APP-DESIGN.md`, "Owner's answers").
 - Q-1: the header filter. Q-6: an edited verse's alignment is reflowed in the same batch.
 
-## Open question for the owner
+## Owner ruling on tC4 alignment stamps (2026-10-18)
 
-- tC4's aligner stamps the hash of its display text while its own fold checks another hash, so
-  tC4 alignments on poetry verses import as invalid. Should the importer re-stamp them (it would
-  rewrite stored values)? Unit I needs the answer.
+tC4's aligner stamps an alignment with the hash of the verse as it displays it, while its own
+fold checks another hash, so tC4 alignments on poetry verses look stale. The importer re-stamps an
+alignment only when its aligned words still match the verse word for word, records each
+re-stamp in the project's history, and leaves every other alignment flagged. The owner expects
+tC4 imports to be rare, so unit I stays lean: correct and lossless first, no extra polish.
 
 ## Records
 
