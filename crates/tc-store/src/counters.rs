@@ -11,6 +11,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 macro_rules! counters {
     ($($(#[$doc:meta])* $name:ident),* $(,)?) => {
@@ -86,6 +87,10 @@ counters! {
     queue_wait_max_ns,
     /// Draft files written.
     drafts_written,
+    /// Renames and removals tried again because another program held the file.
+    held_retries,
+    /// Nanoseconds spent waiting for those files.
+    held_wait_ns,
 }
 
 impl Counters {
@@ -249,6 +254,19 @@ impl Vfs for CountingVfs {
 
     fn canonicalize(&self, path: &Path) -> io::Result<PathBuf> {
         self.inner.canonicalize(path)
+    }
+
+    fn is_held(&self, error: &io::Error) -> bool {
+        self.inner.is_held(error)
+    }
+
+    fn wait_held(&self, delay: Duration) {
+        self.counters.held_retries.fetch_add(1, Ordering::Relaxed);
+        self.counters.held_wait_ns.fetch_add(
+            u64::try_from(delay.as_nanos()).unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
+        self.inner.wait_held(delay);
     }
 
     fn secure_dir_chain(&self, dir: &Path, made: &[PathBuf]) -> io::Result<()> {

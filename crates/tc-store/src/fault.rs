@@ -18,7 +18,9 @@
 //!
 //! Paths are absolute, `/`-separated, without `.` or `..`.
 
-use crate::vfs::{DirEntry, EntryKind, FileMeta, LockHandle, ReadHandle, Vfs, WriteHandle};
+use crate::vfs::{
+    DirEntry, EntryKind, FileMeta, HeldByAnotherProgram, LockHandle, ReadHandle, Vfs, WriteHandle,
+};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
 use std::io;
@@ -98,6 +100,13 @@ struct Faults {
     reads_fail_from: Option<Instant>,
     unreadable: BTreeSet<PathBuf>,
     busy: BTreeSet<PathBuf>,
+    /// Folders whose new files another program holds, each for this many refused renames
+    /// or removals (`None`: until the hold is released).
+    hold_new: BTreeMap<PathBuf, Option<u32>>,
+    /// Files held now, with the refusals left (`None`: until released).
+    held: BTreeMap<PathBuf, Option<u32>>,
+    /// The waits [`Vfs::wait_held`] was asked for.
+    held_waits: Vec<Duration>,
 }
 
 #[derive(Debug, Clone)]
@@ -276,6 +285,25 @@ impl Model {
             ));
         }
         Ok(())
+    }
+
+    /// A rename or removal of `path`: refused while another program holds it (Windows).
+    fn check_held(&mut self, path: &Path) -> io::Result<()> {
+        if self.faults.busy.contains(path) {
+            return Err(HeldByAnotherProgram::error(path));
+        }
+        match self.faults.held.get_mut(path) {
+            None => Ok(()),
+            Some(Some(0)) => {
+                self.faults.held.remove(path);
+                Ok(())
+            }
+            Some(Some(left)) => {
+                *left -= 1;
+                Err(HeldByAnotherProgram::error(path))
+            }
+            Some(None) => Err(HeldByAnotherProgram::error(path)),
+        }
     }
 
     fn check_read(&mut self, path: &Path) -> io::Result<()> {
@@ -488,7 +516,8 @@ impl FaultFs {
         }
     }
 
-    /// Another program holds `path` open: a rename onto it fails (Windows).
+    /// Another program holds `path` open: a rename onto it or from it, and a removal of it,
+    /// fail (Windows), with the error a held file gives.
     pub fn set_busy(&self, path: &Path, on: bool) {
         let mut model = self.model();
         if on {
@@ -496,6 +525,28 @@ impl FaultFs {
         } else {
             model.faults.busy.remove(path);
         }
+    }
+
+    /// What a scanner does: every file created in `dir` from now on is held for its next
+    /// `tries` renames or removals (`None`: until [`Self::release_new_files`]). Holds do
+    /// not survive [`Self::copy`] or [`Self::crash`].
+    pub fn hold_new_files(&self, dir: &Path, tries: Option<u32>) {
+        self.model().faults.hold_new.insert(dir.to_owned(), tries);
+    }
+
+    /// The scanner lets go of the files of `dir`, and of the ones it will create.
+    pub fn release_new_files(&self, dir: &Path) {
+        let mut model = self.model();
+        model.faults.hold_new.remove(dir);
+        model
+            .faults
+            .held
+            .retain(|path, _| path.parent() != Some(dir));
+    }
+
+    /// The waits the helpers of [`crate::atomic`] made for a held file, in order.
+    pub fn held_waits(&self) -> Vec<Duration> {
+        self.model().faults.held_waits.clone()
     }
 
     /// Modification times are truncated to `tick` (2 s on FAT32, §6.2).
@@ -830,6 +881,13 @@ impl Vfs for FaultFs {
             mtime_ns: mtime,
         });
         model.link(dir, name, ino);
+        if let Some(tries) = path
+            .parent()
+            .and_then(|d| model.faults.hold_new.get(d))
+            .copied()
+        {
+            model.faults.held.insert(path.to_owned(), tries);
+        }
         Ok(Box::new(FaultWrite {
             fs: self.clone(),
             path: path.to_owned(),
@@ -839,12 +897,8 @@ impl Vfs for FaultFs {
 
     fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
         let mut model = self.model();
-        if model.faults.busy.contains(to) || model.faults.busy.contains(from) {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("FaultFs: {} is held open by another program", to.display()),
-            ));
-        }
+        model.check_held(from)?;
+        model.check_held(to)?;
         let (from_dir, from_name) = model.parent(from)?;
         let ino = model.resolve(from)?;
         let (to_dir, to_name) = model.parent(to)?;
@@ -863,6 +917,7 @@ impl Vfs for FaultFs {
         model.unlink(from_dir, &from_name);
         model.unlink(to_dir, &to_name);
         model.link(to_dir, to_name, ino);
+        model.faults.held.remove(from);
         Ok(())
     }
 
@@ -890,6 +945,7 @@ impl Vfs for FaultFs {
         let mut model = self.model();
         let (dir, name) = model.parent(path)?;
         let ino = model.resolve(path)?;
+        model.check_held(path)?;
         if model.dir(ino).is_some() {
             return Err(io::Error::new(
                 io::ErrorKind::IsADirectory,
@@ -898,6 +954,7 @@ impl Vfs for FaultFs {
         }
         model.step(OpKind::RemoveFile, path)?;
         model.unlink(dir, &name);
+        model.faults.held.remove(path);
         Ok(())
     }
 
@@ -990,6 +1047,10 @@ impl Vfs for FaultFs {
         let model = self.model();
         model.resolve(path)?;
         Ok(path.to_owned())
+    }
+
+    fn wait_held(&self, delay: Duration) {
+        self.model().faults.held_waits.push(delay);
     }
 }
 

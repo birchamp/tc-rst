@@ -14,7 +14,9 @@
 //! (§5.10).
 
 use crate::appdata::utc_stamp;
-use crate::atomic::{DirSet, SyncDir, atomic_create_dirs, atomic_remove, atomic_write};
+use crate::atomic::{
+    DirSet, HeldRetry, SyncDir, atomic_create_dirs, atomic_remove, atomic_write, atomic_write_with,
+};
 use crate::error::StoreError;
 use crate::layout::{self, EXTERNAL, HEADS, INTENT, MANIFEST, METADATA, TC};
 use crate::manifest::{Entry, HeadsFile, Held, HeldCause, Intent, IntentWrite, PackEntry};
@@ -775,10 +777,19 @@ impl Project {
         bytes: &[u8],
         dirs: &mut DirSet,
     ) -> Result<bool, StoreError> {
-        match atomic_write(&*self.vfs, dir, name, bytes, SyncDir::Deferred(dirs)) {
+        // Three short retries: the file is tried again by the next run, and one held file
+        // must not stall the other files of its book.
+        match atomic_write_with(
+            &*self.vfs,
+            dir,
+            name,
+            bytes,
+            SyncDir::Deferred(dirs),
+            &HeldRetry::BACKGROUND,
+        ) {
             Ok(()) => Ok(true),
             Err(crate::atomic::WriteError::NotWritten(e))
-                if e.kind() == Some(std::io::ErrorKind::PermissionDenied) =>
+                if e.io_error().is_some_and(|io| self.vfs.is_held(io)) =>
             {
                 Ok(false)
             }

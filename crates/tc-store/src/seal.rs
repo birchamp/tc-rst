@@ -11,7 +11,9 @@
 //! ([`crate::source::FileSource::moved`]): the actor keeps where each change lies, not its
 //! bytes (§2.6).
 
-use crate::atomic::{DirSet, SyncDir, atomic_create_dirs, atomic_remove, atomic_write};
+use crate::atomic::{
+    DirSet, SyncDir, atomic_create_dirs, atomic_remove, atomic_remove_if_free, atomic_write,
+};
 use crate::error::StoreError;
 use crate::layout::{PACKS, QUARANTINE};
 use crate::load::{JournalFile, JournalKind, relocation};
@@ -243,7 +245,8 @@ impl Project {
             if !self.relocate(&rel, JournalKind::Pending, number, &bytes, &written) {
                 continue;
             }
-            atomic_remove(
+            // A pending file a scanner still holds stays; the next open removes it (O7).
+            let removed = atomic_remove_if_free(
                 &*self.vfs,
                 &self.folder.path(&rel),
                 SyncDir::Deferred(&mut dirs),
@@ -252,7 +255,9 @@ impl Project {
             if self.index.sections.remove(&rel).is_some() {
                 self.index.changed = true;
             }
-            report.removed.push(rel);
+            if removed {
+                report.removed.push(rel);
+            }
         }
         dirs.sync(&*self.vfs)?;
         // K5.
@@ -338,7 +343,8 @@ impl Project {
                     if !self.relocate(rel, JournalKind::Pack, number, bytes, &written) {
                         continue;
                     }
-                    atomic_remove(
+                    // A pack a scanner still holds stays; the next open removes it (O7).
+                    let removed = atomic_remove_if_free(
                         &*self.vfs,
                         &self.folder.path(rel),
                         SyncDir::Deferred(&mut dirs),
@@ -348,7 +354,9 @@ impl Project {
                     if self.index.sections.remove(rel).is_some() {
                         self.index.changed = true;
                     }
-                    gone.push(rel.clone());
+                    if removed {
+                        gone.push(rel.clone());
+                    }
                 }
                 dirs.sync(&*self.vfs)?;
                 report.consolidated.push((written[0].rel.clone(), gone));

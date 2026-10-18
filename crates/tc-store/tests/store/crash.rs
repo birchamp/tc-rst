@@ -85,6 +85,18 @@ pub(crate) fn kill_everywhere(
     action: &dyn Fn(&ProjectHandle) -> Outcome,
     check: &dyn Fn(&ProjectHandle, Outcome),
 ) -> u64 {
+    kill_everywhere_after(base, folder, &|_, _| {}, action, check)
+}
+
+/// [`kill_everywhere`] for an action that follows `setup`, which runs on the opened project
+/// before the kill is armed.
+pub(crate) fn kill_everywhere_after(
+    base: &FaultFs,
+    folder: &Path,
+    setup: &dyn Fn(&FaultFs, &ProjectHandle),
+    action: &dyn Fn(&ProjectHandle) -> Outcome,
+    check: &dyn Fn(&ProjectHandle, Outcome),
+) -> u64 {
     let mut points = 0;
     for model in [PowerLoss::KeepSyncedNames, PowerLoss::Strict] {
         for torn in [false, true] {
@@ -95,6 +107,7 @@ pub(crate) fn kill_everywhere(
                 let rig = rig_as(fs.clone(), APP, "host-1");
                 let handle = rig.store.open(folder, &OpenOptions::default()).unwrap();
                 handle.wait_idle();
+                setup(&fs, &handle);
                 fs.kill_before(k, torn);
                 let outcome = action(&handle);
                 let dead = fs.is_dead();
@@ -549,4 +562,57 @@ fn an_unflushed_pack_is_flushed_before_the_open_removes_what_it_holds() {
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     assert_eq!(words(&handle, 1, 3).as_deref(), Some("kept by the pack"));
     handle.close().unwrap();
+}
+
+/// A save a scanner kept from being written, then the person saves again, and the process
+/// stops at any write point of the second save: every reopen shows no other computer saving
+/// as this one and no conflict on the verse, the verse holds the second text whenever that
+/// save was reported saved, and what it holds is always one of the two attempts (or, after a
+/// power cut that took the failed attempt's file, the text before).
+#[test]
+fn crash_held_save_and_retry() {
+    use tc_journal::fold::{Anomaly, Notice, RotationReason};
+    let (base, folder) = base_titus();
+    let before = words_on(&base, &folder, 1, 2);
+    let pending = folder.join(".tc/pending");
+    let points = kill_everywhere_after(
+        &base,
+        &folder,
+        &|fs, handle| {
+            fs.hold_new_files(&pending, None);
+            assert!(save_verse(handle, 1, 2, "A, the held attempt").is_err());
+            fs.release_new_files(&pending);
+        },
+        &|handle| outcome_of(save_verse(handle, 1, 2, "B, the retry")),
+        &|handle, outcome| {
+            let now = words(handle, 1, 2);
+            if outcome == Outcome::Saved {
+                assert_eq!(now.as_deref(), Some("B, the retry"));
+            } else {
+                assert!(
+                    now == before
+                        || now.as_deref() == Some("A, the held attempt")
+                        || now.as_deref() == Some("B, the retry"),
+                    "{now:?}"
+                );
+            }
+            assert!(
+                !handle
+                    .snapshot()
+                    .fold()
+                    .anomalies()
+                    .any(|a| matches!(a, Anomaly::DuplicateDevice { .. })),
+                "another computer saved as this one"
+            );
+            assert_eq!(handle.snapshot().fold().conflict_count(), 0);
+            assert!(!handle.notices().iter().any(|n| matches!(
+                n.notice,
+                Notice::DeviceRotated {
+                    reason: RotationReason::DuplicateDevice,
+                    ..
+                }
+            )));
+        },
+    );
+    assert!(points > 4, "{points} kill points");
 }

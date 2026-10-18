@@ -3,13 +3,14 @@
 //! durable and what is only in the page cache, so a test can stop the writer at any write
 //! point and drop what a power cut would drop (§16.2).
 //!
-//! Only the helpers of [`crate::atomic`] write project files through it.
+//! Only the helpers of [`crate::atomic`] write, rename or remove project files through it.
 
 use std::ffi::OsString;
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 /// What a stat of a path gives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -94,6 +95,46 @@ pub trait Vfs: Send + Sync + fmt::Debug {
     fn secure_dir_chain(&self, _dir: &Path, _made: &[PathBuf]) -> io::Result<()> {
         Ok(())
     }
+    /// Whether `error` says another program holds the file for a moment (Windows: Defender,
+    /// the Search indexer and OneDrive open a file just written without `FILE_SHARE_DELETE`,
+    /// and a rename or removal of it fails until they let go).
+    fn is_held(&self, error: &io::Error) -> bool {
+        is_held_by_another_program(error)
+    }
+    /// Waits before the next try of a rename or removal that was refused as held. The test
+    /// filesystem records the wait instead of sleeping.
+    fn wait_held(&self, delay: Duration) {
+        std::thread::sleep(delay);
+    }
+}
+
+/// The error of a rename or removal that another program's open handle refused. A
+/// filesystem that is not Windows raises it to behave like one (the test filesystem).
+#[derive(Debug, thiserror::Error)]
+#[error("{} is held by another program", path.display())]
+pub struct HeldByAnotherProgram {
+    pub path: PathBuf,
+}
+
+impl HeldByAnotherProgram {
+    /// The `io::Error` that carries this as its payload.
+    pub fn error(path: &Path) -> io::Error {
+        io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            Self {
+                path: path.to_owned(),
+            },
+        )
+    }
+}
+
+/// Windows: the operating system's error 5 (access denied), 32 (sharing violation) or 33
+/// (lock violation). Anywhere: an error whose payload is [`HeldByAnotherProgram`].
+pub fn is_held_by_another_program(error: &io::Error) -> bool {
+    error
+        .get_ref()
+        .is_some_and(|inner| inner.is::<HeldByAnotherProgram>())
+        || (cfg!(windows) && matches!(error.raw_os_error(), Some(5 | 32 | 33)))
 }
 
 /// The real filesystem.

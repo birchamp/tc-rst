@@ -14,7 +14,7 @@
 
 use crate::appdata::{AppData, rfc3339};
 use crate::atomic::{
-    DirSet, SyncDir, atomic_create_dirs, atomic_remove, atomic_write, temp_target,
+    DirSet, HeldRetry, SyncDir, atomic_create_dirs, atomic_remove, atomic_write, rename_held,
 };
 use crate::clock::Clock;
 use crate::counters::{Counters, CountingVfs};
@@ -36,10 +36,11 @@ use crate::progress::{Phase, ProgressSink, Tracker, no_progress};
 use crate::project::{Dirty, IndexCache, Journal, PackInfo, PendingInfo, Project};
 use crate::reply::ReadOnlyReason;
 use crate::source::FileSource;
-use crate::vfs::{EntryKind, LockHandle, Vfs, is_not_found};
+use crate::temps::{Settled, Temps, finish_temps, settle_temps};
+use crate::vfs::{LockHandle, Vfs, is_not_found};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 use tc_journal::fold::{Anomaly, DerivedFile, FoldState, Notice, ProjectKind, RotationReason};
@@ -282,10 +283,12 @@ fn open_inner(
         }
     }
     // O2.
+    let mut temps = Temps::default();
     if !read_only && write_failed.is_none() {
         // O4's repair: unit S1 has no HEAD to restore `format.json` from, so a missing or
         // damaged one is written as this app's; a newer one was never damaged here.
-        let repaired = finish_temps(&*vfs, &folder, id).and_then(|()| {
+        let repaired = finish_temps(&*vfs, &folder, id).and_then(|found| {
+            temps = found;
             // The folder every save goes into is made durable now (once, §5.0), not by the
             // first save.
             atomic_create_dirs(&*vfs, &folder.path(PENDING))?;
@@ -321,7 +324,7 @@ fn open_inner(
     let source = Arc::new(FileSource::new(vfs.clone()));
     let value_source: Arc<dyn tc_journal::fold::ValueSource> = source.clone();
     let fold_tracker = tracker.clone();
-    let (fold, reads) = load_streaming(
+    let (mut fold, reads) = load_streaming(
         LoadSetup {
             vfs: vfs.clone(),
             project: id,
@@ -383,6 +386,20 @@ fn open_inner(
             notices.push((Notice::PackMissing { path }, None));
         }
     }
+    // O2, second half: the pending temps wait for the fold (§6.1).
+    let mut settled = Settled::default();
+    if !read_only && write_failed.is_none() {
+        settled = settle_temps(
+            &*vfs,
+            &folder,
+            &*env.clock,
+            &mut fold,
+            &mut journal,
+            &mut notices,
+            std::mem::take(&mut temps.deferred),
+        );
+        settled.pending_unreadable |= temps.pending_unreadable;
+    }
     // O6, second half: the ledger and duplicate devices need the fold (§6.3).
     let stats = fold.device_stats();
     let now = env.clock.now().0;
@@ -399,10 +416,11 @@ fn open_inner(
         }
     }
     if !read_only && write_failed.is_none() {
-        let pending_unreadable = journal
-            .unreadable
-            .iter()
-            .any(|rel| rel.starts_with(&format!("{PENDING}/")));
+        let pending_unreadable = settled.pending_unreadable
+            || journal
+                .unreadable
+                .iter()
+                .any(|rel| rel.starts_with(&format!("{PENDING}/")));
         match check_identity(
             env,
             &*vfs,
@@ -412,6 +430,7 @@ fn open_inner(
             &stats,
             &print,
             pending_unreadable,
+            &settled.unplaced_seq,
         ) {
             Ok((checked, notice)) => {
                 identity = checked;
@@ -670,79 +689,6 @@ fn gates(
     })
 }
 
-/// O2: a temporary file of a pending file or pack whose bytes verify is renamed into place
-/// durably (a power cut on Windows can keep the temp and lose the rename after "Saved");
-/// every other temporary file is removed.
-fn finish_temps(vfs: &dyn Vfs, folder: &Folder, project: ProjectId) -> Result<(), StoreError> {
-    let mut stack: Vec<(PathBuf, String)> = vec![(folder.root().to_owned(), String::new())];
-    while let Some((dir, rel)) = stack.pop() {
-        let entries = match vfs.read_dir(&dir) {
-            Ok(entries) => entries,
-            Err(e) if is_not_found(&e) => continue,
-            Err(e) => return Err(StoreError::io("list", &dir, e)),
-        };
-        let mut dirs = DirSet::new();
-        for entry in entries {
-            let name = entry.name.to_string_lossy().into_owned();
-            let child = if rel.is_empty() {
-                name.clone()
-            } else {
-                format!("{rel}/{name}")
-            };
-            if entry.kind == EntryKind::Dir {
-                if child != ".git" && !name.starts_with(".staging-") {
-                    stack.push((dir.join(&entry.name), child));
-                }
-                continue;
-            }
-            let Some(target) = temp_target(&name) else {
-                continue;
-            };
-            let abs = dir.join(&entry.name);
-            let target_rel = if rel.is_empty() {
-                target.to_owned()
-            } else {
-                format!("{rel}/{target}")
-            };
-            let complete = vfs
-                .read(&abs)
-                .ok()
-                .is_some_and(|bytes| verifies(&target_rel, &bytes, project));
-            if complete {
-                vfs.rename(&abs, &dir.join(target))
-                    .map_err(|e| StoreError::io("rename", &abs, e))?;
-                dirs.add_dir(&dir);
-                // Windows keeps a rename in its log until the renamed file is flushed.
-                let _ = vfs.sync_file(&dir.join(target));
-            } else {
-                atomic_remove(vfs, &abs, SyncDir::Deferred(&mut dirs))?;
-            }
-        }
-        dirs.sync(vfs)?;
-    }
-    Ok(())
-}
-
-/// Whether `bytes` are a complete file for `rel`: a pending file whose name its bytes give,
-/// or a pack that passes P2 to P4 at its path (its name is the hash of its header and ids).
-fn verifies(rel: &str, bytes: &[u8], project: ProjectId) -> bool {
-    if let Some(name) = rel.strip_prefix(&format!("{PENDING}/")) {
-        let read = read_pending(bytes, project);
-        let Some(header) = read.header.clone() else {
-            return false;
-        };
-        if read.status != PendingStatus::Valid {
-            return false;
-        }
-        return encode_pending(&header, &read.entries)
-            .is_ok_and(|encoded| encoded.name == name && encoded.bytes == bytes);
-    }
-    if rel.starts_with(PACKS) {
-        return read_pack(rel, bytes, project).is_valid();
-    }
-    false
-}
-
 /// What the open's reads say of each journal file, the notices they call for, and the fold
 /// cache's sections that stand.
 fn journal_of(
@@ -856,9 +802,14 @@ fn check_identity(
     stats: &BTreeMap<DeviceId, tc_journal::fold::DeviceStat>,
     print: &[u8; 32],
     pending_unreadable: bool,
+    unplaced_seq: &BTreeMap<DeviceId, u64>,
 ) -> Result<(Identity, Option<Notice>), StoreError> {
     let device = identity.device();
-    let held = stats.get(&device).map_or(0, |s| s.max_seq.0);
+    // A temp that could be neither folded nor kept holds sequence numbers this device used.
+    let held = stats
+        .get(&device)
+        .map_or(0, |s| s.max_seq.0)
+        .max(unplaced_seq.get(&device).copied().unwrap_or(0));
     let reason = if let Some(entry) = env.app.ledger_entry(device)
         && entry.last_seq > held
     {
@@ -1197,8 +1148,7 @@ impl Project {
         let name = layout::escaped(rel);
         let from = self.folder.path(rel);
         let to = dir.join(&name);
-        self.vfs
-            .rename(&from, &to)
+        rename_held(&*self.vfs, &from, &to, &HeldRetry::SAVE)
             .map_err(|e| StoreError::io("move to quarantine", &from, e))?;
         dirs.add_dir(&dir);
         if let Some(parent) = from.parent() {

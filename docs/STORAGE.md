@@ -1431,7 +1431,7 @@ machine can get a second writer the lock cannot see, so such folders are gated b
 second writer that slips past the gate is detected and stopped before it can do harm.
 
 **All file I/O goes through the `Vfs` trait** in `tc-store` (`std` in production, `FaultFs` in
-tests, §16.2). Only these helpers write project files:
+tests, §16.2). Only these helpers write, rename or remove project files:
 
 ```rust
 /// Replace or create `dir/name` atomically and durably.
@@ -1442,6 +1442,14 @@ pub enum WriteError { NotWritten(StoreError), WrittenNotDurable(StoreError) }
 pub fn atomic_create_dirs(vfs: &dyn Vfs, path: &Path) -> Result<(), StoreError>;
 pub fn atomic_remove(vfs: &dyn Vfs, path: &Path, sync_dir: SyncDir<'_>) -> Result<(), StoreError>;
 pub enum SyncDir<'a> { Now, Deferred(&'a mut DirSet) }   // Deferred collects directories to fsync once
+/// The rename or removal of a project file, retried while another program holds the file.
+pub fn rename_held(vfs: &dyn Vfs, from: &Path, to: &Path, retry: &HeldRetry) -> io::Result<()>;
+pub fn remove_held(vfs: &dyn Vfs, path: &Path, retry: &HeldRetry) -> io::Result<()>;
+pub fn remove_dir_all_held(vfs: &dyn Vfs, path: &Path, retry: &HeldRetry) -> io::Result<()>;
+pub fn rename_dir_noreplace_held(vfs: &dyn Vfs, from: &Path, to: &Path, retry: &HeldRetry) -> io::Result<()>;
+/// Milliseconds to wait before each further try. `SAVE`: 10 more tries, 2,004 ms in all (a
+/// save, a seal, the open, staging); `BACKGROUND`: 3 more tries, 35 ms (a derived file).
+pub struct HeldRetry(&'static [u64]);
 ```
 
 `atomic_write`, in order:
@@ -1451,7 +1459,16 @@ pub enum SyncDir<'a> { Now, Deferred(&'a mut DirSet) }   // Deferred collects di
 2. Write all bytes. `File::sync_all()` (Linux `fsync`, macOS `F_FULLFSYNC`, Windows
    `FlushFileBuffers`).
 3. `std::fs::rename(tmp, dir/name)` (POSIX `rename`; Windows `MoveFileExW` with
-   `MOVEFILE_REPLACE_EXISTING`).
+   `MOVEFILE_REPLACE_EXISTING`). **A file another program holds.** On Windows, Defender, the
+   Search indexer and OneDrive open a file just written without `FILE_SHARE_DELETE`, and the
+   rename fails with error 5, 32 or 33 for a moment. These three errors (`Vfs::is_held`; the
+   test filesystem raises the same error) are retried with a bounded back-off: after 2, 4, 8,
+   16, 32, 64, 128, 250, 500 and 1,000 ms (`HeldRetry::SAVE`, 2,004 ms in all, so the
+   scanner almost always lets go within the retries, and a save that cannot be written still
+   fails within about two seconds). A derived file's write retries 3 times within 35 ms
+   (`HeldRetry::BACKGROUND`) and, still refused, becomes a busy path (§5.10): one held file
+   never stalls the other files of a book. Every rename and removal of a project file goes
+   through the `*_held` helpers.
 4. Make the rename durable, now or once per batch of renames (`Deferred`). Unix: open `dir`
    read-only and `sync_all()` it. Windows: NTFS commits a rename to its log lazily, so a power
    cut can keep the complete temp file and drop the rename. Open `dir` with write access and
@@ -1459,12 +1476,18 @@ pub enum SyncDir<'a> { Now, Deferred(&'a mut DirSet) }   // Deferred collects di
    `sync_all()` it (`FlushFileBuffers` on the directory), then open the renamed file and
    `sync_all()` it. Both calls are safe Rust; the power-cut probe (§16.5 item 5) proves that
    they make the rename durable, and the release is blocked until it does.
-5. On an error before the rename: best-effort removal of the temp file, return
-   `NotWritten`; the target is unchanged. On an error at or after step 4: return
+5. On an error before the rename: removal of the temp file (retried like the rename), return
+   `NotWritten`; the target is unchanged. If the removal fails too (the scanner still holds
+   the file), **the temp file stays**: it is a complete save the person was told failed (B3),
+   and the next open decides what it is (§6.1 O2). On an error at or after step 4: return
    `WrittenNotDurable`; the new bytes are in place and the caller must treat them as written.
 
 `atomic_create_dirs` creates each missing directory and fsyncs its parent. `atomic_remove`
-unlinks and fsyncs the parent.
+unlinks (retried like a rename) and fsyncs the parent. A removal that still fails is
+tolerated where the file only waits to go: a pending file or replaced pack that a seal or a
+consolidation cannot remove stays and is removed by the next open (O7), and the open never
+fails for a temp file or a leftover it cannot remove; a staging folder that cannot be renamed
+into place refuses the create with its reason.
 
 **A directory found existing is not trusted.** Its creator may have stopped between the `mkdir`
 and the flush of its parent: a killed process leaves the folder in the page cache, and a seal
@@ -1523,9 +1546,14 @@ B5  Mark the affected derived paths dirty; re-arm the materialize timer (3 s aft
 B6  Reply { tokens, new_conflicts }.
 ```
 
-If B3 returns `NotWritten` (disk full, permission), the counter does not advance, the editor
-keeps its buffer and shows "Not saved: <reason>. Retry". A retry builds the change again from the
-same token, so a retry after a teammate's sync becomes a conflict, never a revert (I4). If B3
+If B3 returns `NotWritten` (disk full, permission, a file another program holds for longer
+than the retries), the counter does not advance, the editor keeps its buffer and shows "Not
+saved: <reason>. Retry". A retry builds the change again from the same token, so a retry after
+a teammate's sync becomes a conflict, never a revert (I4). The failed attempt's temp file may
+stay (§5.0 step 5), and the retry reuses the attempt's seq: the next open therefore never
+rolls a temp file forward into a seq a later save already used (§6.1 O2). Advancing the counter
+instead would not help: the abandoned temp would then roll forward with its own seq and still
+conflict with the person's retried text. If B3
 returns `WrittenNotDurable`, the file is in place, so the save counts as written: B4 to B6 run,
 the counter advances, and the person sees `SavedWithDiskError` ("Saved, but the disk reported an
 error: <reason>. Your work may not survive a power cut. Check the disk."). The app never reports
@@ -2058,11 +2086,31 @@ O1  Take .tc/lock (exclusive, non-blocking). Held → refuse the open with `Open
     for another reason (O4, O5) takes no lock.
 O2  Finish or remove temporary files. A `.tc/pending/` or `ingredients/tc/changes/` temp file
     whose bytes verify (every line; for a pack, P2 to P4 with the name in the temp name) is
-    complete: rename it into place durably (§5.0 step 4), never delete it (on Windows a power
-    cut can keep the temp file and lose the rename after "Saved" was shown). Remove every other
-    `.~*.tmp` outside .git, every `*.lock` file under `.git` (index, refs, HEAD, config,
-    packed-refs, shallow), and `.git/objects/pack/tmp_*` (safe: we hold the project lock and
-    the app is single-instance).
+    complete: never delete it (on Windows a power cut can keep the temp file and lose the
+    rename after "Saved" was shown). A complete pack temp is renamed into place durably (§5.0
+    step 4). A complete pending temp waits until O8 has read the journal, and is then decided
+    by the `(device, seq)` of its changes (O2b below): the person may have been told that the
+    save failed (§5.0 B3) and saved again at the same seq, and rolling the failed attempt
+    forward beside the later save would be a false *another computer was saving as this one*
+    and a conflict with their own text. Remove every other `.~*.tmp` outside .git, every
+    `*.lock` file under `.git` (index, refs, HEAD, config, packed-refs, shallow), and
+    `.git/objects/pack/tmp_*` (safe: we hold the project lock and the app is single-instance).
+    A temp that cannot be read is never removed (a pending temp so left counts as an
+    unreadable pending file, §6.3), and a rename or removal that another program still holds
+    after the retries (§5.0 step 3) leaves the file for the next open: the open never fails
+    for a temp file.
+O2b After O8 (the fold exists), for each complete pending temp, newest first by `(at, batch)`:
+    (1) every change it holds is in the fold: it duplicates a file in place; remove it.
+    (2) The pending file of its name is in place and not folded (unreadable): leave the temp
+    and count it as an unreadable pending file. (3) One of its changes has a `(device, seq)`
+    that the fold maps to another change, or that a temp placed earlier in this walk holds:
+    it is a save the person was told failed and then saved past. Move the file, bytes
+    unchanged, to `.tc/external/<utc>-not-saved-<name>` and list `UnsavedAttemptKept` ("A save
+    that could not be written on 3 Oct at 10:42 was kept as a copy. Your later saves are in
+    the project."); dismissing the notice never removes the copy. (4) Otherwise rename it into
+    place durably, fold its changes and record it as a pending file. A temp that can be
+    neither moved nor placed stays, and its changes' largest seq counts as held in O6's ledger
+    rule, and as an unreadable pending file.
 O3  git: open the repository. If libgit2 cannot open it or HEAD is unreadable, rebuild it
     (§6.4 row G4) before continuing. Set core.autocrlf=false and core.fsyncObjectFiles=true
     if they are not set.
@@ -2377,7 +2425,13 @@ edit is recorded.
   The open mints a new device before the first write (`DeviceRotated`, reason
   `PendingUnreadable`; a device minted by this same open has none to fear), so a save cannot
   reuse a seq, and when the file can be read again nothing says another computer saved as
-  this one. The file is never removed or sealed while it cannot be read (§4.4).
+  this one. The file is never removed or sealed while it cannot be read (§4.4). A complete
+  temp of a pending file that O2b could neither place nor keep counts the same way.
+- A save that failed (`NotWritten`, §5.0 B3) leaves the counter where it was, and a temp file
+  that may stay (§5.0 step 5). The retry reuses the seq. O2b therefore never folds that temp
+  beside a later save that used the seq: the later one is the person's, and the attempt is
+  kept as a copy. With no later save, the attempt is the person's newest text and O2b folds
+  it with no notice and no new device.
 - The next seq is one more than the largest seq of this device among its changes in the folder.
 - A new device copies the display name and Door43 username into its own `DeviceProfile`, so
   screens group one person's devices by username.
@@ -2391,6 +2445,7 @@ next starts, so power loss is covered by the same rows (the row says where a los
 |---|---|---|---|---|---|
 | W1 | save | temp written and flushed, before rename (or, on Windows, a power cut that dropped a rename after "Saved") | complete `.~*.tmp` in `.tc/pending` | O2 verifies it and renames it into place | after; nothing that was shown as "Saved" is ever deleted |
 | W1a | save | temp partly written | incomplete `.~*.tmp` | O2 removes it (it does not verify) | before; "Saved" was never shown; the draft is offered |
+| W1b | save | rename refused by a held file past the retries, and the temp's removal refused too | complete `.~*.tmp` in `.tc/pending`; "Not saved" was shown | O2b: kept in `.tc/external/` when a later save used its seq; otherwise folded | the person's later save, or else the attempt; never both as a conflict and never a new device |
 | W2 | save | rename, before the rename's flush | the file may be lost on power loss; a complete temp may remain (W1) | read if present | before or after, never torn; "Saved" was not yet shown |
 | W3 | save | directory fsync, before the fold update | complete pending file | folded | after |
 | W4 | save | the fold update, before the reply | complete pending file | folded | after; the UI shows the draft offer only if the text differs |
@@ -4220,6 +4275,7 @@ and the on-disk end state, not only what the fold returns.
 | L100 | *Choose per line* starts from one head's value and skips the units that merged cleanly, so the other person's agreed change (a comment) is lost; with no folded head it panics | the record starts from the merged agreed units and takes only the disputed units from the picks; it is offered only for a record's own conflict with disputed units (§8.3) | `loss_choose_per_line_keeps_agreed_units`, `per_unit_not_offered_without_units` |
 | L101 | Two changes under one comment id that target different books file the comment under the book of whichever arrived first, so devices disagree on removal visibility, `RecordsWithoutBook` and the comments files | the comment is a record of every book a change under its id targets (§7.6); a comments file lists it with the book its shown version targets | `duplicated_comment_id_across_books_converges`; property `fold_converges_under_any_union` |
 | L102 | A *Start empty* rewound after *Restore the text* rewinds only its own `StartOver` changes: a verse typed after starting empty shows beside restored verses, a mix of the two sides, and is on no screen once rewound | every verse change that is or descends from a rewound `StartOver` change is rewound, and listed as a candidate of the book's presence conflict; *Restore the text* restores each such verse (§7.6) | `loss_start_empty_descendants_rewound_and_listed` |
+| L103 | A save the disk refused (a scanner held the file for longer than the retries) leaves a complete temp file; the person saves again at the same seq; the next open rolls the failed attempt forward beside the later save, and the project says *another computer was saving as this one* and shows a conflict between the person's two texts (Windows hazard 2) | a rename or removal another program holds is retried with a bounded back-off (§5.0 step 3); O2b decides a pending temp by `(device, seq)` after O8: a temp that collides with a later save is kept as a copy in `.tc/external/`, never folded, never removed (§6.1 O2b, §6.3) | `a_held_save_past_the_retries_is_not_saved_and_leaves_no_false_conflict`, `a_held_save_never_retried_is_saved_at_the_next_open`, `of_two_failed_attempts_the_later_one_is_kept`, `a_complete_temp_that_cannot_be_placed_rotates_the_device`, `an_open_never_removes_a_temp_it_cannot_read`, `crash_held_save_and_retry`, `a_save_whose_rename_is_held_a_few_times_is_durable` |
 
 ---
 
@@ -4427,6 +4483,9 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the known key for newer fields (parse as `Unknown`) | `mixed_minor_versions_converge` |
 | total `build_metadata` (check the whole document only) | `arbitrary_meta_never_blocks_commit` |
 | the rename flush and the roll-forward of complete temp files | `crash_lost_rename_rolled_forward` |
+| the roll-forward of every complete pending temp at O2 (decide them by `(device, seq)` after O8) | `a_held_save_past_the_retries_is_not_saved_and_leaves_no_false_conflict`, `of_two_failed_attempts_the_later_one_is_kept` |
+| the retry of a held rename or removal (fail at the first refusal) | `a_save_whose_rename_is_held_a_few_times_is_durable`, `a_held_rename_is_retried_within_the_bound` (`atomic.rs`) |
+| the removal of a temp the open cannot read (remove it as damaged) | `an_open_never_removes_a_temp_it_cannot_read` |
 | the flush of a directory found existing (trust it) | `crash_checkpoint_into_a_months_folder_that_does_not_exist_yet`, `a_directory_found_existing_is_made_durable_once` (`atomic.rs`) |
 | the compare-and-swap before each rename retry | `loss_rename_retry_never_overwrites_outside_save` |
 | anchors and Detached (place attached records by number) | `every_head_reachable_from_a_screen` |
@@ -4786,3 +4845,10 @@ conflict but not the book's presence conflict; it marks both (§7.6). (3) The pr
 unreadable bases as heads; it counts heads only, and the restore race's verse heads
 (`differences_are_visible`). (4) A conflict's `batches` left out the batches of a restore
 race's verse heads; they are listed (§2.6).
+
+The same review found **hazard 2**: on Windows a scanner holds a file just written, and the
+rename that makes a save durable fails for a moment. S1 failed the save at the first refusal
+and left the temp; the next open rolled the temp forward beside the person's next save at the
+same seq. Fixed in unit S2: every rename and removal of a project file is retried within a
+bound (§5.0 step 3), and a pending temp is decided by `(device, seq)` after the journal is
+read (§6.1 O2b). L103.

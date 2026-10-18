@@ -42,6 +42,7 @@ pub mod seal;
 pub mod seed;
 pub mod source;
 pub mod store;
+mod temps;
 pub mod training;
 pub mod vfs;
 
