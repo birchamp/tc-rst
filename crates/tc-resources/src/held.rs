@@ -30,6 +30,13 @@ pub(crate) struct HeldByAnotherProgram {
 }
 
 impl HeldByAnotherProgram {
+    /// Whether `error` carries this marker, which only a simulated scanner raises.
+    fn is_in(error: &io::Error) -> bool {
+        error
+            .get_ref()
+            .is_some_and(|inner| inner.is::<HeldByAnotherProgram>())
+    }
+
     #[cfg(test)]
     fn error(path: &Path) -> io::Error {
         io::Error::new(
@@ -48,9 +55,7 @@ pub(crate) fn is_held(error: &io::Error) -> bool {
     const ACCESS_DENIED: i32 = 5;
     const SHARING_VIOLATION: i32 = 32;
     const LOCK_VIOLATION: i32 = 33;
-    error
-        .get_ref()
-        .is_some_and(|inner| inner.is::<HeldByAnotherProgram>())
+    HeldByAnotherProgram::is_in(error)
         || (cfg!(windows)
             && matches!(
                 error.raw_os_error(),
@@ -65,7 +70,7 @@ pub(crate) fn retry_while_held<T>(mut op: impl FnMut() -> io::Result<T>) -> io::
     loop {
         match op() {
             Err(e) if is_held(&e) => match waits.next() {
-                Some(ms) => pause(Duration::from_millis(*ms)),
+                Some(ms) => pause(Duration::from_millis(*ms), &e),
                 None => return Err(e),
             },
             result => return result,
@@ -97,17 +102,21 @@ pub(crate) fn try_remove_dir_all(path: &Path) -> io::Result<()> {
     fs::remove_dir_all(path)
 }
 
-fn pause(wait: Duration) {
+/// Waits before the next try, which follows the failure `after`.
+fn pause(wait: Duration, after: &io::Error) {
     #[cfg(test)]
-    if scanner::note_wait(wait) {
+    if scanner::note_wait(wait, after) {
         return;
     }
+    #[cfg(not(test))]
+    let _ = after;
     std::thread::sleep(wait);
 }
 
 /// A simulated scanner, for any platform: files it holds refuse a rename or removal of
 /// themselves or of a folder around them, as Windows does, and the waits it causes are
-/// recorded and not slept.
+/// recorded and not slept. A hold the operating system itself reports (Windows, with a
+/// real scanner at work during a test) is waited out and not recorded, as in the app.
 #[cfg(test)]
 pub(crate) mod scanner {
     use super::HeldByAnotherProgram;
@@ -201,13 +210,16 @@ pub(crate) mod scanner {
         })
     }
 
-    /// Records a wait and answers `true` when a scanner is simulated, so it is not slept.
-    pub(super) fn note_wait(wait: Duration) -> bool {
+    /// Records the wait that follows `after` and answers `true`, so that it is not slept,
+    /// when a scanner is simulated and `after` is its refusal. Any other error is a real
+    /// one, and its wait has to pass for the real scanner to let go.
+    pub(super) fn note_wait(wait: Duration, after: &io::Error) -> bool {
         SIMULATION.with_borrow_mut(|s| {
-            if s.active {
+            let simulated = s.active && HeldByAnotherProgram::is_in(after);
+            if simulated {
                 s.waits.push(wait);
             }
-            s.active
+            simulated
         })
     }
 }
@@ -217,6 +229,7 @@ mod tests {
     use super::scanner::Scanner;
     use super::*;
     use std::cell::Cell;
+    use std::time::Instant;
 
     fn held() -> io::Error {
         HeldByAnotherProgram::error(Path::new("held"))
@@ -256,6 +269,52 @@ mod tests {
         assert!(is_held(&result.unwrap_err()));
         assert_eq!(calls.get(), WAITS_MS.len() + 1);
         assert_eq!(scanner.waited(), ms(&WAITS_MS));
+    }
+
+    #[test]
+    fn only_a_simulated_refusal_is_not_slept() {
+        let scanner = Scanner::new();
+        let real = io::Error::from(io::ErrorKind::PermissionDenied);
+        let started = Instant::now();
+        pause(Duration::from_millis(60), &real);
+        assert!(started.elapsed() >= Duration::from_millis(30));
+        assert!(scanner.waited().is_empty());
+        let started = Instant::now();
+        pause(Duration::from_secs(10), &held());
+        assert!(started.elapsed() < Duration::from_secs(5));
+        assert_eq!(scanner.waited(), [Duration::from_secs(10)]);
+    }
+
+    /// Opens `path` as a scanner does: others may still read and write it, but it cannot be
+    /// renamed or deleted while it is open.
+    #[cfg(windows)]
+    fn held_like_a_scanner(path: &Path) -> fs::File {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_READ: u32 = 1;
+        const FILE_SHARE_WRITE: u32 = 2;
+        fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .open(path)
+            .unwrap()
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_real_hold_is_waited_out_while_a_scanner_is_simulated() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("file");
+        fs::write(&file, b"x").unwrap();
+        let handle = held_like_a_scanner(&file);
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            drop(handle);
+        });
+        // A simulated scanner that holds nothing: the refusals below are Windows's own.
+        let scanner = Scanner::new();
+        rename(&file, &dir.path().join("moved")).unwrap();
+        release.join().unwrap();
+        assert!(scanner.waited().is_empty(), "{:?}", scanner.waited());
     }
 
     #[test]

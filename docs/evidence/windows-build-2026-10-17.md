@@ -214,7 +214,11 @@ names none for (hazard 6, below).
   `door43-*.zip.part` meets the new `open` rule). Rerun `cargo fmt --all -- --check`,
   `cargo clippy --workspace --all-targets -- -D warnings` and
   `cargo test --workspace --no-fail-fast` on Windows, with the five Windows-only tests of
-  `store.rs`, and record the result here.
+  `store.rs` and the one of `held.rs`, and record the result here. The simulated scanner of
+  the Linux tests skips a sleep only after an error it raised itself; a hold that Windows
+  reports during those tests (Defender at work) is waited out as in the app. The Windows test
+  `a_real_hold_is_waited_out_while_a_scanner_is_simulated` (`held.rs`) pins that and has
+  not run yet.
 - From the review of the `incomplete_history` fix, for the owner: §7.4 says a conflict marked
   incomplete offers only *Apply what was recovered*, which read literally would now block a
   restore race's own choices (nothing enforces it today); a *Start empty* verse head with a
