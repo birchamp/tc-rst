@@ -309,7 +309,14 @@ const results = [];
 function check(name, ok, detail) {
   results.push({ name, ok: Boolean(ok), ...(detail === undefined ? {} : { detail }) });
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok || detail === undefined ? '' : `: ${JSON.stringify(detail)}`}`);
-  if (!ok) throw new Error(`check failed: ${name}`);
+  if (!ok) throw Object.assign(new Error(`check failed: ${name}`), { recorded: true });
+}
+
+/** A case that throws outside check() (a wait that times out, a closed page) failed too. */
+function recordThrown(error) {
+  if (error?.recorded) return;
+  const at = String(error?.stack ?? '').split('\n').find((line) => line.includes('smoke.mjs'));
+  results.push({ name: `threw: ${String(error?.message ?? error).split('\n')[0]}`, ok: false, ...(at ? { detail: at.trim() } : {}) });
 }
 
 const READY = '[data-testid=runtime-ready]';
@@ -1012,6 +1019,9 @@ async function smoke() {
     const quit = await server.quit();
     check('G: quit answers closed', quit.closedLine === '{"closed":true}', quit);
     check('G: tc4 exits 0', quit.exit.code === 0, quit);
+  } catch (error) {
+    recordThrown(error);
+    throw error;
   } finally {
     await browser.close();
     await server.stop();
