@@ -11,6 +11,7 @@
 mod attach;
 mod books;
 mod cow;
+mod decode;
 mod merge;
 pub(crate) mod meta;
 mod metadata;
@@ -25,9 +26,13 @@ mod sidecar;
 mod state;
 pub(crate) mod value;
 
+pub use decode::{
+    DecodedComment, DecodedMetadata, decode_comments, decode_metadata, decode_resources,
+    decode_settings, decode_versification,
+};
 pub use meta::ChangeIdx;
 pub use people::PersonLabel;
-pub use project::{CarriedPlacement, CheckTexts, DerivedFile, ProjectedDecision};
+pub use project::{CarriedPlacement, CheckTexts, DerivedFile, ProjectedDecision, RenderedFile};
 pub use ranges::{ChapterKeys, DeviceStat};
 pub use reads::{BookView, ChangeView, Placement};
 pub use resolve::ResolveError;
@@ -327,8 +332,13 @@ pub struct Delta {
     pub new_conflicts: Vec<ConflictId>,
     /// A pin group changed: decision sidecars and `resources.json` change.
     pub pins: bool,
-    /// Carried or derived paths may have moved.
+    /// A book's projection appeared, vanished or changed scope (`books` names it): its files
+    /// are written or removed.
     pub paths: bool,
+    /// A `CarriedFile` record changed: carried files are placed or removed.
+    pub carried: bool,
+    /// A conflict was listed or unlisted: `conflicts.json` changes.
+    pub conflicts_changed: bool,
     /// The fold was rebuilt from scratch: every derived file may have changed.
     pub everything: bool,
 }
@@ -556,10 +566,57 @@ pub enum Notice {
         missing: u64,
         last_at: WallTime,
     },
+    /// A file changed outside the app was recorded as `changes` changes in one batch
+    /// (§11.1). `unknown_base`: they were recorded without parents, so each is a conflict
+    /// with the project's text (the review offers *Accept all from the file*, *Keep
+    /// translationCore's text* and *Review one by one*); otherwise a toast with *Undo*.
     OutsideEditRecorded {
         path: RepoPath,
         changes: u32,
         batch: BatchId,
+        unknown_base: bool,
+    },
+    /// The file no longer shows `records` alignments, decisions or comments it was written
+    /// with. A file cannot remove them (no removal value exists, §11.1 X3): they stay, and
+    /// the file is written again with them.
+    OutsideRemovalKept {
+        path: RepoPath,
+        records: u32,
+    },
+    /// `metadata.json` was changed in fields translationCore writes itself (§11.1 X2); they
+    /// are written again from the project.
+    DerivedFieldsEdited {
+        path: RepoPath,
+        fields: u32,
+    },
+    /// `project.json`, `format.json` or `conflicts.json` was changed outside the app (§3.5):
+    /// it is written again, and `copy` holds the bytes found.
+    FixedFileRestored {
+        path: RepoPath,
+        copy: Box<str>,
+    },
+    /// `.git` was damaged and was built again from the project (§6.4 G4); `broken` is where
+    /// the damaged one was kept.
+    HistoryRebuilt {
+        broken: Box<str>,
+    },
+    /// The folder's history cannot be opened (for example another account owns `.git`); the
+    /// session runs without checkpoints (§6.1 O3).
+    HistoryUnavailable {
+        reason: Box<str>,
+    },
+    /// A carried file over 256 MiB is not recorded and not committed (§11.4).
+    CarriedTooLarge {
+        path: RepoPath,
+        size: u64,
+    },
+    /// A save the disk refused leaves its file behind; the person saved again, so the open
+    /// kept the earlier attempt as a copy instead of folding it beside their later work
+    /// (§6.1 O2, §5.0 B3).
+    UnsavedAttemptKept {
+        copy: Box<str>,
+        changes: u32,
+        at: WallTime,
     },
     OutsideEditUnreadable {
         path: RepoPath,

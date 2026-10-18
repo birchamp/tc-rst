@@ -380,7 +380,10 @@ pub(crate) struct Dirty {
     /// grew, so the groups it reaches are rebuilt.
     pub regroup: BTreeSet<BatchIdx>,
     pub pins: bool,
+    /// A book's projection appeared, vanished or changed scope.
     pub paths: bool,
+    /// A `CarriedFile` record changed.
+    pub carried: bool,
     pub unknown: bool,
     /// A change stopped being folded: rebuild from scratch.
     pub rebuild: bool,
@@ -1282,6 +1285,17 @@ impl FoldState {
         }
     }
 
+    /// The change a Local device wrote with this seq, if the fold holds one (§6.3). Two
+    /// changes sharing a seq are a `DuplicateDevice` anomaly; this names the first the fold
+    /// met.
+    pub fn change_at(&self, device: DeviceId, seq: DeviceSeq) -> Option<ChangeId> {
+        let found = self.seqs.find(seq_hash(device, seq), |x| {
+            let meta = &self.metas[x as usize];
+            self.devices[meta.device.0 as usize] == device && self.seq_of(ChangeIdx(x)) == seq
+        })?;
+        Some(self.meta(ChangeIdx(found)).id)
+    }
+
     /// F5: files change `c` under its Local device and seq, and lists the devices that two
     /// changes claim.
     fn note_seq(&mut self, c: ChangeIdx, id: ChangeId, device: DeviceId, seq: DeviceSeq) {
@@ -1840,6 +1854,7 @@ impl FoldState {
         if dirty.all {
             dirty.pins = true;
             dirty.paths = true;
+            dirty.carried = true;
             dirty.unknown = !self.unknown_keys.is_empty();
         }
     }
@@ -1979,7 +1994,7 @@ impl FoldState {
         match &entry.key {
             // `resources.json` holds the extra keys too, so its projection is redone.
             RecordKey::Pins(_) | RecordKey::ResourcesExtra(_) => dirty.pins = true,
-            RecordKey::CarriedFile(_) => dirty.paths = true,
+            RecordKey::CarriedFile(_) => dirty.carried = true,
             _ => {}
         }
         dirty.books.extend(self.books_of(k));
@@ -2092,6 +2107,9 @@ impl FoldState {
             new_conflicts,
             pins: dirty.pins,
             paths: dirty.paths,
+            carried: dirty.carried,
+            conflicts_changed: !dirty.added_conflicts.is_empty()
+                || !dirty.removed_conflicts.is_empty(),
             everything: false,
         }
     }

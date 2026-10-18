@@ -92,7 +92,7 @@ impl Dirty {
     /// Marks what a fold step changed.
     pub fn mark(&mut self, fold: &FoldState, kind: ProjectKind, delta: &Delta) {
         self.metadata = true;
-        if delta.everything || delta.paths || kind == ProjectKind::Stories {
+        if delta.everything || delta.paths || delta.carried || kind == ProjectKind::Stories {
             self.everything = true;
             return;
         }

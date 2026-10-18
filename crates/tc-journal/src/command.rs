@@ -268,6 +268,22 @@ pub enum Choice {
     ApplyToMovedCheck,
     /// *Rename* one file of a path-case conflict: writes the new path's record too.
     RenameCarried { from: RepoPath, to: RepoPath },
+    /// *Keep both* versions of a carried file in conflict (§8.3): `keep` stays at the
+    /// file's path and `other` becomes a file of its own at `to`.
+    KeepBothCarried {
+        keep: ChangeId,
+        other: ChangeId,
+        to: RepoPath,
+    },
+}
+
+/// Which side of an outside edit's rows a bulk choice keeps (§8.1 `OutsideEditLarge`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutsideKeep {
+    /// *Accept all from the file*: the versions the outside edit wrote.
+    File,
+    /// *Keep translationCore's text*: the versions the project already had.
+    Project,
 }
 
 /// Which editor field a draft belongs to (§5.14).

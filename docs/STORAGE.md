@@ -690,8 +690,8 @@ pub struct Conflict {
     pub agreed: Vec<(UnitName, UnitValue)>,  // units that merged cleanly; `UnitValue(None)` = the fields are absent
     pub disputed: Vec<UnitName>,             // empty for whole-value kinds
     pub provisional: ChangeId,               // head with the largest (rank, at, id), or the passage side's newest change (§7.2 F7)
-    pub batches: Vec<BatchId>,               // batches of the heads, for grouping (§8.1)
-    pub incomplete_history: bool,            // a head it lists has a MissingParent link (§7.4, §8.1)
+    pub batches: Vec<BatchId>,               // batches of the heads it lists, a restore race's verse heads included, for grouping (§8.1)
+    pub incomplete_history: bool,            // a head it involves has a MissingParent link (§7.4, §8.1); a warning, never a reason to hide a choice
     pub unreadable: Vec<ChangeId>,           // versions this computer cannot read yet (§2.6); not candidates
 }
 pub struct Candidate {
@@ -2611,12 +2611,20 @@ the rest. Releases of one batch are grow-only: the fold applies the union of the
 list.
 
 **Incomplete history.** A head with a `MissingParent` link (its parent is held or was lost)
-continues a version this device cannot see. A conflict that involves such a head is marked
+continues a version this device cannot see. A conflict that **involves** such a head is marked
 `incomplete_history`: the review says "Juan's version continues a change that has not arrived
-(or was damaged). It is not a rival of the older text." When the missing parent is in a held
-batch, the only choice offered is *Apply what was recovered*, and the conflict usually disappears
-once it is applied. When the parent is in no batch this device holds, the usual choices are
-offered with the continuation listed first, because that parent may never come.
+(or was damaged). It is not a rival of the older text." A conflict involves a head when it
+lists it as a candidate, as one of a candidate's equal heads (`also`) or as unreadable; never
+a base a merge needed. A book's restore race also involves the verse heads its *Start empty*
+candidate stands for (§7.6): the `StartOver` changes that are still heads of their verses.
+
+The mark is a **warning** on the conflict and never a reason to hide a choice: every choice of
+the conflict's kind stays offered, so the person can always keep every version, whatever the
+state of the history. When the missing parent is in a held batch, *Apply what was recovered*
+is offered first, because the conflict usually disappears once it is applied; when the parent
+is in no batch this device holds, the continuation is listed first, because that parent may
+never come. Nothing in the fold refuses a choice because `incomplete_history` is set
+(`an_incomplete_restore_race_offers_every_choice`).
 
 ### 7.5 Verse coherence and the USFM projection
 
@@ -2675,6 +2683,11 @@ someone edited concurrently with *Start empty* is in the `Passage` conflict of t
 (§7.3). A verse changed after *Start empty* (descending from its `StartOver` change) is listed
 as a candidate of the presence conflict, with its record in `also_keys`, so it is on a screen
 while it is rewound (I2); the `StartOver` changes themselves are the *Start empty* candidate's.
+A `StartOver` change that is still the head of its verse and continues a change that has not
+arrived marks the presence conflict as incomplete (§7.4), as it marks the verse's own
+`Passage` conflict. A teammate's verse typed after *Start empty* is one of the heads whose
+batches the conflict lists, so the review groups its row with that teammate's other work
+(§8.1).
 Choosing *Restore the text* writes, in one batch, the presence resolution and, on every verse
 whose head is or descends from a `StartOver` change of the losing batch, a `Restore` of the
 value rewinding gives. Choosing *Start empty*, or a verse listed as its candidate, keeps that
@@ -3033,7 +3046,7 @@ heads. One upgrade against another becomes one row: "Maria upgraded translationN
 12 Oct; Juan upgraded to v93 on 13 Oct (1 pin group, 214 checks)". All the conflicts of an
 outside edit recorded in unknown-base mode (§11.1) form one row, `OutsideEditLarge`, with
 *Accept all from the file*, *Keep translationCore's text* and *Review one by one*. Resolving a
-row writes one batch. A conflict marked `incomplete_history` says so on its row (§7.4).
+row writes one batch. A conflict marked `incomplete_history` says so on its row (§7.4) and offers every choice of its kind.
 
 ### 8.2 Editing a record that is in conflict
 
@@ -4175,7 +4188,7 @@ and the on-disk end state, not only what the fold returns.
 | L73 | Restoring a carried version whose blob is not local makes every checkpoint, sync and export fail | `refs/tc/carried` keeps every recorded version; Restore is offered only for local bytes; a missing blob keeps the previous blob in the tree and never fails a commit (§9.4, §9.8, §11.4) | `loss_carried_version_missing_blob_never_blocks_commit`, `carried_superseded_version_survives_repack` |
 | L74 | A section save is refused on every retry because a teammate's span arrived after the screen was drawn | tokens for every displayed verse; coherence is checked on the author's view; overlap is a `Passage` conflict; the section buffer is a draft (§5.2, §5.14) | `loss_section_save_after_teammate_join_conflicts` |
 | L75 | A verse added to a book with a `BookLayout` is skipped by the projection | the save updates `BookLayout`; the projection places every unlisted record after its numeric predecessor (§5.2, §7.5) | `loss_booklayout_new_verse_projected` |
-| L76 | A batch that can never be completed hides its recovered changes forever, and its descendants show false conflicts | *Apply what was recovered* writes a `BatchRelease`; conflicts with a missing parent are marked incomplete history (§7.4) | `loss_unrecoverable_batch_release`, `incomplete_history_conflict_labelled`, `a_restore_race_verse_continuing_a_held_change_marks_the_presence_conflict`, `a_restore_race_candidate_with_a_missing_parent_is_incomplete_history` (properties) |
+| L76 | A batch that can never be completed hides its recovered changes forever, and its descendants show false conflicts | *Apply what was recovered* writes a `BatchRelease`; conflicts with a missing parent are marked incomplete history (§7.4) | `loss_unrecoverable_batch_release`, `incomplete_history_conflict_labelled`, `a_restore_race_verse_continuing_a_held_change_marks_the_presence_conflict`, `a_restore_race_candidate_with_a_missing_parent_is_incomplete_history` (properties), `a_start_empty_verse_head_with_a_missing_parent_marks_the_presence_conflict`, `a_restore_race_lists_the_batches_of_its_verse_candidates`, `an_incomplete_restore_race_offers_every_choice` |
 | L77 | Deterministic ingests and salvaged lines are re-stamped with this device's seq, time and batch | `commit_received` writes them exactly as received (§5.0) | `door43_ingest_written_verbatim`, `salvage_keeps_original_batch_ref` |
 | L78 | "Keep all of mine" discards a teammate's versions when two computers share one Door43 account | bulk choices by computer; conflicts within the chosen set are left for a choice of their own (§5.9, §8.5) | `bulk_choice_by_computer_skips_shared_username` |
 | L79 | Paths that differ only in letter case overwrite each other on Windows or macOS, and one is recorded as an outside edit of the other | collisions are found by case folding; a colliding file is placed at a `.case-` path or kept out of the working tree; a `PathCase` conflict (§3.3, §7.7) | `loss_case_colliding_carried_paths_kept`, `loss_door43_case_alias_never_recorded` |
@@ -4761,3 +4774,15 @@ with a test that failed before the change. The regression tests are rows L97 to 
     change is rewound and listed in the presence conflict; *Restore the text* restores such
     verses (§7.6). L102.
 12. **`per_unit` panics on a conflict whose record has no folded heads.** Real; fixed with 4.
+
+### Review of the Windows build, 2026-10-18 (unit S2)
+
+The owner's Windows build (`docs/evidence/windows-build-2026-10-17.md`, "Open") listed four
+mismatches of the `incomplete_history` mark with this document, all fixed in unit S2. (1) §7.4
+said a conflict marked incomplete offers only *Apply what was recovered*; read literally that
+would have hidden the choices of a restore race. It is now a warning: every choice stays
+offered (§7.4). (2) A *Start empty* `StartOver` head with a missing parent marked its verse's
+conflict but not the book's presence conflict; it marks both (§7.6). (3) The property counted
+unreadable bases as heads; it counts heads only, and the restore race's verse heads
+(`differences_are_visible`). (4) A conflict's `batches` left out the batches of a restore
+race's verse heads; they are listed (§2.6).

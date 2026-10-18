@@ -2691,6 +2691,129 @@ fn a_restore_race_verse_continuing_a_held_change_marks_the_presence_conflict() {
     assert!(!race(&after).incomplete_history);
 }
 
+/// WIN "Open", second item: a *Start empty* `StartOver` change that is still the head of its
+/// verse and continues a change that has not arrived marks the presence conflict as
+/// incomplete, as it marks the verse's own conflict (§7.4, §7.6): choosing *Start empty*
+/// keeps what that change continues, and the person is told.
+fn start_empty_after_a_held_change() -> (Vec<Change>, Vec<Change>, Vec<Change>) {
+    let mut maria = Dev::new(1);
+    let mut juan = Dev::new(2);
+    let book = titus_and_ruth(&mut maria, &[2]);
+    let presence = on(&book, &RecordKey::BookPresence(BOOK));
+    let removal = maria.one(removed(&ids(&book)), vec![presence.id()]);
+    juan.at = maria.at;
+    maria.at += 3_600_000;
+    // Juan saved two verses in one action; the second change has not arrived here.
+    let held = juan.batch(
+        vec![
+            (
+                verse(1, 1, text("Juan held one", 1)),
+                vec![on(&book, &verse_key(1, 1)).id()],
+            ),
+            (
+                verse(1, 2, text("Juan held two", 2)),
+                vec![on(&book, &verse_key(1, 2)).id()],
+            ),
+        ],
+        Cause::Edit,
+    );
+    let empty = juan.batch(
+        vec![
+            (present(PresentHow::StartedEmpty), vec![removal.id()]),
+            (verse(1, 2, text("___", 2)), vec![held[1].id()]),
+        ],
+        Cause::StartOver,
+    );
+    let restore = maria.one(present(PresentHow::RestoredText), vec![removal.id()]);
+    let before = all_of(&[&book, &[removal], &held[..1], &empty, &[restore]]);
+    (before, held, empty)
+}
+
+#[test]
+fn a_start_empty_verse_head_with_a_missing_parent_marks_the_presence_conflict() {
+    let (before, held, empty) = start_empty_after_a_held_change();
+    let state = assert_converges(&before);
+    let verse_change = empty
+        .iter()
+        .find(|c| c.body().record.key() == verse_key(1, 2))
+        .expect("the StartOver verse")
+        .id();
+    assert!(
+        state
+            .anomalies()
+            .any(|a| matches!(a, Anomaly::MissingParent { change, .. } if *change == verse_change)),
+        "the StartOver change continues a change that has not arrived"
+    );
+    let race = |state: &FoldState| {
+        state
+            .conflicts_of(ConflictKind::BookPresence)
+            .next()
+            .cloned()
+            .expect("the restore race")
+    };
+    assert!(
+        race(&state).incomplete_history,
+        "choosing Start empty keeps a change that continues one this device cannot see"
+    );
+    let mut after = state;
+    after.add([FoldInput::from(held[1].clone())]);
+    let mut all = before;
+    all.push(held[1].clone());
+    same_fold(
+        &assert_converges(&all),
+        &after,
+        "the held change arrives last",
+    );
+    assert!(!race(&after).incomplete_history);
+}
+
+/// WIN "Open", fourth item: a conflict's batches include the batches of the verse heads of a
+/// restore race, so a teammate's verse typed after *Start empty* groups with that teammate's
+/// other work (§8.1).
+#[test]
+fn a_restore_race_lists_the_batches_of_its_verse_candidates() {
+    let (all, _empty_presence, typed, _restore) = start_empty_then_typed();
+    let state = assert_converges(&all);
+    let race = state
+        .conflicts_of(ConflictKind::BookPresence)
+        .next()
+        .cloned()
+        .expect("the restore race");
+    assert!(race.candidates.iter().any(|c| c.head == typed.id()));
+    let typed_batch = state.change(&typed.id()).expect("typed folded").batch;
+    assert!(
+        race.batches.contains(&typed_batch),
+        "the typed verse's batch is listed: {:?}",
+        race.batches
+    );
+}
+
+/// WIN "Open", first item: the mark is a warning on the conflict and never a reason to hide
+/// a choice (§7.4): every choice of a restore race stays offered while its history is
+/// incomplete, so the person can always keep every version.
+#[test]
+fn an_incomplete_restore_race_offers_every_choice() {
+    let (before, _held, _empty) = start_empty_after_a_held_change();
+    let state = assert_converges(&before);
+    let race = state
+        .conflicts_of(ConflictKind::BookPresence)
+        .next()
+        .cloned()
+        .expect("the restore race");
+    assert!(race.incomplete_history);
+    for candidate in &race.candidates {
+        let planned = state
+            .resolution(
+                &race.id,
+                &Choice::Candidate {
+                    head: candidate.head,
+                },
+            )
+            .unwrap_or_else(|e| panic!("{:?} is refused: {e}", candidate.value));
+        assert!(!planned.is_empty(), "{:?} writes nothing", candidate.value);
+    }
+}
+
 /// L102: after *Restore the text* wins provisionally, a verse typed after *Start empty* is
 /// rewound with it, so no verse shows one side beside another's, and the typed verse is a
 /// candidate of the presence conflict; each choice keeps one side whole.
