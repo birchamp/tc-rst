@@ -159,3 +159,14 @@ child's rows; its memory is measured by the app's-case table above, not here.
   machine line above says whether this one has them.
 - The cold rows, if a reboot was possible, are added below by `-Phase cold`.
 
+## After a reboot (2026-10-18)
+
+Run 2 minutes after the last boot, before anything else read the corpus: the open with the
+fold cache read `tc4-g0-corpus`, the first open without a cache read its copy
+`tc4-g0-corpus-nocache`. One run each, so no median.
+
+| Action | Wall | The fold after the last file | CPU, all threads | Peak working set | Peak private bytes | Working set with the fold open | Budget |
+|---|---:|---:|---:|---:|---:|---:|---|
+| (b) Open with the fold cache, after a reboot | 4225 ms | 358 ms | 2406 ms | 266 MiB | 262 MiB | 95 MiB | 10 s for the first open after a restart |
+| (c) First open without a cache, after a reboot | 10038 ms | 897 ms | 22719 ms | 333 MiB | 368 MiB | - | 10 s |
+
