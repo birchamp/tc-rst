@@ -11,8 +11,9 @@ rust-version.workspace = true
 # The token types have no other conversion to or from text, so UI code can make, read or
 # relabel a token only by re-encoding it through JSON, which the server's MAC refuses (R19).
 server = []
-# The `test` service, which exists only in test builds of the server (AD35).
-test-hooks = []
+# The `test` service, which exists only in test builds of the server (AD35). `test/echo`
+# measures the length of a reply with serde_json, so the feature brings it in.
+test-hooks = ["dep:serde_json"]
 # `proptest::arbitrary::Arbitrary` for every wire type, for property tests here and in the
 # crates that use these types.
 proptest = ["dep:proptest", "dep:proptest-derive"]
@@ -20,6 +21,7 @@ proptest = ["dep:proptest", "dep:proptest-derive"]
 [dependencies]
 tc-core = { path = "../tc-core" }
 serde.workspace = true
+serde_json = { workspace = true, optional = true }
 thiserror.workspace = true
 proptest = { workspace = true, optional = true }
 proptest-derive = { workspace = true, optional = true }

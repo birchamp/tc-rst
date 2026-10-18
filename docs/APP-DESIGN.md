@@ -178,7 +178,7 @@ Evidence: `docs/evidence/electronite-spike-2026-10-17.md` and
 | AD6 | One seam to storage. Before S1, `MemoryBackend` executes no command: it answers `Unavailable`, or a scripted outcome under the `test-hooks` feature. | No second copy of STORAGE's B1–B2 rules. Save behaviour in the UI is still testable before S1. | Core-first's temporary command builder, whose deletion depended on S1 publishing a pure `build_batch`. |
 | AD7 | The fixture seed is STORAGE §13.2's state seed, with its checks, written as `tc_app::backend::seed::tc4_state_seed`. When unit I lands, `memory_seed_equals_tc_import_seed` runs and the copy is deleted. | §13.2 (STORAGE:3433-3442) requires byte-for-byte USFM and `vrs.json` and field-for-field sidecars. A checked seed cannot make a screen look right for the wrong reason. | A new `tc-import` crate now (unit I owns it); a seed without the check. |
 | AD8 | The open's progress is tc-store's reporter, forwarded unchanged. tc-app's own reporter times only tc-app's jobs. | STORAGE:1870-1891 gives the clock to the store, and S1's `open_shows_determinate_progress_by_300_ms` tests it. | A tc-app clock for the open and an invented `Preparing` phase. |
-| AD9 | Typed `POST /api/v1/<service>/<name>` with JSON. HTTP 200 carries `ReplyOf<E>`, the enum `Reply<E::Ok>`: `{"type": "ok", "value": …}` or `{"type": "err", "value": <ApiError>}`, the crate's one enum form, not serde's `{"Ok": …}` for a `Result` *(A1)*. Statuses are used only below the API: 401 token, 403 Host or Origin, 409 API version, 413 upload cap. | One exhaustive Rust match in the UI. A proxy or auth failure cannot be mistaken for a domain refusal. | 422 for every error; a result type per area without one error enum. |
+| AD9 | Typed `POST /api/v1/<service>/<name>` with JSON. HTTP 200 carries `ReplyOf<E>`, the enum `Reply<E::Ok>`: `{"type": "ok", "value": …}` or `{"type": "err", "value": <ApiError>}`, the crate's one enum form, not serde's `{"Ok": …}` for a `Result` *(A1)*. Statuses are used only below the API: 401 token, 403 Host or Origin, 409 API version, 413 a body over its cap (8 MiB for an API body, the flow's cap for an upload), 503 while the server closes (§5.1). | One exhaustive Rust match in the UI. A proxy or auth failure cannot be mistaken for a domain refusal. | 422 for every error; a result type per area without one error enum. |
 | AD10 | Events come on one SSE stream, `GET /api/v1/events`, read with `fetch` and the token header. Frames carry a sequence number; a ring of 4,096 frames serves reconnects; a gap gives `Resync`. | Works the same in the shell, in Playwright and in a developer's browser, whether or not header injection reaches it. | `EventSource` (needs injection or a cookie); WebSocket (no headers; opaque to Playwright); polling. |
 | AD11 | ARCH:42-44 stays as written. The shell adds `X-Tc-Token` through `session.webRequest.onBeforeSendHeaders`, with a URL filter that lists only the server's paths outside `/api/`: `/`, `/ui/*`, `/help/*`, `/media/*`, `/download/*`, `/print/*` and `/prepare.html`. The UI's own `fetch` calls set the header themselves, so no API request or event-stream read runs the filter's JS listener. Every request the window makes, `/api/` included, still crosses Electron's request proxy on the main process's UI thread, with or without the filter, so a busy main thread delays every API call: the shell keeps synchronous work off that thread (AD21, G1), and G0 measures the delay. Playwright uses `extraHTTPHeaders`. Only debug builds accept a one-time `?dev-token=` cookie. Capability URLs are the fallback if Electronite misses a request type (G0 probes every type). *(A-14)* | No amendment to the fixed security decision; images, iframes, downloads and the print window carry the header, and the aligner's round trip does not pay for the filter's JS callback. It still waits for the main process's UI thread, as every request in an Electronite window does; Q-1 and Q-13 are decided from G0's measurements of that round trip. | A production launch cookie (core-first); public static files plus capability URLs (slice-first); a filter over every request. |
 | AD12 | A project is named by `ProjectRef`, its folder under the projects root. `ProjectId` is data. Scopes, sessions, Home cards and summaries are keyed by folder. `prefs/<projectId>.json` stays as STORAGE §3.7 lists it. | Two imports of one tC4 project get one id (STORAGE:3374, T4), and a copied folder is expected (STORAGE:2015-2036, `FolderCopied`). Two folders must be two cards. | Keying by `ProjectId`. |
@@ -208,7 +208,7 @@ Evidence: `docs/evidence/electronite-spike-2026-10-17.md` and
 | AD36 | Teammate changes in parity scenarios are written only through tc-journal's encoders (phase 1) and the store's sealing API (from C1a), never by hand. | The scenario must exercise the real format. | Hand-made packs. |
 | AD37 | An open editor holds its value and its token as one pair, taken when it opened. A refresh replaces the pair only while the editor has had no input and no composition since then; otherwise the field keeps its text and token and shows the "changed while you were typing" notice. A `Changed` whose cause is the field's own request shows nothing. Nothing is ever written into a focused field, and texts are compared in NFC. *(A-6)* | A value and a token that come apart make the next save conflict with itself, or revert a change unseen (STORAGE:1449-1453). The `Ack` and the `Changed` event of one write may arrive in either order (§5.4). NFC reorders Hebrew points and Arabic marks (STORAGE:1445), and writing into a focused field moves the caret and breaks an IME composition. | Following the query in an open editor; never refreshing an open editor. |
 | AD38 | `SessionRegistry` runs one open per folder at a time; a second caller waits for it and shares the session. The screen session closes when the person goes Home, with tC4's "leaving the project" checkpoint. *(A-8, A-25)* | A second open finds `.tc/lock` held by this same `tc4` and is refused, with `tc4` itself as the holder (STORAGE §6.1 O1). tC4 closes the project at Home (`tC4:src/state.jsx:7286-7328`), and J8 asserts that commit. | Waiting only for a running leave-checkpoint; closing the session only when another project opens. |
-| AD39 | The shell supervises `tc4`. When `tc4` exits without being asked, the shell starts it again and loads Home at the new address; the new page reads the shell's buffer mirror (AD21). `tc4` treats a closed stdin as a quit. The shell starts `tc4` with `detached: true` and `windowsHide: true`: on Windows, Node's plain `spawn` puts the child in libuv's job object, which ends it the moment the shell's process ends, before it can read its closed stdin and quit (G0's "end the shell" rows measure both). A `tc4` that finds `app.lock` held waits up to 10 s for the old process to finish closing, then names it (the lock records its pid). *(A-3)* | Every launch has a new port, so the old page cannot reach a restarted server (§5.2). An orphaned `tc4` would hold `app.lock` and `.tc/lock` and refuse the next launch. When the shell dies, the pipe to `tc4`'s stdin closes. | A quit endpoint for orphans (it would need the old token); restarting in place. |
+| AD39 | The shell supervises `tc4`. When `tc4` exits without being asked, the shell starts it again and loads Home at the new address; the new page reads the shell's buffer mirror (AD21). `tc4` treats a closed stdin as a quit. The shell starts `tc4` with `detached: true` and `windowsHide: true`: on Windows, Node's plain `spawn` puts the child in libuv's job object, which ends it the moment the shell's process ends, before it can read its closed stdin and quit (G0's "end the shell" rows measure both). A `tc4` that finds `app.lock` held waits up to 10 s for the old process to finish closing, then names it (`app-lock.json` beside the lock records its pid, §5.1). *(A-3)* | Every launch has a new port, so the old page cannot reach a restarted server (§5.2). An orphaned `tc4` would hold `app.lock` and `.tc/lock` and refuse the next launch. When the shell dies, the pipe to `tc4`'s stdin closes. | A quit endpoint for orphans (it would need the old token); restarting in place. |
 
 ### 2.2 Disagreements and how they were resolved
 
@@ -329,8 +329,8 @@ journal's identity grammar (`tc_journal::keys::RefPart`): NFC text that is not e
 `|`. This one takes any text that is not empty and holds no `:`, so a check the server sends
 always reads, and the server refuses at its boundary a part that tc-check cannot hold. It has
 no length limit, because a check whose place the UI cannot read drops out of the rail and shows
-its decision as not saved. A request is bounded where the server reads its body (A2), not field
-by field. *(Merge of A1: tc-check's part took the journal's grammar after A1 was written.)*
+its decision as not saved. A request is bounded where the server reads its body (A2: 8 MiB, and 413
+above it), not field by field. *(Merge of A1: tc-check's part took the journal's grammar after A1 was written.)*
 *(A1: the first build typed a check's place as `tc_core::Reference`, which holds a chapter of at
 least 1 and numeric verses, and the first fix of `prefs/recordPlace` capped a verse at 256 bytes.)*
 
@@ -364,6 +364,10 @@ pub type ReplyOf<E> = Reply<<E as Endpoint>::Ok>;
 // does not compile.
 pub const API_VERSION: u32 = 1;           // header `X-Tc-Api`
 ```
+
+tc-server routes `POST /api/v1/{path}` for exactly the rows of these tables (the `test` rows only
+with `--test-hooks`) and hands the body to the backend, whose typed dispatch parses it (A3); a path
+outside the tables is 404 before the backend sees it. *(A2)*
 
 `NetKind::Upload` stays because tC4's catalogs have the key, but no endpoint uses it: ruling Q2
 removes the Upload changes dialog (DELTA:1137, PLAN:49-50).
@@ -739,13 +743,15 @@ has no `sync: SyncAction`: by the owner's ruling Q2 every shared project, Bible 
 | `export` | `preflight`, `run` (job) |
 | `feedback` | `compose` (the shell sends the report, Q-2) |
 | `jobs` | `get`, `cancel` |
-| `test` (feature `test-hooks`) | `quiet`, `hold`, `release`, `crash`, `fieldStore`, `fieldLog`, `clock`, `script`, `door43`, `inspect`, `writeTeammate`, `counters`, `reset` |
+| `test` (feature `test-hooks`) | `quiet`, `echo`, `hold`, `release`, `crash`, `fieldStore`, `fieldLog`, `clock`, `script`, `door43`, `inspect`, `writeTeammate`, `counters`, `reset` |
 
 **The endpoints of phase 0** *(A1)*, which unit A1 defined with golden JSON, are `app/hello`, `quit`,
 `clientError`; all four of `prefs`; `net/state`, `set`; `jobs/get`, `cancel`; `account/state`,
 `signIn`, `cancelSignIn`, `resume`, `signOut`, `profileLink`, `helpLink`; `feedback/compose`; and
-the hooks `test/quiet`, `crash`, `hold`, `release`, `fieldStore`, `fieldLog`, `reset`. Each later
-unit adds the rows of its screens to `endpoint_table!` (B9b adds `account/orgs` and `repoLink`).
+the hooks `test/quiet`, `echo`, `crash`, `hold`, `release`, `fieldStore`, `fieldLog`, `reset`. Each later
+unit adds the rows of its screens to `endpoint_table!` (B9b adds `account/orgs` and `repoLink`). `test/echo { size }` answers a list of Hebrew words whose
+reply is at least `size` bytes long, by at most one word (A2: a reply of a chosen size, for the
+loopback measurement of §8.3).
 
 `prefs/recordPlace` carries one observation of the place in a book or a story, as tC4's
 `rememberPlace` makes it (`tC4:src/state.jsx:3821-3845`): a mode, chapter or tool left out keeps
@@ -765,7 +771,9 @@ answered Q-2 with (a), so the shell sends the report and the server only compose
 - `API_VERSION = 1`, paths under `/api/v1/`, header `X-Tc-Api: 1`.
 - The UI and the server ship as one build. `index.html` is `no-store`; every other UI file has a
   content-hashed name. A `build.commit` in `hello` that differs from the wasm's compile-time
-  commit forces one reload.
+  commit forces one reload. Both read `tc_api::app::BUILD_COMMIT`, which is the environment
+  variable `TC4_BUILD_COMMIT` at build time, or `dev` when it is not set; the release pipeline
+  sets it for the server and the wasm build alike.
 - A new `ServerInstance` means the server restarted. The UI drops every scope, sends nothing
   again, keeps every buffered entry and goes Home; the entries are offered when their project
   next opens (AD4). In the shell this happens on a fresh page, because the shell reloads the
@@ -1108,7 +1116,8 @@ The shell's `drafts-buffer.log` is not among them: the shell writes it (AD21).
 | `summaries/<folder hash>.json` | §4.5 |
 | `reports.json` | the last 50 operation reports, for Feedback and the dev Inspector |
 | `uploads/`, `downloads/` | temporary; emptied at start and after use |
-| `app.lock` | `tc4 serve`'s guard for the restart case: an old `tc4` still exiting after a crash (AD39). It holds the pid, so a new `tc4` that waits for it can name the holder's process. The single instance on a machine is the shell's lock (§5.1) *(A-3)* |
+| `app.lock` | `tc4 serve`'s guard for the restart case: an old `tc4` still exiting after a crash (AD39). The holder writes its pid to `app-lock.json` beside it (Windows lets no other process read a locked file), so a new `tc4` that waits for it can name the holder's process. The single instance on a machine is the shell's lock (§5.1) *(A-3)* |
+| `app-lock.json` | `{pid, at}` of the `tc4` that holds `app.lock`, written atomically after it takes the lock; read only to name the holder |
 | `drafts-buffer.log` | written by the shell, not by `tc4`: the mirror of the browser buffer, one appended line per change, a clean field written as a removal line (AD21) *(A-3)* |
 
 `lastEdit` (the Resume card) is recorded on each acknowledged save and when an editor loses
@@ -1132,16 +1141,28 @@ sees, and typing no longer costs an fsynced app-data write each second *(A-20)*.
 - `tc4 serve --app-data <dir> --projects <dir> --ui <dir> [--door43 <url>]`
   `[--backend memory --scenario <dir>] [--test-hooks]`. The last three exist only with their
   cargo features.
-- It takes `app.lock` in app data and writes its pid into it. The lock is only its guard for the
-  restart case: an old `tc4` may still be closing after a crash or after its shell died (AD39).
-  If that `tc4` holds the lock, the new one waits up to 10 s for it, then exits with a message
-  that names the holder's process. *(A-3)*
+- It takes `app.lock` in app data, an operating-system lock it holds until the process ends (a
+  crash included), and then writes its pid to `app-lock.json` beside it, because Windows lets no
+  other process read a locked file. The lock is only its guard for the restart case: an old `tc4`
+  may still be closing after a crash or after its shell died (AD39). If that `tc4` holds the
+  lock, the new one waits up to 10 s for it, printing nothing and binding nothing, so the shell
+  waits longer than that for the address line; then it prints
+  `{"error":{"type":"appLockHeld","value":{"pid":<pid or null>}}}` as its only line, names the
+  process on stderr, and exits with code 3. A start that fails otherwise prints
+  `{"error":{"type":"start","value":{"reason":"…"}}}` and exits with code 4. *(A-3; A2: the pid
+  is beside the lock, and the two error lines are what the shell reads.)*
 - It binds `127.0.0.1:0` and prints one JSON line before anything else:
   `{"url":"http://127.0.0.1:PORT/","token":"<43 chars base64url>"}`. The token is never logged.
-- On stdin `{"quit":true}`, and when stdin closes (the shell died; on Windows this needs the
-  shell to start it detached, AD39), it quits: it saves every
-  aligner session's unsaved links (AD18), checkpoints every session within 5 s, closes the
-  actors, answers `{"closed":true}` if stdin is still open, and exits. *(A-3, A-4)*
+- On stdin `{"quit":true}`, when stdin closes (the shell died; on Windows this needs the shell
+  to start it detached, AD39), on Ctrl+C or SIGTERM, and when the UI calls `app/quit`, it quits:
+  new requests get 503, and so does one whose body is still arriving; requests being answered get
+  up to 1 s to finish, and a call whose client went away still runs to its end; then it saves
+  every aligner session's unsaved links (AD18), checkpoints every session and closes the actors.
+  The whole close takes at most 5 s: what was written stays, and work still running then is cut
+  (a cut checkpoint runs again at the next open). It then ends the event streams, answers
+  `{"closed":true}` if stdin is still open, and exits. *(A-3, A-4; A2: the drain comes before the quit work, so a save accepted before the
+  quit reaches an open backend and its reply reaches the UI. The first draft quit first and
+  drained after, which let a save in flight meet a closing backend.)*
 
 ### 5.2 Security
 
@@ -1149,7 +1170,10 @@ A tower layer checks, in order:
 
 1. `Host` equals `127.0.0.1:PORT`, else 403 (DNS rebinding, ARCH:45-46).
 2. `X-Tc-Token` matches in constant time, else 401. This applies to every route, static files
-   included (ARCH:42-44). The shell opens the window at `url#t=<token>`.
+   included (ARCH:42-44). The shell opens the window at `url#t=<token>`. A request with the header
+   more than once, or with a comma-separated list, is accepted only when every value is the token:
+   Playwright's `extraHTTPHeaders` and the UI's own header can both set it, and a wrong value
+   anywhere is a 401. *(A2)*
 3. On any method other than GET, `Origin` equals the server's own origin, else 403.
 4. On `/api/`, `X-Tc-Api` equals 1, else 409.
 5. No CORS header is ever sent.
@@ -1177,8 +1201,9 @@ Headers on `index.html`: `Content-Security-Policy: default-src 'self'; script-sr
 
 Tests (`tc-server/tests/security.rs`): `request_without_token_is_401`, `foreign_host_is_403`,
 `foreign_origin_post_is_403`, `no_cors_headers_ever`, `binds_loopback_only`,
-`dev_cookie_only_in_debug_builds`, `help_never_redirects`. Lifecycle tests (`tc-server/tests/
-lifecycle.rs`): `closed_stdin_quits_within_5_s`,
+`dev_cookie_only_in_debug_builds`, `help_never_redirects`. Lifecycle tests
+(`crates/tc4/tests/lifecycle.rs`, against the binary; tc-server's own `tests/lifecycle.rs`
+drives the quit sequence in process): `closed_stdin_quits_within_5_s`,
 `new_tc4_waits_for_the_old_one_then_names_the_holder` (the `app.lock` wait for the restart case)
 *(A-3)*. The second launch is G1's test, in the shell:
 `second_launch_focuses_the_running_window_and_starts_no_server`.
@@ -1198,7 +1223,9 @@ lifecycle.rs`): `closed_stdin_quits_within_5_s`,
 | `GET /download/{id}/{name}` | media | a finished export, `Content-Disposition: attachment` |
 | `GET /print/{job}` | media | print HTML for the shell's `printToPDF` and for `page.pdf()` |
 
-`every_endpoint_is_routed_once` checks the router serves exactly `tc_api::ALL`.
+`every_endpoint_is_routed_once` checks the router serves exactly `tc_api::ALL`. Each API call runs
+on a task of its own, so a client that goes away (a reload, a closed window) never cuts a call
+short, and the quit waits for calls still running (§5.1). *(A2)*
 
 ### 5.4 The event channel
 
@@ -1222,7 +1249,16 @@ lifecycle.rs`): `closed_stdin_quits_within_5_s`,
 - **Uploads.** The DOM keeps tC4's `<input type=file>` and drop zones
   (`tC4:src/views/modals/Import.jsx:63-68`, `AddBook.jsx:57-62`, `GuidedFix.jsx:62-68`). The UI
   posts each `File` as the `fetch` body, with its name percent-encoded in `X-Tc-Upload-Name`. The
-  server streams it to `uploads/<id>` and returns `UploadView { id, name, size }`. Caps follow
+  server streams it to `uploads/<id>` and returns `UploadView { id, name, size }`. It is
+  `POST /api/v1/uploads` with the API's headers, the name in `X-Tc-Upload-Name` and the flow
+  (`exchange`, `import`, `usfm` or `guidedFix`) in `X-Tc-Upload-Flow`. The server writes
+  `uploads/<id>.part` and renames it to `uploads/<id>` after the last byte, and only then
+  answers; a body over the flow's cap is 413, and a cut connection or a full disk leaves nothing
+  (`UploadRefusal::NotWritten`). Nothing is fsynced: `uploads/` is emptied at every start, so a
+  crash never reads a partial upload back. The UI checks a file's size against its flow's cap
+  before it sends it (`UploadFlow::cap`), because a browser still sending when the server
+  refuses may report a reset connection instead of the 413. The name is never a path. *(A2)*
+  Caps follow
   the flow: an exchange file ("Receive work from a file" in a browser) may be 4 GiB, STORAGE's
   cap for the whole file, whose 512 MiB cap applies to each entry inside it (STORAGE:3027) and
   is checked when the file is read; every other upload (USFM, tC3 and tC4 projects, a guided-fix
@@ -1233,7 +1269,9 @@ lifecycle.rs`): `closed_stdin_quits_within_5_s`,
   `<a download href="/download/<id>/<name>">`, as tC4's `deliverFile` does
   (`tC4:src/data/export/kernel.ts:38-57`). Electronite shows the save dialog and reports saved or
   cancelled through `onDownloadDone`, which drives "Saved {file}" (`tC4:src/views/ExportMenu.jsx:26-34`).
-  In a browser the toast says "Export ready: {file}". Files stay 10 minutes.
+  In a browser the toast says "Export ready: {file}". Files stay 10 minutes. A producer writes its
+  file in `downloads/` and registers it (`Downloads::add`); the route answers only an id that is
+  registered, with the name it was registered under, and streams the file. *(A2)*
 - **USB export** is not a download. `tc4Shell.chooseFolder()` gives the destination; the job
   writes, then verifies from the device; "You can remove the stick" shows only after the verify
   (STORAGE:3010-3017).
@@ -1953,13 +1991,25 @@ Count tests live in `crates/tc-app/tests/op_counts.rs` unless named otherwise.
 
 - **Server**: `tokio_never_blocked`, a test-only watchdog that pings the runtime every 10 ms
   under journey load and fails on a ping more than 50 ms late. Installs run on blocking threads,
-  because `install_dcs` fsyncs inside an async function.
+  because `install_dcs` fsyncs inside an async function. A2 builds it (`tc_server::watchdog`) and
+  runs it with the server on one worker thread, where any blocking call shows, under a paced
+  synthetic load (API calls, event streams, an upload, static files and a download). It also
+  times a plain thread's 10 ms sleep and allows that lateness on top of the 50 ms, so a loaded
+  machine does not fail the test for what the operating system did. The load is paced because a
+  saturated single worker polls its timers late and looks blocked with no blocking call in it.
+  Two tests show the test can fail: the watchdog sees a worker blocked by `thread::sleep`, and the
+  same load against a server with one blocking call is caught. *(A2)*
 - **UI**: no synchronous XHR; typing writes only the browser buffer and sends one asynchronous
   message to the shell's mirror; the Playwright perf specs
   fail on any long task over 50 ms during a measured action (Long Tasks API).
 - **The aligner round trip** is measured first, in unit A2: a 20 KB JSON reply over loopback from
   a wasm `fetch`, p95 recorded in `docs/evidence/`, and once more through a proxy that adds a
-  header to each request: the cost if G0 finds that the shell's filter cannot leave `/api/` out. Because the product's numbers come from Windows with Defender
+  header to each request: the cost if G0 finds that the shell's filter cannot leave `/api/` out.
+  The proxy is Playwright's request interception, which pauses each request and lets a JS handler
+  in another process add the header, as Electron's `onBeforeSendHeaders` listener does. A2's
+  figures (`docs/evidence/loopback-2026-10-18.md`): plain p95 5.2 ms, through the proxy p95
+  8.6 ms, a 20 KB reply, 1,000 clicks each, release `tc4`, headless Chromium 141 on the 4-vCPU
+  build container (load about 3). *(A2)* Because the product's numbers come from Windows with Defender
   and Electronite's process model, the spike G0 measures the same round trip in Electronite on
   Windows, and the reference laptop's run is an owner action before B6 merges (Q-26). A miss in
   either raises Q-13. *(A-14)*
@@ -2088,7 +2138,7 @@ This breakdown was checked again after the red team *(A-16, A-17)*:
 | Unit | Scope | Depends on | Waits for | Tests | Done when |
 |---|---|---|---|---|---|
 | A1 tc-api foundations | the crate; ids; `Scope`; `Endpoint`, `endpoints!`, `ALL`; tokens with their prefixes *(A-7)*; `Shown`; `Ack` with `Stored` and rail patches; `NotSaved` with `StaleScope` *(A-19)*; `ApiError` with `RequestReused` *(A-2)*; `Refusal` families, `SyncRefusal`; events (`ChangeScope` as an enum, `Aspect`, `AlignSave`), jobs, progress; the state enums of §3.7 *(A-30)*; `depends_on`; the endpoints of phase 0; rebuild key files (English, with the nine other languages listed as pending) *(A-32)* | — | — | serde proptest; golden JSON per endpoint (rewritten only with `UPDATE_GOLDEN=1`); the four refusal tests and `release_has_no_pending_translation` (§3.5); a token text with the wrong prefix does not parse | builds and lints for wasm32; every phase-0 endpoint has golden JSON |
-| A2 tc-server and `tc4 serve` | axum on loopback; address line; `app.lock` with its pid and the 10 s wait, only for the restart case (the single instance is G1's lock); tc-api's `ReadOnlyReason::OpenElsewhere` ("another translationCore window holds the project's lock", `crates/tc-api/src/write.rs` on branch p0-a1) is removed, and a held project lock is a refusal that names the holder's process (ruling of 2026-10-18); quit on `{"quit":true}` and on a closed stdin *(A-3)*; security layer; CSP; static routes; `hello`; event stream with ring, heartbeat, `Resync`, coalesced progress; uploads with per-flow caps *(A-28)*; downloads registry; `test-hooks` feature with `test/crash`; the loopback spike, also through a header-adding proxy *(A-14)* | A1 | — | §5.2 security tests; `closed_stdin_quits_within_5_s`, `new_tc4_waits_for_the_old_one_then_names_the_holder`; replay and `Resync`; a 513 MiB import upload is 413 and a 1 GiB exchange upload streams to disk; `every_endpoint_is_routed_once`; `tokio_never_blocked` | the tests pass; the spike's two p95 figures are in `docs/evidence/` |
+| A2 tc-server and `tc4 serve` | axum on loopback; address line; `app.lock`, with its holder's pid in `app-lock.json` beside it (§5.1), and the 10 s wait, only for the restart case (the single instance is G1's lock); tc-api's `ReadOnlyReason::OpenElsewhere` ("another translationCore window holds the project's lock", `crates/tc-api/src/write.rs` on branch p0-a1) is removed, and a held project lock is a refusal that names the holder's process (ruling of 2026-10-18); quit on `{"quit":true}` and on a closed stdin *(A-3)*; security layer; CSP; static routes; `hello` from a stand-in backend until the join with A3 (order paragraph); the event stream: the frames of tc-app's `EventBus` as server-sent events, with the heartbeat, ending a connection whose subscription lags (the ring, `Resync` and coalesced progress are tc-app's, §4.1); uploads with per-flow caps *(A-28)*; downloads registry; `test-hooks` feature with `test/crash`; the loopback spike, also through a header-adding proxy *(A-14)* *(A2: §4.1 gives the ring to tc-app, which A3 builds at the same time; a second ring in tc-server would be thrown away at the join.)* | A1 | — | §5.2 security tests; `closed_stdin_quits_within_5_s`, `new_tc4_waits_for_the_old_one_then_names_the_holder`; replay and `Resync` through HTTP (a scripted event source until the join); a 513 MiB import upload is 413 and a 1 GiB exchange upload streams to disk; `every_endpoint_is_routed_once`; `tokio_never_blocked` | the tests pass; the spike's two p95 figures are in `docs/evidence/` |
 | A3 tc-app foundations | `App`, `AppConfig`; `JobRegistry` with reporter (100 ms, or 1 s for jobs no screen shows *(A-29)*) and cancel; `EventBus`; `FlowGate`, with USB export and receive per project *(A-31)*; `PrefsWriter` (memory) with the `lastEdit` rule *(A-20)*; `ReportLog`; internet wiring; `Keychain` trait with `MemKeychain`; `ReplyCache` with body digests and in-flight waits *(A-2)*; `test/fieldStore`, a test-only write endpoint that goes through the reply cache and records every text it stores, so A4b can prove its no-loss rules before any real save exists; `app`, `prefs`, `net`, `jobs` handlers | A1 | — | `job_reports_nothing_before_300ms_then_every_100ms`; `unseen_jobs_report_once_a_second`; `counts_only_grow`; `cancel_stops_at_next_chunk`; flow-gate tests, including `receive_and_sync_of_one_project_never_overlap`; reply-cache tests for a finished request, one in flight, and another body | `tc4 serve` answers `hello` with real state |
 | A4a tc-ui runtime: transport, cache, language | feature `app`; API client with scope drop; SSE-over-fetch reader; `QueryCache`; `Load<T>`; no tab guard, because the ruling of 2026-10-18 removed the one-tab check *(A-19)*; `t()` with generated keys and rebuild keys; all ten catalogs at boot *(A-23)*; `<html lang dir>`; `build-app.sh`; web-sys features (`Storage`, `Headers`, `Request`, `RequestInit`, `ReadableStream`, `ReadableStreamDefaultReader`, `TextDecoder`, `AbortController`, `File`, `Blob`, `DragEvent`, `DataTransfer`, `HtmlAnchorElement`, `HtmlIFrameElement`, `PerformanceObserver`); vendor tC4's `src/ui.css` again | A1, A2 | — | host tests of the SSE parser and `t()`; `i18n-keys` port with floors; Playwright smoke: boot, `hello`, a locale switch with no request after boot | the smoke passes in this container |
 | A4b ◆ tc-ui no-loss core: saves, buffer, panics | the save machine (§6.5: `sent`, the NFC clean rule, retries with the first body *(A-2)*, `StaleScope` *(A-19)*); the refresh rule for open editors (AD37) *(A-6)*; the draft buffer v2 keyed by folder and project id *(A-9)*, with the bridge calls `bufferChanged` and `takeBuffered` *(A-3)*; `boot.js`: capture listener, reload, panic counting by page load, static callout, drafts posted with `fetch` *(A-15)*; panic hook and crash marker; the navigation gate and close guard *(A-26)*; `try_` forms and `clippy::indexing_slicing` in app modules *(A-15)* | A1, A2, A3, A4a | — | port of tC4's scheduler tests; proptest: no `current` dropped; `reload_anywhere_stores_the_last_text_once` against `test/fieldStore`, with reloads and `test/crash` at every point; the AD37 refresh cases; Playwright: a panic in an input handler keeps the keystroke, one panic with trapping closures reloads once, three panics show the static callout and post the drafts | the tests pass and the adversarial review's findings are fixed |

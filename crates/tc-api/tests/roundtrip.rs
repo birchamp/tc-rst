@@ -73,6 +73,7 @@ fn every_shared_type_round_trips() {
     use tc_api::refusal::*;
     use tc_api::shown::*;
     use tc_api::test::*;
+    use tc_api::upload::*;
     use tc_api::write::*;
     use tc_api::{NetKind, ReviewToken, ShownToken};
 
@@ -127,6 +128,7 @@ fn every_shared_type_round_trips() {
             NetKind,
             Refusal,
             OpenRefusal,
+            LockHolder,
             CreateRefusal,
             ImportRefusal,
             ExportRefusal,
@@ -140,6 +142,9 @@ fn every_shared_type_round_trips() {
             ExchangeRefusal,
             FeedbackRefusal,
             PrefsRefusal,
+            UploadRefusal,
+            UploadFlow,
+            UploadView,
             // events and jobs
             EventFrame,
             Event,
@@ -205,6 +210,9 @@ fn every_shared_type_round_trips() {
             QuietView,
             FieldLogView,
             StoredText,
+            Echo,
+            EchoView,
+            EchoWord,
         ]
     });
 }
