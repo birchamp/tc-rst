@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en" dir="ltr"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-nOVsltF1ic35eA9DZwxSCOVppRctfDiR+/3hDuZrGAI='; connect-src 'self'; base-uri 'none'; form-action 'none'"><title>translationCore4</title>
+<style>body{margin:36px;font:16px system-ui,sans-serif;color:#293847;background:#f5f7fa}h1{font-size:22px}p{line-height:1.5}#progress{color:#526173}</style></head>
+<body><h1>Preparing translationCore4</h1><p>Getting resources ready for offline use.</p><p id="progress" role="status">Starting preparation…</p>
+<script type="application/json" id="tc4-text">{"locales":{"ar":{"dir":"rtl","text":{}},"en":{"dir":"ltr","text":{"prepare.failed":"The bundled resources could not be prepared. Please quit and try again.","prepare.failedTitle":"translationCore4 could not start","prepare.handoff":"Starting…","prepare.lead":"Getting resources ready for offline use.","prepare.progress":"Preparing resources: {done} of {total}","prepare.starting":"Starting preparation…","prepare.title":"Preparing translationCore4"}},"es-419":{"dir":"ltr","text":{}},"fr":{"dir":"ltr","text":{}},"hi":{"dir":"ltr","text":{}},"id":{"dir":"ltr","text":{}},"pt-BR":{"dir":"ltr","text":{}},"ru":{"dir":"ltr","text":{}},"uk":{"dir":"ltr","text":{}},"vi":{"dir":"ltr","text":{}}}}</script>
+<script>
+(() => {
+  'use strict';
+  // The first-launch window (APP-DESIGN §5.3, unit A9): tC4's desktop-preparing.html, showing
+  // the server's startup state in the saved app language. Counts only, never resource names.
+  const TOKEN_KEY = 'tc4.token';
+  const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+  const data = JSON.parse(document.getElementById('tc4-text').textContent);
+  const title = document.querySelector('h1');
+  const lead = document.querySelector('p:not(#progress)');
+  const status = document.getElementById('progress');
+  let locale = 'en';
+  let shown = null; // null | {type:'preparing',done,total} | {type:'ready'} | {type:'failed',reason}
+  let ended = false;
+
+  const token = (() => {
+    const pair = location.hash.replace(/^#/, '').split('&').find((p) => p.startsWith('t=') && TOKEN.test(p.slice(2)));
+    try {
+      if (pair) { sessionStorage.setItem(TOKEN_KEY, pair.slice(2)); return pair.slice(2); }
+      const kept = sessionStorage.getItem(TOKEN_KEY);
+      return kept && TOKEN.test(kept) ? kept : null;
+    } catch { return pair ? pair.slice(2) : null; }
+  })();
+
+  // tC4's t(): the language's own text when it is a non-empty string, else English.
+  const say = (key, vars = {}) => {
+    const own = data.locales[locale]?.text[key];
+    let s = typeof own === 'string' && own !== '' ? own : data.locales.en.text[key];
+    for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v));
+    return s;
+  };
+
+  const render = () => {
+    if (shown?.type === 'failed') {
+      title.textContent = say('prepare.failedTitle');
+      lead.textContent = say('prepare.failed');
+      status.textContent = shown.reason;
+      return;
+    }
+    title.textContent = say('prepare.title');
+    lead.textContent = say('prepare.lead');
+    status.textContent = shown === null ? say('prepare.starting')
+      : shown.type === 'preparing' ? say('prepare.progress', { done: shown.done, total: shown.total })
+      : say('prepare.handoff');
+  };
+
+  const showLanguage = (id) => {
+    if (!Object.hasOwn(data.locales, id)) return; // not installed: English, as tC4's isLocale
+    locale = id;
+    document.documentElement.lang = id;
+    document.documentElement.dir = data.locales[id].dir;
+    render();
+  };
+
+  // The server's state only moves forward; so does what this page shows.
+  const apply = (startup) => {
+    if (ended || !startup) return;
+    if (startup.type === 'preparing') {
+      const { done, total } = startup.value;
+      if (shown?.type === 'preparing' && done < shown.done) return;
+      shown = { type: 'preparing', done, total };
+    } else if (startup.type === 'ready') {
+      shown = { type: 'ready' }; ended = true;
+    } else if (startup.type === 'failed') {
+      shown = { type: 'failed', reason: startup.value.reason }; ended = true;
+    } else return;
+    render();
+    if (shown.type === 'ready') location.replace(`/#t=${token}`);
+  };
+
+  if (token === null) {
+    apply({ type: 'failed', value: { reason: 'This window was opened without its key.' } });
+    return;
+  }
+  const headers = { 'X-Tc-Token': token, 'X-Tc-Api': '1' };
+
+  const hello = async () => {
+    const response = await fetch('/api/v1/app/hello', {
+      method: 'POST', cache: 'no-store', body: '{}',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+    });
+    if (response.status !== 200) throw new Error(`HTTP ${response.status}`);
+    const reply = await response.json();
+    if (reply.type !== 'ok') throw new Error(JSON.stringify(reply.value));
+    showLanguage(reply.value.prefs.appLocale);
+    apply(reply.value.startup);
+  };
+
+  // The event stream, read with fetch (AD10): `id:` and `data:` lines, a blank line per frame.
+  let after = 0;
+  const listen = async () => {
+    while (!ended) {
+      try {
+        const response = await fetch(`/api/v1/events?after=${after}`, { headers, cache: 'no-store' });
+        if (response.status !== 200 || !response.body) throw new Error(`HTTP ${response.status}`);
+        const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+        let buffer = '';
+        while (!ended) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += value;
+          let end;
+          while ((end = buffer.indexOf('\n\n')) >= 0) {
+            const block = buffer.slice(0, end);
+            buffer = buffer.slice(end + 2);
+            for (const line of block.split('\n')) {
+              if (!line.startsWith('data: ')) continue;
+              const frame = JSON.parse(line.slice(6));
+              after = frame.seq;
+              if (frame.event.type === 'startup') apply(frame.event.value);
+              else if (frame.event.type === 'resync') hello().catch(() => {});
+            }
+          }
+        }
+        reader.cancel().catch(() => {});
+      } catch { /* the server may be closing; try again */ }
+      if (!ended) await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  };
+
+  listen();
+  hello().catch(() => {}); // the stream carries the state if hello fails
+})();
+</script>
+</body></html>
