@@ -18,6 +18,7 @@
 //! | Mint a token | `GET /api/v1/user`, `GET`/`DELETE`/`POST /api/v1/users/{login}/tokens` with Basic auth |
 //! | Organizations and permission | `GET /api/v1/user/orgs`, `GET /api/v1/users/{login}/orgs/{org}/permissions` |
 //! | Create a repository | `POST /api/v1/user/repos` or `POST /api/v1/orgs/{org}/repos` |
+//! | Read a refused push | [`refused_push`], from what libgit2 reports of `POST .../git-receive-pack` |
 //!
 //! Request and answer shapes follow the DCS swagger (`1.23.7+dcs`). Where Door43's prose
 //! docs disagree with it, the swagger and tC4's verified behavior win: the new token's
@@ -49,6 +50,7 @@ pub mod http;
 mod internet;
 mod listing;
 mod names;
+mod push;
 mod repos;
 mod secret;
 mod unpack;
@@ -66,6 +68,7 @@ pub use names::{
     AccountName, GitOid, NewRepoName, ParseError, RepoName, RepoRef, ServerUrl, TagName, TokenName,
     TokenScope, Visibility,
 };
+pub use push::refused_push;
 pub use repos::{
     CreatedRepo, NewRepoOwner, Organization, Release, ReleaseState, RepoInfo, StageRelease,
     StageReleases, Tag,

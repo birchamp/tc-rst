@@ -19,12 +19,28 @@ pub enum Door43Error {
         route: String,
         cause: UnreachableCause,
     },
-    /// 401 or 403: the password or token was refused, or the token lacks a scope.
+    /// 401 or 403 from the REST API: the password or token was refused, or the token lacks
+    /// a scope. A git push without write access is never a 403; see `NoWriteAccess`.
     #[error("{route}: Door43 refused the sign-in ({status}): {message}")]
     AuthFailed {
         route: String,
         status: AuthStatus,
         message: String,
+    },
+    /// A push refused because the account may not write to the repository. Door43 says so
+    /// with HTTP 200 and a ref its pre-receive hook declined; `server_message` is the hook's
+    /// text. See [`crate::refused_push`].
+    #[error("{route}: this account may not write to the repository: {server_message}")]
+    NoWriteAccess {
+        route: String,
+        server_message: String,
+    },
+    /// A push whose ref Door43 refused for another reason, such as a protected branch or a
+    /// push that is not a fast-forward. `server_message` is Door43's text and the ref's status.
+    #[error("{route}: Door43 refused the push: {server_message}")]
+    RefRejected {
+        route: String,
+        server_message: String,
     },
     #[error("{route}: not found: {message}")]
     NotFound { route: String, message: String },

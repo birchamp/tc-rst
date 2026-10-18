@@ -1485,9 +1485,14 @@ async fn smart_http_route(
         (Service::ReceivePack, Caller::Anonymous) => return challenge(),
         (Service::ReceivePack, caller) => match require(caller, "write:repository") {
             Ok(login) if shared.state().can_write(&login, &rec.owner) => Some(login),
-            Ok(_) => {
-                return ApiError::new(StatusCode::FORBIDDEN, "no write access").into_response();
+            Ok(login) if rec.private && !shared.state().is_member(&login, &rec.owner) => {
+                return ApiError::not_found().into_response();
             }
+            // As Door43 (docs/evidence/door43-live-2026-10-17.md, step 6): any signed-in
+            // account gets the advertisement, and a push without write access is refused
+            // inside git's report, with HTTP 200, never with a 403.
+            Ok(_) if method == Method::POST => return smart_http::declined(&body),
+            Ok(login) => Some(login),
             Err(error) => return error.into_response(),
         },
         (Service::UploadPack, Caller::Anonymous) if rec.private => return challenge(),
