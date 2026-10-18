@@ -13,7 +13,7 @@ to 4.0 for work on one), and leaves Defender's scan of new files out.
 
 | Budget (PERFORMANCE.md) | This machine | Laptop, estimated | Verdict |
 |---|---|---|---|
-| Save a verse, record a decision or save an alignment while a materialize, checkpoint or whole-project materialize runs: 25 ms p95 | verse save 14.2 to 22.5 ms p95, decision 14.1 to 22.1 ms, during a whole-project materialize (rounds of 238 to 331 each; worst 235 ms); 19.7 to 25.1 ms p95 during a checkpoint (426 to 501 saves per round); 14.9 ms beside a repack; idle 13.9 to 15.7 ms | not estimated: a save is two fsyncs, which no ratio scales | **met here**, within 25 ms in the quiet rounds and over it by 0 to 5 ms in the noisy ones (below); not shown on the laptop |
+| Save a verse, record a decision or save an alignment while a materialize, checkpoint or whole-project materialize runs: 25 ms p95 | during a whole-project materialize: verse 14.2 to 22.5 ms p95 and decision 14.1 to 22.1 ms (five rounds of 238 to 331 saves each; the worst save 235 ms); during a checkpoint (413 to 527 saves per round over ten checkpoints, a save about every 15 ms): 19.7 to 44.9 ms p95 over ten rounds, **23.9 to 26.3 ms in the last three**, after the seal was split into steps; beside a repack 14.9 ms; with nothing running 13.9 to 15.7 ms (the median is 7.5 to 8.7 ms: two fsyncs) | not estimated: a save is two fsyncs, which no ratio scales | **met during a whole-project job; at the edge during a checkpoint** (below); not shown on the laptop |
 | Materialize one book: 1 s p95 on the reference laptop, no indicator | Psalms after one verse save 190 to 240 ms median, p95 231 to 307 ms (three rounds of 20); after one decision 198 to 242 ms, p95 215 to 281 ms; Jude after one verse save 59 to 63 ms, p95 71 to 74 ms | p95 0.5 to 1.2 s by the two bounds, about 0.6 to 0.9 s with the mix of a materialize (a third of it on four threads) | **not shown**: the estimate is under 1 s in its middle and over it at its top |
 | Materialize many or all files (a book added, pins changed, an upgrade): background, progress bar, saves continue | pins change over the whole Bible: 2.8 to 4.7 s (five runs in each of two rounds); first progress report 316 to 325 ms after the job began, 366 to 407 ms after the command; 24 to 34 progress events | 6 to 19 s (the budget review estimated 10 to 25 s for the same work on the actor) | **met** (no number is budgeted; progress and saves are) |
 | Close a project: 3 s on the laptop (whole Bible, Psalms changed) | 1.0 s median, p95 1.1 to 1.4 s (five runs in each of two rounds) | 2.9 to 4.1 s median | **not shown**: the estimate straddles 3 s |
@@ -87,6 +87,23 @@ built (see the open issues in the unit's report).
 - **The fold cache is written piece by piece.** Encoding its 65 MB into one `Vec` held up to
   twice that beside the fold at the close; the peak at close fell from 519 to 461 MiB with the
   default heap and from 375 to 321 MiB with one.
+
+## Saves during a checkpoint
+
+A checkpoint is about 40 flushes in half a second (the seal's, the materialization's, the two
+flushes of each of the twelve loose git objects, the reference's), and a save needs two on the
+same drive: the drive's flush queue, not the actor, is what a save waits for once the seal is in
+steps. The seal itself was 22 to 35 ms on the actor and made the p95 of a save made during it
+44.9 ms in one round; it now runs in steps (two pending files read, the packs built, each pack
+written and read back, four files removed, the ledger, the consolidation) and the actor serves
+the commands that wait between two steps (`a_save_is_served_between_the_steps_of_a_seal`), which
+gave 23.9 to 26.3 ms in the three rounds that followed, at a load of 6 to 10. Three things are
+left: the consolidation of a month's packs is one step (it runs once a month, and a save made
+during it waits for the step), the reference move at the end of a checkpoint is an actor step of
+about 8 ms (R21 allows it), and a checkpoint writes its git objects one at a time. Writing them
+as one pack would take about 3 flushes instead of about 24, and was not built: libgit2 looks
+for deltas between the objects of any pack it writes, and the new versions of three files of
+5 to 8 MB would take that search longer than the flushes it saves.
 
 ## Memory in detail
 
