@@ -1387,10 +1387,8 @@ impl Project {
         let e = md5_hex(new);
         let entry = self.manifest.paths.get(rel).cloned();
         let Some(disk) = disk else {
-            // Missing: rebuilt, never read as a deletion (I11). A deletion ends a hold too.
-            if entry.as_ref().is_some_and(|en| en.held.is_some()) {
-                self.end_hold(rel);
-            }
+            // Missing: rebuilt, never read as a deletion (I11). A deletion ends a hold too,
+            // which M0 does for the path it writes (§5.10).
             self.dirty.files.insert(file.clone());
             if entry.is_some()
                 && let Ok(path) = RepoPath::parse(rel)

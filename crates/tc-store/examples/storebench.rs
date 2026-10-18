@@ -177,9 +177,13 @@ fn open_once(dir: &Path, case: &str) {
         .expect("open");
     let usable = started.elapsed();
     let peak = status_mib("VmHWM:");
+    // The counters when the project is usable, and again when the open's background work
+    // (the fold cache's write and the storage check, O14) has ended: the check reads every
+    // derived file once, so the two differ by exactly its cost.
     let counters = handle.counters();
     handle.wait_idle();
     let idle = started.elapsed();
+    let after = handle.counters();
     let steady = status_mib("VmRSS:");
     let reports = reports.lock().unwrap().clone();
     let first = reports
@@ -187,16 +191,20 @@ fn open_once(dir: &Path, case: &str) {
         .map(|(at, p)| format!("{at:?} {:?} {}/{}", p.phase, p.done, p.total));
     println!(
         "{case}: usable {:.3} s, background done {:.3} s, peak {peak:.0} MiB, steady {steady:.0} MiB, \
-         files opened {}, journal files {} ({} from the cache), bytes read {}, projected {}, \
-         derived read {}, first report {}, reports {}, load {} before, {} after",
+         files opened {} (after the background work {}), journal files {} ({} from the cache), \
+         bytes read {} ({}), projected {}, derived read {} (storage check read {} files), \
+         first report {}, reports {}, load {} before, {} after",
         usable.as_secs_f64(),
         idle.as_secs_f64(),
         counters.files_opened,
+        after.files_opened,
         counters.journal_files_read,
         counters.journal_files_cached,
         counters.bytes_read,
+        after.bytes_read,
         counters.projected,
         counters.derived_read,
+        after.check_read,
         first.unwrap_or_else(|| "none".into()),
         reports.len(),
         load_before,
