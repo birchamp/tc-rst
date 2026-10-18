@@ -178,7 +178,8 @@ pub struct Conflict {
     pub provisional: ChangeId,
     /// Batches of the heads, for grouping (§8.1).
     pub batches: Vec<BatchId>,
-    /// A head has a MissingParent link (§8.1).
+    /// A head the conflict lists, as a candidate, in a candidate's `also` or as unreadable,
+    /// has a MissingParent link (§7.4, §8.1).
     pub incomplete_history: bool,
     /// Versions (heads, or the bases a merge needs) whose values this computer could not
     /// read (§2.6). They are kept, and no choice may replace them until they can be read;

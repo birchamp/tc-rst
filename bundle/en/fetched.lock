@@ -1,0 +1,38 @@
+{
+  "format": "tc-fetched-lock",
+  "version": 1,
+  "entries": [
+    {
+      "repo": "uW/en_ugl",
+      "commit": "d9d29e2d589258ce27f92b59f753a3af03ab7a72",
+      "tree": "4d24ed9c8ceb768df1069feed0cc375d32cd93ce",
+      "file": "en_ugl-d9d29e2d589258ce27f92b59f753a3af03ab7a72.zip",
+      "sha256": "f2f9c3e8000ba1dce09b5e26e2f89ff0fff29056eadf66c9805ff57478f20f4f",
+      "size": 1270422,
+      "lexiconSha256": "7798835a14559f03b3d3e4b804b6d88f6118923fd07ff39c44e14258a9f3f094",
+      "checked": "2026-10-17",
+      "how": "GET https://git.door43.org/api/v1/repos/uW/en_ugl/git/commits/<commit> (commit.tree.sha); git fetch --depth 1 https://git.door43.org/uW/en_ugl.git <commit> and git rev-parse <commit>^{tree} gave the same id"
+    },
+    {
+      "repo": "uW/en_uhl",
+      "commit": "72df5ac25acf9d51e826b20e3ad883a5a657ef4e",
+      "tree": "ad07f5e41f7052598d90eb8dc2b9ecad811b0b17",
+      "file": "en_uhl-72df5ac25acf9d51e826b20e3ad883a5a657ef4e.zip",
+      "sha256": "bbb8e3c4538528d37c352cd8fa5078aeed5e83c6ca2e10b0b462b1d6b1d09cd3",
+      "size": 2761374,
+      "lexiconSha256": "b3a002bbfe52720624b9e97a1130b138cfb4ecfc30a5d4111e7fa1f1581cc258",
+      "checked": "2026-10-17",
+      "how": "GET https://git.door43.org/api/v1/repos/uW/en_uhl/git/commits/<commit> (commit.tree.sha); git fetch --depth 1 https://git.door43.org/uW/en_uhl.git <commit> and git rev-parse <commit>^{tree} gave the same id"
+    },
+    {
+      "repo": "uW/obs_images_360",
+      "commit": "7146d5b504f6b63b9e11f7dc0b18c594d0ae179d",
+      "tree": "5ff2bce8e085a19ab30b04e06eefd59f0da9adf0",
+      "file": null,
+      "sha256": "d8170e188e272976e46d9fc8397b55a6bab411ac020394a6f19a0698fdc4b937",
+      "size": 37766473,
+      "checked": "2026-10-17",
+      "how": "GET https://git.door43.org/api/v1/repos/uW/obs_images_360/git/commits/<commit> (commit.tree.sha); git fetch --depth 1 https://git.door43.org/uW/obs_images_360.git <commit> and git rev-parse <commit>^{tree} gave the same id; the sha256 and size are of https://git.door43.org/uW/obs_images_360/archive/<commit>.zip as downloaded that day"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{"t":1792259822667,"ev":"shell-started","pid":5570,"versions":{"electron":"37.1.0","chrome":"138.0.7204.35","node":"22.16.0","v8":"13.8.258.18-electron.0"},"spawn":"job"}
+{"t":1792259822696,"ev":"server-started","pid":5608,"port":32837,"ms":23}
+{"t":1792259822869,"ev":"home-loaded","instance":"ffcf655a0d90","port":32837,"serverPid":5608}
+{"t":1792259822885,"ev":"page-loaded"}
+{"t":1792259822894,"ev":"server-exited","pid":5608,"code":null,"signal":"SIGKILL","quitting":false}
+{"t":1792259822906,"ev":"server-started","pid":5650,"port":38991,"restart":true,"sinceExitMs":12}
+{"t":1792259822958,"ev":"home-loaded","instance":"6abe1c5ac47d","port":38991,"serverPid":5650}
+{"t":1792259822974,"ev":"page-loaded"}
+{"t":1792259823168,"ev":"control","command":"quit"}
+{"t":1792259823170,"ev":"quit-start","why":"control"}
+{"t":1792259823175,"ev":"server-closed","pid":5650}
+{"t":1792259823176,"ev":"server-exited","pid":5650,"code":0,"signal":null,"quitting":true}
+{"t":1792259823176,"ev":"server-stopped","exited":true}

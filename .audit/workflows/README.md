@@ -11,6 +11,7 @@ folder cannot lose them. Each runs with the Workflow tool; a run can resume from
 | `storage-chain-B.js` | Units C, S1, S2, P, X and I of `STORAGE.md` under the owner's option B |
 | `domain-obs-lexicon.js` | The `tc-obs` crate and the lexicon repackaging, beside the storage chain |
 | `app-layer-design.js` | Designs `tc-api`, `tc-app`, `tc-server` and the screen port; writes `docs/APP-DESIGN.md` |
+| `app-phase0.js` | Phase 0 of the app layer: the Windows Electronite spike package (G0) and units A1 to A11, merged into `phase0` |
 
 `../research/` holds the research notes the early units read (recovered on 2026-10-16 from the
 agents' transcripts after a scratch folder was cleared).

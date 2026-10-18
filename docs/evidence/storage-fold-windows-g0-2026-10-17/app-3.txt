@@ -1,0 +1,18 @@
+the app's case, in a process of its own: RSS before the open unavailable
+open with the fold cache 1.8565013s, peak RSS unavailable; RSS with the fold open unavailable
+resident memory by kind unavailable
+| Incremental step: save one Psalms verse | 200 | 0.046 ms | 0.199 ms |
+| Incremental step: record one Psalms decision | 200 | 0.014 ms | 0.029 ms |
+| Incremental step: save one Psalms alignment | 200 | 0.014 ms | 0.031 ms |
+| Conflict counts after a save (incremental) | 200 | 0.000 ms | 0.000 ms |
+| Incremental step with a live snapshot: save one Psalms verse | 200 | 0.157 ms | 0.302 ms |
+| Incremental step with a live snapshot: record one Psalms decision | 200 | 0.061 ms | 0.128 ms |
+| Incremental step: resolve one Psalms conflict | 100 | 0.042 ms | 0.091 ms |
+| Conflict list and counts from scratch (every record's conflict built again) | 20 | 21.379 ms | 25.055 ms |
+| Psalms projection: every file of the book (values read from disk) | 20 | 359.138 ms | 397.672 ms |
+| Psalms USFM alone | 20 | 40.061 ms | 44.280 ms |
+| One Psalms chapter's USFM | 20 | 0.251 ms | 0.840 ms |
+Psalms: 5 files, 18699843 bytes; CPU time of a projection, all threads: median unavailable
+| Snapshot (clone of the fold) | 20 | 0.112 ms | 0.307 ms |
+resident memory by kind unavailable
+peak RSS of the incremental steps, conflict lists, Psalms projections and snapshots unavailable; RSS with the fold open after Psalms was projected unavailable

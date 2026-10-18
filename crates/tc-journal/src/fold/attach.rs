@@ -548,8 +548,10 @@ fn local_conflict(state: &FoldState, k: KeyIdx, local: &super::state::LocalConfl
     }
     // A restore race (§7.6): a verse changed after *Start empty* is rewound for projection
     // while *Restore the text* is provisional, so it is a candidate here whichever is (its
-    // `StartOver` changes are the *Start empty* candidate's).
+    // `StartOver` changes are the *Start empty* candidate's). Being listed, a verse head that
+    // continues a change that has not arrived marks this conflict too (§7.4).
     let mut also_keys: Vec<RecordKey> = Vec::new();
+    let mut race_heads: Vec<ChangeIdx> = Vec::new();
     if let RecordKey::BookPresence(book) = &entry.key {
         let race = super::books::race_batches(state, *book);
         if !race.is_empty()
@@ -579,6 +581,7 @@ fn local_conflict(state: &FoldState, k: KeyIdx, local: &super::state::LocalConfl
                         continue;
                     }
                     listed = true;
+                    race_heads.push(*h);
                     match candidate(state, *h, Vec::new(), None) {
                         Some(c) => candidates.push(c),
                         None => unreadable.push(state.meta(*h).id),
@@ -599,7 +602,8 @@ fn local_conflict(state: &FoldState, k: KeyIdx, local: &super::state::LocalConfl
         .iter()
         .map(|h| state.batch(state.meta(*h).batch).id)
         .collect();
-    let incomplete_history = continues_missing(state, &heads);
+    let incomplete_history =
+        continues_missing(state, &heads) || continues_missing(state, &race_heads);
     Conflict {
         id,
         key: entry.key.clone(),

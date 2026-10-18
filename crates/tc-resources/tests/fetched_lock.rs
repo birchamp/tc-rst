@@ -1,5 +1,5 @@
-//! A folder of archives checked against its `fetched.lock`, offline: the shape of
-//! `bundle/en/`, on the fixture folder `fixtures/door43/fetched-lock/`.
+//! A folder of archives checked against its `fetched.lock`, offline: `bundle/en/` itself,
+//! and the fixture folder `fixtures/door43/fetched-lock/` of the same shape.
 // Test helpers sit outside `#[test]` functions, where clippy.toml already allows these.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -12,9 +12,15 @@ use tc_resources::{FetchedLock, Refusal};
 use zip::write::SimpleFileOptions;
 
 const DEMO: &str = "demo-e8c6503832022a8fd38bb426781d6b6127dde664.zip";
+const UGL: &str = "en_ugl-d9d29e2d589258ce27f92b59f753a3af03ab7a72.zip";
+const UHL: &str = "en_uhl-72df5ac25acf9d51e826b20e3ad883a5a657ef4e.zip";
 
 fn fixture_folder() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/door43/fetched-lock")
+}
+
+fn bundle_folder() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bundle/en")
 }
 
 /// A git archive of one commit, named `<repository>-<40 hex>.zip`, as `bundle/en/` names
@@ -86,6 +92,36 @@ fn the_fixture_folder_matches_its_lock() {
         "the tree git rev-parse gave when the fixture was made"
     );
     assert_eq!(lock.entries[1].file, None);
+}
+
+#[test]
+fn the_bundled_lexicons_match_the_trees_door43_reported() {
+    let lock = check_folder(&bundle_folder()).unwrap();
+    let files: Vec<&str> = lock
+        .entries
+        .iter()
+        .filter_map(|e| e.file.as_deref())
+        .collect();
+    assert_eq!(files, [UGL, UHL]);
+}
+
+#[test]
+fn a_changed_byte_in_a_copy_of_a_bundled_lexicon_fails_the_check() {
+    let copy = tempfile::tempdir().unwrap();
+    for name in ["fetched.lock", UGL, UHL] {
+        fs::copy(bundle_folder().join(name), copy.path().join(name)).unwrap();
+    }
+    check_folder(copy.path()).unwrap();
+    let path = copy.path().join(UHL);
+    let mut zip = fs::read(&path).unwrap();
+    let middle = zip.len() / 2;
+    zip[middle] ^= 1;
+    fs::write(&path, &zip).unwrap();
+    let error = check_folder(copy.path()).unwrap_err();
+    assert!(
+        error.starts_with(UHL) && error.contains("SHA-256"),
+        "{error}"
+    );
 }
 
 #[test]

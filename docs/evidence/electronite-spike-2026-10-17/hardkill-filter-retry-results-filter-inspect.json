@@ -1,0 +1,39 @@
+{
+  "case": "inspect",
+  "origin": "http://127.0.0.1:59078",
+  "localStorage": {
+    "n": 100,
+    "at": 1792266322889,
+    "fields": 1
+  },
+  "mirror": {
+    "n": 301,
+    "at": 1792266332936,
+    "entries": 1
+  },
+  "shell": {
+    "versions": {
+      "electron": "37.1.0",
+      "chrome": "138.0.7204.35",
+      "node": "22.16.0",
+      "v8": "13.8.258.18-electron.0"
+    },
+    "platform": "win32",
+    "arch": "x64",
+    "spawn": "job",
+    "patternForm": "patterns with the port",
+    "seen": {
+      "total": 4,
+      "byPath": {
+        "root": 1,
+        "ui": 3
+      }
+    },
+    "restarts": 0,
+    "mirrorAtLaunch": {
+      "lines": 301,
+      "torn": 0,
+      "entries": 1
+    }
+  }
+}

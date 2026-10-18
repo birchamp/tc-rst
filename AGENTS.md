@@ -17,6 +17,13 @@ that writes project data.
   behind the app's internet switch. Tests never touch the network. They use fixtures and
   local fake servers.
 
+## Matching tC4
+
+- Match tC4 4.0's look and behavior: its screens, words, keys and flows.
+- Where tC4's behavior works against what a feature is for, follow what the translator needs
+  instead of copying tC4 (owner ruling, 2026-10-17). Record each such difference with its
+  reason where the design lists declared differences, and tell the owner.
+
 ## Code
 
 - Rust 2024 edition, stable toolchain. `unsafe` is forbidden.
