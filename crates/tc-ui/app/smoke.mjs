@@ -748,12 +748,13 @@ async function caseK(browser, server) {
     inject(jobEvent('jobRunning', 4244));
     await page.waitForFunction(() => window.__tcIdle === false, null, { timeout: 5000 });
     inject(frames.alignSaving);
-    await page.waitForSelector('[data-testid=runtime-held][data-align-saves="1"]', { timeout: 5000 });
+    // The held counts sit on an empty <p>, which is never visible: wait for it in the DOM.
+    await page.waitForSelector('[data-testid=runtime-held][data-align-saves="1"]', { state: 'attached', timeout: 5000 });
     check('K: an aligner\'s save state reaches the page', true);
     inject(frames.internetOn, { instance: 'cd'.repeat(16), seq: 1 });
     await settle();
     check('K: a frame of another server run forgets the jobs, and asks for none', calls(log, 'jobs/get').length === 2, calls(log, 'jobs/get').length);
-    await page.waitForSelector('[data-testid=runtime-held][data-align-saves="0"][data-jobs="0"][data-checkpoints="0"][data-blocked="0"]', { timeout: 5000 });
+    await page.waitForSelector('[data-testid=runtime-held][data-align-saves="0"][data-jobs="0"][data-checkpoints="0"][data-blocked="0"]', { state: 'attached', timeout: 5000 });
     check('K: and the aligner save states, which only events carry and the old run numbered', true);
     check('K: no page error', log.errors.length === 0, log.errors);
     await context.close();
