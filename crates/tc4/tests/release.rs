@@ -10,8 +10,18 @@ use std::time::Duration;
 use common::{START, Tc4, http};
 use tempfile::TempDir;
 
-/// The words no release binary may hold: the test service's endpoint names.
-const HOOK_TEXT: [&str; 4] = ["test/crash", "test/fieldStore", "test/echo", "test/quiet"];
+/// The words no release binary may hold: every endpoint name of the test service, the
+/// application's and the stand-in's alike.
+const HOOK_TEXT: [&str; 8] = [
+    "test/crash",
+    "test/fieldStore",
+    "test/fieldLog",
+    "test/echo",
+    "test/quiet",
+    "test/hold",
+    "test/release",
+    "test/reset",
+];
 
 fn release_binary() -> PathBuf {
     let Some(given) = std::env::var_os("TC4_RELEASE_BIN") else {

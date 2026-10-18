@@ -287,7 +287,13 @@ impl App {
         if self.is_dead() {
             return Answer::Ended;
         }
-        let _in_flight = (path != "test/quiet").then(|| InFlight::enter(&self.inner.calls));
+        // `test/quiet` asks whether a call is in flight, so it does not count itself. Its name is
+        // written only in a build with the hooks: a release binary holds no hook name (AD35).
+        #[cfg(feature = "test-hooks")]
+        let counted = path != <tc_api::test::Quiet as Endpoint>::PATH;
+        #[cfg(not(feature = "test-hooks"))]
+        let counted = true;
+        let _in_flight = counted.then(|| InFlight::enter(&self.inner.calls));
         if let Some(answer) = self.route_product(path, body).await {
             return answer;
         }
