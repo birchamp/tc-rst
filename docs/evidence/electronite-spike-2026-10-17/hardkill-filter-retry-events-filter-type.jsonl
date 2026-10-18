@@ -1,0 +1,4 @@
+{"t":1792266317482,"ev":"shell-started","pid":19104,"versions":{"electron":"37.1.0","chrome":"138.0.7204.35","node":"22.16.0","v8":"13.8.258.18-electron.0"},"spawn":"job"}
+{"t":1792266317544,"ev":"server-started","pid":6404,"port":59078,"ms":53}
+{"t":1792266317875,"ev":"typing-started","t0":1792266317875,"every":50}
+{"t":1792266317904,"ev":"page-loaded"}

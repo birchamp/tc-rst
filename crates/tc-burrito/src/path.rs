@@ -168,6 +168,11 @@ pub(crate) fn check(text: &str) -> Result<(), PathRule> {
 /// The form under which Windows and macOS see two names as one file: NFC, then every
 /// character upper-cased and lower-cased again, so `É` (NFD) meets `é`, `ſ` meets `s` and
 /// `ς` meets `σ`. Folding more than a given file system does only finds more collisions.
+/// Two paths collide when their collision forms are equal (`docs/STORAGE.md` §3.3).
+pub fn collision_form(text: &str) -> String {
+    fold(text)
+}
+
 pub(crate) fn fold(text: &str) -> String {
     text.nfc()
         .flat_map(char::to_uppercase)

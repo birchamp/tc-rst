@@ -19,7 +19,7 @@ use tc_helps::tsv::{
     NotesLayout, TsvScope, WordLinkStyle, parse_notes, parse_questions, parse_word_links,
     write_notes, write_questions, write_word_links,
 };
-use tc_helps::{BibleLocus, CommitSha, HelpItemId, HelpRef, Helps, Note, Occurrence, WrittenRef};
+use tc_helps::{BibleLocus, GitOid, HelpItemId, HelpRef, Helps, Note, Occurrence, WrittenRef};
 
 const PSA: TsvScope = TsvScope::Book(BookId::Psalms);
 
@@ -160,7 +160,7 @@ fn a_reference_kept_as_written_is_on_no_verse_and_listed_with_its_chapter() {
             owner: "unfoldingWord".into(),
             repo: repo.into(),
             tag: Some("v91".into()),
-            commit: CommitSha::parse("e586762e330f482a60c52aedd1c7b3a2f155df8a").unwrap(),
+            commit: GitOid::parse("e586762e330f482a60c52aedd1c7b3a2f155df8a").unwrap(),
         })
     };
     helps.add_notes(&pin("en_tn"), notes.clone()).unwrap();

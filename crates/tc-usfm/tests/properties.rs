@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use tc_usfm::text::{normalize_whitespace, verse_words};
 use tc_usfm::words::{TokenKind, classify, words};
 use tc_usfm::{
-    AlignmentGroup, Book, Document, Error, SourceWord, TargetWord, parse_aligned, plain_text,
+    AlignmentGroup, Book, Document, Error, SourceWord, TargetWord, display_text, parse_aligned,
     target_words, weave,
 };
 
@@ -177,7 +177,7 @@ proptest! {
         prop_assert_eq!(joined, src.clone());
         let tokens: String = classify(&src).iter().map(|t| t.text).collect();
         prop_assert_eq!(tokens, src.clone());
-        let text = plain_text(&src);
+        let text = display_text(&src);
         prop_assert_eq!(normalize_whitespace(&text), text);
         // Any input either reads apart or is refused, and the same for weaving; neither
         // panics, and a woven verse always reads back.
@@ -370,7 +370,7 @@ proptest! {
         let slots = target_words(&verse).unwrap();
         let groups = group_words(&slots, &runs, false);
         let parsed = parse_aligned(&weave(&verse, &groups).unwrap()).unwrap();
-        prop_assert_eq!(plain_text(&parsed.plain), plain_text(&verse));
+        prop_assert_eq!(display_text(&parsed.plain), display_text(&verse));
         prop_assert_eq!(parsed.plain.replace('\n', " "), verse.replace('\n', " "));
         prop_assert_eq!(links(&parsed.groups), links(&groups));
     }

@@ -1,5 +1,5 @@
 use crate::git_tree::ObjectId;
-use crate::names::CommitSha;
+use crate::names::GitOid;
 use std::fmt;
 use std::time::Duration;
 
@@ -138,12 +138,12 @@ pub enum VerificationError {
     #[error("the archive carries no commit id in its comment")]
     ArchiveCommentMissing,
     #[error("the archive says it holds commit {found:?}, not {expected}")]
-    ArchiveCommentMismatch { expected: CommitSha, found: String },
+    ArchiveCommentMismatch { expected: GitOid, found: String },
     #[error("entry {path:?} cannot come from a git commit: {reason}")]
     NotGitContent { path: String, reason: &'static str },
     #[error("the files hash to git tree {computed}, but commit {commit} has tree {expected}")]
     TreeMismatch {
-        commit: CommitSha,
+        commit: GitOid,
         expected: ObjectId,
         computed: ObjectId,
     },
@@ -158,10 +158,7 @@ pub enum VerificationError {
     #[error("metadata.json declares {0} DCS revisions; exactly one is expected")]
     RevisionAmbiguous(usize),
     #[error("the export declares revision {declared:?}, but {expected} was expected")]
-    RevisionMismatch {
-        expected: CommitSha,
-        declared: String,
-    },
+    RevisionMismatch { expected: GitOid, declared: String },
     #[error("ingredient {path:?} does not match metadata.json: {detail}")]
     IngredientMismatch { path: String, detail: String },
 }

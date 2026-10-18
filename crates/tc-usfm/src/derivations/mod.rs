@@ -1,0 +1,194 @@
+//! The versioned derivations (`docs/STORAGE.md` §7.7, §12.2 rule 3). They decide whether an
+//! alignment or a check decision still fits the verse it was made on, so their output is
+//! part of the project format: the `derivations` of `format.json` name their versions, and
+//! a change to any output is a new version.
+//!
+//! Version 1 of each is tC4's behaviour, byte for byte, so alignments and decisions
+//! imported from tC4 and tC3 keep their hashes and their validity:
+//!
+//! - [`plain_text_v1`] is the text tC4 hashes into `targetVerseMd5` and `verseTextMd5`
+//!   (`journal/fold.mjs`): usfm-js 3.4.3 parses `"\v 1 " + content` as a chunk, the `text`
+//!   of every top-level verse object is joined, and the result is trimmed. The parser is
+//!   ported in `usfmjs` with its quirks: the text of `\w` words inside `\zaln` milestones is
+//!   left out, headings that are not displayable are left out, poetry line breaks are kept.
+//! - [`tokenize_v1`] is string-punctuation-tokenizer 2.0.0's default `tokenize`: the words
+//!   and numbers of [`crate::words::classify`], in order.
+//! - [`selections_v1`] is word-aligner-lib's `validateVerseSelections`: the text goes
+//!   through usfm-js's `removeMarker`, and a selection still fits when its text occurs in
+//!   the result exactly `occurrences` times.
+//!
+//! The library throws a TypeError on a few malformed nestings (an end marker that closes a
+//! phrase whose parent is not a marker, a milestone with no words inside another
+//! milestone). There it has no value, so version 1 defines one: [`plain_text_v1`] is then
+//! the content trimmed, which changes with every edit, and [`selections_v1`] says the
+//! selections fit, as tC4's `decisionIsStale` does when the validator fails.
+//!
+//! `removeMarker` also runs out of stack a few thousand levels of nesting down, at a depth
+//! that depends on the JavaScript engine. Version 1 has no depth limit: the port walks with
+//! its own stacks and gives the value the walk has when it finishes, which is the library's
+//! at every depth the library finishes. Every derivation takes time linear in the length of
+//! the verse and the selections.
+
+mod js;
+mod usfmjs;
+mod usfmjs_tables;
+
+use js::{JsStr, concat, js, to_string, trim};
+use usfmjs::{Key, Ref, Val, truthy};
+
+/// The text tC4 hashes for a verse's content (`words + layout` of a verse value): see the
+/// module documentation. Total: every string has a value.
+pub fn plain_text_v1(content: &str) -> String {
+    let parsed = usfmjs::to_json_chunk(&concat(&[&js("\\v 1 "), &js(content)]));
+    if parsed.thrown {
+        return to_string(trim(&js(content)));
+    }
+    let heap = &parsed.heap;
+    let mut text: JsStr = Vec::new();
+    for (_, verse) in &parsed.verses {
+        for object in heap.elems(*verse) {
+            if let Some(value) = heap.get(*object, &Key::Text).filter(|v| truthy(v)) {
+                text.extend(heap.string_of(Some(value)));
+            }
+        }
+    }
+    to_string(trim(&text))
+}
+
+/// The text tC4's Check screen shows and selects in, and its aligner splits into words, for
+/// a verse's content: `verseText` of `src/data/bookModel.js:15` at d310bf3 over usfm-js's verse
+/// objects (`verseTextIndex`, `src/state.jsx:352`). Each object gives its `text`, or else the
+/// `text` of its children one level down; the pieces are joined and trimmed with
+/// JavaScript's `trim`. So a footnote and the items of a `\li` list are not shown, while a
+/// superscription (`\d`), a `\qs` Selah and the words of `\add` or `\w` spans are. It is
+/// never hashed: hashes are of [`plain_text_v1`]. Where usfm-js throws, or an object's
+/// `children` is not a list (tC4's `map` throws), the value is the content trimmed, as for
+/// [`plain_text_v1`].
+pub fn shown_text_v1(content: &str) -> String {
+    let parsed = usfmjs::to_json_chunk(&concat(&[&js("\\v 1 "), &js(content)]));
+    let fallback = || to_string(trim(&js(content)));
+    if parsed.thrown {
+        return fallback();
+    }
+    let heap = &parsed.heap;
+    let text_of = |object: Ref| heap.get(object, &Key::Text).filter(|v| truthy(v));
+    let mut text: JsStr = Vec::new();
+    for (_, verse) in &parsed.verses {
+        for object in heap.elems(*verse) {
+            if let Some(value) = text_of(*object) {
+                text.extend(heap.string_of(Some(value)));
+                continue;
+            }
+            match heap.get(*object, &Key::Children) {
+                None => {}
+                Some(Val::Ref(list)) if heap.is_array(*list) => {
+                    for child in heap.elems(*list) {
+                        if let Some(value) = text_of(*child) {
+                            text.extend(heap.string_of(Some(value)));
+                        }
+                    }
+                }
+                Some(_) => return fallback(),
+            }
+        }
+    }
+    to_string(trim(&text))
+}
+
+/// The words and numbers of `text`, in order, as tC4 lists the words a checker can select.
+pub fn tokenize_v1(text: &str) -> Vec<&str> {
+    crate::words::classify(text)
+        .into_iter()
+        .filter(|t| {
+            matches!(
+                t.kind,
+                crate::words::TokenKind::Word | crate::words::TokenKind::Number
+            )
+        })
+        .map(|t| t.text)
+        .collect()
+}
+
+/// A selection as `selections_v1` checks it: its text and how many times the verse held
+/// that text when it was selected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SelectionCount<'a> {
+    pub text: &'a str,
+    pub occurrences: u32,
+}
+
+/// True when every selection still fits `text`: see the module documentation.
+pub fn selections_v1(text: &str, selections: &[SelectionCount<'_>]) -> bool {
+    SelectionText::v1(text).fits(selections)
+}
+
+/// [`selections_v1`] in two steps, for checking many decisions against one verse: the
+/// verse's text as the validator reads it, made once.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SelectionText(Option<JsStr>);
+
+impl SelectionText {
+    /// The text `selections_v1` searches; none when the library throws on it.
+    pub fn v1(text: &str) -> Self {
+        Self(usfmjs::remove_marker(&js(text)).ok())
+    }
+
+    /// How many times `selection` occurs in the text, as [`selections_v1`] counts it: the
+    /// `occurrences` a selection of it made now records, so that it fits until the text
+    /// changes. `None` when the library throws on the text, where any count fits.
+    pub fn occurrences(&self, selection: &str) -> Option<u32> {
+        let shown = self.0.as_ref()?;
+        Some(u32::try_from(count(shown, &js(selection))).unwrap_or(u32::MAX))
+    }
+
+    /// [`selections_v1`] of the text this was made from.
+    pub fn fits(&self, selections: &[SelectionCount<'_>]) -> bool {
+        let Some(shown) = &self.0 else {
+            return true;
+        };
+        selections
+            .iter()
+            .all(|s| u64::from(s.occurrences) == count(shown, &js(s.text)))
+    }
+}
+
+/// Non-overlapping occurrences of `needle` in `text`, 0 for an empty needle: what a loop of
+/// `indexOf(needle, at)` with `at` set past each match counts. Both come from the project
+/// (a selection is part of a decision), so the search is Knuth-Morris-Pratt, linear in
+/// both lengths; a naive search of a long selection in a long verse takes their product.
+fn count(text: &[u16], needle: &[u16]) -> u64 {
+    if needle.is_empty() {
+        return 0;
+    }
+    // fail[i]: the length of the longest proper border of needle[..=i].
+    let mut fail = vec![0usize; needle.len()];
+    let mut k = 0;
+    for i in 1..needle.len() {
+        while k > 0 && needle[i] != needle[k] {
+            k = fail[k - 1];
+        }
+        if needle[i] == needle[k] {
+            k += 1;
+        }
+        fail[i] = k;
+    }
+    let mut found = 0;
+    let mut matched = 0;
+    for unit in text {
+        while matched > 0 && *unit != needle[matched] {
+            matched = fail[matched - 1];
+        }
+        if *unit == needle[matched] {
+            matched += 1;
+        }
+        if matched == needle.len() {
+            found += 1;
+            // The next occurrence starts after this one.
+            matched = 0;
+        }
+    }
+    found
+}
+
+#[cfg(test)]
+mod tests;

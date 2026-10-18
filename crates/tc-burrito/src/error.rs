@@ -49,8 +49,6 @@ pub enum ValueError {
         "{0:?} is not a media type the burrito schema accepts (lowercase type/subtype, no dots, no parameters)"
     )]
     MimeType(String),
-    #[error("{0:?} is not a lowercase hexadecimal md5 digest")]
-    Md5(String),
     #[error("{0:?} is not a book code the burrito schema accepts")]
     Book(String),
     #[error("{0:?} is not a scope range such as 3, 3-5, 3:1, 3:1-9 or 3:1-4:2")]

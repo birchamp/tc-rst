@@ -1,0 +1,42 @@
+[package]
+name = "tc-journal"
+description = "The tC4 journal: records, changes and their canonical bytes, change lines, pending files, packs, the per-change rules and format versions. No I/O."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tc-core = { path = "../tc-core" }
+tc-usfm = { path = "../tc-usfm" }
+tc-burrito = { path = "../tc-burrito" }
+thiserror.workspace = true
+serde_json = { workspace = true, features = ["raw_value"] }
+sha2.workspace = true
+unicode-normalization.workspace = true
+hmac = "0.13.0"
+uuid = "1.28.0"
+smallvec = "1.16.3"
+im = "15.1.0"
+# One pool of worker threads for the fold's parallel work (placing attached records,
+# projecting a book), however it nests: each thread keeps an allocator heap of its own.
+rayon.workspace = true
+
+# SHA-256 of every change and file name (src/sha.rs). ring needs a random source that
+# wasm32-unknown-unknown lacks, so a wasm32 build hashes with sha2 instead.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ring.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+# The scale corpus of docs/PERFORMANCE.md, for the operation-count tests. It depends on
+# this crate; as a dev-dependency it links the same build of it.
+tc-corpus = { path = "../tc-corpus" }
+# The screens' crates, for the differential test of what they compute against the files the
+# fold writes (tests/screens_and_fold.rs). They depend on this crate, and link this build.
+tc-check = { path = "../tc-check" }
+tc-align = { path = "../tc-align" }
+tc-resources = { path = "../tc-resources" }
+
+[lints]
+workspace = true

@@ -3,8 +3,8 @@
 //! The aligner holds the verse's alignment, the verse text it is shown against, the
 //! standing suggestions and the selected bank words. Every edit goes through one path, as
 //! in tC4's `applyAlignEdit` (`src/state.jsx:5225-5247` at d310bf3): the edit, then the
-//! bank and every card in verse order ([`AlignmentValue::bank_in_verse_order`],
-//! [`AlignmentValue::cards_in_verse_order`]), then [`AlignmentValue::settle`] against the
+//! bank and every card in verse order ([`Alignment::bank_in_verse_order`],
+//! [`Alignment::cards_in_verse_order`]), then [`Alignment::settle`] against the
 //! shown text, then the suggestions are bound again to the edited cards
 //! ([`suggest::rebind`]). An edit that places words also clears the selection. Suggestions
 //! are proposals (D72): the value changes only when the translator accepts one, which is
@@ -19,14 +19,14 @@
 //! Saving is the caller's: `tc-store` writes [`Aligner::value`] as one `Alignment` change
 //! on leaving the verse or two seconds after the last change (STORAGE.md §5.3).
 
-use crate::edit::EditError;
+use crate::edit::{Alignment, EditError, bootstrap};
 use crate::reflow::{self, DroppedLink};
 use crate::selection::{self, Click};
 use crate::suggest::{self, Proposal, RawLink, SessionInput};
-use crate::value::{AlignmentValue, Basis};
+use crate::value::Basis;
 use crate::words::{SourceVerse, TargetVerse};
 use std::collections::HashSet;
-use tc_usfm::TargetWord;
+use tc_journal::record::{AlignmentValue, TargetWord};
 
 /// Mark valid was refused because suggestions stand: they must be accepted or rejected
 /// first, so that "done" never vouches for a link the translator did not make.
@@ -68,15 +68,18 @@ impl Aligner {
     ///
     /// - With no original-language words or no target words, it does not open.
     /// - With no stored value, or one with no cards (the removal form, or the empty
-    ///   value a span change leaves in tC4), the verse starts from
-    ///   [`AlignmentValue::bootstrap`].
-    /// - A stored value made for another span than `basis.span_end` (the verse was
-    ///   joined into a span or split from one since) does not fit the original words
-    ///   shown: the verse starts from the bootstrap, and the stored value is kept aside
-    ///   in [`Aligner::earlier`] for the app to offer, as STORAGE.md §7.7 does.
+    ///   value a span change leaves in tC4), the verse starts from [`bootstrap`].
+    /// - A stored value made for another span than the run `basis` names, moved with its
+    ///   text ([`Basis::fits`], the journal's rule: the verse was joined into a span or
+    ///   split from one since; a renumbered verse still fits) does not fit the original
+    ///   words shown: the verse starts from the bootstrap, and the stored value is kept
+    ///   aside in [`Aligner::earlier`] for the app to offer, as STORAGE.md §7.7 does.
     /// - A stored value made against this text opens as it is, if it is
-    ///   [well formed](AlignmentValue::well_formed).
-    /// - A stored value made against other text, or one that holds a word twice, opens
+    ///   [well formed](Alignment::well_formed) and holds the words of the verse shown.
+    /// - A stored value made against other text, one that holds a word twice, or one whose
+    ///   words are not the shown verse's (the hash is of `plain_text_v1`, which leaves out
+    ///   some shown words, such as a `\qs` Selah, so an edit of such a word keeps the
+    ///   hash), opens
     ///   carried over to `verse` (see [`crate::reflow`]), so every word the aligner
     ///   offers is a word of the verse, in one place: a bank copy of a placed word goes,
     ///   and a word on a second card is dropped and reported.
@@ -102,7 +105,7 @@ impl Aligner {
             return Err(Unavailable::NoWords);
         }
         let mut aligner = Self {
-            value: AlignmentValue::bootstrap(source, &verse, basis.clone()),
+            value: bootstrap(source, &verse, basis.clone()),
             verse,
             proposals: Vec::new(),
             dropped: Vec::new(),
@@ -121,11 +124,14 @@ impl Aligner {
         let Some(stored) = stored.filter(|s| !s.alignments.is_empty()) else {
             return;
         };
-        if stored.span_end != basis.span_end {
+        if !basis.fits(stored) {
             self.earlier = Some(stored.clone());
             return;
         }
-        if !stored.is_stale_against(&self.verse) && stored.well_formed().is_ok() {
+        if !stored.is_stale_against(&self.verse)
+            && stored.well_formed().is_ok()
+            && holds_the_words_of(stored, &self.verse)
+        {
             self.value = stored.clone();
             return;
         }
@@ -322,12 +328,12 @@ impl Aligner {
         let proposed: HashSet<(&str, u32)> = self
             .proposals
             .iter()
-            .map(|p| (p.word.text.as_str(), p.word.occurrence))
+            .map(|p| (p.word.word.as_str(), p.word.occurrence))
             .collect();
         self.value
             .word_bank
             .iter()
-            .filter(|w| !proposed.contains(&(w.text.as_str(), w.occurrence)))
+            .filter(|w| !proposed.contains(&(w.word.as_str(), w.occurrence)))
             .cloned()
             .collect()
     }
@@ -358,4 +364,15 @@ impl Aligner {
     pub fn dragged_words(&self, index: usize) -> Vec<TargetWord> {
         selection::dragged_words(&self.shown_bank(), &self.armed, index)
     }
+}
+
+/// Whether `value` holds exactly the words of `verse`, by text and occurrence, placed or
+/// banked.
+fn holds_the_words_of(value: &AlignmentValue, verse: &TargetVerse) -> bool {
+    let key = |w: &TargetWord| (w.word.clone(), w.occurrence, w.occurrences);
+    let mut held: Vec<_> = value.all_target_words().map(key).collect();
+    let mut words: Vec<_> = verse.words().iter().map(key).collect();
+    held.sort_unstable();
+    words.sort_unstable();
+    held == words
 }

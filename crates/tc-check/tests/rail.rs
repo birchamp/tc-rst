@@ -4,26 +4,27 @@
 
 mod common;
 
-use common::{eng, notes, pin, word_links};
+use common::{apply, eng, notes, pin, t, word_links};
 use tc_check::derive::{notes_for_book, word_links_for_book};
 use tc_check::item::{Category, NoteCategory};
 use tc_check::rail::{
     Filter, GroupLabel, Position, Progress, SortMode, counts, groups, next_undecided, progress,
     start_index,
 };
-use tc_check::status::{Edit, Triage, apply};
+use tc_check::status::{Edit, Triage};
 use tc_check::{
-    CheckItem, CheckKey, CheckState, CheckTarget, Decision, RefPart, Selection, ToolId,
+    CheckItem, CheckKey, CheckState, CheckTarget, DecisionRecord, RefPart, Selection, ToolId,
 };
 use tc_core::BookId;
 use tc_helps::{HelpItemId, HelpRef, Quote, RowId, WordCategory};
+use tc_journal::json::JsonMap;
 
 fn resource() -> tc_check::ResourceRef {
     pin("unfoldingWord/en_tn", "v86", &[]).resource
 }
 
-fn decision(edits: &[Edit]) -> Decision {
-    let mut d: Option<Decision> = None;
+fn decision(edits: &[Edit]) -> DecisionRecord {
+    let mut d: Option<DecisionRecord> = None;
     for edit in edits {
         d = Some(apply(d.as_ref(), edit.clone(), "Dios", &resource()));
     }
@@ -34,7 +35,7 @@ fn state(edits: &[Edit]) -> CheckState {
     if edits.is_empty() {
         return CheckState::undecided();
     }
-    CheckState::of(Some(&decision(edits)), Some(&resource()), Some("Dios"))
+    CheckState::of(Some(&decision(edits)), Some(&resource()), Some(&t("Dios")))
 }
 
 fn dios() -> Vec<Selection> {
@@ -42,6 +43,7 @@ fn dios() -> Vec<Selection> {
         text: "Dios".into(),
         occurrence: 1,
         occurrences: 1,
+        extra: JsonMap::new(),
     }]
 }
 
@@ -85,7 +87,7 @@ fn chip_counts_and_rows_come_from_one_predicate_each() {
 #[test]
 fn an_invalidated_check_is_to_do_and_invalid() {
     let d = decision(&[Edit::Triage(Triage::Valid(dios()))]);
-    let s = CheckState::of(Some(&d), Some(&resource()), Some("Señor"));
+    let s = CheckState::of(Some(&d), Some(&resource()), Some(&t("Señor")));
     assert!(Filter::ToDo.matches(&s));
     assert!(Filter::Invalid.matches(&s));
     assert_eq!(
@@ -104,8 +106,8 @@ fn item(chapter: &str, verse: &str, category: Category, id: &str) -> CheckItem {
             check_id: tc_check::CheckId::parse(id).unwrap(),
             target: CheckTarget::Verse {
                 book: BookId::Titus,
-                chapter: RefPart::new(chapter).unwrap(),
-                verse: RefPart::new(verse).unwrap(),
+                chapter: RefPart::parse(chapter).unwrap(),
+                verse: RefPart::parse(verse).unwrap(),
             },
             occurrence: 1,
         },

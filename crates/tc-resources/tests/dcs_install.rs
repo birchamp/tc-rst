@@ -47,7 +47,7 @@ async fn a_tagged_pin_installs_from_the_burrito_export_and_is_never_fetched_agai
     );
     let metadata = installed.read_text("metadata.json").unwrap();
     assert!(
-        metadata.contains(pin.sha.as_str()),
+        metadata.contains(&pin.sha.to_hex()),
         "the export declares the pinned revision"
     );
 
@@ -217,7 +217,7 @@ async fn an_export_of_another_repository_is_refused() {
     let pin = release(&rig, "unfoldingWord/en_tn", "v86").await;
     let metadata = serde_json::json!({
         "format": "scripture burrito",
-        "identification": {"primary": {"dcs": {"unfoldingWord/en_ult": {"revision": pin.sha.as_str()}}}},
+        "identification": {"primary": {"dcs": {"unfoldingWord/en_ult": {"revision": pin.sha.to_hex()}}}},
         "languages": [{"tag": "en"}],
         "type": {"flavorType": {"name": "scripture", "flavor": {"name": "textTranslation"}}},
         "ingredients": {}
@@ -402,7 +402,7 @@ async fn a_bundled_store_seeds_a_first_run_that_is_offline() {
     // The registry owner differs in case from the pin's; the identity still matches.
     assert!(machine.has_dcs(&tc_resources::ResourcePin::new(
         repo_path("Es-419_gl/es-419_tn"),
-        pin.sha.clone()
+        pin.sha
     )));
 }
 

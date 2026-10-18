@@ -7,6 +7,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;
+use tc_align::Alignment;
+use tc_align::bootstrap;
 
 use common::*;
 use serde_json::Value;
@@ -15,13 +17,13 @@ use tc_align::{Aligner, AlignmentValue, SourceVerse, SourceWord, TargetVerse, Ta
 
 fn greek(text: &str, strong: &str, lemma: &str) -> SourceWord {
     SourceWord {
-        content: text.to_owned(),
+        word: text.to_owned(),
         strong: Some(strong.to_owned()),
         lemma: Some(lemma.to_owned()),
         morph: Some("Gr,N".to_owned()),
         occurrence: 1,
         occurrences: 1,
-        extra: Vec::new(),
+        extra: tc_journal::json::JsonMap::new(),
     }
 }
 
@@ -36,26 +38,26 @@ const TEXT: &str = "según la fe de los escogidos y la verdad";
 
 fn boot() -> (AlignmentValue, TargetVerse) {
     let verse = TargetVerse::new(TEXT);
-    (AlignmentValue::bootstrap(&orig(), &verse, basis(1)), verse)
+    (bootstrap(&orig(), &verse, basis(1)), verse)
 }
 
 fn bank(value: &AlignmentValue, text: &str, occurrence: u32) -> TargetWord {
     value
         .word_bank
         .iter()
-        .find(|w| w.text == text && w.occurrence == occurrence)
+        .find(|w| w.word == text && w.occurrence == occurrence)
         .cloned()
         .unwrap_or_else(|| panic!("{text} {occurrence} is not banked"))
 }
 
 fn card(value: &AlignmentValue, i: usize) -> Vec<String> {
-    keys(&value.alignments[i].targets)
+    keys(&value.alignments[i].bottom_words)
 }
 
 fn keys(words: &[TargetWord]) -> Vec<String> {
     words
         .iter()
-        .map(|w| format!("{}/{}", w.text, w.occurrence))
+        .map(|w| format!("{}/{}", w.word, w.occurrence))
         .collect()
 }
 
@@ -96,7 +98,7 @@ fn only_the_target_words_move_and_on_every_card() {
     assert_eq!(card(&sorted, 0), ["según/1", "los/1"]);
     assert_eq!(card(&sorted, 1), ["y/1", "verdad/1"]);
     let sources = |v: &AlignmentValue| -> Vec<Vec<SourceWord>> {
-        v.alignments.iter().map(|g| g.sources.clone()).collect()
+        v.alignments.iter().map(|g| g.top_words.clone()).collect()
     };
     assert_eq!(sources(&sorted), sources(&value));
     assert_eq!(sorted.word_bank, value.word_bank);
@@ -137,27 +139,27 @@ fn a_stored_out_of_order_card_opens_in_verse_order_with_nothing_to_save() {
 
 #[test]
 fn weaving_a_card_in_drop_order_or_in_verse_order_gives_the_same_bytes() {
-    let (value, plain) = sample_tit_1_1();
+    let (value, content) = sample_tit_1_1();
     // "de" (the first) on the Παῦλος card next to "Pablo": two words in one card.
     let de = bank(&value, "de", 1);
     let with_card = |bottom: Vec<TargetWord>| {
         let mut v = value.clone();
-        v.alignments[0].targets = bottom;
+        v.alignments[0].bottom_words = bottom;
         v.word_bank.retain(|w| w != &de);
         v
     };
-    let pablo = value.alignments[0].targets.clone();
+    let pablo = value.alignments[0].bottom_words.clone();
     let in_order = weave_verse(
-        &plain,
+        &content,
         &with_card([pablo.clone(), vec![de.clone()]].concat()),
     )
     .unwrap();
-    let reversed = weave_verse(&plain, &with_card([vec![de.clone()], pablo].concat())).unwrap();
+    let reversed = weave_verse(&content, &with_card([vec![de.clone()], pablo].concat())).unwrap();
     assert_eq!(reversed, in_order);
     assert!(in_order.contains("\\zaln-s"));
 }
 
-/// TIT 1:1 of tC4's sample project: its stored record and the verse's plain text.
+/// TIT 1:1 of tC4's sample project: its stored record and the verse's content.
 fn sample_tit_1_1() -> (AlignmentValue, String) {
     let file: Value = serde_json::from_str(&read(
         "fixtures/tc4/sample-burrito/ingredients/checking/alignments/TIT.json",
@@ -165,7 +167,7 @@ fn sample_tit_1_1() -> (AlignmentValue, String) {
     .unwrap();
     let value = record::from_record(&file["chapters"]["1"]["1"], basis(1)).unwrap();
     let body = verse_body("fixtures/tc4/sample-burrito/ingredients/TIT.usfm", "1:1");
-    (value, tc_usfm::plain_text(&body))
+    (value, body)
 }
 
 // ---- The aligner keeps every card in verse order after every edit ----
@@ -180,17 +182,7 @@ fn every_edit_leaves_each_card_in_verse_order_wherever_the_word_was_dropped() {
     }
     assert_eq!(card(aligner.value(), 0), ["la/1", "fe/1", "los/1"], "place");
     aligner.place(1, &word(&aligner, "verdad", 1)).unwrap();
-    aligner
-        .move_word(
-            0,
-            1,
-            &TargetWord {
-                text: "la".into(),
-                occurrence: 1,
-                occurrences: 2,
-            },
-        )
-        .unwrap();
+    aligner.move_word(0, 1, &common::word("la", 1, 2)).unwrap();
     assert_eq!(card(aligner.value(), 1), ["la/1", "verdad/1"], "move");
     aligner.place(1, &word(&aligner, "según", 1)).unwrap();
     aligner.merge(1, 0).unwrap();
@@ -217,8 +209,8 @@ fn every_edit_leaves_each_card_in_verse_order_wherever_the_word_was_dropped() {
 
 #[test]
 fn tc4s_sample_record_opens_in_verse_order_and_is_saved_in_it_only_after_an_edit() {
-    let (stored, plain) = sample_tit_1_1();
-    let verse = TargetVerse::new(&plain);
+    let (stored, content) = sample_tit_1_1();
+    let verse = TargetVerse::new(&content);
     // tC4 4.0 wrote this bank in its bootstrap order: every first occurrence, then every
     // second.
     assert_eq!(

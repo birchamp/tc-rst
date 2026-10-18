@@ -35,7 +35,7 @@ pub use error::{
     StoryWriteProblem, TsvTable, WriteProblem, YamlFile,
 };
 pub use ids::{
-    AcademyArticleId, AquiferContentId, CommitSha, HelpItemId, Manual, Occurrence, Quote, RowId,
+    AcademyArticleId, AquiferContentId, GitOid, HelpItemId, Manual, Occurrence, Quote, RowId,
     Sha256Digest, Slug, WordArticleId, WordCategory,
 };
 pub use model::{

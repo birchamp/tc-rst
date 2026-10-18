@@ -1,7 +1,10 @@
-//! Plain, readable verse text for display and hashing.
+//! The readable text of a verse: what a screen shows, and what the Check screen and the
+//! aligner split into words.
 //!
-//! [`plain_text`] reads a verse body (the USFM after `\v N `) and keeps only what a reader
-//! sees as the verse:
+//! [`display_text`] reads a verse body (the USFM after `\v N `) and keeps only what a reader
+//! sees as the verse, as tC4's `verseText` does (`src/views/verseText.js:9` at d310bf3, the
+//! text of `verseTextIndex` that tC4's Check screen shows and its aligner banks the words
+//! of):
 //!
 //! - Text outside markers, and the text inside character spans such as `\w`, `\add` or
 //!   `\nd`, is kept. Attribute lists (`|x-occurrence="1"`) are not text.
@@ -22,24 +25,22 @@
 //! typography, not layout. No Unicode normalization (NFC) is applied: the text keeps the
 //! code points of the file.
 //!
-//! tC4 hashes a verse for its alignment record (`targetVerseMd5`, invariant I-3) with
-//! usfm-js: the top-level text of its journal slot, trimmed (`verseTextMd5` in
-//! `journal/fold.mjs`). On the tC4 fixtures this text equals that one for all 239 verses
-//! of the plain drafts and of UHB Jonah (`fixtures/usfm/verse-text-vectors.json`). They
-//! differ where usfm-js is uneven: it keeps the line breaks inside a poetic verse and
-//! doubled spaces, it hashes a heading that introduces the next verse into this one
-//! (its slot runs to the next `\v`), and it drops the text of `\li` list items and of
-//! `\w` words inside `\zaln` milestones. A record that tC4 stamped on such a verse does
-//! not match the md5 of this text: in particular every verse with a poetry or paragraph
-//! line break inside it. This crate does not yet reproduce usfm-js's text, so code that
-//! must check a stored `targetVerseMd5` cannot use this function for it.
+//! It is never hashed. tC4 hashes a verse for its alignment record (`targetVerseMd5`,
+//! invariant I-3) with usfm-js: the top-level text of its journal slot, trimmed
+//! (`verseTextMd5` in `journal/fold.mjs`), which is [`crate::plain_text_v1`]. On the tC4
+//! fixtures the two texts are equal for all 239 verses of the plain drafts and of UHB Jonah
+//! (`fixtures/usfm/verse-text-vectors.json`). They differ where usfm-js is uneven: it keeps
+//! the line breaks inside a poetic verse and doubled spaces, it hashes a heading that
+//! introduces the next verse into this one (its slot runs to the next `\v`), and it drops
+//! the text of `\li` list items, of a `\qs` written over lines (the ULT's Selah) and of
+//! `\w` words inside `\zaln` milestones.
 
 use crate::doc::{Document, Marker, Node};
 use crate::markers::{self, MarkerClass};
 use crate::words::{self, TokenKind, WordToken};
 
-/// The normalized plain text of a verse body. See the module documentation.
-pub fn plain_text(body: &str) -> String {
+/// The readable text of a verse body, whitespace normalized. See the module documentation.
+pub fn display_text(body: &str) -> String {
     let doc = Document::parse(body);
     let mut raw = String::with_capacity(body.len());
     for piece in text_pieces(doc.nodes()) {
@@ -186,7 +187,7 @@ mod tests {
     fn notes_attributes_and_headings_are_not_verse_text() {
         let body = "The first \\w word|x-occurrence=\"1\"\\w*\n\\zaln-e\\* has a note \\f + \\fr 1:1 \\ft hidden\\f*  here.\n\\s A heading\n\\q2 and \\nd Lord\\nd*'s \\ca 2\\ca*line.\u{A0}!";
         assert_eq!(
-            plain_text(body),
+            display_text(body),
             "The first word has a note here. and Lord's line.\u{A0}!"
         );
     }
@@ -195,7 +196,7 @@ mod tests {
     fn a_superscription_is_verse_text_and_a_section_heading_is_not() {
         let body = "\\d A psalm of David.\n\\q1 Yahweh, hear David.\n\\s Not this\n\\q2 and \\sp this\n\\q1 too.";
         assert_eq!(
-            plain_text(body),
+            display_text(body),
             "A psalm of David. Yahweh, hear David. and this too."
         );
         let david: Vec<(u32, u32)> = verse_words(body)
@@ -221,7 +222,7 @@ mod tests {
     #[test]
     fn whitespace_collapses_and_trims() {
         assert_eq!(normalize_whitespace("\n a \t\r\n b\u{2003}c  "), "a b c");
-        assert_eq!(plain_text("___\n"), "___");
-        assert_eq!(plain_text(""), "");
+        assert_eq!(display_text("___\n"), "___");
+        assert_eq!(display_text(""), "");
     }
 }

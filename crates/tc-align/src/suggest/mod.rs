@@ -32,10 +32,11 @@ mod wordmap;
 pub use boost::Booster;
 pub use engine::{MIN_BOOST_VERSES, Model, bound_corpus, max_complexity};
 
-use crate::value::AlignmentValue;
+use crate::edit::Alignment;
 use crate::words::TargetVerse;
 use std::collections::HashMap;
-use tc_usfm::TargetWord;
+use tc_journal::record::AlignmentValue;
+use tc_journal::record::TargetWord;
 
 /// A word as the engine sees it: its text, its position in the verse, its occurrence,
 /// and for an original-language word its Strong's number, lemma and morphology.
@@ -296,9 +297,9 @@ fn source_seeds(value: &AlignmentValue) -> (Vec<TokenSeed>, Vec<usize>) {
     let mut seeds = Vec::new();
     let mut card_of = Vec::new();
     for (card, group) in value.alignments.iter().enumerate() {
-        for word in &group.sources {
+        for word in &group.top_words {
             seeds.push(TokenSeed {
-                text: word.content.clone(),
+                text: word.word.clone(),
                 position: seeds.len(),
                 occurrence: word.occurrence,
                 occurrences: word.occurrences,
@@ -319,7 +320,7 @@ pub fn target_seeds(verse: &TargetVerse) -> Vec<TokenSeed> {
         .iter()
         .enumerate()
         .map(|(position, w)| TokenSeed {
-            text: w.text.clone(),
+            text: w.word.clone(),
             position,
             occurrence: w.occurrence,
             occurrences: w.occurrences,
@@ -346,18 +347,22 @@ fn placed_links(
         .map(|t| (key(&t.text, t.occurrence), t.position))
         .collect();
     let mut out = Vec::new();
-    for group in value.alignments.iter().filter(|g| !g.targets.is_empty()) {
+    for group in value
+        .alignments
+        .iter()
+        .filter(|g| !g.bottom_words.is_empty())
+    {
         let s: Vec<usize> = group
-            .sources
+            .top_words
             .iter()
-            .filter_map(|w| source_at.get(&key(&w.content, w.occurrence)).copied())
+            .filter_map(|w| source_at.get(&key(&w.word, w.occurrence)).copied())
             .collect();
         let t: Vec<usize> = group
-            .targets
+            .bottom_words
             .iter()
-            .filter_map(|w| target_at.get(&key(&w.text, w.occurrence)).copied())
+            .filter_map(|w| target_at.get(&key(&w.word, w.occurrence)).copied())
             .collect();
-        if s.len() == group.sources.len() && t.len() == group.targets.len() {
+        if s.len() == group.top_words.len() && t.len() == group.bottom_words.len() {
             out.push(PositionLink {
                 source: s,
                 target: t,
@@ -410,7 +415,7 @@ pub fn proposals(value: &AlignmentValue, verse: &TargetVerse, raw: &[RawLink]) -
     let bank: HashMap<WordKey, &TargetWord> = value
         .word_bank
         .iter()
-        .map(|w| (key(&w.text, w.occurrence), w))
+        .map(|w| (key(&w.word, w.occurrence), w))
         .collect();
     let mut taken = std::collections::HashSet::new();
     let mut out = Vec::new();
@@ -461,13 +466,13 @@ pub fn rebind(value: &AlignmentValue, proposals: &[Proposal]) -> Vec<Proposal> {
             value
                 .word_bank
                 .iter()
-                .any(|w| w.text == p.word.text && w.occurrence == p.word.occurrence)
+                .any(|w| w.word == p.word.word && w.occurrence == p.word.occurrence)
         })
         .filter_map(|p| {
             let card = value.alignments.iter().position(|g| {
-                g.sources
+                g.top_words
                     .iter()
-                    .any(|w| w.content == p.source.word && w.occurrence == p.source.occurrence)
+                    .any(|w| w.word == p.source.word && w.occurrence == p.source.occurrence)
             })?;
             Some(Proposal { card, ..p.clone() })
         })

@@ -26,12 +26,12 @@ use std::collections::{BTreeSet, HashSet};
 use tc_burrito::ScopeRange;
 use tc_core::BookId;
 use tc_helps::{
-    BibleLocus, BibleRef, HelpItemId, HelpRef, Note, ObsRef, Occurrence, WordArticleId, WordLink,
+    BibleLocus, BibleRef, HelpItemId, HelpRef, Note, Occurrence, WordArticleId, WordLink,
 };
 use tc_versification::{BookCode, MapOutcome, RowReference, Scheme, Unplaceable, map_reference};
 
 use crate::item::{Category, CheckItem, NoteCategory};
-use crate::key::{CheckId, CheckKey, CheckTarget, RefPart, ToolId};
+use crate::key::{self, CheckId, CheckKey, CheckTarget, RefPart, ToolId};
 use crate::scope;
 
 /// What a Bible check list is built for.
@@ -319,8 +319,8 @@ fn bible_target(
     };
     let (chapter, verse) = match &place.locus {
         BibleLocus::BookIntro => (text("front")?, text("intro")?),
-        BibleLocus::ChapterIntro(c) => (RefPart::number(*c), text("intro")?),
-        BibleLocus::ChapterFront(c) => (RefPart::number(*c), text("front")?),
+        BibleLocus::ChapterIntro(c) => (RefPart::from_number(*c), text("intro")?),
+        BibleLocus::ChapterFront(c) => (RefPart::from_number(*c), text("front")?),
         BibleLocus::AsWritten(cell) => cell_parts(cell.as_str())?,
         BibleLocus::Verses(_) => {
             let cell = read_from
@@ -359,8 +359,11 @@ fn story_row<'a>(
         skipped.push(row.skip(SkipReason::OutsideList));
         return;
     }
-    let at: ObsRef = *at;
-    rows.push((row, CheckTarget::Frame(at)));
+    let Some(target) = key::frame_target(*at) else {
+        skipped.push(row.skip(SkipReason::OutsideList));
+        return;
+    };
+    rows.push((row, target));
 }
 
 fn finish_stories(rows: Vec<(Row<'_>, CheckTarget)>, mut skipped: Vec<Skipped>) -> CheckList {
@@ -406,7 +409,7 @@ fn finish_book(
                     CheckTarget::Verse { chapter, verse, .. } => {
                         scope::in_scope(spec.scope, chapter, verse)
                     }
-                    CheckTarget::Frame(_) => true,
+                    CheckTarget::Frame { .. } => true,
                 };
                 if inside {
                     items.push(CheckItem {
@@ -468,8 +471,8 @@ fn place(target: &CheckTarget, spec: &BookSpec<'_>) -> Placement {
     };
     let row = RowReference {
         book: BookCode::from(*book),
-        chapter: chapter.to_versification(),
-        verse: verse.to_versification(),
+        chapter: key::to_versification(chapter),
+        verse: key::to_versification(verse),
     };
     match map_reference(spec.resource_frame, to, &row) {
         MapOutcome::SameFrame(_) => kept(),
@@ -480,11 +483,19 @@ fn place(target: &CheckTarget, spec: &BookSpec<'_>) -> Placement {
                     in_scope: whole,
                 };
             }
+            // A mapped verse or span label is digits and a hyphen, which a key holds.
+            let Ok(verse) = key::from_versification(&tc_versification::RefPart::from(at.verses))
+            else {
+                return Placement::Dropped {
+                    reason: DropReason::Unplaceable(Unplaceable::MalformedReference),
+                    in_scope: whole,
+                };
+            };
             Placement::Placed {
                 target: CheckTarget::Verse {
                     book: *book,
-                    chapter: RefPart::number(at.chapter),
-                    verse: RefPart::from(&tc_versification::RefPart::from(at.verses)),
+                    chapter: RefPart::from_number(at.chapter),
+                    verse,
                 },
                 mapped: true,
             }

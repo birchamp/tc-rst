@@ -117,7 +117,8 @@ check in CI that can fail.
   the browser engine used by tests. The app's own interface is right-to-left in Arabic,
   as in tC4 4.0, not only the scripture text. Graphite rendering is checked by a probe that
   also measures vertical glyph extent. That probe runs in the Electronite shell on the
-  release pipeline, because this container cannot run Electronite.
+  release pipeline for Windows and macOS. Electronite's Linux build also runs in this
+  container under Xvfb (G0, 2026-10-17), so the probe can run here too.
 - **P9. Carry-over.** A tC4 4.0 project, a tC3 project, raw USFM and a Scripture Burrito
   each import into a valid project with their text unchanged byte for byte. The tC4 4.0
   cases include:
@@ -148,8 +149,9 @@ These constraints come from this build environment:
   Door43 behavior is therefore tested against a local git server and a fake Gitea API
   built from the Gitea swagger file and tC4's recorded fixtures. Live Door43 calls are
   open until a run on a machine with access.
-- Electronite cannot run here, so the Graphite proof is open until it runs on the
-  release pipeline.
+- Electronite's Linux build runs here under Xvfb, as root with `--no-sandbox` (G0,
+  2026-10-17, which saw Awami Nastaliq joined by Graphite). The Graphite proof on Windows
+  and macOS is open until it runs on the release pipeline.
 - The bundled English suite lives in `bundle/en/`. The OBS image pack is too large for git,
   so the release pipeline downloads it at its pinned commit and checks it against
   `bundle/en/fetched.lock`. The installer carries it, so nobody who installs the app

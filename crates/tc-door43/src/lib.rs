@@ -53,8 +53,8 @@ pub use git_tree::ObjectId;
 pub use internet::{InternetSwitch, Offline};
 pub use listing::{Listing, Skipped};
 pub use names::{
-    AccountName, CommitSha, NewRepoName, ParseError, RepoName, RepoRef, ServerUrl, TagName,
-    TokenName, TokenScope, Visibility,
+    AccountName, GitOid, NewRepoName, ParseError, RepoName, RepoRef, ServerUrl, TagName, TokenName,
+    TokenScope, Visibility,
 };
 pub use repos::{
     CreatedRepo, NewRepoOwner, Organization, Release, ReleaseState, RepoInfo, StageRelease,

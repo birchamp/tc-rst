@@ -7,15 +7,24 @@
 //!   and [`tc_core::VerseSpan`], and replaces units (by key, or by index for units
 //!   without a unique key) while keeping every other byte. The rule for which unit owns a
 //!   leading paragraph marker, heading or sidebar is in [`book`].
-//! - [`plain_text`] gives the readable text of a verse for display and hashing, with the
-//!   normalization documented in [`text`].
+//! - [`display_text`] gives the readable text of a verse with the normalization documented
+//!   in [`text`], the text tC4's source panes show. The Check screen and the aligner show
+//!   [`shown_text_v1`], tC4's `verseText` of its book model. Neither is hashed:
+//!   [`plain_text_v1`] is the text a hash is of.
 //! - [`words`] splits text into words exactly as tC4 does, with occurrence numbers.
 //! - [`align`] reads, strips and weaves `\zaln` word alignment the way en_ult and tC4's
 //!   export write it.
+//! - [`codec`] cuts a book into the journal's records (header, chapter fronts, verse words
+//!   and layout) and writes it back byte for byte.
+//! - [`derivations`] holds the versioned derivations that decide computed validity:
+//!   [`plain_text_v1`], [`tokenize_v1`] and [`selections_v1`], tC4's behaviour byte for byte,
+//!   and the text the screens show, [`shown_text_v1`].
 
 pub mod align;
 mod attributes;
 pub mod book;
+pub mod codec;
+pub mod derivations;
 mod doc;
 mod lex;
 pub mod markers;
@@ -28,8 +37,11 @@ pub use align::{
 };
 pub use attributes::{Attribute, Attributes};
 pub use book::{Book, ChapterMark, Segment, SegmentKind, VerseUnit};
+pub use derivations::{
+    SelectionCount, SelectionText, plain_text_v1, selections_v1, shown_text_v1, tokenize_v1,
+};
 pub use doc::{Document, Marker, Milestone, Node, Span};
-pub use text::plain_text;
+pub use text::display_text;
 
 use tc_core::VerseSpan;
 

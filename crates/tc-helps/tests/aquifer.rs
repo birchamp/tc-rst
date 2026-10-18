@@ -21,7 +21,7 @@ use tc_helps::markdown::{html_to_markdown, plain_text};
 use tc_helps::metadata::{AquiferPin, HelpsSource};
 use tc_helps::tsv::{TsvScope, parse_notes};
 use tc_helps::{
-    AcademyArticleId, AquiferContentId, CheckBlocker, CheckReadiness, CommitSha, Error, HelpRef,
+    AcademyArticleId, AquiferContentId, CheckBlocker, CheckReadiness, Error, GitOid, HelpRef,
     Helps, JsonFile, NotACheck, Note, Occurrence, PinMismatch,
 };
 
@@ -56,7 +56,7 @@ fn pin(code: &str, language: &str, commit: &str) -> AquiferPin {
         resource_code: code.into(),
         language: language.into(),
         tag: "v2026-10-12".into(),
-        commit: CommitSha::parse(commit).unwrap(),
+        commit: GitOid::parse(commit).unwrap(),
         asset_sha256: None,
     }
 }

@@ -1,0 +1,21 @@
+{
+  "derivations": {
+    "plainText": 1,
+    "selections": 1,
+    "tokenizer": 1,
+    "verseSplit": 1
+  },
+  "derivedPaths": [
+    "ingredients/*.usfm",
+    "ingredients/vrs.json",
+    "ingredients/checking/**",
+    "ingredients/content/*.md",
+    "ingredients/tc/comments/*.json",
+    "ingredients/tc/conflicts.json",
+    "ingredients/tc/format.json"
+  ],
+  "format": "tc-project",
+  "major": 1,
+  "minReaderMinor": 0,
+  "minor": 0
+}

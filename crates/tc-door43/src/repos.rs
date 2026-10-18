@@ -2,7 +2,7 @@
 //! the types this crate hands out.
 
 use crate::listing::text;
-use crate::names::{AccountName, CommitSha, RepoRef, ServerUrl, TagName, Visibility};
+use crate::names::{AccountName, GitOid, RepoRef, ServerUrl, TagName, Visibility};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use url::Url;
@@ -48,7 +48,7 @@ pub struct StageReleases {
 pub struct StageRelease {
     /// A tag for `prod` and `preprod`; `latest` may name a branch.
     pub ref_name: String,
-    pub commit: CommitSha,
+    pub commit: GitOid,
     pub released: Option<String>,
 }
 
@@ -56,7 +56,7 @@ pub struct StageRelease {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tag {
     pub name: TagName,
-    pub commit: CommitSha,
+    pub commit: GitOid,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

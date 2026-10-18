@@ -47,6 +47,11 @@ const MERGED = { type: 'object', properties: { merged: { type: 'boolean' }, head
 const wt = (u) => `${MAIN}/.claude/worktrees/p0-${u.key}`
 const br = (u) => `p0-${u.key}`
 
+// Owner, 2026-10-18: Opus plans and reviews, Sonnet edits, Haiku reads. Calls that had already finished keep their
+// prompts and options unchanged, so a resume replays them from the cache.
+const FINISHED = new Set(['build:G0', 'verify:G0#1', 'fix:G0#1', 'build:A1', 'verify:A1#1', 'fix:A1#1', 'build:A6a', 'verify:A6a#1', 'fix:A6a#1', 'build:A10', 'verify:A10#1', 'fix:A10#1', 'build:A11', 'verify:A11#1'])
+const tier = (label, model) => FINISHED.has(label) ? {} : { model }
+
 let mergeChain = Promise.resolve()
 function serialMerge(fn) { const p = mergeChain.then(fn); mergeChain = p.catch(() => null); return p }
 
@@ -58,6 +63,7 @@ const LENSES = [
 
 async function verifyAndFix(u, report) {
   for (let round = 1; round <= 3; round++) {
+    if (u.key === 'g0' && round > 1) return { ok: false, report, why: 'G0 was merged into main by hand and run on Windows on 2026-10-17' }
     let problems = []
     let verdicts = []
     const base = `${COMMON}\n\nYou are an independent, skeptical VERIFIER of design unit ${u.id}, in the git worktree ${wt(u)} (cd there; branch ${br(u)}; do not create another worktree; leave it clean with HEAD unchanged). The task was:\n<<<\n${u.task}\n>>>\nThe builder reported:\n<<<\n${report}\n>>>\nDo not trust the report. Read the diff (git diff ${INT}...HEAD) and the design rows it implements. Check every claim against the code and, where it concerns tC4, against tC4's source. Revert the core of each change and confirm its tests fail, then restore. Attack it with throwaway tests (never commit them). Run the gates (${GATES}). Report only problems you verified by running code. verdict = merge only if the unit's "done when" is met, the gates pass and no blocker or major problem remains.`
@@ -76,7 +82,7 @@ async function verifyAndFix(u, report) {
     log(`${u.id} round ${round}: ${allMerge ? 'merge' : 'fix_first'}, ${serious.length} blocker/major, ${problems.length - serious.length} minor`)
     if (allMerge && !problems.length) return { ok: true, report }
     if (round === 3 && serious.length) return { ok: false, report, problems }
-    const fx = await agent(`${COMMON}\n\nYou are FIXING verified problems in design unit ${u.id}, in the git worktree ${wt(u)} (cd there; branch ${br(u)}). The task:\n<<<\n${u.task}\n>>>\nThe verifiers found:\n<<<\n${JSON.stringify(problems, null, 1)}\n>>>\nFix every blocker and major at the root and the minors; add a regression test for each that fails without the fix. If you disagree, explain with evidence. Run the gates; commit. ${ATTR} Final answer: each problem fixed or rejected (why), test counts.`, { label: `fix:${u.id}#${round}`, phase: 'Build' })
+    const fx = await agent(`${COMMON}\n\nYou are FIXING verified problems in design unit ${u.id}, in the git worktree ${wt(u)} (cd there; branch ${br(u)}). The task:\n<<<\n${u.task}\n>>>\nThe verifiers found:\n<<<\n${JSON.stringify(problems, null, 1)}\n>>>\nFix every blocker and major at the root and the minors; add a regression test for each that fails without the fix. If you disagree, explain with evidence. Run the gates; commit.${FINISHED.has(`fix:${u.id}#${round}`) ? '' : ' A previous fixer may have been stopped part way (a usage limit): if the worktree has uncommitted changes or commits after the verification, read them, keep what is sound, and continue.'} ${ATTR} Final answer: each problem fixed or rejected (why), test counts.`, { label: `fix:${u.id}#${round}`, phase: 'Build', ...tier(`fix:${u.id}#${round}`, 'sonnet') })
     if (!fx) return { ok: false, report, why: 'fixer died' }
     report += `\n\nRound ${round} fixes:\n${fx}`
     if (allMerge && !serious.length) return { ok: true, report }
@@ -92,11 +98,19 @@ function run(u) {
     const deps = await Promise.all(u.deps.map(k => run(byKey[k])))
     const failed = u.deps.filter((k, i) => !deps[i] || !deps[i].merged)
     if (failed.length) { log(`${u.id}: skipped, dependencies not merged: ${failed.join(', ')}`); return { key: u.key, merged: false, skipped: true } }
-    const report = await agent(`${COMMON}\n\nCreate your worktree from the integration branch: if branch ${INT} does not exist yet, create it from ${MAINBR} first (git -C ${MAIN} branch ${INT} ${MAINBR}); then git -C ${MAIN} worktree add -b ${br(u)} ${wt(u)} ${INT}, cd ${wt(u)} and work only there.\n\nYOUR UNIT (${u.id}):\n${u.task}\n\n${ATTR} Final answer: what you built (files, public API), how it meets the row's "done when", test counts, measured numbers, design text you changed and why, and anything left open.`, { label: `build:${u.id}`, phase: 'Build' })
+    let plan = ''
+    if (!FINISHED.has(`build:${u.id}`)) {
+      plan = await agent(`${COMMON}\n\nYou are the PLANNER of design unit ${u.id}. A separate agent on a faster model implements your plan, and independent verifiers check the result. First create the unit's worktree from the integration branch: if branch ${INT} does not exist yet, create it from ${MAINBR} (git -C ${MAIN} branch ${INT} ${MAINBR}); then git -C ${MAIN} worktree add -b ${br(u)} ${wt(u)} ${INT} (if it exists, use it). Do not change code and do not commit. Read the unit's row in docs/APP-DESIGN.md §10 and every section it cites, the code it builds on, and tC4's source where it matters. Write the plan to ${wt(u)}/.audit/plans/${u.id}.md (the only file you write; the builder commits it): the steps in order, each with the files, types and function signatures to add or change, the invariants and edge cases it must keep (above all, that no translator's work is lost, hidden or silently rewritten, and that the screens match tC4 4.0 where the row says so), the tests that prove the row's "done when" (named, with what each asserts), the measurements to take, and the traps you found. Make it concrete enough that the builder never has to rediscover what you read.\n\nYOUR UNIT (${u.id}):\n${u.task}\n\nFinal answer: the plan's path and a ten-line summary.`, { label: `plan:${u.id}`, phase: 'Build' })
+      if (!plan) { log(`${u.id}: planner died`); return { key: u.key, merged: false } }
+    }
+    const report = await agent(plan
+      ? `${COMMON}\n\nYour worktree ${wt(u)} (branch ${br(u)}, from ${INT}) was created by the planner; cd there and work only there. The planner's plan is ${wt(u)}/.audit/plans/${u.id}.md; its summary:\n<<<\n${plan}\n>>>\nRead the plan in full and follow it. Where the code or the design proves the plan wrong, do what the design requires and say so in your final answer. Commit the plan file with your first commit.\n\nYOUR UNIT (${u.id}):\n${u.task}\n\n${ATTR} Final answer: what you built (files, public API), how it meets the row's "done when", test counts, measured numbers, design text you changed and why, where you departed from the plan and why, and anything left open.`
+      : `${COMMON}\n\nCreate your worktree from the integration branch: if branch ${INT} does not exist yet, create it from ${MAINBR} first (git -C ${MAIN} branch ${INT} ${MAINBR}); then git -C ${MAIN} worktree add -b ${br(u)} ${wt(u)} ${INT}, cd ${wt(u)} and work only there.\n\nYOUR UNIT (${u.id}):\n${u.task}\n\n${ATTR} Final answer: what you built (files, public API), how it meets the row's "done when", test counts, measured numbers, design text you changed and why, and anything left open.`,
+      { label: `build:${u.id}`, phase: 'Build', ...tier(`build:${u.id}`, 'sonnet') })
     if (!report) { log(`${u.id}: builder died`); return { key: u.key, merged: false } }
     const v = await verifyAndFix(u, report)
     if (!v.ok) { log(`${u.id}: not verified`); return { key: u.key, merged: false, ...v } }
-    const m = await serialMerge(() => agent(`${COMMON}\n\nYou MERGE verified design unit ${u.id} into the integration branch ${INT}. Use the worktree ${INTWT} (create it with git -C ${MAIN} worktree add ${INTWT} ${INT} if it does not exist; create branch ${INT} from ${MAINBR} first if it does not exist). In it: git merge --no-ff ${MAINBR} if ${MAINBR} has commits ${INT} lacks; then git merge --no-ff ${br(u)} with the message 'Merge ${br(u)}: <what unit ${u.id} brings>' plus the attribution lines. Resolve conflicts carefully, keeping both sides' behavior (Cargo.lock: keep the current side and let cargo add what is missing; never cargo update). Run every gate: ${GATES}. Fix anything the merge broke in its own commit. ${ATTR} Then remove the unit's worktree to free disk (git -C ${MAIN} worktree remove --force ${wt(u)}; the branch stays). merged = true only if the merge is committed and every gate passes. In summary give the head sha, test counts and anything unresolved.`, { label: `merge:${u.id}`, phase: 'Merge', schema: MERGED }))
+    const m = await serialMerge(() => agent(`${COMMON}\n\nYou MERGE verified design unit ${u.id} into the integration branch ${INT}. Use the worktree ${INTWT} (create it with git -C ${MAIN} worktree add ${INTWT} ${INT} if it does not exist; create branch ${INT} from ${MAINBR} first if it does not exist). In it: git merge --no-ff ${MAINBR} if ${MAINBR} has commits ${INT} lacks; then git merge --no-ff ${br(u)} with the message 'Merge ${br(u)}: <what unit ${u.id} brings>' plus the attribution lines. Resolve conflicts carefully, keeping both sides' behavior (Cargo.lock: keep the current side and let cargo add what is missing; never cargo update). Run every gate: ${GATES}. Fix anything the merge broke in its own commit. ${ATTR} Then remove the unit's worktree to free disk (git -C ${MAIN} worktree remove --force ${wt(u)}; the branch stays). merged = true only if the merge is committed and every gate passes. In summary give the head sha, test counts and anything unresolved.`, { label: `merge:${u.id}`, phase: 'Merge', schema: MERGED, model: 'sonnet' }))
     if (!m) { log(`${u.id}: merge agent died`); return { key: u.key, merged: false } }
     log(`${u.id}: ${m.merged ? 'merged into ' + INT + ' at ' + (m.head || '?') : 'NOT merged'}`)
     return { key: u.key, merged: m.merged, head: m.head, summary: m.summary }

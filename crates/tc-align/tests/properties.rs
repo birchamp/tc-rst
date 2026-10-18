@@ -6,6 +6,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;
+use tc_align::Alignment;
+use tc_align::bootstrap;
 
 use common::basis;
 use proptest::prelude::*;
@@ -14,7 +16,7 @@ use tc_align::suggest::RawLink;
 use tc_align::usfm::{from_aligned, weave_verse};
 use tc_align::{
     Aligner, AlignmentValue, Click, NoReflow, SourceVerse, SourceWord, TargetVerse, TargetWord,
-    WordId, record, reflow,
+    reflow,
 };
 
 const TARGET_WORDS: [&str; 7] = ["a", "b", "c", "de", "Dios", "λόγος", "וַ\u{2060}יְהִי"];
@@ -44,13 +46,13 @@ fn source_strategy() -> impl Strategy<Value = SourceVerse> {
             words
                 .into_iter()
                 .map(|w| SourceWord {
-                    content: w.to_owned(),
+                    word: w.to_owned(),
                     strong: Some("G1".to_owned()),
                     lemma: Some(w.to_lowercase()),
                     morph: Some("Gr,N,,,,,NMS,".to_owned()),
                     occurrence: 1,
                     occurrences: 1,
-                    extra: Vec::new(),
+                    extra: tc_journal::json::JsonMap::new(),
                 })
                 .collect(),
         )
@@ -84,7 +86,7 @@ fn op_strategy() -> impl Strategy<Value = Op> {
 fn apply(value: &mut AlignmentValue, verse: &TargetVerse, op: &Op) -> bool {
     let cards = value.alignments.len();
     let placed = |v: &AlignmentValue, c: usize, w: usize| {
-        let targets = &v.alignments[c % cards].targets;
+        let targets = &v.alignments[c % cards].bottom_words;
         (!targets.is_empty()).then(|| targets[w % targets.len()].clone())
     };
     match op {
@@ -168,7 +170,7 @@ fn step_on(aligner: &mut Aligner, step: &Step) -> bool {
     let bank = aligner.value().word_bank.clone();
     let banked = |w: usize| (!bank.is_empty()).then(|| bank[w % bank.len()].clone());
     let placed = |a: &Aligner, c: usize, w: usize| {
-        let targets = &a.value().alignments[c % cards].targets;
+        let targets = &a.value().alignments[c % cards].bottom_words;
         (!targets.is_empty()).then(|| targets[w % targets.len()].clone())
     };
     match step {
@@ -231,9 +233,9 @@ fn assert_shown_in_verse_order(
     );
     for group in &aligner.value().alignments {
         prop_assert!(
-            in_verse_order(verse, &group.targets),
+            in_verse_order(verse, &group.bottom_words),
             "card {:?}",
-            group.targets
+            group.bottom_words
         );
     }
     Ok(())
@@ -252,7 +254,7 @@ fn is_subsequence(part: &[TargetWord], whole: &[TargetWord]) -> bool {
 }
 
 fn key(w: &TargetWord) -> (String, u32) {
-    (w.text.clone(), w.occurrence)
+    (w.word.clone(), w.occurrence)
 }
 
 fn sorted(words: impl IntoIterator<Item = TargetWord>) -> Vec<TargetWord> {
@@ -268,18 +270,20 @@ fn links(value: &AlignmentValue) -> BTreeMap<(String, u32), Vec<(String, u32)>> 
         .iter()
         .flat_map(|g| {
             let sources: Vec<_> = g
-                .sources
+                .top_words
                 .iter()
-                .map(|s| (s.content.clone(), s.occurrence))
+                .map(|s| (s.word.clone(), s.occurrence))
                 .collect();
-            g.targets.iter().map(move |t| (key(t), sources.clone()))
+            g.bottom_words
+                .iter()
+                .map(move |t| (key(t), sources.clone()))
         })
         .collect()
 }
 
 fn edited(source: &SourceVerse, text: &str, ops: &[Op]) -> (AlignmentValue, TargetVerse) {
     let verse = TargetVerse::new(text);
-    let mut value = AlignmentValue::bootstrap(source, &verse, basis(1));
+    let mut value = bootstrap(source, &verse, basis(1));
     for op in ops {
         if apply(&mut value, &verse, op) {
             value.settle(&verse);
@@ -298,7 +302,7 @@ proptest! {
         ops in prop::collection::vec(op_strategy(), 0..40),
     ) {
         let verse = TargetVerse::new(&text);
-        let mut value = AlignmentValue::bootstrap(&source, &verse, basis(1));
+        let mut value = bootstrap(&source, &verse, basis(1));
         let source_order: Vec<SourceWord> = source.words().to_vec();
         for op in &ops {
             let before = value.clone();
@@ -309,9 +313,9 @@ proptest! {
                 prop_assert_eq!(&value, &before, "a refused edit changes nothing");
             }
             prop_assert_eq!(sorted(value.all_target_words().cloned()), sorted(verse.words().to_vec()));
-            let flattened: Vec<SourceWord> = value.alignments.iter().flat_map(|g| g.sources.clone()).collect();
+            let flattened: Vec<SourceWord> = value.alignments.iter().flat_map(|g| g.top_words.clone()).collect();
             prop_assert_eq!(&flattened, &source_order);
-            prop_assert!(value.alignments.iter().all(|g| !g.sources.is_empty()));
+            prop_assert!(value.alignments.iter().all(|g| !g.top_words.is_empty()));
             if matches!(op, Op::Unlink(..) | Op::Clear) && value != before {
                 prop_assert!(in_verse_order(&verse, &value.word_bank), "unlink and clear sort the bank");
             } else {
@@ -334,14 +338,14 @@ proptest! {
                 prop_assert_eq!(value.placed(), next.value.placed() + next.dropped.len());
                 prop_assert_eq!(sorted(next.value.all_target_words().cloned()), sorted(new_verse.words().to_vec()));
                 for (before, after) in value.alignments.iter().zip(&next.value.alignments) {
-                    prop_assert_eq!(&before.sources, &after.sources);
-                    for word in &after.targets {
-                        prop_assert!(before.targets.iter().any(|w| key(w) == key(word)), "no new link");
+                    prop_assert_eq!(&before.top_words, &after.top_words);
+                    for word in &after.bottom_words {
+                        prop_assert!(before.bottom_words.iter().any(|w| key(w) == key(word)), "no new link");
                     }
                 }
                 for drop in &next.dropped {
                     prop_assert!(new_verse.position(&drop.word).is_none());
-                    prop_assert!(value.alignments[drop.card].targets.contains(&drop.word));
+                    prop_assert!(value.alignments[drop.card].bottom_words.contains(&drop.word));
                 }
                 prop_assert!(!next.value.is_stale_against(&new_verse));
                 prop_assert_eq!(next.value.done, next.value.is_fully_aligned());
@@ -436,7 +440,7 @@ proptest! {
             assert_shown_in_verse_order(&aligner, &verse)?;
             prop_assert_eq!(sorted(aligner.value().all_target_words().cloned()), sorted(verse.words().to_vec()));
             prop_assert_eq!(aligner.value().well_formed(), Ok(()));
-            let flattened: Vec<SourceWord> = aligner.value().alignments.iter().flat_map(|g| g.sources.clone()).collect();
+            let flattened: Vec<SourceWord> = aligner.value().alignments.iter().flat_map(|g| g.top_words.clone()).collect();
             prop_assert_eq!(&flattened, &source_order);
             let shown = aligner.shown_bank();
             let selection = aligner.selection();
@@ -454,7 +458,7 @@ proptest! {
         let (mut stored, verse) = edited(&source, &text, &ops);
         stored.word_bank.reverse();
         for group in &mut stored.alignments {
-            group.targets.reverse();
+            group.bottom_words.reverse();
         }
         let aligner = Aligner::open(Some(&stored), verse.clone(), &source, basis(1)).unwrap();
         prop_assert!(!aligner.is_changed(), "order alone is not saved");
@@ -482,30 +486,5 @@ proptest! {
         read.word_bank = back.word_bank;
         prop_assert_eq!(links(&read), links(&value));
         prop_assert_eq!(read.total(), value.total());
-    }
-
-    #[test]
-    fn the_tc4_record_reads_back_the_same_value(
-        source in source_strategy(),
-        text in text_strategy(),
-        ops in prop::collection::vec(op_strategy(), 0..40),
-        invalid in prop::bool::ANY,
-        typed in prop::collection::vec(prop::bool::ANY, 1..8),
-    ) {
-        let (mut value, _) = edited(&source, &text, &ops);
-        // tC3's word type on some words, banked or placed.
-        let held: Vec<TargetWord> = value.all_target_words().cloned().collect();
-        for (i, word) in held.iter().enumerate() {
-            if typed[i % typed.len()] {
-                let mut extra = serde_json::Map::new();
-                extra.insert("type".into(), "bottomWord".into());
-                value.word_extra.insert(WordId::of(word), extra);
-            }
-        }
-        let json = record::to_record(&value, invalid);
-        prop_assert_eq!(json["invalid"].as_bool(), Some(invalid));
-        let mut back = record::from_record(&json, basis(1)).unwrap();
-        back.marked_invalid = value.marked_invalid;
-        prop_assert_eq!(back, value);
     }
 }

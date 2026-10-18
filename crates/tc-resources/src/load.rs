@@ -36,12 +36,13 @@ use tc_helps::metadata::{AquiferPin as HelpsAquiferPin, DcsPin, HelpsSource};
 use tc_helps::obs::{ObsStory, parse_obs_story};
 use tc_helps::tsv::{TsvScope, parse_notes, parse_questions, parse_word_links};
 use tc_helps::{HelpRef, Helps, HelpsPart};
+use tc_journal::pins::{Collection, UnusablePin};
 
 use crate::aquifer::{bible_book, canonical_book, is_article_file};
 use crate::choice::{AquiferHelps, HelpsChoice};
 use crate::layout;
 use crate::pin::{AquiferPin, ResourcePin};
-use crate::resolve::{CoverageSource, Resolution, coverage_for, resolve_obs_slot, resolve_slot};
+use crate::resolve::{CoverageSource, Resolution, Resolved, coverage_for, resolve_slot};
 use crate::sets::{PaneId, ProjectPins, Rung, SetSlot};
 use crate::store::{Installed, ResourceStore};
 
@@ -68,6 +69,10 @@ pub enum Missing {
     Unreadable { source: String, problem: String },
     /// Aquifer mirrors no Open Bible Stories helps, so these come from Door43 only.
     NotInAquifer,
+    /// The rung that answers holds a value that is not a usable pin, such as a pin with a
+    /// tag and no commit (STORAGE §7.7): nothing can be read for it until the pins are
+    /// repaired, and the next rung is not used in its place.
+    UnusablePin { rung: Rung, pin: UnusablePin },
 }
 
 /// One helps part of a screen.
@@ -193,9 +198,12 @@ pub fn load_obs(store: &ResourceStore, pins: &ProjectPins) -> ObsResources {
         (HelpsPart::ObsWordLinks, SetSlot::ObsWordsLinks),
         (HelpsPart::ObsQuestions, SetSlot::ObsQuestions),
     ] {
-        let status = match resolve_obs_slot(pins, slot) {
+        let status = match resolve_slot(pins, slot, Collection::Stories, store) {
             None => PartStatus::Missing(Missing::NotPinned),
-            Some(resolution) => {
+            Some(Resolved::Unusable { rung, pin }) => {
+                PartStatus::Missing(Missing::UnusablePin { rung, pin })
+            }
+            Some(Resolved::Pin(resolution)) => {
                 rung_of.insert(part, resolution.rung);
                 load_table(store, &resolution, None, part, TsvScope::Obs, &mut helps)
             }
@@ -224,10 +232,15 @@ pub fn load_obs(store: &ResourceStore, pins: &ProjectPins) -> ObsResources {
             &mut helps,
         ),
     );
-    let (stories, stories_status) = match resolve_obs_slot(pins, SetSlot::Obs) {
-        None => (Vec::new(), PartStatus::Missing(Missing::NotPinned)),
-        Some(resolution) => load_stories(store, &resolution),
-    };
+    let (stories, stories_status) =
+        match resolve_slot(pins, SetSlot::Obs, Collection::Stories, store) {
+            None => (Vec::new(), PartStatus::Missing(Missing::NotPinned)),
+            Some(Resolved::Unusable { rung, pin }) => (
+                Vec::new(),
+                PartStatus::Missing(Missing::UnusablePin { rung, pin }),
+            ),
+            Some(Resolved::Pin(resolution)) => load_stories(store, &resolution),
+        };
     ObsResources {
         helps,
         parts,
@@ -241,11 +254,7 @@ fn dcs_source(pin: &ResourcePin) -> HelpsSource {
         owner: pin.repo.owner().to_string(),
         repo: pin.repo.name().to_string(),
         tag: pin.version.as_ref().map(|v| v.as_str().to_owned()),
-        // A tc-door43 sha is 40 lower-case hex digits, which tc-helps accepts.
-        commit: match tc_helps::CommitSha::parse(pin.sha.as_str()) {
-            Ok(sha) => sha,
-            Err(_) => unreachable!("a commit sha is 40 hex digits"),
-        },
+        commit: pin.sha,
     })
 }
 
@@ -254,10 +263,7 @@ fn aquifer_source(pin: &AquiferPin) -> HelpsSource {
         resource_code: pin.repo.name.to_string(),
         language: pin.language.to_string(),
         tag: pin.tag.as_str().to_owned(),
-        commit: match tc_helps::CommitSha::parse(pin.commit.as_str()) {
-            Ok(sha) => sha,
-            Err(_) => unreachable!("a commit sha is 40 hex digits"),
-        },
+        commit: pin.commit,
         asset_sha256: tc_helps::Sha256Digest::parse(&pin.sha256.to_hex()).ok(),
     })
 }
@@ -335,9 +341,12 @@ fn load_dcs_book(
             parts.insert(part, PartStatus::Missing(Missing::OldTwl(old.clone())));
             continue;
         }
-        let status = match resolve_slot(pins, slot, book, store) {
+        let status = match resolve_slot(pins, slot, Collection::Book(book), store) {
             None => PartStatus::Missing(unresolved(store, pins, slot)),
-            Some(resolution) => {
+            Some(Resolved::Unusable { rung, pin }) => {
+                PartStatus::Missing(Missing::UnusablePin { rung, pin })
+            }
+            Some(Resolved::Pin(resolution)) => {
                 rung_of.insert(part, resolution.rung);
                 let substitute = substitute_for(store, pins, slot, &resolution);
                 load_table(
@@ -757,10 +766,16 @@ fn load_texts(store: &ResourceStore, pins: &ProjectPins, book: BookId) -> Vec<So
             status: load_usfm(store, &pane.pin, None, book),
         });
     }
-    let simplified = match resolve_slot(pins, SetSlot::SimplifiedText, book, store) {
-        Some(resolution) => load_usfm(store, &resolution.pin, Some(resolution.rung), book),
-        None => TextStatus::Missing(unresolved(store, pins, SetSlot::SimplifiedText)),
-    };
+    let simplified =
+        match resolve_slot(pins, SetSlot::SimplifiedText, Collection::Book(book), store) {
+            Some(Resolved::Pin(resolution)) => {
+                load_usfm(store, &resolution.pin, Some(resolution.rung), book)
+            }
+            Some(Resolved::Unusable { rung, pin }) => {
+                TextStatus::Missing(Missing::UnusablePin { rung, pin })
+            }
+            None => TextStatus::Missing(unresolved(store, pins, SetSlot::SimplifiedText)),
+        };
     texts.push(SourceText {
         role: TextRole::Simplified,
         status: simplified,

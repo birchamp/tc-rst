@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 
 use tc_core::Testament;
 use tc_door43::{
-    AccountName, CatalogQuery, CatalogRef, CommitSha, Door43Client, Door43Error, RepoRef, Stage,
+    AccountName, CatalogQuery, CatalogRef, Door43Client, Door43Error, GitOid, RepoRef, Stage,
     TagName,
 };
 use tc_helps::aquifer::AquiferHelpsKind;
@@ -36,7 +36,7 @@ use crate::sets::{LanguageSet, PaneId, ProjectPins, Rung, SetSlot};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseInfo {
     pub tag: TagName,
-    pub sha: CommitSha,
+    pub sha: GitOid,
     pub published: Option<String>,
 }
 
@@ -139,8 +139,7 @@ impl SetOffer {
 }
 
 fn upgraded_pin(pin: &ResourcePin, info: &ReleaseInfo) -> ResourcePin {
-    let mut to =
-        ResourcePin::new(pin.repo.clone(), info.sha.clone()).with_version(info.tag.clone());
+    let mut to = ResourcePin::new(pin.repo.clone(), info.sha).with_version(info.tag.clone());
     to.flavor = pin.flavor.clone();
     to
 }
@@ -515,7 +514,7 @@ mod tests {
     use crate::sets::{GatewayLanguage, ScripturePane};
 
     /// A distinct commit per letter, as tC4's tests name them (`sha('e')`).
-    fn sha(c: char) -> CommitSha {
+    fn sha(c: char) -> GitOid {
         crate::pin::Sha256::of(c.to_string().as_bytes()).to_hex()[..40]
             .parse()
             .unwrap()
@@ -657,6 +656,7 @@ mod tests {
                 id: "ult".parse().unwrap(),
                 pin: pin("en_ult", "v89", '8', "scripture/textTranslation"),
             }],
+            unreadable_panes: Vec::new(),
             unknown: Default::default(),
         };
         let releases = latest(&[("unfoldingWord/en_tn", "v90", 'e')]);

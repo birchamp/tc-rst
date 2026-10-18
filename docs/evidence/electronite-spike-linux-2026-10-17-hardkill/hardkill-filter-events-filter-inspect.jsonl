@@ -1,0 +1,9 @@
+{"t":1792263868862,"ev":"shell-started","pid":7284,"versions":{"electron":"37.1.0","chrome":"138.0.7204.35","node":"22.16.0","v8":"13.8.258.18-electron.0"},"spawn":"job"}
+{"t":1792263868967,"ev":"server-started","pid":7341,"port":46831,"ms":31}
+{"t":1792263869469,"ev":"page-loaded"}
+{"t":1792263869478,"ev":"results-written"}
+{"t":1792263869681,"ev":"quit-start","why":"done"}
+{"t":1792263869682,"ev":"server-closed","pid":7341}
+{"t":1792263869684,"ev":"server-exited","pid":7341,"code":0,"signal":null,"quitting":true}
+{"t":1792263869685,"ev":"server-stopped","exited":true}
+{"t":1792263869685,"ev":"mirror-flushed","flushed":true}

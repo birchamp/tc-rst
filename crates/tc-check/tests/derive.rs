@@ -335,7 +335,7 @@ fn every_obs_note_is_a_check_keyed_by_story_and_frame() {
     assert!(
         list.items
             .iter()
-            .all(|i| matches!(i.key.target, CheckTarget::Frame(_)))
+            .all(|i| matches!(i.key.target, CheckTarget::Frame { .. }))
     );
     assert!(list.items.iter().all(|i| i.key.occurrence == 1));
     let stories: std::collections::BTreeSet<String> =

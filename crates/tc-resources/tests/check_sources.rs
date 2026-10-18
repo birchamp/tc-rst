@@ -10,7 +10,7 @@ use common::{fixture, install_fixture, release, rig};
 use tc_core::{BookId, Testament};
 use tc_door43_fake::{CommitSeed, ReleaseKind, RepoSeed, SeedFile};
 use tc_resources::{
-    CheckBlocker, GatewayLanguage, LanguageSet, Packaging, ProjectPins, SetSlot, Tool,
+    CheckBlocker, GatewayLanguage, LanguageSet, Packaging, ProjectPins, SetSlot, ToolId,
     check_sources, install_dcs_as, resolve::PreflightState,
 };
 
@@ -64,7 +64,7 @@ async fn a_notes_check_needs_the_door43_original_language_text() {
     let blocked = check_sources(
         &rig.store,
         &pins,
-        Tool::TranslationNotes,
+        ToolId::TranslationNotes,
         BookId::Jonah,
         false,
     )
@@ -80,7 +80,7 @@ async fn a_notes_check_needs_the_door43_original_language_text() {
     let sources = check_sources(
         &rig.store,
         &pins,
-        Tool::TranslationNotes,
+        ToolId::TranslationNotes,
         BookId::Jonah,
         false,
     )
@@ -93,7 +93,7 @@ async fn a_notes_check_needs_the_door43_original_language_text() {
     let blocked = check_sources(
         &rig.store,
         &pins,
-        Tool::TranslationNotes,
+        ToolId::TranslationNotes,
         BookId::Titus,
         false,
     )
@@ -107,7 +107,7 @@ async fn a_notes_check_needs_the_door43_original_language_text() {
     let blocked = check_sources(
         &rig.store,
         &pins,
-        Tool::TranslationWords,
+        ToolId::TranslationWords,
         BookId::Ruth,
         true,
     )
