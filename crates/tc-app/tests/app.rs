@@ -9,6 +9,7 @@ mod app {
     mod folders;
     mod jobs;
     mod keychain;
+    mod prefs;
     mod projects_root;
     mod replies;
     mod reports;

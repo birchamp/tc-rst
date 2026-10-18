@@ -15,6 +15,7 @@ use tc_app::config::{HostEnv, HostOs};
 use tc_app::events::{EventBus, Next, Subscription};
 use tc_app::folders::FolderCheck;
 use tc_app::jobs::{JobCtx, JobEnd, JobRegistry, JobSpec};
+use tc_app::prefs::{MemoryFiles, PrefsWriter};
 use tc_app::reports::ReportLog;
 
 /// A computer that says which folders exist and which a cloud client copies.
@@ -157,4 +158,29 @@ pub fn done_of(state: &JobState) -> u64 {
         JobState::Running(progress) => progress.done,
         other => panic!("not running: {other:?}"),
     }
+}
+
+/// A prefs writer over memory files, with the clock and report log it was started with.
+pub struct Prefs {
+    pub prefs: PrefsWriter,
+    pub files: Arc<MemoryFiles>,
+    pub reports: ReportLog,
+    pub clock: Arc<ManualClock>,
+}
+
+/// Starts a prefs writer over `files`. Must run inside a tokio runtime.
+pub fn prefs_over(files: Arc<MemoryFiles>) -> Prefs {
+    let reports = ReportLog::new();
+    let clock = Arc::new(ManualClock::new(10_000));
+    let prefs = PrefsWriter::start(files.clone(), reports.clone(), clock.clone());
+    Prefs {
+        prefs,
+        files,
+        reports,
+        clock,
+    }
+}
+
+pub fn prefs() -> Prefs {
+    prefs_over(Arc::new(MemoryFiles::new()))
 }
