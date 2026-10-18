@@ -4,6 +4,8 @@
 #![cfg(not(target_arch = "wasm32"))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod common;
+
 use serde_json::{Value, json};
 use tc_api::check::Tool;
 use tc_api::ids::{RefPart, StoryNo};
@@ -163,5 +165,29 @@ fn a_place_that_is_not_one_refuses() {
         json!({"type": "book", "value": {"book": "TIT", "mode": "read"}}),
     ] {
         assert!(read(bad.clone()).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn a_place_refuses_a_field_it_does_not_know_wherever_it_stands() {
+    // The envelope and body of the place and of the verse or frame inside it, for every
+    // variant of both: an extra key must not be read and dropped.
+    let places = [
+        json!({"type": "book", "value": {"book": "TIT", "verse": {"type": "keep"}}}),
+        json!({"type": "book", "value": {"book": "TIT", "verse": {"type": "clear"}}}),
+        json!({"type": "book", "value": {"book": "TIT", "mode": "check", "chapter": 1,
+               "verse": {"type": "set", "value": "4"}, "tool": "translationWords"}}),
+        json!({"type": "story", "value": {"story": 3, "frame": {"type": "keep"}}}),
+        json!({"type": "story", "value": {"story": 3, "frame": {"type": "clear"}}}),
+        json!({"type": "story", "value": {"story": 3, "mode": "read",
+               "frame": {"type": "set", "value": 4}}}),
+    ];
+    for place in places {
+        let request = record(place);
+        let accepted = common::unknown_key_accepted_in::<RecordPlace>(&request).unwrap();
+        assert!(
+            accepted.is_empty(),
+            "{request} reads an unknown key in {accepted:?}"
+        );
     }
 }

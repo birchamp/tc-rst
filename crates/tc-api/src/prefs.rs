@@ -97,7 +97,12 @@ pub enum PlaceUpdate {
 /// What an observation does to the stored verse or frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    deny_unknown_fields
+)]
 pub enum PlaceChange<T> {
     /// The observation names none, so the stored one stays (a mode switch).
     Keep,

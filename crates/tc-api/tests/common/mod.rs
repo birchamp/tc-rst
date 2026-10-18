@@ -19,6 +19,58 @@ fn ui_assets() -> PathBuf {
     crate_dir().join("../tc-ui/assets")
 }
 
+/// A key no request type has.
+const UNKNOWN_KEY: &str = "sneaky";
+
+/// Where an added key could land in `value`: the root and every object inside it, at any
+/// depth, as JSON pointers (RFC 6901).
+pub fn object_pointers(value: &Value) -> Vec<String> {
+    fn walk(value: &Value, at: &str, found: &mut Vec<String>) {
+        match value {
+            Value::Object(map) => {
+                found.push(at.to_owned());
+                for (key, inner) in map {
+                    let key = key.replace('~', "~0").replace('/', "~1");
+                    walk(inner, &format!("{at}/{key}"), found);
+                }
+            }
+            Value::Array(items) => {
+                for (index, inner) in items.iter().enumerate() {
+                    walk(inner, &format!("{at}/{index}"), found);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut found = Vec::new();
+    walk(value, "", &mut found);
+    found
+}
+
+/// The objects of `request` (a JSON pointer each) that `T` reads without complaint once
+/// they hold a key `T` does not know, one object at a time. APP-DESIGN §3.1 wants none: a
+/// request refuses an unknown field wherever it appears, in a nested struct or in an enum's
+/// envelope or body, not only at the top. (A map-valued field would show here; no request
+/// has one.) Errs when `request` itself does not read as `T`, since a refusal would then
+/// prove nothing.
+pub fn unknown_key_accepted_in<T: DeserializeOwned>(
+    request: &Value,
+) -> Result<Vec<String>, String> {
+    serde_json::from_value::<T>(request.clone())
+        .map_err(|e| format!("{request} does not read as written: {e}"))?;
+    Ok(object_pointers(request)
+        .into_iter()
+        .filter(|pointer| {
+            let mut with_key = request.clone();
+            let Some(Value::Object(object)) = with_key.pointer_mut(pointer) else {
+                panic!("{pointer} is an object of {request}");
+            };
+            object.insert(UNKNOWN_KEY.to_owned(), json!(1));
+            serde_json::from_value::<T>(with_key).is_ok()
+        })
+        .collect())
+}
+
 pub type Catalog = BTreeMap<String, String>;
 
 fn read_catalog(path: PathBuf) -> Catalog {

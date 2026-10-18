@@ -628,19 +628,44 @@ fn every_request_refuses_a_field_it_does_not_know() {
         };
     }
     fn refuses_unknown_field<E: Endpoint + Example>() {
-        let mut value = serde_json::to_value(E::example()).unwrap();
-        value
-            .as_object_mut()
-            .unwrap_or_else(|| panic!("{} request is an object", E::PATH))
-            .insert("sneaky".into(), json!(1));
+        let request = serde_json::to_value(E::example()).unwrap();
+        let accepted = common::unknown_key_accepted_in::<E>(&request)
+            .unwrap_or_else(|e| panic!("{}: {e}", E::PATH));
         assert!(
-            serde_json::from_value::<E>(value).is_err(),
-            "{} accepted an unknown field",
+            accepted.is_empty(),
+            "{} accepted an unknown field in {accepted:?} of {request}",
             E::PATH
         );
     }
     tc_api::endpoint_table!(refuses_unknown);
     tc_api::test_hook_table!(refuses_unknown);
+}
+
+#[test]
+fn the_unknown_field_check_reaches_every_nested_object_and_catches_a_lax_one() {
+    // The check must visit the objects a request nests: a scope, an enum's envelope and its
+    // body, and the envelope of an enum inside that body.
+    let place = serde_json::to_value(RecordPlace::example()).unwrap();
+    assert_eq!(
+        common::object_pointers(&place),
+        ["", "/at", "/place", "/place/value", "/place/value/verse"]
+    );
+
+    #[derive(Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Strict {
+        inner: Lax,
+    }
+    #[derive(Serialize, serde::Deserialize)]
+    struct Lax {
+        n: u8,
+    }
+    let request = json!({"inner": {"n": 1}});
+    assert_eq!(
+        common::unknown_key_accepted_in::<Strict>(&request),
+        Ok(vec!["/inner".to_owned()]),
+        "a nested struct that reads an unknown key is found, and only it"
+    );
 }
 
 #[test]

@@ -5,6 +5,8 @@
 #![cfg(not(target_arch = "wasm32"))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod common;
+
 use std::fmt::Debug;
 
 use proptest::arbitrary::{Arbitrary, any};
@@ -227,6 +229,48 @@ fn every_request_and_reply_round_trips() {
     with_big_stack(|| {
         let mut results = tc_api::endpoint_table!(endpoints);
         results.extend(tc_api::test_hook_table!(endpoints));
+        results
+    });
+}
+
+/// A generated request of every variant refuses an unknown key in each object it holds, so
+/// a variant the golden example does not show cannot read and drop one either (§3.1).
+fn refuses_unknown_keys<E>() -> Result<(), String>
+where
+    E: Endpoint + Arbitrary,
+{
+    let mut runner = TestRunner::new(Config {
+        cases: 128,
+        failure_persistence: None,
+        ..Config::default()
+    });
+    runner
+        .run(&any::<E>(), |request| {
+            let text = serde_json::to_value(&request).unwrap();
+            let accepted =
+                common::unknown_key_accepted_in::<E>(&text).map_err(TestCaseError::fail)?;
+            if accepted.is_empty() {
+                Ok(())
+            } else {
+                Err(TestCaseError::fail(format!(
+                    "{text} reads an unknown key in {accepted:?}"
+                )))
+            }
+        })
+        .map_err(|e| format!("{}: {e}", E::PATH))
+}
+
+macro_rules! refusals {
+    ($( $kind:ident $([$net:ident])? $path:literal : $req:path => $ok:ty; )*) => {
+        vec![$( refuses_unknown_keys::<$req>() ),*]
+    };
+}
+
+#[test]
+fn every_generated_request_refuses_an_unknown_key_in_every_object() {
+    with_big_stack(|| {
+        let mut results = tc_api::endpoint_table!(refusals);
+        results.extend(tc_api::test_hook_table!(refusals));
         results
     });
 }

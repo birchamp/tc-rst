@@ -214,7 +214,9 @@ what changed for each finding, which parts were done another way, and why.
   wire type, for the round trips here and for property tests in tc-app and tc-ui.
 - No I/O and no `std::time`. Times are `WallMs(i64)`.
 - Every identifier is a newtype whose `Deserialize` validates its format. Requests use
-  `#[serde(deny_unknown_fields)]`. Struct fields are camelCase. An enum of unit variants is a
+  `#[serde(deny_unknown_fields)]`, and so does every struct and enum a request holds, so an
+  unknown key is refused at any depth (a test adds one to each object of each request).
+  Struct fields are camelCase. An enum of unit variants is a
   camelCase string (`"rtl"`); every other enum is adjacently tagged,
   `{"type": "<camelCase variant>", "value": <data>}`, with no `value` for a unit variant. *(A1)*
   The reply body is such an enum too (`Reply`, AD9), and a test checks every golden file

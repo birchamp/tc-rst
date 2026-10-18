@@ -6,7 +6,7 @@
 //! The crate does no I/O and reads no clock, and it builds for `wasm32-unknown-unknown`.
 //!
 //! On the wire, JSON:
-//! - Struct fields are camelCase. A request refuses a field it does not know.
+//! - Struct fields are camelCase. A request refuses a field it does not know, at any depth.
 //! - An enum whose variants carry nothing is a camelCase string: `"rtl"`.
 //! - Any other enum is tagged: `{"type": "<camelCase variant>", "value": <data>}`, with no
 //!   `value` for a variant that carries nothing. The data of a variant with named fields is
