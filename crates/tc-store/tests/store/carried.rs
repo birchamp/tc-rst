@@ -397,7 +397,7 @@ fn restoring_a_version_whose_bytes_are_not_here_is_refused() {
 /// L73: a version whose blob is missing here is told and never blocks a commit: the commit
 /// is made, valid, with what the object database has.
 #[test]
-fn carried_version_missing_blob_never_blocks_commit() {
+fn loss_carried_version_missing_blob_never_blocks_commit() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     handle.close().unwrap();

@@ -686,6 +686,7 @@ fn whole_case(dir: &Path) {
     let run = run_id();
     let (mut total, mut first, mut saves, mut decides) =
         (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let (mut pins_ms, mut first_from_job) = (Vec::new(), Vec::new());
     for n in 0..5u32 {
         log.events.lock().unwrap().clear();
         let key = RecordKey::Pins(tc_journal::PinGroup::Lexicon);
@@ -699,6 +700,8 @@ fn whole_case(dir: &Path) {
             })
             .wait()
             .expect("pins");
+        pins_ms.push(started.elapsed().as_secs_f64() * 1000.0);
+        let left_at = Instant::now();
         let left = handle.leave(Leave::Mode);
         let mut i = 0usize;
         // A save or a decision every 20 ms while the writer is at work, at most 400.
@@ -721,6 +724,7 @@ fn whole_case(dir: &Path) {
         let events = log.events.lock().unwrap().clone();
         if let Some((at, _)) = events.first() {
             first.push(at.duration_since(started).as_secs_f64() * 1000.0);
+            first_from_job.push(at.duration_since(left_at).as_secs_f64() * 1000.0);
         }
         println!(
             "  run {n}: {} progress events, saves and decisions during the job {i}, {}",
@@ -729,7 +733,12 @@ fn whole_case(dir: &Path) {
         );
     }
     stats("whole-project materialize, command to done", total);
+    stats("the pins command until its reply", pins_ms);
     stats("first progress report after the command", first);
+    stats(
+        "first progress report after the writer was handed the job",
+        first_from_job,
+    );
     stats(
         "verse saves during the job (until the durable reply)",
         saves,
@@ -926,7 +935,8 @@ fn outside_case(dir: &Path) {
     handle.close().expect("close");
 }
 
-/// `text` with the words of Psalm 1:2, 1:3 and 1:4 replaced.
+/// `text` with the words of Psalm 1:2, 1:3 and 1:4 replaced (a verse marker can follow a
+/// poetry marker on its line).
 fn edit_three_verses(text: &str, words: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut chapter = 0u32;
@@ -934,13 +944,12 @@ fn edit_three_verses(text: &str, words: &str) -> String {
         if let Some(rest) = line.strip_prefix("\\c ") {
             chapter = rest.trim().parse().unwrap_or(0);
         }
-        let verse = line
-            .strip_prefix("\\v ")
-            .and_then(|r| r.split(' ').next())
-            .and_then(|n| n.parse::<u32>().ok());
-        match verse {
-            Some(v @ 2..=4) if chapter == 1 => {
+        let marker = line.find("\\v ").map(|at| (at, &line[at + 3..]));
+        let verse = marker.and_then(|(_, rest)| rest.split(' ').next()?.parse::<u32>().ok());
+        match (marker, verse) {
+            (Some((at, _)), Some(v @ 2..=4)) if chapter == 1 => {
                 let end = line.trim_end_matches(['\r', '\n']).len();
+                out.push_str(&line[..at]);
                 out.push_str(&format!("\\v {v} {words} {v}"));
                 out.push_str(&line[end..]);
             }

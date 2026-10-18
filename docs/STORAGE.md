@@ -1571,9 +1571,9 @@ other than this folder's means another installation is saving into this folder n
 close) means the same unless the person confirms that the other computer is closed. Either way
 the project switches to read-only with `SecondWriter` and the copy offer above. Every change
 already written by either installation is kept: pending names never collide (§4.2), and the fold
-takes both. Unit S1 has no watcher (§11.1 is unit S2's): a checkpoint lists the journal folders
-before it seals, and a file this session does not know is folded and turns the project
-read-only.
+takes both. The watcher (§11.1) also watches `.tc/pending/` and `ingredients/tc/changes/` and
+tells the actor to list them; a checkpoint lists the journal folders before it seals as well,
+and a file this session does not know is folded and turns the project read-only.
 
 **`commit_batch`**, used by every write path below:
 
@@ -2337,8 +2337,9 @@ folder that became read-only) ends the open's writes, and the project opens read
 refused; the next open finishes the work (the tests `an_open_on_a_full_disk_is_read_only_and_never_refused`
 and `a_disk_that_fills_during_the_opens_materialization_leaves_a_read_only_project`).
 
-**What the unit that made the store's first half does of this sequence.** O4 writes this app's
-`format.json` when it is missing or damaged. O7's expected pack set is the manifest's pack
+**Notes on the sequence as `tc-store` runs it.** O4 restores `project.json` and `format.json`
+from HEAD's tree when they are missing or damaged (§3.5), and writes this app's `format.json` when
+HEAD has none. O7's expected pack set is the manifest's pack
 list (§3.6) and HEAD's packs (§4.4): a listed pack that is gone, and that no valid pack's
 `replaces` names, is restored from a blob at the same path when one passes P2 to P4
 (`PackRestored`), and is otherwise missing (`PackMissing`), and nothing derived is removed
@@ -2349,8 +2350,9 @@ of O6 runs after O8, because it needs the fold: the ledger's `lastSeq` above thi
 largest seq in the folder (a backup put back, `RestoredBackup`), or a `DuplicateDevice` anomaly
 naming this device, or a pending file of the folder that could not be read (`PendingUnreadable`,
 §6.3), mints a new device before anything is written, and the new device's profile copies the
-old one's names. Outside edits are held (§6.2) rather than recorded until
-S2. Each journal file is opened once per open: the reading thread hands its handle to the
+old one's names. An outside edit found by O9 is recorded before the open ends (§11.1), unless
+its file is clean by stat, which is storage damage and is held (§6.2). Each journal file is
+opened once per open: the reading thread hands its handle to the
 fold's `ValueSource`, which reads values on demand through it (§2.6), so a value the fold reads
 during or after the open never opens the file again. O8's cache write and O14 run on one
 background thread after the project is usable; `wait_idle` waits for them.
@@ -4453,7 +4455,7 @@ and the on-disk end state, not only what the fold returns.
 | L84 | Rebuilding a damaged `.git` throws away carried blobs, so no commit can ever be made | G4 copies blobs from the broken repository and re-stores matching working-tree files; a missing blob never fails a commit (§6.4 G4, §9.4) | `crash_g4_rebuild_keeps_carried_blobs` |
 | L85 | The export check reads the zip back from the page cache and calls a failing stick verified | the verify bypasses the cache, or asks for the stick to be re-inserted (§10.1 E5) | `usb_export_verify_reads_device` (probe §16.5) |
 | L86 | A disk error after the rename reports "Not saved" for a save that exists; the retry reuses its seq and raises a false duplicate-device alarm | `WrittenNotDurable` counts as written, with a disk warning (§5.0) | `save_disk_error_after_rename_counts_as_saved` |
-| L87 | A read-only open deletes the writer's temp and lock files; a leftover `config.lock` blocks share and connect forever | a read-only open writes nothing; a writable open removes every `*.lock` under `.git` (§6.1) | `open_read_only_writes_nothing`, `open_removes_stale_config_lock` |
+| L87 | A read-only open deletes the writer's temp and lock files; a leftover `config.lock` blocks share and connect forever | a read-only open writes nothing; a writable open removes every `*.lock` under `.git` (§6.1) | `a_read_only_open_writes_nothing_in_git`, `an_open_removes_stale_git_lock_files` |
 | L88 | Files on Door43 the app does not own (dot files, names with spaces) are dropped from the tip by the next sync | foreign entries are kept verbatim; a badly named ingredient moves to `.tc-moved/` with a notice on every device (§9.4) | `loss_foreign_entries_kept_on_tip`, `loss_bad_name_ingredient_moved_not_dropped` |
 | L89 | `project.json` deleted on Door43 refuses every device's sync forever | a missing or unreadable file on R is not a mismatch; the merge commit restores it (§9.2 N1, N2) | `sync_project_json_deleted_on_door43_restored` |
 | L90 | Moving a tC4 team turns pre-move web edits and the creation commit into whole-book phantom conflicts | a commit without packs is an anchor; nothing is compared with an empty projection (§11.2 D1) | `team_move_tc4_no_phantom_door43_edits` |
@@ -4647,9 +4649,21 @@ on the corpus ten times larger:
 | `an_open_reads_each_pack_once` | every pack and pending file is opened once per open, with or without the fold cache: the reading thread hands its handle to the fold's `ValueSource`, so a value the fold reads later never opens the file again |
 | `a_save_reads_no_pack_and_writes_a_bounded_number_of_files` | a verse save opens no file, reads only the values of the records it changes from where they lie (under 64 KiB, never a whole pack), creates one pending file and flushes twice (the file and its folder), the same write points on both corpora |
 
-Unit S1 records no outside edit (§11.1 is S2's): where the table above says "recorded", S1
-holds the file (§6.2) and the test asserts that its bytes stay and nothing is written over
-them. A pack a teammate sealed is put into the folder between two opens, since S1 has no sync.
+Unit S2 adds the counts of the writer (§5.10), the checkpoint (§5.13) and the examination of an
+outside edit (§11.1), on the same two corpora; each asserts the same counts on both:
+
+| Test | Asserts |
+|---|---|
+| `a_books_materialize_touches_only_that_books_files` | one Psalms verse saved, then `leave`: files projected are at most the book's files (and `conflicts.json`), the files opened and renamed are that book's files, their heads files, `metadata.json`, the manifest and the intent, and no other book's |
+| `a_book_change_marks_only_that_books_files` | adding a book projects its USFM and reads and writes no other book's file |
+| `an_unchanged_file_is_not_read_back_and_each_buffer_is_hashed_once` | a decisions file that renders equal to its entry is neither read nor written; the bytes hashed are the bytes rendered plus the bytes read for the compare-and-swap, once each (`bytes_hashed`) |
+| `a_checkpoint_after_one_save_writes_only_changed_trees` | a Psalms save and a checkpoint write the same number of trees (at most ten) and blobs on both corpora: the changed files, the new pack and `metadata.json`; no unchanged derived file is read |
+| `reconciling_an_outside_edit_costs_what_it_changed` | three Psalms verses replaced inside `PSA.usfm`, told by one watcher event: one derived file and its heads file read, one decode, three keys compared value by value (`outside_keys_examined`), three changes written, on both corpora (D10: a record whose shown digest is the heads file's is not looked at) |
+| `a_focus_reads_only_what_is_not_clean_by_stat` | the window focus stats each path the app wrote once and reads those whose size or time differ |
+
+Where an earlier unit's row says "recorded" for a file that is not clean by stat, it is recorded;
+a file clean by stat whose bytes differ is held (§6.2). A pack a teammate sealed is put into the
+folder between two opens, since sync is unit X's.
 
 ### 16.6 Burrito validity everywhere (P5)
 
@@ -4719,7 +4733,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | settled entries read by O9 (a `clean_by_stat` that is never true: every derived file read before the open is usable) | `an_open_after_no_change_projects_no_file_and_reads_no_derived_file` |
 | the release of a hold whose file is gone (M0, O9) | `a_held_file_deleted_while_the_project_is_closed_is_rebuilt`, `a_held_file_deleted_while_the_project_is_open_is_rebuilt` |
 | a removed carried file in X | `a_removed_carried_file_leaves_the_folder_and_the_burrito_stays_valid`, `a_removed_carried_file_that_was_edited_outside_is_not_deleted` |
-| listing fixed, carried and held files from their bytes | `a_carried_file_edited_outside_is_listed_as_it_is_and_held`, `a_fixed_file_edited_outside_is_listed_as_it_is`, `a_held_file_that_changes_again_is_listed_as_it_is_and_both_copies_stay` |
+| listing fixed, carried and held files from their bytes | `a_carried_file_edited_outside_is_recorded_and_listed_as_it_is`, `a_fixed_file_edited_outside_is_restored_and_a_copy_is_kept`, `a_held_file_that_changes_again_is_recorded_and_both_copies_stay` |
 | no copy replaces another in `.tc/external/` | `two_outside_edits_in_one_second_keep_two_copies` |
 | the copy of outside bytes in `metadata.json` when no manifest entry names them | `an_outside_edit_of_metadata_json_is_copied_when_the_manifest_is_gone`, `an_outside_edit_of_metadata_json_is_copied_when_the_manifest_does_not_parse` |
 | a best-effort open (a write failure → read-only, an unreadable derived file reported, a failed stat listed) | `an_open_on_a_full_disk_is_read_only_and_never_refused`, `a_disk_that_fills_during_the_opens_materialization_leaves_a_read_only_project`, `an_open_goes_on_when_a_derived_file_cannot_be_read`, `loss_pack_cloud_placeholder_unreadable_not_damaged` |

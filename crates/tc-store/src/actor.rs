@@ -310,7 +310,13 @@ impl Actor {
         derived: u32,
         copy: String,
     ) {
-        let outcome = self.project.record_outside(&rel, seen, plan, derived);
+        // A project that turned read-only meanwhile (a second writer, a disk that filled)
+        // records nothing: the bytes stay in the copy the writer made.
+        let outcome = if self.read_only().is_some() {
+            crate::writer::Recorded::NotWritten
+        } else {
+            self.project.record_outside(&rel, seen, plan, derived)
+        };
         if !self.project.dirty.is_empty() {
             self.due = Some(Instant::now() + MATERIALIZE_AFTER);
         }

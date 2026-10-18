@@ -621,6 +621,67 @@ fn reconciling_an_outside_edit_costs_what_it_changed() {
     assert_eq!(costs[0], costs[1], "the cost does not follow the size");
 }
 
+/// The same edit told by the watcher to a project that is open: one event for the file, and
+/// the examination reads that file and its heads file, decodes once, compares the three
+/// records that differ and writes three changes, however large the project is; no other path
+/// is looked at.
+#[test]
+fn a_watcher_event_for_three_changed_verses_costs_what_they_changed() {
+    use crate::corpus::{psalms, psalms_x10};
+    let mut costs = Vec::new();
+    for corpus in [psalms(), psalms_x10()] {
+        let fs = corpus.fs.copy();
+        fs.advance(std::time::Duration::from_secs(5));
+        let rig = rig_as(fs.clone(), APP, "host-1");
+        let handle = rig
+            .store
+            .open(&corpus.folder, &OpenOptions::default())
+            .unwrap();
+        handle.wait_idle();
+        fs.advance(std::time::Duration::from_secs(5));
+        let path = corpus.folder.join("ingredients/PSA.usfm");
+        let mut bytes = fs.peek(&path).unwrap();
+        for v in 1..=3 {
+            bytes = set_verse(&bytes, 1, v, &format!("an outside edit of verse {v}"));
+        }
+        let before = handle.counters();
+        fs.put(&path, &bytes, None);
+        eventually("the watcher never recorded the edit", || {
+            handle.notices().iter().any(|n| {
+                matches!(
+                    &n.notice,
+                    Notice::OutsideEditRecorded { path, .. } if path.as_str() == "ingredients/PSA.usfm"
+                )
+            })
+        });
+        handle.wait_idle();
+        let cost = handle.counters().since(&before);
+        // The file the watcher told is read to examine it. What the writer then reads and
+        // writes is the rewrite of the book from the project, which the 3 s timer of the
+        // batch may repeat when the machine is slow: only the examination is counted.
+        assert!(cost.derived_read >= 1, "{cost:?}");
+        assert_eq!(cost.heads_read, 1, "{cost:?}");
+        assert_eq!(cost.outside_decodes, 1, "{cost:?}");
+        assert_eq!(cost.outside_keys_examined, 3, "{cost:?}");
+        let changes: Vec<u32> = handle
+            .notices()
+            .into_iter()
+            .filter_map(|n| match n.notice {
+                Notice::OutsideEditRecorded { changes, .. } => Some(changes),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(changes, vec![3]);
+        costs.push((
+            cost.heads_read,
+            cost.outside_decodes,
+            cost.outside_keys_examined,
+        ));
+        handle.close().unwrap();
+    }
+    assert_eq!(costs[0], costs[1], "the cost does not follow the size");
+}
+
 fn verse_conflicts_of(handle: &ProjectHandle, book: BookId) -> Vec<RecordKey> {
     handle
         .snapshot()
