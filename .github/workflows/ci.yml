@@ -22,6 +22,9 @@ jobs:
       # The server and the program without test hooks, as a release builds them; the workspace
       # build always has them through the dev-dependencies.
       - run: cargo clippy -p tc-server -p tc4 --lib --bins -- -D warnings
+      # tc-app's library without test hooks, as a release build has it; every other build
+      # has them through the self dev-dependency.
+      - run: cargo clippy -p tc-app --lib -- -D warnings
       - run: cargo test --workspace
       # tc-ui's components compile for wasm32 only, so the host steps above never see them.
       - run: cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings

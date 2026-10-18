@@ -47,7 +47,7 @@ use tc_api::refusal::Message;
 use tc_api::shown::{ConflictMarker, PersonLabel, Shown, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldLog, FieldLogView, FieldStore, Hold,
-    HoldPoint, Quiet, QuietView, Release, Reset, StoredText,
+    HoldPoint, Quiet, QuietView, Release, Reset, StoredText, TokenBase,
 };
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
@@ -531,6 +531,7 @@ impl Example for FieldLogView {
             stores: vec![StoredText {
                 request: request(17),
                 text: "Paul, a servant of God".into(),
+                base: TokenBase::Current,
             }],
         }
     }

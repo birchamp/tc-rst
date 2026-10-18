@@ -213,6 +213,7 @@ fn every_shared_type_round_trips() {
             Echo,
             EchoView,
             EchoWord,
+            TokenBase,
         ]
     });
 }
