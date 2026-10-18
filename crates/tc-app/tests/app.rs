@@ -4,6 +4,7 @@
 
 mod app {
     pub mod common;
+    mod events;
     mod folders;
     mod projects_root;
 }

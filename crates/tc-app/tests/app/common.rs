@@ -5,6 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+use tc_api::event::Event;
+use tc_api::ids::{JobId, ServerInstance};
+use tc_api::jobs::{JobKind, JobState, JobView, Phase, Progress};
 use tc_app::config::{HostEnv, HostOs};
 use tc_app::folders::FolderCheck;
 
@@ -33,4 +36,31 @@ pub fn env(os: HostOs, vars: &[(&str, &str)]) -> HostEnv {
         vars.iter()
             .map(|(name, value)| ((*name).to_owned(), OsString::from(*value))),
     )
+}
+
+pub fn instance() -> ServerInstance {
+    ServerInstance::from_bytes([7; 16])
+}
+
+pub fn progress(done: u64) -> Progress {
+    Progress {
+        phase: Phase::Seed,
+        done,
+        total: Some(1000),
+        item: None,
+    }
+}
+
+pub fn job_event(job: u64, state: JobState) -> Event {
+    Event::Job(JobView {
+        id: JobId::new(job),
+        kind: JobKind::Download,
+        project: None,
+        state,
+    })
+}
+
+/// A progress frame of a job.
+pub fn running(job: u64, done: u64) -> Event {
+    job_event(job, JobState::Running(progress(done)))
 }
