@@ -191,4 +191,19 @@ seeds it into the resource store like every file above.
 - A build whose installer lacks a pinned file fails. The app never falls back to
   downloading a bundled file.
 
+### The bundled store an installer ships
+
+The packaging step builds the store the installer carries from this folder with
+`cargo run -p tc-app --example bundle_store -- --from bundle/en --out <dir>`. Each export is
+checked against `SHA256SUMS` and installed with tc-resources' own installer, each lexicon against
+`fetched.lock`; a pin whose file is not here (the OBS pictures, until the packaging step has
+downloaded them) is skipped and named, so a build here holds 15 of the 16 installs. The build
+ends by writing `BUNDLE-MANIFEST.json` in the store, naming the installs it holds; a start
+that finds one of them missing, or no manifest, stops with the name (`docs/APP-DESIGN.md` §4.6).
+The packaging step therefore downloads the pictures first and builds the store once. At a first
+launch `tc4 serve --bundle <dir>` copies that store into the machine's resource store as the
+`Seed` job, with a count of content files, and a repeat launch reads none of them
+(`docs/APP-DESIGN.md` §4.6, unit A9). Shipping the archives themselves instead of an expanded
+store is still open (`docs/TC4-DELTA-2026-10-16.md` §3.6 item 3).
+
 Licenses: the unfoldingWord resources are CC BY-SA 4.0, © unfoldingWord.

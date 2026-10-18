@@ -283,8 +283,11 @@ mod tests {
                 version: "0".to_owned(),
                 commit: "0".to_owned(),
             },
+            bundle: None,
             #[cfg(feature = "test-hooks")]
             test_hooks: false,
+            #[cfg(feature = "test-hooks")]
+            seed_pace: None,
         };
         App::start(config, AppDeps::production()).await.unwrap()
     }

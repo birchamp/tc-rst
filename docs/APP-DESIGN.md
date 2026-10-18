@@ -618,6 +618,23 @@ No screen shows `Train` or `HomeSummary` progress. Their `Job` frames go out onc
 most; only their end (`Done`, `Failed`, `Cancelled`) goes out at once. The other jobs keep the
 100 ms rate of §4.6, because a screen shows them. *(A-29)*
 
+**`Startup`** *(A9)*. `hello.startup` is exact from the first request, because `App::start` plans
+the first-launch seeding from receipts alone before it returns (§4.4): `Ready` when there is
+nothing to copy or check, `Preparing { done: 0, total }` when there is, and `Failed { reason }`
+when the plan cannot be made, a copy on disk cannot be trusted, or the bundle lacks an install its
+manifest lists (§4.6). Without `--bundle` nothing is seeded and the state is `Ready`. `total` and `done` count **content files**, as the golden
+`hello.json` already shows (`1200 of 3739`). Declared difference from tC4, which counts its 16
+resources (`tC4:scripts/desktop-bootstrap.cjs:236`): one resource is up to 1,021 files, each
+written with an fsync, so a count of resources would stand still for many seconds on the
+reference laptop, and PERF rule 4 asks for a count that grows. It moves as each file is written;
+reading and checking an install comes before its first write and moves nothing (§4.6). The words
+are tC4's. The `Startup` frames follow the `Seed` job's own reports (none before 300 ms, then at
+most one per 100 ms, §4.6). The state moves only forward: a `Preparing` count never falls,
+`total` never changes within a run, and `Ready` or `Failed` is final for the run, so the job's
+last `Running` frame, which the reporter sends after the job's own end, can never show
+"preparing" again. The ring keeps only the newest `Startup(Preparing)` frame (§5.4). A repeat
+launch plans nothing to do, starts no job, sends no `Startup` frame and adds no report.
+
 ### 3.7 View types
 
 The view types follow the shapes tC4's views read, so each screen ports one to one. A value that
@@ -1015,7 +1032,7 @@ case is named after the rule it protects.
 
 | Cache | Key | Owner | Filled | Invalidated by | Budget |
 |---|---|---|---|---|---|
-| `ResourceStore` | — | app | at start; no content file read | an install | repeat launch reads no content file (PERF:100) |
+| `ResourceStore` | — | app | at start: `App::start` opens `<app_data>/resources` and plans first-launch seeding from receipts and check records alone *(A9)*; no content file read | an install | repeat launch reads no content file (PERF:100) |
 | `BookResources` (LRU: current and previous book) | (pins digest, book) | session | first need, `tc_resources::load::load_book` (`crates/tc-resources/src/load.rs:163`) | a pins change | 300 ms first; 60 MiB per book (PERF:87) |
 | `Lexicons` | lexicon pin | app | first lookup | an install | 100 ms load; under 1 ms per lookup (PERF:88) |
 | `HelpsCache` | (pins digest, book or story, helps-source setting) | session | with `BookResources` | pins, setting | part of the 300 ms |
@@ -1076,11 +1093,46 @@ There is no `ProjectIndex` *(A-21)*: §4.3 says how each read finds its keys.
 | `Export` | steps | no file | — |
 | `HomeSummary` | files | the card keeps "—" | background |
 | `Train` | verses | the old model stays | background |
-| `Seed` (first launch) | files | resumes at the next launch | 60 s (PERF:99) |
+| `Seed` (first launch) | content files *(A9)* | whole copies only: the copy being made stays in `resources/.partial/` until the next start removes it, and the next start copies only what is missing | 60 s (PERF:99) |
 
+- **Close is a quit, and a quit stops the seed** *(A9)*. The shell's Close asks `tc4` to quit
+  (§6.5, "The close guard"). `App::quit` cancels the `Seed` job and waits until it has stopped,
+  before it flushes the prefs, all inside the server's 5 s close (§5.1), so `tc4` lets go of
+  `app.lock` only when no seed writer runs (DELTA §3.15.10). The seed polls the token before each
+  install and before each file it writes, never between an install's last file and its receipt,
+  so a copy whose files are all written is finished. It reads and checks a whole install before it
+  writes the first file of its copy, and does not poll in between, so a close waits for the
+  install being read: 277 ms for the largest (`en_ust`, 94 MB) from the disk on the Linux PC
+  (`docs/evidence/first-launch-seeding-2026-10-18.md`); on a reader that makes each open slow it
+  grows with the install's file count (1,022 for `en_tw`), a poll per file read is the fix, and
+  the Windows measurement (G1, G2) decides. A close that the 5 s budget cuts is safe, because an
+  install is staged and renamed whole. `jobs/cancel` of the `Seed` job does the same without
+  quitting; `hello.startup` then says `Failed` ("preparing the resources was stopped; it
+  continues at the next start") until the next launch.
+- **Seeding is planned from receipts** *(A9)*. `ResourceStore::seed_plan` reads each bundled
+  install's receipt and the machine's copy's receipt and check record, never a content file, and
+  says what to copy (an install the machine lacks) and what to check again (a copy not checked
+  against its present receipt). So the plan runs inline in `App::start`, costs the receipts of the
+  bundled installs and of their copies, and a repeat launch plans nothing.
+- **A bundle says what it holds** *(A9)*. The folders of an expanded store cannot say that one
+  is missing, so the build of the bundle (`crates/tc-app/examples/bundle_store`) writes
+  `BUNDLE-MANIFEST.json` beside the installs, naming each by repository and commit, as tC4 walks
+  the `bundled_resources` of its `BUILD-MANIFEST.json` and stops its start at a missing archive
+  (`tC4:scripts/desktop-bootstrap.cjs:230-290`). The plan reads it with the receipts. A listed
+  install that is neither in the bundle nor already on this computer ends the start `Failed` at
+  once, naming what is missing, and nothing is copied from a damaged bundle; an install this
+  computer already holds is no loss, as tC4 finds an installed resource before it looks for its
+  archive. A folder with no manifest, an unreadable or empty one (a `--bundle` that names the
+  wrong folder) ends it `Failed` as well, not `Ready` with nothing done. An install in the bundle
+  that the manifest does not list is copied. Whatever adds an install to the bundle after the
+  build, such as the packaging step that downloads the Open Bible Stories pictures, builds the
+  manifest again with it (it runs `bundle_store` once, after the download).
+  `ResourceStore::seed` does the plan with a `SeedWatch` that hears `done(files)` after each
+  content file and is asked `cancelled()`.
 - **Saves keep flowing** during every job (I9, STORAGE:2976-2984). tc-app holds no lock across a
   job.
-- **After a restart** import and seed resume from their own temporary state; a download starts
+- **After a restart** import resumes from its own temporary state, and the seed from the plan of
+  what is missing (nothing is kept but whole copies, *A9*); a download starts
   again from its first byte when it is next asked for, because opening the resource store clears
   what an interrupted one left in `.partial/` *(A11)*; training, plans and summaries are computed
   again; nothing syncs at launch or while idle (DELTA:737).
@@ -1141,6 +1193,7 @@ The shell's `drafts-buffer.log` is not among them: the shell writes it (AD21).
 | `summaries/<folder hash>.json` | §4.5 |
 | `reports.json` | the last 50 operation reports, for Feedback and the dev Inspector |
 | `uploads/`, `downloads/` | temporary; emptied at start and after use |
+| `resources/` | the machine's resource store (STORAGE §3.7), opened by `App::start`. A first launch with `--bundle <dir>` copies the bundled English suite into it as the `Seed` job (§4.6); `resources/.partial/`, where an interrupted copy or download stays, is emptied at each start. A leftover that cannot be removed (on Windows a scanner may hold one of its files) stops nothing: installs land by renaming a staging folder of their own name, so the start goes on and adds a `resources` report naming the folder, and the next start tries again. Only a `resources/` folder that cannot be made stops the start, as an app-data folder that cannot be made does (`AppData`, exit code 4) *(A9)* |
 | `app.lock` | `tc4 serve`'s guard for the restart case: an old `tc4` still exiting after a crash (AD39). The holder writes its pid to `app-lock.json` beside it (Windows lets no other process read a locked file), so a new `tc4` that waits for it can name the holder's process. The single instance on a machine is the shell's lock (§5.1) *(A-3)* |
 | `app-lock.json` | `{pid, at}` of the `tc4` that holds `app.lock`, written atomically after it takes the lock; read only to name the holder |
 | `drafts-buffer.log` | written by the shell, not by `tc4`: the mirror of the browser buffer, one appended line per change, a clean field written as a removal line (AD21) *(A-3)* |
@@ -1187,11 +1240,19 @@ fields of `test/fieldStore` (§5.8), written atomically before each `Ack`.
   starts no `tc4` server, and the running copy's window is brought to the front, restored if it
   was minimized, on `second-instance` (`tC4:scripts/desktop-main.cjs:134-140`). People work on
   one project at the same time from separate machines.
-- `tc4 serve --app-data <dir> [--projects <dir>] --ui <dir> [--door43 <url>]`
-  `[--backend memory --scenario <dir>] [--test-hooks]`. The last three exist only with their
-  cargo features. Without `--projects`, tc-app chooses the projects folder (§4.9, Q-4). A
-  `--projects` folder that does not exist stops the start with its path: an empty folder made in
-  its place would look as if the person's projects were gone.
+- `tc4 serve --app-data <dir> [--projects <dir>] --ui <dir> [--door43 <url>] [--bundle <dir>]`
+  `[--backend memory --scenario <dir>] [--test-hooks] [--test-seed-pace <ms>]`. The last four
+  exist only with their cargo features. Without `--projects`, tc-app chooses the projects folder
+  (§4.9, Q-4). A `--projects` folder that does not exist stops the start with its path: an empty
+  folder made in its place would look as if the person's projects were gone. `--bundle <dir>`
+  names the bundled resource store the installer ships, read only, with its `BUNDLE-MANIFEST.json`
+  (§4.6); a first launch copies it into `<app-data>/resources` as the `Seed` job (§4.6), a folder
+  that lacks an install its manifest lists ends the start `Failed`, and without the flag nothing
+  is seeded
+  (development, tests, the parity captures, Q-11). `--test-seed-pace <ms>` makes the seed wait
+  that long before each file, so the process tests and Playwright can watch a seed and close it
+  on any disk; a release build refuses it as an unknown flag (`release_has_no_test_hooks`)
+  *(A9)*.
 - It takes `app.lock` in app data, an operating-system lock it holds until the process ends (a
   crash included), and then writes its pid to `app-lock.json` beside it, because Windows lets no
   other process read a locked file. The lock is only its guard for the restart case: an old `tc4`
@@ -1269,7 +1330,7 @@ drives the quit sequence in process): `closed_stdin_quits_within_5_s`,
 | `GET /` | static | `index.html`, `no-store`, with `boot.js` |
 | `GET /ui/<build>/*` | static | wasm, JS glue, `boot.js`, CSS (tC4's `styles.css`, tokens, `ui.css`), fonts, catalogs, in a folder named by a hash of its files (§3.10); immutable |
 | `GET /help/*` | static | vendored help pages as `text/html`, never a redirect (Q28, DELTA:928-944), with the page-swap shim |
-| `GET /prepare.html` | static | first-launch window, strings in 10 languages (Q25) |
+| `GET /prepare.html` | static | first-launch window: tC4's `scripts/desktop-preparing.html` with its words in the saved app language (DELTA Q25; English until translated, Q-10). One file, `crates/tc-ui/app/prepare.html`, with its own CSP (the server sends none for this route); it reads `app/hello` and the event stream and goes to `/` at `Ready` *(A9)* |
 | `GET /api/v1/events` | stream | §5.4 |
 | `POST /api/v1/{service}/{name}` | typed | §3.9 |
 | `POST /api/v1/uploads` | upload | §5.5 |
@@ -1281,15 +1342,29 @@ drives the quit sequence in process): `closed_stdin_quits_within_5_s`,
 on a task of its own, so a client that goes away (a reload, a closed window) never cuts a call
 short, and the quit waits for calls still running (§5.1). *(A2)*
 
+**Who opens the first-launch window** *(A9; a contract for G1 and A5, not built in A9)*. The
+shell opens `/prepare.html#t=<token>` when `hello.startup` is `Preparing` and still is 300 ms
+later, and `/#t=<token>` otherwise, so a repeat launch shows no window (PERF rule 4; tC4 shows
+its window on every packaged launch, until its main window is ready: declared difference). The
+window shows counts only, never resource names, as tC4's page does. It goes to `/#t=<token>` by
+itself at `Ready`, and stays on its failure words at `Failed`, with the reason under them (§6.12).
+A UI page that boots while `hello.startup` is not `Ready` goes to `/prepare.html` with its
+fragment (A5's `App`, which owns the root). The `Seed` job's failure is `JobState::Failed(
+ApiError::Internal { report })`, the report being the `seed` report: no refusal family describes
+a damaged resource copy, and "Ask for help" attaches that report. A9's own proof drives the page
+in Chromium against the real `tc4`, with the request filter of AD11
+(`crates/tc-ui/app/prepare-smoke.mjs`).
+
 ### 5.4 The event channel
 
 - `GET /api/v1/events?after=<seq>` answers `text/event-stream`: `id: <seq>`, `data: <json>`, and
   a comment line every 15 s.
 - The server keeps a ring of 4,096 frames. Progress frames are coalesced: the newest per job
-  replaces older ones. A reconnect with a sequence the ring no longer holds gets `Resync`, and
-  the UI reads every live query again. Every query is idempotent. The ring is tc-app's
-  `EventBus` (§4.1); tc-server writes its frames as server-sent events, adds the heartbeat and
-  bounds each connection's queue.
+  replaces older ones, and so does the newest startup progress frame (a `Ready` or `Failed`
+  frame removes the last one and is itself kept) *(A9)*. A reconnect with a sequence the ring no
+  longer holds gets `Resync`, and the UI reads every live query again. Every query is
+  idempotent. The ring is tc-app's `EventBus` (§4.1); tc-server writes its frames as server-sent
+  events, adds the heartbeat and bounds each connection's queue.
 - Each connection has a bounded queue. A reader too slow for it is disconnected and reconnects.
 - The UI reads the stream with `fetch` and a `ReadableStream` reader, and parses the frames in
   `tc_ui::app::events`, a host-tested parser.
@@ -1837,12 +1912,18 @@ so the rebuild must keep its keyboard contract by itself *(A-24)*:
 
 Rebuild-only screens with no tC4 view: the review tabs beyond Text, History, Detached, Notices,
 the received-work sheet, the draft offer, the read-only banner with the copy offer, the USB flows,
-the first-launch window (Q-9), and the boot error *(A4a)*. tC4 bundles everything and cannot fail
-to boot; the rebuild can: a catalog that does not load, a page opened without its key, or a page
-and a server of two builds. The boot error is tC4's view-error callout (`data-testid="boot-error"`,
-tone warn, `role="alert"`): `app.viewError`, the technical reason, and a Retry button
-(`app.retry`) that reloads. It is shown in the saved language when its catalog is installed, else
-in English.
+the first-launch window (Q-9), and the boot error *(A4a)*. The window is a port of tC4's
+preparation page (`scripts/desktop-preparing.html`, `desktop-prepare.cjs`), with its markup, CSS,
+title and English words unchanged and its words as rebuild keys (`prepare.*`) in the saved app
+language (nine languages pending, Q-10). Only its failure state is new design: tC4 shows a native
+error box and exits (`scripts/desktop-main.cjs:175-181`), while here the server seeds and the
+window shows tC4's failure words with the reason under them, so the owner reviews it under Q-9
+with `docs/evidence/first-launch-seeding-2026-10-18/prepare-failed.png` *(A9)*. tC4 bundles
+everything and cannot fail to boot; the rebuild can: a catalog that does not load, a page opened
+without its key, or a page and a server of two builds. The boot error is tC4's view-error callout
+(`data-testid="boot-error"`, tone warn, `role="alert"`): `app.viewError`, the technical reason,
+and a Retry button (`app.retry`) that reloads. It is shown in the saved language when its catalog
+is installed, else in English.
 
 ---
 
@@ -2093,9 +2174,11 @@ tC4's spec assertions are the reference.
 ### 8.1 Counters
 
 - `FoldState::counters()` (`storage:crates/tc-journal/src/fold/state.rs:1830`), already public.
-- `tc_resources::content_files_opened()` is thread-local (`crates/tc-resources/src/store.rs:183-192`).
-  A count test that loads on rayon threads sums the counter on every worker, or loads on the test
-  thread.
+- `tc_resources::content_files_opened()` and `content_files_written()` are thread-local
+  (`crates/tc-resources/src/store.rs`). A count test that loads on rayon threads sums the counter
+  on every worker, or loads on the test thread. The seeding plan runs inline in `App::start`, on
+  the caller's thread, and the `Seed` job's counts are taken on its own thread and reported in the
+  `seed` report's facts (`contentFilesOpened`, `contentFilesWritten`) *(A9)*.
 - tc-store's counters (R14), or C0's own counts of commands, replies and waits until R14 lands *(A-5)*.
 - `AppCounters`: `records_read`, `values_decoded`, `items_derived`, `rows_serialized`,
   `chapters_projected`, `book_resource_loads`, `summaries_computed`, `keys_probed`,
@@ -2114,7 +2197,8 @@ Count tests live in `crates/tc-app/tests/op_counts.rs` unless named otherwise.
 | Screen, action | Budget (PERF line) | Count test | Earliest backend |
 |---|---|---|---|
 | Home list, 10 cards | proposed 3 s repeat launch (PERF:100); no cost per history (PERF:12-19) | `home_costs_projects_not_history`: fresh summaries mean 0 folds, 0 pack reads, at most 5 files per card; a stale card starts one summary job | store only: the memory backend's `peek` folds, which the product never does *(A-25)* |
-| Repeat launch | 0 resource content reads (PERF:100) | `repeat_launch_reads_no_resource_content_file` (`tc4` test) | store |
+| First launch | 60 s with a determinate count (PERF:99, rule 4); a read of each bundled file once, a write of each once, no read back (PERF:133-138) | `first_launch_opens_each_bundled_file_once_and_writes_each_once` (`crates/tc-app/tests/app/seed.rs`, in process, because the counters are per thread); `quit_while_seeding_stops_the_seed_and_waits_for_it`; `c29_a_stop_asked_at_the_last_file_of_a_copy_leaves_that_copy_finished` (`crates/tc-resources/tests/seed.rs`: a copy whose files are all written is finished, whatever the watch says); `a_bundle_that_lost_an_install_fails_the_startup_at_once_and_copies_nothing` and `a_leftover_that_cannot_be_removed_stops_neither_the_start_nor_the_seed` (same file); Playwright `prepare-smoke.mjs`. Until the installer ships the archives themselves (DELTA §3.6 item 3), the count is per bundled file, not per archive; the measurement is `docs/evidence/first-launch-seeding-2026-10-18.md` *(A9)* | none (A9) |
+| Repeat launch | 0 resource content reads (PERF:100) | `repeat_launch_reads_no_resource_content_file` (`crates/tc-app/tests/app/seed.rs`, in process, because the counters are per thread), with `a_repeat_launch_is_ready_at_once_and_changes_no_resource_file` (`crates/tc4/tests/seed.rs`, the real binary) *(A9)* | none (A9) |
 | Open project | 3 s / 10 s; first report within 300 ms (PERF:89-90) | tc-store owns it; tc-app adds `app_forwards_open_reports_unchanged` and `open_lists_no_key` (`record_keys` 0, no index) *(A-21)* | store |
 | Open a book (Understand, Translate) | 150 ms; first chapter 50 ms (PERF:73) | `open_book_touches_one_book`: records read equal that book's | memory |
 | Move to another chapter | 16 ms (PERF:75) | `chapter_switch_sends_no_request` (harness) | memory |
@@ -2297,7 +2381,7 @@ This breakdown was checked again after the red team *(A-16, A-17)*:
 | A6b Parity harness: Rust side and gate *(A-17)* | `env-rust.mjs` (`tc4 serve`, token header, `test/reset`, `test/quiet`, event stream left out of `trackRequests`); the four-layer compare tool; `masks.json`, `report.json`, `residuals.json`; `screen_record.rs` | A6a, A2, A4a | — | the gate fails on a planted pixel, DOM and meaning difference; a screen that reaches the settle deadline fails | the gate runs in `cargo test`, and the planted differences fail it |
 | A7 tC4 view-state gallery | Vite app with the `state.jsx` stub; case format; action recorder; the §7.4 cases | A6a, A6b | — | every case renders with no console error; two runs are byte-identical | the cases are rows in `report.json` |
 | A8 Door43 account and internet consent | `account` service: sign-in with `mint_token` against tc-door43-fake, keep, resume, forget; `cancelSignIn`; "no keychain"; M12; the internet question flow (`InternetFlow`, `Pending`) | A3, A5 | — | sign-in cases of J11; internet-consent a–j that need no project | DOM parity for `share-signin`, `share-internet-consent`, `open-door43-internet-consent` |
-| A9 First-launch seeding | the join of A2 and A3 (order paragraph), if no earlier unit made it; **tc-resources**: progress and cancel hooks in bundle seeding, with that crate's own tests; the `Seed` job; `Startup` events; `/prepare.html` with English text and the other nine languages listed as pending (Q-10) *(A-17, A-32)* | A2, A3 | Q-10 for the translations | seeding count targets (PERF:133-138); cancel leaves a resumable state; tc-resources' tests stay green | Playwright: the window shows "Preparing resources: n of total" and Close cancels |
+| A9 First-launch seeding | the join of A2 and A3 (order paragraph), if no earlier unit made it; **tc-resources**: progress and cancel hooks in bundle seeding, with that crate's own tests; the `Seed` job; `Startup` events; `/prepare.html` with English text and the other nine languages listed as pending (Q-10) *(A-17, A-32)* *(A9: built. D1: the plan is made at start, from receipts alone, inline in `App::start`, so `hello.startup` is exact from the first request (`Ready`, with no job, frame or report, when nothing is missing; `Preparing { 0, total }`; `Failed`), and without `--bundle` nothing is seeded. D2: tc-resources gets `seed_plan`, `seed(plan, &dyn SeedWatch)`, `Seeding::{Finished, Cancelled}` and `content_files_written()`; `seed_from` is the same two steps with a watch that never stops. D3: the count is content files, not tC4's 16 resources (declared difference, §3.6). D4: the `Startup` frames follow the `Seed` job's reports through `JobRegistry::watch` and only move forward, and the ring keeps the newest `Startup(Preparing)`. D5: Close is a quit, and `App::quit` cancels the seed and waits for it; a stop leaves whole copies, and the copy being made stays in `.partial/` until the next start. D6: a bundled install that fails its own check, a copy that cannot be trusted, a bundle that cannot be read and a bundle that lacks an install its manifest lists (D12) end the start `Failed`, and the window shows tC4's failure words with the reason; tC4 shows a native error box and exits, so this is a declared difference, and the screenshot goes to the owner under Q-9; tc-resources keeps its rule that a refused install does not stop `seed_from`. D7: `/prepare.html` is one file, `crates/tc-ui/app/prepare.html`, holding the `prepare.*` text of all ten languages (nine pending, Q-10) and one script that its own CSP allows by hash; `crates/tc-ui/tests/prepare_page.rs` keeps both equal to the rebuild files. D8: `tc4 serve --bundle <dir>`, and with `test-hooks` `--test-seed-pace <ms>`. D9: the installer still ships an expanded store, built from `bundle/en` by `crates/tc-app/examples/bundle_store`, which also writes the store's `BUNDLE-MANIFEST.json` (D12); seeding from the archives stays DELTA §3.6 item 3. D10: the shell (G1) opens the window only when `hello.startup` is still `Preparing` 300 ms after launch, so a repeat launch shows none, a declared difference from tC4, which shows it on every launch; A5's `App` sends a page that boots while it is not `Ready` to `/prepare.html` (§5.3). D11 *(added after the first verification)*: `App::start` opens the resource store with `ResourceStore::open_keeping_leftovers`, so a `.partial/` leftover that cannot be removed is a `resources` report and not a refusal to start (§4.9); `ResourceStore::open` still refuses it for other callers. D12 *(added after the first verification)*: a bundle says what it holds. The build of the bundle writes `BUNDLE-MANIFEST.json`, naming each install by repository and commit, and the plan compares it with the folders (§4.6): a listed install that is neither in the bundle nor on this computer, or a folder with no usable manifest, ends the start `Failed` at once and copies nothing. tC4 does the same with its `BUILD-MANIFEST.json` (`tC4:scripts/desktop-bootstrap.cjs:230-290`), so this is no declared difference; without it a lost install folder, or a `--bundle` that named the wrong folder, ended `Ready` and opened projects that could not find their helps. Evidence: `docs/evidence/first-launch-seeding-2026-10-18.md` (on the Linux PC: first launch 14.8 s median, repeat launch 4.1 ms, `App::quit` in a seed 4.6 ms; the Windows figure is G1's and G2's) and `crates/tc-ui/app/prepare-smoke.mjs`. A4a had not merged when A9 was done: whichever of A4a and A9 merges second adds to `crates/tc-ui/build-app.sh` a copy of `app/prepare.html` to `OUT/prepare.html`, and counts that page as a user of the `prepare.*` rebuild keys.)* | A2, A3 | Q-10 for the translations | seeding count targets (PERF:133-138); cancel leaves a resumable state; tc-resources' tests stay green | Playwright: the window shows "Preparing resources: n of total" and Close cancels |
 | A10 tc-export print model *(A-17)* | the **new crate `tc-export`**, pure, over tc-obs: ports of `printedItems` (`tC4:src/data/bookModel.js`), the print parts (`tC4:src/views/print/PrintBook.jsx:44-71`) and `PrintStories.jsx`, and the page setup; a typed model, no HTML yet. A book's input is its verse rows (label, drafted, shown text), the rows the editor's `VerseRow` is built from, not a second reading of the USFM: tC4 builds the editor and the PDF from one `bookModel` so that both state a verse the same way (`tC4:src/data/bookModel.js:1-4`), and the port of tC4's shown text is tc-usfm's `shown_text_v1`. tc-usfm joins with D2's USFM producers. Declared difference: the "Incomplete draft" notice shows whenever a verse prints as not yet drafted (`has_undrafted`); tC4 asks only for an undrafted verse (`tC4:src/views/CommunityChecking.jsx:182`), so a verse drafted with a footnote alone prints "[ verse not yet drafted ]" with no notice to explain it | — | — | vectors recorded by running tC4's functions in node on the Titus, Jonah and OBS samples, tC4's PDF test cases and generated books and story sets, compared as the markup tC4's print components render, the preview's split pages included; a proptest that every drafted verse appears once, and one for frames | the vectors are equal |
 | A11 Streaming downloads in tc-door43 *(A-17)* | **tc-door43**: `download` streams to a file with byte progress and a cancel check per chunk, and every 100 ms while it waits, the commit lookup that comes before an archive included (it returned one buffer, `crates/tc-door43/src/client.rs:520-526` at `21fef4a`); tc-resources installs use it. Built: `DownloadTo`, `DownloadWatch`, `DownloadedZip`, `Door43Error::{Cancelled, Disk}`, `install_dcs_watched`, the fake's `HoldBody`, `BreakOff` and `NoContentLength` | — | — | against tc-door43-fake: progress counts, cancel leaves no partial install, the internet switch stops the next chunk | the tests pass; tc-resources' install tests stay green |
 | G0 Electronite spike, run on Windows *(A-3, A-14, A-17)* | a throwaway Electronite v37 main script and page in `spikes/electronite/`, never shipped: start a stand-in for `tc4 serve` (`tc4-standin`: axum on loopback, the token, the §5.2 checks, the address line, a quit on a closed stdin), because A2 is built at the same time; the header filter of AD11 and a probe of every request type (fetch, image, iframe, download, print window, web font, CSS `url()`, the event stream, a same-origin child window); a `protocol.handle` prototype for Q-1; whether the page's `/api/` requests wait for a busy main thread; the aligner round trip with a 20 KB reply, up to the painted frame, alone and while OBS pictures and a help page load, in two passes of alternating order; supervision (end `tc4`: restart and reload; end the shell: `tc4` exits, with `tc4` started plainly and detached); what a hard kill leaves of `localStorage` and of the mirror file; the Chromium version; a PowerShell driver that writes the results; the task `.audit/tasks/g0-windows.md`, which also runs the storage benchmark on the same laptop | — (the stand-in; A2 measures `tc4 serve`'s own loopback cost) | Q-26: a person or a Windows runner runs it (PLAN:151-152) | the stand-in's tests; the page's probes in Chromium through Playwright, which fail when nothing adds the token; the whole driver run here with Electronite's Linux build; the probe table; the round trip p95 on the reference laptop or a named stand-in; the supervision cases | `docs/evidence/electronite-spike-<date>.md` holds the Windows results; Q-1 and, on a miss, Q-13 are put to the owner with them |

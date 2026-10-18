@@ -11,8 +11,8 @@ use common::{START, Tc4, http};
 use tempfile::TempDir;
 
 /// The words no release binary may hold: every endpoint name of the test service, the
-/// application's and the stand-in's alike.
-const HOOK_TEXT: [&str; 8] = [
+/// application's and the stand-in's alike, and every flag only a test build has.
+const HOOK_TEXT: [&str; 9] = [
     "test/crash",
     "test/fieldStore",
     "test/fieldLog",
@@ -21,6 +21,7 @@ const HOOK_TEXT: [&str; 8] = [
     "test/hold",
     "test/release",
     "test/reset",
+    "--test-seed-pace",
 ];
 
 fn release_binary() -> PathBuf {
@@ -72,6 +73,24 @@ fn release_has_no_test_hooks() {
     assert_eq!(refused.status.code(), Some(2));
     assert!(
         String::from_utf8_lossy(&refused.stderr).contains("unknown flag --test-hooks"),
+        "{}",
+        String::from_utf8_lossy(&refused.stderr)
+    );
+    assert!(refused.stdout.is_empty());
+
+    // The pace of the seed is a test flag as well: a release build seeds as fast as it can.
+    let refused = Command::new(&binary)
+        .args(["serve", "--app-data"])
+        .arg(app_data.path())
+        .arg("--ui")
+        .arg(&ui)
+        .args(["--test-seed-pace", "30"])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(refused.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("unknown flag --test-seed-pace"),
         "{}",
         String::from_utf8_lossy(&refused.stderr)
     );

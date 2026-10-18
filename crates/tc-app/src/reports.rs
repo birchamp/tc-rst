@@ -39,6 +39,9 @@ pub enum ReportOp {
     ProjectsFolder,
     /// The kept Door43 sign-in could not be read at start.
     Keychain,
+    /// The machine's resource store at start: what an interrupted install left and could not
+    /// be removed (§4.9).
+    Resources,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

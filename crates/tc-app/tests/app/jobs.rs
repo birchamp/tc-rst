@@ -15,7 +15,7 @@ use tc_api::ids::{JobId, ProjectRef};
 use tc_api::jobs::{JobKind, JobOutcome, JobState, OpenPhase, Phase};
 use tc_app::events::Next;
 use tc_app::flows::{FlowGate, FlowRequest};
-use tc_app::jobs::{JobEnd, JobSpec};
+use tc_app::jobs::{JobEnd, JobRegistry, JobSpec, OUTCOME_KEPT};
 
 use super::common::{ManualJob, done_of, drain_jobs, jobs, settle, step};
 
@@ -529,4 +529,44 @@ async fn waiting_for_the_cancel_token_resolves_when_asked() {
     t.jobs.cancel(job.id);
     settle().await;
     assert!(waiter.is_finished());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_watch_sees_each_state_to_the_end_and_a_late_one_sees_the_end() {
+    let t = jobs();
+    assert!(t.jobs.watch(JobId::new(99)).is_none(), "an unknown job");
+    let job = ManualJob::start(&t.jobs, download()).await;
+    let id = job.id;
+    let mut watch = t.jobs.watch(id).unwrap();
+    assert_eq!(*watch.borrow_and_update(), JobState::Queued);
+
+    job.ctx.progress.add(7);
+    step(300).await;
+    assert!(
+        watch.has_changed().unwrap(),
+        "the first report reaches the watch"
+    );
+    assert_eq!(done_of(&watch.borrow_and_update()), 7);
+    assert!(!watch.has_changed().unwrap());
+
+    job.ctx.progress.add(3);
+    step(100).await;
+    assert_eq!(done_of(&watch.borrow_and_update()), 10);
+
+    job.finish(Ok(JobOutcome::Finished));
+    settle().await;
+    assert!(watch.has_changed().unwrap());
+    let end = watch.borrow_and_update().clone();
+    assert_eq!(end, JobState::Done(JobOutcome::Finished));
+    assert!(JobRegistry::is_ended(&end));
+    assert!(!JobRegistry::is_ended(&JobState::Cancelling));
+
+    let late = t.jobs.watch(id).unwrap();
+    assert_eq!(
+        *late.borrow(),
+        JobState::Done(JobOutcome::Finished),
+        "a receiver taken after the end reads the end at once"
+    );
+    tokio::time::advance(OUTCOME_KEPT + Duration::from_secs(1)).await;
+    assert!(t.jobs.watch(id).is_none(), "a pruned job has no watch");
 }

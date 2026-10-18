@@ -2,14 +2,18 @@
 
 use std::ffi::OsString;
 use std::path::PathBuf;
+#[cfg(feature = "test-hooks")]
+use std::time::Duration;
 
 use tc_door43::ServerUrl;
 
 /// The usage line, after "tc4: <what was wrong>".
 pub(crate) const USAGE: &str = if cfg!(feature = "test-hooks") {
-    "usage: tc4 serve --app-data <dir> --ui <dir> [--projects <dir>] [--door43 <url>] [--test-hooks]"
+    "usage: tc4 serve --app-data <dir> --ui <dir> [--projects <dir>] [--door43 <url>] \
+     [--bundle <dir>] [--test-hooks] [--test-seed-pace <ms>]"
 } else {
-    "usage: tc4 serve --app-data <dir> --ui <dir> [--projects <dir>] [--door43 <url>]"
+    "usage: tc4 serve --app-data <dir> --ui <dir> [--projects <dir>] [--door43 <url>] \
+     [--bundle <dir>]"
 };
 
 /// What `tc4 serve` was asked to do.
@@ -23,9 +27,16 @@ pub(crate) struct Args {
     pub projects: Option<PathBuf>,
     /// The Door43 server: QA in a development build, production otherwise (§5.6 item 9).
     pub door43: ServerUrl,
+    /// The bundled resource store the installer ships, read only; `None`: nothing is seeded
+    /// (development, tests, the parity captures).
+    pub bundle: Option<PathBuf>,
     /// Route the `test` service (AD35). The flag exists only with the cargo feature.
     #[cfg(feature = "test-hooks")]
     pub test_hooks: bool,
+    /// `--test-seed-pace <ms>`: the seed waits this long before each file, so a process test
+    /// can watch it and close it on any disk. Exists only with the cargo feature.
+    #[cfg(feature = "test-hooks")]
+    pub seed_pace: Option<Duration>,
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -60,8 +71,11 @@ pub(crate) fn parse(mut args: impl Iterator<Item = OsString>) -> Result<Args, Ar
     let mut ui = None;
     let mut projects = None;
     let mut door43 = None;
+    let mut bundle = None;
     #[cfg(feature = "test-hooks")]
     let mut test_hooks = false;
+    #[cfg(feature = "test-hooks")]
+    let mut seed_pace = None;
     while let Some(flag) = args.next() {
         let name = flag.to_str().unwrap_or_default();
         match name {
@@ -77,12 +91,27 @@ pub(crate) fn parse(mut args: impl Iterator<Item = OsString>) -> Result<Args, Ar
                     .map_err(|error| bad("--door43", error))?;
                 once("--door43", &mut door43, url)?;
             }
+            "--bundle" => once("--bundle", &mut bundle, value("--bundle", &mut args)?)?,
             #[cfg(feature = "test-hooks")]
             "--test-hooks" => {
                 if test_hooks {
                     return Err(ArgsError::Repeated("--test-hooks"));
                 }
                 test_hooks = true;
+            }
+            #[cfg(feature = "test-hooks")]
+            "--test-seed-pace" => {
+                let text = value("--test-seed-pace", &mut args)?;
+                let ms = text
+                    .to_str()
+                    .ok_or_else(|| bad("--test-seed-pace", "not text"))?
+                    .parse::<u64>()
+                    .map_err(|_| bad("--test-seed-pace", "a whole number of milliseconds"))?;
+                once(
+                    "--test-seed-pace",
+                    &mut seed_pace,
+                    Duration::from_millis(ms),
+                )?;
             }
             _ => return Err(ArgsError::UnknownFlag(flag.to_string_lossy().into_owned())),
         }
@@ -92,8 +121,11 @@ pub(crate) fn parse(mut args: impl Iterator<Item = OsString>) -> Result<Args, Ar
         ui: PathBuf::from(ui.ok_or(ArgsError::Required("--ui"))?),
         projects: projects.map(PathBuf::from),
         door43: door43.unwrap_or_else(default_door43),
+        bundle: bundle.map(PathBuf::from),
         #[cfg(feature = "test-hooks")]
         test_hooks,
+        #[cfg(feature = "test-hooks")]
+        seed_pace,
     })
 }
 
@@ -151,8 +183,11 @@ mod tests {
             "/p",
             "--door43",
             "http://127.0.0.1:3000",
+            "--bundle",
+            "/b",
         ])
         .unwrap();
+        assert_eq!(args.bundle, Some(PathBuf::from("/b")));
         assert_eq!(args.app_data, PathBuf::from("/a"));
         assert_eq!(args.ui, PathBuf::from("/u"));
         assert_eq!(args.projects, Some(PathBuf::from("/p")));
@@ -169,6 +204,59 @@ mod tests {
         };
         assert_eq!(args.door43, want);
         assert_eq!(args.projects, None);
+        assert_eq!(args.bundle, None, "without a bundle nothing is seeded");
+    }
+
+    #[test]
+    fn the_bundle_needs_one_value_and_is_given_once() {
+        let with = |extra: &[&str]| {
+            let mut all = vec!["serve", "--app-data", "/a", "--ui", "/u"];
+            all.extend_from_slice(extra);
+            parse_all(&all).map(|args| args.bundle)
+        };
+        assert_eq!(
+            with(&["--bundle"]),
+            Err(ArgsError::MissingValue("--bundle"))
+        );
+        assert_eq!(
+            with(&["--bundle", "--ui"]),
+            Err(ArgsError::MissingValue("--bundle"))
+        );
+        assert_eq!(
+            with(&["--bundle", "/b", "--bundle", "/c"]),
+            Err(ArgsError::Repeated("--bundle"))
+        );
+    }
+
+    #[cfg(feature = "test-hooks")]
+    #[test]
+    fn the_seed_pace_is_a_whole_number_of_milliseconds() {
+        let with = |extra: &[&str]| {
+            let mut all = vec!["serve", "--app-data", "/a", "--ui", "/u"];
+            all.extend_from_slice(extra);
+            parse_all(&all).map(|args| args.seed_pace)
+        };
+        assert_eq!(with(&[]), Ok(None));
+        assert_eq!(
+            with(&["--test-seed-pace", "30"]),
+            Ok(Some(Duration::from_millis(30)))
+        );
+        for text in ["fast", "1.5", "-3", ""] {
+            assert!(
+                matches!(
+                    with(&["--test-seed-pace", text]),
+                    Err(ArgsError::BadValue {
+                        flag: "--test-seed-pace",
+                        ..
+                    } | ArgsError::MissingValue(_))
+                ),
+                "{text:?}"
+            );
+        }
+        assert_eq!(
+            with(&["--test-seed-pace", "1", "--test-seed-pace", "2"]),
+            Err(ArgsError::Repeated("--test-seed-pace"))
+        );
     }
 
     #[test]

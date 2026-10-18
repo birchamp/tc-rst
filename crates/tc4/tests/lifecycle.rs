@@ -211,7 +211,13 @@ fn the_app_data_folder_is_created() {
     let nested = dirs.app_data.path().join("a").join("b");
     let mut tc4 = Tc4::spawn(&nested, &dirs.ui, &[]);
     tc4.address(START);
-    for name in ["app.lock", "app-lock.json", "uploads", "downloads"] {
+    for name in [
+        "app.lock",
+        "app-lock.json",
+        "uploads",
+        "downloads",
+        "resources",
+    ] {
         assert!(nested.join(name).exists(), "{name}");
     }
     assert_eq!(code(tc4.quit()), Some(0));

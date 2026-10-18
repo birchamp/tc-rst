@@ -1,0 +1,59 @@
+{
+  "when": "2026-10-18T21:03:08.642Z",
+  "machine": {
+    "cpu": "12th Gen Intel(R) Core(TM) i7-12700",
+    "cpus": 20,
+    "platform": "linux 7.0.0-38-generic",
+    "node": "v22.23.3"
+  },
+  "playwright": "1.56.1",
+  "bundle": {
+    "installs": 5,
+    "files": 1085,
+    "seedPaceMs": 4
+  },
+  "steps": {
+    "1-first-launch": {
+      "total": 1085,
+      "first": "Preparing resources: 39 of 1085",
+      "later": "Preparing resources: 67 of 1085"
+    },
+    "2-saved-language": {
+      "lang": [
+        "ar",
+        "rtl"
+      ],
+      "first": "Preparing resources: 79 of 1085",
+      "later": "Preparing resources: 117 of 1085"
+    },
+    "3-close": {
+      "closedMs": 3,
+      "exitMs": 4,
+      "exitCode": 0,
+      "wholeInstalls": 4,
+      "ofInstalls": 5,
+      "filesInWholeInstalls": 63,
+      "partialLeft": true
+    },
+    "4-relaunch": {
+      "planned": 1022,
+      "missingFiles": 1022,
+      "reachedHome": true,
+      "installs": 5,
+      "earlierCopiesUnchanged": 4
+    },
+    "5-repeat-launch": {
+      "handoffMs": 30,
+      "statusTexts": [
+        "Starting preparation…",
+        "Starting…"
+      ]
+    },
+    "6-failure": {
+      "h1": "translationCore4 could not start",
+      "lead": "The bundled resources could not be prepared. Please quit and try again.",
+      "reason": "unfoldingWord/en_obs-tq v10 (01b92fe…): ingredients/LICENSE.md: its SHA-256 is not the receipt's"
+    }
+  },
+  "chromium": "141.0.7390.37"
+}
