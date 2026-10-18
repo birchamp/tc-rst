@@ -17,7 +17,8 @@ A removed artifact that is still wanted is rebuilt.
 """
 import collections, os, re, sys, time
 
-WORKTREE = re.compile(r"(/home/user/tc-rst/\.claude/worktrees/[^/\s]+)/")
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+WORKTREE = re.compile("(" + re.escape(os.path.join(REPO, ".claude", "worktrees")) + r"/[^/\s]+)/")
 
 root = sys.argv[1]
 min_age = 60 * max(float(sys.argv[2]) if len(sys.argv) > 2 else 180, 180)
