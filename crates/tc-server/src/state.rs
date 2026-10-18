@@ -24,6 +24,8 @@ pub(crate) struct Shared {
     pub routes: RouteTable,
     pub uploads: Arc<Uploads>,
     pub downloads: Arc<Downloads>,
+    #[cfg(feature = "test-hooks")]
+    pub ender: Arc<dyn crate::hooks::Ender>,
     pub test_hooks: AtomicBool,
     /// Set when the quit sequence begins: new requests get 503.
     pub closing: AtomicBool,

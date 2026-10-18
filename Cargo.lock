@@ -3166,6 +3166,7 @@ dependencies = [
  "base64 0.22.1",
  "futures-util",
  "getrandom 0.3.4",
+ "http-body",
  "percent-encoding",
  "serde",
  "serde_json",

@@ -6,24 +6,37 @@
 //! the test hooks it can, and every other row with `Unavailable(Writes)`, so nothing it says
 //! pretends to save. Every request body is parsed into its tc-api request type first, so it
 //! never accepts what the application would refuse.
+//!
+//! With the `test-hooks` feature it also holds the crash points of AD35 until `tc-app`'s write
+//! path replaces them: `test/crash` arms one, and the stand-in's one write that succeeds,
+//! `app/clientError`, ends the process there. `app/quit` carries no crash point here; the
+//! application's write path covers every write.
 
+#[cfg(feature = "test-hooks")]
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(feature = "test-hooks")]
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use axum::body::Bytes;
 use tc_api::account::{AccountView, KeepState};
 use tc_api::app::{
     AppPrefsView, BUILD_COMMIT, BUILD_VERSION, BuildInfo, ClientError, Hello, HelloView, Quit,
 };
+#[cfg(feature = "test-hooks")]
+use tc_api::endpoint::Kind;
 use tc_api::error::{ApiError, Feature};
 use tc_api::event::StartupState;
 use tc_api::ids::{LocaleId, ServerInstance};
 #[cfg(feature = "test-hooks")]
-use tc_api::test::{Echo, EchoView, MAX_ECHO, Quiet, QuietView};
+use tc_api::test::{Crash, CrashPoint, Echo, EchoView, MAX_ECHO, Quiet, QuietView};
 use tc_api::{API_VERSION, Endpoint, Reply};
 use tokio::sync::watch;
 
 use crate::ServerError;
 use crate::backend::{Answer, Backend, EventSource, Next, Then};
+#[cfg(feature = "test-hooks")]
+use crate::hooks::{Ender, ExitProcess};
 use crate::log::warn;
 
 pub struct Stub {
@@ -31,7 +44,23 @@ pub struct Stub {
     quit: watch::Sender<bool>,
     /// Requests being answered, `test/quiet` excluded: it asks whether any are.
     busy: AtomicUsize,
+    #[cfg(feature = "test-hooks")]
+    ender: Arc<dyn Ender>,
+    /// The crash `test/crash` armed, if it has not fired yet.
+    #[cfg(feature = "test-hooks")]
+    armed: Mutex<Option<Armed>>,
 }
+
+#[cfg(feature = "test-hooks")]
+struct Armed {
+    at: CrashPoint,
+    /// Only a write to this path; any write when `None`.
+    path: Option<String>,
+}
+
+/// The one write the stand-in accepts.
+#[cfg(feature = "test-hooks")]
+const WRITE_PATH: &str = "app/clientError";
 
 impl Stub {
     pub fn new() -> Result<Stub, ServerError> {
@@ -41,7 +70,67 @@ impl Stub {
             instance: ServerInstance::from_bytes(bytes),
             quit: watch::channel(false).0,
             busy: AtomicUsize::new(0),
+            #[cfg(feature = "test-hooks")]
+            ender: Arc::new(ExitProcess),
+            #[cfg(feature = "test-hooks")]
+            armed: Mutex::new(None),
         })
+    }
+
+    /// Ends the process through `ender` at a crash point instead of with [`ExitProcess`].
+    #[cfg(feature = "test-hooks")]
+    #[must_use]
+    pub fn with_ender(mut self, ender: Arc<dyn Ender>) -> Self {
+        self.ender = ender;
+        self
+    }
+
+    #[cfg(feature = "test-hooks")]
+    fn armed(&self) -> MutexGuard<'_, Option<Armed>> {
+        // An `Option` is replaced or taken whole, so a panic elsewhere cannot leave it half
+        // changed.
+        self.armed.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// `test/crash`: arms one crash, replacing any armed one. Only a command or a job can be
+    /// cut off, so only one of those names a path.
+    #[cfg(feature = "test-hooks")]
+    fn arm(&self, crash: Crash) -> Result<(), ApiError> {
+        if let Some(path) = &crash.path {
+            let writes = tc_api::ALL
+                .iter()
+                .any(|row| row.path == path && matches!(row.kind, Kind::Command | Kind::StartJob));
+            if !writes {
+                return Err(ApiError::BadRequest {
+                    field: "path".to_owned(),
+                    reason: "not a command or job endpoint".to_owned(),
+                });
+            }
+        }
+        *self.armed() = Some(Armed {
+            at: crash.at,
+            path: crash.path,
+        });
+        Ok(())
+    }
+
+    /// The crash that fires on this write, if one is armed for it: it fires once.
+    /// `DuringDraftWrite` is accepted and never reached, because the stand-in writes no draft.
+    #[cfg(feature = "test-hooks")]
+    fn crash_for(&self, path: &str) -> Option<CrashPoint> {
+        if path != WRITE_PATH {
+            return None;
+        }
+        let mut armed = self.armed();
+        let hit = armed.as_ref().is_some_and(|armed| {
+            armed.at != CrashPoint::DuringDraftWrite
+                && armed.path.as_deref().is_none_or(|only| only == path)
+        });
+        if hit {
+            armed.take().map(|armed| armed.at)
+        } else {
+            None
+        }
     }
 
     fn hello(&self) -> HelloView {
@@ -102,6 +191,7 @@ impl Stub {
                 }
                 Ok(EchoView::of_size(echo.size))
             }),
+            "test/crash" => reply::<Crash>(body, |crash| self.arm(crash)),
             "test/quiet" => reply::<Quiet>(body, |_| {
                 Ok(QuietView {
                     busy: self.busy.load(Ordering::Acquire) > 0,
@@ -185,13 +275,28 @@ impl Backend for Stub {
         #[cfg(not(feature = "test-hooks"))]
         let counted = true;
         let _busy = counted.then(|| Busy::enter(&self.busy));
-        match self.handle(path, &body) {
-            Some(body) => Answer::Reply {
-                body,
-                then: Then::Continue,
-            },
-            None => Answer::NotFound,
+        #[cfg(feature = "test-hooks")]
+        let crash = self.crash_for(path);
+        #[cfg(feature = "test-hooks")]
+        if crash == Some(CrashPoint::BeforeStore) {
+            self.ender.end_now(CrashPoint::BeforeStore);
+            return Answer::Ended;
         }
+        let Some(body) = self.handle(path, &body) else {
+            return Answer::NotFound;
+        };
+        #[cfg(feature = "test-hooks")]
+        let then = match crash {
+            Some(CrashPoint::BeforeReply) => {
+                self.ender.end_now(CrashPoint::BeforeReply);
+                return Answer::Ended;
+            }
+            Some(CrashPoint::AfterReply) => Then::EndProcess,
+            _ => Then::Continue,
+        };
+        #[cfg(not(feature = "test-hooks"))]
+        let then = Then::Continue;
+        Answer::Reply { body, then }
     }
 
     fn subscribe(&self, _after: u64) -> StubEvents {

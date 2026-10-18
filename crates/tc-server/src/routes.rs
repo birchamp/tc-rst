@@ -160,7 +160,7 @@ pub(crate) async fn api<B: Backend>(
         backend.call(path, body).await
     });
     match call.await {
-        Ok(answer) => answer_response(answer),
+        Ok(answer) => answer_response(&state, answer),
         Err(error) => {
             if error.is_panic() {
                 warn(format_args!("a request to {path} panicked"));
@@ -170,11 +170,24 @@ pub(crate) async fn api<B: Backend>(
     }
 }
 
-fn answer_response(answer: Answer) -> Response {
+fn answer_response<B>(state: &AppState<B>, answer: Answer) -> Response {
+    #[cfg(not(feature = "test-hooks"))]
+    let _ = state;
     match answer {
         Answer::Reply { body, then } => match then {
             Then::Continue => json_response(StatusCode::OK, body),
+            #[cfg(feature = "test-hooks")]
+            Then::EndProcess => {
+                let (parts, body) = json_response(StatusCode::OK, body).into_parts();
+                let ender = Arc::clone(&state.shared.ender);
+                Response::from_parts(
+                    parts,
+                    Body::new(crate::hooks::EndAfterBody::new(body, ender)),
+                )
+            }
         },
         Answer::NotFound => StatusCode::NOT_FOUND.into_response(),
+        #[cfg(feature = "test-hooks")]
+        Answer::Ended => crate::lifecycle::closing_response(),
     }
 }

@@ -14,6 +14,8 @@
 mod backend;
 mod downloads;
 mod events;
+#[cfg(feature = "test-hooks")]
+mod hooks;
 mod lifecycle;
 mod log;
 mod routes;
@@ -44,6 +46,8 @@ use tokio::sync::watch;
 pub use axum::body::Bytes;
 pub use backend::{Answer, Backend, EventSource, Next, Then};
 pub use downloads::{DownloadError, Downloads};
+#[cfg(feature = "test-hooks")]
+pub use hooks::{CRASH_EXIT_CODE, Ended, Ender, ExitProcess, RecordingEnder};
 pub use lifecycle::Exit;
 pub use routes::product_paths;
 #[cfg(feature = "test-hooks")]
@@ -101,6 +105,9 @@ pub struct ServerConfig {
     pub limits: Limits,
     /// End the run on Ctrl+C and SIGTERM. A test run leaves it off and keeps its Ctrl+C.
     pub handle_signals: bool,
+    /// How a test crash after a reply ends the process: [`ExitProcess`], or a test's recorder.
+    #[cfg(feature = "test-hooks")]
+    pub ender: Arc<dyn Ender>,
 }
 
 impl ServerConfig {
@@ -110,6 +117,8 @@ impl ServerConfig {
             ui_dir,
             limits: Limits::default(),
             handle_signals: false,
+            #[cfg(feature = "test-hooks")]
+            ender: Arc::new(ExitProcess),
         }
     }
 }
@@ -174,6 +183,8 @@ impl Server {
             ui_dir,
             limits,
             handle_signals,
+            #[cfg(feature = "test-hooks")]
+            ender,
         } = config;
         if !ui_dir.is_dir() {
             return Err(ServerError::UiDir(ui_dir));
@@ -197,6 +208,8 @@ impl Server {
             routes: routes::RouteTable::new(),
             uploads: Arc::new(Uploads::new(uploads_dir)),
             downloads: Arc::new(Downloads::new(downloads_dir, downloads_keep)),
+            #[cfg(feature = "test-hooks")]
+            ender,
             test_hooks: AtomicBool::new(false),
             closing: AtomicBool::new(false),
             in_flight: AtomicUsize::new(0),

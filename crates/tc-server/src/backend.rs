@@ -56,8 +56,17 @@ pub enum Answer {
     Reply { body: Vec<u8>, then: Then },
     /// 404.
     NotFound,
+    /// The application asked a test crash to end the process before replying, and the
+    /// process is still here: the ender of a test only records. The client gets 503 and no
+    /// body. A real ender never returns.
+    #[cfg(feature = "test-hooks")]
+    Ended,
 }
 
 pub enum Then {
     Continue,
+    /// Send the reply, then end the process once its body was handed to the socket (a test
+    /// crash after the reply).
+    #[cfg(feature = "test-hooks")]
+    EndProcess,
 }
