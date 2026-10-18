@@ -42,6 +42,16 @@ pub fn credentials() -> Credentials {
     Credentials::new(seeded::USER, Password::new(seeded::PASSWORD.to_owned())).unwrap()
 }
 
+/// The names of the files in `folder`: what downloads left there.
+pub fn left_in(folder: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(folder)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
 pub fn fixture(path: &str) -> Vec<u8> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
     std::fs::read(root.join(path)).unwrap()

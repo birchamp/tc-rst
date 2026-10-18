@@ -31,11 +31,14 @@
 //! (catalog search, tags, releases) sets aside an entry it cannot read in
 //! [`Listing::skipped`] instead of failing whole.
 //!
-//! Downloads are verified before they are returned; [`verify`] explains how. An error
-//! message never holds a secret the request carried, whole or in part.
+//! Downloads stream to a file in a folder the caller names, report their bytes and can be
+//! cancelled between chunks ([`download`]); they are verified before they are returned
+//! ([`verify`]). An error message never holds a secret the request carried, whole or in
+//! part.
 
 mod catalog;
 mod client;
+pub mod download;
 mod error;
 mod git_tree;
 mod internet;
@@ -48,6 +51,7 @@ pub mod verify;
 
 pub use catalog::{CatalogEntry, CatalogQuery, CatalogRef, Ingredient, Stage};
 pub use client::{Door43Client, Limits};
+pub use download::{DownloadTo, DownloadWatch, DownloadedZip, Unwatched};
 pub use error::{AuthStatus, Door43Error, UnreachableCause, VerificationError};
 pub use git_tree::ObjectId;
 pub use internet::{InternetSwitch, Offline};

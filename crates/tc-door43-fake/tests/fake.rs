@@ -480,3 +480,60 @@ async fn raw_and_text_echo_faults_answer_as_given() {
     );
     assert_eq!(body, b"xxxtoken abc");
 }
+
+/// Reads `response` until `bytes` have arrived, and returns how many did.
+async fn read_until(response: &mut reqwest::Response, bytes: usize) -> usize {
+    let mut received = 0;
+    while received < bytes {
+        let chunk = response.chunk().await.unwrap().unwrap();
+        received += chunk.len();
+    }
+    received
+}
+
+/// Whether `response` stays silent for a while, as a held download does.
+async fn holds(response: &mut reqwest::Response) -> bool {
+    tokio::time::timeout(std::time::Duration::from_millis(300), response.chunk())
+        .await
+        .is_err()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn each_held_download_waits_for_a_release_of_its_own() {
+    use tc_door43_fake::{Fault, FaultRule};
+    const AFTER: usize = 1000;
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    let url = format!("{}/unfoldingWord/en_tn/sb/v86.zip", fake.url());
+    let (_, _, whole) = get(&fake, "/unfoldingWord/en_tn/sb/v86.zip", None).await;
+    let held = || {
+        FaultRule::once(
+            "GET",
+            "/unfoldingWord/en_tn/sb/",
+            Fault::HoldBody { after: AFTER },
+        )
+    };
+
+    // A release with nothing held, as after a test drops a held download, is not kept for
+    // the next one.
+    fake.release_held();
+    fake.inject(held());
+    let mut first = http().get(&url).send().await.unwrap();
+    assert_eq!(read_until(&mut first, AFTER).await, AFTER);
+    assert!(
+        holds(&mut first).await,
+        "a stray release let the download go on"
+    );
+
+    fake.inject(held());
+    let mut second = http().get(&url).send().await.unwrap();
+    assert_eq!(read_until(&mut second, AFTER).await, AFTER);
+
+    // One release frees the oldest held download only.
+    fake.release_held();
+    let rest = first.bytes().await.unwrap();
+    assert_eq!(AFTER + rest.len(), whole.len());
+    assert!(holds(&mut second).await, "one release freed two downloads");
+    fake.release_held();
+    let rest = second.bytes().await.unwrap();
+    assert_eq!(AFTER + rest.len(), whole.len());
+}

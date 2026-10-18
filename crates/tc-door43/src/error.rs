@@ -1,6 +1,7 @@
 use crate::git_tree::ObjectId;
 use crate::names::GitOid;
 use std::fmt;
+use std::path::PathBuf;
 use std::time::Duration;
 
 /// Why a Door43 call failed. `route` is the method and path, such as
@@ -63,6 +64,18 @@ pub enum Door43Error {
         route: String,
         #[source]
         source: VerificationError,
+    },
+    /// The download's watch asked it to stop. Nothing of it was kept.
+    #[error("{route}: the download was cancelled")]
+    Cancelled { route: String },
+    /// A download could not be written to its file, or read back for its check. Nothing of
+    /// it was kept.
+    #[error("{route}: the download could not be kept in {path}: {source}")]
+    Disk {
+        route: String,
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
     },
     /// The HTTP client could not be built (for example, no TLS backend).
     #[error("the Door43 client could not start: {reason}")]

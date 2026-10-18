@@ -10,7 +10,7 @@
 //!     receipt.json                                 what this is, and every file's size and SHA-256
 //!     checked.json                                 the SHA-256 of the receipt every file was last checked against
 //!     content/…                                    the resource's files
-//!   .partial/                                      installs in progress
+//!   .partial/                                      installs and downloads in progress
 //! ```
 //!
 //! Owner and repository folders are lower-cased, because Door43 and GitHub resolve names
@@ -470,6 +470,13 @@ impl ResourceStore {
 
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// Where downloads are written before they are checked and installed: `.partial/`,
+    /// which [`ResourceStore::open`] empties, so a download a crash cut short is removed at
+    /// the next start.
+    pub(crate) fn download_folder(&self) -> PathBuf {
+        self.root.join(PARTIAL)
     }
 
     fn dcs_dir(&self, pin: &ResourcePin) -> PathBuf {

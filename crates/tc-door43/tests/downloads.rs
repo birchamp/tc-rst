@@ -6,16 +6,21 @@
 
 mod common;
 
-use common::{client, client_with, fixture, repo, sha, tag};
-use tc_door43::{Door43Error, FileMode, Limits, VerificationError};
+use common::{client, client_with, fixture, left_in, repo, sha, tag};
+use tc_door43::{Door43Error, DownloadTo, FileMode, Limits, VerificationError};
 use tc_door43_fake::{CommitSeed, FakeDoor43, Fault, FaultRule, RepoSeed, SeedFile, SeedMode};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_archive_at_a_commit_is_that_commits_content() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let head = fake.resolve("uW", "en_ugl", "master").await.unwrap();
     let archive = client(&fake)
-        .download_archive(&repo("uW/en_ugl"), &sha(&head))
+        .download_archive(
+            &repo("uW/en_ugl"),
+            &sha(&head),
+            DownloadTo::folder(dl.path()),
+        )
         .await
         .unwrap();
     assert_eq!(archive.commit, sha(&head));
@@ -30,10 +35,16 @@ async fn an_archive_at_a_commit_is_that_commits_content() {
     );
     let lexicon = fixture("tc4/test-fixtures/resources/en_ugl@d9d29e2d5892/1.json");
     assert_eq!(archive.files[1].bytes, lexicon);
+    assert_eq!(
+        left_in(dl.path()),
+        Vec::<String>::new(),
+        "a download keeps nothing"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_tree_check_agrees_with_git_on_modes_links_and_nesting() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let file = |path: &str, mode: SeedMode, bytes: &[u8]| SeedFile {
         path: path.to_owned(),
@@ -65,7 +76,11 @@ async fn the_tree_check_agrees_with_git_on_modes_links_and_nesting() {
         .await
         .unwrap();
     let archive = client(&fake)
-        .download_archive(&repo("uW/odd-shapes"), &sha(&shas[0]))
+        .download_archive(
+            &repo("uW/odd-shapes"),
+            &sha(&shas[0]),
+            DownloadTo::folder(dl.path()),
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -76,10 +91,16 @@ async fn the_tree_check_agrees_with_git_on_modes_links_and_nesting() {
     assert_eq!(mode_of("run.sh"), FileMode::Executable);
     assert_eq!(mode_of("link"), FileMode::Symlink);
     assert_eq!(mode_of("a/x"), FileMode::Regular);
+    assert_eq!(
+        left_in(dl.path()),
+        Vec::<String>::new(),
+        "a download keeps nothing"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_archive_naming_another_commit_is_refused() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let head = fake.resolve("uW", "en_ugl", "master").await.unwrap();
     let other = fake.resolve("unfoldingWord", "en_tn", "v86").await.unwrap();
@@ -89,7 +110,11 @@ async fn an_archive_naming_another_commit_is_refused() {
         Fault::ArchiveComment(other.clone()),
     ));
     let result = client(&fake)
-        .download_archive(&repo("uW/en_ugl"), &sha(&head))
+        .download_archive(
+            &repo("uW/en_ugl"),
+            &sha(&head),
+            DownloadTo::folder(dl.path()),
+        )
         .await;
     assert!(
         matches!(
@@ -101,10 +126,16 @@ async fn an_archive_naming_another_commit_is_refused() {
         ),
         "{result:?}"
     );
+    assert_eq!(
+        left_in(dl.path()),
+        Vec::<String>::new(),
+        "a download keeps nothing"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_archive_with_content_the_commit_lacks_is_refused() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let head = fake.resolve("uW", "en_ugl", "master").await.unwrap();
     fake.inject(FaultRule::once(
@@ -116,7 +147,11 @@ async fn an_archive_with_content_the_commit_lacks_is_refused() {
         },
     ));
     let result = client(&fake)
-        .download_archive(&repo("uW/en_ugl"), &sha(&head))
+        .download_archive(
+            &repo("uW/en_ugl"),
+            &sha(&head),
+            DownloadTo::folder(dl.path()),
+        )
         .await;
     assert!(
         matches!(
@@ -128,32 +163,45 @@ async fn an_archive_with_content_the_commit_lacks_is_refused() {
         ),
         "{result:?}"
     );
+    assert_eq!(
+        left_in(dl.path()),
+        Vec::<String>::new(),
+        "a download keeps nothing"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_archive_of_an_unknown_commit_is_not_found() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let result = client(&fake)
         .download_archive(
             &repo("uW/en_ugl"),
             &sha("0123456789012345678901234567890123456789"),
+            DownloadTo::folder(dl.path()),
         )
         .await;
     assert!(
         matches!(result, Err(Door43Error::NotFound { .. })),
         "{result:?}"
     );
+    assert_eq!(
+        left_in(dl.path()),
+        Vec::<String>::new(),
+        "a download keeps nothing"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_burrito_export_checked_against_the_tags_api_is_returned_with_fixture_bytes() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let client = client(&fake);
     let tn = repo("unfoldingWord/en_tn");
     // A first install: the expected commit comes from the tags API, not from the zip.
     let expected = client.tag_commit(&tn, &tag("v86")).await.unwrap();
     let export = client
-        .download_sb_export(&tn, &tag("v86"), &expected)
+        .download_sb_export(&tn, &tag("v86"), &expected, DownloadTo::folder(dl.path()))
         .await
         .unwrap();
     assert_eq!(export.revision, expected);
@@ -185,15 +233,23 @@ async fn a_burrito_export_checked_against_the_tags_api_is_returned_with_fixture_
             .missing_ingredients
             .contains(&"ingredients/GEN.tsv".to_owned())
     );
+    assert_eq!(
+        left_in(dl.path()),
+        Vec::<String>::new(),
+        "a download keeps nothing"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_burrito_export_of_another_commit_is_refused() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let client = client(&fake);
     let tn = repo("unfoldingWord/en_tn");
     let v91 = client.tag_commit(&tn, &tag("v91")).await.unwrap();
-    let result = client.download_sb_export(&tn, &tag("v86"), &v91).await;
+    let result = client
+        .download_sb_export(&tn, &tag("v86"), &v91, DownloadTo::folder(dl.path()))
+        .await;
     assert!(
         matches!(
             &result,
@@ -204,10 +260,16 @@ async fn a_burrito_export_of_another_commit_is_refused() {
         ),
         "{result:?}"
     );
+    assert_eq!(
+        left_in(dl.path()),
+        Vec::<String>::new(),
+        "a download keeps nothing"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_export_that_declares_a_moved_tag_is_refused() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let client = client(&fake);
     let tn = repo("unfoldingWord/en_tn");
@@ -217,7 +279,9 @@ async fn an_export_that_declares_a_moved_tag_is_refused() {
         "/unfoldingWord/en_tn/sb/",
         Fault::SbRevision("ffffffffffffffffffffffffffffffffffffffff".into()),
     ));
-    let result = client.download_sb_export(&tn, &tag("v86"), &v86).await;
+    let result = client
+        .download_sb_export(&tn, &tag("v86"), &v86, DownloadTo::folder(dl.path()))
+        .await;
     assert!(
         matches!(
             &result,
@@ -228,10 +292,16 @@ async fn an_export_that_declares_a_moved_tag_is_refused() {
         ),
         "{result:?}"
     );
+    assert_eq!(
+        left_in(dl.path()),
+        Vec::<String>::new(),
+        "a download keeps nothing"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_export_whose_bytes_differ_from_its_metadata_is_refused() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let client = client(&fake);
     let tn = repo("unfoldingWord/en_tn");
@@ -243,7 +313,9 @@ async fn an_export_whose_bytes_differ_from_its_metadata_is_refused() {
             path: "ingredients/TIT.tsv".into(),
         },
     ));
-    let result = client.download_sb_export(&tn, &tag("v86"), &v86).await;
+    let result = client
+        .download_sb_export(&tn, &tag("v86"), &v86, DownloadTo::folder(dl.path()))
+        .await;
     assert!(
         matches!(
             &result,
@@ -254,10 +326,16 @@ async fn an_export_whose_bytes_differ_from_its_metadata_is_refused() {
         ),
         "{result:?}"
     );
+    assert_eq!(
+        left_in(dl.path()),
+        Vec::<String>::new(),
+        "a download keeps nothing"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_download_past_the_size_limit_is_refused() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let small = client_with(
         &fake,
@@ -268,23 +346,41 @@ async fn a_download_past_the_size_limit_is_refused() {
     );
     let tn = repo("unfoldingWord/en_tn");
     let v86 = small.tag_commit(&tn, &tag("v86")).await.unwrap();
-    let result = small.download_sb_export(&tn, &tag("v86"), &v86).await;
+    let result = small
+        .download_sb_export(&tn, &tag("v86"), &v86, DownloadTo::folder(dl.path()))
+        .await;
     assert!(
         matches!(result, Err(Door43Error::TooLarge { limit: 4096, .. })),
         "{result:?}"
+    );
+    assert_eq!(
+        left_in(dl.path()),
+        Vec::<String>::new(),
+        "a download keeps nothing"
     );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_commit_without_a_tag_has_no_export() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let head = fake.resolve("uW", "en_ugl", "master").await.unwrap();
     let result = client(&fake)
-        .download_sb_export(&repo("uW/en_ugl"), &tag("v1"), &sha(&head))
+        .download_sb_export(
+            &repo("uW/en_ugl"),
+            &tag("v1"),
+            &sha(&head),
+            DownloadTo::folder(dl.path()),
+        )
         .await;
     assert!(
         matches!(result, Err(Door43Error::NotFound { .. })),
         "{result:?}"
+    );
+    assert_eq!(
+        left_in(dl.path()),
+        Vec::<String>::new(),
+        "a download keeps nothing"
     );
 }
 
@@ -311,6 +407,7 @@ async fn one_commit_repo(fake: &FakeDoor43, name: &str, files: Vec<SeedFile>) ->
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_commit_whose_names_collide_on_windows_or_macos_is_refused() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     for (name, pair) in [
         ("case", ["notes/TIT.tsv", "notes/tit.tsv"]),
@@ -324,7 +421,11 @@ async fn a_commit_whose_names_collide_on_windows_or_macos_is_refused() {
             .collect();
         let commit = one_commit_repo(&fake, name, files).await;
         let result = client(&fake)
-            .download_archive(&repo(&format!("uW/{name}")), &sha(&commit))
+            .download_archive(
+                &repo(&format!("uW/{name}")),
+                &sha(&commit),
+                DownloadTo::folder(dl.path()),
+            )
             .await;
         assert!(
             matches!(
@@ -344,7 +445,11 @@ async fn a_commit_whose_names_collide_on_windows_or_macos_is_refused() {
     )
     .await;
     let result = client(&fake)
-        .download_archive(&repo("uW/stream"), &sha(&commit))
+        .download_archive(
+            &repo("uW/stream"),
+            &sha(&commit),
+            DownloadTo::folder(dl.path()),
+        )
         .await;
     assert!(
         matches!(
@@ -356,10 +461,16 @@ async fn a_commit_whose_names_collide_on_windows_or_macos_is_refused() {
         ),
         "{result:?}"
     );
+    assert_eq!(
+        left_in(dl.path()),
+        Vec::<String>::new(),
+        "a download keeps nothing"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_export_file_the_metadata_does_not_list_is_returned_apart() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let tsv = fixture("tc4/test-fixtures/resources/en_tn@v86/TIT.tsv");
     let commit = one_commit_repo(
@@ -376,7 +487,12 @@ async fn an_export_file_the_metadata_does_not_list_is_returned_apart() {
     )
     .await;
     let export = client(&fake)
-        .download_sb_export(&repo("uW/extra"), &tag("v1"), &sha(&commit))
+        .download_sb_export(
+            &repo("uW/extra"),
+            &tag("v1"),
+            &sha(&commit),
+            DownloadTo::folder(dl.path()),
+        )
         .await
         .unwrap();
     let paths: Vec<&str> = export.files.iter().map(|f| f.path.as_str()).collect();
@@ -384,10 +500,16 @@ async fn an_export_file_the_metadata_does_not_list_is_returned_apart() {
     let unlisted: Vec<&str> = export.unlisted.iter().map(|f| f.path.as_str()).collect();
     assert_eq!(unlisted, ["ingredients/EXTRA.tsv"]);
     assert_eq!(export.files[0].bytes, tsv);
+    assert_eq!(
+        left_in(dl.path()),
+        Vec::<String>::new(),
+        "a download keeps nothing"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_symlink_in_an_export_is_refused() {
+    let dl = tempfile::tempdir().unwrap();
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let commit = one_commit_repo(
         &fake,
@@ -406,7 +528,12 @@ async fn a_symlink_in_an_export_is_refused() {
     )
     .await;
     let result = client(&fake)
-        .download_sb_export(&repo("uW/linked"), &tag("v1"), &sha(&commit))
+        .download_sb_export(
+            &repo("uW/linked"),
+            &tag("v1"),
+            &sha(&commit),
+            DownloadTo::folder(dl.path()),
+        )
         .await;
     assert!(
         matches!(
@@ -417,5 +544,10 @@ async fn a_symlink_in_an_export_is_refused() {
             }) if path == "ingredients/TIT.tsv"
         ),
         "{result:?}"
+    );
+    assert_eq!(
+        left_in(dl.path()),
+        Vec::<String>::new(),
+        "a download keeps nothing"
     );
 }
