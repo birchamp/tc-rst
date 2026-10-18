@@ -237,8 +237,8 @@ fn a_record_reads_every_text_canonical_json_writes() {
 
 #[test]
 fn a_reference_part_is_any_text_a_resource_writes_without_the_separator() {
-    // tc-check's `RefPart::new`: not empty and no `:`. The shipped tables write numbers,
-    // `front`, `intro`, spans and lists; other forms keep their spaces and scripts.
+    // Not empty and no `:`, which takes in tc-check's `RefPart::parse`. The shipped tables write
+    // numbers, `front`, `intro`, spans and lists; other forms keep their spaces and scripts.
     for text in [
         "1",
         "150",

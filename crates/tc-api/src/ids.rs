@@ -378,8 +378,11 @@ impl From<RecordRef> for String {
 }
 
 /// A chapter or a verse part of a reference as tC4 writes it: `1`, `9-10`, `front`,
-/// `intro`, `3,5`, `1a`. It is tc-check's `RefPart` and takes what that type takes: any text
-/// that is not empty and holds no `:`, the separator between the parts.
+/// `intro`, `3,5`, `1a`. It reads every part tc-check's `RefPart` holds, and a little more.
+/// tc-check's part is the journal's identity grammar: NFC text that is not empty and holds
+/// neither `:`, the separator between the parts, nor `|`. This one takes any text that is not
+/// empty and holds no `:`, so a check the server sends always reads, and the server refuses
+/// at its boundary a part that tc-check cannot hold.
 ///
 /// It has no length limit. A check whose place the UI cannot read would drop out of the rail
 /// and show its decision as not saved, and tc-check accepts any length, so this type must

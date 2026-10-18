@@ -319,10 +319,13 @@ can name one folder, so the registry opens only a folder it lists, by the name i
 the first text kept colons, which let `c:..` leave the root on Windows.)* `LocaleId` is checked against
 `tc_api::ids::LOCALE_IDS`, which a test compares with tc-ui's catalogs. *(A1)*
 
-`RefPart` is tc-check's `RefPart` and takes what it takes: any text that is not empty and holds
-no `:`. It has no length limit, because a check whose place the UI cannot read drops out of
-the rail and shows its decision as not saved. A request is bounded where the server reads its
-body (A2), not field by field.
+`RefPart` reads every part tc-check's `RefPart` holds, and a little more. tc-check's part is the
+journal's identity grammar (`tc_journal::keys::RefPart`): NFC text that is not empty and holds neither `:` nor
+`|`. This one takes any text that is not empty and holds no `:`, so a check the server sends
+always reads, and the server refuses at its boundary a part that tc-check cannot hold. It has
+no length limit, because a check whose place the UI cannot read drops out of the rail and shows
+its decision as not saved. A request is bounded where the server reads its body (A2), not field
+by field. *(Merge of A1: tc-check's part took the journal's grammar after A1 was written.)*
 *(A1: the first build typed a check's place as `tc_core::Reference`, which holds a chapter of at
 least 1 and numeric verses, and the first fix of `prefs/recordPlace` capped a verse at 256 bytes.)*
 

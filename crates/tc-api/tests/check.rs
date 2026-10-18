@@ -326,21 +326,53 @@ fn a_place_is_the_text_tc_check_prints_for_its_target() {
     for (chapter, verse_text) in parts {
         let target = CheckTarget::Verse {
             book: BookId::Psalms,
-            chapter: tc_check::RefPart::new(&chapter).unwrap(),
-            verse: tc_check::RefPart::new(&verse_text).unwrap(),
+            chapter: tc_check::RefPart::parse(&chapter).unwrap(),
+            verse: tc_check::RefPart::parse(&verse_text).unwrap(),
         };
         let place = verse(BookId::Psalms, &chapter, &verse_text);
         assert_eq!(place.to_string(), target.to_string());
         assert_eq!(place.to_string().parse::<CheckPlace>().unwrap(), place);
     }
     for (story, frame) in [(1u8, 0u16), (3, 4), (50, 15)] {
-        let target = CheckTarget::Frame(tc_helps::ObsRef::new(story, frame).unwrap());
+        let target =
+            tc_check::key::frame_target(tc_helps::ObsRef::new(story, frame).unwrap()).unwrap();
         let place = CheckPlace::Frame {
             story: StoryNo::new(story).unwrap(),
             frame,
         };
         assert_eq!(place.to_string(), target.to_string());
     }
+}
+
+#[test]
+fn a_part_tc_check_holds_always_reads_on_the_wire() {
+    // tc-check's part is the journal's identity grammar (NFC, no `:` or `|`), which is
+    // narrower than the wire's (no `:`), so no check the server sends can fail to read.
+    let mut both = 0;
+    for text in [
+        "1",
+        "0",
+        "151",
+        "front",
+        "intro",
+        "9-10",
+        "1,3,8,12",
+        "1a",
+        "front ",
+        " 3",
+        "1\u{2013}3",
+        "\u{663}",
+        "e\u{301}",
+        "a|b",
+        "a:b",
+        "",
+    ] {
+        if tc_check::RefPart::parse(text).is_ok() {
+            assert!(RefPart::parse(text).is_ok(), "{text:?}");
+            both += 1;
+        }
+    }
+    assert!(both >= 10, "{both} parts tested");
 }
 
 #[test]
