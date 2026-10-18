@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" dir="ltr"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-nOVsltF1ic35eA9DZwxSCOVppRctfDiR+/3hDuZrGAI='; connect-src 'self'; base-uri 'none'; form-action 'none'"><title>translationCore4</title>
+<html lang="en" dir="ltr"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-iqNSzDspCKOZbsTBTOMC1DeRbowY9cT0IHcenkczVv8='; connect-src 'self'; base-uri 'none'; form-action 'none'"><title>translationCore4</title>
 <style>body{margin:36px;font:16px system-ui,sans-serif;color:#293847;background:#f5f7fa}h1{font-size:22px}p{line-height:1.5}#progress{color:#526173}</style></head>
 <body><h1>Preparing translationCore4</h1><p>Getting resources ready for offline use.</p><p id="progress" role="status">Starting preparation…</p>
 <script type="application/json" id="tc4-text">{"locales":{"ar":{"dir":"rtl","text":{}},"en":{"dir":"ltr","text":{"prepare.failed":"The bundled resources could not be prepared. Please quit and try again.","prepare.failedTitle":"translationCore4 could not start","prepare.handoff":"Starting…","prepare.lead":"Getting resources ready for offline use.","prepare.progress":"Preparing resources: {done} of {total}","prepare.starting":"Starting preparation…","prepare.title":"Preparing translationCore4"}},"es-419":{"dir":"ltr","text":{}},"fr":{"dir":"ltr","text":{}},"hi":{"dir":"ltr","text":{}},"id":{"dir":"ltr","text":{}},"pt-BR":{"dir":"ltr","text":{}},"ru":{"dir":"ltr","text":{}},"uk":{"dir":"ltr","text":{}},"vi":{"dir":"ltr","text":{}}}}</script>
@@ -40,6 +40,8 @@
       title.textContent = say('prepare.failedTitle');
       lead.textContent = say('prepare.failed');
       status.textContent = shown.reason;
+      // A reason can be long (a file name, a path) and the window does not grow: it wraps.
+      status.style.cssText = 'font-size:14px;overflow-wrap:anywhere';
       return;
     }
     title.textContent = say('prepare.title');

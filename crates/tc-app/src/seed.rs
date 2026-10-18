@@ -29,7 +29,7 @@ use tc_api::event::{StartupProgress, StartupState};
 use tc_api::ids::JobId;
 use tc_api::jobs::{JobKind, JobOutcome, JobState, Phase};
 use tc_resources::{
-    ResourceStore, SeedPlan, SeedReport, SeedWatch, Seeding, content_files_opened,
+    ResourceStore, SeedPlan, SeedReport, SeedWatch, Seeding, StoreError, content_files_opened,
     content_files_written,
 };
 
@@ -117,9 +117,18 @@ pub(crate) fn end_of(report: &SeedReport) -> StartupEnd {
     let reasons: Vec<String> = report
         .refused
         .iter()
-        .map(|(install, error)| format!("{install}: {error}"))
+        .map(|(install, error)| format!("{install}: {}", short(error)))
         .collect();
     StartupEnd::Failed(reasons.join("; "))
+}
+
+/// What the window shows of an error: a damaged file by its name and problem, where the full
+/// message also holds the install's folder. The report keeps the full message.
+fn short(error: &StoreError) -> String {
+    match error {
+        StoreError::Damaged { file, problem, .. } => format!("{file}: {problem}"),
+        other => other.to_string(),
+    }
 }
 
 /// The `seed` report's facts. Pure.
@@ -344,7 +353,6 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tc_resources::StoreError;
 
     fn damaged(file: &str) -> StoreError {
         StoreError::Damaged {
@@ -367,11 +375,11 @@ mod tests {
         let StartupEnd::Failed(reason) = end_of(&report) else {
             panic!("a refused install did not fail the start")
         };
-        assert!(reason.starts_with("en_tw@v87: "), "{reason}");
-        assert!(reason.contains("; en_tn@v91: "), "{reason}");
+        assert!(reason.starts_with("en_tw@v87: a.md: "), "{reason}");
+        assert!(reason.contains("; en_tn@v91: b.tsv: "), "{reason}");
         assert!(
-            reason.contains("a.md") && reason.contains("b.tsv"),
-            "{reason}"
+            !reason.contains("/bundle/"),
+            "the window does not show folders: {reason}"
         );
     }
 
