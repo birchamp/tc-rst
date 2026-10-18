@@ -33,6 +33,7 @@ use crate::prefs::{AppDataFiles, MemoryFiles, PrefsWriter};
 use crate::replies::ReplyCache;
 use crate::reports::{ReportLog, ReportOp, ReportOutcome, facts};
 use crate::sessions::{NoSessions, SessionDirectory};
+use crate::startup::Startup;
 
 /// What a test replaces when it starts the app. [`AppDeps::production`] is what `tc4 serve`
 /// runs with.
@@ -143,7 +144,7 @@ pub(crate) struct Inner {
     pub(crate) reports: ReportLog,
     pub(crate) replies: Arc<ReplyCache>,
     pub(crate) sessions: Arc<dyn SessionDirectory>,
-    pub(crate) startup: Mutex<StartupState>,
+    pub(crate) startup: Startup,
     /// Calls in flight, for `test/quiet`.
     pub(crate) calls: AtomicUsize,
     quit: watch::Sender<bool>,
@@ -255,6 +256,7 @@ impl App {
 
         let prefs = PrefsWriter::start(files, reports.clone(), clock.clone());
         let jobs = JobRegistry::new(bus.clone(), reports.clone(), clock.clone());
+        let startup = Startup::new(StartupState::Ready, bus.clone());
         let inner = Inner {
             config,
             projects,
@@ -270,7 +272,7 @@ impl App {
             reports,
             replies: ReplyCache::new(ReplyCache::FINISHED),
             sessions,
-            startup: Mutex::new(StartupState::Ready),
+            startup,
             calls: AtomicUsize::new(0),
             quit: watch::channel(false).0,
             #[cfg(feature = "test-hooks")]
@@ -360,11 +362,10 @@ impl App {
         self.inner.clock.as_ref()
     }
 
-    /// Unit A9 reports first-launch seeding through this; `hello` and a `Startup` event
-    /// carry it.
-    pub fn set_startup(&self, state: StartupState) {
-        *lock(&self.inner.startup) = state.clone();
-        self.inner.bus.publish(Event::Startup(state));
+    /// The first-launch state `hello` answers: `Ready` unless a seeding is under way or
+    /// stopped (unit A9).
+    pub fn startup(&self) -> StartupState {
+        self.inner.startup.get()
     }
 
     /// What `app/quit`, a quit line and a closed stdin do: writes what is pending, then

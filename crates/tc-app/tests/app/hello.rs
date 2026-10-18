@@ -6,11 +6,10 @@ use serde_json::{Value, json};
 use tc_api::Reply;
 use tc_api::account::{AccountView, KeepState};
 use tc_api::app::{AppPrefsView, Hello, HelloView};
-use tc_api::event::{Event, StartupProgress, StartupState};
+use tc_api::event::StartupState;
 use tc_api::ids::LocaleId;
 use tc_api::net::Set;
 use tc_api::prefs::SetLocale;
-use tc_app::events::Next;
 use tc_app::{Answer, App, Then};
 
 use super::common::{Parts, TestApp, build, hello_value, open_session, rid, token};
@@ -96,15 +95,6 @@ async fn hello_answers_real_state() {
     .unwrap();
     assert_eq!(hello_value(app).await["prefs"]["appLocale"], "ar");
 
-    app.set_startup(StartupState::Preparing(StartupProgress {
-        done: 1,
-        total: 10,
-    }));
-    assert_eq!(
-        hello_value(app).await["startup"],
-        json!({"type": "preparing", "value": {"done": 1, "total": 10}})
-    );
-
     // Another launch is another instance, and the switch is never stored (§5.6).
     let second = TestApp::start_with(dir.path(), &Parts::new(), |_, _| {}).await;
     assert_ne!(second.app.instance(), app.instance());
@@ -128,26 +118,6 @@ async fn hello_through_the_typed_call_matches_the_bytes() {
         serde_json::to_value(&typed).unwrap(),
         hello_value(&t.app).await
     );
-}
-
-#[tokio::test]
-async fn set_startup_is_announced_and_in_hello() {
-    let dir = tempfile::tempdir().unwrap();
-    let t = TestApp::start_in(dir.path(), |_, _| {}).await;
-    let mut events = t.app.events().subscribe(t.app.events().head());
-    t.app.set_startup(StartupState::Failed {
-        reason: "disk full".to_owned(),
-    });
-    let Some(Next::Frame(frame)) = events.try_next() else {
-        panic!("no frame")
-    };
-    assert_eq!(
-        frame.event,
-        Event::Startup(StartupState::Failed {
-            reason: "disk full".to_owned()
-        })
-    );
-    assert_eq!(hello_value(&t.app).await["startup"]["type"], "failed");
 }
 
 /// Compile-time: tc-server's `Backend` needs a `Send` call future and an `App` it can share.

@@ -54,7 +54,7 @@ impl Handle<Hello> for App {
     async fn handle(&self, _req: Hello) -> Result<HelloView, ApiError> {
         let inner = &self.inner;
         let account = lock(&inner.account).view();
-        let startup = lock(&inner.startup).clone();
+        let startup = inner.startup.get();
         Ok(HelloView {
             api: API_VERSION,
             build: inner.config.build.clone(),
