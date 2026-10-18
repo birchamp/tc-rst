@@ -113,8 +113,22 @@ show that a budget is met.
 | UI | Typing in a verse, input to paint | Psalms | 16 ms |
 | App | First launch: from the shortcut click to a visible, usable Home | a signed, installed Windows build with Defender on; an empty profile, and the first launch after an upgrade, measured apart | under 60 s each, with determinate progress (rule 4); see "Start-up" |
 | App | Repeat launch | the installed bundle | no read and no write of a resource content file (a count test); proposed: a usable Home in 3 s |
+| App | Window on screen: from the shortcut click to a painted window | every launch, the first included | 1 s; no splash screen (owner ruling, 2026-10-18); see "Start-up" |
 
 ## Start-up
+
+The shell shows its window within 1 s of the click, before `tc4` is ready, painted in the
+app's background colour rather than blank white. There is no splash screen. The window draws
+the first-launch window's or Home's layout at once and fills it in: seeding shows its count of
+files (rule 4), and Home shows its cards as they arrive. A project open shows its determinate
+progress inside that window within 300 ms, whether or not the fold cache is usable. The 10 s
+open is the worst case, so it shows a count, never only a spinner.
+
+Why (owner ruling, 2026-10-18): about 1 s is where a person notices a wait and needs to see
+that something is happening, and about 10 s is the limit of their attention. A wait that long
+needs a progress bar that shows how much is done (Nielsen's response-time limits). Apple's and
+Microsoft's guidance for apps says the same: show the app's own first screen at once rather
+than a splash screen, and show progress inside it.
 
 The first-launch budget of 60 s is a hard gate now (owner ruling Q24 in
 `docs/TC4-DELTA-2026-10-16.md`). It is tC4's own release gate. The first measurement of the
