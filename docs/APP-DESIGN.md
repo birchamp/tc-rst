@@ -1679,10 +1679,11 @@ Publish` with tC4's string values; `MainView` is a port of `tC4:src/App.jsx:192-
 - English is built in: tC4's `en.json` and the rebuild's ten key files are compiled into the
   wasm, because `t()` needs English as the fallback of every key even when a fetch fails, and
   `build.rs` reads both English files anyway; the rebuild files hold a few hundred bytes each.
-  The nine other tC4 catalogs (870,974 bytes of the 943,433) are fetched in parallel before the first render,
-  where tC4 bundles all ten (`tC4:src/i18n/index.js:12-21`), so the App language preview (M16)
-  changes language in one render without remounting, and a fetch failure shows the boot error
-  instead of English in the middle of a preview. *(A-23; A4a: only the nine are fetched.)*
+  The nine other tC4 catalogs (870,974 bytes of the 943,433) are fetched in parallel before
+  the first render, where tC4 bundles all ten (`tC4:src/i18n/index.js:12-21`), so the App
+  language preview (M16) changes language in one render without remounting, and a fetch
+  failure shows the boot error instead of English in the middle of a preview. *(A-23; A4a:
+  only the nine are fetched.)*
 - Rebuild-only keys live in `assets/i18n-rebuild/<id>.json`, merged after the vendored catalog
   without overriding it. The vendored files stay byte-identical (DELTA:532-536).
 - `<html lang dir>` comes from `LOCALES` (`crates/tc-ui/src/i18n.rs:41-92`) and is set before the
