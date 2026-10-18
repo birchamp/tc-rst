@@ -15,13 +15,17 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Read};
+use std::sync::Arc;
 use std::time::Duration;
 
 use reqwest::StatusCode;
 use reqwest::header::{ACCEPT, HeaderMap};
 use serde::Deserialize;
 use tc_core::BookId;
-use tc_door43::{GitOid, InternetSwitch, TagName, UnreachableCause};
+use tc_door43::{
+    GitOid, Http, HttpSpec, InternetSwitch, ProxyFinder, TagName, UnreachableCause, check_names,
+    system_proxy_finder,
+};
 use tc_helps::HelpRef;
 use tc_helps::aquifer::{
     AquiferHelpsKind, academy_from_aquifer, notes_from_aquifer, parse_aquifer_articles,
@@ -127,7 +131,7 @@ struct RawCommit {
 /// The one HTTP client for GitHub. See the module documentation.
 #[derive(Clone)]
 pub struct AquiferClient {
-    http: reqwest::Client,
+    http: Http,
     web: Url,
     api: Url,
     internet: InternetSwitch,
@@ -179,6 +183,18 @@ impl AquiferClient {
         internet: InternetSwitch,
         limits: AquiferLimits,
     ) -> Result<Self, AquiferError> {
+        Self::with_proxy_finder(web, api, internet, limits, system_proxy_finder())
+    }
+
+    /// [`AquiferClient::with_servers`] with a finder that names the proxies, asked only
+    /// while the internet is on ([`tc_door43::Http`]).
+    pub fn with_proxy_finder(
+        web: Url,
+        api: Url,
+        internet: InternetSwitch,
+        limits: AquiferLimits,
+        finder: Option<Arc<dyn ProxyFinder>>,
+    ) -> Result<Self, AquiferError> {
         let loopback = is_loopback(&web) && is_loopback(&api);
         for url in [&web, &api] {
             let ok = url.scheme() == "https" || (url.scheme() == "http" && loopback);
@@ -208,20 +224,27 @@ impl AquiferClient {
                 attempt.error("a redirect off GitHub")
             }
         });
-        let builder = reqwest::Client::builder()
-            .user_agent(USER_AGENT)
-            .connect_timeout(limits.connect_timeout)
-            .read_timeout(limits.read_timeout)
-            .redirect(redirects)
-            .referer(false);
-        let builder = if loopback {
-            builder.no_proxy()
-        } else {
-            builder.https_only(true)
+        // Every origin a request or a redirect can reach.
+        let mut origins = vec![web.clone(), api.clone()];
+        if !loopback {
+            origins.extend(
+                ASSET_HOSTS
+                    .iter()
+                    .filter_map(|host| Url::parse(&format!("https://{host}")).ok()),
+            );
+        }
+        let spec = HttpSpec {
+            user_agent: USER_AGENT,
+            connect_timeout: limits.connect_timeout,
+            read_timeout: limits.read_timeout,
+            redirects,
+            origins,
+            loopback,
         };
-        let http = builder.build().map_err(|e| AquiferError::Setup {
-            reason: e.to_string(),
-        })?;
+        let http =
+            Http::with_finder(spec, internet.clone(), finder).map_err(|e| AquiferError::Setup {
+                reason: e.to_string(),
+            })?;
         Ok(Self {
             http,
             web,
@@ -257,11 +280,10 @@ impl AquiferClient {
         accept: &str,
     ) -> Result<(String, reqwest::Response), AquiferError> {
         let route = format!("GET {}", url.path());
-        if self.internet.check().is_err() {
+        let Ok(http) = self.http.client().await else {
             return Err(AquiferError::Offline { route });
-        }
-        let response = self
-            .http
+        };
+        let response = http
             .get(url)
             .header(ACCEPT, accept)
             .header("X-GitHub-Api-Version", "2022-11-28")
@@ -669,15 +691,15 @@ pub(crate) fn canonical_book(path: &str) -> Option<BookId> {
 }
 
 /// Unpacks a release zip. Every entry is read in full, which checks its CRC-32; a name
-/// that could leave the folder, a symbolic link or two names one file system would merge
-/// is refused, never repaired. macOS Finder debris is dropped. When the root holds no
-/// `metadata.json` and every entry shares one top folder, that folder is removed.
+/// that could leave the folder, a name Windows would write under another name, a symbolic
+/// link or two names one file system would merge is refused, never repaired. macOS Finder
+/// debris is dropped. When the root holds no `metadata.json` and every entry shares one top
+/// folder, that folder is removed.
 fn unpack(bytes: &[u8], max_unpacked: u64) -> Result<Vec<(String, Vec<u8>)>, Refusal> {
     let mut archive =
         zip::ZipArchive::new(Cursor::new(bytes)).map_err(|e| Refusal::NotAZip(e.to_string()))?;
     let mut files = Vec::new();
     let mut total: u64 = 0;
-    let mut seen = BTreeSet::new();
     for index in 0..archive.len() {
         let mut entry = archive
             .by_index(index)
@@ -707,9 +729,6 @@ fn unpack(bytes: &[u8], max_unpacked: u64) -> Result<Vec<(String, Vec<u8>)>, Ref
         }
         if name.split('/').any(str::is_empty) {
             return Err(Refusal::EscapesRoot(name));
-        }
-        if !seen.insert(name.to_lowercase()) {
-            return Err(Refusal::DuplicateEntry(name));
         }
         let mut body = Vec::new();
         let limit = max_unpacked.saturating_sub(total).saturating_add(1);
@@ -741,6 +760,7 @@ fn unpack(bytes: &[u8], max_unpacked: u64) -> Result<Vec<(String, Vec<u8>)>, Ref
             }
         }
     }
+    check_names(files.iter().map(|(path, _)| path.as_str()))?;
     Ok(files)
 }
 
@@ -800,10 +820,59 @@ mod tests {
                 "{name}"
             );
         }
-        assert!(matches!(
-            unpack(&zip(&[("a.json", b"x"), ("A.json", b"y")]), 1 << 20),
-            Err(Refusal::DuplicateEntry(_))
-        ));
+        for name in [
+            "notes./x",
+            "x/a ",
+            "x/a.",
+            "PROGRA~1.JSN",
+            "x/abcdef~1.jsn",
+            "A~9",
+            "CON.json",
+            "nul.json",
+        ] {
+            // With a root `metadata.json`, no top folder is removed before the names are
+            // checked: a removed folder's name is never written.
+            assert!(
+                matches!(
+                    unpack(&zip(&[("metadata.json", b"{}"), (name, b"x")]), 1 << 20),
+                    Err(Refusal::NotPortable { .. })
+                ),
+                "{name}"
+            );
+        }
+        for pair in [
+            ["a.json", "A.json"],
+            ["σ.json", "ς.json"],
+            ["café.md", "cafe\u{301}.md"],
+            ["Notes/a.json", "notes/b.json"],
+            ["A", "a/x"],
+        ] {
+            assert!(
+                matches!(
+                    unpack(&zip(&[(pair[0], b"x"), (pair[1], b"y")]), 1 << 20),
+                    Err(Refusal::DuplicateEntry(_))
+                ),
+                "{pair:?}"
+            );
+        }
+        // `ı` stays apart from `i`, and only the shape of an 8.3 short name is refused.
+        let names = [
+            "notes~2024-draft.md",
+            "notes~1.json",
+            "abcdef~12x",
+            "a~1.tar.gz",
+            "ı",
+            "i",
+        ];
+        let entries: Vec<(&str, &[u8])> = names.iter().map(|name| (*name, &b"x"[..])).collect();
+        let allowed = unpack(&zip(&entries), 1 << 20).unwrap();
+        assert_eq!(
+            allowed
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            names
+        );
         assert!(matches!(
             unpack(&zip(&[("a.json", &[0u8; 100])]), 10),
             Err(Refusal::TooLargeUnpacked { .. })

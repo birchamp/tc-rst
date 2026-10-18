@@ -411,8 +411,7 @@ async fn a_commit_whose_names_collide_on_windows_or_macos_is_refused() {
     let fake = FakeDoor43::start_seeded().await.unwrap();
     for (name, pair) in [
         ("case", ["notes/TIT.tsv", "notes/tit.tsv"]),
-        ("dot", ["notes/a", "notes/a."]),
-        ("space", ["notes/a", "notes/a "]),
+        ("sigma", ["notes/\u{3c3}", "notes/\u{3c2}"]),
         ("nfd", ["caf\u{e9}.md", "cafe\u{301}.md"]),
     ] {
         let files = pair
@@ -438,29 +437,31 @@ async fn a_commit_whose_names_collide_on_windows_or_macos_is_refused() {
             "{name}: {result:?}"
         );
     }
-    let commit = one_commit_repo(
-        &fake,
-        "stream",
-        vec![SeedFile::regular("notes/TIT.tsv:hidden", b"x".to_vec())],
-    )
-    .await;
-    let result = client(&fake)
-        .download_archive(
-            &repo("uW/stream"),
-            &sha(&commit),
-            DownloadTo::folder(dl.path()),
-        )
-        .await;
-    assert!(
-        matches!(
-            &result,
-            Err(Door43Error::Verification {
-                source: VerificationError::NotPortable { .. },
-                ..
-            })
-        ),
-        "{result:?}"
-    );
+    for (name, path) in [
+        ("stream", "notes/TIT.tsv:hidden"),
+        ("dot", "notes/a."),
+        ("space", "notes/a "),
+    ] {
+        let commit =
+            one_commit_repo(&fake, name, vec![SeedFile::regular(path, b"x".to_vec())]).await;
+        let result = client(&fake)
+            .download_archive(
+                &repo(&format!("uW/{name}")),
+                &sha(&commit),
+                DownloadTo::folder(dl.path()),
+            )
+            .await;
+        assert!(
+            matches!(
+                &result,
+                Err(Door43Error::Verification {
+                    source: VerificationError::NotPortable { .. },
+                    ..
+                })
+            ),
+            "{name}: {result:?}"
+        );
+    }
     assert_eq!(
         left_in(dl.path()),
         Vec::<String>::new(),

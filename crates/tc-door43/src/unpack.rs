@@ -6,8 +6,11 @@
 //! two entries into one path:
 //!
 //! - a name that could escape the archive's folder on any platform ([`escapes_root`]);
-//! - a name Windows cannot write ([`portability_problem`]);
+//! - a name Windows cannot write, or would write under another name ([`portability_problem`]);
 //! - two names that Windows or macOS would store as one file ([`collision_key`]).
+//!
+//! [`check_names`] applies the last two to any list of paths, so a crate that writes files
+//! from another source (an install into a store) refuses the same names.
 
 use crate::error::VerificationError;
 use icu_normalizer::ComposingNormalizerBorrowed;
@@ -202,7 +205,8 @@ fn strip_and_collect(
             });
         }
     }
-    check_collisions(&files, &folders)?;
+    let names: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
+    find_collision(&names, &folders)?;
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(Unpacked {
         files,
@@ -242,10 +246,70 @@ pub(crate) fn escapes_root(name: &str) -> bool {
         })
 }
 
+/// The first name in a list of relative paths that cannot be written to every file system
+/// the app runs on. See [`check_names`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NameProblem {
+    /// Windows cannot write `path` as it is named, or would write it under another name,
+    /// or would open another file through it. `reason` says which.
+    NotPortable { path: String, reason: &'static str },
+    /// The same path is named twice, or names both a file and a folder.
+    Duplicate(String),
+    /// The names differ, but a case-insensitive or normalization-insensitive file system
+    /// (the Windows and macOS defaults) would make them one file or folder, and writing
+    /// both would lose one. A file also collides with a folder of the same folded name,
+    /// and folders that a file's path implies count: `Notes/a` and `notes/b` collide on
+    /// `Notes` and `notes`.
+    Colliding { first: String, second: String },
+}
+
+impl From<NameProblem> for VerificationError {
+    fn from(problem: NameProblem) -> Self {
+        match problem {
+            NameProblem::NotPortable { path, reason } => {
+                VerificationError::NotPortable { path, reason }
+            }
+            NameProblem::Duplicate(path) => VerificationError::DuplicateEntry(path),
+            NameProblem::Colliding { first, second } => {
+                VerificationError::CollidingNames { first, second }
+            }
+        }
+    }
+}
+
+/// Checks the names of files about to be written into one folder, and returns the first
+/// problem found. Every path is relative and uses `/`, as [`UnpackedFile::path`] does.
+///
+/// Refused, never repaired, because repairing could merge two files into one:
+///
+/// - a name Windows cannot write as it is named: a forbidden character, a segment of only
+///   dots and spaces, a trailing dot or space (Windows strips it), a device name such as
+///   `CON` or `nul.json`, or the shape of an 8.3 short name such as `PROGRA~1`;
+/// - two names that Windows or macOS would store as one file or folder: they differ only
+///   in letter case or Unicode normalization, or a file's name is a folder's (`A` and
+///   `a/x`). The folders a path implies are compared too.
+///
+/// This does not look for a path that escapes the folder (`..`, a drive letter, a
+/// backslash): check that first.
+pub fn check_names<'a>(paths: impl IntoIterator<Item = &'a str>) -> Result<(), NameProblem> {
+    let paths: Vec<&str> = paths.into_iter().collect();
+    for path in &paths {
+        if let Some(reason) = portability_problem(path) {
+            return Err(NameProblem::NotPortable {
+                path: (*path).to_owned(),
+                reason,
+            });
+        }
+    }
+    find_collision(&paths, &BTreeSet::new())
+}
+
 /// Why Windows cannot write `path` as it is named, if it cannot: a character Windows
 /// forbids in a name (`:` would write an NTFS alternate stream), a segment that is nothing
-/// once Windows strips its trailing dots and spaces, or a device name such as `CON` or
-/// `nul.txt`.
+/// but dots and spaces, a segment that ends in a dot or space (Windows strips them, so the
+/// file lands under another name), a segment shaped like an 8.3 short name such as
+/// `PROGRA~1` (Windows opens another file through its short name), or a device name such
+/// as `CON` or `nul.txt`.
 pub(crate) fn portability_problem(path: &str) -> Option<&'static str> {
     for segment in path.split('/') {
         if segment
@@ -254,16 +318,39 @@ pub(crate) fn portability_problem(path: &str) -> Option<&'static str> {
         {
             return Some("it holds a character Windows does not allow in a name");
         }
-        let trimmed = segment.trim_end_matches(['.', ' ']);
-        if trimmed.is_empty() {
+        if segment.trim_end_matches(['.', ' ']).is_empty() {
             return Some("a name of only dots and spaces");
         }
-        let stem = trimmed.split('.').next().unwrap_or_default();
+        if segment.ends_with(['.', ' ']) {
+            return Some("Windows removes a trailing dot or space, so the name would change");
+        }
+        if is_short_name(segment) {
+            return Some("Windows can open another file through this short name (8.3)");
+        }
+        let stem = segment.split('.').next().unwrap_or_default();
         if is_windows_device(stem.trim_end_matches(' ')) {
             return Some("Windows reserves this name for a device");
         }
     }
     None
+}
+
+/// Whether `segment` is shaped like the 8.3 short name Windows gives a long name, as in
+/// `PROGRA~1` or `ABCDEF~1.JSN`: at most one dot; before it at most eight characters, made
+/// of one to six characters other than `~`, then `~` and digits; after it at most three
+/// characters. Only such a name can be one Windows made, so `notes~1.json` (a four-letter
+/// extension) is a long name of its own.
+fn is_short_name(segment: &str) -> bool {
+    let (stem, extension) = segment.split_once('.').unwrap_or((segment, ""));
+    let Some((base, number)) = stem.split_once('~') else {
+        return false;
+    };
+    !extension.contains('.')
+        && extension.chars().count() <= 3
+        && stem.chars().count() <= 8
+        && (1..=6).contains(&base.chars().count())
+        && !number.is_empty()
+        && number.bytes().all(|b| b.is_ascii_digit())
 }
 
 /// `CON`, `PRN`, `AUX`, `NUL`, `COM0`-`COM9`, `LPT0`-`LPT9` (also with superscript ¹²³),
@@ -289,28 +376,40 @@ pub(crate) fn is_windows_device(stem: &str) -> bool {
     )
 }
 
-/// The name a case-insensitive, normalization-insensitive file system that strips trailing
-/// dots and spaces sees: each segment in Unicode NFC (macOS stores NFD), lowercased, with
-/// trailing dots and spaces removed (Windows).
+/// The name a case-insensitive, normalization-insensitive file system sees: each segment in
+/// Unicode NFC (macOS stores NFD), lowercased, then upper-cased wherever that gives one
+/// character, because macOS folds `σ` and `ς`, `ſ` and `s`, `µ` and `μ` into one letter.
+/// `ı` (dotless i) stays apart from `i`: no supported file system merges them, though `ı`
+/// upper-cases to `I`. Segments ending in a dot or space never get here:
+/// [`portability_problem`] refuses them.
 pub(crate) fn collision_key(path: &str) -> String {
+    const DOTLESS_I: char = '\u{131}';
     let nfc = ComposingNormalizerBorrowed::new_nfc();
     path.split('/')
         .map(|segment| {
-            let folded = nfc.normalize(segment).to_lowercase();
-            nfc.normalize(folded.trim_end_matches(['.', ' ']))
-                .into_owned()
+            let folded: String = nfc
+                .normalize(segment)
+                .to_lowercase()
+                .chars()
+                .map(|c| {
+                    let mut upper = c.to_uppercase();
+                    match (upper.next(), upper.next()) {
+                        (Some(single), None) if c != DOTLESS_I => single,
+                        _ => c,
+                    }
+                })
+                .collect();
+            nfc.normalize(&folded).into_owned()
         })
         .collect::<Vec<_>>()
         .join("/")
 }
 
-/// Refuse two paths, files or folders, that differ but share a [`collision_key`], and a
-/// file whose key is a folder's. Folders include those implied by a file's path.
-fn check_collisions(
-    files: &[UnpackedFile],
-    folders: &BTreeSet<String>,
-) -> Result<(), VerificationError> {
-    #[derive(PartialEq)]
+/// Finds two paths, files or folders, that differ but share a [`collision_key`], a file
+/// named twice, and a file whose key is a folder's. Folders include those implied by a
+/// file's path.
+fn find_collision(files: &[&str], folders: &BTreeSet<String>) -> Result<(), NameProblem> {
+    #[derive(Clone, Copy, PartialEq)]
     enum Kind {
         File,
         Folder,
@@ -318,10 +417,10 @@ fn check_collisions(
     let mut by_key: BTreeMap<String, (&str, Kind)> = BTreeMap::new();
     let implied = files
         .iter()
-        .flat_map(|f| f.path.match_indices('/').map(|(at, _)| &f.path[..at]));
+        .flat_map(|f| f.match_indices('/').map(|(at, _)| &f[..at]));
     let all = files
         .iter()
-        .map(|f| (f.path.as_str(), Kind::File))
+        .map(|f| (*f, Kind::File))
         .chain(folders.iter().map(|f| (f.as_str(), Kind::Folder)))
         .chain(implied.map(|f| (f, Kind::Folder)));
     for (path, kind) in all {
@@ -330,9 +429,10 @@ fn check_collisions(
             None => {
                 by_key.insert(key, (path, kind));
             }
-            Some((first, first_kind)) if *first == path && *first_kind == kind => {}
+            // Every file under a folder implies it again.
+            Some((first, Kind::Folder)) if *first == path && kind == Kind::Folder => {}
             Some((first, _)) if *first == path => {
-                return Err(VerificationError::DuplicateEntry(path.to_owned()));
+                return Err(NameProblem::Duplicate(path.to_owned()));
             }
             Some((first, _)) => {
                 let (first, second) = if *first <= path {
@@ -340,7 +440,7 @@ fn check_collisions(
                 } else {
                     (path, *first)
                 };
-                return Err(VerificationError::CollidingNames {
+                return Err(NameProblem::Colliding {
                     first: first.to_owned(),
                     second: second.to_owned(),
                 });
@@ -492,12 +592,12 @@ pub(crate) mod tests {
         let nfd = "notes/cafe\u{301}.tsv";
         for pair in [
             ["notes/TIT.tsv", "notes/tit.tsv"],
-            ["notes/a", "notes/a."],
-            ["notes/a", "notes/a "],
-            ["notes/a", "notes/a. ."],
+            ["notes/σ", "notes/ς"],
+            ["notes/µ", "notes/μ"],
             [nfc, nfd],
             ["Notes/x", "notes/y"],
             ["notes", "Notes/y"],
+            ["A", "a/x"],
             ["ÉTÉ/x", "été/y"],
         ] {
             assert!(
@@ -529,8 +629,54 @@ pub(crate) mod tests {
             "notes/b/a",
             nfc,
             "Ñandú/x",
+            // No supported file system merges the dotless ı with i.
+            "notes/ı",
+            "notes/i",
         ];
         assert!(unpack(&wrapped(&apart), Layout::GitArchive, 1 << 20).is_ok());
+    }
+
+    #[test]
+    fn the_public_check_refuses_what_unpacking_refuses() {
+        let problem = |paths: &[&str]| check_names(paths.iter().copied()).unwrap_err();
+        assert!(matches!(
+            problem(&["notes/ok.json", "CON.json"]),
+            NameProblem::NotPortable { path, .. } if path == "CON.json"
+        ));
+        assert!(matches!(
+            problem(&["nul.json"]),
+            NameProblem::NotPortable { .. }
+        ));
+        for pair in [
+            ["café.md", "cafe\u{301}.md"],
+            ["Notes/a.json", "notes/b.json"],
+            ["A", "a/x"],
+        ] {
+            assert!(
+                matches!(problem(&pair), NameProblem::Colliding { .. }),
+                "{pair:?}"
+            );
+        }
+        assert_eq!(
+            problem(&["a/x", "a/x"]),
+            NameProblem::Duplicate("a/x".into())
+        );
+        assert_eq!(
+            problem(&["TIT.tsv", "tit.tsv"]),
+            NameProblem::Colliding {
+                first: "TIT.tsv".into(),
+                second: "tit.tsv".into()
+            }
+        );
+        assert_eq!(
+            VerificationError::from(problem(&["TIT.tsv", "tit.tsv"])),
+            VerificationError::CollidingNames {
+                first: "TIT.tsv".into(),
+                second: "tit.tsv".into()
+            }
+        );
+        check_names(["a/x", "a/y", "a/b/z", "ı", "i", "notes~1.json"]).unwrap();
+        check_names([]).unwrap();
     }
 
     #[test]
@@ -558,6 +704,17 @@ pub(crate) mod tests {
             "PRN.",
             ". ",
             "x/. /y",
+            "notes/a.",
+            "notes/a ",
+            "notes/a. .",
+            "notes./x",
+            "x/a ",
+            "PROGRA~1",
+            "progra~1",
+            "ABCDEF~1.JSN",
+            "x/abcdef~1.tsv",
+            "abcde~10",
+            "A~9",
         ] {
             assert!(
                 matches!(
@@ -575,6 +732,14 @@ pub(crate) mod tests {
             "nul_x",
             "a.b.c",
             ".hidden",
+            "notes~2024-draft.md",
+            "notes~1.json",
+            "abcdef~12x",
+            "abcdef~12",
+            "a~1.tar.gz",
+            "a~b",
+            "abcdefg~1",
+            "~1",
         ] {
             assert!(portability_problem(name).is_none(), "{name:?}");
         }

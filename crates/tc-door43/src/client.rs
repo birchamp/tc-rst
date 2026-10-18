@@ -4,6 +4,7 @@ use crate::download::{
 };
 use crate::error::{AuthStatus, Door43Error, UnreachableCause, VerificationError};
 use crate::git_tree::ObjectId;
+use crate::http::{Http, HttpSpec, ProxyFinder, system_proxy_finder};
 use crate::internet::InternetSwitch;
 use crate::listing::Listing;
 use crate::names::{
@@ -80,7 +81,7 @@ impl Default for Limits {
 /// No URL carries one, and the log lines name only the method, path and status.
 #[derive(Clone)]
 pub struct Door43Client {
-    http: reqwest::Client,
+    http: Http,
     server: ServerUrl,
     internet: InternetSwitch,
     limits: Limits,
@@ -174,6 +175,17 @@ impl Door43Client {
         internet: InternetSwitch,
         limits: Limits,
     ) -> Result<Self, Door43Error> {
+        Self::with_proxy_finder(server, internet, limits, system_proxy_finder())
+    }
+
+    /// A client whose proxy `finder` names, asked only while the internet is on
+    /// ([`crate::http`]). `None` leaves the system's own proxy settings.
+    pub fn with_proxy_finder(
+        server: ServerUrl,
+        internet: InternetSwitch,
+        limits: Limits,
+        finder: Option<std::sync::Arc<dyn ProxyFinder>>,
+    ) -> Result<Self, Door43Error> {
         let origin = server.clone();
         // A redirect to another host would carry the request off the configured server;
         // only same-origin redirects are followed.
@@ -186,21 +198,19 @@ impl Door43Client {
                 attempt.error("a redirect to another server")
             }
         });
-        let builder = reqwest::Client::builder()
-            .user_agent(USER_AGENT)
-            .connect_timeout(limits.connect_timeout)
-            .read_timeout(limits.read_timeout)
-            .redirect(redirects)
-            .referer(false);
-        // A loopback server is the test fake; a system proxy must not see that traffic.
-        let builder = if server.is_loopback() {
-            builder.no_proxy()
-        } else {
-            builder.https_only(true)
+        let spec = HttpSpec {
+            user_agent: USER_AGENT,
+            connect_timeout: limits.connect_timeout,
+            read_timeout: limits.read_timeout,
+            redirects,
+            origins: vec![server.as_url().clone()],
+            // A loopback server is the test fake; a system proxy must not see that traffic.
+            loopback: server.is_loopback(),
         };
-        let http = builder.build().map_err(|e| Door43Error::Setup {
-            reason: e.to_string(),
-        })?;
+        let http =
+            Http::with_finder(spec, internet.clone(), finder).map_err(|e| Door43Error::Setup {
+                reason: e.to_string(),
+            })?;
         Ok(Self {
             http,
             server,
@@ -677,12 +687,12 @@ impl Door43Client {
         body: Option<Vec<u8>>,
     ) -> Result<(String, reqwest::Response), Door43Error> {
         let route = route_of(&method, &url);
-        if self.internet.check().is_err() {
+        let Ok(http) = self.http.client().await else {
             tracing::debug!(%route, "door43 request refused: the internet is off");
             return Err(Door43Error::Offline { route });
-        }
+        };
         let headers = AuthHeaders::of(auth);
-        let mut request = self.http.request(method, url).header(ACCEPT, accept);
+        let mut request = http.request(method, url).header(ACCEPT, accept);
         if let Some(value) = &headers.authorization {
             request = request.header(AUTHORIZATION, value.clone());
         }
