@@ -80,3 +80,4 @@ ts	phase	decision	why	evidence	result
 2026-10-18T11:58Z	merge	phase0 (A1 tc-api, A6a parity tC4 side, A10 tc-export, A11 streaming downloads) into main; full gates green in an isolated target	
 2026-10-18T13:25Z	ruling	tC4 poetry alignment stamps: re-stamp on import only when the aligned words match the verse word for word, recorded in History; tC4 imports are rare, keep unit I lean	owner
 2026-10-18T19:03Z	merge	phase0 (A2 tc4 serve, A3 tc-app) into main; gates green after making a tc-server hook test wait for the recorded end instead of a fixed 150 ms pause	
+2026-10-18T19:51Z	handoff	stopped both runs; pushed storage (S2 WIP 0d7d4f7), phase0, p0-a4a, p0-a9; HANDOFF.md updated for the Linux machine	owner said the Linux session is running
