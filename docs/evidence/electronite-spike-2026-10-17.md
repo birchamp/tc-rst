@@ -2,7 +2,9 @@
 
 The reference machine: a Dell Latitude 7490 (a 2018 model) with 4 cores, 8 GB and a SATA SSD,
 older than the five years the reference names, so at least as slow
-(`docs/evidence/windows-machine-2026-10-17.md` on `windows-fixes`).
+(`docs/evidence/windows-machine-2026-10-17.md` on `windows-fixes`). Defender excludes no
+folder: the owner confirmed it on 2026-10-18 (the machine table below could not read the list,
+which only an administrator can).
 
 This file was written by `spikes/electronite/run-spike.ps1`. The spike is throwaway and never
 shipped (docs/APP-DESIGN.md section 10, unit G0). **The server is a stand-in**: `tc4-standin`

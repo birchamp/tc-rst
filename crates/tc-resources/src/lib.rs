@@ -54,6 +54,7 @@ mod error;
 mod fetched;
 pub mod gateway_change;
 pub mod gateways;
+mod held;
 mod layout;
 mod lexicon;
 mod load;

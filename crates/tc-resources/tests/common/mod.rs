@@ -116,6 +116,11 @@ pub fn asset_name(language: &str) -> String {
 /// A release asset built from the fixture files, laid out as Aquifer's
 /// `<Language>-json.zip` is: `metadata.json` and `json/` at the root.
 pub fn aquifer_zip(repo: &str, language: &str) -> Vec<u8> {
+    aquifer_zip_with(repo, language, &[])
+}
+
+/// [`aquifer_zip`] with more entries after the fixture's own.
+pub fn aquifer_zip_with(repo: &str, language: &str, extra: &[(&str, &[u8])]) -> Vec<u8> {
     let dir = fixtures().join("aquifer").join(repo).join(language);
     let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
     for entry in std::fs::read_dir(dir.join("json")).unwrap() {
@@ -128,6 +133,11 @@ pub fn aquifer_zip(repo: &str, language: &str) -> Vec<u8> {
         "metadata.json".to_owned(),
         std::fs::read(dir.join("metadata.json")).unwrap(),
     ));
+    entries.extend(
+        extra
+            .iter()
+            .map(|(name, bytes)| ((*name).to_owned(), bytes.to_vec())),
+    );
     let refs: Vec<(&str, &[u8])> = entries
         .iter()
         .map(|(n, b)| (n.as_str(), b.as_slice()))

@@ -77,9 +77,9 @@ Before that, recreate the storage worktree: `git worktree add .claude/worktrees/
 The phase-0 builders recreate their own worktrees from their branches. On a bigger machine,
 edit each script's machine sentence ("4 CPUs shared ... cargo -j 2") to match the machine.
 
-Owner's model policy (2026-10-18): **Opus plans and reviews, Sonnet edits, Haiku reads.** The
-scripts already give planners and reviewers the default model, builders, fixers and merges
-`sonnet`, and gates `haiku`.
+Owner's model policy: on 2026-10-18 the owner first asked for Opus to plan and review, Sonnet to edit
+and Haiku to read; later that day, on a larger subscription, the owner lifted it. Every agent now
+uses the session's default model.
 
 ## What is left
 

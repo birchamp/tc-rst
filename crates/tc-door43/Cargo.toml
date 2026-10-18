@@ -10,6 +10,7 @@ rust-version.workspace = true
 tc-core = { path = "../tc-core" }
 base64.workspace = true
 httpdate = "1.0.3"
+hyper-util = { workspace = true, features = ["client-proxy", "client-proxy-system"] }
 icu_normalizer = { version = "2.3.0", default-features = false, features = ["compiled_data"] }
 md-5.workspace = true
 reqwest = { workspace = true, features = ["rustls", "system-proxy"] }

@@ -33,6 +33,9 @@
 //! puts a token in a URL fails loudly. Every request is recorded (method, path, query and
 //! the kind of credential, never its value) for tests to inspect.
 //!
+//! [`FakeProxy`] is a proxy that refuses every request and records its first line, for
+//! tests of which proxy a client uses.
+//!
 //! The fake needs `git` in `PATH`, with `git http-backend` (part of git's core tools).
 
 // The `Repository` answer has about 80 fields, past the `json!` macro's default depth.
@@ -41,11 +44,13 @@
 mod api;
 mod git;
 mod json;
+pub mod proxy;
 pub mod seeded;
 mod smart_http;
 mod zipping;
 
 pub use git::SeedMode;
+pub use proxy::FakeProxy;
 
 use git::Git;
 use std::collections::{HashMap, VecDeque};

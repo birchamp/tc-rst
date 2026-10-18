@@ -43,6 +43,9 @@ base64 = "0.22.1"
 # Already in Cargo.lock through axum and hyper; the versions locked there.
 futures-util = { version = "0.3.34", default-features = false }
 http-body = "1.1.0"
+# Already in Cargo.lock through reqwest; the version locked there. tc-door43 reads the system's
+# proxy settings with its matcher, as reqwest's own system proxy does.
+hyper-util = { version = "0.1.21", default-features = false }
 percent-encoding = "2.3.2"
 subtle = "2.6.1"
 md-5 = "0.11.0"
