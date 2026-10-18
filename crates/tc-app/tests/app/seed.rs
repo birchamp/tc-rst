@@ -188,7 +188,9 @@ async fn first_launch_opens_each_bundled_file_once_and_writes_each_once() {
     let n = bundled_files();
     let (opened, written) = (content_files_opened(), content_files_written());
 
-    let t = start(dir.path(), bundle(), None).await;
+    // 5 ms before each file keeps the seed running for 300 ms or more, so the first answer
+    // finds it under way on any disk.
+    let t = start(dir.path(), bundle(), Some(5)).await;
 
     // The plan reads receipts and check records only, and it is done before `start` returns.
     assert_eq!(
@@ -198,16 +200,12 @@ async fn first_launch_opens_each_bundled_file_once_and_writes_each_once() {
         ),
         (0, 0)
     );
-    let first = hello_value(&t.app).await["startup"].clone();
-    let state = until_startup_ends(&t.app).await;
-    if let StartupState::Preparing(_) = serde_json::from_value(first.clone()).unwrap() {
-        assert_eq!(
-            first,
-            serde_json::json!({"type": "preparing", "value": {"done": 0, "total": n}}),
-            "hello is exact from the first request"
-        );
-    }
-    assert_eq!(state, StartupState::Ready);
+    assert_eq!(
+        hello_value(&t.app).await["startup"],
+        serde_json::json!({"type": "preparing", "value": {"done": 0, "total": n}}),
+        "hello is exact from the first request"
+    );
+    assert_eq!(until_startup_ends(&t.app).await, StartupState::Ready);
 
     // `Ready` means every copy is whole and checked.
     let installs = t.app.resources().installed().unwrap().installs;

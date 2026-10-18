@@ -391,9 +391,9 @@ impl App {
     }
 
     /// What `app/quit`, a quit line and a closed stdin do: stops the first-launch seed and
-    /// waits for it, writes what is pending, then resolves [`App::quitting`]. Safe to call more than once (the server calls it after
-    /// `app/quit` did). Later units save aligner links and checkpoint their sessions first
-    /// (§5.1).
+    /// waits for it, writes what is pending, then resolves [`App::quitting`]. Safe to call
+    /// more than once (the server calls it after `app/quit` did). Later units save aligner
+    /// links and checkpoint their sessions first (§5.1).
     pub async fn quit(&self) {
         // Close is a quit, and a quit stops the seed first: the process lets go of
         // `app.lock` only when no seed writer runs (unit A9).
