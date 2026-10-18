@@ -4,8 +4,13 @@
 //! ```text
 //! cargo run --release -p tc-app --example bundle_store -- --from bundle/en --out target/a9/bundle-full
 //! cargo run --release -p tc-app --example seedbench -- --bundle target/a9/bundle-full \
-//!   --first 5 --repeat 20 --close 5 --out target/a9/seedbench.json
+//!   --first 5 --repeat 20 --close 5 --evict .audit/tools/evict-page-cache.py \
+//!   --out target/a9/seedbench.json
 //! ```
+//!
+//! `--evict <script>` runs `python3 -I <script> <bundle>` before each first launch and before the
+//! reads, so the bundled files come from the disk, as at a person's first launch, and not from
+//! the memory the build of the bundle left them in.
 //!
 //! Three things are timed, each with the real `App` and the real disk, under `--root`
 //! (default `target/a9/bench`):
@@ -16,7 +21,12 @@
 //!   opened and written, which must be 0;
 //! - a **close**: `App::quit` 500 ms into a seed.
 //!
-//! The driver runs the first launches as child processes (`--one first`) and the other two in
+//! A fourth figure bounds the close: the seed asks to stop between files and before each
+//! install, but it reads and checks a whole install before it writes the first file of its copy,
+//! so a close waits for the install being read. **reads** times that stretch for every bundled
+//! install, with the files in the system's cache (a cold disk reads slower).
+//!
+//! The driver runs the first launches as child processes (`--one first`) and the other three in
 //! one process each, and writes the median and p95 of each to `--out`.
 
 use std::path::{Path, PathBuf};
@@ -146,6 +156,13 @@ async fn closes(root: &Path, bundle: &Path, runs: usize) -> Result<Value, String
         let _ = std::fs::remove_dir_all(root);
         let app = start(root, bundle).await?;
         tokio::time::sleep(Duration::from_millis(500)).await;
+        // A close that finds the seed done measures nothing.
+        if !matches!(app.startup(), StartupState::Preparing(_)) {
+            return Err(format!(
+                "the seed ended before the close: {:?}",
+                app.startup()
+            ));
+        }
         let began = Instant::now();
         app.quit().await;
         times.push(ms(began.elapsed()));
@@ -158,6 +175,34 @@ async fn closes(root: &Path, bundle: &Path, runs: usize) -> Result<Value, String
         whole.push(installs.len());
     }
     Ok(json!({"quitMs": times, "wholeInstallsAtTheStop": whole}))
+}
+
+/// `runs` times, the time to read and check each bundled install: the longest stretch of a seed
+/// that a close cannot interrupt.
+fn install_reads(bundle: &Path, runs: usize) -> Result<Value, String> {
+    let store = ResourceStore::open_read_only(bundle).map_err(|e| e.to_string())?;
+    let installs = store.installed().map_err(|e| e.to_string())?.installs;
+    let mut rows = Vec::new();
+    for install in &installs {
+        let mut times = Vec::new();
+        for _ in 0..runs {
+            let began = Instant::now();
+            install.verify().map_err(|e| e.to_string())?;
+            times.push(ms(began.elapsed()));
+        }
+        let bytes: u64 = install.receipt().files.iter().map(|file| file.size).sum();
+        rows.push(json!({
+            "install": install.dcs_pin().map_or_else(
+                || install.dir().display().to_string(),
+                |pin| pin.to_string(),
+            ),
+            "files": install.files().count(),
+            "bytes": bytes,
+            "firstReadMs": times.first().copied().unwrap_or_default(),
+            "readMs": summary(&times),
+        }));
+    }
+    Ok(json!({"installs": rows}))
 }
 
 /// Nearest-rank percentile of a list of times.
@@ -193,6 +238,7 @@ struct Args {
     first: usize,
     repeat: usize,
     close: usize,
+    evict: Option<PathBuf>,
     out: Option<PathBuf>,
 }
 
@@ -205,6 +251,7 @@ fn parse() -> Result<Args, String> {
         first: 5,
         repeat: 20,
         close: 5,
+        evict: None,
         out: None,
     };
     let mut given = std::env::args().skip(1);
@@ -219,6 +266,7 @@ fn parse() -> Result<Args, String> {
             "--first" => args.first = number(value()?)?,
             "--repeat" => args.repeat = number(value()?)?,
             "--close" => args.close = number(value()?)?,
+            "--evict" => args.evict = Some(PathBuf::from(value()?)),
             "--out" => args.out = Some(PathBuf::from(value()?)),
             other => return Err(format!("unknown flag {other}")),
         }
@@ -231,6 +279,19 @@ fn parse() -> Result<Args, String> {
 
 /// Runs this program again for one measurement and reads its one line of JSON.
 fn child(args: &Args, mode: &str, root: &Path) -> Result<Value, String> {
+    if let Some(script) = &args.evict
+        && matches!(mode, "first" | "reads")
+    {
+        let status = Command::new("python3")
+            .arg("-I")
+            .arg(script)
+            .arg(&args.bundle)
+            .output()
+            .map_err(|e| format!("{}: {e}", script.display()))?;
+        if !status.status.success() {
+            return Err(String::from_utf8_lossy(&status.stderr).into_owned());
+        }
+    }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let output = Command::new(exe)
         .args(["--one", mode, "--bundle"])
@@ -265,6 +326,14 @@ async fn drive(args: Args) -> Result<(), String> {
         ..args.clone()
     };
     let closes = child(&close, "close", &args.root.join("close"))?;
+    let reads = child(
+        &Args {
+            runs: 5,
+            ..args.clone()
+        },
+        "reads",
+        &args.root,
+    )?;
 
     let repeat_times: Vec<f64> = repeats["startMs"]
         .as_array()
@@ -284,6 +353,7 @@ async fn drive(args: Args) -> Result<(), String> {
         "firstLaunches": firsts,
         "repeatLaunches": repeats,
         "closes": closes,
+        "installReads": reads,
     });
     let text = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
     if let Some(out) = &args.out {
@@ -311,6 +381,10 @@ async fn main() -> ExitCode {
             Some("close") => {
                 let value = closes(&args.root, &args.bundle, args.runs).await?;
                 println!("{value}");
+                Ok(())
+            }
+            Some("reads") => {
+                println!("{}", install_reads(&args.bundle, args.runs)?);
                 Ok(())
             }
             Some(other) => Err(format!("unknown mode {other}")),
