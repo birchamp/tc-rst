@@ -197,13 +197,34 @@ fn an_existing_local_folder_is_used_on_later_launches() {
 }
 
 #[test]
-fn a_default_made_by_hand_wins_over_the_local_folder() {
-    // The known edge of §4.9: both exist, so the default is used and the local folder's
-    // projects are not listed.
+fn a_local_folder_beside_a_default_one_is_used_and_names_the_default() {
+    // The local folder exists only because an earlier first launch chose it, so it holds this
+    // app's projects. A default that appeared later does not replace it.
     let mut check = FakeFolders::default();
     check.folders.insert(local());
     check.folders.insert(default_in("/h/ana"));
     let root = choose_projects_root(&ProjectsFolder::Default, &linux(), &check).unwrap();
+    assert_eq!(root.path, local());
+    assert_eq!(
+        root.chosen,
+        RootChoice::LocalBesideDefault {
+            default: default_in("/h/ana")
+        }
+    );
+    assert!(!root.chosen.is_first_launch());
+}
+
+#[test]
+fn a_local_folder_that_is_the_default_folder_is_not_beside_itself() {
+    // XDG_DATA_HOME can name the home folder: the two paths are then one folder.
+    let host = env(
+        HostOs::Linux,
+        &[("HOME", "/h/ana"), ("XDG_DATA_HOME", "/h/ana")],
+    );
+    let mut check = FakeFolders::default();
+    check.folders.insert(default_in("/h/ana"));
+    let root = choose_projects_root(&ProjectsFolder::Default, &host, &check).unwrap();
+    assert_eq!(root.path, default_in("/h/ana"));
     assert_eq!(root.chosen, RootChoice::Existing);
 }
 

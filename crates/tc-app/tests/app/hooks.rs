@@ -185,6 +185,38 @@ async fn arming_a_crash_that_can_never_fire_is_a_bad_request() {
     assert!(t.ender.ended().is_empty());
 }
 
+/// A crash armed at a point no write reaches would let a crash test pass by doing nothing,
+/// as one armed for a query does (APP-DESIGN §5.8). No phase-0 write is a draft write.
+#[tokio::test]
+async fn arming_a_crash_at_a_point_no_write_reaches_is_a_bad_request() {
+    let (_dir, t) = started().await;
+    for (n, path) in [None, Some("net/set"), Some("test/fieldStore")]
+        .into_iter()
+        .enumerate()
+    {
+        let id = 10 + u8::try_from(n).unwrap();
+        let armed = post(&t.app, &crash(id, CrashPoint::DuringDraftWrite, path)).await;
+        assert!(
+            matches!(&armed, Err(ApiError::BadRequest { field, .. }) if field == "at"),
+            "{path:?}: {armed:?}"
+        );
+    }
+    // Nothing was armed: writes run, and the three points they do reach are accepted.
+    post(&t.app, &net(2, true)).await.unwrap();
+    assert!(t.ender.ended().is_empty());
+    for (n, at) in [
+        CrashPoint::BeforeStore,
+        CrashPoint::BeforeReply,
+        CrashPoint::AfterReply,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let id = 20 + u8::try_from(n).unwrap();
+        post(&t.app, &crash(id, at, None)).await.unwrap();
+    }
+}
+
 #[tokio::test]
 async fn a_crash_for_any_write_is_taken_by_the_first_write_and_not_by_the_arming_hooks() {
     let (_dir, t) = started().await;
@@ -313,6 +345,56 @@ async fn reset_restores_default_prefs_clears_reports_releases_holds_and_turns_th
     until_quiet(&t.app).await;
 }
 
+/// A launch has an empty reply cache, so a request id the harness used in one scenario is
+/// free in the next: it must run, and must not be answered with the old scenario's reply.
+#[tokio::test]
+async fn reset_forgets_the_finished_replies_so_a_request_id_can_be_used_again() {
+    let (_dir, t) = started().await;
+    post(&t.app, &net(1, true)).await.unwrap();
+    assert!(t.app.internet().is_on());
+
+    post(&t.app, &Reset { request: rid(2) }).await.unwrap();
+    assert!(!t.app.internet().is_on());
+
+    // The same request again runs. The cache answered `on: true` and left the switch off.
+    let again = post(&t.app, &net(1, true)).await.unwrap();
+    assert!(again.on);
+    assert!(t.app.internet().is_on(), "the write ran");
+
+    // Another body under the id is not `RequestReused`: the id was forgotten.
+    post(&t.app, &Reset { request: rid(3) }).await.unwrap();
+    let other = post(&t.app, &net(1, false)).await;
+    assert_eq!(other.map(|view| view.on), Ok(false));
+}
+
+/// A write still running is not a finished reply: dropping it would let its retry run the
+/// write a second time.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn reset_keeps_a_write_in_flight_so_its_retry_still_waits_for_it() {
+    let (_dir, t) = started().await;
+    let token = field_token(&t.app, "title").await;
+    post(&t.app, &hold(1, HoldPoint::Save)).await.unwrap();
+    let body = serde_json::to_vec(&store_req(5, "title", &token, "Waits")).unwrap();
+    let first = {
+        let app = t.app.clone();
+        let body = body.clone();
+        tokio::spawn(async move { app.call("test/fieldStore", &body).await })
+    };
+    until_held_count(&t.app, 1).await;
+
+    // The reset releases the hold: the store finishes after the reset has run.
+    post(&t.app, &Reset { request: rid(2) }).await.unwrap();
+    let first = first.await.unwrap();
+
+    let retry = t.app.call("test/fieldStore", &body).await;
+    assert_eq!(retry, first, "the retry got the first attempt's reply");
+    assert_eq!(
+        field_log(&t.app, "title").await.stores.len(),
+        1,
+        "stored once"
+    );
+}
+
 #[tokio::test]
 async fn holds_at_the_other_points_are_accepted_and_nothing_reaches_them() {
     let (_dir, t) = started().await;
@@ -327,9 +409,6 @@ async fn holds_at_the_other_points_are_accepted_and_nothing_reaches_them() {
             .await
             .unwrap();
     }
-    post(&t.app, &crash(2, CrashPoint::DuringDraftWrite, None))
-        .await
-        .unwrap();
     // No phase-0 write reaches any of them.
     post(&t.app, &net(3, true)).await.unwrap();
     assert!(!is_busy(&t.app).await);

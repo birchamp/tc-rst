@@ -167,6 +167,11 @@ pub enum RootChoice {
     Existing,
     /// The local folder was already there: an earlier first launch chose it.
     ExistingLocal,
+    /// The local folder exists and so does the default one. The local folder is there only
+    /// because an earlier first launch chose it and filled it, so it is used and the default
+    /// one, which appeared later, is named in the report. Using the default instead would
+    /// stop listing projects the person already works in.
+    LocalBesideDefault { default: PathBuf },
     /// First launch: no client copies the default folder, so it is created.
     FirstLaunch,
     /// First launch: a client copies the default folder and none copies the local one.
@@ -187,12 +192,14 @@ impl RootChoice {
 }
 
 /// Which projects folder to use. A folder that exists is always used, so this rule never
-/// moves or hides a project; only a first launch, when neither default exists, looks at the
-/// cloud detection.
+/// moves a project and a launch never lists fewer projects than the one before it; only a
+/// first launch, when neither default exists, looks at the cloud detection.
 ///
-/// Known edge: if a person makes the default folder by hand after an earlier launch chose
-/// the local one, the default wins and the local folder's projects are not listed. No path
-/// in the app creates the default folder once the local one exists.
+/// When both exist, the local folder wins: no app path creates it except a first launch that
+/// found the default synced, so it holds the projects earlier launches listed, and a default
+/// folder made later by hand or by a sync client does not replace it. The default folder's
+/// projects, if it has any, are not listed; [`RootChoice::LocalBesideDefault`] names it so
+/// the report says so.
 pub fn choose_projects_root(
     folder: &ProjectsFolder,
     env: &HostEnv,
@@ -210,13 +217,23 @@ pub fn choose_projects_root(
     // A computer that cannot name its local data folder keeps the default.
     let local = local_projects_root(env).ok();
 
+    // `XDG_DATA_HOME` can name the home folder, which makes the two paths one folder.
+    let local_folder = local
+        .as_ref()
+        .filter(|local| **local != default && check.is_folder(local));
     if check.is_folder(&default) {
-        return Ok(ProjectsRoot {
-            path: default,
-            chosen: RootChoice::Existing,
+        return Ok(match local_folder {
+            Some(local) => ProjectsRoot {
+                path: local.clone(),
+                chosen: RootChoice::LocalBesideDefault { default },
+            },
+            None => ProjectsRoot {
+                path: default,
+                chosen: RootChoice::Existing,
+            },
         });
     }
-    if let Some(local) = local.as_ref().filter(|local| check.is_folder(local)) {
+    if let Some(local) = local_folder {
         return Ok(ProjectsRoot {
             path: local.clone(),
             chosen: RootChoice::ExistingLocal,

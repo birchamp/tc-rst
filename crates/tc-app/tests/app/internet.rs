@@ -13,7 +13,7 @@ use tc_api::{ApiError, Reply};
 use tc_app::events::Next;
 use tc_app::{Answer, App};
 
-use super::common::{TestApp, rid};
+use super::common::{TestApp, body_of, reply_in, rid};
 
 fn set(app: &App, id: u8, on: bool) -> impl std::future::Future<Output = Answer> + '_ {
     let body = serde_json::to_vec(&Set {
@@ -82,7 +82,7 @@ async fn a_net_endpoint_is_refused_while_offline_and_never_cached() {
     let help = t.app.request(&HelpLink { url: url.clone() }).await.unwrap();
     assert_eq!(help.into_result(), Ok(LinkView { url }));
 
-    // The switch going off again is refused again, whatever was answered before.
+    // The switch going off again refuses the next new request.
     t.app
         .request(&Set {
             request: rid(2),
@@ -90,10 +90,49 @@ async fn a_net_endpoint_is_refused_while_offline_and_never_cached() {
         })
         .await
         .unwrap();
-    let off = t.app.request(&sign_in(7)).await.unwrap();
+    let off = t.app.request(&sign_in(8)).await.unwrap();
     assert_eq!(
         off.into_result(),
         Err(ApiError::NeedsInternet(NetKind::SignIn))
+    );
+}
+
+/// `NeedsInternet` says nothing was sent (APP-DESIGN §3.5). A request id the cache already
+/// knows was sent, so its retry gets its own reply whatever the switch says now.
+#[tokio::test]
+async fn a_retry_of_a_net_write_that_ran_gets_its_reply_not_needs_internet() {
+    let dir = tempfile::tempdir().unwrap();
+    let t = TestApp::start_in(dir.path(), |_, _| {}).await;
+    set(&t.app, 1, true).await;
+    let first = t.app.call("account/signIn", &body_of(&sign_in(7))).await;
+    let first_reply: Reply<()> = reply_in(&first);
+    assert_eq!(
+        first_reply,
+        Reply::Err(ApiError::Unavailable(Feature::Account))
+    );
+
+    // The switch goes off after the write ran, and the reply was lost: the UI retries.
+    set(&t.app, 2, false).await;
+    let retry = t.app.call("account/signIn", &body_of(&sign_in(7))).await;
+    assert_eq!(retry, first, "the first reply, byte for byte");
+
+    // An id the cache knows with another body is a reused id, not "nothing was sent".
+    let mut other = sign_in(7);
+    other.password = "another".to_owned();
+    let reused = t.app.request(&other).await.unwrap();
+    assert_eq!(reused.into_result(), Err(ApiError::RequestReused));
+
+    // A new id still meets the switch, and that refusal is not kept under its id.
+    let fresh = t.app.request(&sign_in(9)).await.unwrap();
+    assert_eq!(
+        fresh.into_result(),
+        Err(ApiError::NeedsInternet(NetKind::SignIn))
+    );
+    set(&t.app, 3, true).await;
+    let again = t.app.request(&sign_in(9)).await.unwrap();
+    assert_eq!(
+        again.into_result(),
+        Err(ApiError::Unavailable(Feature::Account))
     );
 }
 

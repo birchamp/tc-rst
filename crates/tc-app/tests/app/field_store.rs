@@ -433,25 +433,55 @@ multi! {
     }
 }
 
+/// A write that is not a hook, with nothing to store: the cheapest way to make a new write.
+fn report(id: u8) -> tc_api::app::ClientError {
+    tc_api::app::ClientError {
+        request: rid(id),
+        view: None,
+        project: None,
+        message: "x".to_owned(),
+        at: tc_api::ids::WallMs(1),
+    }
+}
+
+fn then_of(answer: Answer) -> Then {
+    match answer {
+        Answer::Reply { then, .. } => then,
+        other => panic!("{other:?}"),
+    }
+}
+
 multi! {
     async fn an_after_reply_crash_fires_once() {
         let (_dir, t) = started().await;
         arm(&t.app, 100, CrashPoint::AfterReply, None).await;
-        let report = |id: u8| tc_api::app::ClientError {
-            request: rid(id),
-            view: None,
-            project: None,
-            message: "x".to_owned(),
-            at: tc_api::ids::WallMs(1),
-        };
-        let then_of = |answer: Answer| match answer {
-            Answer::Reply { then, .. } => then,
-            other => panic!("{other:?}"),
-        };
         assert_eq!(then_of(answer(&t.app, &report(1)).await), Then::EndProcess);
         assert_eq!(then_of(answer(&t.app, &report(2)).await), Then::Continue);
         // A retry of the first is a copy of its reply: it ends nothing.
         assert_eq!(then_of(answer(&t.app, &report(1)).await), Then::Continue);
+    }
+}
+
+multi! {
+    /// The retry of a write whose first attempt came before the arm is a copy of a reply that
+    /// was sent long ago: it must neither end the process nor use up the arm that the next new
+    /// write is waiting for (APP-DESIGN §5.8, plan D5). A4b's reload tests resend a request
+    /// after arming a crash.
+    async fn a_retry_never_takes_an_after_reply_crash() {
+        let (_dir, t) = started().await;
+        assert_eq!(then_of(answer(&t.app, &report(1)).await), Then::Continue);
+
+        arm(&t.app, 100, CrashPoint::AfterReply, None).await;
+        assert_eq!(
+            then_of(answer(&t.app, &report(1)).await),
+            Then::Continue,
+            "the retry of a finished write is a copy"
+        );
+        assert_eq!(
+            then_of(answer(&t.app, &report(2)).await),
+            Then::EndProcess,
+            "the arm waited for the next new write"
+        );
     }
 }
 

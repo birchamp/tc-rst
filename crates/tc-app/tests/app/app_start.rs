@@ -115,20 +115,54 @@ async fn a_second_launch_uses_the_folder_the_first_made() {
     }
 }
 
+/// A launch never lists fewer projects than the one before it did (AGENTS.md: never hide a
+/// translator's work). The first launch chose the local folder because a client copies the
+/// default; if the default folder appears later, by hand or by sync, the local folder is still
+/// the one this app made and filled.
 #[tokio::test]
-async fn a_default_folder_made_by_hand_later_is_used_and_nothing_is_moved() {
+async fn a_default_folder_that_appears_later_does_not_replace_the_local_folder() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(dir.path().join("home").join(".stfolder")).unwrap();
     let first = TestApp::start_in(dir.path(), |_, _| {}).await;
     let local = first.app.projects_root().path.clone();
     std::fs::create_dir_all(local.join("kept_project")).unwrap();
     // Someone makes the default folder by hand.
-    std::fs::create_dir_all(projects_below(&first.home)).unwrap();
+    let default = projects_below(&first.home);
+    std::fs::create_dir_all(&default).unwrap();
+
     let second = TestApp::start_in(dir.path(), |_, _| {}).await;
-    assert_eq!(second.app.projects_root().path, projects_below(&first.home));
+    let root = second.app.projects_root();
+    assert_eq!(root.path, local, "the folder that holds the projects");
+    assert_eq!(
+        root.chosen,
+        RootChoice::LocalBesideDefault {
+            default: default.clone()
+        }
+    );
+    assert!(!root.chosen.is_first_launch());
     assert!(
         local.join("kept_project").is_dir(),
         "nothing was moved or removed"
+    );
+    assert_eq!(
+        std::fs::read_dir(&default).unwrap().count(),
+        0,
+        "the default folder was not touched"
+    );
+
+    // The report says where the projects are and which folder is not listed, so "Ask for
+    // help" explains a person who looks in the other one.
+    let reports = reports_of(&second.app, ReportOp::ProjectsFolder);
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].outcome, ReportOutcome::Ok);
+    assert_eq!(reports[0].facts["choice"], "localBesideDefault");
+    assert_eq!(
+        reports[0].facts["path"],
+        local.display().to_string().as_str()
+    );
+    assert_eq!(
+        reports[0].facts["notListed"],
+        default.display().to_string().as_str()
     );
 }
 

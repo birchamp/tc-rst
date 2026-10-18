@@ -222,7 +222,7 @@ impl App {
         let bus = EventBus::new(instance);
         let reports = ReportLog::new();
         let now = clock.now();
-        if let Some(record) = first_launch_record(&projects) {
+        if let Some(record) = projects_folder_record(&projects) {
             reports.add(
                 ReportOp::ProjectsFolder,
                 ReportOutcome::Ok,
@@ -440,20 +440,24 @@ impl App {
     }
 }
 
-/// The report of a first launch's folder choice (Q-4), so "Ask for help" says where the
-/// projects went and why.
-fn first_launch_record(projects: &ProjectsRoot) -> Option<Value> {
-    let (choice, synced_by) = match &projects.chosen {
-        RootChoice::FirstLaunch => ("firstLaunch", None),
-        RootChoice::FirstLaunchLocal { default_synced_by } => {
-            ("firstLaunchLocal", Some(default_synced_by))
-        }
-        RootChoice::FirstLaunchSynced { synced_by } => ("firstLaunchSynced", Some(synced_by)),
-        RootChoice::Given | RootChoice::Existing | RootChoice::ExistingLocal => return None,
-    };
-    Some(json!({
-        "path": projects.path.display().to_string(),
-        "choice": choice,
-        "syncedBy": synced_by,
-    }))
+/// The report of a choice of projects folder that "Ask for help" must be able to explain: a
+/// first launch (Q-4), and a launch that finds a default folder beside the local one it
+/// listed before.
+fn projects_folder_record(projects: &ProjectsRoot) -> Option<Value> {
+    let path = projects.path.display().to_string();
+    match &projects.chosen {
+        RootChoice::FirstLaunch => Some(json!({
+            "path": path, "choice": "firstLaunch", "syncedBy": null,
+        })),
+        RootChoice::FirstLaunchLocal { default_synced_by } => Some(json!({
+            "path": path, "choice": "firstLaunchLocal", "syncedBy": default_synced_by,
+        })),
+        RootChoice::FirstLaunchSynced { synced_by } => Some(json!({
+            "path": path, "choice": "firstLaunchSynced", "syncedBy": synced_by,
+        })),
+        RootChoice::LocalBesideDefault { default } => Some(json!({
+            "path": path, "choice": "localBesideDefault", "notListed": default.display().to_string(),
+        })),
+        RootChoice::Given | RootChoice::Existing | RootChoice::ExistingLocal => None,
+    }
 }

@@ -11,7 +11,10 @@
 //!   reply: the UI marks a field clean only when the reply's text equals its own, and a reply
 //!   to other text would mark newer typing as saved;
 //! - the work runs to its end when its caller goes away (a reload, a dropped connection), so a
-//!   save is never stopped half way.
+//!   save is never stopped half way;
+//! - a request can be refused before its work starts, but only when its id is new: an id the
+//!   cache knows was sent, so its retry gets its own reply and never a refusal that says
+//!   nothing was sent.
 //!
 //! Replies are kept for the last [`ReplyCache::FINISHED`] requests; a request in flight is
 //! never dropped.
@@ -21,6 +24,7 @@ use std::future::Future;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ring::digest;
+use tc_api::ApiError;
 use tc_api::ids::RequestId;
 use tokio::sync::watch;
 
@@ -61,6 +65,9 @@ pub enum CacheAnswer {
     Repeat(Outcome),
     /// The id came with another request. Nothing ran.
     Reused,
+    /// The id is new and the caller had a refusal for it. Nothing ran and nothing is kept
+    /// under the id: the UI sends the same request again once the refusal's cause is gone.
+    Refused(ApiError),
     /// The task that ran the work ended without an outcome. The request may have been
     /// partly carried out, so it is not run again under this id.
     Lost,
@@ -92,6 +99,7 @@ pub struct ReplyCache {
 
 enum Plan {
     Reused,
+    Refused(ApiError),
     Done(Outcome),
     Wait(Waiting, bool),
 }
@@ -115,7 +123,20 @@ impl ReplyCache {
     /// Runs `work` once for `id`, or answers from the first attempt. The work runs on its own
     /// task, so a caller that goes away does not stop it; a second caller with the same id
     /// and digest waits for it.
-    pub async fn run<W>(self: &Arc<Self>, id: RequestId, digest: BodyDigest, work: W) -> CacheAnswer
+    ///
+    /// `refuse` is the answer for a request that cannot start now, for example because the
+    /// internet switch is off. It applies only when `id` is new: the cache looks the id up
+    /// first, so a request that was sent (finished, or still running) is answered from its
+    /// first attempt, and one id used for another body is [`CacheAnswer::Reused`] whatever
+    /// `refuse` says. The lookup and the decision are one step under the cache's lock, so an
+    /// id that falls out of the cache between them cannot start work that `refuse` forbade.
+    pub async fn run<W>(
+        self: &Arc<Self>,
+        id: RequestId,
+        digest: BodyDigest,
+        refuse: Option<ApiError>,
+        work: W,
+    ) -> CacheAnswer
     where
         W: Future<Output = Outcome> + Send + 'static,
     {
@@ -131,27 +152,31 @@ impl ReplyCache {
                     slot: Slot::Running(waiting),
                     ..
                 }) => Plan::Wait(waiting.clone(), false),
-                None => {
-                    let (sender, waiting) = watch::channel(None);
-                    state.entries.insert(
-                        id,
-                        Entry {
-                            digest,
-                            slot: Slot::Running(waiting.clone()),
-                        },
-                    );
-                    let cache = Arc::clone(self);
-                    tokio::spawn(async move {
-                        let outcome = work.await;
-                        cache.finish(id, &outcome);
-                        sender.send_replace(Some(outcome));
-                    });
-                    Plan::Wait(waiting, true)
-                }
+                None => match refuse {
+                    Some(error) => Plan::Refused(error),
+                    None => {
+                        let (sender, waiting) = watch::channel(None);
+                        state.entries.insert(
+                            id,
+                            Entry {
+                                digest,
+                                slot: Slot::Running(waiting.clone()),
+                            },
+                        );
+                        let cache = Arc::clone(self);
+                        tokio::spawn(async move {
+                            let outcome = work.await;
+                            cache.finish(id, &outcome);
+                            sender.send_replace(Some(outcome));
+                        });
+                        Plan::Wait(waiting, true)
+                    }
+                },
             }
         };
         match plan {
             Plan::Reused => CacheAnswer::Reused,
+            Plan::Refused(error) => CacheAnswer::Refused(error),
             Plan::Done(outcome) => CacheAnswer::Repeat(outcome),
             Plan::Wait(mut waiting, fresh) => {
                 let outcome = match waiting.wait_for(Option::is_some).await {
@@ -190,6 +215,16 @@ impl ReplyCache {
         }
     }
 
+    /// Forgets every kept reply and every write that ended without one, and leaves the writes
+    /// that are still running, so a retry of one of them still waits for it instead of running
+    /// it again. This is what a new launch finds, for `test/reset`: a harness that starts the
+    /// next scenario may use a request id again.
+    pub fn forget_settled(&self) {
+        let mut state = self.state();
+        state.entries.retain(|_, entry| is_running(&entry.slot));
+        state.finished.clear();
+    }
+
     /// The writes still running, for `test/quiet`. A write whose task ended without an outcome
     /// is not running: it stays in the cache so a retry gets [`CacheAnswer::Lost`] instead of
     /// running again, but `test/quiet` must not wait for it until the process ends.
@@ -197,12 +232,16 @@ impl ReplyCache {
         self.state()
             .entries
             .values()
-            .filter(|entry| match &entry.slot {
-                // `has_changed` fails only once the sender is dropped, which the task does
-                // when it ends; a running write's value is `None` too, so that cannot tell.
-                Slot::Running(waiting) => waiting.has_changed().is_ok(),
-                Slot::Finished(_) => false,
-            })
+            .filter(|entry| is_running(&entry.slot))
             .count()
+    }
+}
+
+fn is_running(slot: &Slot) -> bool {
+    match slot {
+        // `has_changed` fails only once the sender is dropped, which the task does when it
+        // ends; a running write's value is `None` too, so that cannot tell.
+        Slot::Running(waiting) => waiting.has_changed().is_ok(),
+        Slot::Finished(_) => false,
     }
 }

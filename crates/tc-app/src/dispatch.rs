@@ -10,9 +10,12 @@
 //!    body that does not parse is a `BadRequest` and is never cached, because it carries no
 //!    trusted `RequestId`;
 //! 2. the internet check: an endpoint that needs the internet answers `NeedsInternet` while
-//!    the switch is off. This comes before the reply cache and is never cached, because the
-//!    UI asks the question, turns the switch on and sends *the same request again*; a cached
-//!    refusal would answer that resend forever;
+//!    the switch is off, and that answer says nothing was sent (§3.5). It is never kept under
+//!    the request's id, because the UI asks the question, turns the switch on and sends *the
+//!    same request again*; a kept refusal would answer that resend forever. A write hands the
+//!    refusal to the reply cache instead of answering it first, because the cache alone knows
+//!    whether the id was sent: a retry of a write that ran, after the switch went off, gets
+//!    that write's reply and not a refusal that says it never happened;
 //! 3. a query runs in the caller's task and changes nothing;
 //! 4. a write goes through the [`ReplyCache`](crate::replies::ReplyCache): the first attempt
 //!    runs on a task of its own, so a dropped connection never stops it half way, and a retry
@@ -118,9 +121,8 @@ impl App {
             Ok(req) => req,
             Err(error) => return self.error_answer(error),
         };
-        if let Some(error) = self.needs_internet::<E>() {
-            return self.error_answer(error);
-        }
+        // The cache applies this only to an id it has not seen.
+        let refuse = self.needs_internet::<E>();
         // The digest is of the request as serde writes it again, not of the body's bytes:
         // a resend with other spacing or key order is the same request.
         let canonical = match serde_json::to_vec(&req) {
@@ -170,10 +172,11 @@ impl App {
             Outcome::Reply(bytes.into())
         };
 
-        match self.inner.replies.run(id, digest, work).await {
+        match self.inner.replies.run(id, digest, refuse, work).await {
             CacheAnswer::Fresh(outcome) => self.write_answer(outcome, true, path),
             CacheAnswer::Repeat(outcome) => self.write_answer(outcome, false, path),
             CacheAnswer::Reused => self.error_answer(ApiError::RequestReused),
+            CacheAnswer::Refused(error) => self.error_answer(error),
             CacheAnswer::Lost => {
                 let error = self.internal(
                     "a write ended without a reply",

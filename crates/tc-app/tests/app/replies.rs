@@ -7,6 +7,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use proptest::prelude::*;
+use tc_api::ApiError;
+use tc_api::endpoint::NetKind;
 use tc_api::ids::RequestId;
 use tc_app::replies::{BodyDigest, CacheAnswer, Outcome, ReplyCache};
 use tokio::sync::Notify;
@@ -59,7 +61,7 @@ async fn retry_of_a_finished_request_gets_the_first_reply() {
     let first = {
         let runs = Arc::clone(&runs);
         cache
-            .run(id(1), digest("a"), async move {
+            .run(id(1), digest("a"), None, async move {
                 runs.fetch_add(1, Ordering::SeqCst);
                 reply("A")
             })
@@ -69,7 +71,7 @@ async fn retry_of_a_finished_request_gets_the_first_reply() {
     let second = {
         let runs = Arc::clone(&runs);
         cache
-            .run(id(1), digest("a"), async move {
+            .run(id(1), digest("a"), None, async move {
                 runs.fetch_add(1, Ordering::SeqCst);
                 reply("B")
             })
@@ -94,7 +96,7 @@ async fn retry_while_the_first_attempt_runs_waits_and_runs_once() {
         );
         tokio::spawn(async move {
             cache
-                .run(id(1), digest("a"), async move {
+                .run(id(1), digest("a"), None, async move {
                     runs.fetch_add(1, Ordering::SeqCst);
                     started.notify_one();
                     release.notified().await;
@@ -108,7 +110,7 @@ async fn retry_while_the_first_attempt_runs_waits_and_runs_once() {
         let (cache, runs) = (Arc::clone(&cache), Arc::clone(&runs));
         tokio::spawn(async move {
             cache
-                .run(id(1), digest("a"), async move {
+                .run(id(1), digest("a"), None, async move {
                     runs.fetch_add(1, Ordering::SeqCst);
                     reply("B")
                 })
@@ -132,11 +134,13 @@ async fn retry_with_another_body_is_request_reused() {
     let runs = Arc::new(AtomicUsize::new(0));
 
     // Finished.
-    let done = cache.run(id(1), digest("a"), async { reply("A") }).await;
+    let done = cache
+        .run(id(1), digest("a"), None, async { reply("A") })
+        .await;
     answered(done);
     let counted = Arc::clone(&runs);
     let reused = cache
-        .run(id(1), digest("other"), async move {
+        .run(id(1), digest("other"), None, async move {
             counted.fetch_add(1, Ordering::SeqCst);
             reply("B")
         })
@@ -154,7 +158,7 @@ async fn retry_with_another_body_is_request_reused() {
         );
         tokio::spawn(async move {
             cache
-                .run(id(2), digest("a"), async move {
+                .run(id(2), digest("a"), None, async move {
                     started.notify_one();
                     release.notified().await;
                     reply("A2")
@@ -165,7 +169,7 @@ async fn retry_with_another_body_is_request_reused() {
     started.notified().await;
     let counted = Arc::clone(&runs);
     let reused = cache
-        .run(id(2), digest("other"), async move {
+        .run(id(2), digest("other"), None, async move {
             counted.fetch_add(1, Ordering::SeqCst);
             reply("B")
         })
@@ -180,15 +184,18 @@ async fn retry_with_another_body_is_request_reused() {
 async fn an_id_reused_for_another_endpoint_is_request_reused() {
     let cache = ReplyCache::new(ReplyCache::FINISHED);
     let first = cache
-        .run(id(1), BodyDigest::of("net/set", b"{}"), async {
+        .run(id(1), BodyDigest::of("net/set", b"{}"), None, async {
             reply("A")
         })
         .await;
     answered(first);
     let other = cache
-        .run(id(1), BodyDigest::of("prefs/setLocale", b"{}"), async {
-            reply("B")
-        })
+        .run(
+            id(1),
+            BodyDigest::of("prefs/setLocale", b"{}"),
+            None,
+            async { reply("B") },
+        )
         .await;
     assert!(matches!(other, CacheAnswer::Reused));
 }
@@ -208,7 +215,7 @@ async fn a_write_finishes_when_its_caller_goes_away() {
         );
         tokio::spawn(async move {
             cache
-                .run(id(1), digest("a"), async move {
+                .run(id(1), digest("a"), None, async move {
                     started.notify_one();
                     release.notified().await;
                     stored.fetch_add(1, Ordering::SeqCst);
@@ -231,7 +238,9 @@ async fn a_write_finishes_when_its_caller_goes_away() {
     }
     assert_eq!(stored.load(Ordering::SeqCst), 1, "the write still finished");
     // The retry gets the reply of the write that finished.
-    let retry = cache.run(id(1), digest("a"), async { reply("B") }).await;
+    let retry = cache
+        .run(id(1), digest("a"), None, async { reply("B") })
+        .await;
     assert_eq!(answered(retry), (b"A".to_vec(), false));
 }
 
@@ -248,7 +257,7 @@ async fn finished_replies_are_bounded_and_running_ones_never_evicted() {
         );
         tokio::spawn(async move {
             cache
-                .run(id(200), digest("held"), async move {
+                .run(id(200), digest("held"), None, async move {
                     started.notify_one();
                     release.notified().await;
                     reply("HELD")
@@ -258,13 +267,15 @@ async fn finished_replies_are_bounded_and_running_ones_never_evicted() {
     };
     started.notified().await;
     for n in 1..=10 {
-        let done = cache.run(id(n), digest("a"), async { reply("done") }).await;
+        let done = cache
+            .run(id(n), digest("a"), None, async { reply("done") })
+            .await;
         answered(done);
     }
     // Only the last four finished replies are kept; an older id runs again.
     for n in 1..=6 {
         let again = cache
-            .run(id(n), digest("a"), async { reply("rerun") })
+            .run(id(n), digest("a"), None, async { reply("rerun") })
             .await;
         assert_eq!(answered(again), (b"rerun".to_vec(), true), "id {n}");
     }
@@ -273,7 +284,7 @@ async fn finished_replies_are_bounded_and_running_ones_never_evicted() {
         let cache = Arc::clone(&cache);
         tokio::spawn(async move {
             cache
-                .run(id(200), digest("held"), async { reply("X") })
+                .run(id(200), digest("held"), None, async { reply("X") })
                 .await
         })
     };
@@ -288,12 +299,14 @@ async fn finished_replies_are_bounded_and_running_ones_never_evicted() {
 async fn the_last_four_finished_ids_stay_repeatable() {
     let cache = ReplyCache::new(4);
     for n in 1..=10 {
-        let done = cache.run(id(n), digest("a"), async { reply("done") }).await;
+        let done = cache
+            .run(id(n), digest("a"), None, async { reply("done") })
+            .await;
         answered(done);
     }
     for n in 7..=10 {
         let again = cache
-            .run(id(n), digest("a"), async { reply("rerun") })
+            .run(id(n), digest("a"), None, async { reply("rerun") })
             .await;
         assert_eq!(answered(again), (b"done".to_vec(), false), "id {n}");
     }
@@ -305,7 +318,7 @@ async fn a_work_that_vanishes_is_lost_and_never_runs_again() {
     let runs = Arc::new(AtomicUsize::new(0));
     let counted = Arc::clone(&runs);
     let first = cache
-        .run(id(1), digest("a"), async move {
+        .run(id(1), digest("a"), None, async move {
             counted.fetch_add(1, Ordering::SeqCst);
             panic!("the work stopped");
         })
@@ -313,7 +326,7 @@ async fn a_work_that_vanishes_is_lost_and_never_runs_again() {
     assert!(matches!(first, CacheAnswer::Lost), "{first:?}");
     let counted = Arc::clone(&runs);
     let again = cache
-        .run(id(1), digest("a"), async move {
+        .run(id(1), digest("a"), None, async move {
             counted.fetch_add(1, Ordering::SeqCst);
             reply("B")
         })
@@ -330,7 +343,7 @@ async fn a_lost_write_is_not_counted_as_running() {
     let runs = Arc::new(AtomicUsize::new(0));
     let counted = Arc::clone(&runs);
     let first = cache
-        .run(id(1), digest("a"), async move {
+        .run(id(1), digest("a"), None, async move {
             counted.fetch_add(1, Ordering::SeqCst);
             panic!("the work stopped");
         })
@@ -340,7 +353,7 @@ async fn a_lost_write_is_not_counted_as_running() {
 
     let counted = Arc::clone(&runs);
     let again = cache
-        .run(id(1), digest("a"), async move {
+        .run(id(1), digest("a"), None, async move {
             counted.fetch_add(1, Ordering::SeqCst);
             reply("B")
         })
@@ -364,7 +377,7 @@ async fn a_running_write_is_counted_until_it_ends() {
         let cache = Arc::clone(&cache);
         tokio::spawn(async move {
             cache
-                .run(id(1), digest("a"), async move {
+                .run(id(1), digest("a"), None, async move {
                     held.notified().await;
                     reply("done")
                 })
@@ -382,6 +395,172 @@ async fn a_running_write_is_counted_until_it_ends() {
     let answer = waiting.await.unwrap();
     assert_eq!(answered(answer), (b"done".to_vec(), true));
     assert_eq!(cache.running(), 0);
+}
+
+fn offline() -> Option<ApiError> {
+    Some(ApiError::NeedsInternet(NetKind::SignIn))
+}
+
+/// `NeedsInternet` says nothing was sent. For an id the cache has not seen that is true, and
+/// nothing is kept: the UI turns the switch on and sends the same request again.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_refusal_of_a_new_id_runs_nothing_and_keeps_nothing() {
+    let cache = ReplyCache::new(ReplyCache::FINISHED);
+    let runs = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&runs);
+    let refused = cache
+        .run(id(1), digest("a"), offline(), async move {
+            counted.fetch_add(1, Ordering::SeqCst);
+            reply("never")
+        })
+        .await;
+    assert!(
+        matches!(
+            &refused,
+            CacheAnswer::Refused(ApiError::NeedsInternet(NetKind::SignIn))
+        ),
+        "{refused:?}"
+    );
+    assert_eq!(runs.load(Ordering::SeqCst), 0);
+    assert_eq!(cache.running(), 0);
+
+    // The same id and body again, now allowed: it runs, as the first attempt.
+    let counted = Arc::clone(&runs);
+    let again = cache
+        .run(id(1), digest("a"), None, async move {
+            counted.fetch_add(1, Ordering::SeqCst);
+            reply("A")
+        })
+        .await;
+    assert_eq!(answered(again), (b"A".to_vec(), true));
+    assert_eq!(runs.load(Ordering::SeqCst), 1);
+}
+
+/// An id the cache knows was sent, so its retry gets its own answer whatever the refusal
+/// says now: finished, still running, or used for another request.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_refusal_never_applies_to_an_id_that_was_sent() {
+    let cache = ReplyCache::new(ReplyCache::FINISHED);
+    let done = cache
+        .run(id(1), digest("a"), None, async { reply("A") })
+        .await;
+    assert_eq!(answered(done), (b"A".to_vec(), true));
+    let retry = cache
+        .run(id(1), digest("a"), offline(), async { reply("rerun") })
+        .await;
+    assert_eq!(answered(retry), (b"A".to_vec(), false), "a finished write");
+
+    let other = cache
+        .run(id(1), digest("other"), offline(), async { reply("rerun") })
+        .await;
+    assert!(matches!(other, CacheAnswer::Reused), "{other:?}");
+
+    let gate = Arc::new(Notify::new());
+    let held = Arc::clone(&gate);
+    let first = {
+        let cache = Arc::clone(&cache);
+        tokio::spawn(async move {
+            cache
+                .run(id(2), digest("b"), None, async move {
+                    held.notified().await;
+                    reply("B")
+                })
+                .await
+        })
+    };
+    for _ in 0..2000 {
+        if cache.running() == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+    let waiting = {
+        let cache = Arc::clone(&cache);
+        tokio::spawn(async move {
+            cache
+                .run(id(2), digest("b"), offline(), async { reply("rerun") })
+                .await
+        })
+    };
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    gate.notify_one();
+    assert_eq!(answered(first.await.unwrap()), (b"B".to_vec(), true));
+    assert_eq!(
+        answered(waiting.await.unwrap()),
+        (b"B".to_vec(), false),
+        "a write in flight"
+    );
+}
+
+/// `test/reset` gives the next scenario the empty cache of a new launch, but a write that is
+/// still running stays, or its retry would run the write a second time.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn forget_settled_forgets_finished_and_lost_writes_and_keeps_running_ones() {
+    let cache = ReplyCache::new(ReplyCache::FINISHED);
+    let done = cache
+        .run(id(1), digest("a"), None, async { reply("A") })
+        .await;
+    assert_eq!(answered(done), (b"A".to_vec(), true));
+    let lost = cache
+        .run(id(2), digest("a"), None, async {
+            panic!("the work stopped")
+        })
+        .await;
+    assert!(matches!(lost, CacheAnswer::Lost), "{lost:?}");
+
+    let runs = Arc::new(AtomicUsize::new(0));
+    let gate = Arc::new(Notify::new());
+    let first = {
+        let cache = Arc::clone(&cache);
+        let held = Arc::clone(&gate);
+        let counted = Arc::clone(&runs);
+        tokio::spawn(async move {
+            cache
+                .run(id(3), digest("c"), None, async move {
+                    counted.fetch_add(1, Ordering::SeqCst);
+                    held.notified().await;
+                    reply("C")
+                })
+                .await
+        })
+    };
+    for _ in 0..2000 {
+        if cache.running() == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+
+    cache.forget_settled();
+
+    // The ids of the finished and the lost write are free, and another body is not "reused".
+    let again = cache
+        .run(id(1), digest("other"), None, async { reply("A2") })
+        .await;
+    assert_eq!(answered(again), (b"A2".to_vec(), true));
+    let again = cache
+        .run(id(2), digest("a"), None, async { reply("L2") })
+        .await;
+    assert_eq!(answered(again), (b"L2".to_vec(), true));
+
+    // The running write is still the one answer for its id.
+    let counted = Arc::clone(&runs);
+    let retry = {
+        let cache = Arc::clone(&cache);
+        tokio::spawn(async move {
+            cache
+                .run(id(3), digest("c"), None, async move {
+                    counted.fetch_add(1, Ordering::SeqCst);
+                    reply("again")
+                })
+                .await
+        })
+    };
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    gate.notify_one();
+    assert_eq!(answered(first.await.unwrap()), (b"C".to_vec(), true));
+    assert_eq!(answered(retry.await.unwrap()), (b"C".to_vec(), false));
+    assert_eq!(runs.load(Ordering::SeqCst), 1, "the running write ran once");
 }
 
 #[derive(Debug, Clone)]
@@ -421,7 +600,7 @@ proptest! {
                         tokio::task::yield_now().await;
                     }
                     let answer = cache
-                        .run(id(call.id), digest(&call.body.to_string()), async move {
+                        .run(id(call.id), digest(&call.body.to_string()), None, async move {
                             *runs.lock().unwrap().entry(call.id).or_default() += 1;
                             tokio::task::yield_now().await;
                             Outcome::Reply(Arc::from(vec![call.id, call.body]))
@@ -451,6 +630,7 @@ proptest! {
                 }
                 CacheAnswer::Reused => {}
                 CacheAnswer::Lost => prop_assert!(false, "a work was lost"),
+                CacheAnswer::Refused(_) => prop_assert!(false, "no call asked to be refused"),
             }
         }
         for (call, answer) in &answers {

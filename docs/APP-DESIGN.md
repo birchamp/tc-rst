@@ -778,7 +778,7 @@ answered Q-2 with (a), so the shell sends the report and the server only compose
 | Module | Owns |
 |---|---|
 | `lib.rs`, `config.rs`, `app.rs` | `App::start(AppConfig, AppDeps)`, `App::call` (bytes in, bytes out: the one entry tc-server routes to), `App::events`, `App::quit`; `AppConfig { app_data, projects: Given(dir) \| Default, door43: ServerUrl, build, test_hooks }` (the UI folder is tc-server's; the backend comes with B1b); `AppDeps` holds what a test replaces: the clock, the keychain, the folder check, the app-data files, the session directory and, with `test-hooks`, the process ender |
-| `dispatch.rs`, `handlers.rs` | `Handle<E>` for every row of `endpoint_table!`, the internet check before the reply cache (AD25), crash points on every write (§5.8) |
+| `dispatch.rs`, `handlers.rs` | `Handle<E>` for every row of `endpoint_table!`, the internet check (AD25), which a write hands to the reply cache so it applies only to an id not yet sent, crash points on every write (§5.8) |
 | `replies.rs` | `ReplyCache` and `BodyDigest` (AD4); one app-wide cache until B1b |
 | `folders.rs` | the cloud-folder check of STORAGE §5.0, a copy of tc-store's until C1a, which deletes it |
 | `sessions.rs` | `SessionDirectory`, the seam B1b's `SessionRegistry` fills; until then every scope is stale |
@@ -1120,17 +1120,23 @@ sees, and typing no longer costs an fsynced app-data write each second *(A-20)*.
 
 **The projects folder** (Q-4, built in A3). Without `--projects`, the folder is
 `%USERPROFILE%\translationCore4\projects` on Windows and `~/translationCore4/projects`
-elsewhere. A folder that exists is used: that default first, then the local one below. At the
-first launch, when neither exists, the default is checked with STORAGE §5.0's cloud detection;
-if a client copies it, the app uses `%LOCALAPPDATA%\translationCore4\projects` (macOS
+elsewhere. A folder that exists is used. At the first launch, when neither the default nor the
+local folder exists, the default is checked with STORAGE §5.0's cloud detection; if a client
+copies it, the app creates and uses `%LOCALAPPDATA%\translationCore4\projects` (macOS
 `~/Library/Application Support/…`, Linux `$XDG_DATA_HOME` or `~/.local/share/…`), which no
-client copies, so projects do not open read-only; if both are copied, the default is used and
-each project's open says why. The choice is recorded in the report log. Later launches find
-the folder that exists, so nothing needs to be stored before S1. If a person later makes the
-default folder by hand while the local one holds projects, the default wins and the local
-folder's projects are not listed; no path in the app creates it. tC4 has no such check (its
-profile is under the home folder, `tC4:scripts/desktop-bootstrap.cjs:29-32`); telling the
-person on Home where their projects are is left to the owner. The check is a copy of
+client copies, so projects do not open read-only; if both are copied, the default is created
+and each project's open says why. The choice is recorded in the report log. Later launches find
+the folder that exists, so nothing needs to be stored before S1. When both folders exist, the
+local one wins: nothing in the app creates it except that first launch, so it holds the
+projects the person already works in, and a default folder made later by hand or by a sync
+client must not replace it. A launch never lists fewer projects than the one before it. The
+default folder's own projects, if it has any, are not listed; the report names that folder
+(`localBesideDefault`), so "Ask for help" explains a person who looks in it. A `--projects` folder is used as named; if it does not exist the
+start stops with its path, because an empty folder made in its place would look as if the
+projects were gone. Declared difference from tC4 (owner's answer Q-4): tC4 has no such
+check (its profile is under the home folder, `tC4:scripts/desktop-bootstrap.cjs:29-32`), and
+it was not built for a synced folder. Telling the person on Home where their projects are is
+left to the owner. The check is a copy of
 tc-store's until C1a, with one difference reported to the storage team: Dropbox's settings
 folder `~/.dropbox`, which holds `info.json`, is not a sync marker (tc-store's copy calls
 every folder under such a home synced). Test builds also keep `test-hooks/fields.json`, the
@@ -1274,9 +1280,11 @@ lifecycle.rs`): `closed_stdin_quits_within_5_s`,
    request. A failed `net/set` shows "tC4 could not use the internet". Two quick presses share one
    question (`tC4:src/state.jsx:4249-4282`).
 3. The server refuses with `NeedsInternet` if the switch went off meanwhile; the UI asks once
-   more. The refusal is answered before the reply cache and is never kept under the request's
-   id, like a body that does not parse: the UI sends the same request again once the switch is
-   on, and a kept refusal would answer that resend for ever. A job that loses the internet while
+   more. `NeedsInternet` says nothing was sent (§3.5), so the reply cache applies it only to a
+   request id it has not seen: a retry of a write that ran, after the switch went off, gets
+   that write's reply, never a refusal that says it did not happen. The refusal is never kept
+   under the request's id, like a body that does not parse: the UI sends the same request
+   again once the switch is on, and a kept refusal would answer that resend for ever. A job that loses the internet while
    it runs ends with its own refusal, for example `SyncRefusal::Offline`.
 4. Turning the switch off stops the very next request: tc-door43 checks it before every request,
    before every download chunk is written and every 100 ms while a download waits
@@ -1323,7 +1331,7 @@ show a 401 page.
 |---|---|
 | `test/quiet` | `{busy}`: true while a request, job, actor queue or pending materialize is live; the capture's settle waits for false |
 | `test/hold`, `test/release` | hold a book read, a checkpoint, a materialize, a save before B3, a draft write, or a sync step (R8); replaces tC4's `e2e/helpers/checkpointHold.ts:14` |
-| `test/crash` | end `tc4` at a named point (after a reply is sent, before B3, while a draft is written) for the reload and relaunch tests of §6.6 *(A-2, A-3)*. The points are in tc-app's write path and apply to every write but the arming hooks (§10 A3): before the handler (`beforeStore`), after it (`beforeReply`), and after the reply, which the server does when `App::call` answers `then: EndProcess`. An arm that can never fire (a query, an arming hook) is a bad request. |
+| `test/crash` | end `tc4` at a named point (after a reply is sent, before B3, while a draft is written) for the reload and relaunch tests of §6.6 *(A-2, A-3)*. The points are in tc-app's write path and apply to every write but the arming hooks (§10 A3): before the handler (`beforeStore`), after it (`beforeReply`), and after the reply, which the server does when `App::call` answers `then: EndProcess`. An arm that can never fire (a query, an arming hook, or `duringDraftWrite` before any write reaches it) is a bad request; the unit that adds draft writes (S1, C1b) accepts it. |
 | `test/fieldStore` | a write endpoint that goes through the real reply cache and records every text it stores, with holds and crash points, so A4b can prove the save machine's no-loss rules before any real save exists *(A-2)*. Its tokens carry the field and its version under a key kept with the fields, so they verify after a restart; a store over an older version is logged as `stale`, and an unchanged text answers with the token it came with, as the store does (STORAGE:1446-1447, STORAGE §5.1 step 4). |
 | `test/fieldLog` | a test field's current value with its token, and every text `test/fieldStore` stored into it, in order, each with the token base it was saved over (`current` or `stale`): what A4b's tests read back *(A1)* |
 | `test/clock` | a fixed clock for dates in screenshots |
@@ -1332,7 +1340,7 @@ show a 401 page.
 | `test/inspect` | fold facts journeys assert: heads, values, conflicts, commits, `.tc/` files |
 | `test/writeTeammate` | teammate changes through tc-journal and the store's sealing API (AD36) |
 | `test/counters` | operation counters |
-| `test/reset` | reset prefs, summaries and reports to the scenario seed, release every hold, disarm the crash, and turn the internet switch off as a launch finds it (tC4's switch is page state that a reload turns off, `tC4:e2e/helpers/door43Share.ts:21-25`); the harness's `home()` |
+| `test/reset` | reset prefs, summaries and reports to the scenario seed, release every hold, disarm the crash, and turn the internet switch off as a launch finds it (tC4's switch is page state that a reload turns off, `tC4:e2e/helpers/door43Share.ts:21-25`), and forget the kept replies, so a request id may be used again in the next scenario (a write still running is kept, so its retry still waits for it); the harness's `home()` |
 
 ---
 
@@ -2284,7 +2292,7 @@ last.
 | Q-1 | **Stable origin.** Every launch has a new port. The shell's mirror (AD21) now keeps typed text through any crash and across launches, so this no longer decides whether text survives *(A-3)*. It still decides whether the shell serves the UI from a privileged custom scheme (Electron `protocol.handle`) proxied to the server, which gives one origin across launches and lets the shell add the token header itself instead of filtering requests (AD11). G0 prototypes both. Under `protocol.handle`, Electronite v37 hands the handler a same-origin request without an `Origin` header, so the shell sets the server's own `Origin` on what it forwards (G0). Under both, every request crosses the main process's UI thread (AD11). | Decide after G0: the custom scheme if it adds less to the aligner's round trip than the filter, otherwise the filter. G0 times both in alternating passes; a difference inside the spread between passes does not decide. The UI code is the same either way *(A-14)*. **G0 (2026-10-17):** the passes overlap (filter 22.4-24.5 ms, protocol 22.7-25.5 ms painted p95), so the filter stays. **Decided (2026-10-17):** the filter (AD11). The owner was told that the choice is invisible to a translator and left it to the team. |
 | Q-2 | **Feedback send.** tC4 sends from Electron main to SendGrid (`tC4:scripts/desktop-feedback.cjs:13`). ARCH:13-14 gives every network request to the server; AGENTS.md allows network only in tc-door43 and tc-resources. Options: (a) the shell sends, gated by the server's switch; (b) a mail client in tc-door43 with the key as a build secret; (c) no sending, keep "Copy the report". | (a): it keeps the key out of the server and reuses tC4's code. |
 | Q-3 | **Keychain.** The `keyring` crate in the server, or Electronite `safeStorage` through the shell (`tC4:scripts/desktop-main.cjs:51-96`)? | `keyring` behind the `Keychain` trait; keep "no keychain on this computer". |
-| Q-4 | **Projects folder.** A default under Documents that OneDrive redirects would open every project read-only (STORAGE:1387-1396). | `%USERPROFILE%\translationCore4\projects` (or `~/translationCore4/projects`), checked against the cloud detection at first launch. **Built in A3 (2026-10-18):** as recommended, with the local folder when a cloud client copies the default at the first launch (§4.9). |
+| Q-4 | **Projects folder.** A default under Documents that OneDrive redirects would open every project read-only (STORAGE:1387-1396). | `%USERPROFILE%\translationCore4\projects` (or `~/translationCore4/projects`), checked against the cloud detection at first launch. **Built in A3 (2026-10-18):** as recommended, with the local folder when a cloud client copies the default at the first launch, and kept when a default folder appears beside it later (§4.9). |
 | Q-5 | **Checkpoint on every mode switch.** tC4's J8 asserts it (`tC4:e2e/j08-resume.spec.ts:194`); STORAGE checkpoints only on leaving Translate or the project (STORAGE:1723). Each checkpoint is an actor step of up to 500 ms on a whole Bible (STORAGE:2720, PERF:92), so a checker who switches after each decision would wait behind one each time. | Follow tC4 (R17) once unit P shows saves meet 25 ms while a checkpoint runs (R9, with R21 if needed). Otherwise checkpoint at a mode switch at most once every two minutes, which still gives J8 its commit at the first switch *(A-11)*. |
 | Q-6 | **Alignment reflow after a verse edit.** tC4 writes the reflow at once (`tC4:src/state.jsx:7194-7220`), so a lossless reflow keeps the verse "aligned". The rebuild writes nothing (STORAGE:1482-1485), so the Align rail shows "needs review" until the aligner opens the verse and saves the lossless reflow. Accept, or let tc-app write lossless reflows as a second batch after the verse save (an automated writer, allowed by I4)? | Accept for now; measure how often it shows in J5 and J6. |
 | Q-7 | **Open progress captions.** STORAGE has five phases (STORAGE:1873-1876); tC4's overlay has three captions and draws its two short stages as indeterminate bars (`tC4:src/views/OpenProgress.jsx:16-40`). Map reading and folding to the journal caption, finishing and checking to "Checking the project state", writing to "Preparing the project"; or add keys. | Map, with a rebuild key for "reading changes"; a stage shows tC4's indeterminate bar until it has a count *(A-22)*. |

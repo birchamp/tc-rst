@@ -588,6 +588,12 @@ impl Handle<Crash> for App {
     async fn handle(&self, req: Crash) -> Result<(), ApiError> {
         let hooks = self.hooks()?;
         // A crash that can never fire would make a crash test pass by doing nothing.
+        if req.at == CrashPoint::DuringDraftWrite {
+            return Err(ApiError::BadRequest {
+                field: "at".to_owned(),
+                reason: "no write reaches duringDraftWrite before drafts exist".to_owned(),
+            });
+        }
         if let Some(path) = &req.path {
             let writes = ALL.iter().any(|info| {
                 info.path == path && matches!(info.kind, Kind::Command | Kind::StartJob)
@@ -633,13 +639,16 @@ impl Handle<FieldLog> for App {
 
 impl Handle<Reset> for App {
     /// The parity harness's `home()`: preferences and reports back to the seed, the crash
-    /// disarmed, every hold released, and the internet off as a launch finds it (tC4's switch
-    /// is page state that a reload turns off). The test fields are kept: tests name their
-    /// own.
+    /// disarmed, every hold released, the kept replies forgotten (a write still running is
+    /// kept, so its retry waits for it) and the internet off as a launch finds it (tC4's
+    /// switch is page state that a reload turns off). The test fields are kept: tests name
+    /// their own.
     async fn handle(&self, _req: Reset) -> Result<(), ApiError> {
         let hooks = self.hooks()?;
         *lock(&hooks.crash) = None;
         hooks.holds.release_all();
+        // A launch starts with no kept replies, so a request id may be used again.
+        self.inner.replies.forget_settled();
         self.inner.prefs.reset().await;
         self.inner.reports.clear();
         self.set_internet(false);
