@@ -122,6 +122,21 @@ class Server {
     });
   }
 
+  /** A GET outside /api/ as the shell makes it, with the token header: the status and bytes. */
+  get(pathname) {
+    return new Promise((resolve, reject) => {
+      const request = http.get(
+        { host: this.base.hostname, port: this.base.port, path: pathname, headers: { Host: this.base.host, 'X-Tc-Token': this.token } },
+        (response) => {
+          const parts = [];
+          response.on('data', (part) => parts.push(part));
+          response.on('end', () => resolve({ status: response.statusCode, body: Buffer.concat(parts) }));
+        },
+      );
+      request.on('error', reject);
+    });
+  }
+
   /** A command: it carries a fresh request id. */
   command(endpoint, body) {
     return this.call(endpoint, { request: crypto.randomBytes(16).toString('hex'), ...body });
@@ -366,6 +381,9 @@ async function caseA(page, log, server) {
   const marks = await page.evaluate(() => performance.getEntriesByType('mark').map((m) => [m.name, m.startTime]));
   const order = ['tc4:boot', 'tc4:hello', 'tc4:catalogs', 'tc4:mounted'].map((name) => marks.find(([n]) => n === name)?.[1]);
   check('A: the boot marks are in order', order.every((t, i) => t !== undefined && (i === 0 || t >= order[i - 1])), order);
+  // build-app.sh puts the first-launch window beside index.html, where tc4 serves it (A9).
+  const prepare = await server.get('/prepare.html');
+  check('A: the built folder serves the first-launch window, app/prepare.html', prepare.status === 200 && prepare.body.equals(fs.readFileSync(path.join(crateDir, 'app/prepare.html'))), prepare.status);
   return { build: buildName, marks: Object.fromEntries(marks) };
 }
 
