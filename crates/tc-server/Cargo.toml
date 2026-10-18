@@ -1,0 +1,33 @@
+[package]
+name = "tc-server"
+description = "The local HTTP server of the tC4 rebuild: loopback only, a per-launch token on every request, the API and event stream routed to the app, static UI files, uploads and downloads."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+# The `test` service of APP-DESIGN §5.8 and ending the process at a crash point (AD35).
+test-hooks = ["tc-api/test-hooks"]
+
+[dependencies]
+tc-api = { path = "../tc-api" }
+axum = { workspace = true, features = ["http1", "tokio", "query"] }
+base64.workspace = true
+futures-util = { workspace = true, features = ["std"] }
+getrandom.workspace = true
+percent-encoding.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+subtle.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-std", "io-util", "time", "sync", "signal", "fs"] }
+
+[dev-dependencies]
+# The workspace builds tc-api with its test hooks in every test and `--all-targets` build,
+# so this crate's hooks are on there too and the three agree. A plain build has none.
+tc-server = { path = ".", features = ["test-hooks"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true

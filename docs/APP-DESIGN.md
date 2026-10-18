@@ -173,7 +173,7 @@ Evidence: `docs/evidence/electronite-spike-2026-10-17.md` and
 | AD6 | One seam to storage. Before S1, `MemoryBackend` executes no command: it answers `Unavailable`, or a scripted outcome under the `test-hooks` feature. | No second copy of STORAGE's B1–B2 rules. Save behaviour in the UI is still testable before S1. | Core-first's temporary command builder, whose deletion depended on S1 publishing a pure `build_batch`. |
 | AD7 | The fixture seed is STORAGE §13.2's state seed, with its checks, written as `tc_app::backend::seed::tc4_state_seed`. When unit I lands, `memory_seed_equals_tc_import_seed` runs and the copy is deleted. | §13.2 (STORAGE:3433-3442) requires byte-for-byte USFM and `vrs.json` and field-for-field sidecars. A checked seed cannot make a screen look right for the wrong reason. | A new `tc-import` crate now (unit I owns it); a seed without the check. |
 | AD8 | The open's progress is tc-store's reporter, forwarded unchanged. tc-app's own reporter times only tc-app's jobs. | STORAGE:1870-1891 gives the clock to the store, and S1's `open_shows_determinate_progress_by_300_ms` tests it. | A tc-app clock for the open and an invented `Preparing` phase. |
-| AD9 | Typed `POST /api/v1/<service>/<name>` with JSON. HTTP 200 carries `ReplyOf<E>`, the enum `Reply<E::Ok>`: `{"type": "ok", "value": …}` or `{"type": "err", "value": <ApiError>}`, the crate's one enum form, not serde's `{"Ok": …}` for a `Result` *(A1)*. Statuses are used only below the API: 401 token, 403 Host or Origin, 409 API version, 413 upload cap. | One exhaustive Rust match in the UI. A proxy or auth failure cannot be mistaken for a domain refusal. | 422 for every error; a result type per area without one error enum. |
+| AD9 | Typed `POST /api/v1/<service>/<name>` with JSON. HTTP 200 carries `ReplyOf<E>`, the enum `Reply<E::Ok>`: `{"type": "ok", "value": …}` or `{"type": "err", "value": <ApiError>}`, the crate's one enum form, not serde's `{"Ok": …}` for a `Result` *(A1)*. Statuses are used only below the API: 401 token, 403 Host or Origin, 409 API version, 413 a body over its cap (8 MiB for an API body, the flow's cap for an upload), 503 while the server closes (§5.1). | One exhaustive Rust match in the UI. A proxy or auth failure cannot be mistaken for a domain refusal. | 422 for every error; a result type per area without one error enum. |
 | AD10 | Events come on one SSE stream, `GET /api/v1/events`, read with `fetch` and the token header. Frames carry a sequence number; a ring of 4,096 frames serves reconnects; a gap gives `Resync`. | Works the same in the shell, in Playwright and in a developer's browser, whether or not header injection reaches it. | `EventSource` (needs injection or a cookie); WebSocket (no headers; opaque to Playwright); polling. |
 | AD11 | ARCH:42-44 stays as written. The shell adds `X-Tc-Token` through `session.webRequest.onBeforeSendHeaders`, with a URL filter that lists only the server's paths outside `/api/`: `/`, `/ui/*`, `/help/*`, `/media/*`, `/download/*`, `/print/*` and `/prepare.html`. The UI's own `fetch` calls set the header themselves, so no API request or event-stream read runs the filter's JS listener. Every request the window makes, `/api/` included, still crosses Electron's request proxy on the main process's UI thread, with or without the filter, so a busy main thread delays every API call: the shell keeps synchronous work off that thread (AD21, G1), and G0 measures the delay. Playwright uses `extraHTTPHeaders`. Only debug builds accept a one-time `?dev-token=` cookie. Capability URLs are the fallback if Electronite misses a request type (G0 probes every type). *(A-14)* | No amendment to the fixed security decision; images, iframes, downloads and the print window carry the header, and the aligner's round trip does not pay for the filter's JS callback. It still waits for the main process's UI thread, as every request in an Electronite window does; Q-1 and Q-13 are decided from G0's measurements of that round trip. | A production launch cookie (core-first); public static files plus capability URLs (slice-first); a filter over every request. |
 | AD12 | A project is named by `ProjectRef`, its folder under the projects root. `ProjectId` is data. Scopes, sessions, Home cards and summaries are keyed by folder. `prefs/<projectId>.json` stays as STORAGE §3.7 lists it. | Two imports of one tC4 project get one id (STORAGE:3374, T4), and a copied folder is expected (STORAGE:2015-2036, `FolderCopied`). Two folders must be two cards. | Keying by `ProjectId`. |
@@ -324,8 +324,8 @@ journal's identity grammar (`tc_journal::keys::RefPart`): NFC text that is not e
 `|`. This one takes any text that is not empty and holds no `:`, so a check the server sends
 always reads, and the server refuses at its boundary a part that tc-check cannot hold. It has
 no length limit, because a check whose place the UI cannot read drops out of the rail and shows
-its decision as not saved. A request is bounded where the server reads its body (A2), not field
-by field. *(Merge of A1: tc-check's part took the journal's grammar after A1 was written.)*
+its decision as not saved. A request is bounded where the server reads its body (A2: 8 MiB, and 413
+above it), not field by field. *(Merge of A1: tc-check's part took the journal's grammar after A1 was written.)*
 *(A1: the first build typed a check's place as `tc_core::Reference`, which holds a chapter of at
 least 1 and numeric verses, and the first fix of `prefs/recordPlace` capped a verse at 256 bytes.)*
 
@@ -359,6 +359,10 @@ pub type ReplyOf<E> = Reply<<E as Endpoint>::Ok>;
 // does not compile.
 pub const API_VERSION: u32 = 1;           // header `X-Tc-Api`
 ```
+
+tc-server routes `POST /api/v1/{path}` for exactly the rows of these tables (the `test` rows only
+with `--test-hooks`) and hands the body to the backend, whose typed dispatch parses it (A3); a path
+outside the tables is 404 before the backend sees it. *(A2)*
 
 `NetKind::Upload` stays because tC4's catalogs have the key, but no endpoint uses it: ruling Q2
 removes the Upload changes dialog (DELTA:1137, PLAN:49-50).
@@ -1148,7 +1152,10 @@ A tower layer checks, in order:
 
 1. `Host` equals `127.0.0.1:PORT`, else 403 (DNS rebinding, ARCH:45-46).
 2. `X-Tc-Token` matches in constant time, else 401. This applies to every route, static files
-   included (ARCH:42-44). The shell opens the window at `url#t=<token>`.
+   included (ARCH:42-44). The shell opens the window at `url#t=<token>`. A request with the header
+   more than once, or with a comma-separated list, is accepted only when every value is the token:
+   Playwright's `extraHTTPHeaders` and the UI's own header can both set it, and a wrong value
+   anywhere is a 401. *(A2)*
 3. On any method other than GET, `Origin` equals the server's own origin, else 403.
 4. On `/api/`, `X-Tc-Api` equals 1, else 409.
 5. No CORS header is ever sent.

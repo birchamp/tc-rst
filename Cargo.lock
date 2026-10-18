@@ -3159,6 +3159,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "tc-server"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "futures-util",
+ "getrandom 0.3.4",
+ "percent-encoding",
+ "serde",
+ "serde_json",
+ "subtle",
+ "tc-api",
+ "tc-server",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "tc-ui"
 version = "0.1.0"
 dependencies = [
