@@ -462,7 +462,7 @@ impl TestFields {
         if named > version {
             return Err(ApiError::NotSaved(NotSaved::BadToken));
         }
-        let record = Self::record_of(name).map_err(&internal)?;
+        let record = Self::record_of(name).map_err(internal)?;
         let text: String = req.text.nfc().collect();
 
         let named_value = Self::value_of(&stores, named);
@@ -475,7 +475,7 @@ impl TestFields {
                 stored: Stored::Unchanged,
                 tokens: vec![TokenUpdate {
                     record: record.clone(),
-                    token: self.mint(name, named).map_err(&internal)?,
+                    token: self.mint(name, named).map_err(internal)?,
                 }],
                 new_conflicts: Vec::new(),
                 saved: vec![SavedValue {
@@ -520,7 +520,7 @@ impl TestFields {
 
         let new_conflicts = if stale {
             vec![ConflictBrief {
-                conflict: Self::conflict_of(name, version + 1).map_err(&internal)?,
+                conflict: Self::conflict_of(name, version + 1).map_err(internal)?,
                 record: record.clone(),
                 by: PersonLabel {
                     who: Who::Mine,
@@ -535,7 +535,7 @@ impl TestFields {
             stored: Stored::Written,
             tokens: vec![TokenUpdate {
                 record: record.clone(),
-                token: self.mint(name, version + 1).map_err(&internal)?,
+                token: self.mint(name, version + 1).map_err(internal)?,
             }],
             new_conflicts,
             saved: vec![SavedValue { record, text }],

@@ -49,10 +49,11 @@ Never share one `target` between worktrees (`.audit/rebuild.tsv`, 2026-10-18). P
 
 | Branch | State |
 |---|---|
-| `claude/focused-ride-5uzj7p` | main. Everything finished is here: the domain crates, tc-journal, tc-store (storage unit S1), phase-0 units A1, A6a, A10, A11, G0's evidence, the Windows fixes and Door43's tree ids. Push here. |
-| `storage` | storage unit S2 in progress (plan `.audit/plans/S2.md`, builder commits up to the handoff). The owner allowed pushing it. |
-| `phase0` | integration branch of phase 0 (A1, A6a, A10, A11 merged; all on main) |
-| `p0-a2`, `p0-a3` | phase-0 units A2 (`tc4 serve`) and A3 (tc-app) in progress, each with its plan in `.audit/plans/` |
+| `claude/focused-ride-5uzj7p` | main. Everything finished is here: the domain crates, tc-journal, tc-store (storage unit S1), phase-0 units A1, A2, A3, A6a, A10, A11, G0's evidence, the Windows fixes and Door43's tree ids. Push here. |
+| `storage` | storage unit S2 in progress (plan `.audit/plans/S2.md`): writer thread, held-file retries, per-book groups, Git foundation and checkpoint commit done; outside edits, carried files and pins choice under way. The last commit (`0d7d4f7`, "WIP") is the stopped builder's unreviewed work. The owner allowed pushing this branch. |
+| `phase0` | integration branch of phase 0 (A1, A2, A3, A6a, A10, A11 merged; all on main) |
+| `p0-a4a` | unit A4a (tc-ui runtime: transport, cache, language) built from its plan; its independent verification had not run yet |
+| `p0-a9` | unit A9 (first-launch seeding) built up to step 8 of its plan (the seedbench measurement, design text and final checks remain); the last commit ("WIP") is unreviewed |
 | `windows-fixes`, `door43-facts`, `g0-windows` | the owner's Windows session; all merged into main |
 
 Ask the owner before pushing any other branch. Commit messages end with the two attribution lines
@@ -69,7 +70,7 @@ Workflow({ scriptPath: '.audit/workflows/storage-chain-B.js',
           skip: ['C', 'S1'], cont: ['S2'] } })
 Workflow({ scriptPath: '.audit/workflows/app-phase0.js',
   args: { root: '<abs path of ~/tc-rst>', tc4: '<abs path of tC4>',
-          onMain: ['a1', 'a6a', 'a10', 'a11'], cont: ['a2', 'a3'] } })
+          onMain: ['a1', 'a6a', 'a10', 'a11', 'a2', 'a3'], cont: ['a4a', 'a9'] } })
 ```
 
 Before that, recreate the storage worktree: `git worktree add .claude/worktrees/storage storage`.
@@ -84,8 +85,8 @@ scripts already give planners and reviewers the default model, builders, fixers 
 
 - Storage chain: S2 (materialize off the actor, Git, held-file retries) → P (scale against the
   reference laptop) → X (sync and USB exchange) → I (tC4 and tC3 import).
-- App layer: phase 0 A2, A3, A4a, A9, A4b, A6b, A5, A7, A8; then phases 1 to 6
-  (`docs/APP-DESIGN.md` §10): 43 of 48 units are left.
+- App layer: phase 0 A4a, A9, A4b, A6b, A5, A7, A8; then phases 1 to 6
+  (`docs/APP-DESIGN.md` §10): 41 of 48 units are left.
 - Windows track (`.audit/tasks/windows-track.md`, done by the owner's Windows session): task 5
   (memory of Word, a browser, tC4 and Paratext with Psalms open, against our 1 GiB and 400 MiB
   limits), task 6 (the Windows hazards from its build report). Merge their branches after the
