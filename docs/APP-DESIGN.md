@@ -1660,16 +1660,29 @@ Publish` with tC4's string values; `MainView` is a port of `tC4:src/App.jsx:192-
 
 ### 6.9 Language and right-to-left
 
-- `t(key, vars)`, `t_or` port `tC4:src/i18n/index.js:76-95`: English fallback per key; an unknown
-  key warns once and shows the key; an explicit fallback wins; `{name}` is replaced.
+- `t(key, vars)` and `t_dyn(key, vars, fallback)` port `tC4:src/i18n/index.js:76-95`: a target
+  entry that is missing, empty or not a string falls back to English per key; an unknown key
+  warns once (`[i18n] missing key: <key>`) and shows the key; an explicit fallback wins and is
+  returned as given; each `{name}` is replaced, the variables one after another in the order
+  given, as tC4's loop does. *(A4a: one declared difference. tC4's `replaceAll` also reads
+  `$&` and `$$` in a value as patterns, so a project named `Cost $$` would show `Cost $`; `t()`
+  puts a value in as it is.)* `show_locale` ports `setLocale`: a language that is not
+  installed, or the one already shown, changes nothing.
 - `build.rs` generates key constants from `assets/i18n/en.json` and
-  `assets/i18n-rebuild/en.json`, so a misspelled static key does not compile. The port of
+  `assets/i18n-rebuild/en.json`, so a misspelled static key does not compile. The constants are
+  nested modules, `keys::app::SAVED`, `keys::net::ask::SIGN_IN`,
+  `keys::refusal::open::LOCK_HELD`: flat names collide in tC4's own catalog
+  (`upgrade.text.gateway` and `upgrade.textGateway` would both be `UPGRADE_TEXT_GATEWAY`), and the
+  build fails on a key that gives another key's path. *(A4a)* The port of
   `test/i18n-keys.test.ts`, with floors, covers dynamic keys such as `net.ask.<kind>` and
   `syncResult.error.*` (DELTA:525-531).
-- English is built in. All ten catalogs (about 0.94 MB) are fetched in parallel before the first
-  render, as tC4 bundles all ten (`tC4:src/i18n/index.js:12-21`), so the App language preview
-  (M16) changes language in one render without remounting, and a fetch failure shows at boot
-  instead of as English in the middle of a preview. *(A-23)*
+- English is built in: tC4's `en.json` and the rebuild's ten key files are compiled into the
+  wasm, because `t()` needs English as the fallback of every key even when a fetch fails, and
+  `build.rs` reads both English files anyway; the rebuild files hold a few hundred bytes each.
+  The nine other tC4 catalogs (870,974 bytes of the 943,433) are fetched in parallel before the first render,
+  where tC4 bundles all ten (`tC4:src/i18n/index.js:12-21`), so the App language preview (M16)
+  changes language in one render without remounting, and a fetch failure shows the boot error
+  instead of English in the middle of a preview. *(A-23; A4a: only the nine are fetched.)*
 - Rebuild-only keys live in `assets/i18n-rebuild/<id>.json`, merged after the vendored catalog
   without overriding it. The vendored files stay byte-identical (DELTA:532-536).
 - `<html lang dir>` comes from `LOCALES` (`crates/tc-ui/src/i18n.rs:41-92`) and is set before the
