@@ -98,13 +98,24 @@ impl TestServer {
         configure: impl FnOnce(&mut ServerConfig),
         hooks: bool,
     ) -> TestServer {
-        Self::start_inner(backend, configure, hooks, TempDir::new().unwrap())
+        Self::start_on(backend, configure, hooks, 2).0
     }
 
     /// A server whose app data is `dir` (it must exist; the test deletes it).
     pub fn start_in<B: Backend>(backend: Arc<B>, dir: &std::path::Path) -> TestServer {
         let app_data = TempDir::new_in(dir).unwrap();
-        Self::start_inner(backend, |_| {}, true, app_data)
+        Self::start_inner(backend, |_| {}, true, app_data, 2).0
+    }
+
+    /// As `start_with`, on a runtime of `workers` threads, whose handle comes back too. One
+    /// worker shows a blocking call that several would hide by stealing work.
+    pub fn start_on<B: Backend>(
+        backend: Arc<B>,
+        configure: impl FnOnce(&mut ServerConfig),
+        hooks: bool,
+        workers: usize,
+    ) -> (TestServer, tokio::runtime::Handle) {
+        Self::start_inner(backend, configure, hooks, TempDir::new().unwrap(), workers)
     }
 
     fn start_inner<B: Backend>(
@@ -112,7 +123,8 @@ impl TestServer {
         configure: impl FnOnce(&mut ServerConfig),
         hooks: bool,
         app_data: TempDir,
-    ) -> TestServer {
+        workers: usize,
+    ) -> (TestServer, tokio::runtime::Handle) {
         let ui_root = TempDir::new().unwrap();
         let site = seed_ui(ui_root.path());
         let mut config = ServerConfig::new(app_data.path().to_path_buf(), site);
@@ -137,12 +149,14 @@ impl TestServer {
         let (writer, reader) = tokio::io::duplex(4096);
         let stdout = Collected::default();
         let out = stdout.clone();
+        let (runtime_handle, handle_back) = std::sync::mpsc::channel();
         let thread = std::thread::spawn(move || {
             let runtime = tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(2)
+                .worker_threads(workers)
                 .enable_all()
                 .build()
                 .unwrap();
+            runtime_handle.send(runtime.handle().clone()).unwrap();
             runtime
                 .block_on(server.run(
                     backend,
@@ -153,7 +167,7 @@ impl TestServer {
                 ))
                 .unwrap()
         });
-        TestServer {
+        let server = TestServer {
             port,
             token,
             app_data,
@@ -166,7 +180,8 @@ impl TestServer {
                 .build()
                 .unwrap(),
             started: Instant::now(),
-        }
+        };
+        (server, handle_back.recv().unwrap())
     }
 
     pub fn quit_message(&mut self) {

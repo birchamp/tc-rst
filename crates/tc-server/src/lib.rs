@@ -26,6 +26,8 @@ mod statics;
 pub mod stub;
 mod token;
 mod uploads;
+#[cfg(feature = "test-hooks")]
+pub mod watchdog;
 
 use std::io;
 use std::path::PathBuf;
