@@ -1,7 +1,7 @@
 //! The DCS catalog: `GET /api/v1/catalog/search` (swagger `catalogSearch`).
 
 use crate::listing::text;
-use crate::names::{AccountName, CommitSha, RepoName, RepoRef, TagName};
+use crate::names::{AccountName, GitOid, RepoName, RepoRef, TagName};
 use crate::repos::nullable;
 use serde::Deserialize;
 use serde_json::Value;
@@ -86,7 +86,7 @@ pub struct CatalogEntry {
     pub language_is_gl: bool,
     pub stage: String,
     pub git_ref: CatalogRef,
-    pub commit: CommitSha,
+    pub commit: GitOid,
     pub released: Option<String>,
     /// `rc`, `sb`, `tc` or `ts`.
     pub metadata_type: String,

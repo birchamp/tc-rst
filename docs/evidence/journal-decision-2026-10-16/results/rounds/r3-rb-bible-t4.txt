@@ -1,0 +1,13 @@
+### rb-bible-t4 round 3
+start 13:20:06 2.68 3.87 5.87 5/126 15553
+cold open 11.903866106s, the fold after the last file 621.422631ms, cpu over all threads 26880 ms
+load 8.856138117s, cpu over all threads 24820 ms
+fold 2.762847886s, cpu 2657 ms, minor faults 10
+peak RSS during the streamed cold opens 366 MiB
+| Read, verify and prepare | 1 | 8856.138 ms | 8856.138 ms |
+| Full fold of the prepared changes | 1 | 2762.846 ms | 2762.846 ms |
+| Cold open: read, verify, prepare and fold, the fold indexing as files are read | 1 | 11903.865 ms | 11903.865 ms |
+| Cold open: the fold's work after the last file is read (stages F2 to F10) | 1 | 621.423 ms | 621.423 ms |
+peak RSS 554 MiB
+process: real 24.292 s, user 54.081 s, sys 1.308 s
+end 13:20:30 3.18 3.91 5.83 2/117 15802

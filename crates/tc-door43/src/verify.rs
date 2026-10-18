@@ -42,7 +42,7 @@
 
 use crate::error::VerificationError;
 use crate::git_tree::{ObjectId, tree_id};
-use crate::names::CommitSha;
+use crate::names::GitOid;
 use crate::unpack::{FileMode, Layout, UnpackedFile, unpack};
 use md5::{Digest, Md5};
 use serde_json::Value;
@@ -50,7 +50,7 @@ use serde_json::Value;
 /// A Gitea archive whose files are the content of `commit`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedArchive {
-    pub commit: CommitSha,
+    pub commit: GitOid,
     pub tree: ObjectId,
     /// Sorted by path, relative to the repository root. A symbolic link in the commit is
     /// here too, as its target text: never create it as a link ([`FileMode::Symlink`]).
@@ -60,7 +60,7 @@ pub struct VerifiedArchive {
 /// A DCS burrito export whose `metadata.json` declares the expected revision.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedSbExport {
-    pub revision: CommitSha,
+    pub revision: GitOid,
     /// `metadata.json` and every ingredient it lists that the zip holds, each matching its
     /// md5 and size. Sorted by path, relative to the burrito root. None is a symbolic link.
     pub files: Vec<UnpackedFile>,
@@ -79,7 +79,7 @@ pub struct VerifiedSbExport {
 /// module documentation for the checks.
 pub fn verify_archive(
     zip: &[u8],
-    commit: &CommitSha,
+    commit: &GitOid,
     commit_tree: &ObjectId,
     max_unpacked: u64,
 ) -> Result<VerifiedArchive, VerificationError> {
@@ -89,22 +89,22 @@ pub fn verify_archive(
     if comment.is_empty() {
         return Err(VerificationError::ArchiveCommentMissing);
     }
-    if !comment.eq_ignore_ascii_case(commit.as_str()) {
+    if !comment.eq_ignore_ascii_case(&commit.to_hex()) {
         return Err(VerificationError::ArchiveCommentMismatch {
-            expected: commit.clone(),
+            expected: *commit,
             found: comment.chars().take(80).collect(),
         });
     }
     let computed = tree_id(&unpacked.files, &unpacked.folders)?;
     if computed != *commit_tree {
         return Err(VerificationError::TreeMismatch {
-            commit: commit.clone(),
+            commit: *commit,
             expected: *commit_tree,
             computed,
         });
     }
     Ok(VerifiedArchive {
-        commit: commit.clone(),
+        commit: *commit,
         tree: computed,
         files: unpacked.files,
     })
@@ -114,7 +114,7 @@ pub fn verify_archive(
 /// See the module documentation for the checks.
 pub fn verify_sb_export(
     zip: &[u8],
-    expected: &CommitSha,
+    expected: &GitOid,
     max_unpacked: u64,
 ) -> Result<VerifiedSbExport, VerificationError> {
     let unpacked = unpack(zip, Layout::Burrito, max_unpacked)?;
@@ -144,9 +144,9 @@ pub fn verify_sb_export(
         .map_err(|e| VerificationError::MetadataUnreadable(e.to_string()))?;
 
     let declared = declared_revision(&metadata)?;
-    if !declared.eq_ignore_ascii_case(expected.as_str()) {
+    if !declared.eq_ignore_ascii_case(&expected.to_hex()) {
         return Err(VerificationError::RevisionMismatch {
-            expected: expected.clone(),
+            expected: *expected,
             declared: declared.chars().take(80).collect(),
         });
     }
@@ -157,7 +157,7 @@ pub fn verify_sb_export(
         .into_iter()
         .partition(|f| f.path == "metadata.json" || ingredients.contains_key(&f.path));
     Ok(VerifiedSbExport {
-        revision: expected.clone(),
+        revision: *expected,
         files,
         unlisted,
         missing_ingredients,
@@ -239,7 +239,7 @@ mod tests {
     const SHA: &str = "c354b8ae66a23c485bf6f38fd35bd8f7ef81e4e5";
     const OTHER: &str = "570e76d0024c847689e48a20e2ac1a1d2c6eb6e3";
 
-    fn sha(s: &str) -> CommitSha {
+    fn sha(s: &str) -> GitOid {
         s.parse().unwrap()
     }
 

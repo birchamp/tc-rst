@@ -8,6 +8,7 @@
 //!   dcs/<owner>/<repo>/<sha>/                      a Door43 commit
 //!   aquifer/<owner>/<repo>/<commit>/<lang>-<sha256 prefix>/   an Aquifer release asset
 //!     receipt.json                                 what this is, and every file's size and SHA-256
+//!     checked.json                                 the SHA-256 of the receipt every file was last checked against
 //!     content/…                                    the resource's files
 //!   .partial/                                      installs in progress
 //! ```
@@ -25,12 +26,25 @@
 //! An install writes every file and then the receipt into a new folder under
 //! `.partial/`, fsyncing each file and folder, then renames that folder to its key and
 //! fsyncs the parent. A crash at any point leaves either no install or the complete one;
-//! [`ResourceStore::open`] removes what a crash left in `.partial/`. An existing install
-//! is never written again: a second install of the same identity finds it and stops.
+//! [`ResourceStore::open`] removes what a crash left in `.partial/`. An existing install's
+//! content and receipt are never written again: a second install of the same identity
+//! finds it and stops.
+//!
+//! # Checked once
+//!
+//! An install's files are checked when it is made, and `checked.json` records the receipt
+//! they were checked against. A later start trusts the copy while that record names its
+//! receipt, and opens none of its files (tC4 #740). A copy whose receipt changed, or whose
+//! record is missing or unreadable, is checked again against its own receipt, and its
+//! record is replaced atomically. A copy that fails that check stops the seeding, as it
+//! stops tC4's start, and is left as it is. Like tC4, this does not see a change to a
+//! content file made after its check: a reader that finds a file whose size differs from
+//! the receipt's refuses it ([`Installed::read`]).
 //!
 //! One process owns a store: the app's server. Two processes installing into one store
 //! at once is not supported, because opening the store clears `.partial/`.
 
+use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
@@ -46,6 +60,7 @@ use crate::pin::{AquiferPin, BookCoverage, ResourcePin, Sha256};
 use crate::resolve::LocalCoverage;
 
 const RECEIPT: &str = "receipt.json";
+const CHECKED: &str = "checked.json";
 const CONTENT: &str = "content";
 const PARTIAL: &str = ".partial";
 const DCS: &str = "dcs";
@@ -63,6 +78,10 @@ pub enum Packaging {
     /// `/archive/<sha>.zip`: the commit's own files, checked against its git tree, so the
     /// same sha always gives the same bytes.
     Archive,
+    /// A lexicon's archive, checked as [`Packaging::Archive`] is, then repackaged into one
+    /// file, [`crate::LEXICON_FILE`] ([`crate::repackage_lexicon`]). Every lexicon is
+    /// installed this way (owner ruling, 2026-10-15).
+    Lexicon,
 }
 
 /// Where an install came from.
@@ -150,6 +169,31 @@ pub struct Receipt {
 pub struct Installed {
     dir: PathBuf,
     receipt: Receipt,
+    /// Of the receipt's bytes as they were read or written: what `checked.json` names.
+    receipt_sha256: Sha256,
+}
+
+/// `checked.json`.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CheckRecord {
+    receipt_sha256: Sha256,
+}
+
+thread_local! {
+    static CONTENT_FILES_OPENED: Cell<u64> = const { Cell::new(0) };
+}
+
+/// How many installed content files this thread has opened since it started, in any
+/// store: the operation count the start-up tests assert (docs/PERFORMANCE.md rule 2).
+/// Receipts and check records are not content files.
+pub fn content_files_opened() -> u64 {
+    CONTENT_FILES_OPENED.with(Cell::get)
+}
+
+fn read_content(path: &Path) -> std::io::Result<Vec<u8>> {
+    CONTENT_FILES_OPENED.with(|opened| opened.set(opened.get() + 1));
+    fs::read(path)
 }
 
 impl Installed {
@@ -227,7 +271,7 @@ impl Installed {
             file: path.to_owned(),
         })?;
         let full = self.dir.join(CONTENT).join(path);
-        let bytes = fs::read(&full).map_err(|e| StoreError::io("read", &full, e))?;
+        let bytes = read_content(&full).map_err(|e| StoreError::io("read", &full, e))?;
         if bytes.len() as u64 != record.size {
             return Err(StoreError::Damaged {
                 path: self.dir.clone(),
@@ -250,26 +294,80 @@ impl Installed {
     /// Checks every file against the receipt's size and SHA-256, and that the content
     /// folder holds nothing else.
     pub fn verify(&self) -> Result<(), StoreError> {
-        let damaged = |file: &str, problem: String| StoreError::Damaged {
+        self.check_listing()?;
+        self.check_listed()
+    }
+
+    /// Checks each file the receipt lists against its size and SHA-256, opening each
+    /// once. Seeding checks only these, as tC4's `validateTree`
+    /// (`scripts/desktop-bootstrap.cjs:164-176`) checks only its inventory's files, so a
+    /// file manager's leftover such as `.DS_Store` never stops a start.
+    fn check_listed(&self) -> Result<(), StoreError> {
+        for record in &self.receipt.files {
+            self.read_checked(record)?;
+        }
+        Ok(())
+    }
+
+    /// The bytes of every file the receipt lists, checked as [`Installed::check_listed`]
+    /// checks them, opening each file once.
+    fn read_all_checked(&self) -> Result<Vec<(String, Vec<u8>)>, StoreError> {
+        self.receipt
+            .files
+            .iter()
+            .map(|record| Ok((record.path.clone(), self.read_checked(record)?)))
+            .collect()
+    }
+
+    fn read_checked(&self, record: &FileRecord) -> Result<Vec<u8>, StoreError> {
+        let full = self.dir.join(CONTENT).join(&record.path);
+        let bytes = read_content(&full).map_err(|e| self.damaged(&record.path, e.to_string()))?;
+        if bytes.len() as u64 != record.size {
+            return Err(self.damaged(
+                &record.path,
+                format!("{} bytes, the receipt says {}", bytes.len(), record.size),
+            ));
+        }
+        if Sha256::of(&bytes) != record.sha256 {
+            return Err(self.damaged(&record.path, "its SHA-256 is not the receipt's".to_owned()));
+        }
+        Ok(bytes)
+    }
+
+    /// That the content folder holds no file the receipt does not list.
+    fn check_listing(&self) -> Result<(), StoreError> {
+        let mut found = Vec::new();
+        list_files(&self.dir.join(CONTENT), "", &mut found)?;
+        match found.into_iter().find(|path| self.record(path).is_none()) {
+            Some(path) => Err(self.damaged(&path, "the receipt does not list it".to_owned())),
+            None => Ok(()),
+        }
+    }
+
+    fn damaged(&self, file: &str, problem: String) -> StoreError {
+        StoreError::Damaged {
             path: self.dir.clone(),
             file: file.to_owned(),
             problem,
-        };
-        for record in &self.receipt.files {
-            let full = self.dir.join(CONTENT).join(&record.path);
-            let bytes = fs::read(&full).map_err(|e| damaged(&record.path, e.to_string()))?;
-            if bytes.len() as u64 != record.size || Sha256::of(&bytes) != record.sha256 {
-                return Err(damaged(&record.path, "its bytes changed".to_owned()));
-            }
         }
-        let mut found = Vec::new();
-        list_files(&self.dir.join(CONTENT), "", &mut found)?;
-        for path in found {
-            if self.record(&path).is_none() {
-                return Err(damaged(&path, "the receipt does not list it".to_owned()));
-            }
-        }
-        Ok(())
+    }
+
+    /// Whether `checked.json` names this receipt. A missing or unreadable record is no
+    /// check.
+    fn is_checked(&self) -> bool {
+        fs::read(self.dir.join(CHECKED))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<CheckRecord>(&bytes).ok())
+            .is_some_and(|record| record.receipt_sha256 == self.receipt_sha256)
+    }
+
+    /// Records that every file was checked against this receipt.
+    fn record_check(&self) -> Result<(), StoreError> {
+        replace_synced(
+            &self.dir,
+            CHECKED,
+            &check_record(&self.dir, self.receipt_sha256)?,
+        )
     }
 }
 
@@ -312,6 +410,9 @@ pub struct Inventory {
 pub struct SeedReport {
     pub added: Vec<String>,
     pub already_installed: Vec<String>,
+    /// Of `already_installed`: copies whose receipt was not the one their files were last
+    /// checked against, checked again now against their own receipt.
+    pub checked_again: Vec<String>,
     /// Bundled installs whose files no longer match their receipts: not copied.
     pub refused: Vec<(String, StoreError)>,
 }
@@ -376,7 +477,7 @@ impl ResourceStore {
             .join(DCS)
             .join(folder_name(pin.repo.owner().as_str()))
             .join(folder_name(pin.repo.name().as_str()))
-            .join(pin.sha.as_str())
+            .join(pin.sha.to_hex())
     }
 
     fn aquifer_dir(&self, pin: &AquiferPin) -> PathBuf {
@@ -385,7 +486,7 @@ impl ResourceStore {
             .join(AQUIFER)
             .join(folder_name(pin.repo.owner.as_str()))
             .join(folder_name(pin.repo.name.as_str()))
-            .join(pin.commit.as_str())
+            .join(pin.commit.to_hex())
             .join(format!("{}-{}", pin.language, &digest[..16]))
     }
 
@@ -470,7 +571,19 @@ impl ResourceStore {
     /// Copies into this store every install of `bundled` that it lacks, checking each
     /// file against the bundled receipt first. An installer ships the bundled store, so a
     /// first run works offline; seeding again after an update adds the new releases and
-    /// keeps the old ones, which projects may still pin.
+    /// keeps the old ones, which projects may still pin. Seeding checks and copies only
+    /// the files a receipt lists: another file in a bundled install or a copy, such as a
+    /// file manager's `.DS_Store`, is left where it is and stops nothing, as in tC4.
+    ///
+    /// The app seeds at every start, so a copy this store already holds is not read
+    /// again while its check record names its receipt: a repeat start reads receipts and
+    /// check records only. A copy whose receipt changed since its check is checked again
+    /// against its own receipt, never the bundle's (tC4 #740).
+    ///
+    /// A copy of a bundled install that cannot be trusted stops the seeding with its error,
+    /// as tC4 stops its start (`scripts/desktop-resources.test.cjs:453-463, 586-589`): a
+    /// copy whose files fail that check, or whose receipt cannot be read or names another
+    /// resource. The copy is left as it is, never overwritten from the bundle.
     pub fn seed_from(&self, bundled: &ResourceStore) -> Result<SeedReport, StoreError> {
         let inventory = bundled.installed()?;
         let mut report = SeedReport::default();
@@ -481,26 +594,16 @@ impl ResourceStore {
         }
         for install in inventory.installs {
             let name = install.origin().describe();
-            match self.find(install.origin()) {
-                Ok(Some(_)) => {
-                    report.already_installed.push(name);
-                    continue;
+            if let Some(copy) = self.find(install.origin())? {
+                if !copy.is_checked() {
+                    copy.check_listed()?;
+                    copy.record_check()?;
+                    report.checked_again.push(name.clone());
                 }
-                Ok(None) => {}
-                Err(e) => {
-                    report.refused.push((name, e));
-                    continue;
-                }
+                report.already_installed.push(name);
+                continue;
             }
-            let files = install.verify().and_then(|()| {
-                install
-                    .receipt
-                    .files
-                    .iter()
-                    .map(|r| Ok((r.path.clone(), install.read(&r.path)?)))
-                    .collect::<Result<Vec<_>, StoreError>>()
-            });
-            let files = match files {
+            let files = match install.read_all_checked() {
                 Ok(files) => files,
                 Err(e) => {
                     report.refused.push((name, e));
@@ -584,6 +687,13 @@ impl ResourceStore {
                 problem: e.to_string(),
             })?;
         write_synced(&staging.join(RECEIPT), &receipt_bytes)?;
+        // The files were checked before they were staged, and are written from the
+        // checked bytes.
+        let receipt_sha256 = Sha256::of(&receipt_bytes);
+        write_synced(
+            &staging.join(CHECKED),
+            &check_record(&staging, receipt_sha256)?,
+        )?;
         folders.insert(staging.join(CONTENT));
         // Deepest first, so each folder's entry is durable before its parent's.
         for folder in folders.iter().rev() {
@@ -612,6 +722,7 @@ impl ResourceStore {
         Ok(Installed {
             dir: target,
             receipt,
+            receipt_sha256,
         })
     }
 }
@@ -679,6 +790,14 @@ fn read_install(dir: &Path) -> Result<Installed, StoreError> {
     Ok(Installed {
         dir: dir.to_path_buf(),
         receipt,
+        receipt_sha256: Sha256::of(&bytes),
+    })
+}
+
+fn check_record(dir: &Path, receipt_sha256: Sha256) -> Result<Vec<u8>, StoreError> {
+    serde_json::to_vec(&CheckRecord { receipt_sha256 }).map_err(|e| StoreError::BadReceipt {
+        path: dir.to_path_buf(),
+        problem: e.to_string(),
     })
 }
 
@@ -727,6 +846,16 @@ fn check_paths(files: &[(String, Vec<u8>)]) -> Result<(), Refusal> {
 
 fn create_dirs(dir: &Path) -> Result<(), StoreError> {
     fs::create_dir_all(dir).map_err(|e| StoreError::io("create", dir, e))
+}
+
+/// Replaces `dir/name`: a temporary file in `dir`, synced, renamed over it, then `dir`
+/// synced.
+fn replace_synced(dir: &Path, name: &str, bytes: &[u8]) -> Result<(), StoreError> {
+    let temporary = dir.join(format!("{name}.partial"));
+    write_synced(&temporary, bytes)?;
+    let target = dir.join(name);
+    fs::rename(&temporary, &target).map_err(|e| StoreError::io("replace", &target, e))?;
+    sync_dir(dir)
 }
 
 fn write_synced(path: &Path, bytes: &[u8]) -> Result<(), StoreError> {

@@ -12,12 +12,10 @@ tc-usfm = { path = "../tc-usfm" }
 tc-versification = { path = "../tc-versification" }
 tc-helps = { path = "../tc-helps" }
 tc-burrito = { path = "../tc-burrito" }
+# The check identity, the decision record and its rules, the pins and the ladder.
+tc-journal = { path = "../tc-journal" }
 serde_json.workspace = true
 thiserror.workspace = true
-# A decision records the md5 of the verse text it was made against (STORAGE.md §2.3).
-md-5.workspace = true
-# A check id is refused unless it is NFC (STORAGE.md §2.2).
-unicode-normalization.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

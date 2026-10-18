@@ -68,12 +68,18 @@ UTF-8 JSON with stable key order:
   "format": "tc-fetched-lock",
   "version": 1,
   "entries": [
-    { "repo": "uW/en_ugl", "commit": "<40 hex>", "tree": "<40 hex>", "file": "en_ugl-<commit>.zip", "sha256": "<64 hex>", "size": 0, "checked": "<YYYY-MM-DD>", "how": "<the API call and the second method>" },
-    { "repo": "uW/en_uhl", "commit": "<40 hex>", "tree": "<40 hex>", "file": "en_uhl-<commit>.zip", "sha256": "<64 hex>", "size": 0, "checked": "<YYYY-MM-DD>", "how": "<the API call and the second method>" },
+    { "repo": "uW/en_ugl", "commit": "<40 hex>", "tree": "<40 hex>", "file": "en_ugl-<commit>.zip", "sha256": "<64 hex>", "size": 0, "lexiconSha256": "7798835a14559f03b3d3e4b804b6d88f6118923fd07ff39c44e14258a9f3f094", "checked": "<YYYY-MM-DD>", "how": "<the API call and the second method>" },
+    { "repo": "uW/en_uhl", "commit": "<40 hex>", "tree": "<40 hex>", "file": "en_uhl-<commit>.zip", "sha256": "<64 hex>", "size": 0, "lexiconSha256": "b3a002bbfe52720624b9e97a1130b138cfb4ecfc30a5d4111e7fa1f1581cc258", "checked": "<YYYY-MM-DD>", "how": "<the API call and the second method>" },
     { "repo": "uW/obs_images_360", "commit": "7146d5b504f6b63b9e11f7dc0b18c594d0ae179d", "tree": "<40 hex>", "file": null, "sha256": "<64 hex of the archive>", "size": 0, "checked": "<YYYY-MM-DD>", "how": "<the API call and the second method>" }
   ]
 }
 ```
+
+`lexiconSha256` is not a Door43 fact: it is the SHA-256 of the one JSON file
+`tc_resources::repackage_lexicon` makes of each lexicon archive (`bundle/en/README.md`,
+"Repackaged as one JSON file per lexicon"), which the packaging step checks. Copy the two
+values above unchanged; the test `a_bundled_lexicon_is_unconfirmed_until_fetched_lock_has_its_entry`
+in `crates/tc-resources/tests/lexicon.rs` then installs both lexicons from the lock.
 
 ## 4. An offline test that checks the bundle against the lock
 

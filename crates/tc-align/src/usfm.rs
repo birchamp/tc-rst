@@ -13,22 +13,17 @@
 //! ἐκλεκτῶν), the card holds both and the export writes them as one run: the same links,
 //! in tC4's bytes, which differ from en_ult's in 5 of the 46 verses of Titus.
 
-use crate::value::{AlignmentValue, Group};
+use crate::edit::card;
 use crate::words::SourceVerse;
-use tc_usfm::{AlignedVerse, AlignmentGroup, SourceWord, TargetWord};
+use tc_journal::json::JsonMap;
+use tc_journal::record::{AlignmentGroup, AlignmentValue, SourceWord, TargetWord};
+use tc_usfm::AlignedVerse;
 
-/// The cards that align something, as `tc-usfm` groups for [`tc_usfm::weave`]. Cards
-/// with no placed word, or with no source word, write nothing and are left out.
-pub fn usfm_groups(value: &AlignmentValue) -> Vec<AlignmentGroup> {
-    value
-        .alignments
-        .iter()
-        .filter(|g| !g.sources.is_empty() && !g.targets.is_empty())
-        .map(|g| AlignmentGroup {
-            sources: g.sources.clone(),
-            targets: g.targets.clone(),
-        })
-        .collect()
+/// The cards that align something, as `tc-usfm` groups for [`tc_usfm::weave`]: the
+/// journal's [`AlignmentValue::usfm_groups`]. Cards with no placed word, or with no source
+/// word, write nothing and are left out.
+pub fn usfm_groups(value: &AlignmentValue) -> Vec<tc_usfm::AlignmentGroup> {
+    value.usfm_groups()
 }
 
 /// The verse body `plain` with `value`'s alignment woven in. Fails as
@@ -36,13 +31,13 @@ pub fn usfm_groups(value: &AlignmentValue) -> Vec<AlignmentGroup> {
 /// not have: a caller weaves only a value that is valid for the verse (STORAGE.md §7.7),
 /// as tC4's export does.
 pub fn weave_verse(plain: &str, value: &AlignmentValue) -> Result<String, tc_usfm::Error> {
-    tc_usfm::weave(plain, &usfm_groups(value))
+    tc_usfm::weave(plain, &value.usfm_groups())
 }
 
 /// Cards and a bank read from aligned USFM.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Extracted {
-    pub alignments: Vec<Group>,
+    pub alignments: Vec<AlignmentGroup>,
     pub word_bank: Vec<TargetWord>,
 }
 
@@ -61,7 +56,7 @@ pub struct Extracted {
 /// those words. (tC4 banks only words written as `\w`; a word left as plain text is
 /// banked here too, so that every word of the verse is somewhere.)
 pub fn from_aligned(aligned: &AlignedVerse, source: Option<&SourceVerse>) -> Extracted {
-    let mut cards: Vec<(Option<(String, u32)>, Group)> = Vec::new();
+    let mut cards: Vec<(Option<(String, u32)>, AlignmentGroup)> = Vec::new();
     let mut placed = vec![false; aligned.words.len()];
     for run in aligned.groups.iter().filter(|g| !g.sources.is_empty()) {
         let outer = (run.sources[0].content.clone(), run.sources[0].occurrence);
@@ -73,9 +68,10 @@ pub fn from_aligned(aligned: &AlignedVerse, source: Option<&SourceVerse>) -> Ext
             None => {
                 cards.push((
                     Some(outer),
-                    Group {
-                        sources: Vec::new(),
-                        targets: Vec::new(),
+                    AlignmentGroup {
+                        top_words: Vec::new(),
+                        bottom_words: Vec::new(),
+                        extra: JsonMap::new(),
                     },
                 ));
                 cards.len() - 1
@@ -84,8 +80,9 @@ pub fn from_aligned(aligned: &AlignedVerse, source: Option<&SourceVerse>) -> Ext
         let card = &mut cards[at].1;
         if !run.targets.is_empty() {
             for word in &run.sources {
-                if !card.sources.iter().any(|s| same_source(s, word)) {
-                    card.sources.push(word.clone());
+                let word = SourceWord::from_usfm(word);
+                if !card.top_words.iter().any(|s| same_source(s, &word)) {
+                    card.top_words.push(word);
                 }
             }
         }
@@ -97,15 +94,15 @@ pub fn from_aligned(aligned: &AlignedVerse, source: Option<&SourceVerse>) -> Ext
             {
                 placed[slot] = true;
             }
-            card.targets.push(target.clone());
+            card.bottom_words.push(TargetWord::from_usfm(target));
         }
     }
     // A milestone over no word adds no source word; a card left without one aligns
     // nothing and is not kept, as in word-aligner.
-    let unordered: Vec<Group> = cards
+    let unordered: Vec<AlignmentGroup> = cards
         .into_iter()
         .map(|(_, g)| g)
-        .filter(|g| !g.sources.is_empty())
+        .filter(|g| !g.top_words.is_empty())
         .collect();
     let alignments = match source {
         Some(source) => order_cards(source, unordered),
@@ -119,29 +116,29 @@ pub fn from_aligned(aligned: &AlignedVerse, source: Option<&SourceVerse>) -> Ext
                 .iter()
                 .zip(&placed)
                 .filter(|(_, placed)| !**placed)
-                .map(|(w, _)| w.clone()),
+                .map(|(w, _)| TargetWord::from_usfm(w)),
         ),
     }
 }
 
 fn same_source(a: &SourceWord, b: &SourceWord) -> bool {
-    a.content == b.content && a.occurrence == b.occurrence
+    a.word == b.word && a.occurrence == b.occurrence
 }
 
 /// word-aligner's `orderAlignments` with the original verse's word list.
-fn order_cards(source: &SourceVerse, mut unordered: Vec<Group>) -> Vec<Group> {
-    let mut ordered: Vec<Group> = Vec::new();
+fn order_cards(source: &SourceVerse, mut unordered: Vec<AlignmentGroup>) -> Vec<AlignmentGroup> {
+    let mut ordered: Vec<AlignmentGroup> = Vec::new();
     for word in source.words() {
         if let Some(at) = unordered
             .iter()
-            .position(|g| g.sources.first().is_some_and(|s| same_source(s, word)))
+            .position(|g| g.top_words.first().is_some_and(|s| same_source(s, word)))
         {
             ordered.push(unordered.remove(at));
             continue;
         }
-        let holds = |g: &Group| g.sources.iter().any(|s| same_source(s, word));
+        let holds = |g: &AlignmentGroup| g.top_words.iter().any(|s| same_source(s, word));
         if !unordered.iter().any(holds) && !ordered.iter().any(holds) {
-            ordered.push(Group::single(word.clone()));
+            ordered.push(card(word.clone()));
         }
     }
     ordered.extend(unordered);

@@ -53,6 +53,24 @@ async function focusByKeyboard(page, target) {
   throw new Error(`Tab never reached ${target}`);
 }
 
+/** A text selection from the start of `from` to the end of `to`, as a drag across them makes
+ * it. A script sets it: a drag would start on whichever element is under the pointer (a
+ * draggable chip drags itself), and the selection's exact ends would follow the pointer. */
+function selectText(page, from, to) {
+  return page.evaluate(([a, b]) => {
+    const frame = document.querySelector('[data-case]');
+    const start = frame.querySelector(a);
+    const end = frame.querySelector(b);
+    if (!start || !end) throw new Error(`select: nothing matches ${start ? b : a}`);
+    const range = document.createRange();
+    range.setStart(start, 0);
+    range.setEnd(end, end.childNodes.length);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }, [from, to]);
+}
+
 async function runStep(page, step) {
   const target = step.target && page.locator(`[data-case] ${step.target}`).first();
   switch (step.do) {
@@ -62,6 +80,7 @@ async function runStep(page, step) {
     case 'click': return target.click();
     case 'key': return page.keyboard.press(step.key);
     case 'type': return page.keyboard.type(step.text);
+    case 'select': return selectText(page, step.target, step.to ?? step.target);
     default: throw new Error(`unknown step ${step.do}`);
   }
 }

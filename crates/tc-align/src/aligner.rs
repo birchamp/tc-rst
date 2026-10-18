@@ -1,21 +1,32 @@
 //! One verse open in the Align workspace (tC4's align session in `state.jsx`).
 //!
-//! The aligner holds the verse's alignment, the verse text it is shown against, and the
-//! standing suggestions. Every edit goes through one path, as in tC4's `applyAlignEdit`:
-//! the edit, then [`AlignmentValue::settle`] against the shown text, then the suggestions
-//! are bound again to the edited cards ([`suggest::rebind`]). Suggestions are proposals
-//! (D72): the value changes only when the translator accepts one, which is the same
-//! placement a click makes, and Mark valid is refused while any stands.
+//! The aligner holds the verse's alignment, the verse text it is shown against, the
+//! standing suggestions and the selected bank words. Every edit goes through one path, as
+//! in tC4's `applyAlignEdit` (`src/state.jsx:5225-5247` at d310bf3): the edit, then the
+//! bank and every card in verse order ([`Alignment::bank_in_verse_order`],
+//! [`Alignment::cards_in_verse_order`]), then [`Alignment::settle`] against the
+//! shown text, then the suggestions are bound again to the edited cards
+//! ([`suggest::rebind`]). An edit that places words also clears the selection. Suggestions
+//! are proposals (D72): the value changes only when the translator accepts one, which is
+//! the same placement a click makes, and Mark valid is refused while any stands.
+//!
+//! The bank and the cards are in verse order from the first view of a verse, whatever
+//! order the stored value has (the owner's Q15 ruling; tC4 sorts a stored value on open,
+//! `src/state.jsx:1193-1198`, but not its bootstrap). Order alone never makes the value
+//! count as changed: a value stored in another order, such as an import, stays as it was
+//! until the translator edits the verse or marks it valid (Q19).
 //!
 //! Saving is the caller's: `tc-store` writes [`Aligner::value`] as one `Alignment` change
 //! on leaving the verse or two seconds after the last change (STORAGE.md §5.3).
 
-use crate::edit::EditError;
+use crate::edit::{Alignment, EditError, bootstrap};
 use crate::reflow::{self, DroppedLink};
+use crate::selection::{self, Click};
 use crate::suggest::{self, Proposal, RawLink, SessionInput};
-use crate::value::{AlignmentValue, Basis};
+use crate::value::Basis;
 use crate::words::{SourceVerse, TargetVerse};
-use tc_usfm::TargetWord;
+use std::collections::HashSet;
+use tc_journal::record::{AlignmentValue, TargetWord};
 
 /// Mark valid was refused because suggestions stand: they must be accepted or rejected
 /// first, so that "done" never vouches for a link the translator did not make.
@@ -47,6 +58,9 @@ pub struct Aligner {
     dropped: Vec<DroppedLink>,
     earlier: Option<AlignmentValue>,
     changed: bool,
+    /// The selected bank words, as clicked. Only the shown part counts
+    /// ([`Aligner::selection`]).
+    armed: Vec<TargetWord>,
 }
 
 impl Aligner {
@@ -54,15 +68,18 @@ impl Aligner {
     ///
     /// - With no original-language words or no target words, it does not open.
     /// - With no stored value, or one with no cards (the removal form, or the empty
-    ///   value a span change leaves in tC4), the verse starts from
-    ///   [`AlignmentValue::bootstrap`].
-    /// - A stored value made for another span than `basis.span_end` (the verse was
-    ///   joined into a span or split from one since) does not fit the original words
-    ///   shown: the verse starts from the bootstrap, and the stored value is kept aside
-    ///   in [`Aligner::earlier`] for the app to offer, as STORAGE.md §7.7 does.
+    ///   value a span change leaves in tC4), the verse starts from [`bootstrap`].
+    /// - A stored value made for another span than the run `basis` names, moved with its
+    ///   text ([`Basis::fits`], the journal's rule: the verse was joined into a span or
+    ///   split from one since; a renumbered verse still fits) does not fit the original
+    ///   words shown: the verse starts from the bootstrap, and the stored value is kept
+    ///   aside in [`Aligner::earlier`] for the app to offer, as STORAGE.md §7.7 does.
     /// - A stored value made against this text opens as it is, if it is
-    ///   [well formed](AlignmentValue::well_formed).
-    /// - A stored value made against other text, or one that holds a word twice, opens
+    ///   [well formed](Alignment::well_formed) and holds the words of the verse shown.
+    /// - A stored value made against other text, one that holds a word twice, or one whose
+    ///   words are not the shown verse's (the hash is of `plain_text_v1`, which leaves out
+    ///   some shown words, such as a `\qs` Selah, so an edit of such a word keeps the
+    ///   hash), opens
     ///   carried over to `verse` (see [`crate::reflow`]), so every word the aligner
     ///   offers is a word of the verse, in one place: a bank copy of a placed word goes,
     ///   and a word on a second card is dropped and reported.
@@ -72,6 +89,9 @@ impl Aligner {
     ///   is. A carry-over that dropped nothing counts as changed at once, as tC4 saves
     ///   it, unless tC4 would have left the value alone (it was marked invalid, or held
     ///   no placed word).
+    ///
+    /// Whichever it starts from, the bank and every card are shown in verse order. That
+    /// alone does not count as a change. Nothing is selected.
     pub fn open(
         stored: Option<&AlignmentValue>,
         verse: TargetVerse,
@@ -85,30 +105,41 @@ impl Aligner {
             return Err(Unavailable::NoWords);
         }
         let mut aligner = Self {
-            value: AlignmentValue::bootstrap(source, &verse, basis.clone()),
+            value: bootstrap(source, &verse, basis.clone()),
             verse,
             proposals: Vec::new(),
             dropped: Vec::new(),
             earlier: None,
             changed: false,
+            armed: Vec::new(),
         };
-        let Some(stored) = stored.filter(|s| !s.alignments.is_empty()) else {
-            return Ok(aligner);
-        };
-        if stored.span_end != basis.span_end {
-            aligner.earlier = Some(stored.clone());
-            return Ok(aligner);
-        }
-        if !stored.is_stale_against(&aligner.verse) && stored.well_formed().is_ok() {
-            aligner.value = stored.clone();
-            return Ok(aligner);
-        }
-        let tc4_would_reflow = reflow::reflow(stored, &aligner.verse).is_ok();
-        let carried = reflow::carry(stored, &aligner.verse);
-        aligner.changed = tc4_would_reflow && carried.is_lossless();
-        aligner.value = carried.value;
-        aligner.dropped = carried.dropped;
+        aligner.start_from(stored, &basis);
+        aligner.value.bank_in_verse_order(&aligner.verse);
+        aligner.value.cards_in_verse_order(&aligner.verse);
         Ok(aligner)
+    }
+
+    /// Replace the bootstrap with what `stored` gives, as [`Aligner::open`] describes.
+    fn start_from(&mut self, stored: Option<&AlignmentValue>, basis: &Basis) {
+        let Some(stored) = stored.filter(|s| !s.alignments.is_empty()) else {
+            return;
+        };
+        if !basis.fits(stored) {
+            self.earlier = Some(stored.clone());
+            return;
+        }
+        if !stored.is_stale_against(&self.verse)
+            && stored.well_formed().is_ok()
+            && holds_the_words_of(stored, &self.verse)
+        {
+            self.value = stored.clone();
+            return;
+        }
+        let tc4_would_reflow = reflow::reflow(stored, &self.verse).is_ok();
+        let carried = reflow::carry(stored, &self.verse);
+        self.changed = tc4_would_reflow && carried.is_lossless();
+        self.value = carried.value;
+        self.dropped = carried.dropped;
     }
 
     pub fn value(&self) -> &AlignmentValue {
@@ -155,20 +186,50 @@ impl Aligner {
         &self.proposals
     }
 
-    fn edit(
+    /// The one path of every edit. See the module documentation.
+    fn edit<T>(
         &mut self,
-        f: impl FnOnce(&mut AlignmentValue, &TargetVerse) -> Result<(), EditError>,
-    ) -> Result<(), EditError> {
-        f(&mut self.value, &self.verse)?;
+        f: impl FnOnce(&mut AlignmentValue, &TargetVerse) -> Result<T, EditError>,
+    ) -> Result<T, EditError> {
+        let out = f(&mut self.value, &self.verse)?;
+        self.value.bank_in_verse_order(&self.verse);
+        self.value.cards_in_verse_order(&self.verse);
         self.value.settle(&self.verse);
         self.proposals = suggest::rebind(&self.value, &self.proposals);
         self.changed = true;
-        Ok(())
+        Ok(out)
+    }
+
+    /// An edit that places words: on success it also clears the selection, as tC4's
+    /// `applyAlignEdit(…, true)` disarms.
+    fn place_edit<T>(
+        &mut self,
+        f: impl FnOnce(&mut AlignmentValue, &TargetVerse) -> Result<T, EditError>,
+    ) -> Result<T, EditError> {
+        let out = self.edit(f)?;
+        self.armed.clear();
+        Ok(out)
     }
 
     /// Place a banked word on a card.
     pub fn place(&mut self, card: usize, word: &TargetWord) -> Result<(), EditError> {
-        self.edit(|v, _| v.link(card, word))
+        self.place_edit(|v, _| v.link(card, word))
+    }
+
+    /// Place several banked words on a card in one edit, as a drop of dragged bank words
+    /// does, and return how many were placed. A word no longer in the bank is skipped;
+    /// the edit is refused, changing nothing and keeping the selection, only when no
+    /// word could be placed. tC4's `placeAlignWordsAt` (#736).
+    pub fn place_many(&mut self, card: usize, words: &[TargetWord]) -> Result<usize, EditError> {
+        self.place_edit(|v, _| v.link_many(card, words))
+    }
+
+    /// A click on a card while bank words are selected: the shown selection
+    /// ([`Aligner::selection`]) is placed on the card in one edit. Selected words that
+    /// became suggestions stay where they are (Q16). tC4's `placeAlignWord`.
+    pub fn place_selection(&mut self, card: usize) -> Result<usize, EditError> {
+        let words = self.selection();
+        self.place_many(card, &words)
     }
 
     /// Send a placed word back to the bank.
@@ -198,7 +259,8 @@ impl Aligner {
 
     /// Start the verse over.
     pub fn clear(&mut self) {
-        // Clearing cannot fail; the edit path only adds the settle and the rebind.
+        // Clearing cannot fail; the edit path only adds the sorts, the settle and the
+        // rebind.
         let _ = self.edit(|v, verse| {
             v.clear(verse);
             Ok(())
@@ -234,22 +296,83 @@ impl Aligner {
         self.place(proposal.card, &proposal.word)
     }
 
-    /// Accept every proposal, each as a click would place it. Returns how many were
-    /// placed.
+    /// Accept every proposal in one edit, each placed as a click would place it, and
+    /// return how many were placed. tC4's `acceptAllAlignSuggestions`.
     ///
     /// Each standing proposal is for a different bank word and an existing card, and a
     /// placement moves no card, so each one places; one that did not would be skipped
-    /// without holding back the others.
+    /// without holding back the others. With nothing to place, nothing changes.
     pub fn accept_all(&mut self) -> usize {
         let standing = self.proposals.clone();
-        standing
-            .iter()
-            .filter(|p| self.place(p.card, &p.word).is_ok())
-            .count()
+        self.place_edit(|v, _| {
+            let placed = standing
+                .iter()
+                .filter(|p| v.link(p.card, &p.word).is_ok())
+                .count();
+            if placed == 0 {
+                return Err(EditError::NothingToPlace);
+            }
+            Ok(placed)
+        })
+        .unwrap_or(0)
     }
 
     /// Reject every proposal. The value is not changed.
     pub fn reject_all(&mut self) {
         self.proposals.clear();
     }
+
+    /// The bank as the Align workspace shows it, in bank order: the banked words without
+    /// a standing suggestion, which show on their card instead.
+    pub fn shown_bank(&self) -> Vec<TargetWord> {
+        let proposed: HashSet<(&str, u32)> = self
+            .proposals
+            .iter()
+            .map(|p| (p.word.word.as_str(), p.word.occurrence))
+            .collect();
+        self.value
+            .word_bank
+            .iter()
+            .filter(|w| !proposed.contains(&(w.word.as_str(), w.occurrence)))
+            .cloned()
+            .collect()
+    }
+
+    /// The selected bank words the bank shows, in bank order: what a card click places
+    /// and what the bank draws as selected.
+    pub fn selection(&self) -> Vec<TargetWord> {
+        selection::shown_selection(&self.shown_bank(), &self.armed)
+    }
+
+    /// Whether the cards take a click: some shown bank word is selected. While only words
+    /// that became suggestions are selected, the cards look as they do with nothing
+    /// selected (Q16).
+    pub fn is_armed(&self) -> bool {
+        !self.selection().is_empty()
+    }
+
+    /// A click on the word at `index` of [`Aligner::shown_bank`]: the selection becomes
+    /// what [`selection::next_selection`] says. The value is not changed.
+    pub fn click_bank_word(&mut self, index: usize, click: Click) {
+        self.armed = selection::next_selection(&self.shown_bank(), &self.armed, click, index)
+            .unwrap_or_default();
+    }
+
+    /// What dragging the word at `index` of [`Aligner::shown_bank`] carries, to give to
+    /// [`Aligner::place_many`] at the drop: the shown selection when the word is selected,
+    /// else the word alone.
+    pub fn dragged_words(&self, index: usize) -> Vec<TargetWord> {
+        selection::dragged_words(&self.shown_bank(), &self.armed, index)
+    }
+}
+
+/// Whether `value` holds exactly the words of `verse`, by text and occurrence, placed or
+/// banked.
+fn holds_the_words_of(value: &AlignmentValue, verse: &TargetVerse) -> bool {
+    let key = |w: &TargetWord| (w.word.clone(), w.occurrence, w.occurrences);
+    let mut held: Vec<_> = value.all_target_words().map(key).collect();
+    let mut words: Vec<_> = verse.words().iter().map(key).collect();
+    held.sort_unstable();
+    words.sort_unstable();
+    held == words
 }

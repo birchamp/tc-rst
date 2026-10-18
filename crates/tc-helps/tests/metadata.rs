@@ -12,10 +12,10 @@ use tc_helps::metadata::{
     DcsPin, MetadataFormat, ResourceKind, Revision, ScriptDirection, parse_burrito_metadata,
     parse_rc_manifest,
 };
-use tc_helps::{CommitSha, Error, JsonFile, PinMismatch, YamlFile};
+use tc_helps::{Error, GitOid, JsonFile, PinMismatch, YamlFile};
 
-fn sha(s: &str) -> CommitSha {
-    CommitSha::parse(s).unwrap()
+fn sha(s: &str) -> GitOid {
+    GitOid::parse(s).unwrap()
 }
 
 /// The pins tC4's fixture README records for each export.

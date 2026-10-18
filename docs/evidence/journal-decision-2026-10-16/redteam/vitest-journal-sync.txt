@@ -1,0 +1,7 @@
+vitest 17:51:53 load 7.32 8.87 7.25 8/272 2138
+     × fresh note → accepted/response lost → clear → Retry: the durable note appears immediately, exactly once, and Saved is honest 5030ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  test/journalingRound6.test.ts > 2026-08-28 adversarial round 28: Retry surfaces a lost-response accept even over a CLEAN buffer > fresh note → accepted/response lost → clear → Retry: the durable note appears immediately, exactly once, and Saved is honest
+ Test Files  1 failed | 15 passed | 2 skipped (18)
+      Tests  1 failed | 323 passed | 8 skipped (332)
+end 17:53:09 load 11.55 9.79 7.70 10/276 3072

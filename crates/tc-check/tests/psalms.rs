@@ -11,7 +11,6 @@ use std::collections::BTreeSet;
 use std::io::Read;
 
 use common::{eng, fixture, identity, reason};
-use md5::{Digest, Md5};
 use serde_json::{Value, json};
 use tc_burrito::ScopeRange;
 use tc_check::derive::{BookSpec, CheckList, SkipReason, notes_for_book, word_links_for_book};
@@ -215,10 +214,7 @@ fn the_superscriptions_are_checks_on_the_verse_front() {
 }
 
 fn digest(lines: &[String]) -> String {
-    Md5::digest(lines.join("\n").as_bytes())
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+    tc_core::Md5::of(lines.join("\n").as_bytes()).to_hex()
 }
 
 /// tC4's `String()` of a reference part as the vectors hold it.

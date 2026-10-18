@@ -1,0 +1,12 @@
+[package]
+name = "memo-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+sha2 = "=0.11.1"
+ring = "=0.17.14"
+
+[profile.release]
+debug = false

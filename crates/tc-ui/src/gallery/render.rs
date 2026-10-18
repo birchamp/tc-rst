@@ -4,6 +4,7 @@
 //!   `{ "$fn": "noop" }`                   a callback that does nothing; only its presence matters
 //!   `{ "$asset": "public/assets/x.png" }` a file of the tC4 checkout, served by the gallery
 //!   `{ "$cell": "picked" }`               the text of one of the case's cells, kept current
+//!   `{ "$if": "busy", "then": …, "else": … }`  one value or the other by a cell, kept current
 //!
 //! Everything else is plain JSON.
 
@@ -71,6 +72,10 @@ pub fn node(v: &Value) -> AnyView {
                 components::render(name, Props::new(name, props))
             }
         }
+        Value::Object(m) if m.contains_key("$if") => match super::props::follow(v) {
+            Some(s) => (move || s.with(node)).into_any(),
+            None => ().into_any(),
+        },
         Value::Object(_) => match super::props::cell_of(v) {
             Some(cell) => (move || {
                 cell.with(|v| match v {
@@ -121,7 +126,17 @@ fn html(tag: &str, p: Props) -> AnyView {
         other => {
             if !matches!(
                 other,
-                "div" | "p" | "span" | "section" | "header" | "nav" | "label" | "h1" | "h2" | "h3"
+                "div"
+                    | "p"
+                    | "span"
+                    | "section"
+                    | "header"
+                    | "nav"
+                    | "label"
+                    | "h1"
+                    | "h2"
+                    | "h3"
+                    | "sup"
             ) {
                 warn(&format!("gallery: unexpected tag {other}"));
             }

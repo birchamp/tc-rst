@@ -1,0 +1,54 @@
+0	c_nocache_warm	5688	596	19940	433.0		2.4	2.61	read 705135600 bytes in 0.235 s
+0	a_cache_warm	1802	539	2550	332.0	270.0	2.72	2.72	read 769657142 bytes in 0.263 s
+0	b_cache_cold	1980	599	2760	326.0	264.0	2.72	2.72	resident 0 of 769657142 bytes
+0	c_nocache_cold	5899	583	20420	434.0		2.58	2.78	resident 0 of 705135600 bytes
+0	other_build_nocache_warm	5956	580	21180	430.0		2.78	2.87	read 705135600 bytes in 0.284 s
+0	d_other_builds_cache_warm	1724	521	2430	331.0	269.0	2.87	2.72	index identical: True; read 769657142 bytes in 0.273 s
+1	c_nocache_warm	5650	624	19480	435.0		2.72	2.91	read 705135600 bytes in 0.253 s
+1	a_cache_warm	1738	501	2480	330.0	268.0	2.91	2.75	read 769657142 bytes in 0.278 s
+1	b_cache_cold	1934	577	2700	328.0	267.0	2.75	2.75	resident 0 of 769657142 bytes
+1	c_nocache_cold	6556	736	22480	432.0		2.75	3.1	resident 0 of 705135600 bytes
+1	other_build_nocache_warm	6291	582	22460	433.0		3.1	3.25	read 705135600 bytes in 0.305 s
+1	d_other_builds_cache_warm	1721	541	2460	330.0	269.0	3.25	3.23	index identical: True; read 769657142 bytes in 0.268 s
+2	c_nocache_warm	6290	587	20010	441.0		3.23	3.18	read 705135600 bytes in 0.265 s
+2	a_cache_warm	1802	563	2540	332.0	270.0	3.18	3.18	read 769657142 bytes in 0.240 s
+2	b_cache_cold	1833	546	2560	331.0	270.0	3.18	3.01	resident 0 of 769657142 bytes
+2	c_nocache_cold	5866	548	19900	435.0		3.01	3.17	resident 0 of 705135600 bytes
+2	other_build_nocache_warm	5818	571	20730	428.0		3.17	3.31	read 705135600 bytes in 0.262 s
+2	d_other_builds_cache_warm	1691	510	2390	330.0	268.0	3.13	3.13	index identical: True; read 769657142 bytes in 0.271 s
+3	c_nocache_warm	5728	607	19880	433.0		3.13	3.1	read 705135600 bytes in 0.233 s
+3	a_cache_warm	1890	696	2650	329.0	267.0	3.1	3.1	read 769657142 bytes in 0.280 s
+3	b_cache_cold	1875	574	2680	330.0	268.0	3.1	2.93	resident 0 of 769657142 bytes
+3	c_nocache_cold	6151	601	21370	432.0		2.93	3.09	resident 0 of 705135600 bytes
+3	other_build_nocache_warm	6404	641	22290	432.0		3.09	3.07	read 705135600 bytes in 0.274 s
+3	d_other_builds_cache_warm	1704	556	2500	334.0	272.0	3.07	3.07	index identical: True; read 769657142 bytes in 0.254 s
+4	c_nocache_warm	5478	560	19210	433.0		2.82	3.0	read 705135600 bytes in 0.243 s
+4	a_cache_warm	1831	546	2580	332.0	270.0	3.0	3.0	read 769657142 bytes in 0.236 s
+4	b_cache_cold	1886	601	2750	329.0	267.0	3.0	3.16	resident 0 of 769657142 bytes
+4	c_nocache_cold	5942	559	20610	431.0		3.16	3.3	resident 0 of 705135600 bytes
+4	other_build_nocache_warm	8578	578	20800	428.0		3.3	3.96	read 705135600 bytes in 0.278 s
+4	d_other_builds_cache_warm	1933	540	2460	332.0	271.0	3.96	3.88	index identical: True; read 769657142 bytes in 0.270 s
+5	c_nocache_warm	8483	622	19310	433.0		3.88	4.29	read 705135600 bytes in 0.264 s
+5	a_cache_warm	1818	518	2370	329.0	268.0	4.29	4.29	read 769657142 bytes in 0.285 s
+5	b_cache_cold	1874	556	2800	331.0	270.0	4.29	4.03	resident 0 of 769657142 bytes
+5	c_nocache_cold	5921	579	20490	433.0		4.03	4.1	resident 0 of 705135600 bytes
+5	other_build_nocache_warm	7224	648	22180	433.0		4.1	4.48	read 705135600 bytes in 0.283 s
+5	d_other_builds_cache_warm	1904	554	2640	333.0	271.0	4.48	4.48	index identical: True; read 769657142 bytes in 0.282 s
+6	c_nocache_warm	6310	651	19900	436.0		4.2	4.27	read 705135600 bytes in 0.249 s
+6	a_cache_warm	1816	512	2360	334.0	272.0	4.27	4.17	read 769657142 bytes in 0.303 s
+6	b_cache_cold	1895	577	2980	330.0	268.0	4.17	4.17	resident 0 of 769657142 bytes
+6	c_nocache_cold	5678	613	19740	433.0		4.17	3.97	resident 0 of 705135600 bytes
+6	other_build_nocache_warm	5917	528	20410	430.0		3.97	4.06	read 705135600 bytes in 0.268 s
+6	d_other_builds_cache_warm	1655	496	2310	331.0	269.0	4.06	4.06	index identical: True; read 769657142 bytes in 0.249 s
+7	c_nocache_warm	6794	603	18600	433.0		3.81	4.07	read 705135600 bytes in 0.228 s
+7	a_cache_warm	1719	504	2430	331.0	269.0	4.07	3.82	read 769657142 bytes in 0.261 s
+7	b_cache_cold	1782	543	2600	330.0	268.0	3.82	3.82	resident 0 of 769657142 bytes
+7	c_nocache_cold	5501	550	19170	433.0		3.82	3.61	resident 0 of 705135600 bytes
+7	other_build_nocache_warm	6049	534	21350	432.0		3.61	3.64	read 705135600 bytes in 0.274 s
+7	d_other_builds_cache_warm	1738	481	2390	330.0	268.0	3.64	3.64	index identical: True; read 769657142 bytes in 0.267 s
+8	c_nocache_warm	7203	588	20080	434.0		3.35	3.56	read 705135600 bytes in 0.261 s
+8	a_cache_warm	1735	497	2460	333.0	271.0	3.36	3.36	read 769657142 bytes in 0.245 s
+8	b_cache_cold	1870	549	2620	331.0	269.0	3.36	3.36	resident 0 of 769657142 bytes
+8	c_nocache_cold	5644	585	19440	433.0		3.36	3.29	resident 0 of 705135600 bytes
+8	other_build_nocache_warm	6612	658	21750	430.0		3.29	3.43	read 705135600 bytes in 0.312 s
+8	d_other_builds_cache_warm	1945	543	2490	331.0	269.0	3.43	3.39	index identical: True; read 769657142 bytes in 0.326 s

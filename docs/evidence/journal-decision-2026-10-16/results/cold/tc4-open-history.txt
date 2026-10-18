@@ -1,0 +1,6 @@
+### tc4-open-history cold
+start 16:06:31 13.23 10.76 5.69 7/147 21112
+Buffers:          454420 kB Cached:          5071712 kB 
+{"rep":0,"events":576195,"books":66,"scan_ms":222291.5,"fold_ms":23183,"total_ms":245474.5,"scan_cpu_ms":108521.263,"fold_cpu_ms":22931.255,"maxrss_mib":1071}
+process: real 246.015 s, user 86.513 s, sys 45.336 s
+end 16:10:37 6.18 8.08 5.75 8/133 32156

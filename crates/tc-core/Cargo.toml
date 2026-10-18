@@ -7,6 +7,8 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+# A decision, an alignment and a burrito ingredient record an MD5 (src/digest.rs).
+md-5.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 

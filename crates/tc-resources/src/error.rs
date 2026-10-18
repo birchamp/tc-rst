@@ -6,7 +6,8 @@ use std::path::PathBuf;
 
 use tc_door43::{Door43Error, UnreachableCause, VerificationError};
 
-use crate::pin::Sha256;
+use crate::pin::{ResourcePin, Sha256};
+use crate::strongs::LexiconId;
 
 /// A value from outside that does not have the expected form.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -113,6 +114,69 @@ pub enum Refusal {
     Unreadable(String),
 }
 
+/// Why a lexicon archive cannot be repackaged, or a repackaged lexicon file cannot be read.
+/// Either way the app shows the lexicon as unavailable, with this reason, and guesses
+/// nothing.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum LexiconError {
+    #[error("the archive has no metadata.json")]
+    NoMetadata,
+    #[error(
+        "its metadata.json does not declare the flavor x-lexicon (it declares {})",
+        .found.as_deref().map_or_else(|| "none".to_owned(), |f| format!("{f:?}"))
+    )]
+    NotALexicon { found: Option<String> },
+    #[error("the archive holds no entry (ingredients/content/<number>.json)")]
+    NoEntries,
+    #[error("{path} is a symbolic link")]
+    Symlink { path: String },
+    #[error("{path} is not UTF-8 text")]
+    NotText { path: String },
+    #[error("{path} is not JSON: {reason}")]
+    NotJson { path: String, reason: String },
+    #[error("entry {path}: {problem}")]
+    BadEntry { path: String, problem: String },
+    /// The packaging step's check against `fetched.lock`'s `lexiconSha256`.
+    #[error(
+        "the repackaged file's SHA-256 is {found}, but fetched.lock records {}",
+        .recorded.map_or_else(|| "none (record it as lexiconSha256)".to_owned(), |r| r.to_string())
+    )]
+    NotTheRecordedFile {
+        recorded: Option<Sha256>,
+        found: Sha256,
+    },
+    #[error("the file's format is {found:?}, not \"tc-lexicon\", so this app cannot read it")]
+    UnknownFormat { found: String },
+    #[error(
+        "the file is version {found} of the lexicon format, and this app reads only version {reads}: a newer app wrote it"
+    )]
+    NewerVersion { found: u64, reads: u64 },
+    #[error("version {0} is not a version of the lexicon format")]
+    NoSuchVersion(u64),
+    #[error("it is not a lexicon file this app can read: {0}")]
+    Malformed(String),
+}
+
+/// Why a lexicon cannot be shown. The app shows it as unavailable, with this reason.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum LexiconUnavailable {
+    #[error("the project names no {} lexicon", .0.language())]
+    NotPinned(LexiconId),
+    #[error("{0} is not on this computer")]
+    NotInstalled(ResourcePin),
+    /// Installed as the commit's files by a build from before lexicons were repackaged.
+    /// The store never changes an install, so it stays as it is.
+    #[error("{0} is installed as thousands of files, which this app does not read")]
+    NotRepackaged(ResourcePin),
+    #[error("{pin} is damaged on this computer: {problem}")]
+    Damaged { pin: ResourcePin, problem: String },
+    #[error("{pin} cannot be read: {error}")]
+    Unreadable {
+        pin: ResourcePin,
+        error: LexiconError,
+    },
+}
+
 /// Why an install did not happen. In every case nothing was installed, and an install
 /// that was already complete is untouched.
 #[derive(Debug, thiserror::Error)]
@@ -126,6 +190,10 @@ pub enum InstallError {
     Aquifer(#[from] AquiferError),
     #[error("{what} was refused: {refusal}")]
     Refused { what: String, refusal: Refusal },
+    /// A lexicon archive that passed every check of its download but cannot be
+    /// repackaged into one lexicon file.
+    #[error("{what} cannot be installed as a lexicon: {problem}")]
+    Lexicon { what: String, problem: LexiconError },
     /// A burrito export is asked for by tag, and the pin names none.
     #[error("{pin} has no version tag, so it can be installed only from the commit's archive")]
     NoTag { pin: String },

@@ -8,18 +8,29 @@
 //!   assets are pinned by repository, tag, commit, language and SHA-256 ([`AquiferPin`]).
 //! - **Gateway languages.** [`gateways`] holds tC4's registry of 18 (language, owner)
 //!   pairs and their naming quirks, and builds a language set from what is installed;
-//!   [`suite`] holds the bundled English pins; [`gateway_change`] counts what a change of
-//!   gateway language would cost before it is made.
-//! - **Resolution.** [`resolve`] ports the D30 ladder: which rung answers a (tool, book),
-//!   and what opening it requires (ready, fetch, unavailable, unpinned, not covered).
+//!   [`suite`] holds the bundled English pins; [`gateway_change`] makes the pin edits of a
+//!   change of gateway language (what it would cost is `tc-check`'s count).
+//! - **Resolution.** The D30 ladder is the journal's (`tc_journal::pins::Ladder`, which
+//!   [`ProjectPins`] implements), the one the fold and the Check screens resolve with.
+//!   [`resolve`] reads it on this computer: which rung answers a (tool, book), and what
+//!   opening it requires (ready, fetch, unavailable, unpinned, not covered, an unusable
+//!   pin). It also counts the pinned versions this computer lacks, and names the one a
+//!   download of a repository must fetch.
 //! - **Store.** [`ResourceStore`] keeps installed resources by source, owner, repository
 //!   and commit, each installed atomically and never modified after, with a receipt that
-//!   lets it be verified. A bundled store seeds a first run that is offline.
+//!   lets it be verified. A bundled store seeds a first run that is offline; each copy is
+//!   checked once, so a repeat start opens no resource file.
 //! - **Installs.** [`install_dcs`] downloads an exact commit through tc-door43 and
 //!   [`install_aquifer`] an exact release asset from GitHub; nothing is kept unless it is
 //!   the pinned bytes. Zips at hand install with [`install_dcs_zip`] and
 //!   [`install_aquifer_zip`]. [`FetchedLock`] holds the Door43 facts recorded once for the
 //!   bundled and packaged archives, so they are checked offline.
+//! - **Lexicons.** A lexicon is installed as one JSON file, never as its thousands of
+//!   files: [`repackage_lexicon`] turns its verified archive into that file, both when the
+//!   app is packaged ([`install_lexicon_zip`], checked against [`FetchedLock`]) and when a
+//!   lexicon is downloaded later ([`install_dcs`]). [`Lexicons`] reads a project's two
+//!   lexicons once per session, and looks a word's `strong` attribute up in memory by
+//!   tC4's rule ([`strongs`]).
 //! - **Loading.** [`load_book`] and [`load_obs`] open what is installed as tc-helps
 //!   [`tc_helps::Helps`] and USFM texts, and say why each missing part is missing.
 //!   [`HelpsChoice`] picks Door43 or Aquifer for the helps tabs; [`check_sources`] says
@@ -39,11 +50,13 @@ mod fetched;
 pub mod gateway_change;
 pub mod gateways;
 mod layout;
+mod lexicon;
 mod load;
 mod pin;
 pub mod resolve;
 mod sets;
 mod store;
+pub mod strongs;
 pub mod suite;
 pub mod updates;
 
@@ -54,9 +67,19 @@ pub use aquifer::{
 pub use choice::{
     AquiferHelps, CheckBlocker, CheckSources, HELPS_SOURCE_SETTING, HelpsChoice, check_sources,
 };
-pub use dcs::{install_all, install_dcs, install_dcs_as, install_dcs_zip, pin_release};
-pub use error::{AquiferError, InstallError, ParseError, Refusal, StoreError, UnwritablePin};
-pub use fetched::{FetchedLock, LOCK_FORMAT, LOCK_VERSION, LockEntry};
+pub use dcs::{
+    LexiconInstall, install_all, install_dcs, install_dcs_as, install_dcs_zip, install_lexicon_zip,
+    pin_release,
+};
+pub use error::{
+    AquiferError, InstallError, LexiconError, LexiconUnavailable, ParseError, Refusal, StoreError,
+    UnwritablePin,
+};
+pub use fetched::{FetchedLock, LOCK_FORMAT, LOCK_VERSION, LockEntry, TreeCheck};
+pub use lexicon::{
+    LEXICON_FILE, LEXICON_FORMAT, LEXICON_VERSION, Lexicon, LexiconEntry, LexiconSource, Lexicons,
+    PartEntry, PartLookup, lexicon_entries_compared, open_lexicon, repackage_lexicon,
+};
 pub use load::{
     BookResources, Missing, ObsResources, PartStatus, SourceText, TextRole, TextStatus, load_book,
     load_obs,
@@ -66,9 +89,12 @@ pub use pin::{
     GithubName, RepoPath, ResourcePin, Sha256,
 };
 pub use sets::{
-    GatewayLanguage, LanguageSet, PaneId, PinGroup, ProjectKind, ProjectPins, Rung, ScripturePane,
-    SetSlot, Testaments, Tool, UnknownKeys,
+    GatewayLanguage, GroupError, LanguageSet, PaneId, PinGroup, ProjectKind, ProjectPins, Rung,
+    ScripturePane, SetGateway, SetSlot, Testaments, UnknownKeys,
 };
 pub use store::{
     FileRecord, Installed, Inventory, Origin, Packaging, Receipt, ResourceStore, SeedReport,
+    content_files_opened,
 };
+pub use tc_journal::keys::ToolId;
+pub use tc_journal::pins::{Collection, Ladder};

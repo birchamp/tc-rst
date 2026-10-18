@@ -1,0 +1,5 @@
+### tc4-open-history round 5
+start 14:13:55 7.53 8.50 10.65 7/157 12813
+{"rep":0,"events":576195,"books":66,"scan_ms":49491.5,"fold_ms":25338.9,"total_ms":74830.4,"scan_cpu_ms":45755.021,"fold_cpu_ms":22720.78,"maxrss_mib":1030}
+process: real 75.227 s, user 59.816 s, sys 8.952 s
+end 14:15:10 7.51 8.21 10.38 6/161 13484

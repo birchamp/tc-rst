@@ -7,8 +7,10 @@
 //
 // - `text`: the verse's text, `verseText` of src/views/verseText.js:9, which is
 //   `tokensText(tokenizeVerse(…))` of src/data/sourceHighlight.ts:34-66 with its whitespace
-//   collapsed. It is what the source panes show and what the aligner splits into words
-//   (`verseTextIndex` in src/state.jsx:329, `buildAlignmentSession` in src/state.jsx:1116).
+//   collapsed: what the source panes show (`tc_usfm::display_text`). The Check screen and
+//   the aligner read `verseText` of src/data/bookModel.js:15 instead (`verseTextIndex`,
+//   src/state.jsx:352), whose words are the same on these verses;
+//   gen-check-text-vectors.mjs pins that text (`tc_usfm::shown_text_v1`).
 // - `words`: those words with their occurrences, `wordTokens` of
 //   src/data/align/tokenize.ts:59 (string-punctuation-tokenizer 2.0.0), the words the
 //   aligner banks (`bootstrapVerse` in src/data/align/edit.ts:46).

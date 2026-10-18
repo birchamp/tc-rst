@@ -429,7 +429,7 @@ proptest! {
         let refused = schema_refuses_at("/ingredients/ingredients~1TIT.usfm/checksum/md5", |m| {
             m["ingredients"]["ingredients/TIT.usfm"]["checksum"]["md5"] = json!(text.clone());
         });
-        prop_assert_eq!(Md5::parse(&text).is_ok(), !refused, "{:?}", text);
+        prop_assert_eq!(Md5::parse(&text).is_some(), !refused, "{:?}", text);
     }
 
     #[test]

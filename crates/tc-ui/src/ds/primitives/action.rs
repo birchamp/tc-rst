@@ -1,6 +1,6 @@
 //! Action.jsx: anything the user activates.
 
-use leptos::ev::{self, MouseEvent};
+use leptos::ev::{self, MouseEvent, PointerEvent};
 use leptos::prelude::*;
 
 use crate::ds::{Attrs, Css, Shape, Size, Tag, Tone, Weight, element, spread};
@@ -142,6 +142,11 @@ pub(crate) fn action_css(
 
 /// Anything the user activates: a filled primary, a hairline alternative, a text link, an
 /// icon square, a menu row. Weight is how loud it is; tone is what it means.
+///
+/// `title`, `disabled`, `aria_busy` and `style` may change while the action is on screen; the
+/// element stays, so it keeps the focus. tC4's sync button reads "Syncing…" in its title and
+/// is busy while a sync runs, and the Previous and Next pills drop their accent colour at the
+/// ends.
 #[component]
 pub fn Action(
     #[prop(optional)] weight: Weight,
@@ -149,11 +154,18 @@ pub fn Action(
     #[prop(optional)] size: Size,
     #[prop(optional)] shape: Shape,
     #[prop(optional)] icon_only: bool,
-    #[prop(optional, into)] title: Option<String>,
+    #[prop(optional, into)] title: Signal<Option<String>>,
     #[prop(optional, into)] disabled: Signal<bool>,
+    /// `aria-busy="true"` while true; absent otherwise (React's `aria-busy={busy || undefined}`).
+    #[prop(optional, into)]
+    aria_busy: Signal<bool>,
     #[prop(optional, into)] tag: Option<Tag>,
     #[prop(optional, into)] href: Option<String>,
     #[prop(optional)] on_click: Option<Callback<MouseEvent>>,
+    /// React's `onPointerDownCapture`. tC4 calls `preventDefault` there on a control that is
+    /// off while an editing card is open, so a press keeps the focus in the card (#698).
+    #[prop(optional)]
+    on_pointer_down_capture: Option<Callback<PointerEvent>>,
     #[prop(optional, into)] style: Signal<Css>,
     #[prop(optional)] attrs: Attrs,
     #[prop(optional)] children: Option<Children>,
@@ -166,7 +178,6 @@ pub fn Action(
     let is_button = tag == "button";
     let square = shape == Shape::Square || icon_only;
     let i = weight_css(weight).1;
-    let label = icon_only.then(|| title.clone()).flatten();
     element(tag)
         .attr("type", is_button.then_some("button"))
         .attr("href", href)
@@ -176,8 +187,11 @@ pub fn Action(
         .attr("aria-disabled", move || {
             (!is_button && disabled.get()).then_some("true")
         })
-        .attr("title", title)
-        .attr("aria-label", label)
+        .attr("title", move || title.get())
+        .attr("aria-label", move || {
+            icon_only.then(|| title.get()).flatten()
+        })
+        .attr("aria-busy", move || aria_busy.get().then_some("true"))
         .attr("data-trim", (!square).then_some("cap"))
         .attr("style", move || {
             style.with(|st| {
@@ -189,6 +203,11 @@ pub fn Action(
             if let Some(cb) = on_click
                 && !disabled.get_untracked()
             {
+                cb.run(e);
+            }
+        })
+        .on(ev::capture(ev::pointerdown), move |e| {
+            if let Some(cb) = on_pointer_down_capture {
                 cb.run(e);
             }
         })

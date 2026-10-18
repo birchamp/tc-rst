@@ -9,27 +9,42 @@
 //! the checks; this module adds that an export names the pinned repository, and keeps
 //! out what nothing verified.
 //!
+//! A lexicon is never installed as its files: its archive is repackaged into one file
+//! ([`crate::repackage_lexicon`]), whether it is downloaded here or was bundled
+//! ([`install_lexicon_zip`]).
+//!
 //! The pin's host is not compared with the client's server: reads go to the server the
 //! client was made for (production, or a test server), and the commit is the identity.
 
-use tc_door43::{Door43Client, FileMode, TagName, UnpackedFile};
+use tc_door43::{Door43Client, FileMode, TagName, UnpackedFile, VerifiedArchive};
 use tc_helps::metadata::parse_burrito_metadata;
 
-use crate::error::{InstallError, Refusal};
+use crate::error::{InstallError, LexiconError, Refusal};
+use crate::fetched::{FetchedLock, TreeCheck};
 use crate::layout;
-use crate::pin::{RepoPath, ResourcePin};
+use crate::lexicon::{LEXICON_FILE, LEXICON_FLAVOR, is_lexicon_archive, repackage_lexicon};
+use crate::pin::{BookCoverage, RepoPath, ResourcePin, Sha256};
 use crate::store::{Installed, Origin, Packaging, ResourceStore, Staged};
 
 impl Packaging {
     /// tC4's choice: the burrito export of the pin's tag, or the archive of a pin by
-    /// commit only.
+    /// commit only. A lexicon is repackaged from its archive, so its tag is not used.
     pub fn for_pin(pin: &ResourcePin) -> Self {
-        if pin.version.is_some() {
+        if is_lexicon_pin(pin) {
+            Packaging::Lexicon
+        } else if pin.version.is_some() {
             Packaging::BurritoExport
         } else {
             Packaging::Archive
         }
     }
+}
+
+fn is_lexicon_pin(pin: &ResourcePin) -> bool {
+    pin.flavor
+        .as_deref()
+        .and_then(|f| f.rsplit_once('/'))
+        .is_some_and(|(_, flavor)| flavor == LEXICON_FLAVOR)
 }
 
 /// Turns a release tag into a pin by one Door43 tag lookup (D59): the commit Door43's tags
@@ -58,6 +73,9 @@ pub async fn install_dcs(
 
 /// [`install_dcs`] with the packaging chosen by the caller. [`Packaging::Archive`] gives
 /// the same bytes on every download; [`Packaging::BurritoExport`] needs the pin's tag.
+/// An archive whose metadata declares a lexicon is repackaged whichever was chosen
+/// ([`Packaging::Lexicon`]), and [`Packaging::Lexicon`] refuses an archive that is not a
+/// lexicon.
 pub async fn install_dcs_as(
     store: &ResourceStore,
     client: &Door43Client,
@@ -84,12 +102,66 @@ pub async fn install_dcs_as(
                 pin: pin.to_string(),
             });
         }
-        (Packaging::Archive, _) => {
-            let archive = client.download_archive(pin.repo.repo(), &pin.sha).await?;
-            from_archive(pin, archive.files)
+        (Packaging::Archive | Packaging::Lexicon, _) => {
+            let (zip, archive) = client
+                .download_archive_zip(pin.repo.repo(), &pin.sha)
+                .await?;
+            from_archive(pin, archive, Sha256::of(&zip), packaging)?
         }
     };
     store.install(staged)
+}
+
+/// What [`install_lexicon_zip`] did.
+// Made once per install; boxing the install would only make every match harder to read.
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug)]
+pub enum LexiconInstall {
+    Installed(Installed),
+    /// `fetched.lock` has no entry for the archive's commit, so nothing confirms its files
+    /// and nothing was installed. The app shows the lexicon as unavailable.
+    Unconfirmed,
+}
+
+/// Installs a lexicon from its archive at hand: the bundled `en_ugl` and `en_uhl` archives
+/// when the app is packaged. The archive must match the entry `lock` holds for the pin's
+/// commit (its size, its SHA-256 and the commit's tree that Door43 reported); without an
+/// entry it is [`LexiconInstall::Unconfirmed`]. A confirmed archive is repackaged into one
+/// file by the function a download uses, and that file must have the SHA-256 the entry
+/// records as `lexiconSha256`.
+pub fn install_lexicon_zip(
+    store: &ResourceStore,
+    pin: &ResourcePin,
+    lock: &FetchedLock,
+    zip: &[u8],
+    max_unpacked: u64,
+) -> Result<LexiconInstall, InstallError> {
+    if let Some(installed) = store.dcs(pin)? {
+        return Ok(LexiconInstall::Installed(installed));
+    }
+    let refused = |refusal| InstallError::Refused {
+        what: pin.to_string(),
+        refusal,
+    };
+    let archive = match lock
+        .check(pin.repo.repo(), &pin.sha, zip, max_unpacked)
+        .map_err(refused)?
+    {
+        TreeCheck::Unconfirmed => return Ok(LexiconInstall::Unconfirmed),
+        TreeCheck::Confirmed(archive) => archive,
+    };
+    let (staged, found) =
+        staged_lexicon(with_flavor(pin, &archive.files), &archive, Sha256::of(zip))?;
+    let recorded = lock
+        .entry(pin.repo.repo(), &pin.sha)
+        .and_then(|entry| entry.lexicon_sha256);
+    if recorded != Some(found) {
+        return Err(InstallError::Lexicon {
+            what: pin.to_string(),
+            problem: LexiconError::NotTheRecordedFile { recorded, found },
+        });
+    }
+    store.install(staged).map(LexiconInstall::Installed)
 }
 
 /// Installs a burrito export already at hand: a zip a person picked from a USB drive, or
@@ -128,12 +200,12 @@ pub async fn install_all(
     store: &ResourceStore,
     client: &Door43Client,
     pins: &[ResourcePin],
-) -> Result<Vec<Installed>, (ResourcePin, InstallError)> {
+) -> Result<Vec<Installed>, Box<(ResourcePin, InstallError)>> {
     let mut out = Vec::new();
     for pin in pins {
         match install_dcs(store, client, pin).await {
             Ok(installed) => out.push(installed),
-            Err(e) => return Err((pin.clone(), e)),
+            Err(e) => return Err(Box::new((pin.clone(), e))),
         }
     }
     Ok(out)
@@ -162,6 +234,14 @@ fn from_export(
     let identity = parse_burrito_metadata(text)
         .map_err(|e| refused(Refusal::Unreadable(e.to_string())))?
         .identity;
+    // Its entries are not in the export's ingredient table, so nothing in the export
+    // vouches for them.
+    if is_lexicon_pin(pin) || is_lexicon_archive(&files) {
+        return Err(refused(Refusal::Unreadable(
+            "a lexicon is installed from its commit's archive, not from a burrito export"
+                .to_owned(),
+        )));
+    }
     // The owner is not compared: an export names the organization at export time, which a
     // rename leaves stale (`Idiomas-Puentes/es-419_tn`).
     if let Some(repo) = &identity.repo
@@ -194,7 +274,45 @@ fn from_export(
     })
 }
 
-fn from_archive(pin: &ResourcePin, files: Vec<UnpackedFile>) -> Staged {
+fn from_archive(
+    pin: &ResourcePin,
+    archive: VerifiedArchive,
+    zip_sha256: Sha256,
+    packaging: Packaging,
+) -> Result<Staged, InstallError> {
+    let lexicon = packaging == Packaging::Lexicon
+        || is_lexicon_pin(pin)
+        || is_lexicon_archive(&archive.files);
+    let pin = with_flavor(pin, &archive.files);
+    if lexicon {
+        return staged_lexicon(pin, &archive, zip_sha256).map(|(staged, _)| staged);
+    }
+    // A symbolic link's target can point anywhere; it is never written (tc-door43
+    // `FileMode::Symlink`).
+    let (links, files): (Vec<UnpackedFile>, Vec<UnpackedFile>) = archive
+        .files
+        .into_iter()
+        .partition(|f| f.mode == FileMode::Symlink);
+    let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
+    let books = layout::coverage_of(
+        paths.iter().copied(),
+        pin.flavor.as_deref(),
+        pin.repo.repo(),
+    );
+    Ok(Staged {
+        origin: Origin::Dcs {
+            pin,
+            packaging: Packaging::Archive,
+            left_out: links.into_iter().map(|f| f.path).collect(),
+            missing_ingredients: Vec::new(),
+        },
+        books,
+        files: files.into_iter().map(|f| (f.path, f.bytes)).collect(),
+    })
+}
+
+/// The pin, with the flavor the archive's metadata declares when the pin names none.
+fn with_flavor(pin: &ResourcePin, files: &[UnpackedFile]) -> ResourcePin {
     let mut pin = pin.clone();
     if pin.flavor.is_none() {
         pin.flavor = files
@@ -204,24 +322,32 @@ fn from_archive(pin: &ResourcePin, files: Vec<UnpackedFile>) -> Staged {
             .and_then(|text| parse_burrito_metadata(text).ok())
             .and_then(|m| m.identity.flavor);
     }
-    // A symbolic link's target can point anywhere; it is never written (tc-door43
-    // `FileMode::Symlink`).
-    let (links, files): (Vec<UnpackedFile>, Vec<UnpackedFile>) =
-        files.into_iter().partition(|f| f.mode == FileMode::Symlink);
-    let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
-    let books = layout::coverage_of(
-        paths.iter().copied(),
-        pin.flavor.as_deref(),
-        pin.repo.repo(),
-    );
-    Staged {
+    pin
+}
+
+/// A lexicon's install: the one file [`repackage_lexicon`] makes of its archive, and that
+/// file's SHA-256.
+fn staged_lexicon(
+    pin: ResourcePin,
+    archive: &VerifiedArchive,
+    zip_sha256: Sha256,
+) -> Result<(Staged, Sha256), InstallError> {
+    let bytes = repackage_lexicon(pin.repo.repo(), archive, zip_sha256).map_err(|problem| {
+        InstallError::Lexicon {
+            what: pin.to_string(),
+            problem,
+        }
+    })?;
+    let sha256 = Sha256::of(&bytes);
+    let staged = Staged {
         origin: Origin::Dcs {
             pin,
-            packaging: Packaging::Archive,
-            left_out: links.into_iter().map(|f| f.path).collect(),
+            packaging: Packaging::Lexicon,
+            left_out: Vec::new(),
             missing_ingredients: Vec::new(),
         },
-        books,
-        files: files.into_iter().map(|f| (f.path, f.bytes)).collect(),
-    }
+        books: Some(BookCoverage::WholeCollection),
+        files: vec![(LEXICON_FILE.to_owned(), bytes)],
+    };
+    Ok((staged, sha256))
 }

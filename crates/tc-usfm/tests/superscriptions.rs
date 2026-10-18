@@ -15,7 +15,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use tc_usfm::{
-    AlignedVerse, AlignmentGroup, Book, Error, SourceWord, TargetWord, parse_aligned, plain_text,
+    AlignedVerse, AlignmentGroup, Book, Error, SourceWord, TargetWord, display_text, parse_aligned,
     target_words, weave,
 };
 
@@ -65,6 +65,19 @@ fn words(list: &Value) -> Vec<TargetWord> {
             text: w[0].as_str().unwrap().to_owned(),
             occurrence: count(&w[1]),
             occurrences: count(&w[2]),
+        })
+        .collect()
+}
+
+/// The words of the text the Check screen shows and the aligner splits
+/// ([`tc_usfm::shown_text_v1`]).
+fn shown_words(plain: &str) -> Vec<TargetWord> {
+    tc_usfm::words::words(&tc_usfm::shown_text_v1(plain))
+        .into_iter()
+        .map(|w| TargetWord {
+            text: w.text.to_owned(),
+            occurrence: w.occurrence,
+            occurrences: w.occurrences,
         })
         .collect()
 }
@@ -162,10 +175,12 @@ fn verses_with_a_superscription_read_as_tc4_reads_them() {
         let at = format!("{source} {chapter}:{verses}");
         let body = book.verse(chapter, verses).unwrap().body();
         let parsed = parse_aligned(body).unwrap_or_else(|e| panic!("{at}: {e}"));
-        assert_eq!(plain_text(body), str_of(&case, "text"), "{at}");
-        assert_eq!(plain_text(&parsed.plain), str_of(&case, "text"), "{at}");
+        assert_eq!(display_text(body), str_of(&case, "text"), "{at}");
+        assert_eq!(display_text(&parsed.plain), str_of(&case, "text"), "{at}");
         assert_eq!(parsed.words, words(&case["words"]), "{at}");
         assert_eq!(target_words(&parsed.plain).unwrap(), parsed.words, "{at}");
+        // The Check screen and the aligner show these words too.
+        assert_eq!(shown_words(&parsed.plain), parsed.words, "{at}");
         if let Some(aligned) = case.get("aligned") {
             assert_eq!(aligned_words(&parsed), expected_aligned(aligned), "{at}");
             assert!(parsed.renumbered.is_empty(), "{at}");
@@ -264,8 +279,9 @@ fn an_acrostic_letter_that_ends_a_verse_is_woven_as_tc4_weaves_it() {
         let slot = tc4_slot(&text, chapter, verse);
         assert!(slot.ends_with("\n\\qa BETH\n\\q1 "), "{at}");
         let parsed = parse_aligned(slot).unwrap_or_else(|e| panic!("{at}: {e}"));
-        assert_eq!(plain_text(slot), str_of(case, "text"), "{at}");
+        assert_eq!(display_text(slot), str_of(case, "text"), "{at}");
         assert_eq!(parsed.words, words(&case["words"]), "{at}");
+        assert_eq!(shown_words(&parsed.plain), parsed.words, "{at}");
         let held: HashSet<&TargetWord> = parsed.groups.iter().flat_map(|g| &g.targets).collect();
         let bank: Vec<TargetWord> = parsed
             .words

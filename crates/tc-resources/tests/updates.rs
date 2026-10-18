@@ -148,7 +148,7 @@ async fn aquifer_offers_a_newer_release_or_a_reuploaded_asset_by_digest() {
         panic!("{:?}", offers[0].update);
     };
     assert_eq!(to.tag.as_str(), "v2026-10-19");
-    assert_eq!(to.commit.as_str(), "e".repeat(40));
+    assert_eq!(to.commit.to_hex(), "e".repeat(40));
     assert_eq!(to.sha256, tc_resources::Sha256::of(&newer));
     assert_eq!(published.as_deref(), Some("2026-10-19T00:00:00Z"));
     assert_eq!(offers[1].update, AquiferUpdate::Current);

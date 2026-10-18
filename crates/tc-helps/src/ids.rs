@@ -222,27 +222,8 @@ impl AcademyArticleId {
     }
 }
 
-/// A git commit id: 40 hexadecimal digits, stored in lower case.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CommitSha(String);
-
-impl CommitSha {
-    pub fn parse(text: &str) -> Result<Self, Error> {
-        let ok = text.len() == 40 && text.bytes().all(|b| b.is_ascii_hexdigit());
-        ok.then(|| Self(text.to_ascii_lowercase()))
-            .ok_or_else(|| invalid("commit sha", text))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for CommitSha {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
+/// A git commit id: the one shared type ([`tc_core::GitOid`]).
+pub use tc_core::GitOid;
 
 /// An original-language quote (or, for Open Bible Stories, a gateway-language phrase),
 /// exactly as the resource writes it. ` & ` separates discontinuous spans. The text is kept

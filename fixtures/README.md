@@ -19,9 +19,18 @@ Licenses: the content licenses are in `tc4/LICENSE-CONTENT.md`. unfoldingWord re
 (ULT, UST, UHB, UGNT, tN, tW, tA, tQ, TWL, OBS) are CC BY-SA 4.0, © unfoldingWord. The
 `.mjs` generator scripts are tC4 code under GPL-2.0-or-later, kept for provenance.
 
+## `obs/`
+
+What tC4's own OBS code answers, for `tc-obs`. Read `obs/README.md`.
+
 ## `scale/`
 
 Real Psalms data for the performance budgets in `docs/PERFORMANCE.md` (the aligned ULT, the
 UHB, the tN and TWL rows, and the WEB text). The unfoldingWord releases the corpus uses are
 the bundled English suite in `../bundle/en/`. Read `scale/README.md` for provenance and
 checksums.
+
+## `lexicon/`
+
+An excerpt of the bundled Hebrew lexicon as a `git archive` with its `fetched.lock`, and the
+Strong's vectors computed by tC4's rule. Read `lexicon/README.md`.

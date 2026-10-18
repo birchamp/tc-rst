@@ -1,0 +1,6 @@
+### tc4-open cold
+start 15:58:16 2.82 1.13 0.44 7/142 2651
+Buffers:          349008 kB Cached:           897160 kB 
+{"rep":0,"events":278041,"books":66,"scan_ms":186340.7,"fold_ms":22912,"total_ms":209252.7,"scan_cpu_ms":61414.546,"fold_cpu_ms":13156.652,"maxrss_mib":836}
+process: real 211.288 s, user 45.105 s, sys 30.893 s
+end 16:01:47 13.56 7.72 3.22 9/259 12650

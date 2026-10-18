@@ -1,0 +1,27 @@
+== tc4shape
+generated 310422 changes in 43.26986283s
+stats: changes 310422 batches 278055 bytes 406004901 sections 0 concurrent 0 conflicts_seen 0 resolutions 0 by_kind {"alignment": 31102, "bookHeader": 66, "bookPresence": 66, "chapterFront": 1189, "check": 215836, "deviceProfile": 3, "pins": 2, "projectMeta": 5, "setting": 1, "verse": 62151, "versification": 1}; packs 130 pending 147
+real	0m47.053s
+user	0m40.248s
+sys	0m5.395s
+408M	/tmp/claude-0/-home-user-tc-rst/4a142024-63e1-59b8-bcc4-3b15bbfdf386/scratchpad/journal-decision/corpora/rb-tc4shape
+130
+147
+== bible-share 0.42
+generated 277880 changes in 31.445175349s
+stats: changes 277880 batches 232504 bytes 301795156 sections 8776 concurrent 606 conflicts_seen 2211 resolutions 1045 by_kind {"alignment": 19725, "bookHeader": 66, "bookPresence": 66, "chapterFront": 1189, "check": 118636, "comment": 2102, "deviceProfile": 3, "pins": 2, "projectMeta": 5, "setting": 1, "verse": 136084, "versification": 1}; packs 131 pending 74
+real	0m35.494s
+user	0m30.499s
+sys	0m4.704s
+306M	/tmp/claude-0/-home-user-tc-rst/4a142024-63e1-59b8-bcc4-3b15bbfdf386/scratchpad/journal-decision/corpora/rb-share042
+131
+74
+== bible
+generated 617143 changes in 78.082992063s
+stats: changes 617143 batches 553978 bytes 664344248 sections 20917 concurrent 1443 conflicts_seen 6057 resolutions 2844 by_kind {"alignment": 47051, "bookHeader": 66, "bookPresence": 66, "chapterFront": 1189, "check": 282476, "comment": 5003, "deviceProfile": 3, "pins": 2, "projectMeta": 5, "setting": 1, "verse": 281280, "versification": 1}; packs 131 pending 172
+real	1m25.234s
+user	1m10.757s
+sys	0m8.586s
+674M	/tmp/claude-0/-home-user-tc-rst/4a142024-63e1-59b8-bcc4-3b15bbfdf386/scratchpad/journal-decision/corpora/rb-bible
+131
+172

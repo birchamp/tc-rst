@@ -15,9 +15,12 @@
 //! aligner shows them and saves only after the translator edits the verse or keeps the
 //! reflow; until then the stored value, with every link, stays as it is, and after that
 //! it stays in History as the parent of the new change.
-use crate::value::{AlignmentValue, Group};
+use std::collections::HashMap;
+
+use crate::edit::Alignment;
 use crate::words::TargetVerse;
-use tc_usfm::{SourceWord, TargetWord};
+use tc_journal::json::JsonMap;
+use tc_journal::record::{AlignmentGroup, AlignmentValue, SourceWord, TargetWord};
 
 /// A link the new text cannot keep: the word is gone, or its occurrence moved.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,7 +28,7 @@ pub struct DroppedLink {
     /// The card the word was on, by its index in the value.
     pub card: usize,
     /// The card's source words.
-    pub sources: Vec<SourceWord>,
+    pub top_words: Vec<SourceWord>,
     /// The target word as the old value recorded it.
     pub word: TargetWord,
 }
@@ -83,29 +86,44 @@ pub fn reflow(value: &AlignmentValue, verse: &TargetVerse) -> Result<Reflowed, N
 /// to show any stale value against the verse it shows, so that every word it offers is a
 /// word of that verse.
 pub(crate) fn carry(value: &AlignmentValue, verse: &TargetVerse) -> Reflowed {
+    // The fields tC3 or tC4 wrote on a word go with the word, wherever the new text has
+    // it: on its card, or back in the bank.
+    let extras: HashMap<(&str, u32), &JsonMap> = value
+        .all_target_words()
+        .filter(|w| !w.extra.is_empty())
+        .map(|w| ((w.word.as_str(), w.occurrence), &w.extra))
+        .collect();
+    let with_extra = |word: &TargetWord| TargetWord {
+        extra: extras
+            .get(&(word.word.as_str(), word.occurrence))
+            .map(|e| (*e).clone())
+            .unwrap_or_default(),
+        ..word.clone()
+    };
     let mut kept = vec![false; verse.words().len()];
     let mut dropped = Vec::new();
     let mut alignments = Vec::with_capacity(value.alignments.len());
     for (card, group) in value.alignments.iter().enumerate() {
         let mut targets = Vec::new();
-        for word in &group.targets {
+        for word in &group.bottom_words {
             match verse.position(word) {
                 // tC4 keeps a word placed twice on two cards twice; the second copy
                 // would put one word on two cards, so it is reported dropped instead.
                 Some(at) if !kept[at] => {
                     kept[at] = true;
-                    targets.push(verse.words()[at].clone());
+                    targets.push(with_extra(&verse.words()[at]));
                 }
                 _ => dropped.push(DroppedLink {
                     card,
-                    sources: group.sources.clone(),
+                    top_words: group.top_words.clone(),
                     word: word.clone(),
                 }),
             }
         }
-        alignments.push(Group {
-            sources: group.sources.clone(),
-            targets,
+        alignments.push(AlignmentGroup {
+            top_words: group.top_words.clone(),
+            bottom_words: targets,
+            extra: group.extra.clone(),
         });
     }
     let word_bank = verse
@@ -113,14 +131,13 @@ pub(crate) fn carry(value: &AlignmentValue, verse: &TargetVerse) -> Reflowed {
         .iter()
         .zip(&kept)
         .filter(|(_, kept)| !**kept)
-        .map(|(w, _)| w.clone())
+        .map(|(w, _)| with_extra(w))
         .collect();
     let mut next = AlignmentValue {
         alignments,
         word_bank,
         ..value.clone()
     };
-    next.retain_word_extra();
     next.settle(verse);
     Reflowed {
         value: next,

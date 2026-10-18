@@ -61,6 +61,9 @@ console_error_panic_hook = { version = "0.1.7", optional = true }
 # proptest does not build for wasm32-unknown-unknown, where clippy --all-targets also runs.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 proptest = { workspace = true }
+serde_json = { workspace = true }
+sha1 = { workspace = true }
+unicode-general-category = { workspace = true }
 
 [lints]
 workspace = true

@@ -10,6 +10,11 @@ export const cell = (name) => ({ $cell: name });
 export const set = (name, from) => ({ $fn: 'set', cell: name, from });
 /** A callback that writes `value` into cell `name`. */
 export const setTo = (name, value) => ({ $fn: 'set', cell: name, value });
+/** `then` while cell `name` is truthy, else `otherwise`; an absent branch is undefined, as in
+ * tC4's `onClose={busy ? undefined : close}`. */
+export const when = (name, then, otherwise) => ({ $if: name, then, else: otherwise });
+/** A callback that calls preventDefault on its event: tC4's press guard while a card is open. */
+export const prevent = { $fn: 'preventDefault' };
 /** A file of the tC4 checkout, by its path there. */
 export const asset = (path) => ({ $asset: path });
 
@@ -22,6 +27,8 @@ export const hover = (target) => ({ do: 'hover', target });
 export const press = (target) => ({ do: 'press', target });
 export const click = (target) => ({ do: 'click', target });
 export const key = (k) => ({ do: 'key', key: k });
+/** Selects the text from the start of `target` to the end of `to` (or of `target`). */
+export const select = (target, to) => ({ do: 'select', target, ...(to ? { to } : null) });
 
 /** The Ocean title-bar ground: a solid Ocean Surface sets data-on="dark" for its children. */
 export const onDark = (node, pad = 'md') => el('Surface', { tone: 'ocean', fill: 'solid', radius: 'lg', pad, children: node });

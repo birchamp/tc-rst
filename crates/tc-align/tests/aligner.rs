@@ -5,6 +5,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;
+use tc_align::Alignment;
 
 use common::*;
 use tc_align::suggest::{self, Model, RawLink};
@@ -29,7 +30,7 @@ fn banked(aligner: &Aligner, text: &str) -> TargetWord {
         .value()
         .word_bank
         .iter()
-        .find(|w| w.text == text)
+        .find(|w| w.word == text)
         .cloned()
         .unwrap()
 }
@@ -54,7 +55,7 @@ fn placing_and_unplacing_conserve_the_words_and_stamp_the_shown_text() {
     let paul = banked(&aligner, "Paul");
     aligner.place(0, &paul).unwrap();
     assert_eq!(
-        aligner.value().alignments[0].targets,
+        aligner.value().alignments[0].bottom_words,
         std::slice::from_ref(&paul)
     );
     assert_eq!(aligner.value().total(), 11);
@@ -85,7 +86,7 @@ fn proposal_for(aligner: &mut Aligner, card: usize, word: &str) {
     let source = input
         .source()
         .iter()
-        .position(|s| s.text == aligner.value().alignments[card].sources[0].content)
+        .position(|s| s.text == aligner.value().alignments[card].top_words[0].word)
         .unwrap();
     aligner.show_suggestions(&[RawLink {
         source: vec![source],
@@ -137,7 +138,10 @@ fn proposals_follow_their_card_through_a_merge() {
     aligner.merge(0, 1).unwrap();
     assert_eq!(aligner.proposals()[0].card, 0);
     assert_eq!(aligner.accept_all(), 1);
-    assert_eq!(aligner.value().alignments[0].targets[0].text, "servant");
+    assert_eq!(
+        aligner.value().alignments[0].bottom_words[0].word,
+        "servant"
+    );
 }
 
 /// Paul and servant placed on TIT 1:1, saved against `TEXT`.
@@ -149,7 +153,7 @@ fn paul_and_servant() -> AlignmentValue {
 }
 
 fn sorted_words(words: impl IntoIterator<Item = TargetWord>) -> Vec<(String, u32)> {
-    let mut out: Vec<_> = words.into_iter().map(|w| (w.text, w.occurrence)).collect();
+    let mut out: Vec<_> = words.into_iter().map(|w| (w.word, w.occurrence)).collect();
     out.sort();
     out
 }
@@ -162,8 +166,8 @@ fn a_stored_alignment_made_for_other_text_opens_reflowed_and_says_what_it_droppe
     assert!(!aligner.is_stale());
     assert_eq!(aligner.value().placed(), 1);
     assert_eq!(aligner.dropped().len(), 1);
-    assert_eq!(aligner.dropped()[0].word.text, "servant");
-    assert_eq!(aligner.dropped()[0].sources[0].content, "δοῦλος");
+    assert_eq!(aligner.dropped()[0].word.word, "servant");
+    assert_eq!(aligner.dropped()[0].top_words[0].word, "δοῦλος");
     assert!(
         !aligner.is_changed(),
         "a carry-over that dropped a link is not saved until the translator acts"
@@ -229,7 +233,7 @@ fn a_stale_value_tc4_would_not_reflow_opens_with_the_words_of_the_shown_verse() 
 #[test]
 fn a_value_made_for_another_span_is_set_aside_and_the_verse_starts_over() {
     let mut stored = paul_and_servant();
-    stored.span_end = std::num::NonZeroU16::new(2).unwrap();
+    stored.span_end = tc_journal::ids::VerseNo::new(2).unwrap();
     let aligner = open(Some(&stored), TEXT);
     assert_eq!(aligner.value(), open(None, TEXT).value());
     assert_eq!(aligner.earlier(), Some(&stored));
@@ -264,7 +268,7 @@ fn suggestions_from_a_model_trained_on_titus_are_proposals_for_bank_words_only()
     assert_eq!(aligner.value(), &before);
     for p in aligner.proposals() {
         assert!(aligner.value().word_bank.contains(&p.word));
-        assert_ne!(p.word.text, "Paul", "a placed word is never proposed");
+        assert_ne!(p.word.word, "Paul", "a placed word is never proposed");
     }
 }
 
@@ -315,12 +319,12 @@ fn a_record_flagged_for_re_review_opens_as_it_is_and_the_first_edit_clears_the_f
 fn a_stored_word_held_in_two_places_opens_in_one() {
     // Placed on card 0 and also left in the bank: the bank copy goes, nothing is lost.
     let mut both = paul_and_servant();
-    let paul = both.alignments[0].targets[0].clone();
+    let paul = both.alignments[0].bottom_words[0].clone();
     both.word_bank.push(paul.clone());
     let mut aligner = open(Some(&both), TEXT);
     assert!(!aligner.value().word_bank.contains(&paul));
     assert_eq!(
-        aligner.value().alignments[0].targets,
+        aligner.value().alignments[0].bottom_words,
         std::slice::from_ref(&paul)
     );
     assert!(aligner.dropped().is_empty());
@@ -337,7 +341,7 @@ fn a_stored_word_held_in_two_places_opens_in_one() {
 
     // Placed on two cards: kept on the first, the second link reported.
     let mut twice = paul_and_servant();
-    twice.alignments[2].targets.push(paul.clone());
+    twice.alignments[2].bottom_words.push(paul.clone());
     let aligner = open(Some(&twice), TEXT);
     assert_eq!(aligner.dropped().len(), 1);
     assert_eq!(
@@ -348,7 +352,7 @@ fn a_stored_word_held_in_two_places_opens_in_one() {
 }
 
 #[test]
-fn clear_after_a_carry_over_puts_the_bank_back_in_bootstrap_order() {
+fn clear_after_a_carry_over_puts_the_bank_back_in_verse_order() {
     let mut first = open(None, "the cat saw the dog");
     first.place(0, &banked(&first, "cat")).unwrap();
     let stored = first.into_value();
@@ -356,11 +360,20 @@ fn clear_after_a_carry_over_puts_the_bank_back_in_bootstrap_order() {
     let mut aligner = open(Some(&stored), edited);
     assert_eq!(aligner.value().placed(), 1);
     aligner.clear();
-    assert_eq!(
-        aligner.value().word_bank,
-        TargetVerse::new(edited).bank_order()
-    );
+    assert_eq!(aligner.value().word_bank, TargetVerse::new(edited).words());
     assert_eq!(aligner.value().placed(), 0);
+}
+
+#[test]
+fn a_verse_with_no_alignment_shows_its_bank_in_verse_order_from_the_first_view() {
+    // tC4's record of an unaligned verse banks every first occurrence before every
+    // second one; the owner's Q15 ruling shows the bank in verse order from the start.
+    let text = "the cat saw the dog";
+    let verse = TargetVerse::new(text);
+    let aligner = open(None, text);
+    assert_eq!(aligner.value().word_bank, verse.words());
+    assert_ne!(verse.bank_order(), verse.words());
+    assert!(!aligner.is_changed(), "the order alone is not saved");
 }
 
 #[test]
@@ -386,4 +399,51 @@ fn accept_all_places_every_standing_proposal_as_clicks_would() {
     assert_eq!(aligner.value(), by_hand.value());
     assert!(aligner.proposals().is_empty());
     aligner.mark_valid().unwrap();
+}
+
+#[test]
+fn equal_verses_and_aligners_print_alike() {
+    // A verse indexes where its words stand, for the verse-order sort after each edit.
+    // That index is not part of the verse: two equal verses, and two aligners opened on
+    // the same verse, print the same in an assertion message on every run.
+    let text = "a b c d e f g h i j k l m n o p";
+    let verse = TargetVerse::new(text);
+    for _ in 0..4 {
+        let again = TargetVerse::new(text);
+        assert_eq!(again, verse);
+        assert_eq!(format!("{again:?}"), format!("{verse:?}"));
+    }
+    assert_eq!(
+        format!("{:?}", open(None, TEXT)),
+        format!("{:?}", open(None, TEXT))
+    );
+}
+
+#[test]
+fn a_shown_word_the_hash_leaves_out_is_carried_over_when_it_changes() {
+    // `plain_text_v1` leaves out the text of a `\qs` written over lines as the ULT writes
+    // it, so the hash of these two verses is the same; the aligner shows and banks the
+    // Selah all the same, as tC4 does.
+    let before = "Paul, a servant of God\n\\qs\nSelah\n\\qs*\n";
+    let after = "Paul, a servant of God\n\\qs\nPause\n\\qs*\n";
+    assert_eq!(
+        TargetVerse::new(before).md5(),
+        TargetVerse::new(after).md5()
+    );
+    let mut aligner = open(None, before);
+    assert!(aligner.verse().text().ends_with("Selah"));
+    let selah = banked(&aligner, "Selah");
+    aligner.place(0, &selah).unwrap();
+    let stored = aligner.value().clone();
+
+    let reopened = open(Some(&stored), after);
+    let held: Vec<&str> = reopened
+        .value()
+        .all_target_words()
+        .map(|w| w.word.as_str())
+        .collect();
+    assert!(held.contains(&"Pause") && !held.contains(&"Selah"));
+    assert_eq!(reopened.dropped().len(), 1);
+    assert_eq!(reopened.dropped()[0].word, selah);
+    assert!(!reopened.is_changed(), "leaving keeps the stored value");
 }

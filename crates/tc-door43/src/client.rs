@@ -4,7 +4,7 @@ use crate::git_tree::ObjectId;
 use crate::internet::InternetSwitch;
 use crate::listing::Listing;
 use crate::names::{
-    AccountName, CommitSha, NewRepoName, RepoRef, ServerUrl, TagName, TokenName, TokenScope,
+    AccountName, GitOid, NewRepoName, RepoRef, ServerUrl, TagName, TokenName, TokenScope,
     Visibility,
 };
 use crate::repos::{
@@ -276,11 +276,7 @@ impl Door43Client {
 
     /// The commit a tag points at, in one call (`GET /repos/{owner}/{repo}/tags/{tag}`).
     /// This is the independent answer a first install checks a download against.
-    pub async fn tag_commit(
-        &self,
-        repo: &RepoRef,
-        tag: &TagName,
-    ) -> Result<CommitSha, Door43Error> {
+    pub async fn tag_commit(&self, repo: &RepoRef, tag: &TagName) -> Result<GitOid, Door43Error> {
         let mut segments = vec!["tags"];
         segments.extend(tag.segments());
         let url = self.repo_api(repo, &segments);
@@ -323,15 +319,27 @@ impl Door43Client {
     pub async fn download_archive(
         &self,
         repo: &RepoRef,
-        commit: &CommitSha,
+        commit: &GitOid,
     ) -> Result<VerifiedArchive, Door43Error> {
+        Ok(self.download_archive_zip(repo, commit).await?.1)
+    }
+
+    /// [`Door43Client::download_archive`], also returning the zip as it was downloaded,
+    /// for a caller that records which download its files came from (a repackaged
+    /// lexicon names its archive's SHA-256).
+    pub async fn download_archive_zip(
+        &self,
+        repo: &RepoRef,
+        commit: &GitOid,
+    ) -> Result<(Vec<u8>, VerifiedArchive), Door43Error> {
         let tree = self.commit_tree(repo, commit).await?;
         let file = format!("{commit}.zip");
         let url = self.repo_api(repo, &["archive", &file]);
         let route = route_of(&Method::GET, &url);
         let bytes = self.download(url).await?;
-        verify_archive(&bytes, commit, &tree, self.limits.max_unpacked_bytes)
-            .map_err(|source| Door43Error::Verification { route, source })
+        let archive = verify_archive(&bytes, commit, &tree, self.limits.max_unpacked_bytes)
+            .map_err(|source| Door43Error::Verification { route, source })?;
+        Ok((bytes, archive))
     }
 
     /// Download the DCS Scripture Burrito export of `tag` and return it only when its
@@ -341,7 +349,7 @@ impl Door43Client {
         &self,
         repo: &RepoRef,
         tag: &TagName,
-        expected: &CommitSha,
+        expected: &GitOid,
     ) -> Result<VerifiedSbExport, Door43Error> {
         let mut file: Vec<String> = tag.segments().map(str::to_owned).collect();
         if let Some(last) = file.last_mut() {
@@ -480,19 +488,15 @@ impl Door43Client {
             .map_err(|e| unexpected(&route, format!("the account login: {e}")))
     }
 
-    async fn commit_tree(
-        &self,
-        repo: &RepoRef,
-        commit: &CommitSha,
-    ) -> Result<ObjectId, Door43Error> {
-        let mut url = self.repo_api(repo, &["git", "commits", commit.as_str()]);
+    async fn commit_tree(&self, repo: &RepoRef, commit: &GitOid) -> Result<ObjectId, Door43Error> {
+        let mut url = self.repo_api(repo, &["git", "commits", &commit.to_hex()]);
         url.query_pairs_mut()
             .append_pair("stat", "false")
             .append_pair("verification", "false")
             .append_pair("files", "false");
         let route = route_of(&Method::GET, &url);
         let raw: RawCommit = self.json(Method::GET, url, Auth::Anonymous, None).await?;
-        if !raw.sha.eq_ignore_ascii_case(commit.as_str()) {
+        if !raw.sha.eq_ignore_ascii_case(&commit.to_hex()) {
             return Err(unexpected(
                 &route,
                 format!("asked for commit {commit}, Door43 answered {:?}", raw.sha),

@@ -159,9 +159,9 @@ impl<'a> VerseUnit<'a> {
         self.body
     }
 
-    /// The normalized plain text of the body. See [`crate::text`].
-    pub fn plain_text(&self) -> String {
-        text::plain_text(self.body)
+    /// The readable text of the body, never hashed. See [`crate::text`].
+    pub fn display_text(&self) -> String {
+        text::display_text(self.body)
     }
 
     /// The words of the body, numbered by occurrence. Offsets are relative to the body.
@@ -652,7 +652,7 @@ mod tests {
         let uhb = "\\c 3\n\\d\n\\v 1 \\w מִזְמ֥וֹר|lemma=\"מִזְמוֹר\"\\w*\n\\q1\n\\v 2 \\w יְ֭הוָה\\w*\n";
         let book = Book::parse(uhb);
         assert_eq!(book.verse(3, span("1")).unwrap().leading(), "\\d\n");
-        assert_eq!(book.verse(3, span("1")).unwrap().plain_text(), "מִזְמ֥וֹר");
+        assert_eq!(book.verse(3, span("1")).unwrap().display_text(), "מִזְמ֥וֹר");
         // Markers in the middle of a line, and old chunk headings.
         assert_eq!(
             leading_of("\\c 1\n\\q1 \\v 3 Text.\n\\s5\n\\v 4 More \\ts\\*\n\\v 5 End.\n"),
@@ -687,7 +687,7 @@ mod tests {
         assert_eq!(v1.leading(), "\\s Heading\n\\p\n");
         assert_eq!(v1.marker(), "\\v 1 ");
         assert_eq!(v1.body(), "In the beginning.\n\\q1 A line\n");
-        assert_eq!(v1.plain_text(), "In the beginning. A line");
+        assert_eq!(v1.display_text(), "In the beginning. A line");
     }
 
     #[test]
@@ -809,7 +809,7 @@ mod tests {
         );
         // A sidebar inside a body is not verse text.
         let unit = "\\v 2 Two \\esb \\p Aside.\n\\esbe\n\\p again.\n";
-        assert_eq!(text::plain_text(&unit[5..]), "Two again.");
+        assert_eq!(text::display_text(&unit[5..]), "Two again.");
     }
 
     #[test]

@@ -10,6 +10,10 @@ body {
 }
 *, *::before, *::after { box-sizing: border-box; }
 ::selection { background: var(--tc-highlight-soft); }
+/* #737: in Check's "Your translation" line a selected word is painted with that
+   same yellow, so text selected for copying there takes the system's highlight
+   instead and never passes for a selected word. */
+[data-words="target"] ::selection { background: Highlight; color: HighlightText; }
 
 /* ---- Scrollbars ----
 

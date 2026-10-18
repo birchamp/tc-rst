@@ -1,0 +1,7 @@
+{"format":"tc-project","major":1,"minor":3,"minReaderMinor":0,
+ "derivations":{"plainText":1,"verseSplit":1,"tokenizer":1,"selections":1,"wordDiff":1},
+ "derivedPaths":["ingredients/*.usfm","ingredients/vrs.json","ingredients/checking/**",
+                 "ingredients/content/*.md","ingredients/tc/comments/*.json",
+                 "ingredients/tc/conflicts.json","ingredients/tc/format.json",
+                 "ingredients/tc/notes/*.json"],
+ "signing":{"algorithm":"ed25519"}}

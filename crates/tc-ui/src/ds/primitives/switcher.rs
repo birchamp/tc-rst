@@ -17,7 +17,9 @@ pub struct SwitcherOption {
     pub label: String,
     /// A count after the label (a number of notes, …).
     pub count: Option<String>,
-    pub disabled: bool,
+    /// May change while the option is on screen: tC4 turns Understand and Check off while an
+    /// editing card is open in Translate (#698), and the tab stays the same node.
+    pub disabled: Signal<bool>,
 }
 
 impl SwitcherOption {
@@ -26,8 +28,14 @@ impl SwitcherOption {
             value: value.into(),
             label: label.into(),
             count: None,
-            disabled: false,
+            disabled: Signal::from(false),
         }
+    }
+
+    #[must_use]
+    pub fn disabled(mut self, disabled: impl Into<Signal<bool>>) -> Self {
+        self.disabled = disabled.into();
+        self
     }
 }
 
@@ -84,7 +92,7 @@ pub fn Switcher(
         let Some(opt) = options.with_value(|o| o.get(next).cloned()) else {
             return;
         };
-        if opt.disabled {
+        if opt.disabled.get_untracked() {
             return;
         }
         if let Some(cb) = on_change {
@@ -136,7 +144,7 @@ pub fn Switcher(
                             "gap": "var(--control-gap)",
                             "white-space": "nowrap",
                             "line-height": 1.2,
-                            "cursor": if disabled { "default" } else { "pointer" },
+                            "cursor": if disabled.get() { "default" } else { "pointer" },
                             "flex": if grow { "1 1 0" } else { "none" },
                         };
                         if pill {
@@ -163,7 +171,7 @@ pub fn Switcher(
                                 },
                             });
                         }
-                        if disabled {
+                        if disabled.get() {
                             s.set("color", "var(--disabled-fg)");
                         }
                         s.to_style()
@@ -183,9 +191,9 @@ pub fn Switcher(
                         role="tab"
                         aria-selected=move || if on() { "true" } else { "false" }
                         tabindex=move || if on_tab() || (idx().is_none() && i == 0) { "0" } else { "-1" }
-                        disabled=disabled
+                        disabled=move || disabled.get()
                         data-i=move || {
-                            if disabled {
+                            if disabled.get() {
                                 None
                             } else if pill {
                                 Some(if on_i() { "fill" } else { "quiet" })
@@ -195,7 +203,7 @@ pub fn Switcher(
                         }
                         data-selected=move || on_sel().then_some("true")
                         on:click=move |_| {
-                            if !disabled
+                            if !disabled.get_untracked()
                                 && let Some(cb) = on_change {
                                     cb.run(v.clone());
                                 }

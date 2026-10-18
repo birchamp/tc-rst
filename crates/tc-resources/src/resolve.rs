@@ -8,17 +8,23 @@
 //! 5. Offline with it absent: that (tool, book) is unavailable, a first-class state that
 //!    blocks nothing else.
 //!
-//! A rung answers a book when its pin covers the book. A pin's own recorded `books` win;
-//! otherwise the books the exact installed commit holds ([`LocalCoverage`]); otherwise
-//! coverage is unknown and the rung does not answer. The fold (STORAGE §7.7
-//! `resource_ok`) must resolve the same way on every device, so it reads recorded
-//! coverage only: it passes [`RecordedOnly`].
+//! The ladder itself is the journal's (`tc_journal::pins::Ladder`, which [`ProjectPins`]
+//! implements), so the fold, the Check screens and this crate resolve with one
+//! implementation (STORAGE §7.7). A rung answers a book when its pin covers the book: the
+//! pin's own recorded `books`, else here the books its installed commit holds
+//! ([`LocalCoverage`], tC4 `coverageFor`). The fold reads no installed copy: there a pin
+//! that records nothing covers every book (`Ladder::resolution`). A slot whose value is not
+//! a usable pin, such as a pin with a tag and no commit, stops the ladder for the books it
+//! records ([`Resolved::Unusable`]).
 
 use tc_core::BookId;
-use tc_door43::CommitSha;
+use tc_door43::RepoRef;
+use tc_journal::keys::ToolId;
+use tc_journal::pins::{Answer, Collection, Coverage, Ladder, Unrecorded, UnusablePin};
+use tc_journal::record::ResourceRef;
 
-use crate::pin::{BookCoverage, RepoPath, ResourcePin};
-use crate::sets::{ProjectPins, Rung, SetSlot, Tool};
+use crate::pin::{BookCoverage, ResourcePin};
+use crate::sets::{ProjectPins, Rung, SetSlot};
 
 /// The books an installed commit holds, for a pin whose own record says nothing.
 pub trait LocalCoverage {
@@ -32,14 +38,12 @@ impl<F: Fn(&ResourcePin) -> Option<BookCoverage>> LocalCoverage for F {
     }
 }
 
-/// No local input: recorded coverage only, as the fold resolves.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct RecordedOnly;
-
-impl LocalCoverage for RecordedOnly {
-    fn local_books(&self, _: &ResourcePin) -> Option<BookCoverage> {
-        None
-    }
+/// The installed coverage of a resource as the journal's ladder asks for it.
+fn installed_coverage(local: &dyn LocalCoverage, resource: &ResourceRef) -> Option<Coverage> {
+    let repo = resource.repo_path.parse().ok()?;
+    local
+        .local_books(&ResourcePin::new(repo, resource.sha))
+        .map(|books| books.coverage())
 }
 
 /// Where a pin's coverage came from. Only `Unknown` is ambiguous, and only it warrants
@@ -67,13 +71,15 @@ pub fn coverage_for(
     }
 }
 
+/// Whether `pin` covers `book` on this computer, by the journal's rule
+/// (`tc_journal::pins::Pin::coverage_with`, tC4 `coverageFor`).
 pub fn covers(pin: &ResourcePin, book: BookId, local: &dyn LocalCoverage) -> bool {
-    coverage_for(pin, local)
-        .0
-        .is_some_and(|coverage| coverage.covers(book))
+    pin.journal_pin()
+        .coverage_with(&|r: &ResourceRef| installed_coverage(local, r))
+        .covers(book)
 }
 
-/// The rung and pin that answer a (slot, book).
+/// The rung and pin that answer a (slot, collection).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Resolution {
     pub rung: Rung,
@@ -86,141 +92,64 @@ impl Resolution {
     pub fn used_fallback(&self) -> bool {
         self.rung == Rung::Fallback
     }
+}
 
-    /// The record a decision stores as its `resource` (tC4 `resolutionRecord`).
-    pub fn record(&self) -> ResolutionRecord {
-        ResolutionRecord {
-            repo_path: self.pin.repo.clone(),
-            version: self.pin.version.as_ref().map(|v| v.as_str().to_owned()),
-            sha: self.pin.sha.clone(),
-            language_set: self.rung,
+/// Where the ladder stops for a (slot, collection) on this computer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Resolved {
+    /// A usable pin answers.
+    Pin(Resolution),
+    /// A slot value that is not a usable pin answers, such as a pin with a tag and no
+    /// commit. The next rung is not used in its place: that would check the book against
+    /// another language's list without saying so. No install satisfies it, and no
+    /// decision matches it, until the pins are repaired.
+    Unusable { rung: Rung, pin: UnusablePin },
+}
+
+impl Resolved {
+    pub fn rung(&self) -> Rung {
+        match self {
+            Self::Pin(resolution) => resolution.rung,
+            Self::Unusable { rung, .. } => *rung,
+        }
+    }
+
+    /// The usable resolution, if the ladder stopped at one.
+    pub fn usable(self) -> Option<Resolution> {
+        match self {
+            Self::Pin(resolution) => Some(resolution),
+            Self::Unusable { .. } => None,
         }
     }
 }
 
-/// tC4's §5.2 `resource` record: what a decision file stores so a later reader knows
-/// which resource produced its checks. The version is a label for people.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ResolutionRecord {
-    pub repo_path: RepoPath,
-    pub version: Option<String>,
-    pub sha: CommitSha,
-    pub language_set: Rung,
-}
-
-/// STORAGE §2.3 `ResourceRef`: the identity a decision or alignment was made against.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ResourceRef {
-    pub repo_path: RepoPath,
-    pub sha: CommitSha,
-}
-
-impl From<&ResourcePin> for ResourceRef {
-    fn from(pin: &ResourcePin) -> Self {
-        Self {
-            repo_path: pin.repo.clone(),
-            sha: pin.sha.clone(),
-        }
-    }
-}
-
-/// Resolves one language-set slot for a book over the ladder (tC4 `resolveSetSlot`). An
-/// absent slot covers no book; the rung is skipped (D64).
+/// Resolves one language-set slot for `collection` over the ladder (tC4 `resolveSetSlot`
+/// and, for the stories, `resolveObsSetSlot`), reading a pin that records no books with the
+/// books of its installed commit. An absent slot covers nothing; the rung is skipped (D64).
 pub fn resolve_slot(
     pins: &ProjectPins,
     slot: SetSlot,
-    book: BookId,
+    collection: Collection,
     local: &dyn LocalCoverage,
-) -> Option<Resolution> {
-    Rung::LADDER.into_iter().find_map(|rung| {
-        let pin = pins.set(rung)?.pin(slot)?;
-        covers(pin, book, local).then(|| Resolution {
-            rung,
-            pin: pin.clone(),
-        })
-    })
-}
-
-/// Resolves a checking tool for a book (tC4 `resolveToolBook`).
-pub fn resolve_tool_book(
-    pins: &ProjectPins,
-    tool: Tool,
-    book: BookId,
-    local: &dyn LocalCoverage,
-) -> Option<Resolution> {
-    resolve_slot(pins, tool.slot(), book, local)
-}
-
-/// Resolves an Open Bible Stories slot (tC4 `resolveObsSetSlot`): the collection is not
-/// divided into books, so a pin answers on presence.
-pub fn resolve_obs_slot(pins: &ProjectPins, slot: SetSlot) -> Option<Resolution> {
-    Rung::LADDER.into_iter().find_map(|rung| {
-        let pin = pins.set(rung)?.pin(slot)?;
-        Some(Resolution {
-            rung,
-            pin: pin.clone(),
-        })
-    })
-}
-
-/// Whether a stored record still matches the current resolution (tC4
-/// `recordMatchesResolution`). Repository without regard to case, sha exactly; the
-/// label is not compared. A record with no sha (tC3-era) cannot be a [`ResourceRef`],
-/// so the caller passes `None`, which never matches: the warned update, the safe way.
-pub fn record_matches(stored: Option<&ResourceRef>, resolution: Option<&Resolution>) -> bool {
-    match (stored, resolution) {
-        (Some(stored), Some(r)) => stored.repo_path == r.pin.repo && stored.sha == r.pin.sha,
-        _ => false,
+) -> Option<Resolved> {
+    let installed = |r: &ResourceRef| installed_coverage(local, r);
+    match pins.answer_slot(slot, collection, Unrecorded::Installed(&installed))? {
+        Answer::Pin { rung, .. } => {
+            let pin = pins.set(rung)?.readable_pin(slot)?;
+            Some(Resolved::Pin(Resolution { rung, pin }))
+        }
+        Answer::Unusable { rung, pin } => Some(Resolved::Unusable { rung, pin }),
     }
 }
 
-/// What a decision is about: a Bible book, or Open Bible Stories.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum CheckUnit {
-    Book(BookId),
-    Stories,
-}
-
-/// Resolves a tool for a book, or for the stories by presence.
-pub fn resolve_unit(
+/// Resolves a checking tool's list for a collection (tC4 `resolveToolBook`).
+pub fn resolve_tool(
     pins: &ProjectPins,
-    tool: Tool,
-    unit: CheckUnit,
+    tool: ToolId,
+    collection: Collection,
     local: &dyn LocalCoverage,
-) -> Option<Resolution> {
-    match unit {
-        CheckUnit::Book(book) => resolve_tool_book(pins, tool, book, local),
-        CheckUnit::Stories => resolve_obs_slot(pins, tool.obs_slot()),
-    }
-}
-
-/// STORAGE §7.7 `resource_ok`: whether a decision's `resource` is what its (tool, unit)
-/// resolves to over the pins alone, with recorded coverage and no installed input, so
-/// every device computes the same answer. A decision that fails it computes as
-/// invalidated and is kept (D36).
-pub fn resource_ok(
-    pins: &ProjectPins,
-    tool: Tool,
-    unit: CheckUnit,
-    resource: &ResourceRef,
-) -> bool {
-    record_matches(
-        Some(resource),
-        resolve_unit(pins, tool, unit, &RecordedOnly).as_ref(),
-    )
-}
-
-/// STORAGE §7.7's original-language clause of an alignment's validity: an alignment made
-/// against a pinned text (`AlignmentValue::source`) is valid only while the book's
-/// testament still pins that commit. An import with no recorded source passes.
-pub fn alignment_source_ok(pins: &ProjectPins, book: BookId, source: Option<&ResourceRef>) -> bool {
-    match source {
-        None => true,
-        Some(source) => pins
-            .original_language
-            .for_book(book)
-            .is_some_and(|pin| pin.sha == source.sha),
-    }
+) -> Option<Resolved> {
+    resolve_slot(pins, SetSlot::of_tool(tool, collection), collection, local)
 }
 
 /// What a check session can do with one (tool, book) (tC4 `PreflightState`).
@@ -237,6 +166,9 @@ pub enum PreflightState {
     Unpinned,
     /// Pins exist, but neither rung covers this book.
     NotCovered,
+    /// The rung that answers holds a value that is not a usable pin (no commit): nothing
+    /// can be installed for it until the pins are repaired.
+    UnusablePin,
     /// The words-links pin is the pre-release one-repository form (D97 ruling 6): it is
     /// never read, and the project must be created again.
     OldTwl,
@@ -244,7 +176,7 @@ pub enum PreflightState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Preflight {
-    pub tool: Tool,
+    pub tool: ToolId,
     pub book: BookId,
     pub state: PreflightState,
     pub resolution: Option<Resolution>,
@@ -261,7 +193,7 @@ pub struct Preflight {
 /// answers whether this exact pinned commit is on this machine.
 pub fn preflight_tool_book(
     pins: Option<&ProjectPins>,
-    tool: Tool,
+    tool: ToolId,
     book: BookId,
     local: &dyn LocalCoverage,
     installed: &dyn Fn(&ResourcePin) -> bool,
@@ -278,7 +210,7 @@ pub fn preflight_tool_book(
     let Some(pins) = pins.filter(|p| p.has_language_sets()) else {
         return out;
     };
-    if tool == Tool::TranslationWords
+    if tool == ToolId::TranslationWords
         && let Some(old) = pins.old_twl_pin()
     {
         out.state = PreflightState::OldTwl;
@@ -294,22 +226,30 @@ pub fn preflight_tool_book(
             PreflightState::Unavailable
         }
     };
-    if let Some(resolution) = resolve_tool_book(pins, tool, book, local) {
-        let missing = missing_pin(pins, tool, &resolution, installed);
-        out.state = missing.as_ref().map_or(PreflightState::Ready, availability);
-        out.needs = missing;
-        let primary = pins.set(Rung::Primary).and_then(|set| set.pin(tool.slot()));
-        out.unavailable_primary = primary
-            .filter(|_| resolution.used_fallback())
-            .filter(|pin| coverage_for(pin, local).1 == CoverageSource::Unknown)
-            .filter(|pin| !installed(pin))
-            .cloned();
-        out.resolution = Some(resolution);
-        return out;
+    let slot = SetSlot::of_tool(tool, Collection::Book(book));
+    match resolve_tool(pins, tool, Collection::Book(book), local) {
+        Some(Resolved::Pin(resolution)) => {
+            let missing = missing_pin(pins, tool, &resolution, installed);
+            out.state = missing.as_ref().map_or(PreflightState::Ready, availability);
+            out.needs = missing;
+            let primary = pins.set(Rung::Primary).and_then(|set| set.pin(slot));
+            out.unavailable_primary = primary
+                .filter(|_| resolution.used_fallback())
+                .filter(|pin| coverage_for(pin, local).1 == CoverageSource::Unknown)
+                .filter(|pin| !installed(pin))
+                .cloned();
+            out.resolution = Some(resolution);
+            return out;
+        }
+        Some(Resolved::Unusable { .. }) => {
+            out.state = PreflightState::UnusablePin;
+            return out;
+        }
+        None => {}
     }
     let pinned: Vec<&ResourcePin> = Rung::LADDER
         .into_iter()
-        .filter_map(|rung| pins.set(rung)?.pin(tool.slot()))
+        .filter_map(|rung| pins.set(rung)?.pin(slot))
         .collect();
     if pinned.is_empty() {
         return out;
@@ -335,20 +275,57 @@ pub fn preflight_tool_book(
 /// resolving set: the links it resolved on and that set's articles (D97).
 fn missing_pin(
     pins: &ProjectPins,
-    tool: Tool,
+    tool: ToolId,
     resolution: &Resolution,
     installed: &dyn Fn(&ResourcePin) -> bool,
 ) -> Option<ResourcePin> {
     if !installed(&resolution.pin) {
         return Some(resolution.pin.clone());
     }
-    if tool != Tool::TranslationWords {
+    if tool != ToolId::TranslationWords {
         return None;
     }
     pins.set(resolution.rung)?
-        .pin(SetSlot::TranslationWords)
+        .readable_pin(SetSlot::TranslationWords)
         .filter(|tw| !installed(tw))
-        .cloned()
+}
+
+/// How many of a project's pins name a version this computer lacks (tC4
+/// `missingPinCount`, `src/data/installed.ts:282`, D88 point 6): each pin of both language
+/// sets, the original-language `nt` and `ot` pins and each source pane pin, once per
+/// place it is pinned. `installed` answers whether this exact commit is on this machine.
+///
+/// Lexicon pins are left out, as tC4 leaves them out: the Download that this count offers
+/// after a sync opens Source texts, which offers no lexicon.
+pub fn missing_pin_count(pins: &ProjectPins, installed: &dyn Fn(&ResourcePin) -> bool) -> usize {
+    downloadable_pins(pins)
+        .filter(|pin| !installed(pin))
+        .count()
+}
+
+/// The project's pin of `repo` that no install on this machine satisfies: the version a
+/// download of that repository from Source texts must fetch, instead of the catalogue's
+/// latest (tC4 `unsatisfiedProjectPinFor`, `src/data/installed.ts:328`, D58). The primary
+/// set is searched first, then the fallback set, `nt`, `ot` and the source panes. `None`
+/// when the project pins `repo` nowhere or every pin of it is installed.
+pub fn unsatisfied_pin_for<'a>(
+    pins: &'a ProjectPins,
+    repo: &RepoRef,
+    installed: &dyn Fn(&ResourcePin) -> bool,
+) -> Option<&'a ResourcePin> {
+    downloadable_pins(pins).find(|pin| pin.is_repo(repo) && !installed(pin))
+}
+
+/// The pins that Source texts can download, in tC4's search order.
+fn downloadable_pins(pins: &ProjectPins) -> impl Iterator<Item = &ResourcePin> {
+    let sets = Rung::LADDER
+        .into_iter()
+        .filter_map(|rung| pins.set(rung))
+        .flat_map(|set| set.pins.values());
+    let original = &pins.original_language;
+    sets.chain(original.nt.iter())
+        .chain(original.ot.iter())
+        .chain(pins.extra_scripture.iter().map(|pane| &pane.pin))
 }
 
 /// Where in a project's pins a pin sits, for a coverage write-back.
@@ -419,6 +396,7 @@ mod tests {
 
     use super::*;
     use crate::sets::{GatewayLanguage, LanguageSet};
+    use tc_journal::pins::Answer;
 
     /// tC4's deterministic fake sha per (repo, version): djb2-xor, 8 hex digits, five
     /// times.
@@ -499,12 +477,25 @@ mod tests {
         }
     }
 
+    fn nothing_installed(_: &ResourcePin) -> Option<BookCoverage> {
+        None
+    }
+
+    fn book_resolution(
+        pins: &ProjectPins,
+        tool: ToolId,
+        book: BookId,
+        local: &dyn LocalCoverage,
+    ) -> Option<Resolution> {
+        resolve_tool(pins, tool, Collection::Book(book), local)?.usable()
+    }
+
     #[test]
     fn d30_1_resolution_is_per_tool_and_book() {
         let cov = coverage();
         let r = resources();
-        let tit = resolve_tool_book(&r, Tool::TranslationNotes, BookId::Titus, &cov).unwrap();
-        let heb = resolve_tool_book(&r, Tool::TranslationNotes, BookId::Hebrews, &cov).unwrap();
+        let tit = book_resolution(&r, ToolId::TranslationNotes, BookId::Titus, &cov).unwrap();
+        let heb = book_resolution(&r, ToolId::TranslationNotes, BookId::Hebrews, &cov).unwrap();
         assert_eq!(tit.rung, Rung::Primary);
         assert_eq!(heb.rung, Rung::Fallback);
         assert!(heb.used_fallback());
@@ -514,9 +505,9 @@ mod tests {
     fn d30_2_neither_rung_covers_the_book() {
         let cov = coverage();
         assert!(
-            resolve_tool_book(
+            book_resolution(
                 &resources(),
-                Tool::TranslationNotes,
+                ToolId::TranslationNotes,
                 BookId::Revelation,
                 &cov
             )
@@ -535,7 +526,15 @@ mod tests {
                      local: &dyn LocalCoverage,
                      installed: &dyn Fn(&ResourcePin) -> bool,
                      online| {
-            preflight_tool_book(pins, Tool::TranslationNotes, book, local, installed, online).state
+            preflight_tool_book(
+                pins,
+                ToolId::TranslationNotes,
+                book,
+                local,
+                installed,
+                online,
+            )
+            .state
         };
         assert_eq!(
             state(None, BookId::Titus, &cov, &all, true),
@@ -548,11 +547,23 @@ mod tests {
         // Offline with unknown coverage (nothing fetched yet) is unavailable, not a false
         // not-covered verdict.
         assert_eq!(
-            state(Some(&r), BookId::Revelation, &RecordedOnly, &none, false),
+            state(
+                Some(&r),
+                BookId::Revelation,
+                &nothing_installed,
+                &none,
+                false
+            ),
             PreflightState::Unavailable
         );
         assert_eq!(
-            state(Some(&r), BookId::Revelation, &RecordedOnly, &none, true),
+            state(
+                Some(&r),
+                BookId::Revelation,
+                &nothing_installed,
+                &none,
+                true
+            ),
             PreflightState::Fetch
         );
         assert_eq!(
@@ -584,7 +595,7 @@ mod tests {
         let installed = move |p: &ResourcePin| !p.same_identity(&tw_for_check);
         let pre = preflight_tool_book(
             Some(&r),
-            Tool::TranslationWords,
+            ToolId::TranslationWords,
             BookId::Titus,
             &cov,
             &installed,
@@ -611,7 +622,7 @@ mod tests {
         let installed = move |p: &ResourcePin| p.same_identity(&f_inst);
         let pre = preflight_tool_book(
             Some(&r),
-            Tool::TranslationNotes,
+            ToolId::TranslationNotes,
             BookId::Hebrews,
             &local,
             &installed,
@@ -629,7 +640,7 @@ mod tests {
         tn.books = Some(books(&["TIT"]));
         let pre = preflight_tool_book(
             Some(&recorded),
-            Tool::TranslationNotes,
+            ToolId::TranslationNotes,
             BookId::Hebrews,
             &local,
             &installed,
@@ -655,16 +666,16 @@ mod tests {
             .insert(SetSlot::TranslationWordsLinks, tw);
         let pre = preflight_tool_book(
             Some(&r),
-            Tool::TranslationWords,
+            ToolId::TranslationWords,
             BookId::Titus,
-            &RecordedOnly,
+            &nothing_installed,
             &|_| true,
             true,
         );
         assert_eq!(pre.state, PreflightState::OldTwl);
         let notes = preflight_tool_book(
             Some(&r),
-            Tool::TranslationNotes,
+            ToolId::TranslationNotes,
             BookId::Titus,
             &coverage(),
             &|_| true,
@@ -675,36 +686,26 @@ mod tests {
 
     #[test]
     fn d17_a_stored_record_is_compared_by_repository_and_sha() {
-        let cov = coverage();
-        let now = resolve_tool_book(&resources(), Tool::TranslationNotes, BookId::Titus, &cov);
+        let r = resources();
+        let now = r.answer(
+            ToolId::TranslationNotes,
+            Collection::Book(BookId::Titus),
+            Unrecorded::Installed(&|res: &ResourceRef| installed_coverage(&coverage(), res)),
+        );
         let rec = |repo: &str, sha_of: &str| ResourceRef {
-            repo_path: format!("git.door43.org/{repo}").parse().unwrap(),
+            repo_path: format!("git.door43.org/{repo}").into(),
             sha: sha40(sha_of).parse().unwrap(),
         };
-        assert!(record_matches(
-            Some(&rec("Es-419_gl/es-419_tn", "es-419_gl/es-419_tn@v66")),
-            now.as_ref()
-        ));
-        assert!(record_matches(
-            Some(&rec("es-419_GL/ES-419_TN", "es-419_gl/es-419_tn@v66")),
-            now.as_ref()
-        ));
-        assert!(!record_matches(
-            Some(&rec("Es-419_gl/es-419_tn", "es-419_gl/es-419_tn@v67")),
-            now.as_ref()
-        ));
-        assert!(!record_matches(
-            Some(&rec("unfoldingWord/en_tn", "unfoldingword/en_tn@v86")),
-            now.as_ref()
-        ));
-        assert!(!record_matches(None, now.as_ref()));
-        let record = now.unwrap().record();
-        assert_eq!(record.version.as_deref(), Some("v66"));
-        assert_eq!(record.language_set, Rung::Primary);
+        let ok = |record: &ResourceRef| tc_journal::pins::resource_ok(record, now.as_ref());
+        assert!(ok(&rec("Es-419_gl/es-419_tn", "es-419_gl/es-419_tn@v66")));
+        assert!(ok(&rec("es-419_GL/ES-419_TN", "es-419_gl/es-419_tn@v66")));
+        assert!(!ok(&rec("Es-419_gl/es-419_tn", "es-419_gl/es-419_tn@v67")));
+        assert!(!ok(&rec("unfoldingWord/en_tn", "unfoldingword/en_tn@v86")));
+        assert_eq!(now.unwrap().version(), Some("v66"));
     }
 
     #[test]
-    fn the_folds_rules_read_recorded_coverage_only() {
+    fn the_fold_reads_the_pins_alone_and_an_unrecorded_pin_covers_every_book() {
         let mut r = resources();
         let es_tn = r
             .primary
@@ -720,13 +721,13 @@ mod tests {
             .pin(SetSlot::TranslationNotes)
             .unwrap()
             .clone();
-        // Nothing records coverage: no rung answers, whatever is installed.
-        assert!(!resource_ok(
-            &r,
-            Tool::TranslationNotes,
-            CheckUnit::Book(BookId::Titus),
-            &ResourceRef::from(&es_tn)
-        ));
+        let fold = |pins: &ProjectPins, book| {
+            pins.resolution(ToolId::TranslationNotes, Collection::Book(book))
+        };
+        // Nothing records coverage: in the fold the primary covers every book, whatever is
+        // installed, so every device computes the same answer (STORAGE §7.7).
+        let tit = fold(&r, BookId::Titus).unwrap();
+        assert_eq!(tit.resource(), Some(&es_tn.resource()));
         r.primary
             .as_mut()
             .unwrap()
@@ -741,47 +742,102 @@ mod tests {
             .get_mut(&SetSlot::TranslationNotes)
             .unwrap()
             .books = Some(BookCoverage::WholeCollection);
-        let tit = CheckUnit::Book(BookId::Titus);
-        assert!(resource_ok(
-            &r,
-            Tool::TranslationNotes,
-            tit,
-            &ResourceRef::from(&es_tn)
-        ));
-        assert!(!resource_ok(
-            &r,
-            Tool::TranslationNotes,
-            tit,
-            &ResourceRef::from(&en_tn)
-        ));
-        assert!(resource_ok(
-            &r,
-            Tool::TranslationNotes,
-            CheckUnit::Book(BookId::Ruth),
-            &ResourceRef::from(&en_tn)
-        ));
+        assert_eq!(
+            fold(&r, BookId::Titus).unwrap().resource(),
+            Some(&es_tn.resource())
+        );
+        assert_eq!(
+            fold(&r, BookId::Ruth).unwrap().resource(),
+            Some(&en_tn.resource())
+        );
+    }
 
-        let ugnt = pin("unfoldingWord/el-x-koine_ugnt", "v0.34");
-        r.original_language.nt = Some(ugnt.clone());
-        assert!(alignment_source_ok(
+    #[test]
+    fn a_pin_with_no_commit_is_kept_and_stops_the_ladder_for_its_books() {
+        let mut r = resources();
+        let mut json = r.group_json(crate::PinGroup::Primary).unwrap();
+        let tag_only = serde_json::json!({
+            "repoPath": "git.door43.org/Es-419_gl/es-419_tn",
+            "version": "v66",
+            "flavor": "parascriptural/x-bcvnotes",
+            "books": ["TIT"]
+        });
+        json["translationNotes"] = tag_only.clone();
+        r.set_group_json(crate::PinGroup::Primary, &json).unwrap();
+        let primary = r.primary.as_ref().unwrap();
+        assert!(primary.pin(SetSlot::TranslationNotes).is_none());
+        assert_eq!(
+            primary.unreadable.get(&SetSlot::TranslationNotes),
+            Some(&tag_only)
+        );
+        // Writing the set back keeps the slot as it was read, in its place.
+        assert_eq!(primary.to_json().unwrap(), json);
+        // Titus: the primary answers with an unusable pin; the fallback is not used.
+        let tit = resolve_tool(
             &r,
+            ToolId::TranslationNotes,
+            Collection::Book(BookId::Titus),
+            &coverage(),
+        )
+        .unwrap();
+        assert!(matches!(
+            tit,
+            Resolved::Unusable {
+                rung: Rung::Primary,
+                ..
+            }
+        ));
+        assert!(matches!(
+            r.resolution(ToolId::TranslationNotes, Collection::Book(BookId::Titus)),
+            Some(Answer::Unusable { .. })
+        ));
+        let pre = preflight_tool_book(
+            Some(&r),
+            ToolId::TranslationNotes,
             BookId::Titus,
-            Some(&ResourceRef::from(&ugnt))
-        ));
-        assert!(!alignment_source_ok(
-            &r,
-            BookId::Titus,
-            Some(&ResourceRef::from(&pin(
-                "unfoldingWord/el-x-koine_ugnt",
-                "v0.35"
-            )))
-        ));
-        assert!(!alignment_source_ok(
-            &r,
-            BookId::Jonah,
-            Some(&ResourceRef::from(&ugnt))
-        ));
-        assert!(alignment_source_ok(&r, BookId::Jonah, None));
+            &coverage(),
+            &|_| true,
+            true,
+        );
+        assert_eq!(pre.state, PreflightState::UnusablePin);
+        // A book it does not record falls to English.
+        let heb = book_resolution(&r, ToolId::TranslationNotes, BookId::Hebrews, &coverage());
+        assert_eq!(heb.unwrap().rung, Rung::Fallback);
+    }
+
+    #[test]
+    fn a_pin_not_in_tc4s_form_is_kept_as_written_and_still_read() {
+        let mut r = resources();
+        let mut json = r.group_json(crate::PinGroup::Fallback).unwrap();
+        let mut lower = json["translationNotes"].clone();
+        lower["books"] = serde_json::json!(["tit"]);
+        json["translationNotes"] = lower.clone();
+        r.set_group_json(crate::PinGroup::Fallback, &json).unwrap();
+        let fallback = r.fallback.as_ref().unwrap();
+        assert!(fallback.pin(SetSlot::TranslationNotes).is_none());
+        assert_eq!(fallback.to_json().unwrap(), json, "nothing is rewritten");
+        // The ladder reads it as tC4's coverageFor does: the code in upper case.
+        let view = fallback.readable_pin(SetSlot::TranslationNotes).unwrap();
+        assert!(view.books.as_ref().unwrap().covers(BookId::Titus));
+        // With no Spanish notes, Titus resolves to it; Hebrews, which its record leaves
+        // out, to nothing, though the installed copy holds it: a record wins.
+        r.primary
+            .as_mut()
+            .unwrap()
+            .pins
+            .remove(&SetSlot::TranslationNotes);
+        let tit = book_resolution(&r, ToolId::TranslationNotes, BookId::Titus, &coverage());
+        assert_eq!(
+            tit.unwrap(),
+            Resolution {
+                rung: Rung::Fallback,
+                pin: view
+            }
+        );
+        assert_eq!(
+            book_resolution(&r, ToolId::TranslationNotes, BookId::Hebrews, &coverage()),
+            None
+        );
     }
 
     #[test]

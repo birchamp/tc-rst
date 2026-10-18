@@ -1,9 +1,20 @@
 // components/core: Badge, Button, Divider, IconButton, Overline, ProgressBar, StatusDot.
-import { el, noop, group, onDark, row, focus, hover, press, AR, T } from './lib.mjs';
+import { el, noop, cell, setTo, when, prevent, group, onDark, row, focus, hover, press, click, AR, T } from './lib.mjs';
 
 const BADGE_TONES = ['accent', 'accentSoft', 'cultivate', 'ocean', 'neutral', 'valid', 'warn'];
 const BUTTON_VARIANTS = ['primary', 'ocean', 'secondary', 'outline', 'ghost', 'valid', 'danger'];
 const kebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
+
+/* Props tC4's new screens change while the button is on screen. Home's sync button
+   (src/views/Home.jsx:65-66, #690): its title follows its label and it is busy while a sync
+   runs. ItemNavButton (src/views/ItemNav.jsx:16-19, #745): the accent colour only while
+   enabled. The Draft section pill (src/views/Draft.jsx:197-200, #698, #728): off, with a press
+   guard, while an editing card is open. */
+const SYNC = 'Sync with Door43';
+const SYNCING = 'Syncing…';
+const nextPill = (props) => ({ variant: 'secondary', size: 'sm', title: 'Next item', children: 'Next →', ...props });
+const sectionPill = (props) => ({ variant: 'secondary', size: 'sm', children: 'Draft section 1–3', ...props });
+const verseField = el('Input', { defaultValue: 'In the beginning God created', 'aria-label': 'Verse 1' });
 
 export default [
   ...group('Badge', { frame: { width: 200, height: 56 } }, [
@@ -29,6 +40,24 @@ export default [
     ['rtl-pair', { variant: 'secondary', children: T.cancelAr }, {
       document: AR, frame: { width: 280 },
       wrap: (node) => row([node, el('Button', { variant: 'primary', children: T.saveAr })], 10),
+    }],
+    ['sync-busy', { variant: 'outline', size: 'sm', 'data-testid': 'share-p1', title: SYNCING, 'aria-busy': true, disabled: true, children: SYNCING }],
+    ['sync-press', { variant: 'outline', size: 'sm', 'data-testid': 'share-p1', title: when('busy', SYNCING, SYNC), 'aria-busy': when('busy', true),
+      disabled: cell('busy'), onClick: setTo('busy', true), children: when('busy', SYNCING, SYNC) },
+      { cells: { busy: false }, steps: [click('button')], note: 'The press starts a sync: the same button takes the busy title, label and aria-busy.' }],
+    ['nav-next', nextPill({ onClick: noop, style: { marginInlineStart: 4, color: 'var(--accent)' } })],
+    ['nav-prev-rtl', nextPill({ title: 'العنصر السابق', onClick: noop, style: { marginInlineEnd: 4, color: 'var(--accent)' }, children: '→ السابق' }), { document: AR }],
+    ['nav-next-hover', nextPill({ onClick: noop, style: { marginInlineStart: 4, color: 'var(--accent)' } }), { steps: [hover('button')] }],
+    ['nav-next-end', nextPill({ disabled: true, onClick: noop, style: { marginInlineStart: 4 } })],
+    ['nav-to-end', nextPill({ disabled: cell('end'), onClick: setTo('end', true), style: when('end', { marginInlineStart: 4 }, { marginInlineStart: 4, color: 'var(--accent)' }) }),
+      { cells: { end: false }, steps: [click('button')], note: 'The press reaches the last item: the same button turns off and drops the accent colour.' }],
+    ['draft-section', sectionPill({ onClick: noop, style: { color: 'var(--accent)' } })],
+    ['draft-section-hover', sectionPill({ onClick: noop, style: { color: 'var(--accent)' } }), { steps: [hover('button')] }],
+    ['draft-section-focus-visible', sectionPill({ onClick: noop, style: { color: 'var(--accent)' } }), { steps: [focus('button')] }],
+    ['draft-section-off', sectionPill({ onClick: noop, disabled: true, onPointerDownCapture: prevent }), {
+      frame: { width: 280, height: 112 },
+      wrap: (node) => el('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10 }, children: [verseField, node] }),
+      note: 'Off while an editing card is open; a press on it keeps the focus in the card (scenarios.mjs, button-press-guard).',
     }],
   ]),
 

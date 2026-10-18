@@ -5,11 +5,12 @@
 
 use proptest::prelude::*;
 use tc_core::BookId;
-use tc_resources::resolve::{RecordedOnly, resolve_slot};
+use tc_resources::resolve::resolve_slot;
 use tc_resources::{
     BookCoverage, GatewayLanguage, LanguageSet, PinGroup, ProjectPins, ResourcePin, Rung,
-    ScripturePane, SetSlot, Sha256, Testaments,
+    ScripturePane, SetGateway, SetSlot, Sha256, Testaments,
 };
+use tc_resources::{Collection, Ladder, ToolId};
 
 fn book() -> impl Strategy<Value = BookId> {
     (0usize..66).prop_map(|i| BookId::ALL[i])
@@ -68,38 +69,108 @@ fn pin_with(flavor: impl Strategy<Value = Option<String>>) -> impl Strategy<Valu
         })
 }
 
-fn language_set() -> impl Strategy<Value = LanguageSet> {
+/// A slot value not in tC4's §5.3 form, which a project keeps as written: a pin with a tag
+/// and no commit, or one whose coverage names a book in lower case.
+fn unreadable_slot() -> impl Strategy<Value = serde_json::Value> {
     (
+        "[a-z]{2,3}_[a-z]{2,3}",
+        "v[0-9]{1,2}",
+        prop::bool::ANY,
+        "[0-9a-f]{40}",
+    )
+        .prop_map(|(name, version, tag_only, sha)| {
+            let mut slot = serde_json::json!({
+                "repoPath": format!("git.door43.org/someone/{name}"),
+                "version": version,
+                "flavor": "parascriptural/x-bcvnotes",
+            });
+            if tag_only {
+                slot["books"] = serde_json::json!(["TIT"]);
+            } else {
+                slot["sha"] = serde_json::Value::from(sha);
+                slot["books"] = serde_json::json!(["tit"]);
+            }
+            slot
+        })
+}
+
+/// A set's `gatewayLanguage`: tC4's `{languageId, owner}` with a newer app's fields, none,
+/// or a value in another form that a project keeps as written.
+fn set_gateway() -> impl Strategy<Value = SetGateway> {
+    let named = (
         "[a-z]{2}(-[0-9]{3})?",
         "[A-Za-z][A-Za-z0-9_-]{0,10}",
+        unknown_fields(),
+    )
+        .prop_map(|(language, owner, extra)| SetGateway::Named {
+            gateway: GatewayLanguage {
+                language,
+                owner: owner.parse().unwrap(),
+            },
+            extra,
+        });
+    let unreadable = prop_oneof![
+        Just(serde_json::json!(null)),
+        Just(serde_json::json!("en")),
+        Just(serde_json::json!([])),
+        Just(serde_json::json!({"languageId": "en"})),
+        Just(serde_json::json!({"owner": "unfoldingWord", "languageId": 5})),
+        Just(serde_json::json!({"languageId": "en", "owner": "not an owner!"})),
+    ]
+    .prop_map(SetGateway::Unreadable);
+    prop_oneof![4 => named, 1 => Just(SetGateway::Absent), 2 => unreadable]
+}
+
+fn language_set() -> impl Strategy<Value = LanguageSet> {
+    (
+        set_gateway(),
         proptest::collection::btree_map(
             (0usize..SetSlot::ALL.len()).prop_map(|i| SetSlot::ALL[i]),
             project_pin(),
             0..6,
         ),
-        unknown_fields(),
+        proptest::collection::btree_map(
+            (0usize..SetSlot::ALL.len()).prop_map(|i| SetSlot::ALL[i]),
+            unreadable_slot(),
+            0..3,
+        ),
         unknown_fields(),
     )
-        .prop_map(
-            |(language, owner, pins, extra, gateway_extra)| LanguageSet {
-                gateway: GatewayLanguage {
-                    language,
-                    owner: owner.parse().unwrap(),
-                },
+        .prop_map(|(gateway, pins, mut unreadable, mut extra)| {
+            unreadable.retain(|slot, _| !pins.contains_key(slot));
+            // An empty object is an unpinned group, not a set.
+            if gateway == SetGateway::Absent && pins.is_empty() && unreadable.is_empty() {
+                extra.insert("x-only".to_owned(), serde_json::Value::from(1));
+            }
+            LanguageSet {
+                gateway,
                 pins,
+                unreadable,
                 extra,
-                gateway_extra,
-            },
-        )
+            }
+        })
 }
 
 fn testaments() -> impl Strategy<Value = Testaments> {
     (
         proptest::option::of(project_pin()),
         proptest::option::of(project_pin()),
+        proptest::option::of(unreadable_slot()),
         unknown_fields(),
     )
-        .prop_map(|(nt, ot, extra)| Testaments { nt, ot, extra })
+        .prop_map(|(nt, ot, raw, extra)| {
+            let mut unreadable = std::collections::BTreeMap::new();
+            // A testament the group pins in tC4's form cannot also be kept as written.
+            if let Some(raw) = raw.filter(|_| ot.is_none()) {
+                unreadable.insert(tc_core::Testament::Old, raw);
+            }
+            Testaments {
+                nt,
+                ot,
+                unreadable,
+                extra,
+            }
+        })
 }
 
 fn project_pins() -> impl Strategy<Value = ProjectPins> {
@@ -108,24 +179,39 @@ fn project_pins() -> impl Strategy<Value = ProjectPins> {
         proptest::option::of(language_set()),
         testaments(),
         testaments(),
-        proptest::collection::vec(("[a-z]{2,4}", project_pin()), 0..3),
+        proptest::collection::vec(
+            prop_oneof![
+                ("[a-z]{2,4}", project_pin()).prop_map(|(id, pin)| Ok(ScripturePane {
+                    id: id.parse().unwrap(),
+                    pin,
+                })),
+                ("[a-z]{2,4}", unreadable_slot()).prop_map(|(id, mut raw)| {
+                    raw["id"] = serde_json::Value::from(id);
+                    Err(raw)
+                }),
+            ],
+            0..4,
+        ),
     )
-        .prop_map(
-            |(primary, fallback, original_language, lexicon, panes)| ProjectPins {
+        .prop_map(|(primary, fallback, original_language, lexicon, entries)| {
+            let mut extra_scripture = Vec::new();
+            let mut unreadable_panes = Vec::new();
+            for (at, entry) in entries.into_iter().enumerate() {
+                match entry {
+                    Ok(pane) => extra_scripture.push(pane),
+                    Err(raw) => unreadable_panes.push((at, raw)),
+                }
+            }
+            ProjectPins {
                 primary,
                 fallback,
                 original_language,
                 lexicon,
-                extra_scripture: panes
-                    .into_iter()
-                    .map(|(id, pin)| ScripturePane {
-                        id: id.parse().unwrap(),
-                        pin,
-                    })
-                    .collect(),
+                extra_scripture,
+                unreadable_panes,
                 unknown: Default::default(),
-            },
-        )
+            }
+        })
 }
 
 proptest! {
@@ -180,14 +266,29 @@ proptest! {
             fallback: Some(make(fallback.clone(), 'b')),
             ..ProjectPins::default()
         };
-        let got = resolve_slot(&pins, SetSlot::TranslationNotes, b, &RecordedOnly).map(|r| r.rung);
-        let want = if primary.is_some_and(|c| c.covers(b)) {
+        // On a computer with nothing installed, a pin that records nothing covers nothing.
+        let nothing = |_: &ResourcePin| None;
+        let got = resolve_slot(&pins, SetSlot::TranslationNotes, Collection::Book(b), &nothing)
+            .map(|r| r.rung());
+        let want = if primary.as_ref().is_some_and(|c| c.covers(b)) {
             Some(Rung::Primary)
-        } else if fallback.is_some_and(|c| c.covers(b)) {
+        } else if fallback.as_ref().is_some_and(|c| c.covers(b)) {
             Some(Rung::Fallback)
         } else {
             None
         };
         prop_assert_eq!(got, want);
+        // In the fold, which reads no installed copy, it covers every book (STORAGE §7.7).
+        let fold = pins
+            .resolution(ToolId::TranslationNotes, Collection::Book(b))
+            .map(|a| a.rung());
+        let want = if primary.as_ref().is_none_or(|c| c.covers(b)) {
+            Some(Rung::Primary)
+        } else if fallback.as_ref().is_none_or(|c| c.covers(b)) {
+            Some(Rung::Fallback)
+        } else {
+            None
+        };
+        prop_assert_eq!(fold, want);
     }
 }

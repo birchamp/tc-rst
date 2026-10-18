@@ -1,7 +1,7 @@
 {
-  "same": 43,
-  "total": 43,
-  "steps": 231,
+  "same": 53,
+  "total": 53,
+  "steps": 277,
   "scenarios": [
     {
       "name": "menu-keys",
@@ -343,6 +343,86 @@
       "name": "card-keys",
       "case": "Card/interactive-hover",
       "steps": 3,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "button-busy",
+      "case": "Button/sync-press",
+      "steps": 4,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "button-nav-end",
+      "case": "Button/nav-to-end",
+      "steps": 3,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "button-press-guard",
+      "case": "Button/draft-section-off",
+      "steps": 3,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "modal-busy",
+      "case": "Modal/busy-later",
+      "steps": 6,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "modal-not-busy-escape",
+      "case": "Modal/busy-later",
+      "steps": 2,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "modal-not-busy-scrim",
+      "case": "Modal/busy-later",
+      "steps": 1,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "switcher-turn-off",
+      "case": "Switcher/options-turn-off",
+      "steps": 7,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "app-header-exits",
+      "case": "AppHeader/project-editing-later",
+      "steps": 6,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "app-header-exits-taken",
+      "case": "AppHeader/project-exits-taken",
+      "steps": 9,
+      "same": true,
+      "diffs": [],
+      "errors": []
+    },
+    {
+      "name": "book-tile-editing",
+      "case": "BookTile/row-editing",
+      "steps": 5,
       "same": true,
       "diffs": [],
       "errors": []
