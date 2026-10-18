@@ -191,6 +191,34 @@ fn assert_same_inputs(file: &File, section: &Section, number: u32) {
     assert_eq!(texts(&from_cache.inputs), texts(&read.inputs));
 }
 
+/// A cache written piece by piece is the cache written whole, so the store can write the file
+/// of a whole Bible from its sections without holding it (PERFORMANCE.md memory rows).
+#[test]
+fn an_index_written_in_pieces_is_the_index_written_whole() {
+    let changes = every_kind();
+    let mut files = packs_of(&changes);
+    files.push(pending_of(&changes, 3));
+    let sections: Vec<Section> = files
+        .iter()
+        .enumerate()
+        .map(|(n, f)| {
+            f.section(project(), n as u32)
+                .expect("the file can be cached")
+        })
+        .collect();
+    let whole = Index::encode(project(), &sections);
+    let mut pieces = Vec::new();
+    let mut calls = 0;
+    Index::encode_to::<std::convert::Infallible>(project(), &sections, &mut |bytes| {
+        calls += 1;
+        pieces.extend_from_slice(bytes);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(pieces, whole);
+    assert!(calls > sections.len(), "each section goes out as it is");
+}
+
 #[test]
 fn every_kind_from_the_cache_is_what_parsing_gives() {
     let changes = every_kind();

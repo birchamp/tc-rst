@@ -14,7 +14,7 @@ use crate::handle::{
     CheckpointReason, CheckpointReport, CheckpointSkip, Mode, Msg, ProjectHandle, Resolver,
     StoreEvent, pending,
 };
-use crate::layout::{INDEX, TC};
+use crate::layout::TC;
 use crate::load::JournalKind;
 use crate::project::{PackInfo, PendingInfo, Project};
 use crate::reply::{CommandError, ReadOnlyReason};
@@ -455,19 +455,12 @@ impl Actor {
             });
             self.checkpoint(CheckpointReason::LeavingProject, Some(resolver));
             result = self.wait_serving(done).map(|_| ());
-            if self.read_only().is_none() {
-                let bytes = self.project.index_bytes();
-                if let Some(bytes) = bytes {
-                    let _guard = self.index_lock.lock().unwrap_or_else(|e| e.into_inner());
-                    let dir = self.project.folder.path(TC);
-                    let _ = crate::atomic::atomic_write(
-                        &*self.project.vfs,
-                        &dir,
-                        INDEX.rsplit('/').next().unwrap_or("index.bin"),
-                        &bytes,
-                        crate::atomic::SyncDir::Now,
-                    );
-                }
+            if self.read_only().is_none()
+                && let Some(sections) = self.project.index_bytes_later()
+            {
+                let _guard = self.index_lock.lock().unwrap_or_else(|e| e.into_inner());
+                let dir = self.project.folder.path(TC);
+                crate::open::write_index_file(&*self.project.vfs, &dir, self.project.id, &sections);
             }
         }
         self.stop_writer();

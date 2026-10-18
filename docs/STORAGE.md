@@ -4743,6 +4743,22 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the materialization after a failed seal | `a_seal_that_fails_after_its_pack_leaves_a_valid_burrito` |
 | the draft writer ending before the lock is released | `nothing_is_written_into_the_folder_after_the_lock_is_released` |
 | the coherence view of an unverified section draft (current values, no parents) | `an_unverified_section_draft_that_holds_a_span_can_be_kept` |
+| the look at a file just before its rename (rename over what M1 read) | `an_outside_save_during_the_rename_window_is_never_overwritten` |
+| the compare-and-swap reading the bytes (trust an entry's size and mtime) | `the_compare_and_swap_reads_a_file_whose_size_and_mtime_are_unchanged` |
+| the writer thread (materialize on the actor, as unit S1 did) | `a_save_is_durable_while_a_materialize_is_held`, `a_save_is_durable_while_a_checkpoint_is_held`, `a_save_is_durable_while_the_tree_is_built`, `the_opens_first_materialization_runs_after_the_open_returns` |
+| a job never goes back to an older snapshot | `a_job_from_an_older_snapshot_never_writes_over_newer_bytes` (`writer.rs`) |
+| marking by book (mark every file of the project) | `a_book_change_marks_only_that_books_files`, `a_books_materialize_touches_only_that_books_files` |
+| one hash for each buffer and no read-back of an unchanged file | `an_unchanged_file_is_not_read_back_and_each_buffer_is_hashed_once` |
+| the planner's rule 7 and the `reconciles` header (record again what the project shows) | `crash_outside_edit_recording` |
+| the digest prefilter (compare every record of the file) | `reconciling_an_outside_edit_costs_what_it_changed`, `a_watcher_event_for_three_changed_verses_costs_what_they_changed`, `outside_edit_reconcile_conserves` |
+| the writer's own retry of an outside edit the disk refused | `a_disk_that_refuses_the_batch_of_an_outside_edit_is_tried_again_by_the_writer` |
+| the raw commit object (libgit2's signature, which refuses an empty email) | `the_author_is_translationcore_user_with_no_email` |
+| `refs/tc/carried` (reach only what a branch reaches) | `carried_superseded_version_survives_repack` |
+| the read-back of a repack's index before it removes a loose object, and the 14 days | `repack_keeps_every_reachable_object`, `repack_prunes_unreachable_objects_by_age_and_keeps_what_a_ref_reaches`, `crash_r1_pack_written_loose_not_removed` |
+| G4's copy of the carried blobs (start a new repository empty) | `crash_g4_rebuild_keeps_carried_blobs` |
+| the choices of a conflict marked as incomplete history (offer only *Apply what was recovered*) | `an_incomplete_restore_race_offers_every_choice`, `release_batch_is_accepted_beside_the_other_choices` |
+| a target path of *Keep both* or a rename (any path) | `keep_both_to_a_path_the_app_writes_or_another_file_holds_is_refused` |
+| the look at the folder as a burrito after a job (§16.6) | `every_written_state_is_a_valid_burrito`, `the_states_after_outside_changes_are_valid_burritos` |
 ---
 
 ## 17. Crates

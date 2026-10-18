@@ -831,17 +831,9 @@ impl ProjectHandle {
             .name("tc-store background".into())
             .spawn(move || {
                 if let Some(sections) = job.index {
-                    let bytes = tc_journal::index::Index::encode(job.project, sections.iter());
                     let _guard = index_lock.lock().unwrap_or_else(|e| e.into_inner());
                     let dir = job.folder.path(crate::layout::TC);
-                    // A failed write only costs the next open the parse of those files.
-                    let _ = crate::atomic::atomic_write(
-                        &*job.vfs,
-                        &dir,
-                        "index.bin",
-                        &bytes,
-                        crate::atomic::SyncDir::Now,
-                    );
+                    crate::open::write_index_file(&*job.vfs, &dir, job.project, &sections);
                 }
                 if !job.check.is_empty() {
                     let results = crate::open::storage_check(

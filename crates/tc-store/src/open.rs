@@ -1396,17 +1396,9 @@ impl Project {
             .map_err(|e| StoreError::Other(e.to_string()))
     }
 
-    /// The fold cache's bytes (§3.6) if its sections changed since it was last written.
-    pub(crate) fn index_bytes(&mut self) -> Option<Vec<u8>> {
-        if !self.index.changed {
-            return None;
-        }
-        self.index.changed = false;
-        Some(Index::encode(self.id, self.index.sections.values()))
-    }
-
-    /// The sections to encode off the actor, if they changed: sections share their bytes,
-    /// so this copies no change.
+    /// The sections of the fold cache (§3.6) if they changed since it was last written:
+    /// sections share their bytes, so this copies no change, and the file is written from
+    /// them piece by piece ([`write_index_file`]).
     pub(crate) fn index_bytes_later(&mut self) -> Option<Vec<tc_journal::index::Section>> {
         if !self.index.changed {
             return None;
@@ -1414,6 +1406,32 @@ impl Project {
         self.index.changed = false;
         Some(self.index.sections.values().cloned().collect())
     }
+}
+
+/// Writes the fold cache (§3.6) `.tc/index.bin` atomically from its sections, piece by piece:
+/// the file of a whole Bible is 65 MB, and holding it whole beside the fold would add that to
+/// the project store's memory peak at close (PERFORMANCE.md). A failure only costs the next
+/// open the parse of the files the cache lacks.
+pub(crate) fn write_index_file(
+    vfs: &dyn Vfs,
+    dir: &Path,
+    project: ProjectId,
+    sections: &[tc_journal::index::Section],
+) {
+    let mut fill = |out: &mut crate::atomic::Sink<'_>| -> Result<(), StoreError> {
+        Index::encode_to(project, sections.iter(), &mut |bytes: &[u8]| {
+            out(bytes).map_err(|e| StoreError::io("write", dir, e))
+        })
+    };
+    let _ = crate::atomic::atomic_write_streamed(
+        vfs,
+        dir,
+        "index.bin",
+        &mut fill,
+        crate::atomic::SyncDir::Now,
+        &crate::atomic::HeldRetry::SAVE,
+        &mut || Ok(true),
+    );
 }
 
 /// O14's reads, off the actor: each path's md5, size and mtime, and the newest time stamp
