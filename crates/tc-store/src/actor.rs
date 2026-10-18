@@ -10,13 +10,16 @@
 use crate::commands;
 use crate::drafts::{DraftWriter, cleared_by};
 use crate::error::StoreError;
-use crate::handle::{Mode, Msg, ProjectHandle, Resolver, StoreEvent, pending};
+use crate::handle::{
+    CheckpointReason, CheckpointReport, CheckpointSkip, Mode, Msg, ProjectHandle, Resolver,
+    StoreEvent, pending,
+};
 use crate::layout::{INDEX, TC};
 use crate::load::JournalKind;
 use crate::project::{PackInfo, PendingInfo, Project};
 use crate::reply::{CommandError, ReadOnlyReason};
 use crate::vfs::LockHandle;
-use crate::writer::{Job, Origin};
+use crate::writer::{CheckpointJob, Job, Origin};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -62,7 +65,7 @@ pub(crate) fn spawn(
     // O10: the open's materialization is the writer's first job, and the open does not wait
     // for it (a failure of it turns the project read-only, §6.1).
     if matches!(shared.facts().mode, Mode::Writable) {
-        let job = project.materialize_job(Origin::Open, Ok(()), None);
+        let job = project.materialize_job(Origin::Open, None, None);
         let _ = writer.send(Job::Materialize(Box::new(job)));
     }
     let dirty = !project.dirty.is_empty();
@@ -153,8 +156,16 @@ impl Actor {
                 }
                 reply.resolve(result);
             }
-            Msg::Materialize { reply } => self.materialize(Origin::Leave, Ok(()), reply),
-            Msg::Checkpoint { reply } => self.checkpoint(Some(reply)),
+            Msg::Materialize { reply } => self.materialize(Origin::Leave, reply),
+            Msg::Checkpoint { reason, reply } => self.checkpoint(reason, Some(reply)),
+            Msg::MoveHead {
+                commit,
+                expected,
+                tree,
+                report,
+                reply,
+            } => reply.resolve(self.move_head(commit, expected, tree, report)),
+            Msg::CheckpointEnded { result, reply } => reply.resolve(result),
             Msg::WritesFailed { reason } => {
                 // The open's first materialization failed: the writer made the project
                 // read-only; a project that cannot be written holds no lock.
@@ -173,59 +184,125 @@ impl Actor {
 
     fn on_timer(&mut self) {
         if self.due.is_some_and(|d| d <= Instant::now()) {
-            self.materialize(Origin::Timer, Ok(()), None);
+            self.materialize(Origin::Timer, None);
         }
         if self.last_checkpoint.elapsed() >= CHECKPOINT_EVERY {
             self.last_checkpoint = Instant::now();
             if !self.project.journal.pending.is_empty() {
-                self.checkpoint(None);
+                self.checkpoint(CheckpointReason::Periodic, None);
             }
         }
     }
 
     /// §5.10. Hands the dirty paths to the writer with the newest snapshot, and goes on: the
     /// actor never waits for a derived file. `reply` resolves when the writer is done.
-    fn materialize(
-        &mut self,
-        origin: Origin,
-        sealed: Result<(), StoreError>,
-        reply: Option<Resolver<Result<(), StoreError>>>,
-    ) {
+    fn materialize(&mut self, origin: Origin, reply: Option<Resolver<Result<(), StoreError>>>) {
         self.due = None;
         if self.read_only().is_some() {
             if let Some(reply) = reply {
-                reply.resolve(sealed);
+                reply.resolve(Ok(()));
             }
             return;
         }
-        let job = self.project.materialize_job(origin, sealed, reply);
+        let job = self.project.materialize_job(origin, reply, None);
         if let Some(writer) = &self.project.writer {
             // A writer that is gone drops the job, and its reply resolves as closed.
             let _ = writer.send(Job::Materialize(Box::new(job)));
         }
     }
 
-    /// §5.13 C1 and C2 (the commit is unit S2's), after the listing that finds a second
-    /// writer. The seal runs here; the materialization that follows it runs on the writer.
-    fn checkpoint(&mut self, reply: Option<Resolver<Result<(), StoreError>>>) {
+    /// §5.13. The actor lists the journal folders for a second writer, checks the packs this
+    /// session knows, seals, and hands the writer the snapshot after the seal: the files, the
+    /// tree and the commit object are the writer's work, so saves go on meanwhile (R21). The
+    /// branch moves when the writer sends [`Msg::MoveHead`].
+    fn checkpoint(
+        &mut self,
+        reason: CheckpointReason,
+        reply: Option<Resolver<Result<CheckpointReport, StoreError>>>,
+    ) {
         self.last_checkpoint = Instant::now();
-        let done = |reply: Option<Resolver<Result<(), StoreError>>>, result| {
+        let skipped = |why| CheckpointReport {
+            skipped: Some(why),
+            ..CheckpointReport::default()
+        };
+        let done = |reply: Option<Resolver<Result<CheckpointReport, StoreError>>>, result| {
             if let Some(reply) = reply {
                 reply.resolve(result);
             }
         };
         if self.read_only().is_some() {
-            return done(reply, Ok(()));
+            return done(reply, Ok(skipped(CheckpointSkip::ReadOnly)));
         }
         match self.second_writer() {
             Ok(false) => {}
-            Ok(true) => return done(reply, Ok(())),
+            Ok(true) => return done(reply, Ok(skipped(CheckpointSkip::SecondWriter))),
             Err(e) => return done(reply, Err(e)),
         }
+        // A pack an antivirus program or a cloud client took is written back from its blob
+        // before anything is derived from a project without it (§4.4).
+        let restored = self.project.restore_expected_packs(false);
         // A seal that failed after it renamed a pack leaves `metadata.json` without that
-        // pack (I7), so the materialization runs anyway; the seal's error comes first.
-        let sealed = self.project.seal().map(|_| ());
-        self.materialize(Origin::Checkpoint, sealed, reply);
+        // pack (I7), so the files are written anyway; the seal's error comes first.
+        let sealed = restored.and_then(|()| self.project.seal());
+        let device = self.project.device;
+        let Some(reply) = reply else {
+            // The periodic checkpoint nobody waits for: the writer's answer is dropped.
+            let (_unused, resolver) = pending(|| Err(StoreError::Other("no one waits".into())));
+            return self.send_checkpoint(reason, sealed, device, resolver);
+        };
+        self.send_checkpoint(reason, sealed, device, reply);
+    }
+
+    fn send_checkpoint(
+        &mut self,
+        reason: CheckpointReason,
+        sealed: Result<crate::seal::SealReport, StoreError>,
+        device: tc_journal::DeviceId,
+        reply: Resolver<Result<CheckpointReport, StoreError>>,
+    ) {
+        self.due = None;
+        let checkpoint = CheckpointJob {
+            reason,
+            sealed,
+            device,
+            reply,
+        };
+        let job = self
+            .project
+            .materialize_job(Origin::Checkpoint, None, Some(checkpoint));
+        if let Some(writer) = &self.project.writer {
+            let _ = writer.send(Job::Materialize(Box::new(job)));
+        }
+    }
+
+    /// §5.13 C5 and C6: the writer wrote the commit object; the branch moves to it if it is
+    /// still where the writer read it, and the index follows so `git status` is clean.
+    fn move_head(
+        &mut self,
+        commit: tc_journal::GitOid,
+        expected: Option<tc_journal::GitOid>,
+        tree: tc_journal::GitOid,
+        mut report: CheckpointReport,
+    ) -> Result<CheckpointReport, StoreError> {
+        let Some(git) = &self.project.git else {
+            report.skipped = Some(CheckpointSkip::NoHistory);
+            return Ok(report);
+        };
+        match git.move_branch(expected, commit) {
+            Ok(()) => {}
+            Err(crate::git::GitError::HeadMoved) => {
+                report.skipped = Some(CheckpointSkip::HeadMoved);
+                return Ok(report);
+            }
+            Err(e) => return Err(e.into()),
+        }
+        // The index is a courtesy to a terminal; a failure to write it costs nothing.
+        let _ = git.write_index(tree);
+        report.commit = Some(commit);
+        self.project
+            .shared
+            .emit(StoreEvent::Checkpointed { commit });
+        Ok(report)
     }
 
     /// Folds journal files another installation wrote into this folder while it was open,
@@ -262,6 +339,9 @@ impl Actor {
                             sealer: pack.path.map(|p| p.sealer),
                             replaces: pack.header.map(|h| h.replaces).unwrap_or_default(),
                             ids: Vec::new(),
+                            blob: None,
+                            seen: None,
+                            damaged: matches!(pack.status, PackStatus::Damaged(_)),
                         },
                     );
                 }
@@ -303,9 +383,13 @@ impl Actor {
     fn close(&mut self) -> Result<(), StoreError> {
         let mut result = Ok(());
         if self.read_only().is_none() {
-            let (done, resolver) = pending(|| Ok(()));
-            self.checkpoint(Some(resolver));
-            result = done.wait();
+            let (done, resolver) = pending(|| {
+                Err(StoreError::Other(
+                    "the checkpoint at close was dropped".into(),
+                ))
+            });
+            self.checkpoint(CheckpointReason::LeavingProject, Some(resolver));
+            result = self.wait_serving(done).map(|_| ());
             if self.read_only().is_none() {
                 let bytes = self.project.index_bytes();
                 if let Some(bytes) = bytes {
@@ -332,6 +416,38 @@ impl Actor {
         }
         self.lock = None;
         result
+    }
+
+    /// Waits for the writer's answer to a checkpoint while serving what the writer sends the
+    /// actor (the branch to move, the answer itself), so the actor never waits for a writer
+    /// that waits for the actor (D2). Commands that arrive meanwhile are refused: the project
+    /// is closing.
+    fn wait_serving<T>(&mut self, done: crate::handle::Pending<T>) -> T {
+        while !done.is_ready() {
+            match self.rx.recv_timeout(Duration::from_millis(100)) {
+                Ok(Msg::Command { reply, .. }) => reply.resolve(Err(CommandError::Closed)),
+                Ok(Msg::MoveHead {
+                    commit,
+                    expected,
+                    tree,
+                    report,
+                    reply,
+                }) => reply.resolve(self.move_head(commit, expected, tree, report)),
+                Ok(Msg::CheckpointEnded { result, reply }) => reply.resolve(result),
+                Ok(Msg::Sync { reply }) => reply.resolve(()),
+                Ok(Msg::Materialize { reply }) => {
+                    if let Some(reply) = reply {
+                        reply.resolve(Ok(()));
+                    }
+                }
+                Ok(Msg::Checkpoint { reply, .. }) => {
+                    reply.resolve(Err(StoreError::Other("the project is closing".into())));
+                }
+                Ok(Msg::WritesFailed { .. } | Msg::Close { .. }) => {}
+                Err(_) => {}
+            }
+        }
+        done.wait()
     }
 
     /// Ends the writer thread after the jobs already sent.

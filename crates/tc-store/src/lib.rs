@@ -18,6 +18,7 @@
 pub mod actor;
 pub mod appdata;
 pub mod atomic;
+mod checkpoint;
 mod classify;
 pub mod clock;
 mod commands;
@@ -37,6 +38,7 @@ pub mod materialize;
 pub mod notices;
 pub mod open;
 mod pace;
+mod packs;
 pub mod platform;
 pub mod progress;
 mod project;
@@ -57,8 +59,8 @@ pub use counters::StoreCounters;
 pub use drafts::OfferedDraft;
 pub use error::StoreError;
 pub use handle::{
-    BookRead, CheckpointReason, Leave, Mode, Pending, ProjectFacts, ProjectHandle, Snapshot,
-    StoreEvent, Work,
+    BookRead, CheckpointReason, CheckpointReport, CheckpointSkip, Leave, Mode, Pending,
+    ProjectFacts, ProjectHandle, Snapshot, StoreEvent, Work,
 };
 pub use hooks::{Failure, Hooks, Point};
 pub use notices::StoreNotice;

@@ -39,6 +39,13 @@ pub(crate) struct PackInfo {
     /// Its change ids while the open's rules need them (§6.1 O7): only for a pack that
     /// replaces others; empty otherwise.
     pub ids: Vec<ChangeId>,
+    /// The git blob that holds the pack's bytes, when this session stored it (§5.11 K3).
+    pub blob: Option<tc_journal::GitOid>,
+    /// The size and modification time the pack had when this session last looked at it, so a
+    /// checkpoint reads again only a pack that changed (§4.4 "The expected pack set").
+    pub seen: Option<(u64, i64)>,
+    /// The pack failed P2 to P4 when it was read (damaged, as opposed to newer or foreign).
+    pub damaged: bool,
 }
 
 /// A pending file this session knows.
@@ -66,6 +73,15 @@ impl Journal {
     /// removed (§5.10 M0).
     pub fn complete(&self) -> bool {
         self.unreadable.is_empty() && self.missing.is_empty()
+    }
+
+    /// The files that keep it from being complete.
+    pub fn blocked_packs(&self) -> Vec<String> {
+        self.missing
+            .iter()
+            .chain(self.unreadable.iter())
+            .cloned()
+            .collect()
     }
 }
 
@@ -231,7 +247,6 @@ pub(crate) struct Project {
     pub writer: Option<Sender<Job>>,
     /// The actor's handle on the project's repository: it moves the branch and reads the
     /// objects a command asks about. `None` when the session has no history (§6.1 O3).
-    #[allow(dead_code)] // the checkpoint of the next commit moves the branch with it
     pub git: Option<crate::git::Git>,
 }
 
@@ -247,6 +262,9 @@ impl Project {
                     PackFacts {
                         size: p.size,
                         fingerprint: p.fingerprint,
+                        valid: p.valid,
+                        replaces: p.replaces.clone(),
+                        blob: p.blob,
                     },
                 )
             })
@@ -257,17 +275,18 @@ impl Project {
     pub fn materialize_job(
         &mut self,
         origin: crate::writer::Origin,
-        sealed: Result<(), crate::error::StoreError>,
         reply: Option<crate::handle::Resolver<Result<(), crate::error::StoreError>>>,
+        checkpoint: Option<crate::writer::CheckpointJob>,
     ) -> crate::writer::MaterializeJob {
         crate::writer::MaterializeJob {
             snapshot: self.shared.snapshot(),
             dirty: std::mem::take(&mut self.dirty),
             packs: self.pack_facts(),
             complete: self.journal.complete(),
+            missing: self.journal.blocked_packs(),
             origin,
-            sealed,
             reply,
+            checkpoint,
         }
     }
 

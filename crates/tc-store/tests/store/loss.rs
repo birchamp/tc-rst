@@ -245,11 +245,16 @@ fn save_disk_error_after_rename_counts_as_saved() {
     handle.close().unwrap();
 }
 
+/// A pack deleted outside the app that no copy in the object database can restore (the
+/// project's `.git` went with it): nothing derived from it is removed (§4.4). With a copy, the
+/// pack is restored (`checkpoint::loss_pack_deleted_outside_app_restored`).
 #[test]
-fn loss_pack_deleted_outside_app_removes_nothing_derived() {
+fn loss_pack_deleted_with_no_copy_removes_nothing_derived() {
     let (rig, folder) = titus();
     let pack = packs(&rig.fs, &folder).into_iter().next().unwrap();
     rig.fs.delete(&folder.join(&pack)).unwrap();
+    let outside = tc_store::Vfs::outside_dir(&rig.fs, &folder).unwrap();
+    std::fs::remove_dir_all(outside.join(".git")).unwrap();
     let before_usfm = rig.fs.peek(&folder.join("ingredients/TIT.usfm")).unwrap();
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     handle.wait_idle();

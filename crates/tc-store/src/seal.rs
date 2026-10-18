@@ -92,6 +92,9 @@ impl Project {
                 "the new pack {rel} did not read back as written; the pending files are kept"
             )));
         }
+        // K3: the verified pack is stored as a blob, so it can be restored even before a
+        // commit holds it. A blob that cannot be stored now is stored by the checkpoint.
+        let blob = self.git.as_ref().and_then(|git| git.write_blob(&back).ok());
         let number = self.source.add(&abs);
         let loaded = load_pack(&rel, &back, self.id, number);
         if let Some(section) = loaded.section {
@@ -110,6 +113,9 @@ impl Project {
                 sealer: Some(self.device),
                 replaces: replaces_copy,
                 ids: Vec::new(),
+                blob,
+                seen: None,
+                damaged: false,
             },
         );
         self.dirty.metadata = true;

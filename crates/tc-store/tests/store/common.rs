@@ -253,3 +253,79 @@ pub fn ids_on_disk(fs: &FaultFs, folder: &Path) -> BTreeSet<ChangeId> {
     }
     out
 }
+
+// ---------------------------------------------------------------------------------------
+// The project's repository (docs/STORAGE.md §9, §16.6)
+// ---------------------------------------------------------------------------------------
+
+/// The repository of the project at `folder`, as git itself reads it.
+pub fn repo_of(fs: &FaultFs, folder: &Path) -> git2::Repository {
+    use tc_store::Vfs;
+    git2::Repository::open(fs.outside_dir(folder).unwrap()).unwrap()
+}
+
+/// The `.git` folder of the project at `folder`.
+pub fn git_dir_of(fs: &FaultFs, folder: &Path) -> PathBuf {
+    use tc_store::Vfs;
+    fs.outside_dir(folder).unwrap().join(".git")
+}
+
+/// The commits reachable from HEAD, newest first; none when the branch has no commit.
+pub fn commits_of(repo: &git2::Repository) -> Vec<git2::Oid> {
+    let Ok(head) = repo.head() else {
+        return Vec::new();
+    };
+    let mut walk = repo.revwalk().unwrap();
+    walk.push(head.target().unwrap()).unwrap();
+    walk.map(|oid| oid.unwrap()).collect()
+}
+
+/// Every file of a commit's tree, by path.
+pub fn commit_files(repo: &git2::Repository, commit: git2::Oid) -> BTreeMap<String, Vec<u8>> {
+    let tree = repo.find_commit(commit).unwrap().tree().unwrap();
+    let mut out = BTreeMap::new();
+    tree.walk(git2::TreeWalkMode::PreOrder, |root, entry| {
+        if entry.kind() == Some(git2::ObjectType::Blob) {
+            let blob = repo.find_blob(entry.id()).unwrap();
+            out.insert(
+                format!("{root}{}", entry.name().unwrap()),
+                blob.content().to_vec(),
+            );
+        }
+        git2::TreeWalkResult::Ok
+    })
+    .unwrap();
+    out
+}
+
+/// What `tc_burrito` finds wrong with the tree of a commit (§16.6).
+pub fn commit_problems(repo: &git2::Repository, commit: git2::Oid) -> Vec<String> {
+    let files = commit_files(repo, commit);
+    let Some(metadata) = files.get("metadata.json") else {
+        return vec!["no metadata.json".into()];
+    };
+    let mut project = tc_burrito::MemProject::new();
+    for (rel, bytes) in &files {
+        project.insert(rel.clone(), bytes.clone());
+    }
+    tc_burrito::validate_project(metadata, &project)
+        .into_iter()
+        .map(|p| format!("{p:?}"))
+        .collect()
+}
+
+/// Every commit of the project's history is a valid Scripture Burrito (§16.6). A project with
+/// no repository or no commit has nothing to check.
+pub fn assert_commits_valid(fs: &FaultFs, folder: &Path) {
+    if !git_dir_of(fs, folder).exists() {
+        return;
+    }
+    let repo = repo_of(fs, folder);
+    for commit in commits_of(&repo) {
+        let problems = commit_problems(&repo, commit);
+        assert!(
+            problems.is_empty(),
+            "commit {commit} is not a valid burrito: {problems:#?}"
+        );
+    }
+}

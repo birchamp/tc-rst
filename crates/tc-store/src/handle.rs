@@ -24,7 +24,7 @@ use std::time::Instant;
 use tc_journal::command::Command;
 use tc_journal::fold::{Delta, FoldState, ProjectKind};
 use tc_journal::token::{TokenError, TokenKind};
-use tc_journal::{BookId, ChangeId, DeviceId, ProjectId, RecordKey, ShownToken, TokenKey};
+use tc_journal::{BookId, ChangeId, DeviceId, GitOid, ProjectId, RecordKey, ShownToken, TokenKey};
 
 // ---------------------------------------------------------------------------------------
 // A value that arrives later
@@ -243,6 +243,8 @@ pub enum StoreEvent {
         work: Work,
         progress: crate::progress::Progress,
     },
+    /// A checkpoint made a commit and moved the branch to it (§5.13 C5).
+    Checkpointed { commit: GitOid },
 }
 
 /// What a [`StoreEvent::Progress`] is about.
@@ -495,6 +497,55 @@ pub enum CheckpointReason {
     Other(String),
 }
 
+impl CheckpointReason {
+    /// The words of a commit message (§5.13 C5).
+    pub fn words(&self) -> String {
+        match self {
+            Self::LeavingTranslate => "leaving Translate".into(),
+            Self::LeavingProject => "leaving the project".into(),
+            Self::BeforeSync => "before sync".into(),
+            Self::BeforeExport => "before export".into(),
+            Self::AfterImport => "after import".into(),
+            Self::Periodic => "every 30 minutes".into(),
+            Self::Other(words) => words.clone(),
+        }
+    }
+}
+
+/// What a checkpoint did (§5.13).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CheckpointReport {
+    /// The commit the branch now points at, when this checkpoint made one.
+    pub commit: Option<GitOid>,
+    /// The packs the seal wrote.
+    pub sealed: Vec<String>,
+    /// Why no commit was made, when none was.
+    pub skipped: Option<CheckpointSkip>,
+}
+
+/// Why a checkpoint made no commit. Each is a state, not a failure: the work is saved and the
+/// next checkpoint tries again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckpointSkip {
+    /// Nothing changed since the last commit (C4: no empty commits).
+    NoChanges,
+    /// The project is read-only.
+    ReadOnly,
+    /// Another installation is saving into this folder (§5.0).
+    SecondWriter,
+    /// The session has no repository (libgit2 refuses the folder, or it cannot be made).
+    NoHistory,
+    /// The seal failed: the tree's files would show changes its packs lack.
+    SealFailed,
+    /// An expected pack is missing or unreadable: a commit without it would remove it from
+    /// Door43 (§4.4).
+    PackMissing,
+    /// The tree is not a valid burrito: a bug, nothing is committed (§9.4).
+    TreeInvalid,
+    /// The branch moved while the tree was built; the next checkpoint commits again.
+    HeadMoved,
+}
+
 pub(crate) enum Msg {
     Command {
         command: Box<Command>,
@@ -505,7 +556,24 @@ pub(crate) enum Msg {
         reply: Option<Resolver<Result<(), StoreError>>>,
     },
     Checkpoint {
-        reply: Resolver<Result<(), StoreError>>,
+        reason: CheckpointReason,
+        reply: Resolver<Result<CheckpointReport, StoreError>>,
+    },
+    /// The writer built a commit object (§5.13 C5): the actor moves the branch to it, the
+    /// last step of a checkpoint and the only one the actor takes after the seal (R21).
+    MoveHead {
+        commit: GitOid,
+        /// Where the branch was when the writer read it; `None` for a branch with no commit.
+        expected: Option<GitOid>,
+        tree: GitOid,
+        report: CheckpointReport,
+        reply: Resolver<Result<CheckpointReport, StoreError>>,
+    },
+    /// The writer's checkpoint ended without a commit: the actor answers (a close waits for
+    /// exactly this message while it serves the writer's, so neither waits for the other).
+    CheckpointEnded {
+        result: Result<CheckpointReport, StoreError>,
+        reply: Resolver<Result<CheckpointReport, StoreError>>,
     },
     /// The writer's first job failed: the project is read-only and holds no lock (§6.1).
     WritesFailed {
@@ -751,11 +819,19 @@ impl ProjectHandle {
         pending
     }
 
-    /// Seal and materialize (§5.13 C1, C2); the commit is unit S2's.
-    pub fn checkpoint(&self, _reason: CheckpointReason) -> Pending<Result<(), StoreError>> {
+    /// Seal, materialize and commit (§5.13). Only the seal and the move of the branch run on
+    /// the actor; the files, the tree and the commit object are the writer's work from a
+    /// snapshot, so saves go on meanwhile (R21).
+    pub fn checkpoint(
+        &self,
+        reason: CheckpointReason,
+    ) -> Pending<Result<CheckpointReport, StoreError>> {
         let (pending, resolver) =
             pending(|| Err(StoreError::Other("the project is closed".into())));
-        self.send(Msg::Checkpoint { reply: resolver });
+        self.send(Msg::Checkpoint {
+            reason,
+            reply: resolver,
+        });
         pending
     }
 
@@ -796,6 +872,12 @@ impl ProjectHandle {
         let (idle, resolver) = pending(|| ());
         if self.send_writer(crate::writer::Job::Sync { reply: resolver }) {
             idle.wait();
+            // And the actor again: what the writer sent it (a branch to move, a recorded
+            // edit) is in its queue by now.
+            let (idle, resolver) = pending(|| ());
+            if self.send(Msg::Sync { reply: resolver }) {
+                idle.wait();
+            }
         }
         self.shared.wait_jobs();
         self.drafts.flush();

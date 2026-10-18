@@ -32,6 +32,10 @@ pub struct Entry {
     /// `normalization` without projecting every book again (§3.4).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nfc: Option<bool>,
+    /// The git blob that holds exactly these bytes, once a checkpoint has stored it (§9.4).
+    /// A new entry has none: a changed file is stored at the next checkpoint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blob: Option<String>,
 }
 
 /// Bytes held at a path (§6.2): what they are, why they are held, and where their copy is,
@@ -66,6 +70,7 @@ impl Entry {
             held: None,
             oid: None,
             nfc: None,
+            blob: None,
         }
     }
 }
@@ -78,6 +83,9 @@ pub struct PackEntry {
     /// The 64-bit fingerprint (§2.6) the md5 was computed for, as 16 hex digits: an open
     /// fingerprints every pack anyway (O8), so a pack listed here is never hashed again.
     pub fingerprint: String,
+    /// The git blob that holds the pack's bytes, once stored (§4.4, §5.11 K3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blob: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

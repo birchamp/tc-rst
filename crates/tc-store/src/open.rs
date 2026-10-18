@@ -315,13 +315,14 @@ fn open_inner(
     // O3: the project's repository (§6.1).
     let mut notices: Vec<(Notice, Option<String>)> = Vec::new();
     let writable = !read_only && write_failed.is_none();
-    let (git, git_failed) = match crate::history::open(env, &*vfs, path, writable, &counters) {
-        Ok(opened) => {
-            notices.extend(opened.notices);
-            (opened.git, None)
-        }
-        Err(e) => (None, Some(e.to_string())),
-    };
+    let (git, git_failed, rebuilt) =
+        match crate::history::open(env, &*vfs, path, writable, &counters) {
+            Ok(opened) => {
+                notices.extend(opened.notices);
+                (opened.git, None, opened.rebuilt)
+            }
+            Err(e) => (None, Some(e.to_string()), false),
+        };
     if writable && let Some(reason) = git_failed {
         write_failed = Some(reason);
     }
@@ -533,6 +534,7 @@ fn open_inner(
         seq: 0,
         packs: project.pack_facts(),
         complete: project.journal.complete(),
+        packs_missing: project.journal.blocked_packs(),
         dirty: Dirty::default(),
         prerendered: BTreeMap::new(),
         prerendered_seq: 0,
@@ -541,6 +543,8 @@ fn open_inner(
         open_intent: None,
         opening: false,
         git,
+        device,
+        recover: rebuilt,
         actor: actor_tx.clone(),
     };
     for (notice, copy) in notices {
@@ -625,6 +629,8 @@ fn repair_and_classify(
 ) -> Result<Vec<String>, StoreError> {
     // O7.
     project.finish_interrupted()?;
+    // O7: the packs the project expects, written back from their blobs (§4.4).
+    project.restore_expected_packs(true)?;
     // A new device names its person as the old one did (§6.3).
     if let Identity::Minted { old: Some(old), .. } = identity {
         project.copy_profile(old)?;
@@ -827,6 +833,9 @@ fn journal_of(
                             .map(|h| h.replaces.clone())
                             .unwrap_or_default(),
                         ids: pack.ids,
+                        blob: None,
+                        seen: None,
+                        damaged: matches!(pack.status, PackStatus::Damaged(_)),
                     },
                 );
             }

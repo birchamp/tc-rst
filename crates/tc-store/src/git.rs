@@ -421,6 +421,74 @@ impl Git {
         from_oid(oid)
     }
 
+    /// The blob id `bytes` would have, without storing anything.
+    pub fn blob_id(&self, bytes: &[u8]) -> Result<GitOid, GitError> {
+        from_oid(at(
+            "hash a file",
+            Oid::hash_object(ObjectType::Blob, bytes),
+        )?)
+    }
+
+    /// The blob of `bytes`, stored only if the object database lacks it (a checkpoint that
+    /// finds a file unchanged writes nothing).
+    pub fn ensure_blob(&self, bytes: &[u8]) -> Result<GitOid, GitError> {
+        let oid = self.blob_id(bytes)?;
+        if self.has(oid) {
+            Ok(oid)
+        } else {
+            self.write_blob(bytes)
+        }
+    }
+
+    /// Every blob below `prefix` (a directory path such as `ingredients/tc/changes`) in a
+    /// tree, with its full path; empty when the tree has no such directory.
+    pub fn subtree_entries(
+        &self,
+        tree: GitOid,
+        prefix: &str,
+    ) -> Result<BTreeMap<String, TreeEntry>, GitError> {
+        let root = at("read a tree", self.repo.find_tree(to_oid(tree)?))?;
+        let sub = match root.get_path(Path::new(prefix)) {
+            Ok(entry) => at("read a tree", self.repo.find_tree(entry.id()))?,
+            Err(e) if e.code() == ErrorCode::NotFound => return Ok(BTreeMap::new()),
+            Err(source) => {
+                return Err(GitError::Git {
+                    what: "read a tree",
+                    source,
+                });
+            }
+        };
+        let mut out = BTreeMap::new();
+        let mut failed: Option<GitError> = None;
+        at(
+            "walk a tree",
+            sub.walk(TreeWalkMode::PreOrder, |dir, entry| {
+                if entry.kind() == Some(ObjectType::Tree) {
+                    return TreeWalkResult::Ok;
+                }
+                let name = String::from_utf8_lossy(entry.name_bytes());
+                match from_oid(entry.id()) {
+                    Ok(oid) => {
+                        out.insert(
+                            format!("{prefix}/{dir}{name}"),
+                            TreeEntry {
+                                oid,
+                                mode: entry.filemode() as u32,
+                            },
+                        );
+                        TreeWalkResult::Ok
+                    }
+                    Err(e) => {
+                        failed = Some(e);
+                        TreeWalkResult::Abort
+                    }
+                }
+            }),
+        )
+        .or_else(|e| failed.take().map_or(Err(e), Err))?;
+        Ok(out)
+    }
+
     /// Stores a blob read from `read` until it returns 0, without holding it in memory.
     pub fn write_blob_from(
         &self,

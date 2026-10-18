@@ -393,7 +393,7 @@ impl Writer {
 
     /// The facts `metadata.json` lists for a pack: from the manifest when its size and
     /// fingerprint are the ones recorded, else read once.
-    fn pack_entry(&mut self, rel: &str) -> Result<Option<PackEntry>, StoreError> {
+    pub(crate) fn pack_entry(&mut self, rel: &str) -> Result<Option<PackEntry>, StoreError> {
         let Some(info) = self.packs.get(rel).cloned() else {
             return Ok(None);
         };
@@ -411,6 +411,7 @@ impl Writer {
             md5: md5_hex(&bytes),
             size: bytes.len() as u64,
             fingerprint: format!("{:016x}", tc_journal::index::fingerprint(&bytes)),
+            blob: info.blob.map(|b| b.to_hex()),
         };
         self.manifest.packs.insert(rel.to_owned(), entry.clone());
         Ok(Some(entry))
@@ -757,6 +758,9 @@ impl Writer {
         let metadata = match self.build_metadata(&planned, &departing) {
             Ok(metadata) => metadata,
             Err(_) if self.kind == ProjectKind::Bible && self.fold.projected_books().is_empty() => {
+                // The paths stay dirty until a book is there.
+                self.restore_group(group);
+                self.dirty.metadata = true;
                 return Ok(());
             }
             Err(e) => return Err(e),
@@ -1369,6 +1373,13 @@ impl Writer {
         }
     }
 
+    /// The fold's `currentScope`, from which a book file's scope is cut.
+    pub(crate) fn scope_probe(&self) -> serde_json::Value {
+        self.fold
+            .metadata_source_nfc((u64::from(FORMAT_MAJOR), u64::from(FORMAT_MINOR)), true)
+            .scope
+    }
+
     /// `metadata.json` for the files as they will be once `planned` are written and
     /// `removed` gone (M2, M6): the manifest's entries, which stand for every file the app
     /// wrote or holds, with the planned bytes in place of the old, and the fixed files, the
@@ -1380,21 +1391,8 @@ impl Writer {
         planned: &BTreeMap<String, (Md5, u64, Option<bool>)>,
         removed: &[String],
     ) -> Result<Vec<u8>, StoreError> {
-        let source_probe = self
-            .fold
-            .metadata_source_nfc((u64::from(FORMAT_MAJOR), u64::from(FORMAT_MINOR)), true);
-        let book_ranges = |book: BookId| -> Vec<String> {
-            source_probe
-                .scope
-                .get(book.code())
-                .and_then(|v| v.as_array())
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|r| r.as_str().map(str::to_owned))
-                        .collect()
-                })
-                .unwrap_or_default()
-        };
+        let source_probe = self.scope_probe();
+        let book_ranges = |book: BookId| book_ranges(&source_probe, book);
         let removed: BTreeSet<&str> = removed.iter().map(String::as_str).collect();
         let mut entries: Vec<IngredientEntry> = Vec::new();
         let mut nfc = true;
@@ -1515,6 +1513,16 @@ impl Writer {
                 push(&mut entries, &placement.path, md5, size, None, None);
             }
         }
+        self.assemble_metadata(&entries, nfc)
+    }
+
+    /// `metadata.json` for the entries it lists: the project's details, books and pins from
+    /// the fold, and `entries` as the ingredients. `nfc`: every text file listed is in NFC.
+    pub(crate) fn assemble_metadata(
+        &self,
+        entries: &[IngredientEntry],
+        nfc: bool,
+    ) -> Result<Vec<u8>, StoreError> {
         let mut source = self
             .fold
             .metadata_source_nfc((u64::from(FORMAT_MAJOR), u64::from(FORMAT_MINOR)), nfc);
@@ -1534,12 +1542,25 @@ impl Writer {
                 }
             }
         }
-        tc_burrito::build_metadata(&source, &entries).map_err(|problems| {
+        tc_burrito::build_metadata(&source, entries).map_err(|problems| {
             StoreError::Other(format!(
                 "metadata.json would be invalid, so nothing was written (a bug): {problems:?}"
             ))
         })
     }
+}
+
+/// The ranges of the book's scope in `scope` (the fold's `currentScope`).
+pub(crate) fn book_ranges(scope: &serde_json::Value, book: BookId) -> Vec<String> {
+    scope
+        .get(book.code())
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|r| r.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// What a group writes: one book's files, or the files of no book.

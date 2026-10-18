@@ -20,6 +20,9 @@ pub(crate) struct History {
     /// The repository, when this session has one.
     pub git: Option<Git>,
     pub notices: Vec<(Notice, Option<String>)>,
+    /// A damaged repository was replaced: the first commit of the new one is the project as
+    /// it is (§6.4 G4).
+    pub rebuilt: bool,
 }
 
 /// O2's lock files and O3: opens, makes or replaces the repository of the project at `path`.
@@ -41,6 +44,7 @@ pub(crate) fn open(
             },
             None,
         )],
+        rebuilt: false,
     };
     let outside = match vfs.outside_dir(path) {
         Ok(outside) => outside,
@@ -49,6 +53,7 @@ pub(crate) fn open(
     if writable {
         remove_stale_locks(&outside).map_err(|e| StoreError::io("clean", &outside, e))?;
     }
+    let mut rebuilt = false;
     let git = match Git::open(&outside, !writable, counters.clone(), &env.hooks) {
         Opened::Existing(git) | Opened::Created(git) => Some(git),
         Opened::Absent => None,
@@ -64,13 +69,18 @@ pub(crate) fn open(
                         },
                         None,
                     ));
+                    rebuilt = true;
                     Some(git)
                 }
                 Err(e) => return Ok(unavailable(format!("{reason}; {e}"))),
             }
         }
     };
-    Ok(History { git, notices })
+    Ok(History {
+        git,
+        notices,
+        rebuilt,
+    })
 }
 
 /// G4: the damaged `.git` is kept in `.tc/broken-git-<utc>` and a new repository takes its

@@ -55,6 +55,7 @@ fn reopen_checked(fs: FaultFs, folder: &Path) -> (Rig, ProjectHandle) {
         all.keys().filter(|p| p.contains(".~")).collect::<Vec<_>>()
     );
     assert_valid_burrito(&rig.fs, folder);
+    assert_commits_valid(&rig.fs, folder);
     (rig, handle)
 }
 
@@ -705,4 +706,111 @@ fn lexicon_pin() -> tc_journal::record::PinGroupValue {
             ("version".to_owned(), Json::from("v1")),
         ]))),
     )]))
+}
+
+// ---------------------------------------------------------------------------------------
+// The checkpoint's git rows (§6.4 G1 to G3)
+// ---------------------------------------------------------------------------------------
+
+/// G1: the commit object is written and the process stops before the branch moves. The
+/// objects are unreachable and harmless; the next checkpoint commits the same changes once.
+#[test]
+fn crash_g1_objects_written_ref_not_moved_commits_again() {
+    use tc_store::{Failure, Hooks, Point};
+    let hooks = std::sync::Arc::new(Hooks::default());
+    let (base, folder) = titus();
+    let fs = base.fs.copy();
+    let rig = rig_with_hooks(fs.clone(), hooks.clone());
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    let before = commits_of(&repo_of(&fs, &folder));
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    hooks.fail(Point::BeforeHeadUpdate, Failure::Stop);
+    let stopped = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait();
+    assert!(stopped.is_err(), "{stopped:?}");
+    let after = fs.crash(true);
+    hooks.heal(Point::BeforeHeadUpdate);
+    handle.close().unwrap();
+    assert_eq!(commits_of(&repo_of(&after, &folder)), before);
+    let (rig2, handle) = reopen_checked(after, &folder);
+    let report = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert!(report.commit.is_some(), "{report:?}");
+    let repo = repo_of(&rig2.fs, &folder);
+    assert_eq!(commits_of(&repo).len(), before.len() + 1, "one commit");
+    let usfm = String::from_utf8(
+        commit_files(&repo, commits_of(&repo)[0])["ingredients/TIT.usfm"].clone(),
+    )
+    .unwrap();
+    assert!(usfm.contains("Paul, a servant of God"));
+    let again = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert_eq!(again.skipped, Some(tc_store::CheckpointSkip::NoChanges));
+    handle.close().unwrap();
+    assert_commits_valid(&rig2.fs, &folder);
+}
+
+/// G2: a stopped process leaves the branch's lock file. The next open removes it, and the
+/// checkpoint commits.
+#[test]
+fn crash_g2_ref_lock_left_is_removed() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    handle.wait_idle();
+    let after = rig.fs.crash(false);
+    drop(handle);
+    let lock = git_dir_of(&after, &folder).join("refs/heads/main.lock");
+    std::fs::write(&lock, b"a stopped process").unwrap();
+    let (rig2, handle) = reopen_checked(after, &folder);
+    assert!(!lock.exists());
+    let report = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert!(report.commit.is_some(), "{report:?}");
+    handle.close().unwrap();
+    assert_commits_valid(&rig2.fs, &folder);
+}
+
+/// G3: a power cut loses the update of the branch's reference. HEAD is the earlier commit, and
+/// the next checkpoint commits again; the project lost nothing, because git is not the source of
+/// truth.
+#[test]
+fn crash_g3_lost_ref_update_commits_again() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    let reference = git_dir_of(&rig.fs, &folder).join("refs/heads/main");
+    let old = std::fs::read(&reference).unwrap();
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    let report = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert!(report.commit.is_some());
+    handle.close().unwrap();
+    let after = rig.fs.crash(false);
+    std::fs::write(git_dir_of(&after, &folder).join("refs/heads/main"), &old).unwrap();
+    let (rig2, handle) = reopen_checked(after, &folder);
+    let repo = repo_of(&rig2.fs, &folder);
+    let lost = commits_of(&repo).len();
+    let report = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert!(report.commit.is_some(), "{report:?}");
+    assert_eq!(commits_of(&repo).len(), lost + 1);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("Paul, a servant of God")
+    );
+    handle.close().unwrap();
+    assert_commits_valid(&rig2.fs, &folder);
 }

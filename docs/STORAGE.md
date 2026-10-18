@@ -1137,7 +1137,7 @@ None of these files is project data that another device needs. Each is written w
 | `lock` | `{host, pid, device, at}` | exclusive advisory lock (`std::fs::File::try_lock`) while the project is open. It guards the folder against a process a crash left running and against other programs; translationCore itself runs once per computer (§5.0). A lock another process holds refuses the open (O1), and the content names the holder in the error. It is written through the locked handle (truncate, write, flush), never with `atomic_write`: a new file renamed over it would be a file whose lock nobody holds, and another process could take it |
 | `device.json` | `{device, fingerprint, created}` | this folder's Local device (§6.3) |
 | `pending/<device>-<hash32>.batch` | header + change lines (§4.2) | saves not yet sealed: the commit point of every save |
-| `materialized.json` | `{minor, derivations, paths: {<path>: {md5, size, mtimeNs, settled, scope, held, oid, nfc}}, packs: {<path>: {md5, size, fingerprint}}}`: the format minor and derivation versions (§12.1) the files were projected with; per derived or carried path what was written (md5, size, mtime), whether its bytes were read back after its timestamp tick was over (`settled`), the digest of the heads its projection stands for (`scope`), and the bytes the app holds there without writing over them (`held`: their md5, why they are held, and the path of their copy in `.tc/external/`), §6.2; for a USFM or story file whether its bytes are NFC (`nfc`), so `metadata.json` states its `normalization` without projecting every book again; per pack the md5 that `metadata.json` lists, which also makes the manifest's pack list the expected pack set unit S1 checks at open (§4.4: a listed pack that is gone and that no valid pack's `replaces` names is missing) | the manifest: what the app last wrote (§5.10). Its own mtime, which the filesystem sets when it is written, is a time stamp that settles entries (§6.2) |
+| `materialized.json` | `{minor, derivations, paths: {<path>: {md5, size, mtimeNs, settled, scope, held, oid, nfc}}, packs: {<path>: {md5, size, fingerprint}}}`: the format minor and derivation versions (§12.1) the files were projected with; per derived or carried path what was written (md5, size, mtime), whether its bytes were read back after its timestamp tick was over (`settled`), the digest of the heads its projection stands for (`scope`), and the bytes the app holds there without writing over them (`held`: their md5, why they are held, and the path of their copy in `.tc/external/`), §6.2; for a USFM or story file whether its bytes are NFC (`nfc`), so `metadata.json` states its `normalization` without projecting every book again; per derived path the git blob that holds exactly those bytes once a checkpoint stored it (`blob`, §9.4); per pack the md5 that `metadata.json` lists and its blob, which also makes the manifest's pack list part of the expected pack set (§4.4: a listed pack that is gone and that no valid pack's `replaces` names is missing) | the manifest: what the app last wrote (§5.10). Its own mtime, which the filesystem sets when it is written, is a time stamp that settles entries (§6.2) |
 | `heads/<escaped path>.bin` | postcard `HeadsFile`: for every record the file was built from, the heads the written bytes stand for, by the token rule of §2.7 (every head of a settled or merged record; only the provisional candidate and its equal heads for a conflict) | the base of an outside edit (§11.1); an outside editor saw only the provisional text, so its edit never resolves a conflict |
 | `materialize.intent.json` | `{writes: [{path, oldMd5, newMd5}], removes: [path]}` | present only during a materialization |
 | `quarantine/…` | damaged pending files, byte copies; change lines too long for any pack (§5.11 K1) | kept until the person dismisses the notice |
@@ -1321,6 +1321,14 @@ packs are in another device's directory, and a teammate's pack on this disk is a
 one's own. Packs are immutable, so restoring one is always safe. If an expected pack cannot be
 restored or read, no materialization removes anything derived from it and no tree is built
 (§5.13 C3): a commit without it would remove it from Door43 by fast-forward.
+
+A pack this session read or wrote is not read again at a checkpoint when its size and
+modification time are those it was last seen with: reading 674 MiB at every checkpoint would
+break the checkpoint's budget, and a changed pack cannot hide, because its size or time moves.
+A pack that is gone is found by the stat; one whose size or time moved is read and checked
+(P2 to P4, and its fingerprint); the packs of HEAD's tree that are not in the working tree at all
+are found at the open (O7), which lists HEAD's `ingredients/tc/changes` folder once. A damaged
+file that is replaced is first copied into `.tc/quarantine/`.
 
 **All copies damaged.** When no valid blob exists for a damaged path (§9.2 N3), every copy is
 salvaged, and the union of their verified lines is written to a `salvage` pending batch
@@ -1582,7 +1590,8 @@ the counter advances, and the person sees `SavedWithDiskError` ("Saved, but the 
 error: <reason>. Your work may not survive a power cut. Check the disk."). The app never reports
 "Not saved" for a file that exists, so a retry can never reuse its seq.
 
-**Closing.** A close seals and materializes what is due (§5.13 C1, C2), writes the fold cache,
+**Closing.** A close runs a checkpoint (§5.13; the actor serves the writer's messages until the
+checkpoint ends, so neither waits for the other), writes the fold cache,
 stops the draft writer and waits for it, and only then clears `.tc/lock`'s content and releases
 the lock: nothing is written into the folder after the lock is gone, so the next open (after a
 restart, or by a program that takes the lock as this session ends) never races a late
@@ -1620,9 +1629,10 @@ layer holds an open project as a handle:
   `Snapshot::training_input` gives the aligner's training input, each verse's text and
   alignment from that one snapshot (§3.10 item 3).
 - `leave`, `checkpoint`, `restore_held`, `dismiss_notice`, `offered_drafts`, `discard_draft`,
-  `wait_idle`, `close`, and `counters()`. `leave` and `checkpoint` resolve when the writer has
-  finished the job they sent it (`checkpoint` carries the seal's error first); the actor serves
-  commands meanwhile. `restore_held` and `dismiss_notice` go to the writer. `wait_idle` waits
+  `wait_idle`, `close`, and `counters()`. `leave` resolves when the writer has finished the job it
+  sent it; `checkpoint` resolves with a `CheckpointReport` (the commit, the packs sealed, why
+  there is no commit) when the actor has moved the branch or the writer has said why not (the
+  seal's error comes first, then the files'); the actor serves commands meanwhile. `restore_held` and `dismiss_notice` go to the writer. `wait_idle` waits
   for the actor's queue, then the writer's (not for a retry it has scheduled), then the
   background jobs and the drafts. The counters are: files opened, created, read and written, fsyncs,
   renames, listings, derived files read (by the open's classification and by compare-and-swaps,
@@ -2018,7 +2028,8 @@ K2  For each chunk: atomic_create_dirs(ingredients/tc/changes/<me>/<yyyy-mm>);
     quarantined changes.
 K3  Re-read every new pack from disk; P2 to P4 must pass and its id set must equal the chunk's.
     Any failure: remove the bad pack, keep the pending files, report, stop. Store each verified
-    pack as a git blob (repo.blob), so it can be restored even before its commit (§4.4).
+    pack as a git blob (repo.blob), so it can be restored even before its commit (§4.4). A blob
+    that cannot be stored now is stored by the checkpoint's tree build.
 K4  atomic_remove each pending file all of whose change ids are in the verified packs or were
     set aside in K2;
     fsync .tc/pending. A pending file that could not be read is never removed (§4.4).
@@ -2039,30 +2050,47 @@ Q4  atomic_remove each replaced pack (directory fsync once).
 
 A checkpoint runs on leaving Translate or the project (tC4 J8), before a sync, an export or a USB
 export, after a USB import, at app exit, and every 30 minutes while there are pending batches.
+Only the seal and the move of the branch stand in the actor's queue; the files, the tree and the
+commit object are the writer's work from a snapshot, so saves go on meanwhile (R21, I9).
 
 ```
-C1  Seal (§5.11).
-C2  Materialize (§5.10). The new packs are now listed in metadata.json. This closes the write
-    group the seal opened (I7).
-C3  Check the expected pack set (§4.4): restore every missing or damaged pack and fold it (then
-    run C2 again). If an expected pack can be neither restored nor read, stop: no commit, and
-    the notice says which file and why ("translationCore can't read a file of changes; sync
-    waits until it can"). Then build the commit tree in memory (§9.4) from the fold's projection
-    bytes, the expected pack set, the carried bytes, and the files kept verbatim (§9.4). Run
-    tc_burrito::check on the tree's bytes. Failure: bug report, no commit.
+C1  On the actor: list the journal folders for a second writer (§5.0), check the expected pack
+    set (§4.4: a pack that is missing from the working tree, or changed and failing P2 to P4, is
+    written back from a blob at the same path and its changes are folded, `PackRestored`), seal
+    (§5.11; K3 stores each new pack as a blob), and hand the writer the snapshot after the seal.
+C2  On the writer: materialize (§5.10) from that snapshot. The new packs are now listed in
+    metadata.json. This closes the write group the seal opened (I7).
+C3  On the writer. If the seal failed, stop: the tree's files would show changes its packs lack.
+    If an expected pack could be neither restored nor read, stop: no commit, and the notice
+    (`MaterializeBlocked`, reason `PackMissing`) names the file ("translationCore can't read a
+    file of changes; sync waits until it can"). Otherwise build the commit tree in memory (§9.4)
+    from the manifest's blobs for the derived files the last materialization made equal to the
+    snapshot's projection, from the snapshot for the rest, the expected pack set, the carried
+    bytes, and the files kept verbatim (§9.4), and run tc_burrito::validate_project over the tree's
+    entries. Failure: bug report (`MaterializeBlocked`, reason `TreeInvalid`), no commit.
 C4  If the tree equals HEAD's tree, stop: no empty commits (tC4 J8).
-C5  repo.commit(Some("HEAD"), &sig, &sig, msg, &tree, &[&head]). libgit2 writes the objects
-    (fsynced, because core.fsyncObjectFiles=true) and moves the branch through a lock file and
-    rename. The message is "Checkpoint, <reason>: <books> (tC)" plus the trailers
-    `Tc-Device: d…`, `Tc-Format: <major>.<minor>`, `Tc-Frontier: <64 hex>`.
-C6  index.read_tree(&tree); index.write(), so `git status` in a terminal shows a clean tree.
+C5  The writer writes the commit object itself. The message is "Checkpoint, <reason>: <books>
+    (tC)" plus the trailers `Tc-Device: d…`, `Tc-Format: <major>.<minor>`, `Tc-Frontier: <64
+    hex>`, the author is the Door43 username after the person consented to show it (D98),
+    otherwise "translationCore user", the email is empty (D85), and the time is the store's
+    clock. The object is written raw through the object database, because libgit2's signature
+    refuses an empty email. The actor then moves the branch to it if the branch is still where
+    the writer read it: libgit2 takes the reference's lock file, writes, flushes the file and
+    renames it (core.fsyncObjectFiles=true makes libgit2 1.9 flush references as well as
+    objects). A branch that moved meanwhile leaves the commit unreferenced; the next checkpoint
+    commits again (`HeadMoved`).
+C6  The actor writes the index from the tree (index.read_tree, index.write), so `git status` in a
+    terminal shows a clean tree.
 ```
 
-The signature is the Door43 username after the person consented to show it (D98), otherwise
-"translationCore user"; the email is empty (D85: no name or email is stored by default).
-git2 0.21 has no safe setter for libgit2's `GIT_OPT_ENABLE_FSYNC_GITDIR`, so ref updates are
-not fsynced. That is acceptable because git is not the source of truth: a lost ref update after
-a power cut means the next checkpoint commits again, and a damaged `.git` is rebuilt (§6.4 G4).
+The signature never reaches libgit2's reflog: `core.logAllRefUpdates=false`, because libgit2's
+reflog identity falls back to the machine's `user.name` and `user.email` (D85). A lost ref
+update after a power cut means the next checkpoint commits again, and a damaged `.git` is rebuilt
+(§6.4 G4). The reason words are "leaving Translate", "leaving the project", "before sync",
+"before export", "after import", "every 30 minutes", and for a project just made "created".
+The checkpoint's reply (`CheckpointReport`) names the commit, the packs sealed, and why there is
+none when there is none (`NoChanges`, `ReadOnly`, `SecondWriter`, `NoHistory`, `SealFailed`,
+`PackMissing`, `TreeInvalid`, `HeadMoved`).
 
 ### 5.14 Drafts
 
@@ -2168,9 +2196,15 @@ O2b After O8 (the fold exists), for each complete pending temp, newest first by 
     place durably, fold its changes and record it as a pending file. A temp that can be
     neither moved nor placed stays, and its changes' largest seq counts as held in O6's ledger
     rule, and as an unreadable pending file.
-O3  git: open the repository. If libgit2 cannot open it or HEAD is unreadable, rebuild it
-    (§6.4 row G4) before continuing. Set core.autocrlf=false and core.fsyncObjectFiles=true
-    if they are not set.
+O3  git: open the repository in the folder `Vfs::outside_dir` names (the project folder; a
+    mirror folder under the test filesystem), making one on branch `main` when there is none.
+    If libgit2 cannot open it or HEAD is unreadable, rebuild it (§6.4 row G4) before
+    continuing. If libgit2 refuses the folder because another account owns it
+    (`ErrorCode::Owner`; the check cannot be turned off safely), that is not damage: nothing is
+    rebuilt or moved, the person sees `HistoryUnavailable`, and the session runs without
+    history (no commit, no carried bytes). Set core.autocrlf=false, core.fsyncObjectFiles=true
+    and core.logAllRefUpdates=false in the repository's own config if they are not set, and
+    open the repository again when one was written (libgit2 caches its configuration).
 O4  Format gate: read ingredients/tc/format.json. Larger major → refuse (§12). minReaderMinor
     above this app → read-only (§12). Damaged or missing → restore from the HEAD tree; if HEAD
     has none either and tc/project.json is absent, this is not a project of this format: offer
@@ -2269,10 +2303,11 @@ folder that became read-only) ends the open's writes, and the project opens read
 refused; the next open finishes the work (the tests `an_open_on_a_full_disk_is_read_only_and_never_refused`
 and `a_disk_that_fills_during_the_opens_materialization_leaves_a_read_only_project`).
 
-**What unit S1 does of this sequence.** S1 has no git, so O3, the blobs of O8 and every restore
-from HEAD are unit S2's; O4 writes this app's `format.json` when it is missing or damaged, and
-O7's expected pack set is the manifest's pack list (§3.6): a listed pack that is gone, and that
-no valid pack's `replaces` names, is missing (`PackMissing`), and nothing derived is removed
+**What the unit that made the store's first half does of this sequence.** O4 writes this app's
+`format.json` when it is missing or damaged. O7's expected pack set is the manifest's pack
+list (§3.6) and HEAD's packs (§4.4): a listed pack that is gone, and that no valid pack's
+`replaces` names, is restored from a blob at the same path when one passes P2 to P4
+(`PackRestored`), and is otherwise missing (`PackMissing`), and nothing derived is removed
 while it is. A damaged pending file is salvaged at O7: its verified lines, byte for byte, go into
 a new pending file of this device (purpose `salvage`) and the file moves to `.tc/quarantine/`
 (`QuarantinedPending`); a pending file of another project moves there unread. The second half
@@ -2526,7 +2561,7 @@ next starts, so power loss is covered by the same rows (the row says where a los
 | G1 | commit | objects written, ref not moved | HEAD old, loose orphans | the next checkpoint commits again; repack drops orphans | after (git is not the truth) |
 | G2 | commit | ref lock file left | `refs/heads/<b>.lock` | O2 removes it | after |
 | G3 | commit | power loss loses the ref rename | HEAD at the previous commit | the next checkpoint commits again | after |
-| G4 | any git step | power loss damaged `.git` | git2 cannot open it | rename `.git` to `.tc/broken-git-<utc>`; `git init`; restore `origin` and `tc.branch` from `.tc/sync.json`; add the broken repository's `objects` directory as a disk alternate (`Odb::add_disk_alternate`), copy every blob a `CarriedFile` change names and every pack blob it can read into the new object database, then drop the alternate; store as blobs the carried files in the working tree whose md5 and oid match a recorded version; commit the tree built from the fold (a carried head whose blob is still missing is left out with `CarriedBytesMissing`, §9.4), "Recovered history (tC)". The next sync merges with Door43 as an unrelated history (§9.4) | after; the packs never depended on git |
+| G4 | any git step | power loss damaged `.git` | git2 cannot open it or HEAD does not read (not: libgit2 refuses the folder because another account owns it, which rebuilds nothing, §6.1 O3) | rename `.git` to `.tc/broken-git-<utc>`; `git init`; restore `origin` and `tc.branch` from `.tc/sync.json`; add the broken repository's `objects` directory as a disk alternate (`Odb::add_disk_alternate`), copy every blob a `CarriedFile` change names and every pack blob it can read into the new object database, then drop the alternate; store as blobs the carried files in the working tree whose md5 and oid match a recorded version; commit the tree built from the fold (a carried head whose blob is still missing is left out with `CarriedBytesMissing`, §9.4), "Recovered history (tC)". The next sync merges with Door43 as an unrelated history (§9.4) | after; the packs never depended on git |
 | Y1 | sync | during fetch | libgit2 temp pack | O2; the next fetch redoes it | before |
 | Y2 | sync | some received packs written (§9.3 T1) | some new packs, each valid alone | folded; a partly received batch waits (§7.4); the next sync fetches R again and takes the rest | after for what arrived; nothing half-applied |
 | Y3 | sync | packs written, intake batch not written | packs, no ingested Door43 edits | the next sync's walk computes the same deterministic changes | after |
@@ -3435,13 +3470,20 @@ conflicts for `tc/conflicts.json`), or a foreign entry moved under `.tc-moved/`.
 check: intake decodes it into records that add the book (§7.6, §11.2 D2).
 
 Blobs are written with `repo.blob(&bytes)` (loose objects, fsynced through
-`core.fsyncObjectFiles`); a pack file's blob id is cached in memory by `(path, size, mtime)` so
-unchanged packs are not re-hashed, and every pack is stored as a blob when it is first read or
-written (§5.11 K3, §6.1 O8), so a pack can be restored before it is committed. Trees are built
-bottom-up with one `TreeBuilder` per directory; each blob id is checked to exist before it is
-inserted (libgit2 refuses missing objects), and a missing one is handled by the rules of the
-table, never by failing the commit. `tc_burrito::check` runs on the entries' bytes before the
-commit is written (I7).
+`core.fsyncObjectFiles`). The manifest keeps the blob of each derived file and each pack it has
+stored (`blob`, §3.6), so a derived file the last materialization made equal to the projection
+is never read or hashed again for a tree: only a file whose entry has no blob yet is read (its
+md5 must still be the entry's, else the snapshot's projection is used), and a held, busy or
+dirty path is projected from the snapshot. Every pack is stored as a blob when it is sealed
+(§5.11 K3) or first needed by a tree, so a pack can be restored before it is committed. The
+tree is HEAD's tree with the entries that differ set (`TreeUpdateBuilder`): only the directories
+on the paths that changed are written again, and a file that is as in HEAD is neither read nor
+written. Each blob id is checked to exist before it is inserted (libgit2 refuses missing
+objects), and a missing one is handled by the rules of the table, never by failing the commit.
+`metadata.json` of the tree lists the md5 and size of the bytes in the tree. The validator
+(`tc_burrito::validate_project`) reads the entries through a `ProjectFiles` over the tree's
+entries and runs before the commit is written (I7). A foreign entry under `ingredients/` whose
+name can be no ingredient moves to `.tc-moved/`.
 
 Because every tree comes from the fold, a git conflict cannot happen and conflict markers never
 reach a file. Histories that share no ancestor (a project received by USB, then connected to
@@ -4628,7 +4670,9 @@ go in `[workspace.dependencies]`. No CRDT library and no git content merge (`.au
 8. **One person on two computers is two devices.** Screens group devices by Door43 username; a
    person who never signs in shows as two teammates.
 9. **Root-level files** added on Door43 are carried in commits but are not burrito ingredients.
-10. **Ref updates are not fsynced** (no safe git2 setter); a lost ref update costs one recommit.
+10. **A lost ref update costs one recommit.** libgit2 1.9 flushes a reference it writes when
+    core.fsyncObjectFiles is on, but a power cut can still leave the earlier commit as HEAD, and
+    git is not the source of truth (§6.4 G3).
 11. **Letter-part verse labels** (`\v 2a`) are refused at import, as in tC4 4.0.
 12. **Cloud-synced project folders are read-only.** Two computers work on one project through
     Door43 or exchange files, not through a shared folder. Detection covers the common clients

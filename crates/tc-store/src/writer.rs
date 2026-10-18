@@ -15,7 +15,9 @@ use crate::atomic::{SyncDir, atomic_remove};
 use crate::clock::Clock;
 use crate::counters::Counters;
 use crate::error::StoreError;
-use crate::handle::{Msg, Resolver, Shared, Snapshot, StoreEvent};
+use crate::handle::{
+    CheckpointReason, CheckpointReport, Msg, Resolver, Shared, Snapshot, StoreEvent,
+};
 use crate::hooks::Point;
 use crate::layout::Folder;
 use crate::manifest::{Intent, Manifest};
@@ -31,10 +33,16 @@ use std::thread::JoinHandle;
 use tc_journal::fold::{Blocked, FoldState, Notice, ProjectKind};
 
 /// What `metadata.json` and the manifest need of a pack the actor knows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PackFacts {
     pub size: u64,
     pub fingerprint: u64,
+    /// It passed P2 to P4.
+    pub valid: bool,
+    /// The packs its header says it replaces (§4.7): redundant in a tree.
+    pub replaces: Vec<tc_journal::PackName>,
+    /// The blob that holds its bytes, when the actor stored it at the seal.
+    pub blob: Option<tc_journal::GitOid>,
 }
 
 /// Why a materialization runs (§5.10).
@@ -60,10 +68,21 @@ pub(crate) struct MaterializeJob {
     pub packs: BTreeMap<String, PackFacts>,
     /// No expected pack is missing and no journal file is unreadable (§5.10 M0).
     pub complete: bool,
+    /// Why it is not complete: the expected packs that are missing or unreadable.
+    pub missing: Vec<String>,
     pub origin: Origin,
-    /// A checkpoint's seal result, which the reply carries before the materialization's.
-    pub sealed: Result<(), StoreError>,
     pub reply: Option<Resolver<Result<(), StoreError>>>,
+    /// The rest of a checkpoint: the writer builds and commits the tree after the files.
+    pub checkpoint: Option<CheckpointJob>,
+}
+
+/// What the writer does for a checkpoint after the seal and the files (§5.13 C3 to C5).
+pub(crate) struct CheckpointJob {
+    pub reason: CheckpointReason,
+    /// The seal's result, which comes before the files' in the reply.
+    pub sealed: Result<crate::seal::SealReport, StoreError>,
+    pub device: tc_journal::DeviceId,
+    pub reply: Resolver<Result<CheckpointReport, StoreError>>,
 }
 
 pub(crate) enum Job {
@@ -114,6 +133,8 @@ pub(crate) struct Writer {
     pub seq: u64,
     pub packs: BTreeMap<String, PackFacts>,
     pub complete: bool,
+    /// The expected packs that are missing or unreadable, which is why `complete` is false.
+    pub packs_missing: Vec<String>,
     /// What to write: the actor's marks of the job, the open's classification, and the paths
     /// the last run could not write.
     pub dirty: Dirty,
@@ -132,8 +153,12 @@ pub(crate) struct Writer {
     /// The open's first job runs: a long one shows progress.
     pub opening: bool,
     /// The writer's own handle on the project's repository: blobs, trees and commit objects.
-    #[allow(dead_code)] // the checkpoint of the next commit builds trees with it
     pub git: Option<crate::git::Git>,
+    /// This computer's device, for the trailers of a commit.
+    pub device: tc_journal::DeviceId,
+    /// A damaged repository was replaced at the open: its first commit is the project as it
+    /// is (§6.4 G4), made once the open's files are written.
+    pub recover: bool,
     pub actor: Sender<Msg>,
 }
 
@@ -144,7 +169,7 @@ impl Writer {
         self.shared.emit(StoreEvent::Notice(notice));
     }
 
-    fn read_only(&self) -> Option<ReadOnlyReason> {
+    pub(crate) fn read_only(&self) -> Option<ReadOnlyReason> {
         match self.shared.facts().mode {
             crate::handle::Mode::ReadOnly(reason) => Some(reason),
             crate::handle::Mode::Writable => None,
@@ -174,11 +199,13 @@ impl Writer {
             dirty,
             packs,
             complete,
+            missing,
             origin,
-            sealed,
             reply,
+            checkpoint,
         } = job;
         self.begin(&snapshot, packs, complete);
+        self.packs_missing = missing;
         self.dirty.absorb(dirty);
         self.opening = origin == Origin::Open;
         if origin == Origin::Checkpoint {
@@ -201,8 +228,13 @@ impl Writer {
                 )));
             let _ = self.actor.send(Msg::WritesFailed { reason });
         }
-        if let Some(reply) = reply {
-            reply.resolve(sealed.and(result));
+        if origin == Origin::Open && self.recover && result.is_ok() {
+            self.recover_history();
+        }
+        if let Some(checkpoint) = checkpoint {
+            self.finish_checkpoint(checkpoint, result);
+        } else if let Some(reply) = reply {
+            reply.resolve(result);
         }
     }
 
@@ -510,6 +542,7 @@ mod tests {
             seq: 1,
             packs: BTreeMap::new(),
             complete: true,
+            packs_missing: Vec::new(),
             dirty: Dirty::default(),
             prerendered: BTreeMap::new(),
             prerendered_seq: 0,
@@ -518,6 +551,8 @@ mod tests {
             open_intent: None,
             opening: false,
             git: None,
+            device: DeviceId::local([9; 15]),
+            recover: false,
             actor,
         }
     }

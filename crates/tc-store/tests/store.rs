@@ -54,3 +54,6 @@ mod groups;
 
 #[path = "store/git.rs"]
 mod git;
+
+#[path = "store/checkpoint.rs"]
+mod checkpoint;

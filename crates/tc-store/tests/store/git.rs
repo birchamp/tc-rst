@@ -9,15 +9,8 @@ use tc_journal::fold::Notice;
 use tc_store::fault::FaultFs;
 use tc_store::{Failure, Hooks, OpenOptions, Point};
 
-/// The repository of the project at `folder`, as git itself reads it.
-pub fn repo_of(fs: &FaultFs, folder: &Path) -> git2::Repository {
-    use tc_store::Vfs;
-    git2::Repository::open(fs.outside_dir(folder).unwrap()).unwrap()
-}
-
 fn git_dir(fs: &FaultFs, folder: &Path) -> PathBuf {
-    use tc_store::Vfs;
-    fs.outside_dir(folder).unwrap().join(".git")
+    git_dir_of(fs, folder)
 }
 
 /// Every file under `dir`, by relative path, with its bytes.
@@ -171,10 +164,23 @@ fn a_damaged_repository_is_kept_aside_and_replaced() {
         std::fs::read(outside.join(&kept).join("HEAD")).unwrap(),
         b"garbage that is no reference"
     );
+    // The new repository starts with the project as it is.
     let repo = repo_of(&rig.fs, &folder);
-    assert_eq!(
-        repo.head().err().map(|e| e.code()),
-        Some(git2::ErrorCode::UnbornBranch)
+    let commits = commits_of(&repo);
+    assert_eq!(commits.len(), 1);
+    let first = repo.find_commit(commits[0]).unwrap();
+    assert_eq!(first.parent_count(), 0);
+    assert!(
+        first
+            .message()
+            .unwrap()
+            .starts_with("Recovered history (tC)")
     );
+    assert!(commit_problems(&repo, commits[0]).is_empty());
+    let report = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert_eq!(report.skipped, Some(tc_store::CheckpointSkip::NoChanges));
     handle.close().unwrap();
 }
