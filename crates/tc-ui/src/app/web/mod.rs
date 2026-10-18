@@ -14,8 +14,8 @@ mod root;
 mod state;
 mod stream;
 
+use std::any::Any;
 use std::cell::{Cell, RefCell};
-use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use js_sys::Array;
@@ -32,7 +32,9 @@ pub use api::Api;
 pub use query::QueryCache;
 pub use state::ServerState;
 
-use crate::app::boot::{BuildAction, RELOADED_FOR_KEY, TOKEN_KEY, build_action, token_from};
+use crate::app::boot::{
+    BuildAction, Fate, RELOADED_FOR_KEY, TOKEN_KEY, build_action, stop_reason, token_from,
+};
 use crate::app::cache::CachedQuery;
 use crate::app::client::CallError;
 use crate::app::effects::{Effect, active_jobs, apply_reread, jobs_to_reread, merge_job, react};
@@ -186,10 +188,8 @@ impl Runtime {
             Effect::ReadEverything => self.0.cache.resync(),
             Effect::Restarted(instance) => {
                 self.0.cache.restarted();
-                state.restarted.set(true);
-                state.instance.set(instance);
-                // The new run numbers its jobs from the start: an old id may name another job.
-                state.jobs.set(BTreeMap::new());
+                state.restarted(instance);
+                // The new run's jobs are not the old run's.
                 self.0.busy.set_jobs(0);
             }
             Effect::Topic(topic) => self.0.cache.topic(&topic),
@@ -386,17 +386,11 @@ async fn boot(base: &str, busy: &Rc<api::Busy>) -> Result<(), String> {
     let action = build_action(&hello.build.commit, hello.api, kept.as_deref(), |marker| {
         js::session_set(RELOADED_FOR_KEY, marker)
     });
-    match action {
-        BuildAction::Proceed => js::session_remove(RELOADED_FOR_KEY),
-        BuildAction::Reload => {
-            let _ = window.location().reload();
-            return Ok(());
-        }
-        BuildAction::Stop { ui, server } => {
-            return Err(format!(
-                "this page is from build {ui}, but the app's server is build {server}"
-            ));
-        }
+    if action == BuildAction::Proceed {
+        js::session_remove(RELOADED_FOR_KEY);
+    } else {
+        carry_out(action);
+        return Ok(());
     }
 
     let texts = JsFuture::from(catalogs)
@@ -423,11 +417,13 @@ async fn boot(base: &str, busy: &Rc<api::Busy>) -> Result<(), String> {
 
     let root = root_element().ok_or("the page has no #root")?;
     let provided = SendWrapper::new(runtime);
-    leptos::mount::mount_to(root, move || {
+    let app = leptos::mount::mount_to(root, move || {
         provide_context(provided.clone());
         view! { <root::StandIn /> }
-    })
-    .forget();
+    });
+    // Kept, not forgotten: the boot error replaces the app when a session meets a server of
+    // another build, and dropping the handle is what takes the app off the page.
+    APP.with(|view| *view.borrow_mut() = Some(Box::new(app)));
     js::mark("tc4:mounted");
     Ok(())
 }
@@ -439,11 +435,50 @@ fn root_element() -> Option<web_sys::HtmlElement> {
         .and_then(|element| element.dyn_into().ok())
 }
 
+thread_local! {
+    /// The mounted app, whose handle the boot error drops.
+    static APP: RefCell<Option<Box<dyn Any>>> = const { RefCell::new(None) };
+    static FATE: RefCell<Fate> = const { RefCell::new(Fate::new()) };
+}
+
+/// True once the page has reloaded itself or stopped for good: the event stream and every later
+/// decision leave it as it is.
+fn settled() -> bool {
+    FATE.with(|fate| fate.borrow().is_settled())
+}
+
+/// Does what [`build_action`] or `version_error_action` decided (APP-DESIGN 3.10), at the boot
+/// or in the middle of a session: reload the page, or replace it with the boot error naming
+/// both builds. [`Fate`] keeps the first decision.
+fn carry_out(action: BuildAction) {
+    let action = FATE.with(|fate| fate.borrow_mut().take(action));
+    match action {
+        None | Some(BuildAction::Proceed) => {}
+        Some(BuildAction::Reload) => {
+            if let Ok(window) = js::window() {
+                let _ = window.location().reload();
+            }
+        }
+        Some(BuildAction::Stop { ui, server }) => mount_boot_error(stop_reason(&ui, &server)),
+    }
+}
+
 /// What the page shows when it cannot start (APP-DESIGN 6.12): tC4's view-error callout, with
-/// the reason, and Retry, which reloads. In the saved language when its catalog is installed,
-/// else in English.
+/// the reason, and Retry, which reloads. Only the first reason is shown, and none for a page
+/// that is reloading.
 fn show_boot_error(reason: String) {
+    if FATE.with(|fate| fate.borrow_mut().stop()) {
+        mount_boot_error(reason);
+    }
+}
+
+/// The boot error in the saved language when its catalog is installed, else in English. It
+/// replaces the app if the app is on the page.
+fn mount_boot_error(reason: String) {
     js::mark("tc4:boot-error");
+    // The app's view comes off the page before the error goes on it.
+    let app = APP.with(|view| view.borrow_mut().take());
+    drop(app);
     let Some(root) = root_element() else {
         return;
     };

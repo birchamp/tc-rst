@@ -49,6 +49,10 @@ impl Connection {
     async fn pump(&self, runtime: &Runtime, events: &mut EventReader) -> bool {
         let mut received = false;
         loop {
+            // The page reloads or shows the boot error: what the stream brings is not its.
+            if super::settled() {
+                break;
+            }
             let Ok(chunk) = JsFuture::from(self.reader.read()).await else {
                 break;
             };
@@ -97,7 +101,15 @@ pub(super) async fn run(runtime: Runtime, first: Connection, mut events: EventRe
         }
         drop(connection);
         connection = loop {
+            // A request found out that the server is another build (APP-DESIGN 3.10), and the
+            // page reloads or has stopped: nothing is left to read for.
+            if super::settled() {
+                return;
+            }
             js::sleep(backoff).await;
+            if super::settled() {
+                return;
+            }
             backoff = (backoff * 2).min(BACKOFF_MAX_MS);
             events.reconnected();
             match Connection::open(&runtime.0.api, events.after()).await {

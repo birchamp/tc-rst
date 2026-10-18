@@ -176,6 +176,26 @@ pub fn retain_open<V>(held: &mut HashMap<Scope, V>, sessions: &[OpenSession]) {
     held.retain(|at, _| sessions.iter().any(|session| session.at == *at));
 }
 
+/// What a new server run makes meaningless (APP-DESIGN 3.10, 5.4). The new run numbers its jobs
+/// and its aligners from the start, and its opens from epoch 1, so every map keyed by one of
+/// those would name another thing than the old run's entry does: a job id that the new run gives
+/// to another job, an aligner whose first save state the new run has not sent yet, a failed
+/// checkpoint or a blocked file of a `TIT` at epoch 1 that is not the open that failed.
+/// `hello` follows a restart and lists the new run's opens; these are not in it.
+///
+/// Every map of `ServerState` that an event fills and that a number of the run keys goes here.
+pub fn forget_run(
+    jobs: &mut BTreeMap<JobId, JobView>,
+    checkpoints: &mut HashMap<Scope, CheckpointOutcome>,
+    blocked: &mut HashMap<Scope, Vec<String>>,
+    align_saves: &mut HashMap<AlignerId, AlignSave>,
+) {
+    jobs.clear();
+    checkpoints.clear();
+    blocked.clear();
+    align_saves.clear();
+}
+
 pub fn active_jobs(jobs: &BTreeMap<JobId, JobView>) -> usize {
     jobs.values().filter(|job| is_active(&job.state)).count()
 }

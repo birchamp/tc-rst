@@ -22,7 +22,7 @@ use tc_api::event::{CheckpointOutcome, SessionMode, StartupState};
 use tc_api::ids::{AlignerId, JobId, LocaleId, Scope, ServerInstance};
 use tc_api::jobs::JobView;
 
-use crate::app::effects::retain_open;
+use crate::app::effects::{forget_run, retain_open};
 
 #[derive(Clone)]
 pub struct ServerState {
@@ -73,6 +73,36 @@ impl ServerState {
             .update(|map| retain_open(map, &hello.sessions));
         self.blocked.update(|map| retain_open(map, &hello.sessions));
         self.saved_locale.set(hello.prefs.app_locale);
+    }
+
+    /// The server started again: it is another run, which numbers its jobs, aligners and opens
+    /// from the start. What an event filled and a number of the old run keys goes
+    /// ([`forget_run`]); `hello` follows and replaces the rest.
+    ///
+    /// Every field is named, so that a new one cannot be left out without the compiler asking.
+    pub(super) fn restarted(&self, run: ServerInstance) {
+        let Self {
+            instance,
+            internet: _,
+            account: _,
+            startup: _,
+            sessions: _,
+            saved_locale: _,
+            jobs,
+            checkpoints,
+            blocked,
+            align_saves,
+            restarted,
+        } = self;
+        instance.set(run);
+        restarted.set(true);
+        jobs.update(|jobs| {
+            checkpoints.update(|checkpoints| {
+                blocked.update(|blocked| {
+                    align_saves.update(|saves| forget_run(jobs, checkpoints, blocked, saves));
+                });
+            });
+        });
     }
 
     pub(super) fn session_mode(&self, at: &Scope, mode: SessionMode) {

@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, HashMap};
 use proptest::prelude::*;
 use proptest::test_runner::{Config, TestCaseError, TestRunner};
 use tc_api::account::{AccountView, KeepState};
+use tc_api::align::AlignSave;
 use tc_api::app::{OpenSession, SessionRole};
 use tc_api::event::{
     ChangeCause, ChangeParts, ChangeScope, CheckpointOutcome, Event, EventFrame, SessionEvent,
@@ -15,8 +16,8 @@ use tc_api::ids::{AlignerId, Epoch, JobId, ProjectId, ProjectRef, Scope, ServerI
 use tc_api::jobs::{JobKind, JobState, JobView, Progress};
 use tc_ui::app::cache::AppTopic;
 use tc_ui::app::effects::{
-    BusyCount, Effect, FINISHED_JOBS_KEPT, active_jobs, apply_reread, is_active, jobs_to_reread,
-    merge_job, react, retain_open,
+    BusyCount, Effect, FINISHED_JOBS_KEPT, active_jobs, apply_reread, forget_run, is_active,
+    jobs_to_reread, merge_job, react, retain_open,
 };
 use tc_ui::app::events::Incoming;
 
@@ -205,7 +206,13 @@ fn the_events_the_smoke_injects_are_events_this_build_reads_and_do_what_the_smok
     let events: BTreeMap<String, Event> = serde_json::from_str(SMOKE_EVENTS).unwrap();
     assert_eq!(
         events.keys().map(String::as_str).collect::<Vec<_>>(),
-        ["internetOn", "jobDone", "jobRunning", "resync"]
+        [
+            "alignSaving",
+            "internetOn",
+            "jobDone",
+            "jobRunning",
+            "resync"
+        ]
     );
     let effects = |name: &str| react(&frame(events[name].clone()));
     assert_eq!(
@@ -213,6 +220,14 @@ fn the_events_the_smoke_injects_are_events_this_build_reads_and_do_what_the_smok
         vec![Effect::ReadEverything, Effect::ReadHello, Effect::ReadJobs]
     );
     assert_eq!(effects("internetOn"), vec![Effect::Internet(true)]);
+    assert_eq!(
+        effects("alignSaving"),
+        vec![Effect::AlignSave {
+            aligner: AlignerId::new(1),
+            state: AlignSave::Saving
+        }],
+        "the aligner whose number the new run gives again"
+    );
     let running = effects("jobRunning");
     let [Effect::Job(running)] = running.as_slice() else {
         panic!("a job frame is one job effect");
@@ -411,4 +426,36 @@ fn a_resync_forgets_what_was_held_for_an_open_that_hello_no_longer_lists() {
     // No open at all: nothing is held.
     retain_open(&mut held, &[]);
     assert!(held.is_empty());
+}
+
+#[test]
+fn a_restart_forgets_everything_an_event_filled_that_the_old_runs_numbers_key() {
+    // The new run numbers its jobs and aligners from the start and its opens from epoch 1: an
+    // entry of the old run under the same number would be read as the new run's.
+    let open = Scope {
+        epoch: Epoch::new(1),
+        ..at()
+    };
+    let mut jobs = BTreeMap::from([(JobId::new(1), job(1, running()))]);
+    let mut checkpoints = HashMap::from([(
+        open.clone(),
+        CheckpointOutcome::Failed {
+            reason: "disk full".into(),
+        },
+    )]);
+    let mut blocked = HashMap::from([(open, vec!["TIT.usfm".to_owned()])]);
+    let mut align_saves = HashMap::from([
+        (AlignerId::new(1), AlignSave::Saving),
+        (AlignerId::new(2), AlignSave::Unsaved),
+    ]);
+
+    forget_run(&mut jobs, &mut checkpoints, &mut blocked, &mut align_saves);
+
+    assert!(jobs.is_empty(), "job 1 of the new run is another job");
+    assert!(checkpoints.is_empty(), "TIT at epoch 1 is another open");
+    assert!(blocked.is_empty());
+    assert!(
+        align_saves.is_empty(),
+        "aligner 1 of the new run would show the old run's Saving before its first frame"
+    );
 }

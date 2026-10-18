@@ -4,8 +4,8 @@
 // sends nothing and remounts nothing, events that reach the page, a boot in the saved
 // language, a boot that stops on a catalog that does not load, a reload that keeps the token,
 // a server of another API version or build (one reload, then the boot error; none when the
-// page cannot keep its marker), a `Resync` or a restart while the page holds a running job,
-// and a quit.
+// page cannot keep its marker, in the middle of a session too), a `Resync` or a restart while
+// the page holds a running job and an aligner's save state, and a quit.
 //
 //   crates/tc-ui/build-app.sh
 //   node crates/tc-ui/app/smoke.mjs --tc4 target/debug/tc4 --ui target/tc-ui-app
@@ -547,7 +547,7 @@ async function caseI(browser, server) {
     await sleep(1500); // a second reload would have started by now
     check('I: a stream refused for the API version reloaded the page once', documents(log).length === 2, documents(log).length);
     const shown = await text(page, 'boot-error');
-    check('I: the boot error names the server\'s API version', shown.includes('API version 2'), shown);
+    check('I: the boot error names both builds, with the server\'s API version', shown.includes('(API 1)') && shown.includes('(API 2)'), shown);
     check('I: it was the stream that found out: hello was never asked', calls(log, 'app/hello').length === 0);
     check('I: the marker of the reload names that version', /\/2$/.test((await marker(page)) ?? ''), await marker(page));
     await page.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
@@ -576,6 +576,42 @@ async function caseI(browser, server) {
     check('I: a reconnect refused for the API version reloads the page once', documents(liveLog).length === 2, documents(liveLog).length);
     check('I: and the marker names that version', /\/3$/.test((await marker(live)) ?? ''), await marker(live));
     await second.close();
+
+    // The middle of a session, with storage that refuses the marker: no reload is safe, since
+    // the page after it would reload again, so the boot error replaces the app at once, and the
+    // stream is not retried behind it.
+    const blocked = await openContext(browser, server);
+    await blocked.addInitScript(() => {
+      Object.defineProperty(window, 'sessionStorage', {
+        configurable: true,
+        get() {
+          throw new DOMException('The operation is insecure.', 'SecurityError');
+        },
+      });
+    });
+    const stuck = await blocked.newPage();
+    const stuckLog = watch(stuck);
+    proxy.refuseEvents = null;
+    await stuck.goto(`${proxy.url}#t=${server.token}`);
+    await stuck.waitForSelector(READY, { timeout: 60000 });
+    await stuck.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
+    const streamRequests = () => stuckLog.requests.filter((r) => r.path.startsWith('/api/v1/events'));
+    check('I: with storage blocked, a page of the same API version boots', streamRequests().length === 1);
+    proxy.refuseEvents = versionRefusal(4);
+    proxy.cutStreams();
+    await stuck.waitForSelector('[data-testid=boot-error]', { timeout: 15000 });
+    check('I: with storage blocked, a reconnect refused for the API version shows the boot error at once', true);
+    check('I: and the app is off the page', (await stuck.$(READY)) === null);
+    const stuckText = await text(stuck, 'boot-error');
+    check('I: and the error names both builds', stuckText.includes('(API 1)') && stuckText.includes('(API 4)'), stuckText);
+    const attempts = streamRequests().length;
+    await sleep(3500); // a stream that is retried would have asked again after 250 ms, 500 ms, 1 s and 2 s
+    check('I: and the page made no reload', documents(stuckLog).length === 1, documents(stuckLog).length);
+    check('I: and the stream is not retried behind the error', streamRequests().length === attempts, { attempts, now: streamRequests().length });
+    check('I: and no page error', stuckLog.errors.length === 0, stuckLog.errors);
+    await stuck.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
+    check('I: __tcIdle is true behind the error', true);
+    await blocked.close();
   } finally {
     await proxy.stop();
   }
@@ -707,12 +743,18 @@ async function caseK(browser, server) {
     await settle();
     check('K: a job whose end frame was lost is not left running', calls(log, 'jobs/get').length === 2 && JSON.parse(calls(log, 'jobs/get')[1].body).job === 4243, calls(log, 'jobs/get').map((r) => r.body));
 
-    // A restart: the new run numbers its jobs from 1, so an old id may name another job.
+    // A restart: the new run numbers its jobs and aligners from 1, so an old id may name
+    // another job or another aligner, and `hello` carries neither.
     inject(jobEvent('jobRunning', 4244));
     await page.waitForFunction(() => window.__tcIdle === false, null, { timeout: 5000 });
+    inject(frames.alignSaving);
+    await page.waitForSelector('[data-testid=runtime-held][data-align-saves="1"]', { timeout: 5000 });
+    check('K: an aligner\'s save state reaches the page', true);
     inject(frames.internetOn, { instance: 'cd'.repeat(16), seq: 1 });
     await settle();
     check('K: a frame of another server run forgets the jobs, and asks for none', calls(log, 'jobs/get').length === 2, calls(log, 'jobs/get').length);
+    await page.waitForSelector('[data-testid=runtime-held][data-align-saves="0"][data-jobs="0"][data-checkpoints="0"][data-blocked="0"]', { timeout: 5000 });
+    check('K: and the aligner save states, which only events carry and the old run numbered', true);
     check('K: no page error', log.errors.length === 0, log.errors);
     await context.close();
   } finally {

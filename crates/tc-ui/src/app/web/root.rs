@@ -4,10 +4,12 @@
 //! It is the only way the smoke can change the language before A5 exists, and it uses no
 //! path of its own: the picker calls `show_locale`, as the language dialog will.
 
+use std::collections::{BTreeMap, HashMap};
+
 use leptos::prelude::*;
 use tc_api::ids::LocaleId;
 
-use super::{js, use_runtime};
+use super::{ServerState, js, use_runtime};
 use crate::i18n::{LOCALES, keys, show_locale, shown_locale, t};
 
 /// A sample of the shown language, the language picker and the internet state.
@@ -31,6 +33,12 @@ pub(super) fn StandIn() -> impl IntoView {
             }
         })
         .collect_view();
+    // How much of what only events carry the page holds, for the smoke: a restart forgets all of it.
+    let state = use_runtime().map(|runtime| runtime.state().clone());
+    let held = move |count: fn(&ServerState) -> usize| {
+        let state = state.clone();
+        move || state.as_ref().map_or(0, count).to_string()
+    };
     let internet_on = move || internet.as_ref().is_some_and(|on| on.get());
     let internet_for_attr = internet_on.clone();
     view! {
@@ -46,6 +54,13 @@ pub(super) fn StandIn() -> impl IntoView {
             >
                 {options}
             </select>
+            <p
+                data-testid="runtime-held"
+                data-jobs=held(|state| state.jobs.with(BTreeMap::len))
+                data-checkpoints=held(|state| state.checkpoints.with(HashMap::len))
+                data-blocked=held(|state| state.blocked.with(HashMap::len))
+                data-align-saves=held(|state| state.align_saves.with(HashMap::len))
+            ></p>
             <p
                 data-testid="runtime-internet"
                 data-on=move || internet_for_attr().to_string()

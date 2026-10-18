@@ -10,8 +10,8 @@ use tc_api::upload::UPLOADS_PATH;
 use tc_api::{ALL, API_VERSION, ApiError, Reply};
 
 use tc_ui::app::boot::{
-    BuildAction, BuildCheck, RELOADED_FOR_KEY, TOKEN_KEY, Token, build_action, check_build,
-    token_from, version_error_action,
+    BuildAction, BuildCheck, Fate, RELOADED_FOR_KEY, TOKEN_KEY, Token, build_action, check_build,
+    stop_reason, token_from, version_error_action,
 };
 use tc_ui::app::client::{API_ROOT, CallError, Transport, api_url, interpret, refused_stream};
 use tc_ui::app::load::Load;
@@ -431,4 +431,84 @@ fn refreshing_keeps_the_value_and_a_failure_does_not() {
         Load::Ready(String::from("a")).as_ref(),
         Load::Ready(&String::from("a"))
     );
+}
+
+/// The refusal of the API version that a server of another build gives, as a call or the event
+/// stream's open finds it.
+fn newer_api() -> CallError {
+    CallError::Api(ApiError::Version {
+        server: API_VERSION + 1,
+    })
+}
+
+#[test]
+fn a_session_that_meets_another_api_version_stops_with_both_builds_named() {
+    // The page booted, and its event stream reconnects to a server that was updated meanwhile.
+    // With a page that cannot keep the marker the action is a stop, in the middle of a
+    // session as at the boot (APP-DESIGN 3.10): the boot error replaces the app at once.
+    let mut fate = Fate::new();
+    assert!(!fate.is_settled(), "the page booted");
+    let action = version_error_action(&newer_api(), None, keeper(&RefCell::new(Vec::new()), false))
+        .expect("a version refusal decides");
+    let Some(BuildAction::Stop { ui, server }) = fate.take(action) else {
+        panic!("the first decision is carried out");
+    };
+    assert!(fate.is_settled(), "the event stream reads no more");
+    let reason = stop_reason(&ui, &server);
+    assert!(
+        reason.contains(&format!("{BUILD_COMMIT} (API {API_VERSION})")),
+        "this page's build: {reason}"
+    );
+    assert!(
+        reason.contains(&format!("{BUILD_COMMIT} (API {})", API_VERSION + 1)),
+        "the server's: {reason}"
+    );
+}
+
+#[test]
+fn the_first_decision_about_the_page_stands() {
+    // A reload decided by one request is not followed by the boot error of another that met the
+    // same mismatch a moment later, nor by a second reload.
+    let marker = RefCell::new(Vec::new());
+    let mut fate = Fate::new();
+    let first = version_error_action(&newer_api(), None, keeper(&marker, true)).unwrap();
+    assert_eq!(first, BuildAction::Reload);
+    assert_eq!(fate.take(first), Some(BuildAction::Reload));
+
+    let kept = format!("{BUILD_COMMIT}/{}", API_VERSION + 1);
+    let second = version_error_action(&newer_api(), Some(&kept), keeper(&marker, true)).unwrap();
+    assert!(matches!(second, BuildAction::Stop { .. }));
+    assert_eq!(
+        fate.take(second),
+        None,
+        "no boot error while the page leaves"
+    );
+    assert_eq!(fate.take(BuildAction::Reload), None, "and no second reload");
+    assert!(!fate.stop(), "nor a boot error for another failure");
+}
+
+#[test]
+fn a_page_that_stopped_does_not_reload_and_shows_one_boot_error() {
+    let mut fate = Fate::new();
+    let stop = BuildAction::Stop {
+        ui: "a".into(),
+        server: "b".into(),
+    };
+    assert_eq!(fate.take(stop.clone()), Some(stop));
+    assert_eq!(fate.take(BuildAction::Reload), None);
+    assert!(!fate.stop(), "the first reason is the one shown");
+
+    // A page that failed to start for another reason is as settled.
+    let mut failed = Fate::new();
+    assert!(failed.stop());
+    assert!(failed.is_settled());
+    assert_eq!(failed.take(BuildAction::Reload), None);
+}
+
+#[test]
+fn a_build_that_agrees_decides_nothing() {
+    let mut fate = Fate::new();
+    assert_eq!(fate.take(BuildAction::Proceed), None);
+    assert!(!fate.is_settled());
+    assert_eq!(fate.take(BuildAction::Reload), Some(BuildAction::Reload));
 }

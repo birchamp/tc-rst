@@ -125,6 +125,48 @@ pub fn build_action(
     }
 }
 
+/// What the page has decided about itself. Several requests can meet the same mismatch at once:
+/// each one's [`build_action`] is right alone, but together they must not reload twice, show the
+/// boot error while the page is leaving, or reload a page that has already stopped. The first
+/// decision stands, and the event stream reads no more once there is one (APP-DESIGN 3.10).
+#[derive(Debug, Default)]
+pub struct Fate {
+    decided: bool,
+}
+
+impl Fate {
+    pub const fn new() -> Self {
+        Self { decided: false }
+    }
+
+    /// Whether the page is reloading or has stopped with the boot error.
+    pub fn is_settled(&self) -> bool {
+        self.decided
+    }
+
+    /// `Some(action)` when the page is to carry `action` out: a reload or a stop, and only the
+    /// first of them. `Proceed` decides nothing.
+    pub fn take(&mut self, action: BuildAction) -> Option<BuildAction> {
+        if self.decided || action == BuildAction::Proceed {
+            return None;
+        }
+        self.decided = true;
+        Some(action)
+    }
+
+    /// A page that cannot start or go on for another reason shows the boot error: true the first
+    /// time only, and never for a page that is reloading.
+    pub fn stop(&mut self) -> bool {
+        !std::mem::replace(&mut self.decided, true)
+    }
+}
+
+/// What the boot error says for a page that stops on a mismatch: both builds, so that the
+/// person can tell which of the two is old.
+pub fn stop_reason(ui: &str, server: &str) -> String {
+    format!("this page is from build {ui}, but the app's server is build {server}")
+}
+
 fn stale(server_commit: &str, server_api: u32) -> BuildAction {
     BuildAction::Stop {
         ui: describe(BUILD_COMMIT, API_VERSION),

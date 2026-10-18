@@ -1,5 +1,9 @@
 {
   "resync": { "type": "resync" },
+  "alignSaving": {
+    "type": "session",
+    "value": { "at": { "project": "TIT", "epoch": 1 }, "event": { "type": "alignSave", "value": { "aligner": 1, "state": { "type": "saving" } } } }
+  },
   "internetOn": { "type": "internet", "value": { "on": true } },
   "jobRunning": {
     "type": "job",

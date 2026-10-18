@@ -11,7 +11,7 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{AbortSignal, Headers, ReadableStreamDefaultReader, Request, RequestInit, Response};
 
 use super::js;
-use crate::app::boot::{BuildAction, RELOADED_FOR_KEY, Token, version_error_action};
+use crate::app::boot::{RELOADED_FOR_KEY, Token, version_error_action};
 use crate::app::client::{CallError, Transport, api_url, interpret, refused_stream};
 use crate::app::effects::BusyCount;
 
@@ -177,18 +177,17 @@ async fn read_text(response: Response) -> Result<(u16, String), CallError> {
 
 /// Every call's result and the event stream's open pass through here. A server that refuses
 /// the API version is another build than this page (APP-DESIGN 3.10): the page reloads once,
-/// whichever request it was that found out. [`version_error_action`] decides, and what it needs
-/// of the page is the marker, which the reload must be able to keep.
+/// or stops with the boot error, whichever request it was that found out, and in the middle of a
+/// session as at the boot. [`version_error_action`] decides, and what it needs of the page is
+/// the marker, which the reload must be able to keep; the page carries the decision out.
 fn reload_on_version_error<T>(result: Result<T, CallError>) -> Result<T, CallError> {
     if let Err(error) = &result {
         let kept = js::session_get(RELOADED_FOR_KEY);
         let action = version_error_action(error, kept.as_deref(), |marker| {
             js::session_set(RELOADED_FOR_KEY, marker)
         });
-        if action == Some(BuildAction::Reload)
-            && let Ok(window) = js::window()
-        {
-            let _ = window.location().reload();
+        if let Some(action) = action {
+            super::carry_out(action);
         }
     }
     result
