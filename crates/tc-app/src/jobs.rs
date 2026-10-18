@@ -244,6 +244,8 @@ struct Job {
     kind: JobKind,
     project: Option<ProjectRef>,
     state: JobState,
+    /// Carries `state` to whoever follows the job ([`JobRegistry::watch`]).
+    state_tx: watch::Sender<JobState>,
     cancel: CancelToken,
     ended: Option<Instant>,
 }
@@ -291,13 +293,6 @@ fn allowed(from: &JobState, to: &JobState) -> bool {
                 JobState::Cancelling,
                 JobState::Running(_) | JobState::Cancelling
             )
-    )
-}
-
-fn is_terminal(state: &JobState) -> bool {
-    matches!(
-        state,
-        JobState::Done(_) | JobState::Failed(_) | JobState::Cancelled
     )
 }
 
@@ -371,6 +366,22 @@ impl JobRegistry {
         registry.jobs.get(&id).map(|job| job.view(id))
     }
 
+    /// The job's state now and each change after it, or `None` for a job this registry does
+    /// not hold. A receiver taken after the job ended reads its end at once.
+    pub fn watch(&self, id: JobId) -> Option<watch::Receiver<JobState>> {
+        let mut registry = lock(&self.inner.registry);
+        Self::prune(&mut registry);
+        registry.jobs.get(&id).map(|job| job.state_tx.subscribe())
+    }
+
+    /// Whether a job in this state has ended: `Done`, `Failed` or `Cancelled`.
+    pub fn is_ended(state: &JobState) -> bool {
+        matches!(
+            state,
+            JobState::Done(_) | JobState::Failed(_) | JobState::Cancelled
+        )
+    }
+
     /// Asks the job to stop at its next check and shows `Cancelling` at once. A job that is
     /// finished or unknown is left as it is.
     pub fn cancel(&self, id: JobId) {
@@ -379,7 +390,7 @@ impl JobRegistry {
         let Some(job) = registry.jobs.get(&id) else {
             return;
         };
-        if is_terminal(&job.state) {
+        if Self::is_ended(&job.state) {
             return;
         }
         job.cancel.cancel();
@@ -391,7 +402,7 @@ impl JobRegistry {
         lock(&self.inner.registry)
             .jobs
             .values()
-            .filter(|job| !is_terminal(&job.state))
+            .filter(|job| !Self::is_ended(&job.state))
             .count()
     }
 
@@ -415,6 +426,7 @@ impl JobRegistry {
                 kind,
                 project,
                 state: JobState::Queued,
+                state_tx: watch::channel(JobState::Queued).0,
                 cancel: ctx.cancel.clone(),
                 ended: None,
             },
@@ -439,10 +451,11 @@ impl JobRegistry {
         if !allowed(&job.state, &to) {
             return false;
         }
-        if is_terminal(&to) {
+        if Self::is_ended(&to) {
             job.ended = Some(Instant::now());
         }
         job.state = to;
+        job.state_tx.send_replace(job.state.clone());
         self.inner.bus.publish(Event::Job(job.view(id)));
         true
     }
