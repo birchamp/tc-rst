@@ -766,6 +766,77 @@ fn c29_a_stop_asked_at_the_last_file_of_a_copy_leaves_that_copy_finished() {
     }
 }
 
+/// A folder made read-only, which holds its entries in place; its permissions come back when
+/// it is dropped, so the temporary folder can be removed.
+#[cfg(unix)]
+struct Held(PathBuf);
+
+#[cfg(unix)]
+impl Held {
+    fn new(dir: PathBuf) -> Self {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o555)).unwrap();
+        Self(dir)
+    }
+}
+
+#[cfg(unix)]
+impl Drop for Held {
+    fn drop(&mut self) {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&self.0, fs::Permissions::from_mode(0o755));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn c29_a_leftover_that_cannot_be_removed_comes_back_and_stops_neither_the_open_nor_a_seed() {
+    let (bundled_dir, _) = bundle();
+    let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+    let machine_dir = tempfile::tempdir().unwrap();
+    // What a crash left in `.partial/`, with a folder that cannot be emptied (on Windows a
+    // scanner holding one of the files does the same).
+    let old = machine_dir.path().join(".partial/1-2-3");
+    fs::create_dir_all(old.join("content")).unwrap();
+    fs::write(old.join("content/a.md"), b"half").unwrap();
+    let held = Held::new(old.clone());
+    if fs::write(old.join("probe"), b"").is_ok() {
+        eprintln!("the permission is not enforced here (running as root): nothing to prove");
+        return;
+    }
+
+    assert!(
+        matches!(
+            ResourceStore::open(machine_dir.path()),
+            Err(StoreError::Io {
+                action: "clear",
+                ..
+            })
+        ),
+        "open still refuses, as other callers rely on"
+    );
+    let (machine, left) = ResourceStore::open_keeping_leftovers(machine_dir.path()).unwrap();
+    let Some(StoreError::Io { action, path, .. }) = left else {
+        panic!("the leftover was not reported: {left:?}")
+    };
+    assert_eq!(action, "clear");
+    assert_eq!(path, machine_dir.path().join(".partial"));
+    assert!(old.is_dir(), "the leftover is still there");
+
+    // The store works beside the leftover: a seed lands whole installs by rename.
+    let report = machine.seed_from(&bundled).unwrap();
+    assert_eq!(report.added.len(), 3);
+    for install in machine.installed().unwrap().installs {
+        install.verify().unwrap();
+    }
+    drop(held);
+
+    // Once the leftover can go, the next open removes it and says nothing.
+    let (_, left) = ResourceStore::open_keeping_leftovers(machine_dir.path()).unwrap();
+    assert!(left.is_none(), "{left:?}");
+    assert!(!machine_dir.path().join(".partial").exists());
+}
+
 proptest::proptest! {
     #![proptest_config(proptest::prelude::ProptestConfig::with_cases(12))]
 

@@ -262,14 +262,31 @@ impl App {
             None
         };
 
-        // Opening the store clears what an interrupted install left in `.partial/`. The plan
-        // reads receipts and check records, never a content file, so `hello` is exact from
-        // the first request (unit A9).
+        // Opening the store clears what an interrupted install left in `.partial/`. A leftover
+        // that cannot be removed (a scanner holds one of its files) stops nothing: installs
+        // land by rename, each from a staging folder of its own, so it is reported and the
+        // next start tries again. Only a store folder that cannot be made stops the start,
+        // as an app-data folder that cannot be made does. The plan reads receipts and check
+        // records, never a content file, so `hello` is exact from the first request (unit A9).
         let resources_dir = config.app_data.join(RESOURCES_FOLDER);
-        let resources = ResourceStore::open(&resources_dir).map_err(|e| StartError::AppData {
-            path: resources_dir,
-            reason: e.to_string(),
-        })?;
+        let (resources, leftover) =
+            ResourceStore::open_keeping_leftovers(&resources_dir).map_err(|e| {
+                StartError::AppData {
+                    path: resources_dir.clone(),
+                    reason: e.to_string(),
+                }
+            })?;
+        if let Some(left) = leftover {
+            reports.add(
+                ReportOp::Resources,
+                ReportOutcome::Failed {
+                    reason: left.to_string(),
+                },
+                facts(json!({"folder": resources_dir.display().to_string()})),
+                now,
+                now,
+            );
+        }
         let seed_start = seed::plan(&resources, config.bundle.as_deref());
 
         let prefs = PrefsWriter::start(files, reports.clone(), clock.clone());

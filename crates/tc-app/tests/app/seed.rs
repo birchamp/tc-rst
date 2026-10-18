@@ -546,3 +546,80 @@ async fn a_copy_that_cannot_be_trusted_fails_the_startup_without_a_job() {
     );
     second.app.quit().await;
 }
+
+/// A folder made read-only, which holds its entries in place; its permissions come back when it
+/// is dropped, so the temporary folder can be removed.
+#[cfg(unix)]
+struct Held(PathBuf);
+
+#[cfg(unix)]
+impl Held {
+    fn new(dir: &Path) -> Self {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(dir, fs::Permissions::from_mode(0o555)).unwrap();
+        Self(dir.to_owned())
+    }
+}
+
+#[cfg(unix)]
+impl Drop for Held {
+    fn drop(&mut self) {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&self.0, fs::Permissions::from_mode(0o755));
+    }
+}
+
+fn resources_reports(app: &App) -> Vec<OperationReport> {
+    app.reports()
+        .all()
+        .into_iter()
+        .filter(|report| report.op == ReportOp::Resources)
+        .collect()
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_leftover_that_cannot_be_removed_stops_neither_the_start_nor_the_seed() {
+    let dir = tempfile::tempdir().unwrap();
+    // What a crash left in `resources/.partial/`, with a folder that cannot be emptied (on
+    // Windows a scanner holding one of the files does the same).
+    let partial = dir.path().join("app-data/resources/.partial");
+    let old = partial.join("1-2-3");
+    fs::create_dir_all(old.join("content")).unwrap();
+    fs::write(old.join("content/a.md"), b"half").unwrap();
+    let held = Held::new(&old);
+    if fs::write(old.join("probe"), b"").is_ok() {
+        eprintln!("the permission is not enforced here (running as root): nothing to prove");
+        return;
+    }
+
+    // Without a bundle: the app starts, ready, and says what it could not remove.
+    let plain = TestApp::start_in(dir.path(), |_, _| {}).await;
+    assert_eq!(hello_value(&plain.app).await["startup"]["type"], "ready");
+    let reports = resources_reports(&plain.app);
+    assert_eq!(reports.len(), 1, "{reports:?}");
+    let ReportOutcome::Failed { reason } = &reports[0].outcome else {
+        panic!("{:?}", reports[0].outcome)
+    };
+    assert!(reason.contains(".partial"), "{reason}");
+    assert!(old.is_dir(), "the leftover stays until it can go");
+    plain.app.quit().await;
+
+    // With a bundle: the first launch is not stopped either, and lands whole installs.
+    let seeding = start(dir.path(), bundle(), None).await;
+    assert_eq!(until_startup_ends(&seeding.app).await, StartupState::Ready);
+    let installs = seeding.app.resources().installed().unwrap().installs;
+    assert_eq!(installs.len(), 4);
+    for install in &installs {
+        install.verify().unwrap();
+    }
+    assert_eq!(resources_reports(&seeding.app).len(), 1);
+    seeding.app.quit().await;
+
+    // Once it can go, the next start removes it and says nothing.
+    drop(held);
+    let last = TestApp::start_in(dir.path(), |_, _| {}).await;
+    assert!(!partial.exists());
+    assert!(resources_reports(&last.app).is_empty());
+    last.app.quit().await;
+}

@@ -538,13 +538,32 @@ impl ResourceStore {
     /// Opens the store at `root`, creating it when missing, and removes whatever an
     /// interrupted install left behind.
     pub fn open(root: impl Into<PathBuf>) -> Result<Self, StoreError> {
+        match Self::open_keeping_leftovers(root)? {
+            (store, None) => Ok(store),
+            (_, Some(left)) => Err(left),
+        }
+    }
+
+    /// [`ResourceStore::open`] for the app, which must start although something an
+    /// interrupted install left in `.partial/` cannot be removed (on Windows a scanner may
+    /// hold one of its files). An install lands only by renaming a staging folder with a
+    /// name of its own, so the leftovers cannot reach an install; they come back as the
+    /// second value for the caller to report, and the next open tries again. Only a store
+    /// folder that cannot be made is an error.
+    pub fn open_keeping_leftovers(
+        root: impl Into<PathBuf>,
+    ) -> Result<(Self, Option<StoreError>), StoreError> {
         let store = Self { root: root.into() };
         fs::create_dir_all(&store.root).map_err(|e| StoreError::io("create", &store.root, e))?;
         let partial = store.root.join(PARTIAL);
-        if partial.exists() {
-            fs::remove_dir_all(&partial).map_err(|e| StoreError::io("clear", &partial, e))?;
-        }
-        Ok(store)
+        let left = if partial.exists() {
+            fs::remove_dir_all(&partial)
+                .err()
+                .map(|e| StoreError::io("clear", &partial, e))
+        } else {
+            None
+        };
+        Ok((store, left))
     }
 
     /// Opens a store only to read it, such as the bundled store an installer ships in a
