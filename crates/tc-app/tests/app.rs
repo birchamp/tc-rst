@@ -5,6 +5,7 @@
 mod app {
     pub mod common;
     mod events;
+    mod flows;
     mod folders;
     mod projects_root;
 }

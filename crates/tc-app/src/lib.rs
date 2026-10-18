@@ -8,4 +8,5 @@
 pub mod clock;
 pub mod config;
 pub mod events;
+pub mod flows;
 pub mod folders;
