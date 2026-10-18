@@ -773,7 +773,11 @@ answered Q-2 with (a), so the shell sends the report and the server only compose
   content-hashed name. A `build.commit` in `hello` that differs from the wasm's compile-time
   commit forces one reload. Both read `tc_api::app::BUILD_COMMIT`, which is the environment
   variable `TC4_BUILD_COMMIT` at build time, or `dev` when it is not set; the release pipeline
-  sets it for the server and the wasm build alike.
+  sets it for the server and the wasm build alike. *(A4a: so do a `hello.api` that differs from
+  `API_VERSION` and any reply that is `ApiError::Version`. The page keeps a marker in
+  `sessionStorage`, `tc4.reloadedFor`, naming the server's commit and API version it reloaded
+  for. The same mismatch after that reload shows the boot error naming both builds, instead of
+  reloading for ever; a different mismatch gets one reload of its own.)*
 - A new `ServerInstance` means the server restarted. The UI drops every scope, sends nothing
   again, keeps every buffered entry and goes Home; the entries are offered when their project
   next opens (AD4). In the shell this happens on a fresh page, because the shell reloads the
@@ -1274,6 +1278,17 @@ short, and the quit waits for calls still running (§5.1). *(A2)*
 - Each connection has a bounded queue. A reader too slow for it is disconnected and reconnects.
 - The UI reads the stream with `fetch` and a `ReadableStream` reader, and parses the frames in
   `tc_ui::app::events`, a host-tested parser.
+- **The UI's reading rules** *(A4a)*. Its first connection asks `?after=0`, so the bus replays
+  every frame since launch, or sends one `Resync` if the ring has wrapped, and applying the
+  frames in order converges on the current state (none is suppressed as old). It reads
+  `app/hello` only after the stream's response head has arrived, so the subscription is made
+  before `hello`'s snapshot and no frame can fall between them. A `Resync` is numbered like the
+  newest frame, which may be lower than the reader's `after`, so it is never skipped as a repeat
+  and sets `after` to its own number; any other frame with `seq <= after` is a repeat and is
+  skipped. A frame that does not parse is handled as a `Resync` (every live query is read
+  again), never dropped, and `after` moves past its `id`. A frame of another `ServerInstance` is
+  a restart (§3.10). The reader aborts a connection that sends no byte for 45 s (three
+  heartbeats) and reconnects after 250 ms, doubling to 5 s, with the last `after`.
 - **Ordering.** The server publishes a command's events before it sends the command's reply. An
   `Ack` and a `Changed` event for the same write may still arrive in either order at the UI; both
   carry a `ViewSeq`, and the UI keeps the newer. A `Changed` whose cause is
@@ -1414,10 +1429,18 @@ show a 401 page.
 
 ### 6.2 Reading
 
-- `api.query::<E>(req).await -> ReplyOf<E>`. A screen holds `Load<T> { Loading, Ready(T),
-  Refreshing(T), Failed(ApiError) }`. "Failed" is never drawn as "absent".
-- A reply is dropped when its scope is no longer current, or when its `ViewSeq` is older than the
-  cached one.
+- `api.call(&req).await -> Result<E::Ok, CallError>`, with `CallError { Api(ApiError), Dropped,
+  Transport(Transport) }` and `Transport { Unreachable(String), Status(u16), Unreadable(String) }`.
+  A screen holds `Load<T> { Loading, Ready(T), Refreshing(T), Failed(CallError) }`. "Failed" is
+  never drawn as "absent". *(A4a: the first draft had `-> ReplyOf<E>` and `Failed(ApiError)`.
+  AD9 keeps HTTP statuses and network failures below the API, so a refused token, a proxy's
+  page or a server that is gone are not `ApiError`s; and a reply dropped because its project
+  closed must not look like a refusal.)*
+- A *read's* reply is dropped when its scope is no longer current, when the server answered it
+  with `ApiError::StaleScope`, or when its `ViewSeq` is older than the cached one. The query cache
+  and `Runtime::read_once` (a read an action makes itself) apply the rule. **A write's reply is
+  never dropped**: the save machine needs every `Ack` and every `NotSaved::StaleScope` (§6.5,
+  A-19). *(A4a)*
 - A `Session::Changed` event whose scope a query `depends_on` moves it to `Refreshing` and fetches
   it again. The old data stays on screen; a book waiting behind a commit shows as pending, never
   as empty (DELTA:625-626). `Resync` refreshes every query. The check rail is the exception: it

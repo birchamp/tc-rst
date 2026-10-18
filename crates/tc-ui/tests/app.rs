@@ -4,5 +4,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod app {
+    mod client;
     mod sse;
 }

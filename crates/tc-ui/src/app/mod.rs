@@ -11,4 +11,7 @@
 //! WebAssembly stops the whole UI.
 #![deny(clippy::indexing_slicing)]
 
+pub mod boot;
+pub mod client;
 pub mod events;
+pub mod load;
