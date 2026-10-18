@@ -1,0 +1,23 @@
+[package]
+name = "tc-export"
+description = "The export kernel's pure parts: the print model of a book and of an Open Bible Stories project, with its page setup."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tc-obs = { path = "../tc-obs" }
+
+[dev-dependencies]
+proptest.workspace = true
+serde_json.workspace = true
+# The tests build stories with tc-helps' type and read the OBS sample with tc-obs' parser.
+tc-helps = { path = "../tc-helps" }
+# The benchmark reads the Psalms of fixtures/scale into book rows, and the en_obs v9 stories
+# from bundle/en.
+tc-usfm = { path = "../tc-usfm" }
+zip.workspace = true
+
+[lints]
+workspace = true

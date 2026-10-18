@@ -3043,6 +3043,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tc-export"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "serde_json",
+ "tc-helps",
+ "tc-obs",
+ "tc-usfm",
+ "zip",
+]
+
+[[package]]
 name = "tc-helps"
 version = "0.1.0"
 dependencies = [
