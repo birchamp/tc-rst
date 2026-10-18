@@ -257,7 +257,12 @@ impl Git {
         let wanted: HashSet<Oid> = loose.iter().map(|l| l.oid).collect();
         // A walk that fails removes nothing: an object is pruned only when every ref was
         // read and none reached it.
-        let reach = reachable(repo, &wanted, stop)?;
+        let reach = match reachable(repo, &wanted, stop) {
+            Ok(reach) => reach,
+            // A stopped walk is no failure: nothing was packed or removed.
+            Err(_) if stop.load(Ordering::Acquire) => return Ok(done),
+            Err(e) => return Err(e),
+        };
         let reached: HashSet<Oid> = reach.set.intersection(&wanted).copied().collect();
         let packed = packed_among(&objects.join("pack"), &reached)?;
         let plan = classify(&loose, &reach.set, &packed, now);
