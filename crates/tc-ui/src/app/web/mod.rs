@@ -283,6 +283,11 @@ pub fn run_app(base: String) {
 
 /// The nine catalogs that are not compiled in, fetched in parallel. The promise gives their
 /// texts as an array, in the order of the ten languages without English.
+///
+/// It is awaited only after the stream has opened and `hello` has answered, and a fetch that
+/// fails sooner would reject it with no handler yet, which the page reports as an unhandled
+/// rejection. A handler that does nothing is attached at once; the await later sees the
+/// rejection all the same.
 fn fetch_catalogs(api: &Api, base: &str) -> js_sys::Promise {
     let all = Array::new();
     for id in LocaleId::all().filter(|id| *id != LocaleId::ENGLISH) {
@@ -294,7 +299,12 @@ fn fetch_catalogs(api: &Api, base: &str) -> js_sys::Promise {
                 .map_err(|error| JsValue::from_str(&format!("{url}: {error}")))
         }));
     }
-    js_sys::Promise::all(&all)
+    let promise = js_sys::Promise::all(&all);
+    // Once per page, so the closure is not freed: the promise may settle at any time.
+    let quiet = Closure::<dyn FnMut(JsValue)>::new(|_| {});
+    let _ = promise.catch(&quiet);
+    quiet.forget();
+    promise
 }
 
 fn install_catalogs(texts: &JsValue) -> Result<(), String> {

@@ -769,8 +769,10 @@ answered Q-2 with (a), so the shell sends the report and the server only compose
 ### 3.10 Versioning
 
 - `API_VERSION = 1`, paths under `/api/v1/`, header `X-Tc-Api: 1`.
-- The UI and the server ship as one build. `index.html` is `no-store`; every other UI file has a
-  content-hashed name. A `build.commit` in `hello` that differs from the wasm's compile-time
+- The UI and the server ship as one build. `index.html` is `no-store`; every other UI file is in
+  a folder named by a hash, `ui/<build>/`, where `<build>` is 16 hex digits of a SHA-256 over every
+  file's path and bytes. *(A4a: a hashed folder, not hashed file names, because tC4's CSS imports
+  `tokens/*.css` and its fonts by relative URL, which a renamed file would break.)* A `build.commit` in `hello` that differs from the wasm's compile-time
   commit forces one reload. Both read `tc_api::app::BUILD_COMMIT`, which is the environment
   variable `TC4_BUILD_COMMIT` at build time, or `dev` when it is not set; the release pipeline
   sets it for the server and the wasm build alike. *(A4a: so do a `hello.api` that differs from
@@ -1252,7 +1254,7 @@ drives the quit sequence in process): `closed_stdin_quits_within_5_s`,
 | Method, path | Kind | Notes |
 |---|---|---|
 | `GET /` | static | `index.html`, `no-store`, with `boot.js` |
-| `GET /ui/*` | static | hashed wasm, JS glue, CSS (tC4's `styles.css`, tokens, `ui.css`), fonts, catalogs; immutable |
+| `GET /ui/<build>/*` | static | wasm, JS glue, `boot.js`, CSS (tC4's `styles.css`, tokens, `ui.css`), fonts, catalogs, in a folder named by a hash of its files (§3.10); immutable |
 | `GET /help/*` | static | vendored help pages as `text/html`, never a redirect (Q28, DELTA:928-944), with the page-swap shim |
 | `GET /prepare.html` | static | first-launch window, strings in 10 languages (Q25) |
 | `GET /api/v1/events` | stream | §5.4 |
