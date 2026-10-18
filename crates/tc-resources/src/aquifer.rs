@@ -21,7 +21,7 @@ use reqwest::StatusCode;
 use reqwest::header::{ACCEPT, HeaderMap};
 use serde::Deserialize;
 use tc_core::BookId;
-use tc_door43::{GitOid, InternetSwitch, TagName, UnreachableCause};
+use tc_door43::{GitOid, InternetSwitch, TagName, UnreachableCause, check_names};
 use tc_helps::HelpRef;
 use tc_helps::aquifer::{
     AquiferHelpsKind, academy_from_aquifer, notes_from_aquifer, parse_aquifer_articles,
@@ -31,7 +31,7 @@ use url::Url;
 
 use crate::error::{AquiferError, InstallError, Refusal};
 use crate::pin::{AquiferLanguage, AquiferPin, AquiferRepo, AssetName, BookCoverage, Sha256};
-use crate::store::{Installed, Origin, ResourceStore, Staged, collision_key, unportable_segment};
+use crate::store::{Installed, Origin, ResourceStore, Staged};
 
 const USER_AGENT: &str = concat!("tc-resources/", env!("CARGO_PKG_VERSION"));
 const GITHUB: &str = "https://github.com";
@@ -678,7 +678,6 @@ fn unpack(bytes: &[u8], max_unpacked: u64) -> Result<Vec<(String, Vec<u8>)>, Ref
         zip::ZipArchive::new(Cursor::new(bytes)).map_err(|e| Refusal::NotAZip(e.to_string()))?;
     let mut files = Vec::new();
     let mut total: u64 = 0;
-    let mut seen = BTreeSet::new();
     for index in 0..archive.len() {
         let mut entry = archive
             .by_index(index)
@@ -708,12 +707,6 @@ fn unpack(bytes: &[u8], max_unpacked: u64) -> Result<Vec<(String, Vec<u8>)>, Ref
         }
         if name.split('/').any(str::is_empty) {
             return Err(Refusal::EscapesRoot(name));
-        }
-        if let Some(reason) = name.split('/').find_map(unportable_segment) {
-            return Err(Refusal::NotPortable { path: name, reason });
-        }
-        if !seen.insert(collision_key(&name)) {
-            return Err(Refusal::DuplicateEntry(name));
         }
         let mut body = Vec::new();
         let limit = max_unpacked.saturating_sub(total).saturating_add(1);
@@ -745,6 +738,7 @@ fn unpack(bytes: &[u8], max_unpacked: u64) -> Result<Vec<(String, Vec<u8>)>, Ref
             }
         }
     }
+    check_names(files.iter().map(|(path, _)| path.as_str()))?;
     Ok(files)
 }
 
@@ -808,19 +802,29 @@ mod tests {
             "notes./x",
             "x/a ",
             "x/a.",
-            "PROGRA~1.json",
-            "x/abcdef~1.json",
+            "PROGRA~1.JSN",
+            "x/abcdef~1.jsn",
             "A~9",
+            "CON.json",
+            "nul.json",
         ] {
+            // With a root `metadata.json`, no top folder is removed before the names are
+            // checked: a removed folder's name is never written.
             assert!(
                 matches!(
-                    unpack(&zip(&[(name, b"x")]), 1 << 20),
+                    unpack(&zip(&[("metadata.json", b"{}"), (name, b"x")]), 1 << 20),
                     Err(Refusal::NotPortable { .. })
                 ),
                 "{name}"
             );
         }
-        for pair in [["a.json", "A.json"], ["σ.json", "ς.json"]] {
+        for pair in [
+            ["a.json", "A.json"],
+            ["σ.json", "ς.json"],
+            ["café.md", "cafe\u{301}.md"],
+            ["Notes/a.json", "notes/b.json"],
+            ["A", "a/x"],
+        ] {
             assert!(
                 matches!(
                     unpack(&zip(&[(pair[0], b"x"), (pair[1], b"y")]), 1 << 20),
@@ -829,10 +833,23 @@ mod tests {
                 "{pair:?}"
             );
         }
-        let allowed = unpack(&zip(&[("notes~2024-draft.md", b"x")]), 1 << 20).unwrap();
+        // `ı` stays apart from `i`, and only the shape of an 8.3 short name is refused.
+        let names = [
+            "notes~2024-draft.md",
+            "notes~1.json",
+            "abcdef~12x",
+            "a~1.tar.gz",
+            "ı",
+            "i",
+        ];
+        let entries: Vec<(&str, &[u8])> = names.iter().map(|name| (*name, &b"x"[..])).collect();
+        let allowed = unpack(&zip(&entries), 1 << 20).unwrap();
         assert_eq!(
-            allowed,
-            vec![("notes~2024-draft.md".to_owned(), b"x".to_vec())]
+            allowed
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            names
         );
         assert!(matches!(
             unpack(&zip(&[("a.json", &[0u8; 100])]), 10),

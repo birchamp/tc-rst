@@ -61,5 +61,5 @@ pub use repos::{
     StageReleases, Tag,
 };
 pub use secret::{Credentials, OneTimeCode, Password, Session, Token};
-pub use unpack::{FileMode, UnpackedFile};
+pub use unpack::{FileMode, NameProblem, UnpackedFile, check_names};
 pub use verify::{VerifiedArchive, VerifiedSbExport, verify_archive, verify_sb_export};

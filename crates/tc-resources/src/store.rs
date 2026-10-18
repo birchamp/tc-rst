@@ -26,9 +26,10 @@
 //! An install writes every file and then the receipt into a new folder under
 //! `.partial/`, fsyncing each file and folder, then renames that folder to its key and
 //! fsyncs the parent. A crash at any point leaves either no install or the complete one;
-//! [`ResourceStore::open`] removes what a crash left in `.partial/`, or leaves what it
-//! cannot remove for the next open. An existing install's content and receipt are never
-//! written again: a second install of the same identity finds it and stops.
+//! [`ResourceStore::open`] removes what a crash left in `.partial/`. On Windows, a leftover
+//! that another program (a virus scanner, the search indexer) still holds open stays for
+//! the next open. An existing install's content and receipt are never written again: a
+//! second install of the same identity finds it and stops.
 //!
 //! # Checked once
 //!
@@ -50,10 +51,11 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tc_core::BookId;
+use tc_door43::check_names;
 
 use crate::error::{InstallError, Refusal, StoreError};
 use crate::pin::{AquiferPin, BookCoverage, ResourcePin, Sha256};
@@ -442,16 +444,19 @@ pub struct ResourceStore {
 }
 
 impl ResourceStore {
-    /// Opens the store at `root`, creating it when missing, and tries to remove whatever
-    /// an interrupted install left behind. A leftover that cannot be removed (a scanner
-    /// holds a file in it) stays for the next open: staging names are unique, so it never
-    /// meets a new install.
+    /// Opens the store at `root`, creating it when missing, and removes whatever an
+    /// interrupted install left behind. On Windows, a leftover that another program still
+    /// holds open stays for the next open: staging names are unique, so it never meets a
+    /// new install.
     pub fn open(root: impl Into<PathBuf>) -> Result<Self, StoreError> {
         let store = Self { root: root.into() };
         fs::create_dir_all(&store.root).map_err(|e| StoreError::io("create", &store.root, e))?;
         let partial = store.root.join(PARTIAL);
-        if partial.exists() {
-            let _ = retry_while_held(|| fs::remove_dir_all(&partial));
+        if partial.exists()
+            && let Err(e) = retry_while_held(|| fs::remove_dir_all(&partial))
+            && !is_held(&e)
+        {
+            return Err(StoreError::io("clear", &partial, e));
         }
         Ok(store)
     }
@@ -670,6 +675,9 @@ impl ResourceStore {
         let partial = self.root.join(PARTIAL);
         create_dirs(&partial)?;
         let staging = partial.join(staging_name());
+        // Not `create_dirs`: a staging name already taken must fail here, before any file
+        // is written into the other install's folder.
+        fs::create_dir(&staging).map_err(|e| StoreError::io("create", &staging, e))?;
         create_dirs(&staging.join(CONTENT))?;
         let mut folders = BTreeSet::new();
         for (written, (path, bytes)) in files.iter().enumerate() {
@@ -682,6 +690,7 @@ impl ResourceStore {
                 Err(StoreError::Io { source, .. })
                     if source.kind() == io::ErrorKind::AlreadyExists =>
                 {
+                    let _ = retry_while_held(|| fs::remove_dir_all(&staging));
                     return Err(InstallError::Refused {
                         what: receipt.origin.describe(),
                         refusal: Refusal::DuplicateEntry(path.clone()),
@@ -718,7 +727,13 @@ impl ResourceStore {
 
         let parent = target.parent().unwrap_or(&self.root);
         create_dirs(parent)?;
-        if let Err(e) = retry_while_held(|| fs::rename(&staging, &target)) {
+        let renamed = retry_while_held(|| match fs::rename(&staging, &target) {
+            // Some Windows versions answer a rename onto a folder that exists with "access
+            // denied", which looks like a file held open. Waiting would not help.
+            Err(e) if target.exists() => Err(io::Error::new(io::ErrorKind::AlreadyExists, e)),
+            result => result,
+        });
+        if let Err(e) = renamed {
             // Another install of the same identity may have landed first.
             if let Some(existing) = self.find(&receipt.origin)? {
                 let _ = fs::remove_dir_all(&staging);
@@ -836,7 +851,6 @@ fn dirs_at_depth(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) -> Result<(),
 /// another name, or that a case-insensitive file system would merge with another.
 /// Downloads were checked already; this guards every write, whatever its source.
 fn check_paths(files: &[(String, Vec<u8>)]) -> Result<(), Refusal> {
-    let mut seen = BTreeSet::new();
     for (path, _) in files {
         let bad = path.is_empty()
             || path.contains(['\\', ':', '\0'])
@@ -846,53 +860,8 @@ fn check_paths(files: &[(String, Vec<u8>)]) -> Result<(), Refusal> {
         if bad {
             return Err(Refusal::EscapesRoot(path.clone()));
         }
-        if let Some(reason) = path.split('/').find_map(unportable_segment) {
-            return Err(Refusal::NotPortable {
-                path: path.clone(),
-                reason,
-            });
-        }
-        if path == RECEIPT {
-            continue;
-        }
-        if !seen.insert(collision_key(path)) {
-            return Err(Refusal::DuplicateEntry(path.clone()));
-        }
     }
-    Ok(())
-}
-
-/// Why Windows would write a file with this name under another, or open another file
-/// through it, if it would: the name ends in a dot or space (Windows strips them), or its
-/// stem is shaped like an 8.3 short name such as `PROGRA~1`. Device names and forbidden
-/// characters are not checked here.
-pub(crate) fn unportable_segment(segment: &str) -> Option<&'static str> {
-    if segment.ends_with(['.', ' ']) {
-        return Some("Windows removes a trailing dot or space, so the name would change");
-    }
-    let stem = segment.split('.').next().unwrap_or_default();
-    let short_name = stem.split_once('~').is_some_and(|(base, number)| {
-        (1..=6).contains(&base.chars().count())
-            && !number.is_empty()
-            && number.bytes().all(|b| b.is_ascii_digit())
-    });
-    short_name.then_some("Windows can open another file through this short name (8.3)")
-}
-
-/// The name a case-insensitive file system sees: lowercased, then upper-cased wherever that
-/// gives one character, because macOS folds `σ` and `ς`, `ſ` and `s`, `µ` and `μ` into one
-/// letter.
-pub(crate) fn collision_key(path: &str) -> String {
-    path.to_lowercase()
-        .chars()
-        .map(|c| {
-            let mut upper = c.to_uppercase();
-            match (upper.next(), upper.next()) {
-                (Some(single), None) => single,
-                _ => c,
-            }
-        })
-        .collect()
+    Ok(check_names(files.iter().map(|(path, _)| path.as_str()))?)
 }
 
 fn create_dirs(dir: &Path) -> Result<(), StoreError> {
@@ -910,26 +879,32 @@ fn replace_synced(dir: &Path, name: &str, bytes: &[u8]) -> Result<(), StoreError
     sync_dir(dir)
 }
 
-/// Defender, the Search indexer or OneDrive briefly hold a file that was just written, and
-/// Windows refuses to rename or remove it until they let go.
-#[cfg(windows)]
-fn retry_while_held<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
-    use std::time::Duration;
+/// Whether `error` says that another program holds a file open, as Windows does with
+/// "access denied", a sharing violation or a lock violation. Elsewhere the same numbers
+/// mean other things, so no error is a held file.
+fn is_held(error: &io::Error) -> bool {
     const ACCESS_DENIED: i32 = 5;
     const SHARING_VIOLATION: i32 = 32;
     const LOCK_VIOLATION: i32 = 33;
+    cfg!(windows)
+        && matches!(
+            error.raw_os_error(),
+            Some(ACCESS_DENIED | SHARING_VIOLATION | LOCK_VIOLATION)
+        )
+}
+
+/// Runs `op` again while it fails because a file is held ([`is_held`]), for up to two
+/// seconds: Defender, the Search indexer or OneDrive briefly hold a file that was just
+/// written, and Windows refuses to rename or remove it until they let go. Any other result,
+/// and every result on another platform, is returned after one call.
+fn retry_while_held<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
     const LONGEST_PAUSE: Duration = Duration::from_millis(500);
     const GIVE_UP_AFTER: Duration = Duration::from_secs(2);
     let mut pause = Duration::from_millis(10);
     let mut slept = Duration::ZERO;
     loop {
         match op() {
-            Err(e)
-                if matches!(
-                    e.raw_os_error(),
-                    Some(ACCESS_DENIED | SHARING_VIOLATION | LOCK_VIOLATION)
-                ) && slept < GIVE_UP_AFTER =>
-            {
+            Err(e) if is_held(&e) && slept < GIVE_UP_AFTER => {
                 std::thread::sleep(pause);
                 slept += pause;
                 pause = (pause * 2).min(LONGEST_PAUSE);
@@ -937,11 +912,6 @@ fn retry_while_held<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
             result => return result,
         }
     }
-}
-
-#[cfg(not(windows))]
-fn retry_while_held<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
-    op()
 }
 
 /// Writes `path` anew or over what is there: a crash can leave the temporary of
@@ -1165,8 +1135,11 @@ mod tests {
             "x/a ",
             "x/a.",
             "PROGRA~1",
+            "ABCDEF~1.JSN",
             "x/abcdef~1.tsv",
             "A~9",
+            "CON.json",
+            "nul.json",
         ] {
             let mut s = staged('a');
             s.files.push((unportable.to_owned(), Vec::new()));
@@ -1181,8 +1154,17 @@ mod tests {
                 "{unportable:?}"
             );
         }
-        // `σ` and `ς` are one letter to macOS, which folds them as it folds case.
-        for added in [&["METADATA.json"][..], &["σ", "ς"][..]] {
+        // Names one volume would store as one file or folder: letter case, `σ` and `ς`
+        // (macOS folds them as it folds case), NFC and NFD, folders that differ in case,
+        // and a file and a folder of one name.
+        for added in [
+            &["METADATA.json"][..],
+            &["σ", "ς"],
+            &["café.md", "cafe\u{301}.md"],
+            &["Notes/a.json", "notes/b.json"],
+            &["A", "a/x"],
+            &["receipt.json", "RECEIPT.json"],
+        ] {
             let mut s = staged('a');
             s.files
                 .extend(added.iter().map(|path| ((*path).to_owned(), Vec::new())));
@@ -1198,8 +1180,20 @@ mod tests {
             );
         }
         assert!(store.installed().unwrap().installs.is_empty());
+        // `ı` stays apart from `i` on every supported file system, and only the shape of an
+        // 8.3 short name is refused as one.
         let mut s = staged('a');
-        s.files.push(("notes~2024-draft.md".to_owned(), Vec::new()));
+        s.files.extend(
+            [
+                "ı",
+                "i",
+                "notes~1.json",
+                "abcdef~12x",
+                "a~1.tar.gz",
+                "notes~2024-draft.md",
+            ]
+            .map(|path| (path.to_owned(), Vec::new())),
+        );
         store.install(s).unwrap().verify().unwrap();
     }
 
@@ -1295,20 +1289,27 @@ mod tests {
         staging
     }
 
+    fn no_staging_folder_left(store: &ResourceStore) {
+        let leftovers = fs::read_dir(store.root().join(PARTIAL)).map_or(0, Iterator::count);
+        assert_eq!(leftovers, 0, "no staging folder may remain");
+    }
+
     #[test]
     fn a_staged_file_never_overwrites_a_name_the_volume_already_holds() {
         let dir = tempfile::tempdir().unwrap();
         let store = ResourceStore::open(dir.path()).unwrap();
-        let mut planted = None;
+        let outside = dir.path().join("planted");
         // Stands in for a volume that shows an earlier file under this file's name: the
-        // second file's name exists before the install creates it.
+        // second file's name exists before the install creates it. The staging folder is
+        // removed when the install is refused, so a second name for the planted file's
+        // bytes outside it shows whether they were written over.
         let result = store.install_until(staged('a'), &mut |step| {
             if step == Step::FileWritten(1) {
                 let file = the_staging_folder(dir.path())
                     .join(CONTENT)
                     .join("ingredients/TIT.tsv");
                 fs::write(&file, b"planted").unwrap();
-                planted = Some(file);
+                fs::hard_link(&file, &outside).unwrap();
             }
             false
         });
@@ -1320,8 +1321,47 @@ mod tests {
             ),
             "{result:?}"
         );
-        assert_eq!(fs::read(planted.unwrap()).unwrap(), b"planted");
+        assert_eq!(fs::read(outside).unwrap(), b"planted");
         assert!(store.dcs(&pin('a')).unwrap().is_none());
+        assert!(store.installed().unwrap().installs.is_empty());
+        no_staging_folder_left(&store);
+    }
+
+    #[test]
+    fn an_install_that_lost_the_race_returns_the_winner_and_removes_its_staging() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ResourceStore::open(dir.path()).unwrap();
+        // The same install lands between this one's last write and its rename.
+        let installed = store
+            .install_until(staged('a'), &mut |step| {
+                if step == Step::ReceiptWritten {
+                    store.install(staged('a')).unwrap();
+                }
+                false
+            })
+            .unwrap();
+        installed.verify().unwrap();
+        assert_eq!(store.installed().unwrap().installs.len(), 1);
+        no_staging_folder_left(&store);
+    }
+
+    #[test]
+    fn opening_fails_when_a_leftover_cannot_be_cleared_for_a_reason_no_scanner_causes() {
+        let dir = tempfile::tempdir().unwrap();
+        // A file where the staging folders go: clearing it as a folder fails with "not a
+        // directory".
+        fs::write(dir.path().join(PARTIAL), b"x").unwrap();
+        let result = ResourceStore::open(dir.path());
+        assert!(
+            matches!(
+                result,
+                Err(StoreError::Io {
+                    action: "clear",
+                    ..
+                })
+            ),
+            "{result:?}"
+        );
     }
 
     #[cfg(windows)]
@@ -1342,7 +1382,7 @@ mod tests {
     }
 
     #[cfg(windows)]
-    fn release_after(file: fs::File, pause: std::time::Duration) -> std::thread::JoinHandle<()> {
+    fn release_after(file: fs::File, pause: Duration) -> std::thread::JoinHandle<()> {
         std::thread::spawn(move || {
             std::thread::sleep(pause);
             drop(file);
@@ -1363,7 +1403,7 @@ mod tests {
                             .join(CONTENT)
                             .join("metadata.json"),
                     );
-                    scanner = Some(release_after(held, std::time::Duration::from_millis(300)));
+                    scanner = Some(release_after(held, Duration::from_millis(300)));
                 }
                 false
             })
@@ -1380,10 +1420,7 @@ mod tests {
         fs::create_dir_all(&leftover).unwrap();
         let file = leftover.join("metadata.json");
         fs::write(&file, b"{}").unwrap();
-        let scanner = release_after(
-            held_like_a_scanner(&file),
-            std::time::Duration::from_millis(300),
-        );
+        let scanner = release_after(held_like_a_scanner(&file), Duration::from_millis(300));
         ResourceStore::open(dir.path()).unwrap();
         scanner.join().unwrap();
         assert!(!dir.path().join(PARTIAL).exists());
@@ -1403,6 +1440,67 @@ mod tests {
         drop(held);
         ResourceStore::open(dir.path()).unwrap();
         assert!(!dir.path().join(PARTIAL).exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn an_install_that_lost_the_race_does_not_wait_for_a_scanner_to_let_go_of_its_staging() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ResourceStore::open(dir.path()).unwrap();
+        let mut held = None;
+        let started = std::time::Instant::now();
+        // The scanner holds a staged file while the same install lands first. The rename
+        // fails with a held-file error either way; the folder it was renamed onto exists,
+        // so waiting for the scanner would not help.
+        let installed = store
+            .install_until(staged('a'), &mut |step| {
+                if step == Step::ReceiptWritten {
+                    held = Some(held_like_a_scanner(
+                        &the_staging_folder(dir.path())
+                            .join(CONTENT)
+                            .join("metadata.json"),
+                    ));
+                    store.install(staged('a')).unwrap();
+                }
+                false
+            })
+            .unwrap();
+        let waited = started.elapsed();
+        drop(held);
+        assert!(waited < Duration::from_millis(1500), "{waited:?}");
+        installed.verify().unwrap();
+        // The loser's staging folder was held, so it stays until the next open.
+        ResourceStore::open(dir.path()).unwrap();
+        assert!(!dir.path().join(PARTIAL).exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn seeding_records_a_check_when_a_scanner_briefly_holds_the_old_record() {
+        let bundled_dir = tempfile::tempdir().unwrap();
+        let bundled = ResourceStore::open(bundled_dir.path()).unwrap();
+        bundled.install(staged('a')).unwrap();
+        let read_only = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
+        let machine_dir = tempfile::tempdir().unwrap();
+        let machine = ResourceStore::open(machine_dir.path()).unwrap();
+        machine.seed_from(&read_only).unwrap();
+        let record = machine.dcs(&pin('a')).unwrap().unwrap().dir().join(CHECKED);
+        let recorded = fs::read(&record).unwrap();
+        // A record that names no receipt: the copy is checked again and the record
+        // replaced, while the scanner still has the old one open.
+        fs::write(&record, b"stale").unwrap();
+        let scanner = release_after(held_like_a_scanner(&record), Duration::from_millis(300));
+        let report = machine.seed_from(&read_only).unwrap();
+        scanner.join().unwrap();
+        assert_eq!(report.checked_again.len(), 1);
+        assert_eq!(fs::read(&record).unwrap(), recorded);
+        assert!(
+            machine
+                .seed_from(&read_only)
+                .unwrap()
+                .checked_again
+                .is_empty()
+        );
     }
 
     #[test]
