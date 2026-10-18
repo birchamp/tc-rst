@@ -11,7 +11,7 @@ use tc_api::ids::{LocaleId, WallMs};
 use tc_api::jobs::{JobKind, JobOutcome, Phase};
 use tc_api::net::Set;
 use tc_api::prefs::SetLocale;
-use tc_api::test::{Crash, CrashPoint, Hold, HoldPoint, Release, Reset};
+use tc_api::test::{Crash, CrashPoint, Echo, EchoView, Hold, HoldPoint, MAX_ECHO, Release, Reset};
 use tc_api::{ApiError, Reply};
 use tc_app::Answer;
 use tc_app::events::Next;
@@ -144,6 +144,7 @@ async fn every_endpoint_answers_its_golden_request() {
             "account/state",
             "account/helpLink",
             "test/quiet",
+            "test/echo",
             "test/hold",
             "test/release",
             "test/reset",
@@ -155,6 +156,24 @@ async fn every_endpoint_answers_its_golden_request() {
             assert!(matches!(reply, Reply::Ok(_)), "{}: {reply:?}", info.path);
         }
     }
+}
+
+/// The loopback spike measures the reply's size, so the app must answer the size asked for
+/// with the words tc-api builds, and refuse one it would not build.
+#[tokio::test]
+async fn echo_answers_the_size_asked_for_and_refuses_a_larger_one() {
+    let (_dir, t) = started().await;
+    for size in [0, 1, 20_480, MAX_ECHO] {
+        let view = post(&t.app, &Echo { size }).await.unwrap();
+        assert_eq!(view, EchoView::of_size(size), "size {size}");
+        let sent = serde_json::to_vec(&Reply::Ok(view)).unwrap();
+        assert!(sent.len() >= size as usize, "size {size}: {}", sent.len());
+    }
+    let refused = post(&t.app, &Echo { size: MAX_ECHO + 1 }).await;
+    assert!(
+        matches!(&refused, Err(ApiError::BadRequest { field, .. }) if field == "size"),
+        "{refused:?}"
+    );
 }
 
 #[tokio::test]

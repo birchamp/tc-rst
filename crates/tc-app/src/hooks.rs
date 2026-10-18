@@ -32,8 +32,8 @@ use tc_api::endpoint::Kind;
 use tc_api::ids::{ConflictRef, RecordRef, ViewSeq};
 use tc_api::shown::{PersonLabel, Who};
 use tc_api::test::{
-    Crash, CrashPoint, FieldLog, FieldLogView, FieldStore, Hold, HoldPoint, Quiet, QuietView,
-    Release, Reset, StoredText, TokenBase,
+    Crash, CrashPoint, Echo, EchoView, FieldLog, FieldLogView, FieldStore, Hold, HoldPoint,
+    MAX_ECHO, Quiet, QuietView, Release, Reset, StoredText, TokenBase,
 };
 use tc_api::write::{Ack, ConflictBrief, SavedValue, Stored, TokenUpdate};
 use tc_api::{ALL, ApiError, NotSaved, Shown, ShownToken};
@@ -581,6 +581,21 @@ impl Handle<Quiet> for App {
             || self.inner.jobs.live() > 0
             || hooks.holds.holding() > 0;
         Ok(QuietView { busy })
+    }
+}
+
+impl Handle<Echo> for App {
+    /// A reply of the size asked for, the same one tc-server's stand-in gives, so the loopback
+    /// spike measures the same bytes before and after the join.
+    async fn handle(&self, req: Echo) -> Result<EchoView, ApiError> {
+        self.hooks()?;
+        if req.size > MAX_ECHO {
+            return Err(ApiError::BadRequest {
+                field: "size".to_owned(),
+                reason: format!("at most {MAX_ECHO}"),
+            });
+        }
+        Ok(EchoView::of_size(req.size))
     }
 }
 
