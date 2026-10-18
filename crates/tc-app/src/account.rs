@@ -8,6 +8,7 @@
 
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
+use tc_api::account::{AccountNotice, AccountView, KeepState};
 use tc_door43::Token;
 
 /// Where "Stay signed in" keeps a Door43 token.
@@ -117,5 +118,54 @@ impl Keychain for MemKeychain {
         }
         *self.slot() = None;
         Ok(())
+    }
+}
+
+/// The account as this server run holds it. The keychain is read once, at start.
+pub(crate) struct AccountState {
+    /// The signed-in Door43 username; `None` until unit A8's sign-in or resume.
+    user: Option<String>,
+    /// The kept token, for A8's resume. It never goes into a view, a report or a log.
+    #[expect(dead_code, reason = "unit A8's resume reads the kept token")]
+    kept_token: Option<Token>,
+    kept: KeepState,
+    notice: Option<AccountNotice>,
+}
+
+impl AccountState {
+    /// What the first read of the keychain means, and the reason to report when the read
+    /// failed. A computer with no keychain, or an empty one, is not an error: the sign-in
+    /// then lasts for this session only.
+    pub(crate) fn at_start(read: Result<Option<Token>, KeychainError>) -> (Self, Option<String>) {
+        let (kept_token, report) = match read {
+            Ok(token) => (token, None),
+            Err(KeychainError::NoKeychain) => (None, None),
+            // The reason is the keychain's own text; a token is never in it (`Token` prints
+            // redacted and the keychain returns bytes only when they open).
+            Err(KeychainError::Unreadable(reason) | KeychainError::Failed(reason)) => (
+                None,
+                Some(format!("the kept sign-in could not be read: {reason}")),
+            ),
+        };
+        let kept = if kept_token.is_some() {
+            KeepState::Kept
+        } else {
+            KeepState::NotKept
+        };
+        let state = Self {
+            user: None,
+            kept_token,
+            kept,
+            notice: None,
+        };
+        (state, report)
+    }
+
+    pub(crate) fn view(&self) -> AccountView {
+        AccountView {
+            user: self.user.clone(),
+            kept: self.kept,
+            notice: self.notice,
+        }
     }
 }

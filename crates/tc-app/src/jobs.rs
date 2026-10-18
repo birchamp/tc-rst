@@ -521,7 +521,7 @@ impl JobRegistry {
     }
 }
 
-fn stop_reason(stopped: JoinError) -> String {
+pub(crate) fn stop_reason(stopped: JoinError) -> String {
     match stopped.try_into_panic() {
         Ok(payload) => payload
             .downcast_ref::<&str>()

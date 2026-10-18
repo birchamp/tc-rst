@@ -3,10 +3,14 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod app {
+    mod app_start;
     pub mod common;
+    mod dispatch;
     mod events;
     mod flows;
     mod folders;
+    mod hello;
+    mod internet;
     mod jobs;
     mod keychain;
     mod prefs;
