@@ -133,6 +133,57 @@ class Server {
   }
 }
 
+/**
+ * A forwarding proxy in front of `tc4`, so a test can cut the event stream's connection, which
+ * the browser offers no way to do. It rewrites `Host` and `Origin` to the server's, which the
+ * server's checks demand, and passes everything else, the token header included, through.
+ */
+class Proxy {
+  static async start(server) {
+    const streams = new Set();
+    const http_ = http.createServer((req, res) => {
+      const headers = { ...req.headers, host: server.base.host };
+      if (headers.origin) headers.origin = server.base.origin;
+      const upstream = http.request(
+        { host: server.base.hostname, port: server.base.port, method: req.method, path: req.url, headers },
+        (up) => {
+          res.writeHead(up.statusCode, up.headers);
+          res.flushHeaders();
+          if (req.url.startsWith('/api/v1/events')) {
+            streams.add(res);
+            res.on('close', () => streams.delete(res));
+          }
+          up.pipe(res);
+        },
+      );
+      upstream.on('error', () => res.destroy());
+      res.on('close', () => upstream.destroy());
+      req.pipe(upstream);
+    });
+    await new Promise((resolve) => http_.listen(0, '127.0.0.1', resolve));
+    return new Proxy(http_, streams);
+  }
+
+  constructor(http_, streams) {
+    this.http = http_;
+    this.streams = streams;
+    this.url = `http://127.0.0.1:${http_.address().port}/`;
+  }
+
+  /** Cuts every event stream that is open, as a network failure would. */
+  cutStreams() {
+    const count = this.streams.size;
+    for (const res of this.streams) res.socket?.destroy();
+    this.streams.clear();
+    return count;
+  }
+
+  async stop() {
+    this.http.closeAllConnections();
+    await new Promise((resolve) => this.http.close(resolve));
+  }
+}
+
 // --- the page, driven as the shell drives it --------------------------------------------------
 /** A browser context whose route adds the token outside /api/, with a log of what the page does. */
 async function openContext(browser, server, { abort = [] } = {}) {
@@ -273,6 +324,51 @@ async function caseC(page, log, server) {
   check('C: the page made no request for it', asked.length === 0, asked.map((r) => r.path));
 }
 
+/**
+ * A change made while the page's stream is down reaches it when it reconnects. The page runs
+ * behind a proxy that cuts its event stream; while it is down Node switches the internet on;
+ * the page must ask for the frames after the last it read (`?after=N`, N above 0) and show the
+ * change. Cut again, it reconnects again.
+ */
+async function caseH(browser, server) {
+  const proxy = await Proxy.start(server);
+  try {
+    const context = await openContext(browser, server);
+    const page = await context.newPage();
+    const log = watch(page);
+    await page.goto(`${proxy.url}#t=${server.token}`);
+    await page.waitForSelector(READY, { timeout: 60000 });
+    await page.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
+    // Frames the stream carries before the cut, so that `after` is above 0 when it reconnects.
+    await server.command('net/set', { on: true });
+    await page.waitForSelector('[data-testid=runtime-internet][data-on=true]', { timeout: 2000 });
+    const events = () => log.requests.filter((r) => r.path.startsWith('/api/v1/events'));
+    check('H: the page holds the stream through the proxy', events().length === 1 && proxy.streams.size === 1, events().length);
+
+    const before = events().length;
+    check('H: the proxy cuts the open stream', proxy.cutStreams() === 1);
+    // While the stream is down the switch changes; the page cannot hear it.
+    await server.command('net/set', { on: false });
+    await page.waitForSelector('[data-testid=runtime-internet][data-on=false]', { timeout: 15000 });
+    check('H: a change made while the stream was down reaches the page', true);
+    const again = events().slice(before);
+    const afters = again.map((r) => Number(new URL(r.url).searchParams.get('after')));
+    check('H: the page reconnected, asking after the frames it had read', again.length >= 1 && afters[0] > 0, afters);
+
+    // And again, to see that a second cut is survived too.
+    await page.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
+    await sleep(300);
+    const cut = proxy.cutStreams();
+    await server.command('net/set', { on: true });
+    await page.waitForSelector('[data-testid=runtime-internet][data-on=true]', { timeout: 15000 });
+    check('H: a second cut is survived the same way', cut === 1);
+    await server.command('net/set', { on: false });
+    await context.close();
+  } finally {
+    await proxy.stop();
+  }
+}
+
 async function caseF(page, log, server) {
   const before = log.requests.length;
   await page.goto(server.url); // no fragment: only the token kept in sessionStorage
@@ -331,6 +427,158 @@ async function caseE(browser, server) {
   await context.close();
 }
 
+// --- measurements (docs/PERFORMANCE.md rule 5: median and p95 of at least 20 runs) ------------
+/** Nearest-rank percentile of an unsorted sample list. */
+function percentile(samples, p) {
+  const sorted = [...samples].sort((a, b) => a - b);
+  return sorted[Math.max(0, Math.ceil(p * sorted.length) - 1)];
+}
+const round = (x) => Math.round(x * 100) / 100;
+const summary = (samples) => ({
+  n: samples.length,
+  median: round(percentile(samples, 0.5)),
+  p95: round(percentile(samples, 0.95)),
+  min: round(Math.min(...samples)),
+  max: round(Math.max(...samples)),
+});
+
+function folderBytes(dir) {
+  let total = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    total += entry.isDirectory() ? folderBytes(full) : fs.statSync(full).size;
+  }
+  return total;
+}
+
+/** One load in a fresh context: the boot marks and the bytes the page fetched. */
+async function measureBoot(browser, server) {
+  const context = await openContext(browser, server);
+  const page = await context.newPage();
+  await page.goto(`${server.url}#t=${server.token}`);
+  await page.waitForSelector(READY, { timeout: 60000 });
+  await page.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
+  const got = await page.evaluate(() => {
+    const marks = Object.fromEntries(performance.getEntriesByType('mark').map((m) => [m.name, m.startTime]));
+    const navigation = performance.getEntriesByType('navigation')[0];
+    const resources = performance.getEntriesByType('resource');
+    const bytes = (list) => list.reduce((sum, r) => sum + r.encodedBodySize, 0);
+    return {
+      marks,
+      domContentLoaded: navigation.domContentLoadedEventEnd,
+      bytesFetched: bytes(resources.filter((r) => !/\.woff2?$/.test(new URL(r.name).pathname))),
+      bytesOfFonts: bytes(resources.filter((r) => /\.woff2?$/.test(new URL(r.name).pathname))),
+      requests: resources.length,
+    };
+  });
+  await context.close();
+  return got;
+}
+
+/**
+ * `count` switches of the language, alternating ar and en, in one page. Each is timed in the
+ * page twice from the dispatch of the select's `change`: to the moment the sample line's text
+ * changes (a MutationObserver sees the change as it happens), which is what the update costs,
+ * and to the first animation frame after that, which is what a person waits for and which
+ * rounds up to the display's frame. Long tasks (over 50 ms, the Long Tasks API) are listed.
+ * Two switches first, that are not timed, load the Arabic face of the fonts; the first one's
+ * time is reported apart.
+ */
+async function measureSwitches(page, count) {
+  return page.evaluate(async (count) => {
+    const select = document.querySelector('[data-testid=runtime-locale]');
+    const sample = document.querySelector('[data-testid=runtime-sample]');
+    const longTasks = [];
+    const watcher = new PerformanceObserver((list) => list.getEntries().forEach((e) => longTasks.push(Math.round(e.duration))));
+    watcher.observe({ entryTypes: ['longtask'] });
+    const switchTo = (locale) =>
+      new Promise((resolve) => {
+        let changed = 0;
+        const observer = new MutationObserver(() => {
+          observer.disconnect();
+          changed = performance.now() - started;
+          requestAnimationFrame(() => resolve({ dom: changed, frame: performance.now() - started }));
+        });
+        observer.observe(sample, { childList: true, characterData: true, subtree: true });
+        const started = performance.now();
+        select.value = locale;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    const cold = await switchTo('ar');
+    await switchTo('en');
+    longTasks.length = 0; // the cold pair is not part of the measurement
+    const times = [];
+    for (let i = 0; i < count; i++) times.push(await switchTo(i % 2 === 0 ? 'ar' : 'en'));
+    await new Promise((resolve) => setTimeout(resolve, 100)); // long tasks are reported late
+    watcher.disconnect();
+    return { cold, times, longTasks };
+  }, count);
+}
+
+async function measure() {
+  const runs = Number(args.measure);
+  const server = await Server.start();
+  const browser = await chromium.launch();
+  try {
+    const loadBefore = os.loadavg();
+    const boots = [];
+    for (let i = 0; i < runs; i++) boots.push(await measureBoot(browser, server));
+    const context = await openContext(browser, server);
+    const page = await context.newPage();
+    await page.goto(`${server.url}#t=${server.token}`);
+    await page.waitForSelector(READY, { timeout: 60000 });
+    await page.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
+    const switches = await measureSwitches(page, runs);
+    await context.close();
+    const cpu = fs.readFileSync('/proc/cpuinfo', 'utf8');
+    const flags = (/^flags\s*:\s*(.*)$/m.exec(cpu)?.[1] ?? '').split(' ');
+    const buildDir = path.join(uiDir, 'ui', buildName);
+    const mark = (name) => summary(boots.map((b) => b.marks[name]));
+    const result = {
+      build: buildName,
+      runs,
+      machine: {
+        cpu: /^model name\s*:\s*(.*)$/m.exec(cpu)?.[1] ?? 'unknown',
+        vcpus: os.cpus().length,
+        sha_ni: flags.includes('sha_ni'),
+        avx512f: flags.includes('avx512f'),
+        loadBefore,
+        loadAfter: os.loadavg(),
+      },
+      browser: browser.version(),
+      playwright: JSON.parse(fs.readFileSync(path.join(playwrightDir, 'package.json'), 'utf8')).version,
+      bytes: {
+        wasm: fs.statSync(path.join(buildDir, 'tc_ui_bg.wasm')).size,
+        glue: fs.statSync(path.join(buildDir, 'tc_ui.js')).size,
+        folder: folderBytes(buildDir),
+        fetchedAtBoot: boots[0].bytesFetched,
+        fontsAtBoot: boots[0].bytesOfFonts,
+        requestsAtBoot: boots[0].requests,
+      },
+      bootMs: {
+        wasmReady: mark('tc4:boot'),
+        hello: mark('tc4:hello'),
+        catalogsFetched: mark('tc4:catalogs-fetched'),
+        catalogs: mark('tc4:catalogs'),
+        catalogParse: summary(boots.map((b) => b.marks['tc4:catalogs'] - b.marks['tc4:catalogs-fetched'])),
+        mounted: mark('tc4:mounted'),
+        domContentLoaded: summary(boots.map((b) => b.domContentLoaded)),
+      },
+      switchMs: {
+        toTextChange: summary(switches.times.map((t) => t.dom)),
+        toNextFrame: summary(switches.times.map((t) => t.frame)),
+        coldFirstArabic: { toTextChange: round(switches.cold.dom), toNextFrame: round(switches.cold.frame) },
+      },
+      longTasksMs: switches.longTasks,
+    };
+    if (args.out) fs.writeFileSync(args.out, `${JSON.stringify(result, null, 2)}\n`);
+    console.log(JSON.stringify(result, null, 2));
+  } finally {
+    await browser.close();
+    await server.stop();
+  }
+}
+
 async function smoke() {
   const server = await Server.start();
   const browser = await chromium.launch();
@@ -344,6 +592,7 @@ async function smoke() {
     await caseC(page, log, server);
     await caseF(page, log, server);
     await context.close();
+    await caseH(browser, server);
     await caseD(browser, server);
     await caseE(browser, server);
     const quit = await server.quit();
@@ -359,7 +608,7 @@ async function smoke() {
 }
 
 try {
-  await smoke();
+  await (args.measure ? measure() : smoke());
 } catch (error) {
   console.error(error);
   process.exitCode = 1;

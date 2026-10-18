@@ -372,6 +372,8 @@ async fn boot(base: &str, busy: &Rc<api::Busy>) -> Result<(), String> {
     let texts = JsFuture::from(catalogs)
         .await
         .map_err(|error| js::describe(&error))?;
+    // The parse of nine catalogs is the time between these two marks.
+    js::mark("tc4:catalogs-fetched");
     install_catalogs(&texts)?;
     js::mark("tc4:catalogs");
     // Before anything mounts: `<html lang dir>` is the saved language's from the first paint.
