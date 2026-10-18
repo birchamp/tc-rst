@@ -126,6 +126,9 @@ impl Writer {
         tracker.add(1, 0);
         if intent.is_some() && self.dirty.is_empty() {
             atomic_remove(&*self.vfs, &self.folder.path(INTENT), SyncDir::Now)?;
+            self.open_intent = None;
+        } else {
+            self.open_intent = intent;
         }
         self.renew_hold_notices();
         Ok(unread)

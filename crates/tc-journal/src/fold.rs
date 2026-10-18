@@ -529,6 +529,24 @@ pub enum RotationReason {
     PendingUnreadable,
 }
 
+/// Why a materialization or a commit is blocked (R16).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Blocked {
+    /// Another program holds the file and the rename kept failing (a scanner, Paratext).
+    FileBusy,
+    /// The file could not be read to compare it before it is written over (§4.4).
+    FileUnreadable,
+    /// `records` values of the fold cannot be read on this computer yet (§2.6): nothing is
+    /// written from a value that is not read.
+    ValuesUnreadable { records: u32 },
+    /// An expected pack is missing (§4.4): nothing derived from it is removed.
+    PackMissing,
+    /// The commit's tree is not a valid Scripture Burrito (§9.4): no commit was made.
+    TreeInvalid { problem: Box<str> },
+    /// A write failed for another reason.
+    Failed { reason: Box<str> },
+}
+
 /// Notices depend on the files and the machine, so `tc-store` computes them outside the
 /// fold, and they are not part of the convergence comparison.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -662,10 +680,13 @@ pub enum Notice {
     MetadataEditedOutside {
         copy: Box<str>,
     },
+    /// Derived files (§5.10) or a commit (§5.13) could not be written, and the work is saved:
     /// "translationCore can't update TIT.usfm because another program has it open. Your
-    /// work is saved." (§5.10): the rename kept failing for 2 s; the path stays dirty.
-    WriteBlocked {
-        path: RepoPath,
+    /// work is saved." The paths stay dirty and are tried again; the notice is listed once for
+    /// each reason and path set, and goes when the blockage clears (R16).
+    MaterializeBlocked {
+        paths: Vec<RepoPath>,
+        reason: Blocked,
     },
     /// An expected pack (§4.4) is missing from the working tree and no copy of it could be
     /// restored: nothing derived from it is removed, and no tree is built, until it is back.

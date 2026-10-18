@@ -16,12 +16,12 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use tc_journal::command::PlannedChange;
-use tc_journal::fold::{Delta, DerivedFile, FoldInput, FoldState, ProjectKind};
+use tc_journal::fold::{Delta, DerivedFile, FoldInput, FoldState, ProjectKind, Resolved};
 use tc_journal::index::Section;
 use tc_journal::pending::{PendingHeader, Purpose, encode_pending};
 use tc_journal::{
-    BatchId, BatchRef, Change, ChangeBody, ChangeId, DeviceId, DeviceSeq, FORMAT_MINOR, PackId,
-    ProjectId, RecordKey, TokenKey, Verified,
+    BatchId, BatchRef, BookId, Change, ChangeBody, ChangeId, DeviceId, DeviceSeq, FORMAT_MINOR,
+    PackId, ProjectId, RecordKey, TokenKey, Verified,
 };
 
 /// A pack this session knows.
@@ -76,45 +76,86 @@ pub(crate) struct IndexCache {
     pub changed: bool,
 }
 
-/// Derived paths to write again (§5.0 B5).
+/// What to write again (§5.0 B5): the actor marks books and files, and the writer expands
+/// them from its snapshot, off the actor.
 #[derive(Debug, Default)]
 pub(crate) struct Dirty {
+    /// Every file of these books is reconciled with the projection: rendered, written when it
+    /// differs, removed when the book no longer projects it.
+    pub books: BTreeSet<BookId>,
+    /// These files only (a file of no book, or one file of a book).
     pub files: BTreeSet<DerivedFile>,
+    /// A `DeviceProfile` changed: the authors' names show in every comments file and in
+    /// `conflicts.json`.
+    pub comments_all: bool,
+    /// A `CarriedFile` record changed: carried files are placed or removed (§11.4).
+    pub carried: bool,
+    /// Every derived file may have changed (a rebuilt fold, a pin group).
     pub everything: bool,
     /// `metadata.json` lists something that changed (a new pack, a removed file).
     pub metadata: bool,
+    /// The work is a book added, removed, restored or rescoped, a pin change or a resource
+    /// upgrade: it shows a progress indicator when it lasts (PERFORMANCE.md rule 4).
+    pub progress: bool,
 }
 
 impl Dirty {
     pub fn is_empty(&self) -> bool {
-        self.files.is_empty() && !self.everything && !self.metadata
+        self.books.is_empty()
+            && self.files.is_empty()
+            && !self.comments_all
+            && !self.carried
+            && !self.everything
+            && !self.metadata
     }
 
     /// Adds what `other` marks.
     pub fn absorb(&mut self, other: Dirty) {
+        self.books.extend(other.books);
         self.files.extend(other.files);
+        self.comments_all |= other.comments_all;
+        self.carried |= other.carried;
         self.everything |= other.everything;
         self.metadata |= other.metadata;
+        self.progress |= other.progress;
     }
 
-    /// Marks what a fold step changed.
-    pub fn mark(&mut self, fold: &FoldState, kind: ProjectKind, delta: &Delta) {
+    /// Marks one derived file: its book, when it is one of a book's files, so the book's
+    /// records are decoded once for all its files.
+    pub fn add_file(&mut self, file: DerivedFile) {
+        match file.book() {
+            Some(book) => {
+                self.books.insert(book);
+            }
+            None => {
+                self.files.insert(file);
+            }
+        }
+    }
+
+    /// Marks what a fold step changed. A book change marks that book only (B5).
+    /// `conflicted`: the step listed or unlisted a conflict, or changed a record that is in
+    /// one, so `conflicts.json` shows something different.
+    pub fn mark(&mut self, kind: ProjectKind, delta: &Delta, conflicted: bool) {
         self.metadata = true;
-        if delta.everything || delta.paths || delta.carried || kind == ProjectKind::Stories {
+        if conflicted {
+            self.files.insert(DerivedFile::Conflicts);
+        }
+        if delta.everything || delta.pins {
+            // A pin group changes every book's decisions and alignments and `resources.json`.
             self.everything = true;
+            self.progress = true;
             return;
         }
-        for book in &delta.books {
-            self.files.extend(fold.book_files(*book));
-            self.files.insert(DerivedFile::Usfm(*book));
+        if delta.paths {
+            self.progress = true;
         }
-        for (book, _) in &delta.chapters {
-            self.files.extend(fold.book_files(*book));
+        if delta.carried {
+            self.carried = true;
         }
-        if delta.pins {
-            self.files.insert(DerivedFile::Resources);
-            self.everything = true;
-        }
+        self.books.extend(delta.books.iter().copied());
+        self.books
+            .extend(delta.chapters.iter().map(|(book, _)| *book));
         for key in &delta.keys {
             match key {
                 RecordKey::Setting(_) => {
@@ -129,33 +170,42 @@ impl Dirty {
                 RecordKey::StoryBase(s) | RecordKey::Frame(s, _) | RecordKey::StoryRef(s) => {
                     self.files.insert(DerivedFile::Story(*s));
                 }
-                RecordKey::DeviceProfile(_) => {
-                    // Authors' names show in comments and conflicts only.
-                    self.files
-                        .extend(fold.derived_files().into_iter().filter(|f| {
-                            matches!(
-                                f,
-                                DerivedFile::Comments(_)
-                                    | DerivedFile::StoryComments
-                                    | DerivedFile::Conflicts
-                            )
-                        }));
-                }
-                RecordKey::Comment(_) | RecordKey::Check(_) => {
+                RecordKey::DeviceProfile(_) => self.comments_all = true,
+                RecordKey::Comment(_) => {
+                    if kind == ProjectKind::Stories {
+                        self.files.insert(DerivedFile::StoryComments);
+                    }
                     if let Some(book) = key.book() {
-                        self.files.extend(fold.book_files(book));
+                        self.books.insert(book);
                     }
                 }
+                RecordKey::Check(check) => match key.book() {
+                    Some(book) => {
+                        self.books.insert(book);
+                    }
+                    None => {
+                        self.files.insert(DerivedFile::StoryDecisions(check.tool));
+                    }
+                },
                 other => {
                     if let Some(book) = other.book() {
-                        self.files.extend(fold.book_files(book));
-                        self.files.insert(DerivedFile::Usfm(book));
+                        self.books.insert(book);
                     }
                 }
             }
         }
-        self.files.insert(DerivedFile::Conflicts);
     }
+}
+
+/// Whether a fold step changed the conflicts the project lists: one was listed or unlisted,
+/// or a record that is in one changed (its candidates are in `conflicts.json`).
+pub(crate) fn conflicts_touched(fold: &FoldState, delta: &Delta) -> bool {
+    delta.conflicts_changed
+        || !delta.new_conflicts.is_empty()
+        || delta.keys.iter().any(|key| {
+            fold.key_state(key)
+                .is_some_and(|state| matches!(state.state, Resolved::Conflict(_)))
+        })
 }
 
 /// See the module documentation.
@@ -257,7 +307,8 @@ impl Project {
         let ids: Vec<ChangeId> = changes.iter().map(Change::id).collect();
         let keys: Vec<RecordKey> = changes.iter().map(|c| c.body().record.key()).collect();
         let delta = self.fold.add(changes.into_iter().map(FoldInput::from));
-        self.dirty.mark(&self.fold, self.kind, &delta);
+        let conflicted = conflicts_touched(&self.fold, &delta);
+        self.dirty.mark(self.kind, &delta, conflicted);
         let seq = self.publish();
         let mut tokens = Vec::with_capacity(keys.len());
         for (key, id) in keys.iter().zip(&ids) {
@@ -339,6 +390,8 @@ impl Project {
         self.shared
             .hooks
             .wait(crate::hooks::Point::BeforeDurablePending);
+        // The writer's flushes wait behind this one (PERFORMANCE.md).
+        let _in_flight = self.shared.gate.enter();
         let dir = self.folder.path(PENDING);
         if let Err(e) = atomic_create_dirs(&*self.vfs, &dir) {
             return Err(CommandError::NotWritten(e.to_string()));

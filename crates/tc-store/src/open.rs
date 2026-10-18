@@ -14,7 +14,8 @@
 
 use crate::appdata::{AppData, rfc3339};
 use crate::atomic::{
-    DirSet, HeldRetry, SyncDir, atomic_create_dirs, atomic_remove, atomic_write, rename_held,
+    DirSet, HeldRetry, SyncDir, atomic_create_dirs, atomic_remove_if_free, atomic_write,
+    rename_held,
 };
 use crate::clock::Clock;
 use crate::counters::{Counters, CountingVfs};
@@ -498,7 +499,12 @@ fn open_inner(
         writer: None,
     };
     let mut writer = Writer {
-        vfs: vfs.clone(),
+        // Its flushes and renames wait for the saves in flight, a little (PERFORMANCE.md).
+        vfs: Arc::new(crate::pace::PacedVfs::new(
+            vfs.clone(),
+            shared.gate.clone(),
+            counters.clone(),
+        )),
         counters: counters.clone(),
         folder: folder.clone(),
         kind,
@@ -517,6 +523,10 @@ fn open_inner(
         dirty: Dirty::default(),
         prerendered: BTreeMap::new(),
         prerendered_seq: 0,
+        reasons: BTreeMap::new(),
+        values_told: None,
+        open_intent: None,
+        opening: false,
         actor: actor_tx.clone(),
     };
     for (notice, copy) in notices {
@@ -937,7 +947,9 @@ impl Project {
             }
             self.flush_holders(&holders, &mut flushed)?;
             if self.relocate_to_packs(&rel, JournalKind::Pending, info.number, &holders)? {
-                atomic_remove(
+                // A file a scanner still holds stays for the next open: the open never
+                // fails for it.
+                atomic_remove_if_free(
                     &*self.vfs,
                     &self.folder.path(&rel),
                     SyncDir::Deferred(&mut dirs),
@@ -984,7 +996,7 @@ impl Project {
                 let holders = BTreeSet::from([by_rel.clone()]);
                 self.flush_holders(&holders, &mut flushed)?;
                 if self.relocate_to_packs(&rel, JournalKind::Pack, number, &holders)? {
-                    atomic_remove(&*self.vfs, &abs, SyncDir::Deferred(&mut dirs))?;
+                    atomic_remove_if_free(&*self.vfs, &abs, SyncDir::Deferred(&mut dirs))?;
                     self.journal.packs.remove(&rel);
                     if self.index.sections.remove(&rel).is_some() {
                         self.index.changed = true;

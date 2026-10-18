@@ -24,12 +24,11 @@ use crate::manifest::{Entry, HeadsFile, Held, HeldCause, Intent, IntentWrite, Pa
 use crate::vfs::{FileMeta, is_not_found};
 use crate::writer::Writer;
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 use tc_burrito::{IngredientEntry, IngredientPath};
-use tc_journal::fold::{DerivedFile, Notice, ProjectKind, Resolved};
+use tc_journal::fold::{Blocked, DerivedFile, Notice, ProjectKind, Resolved};
 use tc_journal::record::CarriedValue;
-use tc_journal::{FORMAT_MAJOR, FORMAT_MINOR, Md5, Record, RecordKey, RepoPath};
+use tc_journal::{BookId, FORMAT_MAJOR, FORMAT_MINOR, Md5, Record, RecordKey, RepoPath};
 use unicode_normalization::is_nfc;
 
 /// How long a path has been refused before the person is told (§5.10).
@@ -368,7 +367,7 @@ impl Writer {
     /// M0: a hold ends when its file is gone, and the file is written again (§6.2): a
     /// deletion is never read as an edit. A path the projection no longer has is dropped by
     /// the removal rules after it.
-    fn release_missing_holds(&mut self, projection: &BTreeMap<String, DerivedFile>) {
+    fn release_missing_holds(&mut self) {
         let held: Vec<String> = self
             .manifest
             .paths
@@ -385,8 +384,8 @@ impl Writer {
                 continue;
             }
             self.end_hold(&rel);
-            if let Some(file) = projection.get(&rel) {
-                self.dirty.files.insert(file.clone());
+            if let Some(file) = DerivedFile::from_path(&rel) {
+                self.dirty.add_file(file);
             }
             self.dirty.metadata = true;
         }
@@ -417,81 +416,276 @@ impl Writer {
         Ok(Some(entry))
     }
 
-    /// M0 to M8 (§5.10) for the dirty paths. Writes nothing while a value of the fold cannot
-    /// be read on this computer (§2.6), and removes nothing while an expected pack is
-    /// missing or a journal file unreadable (§4.4).
+    /// M0 to M8 (§5.10) for the dirty paths, one write group for each book and one for the
+    /// files of no book: after each group the folder is a valid Scripture Burrito (I7), and a
+    /// crash leaves at most one group half done (§6.4). Writes nothing while a value of the
+    /// fold cannot be read on this computer (§2.6), and removes nothing while an expected
+    /// pack is missing or a journal file unreadable (§4.4).
     pub(crate) fn materialize(&mut self) -> Result<MaterializeReport, StoreError> {
         let mut report = MaterializeReport::default();
         if self.dirty.is_empty() {
             return Ok(report);
         }
-        if !self.fold.unreadable_records().is_empty() {
+        let unreadable = self.fold.unreadable_records().len();
+        if unreadable > 0 {
+            self.block_values(unreadable);
             return Ok(report);
         }
+        self.unblock_values();
         self.shared
             .hooks
             .wait(crate::hooks::Point::BeforeMaterialize);
-        let intent_now = match self.read_disk(INTENT) {
-            Disk::Bytes(b) => Intent::parse(&b).unwrap_or_default(),
-            _ => Intent::default(),
-        };
-        // M0: what the projection holds now, and what to write and remove.
-        let projection: BTreeMap<String, DerivedFile> = self
-            .fold
-            .derived_files()
-            .into_iter()
-            .map(|f| (f.path(), f))
-            .collect();
-        self.release_missing_holds(&projection);
-        let dirty: BTreeSet<DerivedFile> = if self.dirty.everything {
-            projection.values().cloned().collect()
-        } else {
-            self.dirty
-                .files
-                .iter()
-                .filter(|f| projection.contains_key(&f.path()))
-                .cloned()
-                .collect()
-        };
-        let mut removes: Vec<String> = Vec::new();
-        if self.complete {
-            for (path, entry) in &self.manifest.paths {
-                let ours = path != METADATA
-                    && !FIXED.contains(&path.as_str())
-                    && !projection.contains_key(path);
-                // A derived file the projection no longer has, or a carried file a
-                // command removed (§5.16). A carried file merely missing from the fold's
-                // placements is not removed: only a settled `Removed` is a removal.
-                let gone = match &entry.oid {
-                    None => true,
-                    Some(_) => self.carried_removed(path),
-                };
-                if ours && gone && entry.held.is_none() {
-                    removes.push(path.clone());
+        self.release_missing_holds();
+        let progress = self.dirty.progress;
+        let groups = self.plan_groups();
+        let show = groups.len() > 1 && (progress || self.opening);
+        let tracker = show.then(|| {
+            let shared = self.shared.clone();
+            let sink: crate::progress::ProgressSink = std::sync::Arc::new(move |progress| {
+                shared.emit(crate::handle::StoreEvent::Progress {
+                    work: crate::handle::Work::Materialize,
+                    progress,
+                });
+            });
+            let (tracker, reporter) = crate::progress::start(sink, Instant::now());
+            tracker.phase(crate::progress::Phase::Working, groups.len() as u64, 0);
+            (tracker, reporter)
+        });
+        self.reasons.clear();
+        let mut processed: BTreeSet<String> = BTreeSet::new();
+        let mut failed = None;
+        for (i, group) in groups.iter().enumerate() {
+            if let Err(e) = self.run_group(group, &mut report, &mut processed) {
+                // What was not done stays dirty, and is tried again.
+                for left in &groups[i..] {
+                    self.restore_group(left);
+                }
+                self.dirty.metadata = true;
+                failed = Some(e);
+                break;
+            }
+            if let Some((tracker, _)) = &tracker {
+                tracker.add(1, 0);
+            }
+        }
+        if let Some((tracker, reporter)) = tracker {
+            reporter.finish(&tracker);
+        }
+        if failed.is_none() && self.open_intent.take().is_some() {
+            // The intent a stopped materialization left is finished: every group is done.
+            let intent = self.folder.path(INTENT);
+            if self.vfs.metadata(&intent).is_ok() {
+                atomic_remove(&*self.vfs, &intent, SyncDir::Now)?;
+            }
+        }
+        self.retry_blocked(&report, &processed);
+        self.shared.emit(crate::handle::StoreEvent::Materialized {
+            paths: report.written.clone(),
+        });
+        match failed {
+            Some(e) => Err(e),
+            None => Ok(report),
+        }
+    }
+
+    /// The write groups of the dirty marks, the books in order and then the files of no book.
+    /// Taking the marks off `self.dirty` leaves it empty; what a group cannot do is put back.
+    fn plan_groups(&mut self) -> Vec<Group> {
+        let dirty = std::mem::take(&mut self.dirty);
+        let mut books: BTreeMap<BookId, Group> = BTreeMap::new();
+        let mut project = Group::project();
+        if dirty.everything {
+            // The one place the whole listing is asked for: every file may have changed.
+            for file in self.fold.derived_files() {
+                match file.book() {
+                    Some(book) => {
+                        books.entry(book).or_insert_with(|| Group::book(book)).whole = true
+                    }
+                    None => {
+                        project.files.insert(file);
+                    }
+                }
+            }
+            // Books the manifest holds files of and the projection no longer has.
+            for path in self.manifest.paths.keys() {
+                if let Some(book) = DerivedFile::from_path(path).and_then(|f| f.book()) {
+                    books.entry(book).or_insert_with(|| Group::book(book)).whole = true;
+                }
+            }
+            project.whole = true;
+            project.carried = true;
+        }
+        for book in dirty.books {
+            books.entry(book).or_insert_with(|| Group::book(book)).whole = true;
+        }
+        for file in dirty.files {
+            match file.book() {
+                Some(book) => {
+                    books
+                        .entry(book)
+                        .or_insert_with(|| Group::book(book))
+                        .files
+                        .insert(file);
+                }
+                None => {
+                    project.files.insert(file);
                 }
             }
         }
-        let rendered = self.render(&dirty);
+        if dirty.comments_all {
+            for book in self.fold.projected_books() {
+                books
+                    .entry(book)
+                    .or_insert_with(|| Group::book(book))
+                    .files
+                    .insert(DerivedFile::Comments(book));
+            }
+            project.files.insert(DerivedFile::StoryComments);
+            project.files.insert(DerivedFile::Conflicts);
+        }
+        project.carried |= dirty.carried;
+        let mut groups: Vec<Group> = books.into_values().collect();
+        let needed = project.whole
+            || project.carried
+            || !project.files.is_empty()
+            || (groups.is_empty() && dirty.metadata);
+        if needed {
+            groups.push(project);
+        }
+        groups
+    }
+
+    /// The files of `group` the projection holds now (M0).
+    fn wanted(&self, group: &Group) -> Vec<DerivedFile> {
+        match group.book {
+            Some(book) => {
+                let projected = self.fold.book_files(book);
+                if group.whole {
+                    projected
+                } else {
+                    projected
+                        .into_iter()
+                        .filter(|f| group.files.contains(f))
+                        .collect()
+                }
+            }
+            None if group.whole => group.files.iter().cloned().collect(),
+            None => group
+                .files
+                .iter()
+                .filter(|f| self.fold.projects_file(f))
+                .cloned()
+                .collect(),
+        }
+    }
+
+    /// The paths of `group` to remove (X, M0): files the app wrote that the projection no
+    /// longer holds, and carried files a command removed (§5.16). A held path stays until the
+    /// person chooses. Nothing is removed while an expected pack is missing or a journal file
+    /// unreadable (§4.4); the person is told what waits.
+    fn removals(&mut self, group: &Group, wanted: &[DerivedFile]) -> Vec<String> {
+        let keep: BTreeSet<String> = wanted.iter().map(DerivedFile::path).collect();
+        let mut candidates: Vec<String> = Vec::new();
+        let ours = |s: &Self, path: &String| {
+            s.manifest
+                .paths
+                .get(path)
+                .is_some_and(|e| e.oid.is_none() && e.held.is_none())
+        };
+        match group.book {
+            Some(book) => {
+                let named: Vec<String> = if group.whole {
+                    book_paths(book)
+                } else {
+                    group.files.iter().map(DerivedFile::path).collect()
+                };
+                for path in named {
+                    if !keep.contains(&path) && ours(self, &path) {
+                        candidates.push(path);
+                    }
+                }
+            }
+            None => {
+                if group.whole {
+                    // Every manifest entry that is no book's file, no fixed file and not
+                    // projected: a story that went, a file of a kind this format dropped.
+                    for (path, entry) in &self.manifest.paths {
+                        let derived = DerivedFile::from_path(path);
+                        let ours_path = path != METADATA
+                            && !FIXED.contains(&path.as_str())
+                            && entry.oid.is_none()
+                            && entry.held.is_none()
+                            && derived.as_ref().is_none_or(|f| f.book().is_none())
+                            && !keep.contains(path);
+                        if ours_path {
+                            candidates.push(path.clone());
+                        }
+                    }
+                } else {
+                    for file in &group.files {
+                        let path = file.path();
+                        if !keep.contains(&path) && ours(self, &path) {
+                            candidates.push(path);
+                        }
+                    }
+                }
+                if group.carried {
+                    for (path, entry) in &self.manifest.paths {
+                        if entry.oid.is_some() && entry.held.is_none() && self.carried_removed(path)
+                        {
+                            candidates.push(path.clone());
+                        }
+                    }
+                }
+            }
+        }
+        if !self.complete && !candidates.is_empty() {
+            self.withhold_removals(&candidates);
+            return Vec::new();
+        }
+        candidates
+    }
+
+    /// M0 to M8 for one group.
+    fn run_group(
+        &mut self,
+        group: &Group,
+        report: &mut MaterializeReport,
+        processed: &mut BTreeSet<String>,
+    ) -> Result<(), StoreError> {
+        let wanted = self.wanted(group);
+        let removes = self.removals(group, &wanted);
+        let rendered = self.render(group.book, &wanted);
+        let intent_now = self.open_intent.clone().unwrap_or_default();
         // M1: compare and swap.
-        let mut writes: Vec<(String, DerivedFile, Vec<u8>)> = Vec::new();
+        let mut writes: Vec<(String, Rendered)> = Vec::new();
         // What each path looked like when M1 read it, which M4 checks again at the rename.
         let mut seen: BTreeMap<String, Option<FileMeta>> = BTreeMap::new();
+        // Paths whose bytes are the new ones: read (`converged`), or taken from a clean
+        // entry without a read (`unread`). Only their entries change.
         let mut converged: BTreeMap<String, (DerivedFile, String, bool)> = BTreeMap::new();
-        for (path, (file, bytes)) in rendered {
-            if self
-                .manifest
-                .paths
-                .get(&path)
-                .is_some_and(|e| e.held.is_some())
-            {
-                // Held: left as it is until the person chooses (§6.2). A deletion ended
-                // the hold in M0.
+        let mut unread: Vec<DerivedFile> = Vec::new();
+        for (path, r) in rendered {
+            processed.insert(path.clone());
+            let entry = self.manifest.paths.get(&path).cloned();
+            if entry.as_ref().is_some_and(|e| e.held.is_some()) {
+                // Held: left as it is until the person chooses (§6.2). A deletion ended the
+                // hold in M0.
                 continue;
             }
-            let new = md5_hex(&bytes);
+            // The bytes are what the app wrote and the file is as it left it: nothing to
+            // read, nothing to write.
+            if let Some(e) = &entry
+                && e.md5 == r.md5.to_hex()
+                && self.clean_by_stat(&path)
+            {
+                unread.push(r.file);
+                continue;
+            }
             let stat = self.vfs.metadata(&self.folder.path(&path)).ok();
             let disk = match self.read_disk(&path) {
                 Disk::Unreadable => {
+                    self.reasons.insert(path.clone(), Blocked::FileUnreadable);
                     report.blocked.push(path);
                     continue;
                 }
@@ -503,19 +697,20 @@ impl Writer {
             match disk {
                 None => {
                     seen.insert(path.clone(), None);
-                    writes.push((path, file, bytes));
+                    writes.push((path, r));
                 }
                 Some(disk) => {
-                    let d = md5_hex(&disk);
-                    let ours = self.manifest.paths.get(&path).map(|e| e.md5.as_str());
+                    let d = self.hash(&disk);
+                    let new = r.md5.to_hex();
+                    let ours = entry.as_ref().map(|e| e.md5.as_str());
                     if d == new {
-                        let nfc = is_text(&file).then(|| is_nfc(&String::from_utf8_lossy(&disk)));
-                        converged.insert(path, (file, d, nfc.unwrap_or(true)));
+                        let nfc = is_text(&r.file).then(|| is_nfc(&String::from_utf8_lossy(&disk)));
+                        converged.insert(path, (r.file, d, nfc.unwrap_or(true)));
                     } else if ours == Some(d.as_str())
                         || intent_now.md5s_of(&path).contains(&d.as_str())
                     {
                         seen.insert(path.clone(), stat);
-                        writes.push((path, file, bytes));
+                        writes.push((path, r));
                     } else {
                         let damage = self.clean_by_stat(&path);
                         self.hold(&path, &disk, damage)?;
@@ -525,15 +720,20 @@ impl Writer {
             }
         }
         let mut gone: Vec<String> = Vec::new();
+        let mut removing: Vec<String> = Vec::new();
         for path in removes {
+            processed.insert(path.clone());
             match self.read_disk(&path) {
                 Disk::Missing => gone.push(path),
-                Disk::Unreadable => report.blocked.push(path),
+                Disk::Unreadable => {
+                    self.reasons.insert(path.clone(), Blocked::FileUnreadable);
+                    report.blocked.push(path);
+                }
                 Disk::Bytes(disk) => {
-                    let d = md5_hex(&disk);
+                    let d = self.hash(&disk);
                     let ours = self.manifest.paths.get(&path).map(|e| e.md5.as_str());
                     if ours == Some(d.as_str()) || intent_now.md5s_of(&path).contains(&d.as_str()) {
-                        report.removed.push(path);
+                        removing.push(path);
                     } else {
                         let damage = self.clean_by_stat(&path);
                         self.hold(&path, &disk, damage)?;
@@ -545,36 +745,44 @@ impl Writer {
         // M2: metadata.json for the planned result.
         let planned: BTreeMap<String, (Md5, u64, Option<bool>)> = writes
             .iter()
-            .map(|(p, f, b)| {
-                let nfc = is_text(f).then(|| is_nfc(&String::from_utf8_lossy(b)));
-                (p.clone(), (Md5::of(b), b.len() as u64, nfc))
+            .map(|(p, r)| {
+                let nfc = is_text(&r.file).then(|| is_nfc(&String::from_utf8_lossy(&r.bytes)));
+                (p.clone(), (r.md5, r.bytes.len() as u64, nfc))
             })
             .collect();
         // A Bible project with no book yet (a create before its first book) has no valid
         // `metadata.json`; nothing is written until it has one (M2). Any other failure is a
         // bug, reported, and nothing is written either.
-        let metadata = match self.build_metadata(&projection, &planned, &report.removed) {
+        let departing: Vec<String> = removing.iter().chain(&gone).cloned().collect();
+        let metadata = match self.build_metadata(&planned, &departing) {
             Ok(metadata) => metadata,
             Err(_) if self.kind == ProjectKind::Bible && self.fold.projected_books().is_empty() => {
-                return Ok(report);
+                return Ok(());
             }
             Err(e) => return Err(e),
         };
+        let metadata_md5 = self.hash(&metadata);
+        let metadata_current = self.metadata_is_current(&metadata_md5);
+        if writes.is_empty() && removing.is_empty() && metadata_current {
+            // Nothing to write: only entries (scope digests, settled marks) may change.
+            self.finish_entries(Vec::new(), converged, unread, &gone, &[], None)?;
+            return Ok(());
+        }
         // M3: the intent.
         let mut intent = Intent::default();
-        for (path, _, bytes) in &writes {
+        for (path, r) in &writes {
             intent.writes.push(IntentWrite {
                 path: path.clone(),
                 old_md5: self.manifest.paths.get(path).map(|e| e.md5.clone()),
-                new_md5: md5_hex(bytes),
+                new_md5: r.md5.to_hex(),
             });
         }
         intent.writes.push(IntentWrite {
             path: METADATA.to_owned(),
             old_md5: self.manifest.paths.get(METADATA).map(|e| e.md5.clone()),
-            new_md5: md5_hex(&metadata),
+            new_md5: metadata_md5.clone(),
         });
-        intent.removes = report.removed.clone();
+        intent.removes = removing.clone();
         let tc = self.folder.path(TC);
         atomic_create_dirs(&*self.vfs, &tc)?;
         atomic_write(
@@ -589,19 +797,17 @@ impl Writer {
         let heads_dir = self.folder.path(HEADS);
         atomic_create_dirs(&*self.vfs, &heads_dir)?;
         let mut dirs = DirSet::new();
-        let digests = self
-            .fold
-            .scope_digests(&writes.iter().map(|(_, f, _)| f.clone()).collect::<Vec<_>>());
-        let mut written_entries: Vec<(String, DerivedFile, Md5, u64, Option<bool>, String)> =
-            Vec::new();
-        for ((path, file, bytes), digest) in writes.into_iter().zip(digests) {
+        let files: Vec<DerivedFile> = writes.iter().map(|(_, r)| r.file.clone()).collect();
+        let digests = self.fold.scope_digests(&files);
+        let mut written: Vec<(String, DerivedFile, Md5, u64, Option<bool>, String)> = Vec::new();
+        for ((path, r), digest) in writes.into_iter().zip(digests) {
             let (dir, name) = self.folder.dir_and_name(&path);
             atomic_create_dirs(&*self.vfs, &dir)?;
             let mut outside: Option<Vec<u8>> = None;
             let wrote = self.write_once(
                 &dir,
                 name,
-                &bytes,
+                &r.bytes,
                 &mut dirs,
                 &path,
                 seen.get(&path).copied().flatten(),
@@ -611,6 +817,7 @@ impl Writer {
             match wrote {
                 Wrote::Done => {}
                 Wrote::Busy => {
+                    self.reasons.insert(path.clone(), Blocked::FileBusy);
                     report.blocked.push(path);
                     continue;
                 }
@@ -623,12 +830,15 @@ impl Writer {
                             self.hold(&path, &disk, false)?;
                             report.held.push(path);
                         }
-                        None => report.blocked.push(path),
+                        None => {
+                            self.reasons.insert(path.clone(), Blocked::FileUnreadable);
+                            report.blocked.push(path);
+                        }
                     }
                     continue;
                 }
             }
-            let heads = HeadsFile::of(&self.fold.file_heads(&file));
+            let heads = HeadsFile::of(&self.fold.file_heads(&r.file));
             let heads_name = layout::heads_file(&path);
             let heads_name = heads_name.rsplit('/').next().unwrap_or_default();
             atomic_write(
@@ -639,19 +849,19 @@ impl Writer {
                 SyncDir::Deferred(&mut dirs),
             )
             .map_err(|e| e.into_inner())?;
-            let nfc = is_text(&file).then(|| is_nfc(&String::from_utf8_lossy(&bytes)));
+            let nfc = is_text(&r.file).then(|| is_nfc(&String::from_utf8_lossy(&r.bytes)));
             self.counters.add(&self.counters.derived_written, 1);
-            written_entries.push((
+            written.push((
                 path.clone(),
-                file,
-                Md5::of(&bytes),
-                bytes.len() as u64,
+                r.file,
+                r.md5,
+                r.bytes.len() as u64,
                 nfc,
                 digest.to_hex(),
             ));
             report.written.push(path);
         }
-        for path in &report.removed {
+        for path in &removing {
             atomic_remove(
                 &*self.vfs,
                 &self.folder.path(path),
@@ -661,17 +871,20 @@ impl Writer {
             if self.vfs.metadata(&heads).is_ok() {
                 atomic_remove(&*self.vfs, &heads, SyncDir::Deferred(&mut dirs))?;
             }
+            report.removed.push(path.clone());
         }
         dirs.sync(&*self.vfs)?;
-        // M6: metadata.json from the files as they now are.
-        let metadata = if report.blocked.is_empty() {
-            metadata
-        } else {
-            let planned: BTreeMap<String, (Md5, u64, Option<bool>)> = written_entries
+        // M6: metadata.json from the files as they now are (a path skipped in M4 keeps its
+        // old bytes).
+        let skipped = written.len() != planned.len();
+        let metadata = if skipped {
+            let planned: BTreeMap<String, (Md5, u64, Option<bool>)> = written
                 .iter()
                 .map(|(p, _, m, s, n, _)| (p.clone(), (*m, *s, *n)))
                 .collect();
-            self.build_metadata(&projection, &planned, &report.removed)?
+            self.build_metadata(&planned, &departing)?
+        } else {
+            metadata
         };
         self.keep_outside_metadata(&intent_now, &metadata)?;
         let metadata_written = match atomic_write(
@@ -683,16 +896,40 @@ impl Writer {
         ) {
             Ok(()) => true,
             Err(crate::atomic::WriteError::NotWritten(e))
-                if e.kind() == Some(std::io::ErrorKind::PermissionDenied) =>
+                if e.io_error().is_some_and(|io| self.vfs.is_held(io)) =>
             {
+                self.reasons.insert(METADATA.to_owned(), Blocked::FileBusy);
                 report.blocked.push(METADATA.to_owned());
                 false
             }
             Err(e) => return Err(e.into_inner()),
         };
         // M7: the manifest.
+        let metadata_entry = metadata_written.then_some((metadata, metadata_md5));
+        self.finish_entries(written, converged, unread, &gone, &removing, metadata_entry)?;
+        // M8.
+        atomic_remove(&*self.vfs, &self.folder.path(INTENT), SyncDir::Now)?;
+        self.open_intent = None;
+        Ok(())
+    }
+
+    /// M7: the entries of what was written, found equal or removed, and the manifest.
+    #[allow(clippy::too_many_arguments)]
+    fn finish_entries(
+        &mut self,
+        written: Vec<(String, DerivedFile, Md5, u64, Option<bool>, String)>,
+        converged: BTreeMap<String, (DerivedFile, String, bool)>,
+        unread: Vec<DerivedFile>,
+        gone: &[String],
+        removed: &[String],
+        metadata: Option<(Vec<u8>, String)>,
+    ) -> Result<(), StoreError> {
         let settle_by = self.stamp_ns;
-        for (path, _, md5, size, nfc, scope) in written_entries {
+        let mut files: Vec<DerivedFile> = Vec::new();
+        files.extend(converged.values().map(|(f, _, _)| f.clone()));
+        files.extend(unread.iter().cloned());
+        let digests = self.fold.scope_digests(&files);
+        for (path, _, md5, size, nfc, scope) in written {
             let meta = self.vfs.metadata(&self.folder.path(&path)).ok();
             self.manifest.paths.insert(
                 path,
@@ -702,11 +939,11 @@ impl Writer {
                     ..Entry::of(md5.to_hex(), size, meta.map_or(0, |m| m.mtime_ns), false)
                 },
             );
+            self.manifest_changed = true;
         }
-        let converged_files: Vec<DerivedFile> =
-            converged.values().map(|(f, _, _)| f.clone()).collect();
-        let converged_digests = self.fold.scope_digests(&converged_files);
-        for ((path, (_, md5, nfc)), digest) in converged.into_iter().zip(converged_digests) {
+        let mut digests = digests.into_iter();
+        for (path, (_, md5, nfc)) in converged {
+            let digest = digests.next().map(|d| d.to_hex());
             let meta = self.vfs.metadata(&self.folder.path(&path)).ok();
             let size = meta.map_or(0, |m| m.len);
             let mtime = meta.map_or(0, |m| m.mtime_ns);
@@ -714,16 +951,28 @@ impl Writer {
             self.manifest.paths.insert(
                 path,
                 Entry {
-                    scope: Some(digest.to_hex()),
+                    scope: digest,
                     nfc: Some(nfc),
                     ..Entry::of(md5, size, mtime, settled)
                 },
             );
+            self.manifest_changed = true;
         }
-        for path in report.removed.iter().chain(&gone) {
-            self.manifest.paths.remove(path);
+        for file in unread {
+            let digest = digests.next().map(|d| d.to_hex());
+            if let Some(entry) = self.manifest.paths.get_mut(&file.path())
+                && entry.scope != digest
+            {
+                entry.scope = digest;
+                self.manifest_changed = true;
+            }
         }
-        if metadata_written {
+        for path in removed.iter().chain(gone) {
+            if self.manifest.paths.remove(path).is_some() {
+                self.manifest_changed = true;
+            }
+        }
+        if let Some((metadata, md5)) = metadata {
             let meta = self.vfs.metadata(&self.folder.path(METADATA)).ok();
             let scope = self.metadata_scope();
             self.manifest.paths.insert(
@@ -731,23 +980,64 @@ impl Writer {
                 Entry {
                     scope: Some(scope),
                     ..Entry::of(
-                        md5_hex(&metadata),
+                        md5,
                         metadata.len() as u64,
                         meta.map_or(0, |m| m.mtime_ns),
                         false,
                     )
                 },
             );
+            self.manifest_changed = true;
         }
-        self.write_manifest()?;
-        // M8.
-        atomic_remove(&*self.vfs, &self.folder.path(INTENT), SyncDir::Now)?;
-        self.dirty = Default::default();
-        self.retry_blocked(&report, &projection);
-        self.shared.emit(crate::handle::StoreEvent::Materialized {
-            paths: report.written.clone(),
-        });
-        Ok(report)
+        if self.manifest_changed {
+            self.write_manifest()?;
+        }
+        Ok(())
+    }
+
+    /// Whether `metadata.json` on disk is what these bytes would write: its entry holds the
+    /// same md5, and the file is as the app left it.
+    fn metadata_is_current(&self, md5: &str) -> bool {
+        let same_entry = self
+            .manifest
+            .paths
+            .get(METADATA)
+            .is_some_and(|e| e.md5 == md5 && e.held.is_none());
+        if !same_entry {
+            return false;
+        }
+        if self.clean_by_stat(METADATA) {
+            return true;
+        }
+        // A file written in the tick of its own time stamp is not settled: its bytes are read.
+        match self.read_disk(METADATA) {
+            Disk::Bytes(bytes) => {
+                self.counters.add(&self.counters.derived_read, 1);
+                md5_hex(&bytes) == md5
+            }
+            _ => false,
+        }
+    }
+
+    /// The md5 of `bytes`, counted.
+    pub(crate) fn hash(&self, bytes: &[u8]) -> String {
+        self.counters
+            .add(&self.counters.bytes_hashed, bytes.len() as u64);
+        md5_hex(bytes)
+    }
+
+    /// Marks again what a group could not do.
+    fn restore_group(&mut self, group: &Group) {
+        match group.book {
+            Some(book) if group.whole => {
+                self.dirty.books.insert(book);
+            }
+            Some(_) | None => self.dirty.files.extend(group.files.iter().cloned()),
+        }
+        if group.whole && group.book.is_none() {
+            self.dirty.everything = true;
+        }
+        self.dirty.carried |= group.carried;
     }
 
     /// `metadata.json` must list the files as they are, so it is always rewritten; bytes
@@ -886,33 +1176,51 @@ impl Writer {
         }
     }
 
-    /// What the paths this run could not write need next: they stay dirty, and the person
-    /// is told once a path has been refused for 2 s ("translationCore can't update TIT.usfm
-    /// because another program has it open. Your work is saved.").
-    fn retry_blocked(
-        &mut self,
-        report: &MaterializeReport,
-        projection: &BTreeMap<String, DerivedFile>,
-    ) {
+    /// What the paths this job could not write need next: they stay dirty and are tried again,
+    /// and the person is told once a path has been refused for 2 s ("translationCore can't
+    /// update TIT.usfm because another program has it open. Your work is saved.", R16). A
+    /// path that was written, found equal or removed this time is no longer busy, and its
+    /// notice goes.
+    fn retry_blocked(&mut self, report: &MaterializeReport, processed: &BTreeSet<String>) {
         let now = Instant::now();
-        self.busy.retain(|path, _| report.blocked.contains(path));
-        let mut to_tell: Vec<String> = Vec::new();
+        let cleared: Vec<String> = self
+            .busy
+            .keys()
+            .filter(|p| processed.contains(*p) && !report.blocked.contains(*p))
+            .cloned()
+            .collect();
+        for path in cleared {
+            self.busy.remove(&path);
+            if let Ok(repo) = RepoPath::parse(&path) {
+                self.shared.remove_blocked_notice(&repo);
+            }
+        }
+        let mut to_tell: Vec<(String, Blocked)> = Vec::new();
         for path in &report.blocked {
+            let reason = self.reasons.get(path).cloned().unwrap_or(Blocked::FileBusy);
             let state = self.busy.entry(path.clone()).or_insert(Busy {
                 since: now,
                 told: false,
             });
             if !state.told && now.duration_since(state.since) >= BUSY_NOTICE_AFTER {
                 state.told = true;
-                to_tell.push(path.clone());
+                to_tell.push((path.clone(), reason));
             }
-            if let Some(file) = projection.get(path) {
-                self.dirty.files.insert(file.clone());
+            if path == METADATA {
+                self.dirty.metadata = true;
+            } else if let Some(file) = DerivedFile::from_path(path) {
+                self.dirty.add_file(file);
             }
         }
-        for path in to_tell {
+        for (path, reason) in to_tell {
             if let Ok(path) = RepoPath::parse(&path) {
-                self.notice(Notice::WriteBlocked { path }, None);
+                self.notice(
+                    Notice::MaterializeBlocked {
+                        paths: vec![path],
+                        reason,
+                    },
+                    None,
+                );
             }
         }
         if !report.blocked.is_empty() {
@@ -920,11 +1228,71 @@ impl Writer {
         }
     }
 
-    /// How long until the paths a run could not write are tried again: 200 ms, then as long
-    /// as the oldest has waited, up to 3 s.
+    /// How long until what a job could not write is tried again: 200 ms, then as long as the
+    /// oldest path has waited, up to 3 s; 3 s for paths that wait for something else (values
+    /// not yet readable, a job that failed).
     pub(crate) fn retry_delay(&self) -> Option<Duration> {
-        let oldest = self.busy.values().map(|b| b.since).min()?;
-        Some(oldest.elapsed().clamp(BUSY_RETRY_FIRST, BUSY_RETRY_LAST))
+        if self.dirty.is_empty() {
+            return None;
+        }
+        match self.busy.values().map(|b| b.since).min() {
+            Some(oldest) => Some(oldest.elapsed().clamp(BUSY_RETRY_FIRST, BUSY_RETRY_LAST)),
+            None => Some(BUSY_RETRY_LAST),
+        }
+    }
+
+    /// Nothing is written while values of the fold cannot be read (§2.6): the person is told
+    /// how many wait, once for each count, and the paths stay dirty.
+    fn block_values(&mut self, records: usize) {
+        let records = u32::try_from(records).unwrap_or(u32::MAX);
+        if self.values_told == Some(records) {
+            return;
+        }
+        self.unblock_values();
+        self.values_told = Some(records);
+        self.notice(
+            Notice::MaterializeBlocked {
+                paths: Vec::new(),
+                reason: Blocked::ValuesUnreadable { records },
+            },
+            None,
+        );
+    }
+
+    fn unblock_values(&mut self) {
+        if self.values_told.take().is_some() {
+            self.shared.remove_notices_matching(|n| {
+                matches!(
+                    n,
+                    Notice::MaterializeBlocked {
+                        reason: Blocked::ValuesUnreadable { .. },
+                        ..
+                    }
+                )
+            });
+        }
+    }
+
+    /// Removals wait for an expected pack (§4.4): the person is told which paths, once.
+    fn withhold_removals(&mut self, candidates: &[String]) {
+        let paths: Vec<RepoPath> = candidates
+            .iter()
+            .filter_map(|p| RepoPath::parse(p).ok())
+            .collect();
+        if paths.is_empty()
+            || self
+                .shared
+                .has_blocked_notice(&paths, &Blocked::PackMissing)
+        {
+            return;
+        }
+        self.notice(
+            Notice::MaterializeBlocked {
+                paths,
+                reason: Blocked::PackMissing,
+            },
+            None,
+        );
     }
 
     /// Whether a command removed the carried file at `rel` and no other version of it
@@ -947,66 +1315,75 @@ impl Writer {
         }
     }
 
-    /// Renders the dirty files, a book's files together (§14: a book's records are decoded
-    /// once for its files).
+    /// Renders the wanted files of a group: a book's files together (§14: a book's records are
+    /// decoded once for its files), a file of no book on its own. Each buffer is hashed once
+    /// here, and the md5 stands for it from then on.
     fn render(
         &mut self,
-        files: &BTreeSet<DerivedFile>,
-    ) -> BTreeMap<String, (DerivedFile, Vec<u8>)> {
+        book: Option<BookId>,
+        wanted: &[DerivedFile],
+    ) -> BTreeMap<String, Rendered> {
         let mut out = BTreeMap::new();
-        let mut books: BTreeSet<tc_journal::BookId> = BTreeSet::new();
-        let mut prerendered = std::mem::take(&mut self.prerendered);
         if self.prerendered_seq != self.seq {
-            prerendered.clear();
+            self.prerendered.clear();
         }
-        let mut left: BTreeSet<&DerivedFile> = BTreeSet::new();
-        for file in files {
-            match prerendered.remove(&file.path()) {
+        let mut left: Vec<&DerivedFile> = Vec::new();
+        for file in wanted {
+            match self.prerendered.remove(&file.path()) {
                 Some(bytes) => {
-                    out.insert(file.path(), (file.clone(), bytes));
+                    let rendered = self.rendered(file.clone(), bytes);
+                    out.insert(file.path(), rendered);
                 }
-                None => {
-                    left.insert(file);
-                }
+                None => left.push(file),
             }
         }
-        for file in left.iter().copied() {
-            match file.book() {
-                Some(book) => {
-                    books.insert(book);
-                }
-                None => {
-                    if let Some(bytes) = self.fold.render(file) {
-                        self.counters.projected.fetch_add(1, Ordering::Relaxed);
-                        out.insert(file.path(), (file.clone(), bytes));
-                    }
-                }
-            }
-        }
-        for book in books {
+        let whole_book = book.is_some()
+            && (left.iter().any(|f| matches!(f, DerivedFile::Usfm(_))) || left.len() >= 3);
+        if let (true, Some(book)) = (whole_book, book) {
             for (file, bytes) in self.fold.render_book(book) {
-                if left.contains(&file) {
-                    self.counters.projected.fetch_add(1, Ordering::Relaxed);
-                    out.insert(file.path(), (file, bytes));
+                if left.contains(&&file) {
+                    self.counters.add(&self.counters.projected, 1);
+                    let rendered = self.rendered(file.clone(), bytes);
+                    out.insert(file.path(), rendered);
+                }
+            }
+        } else {
+            for file in left {
+                if let Some(bytes) = self.fold.render(file) {
+                    self.counters.add(&self.counters.projected, 1);
+                    let rendered = self.rendered(file.clone(), bytes);
+                    out.insert(file.path(), rendered);
                 }
             }
         }
         out
     }
 
+    fn rendered(&self, file: DerivedFile, bytes: Vec<u8>) -> Rendered {
+        self.counters
+            .add(&self.counters.bytes_hashed, bytes.len() as u64);
+        Rendered {
+            file,
+            md5: Md5::of(&bytes),
+            bytes,
+        }
+    }
+
     /// `metadata.json` for the files as they will be once `planned` are written and
-    /// `removed` gone (M2, M6). Every value passed `check_field` already (§3.4); a document
-    /// that fails is a bug, and nothing is written.
+    /// `removed` gone (M2, M6): the manifest's entries, which stand for every file the app
+    /// wrote or holds, with the planned bytes in place of the old, and the fixed files, the
+    /// packs and the carried files. Every value passed `check_field` already (§3.4); a
+    /// document that fails is a bug, and nothing is written. It costs the entries, never a
+    /// projection of the project.
     fn build_metadata(
         &mut self,
-        projection: &BTreeMap<String, DerivedFile>,
         planned: &BTreeMap<String, (Md5, u64, Option<bool>)>,
         removed: &[String],
     ) -> Result<Vec<u8>, StoreError> {
         let source_probe = self
             .fold
             .metadata_source_nfc((u64::from(FORMAT_MAJOR), u64::from(FORMAT_MINOR)), true);
-        let book_ranges = |book: tc_journal::BookId| -> Vec<String> {
+        let book_ranges = |book: BookId| -> Vec<String> {
             source_probe
                 .scope
                 .get(book.code())
@@ -1018,6 +1395,7 @@ impl Writer {
                 })
                 .unwrap_or_default()
         };
+        let removed: BTreeSet<&str> = removed.iter().map(String::as_str).collect();
         let mut entries: Vec<IngredientEntry> = Vec::new();
         let mut nfc = true;
         let push = |entries: &mut Vec<IngredientEntry>,
@@ -1037,57 +1415,75 @@ impl Writer {
                 });
             }
         };
-        for (path, file) in projection {
-            if removed.contains(path) {
+        let mut paths: BTreeSet<String> = self.manifest.paths.keys().cloned().collect();
+        paths.extend(planned.keys().cloned());
+        let mut listed: BTreeSet<String> = BTreeSet::new();
+        for path in paths {
+            if removed.contains(path.as_str())
+                || path == METADATA
+                || FIXED.contains(&path.as_str())
+                || self.packs.contains_key(&path)
+            {
                 continue;
             }
-            let (md5, size, text_nfc) = match planned.get(path) {
+            let entry = self.manifest.paths.get(&path).cloned();
+            if entry
+                .as_ref()
+                .is_some_and(|e| e.oid.is_some() && e.held.is_none())
+            {
+                // Carried files are listed with the fold's placements below.
+                continue;
+            }
+            let derived = DerivedFile::from_path(&path);
+            if derived.is_none() && entry.as_ref().is_none_or(|e| e.held.is_none()) {
+                // A path the format does not derive is listed only while it is held: it is
+                // in the folder, so the list says so (I7).
+                continue;
+            }
+            let (md5, size, text_nfc) = match planned.get(&path) {
                 Some(p) => *p,
-                None => match self.manifest.paths.get(path).cloned() {
-                    Some(entry) if entry.held.is_some() => {
-                        match self.listing_of_file(path, None)? {
-                            Some((md5, size)) => {
-                                (md5, size, self.manifest.paths.get(path).and_then(|e| e.nfc))
-                            }
-                            None => continue,
-                        }
-                    }
-                    Some(entry) => match Md5::parse(&entry.md5) {
-                        Some(md5) => (md5, entry.size, entry.nfc),
+                None => match entry {
+                    Some(e) if e.held.is_some() => match self.listing_of_file(&path, None)? {
+                        Some((md5, size)) => (
+                            md5,
+                            size,
+                            self.manifest.paths.get(&path).and_then(|e| e.nfc),
+                        ),
                         None => continue,
                     },
-                    None => match self.read_disk(path) {
+                    Some(e) => match Md5::parse(&e.md5) {
+                        Some(md5) => (md5, e.size, e.nfc),
+                        None => continue,
+                    },
+                    None => match self.read_disk(&path) {
                         Disk::Bytes(bytes) => (
                             Md5::of(&bytes),
                             bytes.len() as u64,
-                            is_text(file).then(|| is_nfc(&String::from_utf8_lossy(&bytes))),
+                            derived
+                                .as_ref()
+                                .filter(|f| is_text(f))
+                                .map(|_| is_nfc(&String::from_utf8_lossy(&bytes))),
                         ),
                         _ => continue,
                     },
                 },
             };
-            if is_text(file) {
-                nfc &= text_nfc.unwrap_or(false);
-            }
-            let ranges = file.book().map(book_ranges).unwrap_or_default();
-            push(
-                &mut entries,
-                path,
-                md5,
-                size,
-                file.role(),
-                file.scope(&ranges),
-            );
+            let (role, scope) = match &derived {
+                Some(file) => {
+                    if is_text(file) {
+                        nfc &= text_nfc.unwrap_or(false);
+                    }
+                    let ranges = file.book().map(book_ranges).unwrap_or_default();
+                    (file.role(), file.scope(&ranges))
+                }
+                None => (None, None),
+            };
+            push(&mut entries, &path, md5, size, role, scope);
+            listed.insert(path);
         }
-        let mut listed: BTreeSet<String> = projection
-            .keys()
-            .filter(|p| !removed.contains(*p))
-            .cloned()
-            .collect();
         for fixed in FIXED {
             if let Some((md5, size)) = self.listing_of_file(fixed, None)? {
                 push(&mut entries, fixed, md5, size, Some("x-tc-project"), None);
-                listed.insert(fixed.to_owned());
             }
         }
         let packs: Vec<String> = self.packs.keys().cloned().collect();
@@ -1105,10 +1501,11 @@ impl Writer {
                 );
             }
         }
-        // Carried files, as they are on disk (unit S2 writes their bytes).
+        // Carried files, as they are on disk (the writer places their bytes, §11.4).
         for placement in self.fold.carried_files() {
-            if projection.contains_key(&placement.path)
+            if listed.contains(&placement.path)
                 || !placement.path.starts_with("ingredients/")
+                || removed.contains(placement.path.as_str())
             {
                 continue;
             }
@@ -1116,34 +1513,26 @@ impl Writer {
                 self.listing_of_file(&placement.path, Some(placement.oid.to_hex()))?
             {
                 push(&mut entries, &placement.path, md5, size, None, None);
-                listed.insert(placement.path.clone());
-            }
-        }
-        // A file held at a path the projection no longer has (a removed book edited
-        // outside the app, a carried file removed after it was edited) is still in the
-        // folder, so it is listed as it is.
-        let leftovers: Vec<String> = self
-            .manifest
-            .paths
-            .iter()
-            .filter(|(p, e)| {
-                e.held.is_some()
-                    && p.starts_with("ingredients/")
-                    && !listed.contains(*p)
-                    && !self.packs.contains_key(*p)
-            })
-            .map(|(p, _)| p.clone())
-            .collect();
-        for rel in leftovers {
-            if let Some((md5, size)) = self.listing_of_file(&rel, None)? {
-                push(&mut entries, &rel, md5, size, None, None);
             }
         }
         let mut source = self
             .fold
             .metadata_source_nfc((u64::from(FORMAT_MAJOR), u64::from(FORMAT_MINOR)), nfc);
-        if self.kind == ProjectKind::Stories {
-            source.scope = obs_scope();
+        match self.kind {
+            ProjectKind::Stories => source.scope = obs_scope(),
+            // Between the groups of a job a book the fold holds may have no file yet: the
+            // scope lists the books the ingredients cover, so the folder is a valid burrito
+            // after each group (I7). Once every group is done, they are all there.
+            ProjectKind::Bible => {
+                if let serde_json::Value::Object(scope) = &mut source.scope {
+                    let covered: BTreeSet<&str> = entries
+                        .iter()
+                        .filter_map(|e| e.scope.as_ref()?.as_object())
+                        .flat_map(|o| o.keys().map(String::as_str))
+                        .collect();
+                    scope.retain(|book, _| covered.contains(book.as_str()));
+                }
+            }
         }
         tc_burrito::build_metadata(&source, &entries).map_err(|problems| {
             StoreError::Other(format!(
@@ -1151,4 +1540,58 @@ impl Writer {
             ))
         })
     }
+}
+
+/// What a group writes: one book's files, or the files of no book.
+#[derive(Debug)]
+struct Group {
+    /// The book, or `None` for the files of no book.
+    book: Option<BookId>,
+    /// Every file of the book is reconciled: written when it differs, removed when the
+    /// projection no longer holds it. For the group of no book: `files` is the whole
+    /// projection of those files, and the manifest is searched for the rest.
+    whole: bool,
+    files: BTreeSet<DerivedFile>,
+    /// Carried files are placed and removed with this group (§11.4).
+    carried: bool,
+}
+
+impl Group {
+    fn book(book: BookId) -> Self {
+        Self {
+            book: Some(book),
+            whole: false,
+            files: BTreeSet::new(),
+            carried: false,
+        }
+    }
+
+    fn project() -> Self {
+        Self {
+            book: None,
+            whole: false,
+            files: BTreeSet::new(),
+            carried: false,
+        }
+    }
+}
+
+/// A derived file rendered, with its md5 taken once.
+struct Rendered {
+    file: DerivedFile,
+    bytes: Vec<u8>,
+    md5: Md5,
+}
+
+/// The paths a book can have files at.
+fn book_paths(book: BookId) -> Vec<String> {
+    let mut files = vec![
+        DerivedFile::Usfm(book),
+        DerivedFile::Alignments(book),
+        DerivedFile::Comments(book),
+    ];
+    for tool in tc_journal::ToolId::ALL {
+        files.push(DerivedFile::Decisions(tool, book));
+    }
+    files.iter().map(DerivedFile::path).collect()
 }

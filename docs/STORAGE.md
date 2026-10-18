@@ -757,8 +757,9 @@ pub enum Notice {
     /// A derived file changed outside the app, held unchanged and unrecorded with a copy kept,
     /// until it is recorded as changes (§11.1) or restored from the project (I8).
     OutsideEditHeld { path: RepoPath, copy: Box<str> },
-    /// A derived file's rename kept failing for 2 s (another program has it open, §5.10).
-    WriteBlocked { path: RepoPath },
+    /// Derived files (§5.10) or a commit (§5.13) could not be written and the work is saved.
+    /// Listed once for each reason and path set, and gone when the blockage clears (APP R16).
+    MaterializeBlocked { paths: Vec<RepoPath>, reason: Blocked },
     /// An expected pack (§4.4) is missing and no copy could be restored: nothing derived is
     /// removed and no tree is built until it is back.
     PackMissing { path: RepoPath },
@@ -771,6 +772,14 @@ pub enum Notice {
     ImportUnfinished { source: Box<str> },
 }
 pub enum PackLoss { Missing, Damaged }
+pub enum Blocked {
+    FileBusy,                           // another program holds the file; its rename kept failing for 2 s
+    FileUnreadable,                     // the file could not be read to compare it before it was written over
+    ValuesUnreadable { records: u32 },  // values of the fold cannot be read on this computer yet (§2.6)
+    PackMissing,                        // an expected pack is missing: nothing derived is removed (§4.4)
+    TreeInvalid { problem: Box<str> },  // the commit's tree is not a valid burrito: no commit (§9.4)
+    Failed { reason: Box<str> },        // a write failed for another reason
+}
 pub enum RotationReason { FolderCopied, BackupRestored, DuplicateDevice }   // §6.3
 ```
 
@@ -1553,7 +1562,10 @@ B2  Assign seq (the in-memory counter, §6.3), at = now, the batch ref. A batch 
 B3  atomic_write(.tc/pending, "<device>-<hash32>.batch", header + lines, SyncDir::Now)
     ← the durability point of every save. "Saved" is never shown before this returns.
 B4  Apply the changes to the in-memory fold (§7.8).
-B5  Mark the affected derived paths dirty; re-arm the materialize timer (3 s after the last batch).
+B5  Mark the affected books and files dirty (a verse of Psalms marks Psalms, and the books of
+    a book's change are named by the fold's delta; nothing else is listed or looked at, so the
+    mark costs the change, not the project), and re-arm the materialize timer (3 s after the
+    last batch). The writer expands the marks to files from its snapshot, off the actor (§5.10).
 B6  Reply { tokens, new_conflicts }.
 ```
 
@@ -1600,8 +1612,9 @@ layer holds an open project as a handle:
   every command of a read-only project resolves with `ReadOnly(reason)`. A `Draft` goes to the
   draft writer, not the queue (§5.14).
 - `subscribe()` gives typed events: `Committed { seq, delta, changes }` for every batch,
-  `Notice` (typed: `SecondWriter`, `SavedWithDiskError`, `WriteBlocked`, `OutsideEditHeld`,
-  `StorageDamage`, …), `Mode` when the project turns read-only, `Materialized { paths }`.
+  `Notice` (typed: `SecondWriter`, `SavedWithDiskError`, `MaterializeBlocked`, `OutsideEditHeld`,
+  `StorageDamage`, …), `Mode` when the project turns read-only, `Materialized { paths }`, and
+  `Progress { work, progress }` while a long materialization runs (§5.10).
 - `read_book` reads a book's text from one snapshot off the caller's thread: a pending read the
   screen waits for, never an empty book (`docs/TC4-DELTA-2026-10-16.md` §3.10).
   `Snapshot::training_input` gives the aligner's training input, each verse's text and
@@ -1889,6 +1902,24 @@ Runs on the writer thread (§5.0) 3 s after the last batch, on leaving a book or
 checkpoint's seal, after an intake, at close, and as the open's first job (O10). It writes only
 dirty paths, from the snapshot the actor sent with them.
 
+**Write groups.** The actor marks books and files (B5); the writer turns the marks into groups,
+one for each book (M0 to M8 for that book's files and no other book's) and one for the files of
+no book (settings, resources, versification, conflicts, stories, carried files), each with its
+own intent and each ending in `metadata.json`, so the folder is a valid burrito after every
+group (I7), and a process stopped between two groups leaves the burrito valid and the rest to
+the next open. A save of a verse marks its book, and one book's materialization lists, projects,
+reads and writes that book's files only: it never lists the project or scans the manifest. The
+whole listing is asked for in one place: a job marked `everything` (a rebuilt fold). A book
+added, removed, restored or rescoped, a pins change, a resource upgrade and a sync's intake
+mark many books, show determinate progress from 300 ms on (`Progress { work: Materialize }`,
+groups done of groups in all; PERFORMANCE.md rule 4) and go on while saves continue. One
+book's materialization shows nothing. Each rendered buffer is hashed once: its md5 stands for it
+in the comparison, the intent, the entry and the list of `metadata.json`; a file read for the
+compare-and-swap is hashed once. A path whose new md5 equals its entry's, that is clean by
+stat, is not read and not written (only its scope digest may change). The writer's flushes and
+renames wait, for at most 50 ms each, while a save is being written (the actor raises a gate
+around B3), so a save is durable within 25 ms p95 whatever the writer is doing.
+
 ```
 M0  D = dirty derived and carried paths, with their new bytes computed in memory (carried bytes
     come from the git object database, §11.4; a carried head whose blob is missing keeps the
@@ -1959,7 +1990,8 @@ path** (the md5 of its bytes): if `d` is neither the manifest md5 nor the new md
 saved by the other program while the app waited, and it is held (unit S1) or recorded (§11.1)
 instead of written over. After 2 s the path stays dirty and the person sees "translationCore
 can't update TIT.usfm because another program has it open. Your work is saved."
-(`WriteBlocked`). A file the open cannot read, or a compare-and-swap that cannot read the file,
+(`MaterializeBlocked` with `Blocked::FileBusy`; the other reasons are in §2.6, and a notice is
+listed once for each reason and path set and goes when the path is written). A file the open cannot read, or a compare-and-swap that cannot read the file,
 is treated the same way: nothing is written over it, and it is tried again. While a path waits
 for a retry, the watcher does not treat the intent's new md5 as the app's own write for that
 path. Writes of pending files are never blocked by a derived file. A checkpoint
@@ -4573,10 +4605,10 @@ go in `[workspace.dependencies]`. No CRDT library and no git content merge (`.au
 
 ## 18. Known limits
 
-1. **The working folder is not a valid burrito inside a write group** (I7): milliseconds for a
-   materialization, up to seconds for a large intake, and, after a crash inside one, until the
-   next open. A plain folder cannot replace many files at once. Commits, exchange files and
-   exports never have this gap.
+1. **The working folder is not a valid burrito inside a write group** (I7): milliseconds for one
+   book's group (§5.10: a whole-project materialization is one group for each book), and,
+   after a crash inside one, until the next open. A plain folder cannot replace many files at
+   once. Commits, exchange files and exports never have this gap.
 2. **A race of milliseconds** remains between each compare-and-swap check and the rename that
    follows it (§5.10). The file watcher records the other program's next save.
 3. **No signatures.** Anyone with write access to the Door43 repository can add a pack under any

@@ -97,6 +97,19 @@ pub(crate) fn kill_everywhere_after(
     action: &dyn Fn(&ProjectHandle) -> Outcome,
     check: &dyn Fn(&ProjectHandle, Outcome),
 ) -> u64 {
+    kill_everywhere_full(base, folder, setup, action, &|handle, _, outcome| {
+        check(handle, outcome);
+    })
+}
+
+/// [`kill_everywhere_after`] whose check also sees the files of the reopened project.
+pub(crate) fn kill_everywhere_full(
+    base: &FaultFs,
+    folder: &Path,
+    setup: &dyn Fn(&FaultFs, &ProjectHandle),
+    action: &dyn Fn(&ProjectHandle) -> Outcome,
+    check: &dyn Fn(&ProjectHandle, &FaultFs, Outcome),
+) -> u64 {
     let mut points = 0;
     for model in [PowerLoss::KeepSyncedNames, PowerLoss::Strict] {
         for torn in [false, true] {
@@ -121,7 +134,7 @@ pub(crate) fn kill_everywhere_after(
                 for &power_cut in cuts {
                     let after = fs.crash(power_cut);
                     let (rig2, reopened) = reopen_checked(after, folder);
-                    check(&reopened, row_outcome(outcome, model, power_cut));
+                    check(&reopened, &rig2.fs, row_outcome(outcome, model, power_cut));
                     let held = ids_on_disk(&rig2.fs, folder);
                     second_open_changes_nothing(&rig2, reopened, folder);
                     // A restart finishes the work the kill left (its close seals and
@@ -615,4 +628,81 @@ fn crash_held_save_and_retry() {
         },
     );
     assert!(points > 4, "{points} kill points");
+}
+
+/// Every derived file of the project is what the fold projects.
+fn assert_files_equal_projection(handle: &ProjectHandle, fs: &FaultFs, folder: &Path) {
+    let snapshot = handle.snapshot();
+    for file in snapshot.fold().derived_files() {
+        let on_disk = fs.peek(&folder.join(file.path()));
+        assert_eq!(
+            on_disk,
+            snapshot.fold().render(&file),
+            "{} is not what the project says",
+            file.path()
+        );
+    }
+}
+
+/// A pin change rewrites every book's files, book by book: a process stopped between two
+/// books leaves a valid burrito, and the next open writes the rest.
+#[test]
+fn crash_whole_project_materialize_group_by_group() {
+    use tc_journal::command::SeedSource;
+    use tc_journal::record::Scope;
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    for book in [tc_journal::BookId::Philemon, tc_journal::BookId::SecondJohn] {
+        handle
+            .submit(Command::AddBook {
+                book,
+                scope: Scope::Whole,
+                seed: SeedSource {
+                    usfm: format!(
+                        "\\id {0} source\n\\usfm 3.0\n\\h {0}\n\\mt {0}\n\\c 1\n\\p\n\\v 1 One.\n",
+                        book.code()
+                    ),
+                },
+            })
+            .wait()
+            .unwrap();
+    }
+    save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
+    handle.wait_idle();
+    handle.close().unwrap();
+    let base = rig.fs.crash(false);
+    let pins = tc_journal::RecordKey::Pins(tc_journal::PinGroup::Lexicon);
+    let action = |handle: &ProjectHandle| {
+        let shown = handle.mint(&pins, None).unwrap();
+        let sent = handle
+            .submit(Command::SetPins {
+                shown,
+                value: lexicon_pin(),
+            })
+            .wait();
+        let _ = handle.leave(tc_store::Leave::Mode).wait();
+        outcome_of(sent)
+    };
+    let points = kill_everywhere_full(&base, &folder, &|_, _| {}, &action, &|handle, fs, _| {
+        assert_files_equal_projection(handle, fs, &folder);
+    });
+    assert!(points > 20, "{points}");
+}
+
+fn lexicon_pin() -> tc_journal::record::PinGroupValue {
+    use std::collections::BTreeMap;
+    use tc_journal::json::{Json, JsonMap};
+    use tc_journal::keys::SlotName;
+    use tc_journal::record::{PinGroupValue, SlotValue};
+    PinGroupValue(BTreeMap::from([(
+        SlotName::parse("ugl").unwrap(),
+        SlotValue(Json::Obj(JsonMap::from([
+            (
+                "repoPath".to_owned(),
+                Json::from("git.door43.org/unfoldingWord/en_ugl"),
+            ),
+            ("sha".to_owned(), Json::from("0".repeat(40))),
+            ("version".to_owned(), Json::from("v1")),
+        ]))),
+    )]))
 }

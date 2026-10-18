@@ -91,6 +91,12 @@ counters! {
     held_retries,
     /// Nanoseconds spent waiting for those files.
     held_wait_ns,
+    /// Bytes the writer took an md5 of: each rendered buffer once, and each file it read to
+    /// compare before it overwrote it.
+    bytes_hashed,
+    /// Nanoseconds the writer waited for saves in flight before a flush or a rename
+    /// (PERFORMANCE.md: derived-file flushes are paced behind saves).
+    writer_yield_ns,
 }
 
 impl Counters {

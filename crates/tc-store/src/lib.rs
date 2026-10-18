@@ -34,6 +34,7 @@ pub mod manifest;
 pub mod materialize;
 pub mod notices;
 pub mod open;
+mod pace;
 pub mod platform;
 pub mod progress;
 mod project;
@@ -55,7 +56,7 @@ pub use drafts::OfferedDraft;
 pub use error::StoreError;
 pub use handle::{
     BookRead, CheckpointReason, Leave, Mode, Pending, ProjectFacts, ProjectHandle, Snapshot,
-    StoreEvent,
+    StoreEvent, Work,
 };
 pub use hooks::{Hooks, Point};
 pub use notices::StoreNotice;

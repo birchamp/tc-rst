@@ -279,8 +279,9 @@ impl Actor {
                 }
             }
             let delta = self.project.fold.add(loaded.inputs);
-            let (fold, kind) = (&self.project.fold, self.project.kind);
-            self.project.dirty.mark(fold, kind, &delta);
+            let kind = self.project.kind;
+            let conflicted = crate::project::conflicts_touched(&self.project.fold, &delta);
+            self.project.dirty.mark(kind, &delta, conflicted);
             let seq = self.project.publish();
             self.project.shared.emit(StoreEvent::Committed {
                 seq,

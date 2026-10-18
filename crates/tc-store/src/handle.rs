@@ -237,6 +237,21 @@ pub enum StoreEvent {
     Mode(Mode),
     /// Derived files were written (§5.10).
     Materialized { paths: Vec<String> },
+    /// A long action reports where it is (PERFORMANCE.md rule 4): the first report comes
+    /// 300 ms after the action began, and none if it ends sooner.
+    Progress {
+        work: Work,
+        progress: crate::progress::Progress,
+    },
+}
+
+/// What a [`StoreEvent::Progress`] is about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Work {
+    /// Derived files are written book by book: a book added, removed, restored or
+    /// rescoped, a pin change, a resource upgrade, a sync's intake, or the open's first
+    /// write of many books.
+    Materialize,
 }
 
 /// A book's text read from one snapshot (`docs/TC4-DELTA-2026-10-16.md` §3.10 item 2): a
@@ -260,6 +275,8 @@ pub(crate) struct Shared {
     next_notice: AtomicU64,
     pub counters: Arc<Counters>,
     pub hooks: Arc<Hooks>,
+    /// Saves in flight, which the writer's flushes wait behind (PERFORMANCE.md).
+    pub gate: Arc<crate::pace::SaveGate>,
     jobs: Mutex<u32>,
     jobs_done: Condvar,
 }
@@ -288,6 +305,7 @@ impl Shared {
             next_notice: AtomicU64::new(1),
             counters,
             hooks,
+            gate: Arc::default(),
             jobs: Mutex::new(0),
             jobs_done: Condvar::new(),
         }
@@ -381,6 +399,43 @@ impl Shared {
                 }
                 _ => true,
             });
+    }
+
+    /// Takes away the notices `matching` picks.
+    pub(crate) fn remove_notices_matching(
+        &self,
+        matching: impl Fn(&tc_journal::fold::Notice) -> bool,
+    ) {
+        self.notices
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|n| !matching(&n.notice));
+    }
+
+    /// Takes away the blocked-materialize notice that names `path` alone: the path was
+    /// written (R16).
+    pub(crate) fn remove_blocked_notice(&self, path: &tc_journal::RepoPath) {
+        use tc_journal::fold::Notice;
+        self.remove_notices_matching(|n| {
+            matches!(n, Notice::MaterializeBlocked { paths, .. } if paths.len() == 1 && paths[0] == *path)
+        });
+    }
+
+    /// Whether a blocked-materialize notice for exactly these paths and this reason is
+    /// listed.
+    pub(crate) fn has_blocked_notice(
+        &self,
+        paths: &[tc_journal::RepoPath],
+        reason: &tc_journal::fold::Blocked,
+    ) -> bool {
+        use tc_journal::fold::Notice;
+        self.notices
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .any(|n| {
+                matches!(&n.notice, Notice::MaterializeBlocked { paths: p, reason: r } if p == paths && r == reason)
+            })
     }
 
     /// Whether a notice for the hold of `rel` is listed.

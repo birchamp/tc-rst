@@ -18,7 +18,7 @@ use crate::error::StoreError;
 use crate::handle::{Msg, Resolver, Shared, Snapshot, StoreEvent};
 use crate::hooks::Point;
 use crate::layout::Folder;
-use crate::manifest::Manifest;
+use crate::manifest::{Intent, Manifest};
 use crate::materialize::Busy;
 use crate::open::CheckResult;
 use crate::project::Dirty;
@@ -28,7 +28,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
-use tc_journal::fold::{FoldState, Notice, ProjectKind};
+use tc_journal::fold::{Blocked, FoldState, Notice, ProjectKind};
 
 /// What `metadata.json` and the manifest need of a pack the actor knows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,6 +122,15 @@ pub(crate) struct Writer {
     pub prerendered: BTreeMap<String, Vec<u8>>,
     /// The sequence number of the fold they were projected from.
     pub prerendered_seq: u64,
+    /// Why each blocked path of the job could not be written (R16).
+    pub reasons: BTreeMap<String, Blocked>,
+    /// The count of unreadable values the person was last told of.
+    pub values_told: Option<u32>,
+    /// The intent a stopped materialization left (§5.10 M3): the md5s it names stand for the
+    /// app's own bytes until a group of this session ends cleanly.
+    pub open_intent: Option<Intent>,
+    /// The open's first job runs: a long one shows progress.
+    pub opening: bool,
     pub actor: Sender<Msg>,
 }
 
@@ -168,10 +177,15 @@ impl Writer {
         } = job;
         self.begin(&snapshot, packs, complete);
         self.dirty.absorb(dirty);
+        self.opening = origin == Origin::Open;
         if origin == Origin::Checkpoint {
             self.shared.hooks.wait(Point::BeforeCheckpoint);
         }
         let result = self.materialize_now();
+        self.opening = false;
+        if let Err(e) = &result {
+            self.job_failed(e);
+        }
         if origin == Origin::Open
             && let Err(e) = &result
         {
@@ -186,6 +200,24 @@ impl Writer {
         }
         if let Some(reply) = reply {
             reply.resolve(sealed.and(result));
+        }
+    }
+
+    /// A job that failed: the paths stay dirty and are tried again; the person is told once
+    /// that derived files could not be written and the work is saved (R16).
+    fn job_failed(&mut self, error: &StoreError) {
+        let reason: Box<str> = error.to_string().into();
+        let blocked = Blocked::Failed {
+            reason: reason.clone(),
+        };
+        if !self.shared.has_blocked_notice(&[], &blocked) {
+            self.notice(
+                Notice::MaterializeBlocked {
+                    paths: Vec::new(),
+                    reason: blocked,
+                },
+                None,
+            );
         }
     }
 
@@ -346,4 +378,203 @@ pub(crate) fn spawn(writer: Writer, rx: Receiver<Job>) -> Option<JoinHandle<()>>
         .name("tc-store writer".into())
         .spawn(move || writer.work(rx))
         .ok()
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    use super::*;
+    use crate::counters::Counters;
+    use crate::fault::FaultFs;
+    use crate::handle::{Mode, ProjectFacts};
+    use crate::hooks::Hooks;
+    use std::sync::Mutex;
+    use tc_journal::fold::{FoldInput, ValueAt, ValueSource};
+    use tc_journal::record::{MarkerWs, VerseValue};
+    use tc_journal::{
+        BatchId, BatchRef, BookId, Cause, Change, ChangeBody, ChapterNo, DeviceId, DeviceSeq,
+        ProjectId, Record, TokenKey, VerseNo, WallTime,
+    };
+
+    /// A value source that can be made to fail, as a file a program holds.
+    #[derive(Debug)]
+    struct Flaky {
+        files: Vec<Vec<u8>>,
+        blocked: Mutex<bool>,
+    }
+
+    impl ValueSource for Flaky {
+        fn read(&self, at: ValueAt) -> Option<Vec<u8>> {
+            if *self.blocked.lock().unwrap() {
+                return None;
+            }
+            let file = self.files.get(at.file as usize)?;
+            let start = at.offset as usize;
+            file.get(start..start + at.len as usize).map(<[u8]>::to_vec)
+        }
+    }
+
+    /// Two devices edit one verse from no common base, each with its own words: a conflict
+    /// whose versions can only be compared by reading them.
+    fn two_edits() -> (FoldState, Arc<Flaky>) {
+        let verse = |words: &str| Record::Verse {
+            book: BookId::Titus,
+            chapter: ChapterNo::new(1).unwrap(),
+            verse: VerseNo::new(1).unwrap(),
+            value: VerseValue::Text {
+                marker: MarkerWs::canonical(),
+                words: words.into(),
+                layout: "\n".into(),
+                last: VerseNo::new(1).unwrap(),
+                from: None,
+            },
+        };
+        let change = |n: u8, words: &str| {
+            let mut random = [0u8; 15];
+            random[0] = n;
+            let mut batch = [0u8; 16];
+            batch[0] = n;
+            Change::new(ChangeBody {
+                v: 0,
+                record: verse(words),
+                parents: Vec::new(),
+                device: DeviceId::local(random),
+                seq: DeviceSeq(1),
+                at: WallTime(1_760_000_000_000 + i64::from(n)),
+                batch: BatchRef::new(BatchId::from_bytes(batch), 1).unwrap(),
+                cause: Cause::Edit,
+            })
+            .unwrap()
+        };
+        let changes = [change(1, "Juan's words"), change(2, "Ana's words")];
+        let flaky = Arc::new(Flaky {
+            files: changes.iter().map(|c| c.raw().to_vec()).collect(),
+            blocked: Mutex::new(true),
+        });
+        let inputs: Vec<FoldInput> = changes
+            .iter()
+            .enumerate()
+            .map(|(i, c)| {
+                FoldInput::from(c.clone()).prepare_at(ValueAt {
+                    offset: 0,
+                    file: i as u32,
+                    len: c.raw().len() as u32,
+                })
+            })
+            .collect();
+        let source: Arc<dyn ValueSource> = flaky.clone();
+        (
+            FoldState::fold_from(ProjectKind::Bible, Some(source), inputs),
+            flaky,
+        )
+    }
+
+    fn writer_over(fold: FoldState) -> Writer {
+        let fs = FaultFs::new();
+        let counters = Arc::new(Counters::default());
+        let id = ProjectId::from_bytes([7; 16]);
+        let signing = Arc::new(TokenKey::derive(&[1; 32], id));
+        let facts = ProjectFacts {
+            id,
+            kind: ProjectKind::Bible,
+            device: DeviceId::local([9; 15]),
+            folder: "/p".into(),
+            mode: Mode::Writable,
+        };
+        let shared = Arc::new(Shared::new(
+            fold.clone(),
+            signing,
+            facts,
+            counters.clone(),
+            Arc::new(Hooks::default()),
+        ));
+        let (actor, _rx) = std::sync::mpsc::channel();
+        Writer {
+            vfs: Arc::new(fs),
+            counters,
+            folder: Folder::new("/p"),
+            kind: ProjectKind::Bible,
+            shared,
+            clock: Arc::new(crate::clock::ManualClock::at(1_792_195_200_000)),
+            network: false,
+            manifest: Manifest::default(),
+            manifest_changed: false,
+            stamp_ns: 0,
+            busy: BTreeMap::new(),
+            copied_outside: BTreeSet::new(),
+            fold,
+            seq: 1,
+            packs: BTreeMap::new(),
+            complete: true,
+            dirty: Dirty::default(),
+            prerendered: BTreeMap::new(),
+            prerendered_seq: 0,
+            reasons: BTreeMap::new(),
+            values_told: None,
+            open_intent: None,
+            opening: false,
+            actor,
+        }
+    }
+
+    fn blocked(writer: &Writer) -> Vec<Blocked> {
+        writer
+            .shared
+            .notices()
+            .into_iter()
+            .filter_map(|n| match n.notice {
+                Notice::MaterializeBlocked { reason, .. } => Some(reason),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// R16: values the fold cannot read block a materialization (§2.6), and the person is
+    /// told how many, once; the notice goes when they can be read.
+    #[test]
+    fn values_the_fold_cannot_read_block_a_materialize_with_a_typed_notice() {
+        let (fold, flaky) = two_edits();
+        assert_eq!(fold.unreadable_records().len(), 1);
+        let mut writer = writer_over(fold);
+        writer.dirty.metadata = true;
+        let report = writer.materialize().unwrap();
+        assert!(report.written.is_empty());
+        assert_eq!(
+            blocked(&writer),
+            vec![Blocked::ValuesUnreadable { records: 1 }]
+        );
+        // The job is tried again: it says nothing new.
+        writer.materialize().unwrap();
+        assert_eq!(blocked(&writer).len(), 1, "listed once");
+        assert!(!writer.dirty.is_empty(), "the work waits");
+        // The values can be read now.
+        *flaky.blocked.lock().unwrap() = false;
+        writer.fold.retry_unreadable();
+        assert!(writer.fold.unreadable_records().is_empty());
+        writer.materialize().unwrap();
+        assert!(blocked(&writer).is_empty(), "the notice went");
+    }
+
+    /// A job never goes back to an older fold than one the writer has run on.
+    #[test]
+    fn a_job_from_an_older_snapshot_never_writes_over_newer_bytes() {
+        let (fold, _) = two_edits();
+        let mut writer = writer_over(fold.clone());
+        // The actor published newer snapshots: the writer ran on the third.
+        let first = writer.shared.snapshot();
+        writer.shared.publish(fold.clone());
+        writer.shared.publish(fold);
+        let newest = writer.shared.snapshot();
+        writer.begin(&newest, BTreeMap::new(), true);
+        assert_eq!(writer.seq, newest.seq());
+        // A queued job that carries the first snapshot runs with the newest.
+        writer.begin(&first, BTreeMap::new(), true);
+        assert_eq!(
+            writer.seq,
+            newest.seq(),
+            "never back to seq {}",
+            first.seq()
+        );
+    }
 }
