@@ -1507,9 +1507,12 @@ mod tests {
     }
 
     #[test]
-    fn seeding_refuses_a_bundled_file_name_windows_would_change_and_installs_nothing_of_it() {
+    fn seeding_refuses_a_bundled_file_name_not_every_platform_accepts_and_installs_nothing_of_it() {
         let bundled_dir = tempfile::tempdir().unwrap();
-        bundled_with_file_named(bundled_dir.path(), "aux.json");
+        // An 8.3 short name, which every platform stores as a plain file. A device name such
+        // as `aux.json` would be refused too, but on Windows putting it on disk opens the
+        // device.
+        bundled_with_file_named(bundled_dir.path(), "ABCDEF~1.JSN");
         let bundled = ResourceStore::open_read_only(bundled_dir.path()).unwrap();
         let machine_dir = tempfile::tempdir().unwrap();
         let machine = ResourceStore::open(machine_dir.path()).unwrap();
@@ -1519,7 +1522,7 @@ mod tests {
         assert!(report.added.is_empty(), "{:?}", report.added);
         assert_eq!(report.refused.len(), 1, "{:?}", report.refused);
         assert!(
-            report.refused[0].1.to_string().contains("aux.json"),
+            report.refused[0].1.to_string().contains("ABCDEF~1.JSN"),
             "the refusal names the file: {}",
             report.refused[0].1
         );
