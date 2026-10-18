@@ -12,8 +12,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use support::*;
 use tc_journal::command::Choice;
 use tc_journal::fold::{
-    Anomaly, BookView, ConflictKind, DerivedFile, FoldInput, FoldState, MergeHow, Placement,
-    ProjectKind, Resolved, Side, decode_decisions,
+    Anomaly, BookView, Conflict, ConflictKind, DerivedFile, FoldInput, FoldState, MergeHow,
+    Placement, ProjectKind, Resolved, Side, decode_decisions,
 };
 use tc_journal::json::Json;
 use tc_journal::record::{
@@ -2600,11 +2600,11 @@ fn start_empty_then_typed() -> (Vec<Change>, Change, Change, Change) {
     (all, empty[0].clone(), typed, restore)
 }
 
-/// L76 with L102: a verse typed after *Start empty* that also continues a change still held in
-/// an incomplete batch is a candidate of the restore race, so the presence conflict says its
-/// history is incomplete, and stops saying so once the rest of the batch arrives.
-#[test]
-fn a_restore_race_verse_continuing_a_held_change_marks_the_presence_conflict() {
+/// Juan chose *Start empty*, saved two verses in one batch, and typed verse 1 again on top of
+/// the first; Maria's *Restore the text* is newer. Only the first change of Juan's two-verse
+/// batch has arrived. Returns what arrived, the change still missing, Juan's *Start empty*
+/// change, his typed verse and Maria's restore.
+fn restore_race_over_a_held_batch() -> (Vec<Change>, Change, Change, Change, Change) {
     let mut maria = Dev::new(1);
     let mut juan = Dev::new(2);
     let book = titus_and_ruth(&mut maria, &[2]);
@@ -2644,28 +2644,37 @@ fn a_restore_race_verse_continuing_a_held_change_marks_the_presence_conflict() {
         vec![on(&empty, &verse_key(1, 1)).id(), held[0].id()],
     );
     let restore = maria.one(present(PresentHow::RestoredText), vec![removal.id()]);
-    // Only the first change of Juan's held batch has arrived.
-    let before = all_of(&[
+    let arrived = all_of(&[
         &book,
         &[removal],
         &empty,
         &held[..1],
-        &[typed.clone(), restore],
+        &[typed.clone(), restore.clone()],
     ]);
+    (arrived, held[1].clone(), empty[0].clone(), typed, restore)
+}
+
+fn the_restore_race(state: &FoldState) -> Conflict {
+    state
+        .conflicts_of(ConflictKind::BookPresence)
+        .next()
+        .cloned()
+        .expect("the restore race")
+}
+
+/// L76 with L102: a verse typed after *Start empty* that also continues a change still held in
+/// an incomplete batch is a candidate of the restore race, so the presence conflict says its
+/// history is incomplete, and stops saying so once the rest of the batch arrives.
+#[test]
+fn a_restore_race_verse_continuing_a_held_change_marks_the_presence_conflict() {
+    let (before, missing, _, typed, _) = restore_race_over_a_held_batch();
     let state = assert_converges(&before);
     assert!(
         state
             .anomalies()
             .any(|a| matches!(a, Anomaly::MissingParent { change, .. } if *change == typed.id()))
     );
-    let race = |state: &FoldState| {
-        state
-            .conflicts_of(ConflictKind::BookPresence)
-            .next()
-            .cloned()
-            .expect("the restore race")
-    };
-    let conflict = race(&state);
+    let conflict = the_restore_race(&state);
     assert!(
         conflict.candidates.iter().any(|c| c.head == typed.id()),
         "the typed verse is listed: {:#?}",
@@ -2675,9 +2684,9 @@ fn a_restore_race_verse_continuing_a_held_change_marks_the_presence_conflict() {
     assert!(conflict.incomplete_history);
 
     let mut after = state;
-    after.add([FoldInput::from(held[1].clone())]);
+    after.add([FoldInput::from(missing.clone())]);
     let mut all = before;
-    all.push(held[1].clone());
+    all.push(missing);
     same_fold(
         &assert_converges(&all),
         &after,
@@ -2688,7 +2697,43 @@ fn a_restore_race_verse_continuing_a_held_change_marks_the_presence_conflict() {
             .anomalies()
             .any(|a| matches!(a, Anomaly::MissingParent { .. }))
     );
-    assert!(!race(&after).incomplete_history);
+    assert!(!the_restore_race(&after).incomplete_history);
+}
+
+/// The owner's ruling of 2026-10-18 (§7.4): a restore race whose listed verse continues a held
+/// change keeps every choice, so the book can be settled before the rest of the batch arrives,
+/// and the held batch stays listed on its own.
+#[test]
+fn an_incomplete_restore_race_can_be_settled_before_the_held_batch_arrives() {
+    let (before, _, started_empty, typed, restore) = restore_race_over_a_held_batch();
+    let state = assert_converges(&before);
+    let conflict = the_restore_race(&state);
+    assert!(conflict.incomplete_history);
+    let mut ana = Dev::new(3);
+    for (choice, head) in [
+        ("Restore the text", restore.id()),
+        ("Start empty", started_empty.id()),
+        ("the typed verse", typed.id()),
+    ] {
+        let planned = match state.resolution(&conflict.id, &Choice::Candidate { head }) {
+            Ok(planned) => planned,
+            Err(e) => panic!("{choice} is offered: {e:?}"),
+        };
+        let mut settled = before.clone();
+        settled.extend(ana.apply(planned));
+        let after = assert_converges(&settled);
+        assert_eq!(
+            after.conflicts_of(ConflictKind::BookPresence).count(),
+            0,
+            "{choice} settles the book"
+        );
+        assert!(
+            after
+                .anomalies()
+                .any(|a| matches!(a, Anomaly::IncompleteBatch { .. })),
+            "{choice}: the held batch stays listed"
+        );
+    }
 }
 
 /// L102: after *Restore the text* wins provisionally, a verse typed after *Start empty* is

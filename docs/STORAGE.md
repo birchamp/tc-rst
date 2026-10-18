@@ -2356,8 +2356,9 @@ What the review offers depends on where the missing change is and what the confl
   recovered*. It brings in what arrived of the batch, and the conflict usually disappears.
 - **The missing change is in a held batch, and the version is a verse that a book's restore
   race lists.** The race's own choices stay offered: *Restore the text*, *Start empty*, or one of
-  the listed verses. Applying the recovered changes would not decide which way the book goes.
-  The held batch keeps its own row in the listing, with *Apply what was recovered*.
+  the listed verses. Applying the recovered changes would not decide which way the book goes,
+  so the book can be settled now (owner ruling, 2026-10-18). The held batch keeps its own row
+  in the listing, with *Apply what was recovered*.
 - **The missing change is in no batch this computer holds.** The usual choices are offered,
   with the continuing version listed first, because the missing change may never come.
 
@@ -3918,7 +3919,7 @@ and the on-disk end state, not only what the fold returns.
 | L73 | Restoring a carried version whose blob is not local makes every checkpoint, sync and export fail | `refs/tc/carried` keeps every recorded version; Restore is offered only for local bytes; a missing blob keeps the previous blob in the tree and never fails a commit (§9.4, §9.8, §11.4) | `loss_carried_version_missing_blob_never_blocks_commit`, `carried_superseded_version_survives_repack` |
 | L74 | A section save is refused on every retry because a teammate's span arrived after the screen was drawn | tokens for every displayed verse; coherence is checked on the author's view; overlap is a `Passage` conflict; the section buffer is a draft (§5.2, §5.14) | `loss_section_save_after_teammate_join_conflicts` |
 | L75 | A verse added to a book with a `BookLayout` is skipped by the projection | the save updates `BookLayout`; the projection places every unlisted record after its numeric predecessor (§5.2, §7.5) | `loss_booklayout_new_verse_projected` |
-| L76 | A batch that can never be completed hides its recovered changes forever, and its descendants show false conflicts | *Apply what was recovered* writes a `BatchRelease`; conflicts with a missing parent are marked incomplete history (§7.4) | `loss_unrecoverable_batch_release`, `incomplete_history_conflict_labelled`, `a_restore_race_verse_continuing_a_held_change_marks_the_presence_conflict`, `a_restore_race_candidate_with_a_missing_parent_is_incomplete_history` (properties) |
+| L76 | A batch that can never be completed hides its recovered changes forever, and its descendants show false conflicts | *Apply what was recovered* writes a `BatchRelease`; conflicts with a missing parent are marked incomplete history (§7.4) | `loss_unrecoverable_batch_release`, `incomplete_history_conflict_labelled`, `a_restore_race_verse_continuing_a_held_change_marks_the_presence_conflict`, `an_incomplete_restore_race_can_be_settled_before_the_held_batch_arrives`, `a_restore_race_candidate_with_a_missing_parent_is_incomplete_history` (properties) |
 | L77 | Deterministic ingests and salvaged lines are re-stamped with this device's seq, time and batch | `commit_received` writes them exactly as received (§5.0) | `door43_ingest_written_verbatim`, `salvage_keeps_original_batch_ref` |
 | L78 | "Keep all of mine" discards a teammate's versions when two computers share one Door43 account | bulk choices by computer; conflicts within the chosen set are left for a choice of their own (§5.9, §8.5) | `bulk_choice_by_computer_skips_shared_username` |
 | L79 | Paths that differ only in letter case overwrite each other on Windows or macOS, and one is recorded as an outside edit of the other | collisions are found by case folding; a colliding file is placed at a `.case-` path or kept out of the working tree; a `PathCase` conflict (§3.3, §7.7) | `loss_case_colliding_carried_paths_kept`, `loss_door43_case_alias_never_recorded` |
