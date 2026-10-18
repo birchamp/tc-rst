@@ -7,5 +7,7 @@ mod app {
     mod events;
     mod flows;
     mod folders;
+    mod keychain;
     mod projects_root;
+    mod reports;
 }
