@@ -33,7 +33,7 @@ use tc_api::event::{
 use tc_api::feedback::{Compose, FeedbackDraft};
 use tc_api::ids::{
     AlignerId, ConflictRef, Epoch, JobId, LocaleId, ProjectId, ProjectRef, RecordRef, RefPart,
-    ReportId, RequestId, Scope, ServerInstance, StoryNo, ViewSeq, WallMs,
+    ReportId, RequestId, Scope, ServerInstance, StoryNo, UploadId, ViewSeq, WallMs,
 };
 use tc_api::jobs::{
     Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress,
@@ -46,9 +46,10 @@ use tc_api::prefs::{
 use tc_api::refusal::Message;
 use tc_api::shown::{ConflictMarker, PersonLabel, Shown, Who};
 use tc_api::test::{
-    Crash, CrashPoint, FieldLog, FieldLogView, FieldStore, Hold, HoldPoint, Quiet, QuietView,
-    Release, Reset, StoredText,
+    Crash, CrashPoint, Echo, EchoView, EchoWord, FieldLog, FieldLogView, FieldStore, Hold,
+    HoldPoint, Quiet, QuietView, Release, Reset, StoredText,
 };
+use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
     Ack, ConflictBrief, NotSaved, ReadOnlyReason, SaveRefusal, SavedValue, Stored, TokenUpdate,
 };
@@ -438,6 +439,34 @@ impl Example for QuietView {
     }
 }
 
+impl Example for Echo {
+    fn example() -> Self {
+        Echo { size: 20_480 }
+    }
+}
+
+/// Short and fixed, so the golden file stays readable; `EchoView::of_size` makes the long ones.
+impl Example for EchoView {
+    fn example() -> Self {
+        EchoView {
+            words: vec![
+                EchoWord {
+                    text: "בְּרֵאשִׁ֖ית".into(),
+                    occurrence: 1,
+                    occurrences: 1,
+                    index: 0,
+                },
+                EchoWord {
+                    text: "בָּרָ֣א".into(),
+                    occurrence: 1,
+                    occurrences: 2,
+                    index: 1,
+                },
+            ],
+        }
+    }
+}
+
 impl Example for Crash {
     fn example() -> Self {
         Crash {
@@ -707,6 +736,18 @@ fn plain_samples<T: Serialize + DeserializeOwned + PartialEq + std::fmt::Debug>(
     )
 }
 
+/// The flows an upload names, in the header's words, and the view the server answers with.
+fn uploads() -> Value {
+    json!({
+        "flows": wire_samples(&UploadFlow::ALL),
+        "view": plain_samples(&[UploadView {
+            id: UploadId::parse("00112233445566778899aabbccddeeff").unwrap(),
+            name: "Tito – 1.usfm".into(),
+            size: 53_248,
+        }]),
+    })
+}
+
 fn api_errors() -> Vec<ApiError> {
     vec![
         ApiError::Version { server: 2 },
@@ -865,6 +906,7 @@ fn shared_types_have_golden_json() {
             serde_json::to_value(frame).unwrap(),
         ),
         ("types/refusals.json", Value::Array(refusals)),
+        ("types/uploads.json", uploads()),
         ("types/check-places.json", plain_samples(&check_places())),
         ("types/check-units.json", wire_samples(&check_units())),
         (
@@ -912,6 +954,7 @@ fn no_golden_file_is_left_without_its_endpoint_or_type() {
         "session-events",
         "event-frame",
         "refusals",
+        "uploads",
         "check-places",
         "check-units",
         "check-lists",

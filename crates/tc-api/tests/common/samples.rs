@@ -4,7 +4,7 @@
 use tc_api::refusal::{
     CreateRefusal, ExchangeRefusal, ExportRefusal, FeedbackRefusal, ImportRefusal, LockHolder,
     OpenDoor43Refusal, OpenRefusal, PrefsRefusal, Refusal, ResourceRefusal, ShareRefusal,
-    SignInRefusal, SyncBlock, SyncFailure, SyncRefusal,
+    SignInRefusal, SyncBlock, SyncFailure, SyncRefusal, UploadRefusal,
 };
 
 fn s(text: &str) -> String {
@@ -184,6 +184,12 @@ pub fn prefs() -> Vec<PrefsRefusal> {
     vec![PrefsRefusal::LocaleNotSaved]
 }
 
+pub fn upload() -> Vec<UploadRefusal> {
+    vec![UploadRefusal::NotWritten {
+        reason: s("No space left on device (os error 28)"),
+    }]
+}
+
 /// Every refusal of every family.
 pub fn refusals() -> Vec<Refusal> {
     let mut all = Vec::new();
@@ -199,5 +205,6 @@ pub fn refusals() -> Vec<Refusal> {
     all.extend(exchange().into_iter().map(Refusal::Exchange));
     all.extend(feedback().into_iter().map(Refusal::Feedback));
     all.extend(prefs().into_iter().map(Refusal::Prefs));
+    all.extend(upload().into_iter().map(Refusal::Upload));
     all
 }

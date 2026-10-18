@@ -734,13 +734,15 @@ has no `sync: SyncAction`: by the owner's ruling Q2 every shared project, Bible 
 | `export` | `preflight`, `run` (job) |
 | `feedback` | `compose` (the shell sends the report, Q-2) |
 | `jobs` | `get`, `cancel` |
-| `test` (feature `test-hooks`) | `quiet`, `hold`, `release`, `crash`, `fieldStore`, `fieldLog`, `clock`, `script`, `door43`, `inspect`, `writeTeammate`, `counters`, `reset` |
+| `test` (feature `test-hooks`) | `quiet`, `echo`, `hold`, `release`, `crash`, `fieldStore`, `fieldLog`, `clock`, `script`, `door43`, `inspect`, `writeTeammate`, `counters`, `reset` |
 
 **The endpoints of phase 0** *(A1)*, which unit A1 defined with golden JSON, are `app/hello`, `quit`,
 `clientError`; all four of `prefs`; `net/state`, `set`; `jobs/get`, `cancel`; `account/state`,
 `signIn`, `cancelSignIn`, `resume`, `signOut`, `profileLink`, `helpLink`; `feedback/compose`; and
-the hooks `test/quiet`, `crash`, `hold`, `release`, `fieldStore`, `fieldLog`, `reset`. Each later
-unit adds the rows of its screens to `endpoint_table!` (B9b adds `account/orgs` and `repoLink`).
+the hooks `test/quiet`, `echo`, `crash`, `hold`, `release`, `fieldStore`, `fieldLog`, `reset`. Each later
+unit adds the rows of its screens to `endpoint_table!` (B9b adds `account/orgs` and `repoLink`). `test/echo { size }` answers a list of Hebrew words whose
+reply is at least `size` bytes long, by at most one word (A2: a reply of a chosen size, for the
+loopback measurement of §8.3).
 
 `prefs/recordPlace` carries one observation of the place in a book or a story, as tC4's
 `rememberPlace` makes it (`tC4:src/state.jsx:3821-3845`): a mode, chapter or tool left out keeps
@@ -760,7 +762,9 @@ answered Q-2 with (a), so the shell sends the report and the server only compose
 - `API_VERSION = 1`, paths under `/api/v1/`, header `X-Tc-Api: 1`.
 - The UI and the server ship as one build. `index.html` is `no-store`; every other UI file has a
   content-hashed name. A `build.commit` in `hello` that differs from the wasm's compile-time
-  commit forces one reload.
+  commit forces one reload. Both read `tc_api::app::BUILD_COMMIT`, which is the environment
+  variable `TC4_BUILD_COMMIT` at build time, or `dev` when it is not set; the release pipeline
+  sets it for the server and the wasm build alike.
 - A new `ServerInstance` means the server restarted. The UI drops every scope, sends nothing
   again, keeps every buffered entry and goes Home; the entries are offered when their project
   next opens (AD4). In the shell this happens on a fresh page, because the shell reloads the

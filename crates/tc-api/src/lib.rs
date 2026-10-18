@@ -42,6 +42,7 @@ pub mod shown;
 #[cfg(feature = "test-hooks")]
 pub mod test;
 pub mod token;
+pub mod upload;
 pub mod write;
 
 pub use endpoint::{
@@ -111,6 +112,7 @@ macro_rules! test_hook_table {
         $callback! {
             $($prefix)*
             query "test/quiet": $crate::test::Quiet => $crate::test::QuietView;
+            query "test/echo": $crate::test::Echo => $crate::test::EchoView;
             command "test/crash": $crate::test::Crash => ();
             command "test/hold": $crate::test::Hold => ();
             command "test/release": $crate::test::Release => ();

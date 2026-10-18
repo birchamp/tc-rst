@@ -13,5 +13,6 @@
   "syncResult.error.projectMismatch": "This Door43 repository holds a different project, so the sync stopped. Two projects are never combined. Nothing changed.",
   "syncResult.error.readOnly": "This project is open read-only, so it cannot sync.",
   "syncResult.error.tc4TeamRepository": "This project is shared by translationCore 4, so the sync stopped. Nothing changed. Move the team to the new translationCore first.",
-  "syncResult.receivedKept": "Your teammates' changes were received and kept."
+  "syncResult.receivedKept": "Your teammates' changes were received and kept.",
+  "upload.notWritten": "The file could not be copied into translationCore: {reason}. Nothing was changed."
 }

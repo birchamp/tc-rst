@@ -21,6 +21,76 @@ pub struct QuietView {
     pub busy: bool,
 }
 
+/// `test/echo`: a reply of about the size asked for, so the loopback round trip of the
+/// aligner's click can be measured with a reply of its size (APP-DESIGN §8.3, unit A2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Echo {
+    /// The reply's length in bytes, at least; at most [`MAX_ECHO`].
+    pub size: u32,
+}
+
+/// The largest `size` an echo answers; a larger one is a `BadRequest`.
+pub const MAX_ECHO: u32 = 4 * 1024 * 1024;
+
+/// Many small objects of Hebrew text, the shape of a word bank, so that the cost of reading
+/// the reply is the cost of reading the aligner's.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct EchoView {
+    pub words: Vec<EchoWord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct EchoWord {
+    pub text: String,
+    pub occurrence: u16,
+    pub occurrences: u16,
+    pub index: u32,
+}
+
+/// Genesis 1:1 in the Hebrew Bible, pointed, a word at a time.
+const ECHO_TEXT: [&str; 7] = ["בְּרֵאשִׁ֖ית", "בָּרָ֣א", "אֱלֹהִ֑ים", "אֵ֥ת", "הַשָּׁמַ֖יִם", "וְאֵ֥ת", "הָאָֽרֶץ"];
+
+impl EchoView {
+    /// The shortest view of the cycle of words whose reply, `{"type":"ok","value":{…}}` as
+    /// the server writes it, is at least `size` bytes: between `size` and `size` plus one
+    /// word, or the empty view for a `size` it already reaches. The same size gives the
+    /// same view.
+    pub fn of_size(size: u32) -> EchoView {
+        let wanted = u64::from(size);
+        let mut words = Vec::new();
+        let mut length = Self::reply_length_without_words();
+        while length < wanted {
+            let index = u32::try_from(words.len()).unwrap_or(u32::MAX);
+            let cycle = words.len() / ECHO_TEXT.len();
+            let word = EchoWord {
+                text: ECHO_TEXT[words.len() % ECHO_TEXT.len()].to_owned(),
+                occurrence: u16::try_from(cycle % 4 + 1).unwrap_or(1),
+                occurrences: 4,
+                index,
+            };
+            // A comma before every word but the first.
+            length += Self::word_length(&word) + u64::from(!words.is_empty());
+            words.push(word);
+        }
+        EchoView { words }
+    }
+
+    fn reply_length_without_words() -> u64 {
+        let empty = crate::Reply::Ok(EchoView { words: Vec::new() });
+        serde_json::to_vec(&empty).map_or(0, |bytes| bytes.len() as u64)
+    }
+
+    fn word_length(word: &EchoWord) -> u64 {
+        serde_json::to_vec(word).map_or(0, |bytes| bytes.len() as u64)
+    }
+}
+
 /// `test/crash`: ends the server at the next time a write reaches `at`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]

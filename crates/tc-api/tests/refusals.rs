@@ -181,6 +181,7 @@ fn every_refusal_family_has_a_sample_of_every_variant() {
     assert_every_variant(&samples::exchange());
     assert_every_variant(&samples::feedback());
     assert_every_variant(&samples::prefs());
+    assert_every_variant(&samples::upload());
     assert_every_variant(&samples::refusals());
 }
 

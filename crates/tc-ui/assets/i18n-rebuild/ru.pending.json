@@ -13,5 +13,6 @@
   "syncResult.error.projectMismatch",
   "syncResult.error.readOnly",
   "syncResult.error.tc4TeamRepository",
-  "syncResult.receivedKept"
+  "syncResult.receivedKept",
+  "upload.notWritten"
 ]

@@ -51,6 +51,7 @@ pub enum Refusal {
     Exchange(ExchangeRefusal),
     Feedback(FeedbackRefusal),
     Prefs(PrefsRefusal),
+    Upload(UploadRefusal),
 }
 
 impl Refusal {
@@ -68,6 +69,7 @@ impl Refusal {
             Self::Exchange(r) => r,
             Self::Feedback(r) => r,
             Self::Prefs(r) => r,
+            Self::Upload(r) => r,
         }
     }
 }
@@ -751,5 +753,36 @@ impl Message for PrefsRefusal {
     }
     fn vars(&self) -> Vec<(&'static str, String)> {
         Vec::new()
+    }
+}
+
+/// A file the UI uploaded could not be stored (APP-DESIGN §5.5). The server keeps no part
+/// of it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum UploadRefusal {
+    /// The disk refused the bytes: full, read-only or gone.
+    NotWritten { reason: String },
+}
+
+impl Message for UploadRefusal {
+    fn code(&self) -> Option<&'static str> {
+        None
+    }
+    fn key(&self) -> &'static str {
+        match self {
+            Self::NotWritten { .. } => "upload.notWritten",
+        }
+    }
+    fn vars(&self) -> Vec<(&'static str, String)> {
+        match self {
+            Self::NotWritten { reason } => vec![("reason", reason.clone())],
+        }
     }
 }

@@ -995,5 +995,22 @@
     "key": "language.saveFailed",
     "vars": {},
     "detail": null
+  },
+  {
+    "wire": {
+      "type": "upload",
+      "value": {
+        "type": "notWritten",
+        "value": {
+          "reason": "No space left on device (os error 28)"
+        }
+      }
+    },
+    "code": null,
+    "key": "upload.notWritten",
+    "vars": {
+      "reason": "No space left on device (os error 28)"
+    },
+    "detail": null
   }
 ]
