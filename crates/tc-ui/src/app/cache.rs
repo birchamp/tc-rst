@@ -36,6 +36,26 @@ impl QueryId {
     }
 }
 
+/// A read as the registry keeps it: the request, and for a read of a project the server run it
+/// was made in. A new run numbers its opens from the start, so the same request in two runs
+/// names two different opens. The earlier run's read stays dead until its last holder lets go;
+/// it never stands in for the new run's, and a holder of the one can never release the other.
+/// A read of the app has no run: a restart does not end it. [`Registry::hold`] gives the
+/// holder this id, and everything that follows (a fetch, a reply, a release, the end of an
+/// open) names the read by it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReadId {
+    query: QueryId,
+    run: Option<u64>,
+}
+
+impl ReadId {
+    /// The request this read is of.
+    pub fn query(&self) -> &QueryId {
+        &self.query
+    }
+}
+
 /// What makes a read stale.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReadOf {
@@ -73,7 +93,7 @@ pub struct Ticket(u64);
 /// A fetch to send now.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Start {
-    pub id: QueryId,
+    pub id: ReadId,
     pub ticket: Ticket,
 }
 
@@ -121,14 +141,14 @@ pub struct Landing {
     /// Another fetch of the same read, because a change reached it while this one ran.
     pub then: Option<Ticket>,
     /// Other reads of the same open that a `StaleScope` ended.
-    pub died: Vec<QueryId>,
+    pub died: Vec<ReadId>,
 }
 
 /// What a server restart leaves of the reads.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Restarted {
     /// Reads of projects: their opens are gone.
-    pub dead: Vec<QueryId>,
+    pub dead: Vec<ReadId>,
     /// Reads of the app: still meaningful, fetched again.
     pub starts: Vec<Start>,
 }
@@ -150,13 +170,11 @@ struct Read {
     fetch: Fetch,
     /// The snapshot of the value on screen.
     applied: Option<ViewSeq>,
-    /// The server run the read was made in; a project read of an earlier run is gone.
-    run: u64,
 }
 
 #[derive(Debug, Default)]
 pub struct Registry {
-    reads: HashMap<QueryId, Read>,
+    reads: HashMap<ReadId, Read>,
     /// The newest open of each folder that was announced.
     newest: HashMap<ProjectRef, Epoch>,
     /// Opens that were closed or refused as stale. Tracking the dead and not the live means a
@@ -173,6 +191,7 @@ fn current(newest: &HashMap<ProjectRef, Epoch>, dead: &HashSet<Scope>, at: &Scop
 /// Whether a read can still be answered: a read of the app always can; a read of a project
 /// only while its open is current and the server run is the one it was made in.
 fn is_live(
+    id: &ReadId,
     read: &Read,
     run: u64,
     newest: &HashMap<ProjectRef, Epoch>,
@@ -180,8 +199,13 @@ fn is_live(
 ) -> bool {
     match &read.of {
         ReadOf::App(_) => true,
-        ReadOf::Project { at, .. } => read.run == run && current(newest, dead, at),
+        ReadOf::Project { at, .. } => in_run(id, run) && current(newest, dead, at),
     }
+}
+
+/// Whether `id` is a read of a project made in server run `run`.
+fn in_run(id: &ReadId, run: u64) -> bool {
+    id.run == Some(run)
 }
 
 fn fresh(next: &mut u64) -> Ticket {
@@ -209,12 +233,21 @@ impl Registry {
         current(&self.newest, &self.dead, at)
     }
 
-    /// One more holder of the read `id`. The first holder of a live read fetches it; the
-    /// others share its value.
-    pub fn hold(&mut self, id: &QueryId, of: ReadOf) -> Held {
-        if let Some(read) = self.reads.get_mut(id) {
+    /// One more holder of the read of `id`, and the id to release it by. The first holder of a
+    /// live read fetches it; the others share its value.
+    ///
+    /// A read of a project made in an earlier server run is another read than this one, even
+    /// for an equal request: the new run numbers its opens from the start, so `TIT` at epoch 1
+    /// is a different open. The new read is fetched; the old one, which is dead, is neither
+    /// shared nor fetched, and its holders' releases do not reach the new one.
+    pub fn hold(&mut self, id: &QueryId, of: ReadOf) -> (ReadId, Held) {
+        let read_id = ReadId {
+            query: id.clone(),
+            run: matches!(of, ReadOf::Project { .. }).then_some(self.run),
+        };
+        if let Some(read) = self.reads.get_mut(&read_id) {
             read.holders += 1;
-            return Held::Shared;
+            return (read_id, Held::Shared);
         }
         if let ReadOf::Project { at, .. } = &of {
             // A read of an open the registry has not heard of teaches it that open.
@@ -226,9 +259,8 @@ impl Registry {
             holders: 1,
             fetch: Fetch::Idle,
             applied: None,
-            run: self.run,
         };
-        let held = if is_live(&read, self.run, &self.newest, &self.dead) {
+        let held = if is_live(&read_id, &read, self.run, &self.newest, &self.dead) {
             let ticket = fresh(&mut self.next_ticket);
             read.fetch = Fetch::Running {
                 ticket,
@@ -238,13 +270,13 @@ impl Registry {
         } else {
             Held::Gone
         };
-        self.reads.insert(id.clone(), read);
-        held
+        self.reads.insert(read_id.clone(), read);
+        (read_id, held)
     }
 
     /// One holder fewer. True when it was the last: the read is forgotten, and a reply that is
     /// still on its way is ignored.
-    pub fn release(&mut self, id: &QueryId) -> bool {
+    pub fn release(&mut self, id: &ReadId) -> bool {
         let Some(read) = self.reads.get_mut(id) else {
             return false;
         };
@@ -256,8 +288,16 @@ impl Registry {
         true
     }
 
-    /// Fetches `id` again, for a Retry after a failure. `None` when the read is not live.
-    pub fn refresh(&mut self, id: &QueryId) -> Option<Ticket> {
+    /// Fetches the read of `query` in this server run again, for a Retry after a failure.
+    /// `None` when there is no such read or it is not live.
+    pub fn refresh(&mut self, query: &QueryId) -> Option<Start> {
+        let id = [None, Some(self.run)]
+            .into_iter()
+            .map(|run| ReadId {
+                query: query.clone(),
+                run,
+            })
+            .find(|id| self.reads.contains_key(id))?;
         let Registry {
             reads,
             newest,
@@ -265,11 +305,12 @@ impl Registry {
             run,
             next_ticket,
         } = self;
-        let read = reads.get_mut(id)?;
-        if !is_live(read, *run, newest, dead) {
+        let read = reads.get_mut(&id)?;
+        if !is_live(&id, read, *run, newest, dead) {
             return None;
         }
-        make_stale(read, next_ticket)
+        let ticket = make_stale(read, next_ticket)?;
+        Some(Start { id, ticket })
     }
 
     /// Makes stale every live read that `wants`, and returns the fetches to start.
@@ -283,7 +324,7 @@ impl Registry {
         } = self;
         let mut starts = Vec::new();
         for (id, read) in reads.iter_mut() {
-            if is_live(read, *run, newest, dead)
+            if is_live(id, read, *run, newest, dead)
                 && wants(&read.of)
                 && let Some(ticket) = make_stale(read, next_ticket)
             {
@@ -323,7 +364,7 @@ impl Registry {
     /// A project was opened: the open `at` is the newest of its folder. Reads of the older
     /// opens of that folder have ended; their ids are returned once, so their values can say
     /// so.
-    pub fn opened(&mut self, at: Scope) -> Vec<QueryId> {
+    pub fn opened(&mut self, at: Scope) -> Vec<ReadId> {
         let known = self.newest.entry(at.project.clone()).or_insert(at.epoch);
         *known = (*known).max(at.epoch);
         let newest = *known;
@@ -332,9 +373,9 @@ impl Registry {
         } = self;
         // The older opens of this folder that no event or reply has ended yet.
         let newly_ended: HashSet<Scope> = reads
-            .values()
-            .filter(|read| read.run == *run)
-            .filter_map(|read| match &read.of {
+            .iter()
+            .filter(|(id, _)| in_run(id, *run))
+            .filter_map(|(_, read)| match &read.of {
                 ReadOf::Project { at: read_at, .. }
                     if read_at.project == at.project && read_at.epoch < newest =>
                 {
@@ -347,8 +388,8 @@ impl Registry {
         dead.extend(newly_ended.iter().cloned());
         reads
             .iter()
-            .filter(|(_, read)| {
-                read.run == *run
+            .filter(|(id, read)| {
+                in_run(id, *run)
                     && matches!(&read.of, ReadOf::Project { at: read_at, .. } if newly_ended.contains(read_at))
             })
             .map(|(id, _)| id.clone())
@@ -356,14 +397,14 @@ impl Registry {
     }
 
     /// A project was closed. Reads of that open have ended; their ids are returned.
-    pub fn closed(&mut self, at: &Scope) -> Vec<QueryId> {
+    pub fn closed(&mut self, at: &Scope) -> Vec<ReadId> {
         if !self.dead.insert(at.clone()) {
             return Vec::new();
         }
         self.reads
             .iter()
-            .filter(|(_, read)| {
-                read.run == self.run
+            .filter(|(id, read)| {
+                in_run(id, self.run)
                     && matches!(&read.of, ReadOf::Project { at: read_at, .. } if read_at == at)
             })
             .map(|(id, _)| id.clone())
@@ -372,11 +413,15 @@ impl Registry {
 
     /// The server started again (a frame of another instance): every open is gone, and the
     /// numbers of its opens begin again. Project reads end; reads of the app fetch again.
+    ///
+    /// A project read of the run that ended stays in the registry until its holders let go, so
+    /// that they can; a read of the new run is a new read even for an equal request (see
+    /// [`hold`](Self::hold)).
     pub fn restarted(&mut self) -> Restarted {
         let dead = self
             .reads
             .iter()
-            .filter(|(_, read)| read.run == self.run && matches!(read.of, ReadOf::Project { .. }))
+            .filter(|(id, _)| in_run(id, self.run))
             .map(|(id, _)| id.clone())
             .collect();
         self.run += 1;
@@ -386,8 +431,9 @@ impl Registry {
         Restarted { dead, starts }
     }
 
-    /// A reply to the fetch `ticket` of `id`: whether to show it, and whether to fetch again.
-    pub fn landed(&mut self, id: &QueryId, ticket: Ticket, landed: Landed) -> Landing {
+    /// A reply to the fetch `ticket` of the read `id`: whether to show it, and whether to fetch
+    /// again.
+    pub fn landed(&mut self, id: &ReadId, ticket: Ticket, landed: Landed) -> Landing {
         let ignored = Landing {
             outcome: Outcome::Ignore,
             then: None,
@@ -412,7 +458,7 @@ impl Registry {
         };
         read.fetch = Fetch::Idle;
 
-        let live = is_live(read, *run, newest, dead);
+        let live = is_live(id, read, *run, newest, dead);
         let project_at = match &read.of {
             ReadOf::Project { at, .. } => Some(at.clone()),
             ReadOf::App(_) => None,
@@ -424,7 +470,7 @@ impl Registry {
                 .iter()
                 .filter(|(other, other_read)| {
                     *other != id
-                        && other_read.run == *run
+                        && in_run(other, *run)
                         && matches!(&other_read.of, ReadOf::Project { at: read_at, .. } if read_at == at)
                 })
                 .map(|(other, _)| other.clone())

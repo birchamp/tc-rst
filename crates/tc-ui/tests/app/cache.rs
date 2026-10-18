@@ -10,7 +10,8 @@ use tc_api::jobs::Get;
 use tc_api::query::QueryKey;
 use tc_core::BookId;
 use tc_ui::app::cache::{
-    AppTopic, Held, Landed, Landing, Outcome, QueryId, ReadOf, Registry, Restarted, Start, Ticket,
+    AppTopic, Held, Landed, Landing, Outcome, QueryId, ReadId, ReadOf, Registry, Restarted, Start,
+    Ticket,
 };
 
 fn scope(folder: &str, epoch: u64) -> Scope {
@@ -45,21 +46,21 @@ fn chapters_changed(book: BookId, chapter: u16) -> ChangeScope {
     })
 }
 
-/// Holds a read and returns the ticket of its first fetch.
-fn hold(registry: &mut Registry, id: &QueryId, of: ReadOf) -> Ticket {
+/// Holds a read and returns its id and the ticket of its first fetch.
+fn hold(registry: &mut Registry, id: &QueryId, of: ReadOf) -> (ReadId, Ticket) {
     match registry.hold(id, of) {
-        Held::Fetch(ticket) => ticket,
+        (read, Held::Fetch(ticket)) => (read, ticket),
         other => panic!("{other:?}"),
     }
 }
 
-fn value(registry: &mut Registry, id: &QueryId, ticket: Ticket) -> Landing {
-    registry.landed(id, ticket, Landed::Value(None))
+fn value(registry: &mut Registry, read: &ReadId, ticket: Ticket) -> Landing {
+    registry.landed(read, ticket, Landed::Value(None))
 }
 
-/// The ids of some starts, in a fixed order.
+/// The requests of some starts, in a fixed order.
 fn ids(starts: &[Start]) -> Vec<QueryId> {
-    let mut ids: Vec<_> = starts.iter().map(|s| s.id.clone()).collect();
+    let mut ids: Vec<_> = starts.iter().map(|s| s.id.query().clone()).collect();
     ids.sort_by(|a, b| a.body.cmp(&b.body));
     ids
 }
@@ -83,11 +84,12 @@ fn query_ids_are_the_endpoint_and_the_request() {
 fn two_holders_of_one_read_share_one_fetch() {
     let mut registry = Registry::new();
     let at = scope("TIT", 1);
-    let read = id("a");
-    let first = registry.hold(&read, project(&at, vec![chapter(BookId::Titus, 1)]));
+    let request = id("a");
+    let (read, first) = registry.hold(&request, project(&at, vec![chapter(BookId::Titus, 1)]));
     assert!(matches!(first, Held::Fetch(_)));
-    let second = registry.hold(&read, project(&at, vec![chapter(BookId::Titus, 1)]));
+    let (shared, second) = registry.hold(&request, project(&at, vec![chapter(BookId::Titus, 1)]));
     assert_eq!(second, Held::Shared);
+    assert_eq!(shared, read, "both holders release by the same id");
     assert_eq!(registry.len(), 1);
     assert!(!registry.release(&read), "one holder is left");
     assert!(registry.release(&read), "the last release forgets the read");
@@ -113,9 +115,8 @@ fn a_change_refetches_only_the_reads_that_depend_on_it() {
         ("psa1", project(&psa, vec![chapter(BookId::Titus, 1)])),
     ];
     for (name, of) in reads {
-        let id = id(name);
-        let ticket = hold(&mut registry, &id, of);
-        value(&mut registry, &id, ticket);
+        let (read, ticket) = hold(&mut registry, &id(name), of);
+        value(&mut registry, &read, ticket);
     }
     // Titus 1 changed in the Titus open: its chapter and its book, nothing else. A read of
     // another folder that happens to name Titus 1 is not in this open.
@@ -149,10 +150,9 @@ fn a_change_in_one_open_does_not_reach_a_read_of_another_epoch() {
     let mut registry = Registry::new();
     let old = scope("TIT", 1);
     let new = scope("TIT", 2);
-    let read = id("new");
-    let ticket = hold(
+    let (read, ticket) = hold(
         &mut registry,
-        &read,
+        &id("new"),
         project(&new, vec![QueryKey::Book(BookId::Titus)]),
     );
     value(&mut registry, &read, ticket);
@@ -164,7 +164,7 @@ fn a_change_in_one_open_does_not_reach_a_read_of_another_epoch() {
     );
     assert_eq!(
         ids(&registry.changed(&new, &chapters_changed(BookId::Titus, 1))),
-        vec![read]
+        vec![id("new")]
     );
 }
 
@@ -174,16 +174,18 @@ fn everything_refetches_every_read_of_that_open_only() {
     let tit = scope("TIT", 1);
     let psa = scope("PSA", 1);
     for (name, at) in [("a", &tit), ("b", &tit), ("c", &psa)] {
-        let read = id(name);
-        let ticket = hold(
+        let (read, ticket) = hold(
             &mut registry,
-            &read,
+            &id(name),
             project(at, vec![QueryKey::Aspect(Aspect::Meta)]),
         );
         value(&mut registry, &read, ticket);
     }
-    let home = id("home");
-    let ticket = hold(&mut registry, &home, ReadOf::App(vec![AppTopic::Projects]));
+    let (home, ticket) = hold(
+        &mut registry,
+        &id("home"),
+        ReadOf::App(vec![AppTopic::Projects]),
+    );
     value(&mut registry, &home, ticket);
     assert_eq!(
         ids(&registry.changed(&tit, &ChangeScope::Everything)),
@@ -195,10 +197,9 @@ fn everything_refetches_every_read_of_that_open_only() {
 fn a_change_during_a_fetch_fetches_again_after_it_lands() {
     let mut registry = Registry::new();
     let at = scope("TIT", 1);
-    let read = id("a");
-    let first = hold(
+    let (read, first) = hold(
         &mut registry,
-        &read,
+        &id("a"),
         project(&at, vec![chapter(BookId::Titus, 1)]),
     );
     // The change arrives while the first fetch runs: no second fetch at once, because the
@@ -221,10 +222,9 @@ fn a_change_during_a_fetch_fetches_again_after_it_lands() {
 fn many_changes_during_one_fetch_cost_one_more_fetch() {
     let mut registry = Registry::new();
     let at = scope("TIT", 1);
-    let read = id("a");
-    let first = hold(
+    let (read, first) = hold(
         &mut registry,
-        &read,
+        &id("a"),
         project(&at, vec![QueryKey::Book(BookId::Titus)]),
     );
     for chapter in 1..=40 {
@@ -244,10 +244,9 @@ fn many_changes_during_one_fetch_cost_one_more_fetch() {
 fn a_late_reply_of_an_earlier_attempt_does_nothing() {
     let mut registry = Registry::new();
     let at = scope("TIT", 1);
-    let read = id("a");
-    let first = hold(
+    let (read, first) = hold(
         &mut registry,
-        &read,
+        &id("a"),
         project(&at, vec![QueryKey::Book(BookId::Titus)]),
     );
     registry.changed(&at, &chapters_changed(BookId::Titus, 1));
@@ -276,8 +275,7 @@ fn resync_refetches_every_live_read() {
         ("home", ReadOf::App(vec![AppTopic::Projects])),
     ];
     for (name, of) in reads {
-        let read = id(name);
-        let ticket = hold(&mut registry, &read, of);
+        let (read, ticket) = hold(&mut registry, &id(name), of);
         value(&mut registry, &read, ticket);
     }
     registry.closed(&ended);
@@ -307,8 +305,7 @@ fn topics_refetch_their_reads() {
         ),
     ];
     for (name, of) in reads {
-        let read = id(name);
-        let ticket = hold(&mut registry, &read, of);
+        let (read, ticket) = hold(&mut registry, &id(name), of);
         value(&mut registry, &read, ticket);
     }
     assert_eq!(
@@ -324,10 +321,9 @@ fn topics_refetch_their_reads() {
 fn a_reply_for_a_closed_open_is_dropped() {
     let mut registry = Registry::new();
     let at = scope("TIT", 1);
-    let read = id("a");
-    let ticket = hold(
+    let (read, ticket) = hold(
         &mut registry,
-        &read,
+        &id("a"),
         project(&at, vec![chapter(BookId::Titus, 1)]),
     );
     assert_eq!(registry.closed(&at), vec![read.clone()]);
@@ -338,7 +334,7 @@ fn a_reply_for_a_closed_open_is_dropped() {
     // Nothing fetches it again, whatever happens.
     assert!(registry.changed(&at, &ChangeScope::Everything).is_empty());
     assert!(registry.resync().is_empty());
-    assert_eq!(registry.refresh(&read), None);
+    assert_eq!(registry.refresh(read.query()), None);
     // Closing again says nothing new.
     assert!(registry.closed(&at).is_empty());
 }
@@ -348,11 +344,8 @@ fn a_read_of_an_ended_open_is_gone_when_held() {
     let mut registry = Registry::new();
     let at = scope("TIT", 1);
     registry.closed(&at);
-    let read = id("a");
-    assert_eq!(
-        registry.hold(&read, project(&at, vec![QueryKey::Book(BookId::Titus)])),
-        Held::Gone
-    );
+    let (read, held) = registry.hold(&id("a"), project(&at, vec![QueryKey::Book(BookId::Titus)]));
+    assert_eq!(held, Held::Gone);
     assert!(registry.resync().is_empty());
     assert!(registry.release(&read));
 }
@@ -362,28 +355,27 @@ fn a_newer_epoch_forgets_the_reads_of_the_older_one() {
     let mut registry = Registry::new();
     let old = scope("TIT", 1);
     let other_folder = scope("PSA", 1);
-    let ticket_old = {
-        let read = id("old");
-        let ticket = hold(
-            &mut registry,
-            &read,
-            project(&old, vec![QueryKey::Book(BookId::Titus)]),
-        );
-        let read2 = id("psa");
-        let t2 = hold(
-            &mut registry,
-            &read2,
-            project(&other_folder, vec![QueryKey::Book(BookId::Psalms)]),
-        );
-        value(&mut registry, &read2, t2);
-        ticket
-    };
+    let (read_old, ticket_old) = hold(
+        &mut registry,
+        &id("old"),
+        project(&old, vec![QueryKey::Book(BookId::Titus)]),
+    );
+    let (read_psa, t2) = hold(
+        &mut registry,
+        &id("psa"),
+        project(&other_folder, vec![QueryKey::Book(BookId::Psalms)]),
+    );
+    value(&mut registry, &read_psa, t2);
     let ended = registry.opened(scope("TIT", 2));
-    assert_eq!(ended, vec![id("old")], "only the older open of that folder");
+    assert_eq!(
+        ended,
+        vec![read_old.clone()],
+        "only the older open of that folder"
+    );
     assert!(!registry.is_current(&old));
     assert!(registry.is_current(&scope("TIT", 2)));
     assert!(registry.is_current(&other_folder));
-    let landing = value(&mut registry, &id("old"), ticket_old);
+    let landing = value(&mut registry, &read_old, ticket_old);
     assert_eq!(landing.outcome, Outcome::Drop);
     assert!(registry.changed(&old, &ChangeScope::Everything).is_empty());
     // The same epoch announced again ends nothing.
@@ -404,22 +396,18 @@ fn an_open_older_than_the_newest_is_not_current_even_with_no_read_of_it() {
     assert!(registry.is_current(&scope("TIT", 3)));
     assert!(registry.is_current(&scope("PSA", 1)));
     // A read of the older open is gone as soon as it is held.
-    let read = id("a");
     let keys = vec![QueryKey::Book(BookId::Titus)];
-    assert_eq!(
-        registry.hold(&read, project(&scope("TIT", 1), keys)),
-        Held::Gone
-    );
+    let (_, held) = registry.hold(&id("a"), project(&scope("TIT", 1), keys));
+    assert_eq!(held, Held::Gone);
 }
 
 #[test]
 fn an_open_nobody_announced_still_gets_its_replies() {
     let mut registry = Registry::new();
     let at = scope("TIT", 7);
-    let read = id("a");
-    let ticket = hold(
+    let (read, ticket) = hold(
         &mut registry,
-        &read,
+        &id("a"),
         project(&at, vec![QueryKey::Book(BookId::Titus)]),
     );
     assert!(registry.is_current(&at));
@@ -431,9 +419,8 @@ fn a_stale_scope_reply_is_dropped_and_kills_the_scope() {
     let mut registry = Registry::new();
     let at = scope("TIT", 1);
     let keys = vec![QueryKey::Book(BookId::Titus)];
-    let (a, b) = (id("a"), id("b"));
-    let ta = hold(&mut registry, &a, project(&at, keys.clone()));
-    let tb = hold(&mut registry, &b, project(&at, keys));
+    let (a, ta) = hold(&mut registry, &id("a"), project(&at, keys.clone()));
+    let (b, tb) = hold(&mut registry, &id("b"), project(&at, keys));
     // The server says the open is gone before any event did.
     let landing = registry.landed(&a, ta, Landed::StaleScope);
     assert_eq!(landing.outcome, Outcome::Drop);
@@ -446,8 +433,11 @@ fn a_stale_scope_reply_is_dropped_and_kills_the_scope() {
 #[test]
 fn a_stale_scope_for_a_read_of_the_app_is_an_error_to_show() {
     let mut registry = Registry::new();
-    let read = id("home");
-    let ticket = hold(&mut registry, &read, ReadOf::App(vec![AppTopic::Projects]));
+    let (read, ticket) = hold(
+        &mut registry,
+        &id("home"),
+        ReadOf::App(vec![AppTopic::Projects]),
+    );
     let landing = registry.landed(&read, ticket, Landed::StaleScope);
     assert_eq!(landing.outcome, Outcome::Apply);
 }
@@ -456,30 +446,30 @@ fn a_stale_scope_for_a_read_of_the_app_is_an_error_to_show() {
 fn an_older_view_never_replaces_a_newer_one() {
     let mut registry = Registry::new();
     let at = scope("TIT", 1);
-    let read = id("a");
     let view = |n| Landed::Value(Some(ViewSeq::new(n)));
-    let t1 = hold(
+    let (read, t1) = hold(
         &mut registry,
-        &read,
+        &id("a"),
         project(&at, vec![QueryKey::Book(BookId::Titus)]),
     );
+    let refresh = |registry: &mut Registry| registry.refresh(read.query()).unwrap().ticket;
     assert_eq!(registry.landed(&read, t1, view(5)).outcome, Outcome::Apply);
-    let t2 = registry.refresh(&read).unwrap();
+    let t2 = refresh(&mut registry);
     assert_eq!(registry.landed(&read, t2, view(3)).outcome, Outcome::Keep);
-    let t3 = registry.refresh(&read).unwrap();
+    let t3 = refresh(&mut registry);
     assert_eq!(registry.landed(&read, t3, view(5)).outcome, Outcome::Apply);
-    let t4 = registry.refresh(&read).unwrap();
+    let t4 = refresh(&mut registry);
     assert_eq!(registry.landed(&read, t4, view(6)).outcome, Outcome::Apply);
     // A reply with no snapshot number does not lower the one shown.
-    let t5 = registry.refresh(&read).unwrap();
+    let t5 = refresh(&mut registry);
     assert_eq!(
         registry.landed(&read, t5, Landed::Value(None)).outcome,
         Outcome::Apply
     );
-    let t6 = registry.refresh(&read).unwrap();
+    let t6 = refresh(&mut registry);
     assert_eq!(registry.landed(&read, t6, view(5)).outcome, Outcome::Keep);
     // An ignored reply still fetches again if a change came meanwhile.
-    let t7 = registry.refresh(&read).unwrap();
+    let t7 = refresh(&mut registry);
     registry.changed(&at, &ChangeScope::Everything);
     let landing = registry.landed(&read, t7, view(1));
     assert_eq!(landing.outcome, Outcome::Keep);
@@ -489,37 +479,34 @@ fn an_older_view_never_replaces_a_newer_one() {
 #[test]
 fn an_error_is_shown_and_a_retry_fetches_again() {
     let mut registry = Registry::new();
-    let read = id("home");
-    let ticket = hold(&mut registry, &read, ReadOf::App(vec![AppTopic::Projects]));
+    let (read, ticket) = hold(
+        &mut registry,
+        &id("home"),
+        ReadOf::App(vec![AppTopic::Projects]),
+    );
     let landing = registry.landed(&read, ticket, Landed::Error);
     assert_eq!((landing.outcome, landing.then), (Outcome::Apply, None));
     let retry = registry
-        .refresh(&read)
+        .refresh(read.query())
         .expect("an idle read starts a fetch");
+    assert_eq!(retry.id, read);
     // A retry while it runs starts nothing more, and is followed by one fetch.
-    assert_eq!(registry.refresh(&read), None);
-    assert!(value(&mut registry, &read, retry).then.is_some());
+    assert_eq!(registry.refresh(read.query()), None);
+    assert!(value(&mut registry, &read, retry.ticket).then.is_some());
 }
 
 #[test]
 fn the_last_release_forgets_the_read_and_its_late_reply() {
     let mut registry = Registry::new();
     let at = scope("TIT", 1);
-    let read = id("a");
-    let old = hold(
-        &mut registry,
-        &read,
-        project(&at, vec![QueryKey::Book(BookId::Titus)]),
-    );
+    let request = id("a");
+    let keys = vec![QueryKey::Book(BookId::Titus)];
+    let (read, old) = hold(&mut registry, &request, project(&at, keys.clone()));
     assert!(registry.release(&read));
     assert_eq!(value(&mut registry, &read, old).outcome, Outcome::Ignore);
     // The same read is held again while the old reply is still on its way: the old reply is
     // not the new read's attempt.
-    let new = hold(
-        &mut registry,
-        &read,
-        project(&at, vec![QueryKey::Book(BookId::Titus)]),
-    );
+    let (read, new) = hold(&mut registry, &request, project(&at, keys));
     assert_ne!(old, new);
     assert_eq!(value(&mut registry, &read, old).outcome, Outcome::Ignore);
     assert_eq!(value(&mut registry, &read, new).outcome, Outcome::Apply);
@@ -532,40 +519,174 @@ fn the_last_release_forgets_the_read_and_its_late_reply() {
 fn restart_forgets_every_read_and_open() {
     let mut registry = Registry::new();
     let at = scope("TIT", 1);
-    let (project_read, home) = (id("project"), id("home"));
+    let (project_request, home_request) = (id("project"), id("home"));
     let keys = vec![QueryKey::Book(BookId::Titus)];
-    let tp = hold(&mut registry, &project_read, project(&at, keys.clone()));
+    let (project_read, tp) = hold(&mut registry, &project_request, project(&at, keys.clone()));
     value(&mut registry, &project_read, tp);
-    let th = hold(&mut registry, &home, ReadOf::App(vec![AppTopic::Projects]));
+    let (home, th) = hold(
+        &mut registry,
+        &home_request,
+        ReadOf::App(vec![AppTopic::Projects]),
+    );
     value(&mut registry, &home, th);
 
     let Restarted { dead, starts } = registry.restarted();
     assert_eq!(dead, vec![project_read.clone()]);
-    assert_eq!(ids(&starts), vec![home.clone()], "Home reads the new run");
+    assert_eq!(
+        ids(&starts),
+        vec![home_request.clone()],
+        "Home reads the new run"
+    );
 
     // The old run's read stays gone even though the new run counts epochs from 1 again.
     assert!(registry.is_current(&at));
     assert!(registry.changed(&at, &ChangeScope::Everything).is_empty());
     assert!(registry.resync().iter().all(|s| s.id != project_read));
-    assert_eq!(registry.refresh(&project_read), None);
-    // The new run's first open of the same folder is a new read.
-    assert!(matches!(
-        registry.hold(&id("fresh"), project(&at, keys)),
-        Held::Fetch(_)
-    ));
+    assert_eq!(registry.refresh(&project_request), None);
+
+    // The new run's first open of the same folder is a new read, even for the very same
+    // request: its epoch is 1 again, so the request's text is equal. The old read is still
+    // held, as it is until its screen lets go.
+    let (fresh, held) = registry.hold(&project_request, project(&at, keys));
+    assert!(matches!(held, Held::Fetch(_)), "{held:?}");
+    assert_ne!(fresh, project_read);
+}
+
+/// The case an unequal request cannot show: after a restart the new run opens the same folder
+/// at the same epoch, and a screen of the old run still holds the old read of that request.
+#[test]
+fn a_new_run_fetches_a_request_that_a_dead_read_of_the_old_run_still_holds() {
+    let mut registry = Registry::new();
+    let at = scope("TIT", 1);
+    let request = id("editor/book");
+    let keys = vec![QueryKey::Book(BookId::Titus)];
+    let (old, old_ticket) = hold(&mut registry, &request, project(&at, keys.clone()));
+    value(&mut registry, &old, old_ticket);
+
+    registry.restarted();
+    // The new run's open is announced; it ends nothing of the old run.
+    assert!(registry.opened(at.clone()).is_empty());
+
+    let (new, held) = registry.hold(&request, project(&at, keys));
+    let Held::Fetch(new_ticket) = held else {
+        panic!("the new run's read was not fetched: {held:?}");
+    };
+    assert_ne!(new, old, "two runs, two reads");
+    assert_eq!(registry.len(), 2);
+
+    // Only the new read is live: a change reaches it, and the reply is shown.
+    assert_eq!(
+        value(&mut registry, &new, new_ticket).outcome,
+        Outcome::Apply
+    );
+    let starts = registry.changed(&at, &ChangeScope::Everything);
+    assert_eq!(
+        starts.iter().map(|start| &start.id).collect::<Vec<_>>(),
+        vec![&new]
+    );
+    assert_eq!(
+        registry
+            .resync()
+            .iter()
+            .map(|start| &start.id)
+            .collect::<Vec<_>>(),
+        Vec::<&ReadId>::new(),
+        "the new read is fetching already, and the old one is dead"
+    );
+
+    // The old screen lets go: that takes nothing from the new read.
+    assert!(registry.release(&old), "the old read had one holder");
+    assert!(!registry.release(&old), "and is gone");
+    assert_eq!(registry.len(), 1);
+    assert!(registry.release(&new), "the new read still had its holder");
+    assert!(registry.is_empty());
+}
+
+#[test]
+fn the_old_holders_of_a_dead_read_cannot_release_the_new_runs_read() {
+    let mut registry = Registry::new();
+    let at = scope("TIT", 1);
+    let request = id("editor/book");
+    let keys = vec![QueryKey::Book(BookId::Titus)];
+    // Two screens hold the old read.
+    let (old, _) = hold(&mut registry, &request, project(&at, keys.clone()));
+    let (again, shared) = registry.hold(&request, project(&at, keys.clone()));
+    assert_eq!((again, shared), (old.clone(), Held::Shared));
+
+    registry.restarted();
+    let (new, held) = registry.hold(&request, project(&at, keys));
+    assert!(matches!(held, Held::Fetch(_)));
+    // Both old screens go, in the middle of the new run's life.
+    assert!(!registry.release(&old));
+    assert!(registry.release(&old));
+    assert_eq!(registry.len(), 1, "the new read is still held");
+    assert!(
+        registry.refresh(&request).is_none(),
+        "and still fetching its first value"
+    );
+    assert!(registry.release(&new));
+    assert!(registry.is_empty());
+}
+
+#[test]
+fn the_reply_of_the_old_run_does_not_reach_the_new_read() {
+    let mut registry = Registry::new();
+    let at = scope("TIT", 1);
+    let request = id("editor/book");
+    let keys = vec![QueryKey::Book(BookId::Titus)];
+    let (old, old_ticket) = hold(&mut registry, &request, project(&at, keys.clone()));
+    registry.restarted();
+    let (new, new_ticket) = hold(&mut registry, &request, project(&at, keys));
+    // The old fetch was in flight when the server restarted, and its reply arrives now: it is
+    // the old run's, and the old read's screens are told so.
+    let landing = value(&mut registry, &old, old_ticket);
+    assert_eq!((landing.outcome, landing.then), (Outcome::Drop, None));
+    // The new read has not been answered by it.
+    assert_eq!(
+        value(&mut registry, &new, new_ticket).outcome,
+        Outcome::Apply
+    );
+    // And the new read's reply is not taken for the old one's.
+    assert_eq!(
+        value(&mut registry, &old, new_ticket).outcome,
+        Outcome::Ignore
+    );
+}
+
+#[test]
+fn a_read_of_the_app_is_one_read_across_a_restart() {
+    let mut registry = Registry::new();
+    let request = id("home");
+    let (home, ticket) = hold(
+        &mut registry,
+        &request,
+        ReadOf::App(vec![AppTopic::Projects]),
+    );
+    value(&mut registry, &home, ticket);
+    let Restarted { dead, starts } = registry.restarted();
+    assert!(dead.is_empty());
+    assert_eq!(starts.len(), 1);
+    // A screen that mounts after the restart shares the read the earlier screen holds.
+    let (shared, held) = registry.hold(&request, ReadOf::App(vec![AppTopic::Projects]));
+    assert_eq!((shared.clone(), held), (home.clone(), Held::Shared));
+    assert!(!registry.release(&home));
+    assert!(registry.release(&shared));
 }
 
 #[test]
 fn a_reply_in_flight_at_a_restart_does_not_count() {
     let mut registry = Registry::new();
     let at = scope("TIT", 1);
-    let (project_read, home) = (id("project"), id("home"));
-    let tp = hold(
+    let (project_read, tp) = hold(
         &mut registry,
-        &project_read,
+        &id("project"),
         project(&at, vec![QueryKey::Book(BookId::Titus)]),
     );
-    let th = hold(&mut registry, &home, ReadOf::App(vec![AppTopic::Projects]));
+    let (home, th) = hold(
+        &mut registry,
+        &id("home"),
+        ReadOf::App(vec![AppTopic::Projects]),
+    );
     // Both fetches are running when the server starts again.
     let Restarted { dead, starts } = registry.restarted();
     assert_eq!(dead, vec![project_read.clone()]);
@@ -660,6 +781,9 @@ struct Outstanding {
 /// A second account of the same events, kept without looking inside the registry.
 struct Model {
     reads: Vec<(QueryId, ReadOf)>,
+    /// The id the registry gave each read when it was first held; it names the read for ever
+    /// in this property, which has no restart.
+    ids: Vec<Option<ReadId>>,
     held: Vec<usize>,
     /// The attempt the registry has running for each read.
     running: Vec<Option<Ticket>>,
@@ -680,6 +804,7 @@ impl Model {
         let n = reads.len();
         Model {
             reads,
+            ids: vec![None; n],
             held: vec![0; n],
             running: vec![None; n],
             last_start: vec![None; n],
@@ -696,8 +821,11 @@ impl Model {
         self.clock
     }
 
-    fn index(&self, id: &QueryId) -> usize {
-        self.reads.iter().position(|(read, _)| read == id).unwrap()
+    fn index(&self, id: &ReadId) -> usize {
+        self.reads
+            .iter()
+            .position(|(read, _)| read == id.query())
+            .unwrap()
     }
 
     fn began(&mut self, read: usize, ticket: Ticket) -> Result<(), TestCaseError> {
@@ -737,7 +865,9 @@ impl Model {
             return Ok(());
         }
         let Outstanding { read, ticket } = self.outstanding.remove(which % self.outstanding.len());
-        let id = self.reads[read].0.clone();
+        let id = self.ids[read]
+            .clone()
+            .expect("a fetch for a read held once");
         let landing = registry.landed(&id, ticket, Landed::Value(None));
         let current = self.held[read] > 0 && self.running[read] == Some(ticket);
         if current {
@@ -767,7 +897,9 @@ fn run(ops: Vec<Op>) -> Result<(), TestCaseError> {
         match op {
             Op::Hold(read) => {
                 let (id, of) = model.reads[read].clone();
-                match registry.hold(&id, of) {
+                let (read_id, held) = registry.hold(&id, of);
+                model.ids[read] = Some(read_id);
+                match held {
                     Held::Fetch(ticket) => {
                         prop_assert_eq!(model.held[read], 0);
                         model.held[read] = 1;
@@ -784,7 +916,8 @@ fn run(ops: Vec<Op>) -> Result<(), TestCaseError> {
             }
             Op::Release(read) => {
                 if model.held[read] > 0 {
-                    let forgotten = registry.release(&model.reads[read].0);
+                    let id = model.ids[read].clone().expect("held, so given an id");
+                    let forgotten = registry.release(&id);
                     model.held[read] -= 1;
                     prop_assert_eq!(forgotten, model.held[read] == 0);
                     if forgotten {
@@ -896,6 +1029,7 @@ proptest! {
         // the epoch it was made at.
         let reads: Vec<(QueryId, usize)> = vec![(id("a"), 0), (id("b"), 0), (id("c"), 1)];
         let mut made_at: Vec<Option<u64>> = vec![None; 3];
+        let mut read_ids: Vec<Option<ReadId>> = vec![None; 3];
         let mut outstanding: Vec<(usize, Ticket)> = Vec::new();
         let keys = |folder: usize| vec![if folder == 0 { QueryKey::Book(BookId::Titus) } else { QueryKey::Book(BookId::Psalms) }];
         for op in ops {
@@ -904,7 +1038,9 @@ proptest! {
                     if made_at[read].is_none() {
                         let (id, folder) = &reads[read];
                         let at = scope(folders[*folder], epoch[*folder]);
-                        match registry.hold(id, project(&at, keys(*folder))) {
+                        let (read_id, held) = registry.hold(id, project(&at, keys(*folder)));
+                        read_ids[read] = Some(read_id);
+                        match held {
                             Held::Fetch(ticket) => {
                                 made_at[read] = Some(epoch[*folder]);
                                 outstanding.push((read, ticket));
@@ -917,7 +1053,7 @@ proptest! {
                 EndOp::Change(folder) => {
                     let at = scope(folders[folder], epoch[folder]);
                     for start in registry.changed(&at, &ChangeScope::Everything) {
-                        let read = reads.iter().position(|(id, _)| *id == start.id).unwrap();
+                        let read = reads.iter().position(|(id, _)| id == start.id.query()).unwrap();
                         let made = made_at[read].unwrap();
                         prop_assert!(!ended.contains(&(folder, made)), "fetched a read of an ended open");
                         outstanding.push((read, start.ticket));
@@ -925,7 +1061,7 @@ proptest! {
                 }
                 EndOp::Resync => {
                     for start in registry.resync() {
-                        let read = reads.iter().position(|(id, _)| *id == start.id).unwrap();
+                        let read = reads.iter().position(|(id, _)| id == start.id.query()).unwrap();
                         let folder = reads[read].1;
                         prop_assert!(!ended.contains(&(folder, made_at[read].unwrap())), "fetched a read of an ended open");
                         outstanding.push((read, start.ticket));
@@ -936,7 +1072,7 @@ proptest! {
                         let (read, ticket) = outstanding.remove(which % outstanding.len());
                         let folder = reads[read].1;
                         let made = made_at[read].unwrap();
-                        let landing = registry.landed(&reads[read].0, ticket, Landed::Value(None));
+                        let landing = registry.landed(read_ids[read].as_ref().unwrap(), ticket, Landed::Value(None));
                         if landing.outcome == Outcome::Apply {
                             prop_assert!(!ended.contains(&(folder, made)), "showed a reply of an ended open");
                         }
@@ -962,7 +1098,7 @@ proptest! {
                         let (read, ticket) = outstanding.remove(which % outstanding.len());
                         let folder = reads[read].1;
                         let made = made_at[read].unwrap();
-                        let landing = registry.landed(&reads[read].0, ticket, Landed::StaleScope);
+                        let landing = registry.landed(read_ids[read].as_ref().unwrap(), ticket, Landed::StaleScope);
                         // The server said the open it was made at is gone, if the read was
                         // its current attempt.
                         if landing.outcome == Outcome::Drop {
@@ -972,5 +1108,112 @@ proptest! {
                 }
             }
         }
+    }
+}
+
+// --- The property: server runs stay apart --------------------------------------------------
+
+#[derive(Debug, Clone)]
+enum RunOp {
+    /// Hold request 0 or 1 (reads of the open TIT at epoch 1) or 2 (a read of the app).
+    Hold(usize),
+    /// Release the holder at this position (modulo how many there are).
+    Release(usize),
+    /// The server starts again: the epochs begin from 1 again.
+    Restart,
+    /// A reply arrives for the outstanding fetch at this position (modulo how many there are).
+    Land(usize),
+}
+
+fn run_op() -> impl Strategy<Value = RunOp> {
+    prop_oneof![
+        4 => (0usize..3).prop_map(RunOp::Hold),
+        3 => any::<usize>().prop_map(RunOp::Release),
+        1 => Just(RunOp::Restart),
+        3 => any::<usize>().prop_map(RunOp::Land),
+    ]
+}
+
+proptest! {
+    /// Whatever the order of holds, releases, restarts and replies: a read of the new run is
+    /// fetched whatever the old run's screens still hold, an old screen's release never takes a
+    /// holder from the new run's read, and no reply of the old run is shown for a project.
+    #[test]
+    fn a_restart_keeps_the_runs_apart(ops in proptest::collection::vec(run_op(), 0..100)) {
+        let at = scope("TIT", 1);
+        let requests = [id("a"), id("b"), id("home")];
+        let of = |request: usize| {
+            if request == 2 {
+                ReadOf::App(vec![AppTopic::Projects])
+            } else {
+                project(&at, vec![QueryKey::Book(BookId::Titus)])
+            }
+        };
+        // What makes two holders hold one read: the same request, and for a project the same
+        // run. A read of the app lasts through restarts.
+        let kind = |request: usize, run: usize| (request, if request == 2 { 0 } else { run });
+        let mut registry = Registry::new();
+        let mut run = 0usize;
+        let mut holders: Vec<(ReadId, (usize, usize))> = Vec::new();
+        let mut outstanding: Vec<(ReadId, Ticket, (usize, usize))> = Vec::new();
+        for op in ops {
+            match op {
+                RunOp::Hold(request) => {
+                    let key = kind(request, run);
+                    let (read, held) = registry.hold(&requests[request], of(request));
+                    let others = holders.iter().any(|(_, held_key)| *held_key == key);
+                    match held {
+                        Held::Fetch(ticket) => {
+                            prop_assert!(!others, "fetched a read that is held already");
+                            outstanding.push((read.clone(), ticket, key));
+                        }
+                        Held::Shared => prop_assert!(others, "shared a read nobody of this run holds"),
+                        Held::Gone => prop_assert!(false, "no open ends in this property"),
+                    }
+                    for (other, other_key) in &holders {
+                        prop_assert_eq!(*other == read, *other_key == key, "one read per request and run");
+                    }
+                    holders.push((read, key));
+                }
+                RunOp::Release(which) => {
+                    if !holders.is_empty() {
+                        let (read, key) = holders.remove(which % holders.len());
+                        let last = !holders.iter().any(|(_, held_key)| *held_key == key);
+                        prop_assert_eq!(registry.release(&read), last);
+                    }
+                }
+                RunOp::Restart => {
+                    let ended: std::collections::HashSet<ReadId> = holders
+                        .iter()
+                        .filter(|(_, (request, held_run))| *request != 2 && *held_run == run)
+                        .map(|(read, _)| read.clone())
+                        .collect();
+                    let Restarted { dead, starts } = registry.restarted();
+                    prop_assert_eq!(dead.iter().cloned().collect::<std::collections::HashSet<_>>(), ended);
+                    prop_assert_eq!(dead.len(), dead.iter().collect::<std::collections::HashSet<_>>().len());
+                    run += 1;
+                    for start in starts {
+                        let request = requests.iter().position(|r| r == start.id.query()).unwrap();
+                        prop_assert_eq!(request, 2, "only the app's read starts again");
+                        outstanding.push((start.id, start.ticket, kind(request, run)));
+                    }
+                }
+                RunOp::Land(which) => {
+                    if !outstanding.is_empty() {
+                        let (read, ticket, key) = outstanding.remove(which % outstanding.len());
+                        let landing = value(&mut registry, &read, ticket);
+                        if key.0 != 2 && key.1 < run {
+                            prop_assert_ne!(landing.outcome, Outcome::Apply, "a project's reply of an earlier run was shown");
+                            prop_assert_eq!(landing.then, None);
+                        }
+                        if let Some(next) = landing.then {
+                            outstanding.push((read, next, key));
+                        }
+                    }
+                }
+            }
+        }
+        let held_reads: std::collections::HashSet<&ReadId> = holders.iter().map(|(read, _)| read).collect();
+        prop_assert_eq!(registry.len(), held_reads.len());
     }
 }

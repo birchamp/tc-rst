@@ -17,7 +17,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use super::api::Api;
 use crate::app::cache::{
-    AppTopic, CachedQuery, Held, Landed, Outcome, QueryId, Registry, Start, Ticket,
+    AppTopic, CachedQuery, Held, Landed, Outcome, QueryId, ReadId, Registry, Start, Ticket,
 };
 use crate::app::client::{CallError, Transport};
 use crate::app::load::Load;
@@ -29,14 +29,16 @@ pub struct QueryCache(Rc<Inner>);
 struct Inner {
     api: Api,
     registry: RefCell<Registry>,
-    slots: RefCell<HashMap<QueryId, Rc<dyn Slot>>>,
+    /// A slot for each read the registry holds, by the id it gave: two server runs' reads of
+    /// one request are two slots.
+    slots: RefCell<HashMap<ReadId, Rc<dyn Slot>>>,
 }
 
 /// A read's value and the way to fetch it, without its type.
 trait Slot {
     fn into_any(self: Rc<Self>) -> Rc<dyn Any>;
     /// Starts the fetch `ticket`.
-    fn begin(self: Rc<Self>, cache: QueryCache, id: QueryId, ticket: Ticket);
+    fn begin(self: Rc<Self>, cache: QueryCache, id: ReadId, ticket: Ticket);
     /// The read's open ended.
     fn dropped(&self);
 }
@@ -51,7 +53,7 @@ impl<Q: CachedQuery> Slot for TypedSlot<Q> {
         self
     }
 
-    fn begin(self: Rc<Self>, cache: QueryCache, id: QueryId, ticket: Ticket) {
+    fn begin(self: Rc<Self>, cache: QueryCache, id: ReadId, ticket: Ticket) {
         // What is on screen stays while the next value is fetched.
         self.value
             .update(|value| *value = std::mem::replace(value, Load::Loading).refreshing());
@@ -106,11 +108,17 @@ impl QueryCache {
             Ok(id) => id,
             Err(error) => return failed(format!("the request does not serialize: {error}")),
         };
-        let existing = self.0.slots.borrow().get(&id).cloned();
+        // The registry says which read this is: a request that a dead read of an earlier server
+        // run still holds is a new read, with a slot of its own.
+        let (read, held) = self.0.registry.borrow_mut().hold(&id, request.read_of());
+        let existing = self.0.slots.borrow().get(&read).cloned();
         let slot = match existing {
             Some(slot) => match slot.into_any().downcast::<TypedSlot<Q>>() {
                 Ok(slot) => slot,
-                Err(_) => return failed(format!("{} is read as two types", id.path)),
+                Err(_) => {
+                    self.release(&read);
+                    return failed(format!("{} is read as two types", id.path));
+                }
             },
             None => {
                 let slot = Rc::new(TypedSlot {
@@ -118,18 +126,17 @@ impl QueryCache {
                     value: ArcRwSignal::new(Load::<Arc<Q::Ok>>::Loading),
                 });
                 let erased: Rc<dyn Slot> = slot.clone();
-                self.0.slots.borrow_mut().insert(id.clone(), erased);
+                self.0.slots.borrow_mut().insert(read.clone(), erased);
                 slot
             }
         };
-        let held = self.0.registry.borrow_mut().hold(&id, request.read_of());
         match held {
-            Held::Fetch(ticket) => self.start(&id, ticket),
+            Held::Fetch(ticket) => self.start(&read, ticket),
             Held::Shared => {}
             Held::Gone => slot.dropped(),
         }
-        let (cache, held_id) = (SendWrapper::new(self.clone()), SendWrapper::new(id));
-        on_cleanup(move || cache.release(&held_id));
+        let (cache, held_read) = (SendWrapper::new(self.clone()), SendWrapper::new(read));
+        on_cleanup(move || cache.release(&held_read));
         let value = slot.value.clone();
         Signal::derive(move || value.get())
     }
@@ -139,19 +146,19 @@ impl QueryCache {
         let Ok(id) = QueryId::of(request) else {
             return;
         };
-        let ticket = self.0.registry.borrow_mut().refresh(&id);
-        if let Some(ticket) = ticket {
+        let start = self.0.registry.borrow_mut().refresh(&id);
+        if let Some(Start { id, ticket }) = start {
             self.start(&id, ticket);
         }
     }
 
-    fn release(&self, id: &QueryId) {
+    fn release(&self, id: &ReadId) {
         if self.0.registry.borrow_mut().release(id) {
             self.0.slots.borrow_mut().remove(id);
         }
     }
 
-    fn start(&self, id: &QueryId, ticket: Ticket) {
+    fn start(&self, id: &ReadId, ticket: Ticket) {
         let slot = self.0.slots.borrow().get(id).cloned();
         if let Some(slot) = slot {
             slot.begin(self.clone(), id.clone(), ticket);
@@ -164,7 +171,7 @@ impl QueryCache {
         }
     }
 
-    fn drop_reads(&self, ids: &[QueryId]) {
+    fn drop_reads(&self, ids: &[ReadId]) {
         for id in ids {
             let slot = self.0.slots.borrow().get(id).cloned();
             if let Some(slot) = slot {
