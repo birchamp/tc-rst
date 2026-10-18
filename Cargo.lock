@@ -3326,6 +3326,7 @@ dependencies = [
  "serde_json",
  "sha1",
  "tc-api",
+ "tc-core",
  "thiserror 2.0.21",
  "unicode-general-category",
  "wasm-bindgen",

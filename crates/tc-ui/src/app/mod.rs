@@ -12,6 +12,7 @@
 #![deny(clippy::indexing_slicing)]
 
 pub mod boot;
+pub mod cache;
 pub mod client;
 pub mod events;
 pub mod load;
