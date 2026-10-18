@@ -45,6 +45,14 @@ impl<T> Load<T> {
         }
     }
 
+    /// A refresh ended without a newer value: what is shown stays, no longer pending.
+    pub fn settled(self) -> Self {
+        match self {
+            Self::Refreshing(value) => Self::Ready(value),
+            other => other,
+        }
+    }
+
     pub fn as_ref(&self) -> Load<&T> {
         match self {
             Self::Loading => Load::Loading,

@@ -56,7 +56,7 @@ pub enum AppTopic {
 }
 
 /// A read a screen keeps in the cache. Each query endpoint a screen unit adds implements it.
-pub trait CachedQuery: Endpoint<Ok: Send + Sync> + Clone {
+pub trait CachedQuery: Endpoint<Ok: Send + Sync + 'static> + Clone {
     fn read_of(&self) -> ReadOf;
 
     /// The snapshot a reply was built from; an older one never replaces a newer one.
@@ -105,8 +105,11 @@ pub enum Landed {
 pub enum Outcome {
     /// Show it: the value, or the error as `Failed`.
     Apply,
-    /// Leave the value alone: the reply is not the read's current attempt, or is older than
-    /// what is shown.
+    /// Keep the value and end the refresh: this was the read's current attempt, but its reply
+    /// is older than what is shown.
+    Keep,
+    /// Do nothing: the reply is not the read's current attempt (a duplicate, an earlier
+    /// attempt, a forgotten read's).
     Ignore,
     /// The read's open has ended: its value becomes `Failed(Dropped)`.
     Drop,
@@ -442,7 +445,7 @@ impl Registry {
 
         let outcome = match landed {
             Landed::Value(Some(view)) if read.applied.is_some_and(|shown| view < shown) => {
-                Outcome::Ignore
+                Outcome::Keep
             }
             Landed::Value(view) => {
                 read.applied = view.or(read.applied);

@@ -29,7 +29,7 @@ use tc_ui::i18n::keys;
 /// and never lowers one without a reason in its commit message: a floor that falls hides a
 /// scan that stopped seeing a call shape. tC4's own floors are 100 literal keys and 100
 /// namespaced strings; they are the end state, once every screen is ported.
-const KEY_CONSTANT_USES_FLOOR: usize = 0;
+const KEY_CONSTANT_USES_FLOOR: usize = 6;
 const NAMESPACED_FLOOR: usize = 0;
 const TEMPLATE_FLOOR: usize = 0;
 

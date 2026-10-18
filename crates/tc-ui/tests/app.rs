@@ -6,5 +6,6 @@
 mod app {
     mod cache;
     mod client;
+    mod effects;
     mod sse;
 }

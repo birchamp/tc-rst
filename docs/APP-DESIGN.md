@@ -1414,8 +1414,15 @@ show a 401 page.
   `actions.open_project_at`, `actions.record_decision`), so each tC4 view file becomes one Rust
   module read top to bottom.
 - Behind `s` there are three sources, and each value has one owner:
-  1. **Server state** in a `QueryCache`: projects, cards, the book model, helps, the check session,
-     the aligner view, jobs, internet, account, prefs. These fields of `s` are read-only signals.
+  1. **Server state**, from two places. Reads that screens hold, refcounted and shared by request,
+     are in a `QueryCache`: projects, cards, the book model, helps, the check session, the aligner
+     view. Values that arrive whole in `hello` and in events live in `ServerState` signals that
+     exist for the life of the page: internet, account, startup, the open sessions, the saved app
+     language, jobs, the last checkpoint outcome, the files a materialize cannot write, and the
+     aligner save states. `hello` seeds them, events update them, and a `Resync` reads `hello`
+     again. These fields of `s` are read-only signals. *(A4a: the first draft put all of them in
+     the cache. A cache entry with no holder is forgotten, and these values must exist before any
+     screen holds them.)*
   2. **Drafts**: typed text not yet acknowledged, in the save machine and the browser buffer.
   3. **View state**, the "memory only" slices of tC4 (`tC4:src/state.jsx:408-588`): view and
      dialogs, rail and helps visibility and width, tabs, filter and sort, `toolPos`, page setup,
@@ -1770,8 +1777,13 @@ so the rebuild must keep its keyboard contract by itself *(A-24)*:
 | `views/dev/Inspector.jsx` | `views/dev/inspector.rs` (dev only) | late |
 
 Rebuild-only screens with no tC4 view: the review tabs beyond Text, History, Detached, Notices,
-the received-work sheet, the draft offer, the read-only banner with the copy offer, the USB flows
-and the first-launch window (Q-9).
+the received-work sheet, the draft offer, the read-only banner with the copy offer, the USB flows,
+the first-launch window (Q-9), and the boot error *(A4a)*. tC4 bundles everything and cannot fail
+to boot; the rebuild can: a catalog that does not load, a page opened without its key, or a page
+and a server of two builds. The boot error is tC4's view-error callout (`data-testid="boot-error"`,
+tone warn, `role="alert"`): `app.viewError`, the technical reason, and a Retry button
+(`app.retry`) that reloads. It is shown in the saved language when its catalog is installed, else
+in English.
 
 ---
 

@@ -1,0 +1,151 @@
+//! What the runtime does for each thing the event stream delivers, decided without touching
+//! anything (APP-DESIGN 6.3).
+//!
+//! [`react`] is one exhaustive `match` with no wildcard arm: a variant that tc-api adds to
+//! `Event` or `SessionEvent` does not compile here until it is handled, so a new kind of
+//! frame cannot be silently ignored. The browser glue only executes the [`Effect`]s.
+
+use std::collections::BTreeMap;
+
+use tc_api::account::AccountView;
+use tc_api::align::AlignSave;
+use tc_api::event::{
+    ChangeScope, CheckpointOutcome, Event, SessionEvent, SessionMode, StartupState,
+};
+use tc_api::ids::{AlignerId, JobId, Scope, ServerInstance};
+use tc_api::jobs::{JobState, JobView};
+
+use super::cache::AppTopic;
+use super::events::Incoming;
+
+/// One thing the runtime does.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Effect {
+    /// Read `app/hello` again and replace what it holds: the internet switch, the account,
+    /// the startup state, the open sessions and the saved language.
+    ReadHello,
+    /// Every live read fetches again.
+    ReadEverything,
+    /// The server started again: every open is gone (APP-DESIGN 3.10).
+    Restarted(ServerInstance),
+    Topic(AppTopic),
+    /// A project's data changed: the reads that depend on it fetch again.
+    Changed {
+        at: Scope,
+        scope: ChangeScope,
+    },
+    SessionOpened(Scope),
+    SessionClosed(Scope),
+    SessionMode {
+        at: Scope,
+        mode: SessionMode,
+    },
+    Internet(bool),
+    Account(AccountView),
+    Startup(StartupState),
+    Job(JobView),
+    Checkpoint {
+        at: Scope,
+        outcome: CheckpointOutcome,
+    },
+    MaterializeBlocked {
+        at: Scope,
+        paths: Vec<String>,
+    },
+    AlignSave {
+        aligner: AlignerId,
+        state: AlignSave,
+    },
+}
+
+/// The effects of one delivery, in the order to run them. Every delivery has at least one.
+pub fn react(incoming: &Incoming) -> Vec<Effect> {
+    match incoming {
+        // A change the build cannot read may be a teammate's: refresh everything, and read the
+        // values that only events carry.
+        Incoming::Unreadable { .. } => vec![Effect::ReadEverything, Effect::ReadHello],
+        Incoming::Restart(instance) => vec![Effect::Restarted(*instance), Effect::ReadHello],
+        Incoming::Frame(frame) => match &frame.event {
+            Event::Resync => vec![Effect::ReadEverything, Effect::ReadHello],
+            Event::Internet { on } => vec![Effect::Internet(*on)],
+            Event::Account(account) => vec![Effect::Account(account.clone())],
+            Event::Job(job) => vec![Effect::Job(job.clone())],
+            Event::ProjectsChanged => vec![Effect::Topic(AppTopic::Projects)],
+            Event::HomeCard { project } => {
+                vec![Effect::Topic(AppTopic::HomeCard(project.clone()))]
+            }
+            Event::Startup(state) => vec![Effect::Startup(state.clone())],
+            Event::Session { at, event } => match event {
+                // The event names the open and nothing else; the list of sessions needs the
+                // project's id and role, which `hello` has.
+                SessionEvent::Opened => vec![Effect::SessionOpened(at.clone()), Effect::ReadHello],
+                SessionEvent::Closed => vec![Effect::SessionClosed(at.clone())],
+                SessionEvent::Mode(mode) => vec![Effect::SessionMode {
+                    at: at.clone(),
+                    mode: *mode,
+                }],
+                SessionEvent::Changed { scope, .. } => vec![Effect::Changed {
+                    at: at.clone(),
+                    scope: scope.clone(),
+                }],
+                SessionEvent::Checkpoint(outcome) => vec![Effect::Checkpoint {
+                    at: at.clone(),
+                    outcome: outcome.clone(),
+                }],
+                SessionEvent::MaterializeBlocked { paths } => vec![Effect::MaterializeBlocked {
+                    at: at.clone(),
+                    paths: paths.clone(),
+                }],
+                SessionEvent::AlignSave { aligner, state } => vec![Effect::AlignSave {
+                    aligner: *aligner,
+                    state: state.clone(),
+                }],
+            },
+        },
+    }
+}
+
+/// How many finished jobs the UI keeps. The server keeps a final outcome readable for ten
+/// minutes (`jobs/get`); a screen that waits for one reads it from here.
+pub const FINISHED_JOBS_KEPT: usize = 64;
+
+/// Queued, running or being cancelled: the job still counts as work in flight.
+pub fn is_active(state: &JobState) -> bool {
+    match state {
+        JobState::Queued | JobState::Running(_) | JobState::Cancelling => true,
+        JobState::Done(_) | JobState::Failed(_) | JobState::Cancelled => false,
+    }
+}
+
+/// Records a job's newest view. The map keeps every job that is active and the newest
+/// [`FINISHED_JOBS_KEPT`] that are not, so a long session does not grow it without end.
+pub fn merge_job(jobs: &mut BTreeMap<JobId, JobView>, view: JobView) {
+    jobs.insert(view.id, view);
+    let finished: Vec<JobId> = jobs
+        .iter()
+        .filter(|(_, job)| !is_active(&job.state))
+        .map(|(id, _)| *id)
+        .collect();
+    let excess = finished.len().saturating_sub(FINISHED_JOBS_KEPT);
+    for id in finished.into_iter().take(excess) {
+        jobs.remove(&id);
+    }
+}
+
+pub fn active_jobs(jobs: &BTreeMap<JobId, JobView>) -> usize {
+    jobs.values().filter(|job| is_active(&job.state)).count()
+}
+
+/// The work in flight, for `window.__tcIdle` (APP-DESIGN 6.2): API calls and catalog fetches
+/// (not the event stream) and jobs that are active. The page is idle when there is none.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BusyCount {
+    pub fetches: usize,
+    pub jobs: usize,
+}
+
+impl BusyCount {
+    pub fn is_idle(self) -> bool {
+        self.fetches == 0 && self.jobs == 0
+    }
+}

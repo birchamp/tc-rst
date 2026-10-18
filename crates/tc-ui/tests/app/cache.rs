@@ -465,7 +465,7 @@ fn an_older_view_never_replaces_a_newer_one() {
     );
     assert_eq!(registry.landed(&read, t1, view(5)).outcome, Outcome::Apply);
     let t2 = registry.refresh(&read).unwrap();
-    assert_eq!(registry.landed(&read, t2, view(3)).outcome, Outcome::Ignore);
+    assert_eq!(registry.landed(&read, t2, view(3)).outcome, Outcome::Keep);
     let t3 = registry.refresh(&read).unwrap();
     assert_eq!(registry.landed(&read, t3, view(5)).outcome, Outcome::Apply);
     let t4 = registry.refresh(&read).unwrap();
@@ -477,12 +477,12 @@ fn an_older_view_never_replaces_a_newer_one() {
         Outcome::Apply
     );
     let t6 = registry.refresh(&read).unwrap();
-    assert_eq!(registry.landed(&read, t6, view(5)).outcome, Outcome::Ignore);
+    assert_eq!(registry.landed(&read, t6, view(5)).outcome, Outcome::Keep);
     // An ignored reply still fetches again if a change came meanwhile.
     let t7 = registry.refresh(&read).unwrap();
     registry.changed(&at, &ChangeScope::Everything);
     let landing = registry.landed(&read, t7, view(1));
-    assert_eq!(landing.outcome, Outcome::Ignore);
+    assert_eq!(landing.outcome, Outcome::Keep);
     assert!(landing.then.is_some());
 }
 

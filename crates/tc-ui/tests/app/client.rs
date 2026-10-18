@@ -262,6 +262,12 @@ fn refreshing_keeps_the_value_and_a_failure_does_not() {
     assert_eq!(failed.error(), Some(&CallError::Dropped));
     assert_eq!(Load::Ready(3).error(), None);
 
+    // A refresh that ends with nothing newer leaves the value, no longer pending.
+    assert_eq!(Load::Refreshing(3).settled(), Load::Ready(3));
+    assert_eq!(Load::Ready(3).settled(), Load::Ready(3));
+    assert_eq!(Load::<u8>::Loading.settled(), Load::Loading);
+    assert_eq!(failed.clone().settled(), failed);
+
     assert_eq!(Load::Ready(3).map(|n| n + 1), Load::Ready(4));
     assert_eq!(Load::Refreshing(3).map(|n| n + 1), Load::Refreshing(4));
     assert_eq!(
