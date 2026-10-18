@@ -15,13 +15,17 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Read};
+use std::sync::Arc;
 use std::time::Duration;
 
 use reqwest::StatusCode;
 use reqwest::header::{ACCEPT, HeaderMap};
 use serde::Deserialize;
 use tc_core::BookId;
-use tc_door43::{GitOid, InternetSwitch, TagName, UnreachableCause, check_names};
+use tc_door43::{
+    GitOid, Http, HttpSpec, InternetSwitch, ProxyFinder, TagName, UnreachableCause, check_names,
+    system_proxy_finder,
+};
 use tc_helps::HelpRef;
 use tc_helps::aquifer::{
     AquiferHelpsKind, academy_from_aquifer, notes_from_aquifer, parse_aquifer_articles,
@@ -127,7 +131,7 @@ struct RawCommit {
 /// The one HTTP client for GitHub. See the module documentation.
 #[derive(Clone)]
 pub struct AquiferClient {
-    http: reqwest::Client,
+    http: Http,
     web: Url,
     api: Url,
     internet: InternetSwitch,
@@ -179,6 +183,18 @@ impl AquiferClient {
         internet: InternetSwitch,
         limits: AquiferLimits,
     ) -> Result<Self, AquiferError> {
+        Self::with_proxy_finder(web, api, internet, limits, system_proxy_finder())
+    }
+
+    /// [`AquiferClient::with_servers`] with a finder that names the proxies, asked only
+    /// while the internet is on ([`tc_door43::Http`]).
+    pub fn with_proxy_finder(
+        web: Url,
+        api: Url,
+        internet: InternetSwitch,
+        limits: AquiferLimits,
+        finder: Option<Arc<dyn ProxyFinder>>,
+    ) -> Result<Self, AquiferError> {
         let loopback = is_loopback(&web) && is_loopback(&api);
         for url in [&web, &api] {
             let ok = url.scheme() == "https" || (url.scheme() == "http" && loopback);
@@ -208,20 +224,27 @@ impl AquiferClient {
                 attempt.error("a redirect off GitHub")
             }
         });
-        let builder = reqwest::Client::builder()
-            .user_agent(USER_AGENT)
-            .connect_timeout(limits.connect_timeout)
-            .read_timeout(limits.read_timeout)
-            .redirect(redirects)
-            .referer(false);
-        let builder = if loopback {
-            builder.no_proxy()
-        } else {
-            builder.https_only(true)
+        // Every origin a request or a redirect can reach.
+        let mut origins = vec![web.clone(), api.clone()];
+        if !loopback {
+            origins.extend(
+                ASSET_HOSTS
+                    .iter()
+                    .filter_map(|host| Url::parse(&format!("https://{host}")).ok()),
+            );
+        }
+        let spec = HttpSpec {
+            user_agent: USER_AGENT,
+            connect_timeout: limits.connect_timeout,
+            read_timeout: limits.read_timeout,
+            redirects,
+            origins,
+            loopback,
         };
-        let http = builder.build().map_err(|e| AquiferError::Setup {
-            reason: e.to_string(),
-        })?;
+        let http =
+            Http::with_finder(spec, internet.clone(), finder).map_err(|e| AquiferError::Setup {
+                reason: e.to_string(),
+            })?;
         Ok(Self {
             http,
             web,
@@ -257,11 +280,10 @@ impl AquiferClient {
         accept: &str,
     ) -> Result<(String, reqwest::Response), AquiferError> {
         let route = format!("GET {}", url.path());
-        if self.internet.check().is_err() {
+        let Ok(http) = self.http.client().await else {
             return Err(AquiferError::Offline { route });
-        }
-        let response = self
-            .http
+        };
+        let response = http
             .get(url)
             .header(ACCEPT, accept)
             .header("X-GitHub-Api-Version", "2022-11-28")
