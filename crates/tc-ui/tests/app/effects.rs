@@ -195,6 +195,47 @@ fn no_frame_is_ignored() {
     assert_eq!(outcome, Ok(()));
 }
 
+/// The events the smoke writes into the page's stream (`crates/tc-ui/app/smoke-events.json`).
+const SMOKE_EVENTS: &str = include_str!("../../app/smoke-events.json");
+
+#[test]
+fn the_events_the_smoke_injects_are_events_this_build_reads_and_do_what_the_smoke_expects() {
+    // A frame the page cannot read is handled as a `Resync`, which would make the smoke's job
+    // cases pass or fail for the wrong reason: so each one is parsed here, and its effect named.
+    let events: BTreeMap<String, Event> = serde_json::from_str(SMOKE_EVENTS).unwrap();
+    assert_eq!(
+        events.keys().map(String::as_str).collect::<Vec<_>>(),
+        ["internetOn", "jobDone", "jobRunning", "resync"]
+    );
+    let effects = |name: &str| react(&frame(events[name].clone()));
+    assert_eq!(
+        effects("resync"),
+        vec![Effect::ReadEverything, Effect::ReadHello, Effect::ReadJobs]
+    );
+    assert_eq!(effects("internetOn"), vec![Effect::Internet(true)]);
+    let running = effects("jobRunning");
+    let [Effect::Job(running)] = running.as_slice() else {
+        panic!("a job frame is one job effect");
+    };
+    assert!(is_active(&running.state));
+    let done = effects("jobDone");
+    let [Effect::Job(done)] = done.as_slice() else {
+        panic!("a job frame is one job effect");
+    };
+    assert!(!is_active(&done.state));
+    assert_eq!(running.id, done.id, "the end frame ends the running job");
+    // The reply the smoke gives `jobs/get` is the same view.
+    let Event::Job(view) = &events["jobRunning"] else {
+        panic!("jobRunning is a job");
+    };
+    let reply = serde_json::to_value(view).unwrap();
+    assert_eq!(
+        reply,
+        serde_json::to_value(running).unwrap(),
+        "jobs/get answers the view that a frame carries"
+    );
+}
+
 fn running() -> JobState {
     JobState::Running(Progress {
         phase: tc_api::jobs::Phase::Seed,

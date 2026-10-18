@@ -1,0 +1,17 @@
+{
+  "resync": { "type": "resync" },
+  "internetOn": { "type": "internet", "value": { "on": true } },
+  "jobRunning": {
+    "type": "job",
+    "value": {
+      "id": 1,
+      "kind": "seed",
+      "project": null,
+      "state": { "type": "running", "value": { "phase": { "type": "seed" }, "done": 1, "total": 10, "item": null } }
+    }
+  },
+  "jobDone": {
+    "type": "job",
+    "value": { "id": 1, "kind": "seed", "project": null, "state": { "type": "done", "value": { "type": "finished" } } }
+  }
+}

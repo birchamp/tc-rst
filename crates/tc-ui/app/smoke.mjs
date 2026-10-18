@@ -3,12 +3,18 @@
 // runtime end to end: boot, `hello` once after the event stream opens, a language switch that
 // sends nothing and remounts nothing, events that reach the page, a boot in the saved
 // language, a boot that stops on a catalog that does not load, a reload that keeps the token,
+// a server of another API version or build (one reload, then the boot error; none when the
+// page cannot keep its marker), a `Resync` or a restart while the page holds a running job,
 // and a quit.
 //
 //   crates/tc-ui/build-app.sh
 //   node crates/tc-ui/app/smoke.mjs --tc4 target/debug/tc4 --ui target/tc-ui-app
 //
-// With `--measure N --out FILE` it measures instead (see measure() below).
+// With `--measure N --out FILE` it measures instead (see measure() below). With
+// `--proxy-selftest` it only checks the test proxy against `tc4`, with no browser (see
+// proxySelftest() below). `--only app,stale,jobs` runs some groups of cases: the app's basics
+// (A to H), a server of another build or API version (I, J), and jobs when the stream has a
+// gap (K).
 //
 // Playwright comes from PLAYWRIGHT_MODULE (default: parity/ds-gallery/node_modules/playwright
 // in this repository), and its Chromium build (1194) from PLAYWRIGHT_BROWSERS_PATH or
@@ -140,40 +146,107 @@ class Server {
 }
 
 /**
- * A forwarding proxy in front of `tc4`, so a test can cut the event stream's connection, which
- * the browser offers no way to do. It rewrites `Host` and `Origin` to the server's, which the
- * server's checks demand, and passes everything else, the token header included, through.
+ * A forwarding proxy in front of `tc4`, so a test can do what the browser cannot do to its own
+ * connections and what a real server would do only after an update:
+ *
+ * - `cutStreams()` cuts the open event streams, as a network failure would;
+ * - `refuseEvents = { status, body }` answers the stream's open itself, as a server of another
+ *   API version would (the server checks the version of every /api/ path, the stream's too);
+ * - `rewrites.set('app/hello', (value) => value)` changes the value of an endpoint's reply
+ *   (a server of another build, a job the server still runs);
+ * - `inject(event, { instance })` writes a frame into every open stream (a `Resync`, a job,
+ *   a frame of another server run), which the real server sends only after 4,096 frames or a
+ *   restart. Its number is the newest the proxy has passed plus one unless `seq` says
+ *   otherwise, so the page reads it as new; a real frame of that number would then be a repeat
+ *   for the page, so the cases that inject make no real change afterwards.
+ *
+ * It rewrites `Host` and `Origin` to the server's, which the server's checks demand, and passes
+ * everything else, the token header included, through.
  */
 class Proxy {
   static async start(server) {
-    const streams = new Set();
-    const http_ = http.createServer((req, res) => {
-      const headers = { ...req.headers, host: server.base.host };
-      if (headers.origin) headers.origin = server.base.origin;
-      const upstream = http.request(
-        { host: server.base.hostname, port: server.base.port, method: req.method, path: req.url, headers },
-        (up) => {
-          res.writeHead(up.statusCode, up.headers);
-          res.flushHeaders();
-          if (req.url.startsWith('/api/v1/events')) {
-            streams.add(res);
-            res.on('close', () => streams.delete(res));
-          }
-          up.pipe(res);
-        },
-      );
-      upstream.on('error', () => res.destroy());
-      res.on('close', () => upstream.destroy());
-      req.pipe(upstream);
-    });
-    await new Promise((resolve) => http_.listen(0, '127.0.0.1', resolve));
-    return new Proxy(http_, streams);
+    const proxy = new Proxy(server);
+    await new Promise((resolve) => proxy.http.listen(0, '127.0.0.1', resolve));
+    proxy.url = `http://127.0.0.1:${proxy.http.address().port}/`;
+    return proxy;
   }
 
-  constructor(http_, streams) {
-    this.http = http_;
-    this.streams = streams;
-    this.url = `http://127.0.0.1:${http_.address().port}/`;
+  constructor(server) {
+    this.server = server;
+    this.streams = new Set();
+    this.lastSeq = 0;
+    this.refuseEvents = null;
+    this.rewrites = new Map();
+    this.http = http.createServer((req, res) => this.handle(req, res));
+  }
+
+  handle(req, res) {
+    const { base } = this.server;
+    const events = req.url.startsWith('/api/v1/events');
+    if (events && this.refuseEvents) {
+      req.resume();
+      res.writeHead(this.refuseEvents.status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(this.refuseEvents.body);
+      return;
+    }
+    const headers = { ...req.headers, host: base.host };
+    if (headers.origin) headers.origin = base.origin;
+    const endpoint = req.method === 'POST' && req.url.startsWith('/api/v1/') ? req.url.slice('/api/v1/'.length) : null;
+    const rewrite = endpoint && this.rewrites.get(endpoint);
+    const upstream = http.request(
+      { host: base.hostname, port: base.port, method: req.method, path: req.url, headers },
+      (up) => {
+        if (rewrite) return this.rewritten(up, res, rewrite);
+        res.writeHead(up.statusCode, up.headers);
+        res.flushHeaders();
+        if (events) {
+          this.streams.add(res);
+          res.on('close', () => this.streams.delete(res));
+          let partial = ''; // a chunk may end inside a line
+          up.on('data', (chunk) => {
+            const lines = (partial + chunk.toString('utf8')).split('\n');
+            partial = lines.pop();
+            for (const line of lines) this.noteSeq(line);
+            res.write(chunk);
+          });
+          up.on('end', () => res.end());
+        } else {
+          up.pipe(res);
+        }
+      },
+    );
+    upstream.on('error', () => res.destroy());
+    res.on('close', () => upstream.destroy());
+    req.pipe(upstream);
+  }
+
+  /** The reply of an endpoint with its `ok` value passed through `rewrite`. */
+  rewritten(up, res, rewrite) {
+    const parts = [];
+    up.on('data', (part) => parts.push(part));
+    up.on('end', () => {
+      const reply = JSON.parse(Buffer.concat(parts).toString('utf8'));
+      if (reply.type === 'ok') reply.value = rewrite(reply.value);
+      const body = JSON.stringify(reply);
+      const headers = { ...up.headers, 'content-length': Buffer.byteLength(body) };
+      delete headers['transfer-encoding'];
+      res.writeHead(up.statusCode, headers);
+      res.end(body);
+    });
+  }
+
+  /** The newest `id:` line seen, so that an injected frame is newer than any the page has read. */
+  noteSeq(line) {
+    const match = /^id: (\d+)$/.exec(line);
+    if (match) this.lastSeq = Math.max(this.lastSeq, Number(match[1]));
+  }
+
+  /** Writes a frame into every open stream, as `tc-server` writes one. Returns how many got it. */
+  inject(event, { instance, seq = this.lastSeq + 1 }) {
+    const text = `id: ${seq}\ndata: ${JSON.stringify({ seq, instance, event })}\n\n`;
+    for (const res of this.streams) res.write(text);
+    this.lastSeq = Math.max(this.lastSeq, seq);
+    return this.streams.size;
   }
 
   /** Cuts every event stream that is open, as a network failure would. */
@@ -213,6 +286,7 @@ function watch(page) {
       url: request.url(),
       path: new URL(request.url()).pathname + new URL(request.url()).search,
       method: request.method(),
+      body: request.postData(),
       type: request.resourceType(),
       at: performance.now(),
       headers: request.allHeaders().catch(() => null),
@@ -433,6 +507,285 @@ async function caseE(browser, server) {
   await context.close();
 }
 
+// --- a server that is not this page's build -----------------------------------------------------
+/** Every document the page asked for: one at the first load, one more for each reload. */
+const documents = (log) => log.requests.filter((r) => r.type === 'document');
+const calls = (log, endpoint) => log.requests.filter((r) => r.path === `/api/v1/${endpoint}`);
+const marker = (page) => page.evaluate(() => sessionStorage.getItem('tc4.reloadedFor'));
+/** The reply of a server that speaks another API version, as `tc-server` writes it (409). */
+const versionRefusal = (server) => ({ status: 409, body: JSON.stringify({ type: 'err', value: { type: 'version', value: { server } } }) });
+/** The same server, as another build: only the commit that `hello` names differs. */
+const otherBuild = (hello) => ({ ...hello, build: { ...hello.build, commit: 'ffffff0' } });
+
+async function until(predicate, timeout, what) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await sleep(50);
+  }
+  throw new Error(`timed out waiting for ${what}`);
+}
+
+/**
+ * The server refuses the page's API version (APP-DESIGN 3.10, D8). The first request of a page
+ * is the event stream's, so it is the one that finds out: the page reloads once and keeps a
+ * marker; the same refusal after the reload shows the boot error naming the version, and no
+ * second reload follows. A server that is fixed meanwhile boots on Retry and the marker goes.
+ * Then the same in the middle of a session, when the stream's reconnect meets the refusal.
+ */
+async function caseI(browser, server) {
+  const proxy = await Proxy.start(server);
+  try {
+    const context = await openContext(browser, server);
+    const page = await context.newPage();
+    const log = watch(page);
+    proxy.refuseEvents = versionRefusal(2);
+    // 'commit': the page reloads itself while it loads, which would interrupt a wait for 'load'.
+    await page.goto(`${proxy.url}#t=${server.token}`, { waitUntil: 'commit' });
+    await until(() => documents(log).length >= 2, 15000, 'the one reload');
+    await page.waitForSelector('[data-testid=boot-error]', { timeout: 15000 });
+    await sleep(1500); // a second reload would have started by now
+    check('I: a stream refused for the API version reloaded the page once', documents(log).length === 2, documents(log).length);
+    const shown = await text(page, 'boot-error');
+    check('I: the boot error names the server\'s API version', shown.includes('API version 2'), shown);
+    check('I: it was the stream that found out: hello was never asked', calls(log, 'app/hello').length === 0);
+    check('I: the marker of the reload names that version', /\/2$/.test((await marker(page)) ?? ''), await marker(page));
+    await page.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
+    check('I: __tcIdle becomes true', true);
+
+    proxy.refuseEvents = null;
+    await page.click('[data-testid=boot-error-retry]');
+    await page.waitForSelector(READY, { timeout: 60000 });
+    check('I: Retry boots once the server speaks this API version', true);
+    check('I: and the marker is gone', (await marker(page)) === null, await marker(page));
+    await context.close();
+
+    // The middle of a session: the stream is cut, and what answers its reconnect is another API.
+    const second = await openContext(browser, server);
+    const live = await second.newPage();
+    const liveLog = watch(live);
+    await live.goto(`${proxy.url}#t=${server.token}`);
+    await live.waitForSelector(READY, { timeout: 60000 });
+    await live.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
+    check('I: a page of the same API version boots', documents(liveLog).length === 1);
+    proxy.refuseEvents = versionRefusal(3);
+    proxy.cutStreams();
+    await until(() => documents(liveLog).length >= 2, 15000, 'the reload after the reconnect was refused');
+    await live.waitForSelector('[data-testid=boot-error]', { timeout: 15000 });
+    await sleep(1500);
+    check('I: a reconnect refused for the API version reloads the page once', documents(liveLog).length === 2, documents(liveLog).length);
+    check('I: and the marker names that version', /\/3$/.test((await marker(live)) ?? ''), await marker(live));
+    await second.close();
+  } finally {
+    await proxy.stop();
+  }
+}
+
+/**
+ * The server is another build: `hello` names another commit. The page reloads once; the same
+ * mismatch after the reload shows the boot error naming both builds. A page whose
+ * `sessionStorage` refuses the marker (a browser with storage blocked) cannot tell its reload
+ * from a first load, so it shows the boot error at once and makes no reload. Storage that
+ * refuses must not stop a page that has nothing to reload for.
+ */
+async function caseJ(browser, server) {
+  const proxy = await Proxy.start(server);
+  try {
+    proxy.rewrites.set('app/hello', otherBuild);
+    const context = await openContext(browser, server);
+    const page = await context.newPage();
+    const log = watch(page);
+    await page.goto(`${proxy.url}#t=${server.token}`, { waitUntil: 'commit' });
+    await until(() => documents(log).length >= 2, 15000, 'the one reload');
+    await page.waitForSelector('[data-testid=boot-error]', { timeout: 15000 });
+    await sleep(1500);
+    check('J: another build reloaded the page once', documents(log).length === 2, documents(log).length);
+    check('J: hello was read once for each load', calls(log, 'app/hello').length === 2, calls(log, 'app/hello').length);
+    const shown = await text(page, 'boot-error');
+    check('J: the boot error names both builds', shown.includes('ffffff0') && shown.includes('API 1'), shown);
+    check('J: the marker names the server\'s build', (await marker(page)) === 'ffffff0/1', await marker(page));
+    proxy.rewrites.delete('app/hello');
+    await page.click('[data-testid=boot-error-retry]');
+    await page.waitForSelector(READY, { timeout: 60000 });
+    check('J: Retry boots once the builds agree, and the marker goes', (await marker(page)) === null, await marker(page));
+    await context.close();
+
+    // sessionStorage refuses: reading `window.sessionStorage` throws, as it does with site data blocked.
+    const blocked = await openContext(browser, server);
+    await blocked.addInitScript(() => {
+      Object.defineProperty(window, 'sessionStorage', {
+        configurable: true,
+        get() {
+          throw new DOMException('The operation is insecure.', 'SecurityError');
+        },
+      });
+    });
+    const stuck = await blocked.newPage();
+    const stuckLog = watch(stuck);
+    proxy.rewrites.set('app/hello', otherBuild);
+    // 'commit': a page that reloads for ever would never reach 'load', and the check below says so.
+    await stuck.goto(`${proxy.url}#t=${server.token}`, { waitUntil: 'commit' });
+    check('J: the page cannot reach sessionStorage', (await stuck.evaluate(() => { try { return sessionStorage.length >= 0; } catch (error) { return error.name; } })) === 'SecurityError');
+    await stuck.waitForSelector('[data-testid=boot-error]', { timeout: 60000 });
+    await sleep(2000); // a reload would have come, and with no marker it would come again
+    check('J: with storage blocked, another build shows the boot error and makes no reload', documents(stuckLog).length === 1, documents(stuckLog).length);
+    check('J: hello was read once', calls(stuckLog, 'app/hello').length === 1, calls(stuckLog, 'app/hello').length);
+    check('J: the boot error names the builds', (await text(stuck, 'boot-error')).includes('ffffff0'));
+    check('J: no page error with storage blocked', stuckLog.errors.length === 0, stuckLog.errors);
+    await stuck.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
+    check('J: __tcIdle becomes true', true);
+
+    proxy.rewrites.delete('app/hello');
+    const fine = await blocked.newPage();
+    const fineLog = watch(fine);
+    await fine.goto(`${proxy.url}#t=${server.token}`);
+    await fine.waitForSelector(READY, { timeout: 60000 });
+    check('J: with storage blocked, a page of the same build still boots', true);
+    check('J: with storage blocked, no page error', fineLog.errors.length === 0, fineLog.errors);
+    await blocked.close();
+  } finally {
+    await proxy.stop();
+  }
+}
+
+// --- a job the page holds when the stream has a gap --------------------------------------------
+const frames = JSON.parse(fs.readFileSync(path.join(crateDir, 'app/smoke-events.json'), 'utf8'));
+/** A job frame's event, for job `id` (the shapes are the ones tests/app/sse.rs reads). */
+const jobEvent = (name, id, value = {}) => {
+  const event = structuredClone(frames[name]);
+  event.value.id = id;
+  Object.assign(event.value.state.value ?? {}, value);
+  return event;
+};
+const idle = (page) => page.evaluate(() => window.__tcIdle);
+
+/**
+ * `hello` carries no jobs, so a final frame lost in a gap would leave a job running in the page
+ * for ever, with `window.__tcIdle` false (PERFORMANCE rule 4). After a `Resync` the page reads
+ * each job it holds as active with `jobs/get`; a restart forgets them all. The server here knows
+ * no job at all, as after a long gap: the proxy writes the frames and, for one step, a reply.
+ */
+async function caseK(browser, server) {
+  const proxy = await Proxy.start(server);
+  try {
+    const { instance } = await server.call('app/hello');
+    const context = await openContext(browser, server);
+    const page = await context.newPage();
+    const log = watch(page);
+    await page.goto(`${proxy.url}#t=${server.token}`);
+    await page.waitForSelector(READY, { timeout: 60000 });
+    await page.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
+    const inject = (event, options = {}) => proxy.inject(event, { instance, ...options });
+    const settle = () => page.waitForFunction(() => window.__tcIdle === true, null, { timeout: 5000 });
+
+    check('K: the proxy holds the page\'s stream', inject(frames.internetOn) === 1);
+    await page.waitForSelector('[data-testid=runtime-internet][data-on=true]', { timeout: 5000 });
+    check('K: an injected frame reaches the page', true);
+
+    inject(jobEvent('jobRunning', 4242));
+    await page.waitForFunction(() => window.__tcIdle === false, null, { timeout: 5000 });
+    check('K: a running job is work in flight', (await idle(page)) === false);
+
+    // The server still runs it: a Resync reads it again, and it stays.
+    proxy.rewrites.set('jobs/get', () => jobEvent('jobRunning', 4242, { done: 5 }).value);
+    inject(frames.resync, { seq: proxy.lastSeq });
+    await until(() => calls(log, 'jobs/get').length >= 1, 5000, 'jobs/get after the Resync');
+    await sleep(400);
+    check('K: a Resync reads the job it holds with jobs/get', JSON.parse(calls(log, 'jobs/get')[0].body).job === 4242, calls(log, 'jobs/get')[0].body);
+    check('K: a Resync reads hello again', calls(log, 'app/hello').length === 2, calls(log, 'app/hello').length);
+    check('K: a job the server still runs stays in flight', (await idle(page)) === false);
+
+    inject(jobEvent('jobDone', 4242));
+    await settle();
+    check('K: its end frame ends it', true);
+
+    // The end frame is lost in the gap, and the server no longer knows the job.
+    proxy.rewrites.delete('jobs/get');
+    inject(jobEvent('jobRunning', 4243));
+    await page.waitForFunction(() => window.__tcIdle === false, null, { timeout: 5000 });
+    inject(frames.resync, { seq: proxy.lastSeq });
+    await settle();
+    check('K: a job whose end frame was lost is not left running', calls(log, 'jobs/get').length === 2 && JSON.parse(calls(log, 'jobs/get')[1].body).job === 4243, calls(log, 'jobs/get').map((r) => r.body));
+
+    // A restart: the new run numbers its jobs from 1, so an old id may name another job.
+    inject(jobEvent('jobRunning', 4244));
+    await page.waitForFunction(() => window.__tcIdle === false, null, { timeout: 5000 });
+    inject(frames.internetOn, { instance: 'cd'.repeat(16), seq: 1 });
+    await settle();
+    check('K: a frame of another server run forgets the jobs, and asks for none', calls(log, 'jobs/get').length === 2, calls(log, 'jobs/get').length);
+    check('K: no page error', log.errors.length === 0, log.errors);
+    await context.close();
+  } finally {
+    await proxy.stop();
+  }
+}
+
+/**
+ * The proxy, with no browser: what the cases above stand on. It passes `hello` through, changes
+ * the commit it names, refuses the stream's open as `tc-server` refuses another API version
+ * (the same status and body), and writes frames into an open stream as `tc-server` writes them.
+ */
+async function proxySelftest(server) {
+  const proxy = await Proxy.start(server);
+  const base = new URL(proxy.url);
+  const request = (method, url, { headers = {}, body } = {}) =>
+    new Promise((resolve, reject) => {
+      const req = http.request(
+        { host: base.hostname, port: base.port, method, path: url, headers: { 'x-tc-token': server.token, 'x-tc-api': '1', ...headers } },
+        (res) => resolve(res),
+      );
+      req.on('error', reject);
+      req.end(body);
+    });
+  const readAll = (res) =>
+    new Promise((resolve) => {
+      const parts = [];
+      res.on('data', (part) => parts.push(part));
+      res.on('end', () => resolve(Buffer.concat(parts).toString('utf8')));
+    });
+  const post = async (endpoint, body = {}) => {
+    const text = JSON.stringify(body);
+    const res = await request('POST', `/api/v1/${endpoint}`, { headers: { origin: proxy.url.slice(0, -1), 'content-type': 'application/json', 'content-length': Buffer.byteLength(text) }, body: text });
+    return { status: res.statusCode, headers: res.headers, text: await readAll(res) };
+  };
+  try {
+    const direct = await server.call('app/hello');
+    const passed = await post('app/hello');
+    check('proxy: hello passes through unchanged', passed.status === 200 && JSON.stringify(JSON.parse(passed.text).value) === JSON.stringify(direct), passed.text);
+
+    proxy.rewrites.set('app/hello', otherBuild);
+    const changed = await post('app/hello');
+    const hello = JSON.parse(changed.text);
+    check('proxy: a rewritten hello names the other commit and keeps the rest', hello.type === 'ok' && hello.value.build.commit === 'ffffff0' && hello.value.instance === direct.instance, changed.text);
+    check('proxy: a rewritten reply has the right content-length', Number(changed.headers['content-length']) === Buffer.byteLength(changed.text), changed.headers['content-length']);
+    proxy.rewrites.delete('app/hello');
+
+    // The refusal the cases use is the one the server writes for another API version.
+    const real = await request('GET', '/api/v1/events?after=0', { headers: { 'x-tc-api': '2' } });
+    const realText = await readAll(real);
+    proxy.refuseEvents = versionRefusal(1);
+    const faked = await request('GET', '/api/v1/events?after=0');
+    check('proxy: a refused stream is the server\'s own refusal', faked.statusCode === real.statusCode && faked.headers['content-type'] === real.headers['content-type'] && (await readAll(faked)) === realText, realText);
+    proxy.refuseEvents = null;
+
+    const stream = await request('GET', '/api/v1/events?after=0');
+    const seen = [];
+    stream.on('data', (part) => seen.push(part.toString('utf8')));
+    await until(() => seen.join('').includes(': tc4'), 3000, 'the stream\'s first line');
+    check('proxy: the stream is open through the proxy', proxy.streams.size === 1);
+    const sent = proxy.inject(frames.resync, { instance: direct.instance });
+    await until(() => seen.join('').includes('"resync"'), 3000, 'the injected frame');
+    const wire = seen.join('').split('\n\n').find((part) => part.includes('"resync"'));
+    const [idLine, dataLine] = wire.split('\n');
+    const frame = JSON.parse(dataLine.slice('data: '.length));
+    check('proxy: an injected frame is written as the server writes one', sent === 1 && idLine === `id: ${frame.seq}` && frame.event.type === 'resync' && frame.instance === direct.instance, wire);
+    check('proxy: the next injected frame is numbered after it', proxy.inject(frames.internetOn, { instance: direct.instance }) === 1 && proxy.lastSeq === frame.seq + 1);
+    stream.destroy();
+  } finally {
+    await proxy.stop();
+  }
+}
+
 // --- measurements (docs/PERFORMANCE.md rule 5: median and p95 of at least 20 runs) ------------
 /** Nearest-rank percentile of an unsorted sample list. */
 function percentile(samples, p) {
@@ -585,22 +938,34 @@ async function measure() {
   }
 }
 
+/** `--only app,stale,jobs` runs some of the groups of cases; the default is all of them. */
+const only = args.only ? new Set(args.only.split(',')) : null;
+const wants = (group) => !only || only.has(group);
+
 async function smoke() {
   const server = await Server.start();
   const browser = await chromium.launch();
   const summary = { build: buildName, browser: browser.version(), playwright: JSON.parse(fs.readFileSync(path.join(playwrightDir, 'package.json'), 'utf8')).version };
   try {
-    const context = await openContext(browser, server);
-    const page = await context.newPage();
-    const log = watch(page);
-    Object.assign(summary, await caseA(page, log, server));
-    Object.assign(summary, await caseB(page, log));
-    await caseC(page, log, server);
-    await caseF(page, log, server);
-    await context.close();
-    await caseH(browser, server);
-    await caseD(browser, server);
-    await caseE(browser, server);
+    await proxySelftest(server);
+    if (wants('app')) {
+      const context = await openContext(browser, server);
+      const page = await context.newPage();
+      const log = watch(page);
+      Object.assign(summary, await caseA(page, log, server));
+      Object.assign(summary, await caseB(page, log));
+      await caseC(page, log, server);
+      await caseF(page, log, server);
+      await context.close();
+      await caseH(browser, server);
+      await caseD(browser, server);
+      await caseE(browser, server);
+    }
+    if (wants('stale')) {
+      await caseI(browser, server);
+      await caseJ(browser, server);
+    }
+    if (wants('jobs')) await caseK(browser, server);
     const quit = await server.quit();
     check('G: quit answers closed', quit.closedLine === '{"closed":true}', quit);
     check('G: tc4 exits 0', quit.exit.code === 0, quit);
@@ -613,8 +978,17 @@ async function smoke() {
   }
 }
 
+async function selftest() {
+  const server = await Server.start();
+  try {
+    await proxySelftest(server);
+  } finally {
+    await server.stop();
+  }
+}
+
 try {
-  await (args.measure ? measure() : smoke());
+  await (args.measure ? measure() : args['proxy-selftest'] ? selftest() : smoke());
 } catch (error) {
   console.error(error);
   process.exitCode = 1;
