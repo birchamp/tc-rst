@@ -35,6 +35,7 @@ pub struct Tc4 {
     stdin: Option<ChildStdin>,
     lines: Receiver<String>,
     stderr: Arc<Mutex<String>>,
+    stderr_reader: Option<std::thread::JoinHandle<()>>,
     pub address: Option<Address>,
     started: Instant,
 }
@@ -95,7 +96,7 @@ impl Tc4 {
         let stderr = Arc::new(Mutex::new(String::new()));
         let collected = Arc::clone(&stderr);
         let pipe = child.stderr.take().unwrap();
-        std::thread::spawn(move || {
+        let stderr_reader = std::thread::spawn(move || {
             for line in BufReader::new(pipe).lines().map_while(Result::ok) {
                 let mut text = collected.lock().unwrap();
                 text.push_str(&line);
@@ -108,6 +109,7 @@ impl Tc4 {
             stdin,
             lines,
             stderr,
+            stderr_reader: Some(stderr_reader),
             address: None,
             started: Instant::now(),
         }
@@ -175,7 +177,20 @@ impl Tc4 {
     }
 
     pub fn try_exit(&mut self) -> Option<ExitStatus> {
-        self.child.try_wait().unwrap()
+        let status = self.child.try_wait().unwrap();
+        if status.is_some() {
+            self.collect_stderr();
+        }
+        status
+    }
+
+    /// Waits for the reader thread to take the last of stderr: the process has ended, so its end
+    /// of the pipe is closed. Without this, a test that reads `stderr()` right after the exit
+    /// can see it empty.
+    fn collect_stderr(&mut self) {
+        if let Some(reader) = self.stderr_reader.take() {
+            let _ = reader.join();
+        }
     }
 
     /// Waits for the process to end.
@@ -212,6 +227,7 @@ impl Tc4 {
     pub fn kill(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+        self.collect_stderr();
     }
 
     fn address_ref(&self) -> &Address {
