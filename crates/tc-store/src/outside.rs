@@ -689,9 +689,13 @@ impl Writer {
             Recorded::Refused(reason) => self.undecodable(&rel, &copy, &reason),
             Recorded::NotWritten => {
                 // The disk refused the batch: nothing is recorded and nothing is accepted;
-                // the copy is kept, and the file is looked at again with the next job.
+                // the copy is kept, and the path stays dirty, so the writer's own retry
+                // (200 ms to 3 s) reads it and examines it again.
                 self.dirty.metadata = true;
                 self.dirty.carried |= carried.is_some();
+                if let Some(file) = DerivedFile::from_path(&rel) {
+                    self.dirty.add_file(file);
+                }
                 return;
             }
         }

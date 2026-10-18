@@ -468,6 +468,7 @@ fn a_project_created_through_a_symlinked_projects_folder_keeps_its_device() {
     })
     .unwrap();
     store.wait_cleanup();
+    watch_real_burrito(&store);
     let folder = store
         .create(&tc_store::NewProject {
             name: "Titus".into(),
@@ -496,4 +497,5 @@ fn a_project_created_through_a_symlinked_projects_folder_keeps_its_device() {
         notices_of(&handle)
     );
     handle.close().unwrap();
+    assert!(store.hooks().burrito_problems().is_empty());
 }

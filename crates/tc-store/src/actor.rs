@@ -256,7 +256,10 @@ impl Actor {
             Err(e) => return done(reply, Err(e)),
         }
         // A pack an antivirus program or a cloud client took is written back from its blob
-        // before anything is derived from a project without it (§4.4).
+        // before anything is derived from a project without it (§4.4). From here to the end
+        // of the writer's materialization the folder may hold packs `metadata.json` does not
+        // list yet: a write group (I7).
+        self.project.shared.open_group();
         let restored = self.project.restore_expected_packs(false);
         // A seal that failed after it renamed a pack leaves `metadata.json` without that
         // pack (I7), so the files are written anyway; the seal's error comes first.
@@ -287,8 +290,13 @@ impl Actor {
         let job = self
             .project
             .materialize_job(Origin::Checkpoint, None, Some(checkpoint));
-        if let Some(writer) = &self.project.writer {
-            let _ = writer.send(Job::Materialize(Box::new(job)));
+        let sent = self
+            .project
+            .writer
+            .as_ref()
+            .is_some_and(|writer| writer.send(Job::Materialize(Box::new(job))).is_ok());
+        if !sent {
+            self.project.shared.close_group();
         }
     }
 

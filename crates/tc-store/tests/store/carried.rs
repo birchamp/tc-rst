@@ -299,6 +299,71 @@ fn keep_both_gives_the_other_version_its_own_file() {
     handle.close().unwrap();
 }
 
+/// A path the other version is moved to must be one a carried file may have: the files the
+/// app writes, a folder it needs and a path another record holds are refused, and nothing is
+/// written (V8, §11.4).
+#[test]
+fn keep_both_to_a_path_the_app_writes_or_another_file_holds_is_refused() {
+    use tc_store::CommandError;
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    arrive(&rig, &handle, &folder, SONG, b"my recording of the song");
+    arrive(
+        &rig,
+        &handle,
+        &folder,
+        "ingredients/audio/other.mp3",
+        b"another song",
+    );
+    handle.close().unwrap();
+    let theirs = b"their recording of the song, longer".to_vec();
+    let oid = store_blob(&rig, &folder, &theirs);
+    teammate_version(&rig, &folder, 5, SONG, oid, &theirs, Vec::new());
+    let handle = open(&rig, &folder);
+    let conflict = handle
+        .snapshot()
+        .fold()
+        .conflicts_of(ConflictKind::CarriedFile)
+        .next()
+        .cloned()
+        .unwrap();
+    let other = conflict
+        .candidates
+        .iter()
+        .map(|c| c.head)
+        .find(|h| *h != conflict.provisional)
+        .unwrap();
+    let before = handle.snapshot().fold().len();
+    for to in [
+        "ingredients/TIT.usfm",
+        "ingredients/tc/conflicts.json",
+        "ingredients/audio/other.mp3",
+    ] {
+        let refused = handle
+            .submit(Command::Resolve {
+                conflict: conflict.id,
+                shown: vec![handle.mint_review(&song_key()).unwrap()],
+                choice: Choice::KeepBothCarried {
+                    keep: conflict.provisional,
+                    other,
+                    to: RepoPath::parse(to).unwrap(),
+                },
+            })
+            .wait();
+        assert!(
+            matches!(refused, Err(CommandError::Refused(_))),
+            "{to}: {refused:?}"
+        );
+    }
+    assert_eq!(
+        handle.snapshot().fold().len(),
+        before,
+        "nothing was written"
+    );
+    assert_eq!(handle.snapshot().fold().conflicts().count(), 1);
+    handle.close().unwrap();
+}
+
 /// §5.9: a version whose bytes are not on this computer cannot be restored.
 #[test]
 fn restoring_a_version_whose_bytes_are_not_here_is_refused() {

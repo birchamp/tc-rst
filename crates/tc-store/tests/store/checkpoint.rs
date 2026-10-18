@@ -249,6 +249,8 @@ fn loss_pack_deleted_while_open_never_pushed() {
             .join(&blob[2..]),
     )
     .unwrap();
+    // The folder is no valid burrito from here on, and not by the app's doing.
+    damaged_on_purpose(&rig);
     rig.fs.delete(&folder.join(&pack)).unwrap();
     save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
     let before_usfm = rig.fs.peek(&folder.join("ingredients/TIT.usfm")).unwrap();

@@ -1,6 +1,7 @@
 //! tC4's tests ported (`docs/TC4-DELTA-2026-10-16.md` §3.10 and §4 "tc-store"): the staging
 //! rename, the start cleanup, the training snapshot, and the open's power-loss scenarios that
-//! need no git (the rest are unit S2's).
+//! need no git; the ones that do (a reopen after packs and stale files, an out-of-band edit
+//! that is still recorded) are here too, since the store records outside edits (§11.1).
 
 use crate::common::*;
 use std::path::{Path, PathBuf};

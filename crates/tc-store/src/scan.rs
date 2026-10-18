@@ -12,7 +12,6 @@ use crate::error::StoreError;
 use crate::layout::{self, EXTERNAL, INGREDIENTS};
 use crate::vfs::EntryKind;
 use crate::writer::Writer;
-use std::collections::BTreeSet;
 use std::path::Path;
 use tc_journal::RepoPath;
 use tc_journal::fold::{DerivedFile, Notice};
@@ -70,12 +69,6 @@ impl Writer {
     pub(crate) fn consider_new(&mut self, mut rels: Vec<String>) -> Result<Scanned, StoreError> {
         rels.sort();
         rels.dedup();
-        let projected: BTreeSet<String> = self
-            .fold
-            .derived_files()
-            .iter()
-            .map(DerivedFile::path)
-            .collect();
         let mut out = Scanned::default();
         for rel in rels {
             if let Some(told) = self.unfit(&rel) {
@@ -93,7 +86,7 @@ impl Writer {
             }
             if self.manifest.paths.contains_key(&rel)
                 || self.packs.contains_key(&rel)
-                || projected.contains(&rel)
+                || DerivedFile::from_path(&rel).is_some_and(|f| self.fold.projects_file(&f))
                 || self.found.iter().any(|f| f.rel == rel)
             {
                 continue;

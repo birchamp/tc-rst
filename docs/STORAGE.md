@@ -4659,6 +4659,22 @@ file, every export. The check is the vendored SB 1.0.0 schema plus the code chec
 the exact-set, md5 and size check. The 48 schema controls of the research are a table test.
 There are zero allowed failures.
 
+In `tc-store` the check is not left to the tests that remember it. With the `test-hooks`
+feature, the writer calls a probe the test installed (`Hooks::check_burrito`) with the project
+folder after every job that wrote files, when no write group is open (`Shared::group_open`: the
+actor raises it before a checkpoint's restore and seal and the writer lowers it when the
+materialization that lists the new packs ends) and no outside edit waits to be recorded (the
+folder then lists the bytes found there, I7). The rig of every store test installs a probe that
+validates the folder with `tc_burrito::validate_project` over the files of the test
+filesystem, read without moving the operation count that kill points use, and fails its test
+at drop when the probe named a problem, unless the test killed the filesystem on purpose or
+took a file out of the folder for good (`damaged_on_purpose`). That is
+`every_written_state_is_a_valid_burrito` for every test of the crate, and the test of that
+name runs each command of §2.7 on a project with every record kind, then a checkpoint and a
+close, and asserts the folder and every commit after each. `assert_commits_valid` reads every
+commit of the history back through git2 and validates each tree; every checkpoint test and
+every reopen of the crash tests calls it.
+
 ### 16.7 Tests that can fail
 
 For each mechanism, a mutation that removes it must turn a named test red:

@@ -30,7 +30,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
-use tc_journal::fold::{Blocked, FoldState, Notice, ProjectKind};
+use tc_journal::fold::{Blocked, DerivedFile, FoldState, Notice, ProjectKind};
 
 /// What `metadata.json` and the manifest need of a pack the actor knows.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -204,6 +204,8 @@ pub(crate) struct Writer {
     /// The blobs `refs/tc/carried` is known to keep (§9.8), once the writer has read or
     /// written it.
     pub carried_kept: Option<BTreeSet<tc_journal::GitOid>>,
+    /// A group wrote files since the folder was last looked at as a burrito (test hooks).
+    pub wrote_group: bool,
     /// Paths examined and sent to the actor, not yet recorded: nothing is written to them
     /// until the actor answers (D7).
     pub pending_record: BTreeMap<String, (tc_journal::Md5, Vec<u8>)>,
@@ -278,6 +280,10 @@ impl Writer {
         }
         let result = self.materialize_now();
         self.opening = false;
+        if checkpoint.is_some() {
+            // The seal's packs are listed now, or the job failed and the next open repairs it.
+            self.shared.close_group();
+        }
         if let Err(e) = &result {
             self.job_failed(e);
         }
@@ -413,12 +419,7 @@ impl Writer {
         let packs = self.packs.clone();
         let complete = self.complete;
         self.begin(&snapshot, packs, complete);
-        let Some(file) = self
-            .fold
-            .derived_files()
-            .into_iter()
-            .find(|f| f.path() == rel)
-        else {
+        let Some(file) = DerivedFile::from_path(rel).filter(|f| self.fold.projects_file(f)) else {
             return Ok(());
         };
         let held = self
@@ -479,7 +480,23 @@ impl Writer {
                 return false;
             }
         }
+        self.probe_written_state();
         true
+    }
+
+    /// Test hooks (§16.6): after a job that wrote files, outside a write group and with no
+    /// outside edit waiting to be recorded, the folder is looked at as a Scripture Burrito.
+    /// Without a probe this costs nothing.
+    fn probe_written_state(&mut self) {
+        if !self.wrote_group || !self.shared.hooks.looks_at_burrito() {
+            return;
+        }
+        if !self.pending_record.is_empty() || self.shared.group_open() {
+            // Looked at after a later job, when the group is closed.
+            return;
+        }
+        self.wrote_group = false;
+        self.shared.hooks.probe_burrito(self.folder.root());
     }
 
     fn work(mut self, rx: Receiver<Job>) {
@@ -494,7 +511,10 @@ impl Writer {
                         return;
                     }
                 }
-                Err(RecvTimeoutError::Timeout) => self.retry(),
+                Err(RecvTimeoutError::Timeout) => {
+                    self.retry();
+                    self.probe_written_state();
+                }
                 Err(RecvTimeoutError::Disconnected) => return,
             }
         }
@@ -649,6 +669,7 @@ mod tests {
             recover: None,
             loose: None,
             carried_kept: None,
+            wrote_group: false,
             pending_record: BTreeMap::new(),
             metadata_heads_written: None,
             pending_carried: BTreeMap::new(),

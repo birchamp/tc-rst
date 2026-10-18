@@ -49,7 +49,8 @@ pub enum Failure {
 mod imp {
     use super::{Failure, Point};
     use std::collections::BTreeMap;
-    use std::sync::{Condvar, Mutex};
+    use std::path::Path;
+    use std::sync::{Arc, Condvar, Mutex};
 
     /// The holds of one store.
     #[derive(Debug, Default)]
@@ -58,10 +59,62 @@ mod imp {
         failing: Mutex<BTreeMap<Point, Failure>>,
         /// The loose objects and bytes past which a repack is due; `None`: §9.8's.
         repack: Mutex<Option<(u64, u64)>>,
+        /// How a test looks at the folder as a Scripture Burrito, and what it found.
+        burrito_probe: Mutex<Option<BurritoProbe>>,
+        burrito_problems: Mutex<Vec<String>>,
         changed: Condvar,
     }
 
+    /// Looks at the project folder and names what makes it an invalid burrito.
+    type Probe = dyn Fn(&Path) -> Vec<String> + Send + Sync;
+
+    #[derive(Clone)]
+    struct BurritoProbe(Arc<Probe>);
+
+    impl std::fmt::Debug for BurritoProbe {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("BurritoProbe")
+        }
+    }
+
     impl Hooks {
+        /// From now on the writer calls `probe` with the project folder after every job that
+        /// wrote files, outside a write group, and keeps what it names (§16.6, I7).
+        pub fn check_burrito(&self, probe: impl Fn(&Path) -> Vec<String> + Send + Sync + 'static) {
+            *self.burrito_probe.lock().unwrap_or_else(|e| e.into_inner()) =
+                Some(BurritoProbe(Arc::new(probe)));
+        }
+
+        /// What the probe named, over every state it looked at.
+        pub fn burrito_problems(&self) -> Vec<String> {
+            self.burrito_problems
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
+        }
+
+        pub(crate) fn looks_at_burrito(&self) -> bool {
+            self.burrito_probe
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .is_some()
+        }
+
+        pub(crate) fn probe_burrito(&self, folder: &Path) {
+            let probe = self
+                .burrito_probe
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            if let Some(probe) = probe {
+                let found = (probe.0)(folder);
+                self.burrito_problems
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .extend(found);
+            }
+        }
+
         /// A repack is due when the repository holds more than `objects` loose objects or
         /// `bytes` bytes of them (§9.8 says 2,000 and 64 MiB; `repack_after(0, 0)` makes
         /// every checkpoint repack).
@@ -161,6 +214,12 @@ mod imp {
     pub struct Hooks;
 
     impl Hooks {
+        pub(crate) fn looks_at_burrito(&self) -> bool {
+            false
+        }
+
+        pub(crate) fn probe_burrito(&self, _folder: &std::path::Path) {}
+
         pub(crate) fn repack_threshold(&self) -> (u64, u64) {
             (crate::repack::REPACK_OBJECTS, crate::repack::REPACK_BYTES)
         }

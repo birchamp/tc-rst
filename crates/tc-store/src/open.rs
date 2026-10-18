@@ -1,11 +1,12 @@
 //! The open sequence (`docs/STORAGE.md` §6.1, O1 to O14) and the classification of derived
 //! files (§6.2).
 //!
-//! Unit S1 has no git: the repository steps (O3, the blobs of O8, restoring a pack or
-//! `format.json` from HEAD) are unit S2's. An expected pack (§4.4) is known from the
-//! manifest's pack list; when one is missing, nothing derived is removed until it is back
-//! (`PackMissing`). A derived file changed outside the app is held (§6.2), not recorded:
-//! recording outside edits (§11.1) is unit S2's.
+//! The repository (O3) is opened, made or, when it is damaged, replaced by `history`; a pack,
+//! `project.json` or `format.json` that is gone comes back from HEAD's tree. An expected pack
+//! (§4.4) is known from the manifest's pack list and HEAD's tree; when one is missing and no
+//! blob restores it, nothing derived is removed until it is back (`PackMissing`). A derived
+//! file changed outside the app is recorded as changes (§11.1) when its time says someone
+//! saved it, and held (§6.2) when only its bytes changed, which is storage damage.
 //!
 //! The open reads each journal file once (O8), takes unchanged files' changes from the fold
 //! cache, and classifies each derived file without reading it when its entry is clean by
@@ -635,6 +636,7 @@ fn open_inner(
         recover: broken_git,
         loose: None,
         carried_kept: None,
+        wrote_group: false,
         pending_record: BTreeMap::new(),
         metadata_heads_written: None,
         pending_carried: BTreeMap::new(),

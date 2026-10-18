@@ -350,11 +350,8 @@ impl Writer {
                 }
                 Some(_) => {
                     // Read again here: the file may have changed since the check read it.
-                    let Some(file) = self
-                        .fold
-                        .derived_files()
-                        .into_iter()
-                        .find(|f| f.path() == result.rel)
+                    let Some(file) =
+                        DerivedFile::from_path(&result.rel).filter(|f| self.fold.projects_file(f))
                     else {
                         continue;
                     };

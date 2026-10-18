@@ -374,7 +374,7 @@ fn conflict_of(fold: &FoldState, key: &RecordKey) -> tc_journal::fold::Conflict 
 
 /// One command of each kind of §2.7, built from what `handle` shows now. `None` when the
 /// command does not apply to the project.
-fn every_command(handle: &ProjectHandle) -> Vec<(&'static str, Command)> {
+pub(crate) fn every_command(handle: &ProjectHandle) -> Vec<(&'static str, Command)> {
     let snapshot = handle.snapshot();
     let fold = snapshot.fold();
     let mut out: Vec<(&'static str, Command)> = Vec::new();
@@ -1245,6 +1245,94 @@ fn what_was_recovered_of_a_batch_is_applied_by_a_release() {
         ),
         Err(CommandError::Refused(Refusal::NothingToRelease))
     ));
+    handle.close().unwrap();
+}
+
+/// §7.4: a conflict marked as incomplete history is a warning, never a reason to hide a
+/// choice. Juan's batch of two lost one of its changes on the way; Ana continued the change
+/// that arrived, and this device edited the verse from the same base: the conflict is marked,
+/// and *Keep this version* works beside *Apply what was recovered*.
+#[test]
+fn release_batch_is_accepted_beside_the_other_choices() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    let base = handle.snapshot().fold().heads(&verse(1, 1));
+    let shown = token(&handle, &verse(1, 1));
+    submit(
+        &handle,
+        Command::SaveVerse {
+            shown,
+            words: "My version of one".into(),
+        },
+    )
+    .unwrap();
+    handle.wait_idle();
+    handle.close().unwrap();
+    let words = |text: &str| Record::Verse {
+        book: TIT,
+        chapter: ChapterNo::new(1).unwrap(),
+        verse: VerseNo::new(1).unwrap(),
+        value: VerseValue::Text {
+            marker: tc_journal::record::MarkerWs::canonical(),
+            words: text.into(),
+            layout: "\n".into(),
+            last: VerseNo::new(1).unwrap(),
+            from: None,
+        },
+    };
+    let lost = teammate_batch(
+        &rig.fs,
+        &folder,
+        DeviceId::local([2u8; 15]),
+        2,
+        vec![(words("Juan's first"), base)],
+    );
+    teammate_batch(
+        &rig.fs,
+        &folder,
+        DeviceId::local([3u8; 15]),
+        1,
+        vec![(words("Ana continues"), vec![lost[0]])],
+    );
+    let (_rig, handle) = open(&rig.fs, &folder);
+    let fold = handle.snapshot().fold().clone();
+    let conflict = conflict_of(&fold, &verse(1, 1));
+    assert!(conflict.incomplete_history, "{conflict:?}");
+    let held = fold
+        .anomalies()
+        .find_map(|a| match a {
+            Anomaly::IncompleteBatch { batch, .. } => Some(*batch),
+            _ => None,
+        })
+        .expect("Juan's batch is held");
+    // Every version can be kept, whatever the history lacks.
+    for candidate in &conflict.candidates {
+        assert!(
+            tc_journal::fold::FoldState::resolution(
+                &fold,
+                &conflict.id,
+                &Choice::Candidate {
+                    head: candidate.head
+                }
+            )
+            .is_ok(),
+            "{candidate:?} cannot be kept"
+        );
+    }
+    let kept = conflict.candidates[0].clone();
+    submit(
+        &handle,
+        Command::Resolve {
+            conflict: conflict.id,
+            shown: vec![review(&handle, &verse(1, 1))],
+            choice: Choice::Candidate { head: kept.head },
+        },
+    )
+    .unwrap();
+    assert_eq!(projected(&handle, &verse(1, 1)), Some(kept.value));
+    // And what was recovered of the batch can still be applied.
+    let reply = submit(&handle, Command::ReleaseBatch { batch: held }).unwrap();
+    assert_eq!(reply.changes.len(), 1);
     handle.close().unwrap();
 }
 

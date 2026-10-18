@@ -157,7 +157,7 @@ impl Writer {
                 if entry.is_some() {
                     self.end_hold(rel);
                     if let Some(file) = DerivedFile::from_path(rel) {
-                        if self.fold.derived_files().contains(&file) {
+                        if self.fold.projects_file(&file) {
                             if let Ok(path) = tc_journal::RepoPath::parse(rel) {
                                 self.notice(Notice::MissingFileRebuilt { path }, None);
                             }

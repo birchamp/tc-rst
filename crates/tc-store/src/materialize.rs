@@ -2,14 +2,14 @@
 //! whose projection changed and `metadata.json`, with an intent file, a manifest and a
 //! compare-and-swap, so the app never writes over a file it did not write last (I8).
 //!
-//! Unit S1 holds a derived file that changed outside the app: a copy goes to `.tc/external/`,
-//! the file stays as it is, and the person is told. Recording such an edit as changes
-//! (§11.1) is unit S2's; until then nothing is written over it and nothing is recorded.
-//! Carried files and the fixed files are listed in `metadata.json` as their bytes are on disk
-//! (I7), read or verified by stat as a derived file is; writing a carried file's bytes from
-//! the object database is unit S2's too.
+//! A derived file that changed outside the app is not written over: a copy of its bytes goes
+//! to `.tc/external/`, and the file is either held (its time says nothing was saved, so the
+//! bytes are storage damage, §6.2) or examined and recorded as changes (§11.1, `outside`),
+//! and then written again from the project. Carried files are placed from the object database
+//! (`carried`); they and the fixed files are listed in `metadata.json` as their bytes are on
+//! disk (I7), read or verified by stat as a derived file is.
 //!
-//! The actor never waits for a file another program holds: a path whose rename is refused
+//! This runs on the writer, never on the actor: a path whose rename another program refuses
 //! stays dirty, and the next attempt starts at M0 again after a delay that grows to 3 s
 //! (§5.10).
 
@@ -870,6 +870,7 @@ impl Writer {
                 &dir,
                 name,
                 &r.bytes,
+                r.md5.to_hex(),
                 &mut dirs,
                 &path,
                 seen.get(&path).copied().flatten(),
@@ -968,6 +969,7 @@ impl Writer {
         };
         if metadata_written {
             self.write_metadata_heads(&heads_dir)?;
+            self.wrote_group = true;
         }
         // M7: the manifest.
         let metadata_entry = metadata_written.then_some((metadata, metadata_md5));
@@ -1206,6 +1208,7 @@ impl Writer {
         dir: &std::path::Path,
         name: &str,
         bytes: &[u8],
+        new_md5: String,
         dirs: &mut DirSet,
         rel: &str,
         seen: Option<FileMeta>,
@@ -1220,7 +1223,7 @@ impl Writer {
             .map(|e| e.md5.clone())
             .into_iter()
             .chain(intent.md5s_of(rel).into_iter().map(str::to_owned))
-            .chain([md5_hex(bytes)])
+            .chain([new_md5])
             .collect();
         let mut look = || -> Result<bool, StoreError> {
             self.shared.hooks.wait(crate::hooks::Point::BeforeRename);

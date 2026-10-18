@@ -20,10 +20,49 @@ pub const APP: &str = "/app";
 pub const PROJECTS: &str = "/projects";
 pub const TIT: BookId = BookId::Titus;
 
-/// A store of one installation on `fs`.
+/// A store of one installation on `fs`. Every state its writer finishes a job in is looked at
+/// as a Scripture Burrito, and the rig fails its test when one was not valid (§16.6,
+/// `every_written_state_is_a_valid_burrito`), unless the filesystem was killed on purpose.
 pub struct Rig {
     pub fs: FaultFs,
     pub store: Store,
+}
+
+impl Drop for Rig {
+    fn drop(&mut self) {
+        if std::thread::panicking() || self.fs.is_dead() {
+            return;
+        }
+        let problems = self.store.hooks().burrito_problems();
+        assert!(
+            problems.is_empty(),
+            "the store wrote a state that is not a valid burrito: {problems:#?}"
+        );
+    }
+}
+
+/// Has the store's writer look at the folder after every job that wrote files.
+pub fn watch_burrito(store: &Store, fs: &FaultFs) {
+    let fs = fs.clone();
+    store
+        .hooks()
+        .check_burrito(move |folder: &Path| burrito_problems(&fs, folder));
+}
+
+/// A test that takes a file out of the folder for good (a pack the app cannot write back)
+/// leaves a burrito that is not valid by the test's own doing: the rig stops looking.
+pub fn damaged_on_purpose(rig: &Rig) {
+    rig.store.hooks().check_burrito(|_: &Path| Vec::new());
+}
+
+/// [`watch_burrito`] for a store on the real filesystem.
+pub fn watch_real_burrito(store: &Store) {
+    store.hooks().check_burrito(|folder: &Path| {
+        tc_burrito::validate_dir(folder)
+            .into_iter()
+            .map(|p| format!("{p:?}"))
+            .collect()
+    });
 }
 
 thread_local! {
@@ -70,12 +109,14 @@ pub fn rig_as(fs: FaultFs, app: &str, host: &str) -> Rig {
     let (config, _) = config(&fs, app, host);
     let store = Store::start(config).unwrap();
     store.wait_cleanup();
+    watch_burrito(&store, &fs);
     Rig { fs, store }
 }
 
 pub fn rig_with_hooks(fs: FaultFs, hooks: Arc<Hooks>) -> Rig {
     let (config, _) = config(&fs, APP, "host-1");
     let store = Store::start_with_hooks(config, hooks).unwrap();
+    watch_burrito(&store, &fs);
     Rig { fs, store }
 }
 

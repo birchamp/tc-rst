@@ -671,6 +671,54 @@ fn the_watcher_records_an_edit_without_a_focus() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
+/// A disk that refuses the batch of an outside edit (a scanner holds the pending file past
+/// the retries) records nothing and accepts nothing; the byte copy stays, and the writer's own
+/// retry records the edit once the disk lets it, with no one looking at the window.
+#[test]
+fn a_disk_that_refuses_the_batch_of_an_outside_edit_is_tried_again_by_the_writer() {
+    let (rig, folder) = saved_and_closed();
+    let handle = open(&rig, &folder);
+    let edited = set_verse(
+        &rig.fs.peek(&usfm_path(&folder)).unwrap(),
+        1,
+        2,
+        "in hope of eternal life",
+    );
+    rig.fs.hold_new_files(&folder.join(".tc/pending"), None);
+    rig.fs.put(&usfm_path(&folder), &edited, None);
+    handle.focus().wait().unwrap();
+    // The actor tries the held rename ten more times, and gives up; the writer is told the
+    // batch was refused and tries again on its own. The project is never idle while the disk
+    // refuses, so there is no `wait_idle` here.
+    eventually("the actor never tried the edit", || {
+        rig.fs.held_waits().len() >= 10
+    });
+    assert!(recorded(&handle).is_empty(), "the disk refused the batch");
+    assert_eq!(
+        rig.fs.peek(&usfm_path(&folder)),
+        Some(edited.clone()),
+        "the file is not written over"
+    );
+    let kept: Vec<Vec<u8>> = files(&rig.fs, &folder)
+        .into_iter()
+        .filter(|(p, _)| p.starts_with(".tc/external/") && p.contains("TIT.usfm"))
+        .map(|(_, bytes)| bytes)
+        .collect();
+    assert_eq!(kept, vec![edited.clone()], "the bytes found are kept");
+    rig.fs.release_new_files(&folder.join(".tc/pending"));
+    eventually("the writer never recorded the edit", || {
+        !recorded(&handle).is_empty()
+    });
+    handle.wait_idle();
+    assert_eq!(recorded(&handle), vec![(1, false)]);
+    assert_eq!(
+        words(&handle, 1, 2).as_deref(),
+        Some("in hope of eternal life")
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
 /// The app's own writes are no edits: the watcher is not told of them on the test
 /// filesystem, and a real one tells them, which the entries recognize.
 #[test]
@@ -965,6 +1013,7 @@ fn the_watcher_on_a_real_folder_records_an_edit() {
     })
     .unwrap();
     store.wait_cleanup();
+    watch_real_burrito(&store);
     let folder = store
         .create(&tc_store::NewProject {
             name: "Titus".into(),
@@ -1004,6 +1053,7 @@ fn the_watcher_on_a_real_folder_records_an_edit() {
     handle.wait_idle();
     assert_eq!(recorded(&handle).len(), 1, "{:?}", handle.notices());
     handle.close().unwrap();
+    assert!(store.hooks().burrito_problems().is_empty());
 }
 
 /// §6.2: with `.tc/` gone (a copy of the folder without it) the last commit of this app says

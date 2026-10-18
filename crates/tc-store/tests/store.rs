@@ -66,3 +66,6 @@ mod carried;
 
 #[path = "store/repack.rs"]
 mod repack;
+
+#[path = "store/burrito.rs"]
+mod burrito;

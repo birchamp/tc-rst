@@ -16,7 +16,7 @@ use crate::reply::{CommandError, ReadOnlyReason, StoreReply, Stored};
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::task::{Context, Poll, Waker};
@@ -284,6 +284,9 @@ pub(crate) struct Shared {
     /// Messages and jobs the actor and the writer have taken up, `Sync` aside: `wait_idle`
     /// asks again until a round of syncs finds this unchanged.
     traffic: AtomicU64,
+    /// Write groups the actor has opened that the writer has not closed: a checkpoint's seal
+    /// writes packs that `metadata.json` lists only after the files that follow it (I7).
+    open_groups: AtomicU32,
 }
 
 impl Shared {
@@ -314,7 +317,24 @@ impl Shared {
             jobs: Mutex::new(0),
             jobs_done: Condvar::new(),
             traffic: AtomicU64::new(0),
+            open_groups: AtomicU32::new(0),
         }
+    }
+
+    /// A seal is about to write packs that `metadata.json` does not list yet.
+    pub(crate) fn open_group(&self) {
+        self.open_groups.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// The materialization that follows the seal has listed them.
+    pub(crate) fn close_group(&self) {
+        let _ = self
+            .open_groups
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1));
+    }
+
+    pub(crate) fn group_open(&self) -> bool {
+        self.open_groups.load(Ordering::Acquire) > 0
     }
 
     /// Notes that the actor or the writer took up a message that does work.

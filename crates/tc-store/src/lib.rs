@@ -13,7 +13,10 @@
 //!   folder a valid Scripture Burrito between write groups, and a crash at any point leaves
 //!   the action's before or after state (§6.4).
 //!
-//! Git, sync and outside-edit recording are unit S2's.
+//! The project's git repository (`git`, `checkpoint`, `repack`; §5.13, §9.4, §9.8) is a backup
+//! and the transport to Door43, never the source of truth. Edits other programs make to the
+//! folder are found (`watch`, `focus`, `scan`) and recorded as changes (`outside`, `carried`;
+//! §11). Sync and exchange are unit X's.
 
 pub mod actor;
 pub mod appdata;
