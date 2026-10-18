@@ -740,7 +740,16 @@ pub enum Notice {
     CarriedBytesMissing { path: RepoPath, oid: GitOid },
     DeviceRotated { old: DeviceId, new: DeviceId, reason: RotationReason },
     RestoredBackup { missing: u64, last_at: WallTime },
-    OutsideEditRecorded { path: RepoPath, changes: u32, batch: BatchId },
+    /// `unknown_base`: recorded without parents, so each change conflicts with the project's text.
+    OutsideEditRecorded { path: RepoPath, changes: u32, batch: BatchId, unknown_base: bool },
+    /// The file lost alignments, decisions or comments that a file cannot remove (§11.1 X3).
+    OutsideRemovalKept { path: RepoPath, records: u32 },
+    /// `metadata.json` fields the app writes itself were edited; they are written again.
+    DerivedFieldsEdited { path: RepoPath, fields: u32 },
+    /// `project.json`, `format.json` or `conflicts.json` was edited (§3.5): written again, `copy` holds the bytes found.
+    FixedFileRestored { path: RepoPath, copy: Box<str> },
+    /// `metadata.json` held bytes the app did not write; they are kept in `copy` (§5.10).
+    MetadataEditedOutside { copy: Box<str> },
     OutsideEditUnreadable { path: RepoPath, copy: Box<str>, reason: Box<str> },
     FileMoved { from: Box<str>, to: Box<str> },                      // not a valid ingredient path
     MissingFileRebuilt { path: RepoPath },
@@ -1034,9 +1043,15 @@ the working tree that collides with another path it writes or keeps there:
 **Files that cannot be ingredients.** A path with a segment starting with `.` is never listed and
 never carried as a record (open removes only the app's own `.~*.tmp` files). In the working tree,
 a file under `ingredients/` whose path has no such segment but breaks the grammar (for example
-`TIT (conflicted copy).usfm` from a cloud-sync client) is moved at open to
-`.tc/external/<utc>-<escaped path>`, and the person is told where. OS junk
-(`Thumbs.db`, `desktop.ini`, `*.bak`) is moved the same way without a notice. Nothing is deleted.
+`TIT (conflicted copy).usfm` from a cloud-sync client), and anything under tC4's exchange folders
+`ingredients/tc4-sync/` and `ingredients/tc4-open/`, is moved to
+`.tc/external/<utc>-<escaped path>` (a rename, both folders flushed), and the person is told where
+(`FileMoved`). OS junk (`Thumbs.db`, `desktop.ini`, `*.bak`, `*~`, `*.tmp`) is moved the same way
+without a notice. Nothing is deleted. The files are found by a listing of the root and of
+`ingredients/` (not `tc/changes/`, and no folder or file whose name starts with `.`), which opens
+no file: the open does it after O9 classified, the window focus does it, and the watcher's word of
+a new path does it for that path (§11.1). A file another program holds is left, and the next look
+tries again.
 Such entries arriving from Door43 or in an exchange file are **foreign entries**: they are kept
 in every commit tree, not dropped (§9.4).
 
@@ -1138,7 +1153,7 @@ None of these files is project data that another device needs. Each is written w
 | `device.json` | `{device, fingerprint, created}` | this folder's Local device (§6.3) |
 | `pending/<device>-<hash32>.batch` | header + change lines (§4.2) | saves not yet sealed: the commit point of every save |
 | `materialized.json` | `{minor, derivations, paths: {<path>: {md5, size, mtimeNs, settled, scope, held, oid, nfc}}, packs: {<path>: {md5, size, fingerprint}}}`: the format minor and derivation versions (§12.1) the files were projected with; per derived or carried path what was written (md5, size, mtime), whether its bytes were read back after its timestamp tick was over (`settled`), the digest of the heads its projection stands for (`scope`), and the bytes the app holds there without writing over them (`held`: their md5, why they are held, and the path of their copy in `.tc/external/`), §6.2; for a USFM or story file whether its bytes are NFC (`nfc`), so `metadata.json` states its `normalization` without projecting every book again; per derived path the git blob that holds exactly those bytes once a checkpoint stored it (`blob`, §9.4); per pack the md5 that `metadata.json` lists and its blob, which also makes the manifest's pack list part of the expected pack set (§4.4: a listed pack that is gone and that no valid pack's `replaces` names is missing) | the manifest: what the app last wrote (§5.10). Its own mtime, which the filesystem sets when it is written, is a time stamp that settles entries (§6.2) |
-| `heads/<escaped path>.bin` | postcard `HeadsFile`: for every record the file was built from, the heads the written bytes stand for, by the token rule of §2.7 (every head of a settled or merged record; only the provisional candidate and its equal heads for a conflict) | the base of an outside edit (§11.1); an outside editor saw only the provisional text, so its edit never resolves a conflict |
+| `heads/<escaped path>.bin` | postcard `HeadsFile` (version 2; version 1 is read, without digests): for every record the file was built from, the heads the written bytes stand for, by the token rule of §2.7 (every head of a settled or merged record; only the provisional candidate and its equal heads for a conflict), and, for a book's USFM, a 16-byte digest of how the written file showed the record (MD5 of its piece of the file after line ends and blanks at line ends are normalized, `tc_journal::outside::shown_digest`). `metadata.json` has one too (its project details, no digests), written after the file | the base of an outside edit (§11.1); an outside editor saw only the provisional text, so its edit never resolves a conflict. The digests let the examination skip every record whose decoded digest equals its base digest, so it costs the records that differ (§14); a heads file without them is as good, and costs the book |
 | `materialize.intent.json` | `{writes: [{path, oldMd5, newMd5}], removes: [path]}` | present only during a materialization |
 | `quarantine/…` | damaged pending files, byte copies; change lines too long for any pack (§5.11 K1) | kept until the person dismisses the notice |
 | `quarantine.json` | blob ids of damaged or unreadable incoming files already reported | each damaged file is reported once, not at every sync |
@@ -1628,8 +1643,18 @@ layer holds an open project as a handle:
   screen waits for, never an empty book (`docs/TC4-DELTA-2026-10-16.md` §3.10).
   `Snapshot::training_input` gives the aligner's training input, each verse's text and
   alignment from that one snapshot (§3.10 item 3).
-- `leave`, `checkpoint`, `restore_held`, `dismiss_notice`, `offered_drafts`, `discard_draft`,
-  `wait_idle`, `close`, and `counters()`. `leave` resolves when the writer has finished the job it
+- `leave`, `checkpoint`, `restore_held`, `take_in_held`, `focus`, `dismiss_notice`,
+  `offered_drafts`, `discard_draft`, `wait_idle`, `close`, and `counters()`. `focus()` is the
+  window getting focus (§11.1): it resolves with a `FocusReport` (files read, files handed to be
+  recorded, files moved out) once the writer has looked. `take_in_held(path)` is *Take in the
+  file as an edit* (§6.2): it resolves with a `TakenIn` (the batch and the count of changes)
+  when the batch is durable. `Command::UndoOutsideEdit { batch }` and
+  `Command::ResolveOutsideEdit { batch, keep, conflicts }` are the toast's *Undo* and the
+  `OutsideEditLarge` row's *Accept all from the file* and *Keep translationCore's text* (§11.1
+  X7, §8.1); `StoreReply::kept` lists what an undo could not take back. `StoreConfig` carries
+  `watch_debounce` (one second in the app) and the `Vfs` a `watch` that the real filesystem
+  answers with `notify` and the test filesystem with the writes of `put`, `delete` and
+  `set_mtime`. `leave` resolves when the writer has finished the job it
   sent it; `checkpoint` resolves with a `CheckpointReport` (the commit, the packs sealed, why
   there is no commit) when the actor has moved the branch or the writer has said why not (the
   seal's error comes first, then the files'); the actor serves commands meanwhile. `restore_held` and `dismiss_notice` go to the writer. `wait_idle` waits
@@ -1900,7 +1925,8 @@ head as the resolution screen displayed it.
 `Restore { shown, from }` writes the value of `from` with `parents = shown.heads` and
 `cause: Restore { from }`. For a carried file, *Restore this version* is offered only when the
 version's blob is in the local object database; otherwise History says "The file of this
-version is not on this computer" (§11.4).
+version is not on this computer" (§11.4), and the command is refused with
+`Refusal::FileNotOnThisComputer`.
 
 `ReleaseBatch { batch }` ("Apply what was recovered", §7.4) writes one `BatchRelease` change
 listing the ids of the batch's changes this device holds. `Dismiss { shown }` writes the
@@ -1987,9 +2013,14 @@ list the files as they are; bytes there that neither the manifest nor the intent
 details edited in a text editor, or any bytes when the manifest is gone or does not parse, so
 that nothing names what is on disk) are first copied to `.tc/external/` with a
 `MetadataEditedOutside` notice, once for each version of the bytes, so nothing a person wrote is
-lost (I8). Until unit S2 records outside edits (§11.1), M1 holds every changed path, clean by
-stat or not: copied, left as it is, dropped from D and X, with an `OutsideEditHeld` or
-`StorageDamage` notice. If a rename in M4 fails because another program holds the file open
+lost (I8). Bytes in `metadata.json` that the app did not write are also examined and
+recorded (§11.1), as the fields of the file that are records, and the file is written over; the
+copy is what keeps the person's bytes if the recording fails. In M1 a path whose bytes are none
+the app wrote is, by §6.2, either **held** (clean by stat: copied, left as it is, dropped from
+D and X, with a `StorageDamage` notice) or an **outside edit**: copied, examined and sent to
+the actor to be recorded (§11.1), the path skipped by this job, `metadata.json` listing the
+bytes that are there (I7) until the actor has answered and the writer, told so, writes the file
+again from the project. If a rename in M4 fails because another program holds the file open
 (Windows: Paratext, an indexer), a program is probably writing that file right now, and the
 writer **does not wait for it** beyond the short retries of §5.0 step 3 (`HeldRetry::BACKGROUND`,
 35 ms, so one held file never stalls the other files of its book): the write of that path is
@@ -1997,8 +2028,8 @@ skipped, the path stays dirty, `metadata.json` lists the file as it is, and a ti
 writer tries again after 200 ms, then after as long as the path has waited so far, up to 3 s.
 The actor serves commands meanwhile, so a save never waits for a derived file. **Every try starts at M0 and so repeats M1 for that
 path** (the md5 of its bytes): if `d` is neither the manifest md5 nor the new md5, the file was
-saved by the other program while the app waited, and it is held (unit S1) or recorded (§11.1)
-instead of written over. After 2 s the path stays dirty and the person sees "translationCore
+saved by the other program while the app waited, and it is recorded (§11.1), or held when it
+is clean by stat (§6.2), instead of written over. After 2 s the path stays dirty and the person sees "translationCore
 can't update TIT.usfm because another program has it open. Your work is saved."
 (`MaterializeBlocked` with `Blocked::FileBusy`; the other reasons are in §2.6, and a notice is
 listed once for each reason and path set and goes when the path is written). A file the open cannot read, or a compare-and-swap that cannot read the file,
@@ -2257,7 +2288,10 @@ O9  Classify every derived and carried path (§6.2), reading and projecting only
     app's. That test reads no file, neither the path nor its heads file. Every other path is
     read; it is projected only when its scope or versions differ, or its bytes are not its
     manifest md5. Edits made outside the app are recorded as changes (§11.1), or held (§6.2),
-    before anything is rewritten. An open after no change projects no file, and reads none
+    before anything is rewritten. The root and `ingredients/` are listed once, after the
+    classification and with no file opened: a file that cannot be an ingredient is moved out
+    (§3.3), and a book file the project does not show is examined as an outside edit and adds
+    its book (§11.1 X2). An open after no change projects no file, and reads none
     once the files the last materialization wrote are settled (§6.2).
 O10 Materialize every path whose disk bytes differ from the projection, except held paths, and
     metadata.json if it is missing, damaged or stale. Remove materialize.intent.json. If O9
@@ -2456,9 +2490,10 @@ the project]". *Take in the file as an edit* records the file by §11.1 in unkno
 the hold ends. *Restore from the project* rewrites the file from the fold, through M1 with `d`
 as the md5 it expects, and the hold ends; the copy stays until the notice is dismissed. While
 the path is held, another save of the file ends the hold: its bytes are recorded by §11.1 in
-unknown-base mode, since the file no longer held what its heads file describes (unit S1, which
-does not record, holds the new bytes in their turn: a second copy, never replacing the first,
-and `metadata.json` lists the bytes that are now in the folder). A deletion ends it too, and the
+unknown-base mode, since the file no longer held what its heads file describes (the writer
+finds it when `metadata.json` is listed or when the open classifies; a hold of an edit that an
+earlier version of the app could only keep is recorded the same way at the next open; a second
+copy of the bytes is kept, never replacing the first). A deletion ends it too, and the
 file is rebuilt (O9 reads a held path that is gone as gone: `MissingFileRebuilt`; M0 releases it
 for a path being written, so `metadata.json` never lists a file that is not there); so does a
 projection that comes to equal the held bytes (`d == e`). A held path is never converged
@@ -2488,8 +2523,8 @@ the projection (computed when the rules above call for it):
 | missing | `p` is in the projection | deleted outside the app, or a crash inside a write | rewrite; notice "TIT.usfm was missing and was rebuilt". Never read as a deletion (I11) |
 | missing | `p` is only in the manifest | a removal by this app (a removed book) that stopped before the manifest was written | drop the manifest entry |
 | present | none of the above, manifest entry exists | edited outside the app | §11.1, base = the heads file |
-| present | no manifest entry (`.tc/` lost or copied away), HEAD was made by this app (`Tc-Frontier` trailer) | edited outside the app since HEAD, or edits whose pending files were lost | §11.1, base = the projection of HEAD's own pack set (§11.2 method) |
-| present | no manifest entry and no usable HEAD | unknown | §11.1 in unknown-base mode (`parents = []`) |
+| present | no manifest entry (`.tc/` lost or copied away), HEAD was made by this app (`Tc-Frontier` trailer) | edited outside the app since HEAD, or edits whose pending files were lost | §11.1, base = for each record, the heads among the changes the packs of HEAD's tree hold (a change another pack holds, or only a pending file, is newer than the file the person started from, so the edit conflicts with it and replaces nothing); a file HEAD does not have: every record new |
+| present | no manifest entry and no usable HEAD, or a manifest entry and no heads file | unknown | §11.1 in unknown-base mode (`parents = []`) |
 | present | not a path the app derives | carried | §11.4 |
 
 Because the manifest records what this app wrote, the app never records its own stale file as a
@@ -3715,10 +3750,16 @@ replacements. A file that cannot be read is copied for the person and never sile
 ### 11.1 A file edited on this computer (Paratext, a text editor, a cloud-sync client)
 
 **Detection** at open (§6.2), by the compare-and-swap before every rewrite (§5.10 M1), by a file
-watcher (`notify`, on `ingredients/` except `tc/changes/`, 1 s debounce; the app's own writes are
-recognized because their md5 is the manifest's or the intent's), and on window focus (the md5
-of every path that is not clean by stat by the rule of §6.2: a size or mtime that differs from
-its entry, an unsettled entry, a held path, every path on a network drive).
+watcher (`notify`, on `ingredients/` and the root, 1 s debounce; the app's own writes are
+recognized because the path's size and time are those of its settled entry, or its md5 is the
+manifest's or the intent's), and on window focus (the md5 of every path that is not clean by
+stat by the rule of §6.2: a size or mtime that differs from its entry, an unsettled entry, a
+held path, every path on a network drive). The watcher also watches `.tc/pending/` and
+`ingredients/tc/changes/`: a path there tells the actor to look for a journal file it does not
+know (a second writer, §5.0). The watcher is stopped before the project closes, so no job
+reaches the writer after the last write. Neither the watcher nor the focus projects a file: they
+stat, read what is not clean by stat, and examine what differs; a file clean by stat whose bytes
+differ is storage damage and is the storage check's (O14), not theirs.
 
 **Recording** a changed file `p` with disk bytes `b` (a file clean by stat whose bytes differ is
 held, not recorded, until the person takes it in, §6.2):
@@ -3798,6 +3839,29 @@ So a select-all-and-delete in another editor, a truncated file, or a cloud clien
 older copy shows as one grouped decision, and translationCore's text stays the provisional text
 until a person accepts the file.
 
+**What the writer does with the answer (D7).** The writer reads the file, keeps the copy (X1),
+decodes and compares it (X2, X3) and sends the plan to the actor (X4, X5); the path is then
+**pending**: no materialization writes it, and `metadata.json` lists the bytes that are in the
+folder (I7). The actor answers when the batch is durable (or when the plan was empty, or
+refused). The writer then **accepts** the bytes it examined: the path's manifest entry gets
+their md5, unsettled, with no scope and no hold, so the next materialization finds them to be
+the app's own and writes the file again from the project (X6). The same acceptance follows
+a plan that records nothing (a rewrite of line ends only, or a file whose records all equal
+what the project shows) and a file that could not be decoded; if the disk refused the batch,
+nothing is accepted and the file is looked at again with the next job. A decoded record that
+the file can only show, never remove (an alignment, a decision, a comment) and that the file
+lost stays in the project, is counted in an `OutsideRemovalKept` notice and is written again
+with the file.
+
+The `localFile` source of an `External` cause names the file as an ingredient path, or
+`metadata.json`, the one file outside the ingredients an edit comes from
+(`RepoPath::parse_source`; no other record may name it). The fields of `metadata.json` that are
+looked at are those that differ from the document the app would write now and those the project
+holds a record for, so a record the file keeps is never read as one it lost; the defaults the
+builder fills in are not records. Its edit is recorded against `metadata.json`'s heads file
+(written after the file, §3.6) and the file is written over; the copy is the only notice that
+keeps the person's bytes, and a copy goes with one notice only.
+
 ### 11.2 A file edited on Door43 (web editor, gatewayEdit, tcCreate, git users)
 
 During intake (§9.2 N4) for the fetched commit `R`:
@@ -3874,10 +3938,26 @@ paths break the grammar or have a dot segment are foreign entries (§9.4), kept 
   History shows it with "The file of this version is not on this computer", *Restore this
   version* is offered only for versions whose bytes are here (§5.9), and a projected head whose
   blob is missing never stops a materialization or a commit (§5.10 M0, §9.4).
-- **Change detection.** As for derived files, against the manifest. A changed file: write its
-  bytes with `repo.blob`, then an External change whose `parents` are the heads of the version
-  the app last wrote there (the token rule of §2.7), or `[]` by the revert rule. A new file
-  nobody tracked: an External change with no parents.
+- **Change detection.** As for derived files, against the manifest, by the open (the entries
+  not clean by stat are read once the actor runs), the watcher and the window focus (§11.1). A
+  file is never held in memory: it is read in chunks of 64 KiB to take its md5 and size; when
+  they are none the app placed, it is read again in chunks into a blob (`blob_writer`) while the
+  md5 is taken once more, and the file is recorded only if the two agree, else it changed
+  meanwhile and the next look finds it. The blob is the copy of the person's bytes, so X1 is
+  skipped. Then an External change whose `parents` are the head of the version the app placed
+  there (the token rule of §2.7), or `[]` by the revert rule (the bytes are an older version's).
+  A new file nobody tracked: an External change with no parents; where a removed file was, it
+  replaces the removal. A session with no repository (`HistoryUnavailable`) cannot keep the
+  bytes and records nothing; the file is left as it is.
+- **Placing.** The materialization of the carried group (and the first job of an open that
+  finds a placement the manifest does not know) writes each placement whose manifest entry is
+  not its blob and clean by stat: the file is gone, or holds the bytes the app placed before.
+  It is written from the blob in chunks by `atomic_write_streamed`, whose last look before the
+  rename checks the bytes written against the record's md5 and the file against what was read
+  (I8). Bytes the app did not place are the person's: they are recorded, not overwritten. A
+  blob missing here leaves the file as it is and lists `CarriedBytesMissing`. A file the
+  project no longer places at that path (the copy of a version that was kept apart, moved or
+  removed) is removed after the same compare-and-swap.
 - **A missing file is never a removal.** It is restored from the object database, or reported as
   `CarriedBytesMissing` if the blob is not there. Removal is the explicit `RemoveCarriedFile`
   command (§5.16). An antivirus quarantine or a cloud client freeing space never deletes a file

@@ -219,11 +219,37 @@ pub fn atomic_write_checked(
     retry: &HeldRetry,
     before_rename: &mut dyn FnMut() -> Result<bool, StoreError>,
 ) -> Result<Written, WriteError> {
+    atomic_write_streamed(
+        vfs,
+        dir,
+        name,
+        &mut |out| out(bytes).at("write", dir),
+        sync_dir,
+        retry,
+        before_rename,
+    )
+}
+
+/// What a streamed write is given to put bytes into the new file.
+pub type Sink<'a> = dyn FnMut(&[u8]) -> io::Result<()> + 'a;
+
+/// [`atomic_write_checked`] for bytes that are not in memory (a carried file of any size, §11.4):
+/// `fill` hands the file its bytes in chunks through the sink it is given. The file is
+/// flushed, looked at once more by `before_rename`, and renamed, as any other.
+pub fn atomic_write_streamed(
+    vfs: &dyn Vfs,
+    dir: &Path,
+    name: &str,
+    fill: &mut dyn FnMut(&mut Sink<'_>) -> Result<(), StoreError>,
+    sync_dir: SyncDir<'_>,
+    retry: &HeldRetry,
+    before_rename: &mut dyn FnMut() -> Result<bool, StoreError>,
+) -> Result<Written, WriteError> {
     let temp = dir.join(temp_name(name));
     let target = dir.join(name);
     let written = (|| {
         let mut file = vfs.create_new(&temp).at("create", &temp)?;
-        file.write_all(bytes).at("write", &temp)?;
+        fill(&mut |chunk: &[u8]| file.write_all(chunk))?;
         file.sync_all().at("flush", &temp)?;
         drop(file);
         if !before_rename()? {

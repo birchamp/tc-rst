@@ -34,6 +34,8 @@ sysinfo.workspace = true
 # The project's local repository: checkpoint commits, carried files' blobs, repack
 # (docs/STORAGE.md §9).
 git2.workspace = true
+# The watcher of the folders another program writes into (§11.1).
+notify.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # libgit2's TLS on Linux is OpenSSL, built from source so the app needs none installed.

@@ -153,7 +153,7 @@ fn the_compare_and_swap_reads_a_file_whose_size_and_mtime_are_unchanged() {
 
 /// I8 at the rename: the file is looked at again once the temp file is complete. A program
 /// that saves the file in the window between the compare-and-swap and the rename is not
-/// written over.
+/// written over: its bytes are kept whole in a copy before anything replaces them.
 #[test]
 fn an_outside_save_during_the_rename_window_is_never_overwritten() {
     let hooks = Arc::new(Hooks::default());
@@ -170,13 +170,12 @@ fn an_outside_save_during_the_rename_window_is_never_overwritten() {
     rig.fs.put(&path, &outside, None);
     hooks.release(Point::BeforeRename);
     left.wait().unwrap();
-    assert_eq!(
-        rig.fs.peek(&path),
-        Some(outside.clone()),
-        "never written over"
-    );
-    let (_, copy) = held_notice(&handle).expect("a hold is listed");
-    assert_eq!(rig.fs.peek(&folder.join(&copy)), Some(outside));
+    handle.wait_idle();
+    let copies = copies_of(&handle, "ingredients/TIT.usfm");
+    assert_eq!(copies.len(), 1, "{:?}", handle.notices());
+    assert_eq!(rig.fs.peek(&folder.join(&copies[0])), Some(outside));
+    let written = String::from_utf8(rig.fs.peek(&path).unwrap()).unwrap();
+    assert!(written.contains("Paul, a servant"), "{written}");
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }

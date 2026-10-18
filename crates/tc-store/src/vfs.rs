@@ -10,6 +10,7 @@ use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 /// What a stat of a path gives.
@@ -33,6 +34,25 @@ pub enum EntryKind {
 pub struct DirEntry {
     pub name: OsString,
     pub kind: EntryKind,
+}
+
+/// What a watch tells: the absolute paths another program changed. It is called on the
+/// watcher's own thread and must not wait.
+pub type WatchSink = Arc<dyn Fn(Vec<PathBuf>) + Send + Sync>;
+
+/// A running watch. Dropping it stops the watch.
+pub struct WatchGuard(#[allow(dead_code)] Box<dyn std::any::Any + Send + Sync>);
+
+impl WatchGuard {
+    pub fn new<T: Send + Sync + 'static>(inner: T) -> Self {
+        Self(Box::new(inner))
+    }
+}
+
+impl fmt::Debug for WatchGuard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("WatchGuard")
+    }
 }
 
 /// A file opened for reading at offsets: the fold reads values from pack and pending files
@@ -110,6 +130,17 @@ pub trait Vfs: Send + Sync + fmt::Debug {
     /// through the operating system and not through this trait (§9, §16.2): the folder itself
     /// for a real filesystem, a real mirror folder for the test filesystem.
     fn outside_dir(&self, folder: &Path) -> io::Result<PathBuf>;
+    /// Tells `sink` which paths below `root` another program changes (`recursive`: in the
+    /// folders below it too), until the guard is dropped (§11.1). `Ok(None)`: this
+    /// filesystem does not watch, and the person's window focus is the only trigger.
+    fn watch(
+        &self,
+        _root: &Path,
+        _recursive: bool,
+        _sink: WatchSink,
+    ) -> io::Result<Option<WatchGuard>> {
+        Ok(None)
+    }
 }
 
 /// The error of a rename or removal that another program's open handle refused. A
@@ -361,6 +392,35 @@ impl Vfs for StdFs {
 
     fn outside_dir(&self, folder: &Path) -> io::Result<PathBuf> {
         Ok(folder.to_owned())
+    }
+
+    fn watch(
+        &self,
+        root: &Path,
+        recursive: bool,
+        sink: WatchSink,
+    ) -> io::Result<Option<WatchGuard>> {
+        use notify::Watcher;
+        let mut watcher =
+            notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+                // An error of the watcher (a queue that overflowed) is a missed event: the
+                // window focus looks at every path again.
+                if let Ok(event) = event
+                    && !matches!(event.kind, notify::EventKind::Access(_))
+                    && !event.paths.is_empty()
+                {
+                    sink(event.paths);
+                }
+            })
+            .map_err(io::Error::other)?;
+        let mode = if recursive {
+            notify::RecursiveMode::Recursive
+        } else {
+            notify::RecursiveMode::NonRecursive
+        };
+        watcher.watch(root, mode).map_err(io::Error::other)?;
+        // The watcher is not `Sync`; a guard is only dropped.
+        Ok(Some(WatchGuard::new(std::sync::Mutex::new(watcher))))
     }
 }
 

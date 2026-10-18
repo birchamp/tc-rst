@@ -148,10 +148,11 @@ fn a_books_materialize_touches_only_that_books_files() {
     }
     // Ten times the project, the same kind of work: each file written is a rename of the
     // file and one of its heads file, and a group adds metadata.json, the manifest and the
-    // intent, whatever the size of the project.
+    // intent, whatever the size of the project; and the heads file of metadata.json the
+    // first time a session writes it (§3.6).
     for cost in &costs {
         let c = &cost.counters;
-        assert_eq!(c.renames, 2 * c.derived_written + 3, "{c:?}");
+        assert_eq!(c.renames, 2 * c.derived_written + 4, "{c:?}");
         assert_eq!(c.files_created, c.renames, "{c:?}");
     }
 }

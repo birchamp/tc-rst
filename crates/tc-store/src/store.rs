@@ -48,6 +48,9 @@ pub struct StoreConfig {
     pub clock: Arc<dyn Clock>,
     /// Threads that read journal files at an open.
     pub threads: usize,
+    /// How long the file watcher waits for a program to stop writing before it tells the
+    /// writer (§11.1): one second in the app.
+    pub watch_debounce: std::time::Duration,
 }
 
 impl std::fmt::Debug for StoreConfig {
@@ -193,6 +196,7 @@ impl Store {
             platform: config.platform.clone(),
             clock: config.clock.clone(),
             threads: config.threads.max(1),
+            watch_debounce: config.watch_debounce,
             hooks: hooks.clone(),
         };
         let (vfs, projects, gate) = (config.vfs.clone(), config.projects.clone(), cleanup.clone());

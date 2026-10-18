@@ -965,5 +965,10 @@ fn metadata_decodes_into_the_fields_the_records_hold() {
             value: Some(v.clone()),
         })
         .collect();
-    assert!(tc_journal::outside::fields_not_shown(shown.clone(), &shown).is_empty());
+    assert!(tc_journal::outside::fields_not_shown(shown.clone(), &shown, |_| false).is_empty());
+    // A field the project holds a record for stays, so the planner does not read it as lost.
+    assert_eq!(
+        tc_journal::outside::fields_not_shown(shown.clone(), &shown, |_| true).len(),
+        shown.len()
+    );
 }

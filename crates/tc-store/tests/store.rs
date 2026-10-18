@@ -57,3 +57,9 @@ mod git;
 
 #[path = "store/checkpoint.rs"]
 mod checkpoint;
+
+#[path = "store/outside.rs"]
+mod outside;
+
+#[path = "store/carried.rs"]
+mod carried;

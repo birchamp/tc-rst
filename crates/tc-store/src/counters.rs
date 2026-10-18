@@ -104,6 +104,13 @@ counters! {
     /// Trees written: the directories on the paths a commit changed, and the root.
     git_trees_written,
     git_commits_written,
+    /// Bytes of rendered USFM the per-record digests of the heads files were taken of
+    /// (§11.1 X3: the base of an outside edit).
+    digest_bytes,
+    /// Files an outside edit was decoded from (§11.1 X2).
+    outside_decodes,
+    /// Records an outside edit compared value by value (§11.1 X3): the changed ones.
+    outside_keys_examined,
 }
 
 impl Counters {
@@ -284,6 +291,15 @@ impl Vfs for CountingVfs {
 
     fn outside_dir(&self, folder: &Path) -> io::Result<PathBuf> {
         self.inner.outside_dir(folder)
+    }
+
+    fn watch(
+        &self,
+        root: &Path,
+        recursive: bool,
+        sink: crate::vfs::WatchSink,
+    ) -> io::Result<Option<crate::vfs::WatchGuard>> {
+        self.inner.watch(root, recursive, sink)
     }
 
     fn secure_dir_chain(&self, dir: &Path, made: &[PathBuf]) -> io::Result<()> {

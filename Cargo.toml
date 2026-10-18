@@ -62,6 +62,8 @@ rustix = { version = "1.1.5", features = ["fs"] }
 # Local git (docs/STORAGE.md §9, §17): libgit2 1.9.7 built from source, with the TLS the fetch
 # and push of unit X will need; vendored OpenSSL is added on Linux only, in tc-store.
 git2 = { version = "=0.21.0", default-features = false, features = ["https", "vendored-libgit2"] }
+# tc-store: the file watcher of docs/STORAGE.md §11.1 (inotify, FSEvents, ReadDirectoryChangesW).
+notify = "8.2.0"
 
 # Full debug info made each agent worktree's target dir several GB and filled the disk.
 [profile.dev]

@@ -99,10 +99,9 @@ fn record_carried(handle: &ProjectHandle, bytes: &[u8]) {
 fn a_held_file_deleted_while_the_project_is_closed_is_rebuilt() {
     let (rig, folder) = titus();
     saved_and_closed(&rig, &folder);
+    settle_entries(&rig, &folder);
     let usfm = usfm_path(&folder);
-    let mut edited = rig.fs.peek(&usfm).unwrap();
-    edited.extend_from_slice(b"\n\\rem typed in an editor\n");
-    rig.fs.put(&usfm, &edited, None);
+    let damaged = damage_file(&rig, &folder, "ingredients/TIT.usfm");
     let handle = open(&rig, &folder);
     assert!(
         hold_notices(&handle)
@@ -126,10 +125,11 @@ fn a_held_file_deleted_while_the_project_is_closed_is_rebuilt() {
     save_verse(&handle, 1, 2, "to Titus").unwrap();
     leave(&handle);
     handle.close().unwrap();
-    let rebuilt = String::from_utf8(rig.fs.peek(&usfm).expect("TIT.usfm is back")).unwrap();
+    let rebuilt = rig.fs.peek(&usfm).expect("TIT.usfm is back");
+    assert_ne!(rebuilt, damaged);
+    let rebuilt = String::from_utf8(rebuilt).unwrap();
     assert!(rebuilt.contains("Paul, a servant"), "{rebuilt}");
     assert!(rebuilt.contains("to Titus"));
-    assert!(!rebuilt.contains("typed in an editor"));
     assert_valid_burrito(&rig.fs, &folder);
 }
 
@@ -138,12 +138,12 @@ fn a_held_file_deleted_while_the_project_is_closed_is_rebuilt() {
 #[test]
 fn a_held_file_deleted_while_the_project_is_open_is_rebuilt() {
     let (rig, folder) = titus();
+    saved_and_closed(&rig, &folder);
+    settle_entries(&rig, &folder);
     let handle = open(&rig, &folder);
-    save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
     let usfm = usfm_path(&folder);
-    let mut edited = rig.fs.peek(&usfm).unwrap();
-    edited.extend_from_slice(b"\n\\rem typed in an editor\n");
-    rig.fs.put(&usfm, &edited, None);
+    damage_file(&rig, &folder, "ingredients/TIT.usfm");
+    save_verse(&handle, 1, 2, "to Titus").unwrap();
     leave(&handle);
     assert!(
         !hold_notices(&handle).is_empty(),
@@ -151,11 +151,11 @@ fn a_held_file_deleted_while_the_project_is_open_is_rebuilt() {
     );
     assert_valid_burrito(&rig.fs, &folder);
     rig.fs.delete(&usfm).unwrap();
-    save_verse(&handle, 1, 2, "to Titus").unwrap();
+    save_verse(&handle, 1, 3, "grace and peace").unwrap();
     leave(&handle);
     assert_valid_burrito(&rig.fs, &folder);
     let rebuilt = String::from_utf8(rig.fs.peek(&usfm).expect("TIT.usfm is back")).unwrap();
-    assert!(rebuilt.contains("to Titus"));
+    assert!(rebuilt.contains("to Titus") && rebuilt.contains("grace and peace"));
     assert!(
         hold_notices(&handle).is_empty(),
         "the hold ended with the deletion"
@@ -231,10 +231,11 @@ fn a_removed_carried_file_that_was_edited_outside_is_not_deleted() {
     handle.close().unwrap();
 }
 
-/// I7: a carried file rewritten outside the app is listed as it is on disk, held with a copy
-/// and a notice, never listed with the md5 and size of the bytes the app saw.
+/// I7 and §11.4: a carried file rewritten outside the app is listed as it is on disk, and the
+/// new bytes are recorded as a new version of the file, stored whole as a blob; nothing is
+/// written over them.
 #[test]
-fn a_carried_file_edited_outside_is_listed_as_it_is_and_held() {
+fn a_carried_file_edited_outside_is_recorded_and_listed_as_it_is() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     let bytes = b"mp3".to_vec();
@@ -248,25 +249,37 @@ fn a_carried_file_edited_outside_is_listed_as_it_is_and_held() {
     save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
     leave(&handle);
     assert_valid_burrito(&rig.fs, &folder);
-    let held = hold_notices(&handle);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    assert_valid_burrito(&rig.fs, &folder);
     assert!(
-        held.iter().any(|(path, _)| path == AUDIO),
-        "the person is told: {held:?}"
+        notices(&handle).iter().any(|n| matches!(
+            &n.notice,
+            Notice::OutsideEditRecorded { path, .. } if path.as_str() == AUDIO
+        )),
+        "{:?}",
+        notices(&handle)
     );
-    let (_, copy) = held.iter().find(|(path, _)| path == AUDIO).unwrap();
-    assert_eq!(rig.fs.peek(&folder.join(copy)), Some(edited.clone()));
-    assert_eq!(rig.fs.peek(&folder.join(AUDIO)), Some(edited));
+    assert_eq!(rig.fs.peek(&folder.join(AUDIO)), Some(edited.clone()));
+    let repo = repo_of(&rig.fs, &folder);
+    let blob = git2::Oid::hash_object(git2::ObjectType::Blob, &edited).unwrap();
+    assert!(
+        repo.odb().unwrap().exists(blob),
+        "the bytes are stored whole"
+    );
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// The same for the fixed files, which are listed from the manifest too (§3.5).
+/// §3.5: `project.json` is never recorded. A copy of the edited file is kept, the file is
+/// written again as the app had it, and the person is told; the burrito lists what is there.
 #[test]
-fn a_fixed_file_edited_outside_is_listed_as_it_is() {
+fn a_fixed_file_edited_outside_is_restored_and_a_copy_is_kept() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     leave(&handle);
-    let path = folder.join("ingredients/tc/project.json");
+    let rel = "ingredients/tc/project.json";
+    let path = folder.join(rel);
     let original = rig.fs.peek(&path).unwrap();
     let mut spaced = original.clone();
     spaced.extend_from_slice(b"\n\n");
@@ -274,37 +287,44 @@ fn a_fixed_file_edited_outside_is_listed_as_it_is() {
     save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
     leave(&handle);
     assert_valid_burrito(&rig.fs, &folder);
-    assert_eq!(rig.fs.peek(&path), Some(spaced), "never written over");
+    assert_eq!(rig.fs.peek(&path), Some(original), "written again");
+    let copies = copies_of(&handle, rel);
+    assert_eq!(copies.len(), 1, "{:?}", notices(&handle));
+    assert_eq!(rig.fs.peek(&folder.join(&copies[0])), Some(spaced));
+    assert!(notices(&handle).iter().any(
+        |n| matches!(&n.notice, Notice::FixedFileRestored { path, .. } if path.as_str() == rel)
+    ));
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// A held file that changes again is listed as it is now, and both versions are kept.
+/// A held file that changes again is recorded as it is now (§6.2), with no base since the
+/// app's version is gone, and both versions of the file stay as copies.
 #[test]
-fn a_held_file_that_changes_again_is_listed_as_it_is_and_both_copies_stay() {
+fn a_held_file_that_changes_again_is_recorded_and_both_copies_stay() {
     let (rig, folder) = titus();
+    saved_and_closed(&rig, &folder);
+    settle_entries(&rig, &folder);
     let handle = open(&rig, &folder);
-    save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
     let usfm = usfm_path(&folder);
-    let original = rig.fs.peek(&usfm).unwrap();
-    let mut first = original.clone();
-    first.extend_from_slice(b"\\rem first\n");
-    rig.fs.put(&usfm, &first, None);
-    leave(&handle);
-    assert_valid_burrito(&rig.fs, &folder);
-    let mut second = original;
-    second.extend_from_slice(b"\\rem second, and longer\n");
-    rig.fs.put(&usfm, &second, None);
+    let first = damage_file(&rig, &folder, "ingredients/TIT.usfm");
     save_verse(&handle, 1, 2, "to Titus").unwrap();
     leave(&handle);
     assert_valid_burrito(&rig.fs, &folder);
-    let copies: Vec<Vec<u8>> = hold_notices(&handle)
-        .into_iter()
-        .map(|(_, copy)| rig.fs.peek(&folder.join(copy)).unwrap())
-        .collect();
+    assert_eq!(hold_notices(&handle).len(), 1, "{:?}", notices(&handle));
+    let mut second = first.clone();
+    second.extend_from_slice(b"\\rem second, and longer\n");
+    rig.fs.put(&usfm, &second, None);
+    save_verse(&handle, 1, 3, "grace and peace").unwrap();
+    leave(&handle);
+    assert_valid_burrito(&rig.fs, &folder);
+    handle.wait_idle();
+    assert!(hold_notices(&handle).is_empty(), "the hold ended");
+    let copies = copies_of(&handle, "ingredients/TIT.usfm");
+    assert_eq!(copies.len(), 1, "{:?}", notices(&handle));
     assert_eq!(
-        copies,
-        vec![second.clone()],
+        rig.fs.peek(&folder.join(&copies[0])),
+        Some(second.clone()),
         "the notice names the newest bytes"
     );
     let kept: Vec<Vec<u8>> = crate::common::files(&rig.fs, &folder)
@@ -315,6 +335,7 @@ fn a_held_file_that_changes_again_is_listed_as_it_is_and_both_copies_stay() {
     assert!(kept.contains(&first), "the first copy stays");
     assert!(kept.contains(&second));
     handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
 }
 
 /// Two outside edits in one second keep two copies: a copy never replaces another.
@@ -602,10 +623,9 @@ fn a_derived_file_another_program_holds_never_stalls_a_save() {
 fn a_held_files_notice_comes_back_after_a_restart() {
     let (rig, folder) = titus();
     saved_and_closed(&rig, &folder);
+    settle_entries(&rig, &folder);
     let usfm = usfm_path(&folder);
-    let mut edited = rig.fs.peek(&usfm).unwrap();
-    edited.extend_from_slice(b"\\rem typed in an editor\n");
-    rig.fs.put(&usfm, &edited, None);
+    let edited = damage_file(&rig, &folder, "ingredients/TIT.usfm");
     let handle = open(&rig, &folder);
     let first = hold_notices(&handle);
     assert_eq!(first.len(), 1, "{first:?}");
@@ -638,7 +658,7 @@ fn a_held_files_notice_comes_back_after_a_restart() {
     handle.restore_held("ingredients/TIT.usfm").wait().unwrap();
     let restored = String::from_utf8(rig.fs.peek(&usfm).unwrap()).unwrap();
     assert!(restored.contains("to Titus"));
-    assert!(!restored.contains("typed in an editor"));
+    assert_ne!(restored.as_bytes(), edited.as_slice());
     assert!(hold_notices(&handle).is_empty());
     handle.close().unwrap();
     let handle = open(&rig, &folder);

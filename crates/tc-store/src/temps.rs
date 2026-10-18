@@ -237,6 +237,7 @@ pub(crate) fn settle_temps(
             temp.rel.clone(),
             PendingInfo {
                 ids,
+                reconciles: None,
                 number: None,
                 status: PendingStatus::Valid,
             },

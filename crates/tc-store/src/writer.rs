@@ -98,6 +98,17 @@ pub(crate) enum Job {
         id: u64,
         reply: Resolver<Result<(), StoreError>>,
     },
+    /// The window got focus: every path is looked at (§11.1).
+    Focus {
+        reply: Resolver<Result<crate::reply::FocusReport, StoreError>>,
+    },
+    /// The watcher told these paths changed (§11.1).
+    Paths(Vec<String>),
+    /// *Take in the file as an edit* for a held path (§6.2).
+    TakeInHeld {
+        rel: String,
+        reply: Resolver<Result<crate::reply::TakenIn, StoreError>>,
+    },
     /// Resolves when every job sent before it has finished.
     Sync {
         reply: Resolver<()>,
@@ -106,6 +117,31 @@ pub(crate) enum Job {
     Close {
         reply: Resolver<()>,
     },
+    /// The actor's answer to a plan the writer sent it (§11.1 X4).
+    Recorded {
+        rel: String,
+        seen: tc_journal::Md5,
+        copy: String,
+        outcome: Recorded,
+    },
+}
+
+/// What the actor did with a plan of an outside edit.
+#[derive(Debug)]
+pub(crate) enum Recorded {
+    /// One batch holds the changes (or a batch that reconciles the same bytes did already).
+    Done {
+        batch: Option<tc_journal::BatchId>,
+        changes: u32,
+        unknown_base: bool,
+        whitespace_only: u32,
+        kept: u32,
+        derived: u32,
+    },
+    /// The rules refuse the plan (a non-NFC identity in a sidecar): nothing is recorded.
+    Refused(String),
+    /// The disk refused the batch: nothing is recorded, and the file is looked at again.
+    NotWritten,
 }
 
 /// See the module documentation.
@@ -140,7 +176,7 @@ pub(crate) struct Writer {
     pub dirty: Dirty,
     /// Bytes O9 projected to classify a path, kept for the materialization that follows it
     /// with the same fold, so the open projects each file once.
-    pub prerendered: BTreeMap<String, Vec<u8>>,
+    pub prerendered: BTreeMap<String, crate::materialize::Projected>,
     /// The sequence number of the fold they were projected from.
     pub prerendered_seq: u64,
     /// Why each blocked path of the job could not be written (R16).
@@ -159,6 +195,21 @@ pub(crate) struct Writer {
     /// A damaged repository was replaced at the open: its first commit is the project as it
     /// is (§6.4 G4), made once the open's files are written.
     pub recover: bool,
+    /// Paths examined and sent to the actor, not yet recorded: nothing is written to them
+    /// until the actor answers (D7).
+    pub pending_record: BTreeMap<String, (tc_journal::Md5, Vec<u8>)>,
+    /// The bytes of `metadata.json`'s heads file as this writer last wrote them.
+    pub metadata_heads_written: Option<Vec<u8>>,
+    /// Carried files handed to the actor to be recorded, with the blob and size they were
+    /// stored as, until the actor answers (§11.4).
+    pub pending_carried: BTreeMap<String, (tc_journal::GitOid, u64)>,
+    /// Paths the open found that need a read, looked at once the actor runs (§6.1 O9).
+    pub deferred_paths: Vec<String>,
+    /// Who asked for a held file to be taken in, answered when the batch is durable.
+    pub waiting: BTreeMap<String, Resolver<Result<crate::reply::TakenIn, StoreError>>>,
+    /// The open classifies: a changed path is collected, and the open records it itself.
+    pub collecting: bool,
+    pub found: Vec<crate::outside::Found>,
     pub actor: Sender<Msg>,
 }
 
@@ -178,7 +229,12 @@ impl Writer {
 
     /// Takes the view of a job: the fold it renders from and the packs the actor knows. The
     /// writer never goes back to an older fold than one it has run on.
-    fn begin(&mut self, snapshot: &Snapshot, packs: BTreeMap<String, PackFacts>, complete: bool) {
+    pub(crate) fn begin(
+        &mut self,
+        snapshot: &Snapshot,
+        packs: BTreeMap<String, PackFacts>,
+        complete: bool,
+    ) {
         let newest;
         let snapshot = if snapshot.seq() < self.seq {
             newest = self.shared.snapshot();
@@ -240,7 +296,7 @@ impl Writer {
 
     /// A job that failed: the paths stay dirty and are tried again; the person is told once
     /// that derived files could not be written and the work is saved (R16).
-    fn job_failed(&mut self, error: &StoreError) {
+    pub(crate) fn job_failed(&mut self, error: &StoreError) {
         let reason: Box<str> = error.to_string().into();
         let blocked = Blocked::Failed {
             reason: reason.clone(),
@@ -258,7 +314,7 @@ impl Writer {
 
     /// §5.10 for what is dirty. A path another program refused, or a write that failed,
     /// stays dirty and is tried again by [`Writer::retry`].
-    fn materialize_now(&mut self) -> Result<(), StoreError> {
+    pub(crate) fn materialize_now(&mut self) -> Result<(), StoreError> {
         if self.read_only().is_some() {
             self.dirty = Dirty::default();
             return Ok(());
@@ -368,6 +424,9 @@ impl Writer {
     }
 
     fn handle(&mut self, job: Job) -> bool {
+        if !matches!(job, Job::Sync { .. }) {
+            self.shared.note_traffic();
+        }
         match job {
             Job::Materialize(job) => self.run(*job),
             Job::StorageCheck(results) => self.storage_check(results),
@@ -375,9 +434,30 @@ impl Writer {
                 let result = self.restore_held(&rel);
                 reply.resolve(result);
             }
+            Job::Focus { reply } => {
+                let result = self.focus();
+                reply.resolve(result);
+            }
+            Job::Paths(rels) => self.paths_changed(rels),
+            Job::TakeInHeld { rel, reply } => self.take_in_held(&rel, reply),
             Job::DismissNotice { id, reply } => {
                 let result = self.dismiss(id);
                 reply.resolve(result);
+            }
+            Job::Recorded {
+                rel,
+                seen,
+                copy,
+                outcome,
+            } => {
+                let bytes = self
+                    .pending_record
+                    .get(&rel)
+                    .map(|(_, bytes)| bytes.clone())
+                    .unwrap_or_default();
+                self.recorded(rel, seen, copy, outcome, &bytes);
+                // The batch is durable: the file is written again from the project now.
+                self.retry();
             }
             Job::Sync { reply } => reply.resolve(()),
             Job::Close { reply } => {
@@ -553,6 +633,13 @@ mod tests {
             git: None,
             device: DeviceId::local([9; 15]),
             recover: false,
+            pending_record: BTreeMap::new(),
+            metadata_heads_written: None,
+            pending_carried: BTreeMap::new(),
+            deferred_paths: Vec::new(),
+            waiting: BTreeMap::new(),
+            collecting: false,
+            found: Vec::new(),
             actor,
         }
     }

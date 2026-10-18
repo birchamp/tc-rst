@@ -117,6 +117,9 @@ struct Model {
     log: Vec<Op>,
     opened: Vec<PathBuf>,
     bytes_read: u64,
+    /// The most bytes one read or one write has moved since [`FaultFs::reset_widest_io`]: a
+    /// store that keeps a large file out of memory moves it in pieces.
+    widest_io: usize,
     power_loss: PowerLoss,
     /// The model's clock: modification times, nanoseconds since the epoch.
     now_ns: i64,
@@ -126,6 +129,41 @@ struct Model {
     step_ns: i64,
     /// The real folder libgit2 works in, made when the first project asks for it.
     mirror: Mirror,
+    /// The watches that were asked for: what another program changes (`put`, `delete`,
+    /// `set_mtime`) is told to the ones whose folder holds it. The store's own writes tell
+    /// nothing.
+    watchers: Vec<Watcher>,
+    next_watcher: u64,
+}
+
+#[derive(Clone)]
+struct Watcher {
+    id: u64,
+    root: PathBuf,
+    recursive: bool,
+    sink: crate::vfs::WatchSink,
+}
+
+impl std::fmt::Debug for Watcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Watcher({}, {})", self.id, self.root.display())
+    }
+}
+
+/// Stops a watch of the model filesystem when dropped.
+struct FaultWatch {
+    model: Arc<Mutex<Model>>,
+    id: u64,
+}
+
+impl Drop for FaultWatch {
+    fn drop(&mut self) {
+        self.model
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .watchers
+            .retain(|w| w.id != self.id);
+    }
 }
 
 /// The real folder beside the model where libgit2 keeps a project's `.git` (D3): git is outside
@@ -315,11 +353,14 @@ impl Model {
             log: Vec::new(),
             opened: Vec::new(),
             bytes_read: 0,
+            widest_io: 0,
             power_loss: PowerLoss::KeepSyncedNames,
             now_ns: START_NS,
             tick_ns: 1,
             step_ns: 1_000_000,
             mirror: Mirror::None,
+            watchers: Vec::new(),
+            next_watcher: 0,
         }
     }
 
@@ -539,6 +580,7 @@ impl FaultFs {
         let mut model = self.model().clone();
         model.mirror = model.mirror.duplicated();
         model.faults = Faults::default();
+        model.watchers.clear();
         model.log.clear();
         model.opened.clear();
         Self {
@@ -559,6 +601,7 @@ impl FaultFs {
         drop(model);
         next.mirror = next.mirror.duplicated();
         next.faults = Faults::default();
+        next.watchers.clear();
         next.log.clear();
         next.opened.clear();
         Self {
@@ -618,6 +661,16 @@ impl FaultFs {
     /// Every file opened for reading since the log was cleared, in order.
     pub fn opened(&self) -> Vec<PathBuf> {
         self.model().opened.clone()
+    }
+
+    /// The most bytes one read or one write moved since the last call of
+    /// [`FaultFs::reset_widest_io`].
+    pub fn widest_io(&self) -> usize {
+        self.model().widest_io
+    }
+
+    pub fn reset_widest_io(&self) {
+        self.model().widest_io = 0;
     }
 
     pub fn bytes_read(&self) -> u64 {
@@ -695,6 +748,36 @@ impl FaultFs {
     /// Writes `bytes` at `path` as another program would, creating the parents: no write
     /// point, durable at once, the modification time now (or `mtime_ns`).
     pub fn put(&self, path: &Path, bytes: &[u8], mtime_ns: Option<i64>) {
+        self.put_unseen(path, bytes, mtime_ns);
+        self.tell(path);
+    }
+
+    /// Tells the watches whose folder holds `path` that it changed, as a real filesystem
+    /// tells the app of its own writes too.
+    pub fn touch_told(&self, path: &Path) {
+        self.tell(path);
+    }
+
+    /// Tells the watches whose folder holds `path` that another program changed it.
+    fn tell(&self, path: &Path) {
+        let sinks: Vec<crate::vfs::WatchSink> = self
+            .model()
+            .watchers
+            .iter()
+            .filter(|w| {
+                path.starts_with(&w.root)
+                    && (w.recursive || path.parent() == Some(w.root.as_path()))
+            })
+            .map(|w| w.sink.clone())
+            .collect();
+        for sink in sinks {
+            sink(vec![path.to_owned()]);
+        }
+    }
+
+    /// [`FaultFs::put`] that tells no watch: the change a watcher missed, which only the
+    /// window focus finds.
+    pub fn put_unseen(&self, path: &Path, bytes: &[u8], mtime_ns: Option<i64>) {
         let mut model = self.model();
         let Ok(parts) = components(path) else {
             return;
@@ -744,20 +827,26 @@ impl FaultFs {
 
     /// Sets a file's modification time, as `touch -d` or a sync client does.
     pub fn set_mtime(&self, path: &Path, mtime_ns: i64) -> io::Result<()> {
-        let mut model = self.model();
-        let ino = model.resolve(path)?;
-        model.nodes[ino].mtime_ns = mtime_ns;
+        {
+            let mut model = self.model();
+            let ino = model.resolve(path)?;
+            model.nodes[ino].mtime_ns = mtime_ns;
+        }
+        self.tell(path);
         Ok(())
     }
 
     /// Removes a file or folder as another program would: no write point, durable at once.
     pub fn delete(&self, path: &Path) -> io::Result<()> {
-        let mut model = self.model();
-        let (dir, name) = model.parent(path)?;
-        model.unlink(dir, &name).ok_or_else(|| not_found(path))?;
-        if let Some(d) = model.dir_mut(dir) {
-            d.durable.remove(&name);
+        {
+            let mut model = self.model();
+            let (dir, name) = model.parent(path)?;
+            model.unlink(dir, &name).ok_or_else(|| not_found(path))?;
+            if let Some(d) = model.dir_mut(dir) {
+                d.durable.remove(&name);
+            }
         }
+        self.tell(path);
         Ok(())
     }
 
@@ -811,6 +900,7 @@ impl ReadHandle for FaultRead {
             let mut model = self.fs.model();
             model.check_read(&self.path)?;
             model.bytes_read += buf.len() as u64;
+            model.widest_io = model.widest_io.max(buf.len());
             model.faults.read_delay
         };
         if let Some(delay) = delay {
@@ -835,6 +925,7 @@ struct FaultWrite {
 impl WriteHandle for FaultWrite {
     fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> {
         let mut model = self.fs.model();
+        model.widest_io = model.widest_io.max(bytes.len());
         if let Err(error) = model.step(OpKind::Write, &self.path) {
             if std::mem::take(&mut model.faults.tear_now) {
                 let half = bytes.len() / 2;
@@ -1191,6 +1282,27 @@ impl Vfs for FaultFs {
 
     fn wait_held(&self, delay: Duration) {
         self.model().faults.held_waits.push(delay);
+    }
+
+    fn watch(
+        &self,
+        root: &Path,
+        recursive: bool,
+        sink: crate::vfs::WatchSink,
+    ) -> io::Result<Option<crate::vfs::WatchGuard>> {
+        let mut model = self.model();
+        let id = model.next_watcher;
+        model.next_watcher += 1;
+        model.watchers.push(Watcher {
+            id,
+            root: root.to_owned(),
+            recursive,
+            sink,
+        });
+        Ok(Some(crate::vfs::WatchGuard::new(FaultWatch {
+            model: self.model.clone(),
+            id,
+        })))
     }
 
     fn outside_dir(&self, folder: &Path) -> io::Result<PathBuf> {

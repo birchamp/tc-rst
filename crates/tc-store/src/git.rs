@@ -352,6 +352,24 @@ impl Git {
         Ok(out)
     }
 
+    /// The bytes of the file at `path` in a commit's tree; `None` when the tree has none
+    /// there or the object database lacks the blob.
+    pub fn read_path(&self, commit: GitOid, path: &str) -> Result<Option<Vec<u8>>, GitError> {
+        let commit = at("read a commit", self.repo.find_commit(to_oid(commit)?))?;
+        let tree = at("read a tree", commit.tree())?;
+        let entry = match tree.get_path(Path::new(path)) {
+            Ok(entry) => entry,
+            Err(e) if e.code() == ErrorCode::NotFound => return Ok(None),
+            Err(source) => {
+                return Err(GitError::Git {
+                    what: "read a tree",
+                    source,
+                });
+            }
+        };
+        self.read_blob(from_oid(entry.id())?)
+    }
+
     /// Whether the object database holds `oid`.
     pub fn has(&self, oid: GitOid) -> bool {
         match (to_oid(oid), self.repo.odb()) {

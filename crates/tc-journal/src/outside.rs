@@ -308,15 +308,24 @@ pub fn decode_file(file: &OutsideFile, bytes: &[u8], path: &RepoPath) -> Result<
     Ok(decoded)
 }
 
-/// The fields of a decoded `metadata.json` that the project does not already show: those
-/// whose value differs from the document the app would write now. A file always holds fields
-/// the records do not (the defaults the builder fills in), and those are not edits.
-pub fn fields_not_shown(found: Vec<Record>, shown: &[Record]) -> Vec<Record> {
+/// The fields of a decoded `metadata.json` worth looking at: those whose value differs from
+/// the document the app would write now, and those the project holds a record for
+/// (`held`), whatever their value, so that a record the file keeps is not read as one it
+/// lost. A file also holds fields the records do not (the defaults the builder fills in), and
+/// those are not edits.
+pub fn fields_not_shown(
+    found: Vec<Record>,
+    shown: &[Record],
+    held: impl Fn(&RecordKey) -> bool,
+) -> Vec<Record> {
     let shown: BTreeMap<RecordKey, String> =
         shown.iter().map(|r| (r.key(), canon_string(r))).collect();
     found
         .into_iter()
-        .filter(|r| shown.get(&r.key()) != Some(&canon_string(r)))
+        .filter(|r| {
+            let key = r.key();
+            held(&key) || shown.get(&key) != Some(&canon_string(r))
+        })
         .collect()
 }
 

@@ -6,6 +6,7 @@ use crate::atomic::{SyncDir, atomic_remove};
 use crate::error::StoreError;
 use crate::layout::{INTENT, METADATA};
 use crate::manifest::{Entry, Intent};
+use crate::materialize::Projected;
 use crate::open::CheckResult;
 use crate::progress::{Phase, Tracker};
 use crate::vfs::is_not_found;
@@ -104,7 +105,7 @@ impl Writer {
                 let Some(new) = rendered.remove(&rel) else {
                     continue;
                 };
-                self.classify_one(&rel, &file, disk.as_deref(), &new, intent.as_ref())?;
+                self.classify_one(&rel, &file, disk.as_deref(), &new.bytes, intent.as_ref())?;
                 if self.dirty.files.contains(&file) {
                     self.prerendered.insert(rel, new);
                 }
@@ -263,21 +264,28 @@ impl Writer {
             || intent.is_some_and(|i| i.md5s_of(rel).contains(&d.as_str()));
         if let Some(held) = entry.as_ref().and_then(|en| en.held.as_ref()) {
             if held.md5 == d {
+                // A hold of an edit that an earlier version of the app could only keep is
+                // recorded now (§6.2); one of storage damage stays until the person chooses.
+                if held.cause == crate::manifest::HeldCause::Edit {
+                    return self.found_outside(rel, disk, false);
+                }
                 return Ok(());
             }
-            self.hold(rel, disk, false)?;
-            return Ok(());
+            // Changed again outside the app: recorded with no base (§6.2); the hold ends.
+            return self.found_outside(rel, disk, true);
         }
         if ours {
             self.dirty.files.insert(file.clone());
             return Ok(());
         }
-        let damage = self.clean_by_stat(rel);
-        self.hold(rel, disk, damage)
+        if self.clean_by_stat(rel) {
+            return self.hold(rel, disk, true);
+        }
+        self.found_outside(rel, disk, false)
     }
 
-    /// Renders `files`, a book's files together.
-    fn render_files(&self, files: &BTreeSet<DerivedFile>) -> BTreeMap<String, Vec<u8>> {
+    /// Renders `files`, a book's files together, with the digests of a USFM file's records.
+    fn render_files(&self, files: &BTreeSet<DerivedFile>) -> BTreeMap<String, Projected> {
         let mut out = BTreeMap::new();
         let mut books = BTreeSet::new();
         for file in files {
@@ -286,18 +294,30 @@ impl Writer {
                     books.insert(book);
                 }
                 None => {
-                    if let Some(bytes) = self.fold.render(file) {
+                    if let Some(projected) = self.fold.render_with_digests(file) {
                         self.counters.add(&self.counters.projected, 1);
-                        out.insert(file.path(), bytes);
+                        out.insert(
+                            file.path(),
+                            Projected {
+                                bytes: projected.bytes,
+                                digests: projected.digests,
+                            },
+                        );
                     }
                 }
             }
         }
         for book in books {
-            for (file, bytes) in self.fold.render_book(book) {
-                if files.contains(&file) {
+            for projected in self.fold.render_book_with_digests(book) {
+                if files.contains(&projected.file) {
                     self.counters.add(&self.counters.projected, 1);
-                    out.insert(file.path(), bytes);
+                    out.insert(
+                        projected.file.path(),
+                        Projected {
+                            bytes: projected.bytes,
+                            digests: projected.digests,
+                        },
+                    );
                 }
             }
         }
@@ -343,7 +363,7 @@ impl Writer {
                     };
                     let rendered = self.render_files(&BTreeSet::from([file.clone()]));
                     if let Some(new) = rendered.get(&result.rel) {
-                        self.classify_one(&result.rel, &file, disk.as_deref(), new, None)?;
+                        self.classify_one(&result.rel, &file, disk.as_deref(), &new.bytes, None)?;
                     }
                 }
                 None => {}

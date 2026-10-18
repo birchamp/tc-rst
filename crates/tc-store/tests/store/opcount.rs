@@ -381,7 +381,9 @@ fn a_record_entering_a_files_scope_projects_it() {
     assert_eq!(counts[0], counts[1]);
 }
 
-/// `FaultFs` with 2 s modification times (FAT32, §6.2).
+/// `FaultFs` with 2 s modification times (FAT32, §6.2). A same-size edit within the tick of
+/// the app's own write is read and recorded; bytes that changed after the entry settled,
+/// with the old size and time put back, are held as storage damage. Neither is written over.
 #[test]
 fn a_racy_or_mtime_restored_file_is_never_overwritten() {
     use tc_journal::fold::Notice;
@@ -397,7 +399,8 @@ fn a_racy_or_mtime_restored_file_is_never_overwritten() {
             )
         })
     };
-    // 1. A same-size edit within the tick of the app's write.
+    // 1. A same-size edit within the tick of the app's write is not told by its stat from
+    // the app's own write: it is read, and recorded as an edit of the person's.
     let fs = rig.fs.copy();
     let rig1 = rig_as(fs.clone(), APP, "host-1");
     let handle = rig1.store.open(&folder, &OpenOptions::default()).unwrap();
@@ -411,16 +414,28 @@ fn a_racy_or_mtime_restored_file_is_never_overwritten() {
     fs.put(&usfm, &edited, Some(mtime));
     let handle = rig1.store.open(&folder, &OpenOptions::default()).unwrap();
     handle.wait_idle();
-    assert!(held(&handle), "the racy edit is read and held");
-    assert_eq!(fs.peek(&usfm).as_deref(), Some(edited.as_slice()));
-    // A materialization of that book leaves it.
+    assert!(!held(&handle), "an edit is recorded, not held");
+    assert!(
+        handle.notices().iter().any(|n| matches!(
+            &n.notice,
+            Notice::OutsideEditRecorded { path, .. } if path.as_str() == "ingredients/TIT.usfm"
+        )),
+        "the racy edit is read and recorded: {:?}",
+        handle.notices()
+    );
+    assert_eq!(words(&handle, 1, 1).as_deref(), Some("paul, a servant"));
+    let copies = copies_of(&handle, "ingredients/TIT.usfm");
+    assert_eq!(copies.len(), 1);
+    assert_eq!(
+        fs.peek(&folder.join(&copies[0])).as_deref(),
+        Some(edited.as_slice()),
+        "the bytes the person saved are kept"
+    );
+    // The project shows the edit, so the next materialization writes the same bytes.
     save_verse(&handle, 1, 2, "in hope").unwrap();
     handle.leave(tc_store::Leave::Book(TIT)).wait().unwrap();
-    assert_eq!(fs.peek(&usfm).as_deref(), Some(edited.as_slice()));
-    // Restore from the project rewrites it.
-    handle.restore_held("ingredients/TIT.usfm").wait().unwrap();
-    let restored = String::from_utf8(fs.peek(&usfm).unwrap()).unwrap();
-    assert!(restored.contains("Paul, a servant") && restored.contains("in hope"));
+    let written = String::from_utf8(fs.peek(&usfm).unwrap()).unwrap();
+    assert!(written.contains("paul, a servant") && written.contains("in hope"));
     handle.close().unwrap();
     // 2. An edit whose old mtime is put back after its entry settled.
     let fs = rig.fs.copy();

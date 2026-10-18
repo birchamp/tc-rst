@@ -281,6 +281,9 @@ pub(crate) struct Shared {
     pub gate: Arc<crate::pace::SaveGate>,
     jobs: Mutex<u32>,
     jobs_done: Condvar,
+    /// Messages and jobs the actor and the writer have taken up, `Sync` aside: `wait_idle`
+    /// asks again until a round of syncs finds this unchanged.
+    traffic: AtomicU64,
 }
 
 impl Shared {
@@ -310,7 +313,13 @@ impl Shared {
             gate: Arc::default(),
             jobs: Mutex::new(0),
             jobs_done: Condvar::new(),
+            traffic: AtomicU64::new(0),
         }
+    }
+
+    /// Notes that the actor or the writer took up a message that does work.
+    pub(crate) fn note_traffic(&self) {
+        self.traffic.fetch_add(1, Ordering::AcqRel);
     }
 
     pub(crate) fn publish(&self, fold: FoldState) -> u64 {
@@ -559,6 +568,16 @@ pub(crate) enum Msg {
         reason: CheckpointReason,
         reply: Resolver<Result<CheckpointReport, StoreError>>,
     },
+    /// The writer examined a changed file and plans to record it (§11.1 X4): the actor
+    /// commits the plan as one batch and answers with [`crate::writer::Job::Recorded`].
+    RecordOutside {
+        rel: String,
+        seen: tc_journal::Md5,
+        plan: Box<tc_journal::outside::OutsidePlan>,
+        /// How many fields of `metadata.json` that the app derives the edit changed.
+        derived: u32,
+        copy: String,
+    },
     /// The writer built a commit object (§5.13 C5): the actor moves the branch to it, the
     /// last step of a checkpoint and the only one the actor takes after the seal (R21).
     MoveHead {
@@ -579,6 +598,9 @@ pub(crate) enum Msg {
     WritesFailed {
         reason: String,
     },
+    /// The watcher saw a pending or pack file change: the actor looks for one it does not
+    /// know (a second writer, §5.0).
+    JournalChanged,
     Sync {
         reply: Resolver<()>,
     },
@@ -598,6 +620,8 @@ pub struct ProjectHandle {
     pub(crate) actor: Mutex<Option<std::thread::JoinHandle<()>>>,
     /// Held while `.tc/index.bin` is written.
     pub(crate) index_lock: Arc<Mutex<()>>,
+    /// The watches of the folder (§11.1), stopped before anything else closes.
+    pub(crate) watcher: Mutex<Option<crate::watch::Watching>>,
 }
 
 /// The work an open leaves to a background thread (§6.1 O8, O14): writing the fold cache,
@@ -703,6 +727,7 @@ impl ProjectHandle {
                 seq: self.shared.seq(),
                 changes: Vec::new(),
                 skipped: Vec::new(),
+                kept: Vec::new(),
             }));
         }
         let (pending, resolver) = pending(|| Err(CommandError::Closed));
@@ -747,6 +772,30 @@ impl ProjectHandle {
         let (pending, resolver) =
             pending(|| Err(StoreError::Other("the project is closed".into())));
         self.send_writer(crate::writer::Job::RestoreHeld {
+            rel: path.to_owned(),
+            reply: resolver,
+        });
+        pending
+    }
+
+    /// The window got focus (§11.1): the writer stats every path the app wrote, reads those
+    /// that are not clean by stat, lists the folders for files that are new, and hands what
+    /// differs from the project to be recorded. It projects no file. Resolves when it has
+    /// looked; what it handed over is durable after [`ProjectHandle::wait_idle`].
+    pub fn focus(&self) -> Pending<Result<crate::reply::FocusReport, StoreError>> {
+        let (pending, resolver) =
+            pending(|| Err(StoreError::Other("the project is closed".into())));
+        self.send_writer(crate::writer::Job::Focus { reply: resolver });
+        pending
+    }
+
+    /// *Take in the file as an edit* for a held file (§6.2, APP-DESIGN R7): its records are
+    /// recorded with no base, each one that differs from the project's a conflict with its
+    /// text, and the hold ends. Resolves when the batch is durable.
+    pub fn take_in_held(&self, path: &str) -> Pending<Result<crate::reply::TakenIn, StoreError>> {
+        let (pending, resolver) =
+            pending(|| Err(StoreError::Other("the project is closed".into())));
+        self.send_writer(crate::writer::Job::TakeInHeld {
             rel: path.to_owned(),
             reply: resolver,
         });
@@ -864,28 +913,47 @@ impl ProjectHandle {
     /// Waits until the actor's queue is empty and no background job of the store runs:
     /// tests use it before they count operations or stop the writer.
     pub fn wait_idle(&self) {
-        let (idle, resolver) = pending(|| ());
-        if self.send(Msg::Sync { reply: resolver }) {
-            idle.wait();
-        }
-        // The writer after the actor: what the actor sent it is in its queue by now.
-        let (idle, resolver) = pending(|| ());
-        if self.send_writer(crate::writer::Job::Sync { reply: resolver }) {
-            idle.wait();
-            // And the actor again: what the writer sent it (a branch to move, a recorded
-            // edit) is in its queue by now.
+        loop {
+            let before = self.shared.traffic.load(Ordering::Acquire);
             let (idle, resolver) = pending(|| ());
             if self.send(Msg::Sync { reply: resolver }) {
                 idle.wait();
             }
+            // The writer after the actor: what the actor sent it is in its queue by now.
+            let (idle, resolver) = pending(|| ());
+            if self.send_writer(crate::writer::Job::Sync { reply: resolver }) {
+                idle.wait();
+                // And the actor again: what the writer sent it (a branch to move, a recorded
+                // edit) is in its queue by now.
+                let (idle, resolver) = pending(|| ());
+                if self.send(Msg::Sync { reply: resolver }) {
+                    idle.wait();
+                }
+            }
+            self.shared.wait_jobs();
+            // A round that took up any work may have queued more for the other thread.
+            if self.shared.traffic.load(Ordering::Acquire) == before {
+                break;
+            }
         }
-        self.shared.wait_jobs();
         self.drafts.flush();
+    }
+
+    /// Ends the watches and the thread that gathers what they tell, so no job reaches the
+    /// writer after the project's last write.
+    fn stop_watching(&self) {
+        let watching = self
+            .watcher
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        drop(watching);
     }
 
     /// Writes what is due (a seal and a materialization), releases the lock and stops the
     /// actor.
     pub fn close(self) -> Result<(), StoreError> {
+        self.stop_watching();
         // The open's background work ends first, while the actor can still answer it; the
         // actor stops the draft writer and releases the lock last, so nothing is written
         // into the folder after the lock is gone (§5.0).
@@ -905,6 +973,7 @@ impl Drop for ProjectHandle {
     fn drop(&mut self) {
         // A handle dropped without close still stops its actor; what was saved is in
         // pending files, and the next open seals and materializes it.
+        self.stop_watching();
         self.shared.wait_jobs();
         let (_pending, resolver) = pending(|| Ok(()));
         self.send(Msg::Close { reply: resolver });

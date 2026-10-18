@@ -382,18 +382,18 @@ fn a_dismissed_notice_of_a_held_file_keeps_its_copy() {
     save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
     handle.leave(tc_store::Leave::Book(TIT)).wait().unwrap();
     handle.close().unwrap();
-    // An edit made outside the app: held, with a copy in .tc/external/.
+    // Bytes changed under the app's feet, with the file's size and time as they were: held
+    // as storage damage, with a copy in .tc/external/.
+    settle_entries(&rig, &folder);
     let usfm = folder.join("ingredients/TIT.usfm");
-    let mut edited = rig.fs.peek(&usfm).unwrap();
-    edited.extend_from_slice(b"\n");
-    rig.fs.put(&usfm, &edited, None);
+    let edited = damage_file(&rig, &folder, "ingredients/TIT.usfm");
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     handle.wait_idle();
     let notice = handle
         .notices()
         .into_iter()
         .find(|n| n.copy.is_some())
-        .expect("a held edit keeps a copy");
+        .expect("a held file keeps a copy");
     let copy = folder.join(notice.copy.clone().unwrap());
     assert!(rig.fs.peek(&copy).is_some());
     handle.dismiss_notice(notice.id).wait().unwrap();

@@ -131,6 +131,7 @@ fn open_cloud_synced_folder_read_only() {
         }),
         clock,
         threads: 2,
+        watch_debounce: std::time::Duration::from_millis(20),
     })
     .unwrap();
     store.wait_cleanup();
@@ -273,7 +274,7 @@ fn loss_pack_deleted_with_no_copy_removes_nothing_derived() {
 
 /// L82. A rename that another program refuses leaves the path dirty and tried again by the
 /// actor's timer, and every try repeats the compare-and-swap: a program that saved the file
-/// meanwhile is never written over.
+/// meanwhile is never written over. Its bytes are kept in a copy and read as an edit.
 #[test]
 fn loss_rename_retry_never_overwrites_outside_save() {
     let (rig, folder) = titus();
@@ -284,32 +285,33 @@ fn loss_rename_retry_never_overwrites_outside_save() {
     save_verse(&handle, 1, 1, "a new first verse").unwrap();
     handle.leave(tc_store::Leave::Book(TIT)).wait().unwrap();
     // Paratext saves the file while the app waits to write it, then lets go of it.
-    rig.fs.put(&usfm, b"\\id TIT saved by Paratext\n", None);
+    let outside = b"\\id TIT saved by Paratext\n".to_vec();
+    rig.fs.put(&usfm, &outside, None);
     rig.fs.set_busy(&usfm, false);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
-    while !notices_of(&handle).iter().any(|n| {
-        matches!(
-            n,
-            Notice::OutsideEditHeld { .. } | Notice::StorageDamage { .. }
-        )
-    }) {
+    let copy = loop {
+        if let Some(copy) = copies_of(&handle, "ingredients/TIT.usfm").pop() {
+            break copy;
+        }
         assert!(
             std::time::Instant::now() < deadline,
             "the retry never found the outside save"
         );
         std::thread::sleep(std::time::Duration::from_millis(50));
-    }
+    };
     assert_eq!(
-        rig.fs.peek(&usfm).as_deref(),
-        Some(b"\\id TIT saved by Paratext\n".as_slice()),
-        "the outside save is never written over"
+        rig.fs.peek(&folder.join(&copy)),
+        Some(outside),
+        "the outside save is kept whole"
+    );
+    handle.wait_idle();
+    let written = String::from_utf8(rig.fs.peek(&usfm).unwrap()).unwrap();
+    assert!(
+        written.contains("a new first verse"),
+        "the project's save is written after the copy: {written}"
     );
     handle.close().unwrap();
-    assert_eq!(
-        rig.fs.peek(&usfm).as_deref(),
-        Some(b"\\id TIT saved by Paratext\n".as_slice()),
-        "not at close either"
-    );
+    assert_valid_burrito(&rig.fs, &folder);
 }
 
 /// L65. A pack a cloud client holds back (a placeholder whose stat and read both fail) is
@@ -462,6 +464,7 @@ fn a_project_created_through_a_symlinked_projects_folder_keeps_its_device() {
         platform: Arc::new(FakePlatform::default()),
         clock: Arc::new(tc_store::ManualClock::at(1_792_195_200_000)),
         threads: 2,
+        watch_debounce: std::time::Duration::from_millis(20),
     })
     .unwrap();
     store.wait_cleanup();

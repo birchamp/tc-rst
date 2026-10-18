@@ -71,6 +71,9 @@ pub struct MaterializeReport {
     pub removed: Vec<String>,
     /// Paths held: changed outside the app, left as they are (§6.2).
     pub held: Vec<String>,
+    /// Paths changed outside the app that were examined and sent to be recorded (§11.1): they
+    /// are written again once the batch is durable.
+    pub recorded: Vec<String>,
     /// Paths another program refused or kept unreadable: still dirty, tried again.
     pub blocked: Vec<String>,
 }
@@ -291,6 +294,26 @@ impl Writer {
         {
             return Ok(listed(entry));
         }
+        if oid.is_some() {
+            // A carried file is read in chunks, never whole (§11.4).
+            return match self.vfs.metadata(&self.folder.path(rel)) {
+                Err(e) if is_not_found(&e) => Ok(None),
+                Err(_) => Ok(entry.as_ref().and_then(listed)),
+                Ok(_) => match self.hash_file(rel) {
+                    Err(_) => Ok(entry.as_ref().and_then(listed)),
+                    Ok((md5, size)) => {
+                        if entry.as_ref().is_none_or(|e| e.md5 == md5.to_hex()) {
+                            self.take_listed(rel, md5, size, oid);
+                        } else {
+                            // Bytes the app did not place: the list says what is there, and
+                            // the look at the carried files records or places it.
+                            self.dirty.carried = true;
+                        }
+                        Ok(Some((md5, size)))
+                    }
+                },
+            };
+        }
         match self.read_disk(rel) {
             Disk::Missing => Ok(None),
             Disk::Unreadable => Ok(entry.as_ref().and_then(listed)),
@@ -298,6 +321,15 @@ impl Writer {
                 let md5 = Md5::of(&bytes);
                 let size = bytes.len() as u64;
                 if entry.as_ref().is_some_and(|e| e.md5 != md5.to_hex()) {
+                    if FIXED.contains(&rel) {
+                        // Never recorded: written again after a copy (§3.5).
+                        return self.restore_fixed(rel, &bytes).map(|()| {
+                            self.manifest
+                                .paths
+                                .get(rel)
+                                .and_then(|e| Md5::parse(&e.md5).map(|m| (m, e.size)))
+                        });
+                    }
                     self.hold(rel, &bytes, false)?;
                 } else {
                     self.take_listed(rel, md5, size, oid);
@@ -342,7 +374,9 @@ impl Writer {
                             self.manifest_changed = true;
                         }
                     } else {
-                        self.hold(rel, &bytes, false)?;
+                        // Saved again while held: the app's version is gone, so the bytes
+                        // are recorded with no base (§6.2).
+                        self.found_outside(rel, &bytes, true)?;
                     }
                     Ok(Some((md5, bytes.len() as u64)))
                 }
@@ -631,8 +665,19 @@ impl Writer {
                     }
                 }
                 if group.carried {
+                    // A carried file a command removed, and one the project no longer places
+                    // at that path (the copy of a version that was kept apart or moved):
+                    // the app's own file goes, after the compare-and-swap (§11.4).
+                    let placed: BTreeSet<String> = self
+                        .fold
+                        .carried_files()
+                        .into_iter()
+                        .map(|p| p.path)
+                        .collect();
                     for (path, entry) in &self.manifest.paths {
-                        if entry.oid.is_some() && entry.held.is_none() && self.carried_removed(path)
+                        if entry.oid.is_some()
+                            && entry.held.is_none()
+                            && (self.carried_removed(path) || !placed.contains(path))
                         {
                             candidates.push(path.clone());
                         }
@@ -668,6 +713,10 @@ impl Writer {
         let mut unread: Vec<DerivedFile> = Vec::new();
         for (path, r) in rendered {
             processed.insert(path.clone());
+            if self.pending_record.contains_key(&path) {
+                // The actor is recording what was found there: nothing is written meanwhile.
+                continue;
+            }
             let entry = self.manifest.paths.get(&path).cloned();
             if entry.as_ref().is_some_and(|e| e.held.is_some()) {
                 // Held: left as it is until the person chooses (§6.2). A deletion ended the
@@ -712,10 +761,13 @@ impl Writer {
                     {
                         seen.insert(path.clone(), stat);
                         writes.push((path, r));
-                    } else {
-                        let damage = self.clean_by_stat(&path);
-                        self.hold(&path, &disk, damage)?;
+                    } else if self.clean_by_stat(&path) {
+                        // Changed although its size and time did not: storage damage, held.
+                        self.hold(&path, &disk, true)?;
                         report.held.push(path);
+                    } else {
+                        self.found_outside(&path, &disk, false)?;
+                        report.recorded.push(path);
                     }
                 }
             }
@@ -735,13 +787,19 @@ impl Writer {
                     let ours = self.manifest.paths.get(&path).map(|e| e.md5.as_str());
                     if ours == Some(d.as_str()) || intent_now.md5s_of(&path).contains(&d.as_str()) {
                         removing.push(path);
-                    } else {
-                        let damage = self.clean_by_stat(&path);
-                        self.hold(&path, &disk, damage)?;
+                    } else if self.clean_by_stat(&path) {
+                        self.hold(&path, &disk, true)?;
                         report.held.push(path);
+                    } else {
+                        self.found_outside(&path, &disk, false)?;
+                        report.recorded.push(path);
                     }
                 }
             }
+        }
+        // Carried files are placed before the listing is built, so it names them (§11.4).
+        if group.carried {
+            self.place_carried(report)?;
         }
         // M2: metadata.json for the planned result.
         let planned: BTreeMap<String, (Md5, u64, Option<bool>)> = writes
@@ -831,8 +889,8 @@ impl Writer {
                     // waits.
                     match outside {
                         Some(disk) => {
-                            self.hold(&path, &disk, false)?;
-                            report.held.push(path);
+                            self.found_outside(&path, &disk, false)?;
+                            report.recorded.push(path);
                         }
                         None => {
                             self.reasons.insert(path.clone(), Blocked::FileUnreadable);
@@ -842,7 +900,7 @@ impl Writer {
                     continue;
                 }
             }
-            let heads = HeadsFile::of(&self.fold.file_heads(&r.file));
+            let heads = HeadsFile::of(&self.fold.file_heads(&r.file), &r.digests);
             let heads_name = layout::heads_file(&path);
             let heads_name = heads_name.rsplit('/').next().unwrap_or_default();
             atomic_write(
@@ -908,12 +966,31 @@ impl Writer {
             }
             Err(e) => return Err(e.into_inner()),
         };
+        if metadata_written {
+            self.write_metadata_heads(&heads_dir)?;
+        }
         // M7: the manifest.
         let metadata_entry = metadata_written.then_some((metadata, metadata_md5));
         self.finish_entries(written, converged, unread, &gone, &removing, metadata_entry)?;
         // M8.
         atomic_remove(&*self.vfs, &self.folder.path(INTENT), SyncDir::Now)?;
         self.open_intent = None;
+        Ok(())
+    }
+
+    /// The heads file of `metadata.json`: the records its project details were written from,
+    /// which an outside edit of the file is compared with (§11.1). It follows the file, as
+    /// every heads file does, so a lost one makes a later edit conflict rather than replace.
+    fn write_metadata_heads(&mut self, heads_dir: &std::path::Path) -> Result<(), StoreError> {
+        let bytes = HeadsFile::of(&self.fold.metadata_heads(), &[]).to_bytes();
+        if self.metadata_heads_written.as_deref() == Some(bytes.as_slice()) {
+            return Ok(());
+        }
+        let name = layout::heads_file(METADATA);
+        let name = name.rsplit('/').next().unwrap_or_default();
+        atomic_write(&*self.vfs, heads_dir, name, &bytes, SyncDir::Now)
+            .map_err(|e| e.into_inner())?;
+        self.metadata_heads_written = Some(bytes);
         Ok(())
     }
 
@@ -1060,18 +1137,30 @@ impl Writer {
             .is_some_and(|e| e.md5 == d)
             || intent.md5s_of(METADATA).contains(&d.as_str())
             || d == md5_hex(new);
-        // A retry of a blocked write finds the same outside bytes: one copy of them.
-        if ours || !self.copied_outside.insert(d) {
+        if ours {
             return Ok(());
         }
-        let copy = self.copy_external(METADATA, &disk)?;
+        self.keep_edited_metadata(&disk).map(|_| ())
+    }
+
+    /// Bytes of `metadata.json` the app did not write: a copy, a notice, and the fields that
+    /// are records sent to be recorded (§11.1 X2); the file is written over right after, and
+    /// again from the records once the batch is durable. A retry of a blocked write finds the
+    /// same outside bytes: one copy of them. `false` when these bytes were seen already.
+    pub(crate) fn keep_edited_metadata(&mut self, disk: &[u8]) -> Result<bool, StoreError> {
+        if !self.copied_outside.insert(md5_hex(disk)) {
+            return Ok(false);
+        }
+        let copy = self.copy_external(METADATA, disk)?;
         self.notice(
             Notice::MetadataEditedOutside {
                 copy: copy.as_str().into(),
             },
-            Some(copy),
+            Some(copy.clone()),
         );
-        Ok(())
+        self.record_metadata_edit(disk, copy);
+        self.dirty.metadata = true;
+        Ok(true)
     }
 
     /// The digest `metadata.json`'s entry keeps: its records' and its ingredient table's.
@@ -1214,6 +1303,8 @@ impl Writer {
                 self.dirty.metadata = true;
             } else if let Some(file) = DerivedFile::from_path(path) {
                 self.dirty.add_file(file);
+            } else {
+                self.dirty.carried = true;
             }
         }
         for (path, reason) in to_tell {
@@ -1321,7 +1412,8 @@ impl Writer {
 
     /// Renders the wanted files of a group: a book's files together (§14: a book's records are
     /// decoded once for its files), a file of no book on its own. Each buffer is hashed once
-    /// here, and the md5 stands for it from then on.
+    /// here, and the md5 stands for it from then on. A book's USFM comes with the digest of
+    /// each record it shows (the heads file keeps them, §11.1 X3).
     fn render(
         &mut self,
         book: Option<BookId>,
@@ -1334,8 +1426,8 @@ impl Writer {
         let mut left: Vec<&DerivedFile> = Vec::new();
         for file in wanted {
             match self.prerendered.remove(&file.path()) {
-                Some(bytes) => {
-                    let rendered = self.rendered(file.clone(), bytes);
+                Some(projected) => {
+                    let rendered = self.rendered(file.clone(), projected.bytes, projected.digests);
                     out.insert(file.path(), rendered);
                 }
                 None => left.push(file),
@@ -1344,18 +1436,19 @@ impl Writer {
         let whole_book = book.is_some()
             && (left.iter().any(|f| matches!(f, DerivedFile::Usfm(_))) || left.len() >= 3);
         if let (true, Some(book)) = (whole_book, book) {
-            for (file, bytes) in self.fold.render_book(book) {
-                if left.contains(&&file) {
+            for projected in self.fold.render_book_with_digests(book) {
+                if left.contains(&&projected.file) {
                     self.counters.add(&self.counters.projected, 1);
-                    let rendered = self.rendered(file.clone(), bytes);
-                    out.insert(file.path(), rendered);
+                    let rendered =
+                        self.rendered(projected.file.clone(), projected.bytes, projected.digests);
+                    out.insert(projected.file.path(), rendered);
                 }
             }
         } else {
             for file in left {
-                if let Some(bytes) = self.fold.render(file) {
+                if let Some(projected) = self.fold.render_with_digests(file) {
                     self.counters.add(&self.counters.projected, 1);
-                    let rendered = self.rendered(file.clone(), bytes);
+                    let rendered = self.rendered(file.clone(), projected.bytes, projected.digests);
                     out.insert(file.path(), rendered);
                 }
             }
@@ -1363,13 +1456,23 @@ impl Writer {
         out
     }
 
-    fn rendered(&self, file: DerivedFile, bytes: Vec<u8>) -> Rendered {
+    fn rendered(
+        &self,
+        file: DerivedFile,
+        bytes: Vec<u8>,
+        digests: Vec<(RecordKey, tc_journal::outside::ShownDigest)>,
+    ) -> Rendered {
         self.counters
             .add(&self.counters.bytes_hashed, bytes.len() as u64);
+        if !digests.is_empty() {
+            self.counters
+                .add(&self.counters.digest_bytes, bytes.len() as u64);
+        }
         Rendered {
             file,
             md5: Md5::of(&bytes),
             bytes,
+            digests,
         }
     }
 
@@ -1386,7 +1489,7 @@ impl Writer {
     /// packs and the carried files. Every value passed `check_field` already (§3.4); a
     /// document that fails is a bug, and nothing is written. It costs the entries, never a
     /// projection of the project.
-    fn build_metadata(
+    pub(crate) fn build_metadata(
         &mut self,
         planned: &BTreeMap<String, (Md5, u64, Option<bool>)>,
         removed: &[String],
@@ -1440,6 +1543,19 @@ impl Writer {
             }
             let (md5, size, text_nfc) = match planned.get(&path) {
                 Some(p) => *p,
+                // Bytes found outside the app wait in the folder for the actor to record
+                // them; the list says what is there (I7).
+                None if self.pending_record.contains_key(&path) => {
+                    let (md5, bytes) = &self.pending_record[&path];
+                    (
+                        *md5,
+                        bytes.len() as u64,
+                        derived
+                            .as_ref()
+                            .filter(|f| is_text(f))
+                            .map(|_| is_nfc(&String::from_utf8_lossy(bytes))),
+                    )
+                }
                 None => match entry {
                     Some(e) if e.held.is_some() => match self.listing_of_file(&path, None)? {
                         Some((md5, size)) => (
@@ -1602,6 +1718,15 @@ struct Rendered {
     file: DerivedFile,
     bytes: Vec<u8>,
     md5: Md5,
+    /// How the file shows each record, for a book's USFM (§11.1 X3).
+    digests: Vec<(RecordKey, tc_journal::outside::ShownDigest)>,
+}
+
+/// A file projected before the writer's job: the bytes and the digests of its records.
+#[derive(Debug, Default)]
+pub(crate) struct Projected {
+    pub bytes: Vec<u8>,
+    pub digests: Vec<(RecordKey, tc_journal::outside::ShownDigest)>,
 }
 
 /// The paths a book can have files at.

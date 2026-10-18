@@ -171,33 +171,78 @@ impl Intent {
 }
 
 /// A heads file (§3.6): for every record a derived file was built from, the heads its
-/// written bytes stand for by the token rule (§2.7). Postcard: the canonical JSON of each key
-/// and its head ids.
+/// written bytes stand for by the token rule (§2.7), and, for a book's USFM, a digest of how
+/// the written file shows the record (§11.1 X3, D10), so reconciling an outside edit looks at
+/// the records whose digest changed and no others. Postcard behind a magic prefix; the
+/// format without digests (unit S1's) still parses.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HeadsFile {
-    pub records: Vec<(String, Vec<[u8; 32]>)>,
+    pub records: Vec<HeadsRecord>,
 }
 
+/// One record of a heads file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HeadsRecord {
+    /// The record's canonical key.
+    pub key: String,
+    pub heads: Vec<[u8; 32]>,
+    /// How the written file showed the record, when the file kind keeps digests.
+    pub shown: Option<[u8; 16]>,
+}
+
+/// The format without digests.
+#[derive(Deserialize)]
+struct HeadsFileV1 {
+    records: Vec<(String, Vec<[u8; 32]>)>,
+}
+
+/// Marks a heads file that keeps digests.
+const HEADS_MAGIC: &[u8; 4] = b"TCH\x02";
+
 impl HeadsFile {
-    pub fn of(heads: &[(RecordKey, Vec<ChangeId>)]) -> Self {
+    pub fn of(
+        heads: &[(RecordKey, Vec<ChangeId>)],
+        digests: &[(RecordKey, tc_journal::outside::ShownDigest)],
+    ) -> Self {
+        let shown: std::collections::HashMap<&RecordKey, &[u8; 16]> =
+            digests.iter().map(|(k, d)| (k, d)).collect();
         Self {
             records: heads
                 .iter()
-                .map(|(key, ids)| {
-                    let key = tc_journal::canon::encode_key(key)
+                .map(|(key, ids)| HeadsRecord {
+                    key: tc_journal::canon::encode_key(key)
                         .map(|j| j.to_canonical_string())
-                        .unwrap_or_default();
-                    (key, ids.iter().map(|id| *id.as_bytes()).collect())
+                        .unwrap_or_default(),
+                    heads: ids.iter().map(|id| *id.as_bytes()).collect(),
+                    shown: shown.get(key).map(|d| **d),
                 })
                 .collect(),
         }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_allocvec(self).unwrap_or_default()
+        let mut out = HEADS_MAGIC.to_vec();
+        out.extend(postcard::to_allocvec(&self.records).unwrap_or_default());
+        out
     }
 
     pub fn parse(bytes: &[u8]) -> Option<Self> {
-        postcard::from_bytes(bytes).ok()
+        if let Some(rest) = bytes.strip_prefix(HEADS_MAGIC.as_slice())
+            && let Ok(records) = postcard::from_bytes(rest)
+        {
+            return Some(Self { records });
+        }
+        let old: HeadsFileV1 = postcard::from_bytes(bytes).ok()?;
+        Some(Self {
+            records: old
+                .records
+                .into_iter()
+                .map(|(key, heads)| HeadsRecord {
+                    key,
+                    heads,
+                    shown: None,
+                })
+                .collect(),
+        })
     }
 }

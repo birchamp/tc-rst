@@ -142,6 +142,11 @@ impl ProjectJson {
         out
     }
 
+    /// Whether `bytes` are a `project.json` this app reads.
+    pub(crate) fn reads(bytes: &[u8]) -> bool {
+        Self::parse(bytes).is_some()
+    }
+
     fn parse(bytes: &[u8]) -> Option<(ProjectId, ProjectKind)> {
         let file: ProjectJson = serde_json::from_slice(bytes).ok()?;
         let kind = match file.kind.as_str() {
@@ -181,6 +186,7 @@ pub(crate) struct Env {
     pub platform: Arc<dyn Platform>,
     pub clock: Arc<dyn Clock>,
     pub threads: usize,
+    pub watch_debounce: std::time::Duration,
     pub hooks: Arc<Hooks>,
 }
 
@@ -202,6 +208,53 @@ pub(crate) fn open_project(
     let result = open_inner(env, path, options, identity, &tracker);
     reporter.finish(&tracker);
     result
+}
+
+/// The `project.json` of HEAD's tree, when the repository has a commit whose copy reads
+/// (§3.5).
+fn head_project_json(
+    env: &Env,
+    vfs: &dyn Vfs,
+    path: &Path,
+    counters: &Arc<Counters>,
+) -> Option<Vec<u8>> {
+    use crate::git::{Git, Opened};
+    let outside = vfs.outside_dir(path).ok()?;
+    let (Opened::Existing(git) | Opened::Created(git)) =
+        Git::open(&outside, true, counters.clone(), &env.hooks)
+    else {
+        return None;
+    };
+    let head = git.head().ok()??;
+    let bytes = git.read_path(head.commit, PROJECT_JSON).ok()??;
+    ProjectJson::parse(&bytes).is_some().then_some(bytes)
+}
+
+/// Writes HEAD's `project.json` back after keeping a copy of the bytes found there: the
+/// path of the copy, or `None` when there was no file.
+fn restore_project_json(
+    vfs: &dyn Vfs,
+    folder: &Folder,
+    clock: &dyn Clock,
+    good: &[u8],
+    damaged: Option<&[u8]>,
+) -> Result<Option<String>, StoreError> {
+    let mut copy = None;
+    if let Some(damaged) = damaged {
+        let dir = folder.path(layout::EXTERNAL);
+        atomic_create_dirs(vfs, &dir)?;
+        let name = format!(
+            "{}-{}",
+            crate::appdata::utc_stamp(clock.now()),
+            layout::escaped(PROJECT_JSON)
+        );
+        atomic_write(vfs, &dir, &name, damaged, SyncDir::Now).map_err(|e| e.into_inner())?;
+        copy = Some(format!("{}/{name}", layout::EXTERNAL));
+    }
+    let (dir, name) = folder.dir_and_name(PROJECT_JSON);
+    atomic_create_dirs(vfs, &dir)?;
+    atomic_write(vfs, &dir, name, good, SyncDir::Now).map_err(|e| e.into_inner())?;
+    Ok(copy)
 }
 
 /// What O1 to O6 decided.
@@ -226,15 +279,25 @@ fn open_inner(
     let folder = Folder::new(path);
     vfs.metadata(path)
         .map_err(|e| OpenError::Unreadable(StoreError::io("stat", path, e)))?;
-    let project_json = match vfs.read(&folder.path(PROJECT_JSON)) {
-        Ok(bytes) => bytes,
-        Err(e) if is_not_found(&e) => return Err(OpenError::NotAProject),
-        Err(e) => {
-            return Err(OpenError::Unreadable(StoreError::io(
-                "read",
-                &folder.path(PROJECT_JSON),
-                e,
-            )));
+    // §3.5: a `project.json` that is missing or does not read is restored from the HEAD
+    // tree; with no copy there, the folder is not a project of this format.
+    let (project_json, restored) = match vfs.read(&folder.path(PROJECT_JSON)) {
+        Ok(bytes) if ProjectJson::parse(&bytes).is_some() => (bytes, None),
+        found => {
+            let damaged = found.as_ref().ok().cloned();
+            match head_project_json(env, &*vfs, path, &counters) {
+                Some(good) => (good.clone(), Some((good, damaged))),
+                None => {
+                    return Err(match found {
+                        Err(e) if !is_not_found(&e) => OpenError::Unreadable(StoreError::io(
+                            "read",
+                            &folder.path(PROJECT_JSON),
+                            e,
+                        )),
+                        _ => OpenError::NotAProject,
+                    });
+                }
+            }
         }
     };
     let (id, kind) = ProjectJson::parse(&project_json).ok_or(OpenError::NotAProject)?;
@@ -311,6 +374,16 @@ fn open_inner(
             write_failed = Some(e.to_string());
         }
     }
+    let mut restored_project: Option<Option<String>> = None;
+    if let Some((good, damaged)) = &restored
+        && !read_only
+        && write_failed.is_none()
+    {
+        match restore_project_json(&*vfs, &folder, &*env.clock, good, damaged.as_deref()) {
+            Ok(copy) => restored_project = Some(copy),
+            Err(e) => write_failed = Some(e.to_string()),
+        }
+    }
     tracker.add(1, 0);
     // O3: the project's repository (§6.1).
     let mut notices: Vec<(Notice, Option<String>)> = Vec::new();
@@ -325,6 +398,21 @@ fn open_inner(
         };
     if writable && let Some(reason) = git_failed {
         write_failed = Some(reason);
+    }
+    if let Some(copy) = restored_project.take()
+        && let Ok(path) = RepoPath::parse(PROJECT_JSON)
+    {
+        // The person is told the file was restored, and where the bytes found are.
+        match copy {
+            Some(copy) => notices.push((
+                Notice::FixedFileRestored {
+                    path,
+                    copy: copy.as_str().into(),
+                },
+                Some(copy),
+            )),
+            None => notices.push((Notice::MissingFileRebuilt { path }, None)),
+        }
     }
     // O8: the journal, in parallel, from the fold cache where it stands.
     let files = list(&*vfs, &folder)
@@ -545,6 +633,13 @@ fn open_inner(
         git,
         device,
         recover: rebuilt,
+        pending_record: BTreeMap::new(),
+        metadata_heads_written: None,
+        pending_carried: BTreeMap::new(),
+        deferred_paths: Vec::new(),
+        waiting: BTreeMap::new(),
+        collecting: false,
+        found: Vec::new(),
         actor: actor_tx.clone(),
     };
     for (notice, copy) in notices {
@@ -601,7 +696,14 @@ fn open_inner(
             stamp_ns: writer.stamp_ns,
         }
     });
+    // Carried files the open found to look at are read once the actor can record them.
+    let deferred = std::mem::take(&mut writer.deferred_paths);
     let writer_thread = crate::writer::spawn(writer, writer_rx);
+    if !deferred.is_empty() {
+        let _ = writer_tx.send(crate::writer::Job::Paths(deferred));
+    }
+    let watch_writer = writer_tx.clone();
+    let watch_actor = actor_tx.clone();
     let handle = crate::actor::spawn(
         project,
         gates.lock.take(),
@@ -611,6 +713,18 @@ fn open_inner(
         actor_tx,
         actor_rx,
     );
+    if !read_only {
+        // §11.1: what another program saves into the folder is told while the project is
+        // open; the window focus covers a filesystem that does not watch.
+        let watching = crate::watch::Watching::start(
+            &vfs,
+            &folder,
+            env.watch_debounce,
+            watch_writer,
+            watch_actor,
+        );
+        *handle.watcher.lock().unwrap_or_else(|e| e.into_inner()) = watching;
+    }
     if let Some(background) = background {
         handle.start_background(background);
     }
@@ -639,13 +753,46 @@ fn repair_and_classify(
     writer.fold = project.fold.clone();
     writer.packs = project.pack_facts();
     writer.complete = project.journal.complete();
-    let unchecked = writer.classify(tracker)?;
+    writer.collecting = true;
+    let classified = writer.classify(tracker).and_then(|unchecked| {
+        // The folders are listed for files that are new: a book file put in, a file that
+        // cannot be an ingredient (§3.3, §11.1).
+        writer.look_for_new_files_at_open()?;
+        Ok(unchecked)
+    });
+    writer.collecting = false;
+    let unchecked = classified?;
+    record_found(project, writer)?;
     tracker.phase(Phase::Writing, 1, 0);
     if writer.manifest_changed {
         writer.write_manifest()?;
     }
     tracker.set(1);
     Ok(unchecked)
+}
+
+/// §6.1 O9: the paths the classification found changed outside the app are examined and
+/// recorded before the open ends (§11.1), each as one batch, the next on the project the
+/// last one left.
+fn record_found(project: &mut Project, writer: &mut Writer) -> Result<(), StoreError> {
+    use crate::outside::Examined;
+    for found in std::mem::take(&mut writer.found) {
+        let md5 = Md5::of(&found.bytes);
+        writer.fold = project.fold.clone();
+        let (examined, copy) = writer.examine(&found.rel, &found.bytes, found.force_unknown)?;
+        match examined {
+            Examined::Plan(plan, derived) => {
+                let outcome = project.record_outside(&found.rel, md5, *plan, derived);
+                writer.recorded(found.rel, md5, copy, outcome, &found.bytes);
+            }
+            Examined::Nothing => writer.accept(&found.rel, md5, &found.bytes)?,
+            Examined::Undecodable { reason } => {
+                writer.undecodable(&found.rel, &copy, &reason);
+                writer.accept(&found.rel, md5, &found.bytes)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// O1, O4 and O5: the lock, the format gate and the filesystem gate. A folder that must
@@ -844,6 +991,11 @@ fn journal_of(
                     rel,
                     PendingInfo {
                         ids: pending.ids,
+                        reconciles: pending
+                            .header
+                            .as_ref()
+                            .and_then(|h| h.reconciles.as_ref())
+                            .map(|r| (r.path.as_str().to_owned(), r.seen_md5)),
                         number: Some(read.number),
                         status: pending.status,
                     },
@@ -1180,6 +1332,7 @@ impl Project {
                 new_rel,
                 PendingInfo {
                     ids: lines.iter().map(Verified::id).collect(),
+                    reconciles: None,
                     number: Some(number),
                     status: PendingStatus::Valid,
                 },
@@ -1232,6 +1385,7 @@ impl Project {
                 cause: tc_journal::Cause::Edit,
             }],
             skipped: Vec::new(),
+            kept: Vec::new(),
         };
         self.commit(plan)
             .map(|_| ())

@@ -52,6 +52,9 @@ pub(crate) struct PackInfo {
 #[derive(Debug, Clone)]
 pub(crate) struct PendingInfo {
     pub ids: Vec<ChangeId>,
+    /// The outside edit this file records, by path and md5 (§11.1 X4), so the same bytes are
+    /// never recorded twice.
+    pub reconciles: Option<(String, tc_journal::Md5)>,
     /// The loader's number, when the fold's values may lie in it (a file read at open).
     pub number: Option<u32>,
     pub status: tc_journal::pending::PendingStatus,
@@ -295,6 +298,8 @@ impl Project {
             fold: &self.fold,
             signing: &self.signing,
             kind: self.kind,
+            device: self.device,
+            git: self.git.as_ref(),
         }
     }
 
@@ -314,6 +319,16 @@ impl Project {
     /// derived files dirty and replies with the new tokens. Nothing is written when a change
     /// breaks a rule of §4.5.
     pub fn commit(&mut self, plan: Plan) -> Result<StoreReply, CommandError> {
+        self.commit_reconciling(plan, None)
+    }
+
+    /// [`Project::commit`] for the batch that records an outside edit: its pending file
+    /// names the file and the md5 it reconciles (§11.1 X4).
+    pub fn commit_reconciling(
+        &mut self,
+        plan: Plan,
+        reconciles: Option<tc_journal::pending::Reconciles>,
+    ) -> Result<StoreReply, CommandError> {
         if plan.changes.is_empty() {
             return Ok(StoreReply {
                 tokens: Vec::new(),
@@ -322,10 +337,11 @@ impl Project {
                 seq: self.shared.seq(),
                 changes: Vec::new(),
                 skipped: plan.skipped,
+                kept: plan.kept,
             });
         }
         let changes = self.build(&plan.changes)?;
-        let stored = self.write_pending(&changes, Purpose::Save)?;
+        let stored = self.write_pending(&changes, Purpose::Save, reconciles)?;
         self.next_seq += changes.len() as u64;
         let ids: Vec<ChangeId> = changes.iter().map(Change::id).collect();
         let keys: Vec<RecordKey> = changes.iter().map(|c| c.body().record.key()).collect();
@@ -359,6 +375,7 @@ impl Project {
             seq,
             changes: ids,
             skipped: plan.skipped,
+            kept: plan.kept,
         })
     }
 
@@ -400,12 +417,13 @@ impl Project {
         &mut self,
         changes: &[Change],
         purpose: Purpose,
+        reconciles: Option<tc_journal::pending::Reconciles>,
     ) -> Result<Stored, CommandError> {
         let header = PendingHeader {
             device: self.device,
             project: self.id,
             purpose,
-            reconciles: None,
+            reconciles: reconciles.clone(),
         };
         let lines: Vec<Verified> = changes.iter().cloned().map(Verified::from).collect();
         let encoded = encode_pending(&header, &lines)
@@ -434,10 +452,69 @@ impl Project {
             format!("{PENDING}/{}", encoded.name),
             PendingInfo {
                 ids: changes.iter().map(Change::id).collect(),
+                reconciles: reconciles.map(|r| (r.path.as_str().to_owned(), r.seen_md5)),
                 number: None,
                 status: tc_journal::pending::PendingStatus::Valid,
             },
         );
         Ok(stored)
+    }
+}
+
+impl Project {
+    /// Commits the plan of an outside edit as one batch (§11.1 X4). A file whose bytes a
+    /// pending batch already reconciles is not recorded twice.
+    pub(crate) fn record_outside(
+        &mut self,
+        rel: &str,
+        seen: tc_journal::Md5,
+        plan: tc_journal::outside::OutsidePlan,
+        derived: u32,
+    ) -> crate::writer::Recorded {
+        use crate::writer::Recorded;
+        let (unknown_base, whitespace_only) = (plan.unknown_base, plan.whitespace_only);
+        let kept = u32::try_from(plan.kept_removals.len()).unwrap_or(u32::MAX);
+        let Ok(path) = tc_journal::RepoPath::parse_source(rel) else {
+            return Recorded::Refused("its name is not a name translationCore can record".into());
+        };
+        let done = |batch, changes| Recorded::Done {
+            batch,
+            changes,
+            unknown_base,
+            whitespace_only,
+            kept,
+            derived,
+        };
+        let already = (rel.to_owned(), seen);
+        if self
+            .journal
+            .pending
+            .values()
+            .any(|p| p.reconciles.as_ref() == Some(&already))
+        {
+            return done(None, 0);
+        }
+        let changes = u32::try_from(plan.changes.len()).unwrap_or(u32::MAX);
+        let plan = Plan {
+            changes: plan.changes,
+            skipped: Vec::new(),
+            kept: Vec::new(),
+        };
+        let reconciles = tc_journal::pending::Reconciles {
+            path,
+            seen_md5: seen,
+        };
+        match self.commit_reconciling(plan, Some(reconciles)) {
+            Ok(reply) => {
+                let batch = reply
+                    .changes
+                    .first()
+                    .and_then(|id| self.fold.change(id))
+                    .map(|view| view.batch);
+                done(batch, changes)
+            }
+            Err(CommandError::NotWritten(_)) => Recorded::NotWritten,
+            Err(e) => Recorded::Refused(e.to_string()),
+        }
     }
 }

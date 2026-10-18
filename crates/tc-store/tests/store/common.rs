@@ -12,8 +12,8 @@ use tc_journal::{
 };
 use tc_store::fault::FaultFs;
 use tc_store::{
-    CommandError, FakePlatform, Hooks, ManualClock, NewProject, ProjectHandle, Store, StoreConfig,
-    StoreReply,
+    CommandError, FakePlatform, Hooks, ManualClock, NewProject, OpenOptions, ProjectHandle, Store,
+    StoreConfig, StoreReply,
 };
 
 pub const APP: &str = "/app";
@@ -56,6 +56,7 @@ pub fn config(fs: &FaultFs, app: &str, host: &str) -> (StoreConfig, Arc<ManualCl
             platform: Arc::new(platform),
             clock: clock.clone(),
             threads: 2,
+            watch_debounce: std::time::Duration::from_millis(20),
         },
         clock,
     )
@@ -328,4 +329,56 @@ pub fn assert_commits_valid(fs: &FaultFs, folder: &Path) {
             "commit {commit} is not a valid burrito: {problems:#?}"
         );
     }
+}
+
+// ---------------------------------------------------------------------------------------
+// Storage damage: bytes that changed although the file's size and time did not (§6.2)
+// ---------------------------------------------------------------------------------------
+
+/// Settles the entries of the project at `folder`: the clock moves past the tick of the
+/// files' time stamps and an open reads them once (O14). A later change that keeps a file's
+/// size and mtime is then storage damage no stat can see, not an edit someone made.
+pub fn settle_entries(rig: &Rig, folder: &Path) {
+    rig.fs.advance(std::time::Duration::from_secs(10));
+    let handle = rig.store.open(folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    handle.close().unwrap();
+}
+
+/// Changes the case of one letter in the second half of the file at `rel`, keeping its size
+/// and its modification time, and returns the bytes now in the file.
+pub fn damage_file(rig: &Rig, folder: &Path, rel: &str) -> Vec<u8> {
+    let path = folder.join(rel);
+    let mut bytes = rig.fs.peek(&path).unwrap();
+    let at = (bytes.len() / 2..bytes.len())
+        .find(|i| bytes[*i].is_ascii_lowercase())
+        .unwrap();
+    bytes[at] = bytes[at].to_ascii_uppercase();
+    let mtime = tc_store::Vfs::metadata(&rig.fs, &path).unwrap().mtime_ns;
+    rig.fs.put(&path, &bytes, Some(mtime));
+    bytes
+}
+
+/// The paths of the byte copies the notices of a handle keep for `rel`.
+pub fn copies_of(handle: &ProjectHandle, rel: &str) -> Vec<String> {
+    let encoded = rel.replace('/', "%2F");
+    handle
+        .notices()
+        .into_iter()
+        .filter_map(|n| n.copy)
+        .filter(|copy| copy.contains(&encoded))
+        .collect()
+}
+
+/// [`damage_file`] for the exact text `from`, which becomes `to` of the same length.
+pub fn damage_text(rig: &Rig, folder: &Path, rel: &str, from: &str, to: &str) -> Vec<u8> {
+    assert_eq!(from.len(), to.len(), "damage keeps the size");
+    let path = folder.join(rel);
+    let bytes = rig.fs.peek(&path).unwrap();
+    let text = String::from_utf8(bytes).unwrap();
+    assert!(text.contains(from), "{rel} has no {from}");
+    let damaged = text.replacen(from, to, 1).into_bytes();
+    let mtime = tc_store::Vfs::metadata(&rig.fs, &path).unwrap().mtime_ns;
+    rig.fs.put(&path, &damaged, Some(mtime));
+    damaged
 }

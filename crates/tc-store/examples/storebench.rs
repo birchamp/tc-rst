@@ -50,6 +50,7 @@ fn store(dir: &Path) -> Store {
         platform: Arc::new(StdPlatform),
         clock: Arc::new(SystemClock),
         threads: std::thread::available_parallelism().map_or(2, |n| n.get()),
+        watch_debounce: std::time::Duration::from_secs(1),
     })
     .expect("store");
     store.wait_cleanup();

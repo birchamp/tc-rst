@@ -90,6 +90,7 @@ pub(crate) fn spawn(
         drafts,
         actor: Mutex::new(thread),
         index_lock,
+        watcher: Mutex::new(None),
     }
 }
 
@@ -130,6 +131,9 @@ impl Actor {
     }
 
     fn handle(&mut self, msg: Msg) {
+        if !matches!(msg, Msg::Sync { .. }) {
+            self.project.shared.note_traffic();
+        }
         match msg {
             Msg::Command {
                 command,
@@ -166,6 +170,13 @@ impl Actor {
                 reply,
             } => reply.resolve(self.move_head(commit, expected, tree, report)),
             Msg::CheckpointEnded { result, reply } => reply.resolve(result),
+            Msg::RecordOutside {
+                rel,
+                seen,
+                plan,
+                derived,
+                copy,
+            } => self.record_outside(rel, seen, *plan, derived, copy),
             Msg::WritesFailed { reason } => {
                 // The open's first materialization failed: the writer made the project
                 // read-only; a project that cannot be written holds no lock.
@@ -173,6 +184,12 @@ impl Actor {
                 self.due = None;
                 self.lock = None;
                 let _ = reason;
+            }
+            Msg::JournalChanged => {
+                if self.read_only().is_none() {
+                    // A failure to list is told by the next checkpoint's own listing.
+                    let _ = self.second_writer();
+                }
             }
             Msg::Sync { reply } => reply.resolve(()),
             Msg::Close { reply } => {
@@ -275,6 +292,30 @@ impl Actor {
         }
     }
 
+    /// §11.1 X4: commits the writer's plan of an outside edit as one batch, and tells the
+    /// writer (which writes the file again) and the timer (the book's other files).
+    fn record_outside(
+        &mut self,
+        rel: String,
+        seen: tc_journal::Md5,
+        plan: tc_journal::outside::OutsidePlan,
+        derived: u32,
+        copy: String,
+    ) {
+        let outcome = self.project.record_outside(&rel, seen, plan, derived);
+        if !self.project.dirty.is_empty() {
+            self.due = Some(Instant::now() + MATERIALIZE_AFTER);
+        }
+        if let Some(writer) = &self.project.writer {
+            let _ = writer.send(Job::Recorded {
+                rel,
+                seen,
+                copy,
+                outcome,
+            });
+        }
+    }
+
     /// §5.13 C5 and C6: the writer wrote the commit object; the branch moves to it if it is
     /// still where the writer read it, and the index follows so `git status` is clean.
     fn move_head(
@@ -352,6 +393,11 @@ impl Actor {
                         file.rel.clone(),
                         PendingInfo {
                             ids: pending.ids,
+                            reconciles: pending
+                                .header
+                                .as_ref()
+                                .and_then(|h| h.reconciles.as_ref())
+                                .map(|r| (r.path.as_str().to_owned(), r.seen_md5)),
                             number: Some(number),
                             status: pending.status,
                         },
@@ -434,6 +480,13 @@ impl Actor {
                     reply,
                 }) => reply.resolve(self.move_head(commit, expected, tree, report)),
                 Ok(Msg::CheckpointEnded { result, reply }) => reply.resolve(result),
+                Ok(Msg::RecordOutside {
+                    rel,
+                    seen,
+                    plan,
+                    derived,
+                    copy,
+                }) => self.record_outside(rel, seen, *plan, derived, copy),
                 Ok(Msg::Sync { reply }) => reply.resolve(()),
                 Ok(Msg::Materialize { reply }) => {
                     if let Some(reply) = reply {
@@ -443,7 +496,7 @@ impl Actor {
                 Ok(Msg::Checkpoint { reply, .. }) => {
                     reply.resolve(Err(StoreError::Other("the project is closing".into())));
                 }
-                Ok(Msg::WritesFailed { .. } | Msg::Close { .. }) => {}
+                Ok(Msg::WritesFailed { .. } | Msg::Close { .. } | Msg::JournalChanged) => {}
                 Err(_) => {}
             }
         }

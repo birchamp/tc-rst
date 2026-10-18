@@ -103,7 +103,7 @@ fn project_id(fs: &FaultFs, folder: &Path) -> ProjectId {
 
 /// A teammate's batch put into `.tc/pending/` as a cloud client or an intake would leave it:
 /// `records` written by device `device`, `n` the batch's declared size.
-fn teammate_batch(
+pub(crate) fn teammate_batch(
     fs: &FaultFs,
     folder: &Path,
     device: DeviceId,
@@ -193,7 +193,7 @@ fn teammate() -> DeviceId {
 /// and removed, a conflict of two of this device's versions of 1:3, a conflict of this
 /// device's and a teammate's versions of 1:4, and a teammate's batch of two of which only
 /// one change arrived.
-fn rich() -> (FaultFs, PathBuf) {
+pub(crate) fn rich() -> (FaultFs, PathBuf) {
     static BASE: std::sync::OnceLock<(FaultFs, PathBuf)> = std::sync::OnceLock::new();
     let (fs, folder) = BASE.get_or_init(|| {
         let (rig, folder) = titus();
@@ -358,7 +358,7 @@ fn rich() -> (FaultFs, PathBuf) {
     (fs.copy(), folder.clone())
 }
 
-fn open(fs: &FaultFs, folder: &Path) -> (Rig, ProjectHandle) {
+pub(crate) fn open(fs: &FaultFs, folder: &Path) -> (Rig, ProjectHandle) {
     let rig = rig_as(fs.clone(), APP, "host-1");
     let handle = rig.store.open(folder, &OpenOptions::default()).unwrap();
     handle.wait_idle();
@@ -1325,7 +1325,7 @@ fn read_only_refuses_every_command_and_writes_nothing() {
 
 /// An Open Bible Stories project made as a new one is (§3.2): its details and each story's
 /// template base, seeded from the shipped template.
-fn stories() -> (FaultFs, PathBuf) {
+pub(crate) fn stories() -> (FaultFs, PathBuf) {
     let fs = FaultFs::new();
     let rig = rig(fs.clone());
     let mut records: Vec<Record> = first_records()
@@ -1448,4 +1448,164 @@ fn an_obs_frame_is_saved_by_tc4s_text_rules_and_whole_or_not_at_all() {
         },
     );
     assert!(points >= 4);
+}
+
+// ---------------------------------------------------------------------------------------
+// A pins choice with its carry-over (§8.3, APP-DESIGN R7)
+// ---------------------------------------------------------------------------------------
+
+fn pin(sha: u8) -> PinGroupValue {
+    PinGroupValue(BTreeMap::from([(
+        SlotName::parse("ugl").unwrap(),
+        SlotValue(Json::Obj(JsonMap::from([
+            (
+                "repoPath".to_owned(),
+                Json::from("git.door43.org/unfoldingWord/en_ugl"),
+            ),
+            ("sha".to_owned(), Json::from(oid(sha).to_hex())),
+            ("version".to_owned(), Json::from("v1")),
+        ]))),
+    )]))
+}
+
+/// Two computers pinned the lexicon differently. Choosing one pin and moving a decision to the
+/// check the other pin's resource makes of it is one batch, one pending file: the conflict is
+/// gone and the decision is where the choice put it. A plan that leaves a pin group of the
+/// conflict out, or was made from heads that moved, writes nothing.
+#[test]
+fn a_pins_choice_and_its_carry_over_are_one_batch() {
+    let (fs, folder) = rich();
+    let group = RecordKey::Pins(PinGroup::Lexicon);
+    let (rig, handle) = open(&fs, &folder);
+    let before_heads = handle.snapshot().fold().heads(&group);
+    submit(
+        &handle,
+        Command::SetPins {
+            shown: token(&handle, &group),
+            value: pin(1),
+        },
+    )
+    .unwrap();
+    handle.wait_idle();
+    handle.close().unwrap();
+    teammate_batch(
+        &rig.fs,
+        &folder,
+        DeviceId::local([8u8; 15]),
+        1,
+        vec![(
+            Record::Pins {
+                group: PinGroup::Lexicon,
+                value: pin(2),
+            },
+            before_heads,
+        )],
+    );
+    let (rig, handle) = open(&rig.fs, &folder);
+    let conflict = handle
+        .snapshot()
+        .fold()
+        .conflicts_of(tc_journal::fold::ConflictKind::Pins)
+        .next()
+        .cloned()
+        .expect("two pins of one group");
+    let heads = handle.snapshot().fold().heads(&group);
+    assert_eq!(heads.len(), 2);
+
+    // The carry-over: the decision on 1:2 moves to the check the chosen pin gives it.
+    let (from, to) = (tn_key(1, 2, 1), tn_key(1, 2, 2));
+    let Some(Record::Check {
+        value: CheckValue::Decision(decision),
+        ..
+    }) = projected(&handle, &RecordKey::Check(from.clone()))
+    else {
+        panic!("1:2 has a decision");
+    };
+    let fold = handle.snapshot().fold().clone();
+    let plan = |parents_of_from: Vec<ChangeId>| UpgradePlan {
+        changes: vec![
+            PlannedChange {
+                record: Record::Pins {
+                    group: PinGroup::Lexicon,
+                    value: pin(2),
+                },
+                parents: heads.clone(),
+                cause: Cause::Resolve,
+            },
+            PlannedChange {
+                record: Record::Check {
+                    key: from.clone(),
+                    value: CheckValue::MovedTo { to: to.clone() },
+                },
+                parents: parents_of_from,
+                cause: Cause::Edit,
+            },
+            PlannedChange {
+                record: Record::Check {
+                    key: to.clone(),
+                    value: CheckValue::Decision(decision.clone()),
+                },
+                parents: fold.heads(&RecordKey::Check(to.clone())),
+                cause: Cause::Edit,
+            },
+        ],
+    };
+    let files_before = pending_files(&rig.fs, &folder).len();
+    // Made from heads that moved: stale, nothing written.
+    let stale = submit(
+        &handle,
+        Command::ResolvePins {
+            conflict: conflict.id,
+            shown: vec![review(&handle, &group)],
+            plan: plan(vec![ChangeId::of(b"not a head of the decision")]),
+        },
+    );
+    assert!(matches!(stale, Err(CommandError::PlanStale)), "{stale:?}");
+    // A plan that does not settle the group: refused.
+    let left_out = submit(
+        &handle,
+        Command::ResolvePins {
+            conflict: conflict.id,
+            shown: vec![review(&handle, &group)],
+            plan: UpgradePlan {
+                changes: plan(fold.heads(&RecordKey::Check(from.clone()))).changes[1..].to_vec(),
+            },
+        },
+    );
+    assert!(
+        matches!(left_out, Err(CommandError::Refused(Refusal::Resolve(_)))),
+        "{left_out:?}"
+    );
+    assert_eq!(pending_files(&rig.fs, &folder).len(), files_before);
+
+    let reply = submit(
+        &handle,
+        Command::ResolvePins {
+            conflict: conflict.id,
+            shown: vec![review(&handle, &group)],
+            plan: plan(fold.heads(&RecordKey::Check(from.clone()))),
+        },
+    )
+    .unwrap();
+    assert_eq!(reply.changes.len(), 3);
+    assert_eq!(
+        pending_files(&rig.fs, &folder).len(),
+        files_before + 1,
+        "one batch, one pending file"
+    );
+    let fold = handle.snapshot().fold().clone();
+    assert_eq!(
+        fold.conflicts_of(tc_journal::fold::ConflictKind::Pins)
+            .count(),
+        0
+    );
+    assert_eq!(fold.heads(&group).len(), 1);
+    assert!(matches!(
+        fold.projected(&RecordKey::Check(to)),
+        Some(Record::Check {
+            value: CheckValue::Decision(_),
+            ..
+        })
+    ));
+    handle.close().unwrap();
 }

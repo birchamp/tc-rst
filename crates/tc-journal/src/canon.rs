@@ -1814,7 +1814,9 @@ impl Wire for ExternalSource {
             let mut o = In::new(inner, cx)?;
             let value = match name {
                 "localFile" => Self::LocalFile {
-                    path: o.req("path")?,
+                    path: o.req_with("path", |j| {
+                        RepoPath::parse_source(string(j)?).map_err(DecodeError::identity)
+                    })?,
                     seen_md5: o.req("seenMd5")?,
                 },
                 "door43" => Self::Door43 {
