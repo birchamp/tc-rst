@@ -95,7 +95,7 @@ async function verifyAndFix(u, report) {
 const done = {}
 const byKey = Object.fromEntries(UNITS.map(u => [u.key, u]))
 // Units already merged into phase0 and from there into main (2026-10-18): no more agents for them.
-const ON_MAIN = new Set(A.onMain || ['a1', 'a6a', 'a10', 'a11'])
+const ON_MAIN = new Set(A.onMain || ['a1', 'a6a', 'a10', 'a11', 'a2', 'a3'])
 function run(u) {
   if (done[u.key]) return done[u.key]
   if (ON_MAIN.has(u.key)) return (done[u.key] = Promise.resolve({ key: u.key, merged: true, head: 'on main' }))

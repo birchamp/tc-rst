@@ -69,7 +69,7 @@ Workflow({ scriptPath: '.audit/workflows/storage-chain-B.js',
           skip: ['C', 'S1'], cont: ['S2'] } })
 Workflow({ scriptPath: '.audit/workflows/app-phase0.js',
   args: { root: '<abs path of ~/tc-rst>', tc4: '<abs path of tC4>',
-          onMain: ['a1', 'a6a', 'a10', 'a11'], cont: ['a2', 'a3'] } })
+          onMain: ['a1', 'a6a', 'a10', 'a11', 'a2', 'a3'], cont: ['a4a', 'a9'] } })
 ```
 
 Before that, recreate the storage worktree: `git worktree add .claude/worktrees/storage storage`.
