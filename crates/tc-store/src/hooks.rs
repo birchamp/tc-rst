@@ -62,11 +62,23 @@ mod imp {
         /// How a test looks at the folder as a Scripture Burrito, and what it found.
         burrito_probe: Mutex<Option<BurritoProbe>>,
         burrito_problems: Mutex<Vec<String>>,
+        /// What a test does between two steps of a seal.
+        seal_step: Mutex<Option<SealStepHook>>,
         changed: Condvar,
     }
 
     /// Looks at the project folder and names what makes it an invalid burrito.
     type Probe = dyn Fn(&Path) -> Vec<String> + Send + Sync;
+
+    /// What a test does between two steps of a seal.
+    #[derive(Clone)]
+    struct SealStepHook(Arc<dyn Fn() + Send + Sync>);
+
+    impl std::fmt::Debug for SealStepHook {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("SealStepHook")
+        }
+    }
 
     #[derive(Clone)]
     struct BurritoProbe(Arc<Probe>);
@@ -83,6 +95,24 @@ mod imp {
         pub fn check_burrito(&self, probe: impl Fn(&Path) -> Vec<String> + Send + Sync + 'static) {
             *self.burrito_probe.lock().unwrap_or_else(|e| e.into_inner()) =
                 Some(BurritoProbe(Arc::new(probe)));
+        }
+
+        /// From now on `step` runs on the actor between two steps of a seal (§5.11), before
+        /// the commands that wait are served: a test uses it to make a save wait there.
+        pub fn at_seal_step(&self, step: impl Fn() + Send + Sync + 'static) {
+            *self.seal_step.lock().unwrap_or_else(|e| e.into_inner()) =
+                Some(SealStepHook(Arc::new(step)));
+        }
+
+        pub(crate) fn seal_step_reached(&self) {
+            let step = self
+                .seal_step
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            if let Some(step) = step {
+                (step.0)();
+            }
         }
 
         /// What the probe named, over every state it looked at.
@@ -214,6 +244,8 @@ mod imp {
     pub struct Hooks;
 
     impl Hooks {
+        pub(crate) fn seal_step_reached(&self) {}
+
         pub(crate) fn looks_at_burrito(&self) -> bool {
             false
         }

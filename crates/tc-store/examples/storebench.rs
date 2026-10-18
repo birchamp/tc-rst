@@ -766,6 +766,23 @@ fn checkpoint_case(dir: &Path) {
     handle.wait_idle();
     let verses = verses_of(&handle, BookId::Psalms, 40);
     let run = run_id();
+    // The first checkpoint commits whatever the previous job changed (a pins change over the
+    // whole Bible changes 334 files): it is reported apart and not counted below.
+    save_one(
+        &handle,
+        &verses[0],
+        format!("Checkpoint first save of run {run}"),
+    );
+    let started = Instant::now();
+    handle
+        .checkpoint(CheckpointReason::LeavingTranslate)
+        .wait()
+        .expect("checkpoint");
+    println!(
+        "the first checkpoint, which commits what earlier jobs changed: {:.0} ms",
+        started.elapsed().as_secs_f64() * 1000.0
+    );
+    handle.wait_idle();
     let (mut dirty, mut settled, mut during) = (Vec::new(), Vec::new(), Vec::new());
     let mut sealed_bytes = 0u64;
     let mut last = tc_store::StoreCounters::default();

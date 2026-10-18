@@ -44,6 +44,9 @@ struct Actor {
     index_lock: Arc<Mutex<()>>,
     /// The writer's thread, joined at close.
     writer_thread: Option<std::thread::JoinHandle<()>>,
+    /// Messages that arrived while a seal ran and are not commands: handled first, in order,
+    /// when it is over.
+    deferred: std::collections::VecDeque<Msg>,
 }
 
 /// Starts the actor of an opened project and returns its handle. `writer` is the queue of
@@ -78,6 +81,7 @@ pub(crate) fn spawn(
         last_checkpoint: Instant::now(),
         index_lock: index_lock.clone(),
         writer_thread,
+        deferred: std::collections::VecDeque::new(),
     };
     let thread = std::thread::Builder::new()
         .name("tc-store actor".into())
@@ -98,7 +102,11 @@ impl Actor {
     fn run(mut self) {
         loop {
             let wait = self.wait();
-            match self.rx.recv_timeout(wait) {
+            let received = match self.deferred.pop_front() {
+                Some(msg) => Ok(msg),
+                None => self.rx.recv_timeout(wait),
+            };
+            match received {
                 Ok(Msg::Close { reply }) => {
                     let result = self.close();
                     reply.resolve(result);
@@ -263,7 +271,7 @@ impl Actor {
         let restored = self.project.restore_expected_packs(false);
         // A seal that failed after it renamed a pack leaves `metadata.json` without that
         // pack (I7), so the files are written anyway; the seal's error comes first.
-        let sealed = restored.and_then(|()| self.project.seal());
+        let sealed = restored.and_then(|()| self.seal_serving());
         let device = self.project.device;
         let Some(reply) = reply else {
             // The periodic checkpoint nobody waits for: the writer's answer is dropped.
@@ -475,6 +483,33 @@ impl Actor {
         }
         self.lock = None;
         result
+    }
+
+    /// K1 to K6 (§5.11) in steps. Between two steps the actor serves the commands that wait,
+    /// so a save waits for one step (a pack written and read back, a few pending files
+    /// removed) and not for the seal: 25 ms p95 while a checkpoint runs (PERFORMANCE.md). A
+    /// save made meanwhile is a pending file this seal never saw, so no step touches it.
+    fn seal_serving(&mut self) -> Result<crate::seal::SealReport, StoreError> {
+        let mut run = self.project.seal_start()?;
+        while self.project.seal_step(&mut run)? {
+            self.serve_between_steps();
+        }
+        Ok(run.report)
+    }
+
+    /// Commands (and the edits the writer records) that wait are served now; whatever else
+    /// has arrived waits until the seal is over.
+    fn serve_between_steps(&mut self) {
+        self.project.shared.hooks.seal_step_reached();
+        while let Ok(msg) = self.rx.try_recv() {
+            match msg {
+                Msg::Command { reply, .. } if self.project.shared.is_closing() => {
+                    reply.resolve(Err(CommandError::Closed));
+                }
+                msg @ (Msg::Command { .. } | Msg::RecordOutside { .. }) => self.handle(msg),
+                other => self.deferred.push_back(other),
+            }
+        }
     }
 
     /// Waits for the writer's answer to a checkpoint while serving what the writer sends the

@@ -40,6 +40,51 @@ pub struct SealReport {
     pub consolidated: Vec<(String, Vec<String>)>,
 }
 
+/// Pending files one step of the seal's K4 removes (each is an unlink; the folder is flushed
+/// once at the end).
+const REMOVALS_PER_STEP: usize = 4;
+/// Pending files one step of the seal's K1 reads.
+const READS_PER_STEP: usize = 2;
+
+/// Where a seal is.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum SealPhase {
+    /// Pending files to read (K1).
+    Read,
+    /// The packs to build (K1, K2 for what no pack can hold).
+    Build,
+    /// Packs to write (K2, K3).
+    Pack,
+    /// Pending files to remove (K4).
+    Remove,
+    /// The ledger (K5).
+    Ledger,
+    /// The consolidation (K6).
+    #[default]
+    Consolidate,
+    Done,
+}
+
+/// A seal in progress ([`Project::seal_start`], [`Project::seal_step`]).
+#[derive(Default)]
+pub(crate) struct SealRun {
+    pub(crate) report: SealReport,
+    phase: SealPhase,
+    /// The pending files not read yet (the next at the end).
+    unread: Vec<String>,
+    /// The pending files read at K1, with their bytes and change ids.
+    files: Vec<(String, Vec<u8>, BTreeSet<ChangeId>)>,
+    /// Their verified lines.
+    lines: Vec<Verified>,
+    packs: Vec<EncodedPack>,
+    written: Vec<Written>,
+    set_aside: BTreeSet<ChangeId>,
+    /// The changes a verified pack holds or that were set aside: a pending file whose changes
+    /// are all in it may go.
+    held: BTreeSet<ChangeId>,
+    dirs: DirSet,
+}
+
 /// A pack written and read back.
 struct Written {
     rel: String,
@@ -174,15 +219,35 @@ impl Project {
         }
     }
 
-    /// K1 to K6 (§5.11). Pending files of a newer format, of another project or unreadable
-    /// are left as they are.
+    /// K1 to K6 (§5.11) in one go. Pending files of a newer format, of another project or
+    /// unreadable are left as they are.
+    #[cfg(test)]
     pub(crate) fn seal(&mut self) -> Result<SealReport, StoreError> {
-        let mut report = SealReport::default();
-        // K1: every verified line of every pending file this session knows.
-        let mut files: Vec<(String, Vec<u8>, BTreeSet<ChangeId>)> = Vec::new();
-        let mut lines: Vec<Verified> = Vec::new();
-        let known: Vec<String> = self.journal.pending.keys().cloned().collect();
-        for rel in known {
+        let mut run = self.seal_start()?;
+        while self.seal_step(&mut run)? {}
+        Ok(run.report)
+    }
+
+    /// The start of a seal: the pending files this session knows are the ones it will read, a
+    /// few at a time ([`Project::seal_step`]), then pack, write, verify and remove. The actor
+    /// serves the commands that wait between steps, so a save waits for one step and not for
+    /// the seal (PERFORMANCE.md: 25 ms p95 while a checkpoint runs). Saves that arrive meanwhile
+    /// are pending files this run never saw, so no step touches them.
+    pub(crate) fn seal_start(&mut self) -> Result<SealRun, StoreError> {
+        let mut run = SealRun::default();
+        let mut known: Vec<String> = self.journal.pending.keys().cloned().collect();
+        known.reverse();
+        run.unread = known;
+        run.phase = SealPhase::Read;
+        Ok(run)
+    }
+
+    /// K1: some of the pending files are read and their verified lines kept.
+    fn seal_read(&mut self, run: &mut SealRun) {
+        for _ in 0..READS_PER_STEP {
+            let Some(rel) = run.unread.pop() else {
+                break;
+            };
             if self.journal.unreadable.contains(&rel) {
                 continue;
             }
@@ -200,16 +265,23 @@ impl Project {
                 continue;
             }
             let ids = read.entries.iter().map(Verified::id).collect();
-            lines.extend(read.entries);
-            files.push((rel, bytes, ids));
+            run.lines.extend(read.entries);
+            run.files.push((rel, bytes, ids));
         }
-        if files.is_empty() {
-            return self.consolidate(report);
+        if run.unread.is_empty() {
+            run.phase = if run.files.is_empty() {
+                SealPhase::Consolidate
+            } else {
+                SealPhase::Build
+            };
         }
+    }
+
+    /// The pack of the lines read, and K2 for the lines no pack can hold.
+    fn seal_build(&mut self, run: &mut SealRun) -> Result<(), StoreError> {
+        let lines = std::mem::take(&mut run.lines);
         let sealed = seal(&self.pack_spec(), &lines)
             .map_err(|e| StoreError::Other(format!("the seal could not build a pack: {e}")))?;
-        // K2 for the lines no pack can hold.
-        let mut set_aside: BTreeSet<ChangeId> = BTreeSet::new();
         if !sealed.set_aside.is_empty() {
             let dir = self.folder.path(QUARANTINE);
             atomic_create_dirs(&*self.vfs, &dir)?;
@@ -223,62 +295,108 @@ impl Project {
                     SyncDir::Now,
                 )
                 .map_err(|e| e.into_inner())?;
-                set_aside.insert(line.id());
+                run.set_aside.insert(line.id());
             }
-            report.set_aside = sealed.set_aside.clone();
+            run.report.set_aside = sealed.set_aside.clone();
         }
         drop(lines);
-        // K2 and K3 for each pack.
-        let mut written: Vec<Written> = Vec::new();
-        for pack in &sealed.packs {
-            let expected: BTreeSet<ChangeId> = pack.changes.iter().copied().collect();
-            let w = self.write_pack(pack, &expected)?;
-            report.packs.push(w.rel.clone());
-            written.push(w);
+        run.packs = sealed.packs;
+        run.phase = if run.packs.is_empty() {
+            run.held = run.set_aside.clone();
+            SealPhase::Remove
+        } else {
+            SealPhase::Pack
+        };
+        Ok(())
+    }
+
+    /// One step of a seal: a pack written and read back (K2, K3), a few pending files removed
+    /// (K4), the ledger (K5), or the consolidation (K6). `false` when the seal is done.
+    pub(crate) fn seal_step(&mut self, run: &mut SealRun) -> Result<bool, StoreError> {
+        match run.phase {
+            SealPhase::Read => {
+                self.seal_read(run);
+                Ok(true)
+            }
+            SealPhase::Build => {
+                self.seal_build(run)?;
+                Ok(true)
+            }
+            SealPhase::Pack => {
+                // K2 and K3 for each pack.
+                let pack = run.packs[run.written.len()].clone();
+                let expected: BTreeSet<ChangeId> = pack.changes.iter().copied().collect();
+                let w = self.write_pack(&pack, &expected)?;
+                run.report.packs.push(w.rel.clone());
+                run.written.push(w);
+                if run.written.len() == run.packs.len() {
+                    run.held = run
+                        .written
+                        .iter()
+                        .flat_map(|w| w.ids.iter().copied())
+                        .chain(run.set_aside.iter().copied())
+                        .collect();
+                    run.phase = SealPhase::Remove;
+                }
+                Ok(true)
+            }
+            SealPhase::Remove => {
+                // K4: a pending file goes only when a verified pack holds every change of it.
+                for _ in 0..REMOVALS_PER_STEP {
+                    let Some((rel, bytes, ids)) = run.files.pop() else {
+                        break;
+                    };
+                    if !ids.is_subset(&run.held) {
+                        continue;
+                    }
+                    let number = self.journal.pending.get(&rel).and_then(|p| p.number);
+                    if !self.relocate(&rel, JournalKind::Pending, number, &bytes, &run.written) {
+                        continue;
+                    }
+                    // A pending file a scanner still holds stays; the next open removes it (O7).
+                    let removed = atomic_remove_if_free(
+                        &*self.vfs,
+                        &self.folder.path(&rel),
+                        SyncDir::Deferred(&mut run.dirs),
+                    )?;
+                    self.journal.pending.remove(&rel);
+                    if self.index.sections.remove(&rel).is_some() {
+                        self.index.changed = true;
+                    }
+                    if removed {
+                        run.report.removed.push(rel);
+                    }
+                }
+                if run.files.is_empty() {
+                    run.dirs.sync(&*self.vfs)?;
+                    run.phase = SealPhase::Ledger;
+                }
+                Ok(true)
+            }
+            SealPhase::Ledger => {
+                // K5.
+                let last_seq = self.next_seq.saturating_sub(1);
+                if last_seq > 0 {
+                    self.app.record_ledger(
+                        self.device,
+                        self.id,
+                        self.folder.root(),
+                        last_seq,
+                        self.clock.now(),
+                    )?;
+                }
+                run.phase = SealPhase::Consolidate;
+                Ok(true)
+            }
+            SealPhase::Consolidate => {
+                // K6.
+                let report = std::mem::take(&mut run.report);
+                run.report = self.consolidate(report)?;
+                run.phase = SealPhase::Done;
+                Ok(false)
+            }
+            SealPhase::Done => Ok(false),
         }
-        // K4: a pending file goes only when a verified pack holds every change of it.
-        let held: BTreeSet<ChangeId> = written
-            .iter()
-            .flat_map(|w| w.ids.iter().copied())
-            .chain(set_aside.iter().copied())
-            .collect();
-        let mut dirs = DirSet::new();
-        for (rel, bytes, ids) in files {
-            if !ids.is_subset(&held) {
-                continue;
-            }
-            let number = self.journal.pending.get(&rel).and_then(|p| p.number);
-            if !self.relocate(&rel, JournalKind::Pending, number, &bytes, &written) {
-                continue;
-            }
-            // A pending file a scanner still holds stays; the next open removes it (O7).
-            let removed = atomic_remove_if_free(
-                &*self.vfs,
-                &self.folder.path(&rel),
-                SyncDir::Deferred(&mut dirs),
-            )?;
-            self.journal.pending.remove(&rel);
-            if self.index.sections.remove(&rel).is_some() {
-                self.index.changed = true;
-            }
-            if removed {
-                report.removed.push(rel);
-            }
-        }
-        dirs.sync(&*self.vfs)?;
-        // K5.
-        let last_seq = self.next_seq.saturating_sub(1);
-        if last_seq > 0 {
-            self.app.record_ledger(
-                self.device,
-                self.id,
-                self.folder.root(),
-                last_seq,
-                self.clock.now(),
-            )?;
-        }
-        // K6.
-        self.consolidate(report)
     }
 
     /// Q1 to Q4 (§5.12) when §4.7 says so.

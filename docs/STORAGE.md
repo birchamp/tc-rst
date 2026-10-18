@@ -2046,7 +2046,11 @@ file watcher (§11.1) records that program's next save.
 
 ### 5.11 Seal
 
-Seals run at every checkpoint (§5.13). Each one:
+Seals run at every checkpoint (§5.13). The seal is the one long step of a checkpoint that runs
+on the actor, so it runs in steps (two pending files read, the packs built, each pack written and
+read back, four pending files removed, the ledger, the consolidation) and the actor serves the
+commands that wait between two steps: a save waits for one step, not for the seal. A save made
+meanwhile is a pending file that K1 did not read, so K4 leaves it. Each one:
 
 ```
 K1  L = every verified change line of every pending file, deduplicated by id, sorted by

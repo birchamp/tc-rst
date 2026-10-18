@@ -179,3 +179,60 @@ fn an_outside_save_during_the_rename_window_is_never_overwritten() {
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+/// R21 and the owner's ruling: the seal is the one long step of a checkpoint on the actor, and
+/// a save does not wait for all of it. A save that is waiting when a step of the seal ends is
+/// served before the next step: it is durable, and its pending file is one this seal never saw,
+/// so it stays.
+#[test]
+fn a_save_is_served_between_the_steps_of_a_seal() {
+    use std::sync::Mutex;
+    let (rig, folder) = titus();
+    let handle = Arc::new(open(&rig, &folder));
+    save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
+    let steps = Arc::new(Mutex::new(0));
+    let saved = Arc::new(Mutex::new(None));
+    {
+        let (handle, steps, saved) = (handle.clone(), steps.clone(), saved.clone());
+        rig.store.hooks().at_seal_step(move || {
+            // On the actor, between two steps: the save is queued, and served next.
+            let mut steps = steps.lock().unwrap();
+            *steps += 1;
+            if *steps == 2 {
+                let shown = handle.mint(&verse(1, 2), None).unwrap();
+                *saved.lock().unwrap() =
+                    Some(handle.submit(tc_journal::command::Command::SaveVerse {
+                        shown,
+                        words: "saved while the seal runs".into(),
+                    }));
+            }
+        });
+    }
+    let report = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert!(*steps.lock().unwrap() >= 3, "the seal has steps");
+    let reply = saved.lock().unwrap().take().expect("a save was queued");
+    // Its reply came while the seal ran, and its pending file was not sealed with the others.
+    assert!(reply.is_ready(), "the save waited for the seal");
+    let reply = reply.wait().unwrap();
+    assert_eq!(reply.stored, Stored::Durable);
+    assert_eq!(report.sealed.len(), 1, "{report:?}");
+    handle.wait_idle();
+    assert_eq!(
+        pending_files(&rig.fs, &folder).len(),
+        1,
+        "the new save stays"
+    );
+    rig.store.hooks().at_seal_step(|| {});
+    let handle = Arc::try_unwrap(handle).ok().expect("no other owner");
+    handle.close().unwrap();
+    let handle = open(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 2).as_deref(),
+        Some("saved while the seal runs")
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
