@@ -75,3 +75,4 @@ ts	phase	decision	why	evidence	result
 2026-10-17T18:19Z	merge	p0-g0 into claude/focused-ride-5uzj7p (464c209): G0 package, 9 review findings fixed; stand-in 12/12, shell 8/8, page 4/4, fmt clean	owner runs .audit/tasks/g0-windows.md at 20:00 UTC
 2026-10-17T19:44Z	merge	p0-g0 again (69991ff): spike mirror writes off the main thread (AD21), shell tests in Electronite 3/3, driver+task 23/23 with pwsh, page 4/4	before the owner runs G0 at 20:00 UTC
 2026-10-18T07:30Z	merge	windows-fixes + door43-facts into main via merge-win; Linux gates green except one merge interaction (lexicon lock entries lacked lexiconSha256), fixed; tc-resources 90+ tests pass	CI was red on clippy 1.99 lints before this
+2026-10-18T10:56Z	merge	storage (S1, tc-store) into main at 2d0cb2b; gates green (one disk-full run of tc-resources reran green)	single-instance ruling included

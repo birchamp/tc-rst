@@ -26,13 +26,20 @@ for profile in os.listdir(root):
             m = re.match(r"^(.*)-([0-9a-f]{16})(\..*)?$", f)
             if not m or not os.path.isfile(p):
                 continue
-            st = os.stat(p)
+            try:
+                st = os.stat(p)
+            except FileNotFoundError:
+                continue
             groups[(m.group(1), m.group(3) or "")].append((st.st_mtime, st.st_size, p))
         for files in groups.values():
             files.sort(reverse=True)
             for mtime, size, p in files[1:]:
                 if now - mtime >= min_age:
-                    os.remove(p)
+                    # A build running beside this one may remove the same file first.
+                    try:
+                        os.remove(p)
+                    except FileNotFoundError:
+                        continue
                     freed += size
                     removed += 1
 print(f"removed {removed} files, {freed / 1e9:.2f} GB")
