@@ -11,6 +11,7 @@
 //! The server knows nothing of projects. Parsing a request, running it and writing the reply
 //! are the backend's: `tc-app` in the product, [`stub::Stub`] in this crate's tests.
 
+mod applock;
 mod backend;
 mod downloads;
 mod events;
@@ -43,6 +44,7 @@ use tc_api::upload::UploadFlow;
 use tokio::io::{AsyncBufRead, AsyncWrite};
 use tokio::sync::watch;
 
+pub use applock::{AppLock, AppLockError, Holder};
 pub use axum::body::Bytes;
 pub use backend::{Answer, Backend, EventSource, Next, Then};
 pub use downloads::{DownloadError, Downloads};

@@ -203,7 +203,7 @@ Evidence: `docs/evidence/electronite-spike-2026-10-17.md` and
 | AD36 | Teammate changes in parity scenarios are written only through tc-journal's encoders (phase 1) and the store's sealing API (from C1a), never by hand. | The scenario must exercise the real format. | Hand-made packs. |
 | AD37 | An open editor holds its value and its token as one pair, taken when it opened. A refresh replaces the pair only while the editor has had no input and no composition since then; otherwise the field keeps its text and token and shows the "changed while you were typing" notice. A `Changed` whose cause is the field's own request shows nothing. Nothing is ever written into a focused field, and texts are compared in NFC. *(A-6)* | A value and a token that come apart make the next save conflict with itself, or revert a change unseen (STORAGE:1449-1453). The `Ack` and the `Changed` event of one write may arrive in either order (§5.4). NFC reorders Hebrew points and Arabic marks (STORAGE:1445), and writing into a focused field moves the caret and breaks an IME composition. | Following the query in an open editor; never refreshing an open editor. |
 | AD38 | `SessionRegistry` runs one open per folder at a time; a second caller waits for it and shares the session. The screen session closes when the person goes Home, with tC4's "leaving the project" checkpoint. *(A-8, A-25)* | A second open finds `.tc/lock` held by this same `tc4` and is refused, with `tc4` itself as the holder (STORAGE §6.1 O1). tC4 closes the project at Home (`tC4:src/state.jsx:7286-7328`), and J8 asserts that commit. | Waiting only for a running leave-checkpoint; closing the session only when another project opens. |
-| AD39 | The shell supervises `tc4`. When `tc4` exits without being asked, the shell starts it again and loads Home at the new address; the new page reads the shell's buffer mirror (AD21). `tc4` treats a closed stdin as a quit. The shell starts `tc4` with `detached: true` and `windowsHide: true`: on Windows, Node's plain `spawn` puts the child in libuv's job object, which ends it the moment the shell's process ends, before it can read its closed stdin and quit (G0's "end the shell" rows measure both). A `tc4` that finds `app.lock` held waits up to 10 s for the old process to finish closing, then names it (the lock records its pid). *(A-3)* | Every launch has a new port, so the old page cannot reach a restarted server (§5.2). An orphaned `tc4` would hold `app.lock` and `.tc/lock` and refuse the next launch. When the shell dies, the pipe to `tc4`'s stdin closes. | A quit endpoint for orphans (it would need the old token); restarting in place. |
+| AD39 | The shell supervises `tc4`. When `tc4` exits without being asked, the shell starts it again and loads Home at the new address; the new page reads the shell's buffer mirror (AD21). `tc4` treats a closed stdin as a quit. The shell starts `tc4` with `detached: true` and `windowsHide: true`: on Windows, Node's plain `spawn` puts the child in libuv's job object, which ends it the moment the shell's process ends, before it can read its closed stdin and quit (G0's "end the shell" rows measure both). A `tc4` that finds `app.lock` held waits up to 10 s for the old process to finish closing, then names it (`app-lock.json` beside the lock records its pid, §5.1). *(A-3)* | Every launch has a new port, so the old page cannot reach a restarted server (§5.2). An orphaned `tc4` would hold `app.lock` and `.tc/lock` and refuse the next launch. When the shell dies, the pipe to `tc4`'s stdin closes. | A quit endpoint for orphans (it would need the old token); restarting in place. |
 
 ### 2.2 Disagreements and how they were resolved
 
@@ -1111,7 +1111,8 @@ The shell's `drafts-buffer.log` is not among them: the shell writes it (AD21).
 | `summaries/<folder hash>.json` | §4.5 |
 | `reports.json` | the last 50 operation reports, for Feedback and the dev Inspector |
 | `uploads/`, `downloads/` | temporary; emptied at start and after use |
-| `app.lock` | `tc4 serve`'s guard for the restart case: an old `tc4` still exiting after a crash (AD39). It holds the pid, so a new `tc4` that waits for it can name the holder's process. The single instance on a machine is the shell's lock (§5.1) *(A-3)* |
+| `app.lock` | `tc4 serve`'s guard for the restart case: an old `tc4` still exiting after a crash (AD39). The holder writes its pid to `app-lock.json` beside it (Windows lets no other process read a locked file), so a new `tc4` that waits for it can name the holder's process. The single instance on a machine is the shell's lock (§5.1) *(A-3)* |
+| `app-lock.json` | `{pid, at}` of the `tc4` that holds `app.lock`, written atomically after it takes the lock; read only to name the holder |
 | `drafts-buffer.log` | written by the shell, not by `tc4`: the mirror of the browser buffer, one appended line per change, a clean field written as a removal line (AD21) *(A-3)* |
 
 `lastEdit` (the Resume card) is recorded on each acknowledged save and when an editor loses
@@ -1135,10 +1136,16 @@ sees, and typing no longer costs an fsynced app-data write each second *(A-20)*.
 - `tc4 serve --app-data <dir> --projects <dir> --ui <dir> [--door43 <url>]`
   `[--backend memory --scenario <dir>] [--test-hooks]`. The last three exist only with their
   cargo features.
-- It takes `app.lock` in app data and writes its pid into it. The lock is only its guard for the
-  restart case: an old `tc4` may still be closing after a crash or after its shell died (AD39).
-  If that `tc4` holds the lock, the new one waits up to 10 s for it, then exits with a message
-  that names the holder's process. *(A-3)*
+- It takes `app.lock` in app data, an operating-system lock it holds until the process ends (a
+  crash included), and then writes its pid to `app-lock.json` beside it, because Windows lets no
+  other process read a locked file. The lock is only its guard for the restart case: an old `tc4`
+  may still be closing after a crash or after its shell died (AD39). If that `tc4` holds the
+  lock, the new one waits up to 10 s for it, printing nothing and binding nothing, so the shell
+  waits longer than that for the address line; then it prints
+  `{"error":{"type":"appLockHeld","value":{"pid":<pid or null>}}}` as its only line, names the
+  process on stderr, and exits with code 3. A start that fails otherwise prints
+  `{"error":{"type":"start","value":{"reason":"…"}}}` and exits with code 4. *(A-3; A2: the pid
+  is beside the lock, and the two error lines are what the shell reads.)*
 - It binds `127.0.0.1:0` and prints one JSON line before anything else:
   `{"url":"http://127.0.0.1:PORT/","token":"<43 chars base64url>"}`. The token is never logged.
 - On stdin `{"quit":true}`, when stdin closes (the shell died; on Windows this needs the shell
@@ -1189,8 +1196,9 @@ Headers on `index.html`: `Content-Security-Policy: default-src 'self'; script-sr
 
 Tests (`tc-server/tests/security.rs`): `request_without_token_is_401`, `foreign_host_is_403`,
 `foreign_origin_post_is_403`, `no_cors_headers_ever`, `binds_loopback_only`,
-`dev_cookie_only_in_debug_builds`, `help_never_redirects`. Lifecycle tests (`tc-server/tests/
-lifecycle.rs`): `closed_stdin_quits_within_5_s`,
+`dev_cookie_only_in_debug_builds`, `help_never_redirects`. Lifecycle tests
+(`crates/tc4/tests/lifecycle.rs`, against the binary; tc-server's own `tests/lifecycle.rs`
+drives the quit sequence in process): `closed_stdin_quits_within_5_s`,
 `new_tc4_waits_for_the_old_one_then_names_the_holder` (the `app.lock` wait for the restart case)
 *(A-3)*. The second launch is G1's test, in the shell:
 `second_launch_focuses_the_running_window_and_starts_no_server`.
