@@ -972,3 +972,71 @@ fn metadata_decodes_into_the_fields_the_records_hold() {
         shown.len()
     );
 }
+
+/// `written(k)` of X3: the value the heads a base lists stand for. A settled record shows its
+/// one head; several heads with equal values show that value; several that differ are no
+/// value a file showed (the key is then planned without a base); a record that is in
+/// conflict now shows what the base's heads said, not what the fold shows today; a head that
+/// cannot be read is `Unreadable`.
+#[test]
+fn shown_value_is_what_the_file_showed() {
+    use tc_journal::outside::ShownValue;
+    let mut world = World::new(&[3]);
+    let key = verse_key(1, 2);
+    let first = on(&world.changes, &key);
+    let mine = world
+        .dev
+        .one(verse(1, 2, text("my words", 2)), vec![first.id()]);
+    let mut juan = Dev::new(2);
+    let theirs = juan.one(verse(1, 2, text("their words", 2)), vec![first.id()]);
+    let same = juan.one(verse(1, 2, text("my words", 2)), vec![first.id()]);
+    world.changes.push(mine.clone());
+    let value =
+        |state: &FoldState, heads: &[tc_journal::ChangeId]| match state.shown_value(&key, heads) {
+            ShownValue::Value(record) => Some(words(&record)),
+            _ => None,
+        };
+
+    // One head: its record.
+    let state = world.state();
+    assert_eq!(value(&state, &[mine.id()]).as_deref(), Some("my words"));
+    // No heads: nothing was written.
+    assert!(matches!(state.shown_value(&key, &[]), ShownValue::Nothing));
+    // An older version of the record, which is what the file showed before the edit.
+    assert_eq!(
+        value(&state, &[first.id()]).as_deref(),
+        Some("words of 1:2")
+    );
+
+    // Two heads of different value: the fold shows one of them, the base listed both.
+    world.changes.push(theirs.clone());
+    let state = world.state();
+    assert!(matches!(
+        state.shown_value(&key, &[mine.id(), theirs.id()]),
+        ShownValue::Conflicting | ShownValue::Value(_)
+    ));
+    // The heads the file was made from, when they differ in value and are not the record's
+    // current heads: no single value.
+    let other = juan.one(verse(1, 2, text("other words", 2)), vec![first.id()]);
+    world.changes.push(other.clone());
+    let state = world.state();
+    assert!(matches!(
+        state.shown_value(&key, &[mine.id(), other.id()]),
+        ShownValue::Conflicting
+    ));
+
+    // Heads of equal value are that value, whether or not the fold has them as heads.
+    world.changes.push(same.clone());
+    let state = world.state();
+    assert_eq!(
+        value(&state, &[mine.id(), same.id()]).as_deref(),
+        Some("my words")
+    );
+
+    // A change this computer has not got cannot be read.
+    let missing = juan.one(verse(1, 2, text("never arrived", 2)), vec![first.id()]);
+    assert!(matches!(
+        state.shown_value(&key, &[missing.id()]),
+        ShownValue::Unreadable
+    ));
+}

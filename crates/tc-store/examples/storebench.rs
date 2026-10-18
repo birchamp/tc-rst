@@ -37,7 +37,9 @@ use tc_store::{
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // An absolute name: the file watcher reports paths as the system resolves them.
     let dir = PathBuf::from(args.get(1).expect("DIR"));
+    let dir = std::fs::canonicalize(&dir).unwrap_or(dir);
     match args.first().map(String::as_str) {
         Some("setup") => setup(&dir),
         Some("open") => open_once(&dir, args.get(2).map_or("warm", String::as_str)),
@@ -625,6 +627,18 @@ fn materialize_case(dir: &Path) {
         stats(name, times);
         println!("  {}", cost("the last run", &last));
         handle.wait_idle();
+        // The file watcher tells the app of its own writes a second later (§11.1): what that
+        // echo costs.
+        let before = handle.counters();
+        std::thread::sleep(Duration::from_secs(3));
+        handle.wait_idle();
+        println!(
+            "  {}",
+            cost(
+                "the 3 s after the last run (the watcher's echo)",
+                &handle.counters().since(&before)
+            )
+        );
     }
     handle.close().expect("close");
 }

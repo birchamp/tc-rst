@@ -106,6 +106,69 @@ fn the_states_after_outside_changes_are_valid_burritos() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
+/// §16.6: every commit of a project's history is a valid burrito (I7), whatever happened
+/// between two checkpoints: a save, a book added and removed, a carried file, an outside edit,
+/// a file held and restored.
+#[test]
+fn every_commit_tree_is_a_valid_burrito() {
+    use tc_journal::command::SeedSource;
+    use tc_journal::record::Scope;
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    let checkpoint = |handle: &ProjectHandle| {
+        handle
+            .checkpoint(CheckpointReason::LeavingTranslate)
+            .wait()
+            .unwrap();
+        handle.wait_idle();
+    };
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    checkpoint(&handle);
+    let book = tc_journal::BookId::Philemon;
+    handle
+        .submit(Command::AddBook {
+            book,
+            scope: Scope::Whole,
+            seed: SeedSource {
+                usfm: "\\id PHM source\n\\usfm 3.0\n\\h PHM\n\\mt PHM\n\\c 1\n\\p\n\\v 1 One.\n"
+                    .into(),
+            },
+        })
+        .wait()
+        .unwrap();
+    checkpoint(&handle);
+    rig.fs.put_unseen(
+        &folder.join("ingredients/audio/song.mp3"),
+        b"an hour of singing, in a few bytes",
+        None,
+    );
+    handle.focus().wait().unwrap();
+    checkpoint(&handle);
+    let usfm = folder.join("ingredients/TIT.usfm");
+    let edited = String::from_utf8(rig.fs.peek(&usfm).unwrap())
+        .unwrap()
+        .replace("Paul, a servant of God", "Paul, a slave of God");
+    rig.fs.put(&usfm, edited.as_bytes(), None);
+    handle.focus().wait().unwrap();
+    checkpoint(&handle);
+    handle
+        .submit(Command::RemoveBook {
+            book,
+            presence_shown: handle
+                .mint(&tc_journal::RecordKey::BookPresence(book), None)
+                .unwrap(),
+        })
+        .wait()
+        .unwrap();
+    checkpoint(&handle);
+    handle.close().unwrap();
+    let repo = repo_of(&rig.fs, &folder);
+    let commits = commits_of(&repo);
+    assert!(commits.len() >= 6, "{}", commits.len());
+    assert_commits_valid(&rig.fs, &folder);
+}
+
 mod arbitrary {
     use super::*;
     use proptest::prelude::*;

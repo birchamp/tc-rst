@@ -257,7 +257,7 @@ impl Git {
         let wanted: HashSet<Oid> = loose.iter().map(|l| l.oid).collect();
         // A walk that fails removes nothing: an object is pruned only when every ref was
         // read and none reached it.
-        let reach = reachable(repo, &wanted)?;
+        let reach = reachable(repo, &wanted, stop)?;
         let reached: HashSet<Oid> = reach.set.intersection(&wanted).copied().collect();
         let packed = packed_among(&objects.join("pack"), &reached)?;
         let plan = classify(&loose, &reach.set, &packed, now);
@@ -431,7 +431,11 @@ fn list_loose(objects: &Path) -> Result<Vec<Loose>, GitError> {
 
 /// Everything the branches, remotes and `refs/tc/` reach. A reference that cannot be read,
 /// or a commit or tree that is missing, fails the walk.
-fn reachable(repo: &Repository, wanted: &HashSet<Oid>) -> Result<Reach, GitError> {
+fn reachable(
+    repo: &Repository,
+    wanted: &HashSet<Oid>,
+    stop: &AtomicBool,
+) -> Result<Reach, GitError> {
     let mut walk = at("walk the history", repo.revwalk())?;
     at("walk the history", walk.set_sorting(Sort::TIME))?;
     let refs = at("list references", repo.references())?;
@@ -460,6 +464,9 @@ fn reachable(repo: &Repository, wanted: &HashSet<Oid>) -> Result<Reach, GitError
     let mut names: HashMap<Oid, String> = HashMap::new();
     let mut stack: Vec<(Oid, String)> = Vec::new();
     for oid in walk {
+        if stop.load(Ordering::Acquire) {
+            return Err(GitError::Other("stopped while walking the history".into()));
+        }
         let oid = at("walk the history", oid)?;
         set.insert(oid);
         commits.push(oid);

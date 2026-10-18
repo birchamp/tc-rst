@@ -219,15 +219,6 @@ impl Project {
         }
     }
 
-    /// K1 to K6 (§5.11) in one go. Pending files of a newer format, of another project or
-    /// unreadable are left as they are.
-    #[cfg(test)]
-    pub(crate) fn seal(&mut self) -> Result<SealReport, StoreError> {
-        let mut run = self.seal_start()?;
-        while self.seal_step(&mut run)? {}
-        Ok(run.report)
-    }
-
     /// The start of a seal: the pending files this session knows are the ones it will read, a
     /// few at a time ([`Project::seal_step`]), then pack, write, verify and remove. The actor
     /// serves the commands that wait between steps, so a save waits for one step and not for

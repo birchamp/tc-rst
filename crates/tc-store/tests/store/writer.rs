@@ -226,7 +226,7 @@ fn a_save_is_served_between_the_steps_of_a_seal() {
         "the new save stays"
     );
     rig.store.hooks().at_seal_step(|| {});
-    let handle = Arc::try_unwrap(handle).ok().expect("no other owner");
+    let handle = Arc::try_unwrap(handle).unwrap_or_else(|_| panic!("no other owner"));
     handle.close().unwrap();
     let handle = open(&rig, &folder);
     assert_eq!(

@@ -62,10 +62,14 @@ impl Watching {
         if guards.is_empty() {
             return None;
         }
-        let root = folder.root().to_owned();
+        // The system reports the paths of the watched folder as it resolves them (absolute,
+        // links followed); the folder may have been opened by a relative name.
+        let roots: Vec<PathBuf> = std::iter::once(folder.root().to_owned())
+            .chain(std::fs::canonicalize(folder.root()).ok())
+            .collect();
         let thread = std::thread::Builder::new()
             .name("tc-store watcher".into())
-            .spawn(move || gather(&root, debounce, &rx, &writer, &actor))
+            .spawn(move || gather(&roots, debounce, &rx, &writer, &actor))
             .ok()?;
         Some(Self {
             guards,
@@ -92,7 +96,7 @@ impl Drop for Watching {
 
 /// Collects paths until none arrives for `debounce`, then tells their owners.
 fn gather(
-    root: &std::path::Path,
+    roots: &[PathBuf],
     debounce: Duration,
     rx: &Receiver<Vec<PathBuf>>,
     writer: &Sender<Job>,
@@ -108,12 +112,12 @@ fn gather(
         match received {
             Ok(paths) => batch.extend(paths),
             Err(RecvTimeoutError::Timeout) => {
-                if !tell(root, std::mem::take(&mut batch), writer, actor) {
+                if !tell(roots, std::mem::take(&mut batch), writer, actor) {
                     return;
                 }
             }
             Err(RecvTimeoutError::Disconnected) => {
-                tell(root, std::mem::take(&mut batch), writer, actor);
+                tell(roots, std::mem::take(&mut batch), writer, actor);
                 return;
             }
         }
@@ -123,7 +127,7 @@ fn gather(
 /// Splits the paths into the files of the project and the journal's. `false` when the
 /// project has closed.
 fn tell(
-    root: &std::path::Path,
+    roots: &[PathBuf],
     paths: BTreeSet<PathBuf>,
     writer: &Sender<Job>,
     actor: &Sender<Msg>,
@@ -131,7 +135,7 @@ fn tell(
     let mut files: Vec<String> = Vec::new();
     let mut journal = false;
     for path in paths {
-        let Ok(rel) = path.strip_prefix(root) else {
+        let Some(rel) = roots.iter().find_map(|root| path.strip_prefix(root).ok()) else {
             continue;
         };
         let rel = rel.to_string_lossy().replace('\\', "/");

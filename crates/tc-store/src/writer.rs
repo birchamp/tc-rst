@@ -518,7 +518,10 @@ impl Writer {
                     self.retry();
                     self.probe_written_state();
                 }
-                Err(RecvTimeoutError::Disconnected) => return,
+                Err(RecvTimeoutError::Disconnected) => {
+                    self.stop_repack();
+                    return;
+                }
             }
         }
     }

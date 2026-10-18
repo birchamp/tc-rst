@@ -814,3 +814,57 @@ fn crash_g3_lost_ref_update_commits_again() {
     handle.close().unwrap();
     assert_commits_valid(&rig2.fs, &folder);
 }
+
+/// §16.2, rows M1 to M6 with the two kinds of path the groups skip or place: a held file (its
+/// bytes were changed without its time, so the app leaves it as it is) and a carried file that
+/// went missing (it is placed again from the object database). Killed at every write point of
+/// a save, the window focus that finds the carried file gone and the materialization, the
+/// reopened project has the held file's bytes untouched, the carried file back or still
+/// pending its placement, every save that was reported saved, and a valid burrito.
+#[test]
+fn crash_materialize_with_a_carried_file_and_a_held_file() {
+    const SONG: &str = "ingredients/audio/song.mp3";
+    let (rig, folder) = titus();
+    let held_rel = "ingredients/TIT.usfm";
+    let song = b"an hour of singing, in a few bytes".to_vec();
+    {
+        let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+        save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
+        rig.fs.put_unseen(&folder.join(SONG), &song, None);
+        handle.focus().wait().unwrap();
+        handle.leave(tc_store::Leave::Mode).wait().unwrap();
+        handle.wait_idle();
+        handle.close().unwrap();
+    }
+    settle_entries(&rig, &folder);
+    let damaged = damage_file(&rig, &folder, held_rel);
+    let base = rig.fs.crash(false);
+    let song_path = folder.join(SONG);
+    let setup = |fs: &FaultFs, _: &ProjectHandle| {
+        fs.delete(&song_path).unwrap();
+    };
+    let action = |handle: &ProjectHandle| {
+        let reply = save_verse(handle, 1, 9, "holding to the word");
+        let _ = handle.focus().wait();
+        let _ = handle.leave(tc_store::Leave::Mode).wait();
+        outcome_of(reply)
+    };
+    let points = kill_everywhere_full(&base, &folder, &setup, &action, &|handle, fs, outcome| {
+        if outcome == Outcome::Saved {
+            assert_eq!(words(handle, 1, 9).as_deref(), Some("holding to the word"));
+        }
+        handle.wait_idle();
+        // The person's bytes in the held file are never written over.
+        assert_eq!(
+            fs.peek(&folder.join(held_rel)),
+            Some(damaged.clone()),
+            "the held file was written over"
+        );
+        // The carried file is back, or the next materialization places it: a missing file is
+        // never read as a removal.
+        handle.focus().wait().unwrap();
+        handle.wait_idle();
+        assert_eq!(fs.peek(&folder.join(SONG)), Some(song.clone()));
+    });
+    assert!(points > 10, "{points}");
+}
