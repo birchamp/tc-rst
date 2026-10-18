@@ -8,8 +8,10 @@ use axum::extract::FromRef;
 use tokio::sync::watch;
 
 use crate::Limits;
+use crate::downloads::Downloads;
 use crate::routes::RouteTable;
 use crate::token::LaunchToken;
+use crate::uploads::Uploads;
 
 pub(crate) struct Shared {
     pub token: LaunchToken,
@@ -20,6 +22,8 @@ pub(crate) struct Shared {
     pub limits: Limits,
     pub ui_dir: PathBuf,
     pub routes: RouteTable,
+    pub uploads: Arc<Uploads>,
+    pub downloads: Arc<Downloads>,
     pub test_hooks: AtomicBool,
     /// Set when the quit sequence begins: new requests get 503.
     pub closing: AtomicBool,

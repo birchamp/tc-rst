@@ -1236,7 +1236,16 @@ short, and the quit waits for calls still running (§5.1). *(A2)*
 - **Uploads.** The DOM keeps tC4's `<input type=file>` and drop zones
   (`tC4:src/views/modals/Import.jsx:63-68`, `AddBook.jsx:57-62`, `GuidedFix.jsx:62-68`). The UI
   posts each `File` as the `fetch` body, with its name percent-encoded in `X-Tc-Upload-Name`. The
-  server streams it to `uploads/<id>` and returns `UploadView { id, name, size }`. Caps follow
+  server streams it to `uploads/<id>` and returns `UploadView { id, name, size }`. It is
+  `POST /api/v1/uploads` with the API's headers, the name in `X-Tc-Upload-Name` and the flow
+  (`exchange`, `import`, `usfm` or `guidedFix`) in `X-Tc-Upload-Flow`. The server writes
+  `uploads/<id>.part` and renames it to `uploads/<id>` after the last byte, and only then
+  answers; a body over the flow's cap is 413, and a cut connection or a full disk leaves nothing
+  (`UploadRefusal::NotWritten`). Nothing is fsynced: `uploads/` is emptied at every start, so a
+  crash never reads a partial upload back. The UI checks a file's size against its flow's cap
+  before it sends it (`UploadFlow::cap`), because a browser still sending when the server
+  refuses may report a reset connection instead of the 413. The name is never a path. *(A2)*
+  Caps follow
   the flow: an exchange file ("Receive work from a file" in a browser) may be 4 GiB, STORAGE's
   cap for the whole file, whose 512 MiB cap applies to each entry inside it (STORAGE:3027) and
   is checked when the file is read; every other upload (USFM, tC3 and tC4 projects, a guided-fix
@@ -1247,7 +1256,9 @@ short, and the quit waits for calls still running (§5.1). *(A2)*
   `<a download href="/download/<id>/<name>">`, as tC4's `deliverFile` does
   (`tC4:src/data/export/kernel.ts:38-57`). Electronite shows the save dialog and reports saved or
   cancelled through `onDownloadDone`, which drives "Saved {file}" (`tC4:src/views/ExportMenu.jsx:26-34`).
-  In a browser the toast says "Export ready: {file}". Files stay 10 minutes.
+  In a browser the toast says "Export ready: {file}". Files stay 10 minutes. A producer writes its
+  file in `downloads/` and registers it (`Downloads::add`); the route answers only an id that is
+  registered, with the name it was registered under, and streams the file. *(A2)*
 - **USB export** is not a download. `tc4Shell.chooseFolder()` gives the destination; the job
   writes, then verifies from the device; "You can remove the stick" shows only after the verify
   (STORAGE:3010-3017).

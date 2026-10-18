@@ -10,9 +10,11 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use tc_api::endpoint::{API_VERSION_HEADER, TOKEN_HEADER};
+use tc_api::upload::{UPLOAD_FLOW_HEADER, UPLOAD_NAME_HEADER, UPLOADS_PATH, UploadFlow};
 use tc_server::stub::{Stub, StubEvents};
-use tc_server::{Answer, Backend, Exit, Server, ServerConfig, Stdio, Then};
+use tc_server::{Answer, Backend, Exit, Server, ServerConfig, ServerHandle, Stdio, Then};
 use tempfile::TempDir;
 use tokio::io::{AsyncWrite, AsyncWriteExt as _, DuplexStream};
 
@@ -53,6 +55,8 @@ pub struct TestServer {
     pub port: u16,
     pub token: String,
     pub app_data: TempDir,
+    /// The registries of uploads and downloads.
+    pub handle: ServerHandle,
     /// Holds `site/` (the UI folder) and `secret.txt` beside it.
     pub ui_root: TempDir,
     stdin: Option<DuplexStream>,
@@ -94,7 +98,21 @@ impl TestServer {
         configure: impl FnOnce(&mut ServerConfig),
         hooks: bool,
     ) -> TestServer {
-        let app_data = TempDir::new().unwrap();
+        Self::start_inner(backend, configure, hooks, TempDir::new().unwrap())
+    }
+
+    /// A server whose app data is `dir` (it must exist; the test deletes it).
+    pub fn start_in<B: Backend>(backend: Arc<B>, dir: &std::path::Path) -> TestServer {
+        let app_data = TempDir::new_in(dir).unwrap();
+        Self::start_inner(backend, |_| {}, true, app_data)
+    }
+
+    fn start_inner<B: Backend>(
+        backend: Arc<B>,
+        configure: impl FnOnce(&mut ServerConfig),
+        hooks: bool,
+        app_data: TempDir,
+    ) -> TestServer {
         let ui_root = TempDir::new().unwrap();
         let site = seed_ui(ui_root.path());
         let mut config = ServerConfig::new(app_data.path().to_path_buf(), site);
@@ -115,6 +133,7 @@ impl TestServer {
             .parse()
             .unwrap();
         let token = server.address().token.clone();
+        let handle = server.handle();
         let (writer, reader) = tokio::io::duplex(4096);
         let stdout = Collected::default();
         let out = stdout.clone();
@@ -138,6 +157,7 @@ impl TestServer {
             port,
             token,
             app_data,
+            handle,
             ui_root,
             stdin: Some(writer),
             stdout,
@@ -190,6 +210,25 @@ impl TestServer {
             .with(API_VERSION_HEADER, "1")
             .with("Content-Type", "application/json")
             .body(json.as_bytes())
+    }
+
+    /// An upload as the UI makes it: the file is the body, its name and flow are headers.
+    pub fn upload_req(&self, flow: UploadFlow, name: &str, body: &[u8]) -> Req {
+        self.authed("POST", UPLOADS_PATH)
+            .with("Origin", &format!("http://127.0.0.1:{}", self.port))
+            .with(API_VERSION_HEADER, "1")
+            .with(UPLOAD_FLOW_HEADER, flow.header_value())
+            .with(
+                UPLOAD_NAME_HEADER,
+                &utf8_percent_encode(name, NON_ALPHANUMERIC).to_string(),
+            )
+            .with("Content-Type", "application/octet-stream")
+            .body(body)
+    }
+
+    /// The folder uploads are stored in.
+    pub fn uploads_dir(&self) -> std::path::PathBuf {
+        self.app_data.path().join("uploads")
     }
 
     pub fn get(&self, path: &str) -> Response {

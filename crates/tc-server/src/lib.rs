@@ -12,6 +12,7 @@
 //! are the backend's: `tc-app` in the product, [`stub::Stub`] in this crate's tests.
 
 mod backend;
+mod downloads;
 mod events;
 mod lifecycle;
 mod log;
@@ -21,6 +22,7 @@ mod state;
 mod statics;
 pub mod stub;
 mod token;
+mod uploads;
 
 use std::io;
 use std::path::PathBuf;
@@ -35,17 +37,20 @@ use axum::middleware::from_fn_with_state;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::serve::ListenerExt as _;
+use tc_api::upload::UploadFlow;
 use tokio::io::{AsyncBufRead, AsyncWrite};
 use tokio::sync::watch;
 
 pub use axum::body::Bytes;
 pub use backend::{Answer, Backend, EventSource, Next, Then};
+pub use downloads::{DownloadError, Downloads};
 pub use lifecycle::Exit;
 pub use routes::product_paths;
 #[cfg(feature = "test-hooks")]
 pub use routes::test_paths;
 pub use statics::CSP;
 pub use token::{AddressLine, LaunchToken};
+pub use uploads::{Upload, Uploads};
 
 use state::{AppState, Shared};
 
@@ -65,6 +70,13 @@ pub struct Limits {
     /// How long requests being answered, and backend calls still running, get to finish once
     /// closing began, before the backend's quit work starts: 1 s.
     pub drain_within: Duration,
+    /// The most bytes an upload of a flow may carry. The product's value is
+    /// [`UploadFlow::cap`]; a test passes a smaller one.
+    pub upload_cap: fn(UploadFlow) -> u64,
+    /// How long a finished file stays available for download: 10 minutes.
+    pub downloads_keep: Duration,
+    /// How often expired downloads are looked for: a minute.
+    pub downloads_sweep: Duration,
 }
 
 impl Default for Limits {
@@ -74,6 +86,9 @@ impl Default for Limits {
             heartbeat: Duration::from_secs(15),
             close_within: Duration::from_secs(5),
             drain_within: Duration::from_secs(1),
+            upload_cap: UploadFlow::cap,
+            downloads_keep: Duration::from_secs(10 * 60),
+            downloads_sweep: Duration::from_secs(60),
         }
     }
 }
@@ -125,6 +140,23 @@ pub struct Server {
     address: AddressLine,
 }
 
+/// What the application's flows reach the server's files through.
+#[derive(Clone)]
+pub struct ServerHandle {
+    uploads: Arc<Uploads>,
+    downloads: Arc<Downloads>,
+}
+
+impl ServerHandle {
+    pub fn uploads(&self) -> &Arc<Uploads> {
+        &self.uploads
+    }
+
+    pub fn downloads(&self) -> &Arc<Downloads> {
+        &self.downloads
+    }
+}
+
 /// Standard input and output of the process, or stand-ins for them.
 pub struct Stdio<R, W> {
     /// Lines from the shell: `{"quit":true}`. The end of input means the shell is gone.
@@ -138,7 +170,7 @@ impl Server {
     /// [`Server::run`], so the caller can print [`Server::address`] first.
     pub fn bind(config: ServerConfig) -> Result<Server, ServerError> {
         let ServerConfig {
-            app_data: _,
+            app_data,
             ui_dir,
             limits,
             handle_signals,
@@ -146,6 +178,8 @@ impl Server {
         if !ui_dir.is_dir() {
             return Err(ServerError::UiDir(ui_dir));
         }
+        let uploads_dir = fresh_folder(&app_data, "uploads")?;
+        let downloads_dir = fresh_folder(&app_data, "downloads")?;
         let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).map_err(ServerError::Bind)?;
         let port = listener.local_addr().map_err(ServerError::Bind)?.port();
         let token = LaunchToken::new()?;
@@ -153,6 +187,7 @@ impl Server {
             url: format!("http://127.0.0.1:{port}/"),
             token: token.as_str().to_owned(),
         };
+        let downloads_keep = limits.downloads_keep;
         let shared = Arc::new(Shared {
             token,
             host: format!("127.0.0.1:{port}"),
@@ -160,6 +195,8 @@ impl Server {
             limits,
             ui_dir,
             routes: routes::RouteTable::new(),
+            uploads: Arc::new(Uploads::new(uploads_dir)),
+            downloads: Arc::new(Downloads::new(downloads_dir, downloads_keep)),
             test_hooks: AtomicBool::new(false),
             closing: AtomicBool::new(false),
             in_flight: AtomicUsize::new(0),
@@ -176,6 +213,14 @@ impl Server {
     /// The line `tc4 serve` prints first.
     pub fn address(&self) -> &AddressLine {
         &self.address
+    }
+
+    /// The registries of uploads and downloads, which the application's flows use.
+    pub fn handle(&self) -> ServerHandle {
+        ServerHandle {
+            uploads: Arc::clone(&self.shared.uploads),
+            downloads: Arc::clone(&self.shared.downloads),
+        }
     }
 
     /// Routes the `test` service too. Without the cargo feature there is no such method, and
@@ -224,12 +269,14 @@ impl Server {
             backend: Arc::clone(&backend),
         };
         let mut serving = tokio::spawn(axum::serve(listener, router(state)).into_future());
+        let sweeper = tokio::spawn(sweep_downloads(Arc::clone(&shared)));
 
         let cause = tokio::select! {
             exit = lifecycle::watch_stdin(input) => exit,
             () = backend.quitting() => Exit::AppQuit,
             exit = lifecycle::watch_signals(handle_signals) => exit,
             ended = &mut serving => {
+                sweeper.abort();
                 return Err(ServerError::Serve(match ended {
                     Ok(Err(error)) => error,
                     Ok(Ok(())) => io::Error::other("the listener closed"),
@@ -257,6 +304,7 @@ impl Server {
             lifecycle::say_closed(&mut output).await;
         }
         serving.abort();
+        sweeper.abort();
         Ok(cause)
     }
 }
@@ -270,6 +318,12 @@ fn router<B: Backend>(state: AppState<B>) -> Router {
         .route("/help/{*path}", get(statics::help))
         .route(tc_api::endpoint::EVENTS_PATH, get(events::stream::<B>))
         .route(
+            tc_api::upload::UPLOADS_PATH,
+            // The upload streams its own body to a file, against the flow's cap.
+            post(uploads::upload).layer(DefaultBodyLimit::disable()),
+        )
+        .route("/download/{id}/{name}", get(downloads::download))
+        .route(
             "/api/v1/{service}/{name}",
             // The handler reads the body itself, against `Limits::api_body`.
             post(routes::api::<B>).layer(DefaultBodyLimit::disable()),
@@ -280,6 +334,37 @@ fn router<B: Backend>(state: AppState<B>) -> Router {
         .layer(from_fn_with_state(Arc::clone(&shared), lifecycle::gate))
         .layer(from_fn_with_state(shared, security::guard))
         .with_state(state)
+}
+
+/// Empties `<app_data>/<name>` and creates it: the registries only serve ids of this run, so
+/// what an earlier run left there is garbage. A folder that cannot be emptied is logged and
+/// kept; one that cannot be created is an error.
+fn fresh_folder(app_data: &std::path::Path, name: &str) -> Result<PathBuf, ServerError> {
+    let dir = app_data.join(name);
+    // `remove_dir_all` does not follow a symbolic link: it removes the link itself.
+    match std::fs::remove_dir_all(&dir) {
+        Ok(()) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => log::warn(format_args!("could not empty {}: {error}", dir.display())),
+    }
+    std::fs::create_dir_all(&dir).map_err(|source| ServerError::AppData {
+        path: dir.clone(),
+        source,
+    })?;
+    Ok(dir)
+}
+
+/// Deletes the downloads that have been kept long enough.
+async fn sweep_downloads(shared: Arc<Shared>) {
+    let mut tick = tokio::time::interval(shared.limits.downloads_sweep);
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tick.tick().await;
+        for file in shared.downloads.sweep(std::time::Instant::now()) {
+            // Already gone is as good as deleted.
+            let _ = tokio::fs::remove_file(file).await;
+        }
+    }
 }
 
 async fn not_found() -> impl IntoResponse {
