@@ -368,6 +368,36 @@ impl Shared {
             .clone()
     }
 
+    /// Takes away the notices that a hold of `rel` raised: the hold ended (§6.2). The byte
+    /// copy stays until the person dismisses a notice of it.
+    pub(crate) fn remove_notices_of(&self, rel: &str) {
+        use tc_journal::fold::Notice;
+        self.notices
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|n| match &n.notice {
+                Notice::OutsideEditHeld { path, .. } | Notice::StorageDamage { path, .. } => {
+                    path.as_str() != rel
+                }
+                _ => true,
+            });
+    }
+
+    /// Whether a notice for the hold of `rel` is listed.
+    pub(crate) fn has_hold_notice(&self, rel: &str) -> bool {
+        use tc_journal::fold::Notice;
+        self.notices
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .any(|n| match &n.notice {
+                Notice::OutsideEditHeld { path, .. } | Notice::StorageDamage { path, .. } => {
+                    path.as_str() == rel
+                }
+                _ => false,
+            })
+    }
+
     /// A background job starts; [`ProjectHandle::wait_idle`] waits for it.
     pub(crate) fn job_started(&self) {
         *self.jobs.lock().unwrap_or_else(|e| e.into_inner()) += 1;
@@ -453,6 +483,7 @@ pub struct ProjectHandle {
 /// and reading the paths O9 took as converged without reading them.
 pub(crate) struct Background {
     pub vfs: Arc<dyn crate::vfs::Vfs>,
+    pub counters: Arc<Counters>,
     pub folder: crate::layout::Folder,
     pub index: Option<Vec<tc_journal::index::Section>>,
     pub project: ProjectId,
@@ -617,6 +648,7 @@ impl ProjectHandle {
                 if !job.check.is_empty() {
                     let results = crate::open::storage_check(
                         &*job.vfs,
+                        &job.counters,
                         &job.folder,
                         &job.check,
                         job.stamp_ns,
@@ -702,10 +734,13 @@ impl ProjectHandle {
     /// Writes what is due (a seal and a materialization), releases the lock and stops the
     /// actor.
     pub fn close(self) -> Result<(), StoreError> {
+        // The open's background work ends first, while the actor can still answer it; the
+        // actor stops the draft writer and releases the lock last, so nothing is written
+        // into the folder after the lock is gone (§5.0).
+        self.shared.wait_jobs();
         let (pending, resolver) = pending(|| Ok(()));
         let sent = self.send(Msg::Close { reply: resolver });
         let result = if sent { pending.wait() } else { Ok(()) };
-        self.shared.wait_jobs();
         self.drafts.stop();
         if let Some(actor) = self.actor.lock().unwrap_or_else(|e| e.into_inner()).take() {
             let _ = actor.join();
@@ -718,6 +753,7 @@ impl Drop for ProjectHandle {
     fn drop(&mut self) {
         // A handle dropped without close still stops its actor; what was saved is in
         // pending files, and the next open seals and materializes it.
+        self.shared.wait_jobs();
         let (_pending, resolver) = pending(|| Ok(()));
         self.send(Msg::Close { reply: resolver });
         if let Some(actor) = self.actor.lock().unwrap_or_else(|e| e.into_inner()).take() {

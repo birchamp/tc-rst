@@ -26,13 +26,38 @@ fn is_journal(path: &std::path::Path) -> bool {
     text.contains("/ingredients/tc/changes/") || text.contains("/.tc/pending/")
 }
 
-fn no_change_opens(corpus: &OnDisk) -> (StoreCounters, StoreCounters) {
+/// What an open after no change cost: the counters when the project became usable, those
+/// after the background work (O14) ended, and the number of derived files the fold has.
+struct OpenCost {
+    usable: StoreCounters,
+    after_idle: StoreCounters,
+    derived_files: usize,
+}
+
+/// Opens twice with the clock past the timestamp tick of the last materialization, so every
+/// entry is settled by the second open's storage check; returns the second and the third
+/// open's costs and the files the third opened.
+fn no_change_opens(corpus: &OnDisk) -> (OpenCost, OpenCost) {
     let fs = corpus.fs.copy();
     // Past the timestamp tick of the last materialization.
     fs.advance(std::time::Duration::from_secs(5));
-    let (second, _) = open_once(&fs, &corpus.folder);
+    let second = open_costed(&fs, &corpus.folder);
     fs.advance(std::time::Duration::from_secs(5));
-    let (third, opened) = open_once(&fs, &corpus.folder);
+    let third = open_costed(&fs, &corpus.folder);
+    (second, third)
+}
+
+/// An open whose counters are taken the moment it returns (the project is usable) and again
+/// when its background work has ended.
+fn open_costed(fs: &FaultFs, folder: &std::path::Path) -> OpenCost {
+    let rig = rig_as(fs.clone(), APP, "host-1");
+    fs.clear_log();
+    let handle = rig.store.open(folder, &OpenOptions::default()).unwrap();
+    let usable = handle.counters();
+    handle.wait_idle();
+    let after_idle = handle.counters();
+    let derived_files = handle.snapshot().fold().derived_files().len();
+    let opened = fs.opened();
     for path in &opened {
         if is_journal(path) {
             assert_eq!(
@@ -43,22 +68,44 @@ fn no_change_opens(corpus: &OnDisk) -> (StoreCounters, StoreCounters) {
             );
         }
     }
-    (second, third)
+    handle.close().unwrap();
+    OpenCost {
+        usable,
+        after_idle,
+        derived_files,
+    }
 }
 
+/// O9 converges a path without reading or projecting it when it is clean by stat; O14 reads
+/// each such path once, in the background, after the project is usable (§6.1). The two reads
+/// are counted apart, so an open that read every derived file before it was usable cannot
+/// pass for one that left the reading to O14.
 #[test]
 fn an_open_after_no_change_projects_no_file_and_reads_no_derived_file() {
     for corpus in [psalms(), psalms_x10()] {
         let (second, third) = no_change_opens(corpus);
         assert_eq!(
-            second.projected, 0,
-            "the second open projects nothing: {second:?}"
+            second.usable.projected, 0,
+            "the second open projects nothing: {:?}",
+            second.usable
         );
-        assert_eq!(third.projected, 0, "{third:?}");
-        assert_eq!(third.heads_read, 0);
-        // The storage check (O14) reads each derived file once, in the background; the
-        // open itself reads none: everything it read is the check's.
-        assert!(third.derived_read <= second.derived_read.max(1) * 2);
+        assert_eq!(third.usable.projected, 0, "{:?}", third.usable);
+        assert_eq!(third.after_idle.projected, 0);
+        assert_eq!(third.usable.heads_read, 0);
+        assert!(third.derived_files > 0);
+        // The entries are settled: the open reads no derived file before it is usable, and
+        // none after it either except the storage check's, which reads each once.
+        assert_eq!(
+            third.usable.derived_read, 0,
+            "the open read derived files: {:?}",
+            third.usable
+        );
+        assert_eq!(third.after_idle.derived_read, 0);
+        assert_eq!(
+            third.after_idle.check_read, third.derived_files as u64,
+            "O14 reads each derived file once: {:?}",
+            third.after_idle
+        );
     }
 }
 

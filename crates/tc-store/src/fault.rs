@@ -92,6 +92,8 @@ struct Faults {
     /// The write point that just stopped the writer was a write to tear.
     tear_now: bool,
     fail_op: BTreeMap<u64, io::ErrorKind>,
+    /// Every write point from this one on fails with this kind (a full disk).
+    fail_from: Option<(u64, io::ErrorKind)>,
     read_delay: Option<Duration>,
     reads_fail_from: Option<Instant>,
     unreadable: BTreeSet<PathBuf>,
@@ -265,6 +267,14 @@ impl Model {
                 format!("FaultFs: {kind:?} of {} failed", path.display()),
             ));
         }
+        if let Some((from, error)) = self.faults.fail_from
+            && index >= from
+        {
+            return Err(io::Error::new(
+                error,
+                format!("FaultFs: {kind:?} of {} failed", path.display()),
+            ));
+        }
         Ok(())
     }
 
@@ -423,6 +433,13 @@ impl FaultFs {
         let mut model = self.model();
         let at = model.ops + n;
         model.faults.fail_op.insert(at, kind);
+    }
+
+    /// From now on every write point fails with `kind` and the writer goes on (a full disk,
+    /// a folder that became read-only); `None` ends it.
+    pub fn fail_writes(&self, kind: Option<io::ErrorKind>) {
+        let mut model = self.model();
+        model.faults.fail_from = kind.map(|k| (model.ops, k));
     }
 
     /// Write points so far.

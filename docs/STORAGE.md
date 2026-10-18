@@ -1128,13 +1128,13 @@ None of these files is project data that another device needs. Each is written w
 | `lock` | `{host, pid, device, at}` | exclusive advisory lock (`std::fs::File::try_lock`) while the project is open; the content only names the holder in messages. It is written through the locked handle (truncate, write, flush), never with `atomic_write`: a new file renamed over it would be a file whose lock nobody holds, and a second process could take it |
 | `device.json` | `{device, fingerprint, created}` | this folder's Local device (§6.3) |
 | `pending/<device>-<hash32>.batch` | header + change lines (§4.2) | saves not yet sealed: the commit point of every save |
-| `materialized.json` | `{minor, derivations, paths: {<path>: {md5, size, mtimeNs, settled, scope, held, oid, nfc}}, packs: {<path>: {md5, size, fingerprint}}}`: the format minor and derivation versions (§12.1) the files were projected with; per derived or carried path what was written (md5, size, mtime), whether its bytes were read back after its timestamp tick was over (`settled`), the digest of the heads its projection stands for (`scope`), and the md5 of bytes the app holds there without writing over them (`held`), §6.2; for a USFM or story file whether its bytes are NFC (`nfc`), so `metadata.json` states its `normalization` without projecting every book again; per pack the md5 that `metadata.json` lists, which also makes the manifest's pack list the expected pack set unit S1 checks at open (§4.4: a listed pack that is gone and that no valid pack's `replaces` names is missing) | the manifest: what the app last wrote (§5.10). Its own mtime, which the filesystem sets when it is written, is a time stamp that settles entries (§6.2) |
+| `materialized.json` | `{minor, derivations, paths: {<path>: {md5, size, mtimeNs, settled, scope, held, oid, nfc}}, packs: {<path>: {md5, size, fingerprint}}}`: the format minor and derivation versions (§12.1) the files were projected with; per derived or carried path what was written (md5, size, mtime), whether its bytes were read back after its timestamp tick was over (`settled`), the digest of the heads its projection stands for (`scope`), and the bytes the app holds there without writing over them (`held`: their md5, why they are held, and the path of their copy in `.tc/external/`), §6.2; for a USFM or story file whether its bytes are NFC (`nfc`), so `metadata.json` states its `normalization` without projecting every book again; per pack the md5 that `metadata.json` lists, which also makes the manifest's pack list the expected pack set unit S1 checks at open (§4.4: a listed pack that is gone and that no valid pack's `replaces` names is missing) | the manifest: what the app last wrote (§5.10). Its own mtime, which the filesystem sets when it is written, is a time stamp that settles entries (§6.2) |
 | `heads/<escaped path>.bin` | postcard `HeadsFile`: for every record the file was built from, the heads the written bytes stand for, by the token rule of §2.7 (every head of a settled or merged record; only the provisional candidate and its equal heads for a conflict) | the base of an outside edit (§11.1); an outside editor saw only the provisional text, so its edit never resolves a conflict |
 | `materialize.intent.json` | `{writes: [{path, oldMd5, newMd5}], removes: [path]}` | present only during a materialization |
 | `quarantine/…` | damaged pending files, byte copies; change lines too long for any pack (§5.11 K1) | kept until the person dismisses the notice |
 | `quarantine.json` | blob ids of damaged or unreadable incoming files already reported | each damaged file is reported once, not at every sync |
 | `intake.json` | `{source, started}` | present only while an exchange-file import writes (§10.2 R7); at open it means the import did not finish |
-| `external/<utc>-<escaped path>` | byte copies of files changed outside the app, and files moved out of `ingredients/` | kept until the person dismisses the notice |
+| `external/<utc>-<escaped path>` | byte copies of files changed outside the app, and files moved out of `ingredients/`; a second copy of the same path in the same second is `…-2`, `…-3`: no copy replaces another | kept until the person dismisses the notice, and while the file they were taken of is held (§6.2) |
 | `sync.json` | `{remoteUrl, branch, confirmed: {commit, at}}` | last confirmed Door43 state; rebuilds `.git` config after git damage (§6.4 G4) |
 | `drafts.json` | `[{field, shown: [token text], text, at}]` | unsaved editor text, written at most every second while text is unsaved, by a writer beside the actor (§5.14) |
 | `index.bin` | the fold cache (`tc_journal::index`): for each valid pack and pending file an open read in full, a section keyed by the file's path, size and 64-bit fingerprint, holding the file's header and the prepared changes the fold takes from it (each change's id, where its JSON lies in the file, the fingerprint of those bytes and its summary), so the facts O7's rules read of the file (its header, status and change ids) come from the section as from a read; stamped with the cache version (`INDEX_VERSION`), the format minor, the build's probe stamp (below) and the project | a cold open takes each unchanged file's changes from it instead of verifying and parsing the file again (§6.1 O8, §14). It never decides what exists: a missing or damaged cache, one of another version, minor, stamp or project, or a file it holds no section for, only means that file is read |
@@ -1515,6 +1515,12 @@ the counter advances, and the person sees `SavedWithDiskError` ("Saved, but the 
 error: <reason>. Your work may not survive a power cut. Check the disk."). The app never reports
 "Not saved" for a file that exists, so a retry can never reuse its seq.
 
+**Closing.** A close seals and materializes what is due (§5.13 C1, C2), writes the fold cache,
+stops the draft writer and waits for it, and only then clears `.tc/lock`'s content and releases
+the lock: nothing is written into the folder after the lock is gone, so another window that
+takes the lock never races a late `drafts.json`. The open's background work (O8's cache write
+and O14) ends before the actor closes, while the actor can still answer it.
+
 **`commit_received`** writes changes whose bytes were fixed elsewhere: deterministic ingests of
 Door43 and exchange-file edits (§11.2, §11.3) and salvaged lines of another device's damaged pack
 (§4.4, §10.2 R4). It runs B1 with the rules of §4.5 only (no command rules), skips B2 (no seq,
@@ -1546,9 +1552,10 @@ layer holds an open project as a handle:
   alignment from that one snapshot (§3.10 item 3).
 - `leave`, `checkpoint`, `restore_held`, `dismiss_notice`, `offered_drafts`, `discard_draft`,
   `wait_idle`, `close`, and `counters()`: files opened, created, read and written, fsyncs,
-  renames, listings, derived files read, projected and written, heads files read, journal
-  files read and how many of them came from the fold cache, and the time commands waited in
-  the queue (R14). Tests hold the store at named points (before a book read, a draft write,
+  renames, listings, derived files read (by the open's classification and by compare-and-swaps,
+  `derived_read`, and apart, by the storage check O14, `check_read`), projected and written,
+  heads files read, journal files read and how many of them came from the fold cache, and the
+  time commands waited in the queue (R14). Tests hold the store at named points (before a book read, a draft write,
   the durability point of a save, a checkpoint, a materialization, a staging removal and
   rename; R8).
 
@@ -1825,9 +1832,11 @@ intake, and at close. It writes only dirty paths.
 M0  D = dirty derived and carried paths, with their new bytes computed in memory (carried bytes
     come from the git object database, §11.4; a carried head whose blob is missing keeps the
     file on disk as it is and reports CarriedBytesMissing); X = derived or carried paths to
-    remove (a removed book, a removed carried file). Nothing in X is removed while an expected
-    pack is missing or unreadable (§4.4). A held path (§6.2) is in neither: it stays dirty and
-    unwritten until the person chooses.
+    remove (a removed book, a carried file a settled `Removed` record names whose manifest entry
+    names its blob, §5.16). Nothing in X is removed while an expected pack is missing or
+    unreadable (§4.4). A held path (§6.2) is in neither: it is left as it is until the person
+    chooses. A held path whose file is gone ends its hold first, and joins D (a deletion is
+    never an edit, §6.2).
 M1  Compare-and-swap check. For each p in D ∪ X present on disk: d = md5(disk). The bytes are
     always read: size and mtime never stand for them here, because an open may have taken p as
     converged by its size and mtime alone (§6.2), and a program can change a file and put its
@@ -1839,7 +1848,12 @@ M1  Compare-and-swap check. For each p in D ∪ X present on disk: d = md5(disk)
     ends: a file no decoder reads (§11.1 X2) is kept as a byte copy with a notice, and the write
     proceeds.
 M2  Build metadata.json for the planned result (total, §3.4) and run tc_burrito::check on it in
-    memory. A failure is a bug report; nothing is written.
+    memory. A failure is a bug report; nothing is written. Every file is listed as its bytes
+    are on disk (I7): a derived file by the manifest or the planned bytes, and the fixed files
+    (`project.json`, `format.json`), the carried files and the held files by the manifest while
+    they are clean by stat and otherwise by a read; bytes there that the app did not write are
+    held with a copy and a notice (§6.2) and listed as they are, so the list never states the
+    md5 and size of bytes that are not in the folder.
 M3  atomic_write(.tc, "materialize.intent.json", {writes: [{path, oldMd5, newMd5}], removes: X})
 M4  For each p in D: write a temp, fsync, rename (directory fsync deferred); then atomic_write
     its heads file. For each p in X: unlink (directory fsync deferred).
@@ -1860,18 +1874,28 @@ A project with no book yet (a create before its first book is added, §6.4 N1) h
 `metadata.json` (`currentScope` needs a book): M2 fails, nothing is written, and the paths stay
 dirty until a book is there. `metadata.json` itself is always rewritten at M6, since it must
 list the files as they are; bytes there that neither the manifest nor the intent names (project
-details edited in a text editor) are first copied to `.tc/external/` with an `OutsideEditHeld`
-notice, so nothing a person wrote is lost (I8). Until unit S2 records outside edits (§11.1), M1
-holds every changed path, clean by stat or not: copied, left as it is, dropped from D and X,
-with an `OutsideEditHeld` or `StorageDamage` notice. If a rename in M4 fails because another
-program holds the file open (Windows: Paratext, an indexer), a program is probably writing that
-file right now. The actor retries for 2 s, and **before each retry it repeats M1 for that path**
-(the md5 of its bytes): if `d` is neither the manifest md5 nor the new md5, the
-write of that path is abandoned, the file is recorded (§11.1), and the materialization restarts
-at M0. After 2 s the path stays dirty and the person sees "translationCore can't update TIT.usfm
-because another program has it open. Your work is saved." While a path waits for a retry, the
-watcher does not treat the intent's new md5 as the app's own write for that path. Writes of
-pending files are never blocked by a derived file.
+details edited in a text editor, or any bytes when the manifest is gone or does not parse, so
+that nothing names what is on disk) are first copied to `.tc/external/` with a
+`MetadataEditedOutside` notice, once for each version of the bytes, so nothing a person wrote is
+lost (I8). Until unit S2 records outside edits (§11.1), M1 holds every changed path, clean by
+stat or not: copied, left as it is, dropped from D and X, with an `OutsideEditHeld` or
+`StorageDamage` notice. If a rename in M4 fails because another program holds the file open
+(Windows: Paratext, an indexer), a program is probably writing that file right now, and the
+actor **does not wait for it**: the write of that path is skipped, the path stays dirty,
+`metadata.json` lists the file as it is, and a timer of the actor tries again after 200 ms, then
+after as long as the path has waited so far, up to 3 s. Commands are served between the tries,
+so a save never waits for a derived file. **Every try starts at M0 and so repeats M1 for that
+path** (the md5 of its bytes): if `d` is neither the manifest md5 nor the new md5, the file was
+saved by the other program while the app waited, and it is held (unit S1) or recorded (§11.1)
+instead of written over. After 2 s the path stays dirty and the person sees "translationCore
+can't update TIT.usfm because another program has it open. Your work is saved."
+(`WriteBlocked`). A file the open cannot read, or a compare-and-swap that cannot read the file,
+is treated the same way: nothing is written over it, and it is tried again. While a path waits
+for a retry, the watcher does not treat the intent's new md5 as the app's own write for that
+path. Writes of pending files are never blocked by a derived file. A checkpoint
+materializes after its seal even when the seal failed, because a pack the seal renamed before
+it failed must be listed (I7); a path that stays dirty after any materialization, or a
+materialization that fails, is tried again 3 s later.
 
 The residual race: a program that writes `p` between the last compare-and-swap check and the
 rename that follows it is overwritten. That window is milliseconds on every attempt, and the
@@ -1967,7 +1991,10 @@ revert; a section draft's values come in `KeepDraft.section`, read from its buff
 section editor. A token whose MAC this installation can no longer check (the installation
 secret was lost and made again) still names its record and heads: the draft is offered as
 text, marked unverified, and *Keep* writes its value with no parents, so it stands as a
-conflict with what the record holds unless the two are equal (APP-DESIGN R20). A read-only open
+conflict with what the record holds unless the two are equal (APP-DESIGN R20); a section draft
+is checked for coherence against the records' current values, since the draft's tokens are no
+base, so a span the draft keeps is coherent against the verses it covers, and a verse the draft
+leaves unchanged is not written again. A read-only open
 offers nothing and writes no draft; a copy of the project (§5.0) carries its `drafts.json`, and
 the copy's first open offers them.
 
@@ -1983,8 +2010,11 @@ Door43) is recorded as an External change on `StoryBase` (§11.1 X2).
 ### 5.16 Carried files
 
 `RemoveCarriedFile { shown }` writes `CarriedValue::Removed` with `parents = shown.heads`. The
-next materialization removes the file (compare-and-swap first). A file that merely went missing
-is never recorded as removed (I11; §11.4).
+next materialization removes the file (compare-and-swap first): a carried path whose manifest
+entry names its blob, and whose record is a settled `Removed` (a conflict between a removal and
+an edit removes nothing), is in X (§5.10 M0), so the folder is a valid burrito again at M6. A
+file the app did not write (its md5 is neither the entry's nor the intent's) is held, not
+removed. A file that merely went missing is never recorded as removed (I11; §11.4).
 
 ---
 
@@ -2080,14 +2110,32 @@ O14 The storage check, in the background (PERFORMANCE.md rule 4): read every pat
     with its manifest entry (§6.2): equal settles the entry once its tick is over; different is
     classified by the table of §6.2, which holds a path that was clean by stat, so nothing is
     written over and nothing is recorded without the person. Saves and every screen go on
-    meanwhile; a path a command must rewrite first is read by M1 (§5.10) anyway.
+    meanwhile; a path a command must rewrite first is read by M1 (§5.10) anyway. **Its cost
+    is every derived file, once per open**: for a whole Bible about 400 files and 210 MiB, read
+    after the project is usable on one thread of its own. The counters report these reads as
+    `check_read`, apart from `derived_read` (the open's own classification and the
+    compare-and-swaps), so "an open after no change reads no derived file" is true of the
+    open itself and the check's cost is not hidden in it. On Windows with Defender on, every
+    file opened is scanned (§14), so those ≈400 opens are paid in the background after each
+    open, in competition with the saves: that is the price of reading what O9 spared, and
+    the reason the check is the only place a stat that lies is found.
 ```
 
 Open refuses only for: the lock is held (read-only instead), the folder cannot be read, the
 format major is newer, or the folder is not a project. It never refuses because of content.
-A journal file that cannot be read is listed (`FileUnreadable`) and never removed; the open
-fails as "cannot be read" only when `project.json` can no longer be read either, so a cloud
-placeholder never stops an open and a folder that went away does.
+A journal file that cannot be read is listed (`FileUnreadable`) and never removed; so is one
+whose stat fails (a cloud placeholder, a delete-pending file on Windows): it is listed with
+size 0, read like any other, and reported when the read fails too. The open fails as
+"cannot be read" only when `project.json` can no longer be read either, so a cloud placeholder
+never stops an open and a folder that went away does. A derived file that cannot be read
+(another program holds it) is neither damaged nor gone: it is reported (`FileUnreadable`),
+left as it is and kept dirty, so the next materialization reads it again (M1) and writes it
+when it can. **Every write of the open is best effort** (the lock's content, O2, O4's repair,
+O6's device file, O7, O9, O10 and the manifest): the first write that fails (a full disk, a
+folder that became read-only) ends the open's writes, and the project opens read-only with
+`WriteFailed(reason)` and the lock released, showing everything it holds, instead of being
+refused; the next open finishes the work (the tests `an_open_on_a_full_disk_is_read_only_and_never_refused`
+and `a_disk_that_fills_during_the_opens_materialization_leaves_a_read_only_project`).
 
 **What unit S1 does of this sequence.** S1 has no git, so O3, the blobs of O8 and every restore
 from HEAD are unit S2's; O4 writes this app's `format.json` when it is missing or damaged, and
@@ -2098,8 +2146,9 @@ a new pending file of this device (purpose `salvage`) and the file moves to `.tc
 (`QuarantinedPending`); a pending file of another project moves there unread. The second half
 of O6 runs after O8, because it needs the fold: the ledger's `lastSeq` above this device's
 largest seq in the folder (a backup put back, `RestoredBackup`), or a `DuplicateDevice` anomaly
-naming this device, mints a new device before anything is written, and the new device's
-profile copies the old one's names. Outside edits are held (§6.2) rather than recorded until
+naming this device, or a pending file of the folder that could not be read (`PendingUnreadable`,
+§6.3), mints a new device before anything is written, and the new device's profile copies the
+old one's names. Outside edits are held (§6.2) rather than recorded until
 S2. Each journal file is opened once per open: the reading thread hands its handle to the
 fold's `ValueSource`, which reads values on demand through it (§2.6), so a value the fold reads
 during or after the open never opens the file again. O8's cache write and O14 run on one
@@ -2240,9 +2289,23 @@ the project]". *Take in the file as an edit* records the file by §11.1 in unkno
 the hold ends. *Restore from the project* rewrites the file from the fold, through M1 with `d`
 as the md5 it expects, and the hold ends; the copy stays until the notice is dismissed. While
 the path is held, another save of the file ends the hold: its bytes are recorded by §11.1 in
-unknown-base mode, since the file no longer held what its heads file describes. A deletion
-ends it too, and the file is rebuilt; so does a projection that comes to equal the held bytes
-(`d == e`). A held path is never converged without reading: each open reads it again.
+unknown-base mode, since the file no longer held what its heads file describes (unit S1, which
+does not record, holds the new bytes in their turn: a second copy, never replacing the first,
+and `metadata.json` lists the bytes that are now in the folder). A deletion ends it too, and the
+file is rebuilt (O9 reads a held path that is gone as gone: `MissingFileRebuilt`; M0 releases it
+for a path being written, so `metadata.json` never lists a file that is not there); so does a
+projection that comes to equal the held bytes (`d == e`). A held path is never converged
+without reading: each open reads it again.
+
+**The hold outlives the session; so does its notice.** The manifest entry keeps the held
+bytes' md5, the cause (an edit, or damage) and the path of the copy in `.tc/external/`. The
+notices live in memory, so every open lists again the notice of every hold the manifest keeps,
+with its own words and its copy, until the hold ends: the file does not silently stop
+following the project because the app was restarted, and *Take in the file as an edit* and
+*Restore from the project* stay reachable. Dismissing the notice of a hold that stands hides it
+for the session and keeps the copy, which is the other trace of the person's bytes. When the
+hold ends (the person's choice, a deletion, equal bytes) its notice goes, and the copy stays
+in `.tc/external/` for the person to open there.
 
 For each path `p` that is read, with `d` = md5 of the disk bytes, `m` = the manifest md5,
 `o`/`n` = the intent's old and new md5 when `materialize.intent.json` exists, and `e` = the md5 of
@@ -2285,6 +2348,12 @@ edit is recorded.
   saving as this one in this project. Both computers' work is kept; anything both changed is
   listed as a conflict." Nothing else changes: the fold never treats two changes of one device
   specially, so their concurrent edits are ordinary conflicts.
+- A pending file of the folder that cannot be read at open (another program holds it, a
+  placeholder) may hold seq numbers this device already used, and the fold does not count it.
+  The open mints a new device before the first write (`DeviceRotated`, reason
+  `PendingUnreadable`; a device minted by this same open has none to fear), so a save cannot
+  reuse a seq, and when the file can be read again nothing says another computer saved as
+  this one. The file is never removed or sealed while it cannot be read (§4.4).
 - The next seq is one more than the largest seq of this device among its changes in the folder.
 - A new device copies the display name and Door43 username into its own `DeviceProfile`, so
   screens group one person's devices by username.
@@ -3963,7 +4032,7 @@ days a year.
 | `metadata.json` | ≈ 120 KB | 600 entries × ≈ 200 B, pretty-printed |
 | Working tree | ≈ 880 MiB | packs 674 MiB (measured) + derived ≈ 210 MiB (compact sidecars: alignments ≈ 90 MiB, decisions ≈ 110 MiB, USFM ≈ 5 MiB) |
 | `.git` after 3 years | ≈ 250–400 MiB | packs ≈ 70 MiB zlib, stored two to three times because consolidation writes new blobs; derived file history ≈ 110 MiB as deltas; ≈ 7,500 commits of ≈ 15 KB trees |
-| Cold open, 4 cores, SSD | budget 3 s with a usable fold cache, 10 s without one or with a cold disk cache; the whole open (O1 to O13) measured by unit S1 (`docs/evidence/storage-open-save-2026-10-17.md`, a 4-vCPU VM **with** SHA instructions, other jobs running, load 1.5 to 5): with the fold cache 1.8 to 1.9 s median, p95 2.0 to 2.3 s, with the page cache warm or the guest's dropped, and as fast with a cache another build of the same encoding wrote; without a cache 3.0 to 3.5 s median, p95 3.5 to 3.7 s, about 3.4 to 4.4 s estimated for a CPU of that speed without SHA instructions; first progress report at 300 to 313 ms; an open after no change opens 132 to 138 files, reads and projects no derived file. Earlier, load and fold alone (O8, with O7's rules on the files' facts): with the fold cache 1.6 s (median of 9, p95 1.7 s) with the files in the page cache and 1.7 s (p95 1.9 s) with the guest's page cache cold, 2.5 to 2.6 s of CPU over all threads, on a 4-vCPU VM without SHA instructions and no other job running; as fast with a cache another build of the same `INDEX_VERSION` and probe stamp wrote; the first open without a cache (§18 item 15) 5.4 to 5.5 s (p95 5.4 to 5.6 s; 5.9 to 6.3 s the evening before), 19 s of CPU with glibc malloc and 13.5 s with jemalloc: within the 10 s budget of an open without a usable cache; on the owner's Ice Lake laptop with SHA instructions 3.8 s (median of 5, p95 3.9 s) | with the fold cache (§3.6, §6.1 O8) the open reads and fingerprints every file (705 MB) and takes each file's prepared changes from its section instead of hashing and parsing its lines; the fold indexes them as they arrive, and its work after the last file is 0.5 to 0.6 s; O7's rules take 1 to 2 ms. Without the cache every byte is hashed once (P4, with `ring`: one pass over every file takes 1 s of the four threads' time) and every change is parsed and checked; `docs/evidence/storage-fold-2026-10-16.md`. A corpus of 277,880 changes (the size of the probe's 278,041 actions, which it folded in 1.13 s) folds in 0.92 s (0.59 s on a faster VM) |
+| Cold open, 4 cores, SSD | budget 3 s with a usable fold cache, 10 s without one or with a cold disk cache; the whole open (O1 to O13) measured by unit S1 (`docs/evidence/storage-open-save-2026-10-17.md`, a 4-vCPU VM **with** SHA instructions, other jobs running, load 1.5 to 5): with the fold cache 1.8 to 1.9 s median, p95 2.0 to 2.3 s, with the page cache warm or the guest's dropped, and as fast with a cache another build of the same encoding wrote; without a cache 3.0 to 3.5 s median, p95 3.5 to 3.7 s, about 3.4 to 4.4 s estimated for a CPU of that speed without SHA instructions; first progress report at 300 to 313 ms; an open after no change opens 132 to 138 files and projects and reads no derived file before the project is usable; its storage check (O14, §6.1) then reads every derived file once, in the background (143 files opened and 72 MB read by the end, against 133 files and 54 MB when the project is usable, on the Psalms corpus; about 400 files and 210 MiB for a whole Bible, a figure from the derived files' sizes, not yet a measurement of a whole-Bible open), which on Windows with Defender is about 400 file scans per open, after the project is usable. Earlier, load and fold alone (O8, with O7's rules on the files' facts): with the fold cache 1.6 s (median of 9, p95 1.7 s) with the files in the page cache and 1.7 s (p95 1.9 s) with the guest's page cache cold, 2.5 to 2.6 s of CPU over all threads, on a 4-vCPU VM without SHA instructions and no other job running; as fast with a cache another build of the same `INDEX_VERSION` and probe stamp wrote; the first open without a cache (§18 item 15) 5.4 to 5.5 s (p95 5.4 to 5.6 s; 5.9 to 6.3 s the evening before), 19 s of CPU with glibc malloc and 13.5 s with jemalloc: within the 10 s budget of an open without a usable cache; on the owner's Ice Lake laptop with SHA instructions 3.8 s (median of 5, p95 3.9 s) | with the fold cache (§3.6, §6.1 O8) the open reads and fingerprints every file (705 MB) and takes each file's prepared changes from its section instead of hashing and parsing its lines; the fold indexes them as they arrive, and its work after the last file is 0.5 to 0.6 s; O7's rules take 1 to 2 ms. Without the cache every byte is hashed once (P4, with `ring`: one pass over every file takes 1 s of the four threads' time) and every change is parsed and checked; `docs/evidence/storage-fold-2026-10-16.md`. A corpus of 277,880 changes (the size of the probe's 278,041 actions, which it folded in 1.13 s) folds in 0.92 s (0.59 s on a faster VM) |
 | Save one verse | 1–10 ms | one `atomic_write` of ≈ 1 KB (measured 0.41 ms on the VM, fsyncbench) |
 | Materialize one book | 20–60 ms estimated; measured projection of Psalms 150 to 164 ms (medians of 20 in each of 5 processes, p95 177 to 195 ms) on the VM with no other job running, 205 to 217 ms (p95 247 to 278 ms) with one other job, within the 300 ms budget; 348 to 376 ms when other jobs loaded it (the build before `1665eba`: 341 to 521 ms in the same rounds); not measured on the reference laptop | projecting every Psalms file (USFM, alignments, tN and TWL decisions, comments; 18.7 MB) with values read from disk and checked against their fingerprints (§2.6), on 4 threads, about 0.5 s of CPU (2.3 G instructions), about half of it decoding the book's records from JSON; the book's files are listed from its own records, and decisions and alignments are decoded, written and freed in chunks on the fold's one worker pool (rayon), however the steps nest; the USFM alone 16 ms, one chapter 0.13 ms; the write and `metadata.json` are `tc-store`'s, and with §6.2 an open after no change projects no file |
 | Checkpoint | 0.1–0.5 s | seal ≤ 1 MiB, materialize, tree of changed directories, one commit |
@@ -4274,7 +4343,7 @@ on the corpus ten times larger:
 
 | Test | Asserts |
 |---|---|
-| `an_open_after_no_change_projects_no_file_and_reads_no_derived_file` | open, close, open, close, open: the second open reads at most the files the first session's last materialization wrote (their entries are unsettled), projects none of them, settles them and writes the manifest again; the third open projects 0 files, reads 0 bytes of derived files and 0 heads files, on both corpora; its storage check (O14) then reads each derived file once |
+| `an_open_after_no_change_projects_no_file_and_reads_no_derived_file` | open, close, open, close, open: the second open reads at most the files the first session's last materialization wrote (their entries are unsettled), projects none of them, settles them and writes the manifest again; the third open, counted at the moment it is usable, projects 0 files and reads 0 derived files (`derived_read`) and 0 heads files, on both corpora; its storage check (O14) then reads each derived file once (`check_read` equals the number of derived files). A `clean_by_stat` that is never true, which reads every derived file at open, fails it |
 | `a_record_entering_a_files_scope_projects_it` | the first comment on a book and a teammate's new check decision, folded from a pack received between two opens, whose files on disk are clean by stat: the next open projects that book's comment and decision files and no other file |
 | `an_open_after_one_save_projects_only_that_books_files` | a verse saved and materialized before close: the next open projects nothing; a verse saved but not materialized (a crash after B3): the next open projects only that book's files and `metadata.json`, the same count on both corpora |
 | `a_racy_or_mtime_restored_file_is_never_overwritten` | on a `FaultFs` with 2 s mtimes: a same-size edit within the tick of the app's write; the same edit followed, before the next open, by another book's materialization that writes the manifest again; and an edit whose old mtime is put back after its entry settled. The first two are read at the next open (and at window focus) and recorded as outside edits; the third is read by the storage check and held: the file keeps its bytes, nothing is recorded, a materialization of that book leaves it, *Take in the file as an edit* records it as a conflict, *Restore from the project* rewrites it. No file is written over before it is recorded or the person chooses |
@@ -4330,6 +4399,19 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the change ids in a loaded file's facts (move the changes out of what the redundancy rule and O7 read) | `the_open_s_rules_read_the_same_ids_from_a_read_and_from_the_cache` |
 | one owner of the validity rules (a screen that hashes its shown text, or reads a pin the ladder stops at as absent) | `the_psalms_corpus_files_are_what_the_screens_compute`, `edits_joins_renumbers_and_pins_change_files_and_screens_alike` (`tc-journal/tests/screens_and_fold.rs`: what `tc_check::status::CheckState` and `tc_align::verse_status` compute from the projected USFM and `resources.json`, read as the screens read them, equals every `invalidated`, `verseEdits`, `status`, `userInvalid` and `invalid` the fold writes, over tC4's sample project, the aligned en_ult Titus, joins, renumbers, cleared verses, unusable and unrecorded pins, and the Psalms corpus) |
 
+| settled entries read by O9 (a `clean_by_stat` that is never true: every derived file read before the open is usable) | `an_open_after_no_change_projects_no_file_and_reads_no_derived_file` |
+| the release of a hold whose file is gone (M0, O9) | `a_held_file_deleted_while_the_project_is_closed_is_rebuilt`, `a_held_file_deleted_while_the_project_is_open_is_rebuilt` |
+| a removed carried file in X | `a_removed_carried_file_leaves_the_folder_and_the_burrito_stays_valid`, `a_removed_carried_file_that_was_edited_outside_is_not_deleted` |
+| listing fixed, carried and held files from their bytes | `a_carried_file_edited_outside_is_listed_as_it_is_and_held`, `a_fixed_file_edited_outside_is_listed_as_it_is`, `a_held_file_that_changes_again_is_listed_as_it_is_and_both_copies_stay` |
+| no copy replaces another in `.tc/external/` | `two_outside_edits_in_one_second_keep_two_copies` |
+| the copy of outside bytes in `metadata.json` when no manifest entry names them | `an_outside_edit_of_metadata_json_is_copied_when_the_manifest_is_gone`, `an_outside_edit_of_metadata_json_is_copied_when_the_manifest_does_not_parse` |
+| a best-effort open (a write failure → read-only, an unreadable derived file reported, a failed stat listed) | `an_open_on_a_full_disk_is_read_only_and_never_refused`, `a_disk_that_fills_during_the_opens_materialization_leaves_a_read_only_project`, `an_open_goes_on_when_a_derived_file_cannot_be_read`, `loss_pack_cloud_placeholder_unreadable_not_damaged` |
+| no wait on the actor for a derived file another program holds | `a_derived_file_another_program_holds_never_stalls_a_save` |
+| the notices of holds listed again at open | `a_held_files_notice_comes_back_after_a_restart`, `a_dismissed_notice_of_a_held_file_keeps_its_copy` |
+| a new device when a pending file cannot be read | `an_unreadable_pending_file_makes_this_device_start_a_new_one` |
+| the materialization after a failed seal | `a_seal_that_fails_after_its_pack_leaves_a_valid_burrito` |
+| the draft writer ending before the lock is released | `nothing_is_written_into_the_folder_after_the_lock_is_released` |
+| the coherence view of an unverified section draft (current values, no parents) | `an_unverified_section_draft_that_holds_a_span_can_be_kept` |
 ---
 
 ## 17. Crates

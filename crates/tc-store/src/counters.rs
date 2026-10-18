@@ -61,9 +61,12 @@ counters! {
     listings,
     /// Stats of a path.
     stats,
-    /// Derived files whose bytes were read (an open's classification, a compare-and-swap,
-    /// the storage check).
+    /// Derived files whose bytes were read by an open's classification (O9) or a
+    /// compare-and-swap (M1): the reads that happen before the project is usable or when a
+    /// file is written.
     derived_read,
+    /// Derived files whose bytes the storage check read in the background (O14).
+    check_read,
     /// Derived files projected (rendered from the fold).
     projected,
     /// Derived files written.

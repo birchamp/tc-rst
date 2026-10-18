@@ -39,3 +39,6 @@ mod commands;
 
 #[path = "store/drafts.rs"]
 mod drafts;
+
+#[path = "store/review.rs"]
+mod review;

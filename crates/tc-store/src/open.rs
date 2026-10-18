@@ -217,6 +217,9 @@ fn open_inner(
     let (id, kind) = ProjectJson::parse(&project_json).ok_or(OpenError::NotAProject)?;
     let mut gates = gates(env, &*vfs, &folder, options)?;
     tracker.add(1, 0);
+    // A write at open that fails (a full disk, a folder that went read-only) ends the
+    // writes: the project opens read-only with `WriteFailed` and never refuses (§6.1).
+    let mut write_failed: Option<String> = None;
     // O6: device identity.
     let machine = env.platform.machine_id();
     let canonical = match identity {
@@ -225,12 +228,19 @@ fn open_inner(
     };
     let print = device::fingerprint(env.app.secret(), &machine, &canonical.to_string_lossy());
     let read_only = gates.read_only.is_some();
-    let mut identity = device::identify(&*vfs, &folder, print, &*env.clock, read_only)?;
+    let mut identity = match device::identify(&*vfs, &folder, print, &*env.clock, read_only) {
+        Ok(identity) => identity,
+        Err(e) if !read_only => {
+            write_failed = Some(e.to_string());
+            device::identify(&*vfs, &folder, print, &*env.clock, true)?
+        }
+        Err(e) => return Err(e.into()),
+    };
     tracker.add(1, 0);
     // O1's content, now that the device is known.
     let mut stamp_ns = 0;
     if let Some(lock) = gates.lock.as_mut()
-        && !read_only
+        && write_failed.is_none()
     {
         let content = LockContent {
             host: env.platform.host(),
@@ -239,18 +249,25 @@ fn open_inner(
             at: rfc3339(env.clock.now()),
         };
         let bytes = serde_json::to_vec(&content).unwrap_or_default();
-        lock.set_content(&bytes)
-            .map_err(|e| StoreError::io("write", &folder.path(LOCK), e))?;
-        if let Ok(meta) = vfs.metadata(&folder.path(LOCK)) {
-            stamp_ns = meta.mtime_ns;
+        match lock.set_content(&bytes) {
+            Ok(()) => {
+                if let Ok(meta) = vfs.metadata(&folder.path(LOCK)) {
+                    stamp_ns = meta.mtime_ns;
+                }
+            }
+            Err(e) => {
+                write_failed = Some(StoreError::io("write", &folder.path(LOCK), e).to_string());
+            }
         }
     }
     // O2.
-    if !read_only {
-        finish_temps(&*vfs, &folder, id)?;
+    if !read_only && write_failed.is_none() {
         // O4's repair: unit S1 has no HEAD to restore `format.json` from, so a missing or
         // damaged one is written as this app's; a newer one was never damaged here.
-        if gates.format.is_none() {
+        let repaired = finish_temps(&*vfs, &folder, id).and_then(|()| {
+            if gates.format.is_some() {
+                return Ok(());
+            }
             let (dir, name) = folder.dir_and_name(FORMAT_JSON);
             atomic_create_dirs(&*vfs, &dir)?;
             atomic_write(
@@ -260,7 +277,10 @@ fn open_inner(
                 &FormatDoc::current().to_bytes(),
                 SyncDir::Now,
             )
-            .map_err(|e| e.into_inner())?;
+            .map_err(|e| e.into_inner())
+        });
+        if let Err(e) = repaired {
+            write_failed = Some(e.to_string());
         }
     }
     tracker.add(1, 0);
@@ -354,11 +374,27 @@ fn open_inner(
             ));
         }
     }
-    if !read_only {
-        let (checked, notice) =
-            check_identity(env, &*vfs, &folder, identity, &fold, &stats, &print)?;
-        identity = checked;
-        notices.extend(notice.map(|n| (n, None)));
+    if !read_only && write_failed.is_none() {
+        let pending_unreadable = journal
+            .unreadable
+            .iter()
+            .any(|rel| rel.starts_with(&format!("{PENDING}/")));
+        match check_identity(
+            env,
+            &*vfs,
+            &folder,
+            identity,
+            &fold,
+            &stats,
+            &print,
+            pending_unreadable,
+        ) {
+            Ok((checked, notice)) => {
+                identity = checked;
+                notices.extend(notice.map(|n| (n, None)));
+            }
+            Err(e) => write_failed = Some(e.to_string()),
+        }
     }
     if let Identity::Minted {
         device,
@@ -384,9 +420,10 @@ fn open_inner(
         kind,
         device,
         folder: path.to_owned(),
-        mode: match &gates.read_only {
-            Some(reason) => Mode::ReadOnly(reason.clone()),
-            None => Mode::Writable,
+        mode: match (&gates.read_only, &write_failed) {
+            (Some(reason), _) => Mode::ReadOnly(reason.clone()),
+            (None, Some(reason)) => Mode::ReadOnly(ReadOnlyReason::WriteFailed(reason.clone())),
+            (None, None) => Mode::Writable,
         },
     };
     let shared = Arc::new(Shared::new(
@@ -418,27 +455,31 @@ fn open_inner(
         shared: shared.clone(),
         manifest_changed: false,
         prerendered: BTreeMap::new(),
+        busy: BTreeMap::new(),
+        copied_outside: BTreeSet::new(),
     };
     for (notice, copy) in notices {
         project.notice(notice, copy);
     }
     let mut unchecked: Vec<String> = Vec::new();
-    if !read_only {
-        // O7.
-        project.finish_interrupted()?;
-        // A new device names its person as the old one did (§6.3).
-        if let Identity::Minted { old: Some(old), .. } = identity {
-            project.copy_profile(old)?;
+    if !read_only && write_failed.is_none() {
+        match repair_and_materialize(&mut project, tracker, identity) {
+            Ok(paths) => unchecked = paths,
+            Err(e) => {
+                let reason = e.to_string();
+                project
+                    .shared
+                    .set_mode(Mode::ReadOnly(ReadOnlyReason::WriteFailed(reason.clone())));
+                write_failed = Some(reason);
+            }
         }
-        // O9, O10.
-        unchecked = project.classify(tracker)?;
-        let paths = project.dirty_count();
-        tracker.phase(Phase::Writing, paths as u64, 0);
-        project.materialize()?;
-        if project.manifest_changed {
-            project.write_manifest()?;
-        }
-        tracker.set(paths as u64);
+    } else {
+        project.renew_hold_notices();
+    }
+    // A project that cannot be written holds no lock: another window may open it.
+    let read_only = read_only || write_failed.is_some();
+    if write_failed.is_some() {
+        gates.lock = None;
     }
     // O12.
     let drafts = Arc::new(DraftWriter::start(
@@ -459,6 +500,7 @@ fn open_inner(
         paths.dedup();
         crate::handle::Background {
             vfs: vfs.clone(),
+            counters: counters.clone(),
             folder: folder.clone(),
             index: project.index_bytes_later(),
             project: id,
@@ -471,6 +513,32 @@ fn open_inner(
         handle.start_background(background);
     }
     Ok(handle)
+}
+
+/// O7, O9 and O10: finishes interrupted work, classifies the derived files and writes what
+/// differs. Returns the paths O9 took as converged without reading them (for O14). A write
+/// that fails ends the open's writes (see the caller).
+fn repair_and_materialize(
+    project: &mut Project,
+    tracker: &Tracker,
+    identity: Identity,
+) -> Result<Vec<String>, StoreError> {
+    // O7.
+    project.finish_interrupted()?;
+    // A new device names its person as the old one did (§6.3).
+    if let Identity::Minted { old: Some(old), .. } = identity {
+        project.copy_profile(old)?;
+    }
+    // O9, O10.
+    let unchecked = project.classify(tracker)?;
+    let paths = project.dirty_count();
+    tracker.phase(Phase::Writing, paths as u64, 0);
+    project.materialize()?;
+    if project.manifest_changed {
+        project.write_manifest()?;
+    }
+    tracker.set(paths as u64);
+    Ok(unchecked)
 }
 
 /// O1, O4 and O5: the lock, the format gate and the filesystem gate. A folder that must
@@ -732,6 +800,7 @@ fn journal_of(
 
 /// O6 after the load: a device that wrote more than the folder holds (an older backup put
 /// back) or that another computer also saves as is replaced by a new one (§6.3).
+#[allow(clippy::too_many_arguments)]
 fn check_identity(
     env: &Env,
     vfs: &dyn Vfs,
@@ -740,6 +809,7 @@ fn check_identity(
     fold: &FoldState,
     stats: &BTreeMap<DeviceId, tc_journal::fold::DeviceStat>,
     print: &[u8; 32],
+    pending_unreadable: bool,
 ) -> Result<(Identity, Option<Notice>), StoreError> {
     let device = identity.device();
     let held = stats.get(&device).map_or(0, |s| s.max_seq.0);
@@ -756,6 +826,10 @@ fn check_identity(
         .any(|a| matches!(a, Anomaly::DuplicateDevice { device: d, .. } if *d == device))
     {
         Some((RotationReason::DuplicateDevice, 0, 0))
+    } else if pending_unreadable && matches!(identity, Identity::Kept(_)) {
+        // A file of saved changes that cannot be read may hold seq numbers this device used:
+        // a new device cannot reuse one (§6.3). A device minted at this open has none.
+        Some((RotationReason::PendingUnreadable, 0, 0))
     } else {
         None
     };
@@ -1139,14 +1213,23 @@ impl Project {
                 tracker.add(1, 0);
                 continue;
             }
-            let disk = self.read_derived(&rel)?;
+            let disk = match self.read_derived(&rel) {
+                Ok(disk) => disk,
+                Err(reason) => {
+                    // A file another program holds, or a placeholder: neither damaged nor
+                    // gone. Nothing is written over it, and it is tried again (§4.4, §6.1).
+                    self.unreadable_derived(&rel, file, reason);
+                    tracker.add(1, 0);
+                    continue;
+                }
+            };
             match (&disk, &entry) {
                 (Some(bytes), Some(entry))
                     if same_scope && entry.held.is_none() && md5_hex(bytes) == entry.md5 =>
                 {
                     // Read, not projected: the bytes are the app's own.
                     let md5 = entry.md5.clone();
-                    self.refresh_entry(&rel, &md5, bytes.len() as u64, None);
+                    self.refresh_entry(&rel, &md5, bytes.len() as u64, None, None);
                 }
                 _ => to_project.push((rel, file.clone(), disk)),
             }
@@ -1201,7 +1284,7 @@ impl Project {
                 .get(METADATA)
                 .is_some_and(|e| e.scope.as_deref() == Some(scope.as_str()))
             && !intent.as_ref().is_some_and(|i| i.names(METADATA))
-            && (self.clean_by_stat(METADATA) || self.metadata_matches_entry()?);
+            && (self.clean_by_stat(METADATA) || self.metadata_matches_entry());
         if !metadata_ok {
             self.dirty.metadata = true;
         }
@@ -1209,10 +1292,13 @@ impl Project {
         if intent.is_some() && self.dirty.is_empty() {
             atomic_remove(&*self.vfs, &self.folder.path(INTENT), SyncDir::Now)?;
         }
+        self.renew_hold_notices();
         Ok(unread)
     }
 
-    fn read_derived(&self, rel: &str) -> Result<Option<Vec<u8>>, StoreError> {
+    /// The bytes of a derived file: `None` when it is gone, the reason when it cannot be
+    /// read now.
+    fn read_derived(&self, rel: &str) -> Result<Option<Vec<u8>>, String> {
         let path = self.folder.path(rel);
         match self.vfs.read(&path) {
             Ok(bytes) => {
@@ -1220,23 +1306,44 @@ impl Project {
                 Ok(Some(bytes))
             }
             Err(e) if is_not_found(&e) => Ok(None),
-            Err(e) => Err(StoreError::io("read", &path, e)),
+            Err(e) => Err(StoreError::io("read", &path, e).to_string()),
         }
     }
 
-    fn metadata_matches_entry(&self) -> Result<bool, StoreError> {
+    /// A derived file the open could not read: the person is told (`FileUnreadable`), the
+    /// file is left as it is, and the path stays dirty, so the next materialization reads it
+    /// again (M1) and writes it when it can.
+    fn unreadable_derived(&mut self, rel: &str, file: &DerivedFile, reason: String) {
+        self.dirty.files.insert(file.clone());
+        self.notice(
+            Notice::FileUnreadable {
+                path: rel.into(),
+                reason: reason.as_str().into(),
+            },
+            None,
+        );
+    }
+
+    /// Whether `metadata.json` holds what the manifest says the app wrote. A file that
+    /// cannot be read now is not known to, so `metadata.json` is written again.
+    fn metadata_matches_entry(&self) -> bool {
         let Some(entry) = self.manifest.paths.get(METADATA) else {
-            return Ok(false);
+            return false;
         };
-        Ok(self
-            .read_derived(METADATA)?
-            .is_some_and(|bytes| md5_hex(&bytes) == entry.md5))
+        matches!(self.read_derived(METADATA), Ok(Some(bytes)) if md5_hex(&bytes) == entry.md5)
     }
 
     /// Takes a path's md5, size and mtime again after a read found bytes the projection
     /// gives; the entry settles when the read began at least 2 s after its mtime (§6.2).
-    /// `scope` replaces the entry's digest when given.
-    fn refresh_entry(&mut self, rel: &str, md5: &str, size: u64, scope: Option<String>) {
+    /// `scope` replaces the entry's digest, and `nfc` its normalization, when given.
+    fn refresh_entry(
+        &mut self,
+        rel: &str,
+        md5: &str,
+        size: u64,
+        scope: Option<String>,
+        nfc: Option<bool>,
+    ) {
         let meta = self.vfs.metadata(&self.folder.path(rel)).ok();
         let stamp = self.stamp_ns;
         let network = self.network;
@@ -1248,16 +1355,23 @@ impl Project {
                 || entry.mtime_ns != mtime
                 || entry.settled != settled
                 || entry.held.is_some()
-                || (scope.is_some() && entry.scope != scope);
+                || (scope.is_some() && entry.scope != scope)
+                || (nfc.is_some() && entry.nfc != nfc);
             entry.md5 = md5.to_owned();
             entry.size = size;
             entry.mtime_ns = mtime;
             entry.settled = settled;
-            entry.held = None;
+            let was_held = entry.held.take().is_some();
             if scope.is_some() {
                 entry.scope = scope;
             }
+            if nfc.is_some() {
+                entry.nfc = nfc;
+            }
             self.manifest_changed |= changed;
+            if was_held {
+                self.shared.remove_notices_of(rel);
+            }
         }
     }
 
@@ -1273,7 +1387,10 @@ impl Project {
         let e = md5_hex(new);
         let entry = self.manifest.paths.get(rel).cloned();
         let Some(disk) = disk else {
-            // Missing: rebuilt, never read as a deletion (I11).
+            // Missing: rebuilt, never read as a deletion (I11). A deletion ends a hold too.
+            if entry.as_ref().is_some_and(|en| en.held.is_some()) {
+                self.end_hold(rel);
+            }
             self.dirty.files.insert(file.clone());
             if entry.is_some()
                 && let Ok(path) = RepoPath::parse(rel)
@@ -1285,21 +1402,20 @@ impl Project {
         let d = md5_hex(disk);
         if d == e {
             let scope = self.fold.scope_digest(file).to_hex();
+            // `metadata.json` declares the normalization of the text it lists, so an entry
+            // made from a read keeps what the read found.
+            let nfc = crate::materialize::is_text_path(rel)
+                .then(|| unicode_normalization::is_nfc(&String::from_utf8_lossy(disk)));
             match self.manifest.paths.contains_key(rel) {
-                true => self.refresh_entry(rel, &d, disk.len() as u64, Some(scope)),
+                true => self.refresh_entry(rel, &d, disk.len() as u64, Some(scope), nfc),
                 false => {
                     let meta = self.vfs.metadata(&self.folder.path(rel)).ok();
                     self.manifest.paths.insert(
                         rel.to_owned(),
                         Entry {
-                            md5: d,
-                            size: disk.len() as u64,
-                            mtime_ns: meta.map_or(0, |m| m.mtime_ns),
-                            settled: false,
                             scope: Some(scope),
-                            held: None,
-                            oid: None,
-                            nfc: None,
+                            nfc,
+                            ..Entry::of(d, disk.len() as u64, meta.map_or(0, |m| m.mtime_ns), false)
                         },
                     );
                     self.manifest_changed = true;
@@ -1309,8 +1425,8 @@ impl Project {
         }
         let ours = entry.as_ref().is_some_and(|en| en.md5 == d)
             || intent.is_some_and(|i| i.md5s_of(rel).contains(&d.as_str()));
-        if let Some(held) = entry.as_ref().and_then(|en| en.held.clone()) {
-            if held == d {
+        if let Some(held) = entry.as_ref().and_then(|en| en.held.as_ref()) {
+            if held.md5 == d {
                 return Ok(());
             }
             self.hold(rel, disk, false)?;
@@ -1386,7 +1502,9 @@ impl Project {
                     else {
                         continue;
                     };
-                    let disk = self.read_derived(&result.rel)?;
+                    let Ok(disk) = self.read_derived(&result.rel) else {
+                        continue;
+                    };
                     let rendered = self.render_files(&BTreeSet::from([file.clone()]));
                     if let Some(new) = rendered.get(&result.rel) {
                         self.classify_one(&result.rel, &file, disk.as_deref(), new, None)?;
@@ -1425,6 +1543,7 @@ impl Project {
 /// before the read began.
 pub(crate) fn storage_check(
     vfs: &dyn Vfs,
+    counters: &Counters,
     folder: &Folder,
     paths: &[String],
     stamp_ns: i64,
@@ -1437,7 +1556,10 @@ pub(crate) fn storage_check(
         .map(|rel| {
             let path = folder.path(rel);
             let meta = vfs.metadata(&path).ok();
-            let md5 = vfs.read(&path).ok().map(|b| md5_hex(&b));
+            let md5 = vfs.read(&path).ok().map(|b| {
+                counters.add(&counters.check_read, 1);
+                md5_hex(&b)
+            });
             CheckResult {
                 rel: rel.clone(),
                 md5,

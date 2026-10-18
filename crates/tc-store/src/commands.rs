@@ -369,7 +369,8 @@ fn nfc_section_value(value: &SectionValue) -> SectionValue {
 }
 
 /// §5.2. `unverified`: the tokens of a draft this installation can no longer verify (R20):
-/// each value is written with no parents.
+/// each value is written with no parents, and the section's coherence is judged against the
+/// records' current values.
 fn save_section(
     ctx: &Ctx<'_>,
     book: BookId,
@@ -386,8 +387,11 @@ fn save_section(
         } else {
             ctx.edit(token)?
         };
+        // A token this installation cannot verify is no base for a change (R20), but the
+        // section is judged as it stands: a span the draft keeps is coherent against the
+        // records it covers, which the records hold now.
         let displayed = if unverified {
-            None
+            ctx.fold.projected(token.key())
         } else {
             ctx.displayed(&token)?
         };

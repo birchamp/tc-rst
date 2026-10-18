@@ -192,16 +192,22 @@ impl Actor {
         }
     }
 
+    /// §5.10. A path another program refused, or a write that failed, stays dirty and is
+    /// tried again: the actor never waits for it, so commands go on being served.
     fn materialize(&mut self) -> Result<(), StoreError> {
         self.due = None;
         if self.read_only().is_some() {
             return Ok(());
         }
-        let report = self.project.materialize()?;
-        if !report.blocked.is_empty() {
-            self.due = Some(Instant::now() + MATERIALIZE_AFTER);
+        let result = self.project.materialize();
+        if !self.project.dirty.is_empty() {
+            let wait = match &result {
+                Ok(_) => self.project.retry_delay().unwrap_or(MATERIALIZE_AFTER),
+                Err(_) => MATERIALIZE_AFTER,
+            };
+            self.due = Some(Instant::now() + wait);
         }
-        Ok(())
+        result.map(|_| ())
     }
 
     /// §5.13 C1 and C2 (the commit is unit S2's), after the listing that finds a second
@@ -218,8 +224,11 @@ impl Actor {
             .shared
             .hooks
             .wait(crate::hooks::Point::BeforeCheckpoint);
-        self.project.seal()?;
-        self.materialize()
+        // A seal that failed after it renamed a pack leaves `metadata.json` without that
+        // pack (I7), so the materialization runs anyway; the seal's error comes first.
+        let sealed = self.project.seal();
+        let materialized = self.materialize();
+        sealed.map(|_| ()).and(materialized)
     }
 
     /// Folds journal files another installation wrote into this folder while it was open,
@@ -298,6 +307,17 @@ impl Actor {
         if self.read_only().is_some() {
             return Ok(());
         }
+        // The copy of a hold that stands is the only other trace of the person's bytes, and
+        // the notice comes back at the next open (§6.2): dismissing it hides it for this
+        // session and keeps the copy.
+        let held = self.project.manifest.paths.values().any(|e| {
+            e.held
+                .as_ref()
+                .is_some_and(|h| Some(&h.copy) == notice.copy.as_ref())
+        });
+        if held {
+            return Ok(());
+        }
         if let Some(copy) = notice.copy {
             let path = self.project.folder.path(&copy);
             if self.project.vfs.metadata(&path).is_ok() {
@@ -328,11 +348,19 @@ impl Actor {
         else {
             return Ok(());
         };
-        if let Some(entry) = self.project.manifest.paths.get_mut(rel)
-            && let Some(held) = entry.held.take()
-        {
-            entry.md5 = held;
-            entry.settled = false;
+        // The held bytes are the ones the compare-and-swap expects to find (§6.2); the hold
+        // and its notice end, the copy stays.
+        let held = self
+            .project
+            .manifest
+            .paths
+            .get(rel)
+            .and_then(|e| e.held.as_ref().map(|h| h.md5.clone()));
+        if let Some(held) = held {
+            self.project.end_hold(rel);
+            if let Some(entry) = self.project.manifest.paths.get_mut(rel) {
+                entry.md5 = held;
+            }
         }
         self.project.dirty.files.insert(file);
         self.materialize()
@@ -357,10 +385,15 @@ impl Actor {
                         crate::atomic::SyncDir::Now,
                     );
                 }
-                if let Some(lock) = self.lock.as_mut() {
-                    let _ = lock.set_content(b"");
-                }
             }
+        }
+        // Everything the project folder gets from this session is written before the lock
+        // is released: the draft writer ends first (§5.0).
+        self.drafts.stop();
+        if self.read_only().is_none()
+            && let Some(lock) = self.lock.as_mut()
+        {
+            let _ = lock.set_content(b"");
         }
         self.lock = None;
         result

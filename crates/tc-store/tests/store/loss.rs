@@ -266,6 +266,9 @@ fn loss_pack_deleted_outside_app_removes_nothing_derived() {
     handle.close().unwrap();
 }
 
+/// L82. A rename that another program refuses leaves the path dirty and tried again by the
+/// actor's timer, and every try repeats the compare-and-swap: a program that saved the file
+/// meanwhile is never written over.
 #[test]
 fn loss_rename_retry_never_overwrites_outside_save() {
     let (rig, folder) = titus();
@@ -274,26 +277,79 @@ fn loss_rename_retry_never_overwrites_outside_save() {
     let usfm = folder.join("ingredients/TIT.usfm");
     rig.fs.set_busy(&usfm, true);
     save_verse(&handle, 1, 1, "a new first verse").unwrap();
-    let fs = rig.fs.clone();
-    let writer = std::thread::spawn({
-        let usfm = usfm.clone();
-        move || {
-            std::thread::sleep(std::time::Duration::from_millis(400));
-            fs.put(&usfm, b"\\id TIT saved by Paratext\n", None);
-        }
-    });
     handle.leave(tc_store::Leave::Book(TIT)).wait().unwrap();
-    writer.join().unwrap();
+    // Paratext saves the file while the app waits to write it, then lets go of it.
+    rig.fs.put(&usfm, b"\\id TIT saved by Paratext\n", None);
     rig.fs.set_busy(&usfm, false);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    while !notices_of(&handle).iter().any(|n| {
+        matches!(
+            n,
+            Notice::OutsideEditHeld { .. } | Notice::StorageDamage { .. }
+        )
+    }) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the retry never found the outside save"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
     assert_eq!(
         rig.fs.peek(&usfm).as_deref(),
         Some(b"\\id TIT saved by Paratext\n".as_slice()),
         "the outside save is never written over"
     );
-    assert!(notices_of(&handle).iter().any(|n| matches!(
-        n,
-        Notice::OutsideEditHeld { .. } | Notice::StorageDamage { .. }
-    )));
+    handle.close().unwrap();
+    assert_eq!(
+        rig.fs.peek(&usfm).as_deref(),
+        Some(b"\\id TIT saved by Paratext\n".as_slice()),
+        "not at close either"
+    );
+}
+
+/// L65. A pack a cloud client holds back (a placeholder whose stat and read both fail) is
+/// neither damaged nor gone: the open reports it and goes on, nothing is removed or
+/// rewritten because of it, and when it can be read again the project is whole.
+#[test]
+fn loss_pack_cloud_placeholder_unreadable_not_damaged() {
+    let (rig, folder) = titus();
+    let pack = packs(&rig.fs, &folder).into_iter().next().unwrap();
+    let abs = folder.join(&pack);
+    let bytes = rig.fs.peek(&abs).unwrap();
+    let before_usfm = rig.fs.peek(&folder.join("ingredients/TIT.usfm")).unwrap();
+    rig.fs.set_unreadable(&abs, true);
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    assert!(
+        notices_of(&handle)
+            .iter()
+            .any(|n| matches!(n, Notice::FileUnreadable { path, .. } if **path == *pack)),
+        "{:?}",
+        notices_of(&handle)
+    );
+    assert!(
+        !notices_of(&handle).iter().any(|n| matches!(
+            n,
+            Notice::QuarantinedPack { .. } | Notice::PackMissing { .. }
+        )),
+        "never damaged, never gone"
+    );
+    handle.close().unwrap();
+    assert_eq!(rig.fs.peek(&abs), Some(bytes), "the pack is untouched");
+    assert_eq!(
+        rig.fs.peek(&folder.join("ingredients/TIT.usfm")),
+        Some(before_usfm),
+        "nothing derived from it is removed or rewritten"
+    );
+    rig.fs.set_unreadable(&abs, false);
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    assert!(words(&handle, 1, 1).is_some(), "whole again");
+    assert!(
+        !notices_of(&handle)
+            .iter()
+            .any(|n| matches!(n, Notice::FileUnreadable { .. }))
+    );
     handle.close().unwrap();
 }
 

@@ -513,6 +513,9 @@ pub enum RotationReason {
     BackupRestored,
     /// Two machines saved as this device.
     DuplicateDevice,
+    /// A file of saved changes in the folder could not be read when the project opened, so
+    /// it may hold sequence numbers this device already used (§6.3).
+    PendingUnreadable,
 }
 
 /// Notices depend on the files and the machine, so `tc-store` computes them outside the
@@ -591,6 +594,14 @@ pub enum Notice {
     /// the file from the project; nothing is written over it meanwhile (I8).
     OutsideEditHeld {
         path: RepoPath,
+        copy: Box<str>,
+    },
+    /// `metadata.json` held bytes the app did not write (a project detail edited in a text
+    /// editor, or any bytes when no manifest says what the app wrote). The app writes the file
+    /// from the project's records, since it must list the files as they are, so the bytes
+    /// found are kept in `copy` first (I8, §5.10). `metadata.json` is no ingredient, so no
+    /// [`RepoPath`] names it.
+    MetadataEditedOutside {
         copy: Box<str>,
     },
     /// "translationCore can't update TIT.usfm because another program has it open. Your

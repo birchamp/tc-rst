@@ -332,9 +332,46 @@ fn a_copy_of_a_read_only_project_carries_its_drafts() {
     handle.close().unwrap();
 }
 
-/// R7: dismissing a notice removes it and the byte copy it kept (§3.6).
+/// R7: dismissing a notice removes it and the byte copy it kept (§3.6), when the copy is the
+/// only trace of bytes the app replaced.
 #[test]
 fn a_dismissed_notice_goes_with_its_copy() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
+    handle.leave(tc_store::Leave::Book(TIT)).wait().unwrap();
+    handle.close().unwrap();
+    // The project name edited in a text editor: `metadata.json` is written from the
+    // project, and the bytes found are kept in a copy.
+    let path = folder.join("metadata.json");
+    let text = String::from_utf8(rig.fs.peek(&path).unwrap()).unwrap();
+    let edited = text.replacen("Titus test translation", "Titus, renamed", 1);
+    rig.fs.put(&path, edited.as_bytes(), None);
+    rig.fs
+        .delete(&folder.join(".tc/materialized.json"))
+        .unwrap();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    let notice = handle
+        .notices()
+        .into_iter()
+        .find(|n| n.copy.is_some())
+        .expect("an outside edit keeps a copy");
+    let copy = folder.join(notice.copy.clone().unwrap());
+    assert_eq!(rig.fs.peek(&copy), Some(edited.into_bytes()));
+    handle.dismiss_notice(notice.id).wait().unwrap();
+    assert!(handle.notices().iter().all(|n| n.id != notice.id));
+    assert!(
+        rig.fs.peek(&copy).is_none(),
+        "the copy goes with the notice"
+    );
+    handle.close().unwrap();
+}
+
+/// A held file's copy is the other trace of the person's bytes, and the notice comes back at
+/// the next open: dismissing it hides it for the session and keeps the copy (§6.2).
+#[test]
+fn a_dismissed_notice_of_a_held_file_keeps_its_copy() {
     let (rig, folder) = titus();
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
@@ -356,10 +393,7 @@ fn a_dismissed_notice_goes_with_its_copy() {
     assert!(rig.fs.peek(&copy).is_some());
     handle.dismiss_notice(notice.id).wait().unwrap();
     assert!(handle.notices().iter().all(|n| n.id != notice.id));
-    assert!(
-        rig.fs.peek(&copy).is_none(),
-        "the copy goes with the notice"
-    );
+    assert!(rig.fs.peek(&copy).is_some(), "the file is still held");
     assert_eq!(rig.fs.peek(&usfm), Some(edited), "the edited file stays");
     handle.close().unwrap();
 }

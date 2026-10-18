@@ -57,6 +57,14 @@ pub struct FileFacts {
     pub changes: usize,
 }
 
+/// A listed file's size. A file whose stat fails (a cloud placeholder, a delete-pending file
+/// on Windows, a sharing violation) is still listed, with size 0: the load opens it, fails
+/// the same way, and reports it as unreadable (`FileUnreadable`, §4.4, §6.1), so one file
+/// that cannot be statted never fails the listing, and the open (L65).
+fn size_of(vfs: &dyn Vfs, abs: &std::path::Path) -> u64 {
+    vfs.metadata(abs).map_or(0, |m| m.len)
+}
+
 /// Lists the packs and pending files of `folder`, temporary files left out (O2 handled
 /// them), each with its size.
 pub fn list(vfs: &dyn Vfs, folder: &Folder) -> io::Result<Vec<JournalFile>> {
@@ -79,7 +87,7 @@ pub fn list(vfs: &dyn Vfs, folder: &Folder) -> io::Result<Vec<JournalFile>> {
             match entry.kind {
                 EntryKind::Dir => stack.push((abs, child)),
                 EntryKind::File => {
-                    let size = vfs.metadata(&abs)?.len;
+                    let size = size_of(vfs, &abs);
                     out.push(JournalFile {
                         rel: child,
                         abs,
@@ -100,7 +108,7 @@ pub fn list(vfs: &dyn Vfs, folder: &Folder) -> io::Result<Vec<JournalFile>> {
                     continue;
                 }
                 let abs = pending.join(&entry.name);
-                let size = vfs.metadata(&abs)?.len;
+                let size = size_of(vfs, &abs);
                 out.push(JournalFile {
                     rel: format!("{PENDING}/{name}"),
                     abs,

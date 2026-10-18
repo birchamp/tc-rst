@@ -179,6 +179,11 @@ pub(crate) struct Project {
     /// with the same fold, so the open projects each file once. Cleared when the fold
     /// changes.
     pub prerendered: BTreeMap<String, Vec<u8>>,
+    /// Derived paths another program refused the app (§5.10), by path.
+    pub busy: BTreeMap<String, crate::materialize::Busy>,
+    /// The md5 of each outside version of `metadata.json` already copied to `.tc/external/`
+    /// this session, so a blocked write that is tried again copies it once.
+    pub copied_outside: BTreeSet<String>,
 }
 
 impl Project {

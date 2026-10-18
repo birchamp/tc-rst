@@ -22,9 +22,9 @@ pub struct Entry {
     /// The scope digest the bytes were projected from.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
-    /// The md5 of bytes the app holds at the path without writing over them (§6.2).
+    /// Bytes the app holds at the path without writing over them (§6.2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub held: Option<String>,
+    pub held: Option<Held>,
     /// A carried file's git blob id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub oid: Option<String>,
@@ -32,6 +32,42 @@ pub struct Entry {
     /// `normalization` without projecting every book again (§3.4).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nfc: Option<bool>,
+}
+
+/// Bytes held at a path (§6.2): what they are, why they are held, and where their copy is,
+/// so the notice of the hold comes back with its own words after a restart.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Held {
+    pub md5: String,
+    pub cause: HeldCause,
+    /// The byte copy in `.tc/external/`, relative to the project folder.
+    pub copy: String,
+}
+
+/// Why a path is held (§6.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HeldCause {
+    /// A program changed the file, or the app cannot tell: `OutsideEditHeld`.
+    Edit,
+    /// The file changed although its size and time did not: `StorageDamage`.
+    Damage,
+}
+
+impl Entry {
+    /// An entry for bytes the app has just read or written at a path, settled or not.
+    pub fn of(md5: String, size: u64, mtime_ns: i64, settled: bool) -> Self {
+        Self {
+            md5,
+            size,
+            mtime_ns,
+            settled,
+            scope: None,
+            held: None,
+            oid: None,
+            nfc: None,
+        }
+    }
 }
 
 /// What `metadata.json` lists for a pack.
