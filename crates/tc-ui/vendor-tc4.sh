@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Copy tC4's design-system CSS, fonts and images and its interface catalogs into
-# crates/tc-ui/assets, byte for byte, from one commit of a tC4 checkout, and write the list of
-# what was copied to crates/tc-ui/vendored-from-tc4.txt. `cargo test -p tc-ui` checks every
-# file under assets/ against that list (tests/vendored_assets.rs).
+# Copy tC4's design-system CSS, fonts and images, its app-level `src/ui.css` and its interface
+# catalogs into crates/tc-ui/assets, byte for byte, from one commit of a tC4 checkout, and write
+# the list of what was copied to crates/tc-ui/vendored-from-tc4.txt. `cargo test -p tc-ui`
+# checks every file under assets/ against that list (tests/vendored_assets.rs).
 #
 #   crates/tc-ui/vendor-tc4.sh /path/to/translationcore4 [COMMIT]
 #
@@ -21,18 +21,19 @@ asset_path() {
   case "$1" in
     src/ds/*) echo "ds/${1#src/ds/}" ;;
     src/i18n/*) echo "i18n/${1#src/i18n/}" ;;
+    src/ui.css) echo "ui.css" ;;
     public/assets/*) echo "images/${1#public/assets/}" ;;
     *) echo "no place for $1" >&2; exit 1 ;;
   esac
 }
 
 entries="$(
-  git -C "$TC4" ls-tree -r "$COMMIT" -- src/ds/styles.css src/ds/tokens src/ds/assets \
+  git -C "$TC4" ls-tree -r "$COMMIT" -- src/ds/styles.css src/ds/tokens src/ds/assets src/ui.css \
     public/assets/translationcore-logo.png public/assets/logo-mark-color.png
   git -C "$TC4" ls-tree -r "$COMMIT" -- src/i18n | grep '\.json$'
 )"
 
-rm -rf "$ASSETS/ds" "$ASSETS/i18n" "$ASSETS/images"
+rm -rf "$ASSETS/ds" "$ASSETS/i18n" "$ASSETS/images" "$ASSETS/ui.css"
 {
   echo "# tC4 files in crates/tc-ui/assets, copied byte for byte by vendor-tc4.sh."
   echo "# Each line: the file's git blob id in tC4, then its path in tC4."
