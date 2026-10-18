@@ -147,17 +147,64 @@ shell (TC4-DELTA §3.15.10) will.
    script, which many school and office networks use. Fix: a shared client constructor that
    asks WinHTTP for the proxy of each origin.
 
+## Fixed on `windows-hazards` (task 6)
+
+Hazards 1, 3, 4 and 5 are fixed on the branch `windows-hazards`, with the Linux CI covering
+what it can and five tests marked `#[cfg(windows)]` for the rest.
+
+1. **Held staged files.** `tc-resources` retries a rename or removal that fails with error 5, 32
+   or 33, ten waits and 2,004 ms in all (the schedule of `tc-store`'s `HeldRetry::SAVE`), in
+   `held.rs`. A rename that fails while its target exists is not retried, and `open` keeps a
+   leftover a scanner still holds for the next open. Windows tests hold a staged file open
+   without `FILE_SHARE_DELETE` (`an_install_succeeds_when_a_scanner_briefly_holds_a_staged_file`
+   and four more in `store.rs`). The same five scenarios also run on every platform against a
+   simulated scanner (`store::tests::a_scanner_holds_files`), so CI fails if the retry breaks.
+3. **Names NTFS folds.** Staged files are created with `create_new`, so a name the volume
+   merges stops the install with `DuplicateEntry` instead of overwriting. The collision key
+   folds letter case and Unicode normalization as Windows and macOS do, in one place for `tc-door43` and `tc-resources`
+   (`tc_door43::check_names`).
+4. **8.3 short names.** The same `create_new` change, and names shaped like a short name
+   (`PROGRA~1`, `IMG~1.JPG`) are refused on every platform.
+5. **A trailing dot or space.** Refused for every path segment, files too, at the three
+   places. The refused-name rules are written down in `docs/STORAGE.md` §3.7.
+
+Also on the branch: the census properties that count a missing parent run 256 cases
+(`team()` owns the count); `a_refused_connection_is_unreachable` became
+`a_connection_that_cannot_be_made_is_unreachable` (below); and one shared HTTP client
+constructor, `tc_door43::Http`, builds both network clients and asks a proxy finder only while
+the internet switch is on (hazard 6, below).
+
 ## Open
 
-- The six hazards above.
-- `a_refused_connection_is_unreachable` fails on Windows in about half the full runs, as
-  above.
-- The census of the team properties can miss: `incremental_equals_full` once, and
-  `provisional_usfm_never_drops_words` once ("the generator never reached
-  ["missing parent"]"), each after all its cases passed; reruns passed. The test file says
-  about one script in eighteen reaches a missing parent, so 64 cases miss it about one run in
-  forty, on any platform. `concurrent_differences_are_visible` already runs 256 cases for
-  that reason; the other properties that count it run 64.
+- **Hazard 2** (a save's rename blocked by a scanner): `tc-store`, on the `storage` branch.
+  The held-file helper there and the one in `tc-resources` follow one policy and become one
+  helper when `storage` lands.
+- **Hazard 6, proxy auto-configuration: not fixed.** The constructor and the rules around
+  it are done and tested on Linux against a local proxy that refuses every request
+  (`tests/proxy.rs` in `tc-door43`, `tests/aquifer_proxy.rs` in `tc-resources`): one `Http`
+  builds both clients, a server on this computer is never proxied, a finder is asked only
+  while the internet switch is on, once for each origin, and again after the switch went off
+  and on. What is missing is the finder for Windows, which asks WinHTTP
+  (`WinHttpGetIEProxyConfigForCurrentUser`, `WinHttpGetProxyForUrl`). It needs FFI, and
+  `AGENTS.md` forbids `unsafe`, so the owner must choose: a crate that opts out of the
+  workspace's `forbid(unsafe_code)` for that one call (a few dozen lines over `windows-sys`,
+  which is already locked), or a vetted dependency that wraps WinHTTP safely. The test the task asks
+  for, against a local PAC file, then passes the PAC file to `WinHttpGetProxyForUrl` as
+  `WINHTTP_AUTOPROXY_CONFIG_URL` (`file:///...`), so it needs no change to the computer's
+  proxy settings. Until then reqwest's system proxy applies: the `*_PROXY` variables and the
+  manual proxy setting, not a PAC script or WPAD.
+- **The refused-connection flake: changed, not yet confirmed on Windows.** The code was right:
+  Windows refuses a closed loopback port after about two seconds and sometimes not before
+  the connect timeout, whatever the client is. The test now connects to loopback port 0,
+  which Linux refuses at once and Winsock, as documented, answers with an invalid-address
+  error (WSAEADDRNOTAVAIL) without sending anything, and expects `Connect`. It passes on Linux; run it on the laptop.
+- **A Windows rerun of the whole branch.** `windows-hazards` was rebased onto
+  `claude/focused-ride-5uzj7p` after the Windows runs of `c7391df`, so the Windows runs did
+  not include downloads that stream into `resources/.partial/` (a scanner holding a fresh
+  `door43-*.zip.part` meets the new `open` rule). Rerun `cargo fmt --all -- --check`,
+  `cargo clippy --workspace --all-targets -- -D warnings` and
+  `cargo test --workspace --no-fail-fast` on Windows, with the five Windows-only tests of
+  `store.rs`, and record the result here.
 - From the review of the `incomplete_history` fix, for the owner: §7.4 says a conflict marked
   incomplete offers only *Apply what was recovered*, which read literally would now block a
   restore race's own choices (nothing enforces it today); a *Start empty* verse head with a
