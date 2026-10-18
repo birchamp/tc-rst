@@ -523,90 +523,257 @@ fn concurrent_differences_are_visible() {
     // A view that holds a change whose parent has not arrived comes from about one script in
     // eighteen (66 of 1,152 measured): in 64 cases the census misses it about one run in
     // forty, in 256 less than one in a million.
-    team(CASES * 4, &["incomplete history"], |view, census| {
-        let state = view.state;
-        let continuing: BTreeSet<ChangeId> = state
+    team(CASES * 4, &["incomplete history"], differences_are_visible);
+}
+
+fn differences_are_visible(view: &View, census: &Census) -> Result<(), TestCaseError> {
+    let state = view.state;
+    let continuing: BTreeSet<ChangeId> = state
+        .anomalies()
+        .filter_map(|a| match a {
+            Anomaly::MissingParent { change, .. } => Some(*change),
+            _ => None,
+        })
+        .collect();
+    for conflict in state.conflicts() {
+        let continues = conflict
+            .candidates
+            .iter()
+            .flat_map(|x| std::iter::once(x.head).chain(x.also.iter().copied()))
+            .chain(conflict.unreadable.iter().copied())
+            .any(|h| continuing.contains(&h));
+        if continues {
+            census.saw("incomplete history");
+        }
+        prop_assert_eq!(
+            conflict.incomplete_history,
+            continues,
+            "{:?} at {:?}",
+            conflict.kind,
+            conflict.key
+        );
+    }
+    for key in state.record_keys() {
+        let heads = state.heads(&key);
+        if heads.len() < 2 {
+            continue;
+        }
+        let values: BTreeSet<Option<Json>> = heads
+            .iter()
+            .map(|h| body_of(state, h).and_then(|b| value_json(&b.record)))
+            .collect();
+        if values.len() < 2 {
+            continue;
+        }
+        match state.key_state(&key).map(|k| k.state) {
+            Some(Resolved::Conflict(id)) => {
+                prop_assert!(
+                    state.conflict(&id).is_some(),
+                    "{key:?}: conflict not listed"
+                );
+            }
+            Some(Resolved::Merged {
+                how: MergeHow::Units(_) | MergeHow::Union,
+                ..
+            }) => {}
+            Some(Resolved::SettledByRule { head, .. }) => {
+                for h in heads.iter().filter(|h| **h != head) {
+                    prop_assert!(
+                        is_seed_stub(state, h),
+                        "{key:?}: a person's version absorbed"
+                    );
+                }
+            }
+            Some(Resolved::Merged {
+                how: MergeHow::EqualValues,
+                ..
+            }) => {
+                // Equal once the seed stubs are absorbed (§7.3).
+                let people: BTreeSet<Option<Json>> = heads
+                    .iter()
+                    .filter(|h| !is_seed_stub(state, h))
+                    .map(|h| body_of(state, h).and_then(|b| value_json(&b.record)))
+                    .collect();
+                prop_assert!(
+                    people.len() <= 1,
+                    "{key:?}: different values merged as equal"
+                );
+            }
+            other => {
+                let raws: Vec<String> = heads
+                    .iter()
+                    .map(|h| String::from_utf8_lossy(&state.raw(h).unwrap()).to_string())
+                    .collect();
+                prop_assert!(false, "{key:?}: different heads but {other:?}: {raws:#?}")
+            }
+        }
+    }
+    Ok(())
+}
+
+/// A history `concurrent_differences_are_visible` found: a verse of a restore race is a
+/// candidate of the presence conflict and continues a change of a held batch, so that
+/// conflict must say its history is incomplete (§7.4, §7.6), as the Passage conflict listing
+/// the same verse head does.
+#[test]
+fn a_restore_race_candidate_with_a_missing_parent_is_incomplete_history() {
+    let script = sim::Script {
+        devices: 5,
+        ops: vec![
+            sim::Op::Comment { dev: 0, on: 0 },
+            sim::Op::Versification { dev: 0, value: 0 },
+            sim::Op::Comment { dev: 0, on: 0 },
+            sim::Op::Layout { dev: 0, at: 0 },
+            sim::Op::Edit {
+                dev: 0,
+                at: 0,
+                stale: false,
+                newer: false,
+            },
+            sim::Op::Align {
+                dev: 0,
+                at: 4,
+                current: false,
+                newer: false,
+            },
+            sim::Op::Renumber { dev: 104, at: 9 },
+            sim::Op::Edit {
+                dev: 131,
+                at: 66,
+                stale: false,
+                newer: false,
+            },
+            sim::Op::Join {
+                dev: 68,
+                at: 7,
+                len: 104,
+            },
+            sim::Op::Stray {
+                dev: 6,
+                at: 0,
+                covered: false,
+            },
+            sim::Op::Meta {
+                dev: 81,
+                field: 0,
+                value: 0,
+            },
+            sim::Op::Fork {
+                a: 18,
+                b: 46,
+                what: 136,
+                at: 0,
+            },
+            sim::Op::Fork {
+                a: 69,
+                b: 78,
+                what: 68,
+                at: 5,
+            },
+            sim::Op::Resolve {
+                dev: 55,
+                pick: 0,
+                how: 0,
+            },
+            sim::Op::Edit {
+                dev: 36,
+                at: 34,
+                stale: false,
+                newer: false,
+            },
+            sim::Op::Fork {
+                a: 34,
+                b: 237,
+                what: 59,
+                at: 133,
+            },
+            sim::Op::Edit {
+                dev: 7,
+                at: 126,
+                stale: false,
+                newer: false,
+            },
+            sim::Op::Align {
+                dev: 2,
+                at: 118,
+                current: false,
+                newer: false,
+            },
+            sim::Op::Resolve {
+                dev: 46,
+                pick: 0,
+                how: 0,
+            },
+            sim::Op::Fork {
+                a: 86,
+                b: 2,
+                what: 74,
+                at: 0,
+            },
+            sim::Op::Fork {
+                a: 73,
+                b: 106,
+                what: 4,
+                at: 1,
+            },
+            sim::Op::Release { dev: 0 },
+            sim::Op::Stray {
+                dev: 53,
+                at: 10,
+                covered: false,
+            },
+            sim::Op::Fork {
+                a: 11,
+                b: 25,
+                what: 13,
+                at: 52,
+            },
+            sim::Op::Split { dev: 70, at: 89 },
+            sim::Op::Exchange {
+                from: 110,
+                to: 128,
+                mode: 115,
+                seed: 2,
+            },
+            sim::Op::Fork {
+                a: 178,
+                b: 224,
+                what: 0,
+                at: 0,
+            },
+        ],
+        last_books_removed: false,
+    };
+    let census = Census::new(&["incomplete history"]);
+    let mut sim = Sim::run(&script, false);
+    {
+        let view = View::of(&sim, most_defects(&sim));
+        let missing: BTreeSet<ChangeId> = view
+            .state
             .anomalies()
             .filter_map(|a| match a {
                 Anomaly::MissingParent { change, .. } => Some(*change),
                 _ => None,
             })
             .collect();
-        for conflict in state.conflicts() {
-            let continues = conflict
-                .candidates
-                .iter()
-                .flat_map(|x| std::iter::once(x.head).chain(x.also.iter().copied()))
-                .chain(conflict.unreadable.iter().copied())
-                .any(|h| continuing.contains(&h));
-            if continues {
-                census.saw("incomplete history");
-            }
-            prop_assert_eq!(
-                conflict.incomplete_history,
-                continues,
-                "{:?} at {:?}",
-                conflict.kind,
-                conflict.key
-            );
+        let race = view
+            .state
+            .conflicts_of(ConflictKind::BookPresence)
+            .find(|c| c.key == RecordKey::BookPresence(BookId::Titus))
+            .expect("the restore race of Titus");
+        assert!(
+            race.candidates.iter().any(|c| missing.contains(&c.head)),
+            "a verse continuing a missing change is listed: {race:#?}"
+        );
+        assert!(race.incomplete_history);
+        if let Err(e) = differences_are_visible(&view, &census) {
+            panic!("before the last exchange: {e}");
         }
-        for key in state.record_keys() {
-            let heads = state.heads(&key);
-            if heads.len() < 2 {
-                continue;
-            }
-            let values: BTreeSet<Option<Json>> = heads
-                .iter()
-                .map(|h| body_of(state, h).and_then(|b| value_json(&b.record)))
-                .collect();
-            if values.len() < 2 {
-                continue;
-            }
-            match state.key_state(&key).map(|k| k.state) {
-                Some(Resolved::Conflict(id)) => {
-                    prop_assert!(
-                        state.conflict(&id).is_some(),
-                        "{key:?}: conflict not listed"
-                    );
-                }
-                Some(Resolved::Merged {
-                    how: MergeHow::Units(_) | MergeHow::Union,
-                    ..
-                }) => {}
-                Some(Resolved::SettledByRule { head, .. }) => {
-                    for h in heads.iter().filter(|h| **h != head) {
-                        prop_assert!(
-                            is_seed_stub(state, h),
-                            "{key:?}: a person's version absorbed"
-                        );
-                    }
-                }
-                Some(Resolved::Merged {
-                    how: MergeHow::EqualValues,
-                    ..
-                }) => {
-                    // Equal once the seed stubs are absorbed (§7.3).
-                    let people: BTreeSet<Option<Json>> = heads
-                        .iter()
-                        .filter(|h| !is_seed_stub(state, h))
-                        .map(|h| body_of(state, h).and_then(|b| value_json(&b.record)))
-                        .collect();
-                    prop_assert!(
-                        people.len() <= 1,
-                        "{key:?}: different values merged as equal"
-                    );
-                }
-                other => {
-                    let raws: Vec<String> = heads
-                        .iter()
-                        .map(|h| String::from_utf8_lossy(&state.raw(h).unwrap()).to_string())
-                        .collect();
-                    prop_assert!(false, "{key:?}: different heads but {other:?}: {raws:#?}")
-                }
-            }
-        }
-        Ok(())
-    });
+    }
+    sim.sync_all();
+    if let Err(e) = differences_are_visible(&View::of(&sim, 0), &census) {
+        panic!("once every device holds everything: {e}");
+    }
 }
 
 /// The ancestors of a change on its own record, by the parents stored in the changes.

@@ -122,17 +122,17 @@ impl Fingerprinter {
             self.block(&block);
             self.carried = 0;
         }
-        let mut blocks = bytes.chunks_exact(BLOCK);
-        for block in &mut blocks {
+        let (blocks, rest) = bytes.as_chunks::<BLOCK>();
+        for block in blocks {
             self.block(block);
         }
-        let rest = blocks.remainder();
         self.carry[..rest.len()].copy_from_slice(rest);
         self.carried = rest.len();
     }
 
     fn block(&mut self, block: &[u8]) {
-        for (lane, bytes) in self.lanes.iter_mut().zip(block.chunks_exact(8)) {
+        let (words, _) = block.as_chunks::<8>();
+        for (lane, bytes) in self.lanes.iter_mut().zip(words) {
             *lane = mix(*lane ^ word(bytes));
         }
     }

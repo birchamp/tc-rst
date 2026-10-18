@@ -2600,6 +2600,97 @@ fn start_empty_then_typed() -> (Vec<Change>, Change, Change, Change) {
     (all, empty[0].clone(), typed, restore)
 }
 
+/// L76 with L102: a verse typed after *Start empty* that also continues a change still held in
+/// an incomplete batch is a candidate of the restore race, so the presence conflict says its
+/// history is incomplete, and stops saying so once the rest of the batch arrives.
+#[test]
+fn a_restore_race_verse_continuing_a_held_change_marks_the_presence_conflict() {
+    let mut maria = Dev::new(1);
+    let mut juan = Dev::new(2);
+    let book = titus_and_ruth(&mut maria, &[2]);
+    let presence = on(&book, &RecordKey::BookPresence(BOOK));
+    let removal = maria.one(removed(&ids(&book)), vec![presence.id()]);
+    juan.at = maria.at;
+    maria.at += 3_600_000;
+    let empty = juan.batch(
+        vec![
+            (present(PresentHow::StartedEmpty), vec![removal.id()]),
+            (
+                verse(1, 1, text("___", 1)),
+                vec![on(&book, &verse_key(1, 1)).id()],
+            ),
+            (
+                verse(1, 2, text("___", 2)),
+                vec![on(&book, &verse_key(1, 2)).id()],
+            ),
+        ],
+        Cause::StartOver,
+    );
+    let held = juan.batch(
+        vec![
+            (
+                verse(1, 1, text("Juan held one", 1)),
+                vec![on(&empty, &verse_key(1, 1)).id()],
+            ),
+            (
+                verse(1, 2, text("Juan held two", 2)),
+                vec![on(&empty, &verse_key(1, 2)).id()],
+            ),
+        ],
+        Cause::Edit,
+    );
+    let typed = juan.one(
+        verse(1, 1, text("Juan new one", 1)),
+        vec![on(&empty, &verse_key(1, 1)).id(), held[0].id()],
+    );
+    let restore = maria.one(present(PresentHow::RestoredText), vec![removal.id()]);
+    // Only the first change of Juan's held batch has arrived.
+    let before = all_of(&[
+        &book,
+        &[removal],
+        &empty,
+        &held[..1],
+        &[typed.clone(), restore],
+    ]);
+    let state = assert_converges(&before);
+    assert!(
+        state
+            .anomalies()
+            .any(|a| matches!(a, Anomaly::MissingParent { change, .. } if *change == typed.id()))
+    );
+    let race = |state: &FoldState| {
+        state
+            .conflicts_of(ConflictKind::BookPresence)
+            .next()
+            .cloned()
+            .expect("the restore race")
+    };
+    let conflict = race(&state);
+    assert!(
+        conflict.candidates.iter().any(|c| c.head == typed.id()),
+        "the typed verse is listed: {:#?}",
+        conflict.candidates
+    );
+    assert!(conflict.also_keys.contains(&verse_key(1, 1)));
+    assert!(conflict.incomplete_history);
+
+    let mut after = state;
+    after.add([FoldInput::from(held[1].clone())]);
+    let mut all = before;
+    all.push(held[1].clone());
+    same_fold(
+        &assert_converges(&all),
+        &after,
+        "the held change arrives last",
+    );
+    assert!(
+        !after
+            .anomalies()
+            .any(|a| matches!(a, Anomaly::MissingParent { .. }))
+    );
+    assert!(!race(&after).incomplete_history);
+}
+
 /// L102: after *Restore the text* wins provisionally, a verse typed after *Start empty* is
 /// rewound with it, so no verse shows one side beside another's, and the typed verse is a
 /// candidate of the presence conflict; each choice keeps one side whole.

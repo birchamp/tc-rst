@@ -27,8 +27,9 @@ pub(crate) fn unhex<const N: usize>(text: &str) -> Option<[u8; N]> {
         return None;
     }
     let mut out = [0u8; N];
-    for (slot, pair) in out.iter_mut().zip(bytes.chunks_exact(2)) {
-        *slot = (hex_digit(pair[0])? << 4) | hex_digit(pair[1])?;
+    let (pairs, _) = bytes.as_chunks::<2>();
+    for (slot, [high, low]) in out.iter_mut().zip(pairs) {
+        *slot = (hex_digit(*high)? << 4) | hex_digit(*low)?;
     }
     Some(out)
 }
