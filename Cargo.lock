@@ -2789,7 +2789,9 @@ dependencies = [
  "serde",
  "serde_json",
  "tc-api",
+ "tc-check",
  "tc-core",
+ "tc-helps",
  "thiserror 2.0.21",
 ]
 

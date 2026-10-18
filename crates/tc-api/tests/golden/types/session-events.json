@@ -25,11 +25,22 @@
             }
           ],
           "books": [],
-          "stories": [],
+          "stories": [
+            12
+          ],
           "checks": [
             {
               "tool": "translationNotes",
-              "book": "TIT"
+              "unit": {
+                "type": "book",
+                "value": "TIT"
+              }
+            },
+            {
+              "tool": "translationWords",
+              "unit": {
+                "type": "stories"
+              }
             }
           ],
           "records": [

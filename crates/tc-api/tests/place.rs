@@ -6,7 +6,8 @@
 
 use serde_json::{Value, json};
 use tc_api::check::Tool;
-use tc_api::prefs::{PlaceChange, PlaceMode, PlaceUpdate, PlaceVerse, RecordPlace};
+use tc_api::ids::{RefPart, StoryNo};
+use tc_api::prefs::{PlaceChange, PlaceMode, PlaceUpdate, RecordPlace};
 use tc_core::BookId;
 
 fn record(place: Value) -> Value {
@@ -24,14 +25,14 @@ fn read(place: Value) -> Result<PlaceUpdate, String> {
         .map_err(|e| e.to_string())
 }
 
-fn verse(text: &str) -> PlaceChange<PlaceVerse> {
-    PlaceChange::Set(PlaceVerse::parse(text).unwrap())
+fn verse(text: &str) -> PlaceChange<RefPart> {
+    PlaceChange::Set(RefPart::parse(text).unwrap())
 }
 
 fn book(
     mode: Option<PlaceMode>,
     chapter: Option<u16>,
-    verse: PlaceChange<PlaceVerse>,
+    verse: PlaceChange<RefPart>,
     tool: Option<Tool>,
 ) -> PlaceUpdate {
     PlaceUpdate::Book {
@@ -112,7 +113,7 @@ fn a_story_records_its_frame_and_a_frame_click_keeps_the_mode() {
         assert_eq!(
             place,
             Ok(PlaceUpdate::Story {
-                story: 3,
+                story: StoryNo::new(3).unwrap(),
                 mode: None,
                 frame: PlaceChange::Set(frame),
                 tool: None,
@@ -133,7 +134,7 @@ fn every_place_reads_back_as_written() {
         ),
         book(None, Some(3), PlaceChange::Clear, None),
         PlaceUpdate::Story {
-            story: 50,
+            story: StoryNo::new(50).unwrap(),
             mode: Some(PlaceMode::Check),
             frame: PlaceChange::Keep,
             tool: Some(Tool::TranslationNotes),
@@ -151,7 +152,9 @@ fn a_place_that_is_not_one_refuses() {
         // A verse that holds the chapter, or none at all.
         json!({"type": "book", "value": {"book": "TIT", "verse": {"type": "set", "value": "1:4"}}}),
         json!({"type": "book", "value": {"book": "TIT", "verse": {"type": "set", "value": ""}}}),
-        json!({"type": "book", "value": {"book": "TIT", "verse": {"type": "set", "value": "x".repeat(PlaceVerse::MAX_BYTES + 1)}}}),
+        // A story is one of the fifty.
+        json!({"type": "story", "value": {"story": 0, "frame": {"type": "keep"}}}),
+        json!({"type": "story", "value": {"story": 51, "frame": {"type": "keep"}}}),
         // A story's frame is a number, and a book has a verse, not a frame.
         json!({"type": "story", "value": {"story": 3, "frame": {"type": "set", "value": "4"}}}),
         json!({"type": "story", "value": {"story": 3, "verse": {"type": "set", "value": "4"}, "frame": {"type": "keep"}}}),

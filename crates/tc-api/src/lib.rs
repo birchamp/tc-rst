@@ -13,6 +13,8 @@
 //!   an object with camelCase fields. Serde's internal tagging (the tag beside the data's
 //!   own fields) cannot carry a variant that holds a string or a number, and an enum inside
 //!   an enum would put two tags in one object, so every data enum uses this one form.
+//! - A value that is one identifier written as text is a string whatever it holds: a book is
+//!   `"TIT"`, a check's place `"PSA 60:front"` (a rail repeats it thousands of times).
 //! - Every enum is closed: an unknown variant is refused, never read as a fallback.
 //! - A reply is the enum [`Reply`]: `{"type": "ok", "value": …}` or `{"type": "err",
 //!   "value": <ApiError>}`.

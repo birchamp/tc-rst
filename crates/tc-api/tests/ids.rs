@@ -6,8 +6,8 @@ use serde::de::DeserializeOwned;
 use serde_json::json;
 use tc_api::account::WebUrl;
 use tc_api::ids::{
-    ChangeRef, ConflictRef, LOCALE_IDS, LocaleId, ProjectId, ProjectRef, RecordRef, RequestId,
-    ServerInstance, UploadId,
+    ChangeRef, ConflictRef, LOCALE_IDS, LocaleId, ProjectId, ProjectRef, RecordRef, RefPart,
+    RequestId, ServerInstance, StoryNo, UploadId,
 };
 use tc_api::{ReviewToken, ShownToken};
 
@@ -233,6 +233,59 @@ fn a_record_reads_every_text_canonical_json_writes() {
     }
     // Escaped forms are plain ASCII.
     assert!(reads::<RecordRef>(r#"{"name":"a\u001fb\nc"}"#));
+}
+
+#[test]
+fn a_reference_part_is_any_text_a_resource_writes_without_the_separator() {
+    // tc-check's `RefPart::new`: not empty and no `:`. The shipped tables write numbers,
+    // `front`, `intro`, spans and lists; other forms keep their spaces and scripts.
+    for text in [
+        "1",
+        "150",
+        "front",
+        "intro",
+        "9-10",
+        "1,3,8,12",
+        "1a",
+        " 3",
+        "front ",
+        "1\u{2013}3",
+        "\u{663}",
+        "0",
+    ] {
+        assert!(reads::<RefPart>(text), "{text:?}");
+        assert_eq!(RefPart::parse(text).unwrap().as_str(), text);
+    }
+    // Long, because no length limit may hide a check from the rail.
+    assert!(reads::<RefPart>(&"1,".repeat(5000)));
+    for text in ["", "1:2", ":", "front:intro"] {
+        assert!(!reads::<RefPart>(text), "{text:?}");
+    }
+    assert!(serde_json::from_value::<RefPart>(json!(3)).is_err());
+}
+
+#[test]
+fn a_story_is_one_of_the_fifty() {
+    for number in [1u8, 2, 49, 50] {
+        assert_eq!(StoryNo::new(number).unwrap().get(), number);
+        assert_eq!(
+            serde_json::from_value::<StoryNo>(json!(number)).unwrap(),
+            StoryNo::new(number).unwrap()
+        );
+    }
+    for number in [0u8, 51, 255] {
+        assert!(StoryNo::new(number).is_err(), "{number}");
+        assert!(
+            serde_json::from_value::<StoryNo>(json!(number)).is_err(),
+            "{number}"
+        );
+    }
+    for bad in [json!(256), json!(-1), json!("3"), json!(3.5)] {
+        assert!(
+            serde_json::from_value::<StoryNo>(bad.clone()).is_err(),
+            "{bad}"
+        );
+    }
 }
 
 #[test]

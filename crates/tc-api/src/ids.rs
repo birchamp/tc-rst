@@ -377,6 +377,87 @@ impl From<RecordRef> for String {
     }
 }
 
+/// A chapter or a verse part of a reference as tC4 writes it: `1`, `9-10`, `front`,
+/// `intro`, `3,5`, `1a`. It is tc-check's `RefPart` and takes what that type takes: any text
+/// that is not empty and holds no `:`, the separator between the parts.
+///
+/// It has no length limit. A check whose place the UI cannot read would drop out of the rail
+/// and show its decision as not saved, and tc-check accepts any length, so this type must
+/// too. A request is bounded where the server reads its body, not field by field.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct RefPart(String);
+
+impl RefPart {
+    pub fn parse(text: &str) -> Result<Self, IdError> {
+        const WHAT: &str = "reference part";
+        if text.is_empty() {
+            return refuse(WHAT, "empty");
+        }
+        if text.contains(':') {
+            return refuse(WHAT, "holds a part separator");
+        }
+        Ok(Self(text.to_owned()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for RefPart {
+    type Error = IdError;
+    fn try_from(text: String) -> Result<Self, IdError> {
+        Self::parse(&text)
+    }
+}
+
+impl From<RefPart> for String {
+    fn from(part: RefPart) -> Self {
+        part.0
+    }
+}
+
+impl fmt::Display for RefPart {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// An Open Bible Stories story, 1 to 50 (tc-helps `ObsRef`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(try_from = "u8", into = "u8")]
+pub struct StoryNo(u8);
+
+impl StoryNo {
+    pub const COUNT: u8 = 50;
+
+    pub fn new(number: u8) -> Result<Self, IdError> {
+        if (1..=Self::COUNT).contains(&number) {
+            Ok(Self(number))
+        } else {
+            refuse("story", "not a story from 1 to 50")
+        }
+    }
+
+    pub fn get(self) -> u8 {
+        self.0
+    }
+}
+
+impl TryFrom<u8> for StoryNo {
+    type Error = IdError;
+    fn try_from(number: u8) -> Result<Self, IdError> {
+        Self::new(number)
+    }
+}
+
+impl From<StoryNo> for u8 {
+    fn from(story: StoryNo) -> Self {
+        story.0
+    }
+}
+
 /// The interface languages, in the picker's order: the catalogs tc-ui ships
 /// (`crates/tc-ui/src/i18n.rs` `LOCALES`).
 pub const LOCALE_IDS: [&str; 10] = [
@@ -474,6 +555,32 @@ mod arbitrary {
             regex("\\{\"kind\":\"[a-z]{1,10}\",\"book\":\"[A-Z1-3]{3}\",\"v\":[0-9]{1,3}\\}")
                 .prop_map(RecordRef)
                 .boxed()
+        }
+    }
+
+    impl Arbitrary for RefPart {
+        type Parameters = ();
+        type Strategy = BoxedStrategy<Self>;
+        fn arbitrary_with((): ()) -> Self::Strategy {
+            let forms = prop_oneof![
+                (1u16..=176, 0u16..3).prop_map(|(v, extra)| if extra == 0 {
+                    v.to_string()
+                } else {
+                    format!("{v}-{}", v + extra)
+                }),
+                proptest::sample::select(&["intro", "front", "3,5", "1a"][..])
+                    .prop_map(str::to_owned),
+                regex("[^:]{1,20}"),
+            ];
+            forms.prop_map(RefPart).boxed()
+        }
+    }
+
+    impl Arbitrary for StoryNo {
+        type Parameters = ();
+        type Strategy = BoxedStrategy<Self>;
+        fn arbitrary_with((): ()) -> Self::Strategy {
+            (1..=StoryNo::COUNT).prop_map(StoryNo).boxed()
         }
     }
 

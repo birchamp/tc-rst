@@ -42,7 +42,7 @@
         {
           "row": {
             "index": 7,
-            "reference": "TIT 1:4",
+            "place": "TIT 1:4",
             "title": "faith",
             "flags": {
               "dot": "valid",

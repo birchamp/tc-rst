@@ -7,9 +7,9 @@
 
 use tc_core::BookId;
 
-use crate::check::CheckListRef;
+use crate::check::{CheckListRef, CheckUnit};
 use crate::event::{Aspect, ChangeScope, ChapterRef};
-use crate::ids::RecordRef;
+use crate::ids::{RecordRef, StoryNo};
 
 /// A part of the project that a query shows.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -19,8 +19,8 @@ pub enum QueryKey {
     /// A whole book: its head, its chapter list, and every chapter in it.
     Book(BookId),
     /// One OBS story.
-    Story(u8),
-    /// One tool's check list for one book.
+    Story(StoryNo),
+    /// One tool's check list for one book, or for the stories.
     CheckList(CheckListRef),
     /// One record, such as a check's decision.
     Record(RecordRef),
@@ -43,11 +43,18 @@ impl QueryKey {
                 book_changed(*book) || parts.chapters.iter().any(|c| c.book == *book)
             }
             Self::Story(story) => parts.stories.contains(story),
-            // A check list is derived from the pinned resources and the book's presence.
+            // A check list is derived from the pinned resources and from the presence of its
+            // book. `ChangeParts` names a story whether it was added, removed or edited, and
+            // a story's presence cannot be told from its text here, so any story change
+            // counts; a book's text edit does not, because the server names the lists it
+            // re-assessed in `checks`.
             Self::CheckList(list) => {
                 parts.checks.contains(list)
-                    || book_changed(list.book)
                     || parts.aspects.contains(&Aspect::Pins)
+                    || match list.unit {
+                        CheckUnit::Book(book) => book_changed(book),
+                        CheckUnit::Stories => !parts.stories.is_empty(),
+                    }
             }
             Self::Record(record) => parts.records.iter().any(|r| &r.record == record),
             Self::Aspect(aspect) => parts.aspects.contains(aspect),

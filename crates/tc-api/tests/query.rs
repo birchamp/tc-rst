@@ -3,9 +3,9 @@
 #![cfg(not(target_arch = "wasm32"))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use tc_api::check::{CheckListRef, Tool};
+use tc_api::check::{CheckListRef, CheckUnit, Tool};
 use tc_api::event::{Aspect, ChangeParts, ChangeScope, ChapterRef, RecordChange};
-use tc_api::ids::RecordRef;
+use tc_api::ids::{RecordRef, StoryNo};
 use tc_api::query::QueryKey;
 use tc_core::BookId;
 
@@ -23,10 +23,21 @@ fn parts(edit: impl FnOnce(&mut ChangeParts)) -> ChangeScope {
     ChangeScope::Parts(parts)
 }
 
+fn story(number: u8) -> StoryNo {
+    StoryNo::new(number).unwrap()
+}
+
 fn tn(book: BookId) -> CheckListRef {
     CheckListRef {
         tool: Tool::TranslationNotes,
-        book,
+        unit: CheckUnit::Book(book),
+    }
+}
+
+fn tn_stories() -> CheckListRef {
+    CheckListRef {
+        tool: Tool::TranslationNotes,
+        unit: CheckUnit::Stories,
     }
 }
 
@@ -34,8 +45,9 @@ fn every_kind_of_key() -> Vec<QueryKey> {
     vec![
         QueryKey::Chapter(chapter(BookId::Titus, 1)),
         QueryKey::Book(BookId::Titus),
-        QueryKey::Story(7),
+        QueryKey::Story(story(7)),
         QueryKey::CheckList(tn(BookId::Titus)),
+        QueryKey::CheckList(tn_stories()),
         QueryKey::Record(record(r#"{"kind":"verse"}"#)),
         QueryKey::Aspect(Aspect::Settings),
     ]
@@ -65,7 +77,7 @@ fn a_book_follows_any_of_its_chapters() {
     assert!(key.depends_on(&parts(|p| p.chapters.push(chapter(BookId::Psalms, 119)))));
     assert!(key.depends_on(&parts(|p| p.books.push(BookId::Psalms))));
     assert!(!key.depends_on(&parts(|p| p.chapters.push(chapter(BookId::Titus, 1)))));
-    assert!(!key.depends_on(&parts(|p| p.stories.push(1))));
+    assert!(!key.depends_on(&parts(|p| p.stories.push(story(1)))));
 }
 
 #[test]
@@ -76,7 +88,7 @@ fn a_check_list_follows_its_rows_its_book_and_the_pins() {
     assert!(key.depends_on(&parts(|p| p.aspects.push(Aspect::Pins))));
     let tw = CheckListRef {
         tool: Tool::TranslationWords,
-        book: BookId::Titus,
+        unit: CheckUnit::Book(BookId::Titus),
     };
     assert!(!key.depends_on(&parts(|p| p.checks.push(tw))));
     assert!(!key.depends_on(&parts(|p| p.checks.push(tn(BookId::Ruth)))));
@@ -86,9 +98,31 @@ fn a_check_list_follows_its_rows_its_book_and_the_pins() {
 }
 
 #[test]
+fn a_story_check_list_is_not_a_book_check_list() {
+    // The OBS stories have check lists of their own (tc-check `Collection::Stories`). The
+    // first build named a list by book only, so a change to a story check list had no name.
+    let stories = QueryKey::CheckList(tn_stories());
+    assert!(stories.depends_on(&parts(|p| p.checks.push(tn_stories()))));
+    assert!(stories.depends_on(&parts(|p| p.stories.push(story(12)))));
+    assert!(stories.depends_on(&parts(|p| p.aspects.push(Aspect::Pins))));
+    let tw_stories = CheckListRef {
+        tool: Tool::TranslationWords,
+        unit: CheckUnit::Stories,
+    };
+    assert!(!stories.depends_on(&parts(|p| p.checks.push(tw_stories))));
+    // A book's list and a book's text do not move a story list, and the other way round.
+    assert!(!stories.depends_on(&parts(|p| p.checks.push(tn(BookId::Titus)))));
+    assert!(!stories.depends_on(&parts(|p| p.books.push(BookId::Titus))));
+    assert!(!stories.depends_on(&parts(|p| p.chapters.push(chapter(BookId::Titus, 1)))));
+    let titus = QueryKey::CheckList(tn(BookId::Titus));
+    assert!(!titus.depends_on(&parts(|p| p.checks.push(tn_stories()))));
+    assert!(!titus.depends_on(&parts(|p| p.stories.push(story(12)))));
+}
+
+#[test]
 fn a_story_a_record_and_an_aspect_follow_only_themselves() {
-    assert!(QueryKey::Story(7).depends_on(&parts(|p| p.stories.push(7))));
-    assert!(!QueryKey::Story(7).depends_on(&parts(|p| p.stories.push(8))));
+    assert!(QueryKey::Story(story(7)).depends_on(&parts(|p| p.stories.push(story(7)))));
+    assert!(!QueryKey::Story(story(7)).depends_on(&parts(|p| p.stories.push(story(8)))));
     let mine = record(r#"{"kind":"decision","n":1}"#);
     let other = record(r#"{"kind":"decision","n":2}"#);
     let change = |r: &RecordRef| RecordChange {

@@ -1,0 +1,28 @@
+[
+  {
+    "tool": "translationNotes",
+    "unit": {
+      "type": "book",
+      "value": "PSA"
+    }
+  },
+  {
+    "tool": "translationNotes",
+    "unit": {
+      "type": "stories"
+    }
+  },
+  {
+    "tool": "translationWords",
+    "unit": {
+      "type": "book",
+      "value": "PSA"
+    }
+  },
+  {
+    "tool": "translationWords",
+    "unit": {
+      "type": "stories"
+    }
+  }
+]

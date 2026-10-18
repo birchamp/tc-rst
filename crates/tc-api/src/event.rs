@@ -11,7 +11,9 @@ use tc_core::BookId;
 use crate::account::AccountView;
 use crate::align::AlignSave;
 use crate::check::CheckListRef;
-use crate::ids::{AlignerId, ProjectRef, RecordRef, RequestId, Scope, ServerInstance, ViewSeq};
+use crate::ids::{
+    AlignerId, ProjectRef, RecordRef, RequestId, Scope, ServerInstance, StoryNo, ViewSeq,
+};
 use crate::jobs::JobView;
 use crate::shown::PersonLabel;
 use crate::write::ReadOnlyReason;
@@ -169,7 +171,7 @@ pub struct ChangeParts {
     )]
     pub books: Vec<BookId>,
     /// OBS stories.
-    pub stories: Vec<u8>,
+    pub stories: Vec<StoryNo>,
     /// Check lists with rows that changed. An open rail asks `check/rows { since }` for
     /// those rows, never for the whole rail (A-12).
     pub checks: Vec<CheckListRef>,

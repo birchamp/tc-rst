@@ -218,7 +218,9 @@ what changed for each finding, which parts were done another way, and why.
   camelCase string (`"rtl"`); every other enum is adjacently tagged,
   `{"type": "<camelCase variant>", "value": <data>}`, with no `value` for a unit variant. *(A1)*
   The reply body is such an enum too (`Reply`, AD9), and a test checks every golden file
-  against this rule.
+  against this rule. A value that is one identifier written as text is a string whatever it
+  holds, as `BookId` is (`"TIT"`); so is `CheckPlace` (`"PSA 60:front"`), which a rail repeats
+  thousands of times.
   This design said "internally tagged" before unit A1 built the crate: serde's internal tagging
   cannot carry a variant that holds a string or a number (`NotSaved::Disk(String)`,
   `Who::Username(String)`), and it fails when such a value is written, not when the code
@@ -252,6 +254,8 @@ pub struct RecordRef(String);        // canonical JSON of a RecordKey (STORAGE:8
 pub struct ReportId(u64);
 pub struct LocaleId(String);         // one of the 10 ids of tc-ui's LOCALES
 pub struct WallMs(i64);
+pub struct StoryNo(u8);              // an OBS story, 1 to 50 (tc-helps `ObsRef`) *(A1)*
+pub struct RefPart(String);          // a chapter or verse part as tC4 writes it: `1`, `9-10`, `front`, `intro`, `3,5`, `1a` *(A1)*
 ```
 
 `ProjectRef` refuses only a name that could leave the projects root on some system the app runs
@@ -265,6 +269,13 @@ instead of skipping it. Where the file system ignores letter case or a trailing 
 can name one folder, so the registry opens only a folder it lists, by the name it listed. *(A1:
 the first text kept colons, which let `c:..` leave the root on Windows.)* `LocaleId` is checked against
 `tc_api::ids::LOCALE_IDS`, which a test compares with tc-ui's catalogs. *(A1)*
+
+`RefPart` is tc-check's `RefPart` and takes what it takes: any text that is not empty and holds
+no `:`. It has no length limit, because a check whose place the UI cannot read drops out of
+the rail and shows its decision as not saved. A request is bounded where the server reads its
+body (A2), not field by field.
+*(A1: the first build typed a check's place as `tc_core::Reference`, which holds a chapter of at
+least 1 and numeric verses, and the first fix of `prefs/recordPlace` capped a verse at 256 bytes.)*
 
 ### 3.3 Endpoints
 
@@ -497,13 +508,13 @@ pub enum ChangeCause { LocalSave { request: RequestId }, Intake { from: Vec<Pers
 pub enum ChangeScope { Parts(ChangeParts), Everything } // a list over its cap gives Everything *(A-30)*
 pub struct ChangeParts {                                 // tc-app's form of the fold's Delta (STORAGE:628-629)
     pub chapters: Vec<ChapterRef>,                       // { book, chapter }
-    pub books: Vec<BookId>, pub stories: Vec<u8>,
-    pub checks: Vec<CheckListRef>,                       // { tool, book }; an open rail asks `check/rows { since }`
+    pub books: Vec<BookId>, pub stories: Vec<StoryNo>,
+    pub checks: Vec<CheckListRef>,                       // { tool, unit }; an open rail asks `check/rows { since }`
                                                          // for the rows that changed; never the whole rail *(A-12)*
     pub records: Vec<RecordChange>,                      // { record, by: Option<PersonLabel> }; capped at 256
     pub aspects: Vec<Aspect>,                            // Pins | Settings | Meta | Conflicts *(A-30)*
 }
-pub enum QueryKey { Chapter(ChapterRef), Book(BookId), Story(u8), CheckList(CheckListRef),
+pub enum QueryKey { Chapter(ChapterRef), Book(BookId), Story(StoryNo), CheckList(CheckListRef),
                     Record(RecordRef), Aspect(Aspect) }  // a query names one or more (A1)
 impl QueryKey { pub fn depends_on(&self, scope: &ChangeScope) -> bool }  // one rule for the UI and the tests
 
@@ -535,8 +546,11 @@ download, a summary, a training). The change parts are named structs, not tuples
 names its fields. A checkpoint failure carries its reason, not a `Refusal`: no refusal family
 describes one, and the UI shows tC4's "Checkpoint not saved" with Retry and the reason as its
 diagnosis (`tC4:src/App.jsx:63-67`). `QueryKey::depends_on` errs toward a refresh: a chapter
-follows its own edits and its book; a book any of its chapters; a check list its rows, its book
-and the pins; a record, a story and an aspect only themselves.
+follows its own edits and its book; a book any of its chapters; a check list its rows, its unit
+and the pins (the unit of a book's list is the book; of the stories' list, any story, because
+`ChangeParts.stories` names a story whether it was added, removed or edited); a record, a story
+and an aspect only themselves. *(A1: the first build named a check list by tool and book, which
+had no form for the OBS stories' lists.)*
 
 No screen shows `Train` or `HomeSummary` progress. Their `Job` frames go out once a second at
 most; only their end (`Done`, `Failed`, `Cancelled`) goes out at once. The other jobs keep the
@@ -580,11 +594,21 @@ pub struct CheckSessionView { pub session: CheckSessionId, pub tool: Tool, pub u
                               pub terms: Vec<String>,            // tW terms in locale order (ByWord)
                               pub progress: Progress3, pub citation: ResourceCitation,
                               pub dropped: u32, pub empty: Option<CheckEmpty>, pub start: u32 }
-pub struct RailRow { pub index: u32, pub reference: Reference, pub title: String,
+pub struct RailRow { pub index: u32, pub place: CheckPlace, pub title: String,   // *(A1)*
                      pub flags: RowFlags,                        // decided, status, invalid, bookmarked, commented
                      pub term: Option<u32>, pub category: Option<Category>,
                      pub marker: Option<ConflictMarker> }
-pub struct CheckItemView { pub index: u32, pub reference: Reference, pub quote_title: String,
+// tc-check's CheckTarget and Collection on the wire. A check is not always at a numeric chapter:verse:
+// tC4's resources put a Psalms superscription at `60:front`, a note on several verses at `5:1,3,8,12`
+// (`5:2-3` for a span), a book's introduction at `front:intro` and a chapter's at `1:intro`, and an
+// OBS note at a story and a frame (frame 0 is the title). `locatorOf` shows `c:v` or `story:frame`.
+// JSON: the text tc-check prints for a target, `"PSA 60:front"` or `"OBS 3:4"`, and read back into the
+// enum at the boundary. Text, not an object per row: the Psalms tN rail has about 8,000 rows. *(A1)*
+pub enum CheckPlace { Verse { book: BookId, chapter: RefPart, verse: RefPart },
+                      Frame { story: StoryNo, frame: u16 } }
+pub enum CheckUnit { Book(BookId), Stories }                     // what one check list covers (tc-check `Collection`)
+pub struct CheckListRef { pub tool: Tool, pub unit: CheckUnit }  // JSON: {"tool":…,"unit":{"type":"book","value":"TIT"}}
+pub struct CheckItemView { pub index: u32, pub place: CheckPlace, pub quote_title: String,
                            pub note: Vec<ArticleBlock>, pub article: Option<HelpLink>,
                            pub notices: Vec<CheckNotice>, pub orig: Option<SourceVerseView>,
                            pub gateway: Option<SourceVerseView>, pub target: Shown<TargetWords>,
@@ -612,7 +636,10 @@ Every optional part is a `Slot`, `Known` or `Result`, so "could not be read" nev
 Unit A1 built the state enums of this section *(A-30)*: `BankSelection`, `Freshness` and
 `AlignSave` (`tc_api::align`), `ProjectOrigin` and `Door43Card` (`tc_api::home`), with the parts of
 the Check rail that an `Ack` carries (`RailRow`, `RailRowPatch`, `RowFlags`, `Dot`, `Category`,
-`Tool`, in `tc_api::check`). The screens' units build the views around them. `Door43Card::Shared`
+`Tool`, and the names of a place and a list, `CheckPlace`, `CheckUnit` and `CheckListRef`, in
+`tc_api::check`). A test reads every check of `fixtures/check/psalms-vectors.json` (31,429 in
+its 18 cases), the odd forms of `reference-forms-vectors.json`, every Titus tN note and every
+OBS tN note back from an `Ack`. The screens' units build the views around them. `Door43Card::Shared`
 has no `sync: SyncAction`: by the owner's ruling Q2 every shared project, Bible or OBS, offers
 "Sync with Door43", and "Syncing…" comes from the running job, not from the card.
 
@@ -666,7 +693,8 @@ unit adds the rows of its screens to `endpoint_table!` (B9b adds `account/orgs` 
 `rememberPlace` makes it (`tC4:src/state.jsx:3821-3845`): a mode, chapter or tool left out keeps
 the stored one, and the verse (a text: `4-5` for a bridge, `intro` or `front` for a check note,
 as tC4's `PlaceRecord` keeps `number | string`) or a story's frame is kept, cleared (a chapter
-click) or set. *(A1: the first build typed the verse as a number and could not clear it.)*
+click) or set. A verse is a `RefPart` and a story a `StoryNo`. *(A1: the first build typed the
+verse as a number and could not clear it.)*
 
 Two rows changed when A1 built them. `account/link` became one endpoint per question, because an
 endpoint declares one `NET` and the UI asks before it sends: `profileLink` [profile] and

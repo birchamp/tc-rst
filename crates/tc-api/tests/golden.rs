@@ -22,7 +22,8 @@ use tc_api::app::{
     AppPrefsView, BuildInfo, ClientError, Hello, HelloView, OpenSession, Quit, SessionRole,
 };
 use tc_api::check::{
-    Category, CheckListRef, Dot, NoteCategory, RailRow, RailRowPatch, RowFlags, Tool,
+    Category, CheckListRef, CheckPlace, CheckUnit, Dot, NoteCategory, RailRow, RailRowPatch,
+    RowFlags, Tool,
 };
 use tc_api::error::{ApiError, Feature, Flow, SignInReason};
 use tc_api::event::{
@@ -31,16 +32,16 @@ use tc_api::event::{
 };
 use tc_api::feedback::{Compose, FeedbackDraft};
 use tc_api::ids::{
-    AlignerId, ConflictRef, Epoch, JobId, LocaleId, ProjectId, ProjectRef, RecordRef, ReportId,
-    RequestId, Scope, ServerInstance, ViewSeq, WallMs,
+    AlignerId, ConflictRef, Epoch, JobId, LocaleId, ProjectId, ProjectRef, RecordRef, RefPart,
+    ReportId, RequestId, Scope, ServerInstance, StoryNo, ViewSeq, WallMs,
 };
 use tc_api::jobs::{
     Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress,
 };
 use tc_api::net::{NetView, Set, State as NetState};
 use tc_api::prefs::{
-    DraftUnit, PlaceChange, PlaceMode, PlaceUpdate, PlaceVerse, RecordPlace, SetAlignSuggestions,
-    SetDraftUnit, SetLocale,
+    DraftUnit, PlaceChange, PlaceMode, PlaceUpdate, RecordPlace, SetAlignSuggestions, SetDraftUnit,
+    SetLocale,
 };
 use tc_api::refusal::Message;
 use tc_api::shown::{ConflictMarker, PersonLabel, Shown, Who};
@@ -86,6 +87,40 @@ fn account() -> AccountView {
     }
 }
 
+fn verse_place(book: BookId, chapter: &str, verse: &str) -> CheckPlace {
+    CheckPlace::Verse {
+        book,
+        chapter: RefPart::parse(chapter).unwrap(),
+        verse: RefPart::parse(verse).unwrap(),
+    }
+}
+
+fn frame_place(story: u8, frame: u16) -> CheckPlace {
+    CheckPlace::Frame {
+        story: StoryNo::new(story).unwrap(),
+        frame,
+    }
+}
+
+/// Every form of place a check has: numbers, a Psalms superscription, a verse list and a
+/// span, a note on an introduction, and the frames of a story, its title included.
+fn check_places() -> Vec<CheckPlace> {
+    vec![
+        verse_place(BookId::Titus, "1", "4"),
+        verse_place(BookId::Psalms, "60", "front"),
+        verse_place(BookId::Psalms, "5", "1,3,8,12"),
+        verse_place(BookId::Psalms, "5", "2-3"),
+        verse_place(BookId::Titus, "1", "intro"),
+        verse_place(BookId::Titus, "front", "intro"),
+        frame_place(3, 4),
+        frame_place(3, 0),
+    ]
+}
+
+fn check_units() -> Vec<CheckUnit> {
+    vec![CheckUnit::Book(BookId::Psalms), CheckUnit::Stories]
+}
+
 fn ack() -> Ack {
     let verse = record(r#"{"book":"TIT","chapter":1,"kind":"verse","verse":4}"#);
     Ack {
@@ -110,7 +145,7 @@ fn ack() -> Ack {
         rows: vec![RailRowPatch {
             row: RailRow {
                 index: 7,
-                reference: "TIT 1:4".parse().unwrap(),
+                place: verse_place(BookId::Titus, "1", "4"),
                 title: "faith".into(),
                 flags: RowFlags {
                     dot: Dot::Valid,
@@ -233,7 +268,7 @@ impl Example for RecordPlace {
                 book: BookId::Titus,
                 mode: Some(PlaceMode::Check),
                 chapter: Some(1),
-                verse: PlaceChange::Set(PlaceVerse::parse("intro").unwrap()),
+                verse: PlaceChange::Set(RefPart::parse("intro").unwrap()),
                 tool: Some(Tool::TranslationNotes),
             },
         }
@@ -626,6 +661,14 @@ fn wire_samples<T: Serialize + DeserializeOwned + PartialEq + std::fmt::Debug>(
     samples: &[T],
 ) -> Value {
     common::assert_every_variant(samples);
+    plain_samples(samples)
+}
+
+/// The wire forms of `samples`, after checking that each reads back as the same value. For a
+/// type that is not a tagged enum, such as a structure or a value written as text.
+fn plain_samples<T: Serialize + DeserializeOwned + PartialEq + std::fmt::Debug>(
+    samples: &[T],
+) -> Value {
     Value::Array(
         samples
             .iter()
@@ -714,11 +757,17 @@ fn session_events() -> Vec<SessionEvent> {
                     chapter: 1,
                 }],
                 books: vec![],
-                stories: vec![],
-                checks: vec![CheckListRef {
-                    tool: Tool::TranslationNotes,
-                    book: BookId::Titus,
-                }],
+                stories: vec![StoryNo::new(12).unwrap()],
+                checks: vec![
+                    CheckListRef {
+                        tool: Tool::TranslationNotes,
+                        unit: CheckUnit::Book(BookId::Titus),
+                    },
+                    CheckListRef {
+                        tool: Tool::TranslationWords,
+                        unit: CheckUnit::Stories,
+                    },
+                ],
                 records: vec![RecordChange {
                     record: verse,
                     by: Some(PersonLabel {
@@ -791,6 +840,21 @@ fn shared_types_have_golden_json() {
             serde_json::to_value(frame).unwrap(),
         ),
         ("types/refusals.json", Value::Array(refusals)),
+        ("types/check-places.json", plain_samples(&check_places())),
+        ("types/check-units.json", wire_samples(&check_units())),
+        (
+            "types/check-lists.json",
+            plain_samples(
+                &[Tool::TranslationNotes, Tool::TranslationWords]
+                    .into_iter()
+                    .flat_map(|tool| {
+                        check_units()
+                            .into_iter()
+                            .map(move |unit| CheckListRef { tool, unit })
+                    })
+                    .collect::<Vec<_>>(),
+            ),
+        ),
     ];
     let problems: Vec<String> = files
         .iter()
@@ -823,6 +887,9 @@ fn no_golden_file_is_left_without_its_endpoint_or_type() {
         "session-events",
         "event-frame",
         "refusals",
+        "check-places",
+        "check-units",
+        "check-lists",
     ] {
         expected.insert(golden_dir().join(format!("types/{file}.json")));
     }
