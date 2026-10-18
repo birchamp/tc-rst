@@ -1999,7 +1999,12 @@ Count tests live in `crates/tc-app/tests/op_counts.rs` unless named otherwise.
   fail on any long task over 50 ms during a measured action (Long Tasks API).
 - **The aligner round trip** is measured first, in unit A2: a 20 KB JSON reply over loopback from
   a wasm `fetch`, p95 recorded in `docs/evidence/`, and once more through a proxy that adds a
-  header to each request: the cost if G0 finds that the shell's filter cannot leave `/api/` out. Because the product's numbers come from Windows with Defender
+  header to each request: the cost if G0 finds that the shell's filter cannot leave `/api/` out.
+  The proxy is Playwright's request interception, which pauses each request and lets a JS handler
+  in another process add the header, as Electron's `onBeforeSendHeaders` listener does. A2's
+  figures (`docs/evidence/loopback-2026-10-18.md`): plain p95 5.2 ms, through the proxy p95
+  8.6 ms, a 20 KB reply, 1,000 clicks each, release `tc4`, headless Chromium 141 on the 4-vCPU
+  build container (load about 3). *(A2)* Because the product's numbers come from Windows with Defender
   and Electronite's process model, the spike G0 measures the same round trip in Electronite on
   Windows, and the reference laptop's run is an owner action before B6 merges (Q-26). A miss in
   either raises Q-13. *(A-14)*

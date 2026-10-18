@@ -58,8 +58,25 @@ impl Tc4 {
         Self::spawn_args(&args)
     }
 
+    /// As `spawn`, for another build of the binary.
+    pub fn spawn_binary(binary: &Path, app_data: &Path, ui: &Path, extra: &[&str]) -> Tc4 {
+        let mut args = vec![
+            "serve".to_owned(),
+            "--app-data".to_owned(),
+            app_data.display().to_string(),
+            "--ui".to_owned(),
+            ui.display().to_string(),
+        ];
+        args.extend(extra.iter().map(|arg| (*arg).to_owned()));
+        Self::spawn_command(binary, &args)
+    }
+
     pub fn spawn_args(args: &[String]) -> Tc4 {
-        let mut child = Command::new(binary())
+        Self::spawn_command(Path::new(binary()), args)
+    }
+
+    fn spawn_command(binary: &Path, args: &[String]) -> Tc4 {
+        let mut child = Command::new(binary)
             .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
