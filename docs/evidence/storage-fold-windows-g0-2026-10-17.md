@@ -170,3 +170,6 @@ fold cache read `tc4-g0-corpus`, the first open without a cache read its copy
 | (b) Open with the fold cache, after a reboot | 4225 ms | 358 ms | 2406 ms | 266 MiB | 262 MiB | 95 MiB | 10 s for the first open after a restart |
 | (c) First open without a cache, after a reboot | 10038 ms | 897 ms | 22719 ms | 333 MiB | 368 MiB | - | 10 s |
 
+Row (c) is 38 ms (0.4%) over its 10 s budget, from a single run. Owner ruling (2026-10-18):
+this is within noise of the budget, so the budget counts as met. No rerun is planned.
+
