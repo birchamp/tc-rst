@@ -966,7 +966,15 @@ computer) makes every older token fail its MAC; that is how a draft becomes `Unv
   seed's report, never silent: `verseEdits` recomputed, a decision file's `summary` dropped, an
   empty `resources` or `languageSets` member added, a `schemaVersion: 1` `resources.json`
   migrated, a timestamp rewritten in tC4's own form, a decision with no `modifiedTimestamp`
-  written with the time its change carries. A mismatch fails the scenario load.
+  written with the time its change carries. A mismatch refuses that project: the scenario loads
+  the projects that pass, lists each refused one with every mismatch (the scenario report,
+  `tc4 serve`'s stderr, and a test that asserts the exact list), and shows nothing of it.
+  *(B1b: the first text failed the whole scenario load. Every scenario holds
+  `sample_burrito_obs`, which the check refuses with 53 mismatches the storage team owns, so no
+  scenario would load at all; loading the refused project instead would make a screen look right
+  for the wrong reason, against AD7. Until the storage team's fix lands, the Rust Home shows only
+  the Bible card in every scenario, and B2's Home captures, whose `home()` waits for both cards
+  (§7.1), wait for it.)*
   *(B1a: pending files are for Local devices only,
   and `encode_pending` refuses the seed's `Importer` device, so the seed seals packs as STORAGE
   §13.1 T8 does. tc-obs's `decode_story` records cannot give a story file back through the fold,
@@ -979,11 +987,25 @@ computer) makes every older token fail its MAC; that is how a draft becomes `Unv
   for the displayed value (the fold does not change), `NotWritten`, `WrittenNotDurable`, a delay,
   a switch to read-only, or a teammate's head added before the reply (a change encoded by
   tc-journal for another device and given to `FoldState::add`). Drafts and leaves are no-ops.
-- **Teammates.** The `shared` scenario adds two teammates' heads on Titus 1:1 the same way, so
-  the conflict chip and the sync toast read a real fold conflict.
-- **Resources.** It installs every `repos/_local_/_sideloaded_/*` burrito of the scenario into a
-  temporary `tc-resources` store, with the pins of the scenario's install records. It never seeds
-  `bundle/en/`, which would change what the screens show (`parity/tc4-baseline/README.md:224-246`).
+- **Teammates.** `memory::teammates::edit_verse` writes teammates' heads the same way (one
+  change per text, each by its own Local device, all on the record's current heads), and
+  `MemoryBackend::teammate_edits` folds them as an intake would, so the conflict chip and the
+  sync toast read a real fold conflict. B10's scripted sync and `test/writeTeammate` call them
+  when a screen's steps ask. *(B1b: the first text had the `shared` scenario load two teammates'
+  heads on Titus 1:1. tC4 shows `shared-home`, `sync-internet-consent`, `sync-failed` and
+  `sync-ok` without a conflict (`parity/tc4-baseline/README.md:407-410`); only after "Door43
+  main: two teammates change Titus 1:1" (`sync-ok-teammates`) does the card show "1 conflict ·
+  Review". Heads added at load would put a conflict chip on four screens tC4 shows without one.)*
+- **Door43 remote.** The `origin` of a project's `.remotes.json` (the mock server's remote list,
+  which the seed ignores) gives the project's Door43 owner and repository, for B2's "On Door43";
+  one that cannot be read refuses the scenario, so a shared project never looks local (B1b).
+- **Resources.** It installs every `repos/_local_/_sideloaded_/*` burrito of the scenario into the
+  app's own resource store (`<app-data>/resources`, which the harness's run folder makes
+  temporary), with the pins of the scenario's install records, before `App::start`; an install
+  already there is kept, so a restart installs nothing. It never seeds `bundle/en/`, which would
+  change what the screens show (`parity/tc4-baseline/README.md:224-246`). *(B1b: "a temporary
+  store" is the app's own: B3's `BookResources` reads the app's `ResourceStore`, and a second
+  store would need a second path.)*
 - **Scale.** It also folds tc-corpus Psalms and ten times Psalms for the operation-count tests.
 - **Home.** It writes no derived files, so its `peek` computes summaries and conflict counts from
   its fold. Home's screens are captured on it, but `home_costs_projects_not_history` runs only

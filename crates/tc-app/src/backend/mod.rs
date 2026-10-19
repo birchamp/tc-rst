@@ -31,6 +31,8 @@ use crate::jobs::ProgressSink;
 #[cfg(feature = "fixture-backend")]
 pub mod memory;
 #[cfg(feature = "fixture-backend")]
+pub mod scenario;
+#[cfg(feature = "fixture-backend")]
 pub mod seed;
 
 /// A future a backend hands back; the caller awaits it without blocking a thread.

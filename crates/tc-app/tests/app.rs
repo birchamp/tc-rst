@@ -30,8 +30,9 @@ mod app {
     mod projects_root;
     mod replies;
     mod reports;
+    mod scenario;
     mod seed;
     mod sessions;
-    mod state_seed;
+    pub mod state_seed;
     mod wire;
 }

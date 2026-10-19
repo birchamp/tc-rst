@@ -1,0 +1,88 @@
+{
+  "format": "scripture burrito",
+  "meta": {
+    "version": "1.0.0",
+    "category": "source",
+    "generator": {
+      "softwareName": "go-rc2sb",
+      "softwareVersion": "v0.5.0",
+      "userName": ""
+    },
+    "defaultLocale": "en",
+    "dateCreated": "2026-09-27T00:37:14.977Z",
+    "normalization": "NFC"
+  },
+  "idAuthorities": {
+    "dcs": {
+      "id": "https://git.door43.org",
+      "name": {
+        "en": "Door43 Content Service"
+      }
+    }
+  },
+  "identification": {
+    "primary": {
+      "dcs": {
+        "unfoldingWord/el-x-koine_ugnt": {
+          "revision": "fc95b2b8aad08bb65ab54628ab685413a1139e97",
+          "timestamp": "2026-09-27T00:37:14.977Z"
+        }
+      }
+    },
+    "name": {
+      "en": "unfoldingWord® Greek New Testament"
+    },
+    "description": {
+      "en": "unfoldingWord® Greek New Testament"
+    },
+    "abbreviation": {
+      "en": "UGNT"
+    }
+  },
+  "languages": [
+    {
+      "tag": "el-x-koine",
+      "name": {
+        "en": "Koine Greek"
+      },
+      "scriptDirection": "ltr"
+    }
+  ],
+  "type": {
+    "flavorType": {
+      "name": "scripture",
+      "flavor": {
+        "name": "textTranslation",
+        "usfmVersion": "3.0",
+        "translationType": "revision",
+        "audience": "common",
+        "projectType": "standard"
+      },
+      "currentScope": {
+        "TIT": []
+      }
+    }
+  },
+  "confidential": false,
+  "ingredients": {
+    "ingredients/TIT.usfm": {
+      "mimeType": "text/plain",
+      "checksum": {
+        "md5": "65133339aca588706545122b56eedde7"
+      },
+      "size": 52552,
+      "scope": {
+        "TIT": []
+      }
+    }
+  },
+  "copyright": {
+    "shortStatements": [
+      {
+        "statement": "© unfoldingWord 2026, CC BY-SA 4.0",
+        "mimetype": "text/plain",
+        "lang": "en"
+      }
+    ]
+  }
+}

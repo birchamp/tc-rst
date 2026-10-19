@@ -247,7 +247,8 @@ impl SessionRegistry {
         }
     }
 
-    pub(crate) fn store(&self) -> &Arc<dyn ProjectStore> {
+    /// The project store every session is opened from (Home lists its projects through it).
+    pub fn store(&self) -> &Arc<dyn ProjectStore> {
         &self.inner.store
     }
 
