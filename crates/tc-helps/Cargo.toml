@@ -11,6 +11,8 @@ tc-core = { path = "../tc-core" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+# A table of thousands of rows is turned into items on the worker pool.
+rayon.workspace = true
 unicode-general-category.workspace = true
 unicode-normalization.workspace = true
 yaml-rust2 = { version = "0.13", default-features = false }

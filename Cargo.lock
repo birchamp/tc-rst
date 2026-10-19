@@ -3409,6 +3409,7 @@ version = "0.1.0"
 dependencies = [
  "md-5",
  "proptest",
+ "rayon",
  "serde",
  "serde_json",
  "tc-core",

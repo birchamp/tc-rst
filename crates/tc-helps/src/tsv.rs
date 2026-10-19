@@ -440,6 +440,23 @@ fn plain(text: &str, table: TsvTable) -> Result<String, Error> {
     }
 }
 
+/// Tables of at least this many rows are turned into items on the worker pool: a book's
+/// notes are thousands of rows, each independent of the others.
+const PARALLEL_ROWS: usize = 512;
+
+/// `convert` of every row, in the order of the rows, and the first failure in that order.
+fn convert<T: Send>(
+    rows: &[Row<'_>],
+    convert: impl Fn(&Row<'_>) -> Result<T, Error> + Send + Sync,
+) -> Result<Vec<T>, Error> {
+    use rayon::prelude::*;
+    if rows.len() < PARALLEL_ROWS {
+        return rows.iter().map(convert).collect();
+    }
+    let converted: Vec<Result<T, Error>> = rows.par_iter().with_min_len(128).map(convert).collect();
+    converted.into_iter().collect()
+}
+
 /// Parses a translation notes table, current or legacy, chosen by its header.
 pub fn parse_notes(text: &str, scope: TsvScope) -> Result<ParsedNotes, Error> {
     let first = header_text(first_line(text));
@@ -456,10 +473,9 @@ pub fn parse_notes(text: &str, scope: TsvScope) -> Result<ParsedNotes, Error> {
             })
         }
         _ => {
-            let notes = rows(text, TsvTable::Notes, &NOTES)?
-                .iter()
-                .map(|row| note(row, scope))
-                .collect::<Result<_, _>>()?;
+            let notes = convert(&rows(text, TsvTable::Notes, &NOTES)?, |row| {
+                note(row, scope)
+            })?;
             Ok(ParsedNotes {
                 layout: NotesLayout::Seven,
                 notes,
@@ -520,29 +536,26 @@ fn legacy_note(row: &Row, book: BookId) -> Result<Note, Error> {
 /// Parses a translation words links table. `TWLink` may be an `rc://` link or an export
 /// path; both name the same article.
 pub fn parse_word_links(text: &str, scope: TsvScope) -> Result<Vec<WordLink>, Error> {
-    rows(text, TsvTable::WordLinks, &WORD_LINKS)?
-        .iter()
-        .map(|row| {
-            let article =
-                parse_word_link(row.cell(5)).map_err(|p| row.fail(5, CellProblem::Link(p)))?;
-            let mut link = WordLink {
-                reference: row.reference(0, scope)?,
-                id: row.id(1)?,
-                tags: tags(row.cell(2)),
-                orig_words: Quote::new(row.cell(3)),
-                occurrence: row.occurrence(4)?,
-                article,
-                read_from: None,
-            };
-            let style = if row.cell(5).starts_with("rc://") {
-                WordLinkStyle::Rc
-            } else {
-                WordLinkStyle::ExportPath
-            };
-            link.read_from = row.read_cells(word_link_row(&link, scope, style));
-            Ok(link)
-        })
-        .collect()
+    convert(&rows(text, TsvTable::WordLinks, &WORD_LINKS)?, |row| {
+        let article =
+            parse_word_link(row.cell(5)).map_err(|p| row.fail(5, CellProblem::Link(p)))?;
+        let mut link = WordLink {
+            reference: row.reference(0, scope)?,
+            id: row.id(1)?,
+            tags: tags(row.cell(2)),
+            orig_words: Quote::new(row.cell(3)),
+            occurrence: row.occurrence(4)?,
+            article,
+            read_from: None,
+        };
+        let style = if row.cell(5).starts_with("rc://") {
+            WordLinkStyle::Rc
+        } else {
+            WordLinkStyle::ExportPath
+        };
+        link.read_from = row.read_cells(word_link_row(&link, scope, style));
+        Ok(link)
+    })
 }
 
 /// Parses a translation questions table.
