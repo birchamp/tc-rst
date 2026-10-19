@@ -17,10 +17,11 @@ use tempfile::TempDir;
 /// only once `tc4` calls the seed (B1b): until then the linker drops the seed from a build
 /// with the feature as well, and `release_build_resolves_no_fixture_backend_and_no_test_hook`
 /// is what keeps the feature out.
-const HOOK_TEXT: [&str; 10] = [
+const HOOK_TEXT: [&str; 11] = [
     "test/crash",
     "test/fieldStore",
     "test/fieldLog",
+    "test/fieldDraft",
     "test/echo",
     "test/quiet",
     "test/hold",

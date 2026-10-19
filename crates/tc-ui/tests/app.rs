@@ -4,8 +4,14 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod app {
+    mod buffer;
     mod cache;
     mod client;
     mod effects;
+    mod recovery;
+    mod save;
+    pub mod save_kit;
+    mod save_props;
+    mod save_refresh;
     mod sse;
 }

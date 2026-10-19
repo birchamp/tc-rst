@@ -24,3 +24,32 @@ export function designUnits(doc) {
 export function repoUnits(repo) {
   return designUnits(fs.readFileSync(path.join(repo, 'docs', 'APP-DESIGN.md'), 'utf8'));
 }
+
+/** The groups of §7.4's table in `doc`: `[{ group, dom, pixels }]`, in the table's order, each
+ * unit one that §10 lists. */
+export function galleryGroups(doc) {
+  const lines = doc.split('\n');
+  const start = lines.findIndex((line) => line.startsWith('### 7.4 '));
+  if (start === -1) throw new Error('docs/APP-DESIGN.md has no "### 7.4"');
+  const units = designUnits(doc);
+  const groups = [];
+  for (const line of lines.slice(start + 1)) {
+    if (/^#{1,3} /.test(line)) break;
+    if (!line.startsWith('| `')) continue;
+    const cells = line.slice(1, -1).split('|').map((cell) => cell.trim());
+    if (cells.length !== 4) throw new Error(`§7.4 line ${JSON.stringify(line)} does not have four cells`);
+    const [name, , dom, pixels] = cells;
+    const group = name.match(/^`([^`]+)`$/)?.[1];
+    if (!group) throw new Error(`§7.4 line ${JSON.stringify(line)}: the group is not in backticks`);
+    for (const unit of [dom, pixels]) {
+      if (!units.has(unit)) throw new Error(`§7.4 group ${group} names ${unit}, which is no unit of §10`);
+    }
+    groups.push({ group, dom, pixels });
+  }
+  return groups;
+}
+
+/** The gallery groups of the repository's design. */
+export function repoGalleryGroups(repo) {
+  return galleryGroups(fs.readFileSync(path.join(repo, 'docs', 'APP-DESIGN.md'), 'utf8'));
+}

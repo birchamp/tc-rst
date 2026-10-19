@@ -1,0 +1,5 @@
+# A link to the tC4 clone's node_modules (build.mjs): no slash, since node_modules/ does not match a link.
+node_modules
+# The built gallery and Vite's cache, rebuilt by every capture.
+dist/
+.cache/

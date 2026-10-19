@@ -1,0 +1,10 @@
+{
+  "case": "check-error",
+  "calls": [
+    {
+      "at": "mount",
+      "name": "runPreflight",
+      "args": []
+    }
+  ]
+}

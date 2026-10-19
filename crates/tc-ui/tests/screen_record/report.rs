@@ -190,7 +190,7 @@ pub fn to_json(report: &Report) -> String {
     text
 }
 
-const ABOUT: &str = "What the four layers of APP-DESIGN §7.3 find for every baseline screen (manifest order) and gallery case: pixels, the DOM, what the DOM shows (meaning) and behaviour, between tC4's record (parity/tc4-baseline) and the Rust app's captures (captures.json). crates/tc-ui/tests/screen_record.rs computes it from the committed files and fails when this file differs; UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record rewrites it. Status: same, declared (every difference inside a mask of masks.json), differs (explained in residuals.json), unported (`missing` names the unit that captures each layer), failed (nothing excuses it).";
+const ABOUT: &str = "What the four layers of APP-DESIGN §7.3 find for every baseline screen (manifest order) and then every case of the tC4 view-state gallery (cases.json order, APP-DESIGN §7.4): pixels, the DOM, what the DOM shows (meaning) and behaviour, between tC4's record (parity/tc4-baseline for a screen, parity/view-gallery for a case) and the Rust app's captures (captures.json). A case has no meaning layer. crates/tc-ui/tests/screen_record.rs computes it from the committed files and fails when this file differs; UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record rewrites it. Status: same, declared (every difference inside a mask of masks.json), differs (explained in residuals.json), unported (`missing` names the unit that captures each layer), failed (nothing excuses it).";
 
 /// tC4's side of a row.
 struct Reference<'a> {
@@ -200,6 +200,11 @@ struct Reference<'a> {
     dom_sha256: Option<&'a str>,
     cards: Option<&'a BTreeMap<String, String>>,
     toast: Option<&'a SyncToast>,
+    /// The machine that captured tC4's side: the baseline's for a screen, the gallery's for a
+    /// case.
+    machine: Option<&'a Machine>,
+    /// The subtree a DOM-first capture compares: `scopes.json`'s for a screen, the case's own.
+    scope: Option<&'a Scope>,
 }
 
 fn dom_failure(error: &DomError) -> FailureKind {
@@ -232,7 +237,7 @@ fn compare(
     let rename = record.rename(&capture.scenario);
     let masks: Vec<_> = record.masks_of(&name).collect();
     if capture.claims(Layer::Pixels) {
-        let tc4_machine = record.manifest.machine.as_ref();
+        let tc4_machine = reference.machine;
         let rust_machine = record.captures.machine.as_ref();
         match (tc4_machine, rust_machine) {
             (Some(a), Some(b)) if a.comparable(b) => {}
@@ -293,7 +298,7 @@ fn compare(
     let scope = if capture.claims(Layer::Pixels) {
         None
     } else {
-        record.scopes.scopes.get(&name)
+        reference.scope
     };
     let dom_masks: Vec<DomMask> = masks
         .iter()
@@ -452,6 +457,12 @@ fn row_for(
                 .layers
                 .is_empty()
                 .then(|| "the capture claims no layer".to_owned())
+        })
+        .or_else(|| {
+            (capture.kind == RowKind::Case && capture.claims(Layer::Meaning)).then(|| {
+                "a gallery case has no meaning layer: capture it with --layers pixels,dom"
+                    .to_owned()
+            })
         });
     if let Some(error) = error {
         row.status = Status::Failed;
@@ -494,6 +505,8 @@ pub fn build(record: &Record, design: &Design, diffs_out: Option<&Path>) -> Resu
             dom_sha256: Some(&screen.dom_sha256),
             cards: Some(&screen.home_cards),
             toast: screen.sync_toast.as_ref(),
+            machine: record.manifest.machine.as_ref(),
+            scope: record.scopes.scopes.get(&screen.name),
         };
         let capture = record
             .captures
@@ -511,31 +524,32 @@ pub fn build(record: &Record, design: &Design, diffs_out: Option<&Path>) -> Resu
         )?);
     }
     for case in &record.cases.cases {
-        let units: BTreeMap<Layer, UnitId> = [
-            (Layer::Pixels, case.until.clone()),
-            (Layer::Dom, case.until.clone()),
-        ]
-        .into();
-        let base = blank(&case.name, RowKind::Case, "", "en");
-        let parity = record.paths.parity();
+        let base = blank(&case.name, RowKind::Case, &case.scenario, &case.locale);
+        let gallery = &record.paths.gallery;
         let reference = Reference {
-            png: parity.join(&case.png),
-            png_sha256: None,
-            dom: parity.join(&case.dom),
-            dom_sha256: None,
+            png: gallery.join(&case.png),
+            png_sha256: Some(&case.sha256),
+            dom: gallery.join(&case.dom),
+            dom_sha256: Some(&case.dom_sha256),
             cards: None,
             toast: None,
+            machine: record.cases.machine.as_ref(),
+            scope: case.scope.as_ref(),
         };
         let capture = record
             .captures
             .screens
             .iter()
             .find(|c| c.kind == RowKind::Case && c.name == case.name);
-        let mut row = row_for(record, base, &units, capture, None, &reference, diffs_out)?;
-        if let Some(capture) = capture {
-            row.scenario = capture.scenario.clone();
-        }
-        rows.push(row);
+        rows.push(row_for(
+            record,
+            base,
+            &case.units(),
+            capture,
+            None,
+            &reference,
+            diffs_out,
+        )?);
     }
     if let Some(dir) = diffs_out {
         let wanted: Vec<String> = rows

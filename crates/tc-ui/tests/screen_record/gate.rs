@@ -58,6 +58,13 @@ pub enum Rule {
     ScopeNotDomFirst,
     /// A Rust recording without tC4's, or of no baseline screen.
     BehaviourUnpaired,
+    /// A gallery case whose group §7.4 does not list, or whose units are not its group's.
+    CaseGroup,
+    /// A DOM-first gallery case without the scope its DOM is compared in, or a scope on a case
+    /// whose DOM and pixels one unit captures.
+    CaseScope,
+    /// Two rows of one name: a case named like a baseline screen or like another case.
+    DuplicateRow,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -183,13 +190,12 @@ pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) ->
             .as_ref()
             .map(|u| (format!("the residual {}", g.id), u))
     }));
-    named.extend(
-        record
-            .cases
-            .cases
-            .iter()
-            .map(|c| (format!("the case {}", c.name), &c.until)),
-    );
+    named.extend(record.cases.cases.iter().flat_map(|c| {
+        [
+            (format!("the case {}", c.name), &c.dom_unit),
+            (format!("the case {}", c.name), &c.pixels_unit),
+        ]
+    }));
     for (what, unit) in named {
         if !design.units.contains(unit) {
             out.add(
@@ -235,6 +241,20 @@ pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) ->
                 "captures.json holds a capture of no baseline screen or gallery case",
             );
         }
+        if let Some(case) = record
+            .case(&capture.name)
+            .filter(|_| capture.kind == RowKind::Case)
+            && (case.scenario != capture.scenario || case.locale != capture.locale)
+        {
+            out.add(
+                Some(&capture.name),
+                Rule::PlanDisagreesWithBaseline,
+                format!(
+                    "captured in {} ({}); the gallery case is {} ({})",
+                    capture.scenario, capture.locale, case.scenario, case.locale
+                ),
+            );
+        }
         if let Some(screen) = manifest
             .screens
             .iter()
@@ -252,6 +272,63 @@ pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) ->
                     screen.locale()
                 ),
             );
+        }
+    }
+
+    // 3b. Each gallery case belongs to a group of §7.4, takes its units, has the scope a
+    // DOM-first group needs, and has a name of its own.
+    let mut case_names = BTreeSet::new();
+    for case in &record.cases.cases {
+        let name = Some(case.name.as_str());
+        if manifest.screens.iter().any(|s| s.name == case.name) {
+            out.add(
+                name,
+                Rule::DuplicateRow,
+                "a gallery case named like a baseline screen: the two would share parity/app/screens/<name>.png; rename the case in parity/view-gallery/cases.mjs",
+            );
+        }
+        if !case_names.insert(case.name.as_str()) {
+            out.add(
+                name,
+                Rule::DuplicateRow,
+                "two gallery cases share this name",
+            );
+        }
+        match design.group(&case.group) {
+            None => out.add(
+                name,
+                Rule::CaseGroup,
+                format!(
+                    "the case's group {} is not in §7.4 of docs/APP-DESIGN.md",
+                    case.group
+                ),
+            ),
+            Some(group) if group.dom != case.dom_unit || group.pixels != case.pixels_unit => out
+                .add(
+                    name,
+                    Rule::CaseGroup,
+                    format!(
+                        "cases.json gives the DOM to {} and the pixels to {}; §7.4 gives group {} to {} and {}: capture the gallery again",
+                        case.dom_unit, case.pixels_unit, group.name, group.dom, group.pixels
+                    ),
+                ),
+            Some(_) => {}
+        }
+        match (case.dom_first(), &case.scope) {
+            (true, None) => out.add(
+                name,
+                Rule::CaseScope,
+                format!(
+                    "a DOM-first case ({} before {}) names no scope: give it the dialog its DOM is compared in",
+                    case.dom_unit, case.pixels_unit
+                ),
+            ),
+            (false, Some(_)) => out.add(
+                name,
+                Rule::CaseScope,
+                "a scope on a case whose DOM and pixels one unit captures: remove it",
+            ),
+            _ => {}
         }
     }
 
@@ -327,6 +404,15 @@ pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) ->
             }
         }
     }
+    for case in &record.cases.cases {
+        for (file, want) in case.files() {
+            match file_sha256(&paths.gallery.join(file)) {
+                Ok(have) if have == want => {}
+                Ok(have) => out.add(Some(&case.name), Rule::HashMismatch, format!("parity/view-gallery/{file} has sha256 {have}, cases.json says {want}: capture the gallery again")),
+                Err(e) => out.add(Some(&case.name), Rule::HashMismatch, e),
+            }
+        }
+    }
     for capture in &record.captures.screens {
         for (file, want) in [
             (&capture.png, &capture.sha256),
@@ -377,6 +463,25 @@ pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) ->
             Err(e) => out.add(None, Rule::StrayFile, e),
         }
     }
+    let gallery_owned: BTreeSet<&str> = record
+        .cases
+        .cases
+        .iter()
+        .flat_map(|c| c.files().map(|(file, _)| file))
+        .collect();
+    for dir in ["screens", "dom", "actions"] {
+        match sorted_files(&paths.gallery.join(dir)) {
+            Ok(files) => {
+                for file in files {
+                    let rel = format!("{dir}/{file}");
+                    if !gallery_owned.contains(rel.as_str()) {
+                        out.add(None, Rule::StrayFile, format!("parity/view-gallery/{rel} belongs to no gallery case: capture the gallery again, which removes it"));
+                    }
+                }
+            }
+            Err(e) => out.add(None, Rule::StrayFile, e),
+        }
+    }
     match sorted_files(&paths.tc4_behaviour) {
         Ok(files) => {
             for file in files.iter().filter(|f| !f.ends_with(".json")) {
@@ -395,8 +500,8 @@ pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) ->
         };
         let tc4_png = match manifest.screens.iter().find(|s| s.name == *name) {
             Some(_) => paths.baseline.join("screens").join(format!("{name}.png")),
-            None => match record.cases.cases.iter().find(|c| c.name == *name) {
-                Some(case) => paths.parity().join(&case.png),
+            None => match record.case(name) {
+                Some(case) => paths.gallery.join(&case.png),
                 None => continue,
             },
         };
@@ -419,12 +524,16 @@ pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) ->
 
     // 9-11. What the landed units owe.
     for row in &now.rows {
+        let which = match row.kind {
+            RowKind::Screen => "--only",
+            RowKind::Case => "--case",
+        };
         for (layer, unit) in &row.missing {
             if landed.contains(unit) {
                 out.add(
                     Some(&row.name),
                     Rule::LayerOverdue,
-                    format!("{unit} has landed but the {layer:?} layer is not captured: `node parity/app/capture-rust.mjs --unit {unit} --only {}`, then {UPDATE}", row.name),
+                    format!("{unit} has landed but the {layer:?} layer is not captured: `node parity/app/capture-rust.mjs --unit {unit} {which} {}`, then {UPDATE}", row.name),
                 );
             }
         }
@@ -495,25 +604,31 @@ pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) ->
             );
         }
         for (screen_name, rect) in &mask.rects {
-            let Some(screen) = manifest.screens.iter().find(|s| &s.name == screen_name) else {
-                if !record.cases.cases.iter().any(|c| &c.name == screen_name) {
-                    out.add(
-                        None,
-                        Rule::MaskRect,
-                        format!(
-                            "mask {} names {screen_name}, which is no baseline screen or case",
-                            mask.id
-                        ),
-                    );
+            let view = if let Some(screen) =
+                manifest.screens.iter().find(|s| &s.name == screen_name)
+            {
+                if mask.ruling.starts_with('Q')
+                    && screen.rebuild_differs.as_ref().map(|r| &r.ruling) != Some(&mask.ruling)
+                {
+                    out.add(Some(screen_name), Rule::MaskRuling, format!("mask {} cites {} on a screen the baseline does not mark as differing under it", mask.id, mask.ruling));
                 }
+                screen.viewport.unwrap_or(manifest.viewport)
+            } else if let Some(case) = record.case(screen_name) {
+                if mask.ruling.starts_with('Q') {
+                    out.add(Some(screen_name), Rule::MaskRuling, format!("mask {} cites {} on a gallery case; an owner ruling's mask covers baseline screens only", mask.id, mask.ruling));
+                }
+                case.viewport.unwrap_or(manifest.viewport)
+            } else {
+                out.add(
+                    None,
+                    Rule::MaskRect,
+                    format!(
+                        "mask {} names {screen_name}, which is no baseline screen or case",
+                        mask.id
+                    ),
+                );
                 continue;
             };
-            if mask.ruling.starts_with('Q')
-                && screen.rebuild_differs.as_ref().map(|r| &r.ruling) != Some(&mask.ruling)
-            {
-                out.add(Some(screen_name), Rule::MaskRuling, format!("mask {} cites {} on a screen the baseline does not mark as differing under it", mask.id, mask.ruling));
-            }
-            let view = screen.viewport.unwrap_or(manifest.viewport);
             if rect.width == 0
                 || rect.height == 0
                 || rect.x + rect.width > view.width
