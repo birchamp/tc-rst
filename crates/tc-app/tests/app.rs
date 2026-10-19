@@ -46,6 +46,7 @@ mod app {
     pub mod state_seed;
     mod store;
     mod store_scenario;
+    mod translate;
     mod understand;
     mod wire;
 }

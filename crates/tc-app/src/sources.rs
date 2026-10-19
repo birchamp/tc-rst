@@ -97,7 +97,7 @@ pub fn verse_range(text: &str) -> Option<(u16, u16)> {
 
 /// tC4's `isParaMark`, by marker name: `\p`, `\m`, `\pi`, `\pm`, `\pmo`, `\nb`, `\b`, `\q`,
 /// `\li`, `\lh`, `\lf`, `\lim`, with a level digit where tC4 allows one.
-fn is_para_mark(name: &str) -> bool {
+pub(crate) fn is_para_mark(name: &str) -> bool {
     let with_level = |base: &str| {
         name.strip_prefix(base).is_some_and(|rest| {
             rest.is_empty() || (rest.len() == 1 && rest.as_bytes()[0].is_ascii_digit())
@@ -111,7 +111,7 @@ fn is_para_mark(name: &str) -> bool {
 }
 
 /// tC4's `levelOfTag`: `\q2` is 2, `\q` 1, any other marker 0.
-fn level(name: &str) -> u8 {
+pub(crate) fn level(name: &str) -> u8 {
     match name.strip_prefix('q') {
         Some("") => 1,
         Some(digits) => digits.parse().unwrap_or(0),

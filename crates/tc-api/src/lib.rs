@@ -122,6 +122,7 @@ macro_rules! endpoint_table {
 
             query "editor/book": $crate::editor::Book => $crate::editor::BookView;
             query "editor/sources": $crate::editor::Sources => $crate::editor::SourcesView;
+            query "editor/chapters": $crate::editor::Chapters => $crate::editor::ChaptersView;
 
             query "helps/passage": $crate::helps::Passage => $crate::helps::PassageView;
             query "helps/article": $crate::helps::Article => $crate::helps::ArticleView;

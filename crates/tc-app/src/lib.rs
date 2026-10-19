@@ -37,6 +37,7 @@ pub mod session;
 pub mod share;
 pub mod sources;
 mod startup;
+mod translate;
 mod understand;
 pub mod wire;
 

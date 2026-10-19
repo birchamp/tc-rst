@@ -55,6 +55,8 @@ enum LoadedText {
 
 struct LoadedPane {
     id: String,
+    /// The pinned version (`v91`), when the pin names one.
+    version: Option<String>,
     text: LoadedText,
 }
 
@@ -67,6 +69,9 @@ pub(crate) struct LoadedBook {
     pins: Option<ProjectPins>,
     resources: BookResources,
     panes: Vec<LoadedPane>,
+    /// The original-language text of the book's testament (Translate's chip); none when the
+    /// project pins none.
+    original: Option<LoadedPane>,
     simplified: Slot<PaneBook>,
     simplified_pin: Option<String>,
     /// How the project numbers the book's verses against its sources.
@@ -283,11 +288,24 @@ fn load(
         .iter()
         .map(|pane| LoadedPane {
             id: pane.id.as_str().to_owned(),
+            version: pane.pin.version.as_ref().map(|v| v.as_str().to_owned()),
             text: resources
                 .text(&TextRole::Pane(pane.id.clone()))
                 .map_or(LoadedText::Missing, text_state),
         })
         .collect();
+    let original = resources
+        .text(&TextRole::OriginalLanguage)
+        .map(|status| LoadedPane {
+            id: "orig".to_owned(),
+            version: match status {
+                TextStatus::Loaded { pin, .. } => {
+                    pin.version.as_ref().map(|v| v.as_str().to_owned())
+                }
+                TextStatus::Missing(_) => None,
+            },
+            text: text_state(status),
+        });
     let simplified_pin = read_pins
         .set(Rung::Primary)
         .and_then(|set| set.pin(tc_resources::SetSlot::SimplifiedText))
@@ -312,6 +330,7 @@ fn load(
         pins,
         resources,
         panes,
+        original,
         simplified,
         simplified_pin,
         numbering: Numbering::of(register),
@@ -514,31 +533,46 @@ impl Handle<Sources> for App {
         let session = self.read(&req.at)?;
         let loaded = self.loaded_book(&session, req.book).await?;
         let frame = loaded.frame(&session.read(), req.chapter);
+        let pane_view = |pane: &LoadedPane, dir: Direction| SourcePane {
+            id: pane.id.clone(),
+            version: pane.version.clone(),
+            dir,
+            text: match &pane.text {
+                LoadedText::Ready(book) => PaneText::Ready(match &frame {
+                    SourceFrame::Same => book
+                        .chapters
+                        .get(&req.chapter)
+                        .map(ChapterModel::view)
+                        .unwrap_or_default(),
+                    SourceFrame::Mapped { rows } => mapped_chapter(book, rows),
+                    SourceFrame::Unknown => PaneChapter::default(),
+                }),
+                LoadedText::NotInstalled => PaneText::NotInstalled,
+                LoadedText::Missing => PaneText::Missing,
+                LoadedText::Error(reason) => PaneText::Error {
+                    reason: reason.clone(),
+                },
+            },
+        };
         let panes = loaded
             .panes
             .iter()
-            .map(|pane| SourcePane {
-                id: pane.id.clone(),
-                dir: Direction::Ltr,
-                text: match &pane.text {
-                    LoadedText::Ready(book) => PaneText::Ready(match &frame {
-                        SourceFrame::Same => book
-                            .chapters
-                            .get(&req.chapter)
-                            .map(ChapterModel::view)
-                            .unwrap_or_default(),
-                        SourceFrame::Mapped { rows } => mapped_chapter(book, rows),
-                        SourceFrame::Unknown => PaneChapter::default(),
-                    }),
-                    LoadedText::NotInstalled => PaneText::NotInstalled,
-                    LoadedText::Missing => PaneText::Missing,
-                    LoadedText::Error(reason) => PaneText::Error {
-                        reason: reason.clone(),
-                    },
-                },
-            })
+            .map(|pane| pane_view(pane, Direction::Ltr))
             .collect();
-        Ok(SourcesView { panes, frame })
+        // The Hebrew Bible reads right to left (tC4's `SourceCell`).
+        let original_dir = match req.book.testament() {
+            tc_core::Testament::Old => Direction::Rtl,
+            tc_core::Testament::New => Direction::Ltr,
+        };
+        let original = loaded
+            .original
+            .as_ref()
+            .map(|pane| pane_view(pane, original_dir));
+        Ok(SourcesView {
+            panes,
+            original,
+            frame,
+        })
     }
 }
 

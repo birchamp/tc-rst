@@ -72,7 +72,7 @@ pub fn usfm_draft(usfm: &str) -> Result<BookDraft, DecomposeError> {
     decompose(usfm).map(|parts| book_draft(&parts))
 }
 
-fn words_drafted(words: &str) -> bool {
+pub(crate) fn words_drafted(words: &str) -> bool {
     let words = js::trim(words);
     !words.is_empty() && words != "___"
 }
