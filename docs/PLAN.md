@@ -63,6 +63,14 @@ The project owner ruled on these points on 2026-10-16 (`docs/TC4-DELTA-2026-10-1
 - One damaged incoming file is salvaged. It does not stop the whole sync or open (Q4).
 - Every other question in that §5 follows its recommendation.
 
+These differences follow the owner's rule in AGENTS.md ("Matching tC4", 2026-10-17), and the
+owner is told of each:
+
+- Urdu in Devanagari script (`ur-deva`) reads left to right and is named उर्दू (#701). tC4 4.0's
+  registry says right to left and names it اردو in Arabic script, so its helps would read
+  backwards. The Source texts screen draws that row in Devanagari; B9a masks it and cites this
+  entry.
+
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9
 give the same outcomes, and STORAGE §9.9 keeps saves flowing while a sync runs. tC4 can
