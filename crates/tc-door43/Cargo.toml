@@ -26,8 +26,8 @@ url.workspace = true
 zip.workspace = true
 
 [dev-dependencies]
-# The version STORAGE.md §9 names for the sync's push; the fake is plain HTTP, so no TLS.
-git2 = { version = "=0.21.0", default-features = false, features = ["vendored-libgit2"] }
+# The libgit2 that STORAGE.md §9 names for the sync's push.
+git2.workspace = true
 proptest.workspace = true
 tc-door43-fake = { path = "../tc-door43-fake" }
 tempfile.workspace = true
