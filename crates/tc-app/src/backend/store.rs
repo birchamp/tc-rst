@@ -358,9 +358,11 @@ fn sync_remote(bytes: &[u8]) -> Option<super::Door43Remote> {
 
 impl ProjectStore for StoreBackend {
     fn peek(&self, folder: &ProjectRef) -> Result<super::ProjectPeek, StoreError> {
-        let path = self
-            .listed(folder)
-            .map_err(|_| store_error("not a project"))?;
+        let path = self.listed(folder).map_err(|failure| match failure {
+            OpenFailure::NotAProject => StoreError::NotAProject,
+            OpenFailure::Unreadable { reason } => StoreError::Other(reason),
+            other => store_error(format!("{other:?}")),
+        })?;
         let metadata = self
             .vfs
             .read(&path.join(tc_store::layout::METADATA))
@@ -374,7 +376,7 @@ impl ProjectStore for StoreBackend {
         Ok(super::ProjectPeek {
             metadata,
             remote,
-            stamp: self.summary_stamp(folder)?,
+            stamp: self.summary_stamp(folder).ok(),
         })
     }
 

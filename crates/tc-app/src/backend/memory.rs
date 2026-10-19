@@ -353,9 +353,10 @@ impl MemoryBackend {
         &self,
         folder: &ProjectRef,
     ) -> Result<(Arc<ProjectState>, Snapshot, u64), StoreError> {
-        let state = self
-            .state(folder)
-            .map_err(|e| StoreError::Other(e.to_string()))?;
+        let state = self.state(folder).map_err(|e| match e {
+            MemoryError::UnknownFolder(_) => StoreError::NotAProject,
+            e => StoreError::Other(e.to_string()),
+        })?;
         let (snapshot, version) = {
             let live = lock(&state.live);
             let snapshot = Snapshot::new(SignedFold {
@@ -419,7 +420,10 @@ impl ProjectStore for MemoryBackend {
             metadata: Ok(metadata_document(snapshot.fold())),
             remote: state.seeded.remote.clone(),
             // The fold's version, in the store's form: no pending save, no manifest.
-            stamp: SummaryStamp::of(&[format!("tc4-memory-summary-{version}")], None),
+            stamp: Some(SummaryStamp::of(
+                &[format!("tc4-memory-summary-{version}")],
+                None,
+            )),
         })
     }
 

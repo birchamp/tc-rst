@@ -171,6 +171,7 @@ fn other_keys() -> Vec<(&'static str, BTreeSet<String>)> {
         UnusableReason::Link,
         UnusableReason::NameNotAllowed,
         UnusableReason::NameNotText,
+        UnusableReason::FolderUnreadable { reason: reason() },
     ] {
         let vars = unusable.vars().into_iter().map(|(name, _)| name.to_owned());
         keys.push((unusable.key(), vars.collect()));

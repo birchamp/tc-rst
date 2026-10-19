@@ -6,6 +6,7 @@
   "exchange.error.verifyFailed",
   "feedback.attachmentFailed",
   "home.unusable.badge",
+  "home.unusable.folderUnreadable",
   "home.unusable.link",
   "home.unusable.nameNotAllowed",
   "home.unusable.nameNotText",

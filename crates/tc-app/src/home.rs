@@ -20,7 +20,7 @@ use tc_api::event::Event;
 use tc_api::home::{
     BookTileView, Card, Door43Card, HomeCard, HomeView, LanguageSuggestion, Languages,
     LanguagesView, LastEditView, List, ProjectKind, RepoPlace, ResumePlace, StoriesView,
-    StoryTileView, UnusableCard, Versifications, VersificationsView,
+    StoryTileView, UnusableCard, UnusableReason, Versifications, VersificationsView,
 };
 use tc_api::ids::{ProjectRef, StoryNo, WallMs};
 use tc_api::jobs::{JobKind, JobOutcome, Phase};
@@ -31,7 +31,7 @@ use tc_door43::ServerUrl;
 
 use crate::app::{App, lock};
 use crate::backend::{
-    ProjectEntry, ProjectPeek, ProjectStore, SummaryFiles, SummaryStamp, SummaryWatch,
+    ProjectEntry, ProjectPeek, ProjectStore, StoreError, SummaryFiles, SummaryStamp, SummaryWatch,
 };
 use crate::counters::AppCounters;
 use crate::dispatch::Handle;
@@ -690,22 +690,25 @@ impl App {
     fn home_card(&self, entry: &ProjectEntry, peek: &ProjectPeek) -> (HomeCard, i64) {
         let kind = api_kind(entry.kind);
         let facts = card_facts(&peek.metadata, &entry.folder, kind);
-        let summary = match self.inner.home.get(&entry.folder, peek.stamp) {
-            Lookup::Ready(summary) => Some(summary),
-            Lookup::Failed => None,
-            Lookup::Missing => {
-                let kept = self.kept_summary(&entry.folder, peek.stamp);
-                if kept.is_none() {
-                    self.inner.home.ensure(
-                        &self.job_deps(),
-                        entry,
-                        facts.books.clone().unwrap_or_default(),
-                        peek.stamp,
-                    );
-                }
-                kept
-            }
-        };
+        // With no stamp no summary can be said to be the folder's, and none could be kept.
+        let summary =
+            peek.stamp
+                .and_then(|stamp| match self.inner.home.get(&entry.folder, stamp) {
+                    Lookup::Ready(summary) => Some(summary),
+                    Lookup::Failed => None,
+                    Lookup::Missing => {
+                        let kept = self.kept_summary(&entry.folder, stamp);
+                        if kept.is_none() {
+                            self.inner.home.ensure(
+                                &self.job_deps(),
+                                entry,
+                                facts.books.clone().unwrap_or_default(),
+                                stamp,
+                            );
+                        }
+                        kept
+                    }
+                });
         let card = card(
             entry,
             &facts,
@@ -744,7 +747,7 @@ impl Handle<List> for App {
                     .iter()
                     .map(|entry| (entry.clone(), store.peek(&entry.folder)))
                     .collect();
-                Ok::<_, crate::backend::StoreError>((peeks, listing.unusable))
+                Ok::<_, StoreError>((peeks, listing.unusable))
             })
             .await?;
         let (peeks, unusable) = read.map_err(|e| {
@@ -755,24 +758,35 @@ impl Handle<List> for App {
         })?;
         let entries: Vec<ProjectEntry> = peeks.iter().map(|(entry, _)| entry.clone()).collect();
         self.inner.home.remember_listing(&entries);
-        let mut cards: Vec<(HomeCard, i64)> = peeks
-            .iter()
-            // A folder that went away between the listing and its peek is not shown.
-            .filter_map(|(entry, peek)| Some(self.home_card(entry, peek.as_ref().ok()?)))
+        let mut unusable: Vec<UnusableCard> = unusable
+            .into_iter()
+            .map(|folder| UnusableCard {
+                name: folder.name,
+                reason: folder.reason.to_api(),
+            })
             .collect();
+        let mut cards: Vec<(HomeCard, i64)> = Vec::new();
+        for (entry, peek) in &peeks {
+            match peek {
+                Ok(peek) => cards.push(self.home_card(entry, peek)),
+                // The folder went away between the listing and its peek.
+                Err(StoreError::NotAProject) => {}
+                Err(StoreError::Other(reason)) => unusable.push(UnusableCard {
+                    name: entry.folder.to_string(),
+                    reason: UnusableReason::FolderUnreadable {
+                        reason: reason.clone(),
+                    },
+                }),
+            }
+        }
+        unusable.sort_by(|a, b| a.name.cmp(&b.name));
         let prefs = &self.inner.prefs;
         order(&mut cards, |folder| prefs.last_used(folder));
         let cards: Vec<HomeCard> = cards.into_iter().map(|(card, _)| card).collect();
         Ok(HomeView {
             resume: resume(prefs.last_edit(), &cards),
             cards,
-            unusable: unusable
-                .into_iter()
-                .map(|folder| UnusableCard {
-                    name: folder.name,
-                    reason: folder.reason.to_api(),
-                })
-                .collect(),
+            unusable,
         })
     }
 }

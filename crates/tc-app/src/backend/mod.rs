@@ -659,7 +659,9 @@ pub struct ProjectPeek {
     /// (`crate::home::card_facts`).
     pub metadata: Result<serde_json::Value, String>,
     pub remote: Option<Door43Remote>,
-    pub stamp: SummaryStamp,
+    /// `None` when the saves could not be looked at (another program holds `.tc/pending` or
+    /// `.tc/materialized.json`): no summary is then the card's, and its counts show "—".
+    pub stamp: Option<SummaryStamp>,
 }
 
 /// The derived files a summary is made of, read without a lock and without a fold.
@@ -718,6 +720,10 @@ pub enum OpenFailure {
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum StoreError {
+    /// The folder is no project of the projects folder (any more): it went away, or lost its
+    /// `project.json`, since it was listed.
+    #[error("not a project")]
+    NotAProject,
     #[error("{0}")]
     Other(String),
 }
@@ -737,7 +743,8 @@ pub trait ProjectStore: Send + Sync + 'static {
     fn list(&self) -> Result<Listing, StoreError>;
 
     /// What `folder`'s Home card shows besides its summary: `metadata.json`, the Door43 remote
-    /// and the summary's stamp. No lock, no fold. Blocking.
+    /// and the summary's stamp. No lock, no fold. Blocking. `NotAProject` when the folder went
+    /// away since it was listed.
     fn peek(&self, folder: &ProjectRef) -> Result<ProjectPeek, StoreError>;
 
     /// What a summary of `folder` is made of: the derived files (tc-store), or the same files

@@ -1323,7 +1323,12 @@ B1b).
   and drafts are still there, or a translationCore 4.0 project copied in, which Import brings
   in, F1); a name tc-api cannot carry; and a link to such a folder elsewhere, which tc-store
   never reads as project data (its checks of the lock, the drive and the cloud client would be
-  about the link), so the reason asks the person to move the folder in. A file, an empty folder
+  about the link), so the reason asks the person to move the folder in. A project whose card
+  cannot be read (`peek` fails other than `NotAProject`) is listed the same way, with the reason
+  (`FolderUnreadable`); only a folder that went away since the listing is left off. A card
+  whose saves cannot be looked at (another program holds `.tc/pending` or
+  `.tc/materialized.json`) is shown with no stamp, so no summary is its and its counts are "—"
+  *(B2 fix)*. A file, an empty folder
   and a folder with none of those files hold no one's work and are not listed; tc-store's
   staging folders are left out. Declared differences from tC4, which lists every local
   repository whose `metadata.json` has a project flavor and nothing else

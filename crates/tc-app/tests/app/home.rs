@@ -7,7 +7,7 @@ use std::time::Duration;
 use tc_api::event::Event;
 use tc_api::home::{
     BookTileView, Card, Door43Card, HomeCard, HomeView, Languages, List, ProjectKind, RepoPlace,
-    ResumePlace, UnusableReason, Versifications,
+    ResumePlace, UnusableCard, UnusableReason, Versifications,
 };
 use tc_api::ids::{ProjectRef, RefPart, StoryNo, WallMs};
 use tc_api::prefs::PlaceMode;
@@ -265,6 +265,8 @@ struct Summaries {
 #[derive(Default)]
 struct Gate {
     fail: bool,
+    /// Each card's peek fails as a disk does.
+    fail_peek: bool,
     hold: bool,
     asked: usize,
 }
@@ -301,6 +303,9 @@ impl ProjectStore for Summaries {
     }
 
     fn peek(&self, folder: &ProjectRef) -> Result<ProjectPeek, StoreError> {
+        if self.gate.0.lock().unwrap().fail_peek {
+            return Err(StoreError::Other("the disk said no".into()));
+        }
         self.inner.peek(folder)
     }
 
@@ -369,6 +374,26 @@ async fn a_failed_summary_waits_for_the_next_home_visit() {
     assert_eq!(
         drafted(&home_card(&t.app, "sample_burrito").await)[1].1,
         Known::Known(11)
+    );
+}
+
+/// A project whose card cannot be read, for another reason than that it went away, is
+/// listed as unusable with the reason, never left off Home.
+#[tokio::test]
+async fn a_card_that_cannot_be_read_is_listed_with_its_reason() {
+    let store = Arc::new(Summaries::new(sample_backend_with(&["sample_burrito"])));
+    store.set(|g| g.fail_peek = true);
+    let (_dir, t) = start(store.clone()).await;
+    let home = list(&t.app).await;
+    assert!(home.cards.is_empty());
+    assert_eq!(
+        home.unusable,
+        [UnusableCard {
+            name: "sample_burrito".into(),
+            reason: UnusableReason::FolderUnreadable {
+                reason: "the disk said no".into()
+            },
+        }]
     );
 }
 
@@ -475,7 +500,7 @@ fn debug_card_names_qa_server() {
     let peek = |host: &str| ProjectPeek {
         metadata: Err("not read".into()),
         remote: Door43Remote::parse_url(&format!("https://{host}/o/r.git")),
-        stamp: SummaryStamp::parse_hex(&"0".repeat(64)).unwrap(),
+        stamp: SummaryStamp::parse_hex(&"0".repeat(64)),
     };
     let place = |host: &str, server: &ServerUrl| {
         let peek = peek(host);
@@ -672,6 +697,34 @@ async fn a_store_stamp_follows_saves() {
     handle.close().await.unwrap();
 }
 
+/// A project whose saves cannot be looked at (another program holds `.tc/materialized.json`
+/// or `.tc/pending`) stays on Home, its counts "—": a folder that holds someone's work never
+/// disappears from Home without a word (§4.5).
+#[tokio::test]
+async fn a_project_whose_stamp_cannot_be_read_stays_on_home() {
+    for held in [tc_store::layout::MANIFEST, tc_store::layout::PENDING] {
+        let world = store_world();
+        let path = held
+            .split('/')
+            .fold(world.folder(&world.bible), |p, part| p.join(part));
+        world.fs.set_unreadable(&path, true);
+        let (_dir, t) = start(world.store()).await;
+        let home = list(&t.app).await;
+        let card = home
+            .cards
+            .iter()
+            .find(|card| card.project == world.bible)
+            .unwrap_or_else(|| panic!("{held} held: {home:?}"));
+        assert!(
+            drafted(card).iter().all(|(_, d)| *d == Known::Unknown),
+            "{held} held: {card:?}"
+        );
+        quiet(&t.app).await;
+        let again = home_card(&t.app, world.bible.as_str()).await;
+        assert!(drafted(&again).iter().all(|(_, d)| *d == Known::Unknown));
+    }
+}
+
 /// The story tiles of tC4's sample OBS project (`homeObsCard`, #328): fifty tiles, story 1
 /// "La Creación" at 13%, stories 2 and 3 untitled (no gateway on this computer) at 0%, and
 /// the project at 1% drafted.
@@ -723,7 +776,7 @@ fn a_story_card_has_stories_and_no_chip() {
     let peek = ProjectPeek {
         metadata: Ok(serde_json::json!({"identification": {"name": {"en": "Historias"}}})),
         remote: None,
-        stamp: SummaryStamp::parse_hex(&"0".repeat(64)).unwrap(),
+        stamp: SummaryStamp::parse_hex(&"0".repeat(64)),
     };
     let facts = card_facts(&peek.metadata, &entry.folder, ProjectKind::Stories);
     let unknown = card(&entry, &facts, &peek, None, &ServerUrl::production());

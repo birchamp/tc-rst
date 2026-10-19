@@ -184,6 +184,8 @@ pub enum UnusableReason {
     NameNotAllowed,
     /// A name that is not UTF-8.
     NameNotText,
+    /// The folder's files could not be read for its card.
+    FolderUnreadable { reason: String },
 }
 
 impl Message for UnusableReason {
@@ -198,13 +200,14 @@ impl Message for UnusableReason {
             Self::Link => "home.unusable.link",
             Self::NameNotAllowed => "home.unusable.nameNotAllowed",
             Self::NameNotText => "home.unusable.nameNotText",
+            Self::FolderUnreadable { .. } => "home.unusable.folderUnreadable",
         }
     }
     fn vars(&self) -> Vec<(&'static str, String)> {
         match self {
-            Self::ProjectFileUnreadable { reason } | Self::ProjectFileDamaged { reason } => {
-                vec![("reason", reason.clone())]
-            }
+            Self::ProjectFileUnreadable { reason }
+            | Self::ProjectFileDamaged { reason }
+            | Self::FolderUnreadable { reason } => vec![("reason", reason.clone())],
             Self::NoProjectFile | Self::Link | Self::NameNotAllowed | Self::NameNotText => {
                 Vec::new()
             }
