@@ -725,6 +725,105 @@ async fn a_project_whose_stamp_cannot_be_read_stays_on_home() {
     }
 }
 
+/// A folder copied in without `.tc/` (Door43 and Git leave it out) has no manifest, so its
+/// stamp is that of the files its summary reads: a copy whose contents are replaced is counted
+/// again, never shown with the old copy's counts (§4.5).
+#[tokio::test]
+async fn a_copy_without_tc_is_counted_again_when_its_files_change() {
+    let world = store_world();
+    let from = world.folder(&world.bible);
+    let copied = std::path::Path::new(store_world::PROJECTS).join("copied");
+    for (path, bytes) in world.fs.files_under(&from) {
+        let rel = path.strip_prefix(&from).unwrap();
+        if !rel.starts_with(tc_store::layout::TC) {
+            world.fs.put(&copied.join(rel), &bytes, None);
+        }
+    }
+    let (_dir, t) = start(world.store()).await;
+    let mut events = t.app.events().subscribe(t.app.events().head());
+    let _ = list(&t.app).await;
+    card_event(&mut events, "copied").await;
+    assert_eq!(
+        drafted(&home_card(&t.app, "copied").await)[1],
+        (BookId::Titus, Known::Known(11))
+    );
+    let drafted_titus = b"\\id TIT\n\\c 1\n\\p\n\\v 1 Pablo, siervo de Dios.\n";
+    world
+        .fs
+        .put(&copied.join("ingredients/TIT.usfm"), drafted_titus, None);
+    let _ = list(&t.app).await;
+    card_event(&mut events, "copied").await;
+    assert_eq!(
+        drafted(&home_card(&t.app, "copied").await)[1],
+        (BookId::Titus, Known::Known(100))
+    );
+}
+
+/// A kept summary is its project's: a folder that holds another project at the same stamp
+/// (the memory backend's is its fold's version) is counted again at the next launch, never
+/// shown with the first project's counts.
+#[tokio::test]
+async fn a_kept_summary_is_used_only_for_its_own_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let parts = Parts::new();
+    let launch = |store: MemoryBackend, at: &std::path::Path| {
+        let at = at.to_owned();
+        let parts = &parts;
+        async move {
+            TestApp::start_with(&at, parts, |_, deps| {
+                deps.store = StoreChoice::Given(Arc::new(store));
+            })
+            .await
+        }
+    };
+    let first = launch(sample_backend_with(&["shared"]), &dir.path().join("1")).await;
+    let mut events = first.app.events().subscribe(first.app.events().head());
+    let _ = list(&first.app).await;
+    card_event(&mut events, "shared").await;
+    assert_eq!(
+        home_card(&first.app, "shared").await.conflicts,
+        Known::Known(0)
+    );
+    first.app.quit().await;
+    drop(first);
+
+    // Another project in the same folder, at the same version: the sample with two
+    // teammates' edits of Titus 1:1, under another id.
+    let edited = sample_backend_with(&["shared"]);
+    let p = folder("shared");
+    let changes = edited
+        .teammates_edit_verse(&p, &tit(1, 1), &["Pablo, siervo", "Pablo, esclavo"])
+        .unwrap();
+    edited.teammate_edits(&p, changes).unwrap();
+    let handle = edited.open(&p, store_world::progress()).unwrap();
+    let fold = handle.snapshot().fold().clone();
+    let kind = handle.facts().kind;
+    handle.close().await.unwrap();
+    let id = tc_journal::ProjectId::parse(super::common::PROJECT_ID).unwrap();
+    assert_ne!(id, sample_bible().id);
+    let other = MemoryBackend::new();
+    other
+        .add(
+            p.clone(),
+            tc_app::backend::memory::MemoryProject {
+                id,
+                kind,
+                fold,
+                carried: Default::default(),
+                remote: None,
+            },
+        )
+        .unwrap();
+    let next = launch(other, &dir.path().join("2")).await;
+    let mut events = next.app.events().subscribe(next.app.events().head());
+    let _ = list(&next.app).await;
+    card_event(&mut events, "shared").await;
+    assert_eq!(
+        home_card(&next.app, "shared").await.conflicts,
+        Known::Known(1)
+    );
+}
+
 /// The story tiles of tC4's sample OBS project (`homeObsCard`, #328): fifty tiles, story 1
 /// "La Creación" at 13%, stories 2 and 3 untitled (no gateway on this computer) at 0%, and
 /// the project at 1% drafted.

@@ -422,7 +422,7 @@ impl ProjectStore for MemoryBackend {
             // The fold's version, in the store's form: no pending save, no manifest.
             stamp: Some(SummaryStamp::of(
                 &[format!("tc4-memory-summary-{version}")],
-                None,
+                &[],
             )),
         })
     }

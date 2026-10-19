@@ -1360,7 +1360,12 @@ B1b).
   pack it lists. `StoreBackend::summary_stamp`; the summary files are `PrefsWriter::summary` and
   `record_summary`, removed by `test/reset`)*. A save adds a pending file and a checkpoint
   rewrites the manifest, so a summary is never invalidated by hand. The memory backend's stamp is
-  its fold's version *(B2 D8)*.
+  its fold's version *(B2 D8)*. A folder with no `materialized.json` (copied or received without
+  `.tc/`, which Door43 and Git leave out) would share one stamp with every such copy whatever it
+  holds, so its stamp also covers the name, size and mtime of `metadata.json`, `conflicts.json`
+  and each book and story file the summary reads: one more listing (two for stories), only for a
+  copy never opened here. A summary, of this launch or kept in app data, is used only when the
+  project id it names is the listed folder's *(B2 fix, C1a's D8)*.
 - Summaries are kept across launches *(C1a's D7; B2 built Home's half)*: a card with no summary of
   this launch reads the one app data keeps (`PrefsWriter::summary`) and uses it when its stamp is
   the card's; each new summary is kept with `record_summary`. A repeat launch with fresh summaries

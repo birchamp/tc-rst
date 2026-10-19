@@ -424,7 +424,8 @@ struct Queued {
 
 #[derive(Default)]
 struct CacheState {
-    kept: HashMap<ProjectRef, (SummaryStamp, Kept)>,
+    /// By folder: the project and the stamp each summary was computed of.
+    kept: HashMap<ProjectRef, (tc_journal::ProjectId, SummaryStamp, Kept)>,
     /// The projects of the last listing, so a card's own read needs no listing of its own.
     listed: HashMap<ProjectRef, ProjectEntry>,
     queue: VecDeque<Queued>,
@@ -458,19 +459,25 @@ struct JobDeps {
 }
 
 impl SummaryCache {
-    pub(crate) fn get(&self, folder: &ProjectRef, stamp: SummaryStamp) -> Lookup {
-        match lock(&self.state).kept.get(folder) {
-            Some((kept, Kept::Ready(summary))) if *kept == stamp => Lookup::Ready(summary.clone()),
-            Some((kept, Kept::Failed)) if *kept == stamp => Lookup::Failed,
+    /// What is kept for `entry`'s folder, when it was computed of `entry`'s project at `stamp`.
+    pub(crate) fn get(&self, entry: &ProjectEntry, stamp: SummaryStamp) -> Lookup {
+        match lock(&self.state).kept.get(&entry.folder) {
+            Some((project, kept, summary)) if *project == entry.id && *kept == stamp => {
+                match summary {
+                    Kept::Ready(summary) => Lookup::Ready(summary.clone()),
+                    Kept::Failed => Lookup::Failed,
+                }
+            }
             _ => Lookup::Missing,
         }
     }
 
-    /// Keeps `summary` as this launch's for `folder` at `stamp`.
-    fn keep(&self, folder: ProjectRef, stamp: SummaryStamp, summary: Arc<Summary>) {
-        lock(&self.state)
-            .kept
-            .insert(folder, (stamp, Kept::Ready(summary)));
+    /// Keeps `summary` as this launch's for `entry`'s folder at `stamp`.
+    fn keep(&self, entry: &ProjectEntry, stamp: SummaryStamp, summary: Arc<Summary>) {
+        lock(&self.state).kept.insert(
+            entry.folder.clone(),
+            (entry.id, stamp, Kept::Ready(summary)),
+        );
     }
 
     /// The projects of the last listing.
@@ -513,7 +520,7 @@ impl SummaryCache {
     pub(crate) fn forget_failures(&self) {
         lock(&self.state)
             .kept
-            .retain(|_, (_, kept)| matches!(kept, Kept::Ready(_)));
+            .retain(|_, (_, _, kept)| matches!(kept, Kept::Ready(_)));
     }
 
     /// Stops the running summary: opening a project cancels it (AD13; B3 calls it through
@@ -650,7 +657,9 @@ impl App {
         state.running = None;
         let summary = summary.map(Arc::new);
         let kept = summary.clone().map_or(Kept::Failed, Kept::Ready);
-        state.kept.insert(job.folder.clone(), (job.stamp, kept));
+        state
+            .kept
+            .insert(job.folder.clone(), (job.project, job.stamp, kept));
         SummaryCache::start_next(&mut state, &self.job_deps());
         drop(state);
         if let Some(summary) = summary {
@@ -671,17 +680,17 @@ impl App {
         }
     }
 
-    /// The summary app data keeps for `folder`, when it was computed at `stamp` and reads as
-    /// a summary: what a launch shows with no job (C1a's D7). A kept summary that does not
-    /// read is no summary.
-    fn kept_summary(&self, folder: &ProjectRef, stamp: SummaryStamp) -> Option<Arc<Summary>> {
-        let stored = self.inner.prefs.summary(folder)?;
-        if stored.stamp != stamp {
+    /// The summary app data keeps for `entry`'s folder, when it was computed of `entry`'s
+    /// project at `stamp` and reads as a summary: what a launch shows with no job (C1a's D7).
+    /// A kept summary that does not read is no summary.
+    fn kept_summary(&self, entry: &ProjectEntry, stamp: SummaryStamp) -> Option<Arc<Summary>> {
+        let stored = self.inner.prefs.summary(&entry.folder)?;
+        if stored.project != entry.id || stored.stamp != stamp {
             return None;
         }
         let summary: Summary = serde_json::from_value(stored.summary).ok()?;
         let summary = Arc::new(summary);
-        self.inner.home.keep(folder.clone(), stamp, summary.clone());
+        self.inner.home.keep(entry, stamp, summary.clone());
         Some(summary)
     }
 
@@ -691,24 +700,24 @@ impl App {
         let kind = api_kind(entry.kind);
         let facts = card_facts(&peek.metadata, &entry.folder, kind);
         // With no stamp no summary can be said to be the folder's, and none could be kept.
-        let summary =
-            peek.stamp
-                .and_then(|stamp| match self.inner.home.get(&entry.folder, stamp) {
-                    Lookup::Ready(summary) => Some(summary),
-                    Lookup::Failed => None,
-                    Lookup::Missing => {
-                        let kept = self.kept_summary(&entry.folder, stamp);
-                        if kept.is_none() {
-                            self.inner.home.ensure(
-                                &self.job_deps(),
-                                entry,
-                                facts.books.clone().unwrap_or_default(),
-                                stamp,
-                            );
-                        }
-                        kept
+        let summary = peek
+            .stamp
+            .and_then(|stamp| match self.inner.home.get(entry, stamp) {
+                Lookup::Ready(summary) => Some(summary),
+                Lookup::Failed => None,
+                Lookup::Missing => {
+                    let kept = self.kept_summary(entry, stamp);
+                    if kept.is_none() {
+                        self.inner.home.ensure(
+                            &self.job_deps(),
+                            entry,
+                            facts.books.clone().unwrap_or_default(),
+                            stamp,
+                        );
                     }
-                });
+                    kept
+                }
+            });
         let card = card(
             entry,
             &facts,

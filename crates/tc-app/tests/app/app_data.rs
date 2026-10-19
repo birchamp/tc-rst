@@ -430,7 +430,10 @@ async fn an_unreadable_prefs_file_on_disk_is_kept_aside_before_it_is_replaced() 
 fn stored(n: u8) -> StoredSummary {
     StoredSummary {
         project: tc_journal::ProjectId::from_bytes([n; 16]),
-        stamp: SummaryStamp::of(&[format!("pending-{n}")], Some((u64::from(n), 7))),
+        stamp: SummaryStamp::of(
+            &[format!("pending-{n}")],
+            &[("manifest".into(), Some((u64::from(n), 7)))],
+        ),
         summary: json!({"books": n, "unknownToThisLayer": [1, 2]}),
     }
 }

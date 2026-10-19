@@ -76,6 +76,14 @@ const PROJECT_PARTS: [&str; 3] = [
 /// `.tc/sync.json` (STORAGE §3.6): the last confirmed Door43 state, with the remote.
 const SYNC_JSON: &str = ".tc/sync.json";
 
+/// The conflicts file, whose verse conflicts a card counts.
+const CONFLICTS: &str = "ingredients/tc/conflicts.json";
+
+/// `rel`, a path of the layout with `/` between its parts, under `root`.
+fn under(root: &Path, rel: &str) -> PathBuf {
+    rel.split('/').fold(root.to_owned(), |p, part| p.join(part))
+}
+
 /// Whether a failed read found nothing there: no file, or a path through something that is
 /// not a folder (a link to a file).
 fn absent(error: &std::io::Error) -> bool {
@@ -182,6 +190,7 @@ impl StoreBackend {
     /// What a Home card's summary of `folder` is computed from (APP-DESIGN §4.5, C1a D8): one
     /// listing of `.tc/pending/` and one stat of `.tc/materialized.json`, no file read, no lock
     /// and no fold, at any history. A temporary file a crash left is no save and is left out.
+    /// With no manifest (a copy never opened here), also a stat of each file the summary reads.
     pub fn summary_stamp(&self, folder: &ProjectRef) -> Result<SummaryStamp, StoreError> {
         // The card's folder comes from the listing, so its name is the listed one: no second
         // listing of the projects folder here.
@@ -189,9 +198,7 @@ impl StoreBackend {
             return Err(store_error(format!("{folder} is a staging folder")));
         }
         let root = self.projects.join(folder.as_str());
-        let pending_dir = tc_store::layout::PENDING
-            .split('/')
-            .fold(root.clone(), |p, part| p.join(part));
+        let pending_dir = under(&root, tc_store::layout::PENDING);
         let pending: Vec<String> = match self.vfs.read_dir(&pending_dir) {
             Ok(entries) => entries
                 .into_iter()
@@ -202,15 +209,57 @@ impl StoreBackend {
             Err(e) if absent(&e) => Vec::new(),
             Err(e) => return Err(store_error(format!("{}: {e}", pending_dir.display()))),
         };
-        let manifest_path = tc_store::layout::MANIFEST
-            .split('/')
-            .fold(root, |p, part| p.join(part));
-        let manifest = match self.vfs.metadata(&manifest_path) {
-            Ok(meta) => Some((meta.len, meta.mtime_ns)),
-            Err(e) if absent(&e) => None,
-            Err(e) => return Err(store_error(format!("{}: {e}", manifest_path.display()))),
+        let mut files = vec![self.stat(&root, tc_store::layout::MANIFEST)?];
+        if files[0].1.is_none() {
+            for rel in self.summary_sources(&root)? {
+                files.push(self.stat(&root, &rel)?);
+            }
+        }
+        Ok(SummaryStamp::of(&pending, &files))
+    }
+
+    /// The size and modification time of `rel` under `root`; `None` when it is missing.
+    fn stat(&self, root: &Path, rel: &str) -> Result<(String, Option<(u64, i64)>), StoreError> {
+        let path = under(root, rel);
+        match self.vfs.metadata(&path) {
+            Ok(meta) => Ok((rel.to_owned(), Some((meta.len, meta.mtime_ns)))),
+            Err(e) if absent(&e) => Ok((rel.to_owned(), None)),
+            Err(e) => Err(store_error(format!("{}: {e}", path.display()))),
+        }
+    }
+
+    /// The files under `root` a summary reads (`summary_files`): `metadata.json`, which names
+    /// the books, `conflicts.json`, and each book and story file. One listing of
+    /// `ingredients/`, and one of `ingredients/content/` in a story project.
+    fn summary_sources(&self, root: &Path) -> Result<Vec<String>, StoreError> {
+        use tc_store::vfs::EntryKind;
+        let list = |rel: &str| match self.vfs.read_dir(&under(root, rel)) {
+            Ok(entries) => Ok(entries),
+            Err(e) if absent(&e) => Ok(Vec::new()),
+            Err(e) => Err(store_error(format!("{rel}: {e}"))),
         };
-        Ok(SummaryStamp::of(&pending, manifest))
+        let mut sources = vec![tc_store::layout::METADATA.to_owned(), CONFLICTS.to_owned()];
+        for entry in list(tc_store::layout::INGREDIENTS)? {
+            let Some(name) = entry.name.to_str() else {
+                continue;
+            };
+            match entry.kind {
+                EntryKind::File if name.ends_with(".usfm") => {
+                    sources.push(format!("ingredients/{name}"));
+                }
+                EntryKind::Dir if name == "content" => {
+                    for story in list("ingredients/content")? {
+                        if let Some(name) =
+                            story.name.to_str().filter(|n| story_number(n).is_some())
+                        {
+                            sources.push(format!("ingredients/content/{name}"));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(sources)
     }
 
     /// The staging folders tc-store's start removed (STORAGE §6.4 N1). It waits for that
@@ -427,7 +476,7 @@ impl ProjectStore for StoreBackend {
                     .map_err(|e| e.to_string()),
             );
         }
-        files.conflicts = match self.vfs.read(&ingredients.join("tc/conflicts.json")) {
+        files.conflicts = match self.vfs.read(&under(&path, CONFLICTS)) {
             Ok(bytes) => Ok(Some(bytes)),
             Err(e) if absent(&e) => Ok(None),
             Err(e) => Err(e.to_string()),

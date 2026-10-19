@@ -515,28 +515,39 @@ pub struct ProjectEntry {
 /// `.tc/materialized.json`, which a seal, a consolidation or an intake rewrites (it records the
 /// md5 of every pack it lists). One listing and one stat at any history: the packs are not
 /// listed, since they are nested by sealer and month and their number grows with the history.
+/// A folder with no manifest (copied or received without `.tc/`, which Door43 and Git leave
+/// out) is stamped by the files its summary reads as well, or every such copy would share one
+/// stamp, whatever it holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SummaryStamp([u8; 32]);
 
 impl SummaryStamp {
-    /// SHA-256 over a domain tag, each name followed by a zero byte, then `1` with the manifest's
-    /// size and mtime (little-endian), or `0` when there is no manifest.
-    pub fn of(pending: &[String], manifest: Option<(u64, i64)>) -> Self {
+    /// SHA-256 over a domain tag, the number of names, each name followed by a zero byte, then
+    /// each file's path followed by a zero byte and `1` with its size and mtime (little-endian),
+    /// or `0` when it is missing.
+    pub fn of(pending: &[String], files: &[(String, Option<(u64, i64)>)]) -> Self {
         let mut names: Vec<&String> = pending.iter().collect();
         names.sort();
+        let mut files: Vec<_> = files.iter().collect();
+        files.sort();
         let mut context = ring::digest::Context::new(&ring::digest::SHA256);
         context.update(b"tc4-summary-stamp\0");
+        context.update(&(names.len() as u64).to_le_bytes());
         for name in names {
             context.update(name.as_bytes());
             context.update(b"\0");
         }
-        match manifest {
-            Some((len, mtime)) => {
-                context.update(&[1]);
-                context.update(&len.to_le_bytes());
-                context.update(&mtime.to_le_bytes());
+        for (path, file) in files {
+            context.update(path.as_bytes());
+            context.update(b"\0");
+            match file {
+                Some((len, mtime)) => {
+                    context.update(&[1]);
+                    context.update(&len.to_le_bytes());
+                    context.update(&mtime.to_le_bytes());
+                }
+                None => context.update(&[0]),
             }
-            None => context.update(&[0]),
         }
         let mut out = [0u8; 32];
         out.copy_from_slice(context.finish().as_ref());
