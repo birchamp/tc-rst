@@ -78,7 +78,7 @@ async function draw(browser, origin, { data, steps = [], file, masks = [] }) {
     await page.goto(`${origin}${BASE}`);
     await page.waitForFunction(() => window.__galleryReady === true);
     // The full-window pointer layer takes the click, as the screen in tC4 was opened by one,
-    // so focus a view moves on mount is not drawn as keyboard focus (README, "Focus").
+    // so focus a view moves on mount is not drawn as keyboard focus (README, "Calibration").
     await page.mouse.click(POINTER_REST.x, POINTER_REST.y);
     const screen = {
       name: 'gallery',
@@ -168,7 +168,7 @@ async function capture({ only, build, out }) {
         return { id, target: Object.fromEntries(Object.entries(mask.target).map(([k, v]) => [k, Object.entries(PROJECTS).reduce((t, [a, b]) => t.replaceAll(a, b), v)])) };
       });
       const file = path.join(scratch, `${c.name}.png`);
-      const drawn = await draw(browser, origin, { data, steps: caseSteps(c), file, masks });
+      const drawn = await draw(browser, origin, { data: { s: data.s, returns: data.returns, locale: data.locale }, steps: caseSteps(c), file, masks });
       for (const m of masks) if (!drawn.rects[m.id]) drawn.failures.push(`the element of mask ${m.id} is not on the page`);
       timing.cases.push(Date.now() - started);
       if (drawn.failures.length) {
@@ -200,6 +200,11 @@ async function capture({ only, build, out }) {
   };
   const previous = !out && fs.existsSync(path.join(REPO, 'parity', 'app', 'cases.json'))
     ? JSON.parse(fs.readFileSync(path.join(REPO, 'parity', 'app', 'cases.json'), 'utf8')) : null;
+  // One machine's pixels in one file: the gate compares a case's pixels with the machine
+  // cases.json names.
+  if (only && previous?.machine && JSON.stringify(previous.machine) !== JSON.stringify(machine)) {
+    throw new Error(`cases.json holds cases of another machine (${JSON.stringify(previous.machine)}): capture every case again here, without --only`);
+  }
   const byName = new Map((only ? previous?.cases ?? [] : []).map((e) => [e.name, e]));
   for (const { c, patchKeys, png, dom, calls } of results) {
     const group = groups.find((g) => g.group === c.group);
