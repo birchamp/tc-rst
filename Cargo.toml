@@ -36,6 +36,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"
 regex = "1.13.1"
+# Already in Cargo.lock through jsonschema; the version locked there. tc-helps ports tC4's
+# JavaScript patterns, whose lookbehinds the regex crate does not have.
+fancy-regex = "0.19.2"
 proptest = "1"
 proptest-derive = "0.9.0"
 tempfile = "3"

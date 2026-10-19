@@ -9,6 +9,7 @@
 //! - [`metadata`] identifies a downloaded resource and holds the pins of a helps source.
 //! - [`aquifer`] reads Aquifer release JSON and converts it into the same model.
 //! - [`links`] resolves `rc://`, relative and `aquifer:` links to typed targets.
+//! - [`blocks`] renders help text into the blocks the helps panes draw, as tC4 does.
 //! - [`markdown`] describes the markdown dialect and converts Aquifer HTML into it.
 //! - [`highlight`] finds the aligned words of a verse that render a quote.
 //! - [`Helps`] holds a set of helps, each part from one pinned resource, and answers
@@ -16,6 +17,7 @@
 
 pub mod aquifer;
 pub mod articles;
+pub mod blocks;
 mod collection;
 mod error;
 pub mod highlight;
