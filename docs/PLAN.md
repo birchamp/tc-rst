@@ -88,6 +88,26 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
   of the span's end marker), so Check and the Align bank miss it, a woven alignment for the
   verse cannot be made, and the store's verse save drops the links to it. So does the text
   after a stray end marker (`a\nd* b`). The note's own words stay hidden.
+- Align, across a verse edit, moves each link with its own word, by position: deleting or
+  adding an earlier copy of a repeated word leaves the link on the word it was on. A link
+  whose word cannot be followed for sure goes back to the word bank and is listed, and the
+  verse is not marked for review (#789, Q30 (a)). tC4 4.0 moves the link to another copy of
+  the word, unannounced (#789 is open in tC4).
+- Align opens a verse with a card for every word of the pinned original-language verse,
+  comparing words in NFC; a link to a word the pin lacks goes back to the word bank and is
+  listed (#790). tC4 shows the stored cards as they are, so the sample's TIT 1:1 offers 11
+  of UGNT's 17 Greek words. Suggestions compare original-language words in NFC (#793), so
+  Hebrew alignments imported from tC4 4.0, which stores them in NFC, train suggestions for
+  the pinned UHB.
+- Align's "The draft changed" notice and the rail's Invalid follow one rule: the text, the
+  words, the span or the original-language text changed, or the alignment is marked for
+  re-review (#787, #796). tC4 shows the notice only for a changed text or changed words, and
+  its rail calls an alignment valid when only its words are wrong.
+- A carry-over that loses no link is saved when the translator leaves the verse
+  (APP-DESIGN AD19); tC4 writes nothing at open (#787).
+- A verse that still holds the alignment markup of the file it was added from does not
+  open in Align, and no verse save writes an alignment over it (#794). This is tC4's open
+  PR #799.
 - The items of a `\li1` list, a `\qm1` line, a table cell and the text of a marker usfm-js
   does not know (a typo such as `\pp`, a custom `\zx`) show, where tC4 hides them (usfm-js
   keeps their text as `content`) while the export counts their words: UST EXO 15:21

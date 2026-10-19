@@ -541,7 +541,7 @@ fn mark_done_sets_done_with_words_in_the_bank_and_vouches_for_the_current_text()
     flagged.mark_done(&new_text);
     assert!(!flagged.marked_invalid);
     assert_eq!(
-        verse_status(Some(&flagged), Some(&current(&new_text))).state,
+        verse_status(Some(&flagged), Some((&current(&new_text), &new_text))).state,
         VerseState::Valid
     );
 }
@@ -568,25 +568,28 @@ fn the_rail_reads_valid_from_done_only_and_staleness_outranks_it() {
     full_no_flag
         .link(1, &bank_word(&full_no_flag, "siervo", 1))
         .unwrap();
-    let state = |v: Option<&AlignmentValue>, c: Option<&AlignedRun>| verse_status(v, c).state;
-    assert_eq!(state(Some(&full_no_flag), Some(&now)), VerseState::Todo);
+    let state = |v: Option<&AlignmentValue>, c: Option<(&AlignedRun, &TargetVerse)>| {
+        verse_status(v, c).state
+    };
+    let now = (&now, &verse);
+    assert_eq!(state(Some(&full_no_flag), Some(now)), VerseState::Todo);
     let mut settled = full_no_flag.clone();
     settled.settle(&verse);
-    assert_eq!(state(Some(&settled), Some(&now)), VerseState::Valid);
+    assert_eq!(state(Some(&settled), Some(now)), VerseState::Valid);
     let mut marked = half.clone();
     marked.mark_done(&verse);
-    assert_eq!(state(Some(&marked), Some(&now)), VerseState::Valid);
+    assert_eq!(state(Some(&marked), Some(now)), VerseState::Valid);
     let other = TargetVerse::new("Pablo siervo de Dios");
     assert_eq!(
-        state(Some(&marked), Some(&current(&other))),
+        state(Some(&marked), Some((&current(&other), &other))),
         VerseState::Invalid
     );
     let mut flagged = marked;
     flagged.marked_invalid = true;
-    assert_eq!(state(Some(&flagged), Some(&now)), VerseState::Invalid);
-    assert_eq!(state(None, Some(&now)), VerseState::Todo);
+    assert_eq!(state(Some(&flagged), Some(now)), VerseState::Invalid);
+    assert_eq!(state(None, Some(now)), VerseState::Todo);
     assert_eq!(state(None, None), VerseState::Undrafted);
-    let status = verse_status(Some(&half), Some(&now));
+    let status = verse_status(Some(&half), Some(now));
     assert_eq!((status.placed, status.total), (1, 2));
 }
 
@@ -598,7 +601,7 @@ fn an_edit_clears_the_re_review_flag_tc3_or_tc4_set() {
     flagged.settle(&verse);
     assert!(!flagged.marked_invalid);
     assert_eq!(
-        verse_status(Some(&flagged), Some(&current(&verse))).state,
+        verse_status(Some(&flagged), Some((&current(&verse), &verse))).state,
         VerseState::Valid
     );
 }
@@ -655,7 +658,12 @@ fn staleness_names_each_reason_a_done_value_no_longer_vouches_for_the_verse() {
     ];
     for (now, reasons) in &cases {
         assert_eq!(&value.staleness(now), reasons, "{now:?}");
-        let state = verse_status(Some(&value), Some(now)).state;
+        let text = if now.text_md5 == verse.md5() {
+            &verse
+        } else {
+            &other
+        };
+        let state = verse_status(Some(&value), Some((now, text))).state;
         let expected = if reasons.is_empty() {
             VerseState::Valid
         } else {

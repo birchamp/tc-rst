@@ -13,7 +13,6 @@
 mod common;
 
 use proptest::prelude::*;
-use std::io::Read;
 use tc_align::{
     Aligner, Alignment, AlignmentGroup, AlignmentValue, Basis, SourceVerse, SourceWord,
     TargetVerse, TargetWord,
@@ -22,35 +21,9 @@ use tc_core::VerseSpan;
 use tc_journal::alignment::split_aligned;
 use tc_journal::ids::VerseNo;
 use tc_journal::json::JsonMap;
-use tc_usfm::{Book, codec};
+use tc_usfm::Book;
 
-fn bundle_entry(archive: &str, entry: &str) -> String {
-    let file = std::fs::File::open(common::fixture(&format!("bundle/en/{archive}"))).unwrap();
-    let mut zip = zip::ZipArchive::new(file).unwrap();
-    let mut text = String::new();
-    zip.by_name(entry)
-        .unwrap_or_else(|e| panic!("{archive} {entry}: {e}"))
-        .read_to_string(&mut text)
-        .unwrap();
-    text
-}
-
-/// Every verse of a book as the codec cuts it: `chapter:verse` and its content.
-fn verses(raw: &str) -> Vec<(String, String)> {
-    let parts = codec::decompose(raw).unwrap();
-    let mut out = Vec::new();
-    for (c, chapter) in &parts.chapters {
-        for (v, part) in &chapter.verses {
-            if let codec::VersePart::Text(verse) = part {
-                out.push((
-                    format!("{c}:{}", codec::label(*v, verse.last)),
-                    codec::join_verse(&verse.words, &verse.layout),
-                ));
-            }
-        }
-    }
-    out
-}
+use common::{bundle_entry, codec_verses as verses};
 
 fn verse_of(raw: &str, reference: &str) -> String {
     verses(raw)

@@ -19,14 +19,15 @@
 //! Saving is the caller's: `tc-store` writes [`Aligner::value`] as one `Alignment` change
 //! on leaving the verse or two seconds after the last change (STORAGE.md §5.3).
 
-use crate::edit::{Alignment, EditError, bootstrap};
+use crate::edit::{self, Alignment, EditError, bootstrap};
 use crate::reflow::{self, DroppedLink};
 use crate::selection::{self, Click};
 use crate::suggest::{self, Proposal, RawLink, SessionInput};
-use crate::value::Basis;
+use crate::value::{Basis, holds_the_words_of, needs_review};
 use crate::words::{SourceVerse, TargetVerse};
-use std::collections::HashSet;
-use tc_journal::record::{AlignmentValue, TargetWord};
+use std::collections::{HashMap, HashSet};
+use tc_journal::record::{AlignmentGroup, AlignmentValue, SourceWord, TargetWord};
+use unicode_normalization::UnicodeNormalization;
 
 /// Mark valid was refused because suggestions stand: they must be accepted or rejected
 /// first, so that "done" never vouches for a link the translator did not make.
@@ -38,6 +39,10 @@ pub struct MarkValidRefused;
 /// shows its "missing" notice instead of an aligner (`buildAlignmentSession`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum Unavailable {
+    /// The verse holds the alignment markup of the aligned file it was added from, which is
+    /// its alignment (tC4 #794). This reason outranks the others.
+    #[error("the verse already holds an alignment in its text")]
+    AlignedInText,
     /// The original-language verse is not available (not installed, or the source has
     /// no words for this verse).
     #[error("the original-language verse is not available")]
@@ -58,6 +63,7 @@ pub struct Aligner {
     dropped: Vec<DroppedLink>,
     earlier: Option<AlignmentValue>,
     changed: bool,
+    stale: bool,
     /// The selected bank words, as clicked. Only the shown part counts
     /// ([`Aligner::selection`]).
     armed: Vec<TargetWord>,
@@ -66,7 +72,8 @@ pub struct Aligner {
 impl Aligner {
     /// Open a verse, or say why it cannot open.
     ///
-    /// - With no original-language words or no target words, it does not open.
+    /// - A verse whose text holds alignment markup does not open, nor does one with no
+    ///   original-language words or no target words.
     /// - With no stored value, or one with no cards (the removal form, or the empty
     ///   value a span change leaves in tC4), the verse starts from [`bootstrap`].
     /// - A stored value made for another span than the run `basis` names, moved with its
@@ -90,6 +97,19 @@ impl Aligner {
     ///   it, unless tC4 would have left the value alone (it was marked invalid, or held
     ///   no placed word).
     ///
+    /// The cards are then fitted to `source`, the pinned original-language words (tC4
+    /// #790): every pinned word on a card, in source order, compared in NFC. A word stays on
+    /// two cards only while both hold links (aligned USFM writes a word aligned to two
+    /// separate runs of the translation so). A card holding a word the pin lacks is taken
+    /// apart: its pinned words get cards and its links return to the bank, listed in
+    /// [`Aligner::dropped`] like the carry-over's. A value whose source
+    /// words carry `x-ref` (per-verse occurrences in a span, #409) is left as it is. The fit
+    /// is never saved on its own; it rides on the first save.
+    ///
+    /// The open verse shows "The draft changed" ([`Aligner::is_stale`]) when the stored value
+    /// [needs review](needs_review) against the verse: its text, words or pin changed, or it
+    /// is marked for re-review.
+    ///
     /// Whichever it starts from, the bank and every card are shown in verse order. That
     /// alone does not count as a change. Nothing is selected.
     pub fn open(
@@ -98,6 +118,9 @@ impl Aligner {
         source: &SourceVerse,
         basis: Basis,
     ) -> Result<Self, Unavailable> {
+        if verse.holds_alignment_markup() {
+            return Err(Unavailable::AlignedInText);
+        }
         if source.is_empty() {
             return Err(Unavailable::NoSource);
         }
@@ -111,16 +134,17 @@ impl Aligner {
             dropped: Vec::new(),
             earlier: None,
             changed: false,
+            stale: false,
             armed: Vec::new(),
         };
-        aligner.start_from(stored, &basis);
+        aligner.start_from(stored, &basis, source);
         aligner.value.bank_in_verse_order(&aligner.verse);
         aligner.value.cards_in_verse_order(&aligner.verse);
         Ok(aligner)
     }
 
     /// Replace the bootstrap with what `stored` gives, as [`Aligner::open`] describes.
-    fn start_from(&mut self, stored: Option<&AlignmentValue>, basis: &Basis) {
+    fn start_from(&mut self, stored: Option<&AlignmentValue>, basis: &Basis, source: &SourceVerse) {
         let Some(stored) = stored.filter(|s| !s.alignments.is_empty()) else {
             return;
         };
@@ -128,18 +152,24 @@ impl Aligner {
             self.earlier = Some(stored.clone());
             return;
         }
+        self.stale = needs_review(stored, &basis.aligned_run(&self.verse), &self.verse);
+        let mut saves = false;
         if !stored.is_stale_against(&self.verse)
             && stored.well_formed().is_ok()
             && holds_the_words_of(stored, &self.verse)
         {
             self.value = stored.clone();
-            return;
+        } else {
+            // AD19: a carry-over over a changed text is saved as the store's reflow would
+            // have saved it; a value fixed for any other reason is not rewritten unasked.
+            saves =
+                stored.is_stale_against(&self.verse) && reflow::reflow(stored, &self.verse).is_ok();
+            let carried = reflow::carry(stored, None, &self.verse);
+            self.value = carried.value;
+            self.dropped = carried.dropped;
         }
-        let tc4_would_reflow = reflow::reflow(stored, &self.verse).is_ok();
-        let carried = reflow::carry(stored, &self.verse);
-        self.changed = tc4_would_reflow && carried.is_lossless();
-        self.value = carried.value;
-        self.dropped = carried.dropped;
+        self.dropped.extend(fit_cards(&mut self.value, source));
+        self.changed = saves && self.dropped.is_empty();
     }
 
     pub fn value(&self) -> &AlignmentValue {
@@ -154,10 +184,12 @@ impl Aligner {
         &self.verse
     }
 
-    /// The value was made against other text than the verse shown: the aligner shows
-    /// "The draft changed since this alignment was made".
+    /// The aligner shows "The draft changed since this alignment was made. Check that the
+    /// words still line up." (tC4 #787): the stored value needed review when the verse
+    /// opened (see [`Aligner::open`]), and the translator has not edited the verse, marked it
+    /// valid or kept the carried-over links since.
     pub fn is_stale(&self) -> bool {
-        self.value.is_stale_against(&self.verse)
+        self.stale
     }
 
     /// Links the carry-over on opening could not keep, to show the translator.
@@ -169,6 +201,7 @@ impl Aligner {
     /// alignment: it is saved like an edit.
     pub fn keep_reflow(&mut self) {
         self.changed = true;
+        self.stale = false;
     }
 
     /// A stored alignment made for another span, kept aside when the verse opened.
@@ -197,6 +230,7 @@ impl Aligner {
         self.value.settle(&self.verse);
         self.proposals = suggest::rebind(&self.value, &self.proposals);
         self.changed = true;
+        self.stale = false;
         Ok(out)
     }
 
@@ -274,6 +308,7 @@ impl Aligner {
         }
         self.value.mark_done(&self.verse);
         self.changed = true;
+        self.stale = false;
         Ok(())
     }
 
@@ -366,13 +401,112 @@ impl Aligner {
     }
 }
 
-/// Whether `value` holds exactly the words of `verse`, by text and occurrence, placed or
-/// banked.
-fn holds_the_words_of(value: &AlignmentValue, verse: &TargetVerse) -> bool {
-    let key = |w: &TargetWord| (w.word.clone(), w.occurrence, w.occurrences);
-    let mut held: Vec<_> = value.all_target_words().map(key).collect();
-    let mut words: Vec<_> = verse.words().iter().map(key).collect();
-    held.sort_unstable();
-    words.sort_unstable();
-    held == words
+/// Fit `value`'s cards to the pinned words `source`, as [`Aligner::open`] describes, and
+/// return the links it took off.
+fn fit_cards(value: &mut AlignmentValue, source: &SourceVerse) -> Vec<DroppedLink> {
+    if value
+        .alignments
+        .iter()
+        .flat_map(|g| &g.top_words)
+        .any(|w| w.extra.contains_key("x-ref"))
+    {
+        return Vec::new();
+    }
+    // A source word is found by its text and occurrence as written, else in NFC with the
+    // pin's words numbered in NFC: the pin numbers two forms of one word apart, and an
+    // aligned file or a tC4 4.0 record may write either.
+    let nfc = |text: &str| text.nfc().collect::<String>();
+    let as_written: HashMap<(&str, u32), usize> = source
+        .words()
+        .iter()
+        .enumerate()
+        .map(|(at, w)| ((w.word.as_str(), w.occurrence), at))
+        .collect();
+    let mut seen: HashMap<String, u32> = HashMap::new();
+    let in_nfc: HashMap<(String, u32), usize> = source
+        .words()
+        .iter()
+        .enumerate()
+        .map(|(at, w)| {
+            let text = nfc(&w.word);
+            let n = seen.entry(text.clone()).or_default();
+            *n += 1;
+            ((text, *n), at)
+        })
+        .collect();
+    let place = |w: &SourceWord| {
+        as_written
+            .get(&(w.word.as_str(), w.occurrence))
+            .or_else(|| in_nfc.get(&(nfc(&w.word), w.occurrence)))
+            .copied()
+    };
+    // Each card with the places of its source words in the pin. A card with no source word
+    // and no link only keeps its fields, and goes last.
+    let mut cards: Vec<(Vec<usize>, AlignmentGroup)> = Vec::new();
+    let mut dropped = Vec::new();
+    for (card, group) in std::mem::take(&mut value.alignments)
+        .into_iter()
+        .enumerate()
+    {
+        match group
+            .top_words
+            .iter()
+            .map(place)
+            .collect::<Option<Vec<_>>>()
+        {
+            // A source word may stand on two cards: aligned USFM writes a word aligned to two
+            // separate runs of the translation as two milestones.
+            Some(at) if !at.is_empty() => cards.push((at, group)),
+            _ if group.top_words.is_empty() && group.bottom_words.is_empty() => {
+                cards.push((Vec::new(), group));
+            }
+            _ => {
+                dropped.extend(group.bottom_words.iter().map(|word| DroppedLink {
+                    card,
+                    top_words: group.top_words.clone(),
+                    word: word.clone(),
+                }));
+                value.word_bank.extend(group.bottom_words);
+                // The card's own fields stay, on a card with no word, as `clear` keeps them.
+                if !group.extra.is_empty() {
+                    let fields = AlignmentGroup {
+                        top_words: Vec::new(),
+                        bottom_words: Vec::new(),
+                        extra: group.extra,
+                    };
+                    cards.push((Vec::new(), fields));
+                }
+            }
+        }
+    }
+    let mut holders = vec![0usize; source.words().len()];
+    for &p in cards.iter().flat_map(|(at, _)| at) {
+        holders[p] += 1;
+    }
+    // A card with nothing on it whose words other cards hold too is a second card for the
+    // same words, such as the one an import leaves when the aligned file writes a Hebrew word
+    // in another order of its marks than the pin: it goes.
+    cards.retain(|(at, g)| {
+        let spare = g.bottom_words.is_empty()
+            && g.extra.is_empty()
+            && !at.is_empty()
+            && at.iter().all(|&p| holders[p] > 1);
+        if spare {
+            for &p in at {
+                holders[p] -= 1;
+            }
+        }
+        !spare
+    });
+    cards.extend(
+        source
+            .words()
+            .iter()
+            .enumerate()
+            .filter(|(p, _)| holders[*p] == 0)
+            .map(|(p, w)| (vec![p], edit::card(w.clone()))),
+    );
+    cards.sort_by_key(|(at, _)| at.first().copied().unwrap_or(usize::MAX));
+    value.alignments = cards.into_iter().map(|(_, g)| g).collect();
+    dropped
 }

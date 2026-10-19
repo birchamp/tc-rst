@@ -78,10 +78,23 @@ fn shown_in_verse_order(aligner: &Aligner) -> bool {
             .all(|g| in_verse_order(verse, &g.bottom_words))
 }
 
+/// The cards that hold links, each as it prints, in a fixed order.
+fn linked_cards(value: &AlignmentValue) -> Vec<String> {
+    let mut cards: Vec<String> = value
+        .alignments
+        .iter()
+        .filter(|g| !g.bottom_words.is_empty())
+        .map(|g| format!("{g:?}"))
+        .collect();
+    cards.sort();
+    cards
+}
+
 #[test]
 fn every_aligned_ult_verse_opens_in_verse_order_with_nothing_to_save() {
     let verses = psalms(ULT_PSA);
     assert_eq!(verses.len(), 2461);
+    let mut spare_cards = 0;
     for verse in &verses {
         let at = &verse.reference;
         let (stored, target) = stored(verse);
@@ -93,8 +106,21 @@ fn every_aligned_ult_verse_opens_in_verse_order_with_nothing_to_save() {
         let mut expected = stored.clone();
         expected.bank_in_verse_order(aligner.verse());
         expected.cards_in_verse_order(aligner.verse());
-        assert_eq!(aligner.value(), &expected, "{at}: only the order differs");
+        assert_eq!(aligner.value().word_bank, expected.word_bank, "{at}");
+        assert_eq!(
+            linked_cards(aligner.value()),
+            linked_cards(&expected),
+            "{at}: every link is kept"
+        );
+        // A word the ULT writes in another order of its marks than the UHB has one card, not
+        // an empty one beside the linked one (#790).
+        assert!(
+            aligner.value().alignments.len() <= stored.alignments.len(),
+            "{at}"
+        );
+        spare_cards += stored.alignments.len() - aligner.value().alignments.len();
     }
+    assert_eq!(spare_cards, 324);
 }
 
 #[test]

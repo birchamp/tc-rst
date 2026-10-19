@@ -1,28 +1,37 @@
 //! Keeping an alignment across an edit of its verse text (tC4 #213 `reflowAlignment`).
 //!
-//! [`reflow`] keeps every link whose target word the new text still has, by text and
-//! occurrence, with its occurrence count updated; drops only the links to words that are
-//! gone; rebuilds the bank from the new text's other words in verse order; and never
-//! touches a card's source words or makes a link. It reports each dropped link in
-//! [`Reflowed::dropped`].
+//! A reflow keeps every link whose target word the new text still has, with its occurrence
+//! updated; drops the links to words that are gone; rebuilds the bank from the new text's
+//! other words in verse order; and never touches a card's source words or makes a link. It
+//! reports each dropped link in [`Reflowed::dropped`].
+//!
+//! Each link follows its own word, by position (tC4 #789, the owner's Q30 (a)). Given the
+//! text the value was made against ([`reflow_edit`]), the words of the two texts are matched
+//! as a longest common subsequence by text, and a word goes where every such match puts it.
+//! Without that text ([`reflow`]), a word keeps its occurrence only while the verse holds as
+//! many copies of it as when it was placed. Either way, when it is not clear where a linked
+//! word went (an earlier copy of it was added or deleted, and the texts do not tell which),
+//! its link returns to the bank and is reported, so it never moves to another copy of the
+//! word. The verse is not marked for review for it.
 //!
 //! Nothing here writes. tC4 writes the reflow of every edited verse at draft save. Here the
 //! store writes it in the batch of the verse save (APP-DESIGN R25, STORAGE.md §5.1 step 5,
 //! §5.2): the reflowed value, lossless or not, becomes the alignment's head, and the value
 //! with every link stays in History as its parent, so a dropped link is never gone. A save
-//! does not reflow an alignment in conflict, one made for another span or one marked
-//! invalid; such a value keeps computing invalid, since its hash no longer matches (§7.7),
-//! and the aligner opens the verse with its reflowed value ([`crate::Aligner::open`]),
-//! showing the links the reflow would drop, and saves only when the translator edits the
-//! verse or keeps the reflow.
+//! does not reflow an alignment in conflict, one made for another span, one marked invalid
+//! or a verse whose text holds its alignment markup; such a value keeps computing invalid,
+//! since its hash no longer matches (§7.7), and the aligner opens the verse with its
+//! reflowed value ([`crate::Aligner::open`]), showing the links the reflow would drop, and
+//! saves only when the translator edits the verse or keeps the reflow.
 use std::collections::HashMap;
 
 use crate::edit::Alignment;
+use crate::value::holds_the_words_of;
 use crate::words::TargetVerse;
 use tc_journal::json::JsonMap;
 use tc_journal::record::{AlignmentGroup, AlignmentValue, SourceWord, TargetWord};
 
-/// A link the new text cannot keep: the word is gone, or its occurrence moved.
+/// A link the new text cannot keep: the word is gone, or it is not clear where it went.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DroppedLink {
     /// The card the word was on, by its index in the value.
@@ -54,7 +63,9 @@ impl Reflowed {
 /// unchanged and its computed validity stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NoReflow {
-    /// The value was made against this very text.
+    /// The verse holds alignment markup in its text, which is its alignment (tC4 #794).
+    AlignedInText,
+    /// The value was made against this very text and holds its words.
     Current,
     /// tC3 or tC4 marked it for re-review (a span created or broken): a person decides.
     MarkedInvalid,
@@ -64,28 +75,56 @@ pub enum NoReflow {
     NoWords,
 }
 
-/// Carry `value` over to the edited `verse`, or say why tC4 would leave it as it is.
-/// See the module documentation.
+/// Carry `value` over to `verse`, without the text it was made against, or say why the
+/// value stays as it is. See the module documentation.
 pub fn reflow(value: &AlignmentValue, verse: &TargetVerse) -> Result<Reflowed, NoReflow> {
+    reflow_from(value, None, verse)
+}
+
+/// Carry `value` over an edit of its verse from `before` to `after`, as a verse or section
+/// save does, or say why the value stays as it is. Each link follows its word by position
+/// when `value` was made against `before`; otherwise this is [`reflow`]. See the module
+/// documentation.
+pub fn reflow_edit(
+    value: &AlignmentValue,
+    before: &TargetVerse,
+    after: &TargetVerse,
+) -> Result<Reflowed, NoReflow> {
+    reflow_from(value, Some(before), after)
+}
+
+fn reflow_from(
+    value: &AlignmentValue,
+    before: Option<&TargetVerse>,
+    verse: &TargetVerse,
+) -> Result<Reflowed, NoReflow> {
+    if verse.holds_alignment_markup() {
+        return Err(NoReflow::AlignedInText);
+    }
     if value.marked_invalid {
         return Err(NoReflow::MarkedInvalid);
     }
     if value.placed() == 0 {
         return Err(NoReflow::NothingPlaced);
     }
-    if !value.is_stale_against(verse) {
+    if !value.is_stale_against(verse) && holds_the_words_of(value, verse) {
         return Err(NoReflow::Current);
     }
     if verse.words().is_empty() {
         return Err(NoReflow::NoWords);
     }
-    Ok(carry(value, verse))
+    Ok(carry(value, before, verse))
 }
 
 /// The reflow itself, without tC4's reasons to leave a value alone. The aligner uses it
 /// to show any stale value against the verse it shows, so that every word it offers is a
 /// word of that verse.
-pub(crate) fn carry(value: &AlignmentValue, verse: &TargetVerse) -> Reflowed {
+pub(crate) fn carry(
+    value: &AlignmentValue,
+    before: Option<&TargetVerse>,
+    verse: &TargetVerse,
+) -> Reflowed {
+    let places = Places::new(value, before, verse);
     // The fields tC3 or tC4 wrote on a word go with the word, wherever the new text has
     // it: on its card, or back in the bank.
     let extras: HashMap<(&str, u32), &JsonMap> = value
@@ -106,7 +145,7 @@ pub(crate) fn carry(value: &AlignmentValue, verse: &TargetVerse) -> Reflowed {
     for (card, group) in value.alignments.iter().enumerate() {
         let mut targets = Vec::new();
         for word in &group.bottom_words {
-            match verse.position(word) {
+            match places.of(word, verse) {
                 // tC4 keeps a word placed twice on two cards twice; the second copy
                 // would put one word on two cards, so it is reported dropped instead.
                 Some(at) if !kept[at] => {
@@ -143,4 +182,83 @@ pub(crate) fn carry(value: &AlignmentValue, verse: &TargetVerse) -> Reflowed {
         value: next,
         dropped,
     }
+}
+
+/// Where a word of the old value stands in the new verse. See the module documentation.
+enum Places<'a> {
+    /// The value was made against `before`: each of its positions, mapped to the new
+    /// position where that is clear.
+    Moved {
+        before: &'a TargetVerse,
+        to: Vec<Option<usize>>,
+    },
+    /// Without the earlier text: by text and occurrence, while the count is unchanged.
+    Counted,
+}
+
+impl<'a> Places<'a> {
+    fn new(value: &AlignmentValue, before: Option<&'a TargetVerse>, verse: &TargetVerse) -> Self {
+        match before.filter(|b| !value.is_stale_against(b)) {
+            Some(before) => Places::Moved {
+                before,
+                to: follow(before.words(), verse.words()),
+            },
+            None => Places::Counted,
+        }
+    }
+
+    fn of(&self, word: &TargetWord, verse: &TargetVerse) -> Option<usize> {
+        match self {
+            Places::Moved { before, to } => to[before.position(word)?],
+            Places::Counted => {
+                let at = verse.position(word)?;
+                (verse.words()[at].occurrences == word.occurrences).then_some(at)
+            }
+        }
+    }
+}
+
+/// For each word of `old`, its position in `new` when every longest common subsequence of
+/// the two word lists, by text, matches it to that one position; `None` when every one
+/// leaves it out (it was deleted) or they disagree (it is not clear where it went).
+fn follow(old: &[TargetWord], new: &[TargetWord]) -> Vec<Option<usize>> {
+    let (n, m) = (old.len(), new.len());
+    let width = m + 1;
+    let same = |i: usize, j: usize| old[i].word == new[j].word;
+    // `head[i * width + j]`: the longest common subsequence of `old[..i]` and `new[..j]`;
+    // `tail[i * width + j]`: of `old[i..]` and `new[j..]`.
+    let mut head = vec![0u32; (n + 1) * width];
+    for i in 0..n {
+        for j in 0..m {
+            head[(i + 1) * width + j + 1] = if same(i, j) {
+                head[i * width + j] + 1
+            } else {
+                head[i * width + j + 1].max(head[(i + 1) * width + j])
+            };
+        }
+    }
+    let mut tail = vec![0u32; (n + 1) * width];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            tail[i * width + j] = if same(i, j) {
+                tail[(i + 1) * width + j + 1] + 1
+            } else {
+                tail[(i + 1) * width + j].max(tail[i * width + j + 1])
+            };
+        }
+    }
+    let longest = head[n * width + m];
+    (0..n)
+        .map(|i| {
+            let left_out =
+                (0..=m).any(|j| head[i * width + j] + tail[(i + 1) * width + j] == longest);
+            let mut matched = (0..m).filter(|&j| {
+                same(i, j) && head[i * width + j] + 1 + tail[(i + 1) * width + j + 1] == longest
+            });
+            match (matched.next(), matched.next()) {
+                (Some(j), None) if !left_out => Some(j),
+                _ => None,
+            }
+        })
+        .collect()
 }

@@ -602,3 +602,73 @@ fn a_booster_trained_elsewhere_attached_to_a_grown_memory_answers_like_the_train
             .any(|p| plain.predict(&p.as_question()) != trained.predict(&p.as_question()))
     );
 }
+
+// ---- #793 the engine's keys compare in NFC ----
+
+/// Links the model predicts for each question that are links of the verse.
+fn right_links(model: &Model, verses: &[TrainingVerse]) -> usize {
+    let key = |s: &[usize], t: &[usize]| {
+        let (mut s, mut t) = (s.to_vec(), t.to_vec());
+        s.sort_unstable();
+        t.sort_unstable();
+        (s, t)
+    };
+    verses
+        .iter()
+        .map(|verse| {
+            let got: Vec<_> = model
+                .predict(&verse.as_question())
+                .iter()
+                .map(|l| key(&l.source, &l.target))
+                .collect();
+            verse
+                .links()
+                .iter()
+                .filter(|g| got.contains(&key(&g.source, &g.target)))
+                .count()
+        })
+        .sum()
+}
+
+#[test]
+fn memory_trained_on_nfc_records_suggests_for_raw_source_words() {
+    use unicode_normalization::UnicodeNormalization;
+    // tC4 4.0 stores Hebrew source words in NFC; the pinned UHB, and the ULT's alignments
+    // made against it, write them otherwise.
+    let raw = bundle_entry("en_ult_v91.sb.zip", "en_ult/ingredients/JON.usfm");
+    let jonah: Vec<(String, String)> = codec_verses(&raw)
+        .into_iter()
+        .filter(|(r, _)| r.starts_with("1:"))
+        .collect();
+    let read = |nfc: bool, range: std::ops::RangeInclusive<u16>| -> Vec<TrainingVerse> {
+        jonah
+            .iter()
+            .filter(|(r, _)| range.contains(&r[2..].parse::<u16>().unwrap()))
+            .filter_map(|(r, body)| {
+                let body: String = if nfc {
+                    body.nfc().collect()
+                } else {
+                    body.clone()
+                };
+                TrainingVerse::from_aligned_usfm(format!("JON {r}"), &body).unwrap()
+            })
+            .collect()
+    };
+    let training = read(true, 1..=12);
+    assert_eq!(training.len(), 12);
+    let mut model = Model::empty(Testament::Old);
+    for verse in &training {
+        model.append_verse(verse, true);
+    }
+    let (asked_raw, asked_nfc) = (read(false, 13..=17), read(true, 13..=17));
+    assert!(
+        asked_raw
+            .iter()
+            .flat_map(|v| v.source())
+            .any(|s| s.text.nfc().collect::<String>() != s.text),
+        "some raw source word is not in NFC"
+    );
+    let right = right_links(&model, &asked_nfc);
+    assert!(right > 0);
+    assert_eq!(right_links(&model, &asked_raw), right);
+}

@@ -265,7 +265,7 @@ fn the_sample_projects_record_reads_and_is_valid() {
     };
     assert!(value.is_valid(&now));
     assert_eq!(
-        verse_status(Some(&value), Some(&now)).state,
+        verse_status(Some(&value), Some((&now, &verse))).state,
         VerseState::Todo
     );
     // Its words are the verse's words.

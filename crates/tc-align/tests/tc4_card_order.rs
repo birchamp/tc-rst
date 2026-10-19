@@ -11,9 +11,8 @@ use tc_align::Alignment;
 use tc_align::bootstrap;
 
 use common::*;
-use serde_json::Value;
 use tc_align::usfm::weave_verse;
-use tc_align::{Aligner, AlignmentValue, SourceVerse, SourceWord, TargetVerse, TargetWord, record};
+use tc_align::{Aligner, AlignmentValue, SourceVerse, SourceWord, TargetVerse, TargetWord};
 
 fn greek(text: &str, strong: &str, lemma: &str) -> SourceWord {
     SourceWord {
@@ -160,15 +159,6 @@ fn weaving_a_card_in_drop_order_or_in_verse_order_gives_the_same_bytes() {
 }
 
 /// TIT 1:1 of tC4's sample project: its stored record and the verse's content.
-fn sample_tit_1_1() -> (AlignmentValue, String) {
-    let file: Value = serde_json::from_str(&read(
-        "fixtures/tc4/sample-burrito/ingredients/checking/alignments/TIT.json",
-    ))
-    .unwrap();
-    let value = record::from_record(&file["chapters"]["1"]["1"], basis(1)).unwrap();
-    let body = verse_body("fixtures/tc4/sample-burrito/ingredients/TIT.usfm", "1:1");
-    (value, body)
-}
 
 // ---- The aligner keeps every card in verse order after every edit ----
 
@@ -236,7 +226,14 @@ fn tc4s_sample_record_opens_in_verse_order_and_is_saved_in_it_only_after_an_edit
     assert!(!aligner.is_changed(), "order alone is not saved");
     let mut as_shown = stored.clone();
     as_shown.word_bank = expected;
-    assert_eq!(aligner.value(), &as_shown, "only the order differs");
+    // The six UGNT words the record has no card for get theirs, after its ten (#790).
+    assert_eq!(&aligner.value().alignments[..10], &stored.alignments[..]);
+    as_shown.alignments = aligner.value().alignments.clone();
+    assert_eq!(
+        aligner.value(),
+        &as_shown,
+        "only the order and the fit differ"
+    );
 
     // Mark valid saves the value, in verse order.
     let mut marked = open();
