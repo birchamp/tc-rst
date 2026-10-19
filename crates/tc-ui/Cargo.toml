@@ -29,6 +29,8 @@ test-hooks = ["app", "tc-api/test-hooks"]
 # The wire types. tc-ui never enables tc-api's `server` feature, so UI code cannot make or read
 # a shown token (APP-DESIGN AD3).
 tc-api = { path = "../tc-api" }
+# The books of Home's tiles and Add a book: their order and English names (B2).
+tc-core = { path = "../tc-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -103,7 +105,6 @@ console_error_panic_hook = { version = "0.1.7", optional = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 # The event frames of tc-api, generated for the stream round trip.
 tc-api = { path = "../tc-api", features = ["proptest"] }
-tc-core = { path = "../tc-core" }
 base64 = { workspace = true }
 proptest = { workspace = true }
 regex = { workspace = true }

@@ -7,6 +7,7 @@
 
 use tc_api::account::WebUrl;
 use tc_api::endpoint::NetKind;
+use tc_api::ids::ProjectRef;
 
 /// A link the help pages hand over (A5). A8 adds the profile, B9b the shared repository.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,6 +22,10 @@ pub enum Pending {
     Feedback,
     /// A page of another site, opened in the system browser.
     Link(LinkKind, WebUrl),
+    /// A Home card's "Share on Door43" (B2 asks; B9b runs the share).
+    Share(ProjectRef),
+    /// A Home card's "Sync with Door43" (B2 asks; B10 runs the sync).
+    Sync(ProjectRef),
 }
 
 impl Pending {
@@ -29,6 +34,8 @@ impl Pending {
         match self {
             Self::Feedback => NetKind::Feedback,
             Self::Link(LinkKind::Help, _) => NetKind::HelpLink,
+            Self::Share(_) => NetKind::Share,
+            Self::Sync(_) => NetKind::Sync,
         }
     }
 }

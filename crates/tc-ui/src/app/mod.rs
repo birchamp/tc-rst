@@ -22,6 +22,8 @@ pub mod confirm;
 pub mod effects;
 pub mod events;
 pub mod feedback;
+pub mod forms;
+pub mod home;
 pub mod internet;
 pub mod language;
 pub mod load;

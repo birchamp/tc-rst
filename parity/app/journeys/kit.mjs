@@ -122,7 +122,6 @@ export async function openLanguage(page) {
 /** A language chosen in the App language dialog's list, by mouse. */
 export async function choose(page, id) {
   await page.getByTestId('language-select').click();
-  // The list's options: the stand-in Home's own <select> has options of the same names.
   await page.getByRole('listbox').getByRole('option', { name: LABEL[id], exact: true }).click();
   await until(`the select shows ${LABEL[id]}`, async () => (await page.getByTestId('language-select').textContent()).includes(LABEL[id]));
 }
@@ -130,8 +129,8 @@ export async function choose(page, id) {
 /** The test id of the focused element, or its role. */
 export const focused = (page) => page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.getAttribute('role') ?? document.activeElement?.tagName ?? null);
 
-/** The app shows `id`: the account button's name, the stand-in Home's sample line, `<html
- * lang>`, and, while the App language dialog is open, its title, hint, Apply and Cancel. */
+/** The app shows `id`: the account button's name, Home's title when Home shows, `<html lang>`,
+ * and, while the App language dialog is open, its title, hint, Apply and Cancel. */
 export async function expectLanguage(page, id) {
   const c = catalog(id);
   const en = catalog('en');
@@ -139,8 +138,8 @@ export async function expectLanguage(page, id) {
   await until(`the page in ${id}`, async () => {
     const lang = await page.evaluate(() => document.documentElement.lang);
     const label = await trigger(page).getAttribute('aria-label');
-    const sample = await page.getByTestId('runtime-sample').textContent().catch(() => null);
-    return lang === id && label === want('account.label.out') && (sample === null || sample === want('account.language'));
+    const title = await page.locator('main h1').textContent({ timeout: 500 }).catch(() => null);
+    return lang === id && label === want('account.label.out') && (title === null || title === want('home.yourProjects'));
   });
   if (await page.getByTestId('language-dialog').count()) {
     const dialog = page.locator('[data-testid="language-dialog"] [role="dialog"]');

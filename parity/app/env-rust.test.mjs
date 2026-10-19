@@ -151,7 +151,7 @@ browserTest('E1 home loads the page with the token, and the shot settles while t
     const events = await trackRequests(page, (url) => new URL(url).pathname === '/api/v1/events');
     await env.load(page, { locale: 'en' });
     const loaded = Date.now();
-    await page.getByTestId('runtime-ready').waitFor({ timeout: 10_000 });
+    await page.getByTestId('add-project').waitFor({ timeout: 10_000 });
     assert.deepEqual(await htmlLangDir(page), ['en', 'ltr']);
     await settle(page, inFlight, { busy });
     const settledIn = Date.now() - loaded;
@@ -167,7 +167,7 @@ browserTest('E2 counting the event stream would make every shot wait out the dea
   await withRustPage(async ({ env, page }) => {
     const all = await trackRequests(page, (url) => new URL(url).pathname.startsWith('/api/'));
     await env.load(page, { locale: 'en' });
-    await page.getByTestId('runtime-ready').waitFor({ timeout: 10_000 });
+    await page.getByTestId('add-project').waitFor({ timeout: 10_000 });
     await assert.rejects(settle(page, all, { deadlineMs: 2_000 }), /did not go quiet for 800 ms within 2 s; in flight: GET http:\/\/127\.0\.0\.1:\d+\/api\/v1\/events/);
   });
 });
@@ -220,7 +220,7 @@ browserTest('E5 nothing leaves the machine', async () => {
   await withRustPage(async ({ env, page, busy }) => {
     const inFlight = await trackRequests(page, env.tracks);
     await env.load(page, { locale: 'en' });
-    await page.getByTestId('runtime-ready').waitFor({ timeout: 10_000 });
+    await page.getByTestId('add-project').waitFor({ timeout: 10_000 });
     await settle(page, inFlight, { busy });
     assert.deepEqual(env.refused(), [], 'the app asks for nothing outside tc4');
     // The page's own CSP (connect-src 'self') stops a fetch to another origin first.
@@ -236,22 +236,27 @@ browserTest('E5 nothing leaves the machine', async () => {
 browserTest('E6 the recorder keeps node identity across a language switch', async () => {
   await withRustPage(async ({ env, page, busy }) => {
     const inFlight = await trackRequests(page, env.tracks);
-    const screen = { name: 'stand-in', run: async () => { await env.load(page, { locale: 'en' }); await page.getByTestId('runtime-ready').waitFor({ timeout: 10_000 }); } };
-    const recording = await recordSequence({
-      page, app: null, sequence: 'locale-switch', screen, inFlight, busy,
-      steps: [{ click: '[data-testid="runtime-locale"]' }, { key: 'ArrowDown' }, { key: 'Enter' }],
-    });
-    assert.deepEqual(recording.steps.map((s) => s.label), ['start', '{"click":"[data-testid=\\"runtime-locale\\"]"}', '{"key":"ArrowDown"}', '{"key":"Enter"}']);
-    const line = (step, testid) => step.dom.root.find((l) => l.includes(`data-testid="${testid}"`));
+    const screen = { name: 'home', run: async () => { await env.load(page, { locale: 'en' }); await page.getByTestId('add-project').waitFor({ timeout: 10_000 }); } };
+    // The App language dialog's preview switches the shown language (B2 D14).
+    const steps = [
+      { click: '[data-testid="account-menu"]' },
+      { click: '[data-testid="account-language"]' },
+      { click: '[data-testid="language-select"]' },
+      { key: 'ArrowDown' },
+      { key: 'Enter' },
+    ];
+    const recording = await recordSequence({ page, app: null, sequence: 'locale-switch', screen, inFlight, busy, steps });
+    assert.deepEqual(recording.steps.map((s) => s.label), ['start', ...steps.map((s) => JSON.stringify(s))]);
+    // Home's title has no test id, as in tC4: found by its tag.
+    const line = (step) => step.dom.root.find((l) => l.trimStart().startsWith('<h1'));
     const id = (l) => l.match(/ #(\d+|new)>$/)?.[1];
     const [first, last] = [recording.steps[0], recording.steps.at(-1)];
-    for (const testid of ['runtime-locale', 'runtime-sample']) {
-      assert.match(id(line(first, testid)) ?? '', /^\d+$/, `${testid} has a number at the start`);
-      assert.equal(id(line(last, testid)), id(line(first, testid)), `${testid} is the same node after the switch`);
-    }
-    assert.match(last.focus, /^select /, `the focus is on the picker, not ${last.focus}`);
-    const text = (step) => step.dom.root[step.dom.root.indexOf(line(step, 'runtime-sample')) + 1];
-    assert.notEqual(text(last), text(first), 'the sample changed language');
-    assert.equal(last.overflow, '(none)');
+    assert.match(id(line(first)) ?? '', /^\d+$/, 'the title has a number at the start');
+    assert.equal(id(line(last)), id(line(first)), 'the title is the same node after the switch');
+    assert.match(last.focus, /^button\[combobox\] /, `the focus is on the dialog's picker, not ${last.focus}`);
+    const text = (step) => step.dom.root[step.dom.root.indexOf(line(step)) + 1];
+    assert.notEqual(text(last), text(first), 'the title changed language');
+    // The open dialog holds the page still.
+    assert.equal(last.overflow, 'hidden');
   });
 });

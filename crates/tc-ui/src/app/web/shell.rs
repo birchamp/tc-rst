@@ -7,7 +7,6 @@ use leptos::prelude::*;
 use tc_api::ids::ServerInstance;
 
 use super::app_ctx::{Actions, AppState, Dialog, use_app};
-use super::home_stand_in::HomeStandIn;
 use super::{ViewError, js, panic};
 use crate::app::save::indicator::{Indicator, IndicatorStatus, Retry};
 use crate::app::shell::{
@@ -21,7 +20,12 @@ use crate::ds::{
 };
 use crate::i18n::{keys, t};
 use crate::views::account_menu::{AccountMenu, InternetDialog};
+use crate::views::home::Home;
+use crate::views::modals::add_book::AddBook;
+use crate::views::modals::add_project::AddProject;
 use crate::views::modals::feedback::Feedback;
+use crate::views::modals::import::Import;
+use crate::views::modals::new_bible::{NewBible, NewObs};
 
 /// tC4's `App`: the frame, the top bar, the screen in its boundary, and the dialogs in tC4's
 /// mount order, which is their stacking order (`tC4:src/App.jsx:138-154`).
@@ -51,15 +55,51 @@ pub fn App() -> impl IntoView {
         <div style=frame.to_style()>
             <TopBar />
             <ViewBoundary />
-            // AddProject, NewBible, NewObs, AddBook, Import (B2, C6, F1), OpenFromDoor43 (B9b),
-            // ProjectSettings, SourceTexts (B9a), GatewayChange, UpgradeSet (C8), GuidedFix
-            // (B5a), ShareSignIn (A8), ShareDialog (B9b, E1b) mount here, in this order.
+            {home_dialogs(&ctx.s)}
+            // OpenFromDoor43 (B9b), ProjectSettings, SourceTexts (B9a), GatewayChange,
+            // UpgradeSet (C8), GuidedFix (B5a), ShareSignIn (A8), ShareDialog (B9b, E1b) mount
+            // here, in this order.
             {move || feedback_open.get().then(|| view! { <Feedback /> })}
             <InternetDialog />
             // OpenProgress (B3) and the Inspector (late) mount here.
         </div>
     }
     .into_any()
+}
+
+/// Home's dialogs, in tC4's mount order (`tC4:src/App.jsx:138-142`): AddProject, NewBible,
+/// NewObs, AddBook, Import. Each is mounted while `s.modal` names it and its form is set.
+fn home_dialogs(s: &AppState) -> impl IntoView + use<> {
+    let dialog = {
+        let (dialog, np, ab, im) = (
+            s.layers.dialog.clone(),
+            s.np.clone(),
+            s.ab.clone(),
+            s.im.clone(),
+        );
+        Memo::new(move |_| match dialog.get() {
+            Some(Dialog::NewProject) if np.with(Option::is_none) => None,
+            Some(Dialog::NewObs) if np.with(Option::is_none) => None,
+            Some(Dialog::AddBook) if ab.with(Option::is_none) => None,
+            Some(Dialog::Import) if im.with(Option::is_none) => None,
+            other => other,
+        })
+    };
+    let open = move |which: Dialog| Memo::new(move |_| dialog.get() == Some(which));
+    let (add_project, new_bible, new_obs, add_book, import) = (
+        open(Dialog::AddProject),
+        open(Dialog::NewProject),
+        open(Dialog::NewObs),
+        open(Dialog::AddBook),
+        open(Dialog::Import),
+    );
+    view! {
+        {move || add_project.get().then(|| view! { <AddProject /> })}
+        {move || new_bible.get().then(|| view! { <NewBible /> })}
+        {move || new_obs.get().then(|| view! { <NewObs /> })}
+        {move || add_book.get().then(|| view! { <AddBook /> })}
+        {move || import.get().then(|| view! { <Import /> })}
+    }
 }
 
 /// Writes the navigation snapshot (6.6) and the panic hook's context whenever the view, the
@@ -394,8 +434,7 @@ fn main_view(s: &AppState) -> AnyView {
         .project
         .with_untracked(|p| screen(s.view.get_untracked(), p.as_ref()));
     match screen {
-        // Home is A4a's stand-in until B2 ports Home.jsx (D5).
-        Screen::Home => view! { <HomeStandIn /> }.into_any(),
+        Screen::Home => view! { <Home /> }.into_any(),
         // B3 Understand, B4a Translate, B5a/B5b Check, B8 Community Checking, B7 the story
         // views.
         Screen::Understand

@@ -1,8 +1,7 @@
 // App language (M16, tC4 #522), the cases of tC4's e2e/app-language.spec.ts that need no
 // project and no Home of B2: a, b, b2, c, d, f, the dialog half of g, the no-project halves of
 // h and j. The Home halves (the Home heading, the cards) are B2's; e, i, k and the in-project
-// halves of h and j are B3's and B4a's (A5 D18). The stand-in Home's sample line stands where
-// tC4's cases read the Home heading.
+// halves of h and j are B3's and B4a's (A5 D18). Home's heading is B2's Home.
 //
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app node --test parity/app/journeys/app-language.test.mjs
 import assert from 'node:assert/strict';
@@ -350,7 +349,7 @@ async function faces(page, locator) {
 browserTest('j. (no-project half) Arabic interface text is painted in the bundled Noto Sans Arabic at each weight, Latin in Mulish, with no other origin', async () => {
   await withApp(async ({ page, env }) => {
     const fonts = recordRequests(page);
-    const latin = await faces(page, page.getByTestId('runtime-sample'));
+    const latin = await faces(page, page.locator('main h1'));
     assert.deepEqual(latin.map((f) => [f.family, f.bundled]), [['Mulish', true]]);
     await applyLanguage(page, 'ar');
     await page.evaluate(() => document.fonts.ready);

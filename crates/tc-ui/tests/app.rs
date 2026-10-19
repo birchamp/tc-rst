@@ -9,6 +9,8 @@ mod app {
     mod client;
     mod effects;
     mod feedback;
+    mod forms;
+    mod home;
     mod indicator;
     mod internet;
     mod language;

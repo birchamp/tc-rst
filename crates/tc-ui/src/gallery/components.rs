@@ -1061,9 +1061,9 @@ fn menu(p: Props) -> AnyView {
 
 fn book_tile(p: Props) -> AnyView {
     BookTile(BookTileProps {
-        name: p.str("name").unwrap_or_default(),
+        name: p.str("name").unwrap_or_default().into(),
         percent: num_or(&p, "percent", 0.0),
-        meta: p.str("meta"),
+        meta: p.str("meta").into(),
         meta_title: p.str("metaTitle"),
         layout: p.keyword("layout").unwrap_or_default(),
         active: p.flag_signal("active"),
