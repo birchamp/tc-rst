@@ -2716,10 +2716,11 @@ a conflict), and the saves come back with the file at the next open.
 (I7), so after a Record or a Hold it is written over at once; the copy and the recorded fields
 keep the person's bytes (§11.1, `MetadataEditedOutside`). Bytes about to be written over are
 decided even when clean by stat: the table is asked about the md5 the ledger placed, and the
-file is read only when the table keeps them. When a file the group cannot read or write leaves no valid listing (the only book file
-held by another program, with no ledger entry or with no file to list), nothing is written and
-the paths wait for the file (`MaterializeBlocked`): never a failed write that turns the project
-read-only. A fixed file (`project.json`,
+file is read only when the table keeps them. When a file the job cannot read or write leaves no valid listing (the only book file
+held by another program, with no ledger entry or with no file to list), or a book file the folder
+lacks waits for a value that cannot be read (R15), nothing is written and the paths wait for the
+file (`MaterializeBlocked`): never a failed write that turns the project read-only or fails a
+checkpoint. A fixed file (`project.json`,
 `format.json`) shows no record (holds is true), and its Record restores it after a copy (§3.5).
 A carried file shows no record either; its edits are recorded by §11.4.
 
@@ -4771,6 +4772,7 @@ and the on-disk end state, not only what the fold returns.
 | L121 | A seal of a new device killed after it made the device's pack folder and before it flushed the folder's entry; a later session's seal made the month folder inside it, flushed only the month folder's entry, wrote the pack, removed the pending files, and a power cut took the device folder with the pack: four saves gone | `secure_dir_chain` flushes the entry of every directory on the way that the session did not make, past the ones it just made (§6.1, "A directory found existing is not trusted") | `a_pack_in_a_folder_a_killed_seal_made_survives_a_power_cut` (`tests/store/model.rs`) |
 | L122 | A held book file with no ledger entry, or its path held where a rebuild must go, in a job whose files of no book are a group of their own: that group found the listing invalid and failed as a bug, turning the project read-only (L119's fix counted only its own group's blocked paths) | any path the job could not read or write excuses an invalid listing (§6.2) | `a_held_edited_book_file_with_its_manifest_lost_leaves_the_project_writable` |
 | L123 | `metadata.json` written by a group killed right after its rename, taken by the next session as the write's new bytes with the old placement's scope digest; the journal then lost the name the file shows, and the next open, whose fold no longer had it, found the stale digest equal to its own and took the file for converged: the name stayed hidden in the file, and the fold showed the old one | an entry's scope stands for the bytes it places or holds and is dropped when those change (§6.2) | `a_metadata_json_found_after_a_kill_past_its_rename_is_never_taken_for_converged` (`tests/store/model.rs`) |
+| L124 | A pending file the open read cut in place, so a value of the book can no longer be read, and the book file deleted: the book file waits for the value (R15), and a later checkpoint's job (or the close's) found no book to list, failed the build of `metadata.json` as a bug, and the checkpoint and the close failed | a book file the folder lacks and the group does not write excuses an invalid listing like a blocked path (§6.2) | `a_deleted_book_file_waiting_for_an_unreadable_value_fails_no_checkpoint` (`tests/store/model.rs`) |
 
 ---
 
@@ -5056,7 +5058,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | R9 for a `Writing` state's old bytes (take `d = old` as the app's own when its size and mtime are the ones the ledger kept) | `a_restore_of_the_book_file_with_its_old_time_after_a_kill_past_its_rename_is_kept`, `a_restore_of_metadata_json_with_its_old_time_after_a_kill_past_its_rename_is_kept`, `a_revert_made_while_the_app_is_closed_after_a_crash_past_the_rename_is_recorded`, `a_revert_the_open_could_not_read_is_recorded_by_the_first_compare_and_swap`, `a_revert_to_an_earlier_write_of_two_stopped_ones_is_kept`, `a_revert_of_metadata_json_after_a_kill_past_its_rename_is_kept` |
 | WriteFailed for the renames a group that stopped with an error never tried or left unchanged (keep `Writing`) | `a_focus_after_a_group_stopped_does_not_take_its_bytes_for_an_outside_edit`, `an_outside_revert_after_a_stopped_group_is_recorded_as_a_conflict` |
 | M1 deciding `metadata.json` bytes about to be written over when clean by stat (trust the stat) | `a_settled_metadata_json_holding_a_lost_name_is_recorded_before_it_is_written_over` |
-| a listing a blocked file leaves invalid treated as blocked (fail the group) | `a_held_book_file_with_its_manifest_lost_leaves_the_project_writable`, `a_held_edited_book_file_with_its_manifest_lost_leaves_the_project_writable`, `a_deleted_book_file_whose_path_is_held_leaves_the_project_writable` |
+| a listing a blocked file leaves invalid treated as blocked (fail the group) | `a_held_book_file_with_its_manifest_lost_leaves_the_project_writable`, `a_held_edited_book_file_with_its_manifest_lost_leaves_the_project_writable`, `a_deleted_book_file_whose_path_is_held_leaves_the_project_writable`, `a_deleted_book_file_waiting_for_an_unreadable_value_fails_no_checkpoint` |
 | the open leaving a held damaged pending file for the next open (fail the open's write) | `a_damaged_pending_file_a_scanner_holds_leaves_the_project_writable` |
 | `secure_dir_chain` walking past the directories just made (stop at the first one) | `a_pack_in_a_folder_a_killed_seal_made_survives_a_power_cut` |
 | an entry's scope dropped when the entry comes to stand for other bytes (keep it) | `a_metadata_json_found_after_a_kill_past_its_rename_is_never_taken_for_converged` |

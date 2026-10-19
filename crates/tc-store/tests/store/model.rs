@@ -1817,8 +1817,9 @@ fn a_chunk() -> impl Strategy<Value = Vec<Step>> {
             ]
         }),
         // Bytes settled by a read after their time stamp, damaged, found by the next open's
-        // storage check and held, and the person's choice.
-        1 => (a_file(), any::<bool>()).prop_map(|(file, take_in)| {
+        // storage check and held, perhaps saved again by another program, and the person's
+        // choice.
+        1 => (a_file(), any::<bool>(), any::<bool>()).prop_map(|(file, again, take_in)| {
             vec![
                 Step::Act { act: Act::Leave, kill: None },
                 Step::Advance,
@@ -1828,9 +1829,34 @@ fn a_chunk() -> impl Strategy<Value = Vec<Step>> {
                 crash(),
                 Step::Open,
                 Step::Advance,
-                Step::Touch { file },
+                if again {
+                    match file {
+                        File::Usfm => Step::Edit { verse: 1, told: false },
+                        File::Meta => Step::EditName { told: false },
+                    }
+                } else {
+                    Step::Touch { file }
+                },
                 Step::Focus,
                 Step::Choose { take_in },
+            ]
+        }),
+        // A pending file the open read cut in place, so a value can no longer be read, and
+        // the book file deleted: the job must not rebuild it without the value (R15).
+        1 => any::<bool>().prop_map(|told| {
+            vec![
+                Step::Act { act: Act::Save(1), kill: None },
+                Step::Act { act: Act::Leave, kill: None },
+                crash(),
+                Step::Open,
+                Step::Cut { journal: Journal::Pending, which: 0, keep: 0, at_line: false },
+                if told {
+                    Step::Delete { file: File::Usfm }
+                } else {
+                    Step::Focus
+                },
+                Step::Delete { file: File::Usfm },
+                Step::Act { act: Act::Leave, kill: None },
             ]
         }),
     ]
@@ -2285,8 +2311,53 @@ fn a_metadata_json_found_after_a_kill_past_its_rename() -> Vec<Step> {
     ]
 }
 
+/// A pending file the open read cut in place (a value of the book can no longer be read),
+/// the book file deleted, and later a checkpoint: the book file waits for the value (R15), and
+/// its absence leaves no valid listing, which the job takes for a wait, never a bug that fails
+/// the checkpoint and the close.
+fn a_deleted_book_file_waiting_for_an_unreadable_value() -> Vec<Step> {
+    vec![
+        act(Act::Save(1)),
+        act(Act::Leave),
+        crash(),
+        Step::Open,
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        Step::Focus,
+        Step::Delete { file: File::Usfm },
+        act(Act::Leave),
+        Step::Act {
+            act: Act::Section(1),
+            kill: Some(Kill {
+                at: 12,
+                power_cut: false,
+                torn: false,
+            }),
+        },
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        act(Act::Save(1)),
+        Step::DeleteJournal {
+            journal: Journal::Pending,
+            which: 0,
+        },
+        act(Act::Checkpoint),
+    ]
+}
+
 fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
     vec![
+        (
+            "a_deleted_book_file_waiting_for_an_unreadable_value",
+            a_deleted_book_file_waiting_for_an_unreadable_value(),
+        ),
         (
             "a_metadata_json_found_after_a_kill_past_its_rename",
             a_metadata_json_found_after_a_kill_past_its_rename(),
@@ -2433,4 +2504,9 @@ fn a_held_edited_book_file_with_its_manifest_lost_leaves_the_project_writable() 
 #[test]
 fn a_metadata_json_found_after_a_kill_past_its_rename_is_never_taken_for_converged() {
     assert_kept(&a_metadata_json_found_after_a_kill_past_its_rename());
+}
+
+#[test]
+fn a_deleted_book_file_waiting_for_an_unreadable_value_fails_no_checkpoint() {
+    assert_kept(&a_deleted_book_file_waiting_for_an_unreadable_value());
 }

@@ -813,10 +813,23 @@ impl Writer {
                 return Ok(());
             }
             // A file this job cannot read or write leaves no valid listing (the only book
-            // file held by another program, `.tc/` lost): nothing is written, and the paths
-            // are tried again with the file, never taken for a failed write that makes the
-            // project read-only.
-            Err(_) if !self.reasons.is_empty() => {
+            // file held by another program, `.tc/` lost), and so does a book file the folder
+            // lacks that this group does not write (deleted while a value it shows cannot be
+            // read, R15): nothing is written, and the paths are tried again with the file,
+            // never taken for a failed write that makes the project read-only.
+            Err(_)
+                if !self.reasons.is_empty()
+                    || self.fold.projected_books().into_iter().any(|book| {
+                        let rel = DerivedFile::Usfm(book).path();
+                        !planned.contains_key(&rel)
+                            && self
+                                .manifest
+                                .paths
+                                .get(&rel)
+                                .and_then(Entry::listed)
+                                .is_none()
+                    }) =>
+            {
                 self.restore_group(group);
                 self.dirty.metadata = true;
                 return Ok(());
