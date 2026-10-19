@@ -3,10 +3,12 @@
 //! at a time, this computer's preferences, the operation reports and the reply cache.
 //!
 //! The crate does no HTTP. [`App::call`] answers one request as bytes, exactly as the
-//! server sends them; the server routes to it.
+//! server sends them; the server routes to it. [`backend`] is the storage side; with the
+//! feature `fixture-backend` it holds STORAGE §13.2's state seed of a tC4 project.
 
 pub mod account;
 pub mod app;
+pub mod backend;
 pub mod bundle;
 pub mod clock;
 pub mod config;

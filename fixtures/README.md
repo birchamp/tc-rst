@@ -38,3 +38,8 @@ Strong's vectors computed by tC4's rule. Read `lexicon/README.md`.
 ## `export/`
 
 What tC4's own print code answers, for `tc-export`'s print model. Read `export/README.md`.
+
+## `parity-state/`
+
+The files that make the parity scenarios' projects differ from the samples above, so cargo
+tests read the exact bytes of `.state/<scenario>` without node. Read `parity-state/README.md`.

@@ -20,4 +20,5 @@ mod app {
     mod replies;
     mod reports;
     mod seed;
+    mod state_seed;
 }
