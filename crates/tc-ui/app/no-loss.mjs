@@ -126,7 +126,9 @@ class Server {
  * A proxy in front of tc4 that stands for a restarted tc4 which got the old port back: it passes
  * everything to the current server, rewriting Host and Origin, and the token header to the current
  * server's, which a reused port alone would not do. A page behind it can therefore reach a new run
- * as if nothing had changed, and only its `hello` check can tell (D8).
+ * as if nothing had changed, and only its `hello` check can tell (D8). A response the server dies
+ * in the middle of ends there for the page too, as the dead server's own socket would: the page's
+ * event stream then reconnects at once instead of waiting out its 45 s of silence.
  */
 class Proxy {
   static async start(server) {
@@ -138,10 +140,27 @@ class Proxy {
 
   constructor(server) {
     this.server = server;
+    this.holds = [];
     this.http = http.createServer((req, res) => this.handle(req, res));
   }
 
+  /** Keeps every request whose path starts with `prefix` until the returned function is called. */
+  hold(prefix) {
+    const hold = { prefix, waiting: [], released: false };
+    this.holds.push(hold);
+    return () => {
+      hold.released = true;
+      for (const go of hold.waiting.splice(0)) go();
+    };
+  }
+
   handle(req, res) {
+    const hold = this.holds.find((h) => !h.released && req.url.startsWith(h.prefix));
+    if (hold) hold.waiting.push(() => this.forward(req, res));
+    else this.forward(req, res);
+  }
+
+  forward(req, res) {
     const { base, token } = this.server;
     const headers = { ...req.headers, host: base.host };
     if (headers.origin) headers.origin = base.origin;
@@ -150,6 +169,14 @@ class Proxy {
       res.writeHead(up.statusCode, up.headers);
       res.flushHeaders();
       up.pipe(res);
+      const cut = () => {
+        if (!res.writableEnded) res.destroy();
+      };
+      up.on('aborted', cut);
+      up.on('error', cut);
+      up.on('close', () => {
+        if (!up.complete) cut();
+      });
     });
     upstream.on('error', () => res.destroy());
     res.on('close', () => upstream.destroy());
@@ -431,7 +458,8 @@ async function caseP2(browser) {
       await typeInto(page, 'a', 'kept');
       await page.evaluate(() => sessionStorage.setItem('tc4.test.panicOnInput', '1'));
       await page.keyboard.type('!');
-      // The aborted instance's ticker traps every 20 ms until the page leaves; keep typing too.
+      // Each later keystroke's input handler traps in the aborted instance before the page
+      // leaves; boot.js counts the page load once, and its listener still keeps the keys.
       await page.keyboard.type('more', { delay: 10 }).catch(() => {});
       await page.waitForSelector('[data-testid=view-error]', { timeout: 20000 });
       await sleep(2000);
@@ -486,6 +514,52 @@ async function caseP3(browser) {
       check('P3: Back to Home reloads once and the page boots', log.navigations === 4, log.navigations);
       await untilStores(server, ['draft text!'], 'P3: then the text is saved', 'probe-a', 6000);
       await clean('P3', page, log, PANIC_PATTERNS);
+    });
+  } finally {
+    await server.stop();
+  }
+}
+
+/**
+ * 6.8 and 6.6: after three panics boot.js posts no draft for an entry whose save is in flight. Its
+ * tokens are those from before that save, so the draft would stand beside the person's own save
+ * as a conflict; the entry stays in the buffer, with its save, and the next page saves it.
+ */
+async function caseP3b(browser) {
+  const server = await Server.start();
+  try {
+    await withPage(browser, server, {}, async (page, log) => {
+      await openProbe(page, server.url, server.token);
+      await server.command('test/hold', { at: 'save' });
+      await typeInto(page, 'a', 'T1');
+      await blur(page);
+      await until(async () => (await indicatorState(page)) === 'saving', 5000, 'saving');
+      await typeInto(page, 'a', ' T2');
+      await page.evaluate(() => {
+        sessionStorage.setItem('tc4.test.panicAtBoot', '2');
+        sessionStorage.setItem('tc4.test.panicOnInput', '1');
+      });
+      await page.keyboard.type('!');
+      await until(() => page.$('[data-testid=view-error]'), 20000, 'the static callout');
+      await sleep(3000);
+      check('P3b: three panics, three page loads, then the static callout', log.navigations === 3, log.navigations);
+      await server.command('test/release', { at: 'save' });
+      await untilStores(server, ['T1'], 'P3b: the save in flight lands');
+      await sleep(1000);
+      const logged = await server.log();
+      check('P3b: no draft is posted for an entry whose save is in flight', logged.drafts === 0, logged.draft);
+      const entry = JSON.parse(await readItem(page, probeItem()));
+      check('P3b: the entry stays in the buffer with its save', entry.text === 'T1 T2!' && entry.sent?.text === 'T1', entry);
+      await page.click('[data-testid=view-error-home]');
+      await page.waitForSelector(`${field('a')}[data-ready=true]`, { timeout: 20000 });
+      await untilStores(server, ['T1', 'T1 T2!'], 'P3b: the next page saves the newer text', 'probe-a', 8000);
+      const after = await server.log();
+      check(
+        'P3b: both over the current version, never a conflict with the person\'s own save',
+        JSON.stringify(after.stores.map((s) => [s.text, s.base])) === '[["T1","current"],["T1 T2!","current"]]',
+        after.stores,
+      );
+      await clean('P3b', page, log, PANIC_PATTERNS);
     });
   } finally {
     await server.stop();
@@ -768,6 +842,48 @@ async function caseP10(browser) {
   }
 }
 
+/**
+ * 6.8: a browser that blocks the site's data throws from the `sessionStorage` getter itself. Here
+ * it does so for boot.js's own reads only (the WebAssembly still reads the panic trigger): a
+ * panic then shows the static callout at once and never reloads.
+ */
+async function caseP10b(browser) {
+  const server = await Server.start();
+  try {
+    const initScripts = [
+      () => {
+        const owner = Object.getOwnPropertyDescriptor(window, 'sessionStorage') ? window : Window.prototype;
+        const real = Object.getOwnPropertyDescriptor(owner, 'sessionStorage');
+        Object.defineProperty(window, 'sessionStorage', {
+          configurable: true,
+          get() {
+            const caller = (new Error().stack ?? '').split('\n')[2] ?? '';
+            if (/\/boot\.js:/.test(caller)) {
+              throw new DOMException("Failed to read the 'sessionStorage' property from 'Window': Access is denied for this document.", 'SecurityError');
+            }
+            return real.get.call(window);
+          },
+        });
+      },
+    ];
+    await withPage(browser, server, { initScripts }, async (page, log) => {
+      await openProbe(page, server.url, server.token);
+      await page.evaluate(() => sessionStorage.setItem('tc4.test.panicOnInput', '1'));
+      await typeInto(page, 'a', 'x');
+      let shown = true;
+      await until(() => page.$('[data-testid=view-error]'), 10000, 'the callout').catch(() => {
+        shown = false;
+      });
+      await sleep(2000);
+      check('P10b: with sessionStorage out of boot.js\'s reach a panic shows the static callout', shown && (await page.$(field('a'))) === null, log.errors);
+      check('P10b: at once, with no reload', log.navigations === 1, log.navigations);
+      await clean('P10b', page, log, [...PANIC_PATTERNS, /sessionStorage/]);
+    });
+  } finally {
+    await server.stop();
+  }
+}
+
 /** 6.6: a field whose item holds another run's entry; its keystrokes reach the mirror at once. */
 async function caseP11(browser) {
   const server = await Server.start();
@@ -854,6 +970,35 @@ async function caseP13(browser) {
 }
 
 /**
+ * tC4's drain on `pagehide` retries a standing failure once (`saveScheduler.ts:139-146`): a save
+ * that failed, whose cause is gone, is stored when the person leaves the page.
+ */
+async function caseP13b(browser) {
+  const server = await Server.start();
+  const file = path.join(server.run, 'appdata', 'test-hooks', 'fields.json');
+  try {
+    await withPage(browser, server, {}, async (page, log) => {
+      await openProbe(page, server.url, server.token);
+      const original = fs.readFileSync(file);
+      fs.rmSync(file);
+      fs.mkdirSync(file);
+      fs.writeFileSync(path.join(file, 'keep'), 'x');
+      await typeInto(page, 'a', 'failed once');
+      await blur(page);
+      await until(async () => (await indicatorState(page)) === 'error', 5000, 'error');
+      fs.rmSync(file, { recursive: true });
+      fs.writeFileSync(file, original);
+      await page.goto('about:blank');
+      check('P13b: leaving with a failed save asks first', log.dialogs.includes('beforeunload'), log.dialogs);
+      await untilStores(server, ['failed once'], 'P13b: leaving the page retries the failed save', 'probe-a', 5000);
+      check('P13b: leaving the page retries the failed save once and stores it', true);
+    });
+  } finally {
+    await server.stop();
+  }
+}
+
+/**
  * The mirror after a crash and a restart behind a reused port: run 1's unsaved text stays in the
  * shell's mirror when run 2 types into the same field and saves it (5.7: lines per field and run).
  */
@@ -885,6 +1030,108 @@ async function caseP14(browser) {
       check('P14: saving run 2\'s text leaves run 1\'s in the mirror', left.some((e) => e.text === 'R1' && e.instance === oldRun), left);
       check('P14: and run 2\'s is gone from it', !left.some((e) => e.instance !== oldRun), left);
       await clean('P14', page, log, [/Failed to load resource/, /net::/, /hello could not be read/, /event stream/]);
+    });
+  } finally {
+    await proxy.stop();
+    await first.stop({ keep: true });
+    if (second) await second.stop();
+    else fs.rmSync(first.run, { recursive: true, force: true });
+  }
+}
+
+/**
+ * 6.6: the WebAssembly leaves a keystroke to boot.js only on boot.js's word (`tc4Boot.wrote`).
+ * Here boot.js tracks no editor (its `track` does nothing), so it neither writes the field's item
+ * nor sends the mirror a line; the keystroke still reaches both, through the WebAssembly's write.
+ */
+async function caseP15(browser) {
+  const server = await Server.start();
+  const bridge = new Bridge();
+  try {
+    const initScripts = [
+      () => {
+        let boot;
+        Object.defineProperty(window, 'tc4Boot', {
+          configurable: true,
+          get: () => boot,
+          set: (value) => {
+            value.track = () => {};
+            boot = value;
+          },
+        });
+      },
+    ];
+    await withPage(browser, server, { bridge, initScripts }, async (page, log) => {
+      await openProbe(page, server.url, server.token);
+      await typeInto(page, 'a', 'kept');
+      const entry = JSON.parse((await readItem(page, probeItem())) ?? 'null');
+      check('P15: with boot.js writing nothing, the keystroke is in the storage', entry?.text === 'kept', entry);
+      check('P15: and in the mirror', mirrored(bridge).some((e) => e.text === 'kept'), mirrored(bridge));
+      await blur(page);
+      await untilStores(server, ['kept'], 'P15: and saved');
+      await clean('P15', page, log);
+    });
+  } finally {
+    await server.stop();
+  }
+}
+
+/**
+ * 6.5: the event stream finds a restart behind a reused port while a lost reply's resend waits for
+ * its `app/hello`. That `hello` then names the run the page already knows, and the old request,
+ * which the new run has no reply cache for, must still not go to it.
+ */
+async function caseP16(browser) {
+  const first = await Server.start();
+  const proxy = await Proxy.start(first);
+  const bridge = new Bridge();
+  let second = null;
+  try {
+    await withPage(browser, first, { bridge }, async (page, log) => {
+      await openProbe(page, proxy.url, first.token);
+      // A frame the page reads, so its stream's reconnect asks the new run after it and gets a
+      // `Resync`: a page that has read none cannot tell a new run by its stream (A4b row).
+      await first.command('net/set', { on: true });
+      await sleep(500);
+      await first.command('test/crash', { at: 'beforeReply', path: 'test/fieldStore' });
+      await typeInto(page, 'a', 'Stored once');
+      await blur(page);
+      await first.exited;
+      const crashedAt = Date.now();
+      // The new run hears nothing of the page's stream, and the resend's first hello waits in the
+      // browser, until the case lets each go.
+      const releaseEvents = proxy.hold('/api/v1/events');
+      let releaseHello = null;
+      const helloHeld = new Promise((resolve) => {
+        page.route('**/api/v1/app/hello', async (route) => {
+          if (releaseHello) return route.continue();
+          await new Promise((go) => {
+            releaseHello = go;
+            resolve();
+          });
+          return route.continue();
+        });
+      });
+      second = await Server.start(first.run);
+      proxy.server = second;
+      await helloHeld;
+      releaseEvents();
+      await until(
+        async () =>
+          (await page.$('[data-testid=probe-restarted]')) !== null &&
+          (await page.evaluate(() => window.__tc4Probe.state('probe-a'))) === 'held',
+        20000,
+        'the stream finds the restart',
+      );
+      check('P16: the stream found the restart while the resend\'s hello waited', true);
+      releaseHello();
+      await sleep(3000);
+      const stored = texts(await second.log());
+      check('P16: the resend\'s hello names the new run, and nothing is resent', JSON.stringify(stored) === '["Stored once"]', stored);
+      const resends = log.requests.filter((r) => r.path === '/api/v1/test/fieldStore' && r.at > crashedAt);
+      check('P16: no save reached the new run', resends.length === 0, resends.length);
+      check('P16: the field stays held', (await page.evaluate(() => window.__tc4Probe.state('probe-a'))) === 'held');
+      await clean('P16', page, log, [/Failed to load resource/, /net::/, /hello could not be read/, /event stream/]);
     });
   } finally {
     await proxy.stop();
@@ -1090,6 +1337,7 @@ async function noLoss() {
     ['P1b', () => panicInInput(browser, true)],
     ['P2', () => caseP2(browser)],
     ['P3', () => caseP3(browser)],
+    ['P3b', () => caseP3b(browser)],
     ['P4', () => caseP4(browser)],
     ['P5', () => caseP5(browser)],
     ['P6', async () => {
@@ -1100,10 +1348,14 @@ async function noLoss() {
     ['P8', () => caseP8(browser)],
     ['P9', () => caseP9(browser)],
     ['P10', () => caseP10(browser)],
+    ['P10b', () => caseP10b(browser)],
     ['P11', () => caseP11(browser)],
     ['P12', () => caseP12(browser)],
     ['P13', () => caseP13(browser)],
+    ['P13b', () => caseP13b(browser)],
     ['P14', () => caseP14(browser)],
+    ['P15', () => caseP15(browser)],
+    ['P16', () => caseP16(browser)],
   ];
   try {
     for (const [name, run] of cases) {
