@@ -35,6 +35,29 @@ const readReplies = (name) => JSON.parse(fs.readFileSync(path.join(REPO, 'parity
 const homeReply = (name) => readReplies(name).replies.find((r) => r.endpoint === 'home/list').reply;
 const newRequestId = () => crypto.randomBytes(16).toString('hex');
 
+/** B3's route to the open overlay: Home, the open held before the store opens the project
+ * (`test/hold` at `open`), `jobs/get` answering the open job with `progress` (the stage the case
+ * shows; the overlay reads it at its next look at the job), and the Titus tile clicked. The
+ * open stays in flight for the shot (`held`). */
+const heldOpen = (progress) => async (app, env) => {
+  // A route of an earlier case's shot (a read held unanswered) goes first.
+  await app.page.unrouteAll({ behavior: 'ignoreErrors' });
+  await app.home();
+  await env.call('test/hold', { request: newRequestId(), at: 'open' });
+  if (progress) {
+    await app.page.route('**/api/v1/jobs/get', async (route) => {
+      const { job } = JSON.parse(route.request().postData());
+      const value = { id: job, kind: 'open', project: env.projectId(BIBLE), state: { type: 'running', value: progress } };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ type: 'ok', value }) });
+    });
+  }
+  await app.card(BIBLE).getByRole('button', { name: /Titus/ }).click();
+  const stage = progress ? { readingChanges: 'journal', finishingWork: 'state', writingFiles: 'prepare' }[progress.phase.value] : 'journal';
+  await app.page.locator(`[data-testid="open-progress"][data-stage="${stage}"]`).waitFor();
+  if (progress?.total) await app.page.getByText(`${progress.done} of ${progress.total}`, { exact: false }).waitFor();
+};
+const openProgress = (phase, done = 0, total = null) => ({ phase: { type: 'open', value: phase }, done, total, item: null });
+
 /** The next release name after `version` (v66 -> v67, v0.34 -> v0.35). */
 const nextVersion = (version) => version.replace(/(\d+)$/, (n) => String(Number(n) + 1));
 
@@ -172,10 +195,16 @@ export const CASES = [
 
   // ---- S14: the open overlay ---------------------------------------------------------------
   { name: 'open-progress-journal', group: 'S14', state: 'home', patch: () => opening('journal', 120, 480),
+    // The Rust app: the open held, the job reading its changes, 120 of 480 files (B3).
+    rust: heldOpen(openProgress('readingChanges', 120, 480)), held: true,
     why: 'A slow open of the Bible sample reading its journal, 120 of 480 saved actions (a determinate bar). The mock opens the sample faster than the 300 ms threshold, so it never shows.' },
   { name: 'open-progress-state', group: 'S14', state: 'home', patch: () => opening('state'),
+    // The Rust app: the open held, the job finishing earlier work, tC4's state stage (Q-7).
+    rust: heldOpen(openProgress('finishingWork')), held: true,
     why: 'The open checking the project state (indeterminate), as the store reports it after the journal (journalingStore.ts:1364).' },
   { name: 'open-progress-prepare', group: 'S14', state: 'home', patch: () => opening('prepare'),
+    // The Rust app: the open held, the job writing the project's files, tC4's preparing (Q-7).
+    rust: heldOpen(openProgress('writingFiles')), held: true,
     why: 'The open preparing the project (indeterminate), its last stage (state.jsx:2185).' },
 
   // ---- M9: the release upgrade confirmation -------------------------------------------------
@@ -379,6 +408,15 @@ export const CASES = [
   // home-loading photographs a read in flight, which B3 can capture (S14 needs it too); the
   // open's and the checkpoint's errors need the open (B3) and the leave checkpoint (D1) (B2 D10).
   { name: 'home-loading', group: 'home-held', state: 'home', patch: () => ({ projects: null }),
+    // The Rust app: Home with its home/list held unanswered for the shot (B3's capture of work
+    // in flight, `held`).
+    rust: async (app, env) => {
+      await app.page.unrouteAll({ behavior: 'ignoreErrors' });
+      await app.page.route('**/api/v1/home/list', () => {});
+      await env.load(app.page, { locale: 'en' });
+      await app.page.getByTestId('account-menu').waitFor();
+    },
+    held: true, heldRequests: ['/api/v1/home/list'],
     why: 'Home before the project list is read.' },
   { name: 'home-empty', group: 'home', state: 'home', patch: () => ({ projects: [] }),
     // The Rust app: home/list answered once with no project, a hand reply (replies/home-empty.json).
@@ -398,6 +436,18 @@ export const CASES = [
     },
     why: 'Home when the project list failed to read: the banner with Retry (state.jsx refreshProjects\' catch writes String(e)).' },
   { name: 'home-open-error', group: 'home-open', state: 'home-open-error',
+    // The Rust app: session/open refused once, a hand reply (replies/home-open-error.json): this
+    // app reads a file written outside it as an outside edit and opens (STORAGE §11.1), so the
+    // refusal is one it does give, a project file it cannot read.
+    rust: async (app, env) => {
+      await app.page.unrouteAll({ behavior: 'ignoreErrors' });
+      await app.home();
+      const { reply } = readReplies('home-open-error').replies[0];
+      await app.page.route('**/api/v1/session/open', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reply) }), { times: 1 });
+      await app.card(BIBLE).getByRole('button', { name: /Titus/ }).click();
+      await app.page.getByTestId('home-open-error').waitFor();
+      await app.page.getByTestId('book-tile-TIT').focus();
+    },
     why: 'Home after an open refused a file written outside the app.' },
   { name: 'home-checkpoint-error', group: 'home-checkpoint', state: 'home',
     patch: (s, { kit }) => ({ commitError: `${kit.t('app.commitError')}: ${FETCH_FAILED}`, commitErrorHelp: null, commitErrorRepo: BIBLE }),

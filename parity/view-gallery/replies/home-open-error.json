@@ -1,0 +1,25 @@
+{
+  "case": "home-open-error",
+  "replies": [
+    {
+      "endpoint": "session/open",
+      "source": "hand",
+      "request": {},
+      "reply": {
+        "type": "err",
+        "value": {
+          "type": "refused",
+          "value": {
+            "type": "open",
+            "value": {
+              "type": "unreadable",
+              "value": {
+                "reason": "ingredients/tc/project.json is not valid JSON"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

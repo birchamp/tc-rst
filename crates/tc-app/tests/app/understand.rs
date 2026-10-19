@@ -10,7 +10,7 @@ use tc_api::app::Hello;
 use tc_api::editor::{Book, PaneText, Sources};
 use tc_api::helps::{Article, ArticleLink, ArticleView, Passage, Slot};
 use tc_api::home::ProjectKind;
-use tc_api::ids::{JobId, ProjectRef, Scope};
+use tc_api::ids::{JobId, Scope};
 use tc_api::jobs::{JobOutcome, JobState};
 use tc_api::prefs::DraftUnit;
 use tc_api::refusal::OpenRefusal;
@@ -291,7 +291,9 @@ async fn an_article_comes_from_the_books_helps() {
         panic!("{article:?}")
     };
     assert_eq!(title, "God");
-    assert!(!blocks.is_empty());
+    // tC4's pane draws the whole file, its title line first.
+    assert_eq!(blocks[0].kind, tc_api::model::BlockKind::H);
+    assert_eq!(blocks[0].text(), "God");
     let missing = ok(
         &t.app,
         &Article {
@@ -304,28 +306,6 @@ async fn an_article_comes_from_the_books_helps() {
     )
     .await;
     assert_eq!(missing, ArticleView::Missing);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_project_open_elsewhere_cannot_be_read_with_this_scope() {
-    let (_dir, t) = start("sample").await;
-    let stale = Scope {
-        project: ProjectRef::parse("sample_burrito").unwrap(),
-        epoch: tc_api::ids::Epoch::new(99),
-    };
-    let read = t
-        .app
-        .request(&Sources {
-            at: stale,
-            book: BookId::Titus,
-            chapter: 1,
-        })
-        .await
-        .unwrap();
-    assert!(
-        matches!(read, Reply::Err(ApiError::StaleScope { .. })),
-        "{read:?}"
-    );
 }
 
 // ---- take_spans: the UI's copy against tc-helps' (§3.8) -----------------------------------

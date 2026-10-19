@@ -79,12 +79,14 @@ export async function trackRequests(page, tracks) {
  * on the server, a call the page has not sent yet). Once it answers true it is asked at every
  * look until it answers false, and the quiet counts again from that answer, so the shot comes
  * `quietMs` after the work stopped, and only when `busy` still answers false then. */
-export async function settle(page, inFlight, { quietMs = 800, deadlineMs = 30_000, busy = null } = {}) {
+export async function settle(page, inFlight, { quietMs = 800, deadlineMs = 30_000, busy = null, ignore = null } = {}) {
   const deadline = Date.now() + deadlineMs;
   let quietSince = Date.now();
   let serverBusy = false;
+  // `ignore`: a request the screen holds on purpose (a read left unanswered for its shot).
+  const pending = () => (ignore ? [...inFlight.values()].filter((r) => !ignore(r)).length : inFlight.size);
   for (;;) {
-    if (inFlight.size > 0) quietSince = Date.now();
+    if (pending() > 0) quietSince = Date.now();
     else if (serverBusy) {
       serverBusy = await busy();
       quietSince = Date.now();

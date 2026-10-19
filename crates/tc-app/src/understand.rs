@@ -680,6 +680,17 @@ impl Handle<Passage> for App {
     }
 }
 
+/// A words article as tC4's pane draws it: the whole file, its `# Title` line included
+/// (`readTwArticle`, `tC4:src/data/articles.ts:57-66`). tc-helps keeps the title apart; an
+/// article whose file had no title line has the slug for its title, and gets no heading back.
+fn word_body(title: &str, slug: &str, body: &str) -> String {
+    if title == slug {
+        body.to_owned()
+    } else {
+        format!("# {title}\n\n{body}")
+    }
+}
+
 impl Handle<Article> for App {
     async fn handle(&self, req: Article) -> Result<ArticleView, ApiError> {
         let session = self.read(&req.at)?;
@@ -708,7 +719,12 @@ impl Handle<Article> for App {
                     .and_then(|(category, slug)| {
                         helps.word_article(&WordArticleId::Dcs { category, slug })
                     })
-                    .map(|f| (f.item.title.clone(), f.item.body.clone())),
+                    .map(|f| {
+                        (
+                            f.item.title.clone(),
+                            word_body(&f.item.title, slug, &f.item.body),
+                        )
+                    }),
                 HelpsPart::WordLinks,
             ),
         };

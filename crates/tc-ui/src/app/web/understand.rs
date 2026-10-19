@@ -130,11 +130,13 @@ fn refused_banner(error: &ApiError) -> HomeBanner {
                 .iter()
                 .map(|(k, v)| (*k, v as &dyn std::fmt::Display))
                 .collect();
-            (
-                refusal.code().unwrap_or("open").to_owned(),
-                t_dyn(refusal.key(), &vars, None),
-                None,
-            )
+            // Home's banner leads with "The project could not be opened.", so a refusal that
+            // carries the store's reason shows the reason, as tC4 shows its store's message.
+            let text = match refusal.detail() {
+                Some(detail) => detail.to_owned(),
+                None => t_dyn(refusal.key(), &vars, None),
+            };
+            (refusal.code().unwrap_or("open").to_owned(), text, None)
         }
         ApiError::Internal { report } => ("internal".to_owned(), error.to_string(), Some(*report)),
         other => ("open".to_owned(), other.to_string(), None),
