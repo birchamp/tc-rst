@@ -2291,7 +2291,11 @@ The Rust environment's seams:
    identity after each step (`parity/ds-gallery/scenarios.mjs:137-151`). Node numbers are
    renumbered by first appearance on each side, so they compare whatever else the page holds;
    the masks' elements take no part, and a DOM-first screen's sequence is compared within its
-   scope *(A6b)*.
+   scope *(A6b)*. *(A5, D7: a step may close that scope, as "Escape returns the focus" does: a
+   scope that matches nothing is the marker `(scope absent)`, equal when it is gone on both
+   sides and a difference on one side only, and every scoped step also compares `<html lang
+   dir>`, which a language preview sets outside the scope; screen rows still fail on a scope
+   they cannot find; three planted tests in `screen_record/planted.rs` prove the rule.)*
 
 ### 7.4 The tC4 view-state gallery
 
