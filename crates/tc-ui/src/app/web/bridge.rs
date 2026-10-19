@@ -4,8 +4,9 @@
 //!
 //! - `bufferChanged(line)`: one `BufferLine` as JSON; the shell appends it to
 //!   `drafts-buffer.log`. Fire and forget.
-//! - `takeBuffered(): Promise<string[]>`: the shell's current lines, the last per field, with
-//!   removed fields left out, on every call.
+//! - `takeBuffered(): Promise<string[]>`: the shell's current lines, the last per field and
+//!   server run, with the entries a removal of the same run ended left out, on every call
+//!   (`buffer::current_lines`).
 //! - `setCanClose(bool)`: whether everything is saved.
 //! - `onCloseRequested(fn)`: `fn` returns `Promise<boolean>`; the page runs the navigation gate
 //!   and answers whether everything is saved. The shell closes on `true` and asks its "Unsaved
