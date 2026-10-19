@@ -496,11 +496,14 @@ impl ProjectStore for StoreBackend {
             match self.entry(entry) {
                 Some(Ok(entry)) => listing.projects.push(entry),
                 Some(Err(unusable)) => listing.unusable.push(unusable),
-                None => {}
+                None => listing
+                    .others
+                    .push(entry.name.to_string_lossy().into_owned()),
             }
         }
         listing.projects.sort_by(|a, b| a.folder.cmp(&b.folder));
         listing.unusable.sort_by(|a, b| a.name.cmp(&b.name));
+        listing.others.sort();
         Ok(listing)
     }
 

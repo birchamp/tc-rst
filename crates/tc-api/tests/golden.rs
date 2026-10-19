@@ -751,6 +751,7 @@ impl Example for HomeView {
                     },
                 },
             ],
+            others: vec!["Notes".into(), "afile".into()],
             resume: Some(LastEditView {
                 project: ProjectRef::parse("sample_burrito").unwrap(),
                 place: ResumePlace::Book {

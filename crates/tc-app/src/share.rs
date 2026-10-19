@@ -164,7 +164,8 @@ impl App {
 
 impl Handle<OpenDoor43> for App {
     /// tC4's `openFromDoor43Asking` after its question: the name is checked against every
-    /// folder Home lists, without letter case, before anything is sent; then the job.
+    /// entry of the projects folder, without letter case, before anything is sent; then the
+    /// job.
     async fn handle(&self, req: OpenDoor43) -> Result<JobId, ApiError> {
         let name = req.name.clone();
         let listed = self
@@ -175,7 +176,8 @@ impl Handle<OpenDoor43> for App {
                             .projects
                             .iter()
                             .map(|p| p.folder.as_str())
-                            .chain(listing.unusable.iter().map(|u| u.name.as_str())),
+                            .chain(listing.unusable.iter().map(|u| u.name.as_str()))
+                            .chain(listing.others.iter().map(String::as_str)),
                     )
                 })
             })

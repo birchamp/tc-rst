@@ -480,6 +480,7 @@ impl ProjectStore for MemoryBackend {
                 })
                 .collect(),
             unusable: Vec::new(),
+            others: Vec::new(),
         })
     }
 

@@ -66,6 +66,9 @@ pub struct HomeView {
     /// Folders that hold a project's files but cannot be opened, by name (§4.5, AD12): a
     /// declared difference from tC4, whose list leaves them off.
     pub unusable: Vec<UnusableCard>,
+    /// The projects folder's other entries, by name: files and folders that hold no project.
+    /// Home shows none of them, and a new project's name must not take one (B9b D5).
+    pub others: Vec<String>,
     pub resume: Option<LastEditView>,
 }
 

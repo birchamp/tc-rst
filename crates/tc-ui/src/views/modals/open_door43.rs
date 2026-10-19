@@ -26,7 +26,8 @@ pub fn OpenFromDoor43() -> impl IntoView {
     };
     let od = s.od.clone();
     let list = runtime.cache().read(List {});
-    // The folders Home lists, for the name check: the cards' and the unusable ones'.
+    // Every entry of the projects folder, for the name check: the cards', the unusable
+    // folders' and the others'.
     let listing = Memo::new(move |_| {
         list.with(|l| {
             l.value()
@@ -35,6 +36,7 @@ pub fn OpenFromDoor43() -> impl IntoView {
                         .iter()
                         .map(|c| c.project.as_str().to_owned())
                         .chain(view.unusable.iter().map(|u| u.name.clone()))
+                        .chain(view.others.iter().cloned())
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default()

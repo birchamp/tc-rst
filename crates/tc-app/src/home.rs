@@ -756,10 +756,10 @@ impl Handle<List> for App {
                     .iter()
                     .map(|entry| (entry.clone(), store.peek(&entry.folder)))
                     .collect();
-                Ok::<_, StoreError>((peeks, listing.unusable))
+                Ok::<_, StoreError>((peeks, listing.unusable, listing.others))
             })
             .await?;
-        let (peeks, unusable) = read.map_err(|e| {
+        let (peeks, unusable, others) = read.map_err(|e| {
             self.internal(
                 "the projects folder could not be listed",
                 crate::reports::facts(serde_json::json!({"reason": e.to_string()})),
@@ -796,6 +796,7 @@ impl Handle<List> for App {
             resume: resume(prefs.last_edit(), &cards),
             cards,
             unusable,
+            others,
         })
     }
 }
