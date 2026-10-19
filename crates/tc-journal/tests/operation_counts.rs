@@ -20,6 +20,8 @@ use support::Dev;
 use tc_corpus::{Corpus, Spec};
 use tc_journal::command::Choice;
 use tc_journal::fold::{Counters, FoldInput, FoldState, Placement, ProjectKind, Resolved};
+use tc_journal::keys::ToolId;
+use tc_journal::pins::Collection;
 use tc_journal::record::{CheckValue, VerseValue};
 use tc_journal::{BookId, Cause, ChangeId, Record, RecordKey};
 
@@ -592,6 +594,43 @@ fn the_conflict_counts_after_a_save_cost_nothing_per_conflict() {
         crowded, small,
         "two thousand conflicts changed what a save and its counts cost"
     );
+}
+
+/// A tool's decisions of a book read that tool's decision records and the verse texts they
+/// are assessed against, and no other record of the book. The Check screen opens with them,
+/// and the book also holds its verses, alignments, comments and the other tool's decisions:
+/// reading all of them to find the Check records made the open cost three times what it
+/// needs (`docs/PERFORMANCE.md` rule 2, "Checking").
+#[test]
+fn a_tools_decisions_read_only_its_own_records() {
+    for (name, state) in [("Psalms", psalms()), ("larger", larger())] {
+        let fold = fork(state);
+        let own = fold.decisions_of(ToolId::TranslationNotes, PSALMS).len();
+        let other = fold.decisions_of(ToolId::TranslationWords, PSALMS).len();
+        let verses: usize = fold
+            .chapters_of(PSALMS)
+            .iter()
+            .map(|&c| fold.chapter_keys(PSALMS, c).verses.len())
+            .sum();
+        assert!(own > 0 && other > 0 && verses > 0, "{name}");
+        let before = fold.counters();
+        let decisions = fold.decisions(ToolId::TranslationNotes, Collection::Book(PSALMS));
+        let read = fold.counters().since(&before);
+        assert_eq!(decisions.len(), own, "{name}: every decision of the tool");
+        // Its decisions and the verses of the book (and a front for a chapter), once each.
+        let bound = (own + verses + 150 + 8) as u64;
+        assert!(
+            read.records_projected <= bound,
+            "{name}: {} records projected for {own} decisions and {verses} verses",
+            read.records_projected
+        );
+        assert!(read.values_decoded <= bound, "{name}: {read:?}");
+        // The other tool's decisions are not among them.
+        assert!(
+            read.records_projected < (own + other + verses) as u64,
+            "{name}: the other tool's {other} decisions were read as well"
+        );
+    }
 }
 
 /// The history axis alone: the same save on the same records, in a project that has had

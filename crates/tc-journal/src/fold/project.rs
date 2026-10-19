@@ -484,10 +484,11 @@ impl FoldState {
             .get(&book)
             .map(|b| b.chapters.iter().copied().collect::<Vec<u16>>())
             .unwrap_or_default();
+        // The chapters are read on the worker pool: a book of 150 chapters is thousands of
+        // verse records.
         BookText {
-            chapters: chapters
+            chapters: on_threads(&chapters, |&c| (c, self.chapter_text(book, c, &rewound)))
                 .into_iter()
-                .map(|c| (c, self.chapter_text(book, c, &rewound)))
                 .collect(),
             facts: Default::default(),
         }
@@ -1145,37 +1146,68 @@ impl FoldState {
             .pins
             .answer(tool, collection)
             .and_then(Answer::resource);
-        let mut out = Vec::new();
-        for k in keys {
-            let Some(record) = self.projected_arc(k) else {
-                continue;
-            };
-            let Record::Check {
-                key,
-                value: CheckValue::Decision(decision),
-            } = &*record
-            else {
-                continue;
-            };
-            if key.tool != tool || key.target.collection() != collection {
-                continue;
-            }
-            let target = match (&key.target, &text) {
-                (CheckTarget::Frame { story, frame }, _) => self
-                    .frame_text(*story, *frame)
-                    .map(|t| Arc::new(TargetText::new(t))),
-                (CheckTarget::Verse { .. }, Some(text)) => {
-                    target_content(text, key).map(|c| text.facts(c))
+        // A record's key says whether it is a check of this tool and collection, so the
+        // verses, alignments, comments and the other tool's decisions of the book are never
+        // read: the book holds tens of thousands of records and a tool's decisions are a
+        // third of them. They are taken in the order of their targets, so the decisions of
+        // one verse read its text once, and projected in chunks on the worker pool, as the
+        // decision files are.
+        let mut mine: Vec<(Target<'_>, KeyIdx)> = keys
+            .into_iter()
+            .filter_map(|k| match &self.entry(k).key {
+                RecordKey::Check(check)
+                    if check.tool == tool && check.target.collection() == collection =>
+                {
+                    let target = match &check.target {
+                        CheckTarget::Verse { chapter, verse, .. } => {
+                            (chapter.as_str(), verse.as_str())
+                        }
+                        CheckTarget::Frame { .. } => ("", ""),
+                    };
+                    Some((target, k))
                 }
-                (CheckTarget::Verse { .. }, None) => None,
-            };
-            out.push(ProjectedDecision {
-                key: key.clone(),
-                assessment: decision::assess(decision, resolved, target.as_deref()),
-                detached: self.detached.contains(&RecordKey::Check(key.clone())),
-                record: decision.clone(),
-            });
-        }
+                _ => None,
+            })
+            .collect();
+        mine.sort_by_key(|(target, k)| (*target, *k));
+        let chunks: Vec<&[Targeted<'_>]> = mine.chunks(512).collect();
+        let parts = on_threads(&chunks, |chunk| {
+            let mut out: Vec<ProjectedDecision> = Vec::with_capacity(chunk.len());
+            let mut verse: Option<(Target<'_>, Option<Arc<TargetText>>)> = None;
+            for (target, k) in chunk.iter() {
+                let Some(record) = self.projected_arc(*k) else {
+                    continue;
+                };
+                let Record::Check {
+                    key,
+                    value: CheckValue::Decision(decision),
+                } = &*record
+                else {
+                    continue;
+                };
+                let target_text = match (&key.target, &text) {
+                    (CheckTarget::Frame { story, frame }, _) => self
+                        .frame_text(*story, *frame)
+                        .map(|t| Arc::new(TargetText::new(t))),
+                    (CheckTarget::Verse { .. }, Some(text)) => {
+                        if verse.as_ref().is_none_or(|(t, _)| t != target) {
+                            let facts = target_content(text, key).map(|c| text.facts(c));
+                            verse = Some((*target, facts));
+                        }
+                        verse.as_ref().and_then(|(_, facts)| facts.clone())
+                    }
+                    (CheckTarget::Verse { .. }, None) => None,
+                };
+                out.push(ProjectedDecision {
+                    key: key.clone(),
+                    assessment: decision::assess(decision, resolved, target_text.as_deref()),
+                    detached: self.detached.contains(&self.entry(*k).key),
+                    record: decision.clone(),
+                });
+            }
+            out
+        });
+        let mut out: Vec<ProjectedDecision> = parts.into_iter().flatten().collect();
         out.sort_by(|a, b| a.key.cmp(&b.key));
         out
     }
