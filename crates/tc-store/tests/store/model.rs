@@ -241,6 +241,8 @@ pub struct Run {
     journal_held: bool,
     /// The project's name as the fold showed it at the last check.
     name: String,
+    /// A step that another program acts during checks once it has accounted for it.
+    check_later: bool,
     /// Every journal file the run saw, in the order it first saw them: a step names a journal
     /// file by its place here, never by its name, which holds a random batch id.
     journal_seen: Vec<String>,
@@ -306,6 +308,7 @@ impl Run {
             journal_held: false,
             name: String::new(),
             journal_seen: Vec::new(),
+            check_later: false,
             log: Vec::new(),
         };
         run.see_versions();
@@ -594,12 +597,13 @@ impl Run {
         self.settle()
     }
 
-    /// Waits for the store's work, and checks it unless the process died.
+    /// Waits for the store's work, and checks it unless the process died (or the step checks
+    /// once it has accounted for what another program did meanwhile).
     fn settle(&mut self) -> Result<(), String> {
         if !self.fs().is_dead() {
             self.handle().wait_idle();
         }
-        if self.died() {
+        if self.died() || self.check_later {
             return Ok(());
         }
         self.check(false)
@@ -912,12 +916,15 @@ impl Run {
         self.outside = true;
         self.log.push(format!("{rel} deleted at seal step {at}"));
         let before = self.copies();
+        self.check_later = true;
         let done = self.act(Act::Checkpoint, None);
+        self.check_later = false;
         if let Some(rig) = &self.rig {
             rig.store.hooks().at_seal_step(|| {});
         }
         self.lost_copies(before, true);
-        done
+        done?;
+        self.check(false)
     }
 
     fn flip(&mut self, journal: Journal, which: u8, at: u16) -> Result<(), String> {
