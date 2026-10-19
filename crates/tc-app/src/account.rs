@@ -481,7 +481,11 @@ fn sign_in_refusal(error: &Door43Error) -> SignInRefusal {
         Door43Error::TooLarge { .. } => SignInRefusal::Rejected {
             reason: "the answer is too large".to_owned(),
         },
-        Door43Error::Verification { .. }
+        // A token call is no push, so the push refusals cannot come from it.
+        Door43Error::NoWriteAccess { .. }
+        | Door43Error::RefRejected { .. }
+        | Door43Error::RefMoved { .. }
+        | Door43Error::Verification { .. }
         | Door43Error::Cancelled { .. }
         | Door43Error::Disk { .. }
         | Door43Error::Setup { .. } => SignInRefusal::Rejected {
