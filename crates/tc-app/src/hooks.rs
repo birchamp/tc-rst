@@ -22,12 +22,11 @@
 //!   draft never delays a store (R22); it takes the lane only for the write of the file that
 //!   drafts and stores share.
 //!
-//! Unit C1a replaces the atomic write here with `tc_store::atomic_write`.
+//! The fields' file is written as every app-data file is: by `tc_store::atomic_write` (C1a).
 
 use std::collections::{BTreeMap, HashMap};
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use base64::Engine as _;
@@ -266,38 +265,16 @@ impl Holds {
 
 // --- The atomic file write ---------------------------------------------------------------
 
-static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-/// Writes `dir/name` so a reader sees the old bytes or the new ones, never a part: a
-/// temporary file in the same folder, flushed to disk, renamed over the target, and the
-/// folder flushed too. On an error the temporary file is removed.
-fn write_file_atomically(dir: &Path, name: &str, bytes: &[u8]) -> std::io::Result<()> {
-    let n = TEMP_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let temp = dir.join(format!("{name}.{}.{n}.tmp", std::process::id()));
-    let result = (|| {
-        let mut file = std::fs::File::create(&temp)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
-        drop(file);
-        std::fs::rename(&temp, dir.join(name))?;
-        sync_folder(dir)
-    })();
-    if result.is_err() {
-        // The first error is the one worth reporting.
-        let _ = std::fs::remove_file(&temp);
+/// Writes `dir/name` through `tc_store::atomic_write`, so a reader sees the old bytes or the
+/// new ones, never a part. Bytes in place whose folder flush failed count as written: the test
+/// fields need the bytes there, not the flush.
+fn write_file_atomically(dir: &Path, name: &str, bytes: &[u8]) -> Result<(), String> {
+    let fs = tc_store::StdFs;
+    tc_store::atomic_create_dirs(&fs, dir).map_err(|e| e.to_string())?;
+    match tc_store::atomic_write(&fs, dir, name, bytes, tc_store::SyncDir::Now) {
+        Ok(()) | Err(tc_store::WriteError::WrittenNotDurable(_)) => Ok(()),
+        Err(error @ tc_store::WriteError::NotWritten(_)) => Err(error.to_string()),
     }
-    result
-}
-
-#[cfg(unix)]
-fn sync_folder(dir: &Path) -> std::io::Result<()> {
-    std::fs::File::open(dir)?.sync_all()
-}
-
-/// Windows cannot flush a folder; a rename there is as durable as the file system makes it.
-#[cfg(not(unix))]
-fn sync_folder(_dir: &Path) -> std::io::Result<()> {
-    Ok(())
 }
 
 // --- Test fields -------------------------------------------------------------------------
@@ -470,7 +447,7 @@ impl TestFields {
             .await
         {
             Ok(Ok(())) => Ok(()),
-            Ok(Err(e)) => Err(NotSaved::Disk(e.to_string())),
+            Ok(Err(e)) => Err(NotSaved::Disk(e)),
             Err(stopped) => Err(NotSaved::Disk(crate::jobs::stop_reason(stopped))),
         }
     }
@@ -792,8 +769,9 @@ impl Handle<Reset> for App {
         }
         // A launch starts with no kept replies, so a request id may be used again.
         self.inner.replies.forget_settled();
-        self.inner.prefs.reset().await;
+        // The log first: the prefs reset writes `reports.json` as the log then holds it.
         self.inner.reports.clear();
+        self.inner.prefs.reset().await;
         self.set_internet(false);
         Ok(())
     }

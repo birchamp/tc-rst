@@ -15,6 +15,7 @@ mod counting_store;
 mod store_world;
 
 mod app {
+    mod app_data;
     mod app_start;
     pub mod common;
     mod dispatch;
