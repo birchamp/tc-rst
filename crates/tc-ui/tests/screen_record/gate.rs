@@ -6,7 +6,7 @@ use std::fmt;
 
 use regex::Regex;
 
-use super::design::{Backend, Design, Layer, UnitId};
+use super::design::{Backend, Design, DiffLayer, Layer, UnitId};
 use super::inputs::{Record, RowKind, sorted_files};
 use super::pixels;
 use super::report::{FailureKind, Report, Status, file_sha256, to_json};
@@ -30,6 +30,8 @@ pub enum Rule {
     /// Pixels captured on another machine than tC4's, or on one with no font list.
     OtherMachine,
     DiffersWithoutResidual,
+    /// A residual that does not name exactly the layers its row differs in.
+    ResidualLayers,
     /// A residual for a row that does not differ.
     StaleResidual,
     /// A committed file is not the one its record names by sha256.
@@ -281,9 +283,18 @@ pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) ->
         let residual = record.residuals.rows.get(&row.name);
         match (row.status == Status::Differs, residual) {
             (true, None) => out.add(Some(&row.name), Rule::DiffersWithoutResidual, "the row differs: fix the port, or explain the difference in parity/app/residuals.json"),
-            (true, Some(r)) if r.why.trim().is_empty() => out.add(Some(&row.name), Rule::DiffersWithoutResidual, "its residual gives no reason"),
+            (true, Some(r)) => {
+                if r.why.trim().is_empty() {
+                    out.add(Some(&row.name), Rule::DiffersWithoutResidual, "its residual gives no reason");
+                }
+                let named: BTreeSet<DiffLayer> = r.layers.iter().copied().collect();
+                let differing = row.differing();
+                if named != differing {
+                    out.add(Some(&row.name), Rule::ResidualLayers, format!("residuals.json explains the layers {}, but the row differs in {}: fix the port, or explain each layer that differs and no other", serde_json::to_string(&named).unwrap_or_default(), serde_json::to_string(&differing).unwrap_or_default()));
+                }
+            }
             (false, Some(_)) => out.add(Some(&row.name), Rule::StaleResidual, format!("residuals.json explains a row that is {:?}: remove the entry", row.status)),
-            _ => {}
+            (false, None) => {}
         }
     }
     for name in record.residuals.rows.keys() {

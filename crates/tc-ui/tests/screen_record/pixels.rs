@@ -93,21 +93,37 @@ pub struct Compared {
     pub count: Count,
     /// The masks with a differing pixel inside, in the order given.
     pub masks_used: Vec<usize>,
-    /// Set when the sizes differ: every pixel of tC4's screenshot then counts.
-    pub size_error: Option<String>,
+}
+
+/// Two screenshots of different sizes, which no pixel count compares: the Rust app was shot at
+/// another viewport than tC4's screen.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OtherSize {
+    pub rust: (u32, u32),
+    pub tc4: (u32, u32),
+}
+
+impl std::fmt::Display for OtherSize {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "rust {}x{}, tC4 {}x{}",
+            self.rust.0, self.rust.1, self.tc4.0, self.tc4.1
+        )
+    }
 }
 
 fn masked(masks: &[Rect], x: u32, y: u32) -> Option<usize> {
     masks.iter().position(|m| m.contains(x, y))
 }
 
-/// Compares two images of one size. Images of different sizes are an error.
-pub fn count(tc4: &Image, rust: &Image, masks: &[Rect]) -> Result<Compared, String> {
+/// Compares two images of one size.
+pub fn count(tc4: &Image, rust: &Image, masks: &[Rect]) -> Result<Compared, OtherSize> {
     if (tc4.width, tc4.height) != (rust.width, rust.height) {
-        return Err(format!(
-            "rust {}x{}, tC4 {}x{}",
-            rust.width, rust.height, tc4.width, tc4.height
-        ));
+        return Err(OtherSize {
+            rust: (rust.width, rust.height),
+            tc4: (tc4.width, tc4.height),
+        });
     }
     let mut out = Compared {
         count: Count {
@@ -115,7 +131,6 @@ pub fn count(tc4: &Image, rust: &Image, masks: &[Rect]) -> Result<Compared, Stri
             outside_masks: 0,
         },
         masks_used: Vec::new(),
-        size_error: None,
     };
     for (i, (a, b)) in tc4
         .rgba
@@ -143,37 +158,27 @@ pub fn count(tc4: &Image, rust: &Image, masks: &[Rect]) -> Result<Compared, Stri
     Ok(out)
 }
 
-/// Compares two PNG files. Equal bytes are equal pixels, so they are not decoded; a size
-/// mismatch counts every pixel of tC4's screenshot and says why.
-pub fn compare_files(tc4: &Path, rust: &Path, masks: &[Rect]) -> Result<Compared, String> {
+/// Compares two PNG files. Equal bytes are equal pixels, so they are not decoded. The outer
+/// error is a file that cannot be read or decoded.
+pub fn compare_files(
+    tc4: &Path,
+    rust: &Path,
+    masks: &[Rect],
+) -> Result<Result<Compared, OtherSize>, String> {
     let a = std::fs::read(tc4).map_err(|e| format!("{}: {e}", tc4.display()))?;
     let b = std::fs::read(rust).map_err(|e| format!("{}: {e}", rust.display()))?;
     if a == b {
-        return Ok(Compared {
+        return Ok(Ok(Compared {
             count: Count {
                 mismatched: 0,
                 outside_masks: 0,
             },
             masks_used: Vec::new(),
-            size_error: None,
-        });
+        }));
     }
     let a = decode(&a).map_err(|e| format!("{}: {e}", tc4.display()))?;
     let b = decode(&b).map_err(|e| format!("{}: {e}", rust.display()))?;
-    match count(&a, &b, masks) {
-        Ok(compared) => Ok(compared),
-        Err(size) => {
-            let all = u64::from(a.width) * u64::from(a.height);
-            Ok(Compared {
-                count: Count {
-                    mismatched: all,
-                    outside_masks: all,
-                },
-                masks_used: Vec::new(),
-                size_error: Some(size),
-            })
-        }
-    }
+    Ok(count(&a, &b, masks))
 }
 
 /// The image a person reviews: each differing pixel red outside the masks and yellow inside,

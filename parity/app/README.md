@@ -55,8 +55,8 @@ for each row whose pixels differ (red outside the masks, yellow inside).
 A row is `same`, `declared` (every difference inside a mask), `differs` (explained in
 `residuals.json`), `unported` (no layer captured yet; `missing` names the unit that captures
 each layer) or `failed` (a capture error, a page error, a view or boot error, a refused request,
-the settle deadline, pixels from another machine, a mask or scope not found). Nothing excuses a
-failed row.
+the settle deadline, a screenshot of another size than tC4's, pixels from another machine, a
+mask or scope not found). Nothing excuses a failed row.
 
 ## The files, and who edits them
 
@@ -67,7 +67,7 @@ failed row.
 | `report.json`, `diffs/` | `UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record` only |
 | `units.json` | each unit adds its own id in the branch that builds it |
 | `masks.json` | by hand, each mask with the ruling it cites (`build`, or a `Q<n>` that docs/PLAN.md lists as a difference on purpose) and its reason; rectangles by `measure-masks.mjs`. A unit whose rebuilt element differs from tC4's sets the mask's `rust` target |
-| `residuals.json` | by hand: a reason for every `differs` row, and the differences no row shows |
+| `residuals.json` | by hand: a reason for every `differs` row, with exactly the layers it differs in (`pixels`, `dom`, `meaning`, `behaviour`), and the differences no row shows |
 | `scopes.json` | by hand, only for DOM-first screens |
 | `cases.json` | unit A7, for the tC4 view-state gallery |
 

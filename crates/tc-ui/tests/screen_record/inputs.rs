@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::behaviour::Recording;
-use super::design::{Backend, Layer, UnitId};
+use super::design::{Backend, DiffLayer, Layer, UnitId};
 
 /// Where the record lives.
 #[derive(Clone, Debug)]
@@ -288,7 +288,8 @@ pub struct GeneralResidual {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RowResidual {
-    pub layers: Vec<Layer>,
+    /// Exactly the layers the row differs in.
+    pub layers: Vec<DiffLayer>,
     pub why: String,
     pub until: Option<UnitId>,
 }

@@ -79,6 +79,17 @@ impl Layer {
     pub const ALL: [Layer; 3] = [Layer::Pixels, Layer::Dom, Layer::Meaning];
 }
 
+/// A layer of §7.3 that a row can differ in: the three a capture claims, and behaviour. A
+/// residual names exactly the layers its row differs in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DiffLayer {
+    Pixels,
+    Dom,
+    Meaning,
+    Behaviour,
+}
+
 /// One row of §7.6.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScreenPlan {

@@ -11,7 +11,7 @@ use regex::Regex;
 use serde_json::{Value, json};
 
 use super::behaviour::{Recording, Step};
-use super::design::{self, Design, Layer};
+use super::design::{self, Design, DiffLayer, Layer};
 use super::dom::{self, DomError, DomMask, Side, Snapshot};
 use super::gate::{self, Failure, Rule};
 use super::inputs::{Paths, Record, Scope, TargetSpec, Which, read_json};
@@ -217,6 +217,17 @@ impl Planted {
         let edited = edit(text.clone());
         assert_ne!(edited, text, "the edit changed nothing");
         std::fs::write(&file, edited).unwrap();
+        self.rehash(name);
+    }
+
+    /// Edits the lines under `#root` of the Rust app's DOM file of `name`.
+    fn edit_root(&mut self, name: &str, edit: impl FnOnce(&mut Vec<String>)) {
+        let file = self.app().join(format!("dom/{name}.json"));
+        let mut snapshot: Snapshot = read_json(&file).unwrap();
+        let before = snapshot.root.clone();
+        edit(&mut snapshot.root);
+        assert_ne!(snapshot.root, before, "the edit changed nothing");
+        std::fs::write(&file, serde_json::to_string(&snapshot).unwrap()).unwrap();
         self.rehash(name);
     }
 
@@ -482,6 +493,101 @@ fn a_residual_excuses_only_a_row_that_differs() {
 }
 
 #[test]
+fn a_residual_names_exactly_the_layers_that_differ() {
+    let mut p = Planted::new();
+    p.identity("about");
+    p.edit_dom("about", |t| {
+        t.replacen(r#"data-tone=\"neutral\""#, r#"data-tone=\"accent\""#, 1)
+    });
+    let explain = |p: &Planted, layers: Value| {
+        p.edit_json("residuals.json", |r| {
+            r["rows"]["about"] = json!({ "layers": layers, "why": "planted", "until": null })
+        });
+        p.run()
+    };
+    // A residual that explains the pixels does not excuse a DOM difference.
+    let out = explain(&p, json!(["pixels"]));
+    assert_eq!(out.row("about").differing(), [DiffLayer::Dom].into());
+    assert_eq!(out.rules("about"), [Rule::ResidualLayers]);
+    let message = &out
+        .failures
+        .iter()
+        .find(|f| f.rule == Rule::ResidualLayers)
+        .unwrap()
+        .message;
+    assert!(
+        message.starts_with(
+            r#"residuals.json explains the layers ["pixels"], but the row differs in ["dom"]"#
+        ),
+        "{message}"
+    );
+    explain(&p, json!(["dom"])).assert_clean(&["about"]);
+    // Nor may it name a layer that does not differ.
+    assert_eq!(
+        explain(&p, json!(["dom", "pixels"])).rules("about"),
+        [Rule::ResidualLayers]
+    );
+    p.edit_png("about", |image| flip_red(image, 5, 5));
+    explain(&p, json!(["pixels", "dom"])).assert_clean(&["about"]);
+    assert_eq!(
+        explain(&p, json!(["dom"])).rules("about"),
+        [Rule::ResidualLayers]
+    );
+}
+
+#[test]
+fn a_row_that_differs_only_in_behaviour_is_explained_as_behaviour() {
+    let mut p = Planted::new();
+    p.identity("about");
+    let tc4 = recording(&numbered(&p.committed.baseline.join("dom/about.json")));
+    let mut rust = recording(&numbered(&p.app().join("dom/about.json")));
+    rust.steps[1].focus = "button \"Read the license\"".to_owned();
+    write_recording(&p.paths().tc4_behaviour, &tc4);
+    write_recording(&p.app().join("behaviour"), &rust);
+    p.edit_json("residuals.json", |r| {
+        r["rows"]["about"] = json!({ "layers": ["behaviour"], "why": "planted", "until": null })
+    });
+    let out = p.run();
+    let row = out.row("about");
+    assert_eq!(row.status, Status::Differs, "{row:#?}");
+    assert_eq!(row.differing(), [DiffLayer::Behaviour].into());
+    out.assert_clean(&["about"]);
+    p.edit_json("residuals.json", |r| {
+        r["rows"]["about"]["layers"] = json!(["dom"])
+    });
+    assert_eq!(p.run().rules("about"), [Rule::ResidualLayers]);
+}
+
+#[test]
+fn a_screenshot_of_another_size_fails_even_with_a_residual() {
+    let mut p = Planted::new();
+    p.identity("about");
+    p.edit_png("about", |image| {
+        image.height -= 1;
+        image
+            .rgba
+            .truncate((image.width * image.height * 4) as usize);
+    });
+    p.edit_json("residuals.json", |r| {
+        r["rows"]["about"] = json!({ "layers": ["pixels"], "why": "planted", "until": null })
+    });
+    let out = p.run();
+    let row = out.row("about");
+    assert_eq!(row.status, Status::Failed, "{row:#?}");
+    assert_eq!(
+        row.error.as_deref(),
+        Some(
+            "the screenshot is another size than tC4's: rust 1280x799, tC4 1280x800; capture it at the screen's viewport"
+        )
+    );
+    assert!(row.pixels.is_none() && row.dom.is_none());
+    assert_eq!(
+        out.rules("about"),
+        [Rule::CaptureFailed, Rule::StaleResidual]
+    );
+}
+
+#[test]
 fn an_edited_report_fails() {
     let mut p = Planted::new();
     p.identity("about");
@@ -653,9 +759,13 @@ fn every_screen_the_rebuild_differs_on_has_a_mask_citing_its_ruling() {
     assert!(p.run().global().iter().any(|f| f.rule == Rule::MaskRuling));
 }
 
-/// tC4's DOM file of `name` as a behaviour step, each element numbered.
+/// A DOM file as a behaviour step, each element numbered.
 fn numbered(file: &Path) -> Snapshot {
-    let mut snapshot: Snapshot = read_json(file).unwrap();
+    number(read_json(file).unwrap())
+}
+
+/// A snapshot as a behaviour step: each element numbered by its line under `#root`.
+fn number(mut snapshot: Snapshot) -> Snapshot {
     snapshot.screen = None;
     for (n, line) in snapshot.root.iter_mut().enumerate() {
         if line.trim_start().starts_with('<') {
@@ -753,6 +863,117 @@ fn a_planted_behaviour_difference_fails_the_gate() {
     // A Rust recording with no tC4 recording.
     std::fs::remove_file(p.paths().tc4_behaviour.join("about-keys.json")).unwrap();
     assert!(p.run().rules("about").contains(&Rule::BehaviourUnpaired));
+}
+
+#[test]
+fn a_scoped_sequence_numbers_its_nodes_whatever_precedes_the_scope() {
+    let mut p = Planted::new();
+    p.identity("about")["layers"] = json!(["dom"]);
+    let tc4 = recording(&numbered(&p.committed.baseline.join("dom/about.json")));
+    let mut page: Snapshot = read_json(&p.app().join("dom/about.json")).unwrap();
+    let dialog = page
+        .root
+        .iter()
+        .position(|l| l.contains(r#"role="dialog""#))
+        .unwrap();
+    let indent = page.root[dialog].len() - page.root[dialog].trim_start().len();
+    // The Rust page holds one more element before the dialog, so every node number in the
+    // dialog is one higher than tC4's.
+    page.root.insert(
+        dialog,
+        format!("{}<div data-testid=\"toasts\">", " ".repeat(indent)),
+    );
+    let rust = recording(&number(page));
+    assert_ne!(
+        tc4.steps[0].dom.root[dialog],
+        rust.steps[0].dom.root[dialog + 1]
+    );
+    write_recording(&p.paths().tc4_behaviour, &tc4);
+    write_recording(&p.app().join("behaviour"), &rust);
+    let out = p.run();
+    let row = out.row("about");
+    assert!(row.behaviour[0].same, "{:#?}", row.behaviour);
+    assert_eq!(row.status, Status::Same);
+    out.assert_clean(&["about"]);
+}
+
+#[test]
+fn a_masked_element_takes_no_part_in_a_sequence() {
+    let mut p = Planted::new();
+    p.identity("about");
+    let tc4 = recording(&numbered(&p.committed.baseline.join("dom/about.json")));
+    let mut rust = recording(&numbered(&p.app().join("dom/about.json")));
+    for (n, step) in rust.steps.iter_mut().enumerate() {
+        let version = step
+            .dom
+            .root
+            .iter()
+            .position(|l| l.trim_start() == r#""4.0.0-rc.1 (d310bf3)""#)
+            .unwrap();
+        step.dom.root[version] = step.dom.root[version].replace("4.0.0-rc.1", &format!("0.{n}.0"));
+    }
+    write_recording(&p.paths().tc4_behaviour, &tc4);
+    write_recording(&p.app().join("behaviour"), &rust);
+    let out = p.run();
+    let row = out.row("about");
+    assert!(row.behaviour[0].same, "{:#?}", row.behaviour);
+    assert_eq!(row.status, Status::Same);
+    out.assert_clean(&["about"]);
+}
+
+#[test]
+fn ids_after_a_mask_are_numbered_without_the_ids_inside_it() {
+    let mut p = Planted::new();
+    p.identity("open-door43");
+    // The rebuild's Q3 note holds a generated id that tC4's does not; the fields after it
+    // still number from 1.
+    p.edit_root("open-door43", |root| {
+        let note = root
+            .iter()
+            .position(|l| l.trim_start().starts_with("\"The project opens from"))
+            .unwrap();
+        root[note - 1] = root[note - 1].replacen("<div ", r#"<div aria-describedby="tc-f3""#, 1);
+    });
+    let out = p.run();
+    let row = out.row("open-door43");
+    let dom = row.dom.as_ref().unwrap();
+    assert!(dom.first_diffs.is_empty(), "{:#?}", dom.first_diffs);
+    assert_eq!(dom.declared, ["q3-where"]);
+    assert_eq!(row.status, Status::Declared);
+    out.assert_clean(&["open-door43"]);
+}
+
+#[test]
+fn the_sync_toast_is_compared_field_by_field() {
+    let mut p = Planted::new();
+    p.identity("sync-ok-teammates")["backend"] = json!("memory+scripted");
+    let out = p.run();
+    assert_eq!(out.row("sync-ok-teammates").status, Status::Same);
+    out.assert_clean(&["sync-ok-teammates"]);
+
+    p.entry("sync-ok-teammates")["syncToast"]["received"] = json!(3);
+    let out = p.run();
+    let row = out.row("sync-ok-teammates");
+    assert_eq!(row.status, Status::Differs);
+    assert_eq!(
+        row.meaning.as_ref().unwrap().diffs,
+        ["syncToast.received: tC4 2, rust 3"]
+    );
+    assert_eq!(
+        out.rules("sync-ok-teammates"),
+        [Rule::DiffersWithoutResidual]
+    );
+
+    p.entry("sync-ok-teammates")["syncToast"] = Value::Null;
+    let out = p.run();
+    assert_eq!(
+        out.row("sync-ok-teammates").meaning.as_ref().unwrap().diffs,
+        ["syncToast: tC4 shows the toast, rust does not"]
+    );
+    assert_eq!(
+        out.rules("sync-ok-teammates"),
+        [Rule::DiffersWithoutResidual]
+    );
 }
 
 #[test]

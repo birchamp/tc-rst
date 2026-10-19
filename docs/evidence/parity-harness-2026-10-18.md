@@ -124,7 +124,28 @@ rows of `parity/app/report.json` are `unported`.
 ## The gate's planted tests
 
 `crates/tc-ui/tests/screen_record/planted.rs` runs the gate on the real baseline with Rust
-captures planted in a temporary `parity/app`. Each normalization and rule was also broken on
+captures planted in a temporary `parity/app`. These normalizations and rules were broken on
 purpose, one at a time, and the planted tests failed each time: no renumbering of generated ids
-(at least 8 tests failed), no folder renaming (at least 8), no asset paths (at least 8), no pixel count (4), failed rows not
-reported as `CaptureFailed` (2), home cards never compared (2).
+(at least 8 tests failed), no folder renaming (at least 8), no asset paths (at least 8), no
+pixel count (4), failed rows not reported as `CaptureFailed` (2), home cards never compared (2).
+
+Correction, after the verification of A6b: commit `8412f07` and the build's report said that
+breaking any normalization or rule failed these tests. That was false for four rules, each of
+which the verifier broke on its own with all 26 tests still passing: ids renumbered before the
+masks are taken out (the reverse of §7.3's order), behaviour node numbers not renumbered per
+side, no masks passed to the behaviour compare, and `syncToast` never compared. Each now has a
+planted test, and with each rule broken again exactly that test failed (32 of 33 passed):
+
+| Rule broken | The test that fails |
+|---|---|
+| ids renumbered before the masks are taken out | `ids_after_a_mask_are_numbered_without_the_ids_inside_it` (`open-door43`: the rebuild's Q3 note holds a `tc-f` id tC4's does not; the two fields after it) |
+| no per-side renumbering of behaviour node numbers | `a_scoped_sequence_numbers_its_nodes_whatever_precedes_the_scope` (`about` DOM-first, one more element before the dialog on the Rust page) |
+| no masks passed to the behaviour compare | `a_masked_element_takes_no_part_in_a_sequence` (`about`, the version text differs at every step) |
+| `syncToast` never compared | `the_sync_toast_is_compared_field_by_field` (`sync-ok-teammates`: `received` 3 for 2, then no toast) |
+
+The verification also found two gate rules missing, now added with their tests (APP-DESIGN
+§10, A6b's D12): a residual must name exactly the layers its row differs in, `behaviour` among
+them (not checking it fails `a_residual_names_exactly_the_layers_that_differ` and
+`a_row_that_differs_only_in_behaviour_is_explained_as_behaviour`), and a Rust screenshot of
+another size than tC4's is a failed capture, not a difference a residual can excuse (counting it
+as a difference fails `a_screenshot_of_another_size_fails_even_with_a_residual`).

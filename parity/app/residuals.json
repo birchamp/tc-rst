@@ -1,5 +1,5 @@
 {
-  "about": "Differences that are listed and explained rather than fixed (PLAN P7: a human reviews the differences, and the differences are listed). `rows` explains a report row whose status is `differs`, naming its layers; `general` lists differences no single row shows. A failed row is never a residual.",
+  "about": "Differences that are listed and explained rather than fixed (PLAN P7: a human reviews the differences, and the differences are listed). `rows` explains a report row whose status is `differs`, naming exactly the layers it differs in (`pixels`, `dom`, `meaning`, `behaviour`), so a difference on another layer still fails; `general` lists differences no single row shows. A failed row is never a residual.",
   "general": [
     {
       "id": "engine",

@@ -2,13 +2,13 @@
 //! case, computed from the committed captures alone, so the committed file can be checked
 //! byte for byte (APP-DESIGN 7.5).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde::Serialize;
 
 use super::behaviour::{self, SequenceResult};
-use super::design::{Backend, Design, Layer, UnitId};
+use super::design::{Backend, Design, DiffLayer, Layer, UnitId};
 use super::dom::{self, DomError, DomMask, Side, Snapshot};
 use super::inputs::{
     Capture, Machine, Record, Rect, RowKind, RustBuild, Scope, SyncToast, TargetSpec, read_json,
@@ -39,7 +39,8 @@ pub enum Status {
     Same,
     /// Every difference lies inside a declared mask.
     Declared,
-    /// A compared layer differs: `residuals.json` must explain the row.
+    /// A compared layer differs: `residuals.json` must explain the row, naming exactly the
+    /// layers that differ.
     Differs,
     /// No layer is captured yet: `missing` names the unit that captures each.
     Unported,
@@ -51,7 +52,8 @@ pub enum Status {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FailureKind {
     /// A capture error, a page error, a view or boot error, a refused request or the settle
-    /// deadline; or a DOM file that is not in the snapshot format.
+    /// deadline; a screenshot of another size than tC4's; or a DOM file that is not in the
+    /// snapshot format.
     Capture,
     /// Pixels from machines whose fingerprints differ, or one with no font list.
     Machine,
@@ -70,8 +72,6 @@ pub struct PixelsRow {
     pub outside_masks: u64,
     pub masks: Vec<String>,
     pub diff: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub size_error: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -123,6 +123,31 @@ pub struct Row {
     pub meaning: Option<MeaningRow>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub behaviour: Vec<SequenceResult>,
+}
+
+impl Row {
+    /// The layers that differ outside the masks: a row is `differs` when there is one, and its
+    /// residual names exactly these.
+    pub fn differing(&self) -> BTreeSet<DiffLayer> {
+        [
+            (
+                DiffLayer::Pixels,
+                self.pixels.as_ref().is_some_and(|p| p.outside_masks > 0),
+            ),
+            (
+                DiffLayer::Dom,
+                self.dom.as_ref().is_some_and(|d| !d.first_diffs.is_empty()),
+            ),
+            (
+                DiffLayer::Meaning,
+                self.meaning.as_ref().is_some_and(|m| !m.diffs.is_empty()),
+            ),
+            (DiffLayer::Behaviour, self.behaviour.iter().any(|b| !b.same)),
+        ]
+        .into_iter()
+        .filter_map(|(layer, differs)| differs.then_some(layer))
+        .collect()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -227,7 +252,17 @@ fn compare(
         }
         let rects: Vec<Rect> = masks.iter().map(|m| m.rects[&name]).collect();
         let rust_png = app.join(&capture.png);
-        let compared = pixels::compare_files(&reference.png, &rust_png, &rects)?;
+        let compared = match pixels::compare_files(&reference.png, &rust_png, &rects)? {
+            Ok(compared) => compared,
+            Err(size) => {
+                row.status = Status::Failed;
+                row.failure = Some(FailureKind::Capture);
+                row.error = Some(format!(
+                    "the screenshot is another size than tC4's: {size}; capture it at the screen's viewport"
+                ));
+                return Ok(());
+            }
+        };
         let diff = (compared.count.mismatched > 0).then(|| format!("diffs/{name}.png"));
         if let (Some(dir), Some(_)) = (diffs_out, &diff) {
             let image = pixels::diff_image(
@@ -253,7 +288,6 @@ fn compare(
                 .map(|&i| masks[i].id.clone())
                 .collect(),
             diff,
-            size_error: compared.size_error,
         });
     }
     let scope = if capture.claims(Layer::Pixels) {
@@ -359,10 +393,7 @@ fn compare(
             ));
         }
     }
-    let differs = row.pixels.as_ref().is_some_and(|p| p.outside_masks > 0)
-        || row.dom.as_ref().is_some_and(|d| !d.first_diffs.is_empty())
-        || row.meaning.as_ref().is_some_and(|m| !m.diffs.is_empty())
-        || row.behaviour.iter().any(|b| !b.same);
+    let differs = !row.differing().is_empty();
     let declared = row.pixels.as_ref().is_some_and(|p| p.mismatched > 0)
         || row.dom.as_ref().is_some_and(|d| !d.declared.is_empty())
         || row.meaning.as_ref().is_some_and(|m| !m.declared.is_empty());
