@@ -8,11 +8,17 @@
 //! which is sound because a browser runs the UI on one thread; and nothing panics.
 
 mod api;
+mod bridge;
 mod js;
+mod panic;
+#[cfg(feature = "test-hooks")]
+mod probe;
 mod query;
 mod root;
+mod saves;
 mod state;
 mod stream;
+mod view_error;
 
 use std::any::Any;
 use std::cell::{Cell, RefCell};
@@ -29,8 +35,11 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise, spawn_local};
 
 pub use api::Api;
+pub use panic::set_context;
 pub use query::QueryCache;
+pub use saves::{FieldWriter, GateHook, GateHookId, LocalBoxFuture, Saves, WriteCap};
 pub use state::ServerState;
+pub use view_error::ViewError;
 
 use crate::app::boot::{
     BuildAction, Fate, RELOADED_FOR_KEY, TOKEN_KEY, build_action, stop_reason, token_from,
@@ -39,6 +48,7 @@ use crate::app::cache::CachedQuery;
 use crate::app::client::CallError;
 use crate::app::effects::{Effect, active_jobs, apply_reread, jobs_to_reread, merge_job, react};
 use crate::app::events::{EventReader, Incoming};
+use crate::app::recovery::{CrashMarker, ViewErrorText};
 use crate::attrs::Attrs;
 use crate::ds::{Button, ButtonVariant, Callout, CalloutTone, Size};
 use crate::i18n::{self, Catalog, keys, rebuild_text, show_locale, t};
@@ -57,6 +67,7 @@ struct Inner {
     api: Api,
     cache: QueryCache,
     state: ServerState,
+    saves: Saves,
     busy: Rc<api::Busy>,
     listeners: RefCell<Vec<(ListenerId, Listener)>>,
     next_listener: Cell<u64>,
@@ -77,11 +88,18 @@ pub fn use_runtime() -> Option<Runtime> {
 }
 
 impl Runtime {
-    fn new(api: Api, cache: QueryCache, state: ServerState, busy: Rc<api::Busy>) -> Self {
+    fn new(
+        api: Api,
+        cache: QueryCache,
+        state: ServerState,
+        saves: Saves,
+        busy: Rc<api::Busy>,
+    ) -> Self {
         Self(Rc::new(Inner {
             api,
             cache,
             state,
+            saves,
             busy,
             listeners: RefCell::new(Vec::new()),
             next_listener: Cell::new(0),
@@ -101,6 +119,11 @@ impl Runtime {
 
     pub fn state(&self) -> &ServerState {
         &self.0.state
+    }
+
+    /// The page's saves (6.5).
+    pub fn saves(&self) -> &Saves {
+        &self.0.saves
     }
 
     /// Whether `at` is an open that can still answer (APP-DESIGN 4.3).
@@ -153,6 +176,19 @@ impl Runtime {
             self.apply(effect);
         }
         if let Incoming::Frame(frame) = &incoming {
+            // A field's own save shows no "while you were typing" notice (AD37).
+            if let tc_api::event::Event::Session {
+                event:
+                    tc_api::event::SessionEvent::Changed {
+                        view,
+                        cause: tc_api::event::ChangeCause::LocalSave { request },
+                        ..
+                    },
+                ..
+            } = &frame.event
+            {
+                self.0.saves.local_change(*request, *view);
+            }
             // A copy of the list: a listener may add or remove listeners.
             let listeners: Vec<Listener> = self
                 .0
@@ -191,6 +227,8 @@ impl Runtime {
                 state.restarted(instance);
                 // The new run's jobs are not the old run's.
                 self.0.busy.set_jobs(0);
+                // Nothing is sent again to a run that has no reply cache (AD4).
+                self.0.saves.restarted(instance);
             }
             Effect::Topic(topic) => self.0.cache.topic(&topic),
             Effect::Changed { at, scope } => self.0.cache.changed(&at, &scope),
@@ -198,8 +236,12 @@ impl Runtime {
             Effect::SessionClosed(at) => {
                 self.0.cache.closed(&at);
                 state.session_closed(&at);
+                self.sessions_changed();
             }
-            Effect::SessionMode { at, mode } => state.session_mode(&at, mode),
+            Effect::SessionMode { at, mode } => {
+                state.session_mode(&at, mode);
+                self.sessions_changed();
+            }
             Effect::Internet(on) => state.internet.set(on),
             Effect::Account(account) => state.account.set(account),
             Effect::Startup(startup) => state.startup.set(startup),
@@ -211,19 +253,31 @@ impl Runtime {
                 });
                 self.0.busy.set_jobs(active);
             }
-            Effect::Checkpoint { at, outcome } => state.checkpoints.update(|map| {
-                map.insert(at, outcome);
-            }),
+            Effect::Checkpoint { at, outcome } => {
+                state.checkpoints.update(|map| {
+                    map.insert(at, outcome);
+                });
+                self.0.saves.server_states_changed();
+            }
             Effect::MaterializeBlocked { at, paths } => state.blocked.update(|map| {
                 map.insert(at, paths);
             }),
             Effect::AlignSave {
                 aligner,
                 state: save,
-            } => state.align_saves.update(|map| {
-                map.insert(aligner, save);
-            }),
+            } => {
+                state.align_saves.update(|map| {
+                    map.insert(aligner, save);
+                });
+                self.0.saves.server_states_changed();
+            }
         }
+    }
+
+    /// Fields reattach to the current opens, and hold while theirs is read-only or gone.
+    fn sessions_changed(&self) {
+        let sessions = self.0.state.sessions.get_untracked();
+        self.0.saves.sessions(&sessions);
     }
 
     /// Reads `hello` again and replaces what it holds. A request while one runs makes it run
@@ -278,6 +332,7 @@ impl Runtime {
                 // Not older than a frame already applied: take it.
                 Ok(hello) if self.0.state_frames.get() == before => {
                     self.0.state.reseed(&hello);
+                    self.0.saves.sessions(&hello.sessions);
                     return;
                 }
                 // A frame came while it was on its way, so it may be older than that frame.
@@ -296,16 +351,21 @@ impl Runtime {
 }
 
 /// Starts the app. `boot.js` calls it with the folder the page was served from
-/// (`/ui/<build>/`), where the catalogs are.
+/// (`/ui/<build>/`), where the catalogs are, and the id it gave this page load, which the
+/// panic hook writes into the crash marker (6.8).
 #[wasm_bindgen]
-pub fn run_app(base: String) {
-    console_error_panic_hook::set_once();
+pub fn run_app(base: String, page: String) {
+    panic::install(&page);
+    #[cfg(feature = "test-hooks")]
+    probe::panic_at_boot();
+    // The last load ended in a panic: its screen is not restored (AD22).
+    let after = panic::take_previous(&page);
     js::mark("tc4:boot");
     spawn_local(async move {
         let busy = Rc::new(api::Busy::default());
         // The page is busy from here until its root is on screen or the boot error is.
         let work = busy.begin();
-        if let Err(reason) = boot(&base, &busy).await {
+        if let Err(reason) = boot(&base, &busy, after).await {
             show_boot_error(reason);
         }
         drop(work);
@@ -354,7 +414,7 @@ fn install_catalogs(texts: &JsValue) -> Result<(), String> {
 
 /// The steps of APP-DESIGN 6.8 and 3.10, in order. An `Err` is the reason the page shows
 /// instead of the app.
-async fn boot(base: &str, busy: &Rc<api::Busy>) -> Result<(), String> {
+async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> Result<(), String> {
     if !base.starts_with("/ui/") || !base.ends_with('/') {
         return Err(format!(
             "the page was started from {base}, which is not a /ui/<build>/ folder"
@@ -408,7 +468,19 @@ async fn boot(base: &str, busy: &Rc<api::Busy>) -> Result<(), String> {
     for session in &hello.sessions {
         cache.opened(session.at.clone());
     }
-    let runtime = Runtime::new(api, cache, state, Rc::clone(busy));
+    // The writers first, then the buffer's entries of this run come back as fields (AD22).
+    let saves = Saves::new(api.clone(), state.clone(), Rc::clone(busy));
+    #[cfg(feature = "test-hooks")]
+    let probe = probe::requested();
+    #[cfg(not(feature = "test-hooks"))]
+    let probe = false;
+    #[cfg(feature = "test-hooks")]
+    if probe {
+        probe::register(&saves);
+    }
+    saves.restore(&hello);
+    saves.guard_close();
+    let runtime = Runtime::new(api, cache, state, saves, Rc::clone(busy));
     spawn_local(stream::run(
         runtime.clone(),
         connection,
@@ -419,13 +491,58 @@ async fn boot(base: &str, busy: &Rc<api::Busy>) -> Result<(), String> {
     let provided = SendWrapper::new(runtime);
     let app = leptos::mount::mount_to(root, move || {
         provide_context(provided.clone());
-        view! { <root::StandIn /> }
+        // The static callout's words follow the shown language (6.8).
+        leptos::prelude::Effect::new(move |_| {
+            panic::keep_view_error_text(&ViewErrorText {
+                lang: i18n::shown_locale().as_str().to_owned(),
+                title: t(keys::app::VIEW_ERROR, &[]),
+                home: t(keys::app::BACK_TO_HOME, &[]),
+            });
+        });
+        view! { <Root after=after.clone() probe=probe /> }
     });
     // Kept, not forgotten: the boot error replaces the app when a session meets a server of
     // another build, and dropping the handle is what takes the app off the page.
     APP.with(|view| *view.borrow_mut() = Some(Box::new(app)));
     js::mark("tc4:mounted");
     Ok(())
+}
+
+/// The page: tC4's view-error callout in place of the screen that panicked, until "Back to
+/// Home", which saves what can be saved first (AD22); then the root, or the no-loss probe in a
+/// test build that asks for it.
+#[component]
+fn Root(after: Option<CrashMarker>, probe: bool) -> impl IntoView {
+    let failed = ArcRwSignal::new(after.map(|marker| marker.message));
+    let saves = use_runtime().map(|runtime| SendWrapper::new(runtime.saves().clone()));
+    let home = {
+        let failed = failed.clone();
+        Callback::new(move |()| {
+            let failed = failed.clone();
+            let Some(saves) = saves.as_ref().map(|saves| (**saves).clone()) else {
+                failed.try_set(None);
+                return;
+            };
+            spawn_local(async move {
+                if saves.gate().await {
+                    failed.try_set(None);
+                }
+            });
+        })
+    };
+    move || match failed.get() {
+        Some(message) => view! { <ViewError message=message on_home=home /> }.into_any(),
+        None => root_view(probe),
+    }
+}
+
+fn root_view(probe: bool) -> AnyView {
+    #[cfg(feature = "test-hooks")]
+    if probe {
+        return view! { <probe::Probe /> }.into_any();
+    }
+    let _ = probe;
+    view! { <root::StandIn /> }.into_any()
 }
 
 fn root_element() -> Option<web_sys::HtmlElement> {

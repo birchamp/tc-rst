@@ -68,6 +68,8 @@ fn the_keys_are_the_ones_recovery_js_reads() {
         let line = format!("{name} = '{key}'");
         assert!(js.contains(&line), "recovery.js lacks {line}");
     }
+    let line = format!("API_VERSION = {};", tc_api::API_VERSION);
+    assert!(js.contains(&line), "recovery.js lacks {line}");
 }
 
 fn id(n: u8) -> RequestId {

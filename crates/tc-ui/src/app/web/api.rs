@@ -34,6 +34,11 @@ impl Busy {
         self.change(|count| count.jobs = jobs);
     }
 
+    /// The saves in flight or armed now.
+    pub(super) fn set_saves(&self, saves: usize) {
+        self.change(|count| count.saves = saves);
+    }
+
     fn change(&self, edit: impl FnOnce(&mut BusyCount)) {
         let mut count = self.count.get();
         edit(&mut count);

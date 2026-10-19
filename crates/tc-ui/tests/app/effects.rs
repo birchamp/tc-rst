@@ -369,20 +369,22 @@ fn a_frame_that_came_during_the_call_is_newer_than_its_reply() {
 #[test]
 fn the_page_is_idle_only_when_nothing_is_in_flight() {
     assert!(BusyCount::default().is_idle());
-    assert!(
-        !BusyCount {
+    for busy in [
+        BusyCount {
             fetches: 1,
-            jobs: 0
-        }
-        .is_idle()
-    );
-    assert!(
-        !BusyCount {
-            fetches: 0,
-            jobs: 2
-        }
-        .is_idle()
-    );
+            ..BusyCount::default()
+        },
+        BusyCount {
+            jobs: 2,
+            ..BusyCount::default()
+        },
+        BusyCount {
+            saves: 1,
+            ..BusyCount::default()
+        },
+    ] {
+        assert!(!busy.is_idle(), "{busy:?}");
+    }
 }
 
 fn open_session(at: Scope) -> OpenSession {

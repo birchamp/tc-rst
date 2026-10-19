@@ -13,6 +13,7 @@ export const TOKEN_KEY = 'tc4.token';
 export const BUFFER_PREFIX = 'tc4.drafts.v2:';
 export const PANIC_WINDOW_MS = 10000;
 export const PANICS_TO_STOP = 3;
+export const API_VERSION = 1;
 
 /** The English words of the callout, for a page that never kept its language's. */
 export const ENGLISH = { lang: 'en', title: 'This screen could not be shown.', home: 'Back to Home' };
@@ -44,6 +45,29 @@ export function panicDecision(keptText, now) {
   }
   const panics = [...kept, now];
   return { panics, action: panics.length >= PANICS_TO_STOP ? 'stop' : 'reload' };
+}
+
+/**
+ * Counts a page load that ended in a panic in `sessionStore` and says what to do: 'reload', or
+ * 'stop' after three within 10 s, and also when the store cannot keep the count, since a page
+ * that cannot count would reload for ever.
+ */
+export function countPanic(sessionStore, now) {
+  let kept = null;
+  try {
+    kept = sessionStore.getItem(PANICS_KEY);
+  } catch {
+    kept = null;
+  }
+  const decision = panicDecision(kept, now);
+  const text = JSON.stringify(decision.panics);
+  try {
+    sessionStore.setItem(PANICS_KEY, text);
+    if (sessionStore.getItem(PANICS_KEY) !== text) return 'stop';
+  } catch {
+    return 'stop';
+  }
+  return decision.action;
 }
 
 /** The mirror's line for a field's entry, byte for byte tc-ui's `buffer::changed_line`. */
@@ -163,31 +187,47 @@ function element(doc, tag, attributes, children) {
   return node;
 }
 
+// The elements and attributes, in order, that tc-ui's `ViewError` renders (`web/view_error.rs`:
+// the design system's Callout with a warn tone and its outline Button). `app/no-loss.mjs`, case P3,
+// compares the two callouts' outerHTML, so a design-system change that moves one fails there.
+const CALLOUT_STYLE =
+  'box-sizing: border-box; background: var(--tone-soft); color: var(--tone-on-soft); border: var(--stroke) solid var(--tone-border); border-radius: var(--radius-lg); box-shadow: none; padding: 12px; overflow-wrap: anywhere;';
+const TEXT_STYLE =
+  'font-family: var(--font-ui); margin: 0; font-size: var(--fs-caption-lg); font-weight: var(--fw-regular); line-height: var(--lh-ui); letter-spacing: var(--track-12-5); color: var(--tone-text); display: contents;';
+const BUTTON_STYLE =
+  'box-sizing: border-box; font-family: var(--font-ui); font-weight: var(--fw-heavy); letter-spacing: var(--track-12-5); display: inline-flex; align-items: center; gap: var(--control-gap); justify-content: center; text-align: center; text-decoration: none; cursor: pointer; flex: none; line-height: 1.2; white-space: nowrap; font-size: var(--control-fs-sm); background: var(--fill-plain); color: var(--tone-text); border: var(--stroke-selected) solid var(--tone-border); border-radius: var(--radius-pill); height: var(--control-h-sm); padding-inline: var(--action-px-sm); padding-block: 0;';
+
 /**
  * tC4's view-error callout (`tC4:src/App.jsx:177-190`) as static DOM, the same elements and
- * attributes as tc-ui's `ViewError` renders (the no-loss smoke compares the two), with every text
- * set as a text node: a panic message can hold a project name or typed text.
+ * attributes as tc-ui's `ViewError`, with every text set as a text node: a panic message can hold
+ * a project name or typed text. Returns the callout's root and its "Back to Home" button.
  */
 export function buildStaticCallout(doc, text, message) {
-  // VIEW_ERROR_DOM: generated from tc-ui's ViewError; see crates/tc-ui/app/no-loss.mjs, case P3.
   const button = element(
     doc,
     'button',
     [
       ['type', 'button'],
+      ['data-tone', 'ocean'],
+      ['data-i', 'outline'],
+      ['data-trim', 'cap'],
+      ['style', BUTTON_STYLE],
       ['data-testid', 'view-error-home'],
     ],
     [text.home],
   );
   const strong = element(doc, 'strong', [], [text.title]);
+  const inner = element(doc, 'div', [['style', TEXT_STYLE]], [strong, ' ', String(message ?? ''), ' ', button]);
   const callout = element(
     doc,
     'div',
     [
+      ['data-tone', 'warn'],
+      ['style', CALLOUT_STYLE],
       ['role', 'alert'],
       ['data-testid', 'view-error'],
     ],
-    [strong, ' ', String(message ?? ''), ' ', button],
+    [inner],
   );
   return { root: element(doc, 'div', [['style', 'flex:1;padding:24px']], [callout]), button };
 }
