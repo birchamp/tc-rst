@@ -9,6 +9,9 @@
     clippy::disallowed_methods
 )]
 
+#[path = "support/counting_store.rs"]
+mod counting_store;
+
 mod app {
     mod app_start;
     pub mod common;
@@ -28,6 +31,7 @@ mod app {
     mod replies;
     mod reports;
     mod seed;
+    mod sessions;
     mod state_seed;
     mod wire;
 }

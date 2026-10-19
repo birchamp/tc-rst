@@ -624,7 +624,7 @@ What unit A1 built *(A1)*: the frame, `Event`, and the session events `Opened`, 
 `Changed`, `Checkpoint`, `MaterializeBlocked` and `AlignSave`; `ChangeScope::bounded` turns a
 change past the record cap into `Everything`. `Notice`, `Received` and `Suggest` carry view
 types of later screens and come with the units that show them (C1b and D1, E2, B6), as do the
-outcomes `Opened` (B1b), `Synced` (B10) and `PlanReady` (C8) and the phases of share, exchange,
+outcomes `Opened` (B3, which builds the open job over B1b's `SessionRegistry::open_screen`), `Synced` (B10) and `PlanReady` (C8) and the phases of share, exchange,
 import and export; `JobOutcome::Finished` ends a job whose end is its whole result (a seed, a
 download, a summary, a training). The change parts are named structs, not tuples, so their JSON
 names its fields. A checkpoint failure carries its reason, not a `Refusal`: no refusal family
@@ -849,15 +849,14 @@ answered Q-2 with (a), so the shell sends the report and the server only compose
 
 | Module | Owns |
 |---|---|
-| `lib.rs`, `config.rs`, `app.rs` | `App::start(AppConfig, AppDeps)`, `App::call` (bytes in, bytes out: the one entry tc-server routes to), `App::events`, `App::quit`; `AppConfig { app_data, projects: Given(dir) \| Default, door43: ServerUrl, build, test_hooks }` (the UI folder is tc-server's; the backend comes with B1b); `AppDeps` holds what a test replaces: the clock, the keychain, the folder check, the app-data files, the session directory and, with `test-hooks`, the process ender |
+| `lib.rs`, `config.rs`, `app.rs` | `App::start(AppConfig, AppDeps)`, `App::call` (bytes in, bytes out: the one entry tc-server routes to), `App::events`, `App::quit`, `App::sessions`, `App::read` (the request guard of queries), `App::counters`; `AppConfig { app_data, projects: Given(dir) \| Default, door43: ServerUrl, build, test_hooks }` (the UI folder is tc-server's); `AppDeps` holds what a test replaces: the clock, the keychain, the folder check, the app-data files, the project store (`NoProjects` until C0; the memory backend in tests) and, with `test-hooks`, the process ender *(B1b: `AppDeps.sessions` became `AppDeps.store`)* |
 | `dispatch.rs`, `handlers.rs` | `Handle<E>` for every row of `endpoint_table!`, the internet check (AD25), which a write hands to the reply cache so it applies only to an id not yet sent, crash points on every write (§5.8) |
-| `replies.rs` | `ReplyCache` and `BodyDigest` (AD4); one app-wide cache until B1b |
+| `replies.rs` | `ReplyCache` and `BodyDigest` (AD4); one per session for project-scoped writes, and one app-wide for writes of no project (B1b) |
 | `folders.rs` | the cloud-folder check of STORAGE §5.0, a copy of tc-store's until C1a, which deletes it |
-| `sessions.rs` | `SessionDirectory`, the seam B1b's `SessionRegistry` fills; until then every scope is stale |
 | `clock.rs` | the injected wall clock; timers use `tokio::time` |
 | `hooks.rs` | the `test` service (feature `test-hooks`, §5.8) |
-| `backend/{mod,memory,store,seed}.rs` | the seam (§4.2) |
-| `session.rs` | `SessionRegistry` (one open per folder, AD38), `ProjectSession`, epochs, the request guard, a `ReplyCache` per session (`replies.rs`) |
+| `backend/{mod,memory,scenario,store,seed}.rs` | the seam (§4.2); `scenario.rs` reads a parity `.state` folder into the memory backend (B1b) |
+| `session.rs` | `SessionRegistry` (one open per folder, AD38), `ProjectSession`, `SideLease`, `WriteLease`, epochs, the request guard, a `ReplyCache` per session (`replies.rs`), the event pump *(B1b: it replaced phase 0's `sessions.rs`)* |
 | `jobs.rs`, `flows.rs`, `events.rs` | `JobRegistry`, `CancelToken`, `ProgressSink`; `FlowGate`; `EventBus` (broadcast plus the ring) |
 | `prefs.rs`, `reports.rs` | `PrefsWriter`, the one writer of app-data files; `ReportLog`, the last 50 operation reports |
 | `home.rs` | `ProjectRegistry`, `SummaryCache` (§4.5) |
@@ -1069,6 +1068,20 @@ case is named after the rule it protects.
   counters (`tC4:src/state.jsx:592-622, 3592-3631`).
 - `ProjectSession` holds the handle, epoch, mode, presentation, `ReplyCache`, caches (§4.4),
   check sessions, aligner sessions, plans and proposals.
+- *(B1b: built in `crates/tc-app/src/session.rs`. The users are the screen, side users
+  (`SideLease`) and the writes in flight (`WriteLease`, taken in dispatch before the reply cache
+  and moved into the write's work, so a session never closes under a running write even when its
+  HTTP caller went away). Only the screen answers project-scoped requests: once the person has
+  gone Home, a request with that scope is stale at once, even while the leave checkpoint runs or
+  a side user keeps the session open, because the person is on Home and nothing they do there
+  names the project; a side user acts through its lease, never through a scope. A screen open
+  of another folder leaves the old one first, as going Home would. An open that meets a running
+  leave checkpoint or close waits for both; if a side user kept the session open it joins it with
+  its epoch, otherwise it opens anew with a new epoch. A failed open reaches every waiter, adds
+  one `Open` report, uses no epoch and leaves nothing. A failed leave checkpoint is reported and
+  sent as `Checkpoint(Failed)`, and the session closes all the same; the owed checkpoint is D1's.
+  `test/reset` and `app/quit` close every session after its checkpoint (`close_all`); epochs are
+  never reset.)*
 - **Queries never touch the actor.** They run on the latest snapshot on a rayon pool. Nothing in
   tc-app calls `FoldState::record_keys` (`storage:crates/tc-journal/src/fold/reads.rs:82-91`),
   which lists every key in the project and sorts them, and there is no project-wide index.
@@ -1102,7 +1115,7 @@ case is named after the rule it protects.
 | `SuggestModel` | (project, testament) | trainer thread | background training from one snapshot (DELTA:627-629) | a save appends its verse (`crates/tc-align/src/suggest/engine.rs:218`) | 50 ms (PERF:84) |
 | `DraftedCounts` | book | session | at open, background | each delta | 1 ms (PERF:76) |
 | `SummaryCache` | folder | app, persisted | while open, from deltas; on a miss, from derived files | stamp change | Home costs O(projects) |
-| `ReplyCache` | `RequestId`, with a SHA-256 of the request body | session; until B1b one app-wide cache serves every write (A3) | when a write starts (in flight), then its reply | bounded at 1,024 finished replies; in-flight entries are never evicted *(A-2)*; `test/reset` keeps no reply (§5.8) | — |
+| `ReplyCache` | `RequestId`, with a SHA-256 of the request body | the session's cache for project-scoped writes; the app-wide cache for writes with no scope (B1b; until then one app-wide cache served every write, A3). Dispatch checks a write's scope (`Write::at`) before it picks the cache, so a stale-scope refusal is never kept under its id | when a write starts (in flight), then its reply | bounded at 1,024 finished replies; in-flight entries are never evicted *(A-2)*; a session's cache goes with the session; `test/reset` keeps no reply (§5.8) | — |
 
 There is no `ProjectIndex` *(A-21)*: §4.3 says how each read finds its keys.
 
