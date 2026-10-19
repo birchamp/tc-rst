@@ -779,7 +779,7 @@ has no `sync: SyncAction`: by the owner's ruling Q2 every shared project, Bible 
 | `net` | `state`, `set` |
 | `account` | `state` (sends nothing to Door43), `signIn` [signIn], `cancelSignIn { signIn }` (the sign-in to cancel, by its request id, A8), `resume` [checkSignIn], `signOut`, `orgs` [share], `profileLink` [profile], `repoLink` [repoLink], `helpLink` [helpLink] |
 | `home` | `list`, `card`, `nameFree`, `versifications`, `languages` |
-| `session` | `open` (job), `drafts { buffered }` (the draft offer: `buffered` carries the browser and mirror entries for the folder, §6.6), `close`, `leave { mode \| book }`, `focus` (outside-edit check, STORAGE §11.1), `notices`, `dismissNotice`, `keepDraft`, `discardDraft`, `copy` (the copy offer of a read-only project, §6.4), `otherComputerClosed` (STORAGE §5.0), `retryCheckpoint` *(C1b: the offer is a query of its own, `drafts`, which the UI sends once an open has its scope and again after a reload while the offer stands, so `open` carries no `buffered` and B3's open job is the open alone; an offer carries the tokens and text Keep sends back, so the server keeps no state between the two. `keepDraftAsVersion` is gone: the store decides from the token whether Keep writes over it or with no parents (R20), and the offer's `keep` tells the UI which words to use. `copy` and `otherComputerClosed` are the banner's two actions)* |
+| `session` | `open` (job), `drafts { buffered }` (the draft offer: `buffered` carries the browser and mirror entries for the folder, §6.6), `close`, `leave { mode \| book }`, `focus` (outside-edit check, STORAGE §11.1), `notices`, `dismissNotice`, `keepDraft`, `discardDraft`, `copy` (the copy offer of a read-only project, §6.4), `otherComputerClosed` (STORAGE §5.0), `retryCheckpoint` *(C1b: the offer is a command of its own, `drafts { at, request, buffered, mirror }`, which the UI sends once an open has its scope and again after a reload while the offer stands, so `open` carries no `buffered` and B3's open job is the open alone. It takes every unsaved text into `drafts.json` as an offered entry before it answers, and answers the questions and the buffer slots to `settle`; `mirror` says the lines include the shell's mirror (§6.6, the draft machine). An offer carries the tokens and text Keep sends back. `keepDraftAsVersion` is gone: the store decides from the token whether Keep writes over it or with no parents (R20), and the offer's `keep` tells the UI which words to use. `copy` and `otherComputerClosed` are the banner's two actions; `copy` is refused with `CreateRefusal::CopyUnsafe` where the projects folder itself made the project read-only (Q-30))* |
 | `editor` | `book`, `chapters`, `sources`, `original`, `saveVerse`, `saveLayout`, `saveSection`, `draft`, `addComment` |
 | `helps` | `passage`, `story`, `article` |
 | `story` | `list`, `open`, `saveFrame`, `saveRef` |
@@ -1983,7 +1983,8 @@ One task reads the stream and dispatches:
   edit controls turn off and the drafts stay. When the person takes the offered copy of a
   read-only project, the copy flow moves the folder's buffer entries and `drafts.json` entries
   to the copy and offers them when it opens (§6.6), so text typed before the switch is not
-  left behind. *(A-10)*
+  left behind. *(A-10)* *(C1b: the mirror's entries move too, and the page holds its own
+  fields on in the copy, §6.6.)*
 
 ### 6.5 Saving
 
@@ -2257,22 +2258,9 @@ had failed for a cause since gone was not stored when the person left.)*
   older token, it would stand beside the person's own save as a conflict. tc-app's
   `crash_anywhere_stores_the_last_text_once` plays the offer with this rule, and fails without
   it. A change anyone else made since makes the stored value differ from `sent`, so it still
-  becomes a conflict.)* *(C1b: built as `tc_app::drafts::offer` behind `session/drafts { at, buffered }`, sent once
-  the open has its scope (`tc_ui::app::offer::buffered_lines` builds `buffered` from the page's
-  storage and `takeBuffered`, leaving out after a reload in the same launch the run whose
-  entries came back as dirty fields, which save themselves), with these refinements, each with a test in
-  `tests/app/drafts.rs`. "The newest per field" became: a stored draft gives way to a buffered
-  entry of its field at least as new that edits the same version (the same tokens), since
-  `drafts.json` is the older copy of the typing the buffer kept; every other distinct text of a
-  field is offered, so two runs' entries of one field and a draft of a folder copied from
-  another computer are each offered, never dropped for being older. An entry whose text the
-  record holds now, or the value it was editing, is answered in `saved`, and the UI drops it
-  with `tc_ui::app::offer::settle`, which removes an item only while it holds that run and
-  text. A read-only project offers nothing (STORAGE §5.14): Keep could not write, and the
-  entries wait for the copy or a writable open. A field this build has no save for yet (a
-  section before B4b and R6, a new comment before C3 and R15) is offered with "Copy text" and
-  stays until Discard. Keep and Discard settle the offer's stored drafts and buffer items
-  (`Settles`).)*
+  becomes a conflict.)* *(C1b: superseded by the draft machine below: `session/drafts` is a
+  command, every unsaved text is taken into `drafts.json` before the answer, and the rules
+  are the machine's table.)*
 - **A draft whose token no longer verifies** (a new installation secret after an app-data reset
   or a reinstall, or a folder copied to another computer) is offered as text beside the current
   value: "Unsaved text from your last session was found for Titus 1:4, but this computer cannot
@@ -2282,15 +2270,119 @@ had failed for a cause since gone was not stored when the person left.)*
   "Copy text", the offer stays until Discard, and nothing is dropped as a bug. *(A-9)* *(C1b: R20
   is on main, so Keep writes the text with no parents through `session/keepDraft` and no
   "Copy text" fallback is built; a buffered entry whose token fails its MAC is offered the same
-  way. Over a seed's first text, which no person wrote, the kept text stands alone instead of
-  as a conflict, by STORAGE's stub rules (§7.3); the seed's text stays in History.)*
+  way (`Base::Unverified`). Over a seed's first text, which no person wrote, the kept text
+  stands alone instead of as a conflict, by STORAGE's stub rules (§7.3); the seed's text stays
+  in History.)*
 - **The copy of a read-only project** gets the entries of the folder it was copied from, re-keyed
   to the copy, and offers them at its first open (§6.4) *(A-10)*. *(C1b: `session/copy` copies the
   folder with `Store::copy_project` (R7), which carries `drafts.json`, into "<name> - Copy" (then
-  "- Copy (2)" and on) and answers the copy's folder and id, the same id as the original's; the
-  UI moves its entries with `tc_ui::app::buffer::rekey`, opens the copy, and its first
-  `session/drafts` offers both. `tests/app/drafts.rs` plays it after a second writer turned the
-  project read-only.)*
+  "- Copy (2)" and on) and answers the copy's folder and id, the same id as the original's. It
+  is refused (`CreateRefusal::CopyUnsafe`) when the projects folder itself is on a drive that
+  cannot keep a project safe or is copied by a cloud client: the copy would open read-only for
+  the same reason (finding 4; where such a copy should go instead is Q-30, §12). The page moves every entry of the folder, the buffer's and the mirror's alike
+  (`tc_ui::app::offer::copy`, finding 3), each keeping its run; the page holds its own run's
+  fields on in the copy, whose tokens stand there too, and the copy's first offer takes the
+  others in. A slot whose item the storage would not take stays with the original, and the
+  mirror has its line under the copy.)*
+
+#### The draft machine (C1b)
+
+One field's unsaved text lives in four places: the page's buffer item (one per field, written
+by one run), the shell's mirror (the last line per field and run), `.tc/drafts.json` and the
+record. Three no-loss reviews of C1b's first build found nine ways the special cases between
+them lost, hid or revived text. They are replaced by one typed machine, `tc_api::model::draft`:
+a state per field, an event list, and one pure `next(state, event) -> (state, actions)` whose
+`match` lists every pair. Executors carry out the actions: the browser glue and the shell
+(`tc_ui::app::offer`: `buffered_lines`, `settle`, `copy`), tc-app for the open and the answers
+(`tc_app::drafts`), tc-store for `drafts.json`. The page's own typing is A4b's save machine; the
+machine's `Live` states say what it leaves in the places, and the property test plays it.
+
+The state is `FieldDraft { live, offers, settle }`: `live` is the page's own field, `Clean`,
+`Typed { base, current }`, `Sending { base, sent, current }` (the item names the save) or
+`Landed { base, over, sent, current }` (the record holds `sent` as `over`; the page has not
+read the reply); `offers` are an open's questions, one per distinct text, each with its homes
+(an offered entry of `drafts.json`; for "Copy text", the buffer slots); `settle` are buffer
+slots the page drops once the server holds their text.
+
+| State | Event | Next state | Actions, in order |
+|---|---|---|---|
+| `Clean` | `Typed` | `Typed`, over the version shown | `Write` the item and the mirror line |
+| `Typed`, `Sending`, `Landed` | `Typed` | the same, with the new text | `Write`, naming the save in flight (in `Landed` the page does not know yet) |
+| `Typed` | `DraftTick` | `Typed` | `Draft`: `drafts.json`'s current entry |
+| `Clean`, `Sending`, `Landed` | `DraftTick` | the same | none: no draft while a save is on its way (A4b's `pump_draft`) |
+| `Typed` | `SaveSent` | `Sending` | `Write` naming the save, then `Send` |
+| `Clean`, `Sending`, `Landed` | `SaveSent` | the same | none: one save in flight |
+| `Sending` | `SaveLanded` | `Landed` | none: the store removes the field's current entry |
+| `Clean`, `Typed`, `Landed` | `SaveLanded` | the same | none |
+| `Landed`, text = `sent` | `SaveAcked` | `Clean` | `Remove`, while the item holds that text |
+| `Landed`, text ≠ `sent` | `SaveAcked` | `Typed` over `over` | `Write`, `Draft` at once (R26) |
+| `Clean`, `Typed`, `Sending` | `SaveAcked` | the same | none |
+| `Sending` | `SaveRefused` | `Typed` | `Write` with no save |
+| `Clean`, `Typed`, `Landed` | `SaveRefused` | the same | none |
+| any | `Reload` | `live` kept; `offers`, `settle` forgotten | none: the page takes its run's entries back and asks again |
+| any | `Relaunch` | `Clean`; the rest forgotten | none: every keystroke is in the buffer and the mirror |
+| any | `Offer` | `live` kept; `offers` planned | `Absorb` (then its slots settle and its run's copies go), `Unstore` |
+| any | `Keep(i)` with a *Keep* | offer *i* gone; its slots to settle | `Keep` (the save over its `over`), `Unstore` its entries |
+| any | `Keep(i)`, "Copy text" | the same | none: the UI copies, the offer stays until Discard |
+| any | `Discard(i)` | offer *i* gone; its slots to settle | `Unstore`, written before the answer |
+| any | `Copy` | `live` kept; `offers`, `settle` cleared | `CopyFolder`, `Rekey` every slot of the folder |
+| any | `Settle` | `settle` emptied | `Settle` each slot, then `Write` the page's own text into what it freed |
+
+The open's plan, for one field's candidates (the buffer's and mirror's entries the page sends,
+and `drafts.json`'s offered entries), newest first:
+
+1. **Older copies.** A stored draft records the run whose page typed it. It goes when that run's
+   own buffer entry of the field (one with a *Keep*) is at least as new: one page edits a field
+   per run and its entry takes every keystroke. Behind the shell's mirror (`session/drafts`'s
+   `mirror`), a run with no entry of the field ended with the field clean, so its stored drafts
+   are older than its save and go (finding 5).
+2. **Verdicts.** `Saved`: a head holds the text, or a version after the one it was typed over did
+   (versions on another branch are not after it); the slot settles, the entry goes. `Undone`: a
+   buffer entry back at its own version with no save of it landed; an offered entry is never
+   judged undone again, since the save it was waiting for is no longer named. Else offered: when
+   a version after its base held the text it sent (its save landed, whoever wrote it) and that is
+   the record's only head, over that version, so the text continues from the save (finding 2);
+   otherwise over its own version, so a change since becomes a conflict.
+3. **One question per text, held by one entry.** An offer already held by an offered entry of no
+   run settles its slots. Any other is taken in: `Absorb` writes an offered entry of no run before
+   the answer, and only then do its slots settle and its run's stored drafts go; a stored draft of
+   a run is judged by that run's buffer once, at the first open after it.
+
+Rules the places keep:
+
+- **The buffer item** is written only by its own run; settling removes it only while it holds the
+  slot's text or an older one of that run (`BufferSlot::at`: a storage that refused the newer
+  text left it). After settling, the page writes its own fields' entries again (`offer::settle`'s
+  `own`), so a freed item takes its text at once (finding 8).
+- **The mirror** keeps the last line per field and run; a removal that names a text drops the
+  entry only while it holds that text (`BufferLine::Removed { text }`, finding 8).
+- **`drafts.json`** holds *current* entries (the session's newest draft per field; a save of the
+  field removes it, *Keep* never does) and *offered* entries (by number; *Keep* removes those of
+  its text, *Discard* its own, written before it answers; a save never). An open turns the last
+  session's entries offered, marked in the file before it returns; a draft of the opening run
+  itself (a reopen or a copy in the same run, `OpenOptions::run`) stays that page's current entry
+  (findings 1, 7, 9).
+- **The page's own fields are never offered**: `buffered_lines` leaves out the entries its save
+  machine holds, by field and run (finding 7). The glue must restore its run's entries of a
+  project at every open of it, not only after a reload, so none of its run's entries waits
+  unheld while its editors take input.
+- **A read-only project** offers nothing and takes nothing in. A screen open never joins a
+  read-only session the person left: after "That computer is closed" it waits for that session
+  to close and opens afresh, so the one-time trust is used then (finding 6).
+
+The property (`tc_ui` `tests/app/draft_machine.rs`) plays random interleavings of typing, drafts,
+saves, landings, replies, refusals, reloads, crashes and relaunches (a page at a new origin and a
+full storage among them), teammates' changes, offers, keeps, discards, settling, a second writer
+and its copy, another computer's lock and an unsafe projects folder, over the real buffer and
+mirror functions and models of `drafts.json` and the record, with an observation (a crash, a
+relaunch and the open's offer) possible between any two steps. It holds that the last text of
+every run's typing of a field that reached a place a crash does not take is stored, offered or
+answered; that every offered text is such an unanswered text; that a copy is never read-only for
+the folder it was made in; that "That computer is closed" ends that lock; and that an offer never
+settles the text of a field the page holds. Each finding put back breaks it within the cases the
+test tries. Without the shell's mirror, or after the storage refused a write, nothing tells a run's
+older text from its last: an older one may be offered beside the last, never instead of it, which
+A4b already accepts for a refused write.
 
 ### 6.7 Flows and dialogs
 
@@ -3150,7 +3242,7 @@ cut from the integration branch `app` after unit C had merged, like every other 
 |---|---|---|---|---|---|
 | C0 ◆ Store adapter *(A-5)* | `StoreBackend` over S1's `ProjectActor` (§4.2): thin if S1 provides R4, R5, R14 and R16; otherwise the command thread, the published snapshot, events from each `Delta`, its own `seq`, the frontier check *(C0: built thin, because S1 provides R4, R5, R14, R16, the O(1) snapshot and each command's `Delta`; no fallback and no frontier check (every fold step S1 makes after an open sends `Committed`, which `every_fold_step_reaches_the_seam` proves). D1: a command carries its `Origin` and `StoreCause::Command { origin }` reaches the pump, so a person's own save is `LocalSave { request }` (AD37); B1b's plan gave it to C2, but only the adapter can join the store's event to its command. D2: the listing is `Listing { projects, unusable }` and an open needs the exact listed name; staging folders are left out. A folder is a project in the listing exactly when tc-store's open would not refuse it as not a project: the listing reads `project.json`'s four fields as tc-store does. The listing reads the projects folder itself, not tc-store's `Store::list`, which keeps only folders with a `project.json`: every other folder that holds a project's files (`project.json`, `metadata.json`, `ingredients/` or `.tc/`), and every link to a folder that does, is unusable with its reason, and a file or a folder with none of them is not listed *(after the second verification: a folder that had lost only its `project.json`, a translationCore 4.0 project copied in and a link to a project were at first left off without a word)*. Declared differences from tC4 (§4.5): Home shows an unusable folder with its reason (B2), so no one's work is hidden, and a translationCore 4.0 project is unusable until Import brings it in. D3: two unit read-only reasons in tc-api, `OpenOnAnotherComputer` and `FolderNotWritable` (§3.4). D4: `test/saveVerse` (§5.8) runs the contract cases that go through tc-app until C2. D5: three contract cases run another way than the table said (§4.2's note). D6: `AppDeps.store` is `StoreChoice` and `App::start` builds the store (§4.1). D7 *(added after the first verification)*: a batch with changes that no seam submit asked for (S2's outside edits, E1a's intakes) goes on as `StoreCause::System` as soon as it cannot be a submit's: when no submit is in flight, or when the relay settles a stored or unchanged reply the actor gave after it; an error reply carries no `seq` and does not end the wait (§4.2's note; *after the second verification*, which found that the first text, "at most until the actor's next reply", did not hold behind an error reply); and since C0 makes tc-app depend on tc-store, CI's two clippy steps without test hooks build tc-store too and are among the gates (AGENTS.md). D8 *(added after the second verification)*: since C0 builds tc-store at `App::start`, every launch runs tc-store's start cleanup (STORAGE §6.4 N1), which removes the staging folders that a create, copy, join or import cut short left; C0 records each in the report log, an import as `import` refused with `import.write-failed` and a join as `open-door43`, each with facts `folder`, `interrupted` and `rolledBack`, as tC4's start records them, and a create or a copy, which tC4 makes no staging folder for, as `staging-removed` with facts `folder` and `kind` *(after the third verification, which found all four recorded as `staging-removed`)*; E1b tells the person of a removed join and F1 of a removed import, and a removed create or copy is recorded only (§4.2's note). D9 *(added after the third verification)*: tc-store clears a field's draft entry on every successful save of the field, so a draft sent while that save was in flight, which holds newer text, is gone when it lands; C0 asks the storage team for R26 (§9.2), adds `a_save_never_erases_a_newer_draft_of_its_field`, ignored until R26, and gives the fallback to C2 (§6.5). Evidence: `docs/evidence/store-adapter-2026-10-19.md`)* | S1, B1b | R4, R5, R14, R16 (fallback: built here); an O(1) snapshot and each command's `Delta` (no fallback: phase 2 waits) | every contract case of §4.2 that runs on the store, including `reads_never_wait_behind_a_long_command` | the contract suite passes on the store through C0, and the adversarial review's findings are fixed |
 | C1a Move the app onto the store *(A-17)* | app data on `atomic_write`; persisted summaries; parity projects on disk through S1's create and sealing API; the parity environment switched to the store *(C1a: built as the row says, with these refinements, each written where the design text names it. D1: the parity projects are written as an import is, through `Store::staging` and `Store::place` with the very packs the seed sealed, not through `Store::create`, whose random id and run-time `Seed` changes would make the screens and §13.2's check no longer tC4's (§4.2; R29 for `project.json`'s writer). D2: `tc4 serve --scenario` runs on the store and needs an empty `--projects` folder; `--backend memory` keeps the memory backend (§5.1). D3: `test/reset` writes again each scenario project opened since it was written and removes every other entry of the projects folder, on the blocking pool after every session closed (§5.8). D4: app data is on disk through `tc_store::atomic_write` (`DiskFiles`, `FilesChoice`), each write on the blocking pool; `app-lock.json` stays tc-server's (§4.9; tC4 #525: the saved language survives a relaunch). D5: `reports.json` keeps the last 50 reports across launches, a declared difference from tC4 (§4.9). D6: `folders.rs` is kept until R28, because tc-store's check calls every folder under a home with `~/.dropbox` synced and reads the environment (§4.1, §4.9, risk 23). D7: persisted summaries, the store's half: the stamp and the summary files; Home's half (`SummaryCache`, the cards, the `HomeSummary` job, `home_costs_projects_not_history`) and the recapture of B2's and B3's screens are done by whichever of B2/B3 and C1a lands second (§4.5, §7.6); neither B2 nor C1a had landed when this was written, so the order is not assumed: the screen gate fails a memory capture once C1a has landed (D9), and `home_keeps_its_summaries_once_b2_and_c1a_have_landed` (tc-app `app_data`) fails the first tree whose `parity/app/units.json` lists both B2 and C1a until tc-app's library calls `PrefsWriter::record_summary` and `home_costs_projects_not_history` exists. D8: the summary stamp lists `.tc/pending/` and stats `materialized.json`, never the packs, which are nested by sealer and month (§4.5). D9: the gate fails a capture on the memory backend once C1a has landed (`MemoryAfterStore`, §7.5). D10: the count rows run on the store too, the open row holding the app's counts there (§8.1). D11: tC4 #766 (creation pins at the first open) is built here, a declared difference from tC4 4.0 (TC4-DELTA-2026-10-19 §1, "Do not wait"): a new `System` reason, `CreationPins`, and the write in tc-store's open (R27, §9.2). D12: teammates on the store are packs sealed by each teammate's own device, written while no session holds the project (AD36, §4.2). D13: `test/hold` arms tc-store's hold points and `test/quiet` counts a store thread waiting at one; tc-store's background work stays unseen until R30 (§5.8). tC4 #746: the scenario writer asks for its staging folder only after tc-store's start cleanup is over, so the cleanup never removes it, and nothing else in tc-app writes a project folder. `MemoryBackend` stays: every B unit after B1b still builds on it. Done when: account-menu, app-language, help, about, feedback and the `license` case recaptured on the store, the report the same row for row but each row's `by`, `backend` and Rust DOM hash, which moved only with the UI build id in the logo's link (each DOM equals a memory-backend capture of the same build byte for byte); the three behaviour recordings differ only in that build id; the journeys pass on the store (54). Tests: tc-app `store_scenario` (17: the creation pins at the first open, the scenario written, the same seed, tC4's bytes on disk, an occupied folder refused, #746, a crash at each of the 153 write points, reset, teammates, holds, the summary stamp, J15 on `FaultFs` delays), `app_data` (12, with D7's gate), `reports` (13), the count rows on both backends; tc4 `scenario` (4) and its args cases; tc-ui's planted `a_memory_capture_fails_once_c1a_has_landed`. Evidence: `docs/evidence/app-on-store-2026-10-19.md`.)* | C0 | — | J15 on real `FaultFs` delays; `home_costs_projects_not_history` by whichever of B2 and C1a lands second (D7) *(A-25)* | every phase-1 screen captured so far is recaptured on `store` with the same report; `MemoryBackend` is deleted when the last B unit has moved |
-| C1b ◆ Offers and read-only modes *(A-3, A-9, A-10)* | draft offers at open: `drafts.json`, buffered entries and the shell's mirror, merged and filtered (§6.6); unverifiable drafts as text; read-only banners; `SecondWriter`; the copy offer, which carries the folder's drafts to the copy *(C1b: built on the server and as the UI's pure side. R20 and R7's copy are on main, so no fallback is built. D1: the offer is `session/drafts { at, buffered }`, a query sent once an open has its scope and again after a reload, since B3's `session/open` is not on main and an offer the UI can ask for again needs no server state; `keepDraftAsVersion` is folded into `keepDraft` (§3.9). D2: the merge's rules (§6.6's C1b note): `saved` entries the UI drops, a stored draft giving way only to newer typing of the same version, every other distinct text offered, A4b's `sent` rule, a read-only project offering nothing, "Copy text" for a section and a new comment until their units. D3: `session/copy` names the copy "<name> - Copy" and answers its folder and id; `session/otherComputerClosed` makes the next open of the folder take a lock that names another computer (tc-store's `other_computer_closed`, once), so a lock left by a computer that crashed does not keep the project read-only. D4: `tc_ui::app::offer` holds the lines the page sends, `settle` (what the page and the mirror drop once an offer is answered), the offer's words and each reason's banner with its actions: the copy where a copy can be written (an unsafe drive, a synced folder, a second writer, another computer's lock), and "That computer is closed" for the lock; the rebuild keys `drafts.offer.*` and `readOnly.*` are English in every other locale until translated. No tC4 counterpart: tC4 4.0 has neither an offer nor read-only modes. Not built here: the dialog and the banner as views, which need a project screen to stand over (B3, B4a) and draw them from `offer_words` and `banner`; the banner names no host for another computer's lock (tc-api's `ReadOnlyReason` is a unit variant). Tests: `tests/app/drafts.rs`, 9 cases through `App::call` on tc-store over `FaultFs`, among them `relaunch_offers_buffered_and_mirrored_entries`, `draft_with_unverifiable_token_is_offered_as_text`, the crash tests through `test/crash` before the store (Keep makes a conflict when the verse changed) and before the reply (the `sent` rule keeps without one), and `a_second_writer_makes_the_project_read_only_and_the_copy_carries_its_drafts`; tc-ui's `tests/app/offer.rs`, 4 cases; tc-api's golden files for the five endpoints.)* | C1a | R20 (fallback: "Copy text"); R7's copy command (fallback: the banner without the copy offer) | `relaunch_offers_buffered_and_mirrored_entries`; `draft_with_unverifiable_token_is_offered_as_text`; crash tests through `test/crash` (end the server while typing, relaunch, the text is offered, Keep makes a conflict when the verse changed); the copy carries drafts (with R7) | the tests pass and the adversarial review's findings are fixed |
+| C1b ◆ Offers and read-only modes *(A-3, A-9, A-10)* | draft offers at open: `drafts.json`, buffered entries and the shell's mirror, merged and filtered (§6.6); unverifiable drafts as text; read-only banners; `SecondWriter`; the copy offer, which carries the folder's drafts to the copy *(C1b: built on the server and as the UI's pure side; R20 and R7's copy are on main, so no fallback is built. The first build's three no-loss reviews found 7 blockers and 11 majors, nine distinct findings, all in how a field's unsaved text moves between the buffer, the mirror, `drafts.json` and the record; instead of patches the lifecycle is one typed machine, `tc_api::model::draft` (§6.6, the draft machine, with its table), and the special cases it replaces are deleted. D1: the offer is `session/drafts { at, request, buffered, mirror }`, a command since it writes: every unsaved text is taken into `drafts.json` as an offered entry before the answer, so *Keep* and *Discard* answer one entry by its number, and the page drops its slots (`settle`) only once the server holds them. D2: tc-store's `drafts.json` keeps offered entries apart from the session's current drafts; a save or *Keep* never removes another text of the field, *Discard* is written before it answers, entries record the run that typed them, and a draft of the opening run stays its page's (`OpenOptions::run`; the app names its run at start). D3: whether a later save superseded a stored draft is judged with the shell's mirror (a run with no line of the field ended clean); a text is saved when a version after its own held it; a save landed when one held its sent text. D4: `BufferLine::Removed` names its text and `BufferSlot` its time, so settling drops neither newer text in the mirror nor anything but an older item of the run in the buffer; settling writes the page's own text again into what it freed. D5: the copy moves the mirror's entries too, keeps going when the storage refuses, and is refused (`CreateRefusal::CopyUnsafe`) where the projects folder itself made the project read-only (where to copy then is Q-30); a screen open never joins a read-only session the person left, so "That computer is closed" takes effect and its trust is used. D6: `tc_ui::app::offer` holds the lines the page sends (leaving out the fields its save machine holds), `settle`, `copy`, the offer's words and each reason's banner; the rebuild keys `drafts.offer.*` and `readOnly.*` (with `readOnly.copyUnsafe`) are English in every other locale until translated. No tC4 counterpart: tC4 4.0 has neither an offer nor read-only modes. Not built here: the dialog and the banner as views (B3, B4a, from `offer_words` and `banner`); the glue that restores the page's run's entries at every open of their project, not only after a reload (B3, §6.6); the banner names no host for another computer's lock. Tests: tc-api `tests/draft_next.rs` (every pair of state and event, 320, drops no text silently; the findings' rows); tc-ui `tests/app/draft_machine.rs` (the property, 2,048 cases here and 1,500,000 once in release while building; each of the nine findings put back is caught), `offer.rs` and `buffer.rs`; tc-store `drafts.rs` (one of two offered texts kept, Discard after typing, the run recorded, an offered draft outliving a save); tc-app `tests/app/drafts.rs`, 11 cases through `App::call` on tc-store over `FaultFs`, among them `relaunch_offers_buffered_and_mirrored_entries`, `draft_with_unverifiable_token_is_offered_as_text`, the crash tests through `test/crash`, `a_second_writer_makes_the_project_read_only_and_the_copy_carries_its_drafts`, `a_reopen_after_that_computer_is_closed_never_joins_the_read_only_session` and `an_older_draft_is_not_offered_over_the_sessions_own_save`; tc-api's golden files.)* | C1a | R20 (fallback: "Copy text"); R7's copy command (fallback: the banner without the copy offer) | `relaunch_offers_buffered_and_mirrored_entries`; `draft_with_unverifiable_token_is_offered_as_text`; crash tests through `test/crash` (end the server while typing, relaunch, the text is offered, Keep makes a conflict when the verse changed); the copy carries drafts (with R7) | the tests pass and the adversarial review's findings are fixed |
 | C2 ◆ Translate saves | `saveVerse`, `saveLayout`, `saveSection` (on Save only), `draft`; the `Draft` sent at once after an `Ack` that leaves the field dirty (§6.5, R26's fallback) *(C0)*; Retry; `NotWritten`; `SavedWithDiskError`; Resume from saves and drafts | C1b, B4b | R6 (fallback: the envelope); R22 (fallback: saves that waited are counted) | J2; J6 edit part; `save_verse_touches_one_verse`; "Saved" never before B3 (held save); `draft_survives_panic`; `reload_anywhere_stores_the_last_text_once` on real saves *(A-2)*; `a_draft_sent_during_a_save_survives_a_crash` (R26's fallback, §6.5) *(C0)* | J2 green |
 | C3 ◆ Comments and OBS saves | `addComment` on blur only, with the reply cache and the offer rule *(A-18)*; `saveFrame`, `saveRef`; OBS editing lock | C1b, B3, B7 | R15 (fallback: buffer and mirror); Q-24 and R24 (fallback: each blur adds a comment) | J16, J21, J25; three pauses and a blur add one comment; a teammate's comment in the unit is untouched | green |
 | C4 Check writes | `check/decide` with rows in the `Ack` *(A-12)*; the check comment with its draft *(A-10)*; re-assessment after verse deltas; late draft (DELTA:906-907) | C1b, B5b | Q-25 | J4, J6, J22; check-project-switch, check-returns-draft; `decision_serializes_one_row`; `decision_refetches_no_rail` | green |
@@ -3342,6 +3434,7 @@ last.
 | Q-27 | **Unsaved aligner links in a crash.** Until R23 gives alignments a draft, a crash can lose up to 2 s of linking. Accept that in writing, or wait for R23? | Ask for R23 in S1; accept the 2 s window until it lands *(A-4)*. |
 | Q-28 | **The engine P7 approves.** Both captures use Chromium 141; the product ships Electronite v37, on Chromium 138. Accept Chromium 141 as P7's engine, with a declared residual and one Electronite capture run per release? | Accept *(A-34)*. |
 | Q-29 | **The rebuild's copyright line and LICENSE notice.** tC4's About shows the first line of tC4's `LICENSE` ("Copyright (C) 2017 - 2026  unfoldingWord …") and its License dialog shows `LICENSE` and `COPYING`. The rebuild's root has `COPYING` (identical to tC4's) and no `LICENSE`. Which copyright line and notice does the rebuild show? | tC4's, as A5 vendored them (`crates/tc-ui/assets/about/`), until the owner gives another. |
+| Q-30 | **Where the copy of a project in an unsafe or synced projects folder goes.** When the projects folder itself is on a FAT32 or exFAT drive or copied by a cloud client, every project there opens read-only, and STORAGE's banner offers "Copy the project to this computer?". A copy into the same folder would be read-only for the same reason (C1b finding 4), so `session/copy` refuses it (`CreateRefusal::CopyUnsafe`) and the banner's Copy then explains why. The app lists one projects folder, so a copy elsewhere would be hidden from Home. Options: (a) ask for a folder and make it the projects folder from then on, moving the copy there; (b) keep refusing and tell the person to move the projects folder; (c) copy into the local projects folder of Q-4 and list it beside the other. | (a): the person picks a folder on this computer, the app checks it is neither unsafe nor synced, copies the project there and lists that folder as the projects folder from then on; the project in the old folder stays where it is. Until answered, (b). |
 
 ---
 

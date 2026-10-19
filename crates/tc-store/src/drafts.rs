@@ -4,17 +4,19 @@
 //! after a crash the file holds the old or the new list (crash row D1).
 //!
 //! The file holds two kinds of entry (APP-DESIGN §6.6, C1b). A *current* entry is the newest
-//! draft of a field this session typed; a save of the field removes it. An *offered* entry is
-//! a text an open offered, from the last session's drafts or taken in from the page's buffer
-//! (`offer`): it has a number, and only *Keep* or *Discard* of that number removes it, written
-//! before they answer, so a save of the field, the field's typing since or a reload never
-//! takes it.
+//! draft of a field this session typed; a save of the field removes it, *Keep* does not. An
+//! *offered* entry is a text an open offered, from the last session's drafts or taken in from
+//! the page's buffer (`offer`): it has a number, and only *Keep* of its text or *Discard* of
+//! its number removes it, *Discard* written before it answers, so a save of the field, the
+//! field's typing since or a reload never takes it. Each entry records the app's run that
+//! typed it.
 //!
-//! At open (§6.1 O12) an entry whose text the record holds (the value its token stands for,
-//! or any head now) goes, and so does a current entry of the last session that the session's
-//! own later save superseded; the others become offered. *Keep* saves an entry with its tokens
-//! (`Command::KeepDraft`), so a record that changed meanwhile becomes a conflict, never a
-//! revert. A draft whose token this installation cannot verify any more (a new installation
+//! At open (§6.1 O12) an entry whose text the record holds now (any head), or, for one no open
+//! offered yet, the value its token stands for, goes; an entry of the opening run itself stays
+//! its current entry; the others become offered. Whether a later save superseded one is the
+//! app's to judge, with the page's buffer and the shell's mirror. *Keep* saves an entry with its
+//! tokens (`Command::KeepDraft`), so a record that changed meanwhile becomes a conflict, never
+//! a revert. A draft whose token this installation cannot verify any more (a new installation
 //! secret) is offered as text, and *Keep* writes it with no parents (R20).
 
 use crate::atomic::{SyncDir, atomic_create_dirs, atomic_write};
