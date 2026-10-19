@@ -1,0 +1,23 @@
+date: 2026-10-19T04:44:20Z
+uname: Linux 7.0.0-38-generic x86_64
+CPU(s):                                  20
+Model name:                              12th Gen Intel(R) Core(TM) i7-12700
+Thread(s) per core:                      2
+Core(s) per socket:                      12
+Socket(s):                               1
+CPU(s) scaling MHz:                      62%
+CPU max MHz:                             4900.0000
+CPU min MHz:                             800.0000
+L2 cache:                                12 MiB (9 instances)
+L3 cache:                                25 MiB (1 instance)
+avx2 sha_ni 
+               total        used        free      shared  buff/cache   available
+Mem:              61          11          15           3          38          50
+pinned: taskset -c 0-7 (cpus 0-15 are the 8 P-cores, two threads each; 16-19 are E-cores), RAYON_NUM_THREADS=8, 4 reading threads
+loads (1,5,15 min) at the start of each round:
+round 1 load 3.59 7.31 7.51
+round 2 load 3.78 7.23 7.48
+round 3 load 5.41 7.47 7.56
+round 4 load 6.07 7.54 7.58
+round 5 load 8.92 8.10 7.76
+done load 11.63 9.00 8.09

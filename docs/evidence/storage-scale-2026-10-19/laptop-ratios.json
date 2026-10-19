@@ -1,0 +1,129 @@
+{
+  "what": "this machine's speed against the reference laptop, from the laptop's own foldbench",
+  "foldbench_commit": "58b6874e92ed993c4a7692eea31e336fa4d29dd0",
+  "storage_commit_of_this_run": "0929d5a",
+  "laptop": "Dell Latitude 7490, i5-8350U 4 cores / 8 threads, 7.9 GiB, WD Blue SATA SSD, Windows 10 19045, Defender on, no SHA, no AVX-512",
+  "here": "see machine.txt next to this file",
+  "method": "laptop median / this machine's fastest of 5 rounds; a class takes the largest ratio of its rows; memory = laptop working set with the fold open / this machine's RSS with one malloc arena, at least 1; disk has no ratio until the laptop runs `perfreport flush`",
+  "rows": [
+    {
+      "row": "SHA-256 of every file once",
+      "class": "sha",
+      "laptop_ms": 813.139,
+      "here_best_ms": 186.47,
+      "here_median_ms": 186.47,
+      "here_runs": 1,
+      "ratio": 4.360696090523945
+    },
+    {
+      "row": "(a) open with the fold cache, one per process",
+      "class": "open_cache",
+      "laptop_ms": 1855.0,
+      "here_best_ms": 614.969924,
+      "here_median_ms": 720.475861,
+      "here_runs": 4,
+      "ratio": 3.016407677198861
+    },
+    {
+      "row": "cold open with the fold cache (every part)",
+      "class": "open_cache",
+      "laptop_ms": 1901.863,
+      "here_best_ms": 914.399,
+      "here_median_ms": 914.399,
+      "here_runs": 1,
+      "ratio": 2.079904943028153
+    },
+    {
+      "row": "(c) first open without a cache, one per process",
+      "class": "open_nocache",
+      "laptop_ms": 6288.0,
+      "here_best_ms": 1159.0,
+      "here_median_ms": 1524.0,
+      "here_runs": 5,
+      "ratio": 5.425366695427092
+    },
+    {
+      "row": "cold open without a cache (every part)",
+      "class": "open_nocache",
+      "laptop_ms": 6820.028,
+      "here_best_ms": 1981.394,
+      "here_median_ms": 1981.394,
+      "here_runs": 1,
+      "ratio": 3.4420352539676613
+    },
+    {
+      "row": "read, verify and prepare",
+      "class": "open_nocache",
+      "laptop_ms": 6172.084,
+      "here_best_ms": 1700.113,
+      "here_median_ms": 1700.113,
+      "here_runs": 1,
+      "ratio": 3.630396332479076
+    },
+    {
+      "row": "Psalms projection (psalms-only run)",
+      "class": "multi",
+      "laptop_ms": 377.5,
+      "here_best_ms": 53.017,
+      "here_median_ms": 95.673,
+      "here_runs": 5,
+      "ratio": 7.120357621140388
+    },
+    {
+      "row": "Psalms projection (app run)",
+      "class": "multi",
+      "laptop_ms": 359.138,
+      "here_best_ms": 58.117,
+      "here_median_ms": 97.131,
+      "here_runs": 5,
+      "ratio": 6.179568800867216
+    },
+    {
+      "row": "full fold of the prepared changes",
+      "class": "multi",
+      "laptop_ms": 1335.708,
+      "here_best_ms": 760.141,
+      "here_median_ms": 760.141,
+      "here_runs": 1,
+      "ratio": 1.7571845223451967
+    },
+    {
+      "row": "Psalms USFM alone",
+      "class": "single",
+      "laptop_ms": 40.061,
+      "here_best_ms": 5.773,
+      "here_median_ms": 9.4225,
+      "here_runs": 10,
+      "ratio": 6.939372943010567
+    },
+    {
+      "row": "conflict list and counts from scratch",
+      "class": "single",
+      "laptop_ms": 22.279,
+      "here_best_ms": 6.164,
+      "here_median_ms": 9.516,
+      "here_runs": 5,
+      "ratio": 3.614373783257625
+    }
+  ],
+  "checks": [
+    {
+      "row": "one Psalms chapter's USFM (microseconds, a check, not in a class)",
+      "ratio": 6.657894736842105
+    }
+  ],
+  "memory": {
+    "laptop_ws_open_mib": 202.0,
+    "here_rss_one_heap_mib": 197.0,
+    "raw_ratio": 1.025
+  },
+  "ratios": {
+    "sha": 4.36,
+    "open_cache": 3.02,
+    "open_nocache": 5.43,
+    "multi": 7.12,
+    "single": 6.94,
+    "memory": 1.03,
+    "disk": null
+  }
+}
