@@ -7,7 +7,7 @@
 //! judges the p95 times the class's ratio against the budget, and says "not shown" for a row
 //! whose cost is the disk's flush, which no CPU ratio scales.
 
-use crate::ratios::Ratios;
+use crate::ratios::{Band, Ratios};
 use std::fmt::Write as _;
 
 /// What scales a row from this machine to the reference laptop.
@@ -213,7 +213,7 @@ pub fn verdict_ci(spec: &RowSpec, samples: &[f64], tolerance: f64) -> Verdict {
     }
 }
 
-fn ratio_of(class: Class, ratios: &Ratios) -> Option<f64> {
+fn band_of(class: Class, ratios: &Ratios) -> Option<Band> {
     match class {
         Class::Sha => Some(ratios.sha),
         Class::OpenCache => Some(ratios.open_cache),
@@ -221,39 +221,39 @@ fn ratio_of(class: Class, ratios: &Ratios) -> Option<f64> {
         Class::Mixed => Some(ratios.multi),
         Class::Single => Some(ratios.single),
         Class::Memory => Some(ratios.memory),
-        Class::Timer | Class::Count => Some(1.0),
+        Class::Timer | Class::Count => Some(Band::one()),
         Class::Disk => ratios.disk,
     }
 }
 
-/// The laptop's figure of a row: this machine's, times the class's ratio. `None` for a row the
+/// The laptop's figure of a row as a band: this machine's, times the smallest and the
+/// largest ratio of the class's rows in the laptop's own foldbench. `None` for a row the
 /// drive's flush decides until the laptop has measured one. For a mixed row the figure is the
-/// CPU part's estimate (the flushes taken out), which is a lower bound.
-pub fn laptop_estimate(
+/// CPU part's (the flushes taken out), so it is a lower bound of the laptop's time.
+pub fn laptop_band(
     spec: &RowSpec,
     samples: &[f64],
     fsyncs: Option<f64>,
     flush_ms: Option<f64>,
     ratios: &Ratios,
-) -> Option<f64> {
+) -> Option<(f64, f64)> {
     if samples.is_empty() {
         return None;
     }
     let value = statistic(spec.on, samples);
-    match spec.class {
-        Class::Disk => ratios.disk.map(|r| value * r),
-        Class::Mixed => {
-            let flush = fsyncs.zip(flush_ms).map_or(0.0, |(n, f)| n * f);
-            let cpu = (value - flush).max(0.0);
-            Some(cpu * ratios.multi)
-        }
-        class => ratio_of(class, ratios).map(|r| value * r),
-    }
+    let value = if spec.class == Class::Mixed {
+        let flush = fsyncs.zip(flush_ms).map_or(0.0, |(n, f)| n * f);
+        (value - flush).max(0.0)
+    } else {
+        value
+    };
+    band_of(spec.class, ratios).map(|b| (value * b.low, value * b.high))
 }
 
-/// The verdict on the laptop: the estimate against the budget. A disk row, or a mixed row,
-/// is "not shown" whatever the estimate is, because the flushes of the laptop are unknown; a
-/// mixed row whose CPU part alone is over the budget fails.
+/// The verdict on the laptop: it passes when even the upper end of the band is within the
+/// budget, fails when even the lower end is over it, and is "not shown" between (the estimate
+/// straddles the budget) and for a row the drive's flush decides. A mixed row is never called
+/// met: the laptop's flushes are unknown.
 pub fn verdict_laptop(
     spec: &RowSpec,
     samples: &[f64],
@@ -273,29 +273,22 @@ pub fn verdict_laptop(
     if matches!(spec.limit, Limit::Count(_)) {
         return verdict_ci(spec, samples, 1.0);
     }
-    match laptop_estimate(spec, samples, fsyncs, flush_ms, ratios) {
-        None => Verdict::NotShown("the laptop's flush is not measured".into()),
-        Some(estimate) if spec.class == Class::Mixed => {
-            if estimate > limit {
-                Verdict::Fail
-            } else {
-                Verdict::NotShown("the laptop's flushes are not measured".into())
-            }
-        }
-        Some(estimate) if spec.class == Class::Timer => {
-            if estimate <= limit * 1.1 {
-                Verdict::Pass
-            } else {
-                Verdict::Fail
-            }
-        }
-        Some(estimate) => {
-            if estimate <= limit {
-                Verdict::Pass
-            } else {
-                Verdict::Fail
-            }
-        }
+    let slack = if spec.class == Class::Timer { 1.1 } else { 1.0 };
+    let Some((low, high)) = laptop_band(spec, samples, fsyncs, flush_ms, ratios) else {
+        return Verdict::NotShown("the laptop's flush is not measured".into());
+    };
+    if low > limit * slack {
+        Verdict::Fail
+    } else if spec.class == Class::Mixed {
+        Verdict::NotShown("the laptop's flushes are not measured".into())
+    } else if high <= limit * slack {
+        Verdict::Pass
+    } else {
+        Verdict::NotShown(format!(
+            "the estimate {}-{} straddles the budget",
+            sig3(low),
+            sig3(high)
+        ))
     }
 }
 
@@ -336,7 +329,7 @@ pub fn render(
     let mut verdicts = Vec::new();
     let _ = writeln!(
         out,
-        "{:<24} {:<46} {:>9} {:>5} {:>9} {:>9} {:>10} {:<30}",
+        "{:<28} {:<46} {:>9} {:>5} {:>9} {:>9} {:>14} {:<30}",
         "id", "action", "budget", "runs", "median", "p95", "laptop est", "verdict"
     );
     for spec in specs {
@@ -355,11 +348,10 @@ pub fn render(
             Limit::Info => "-".into(),
             Limit::NotBuilt(_) => "not built".into(),
         };
-        let estimate = laptop_estimate(spec, samples, fsyncs, flush_ms, ratios)
-            .map_or_else(|| "-".to_owned(), sig3);
+        let estimate = band_text(laptop_band(spec, samples, fsyncs, flush_ms, ratios));
         let _ = writeln!(
             out,
-            "{:<24} {:<46} {:>9} {:>5} {:>9} {:>9} {:>10} {:<30}",
+            "{:<28} {:<46} {:>9} {:>5} {:>9} {:>9} {:>14} {:<30}",
             spec.id,
             truncate(spec.action, 46),
             budget,
@@ -423,12 +415,19 @@ pub fn tsv(
             cell(median(samples)),
             cell(p95(samples)),
             cell(max(samples)),
-            laptop_estimate(spec, samples, fsyncs, flush_ms, ratios).map_or_else(String::new, cell),
+            band_text(laptop_band(spec, samples, fsyncs, flush_ms, ratios)),
             verdict.word(),
             m.map_or("", |m| m.note.as_str()).replace(['\t', '\n'], " ")
         );
     }
     out
+}
+
+fn band_text(band: Option<(f64, f64)>) -> String {
+    band.map_or_else(
+        || "-".to_owned(),
+        |(low, high)| format!("{}-{}", sig3(low), sig3(high)),
+    )
 }
 
 fn truncate(s: &str, n: usize) -> String {
@@ -460,13 +459,14 @@ mod tests {
     }
 
     fn ratios() -> Ratios {
+        let band = |low, high| Band { low, high };
         Ratios {
-            sha: 6.0,
-            open_cache: 1.5,
-            open_nocache: 1.9,
-            multi: 2.5,
-            single: 3.0,
-            memory: 1.0,
+            sha: band(4.0, 6.0),
+            open_cache: band(1.5, 1.5),
+            open_nocache: band(1.9, 1.9),
+            multi: band(2.0, 2.5),
+            single: band(3.0, 3.0),
+            memory: band(1.0, 1.0),
             disk: None,
             source: "test".into(),
         }
@@ -505,7 +505,10 @@ mod tests {
             Verdict::NotShown(_)
         ));
         let mut with = ratios();
-        with.disk = Some(2.0);
+        with.disk = Some(Band {
+            low: 2.0,
+            high: 2.0,
+        });
         assert_eq!(
             verdict_laptop(&s, &[10.0; 20], None, None, &with),
             Verdict::Pass
@@ -519,28 +522,28 @@ mod tests {
     #[test]
     fn a_mixed_row_takes_its_flushes_out_before_scaling() {
         let s = spec(Limit::Ms(1000.0), Class::Mixed);
-        // 300 ms here, 11 flushes of 10 ms: a CPU part of 190 ms, 475 ms on the laptop.
-        let e = laptop_estimate(&s, &[300.0; 5], Some(11.0), Some(10.0), &ratios());
-        assert_eq!(e, Some(475.0));
+        // 300 ms here, 11 flushes of 10 ms: a CPU part of 190 ms, 380 to 475 ms on the laptop.
+        let band = laptop_band(&s, &[300.0; 5], Some(11.0), Some(10.0), &ratios());
+        assert_eq!(band, Some((380.0, 475.0)));
         // Never called met: the laptop's flushes are unknown.
         assert!(matches!(
             verdict_laptop(&s, &[300.0; 5], Some(11.0), Some(10.0), &ratios()),
             Verdict::NotShown(_)
         ));
-        // A CPU part that alone misses is a miss.
+        // A CPU part that alone misses even at the low end is a miss.
         assert_eq!(
-            verdict_laptop(&s, &[600.0; 5], Some(11.0), Some(10.0), &ratios()),
+            verdict_laptop(&s, &[800.0; 5], Some(11.0), Some(10.0), &ratios()),
             Verdict::Fail
         );
     }
 
     #[test]
-    fn a_class_scales_by_its_own_ratio() {
+    fn a_class_scales_by_its_own_band() {
         let r = ratios();
         let single = spec(Limit::Ms(16.0), Class::Single);
         assert_eq!(
-            laptop_estimate(&single, &[4.0; 20], None, None, &r),
-            Some(12.0)
+            laptop_band(&single, &[4.0; 20], None, None, &r),
+            Some((12.0, 12.0))
         );
         assert_eq!(
             verdict_laptop(&single, &[6.0; 20], None, None, &r),
@@ -550,6 +553,24 @@ mod tests {
         assert_eq!(
             verdict_laptop(&open, &[1900.0; 20], None, None, &r),
             Verdict::Pass
+        );
+    }
+
+    #[test]
+    fn an_estimate_that_straddles_the_budget_is_not_shown() {
+        let s = spec(Limit::Ms(100.0), Class::Sha);
+        // 20 ms here is 80 to 120 ms on the laptop: the budget is inside the band.
+        assert!(matches!(
+            verdict_laptop(&s, &[20.0; 20], None, None, &ratios()),
+            Verdict::NotShown(_)
+        ));
+        assert_eq!(
+            verdict_laptop(&s, &[10.0; 20], None, None, &ratios()),
+            Verdict::Pass
+        );
+        assert_eq!(
+            verdict_laptop(&s, &[30.0; 20], None, None, &ratios()),
+            Verdict::Fail
         );
     }
 

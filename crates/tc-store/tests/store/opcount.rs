@@ -511,3 +511,395 @@ fn the_fold_cache_is_kept_by_every_open_of_the_same_encoding() {
     let (again, _) = open_once(&fs, &folder);
     assert_eq!(again.journal_files_cached, again.journal_files_read);
 }
+
+// ---------------------------------------------------------------------------------------
+// Unit P: the other saves of the editor, the aligner and the Check screen, a resolution, and
+// reading a book (docs/PERFORMANCE.md "Editor", "Checking", "Aligning"; §16.5a)
+// ---------------------------------------------------------------------------------------
+
+/// What a command that saves did to the folder, taken from the file system's log and the
+/// store's counters: no file opened that the open had not, under 64 KiB read, one file
+/// created, two flushes (the file and its folder). Returns the number of write points, which
+/// must be the same on both corpora.
+fn one_pending_file(fs: &FaultFs, handle: &tc_store::ProjectHandle, act: impl FnOnce()) -> usize {
+    fs.clear_log();
+    let read_before = fs.bytes_read();
+    let before = handle.counters();
+    act();
+    let log = fs.log();
+    let opened = fs.opened();
+    let read = fs.bytes_read() - read_before;
+    let delta = handle.counters().since(&before);
+    assert!(
+        opened.is_empty(),
+        "a save opened a file the open had not: {opened:?}"
+    );
+    assert!(read < 64 * 1024, "a save read {read} bytes");
+    let created = log.iter().filter(|op| op.kind == OpKind::Create).count();
+    assert_eq!(created, 1, "one pending file: {log:?}");
+    assert_eq!(delta.fsyncs, 2, "the file and its folder: {delta:?}");
+    log.len()
+}
+
+fn open_psalms(corpus: &OnDisk) -> (FaultFs, Rig, tc_store::ProjectHandle) {
+    let fs = corpus.fs.copy();
+    let rig = rig_as(fs.clone(), APP, "host-1");
+    let handle = rig
+        .store
+        .open(&corpus.folder, &OpenOptions::default())
+        .unwrap();
+    handle.wait_idle();
+    (fs, rig, handle)
+}
+
+/// Recording a decision writes one pending file and reads no pack, whatever the project's
+/// size: a bookmark toggled on a decided translationWords check of Psalms.
+#[test]
+fn a_decision_save_reads_no_pack_and_writes_one_pending_file() {
+    use tc_journal::command::{Command, DecisionChange, DecisionEdit};
+    use tc_journal::keys::{CheckTarget, ToolId};
+    use tc_journal::record::CheckValue;
+    let mut writes = Vec::new();
+    for corpus in [psalms(), psalms_x10()] {
+        let (fs, _rig, handle) = open_psalms(corpus);
+        let fold = handle.snapshot().fold().clone();
+        let key = fold
+            .decisions_of(ToolId::TranslationWords, tc_journal::BookId::Psalms)
+            .into_iter()
+            .find(|k| {
+                matches!(
+                    k,
+                    tc_journal::RecordKey::Check(c)
+                        if matches!(&c.target, CheckTarget::Verse { chapter, verse, .. }
+                            if chapter.number().is_some() && verse.number().is_some())
+                )
+            })
+            .expect("a decided check of a verse");
+        let Some(tc_journal::Record::Check {
+            value: CheckValue::Decision(d),
+            ..
+        }) = fold.projected(&key)
+        else {
+            panic!("a decision");
+        };
+        let tc_journal::RecordKey::Check(check) = &key else {
+            unreachable!()
+        };
+        let CheckTarget::Verse {
+            book,
+            chapter,
+            verse,
+        } = &check.target
+        else {
+            unreachable!()
+        };
+        let verse_key = tc_journal::RecordKey::Verse(
+            *book,
+            tc_journal::ChapterNo::new(chapter.number().unwrap()).unwrap(),
+            tc_journal::VerseNo::new(verse.number().unwrap()).unwrap(),
+        );
+        let shown = handle.mint(&key, None).unwrap();
+        let verse_shown = handle.mint(&verse_key, None).unwrap();
+        writes.push(one_pending_file(&fs, &handle, || {
+            let reply = handle
+                .submit(Command::SaveDecision {
+                    shown,
+                    verse_shown,
+                    value: DecisionEdit {
+                        basis: None,
+                        resource: d.resource.clone(),
+                        changes: vec![DecisionChange::Bookmarked(!d.bookmarked)],
+                    },
+                })
+                .wait()
+                .unwrap();
+            assert!(!reply.changes.is_empty());
+        }));
+        handle.close().unwrap();
+    }
+    assert_eq!(
+        writes[0], writes[1],
+        "the same write points on both corpora"
+    );
+}
+
+/// Saving an alignment writes one pending file and reads no pack: the aligned verse of
+/// Psalms marked done or not done.
+#[test]
+fn an_alignment_save_reads_no_pack_and_writes_one_pending_file() {
+    use tc_journal::command::{AlignmentEdit, Command};
+    let mut writes = Vec::new();
+    for corpus in [psalms(), psalms_x10()] {
+        let (fs, _rig, handle) = open_psalms(corpus);
+        let fold = handle.snapshot().fold().clone();
+        let key = fold
+            .chapter_keys(tc_journal::BookId::Psalms, 23)
+            .alignments
+            .into_iter()
+            .next()
+            .expect("an alignment in Psalm 23");
+        let Some(tc_journal::Record::Alignment {
+            book,
+            chapter,
+            verse,
+            value,
+        }) = fold.projected(&key)
+        else {
+            panic!("an alignment");
+        };
+        let shown = handle.mint(&key, None).unwrap();
+        let verse_shown = handle
+            .mint(&tc_journal::RecordKey::Verse(book, chapter, verse), None)
+            .unwrap();
+        writes.push(one_pending_file(&fs, &handle, || {
+            let reply = handle
+                .submit(Command::SaveAlignment {
+                    shown,
+                    verse_shown,
+                    value: AlignmentEdit {
+                        alignments: value.alignments.clone(),
+                        word_bank: value.word_bank.clone(),
+                        done: !value.done,
+                    },
+                })
+                .wait()
+                .unwrap();
+            assert!(!reply.changes.is_empty());
+        }));
+        handle.close().unwrap();
+    }
+    assert_eq!(
+        writes[0], writes[1],
+        "the same write points on both corpora"
+    );
+}
+
+/// Resolving a conflict writes one pending file and reads no pack. The conflict is made the
+/// way a teammate makes it: a pack that arrives between two opens holds an edit of the verse
+/// that was based on the same text as this computer's own save.
+#[test]
+fn a_resolution_reads_no_pack_and_writes_one_pending_file() {
+    use tc_journal::command::{Choice, Command};
+    use tc_journal::record::VerseValue;
+    use tc_journal::{
+        BatchId, BatchRef, Cause, Change, ChangeBody, DeviceId, DeviceSeq, FORMAT_MINOR, Record,
+        Verified, WallTime,
+    };
+    let mut writes = Vec::new();
+    for corpus in [psalms(), psalms_x10()] {
+        let fs = corpus.fs.copy();
+        fs.advance(std::time::Duration::from_secs(5));
+        let rig = rig_as(fs.clone(), APP, "host-1");
+        let key = verse_key_for(corpus);
+        let handle = rig
+            .store
+            .open(&corpus.folder, &OpenOptions::default())
+            .unwrap();
+        handle.wait_idle();
+        let before_edit = handle.snapshot().fold().clone();
+        let heads = before_edit.heads(&key);
+        let Some(Record::Verse {
+            book,
+            chapter,
+            verse,
+            value:
+                VerseValue::Text {
+                    marker,
+                    layout,
+                    last,
+                    from,
+                    ..
+                },
+        }) = before_edit.projected(&key)
+        else {
+            panic!("a verse with text");
+        };
+        save_verse_key(&handle, &key, "Mine, saved here");
+        handle.wait_idle();
+        handle.close().unwrap();
+        // The teammate's edit of the same text, made before the two exchanged.
+        let project = project_of(&fs, &corpus.folder);
+        let device = DeviceId::local([7u8; 15]);
+        let theirs = Change::new(ChangeBody {
+            v: FORMAT_MINOR,
+            record: Record::Verse {
+                book,
+                chapter,
+                verse,
+                value: VerseValue::Text {
+                    marker,
+                    words: "Theirs, saved there".into(),
+                    layout,
+                    last,
+                    from,
+                },
+            },
+            parents: heads,
+            device,
+            seq: DeviceSeq(1),
+            at: WallTime(1_792_195_200_000),
+            batch: BatchRef::new(BatchId::from_bytes([5u8; 16]), 1).unwrap(),
+            cause: Cause::Edit,
+        })
+        .unwrap();
+        let their_id = theirs.id();
+        let pack = tc_journal::pack::encode_pack(
+            &tc_journal::pack::PackSpec {
+                project,
+                sealer: device,
+                sealed: WallTime(1_792_195_200_000),
+            },
+            &[Verified::from(theirs)],
+            &[],
+        )
+        .unwrap();
+        fs.put(
+            &corpus.folder.join(pack.path.to_string()),
+            &pack.bytes,
+            None,
+        );
+        fs.advance(std::time::Duration::from_secs(5));
+        let rig = rig_as(fs.clone(), APP, "host-1");
+        let handle = rig
+            .store
+            .open(&corpus.folder, &OpenOptions::default())
+            .unwrap();
+        handle.wait_idle();
+        let conflict = handle
+            .snapshot()
+            .fold()
+            .conflicts()
+            .find(|c| c.key == key)
+            .cloned()
+            .expect("the two edits conflict");
+        let theirs_head = conflict
+            .candidates
+            .iter()
+            .find(|c| c.head == their_id)
+            .expect("their version is a candidate")
+            .head;
+        let shown = handle.mint_review(&key).unwrap();
+        writes.push(one_pending_file(&fs, &handle, || {
+            let reply = handle
+                .submit(Command::Resolve {
+                    conflict: conflict.id,
+                    shown: vec![shown],
+                    choice: Choice::Candidate { head: theirs_head },
+                })
+                .wait()
+                .unwrap();
+            assert!(!reply.changes.is_empty());
+        }));
+        assert!(
+            handle.snapshot().fold().conflicts().all(|c| c.key != key),
+            "the conflict is resolved"
+        );
+        handle.close().unwrap();
+    }
+    assert_eq!(
+        writes[0], writes[1],
+        "the same write points on both corpora"
+    );
+}
+
+/// A verse of Psalms 23 with text, the same in both corpora.
+fn verse_key_for(corpus: &OnDisk) -> tc_journal::RecordKey {
+    let fs = corpus.fs.copy();
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = rig
+        .store
+        .open(&corpus.folder, &OpenOptions::default())
+        .unwrap();
+    let key = handle
+        .snapshot()
+        .fold()
+        .chapter_keys(tc_journal::BookId::Psalms, 23)
+        .verses
+        .into_iter()
+        .find(|k| {
+            matches!(
+                handle.snapshot().fold().projected(k),
+                Some(tc_journal::Record::Verse {
+                    value: tc_journal::record::VerseValue::Text { .. },
+                    ..
+                })
+            )
+        })
+        .expect("a verse with text");
+    handle.close().unwrap();
+    key
+}
+
+fn save_verse_key(handle: &tc_store::ProjectHandle, key: &tc_journal::RecordKey, words: &str) {
+    let shown = handle.mint(key, None).unwrap();
+    handle
+        .submit(tc_journal::command::Command::SaveVerse {
+            shown,
+            words: words.into(),
+        })
+        .wait()
+        .unwrap();
+}
+
+/// Reading a book reads that book's values, where they lie, and opens no file the project
+/// does not hold open already: the bytes read are about 470 per record of the book's text, the
+/// same on the corpus ten times larger, not the packs the values lie in.
+#[test]
+fn reading_a_book_reads_only_its_values() {
+    let mut read = Vec::new();
+    for corpus in [psalms(), psalms_x10()] {
+        let (fs, _rig, handle) = open_psalms(corpus);
+        // The open took the files' prepared changes from the fold cache the last close wrote,
+        // so the first read of a value opens its file once; a second read opens nothing.
+        let records = handle
+            .snapshot()
+            .fold()
+            .record_keys()
+            .iter()
+            .filter(|k| {
+                matches!(
+                    k,
+                    tc_journal::RecordKey::Verse(tc_journal::BookId::Psalms, ..)
+                        | tc_journal::RecordKey::ChapterFront(tc_journal::BookId::Psalms, _)
+                        | tc_journal::RecordKey::BookHeader(tc_journal::BookId::Psalms)
+                )
+            })
+            .count();
+        fs.clear_log();
+        let before = fs.bytes_read();
+        let book = handle.read_book(tc_journal::BookId::Psalms).wait();
+        let first = fs.bytes_read() - before;
+        assert!(book.usfm.is_some_and(|u| u.contains("\\c 150")));
+        let journal_opened: Vec<_> = fs.opened().into_iter().filter(|p| is_journal(p)).collect();
+        let unique: std::collections::BTreeSet<_> = journal_opened.iter().collect();
+        assert_eq!(journal_opened.len(), unique.len(), "a file opened twice");
+        assert!(
+            fs.opened().iter().all(|p| is_journal(p)),
+            "a book read opened a file that is not a journal file: {:?}",
+            fs.opened()
+        );
+        assert!(
+            first < 1024 * records as u64,
+            "reading Psalms read {first} bytes for the {records} records of its text"
+        );
+        fs.clear_log();
+        let before = fs.bytes_read();
+        let again = handle.read_book(tc_journal::BookId::Psalms).wait();
+        assert!(again.usfm.is_some());
+        assert!(
+            fs.opened().is_empty(),
+            "a second read opened {:?}",
+            fs.opened()
+        );
+        read.push((first, fs.bytes_read() - before));
+        handle.close().unwrap();
+    }
+    // The corpus ten times larger has other books, more devices and more history; Psalms
+    // is the same book, so its values are about as many bytes.
+    assert!(
+        read[1].0 <= read[0].0 * 3 / 2 + 64 * 1024,
+        "reading Psalms read {} bytes in the corpus and {} in the one ten times larger",
+        read[0].0,
+        read[1].0
+    );
+}

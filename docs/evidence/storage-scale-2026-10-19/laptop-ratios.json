@@ -4,7 +4,7 @@
   "storage_commit_of_this_run": "0929d5a",
   "laptop": "Dell Latitude 7490, i5-8350U 4 cores / 8 threads, 7.9 GiB, WD Blue SATA SSD, Windows 10 19045, Defender on, no SHA, no AVX-512",
   "here": "see machine.txt next to this file",
-  "method": "laptop median / this machine's fastest of 5 rounds; a class takes the largest ratio of its rows; memory = laptop working set with the fold open / this machine's RSS with one malloc arena, at least 1; disk has no ratio until the laptop runs `perfreport flush`",
+  "method": "laptop median / this machine's fastest of 5 rounds; a class's ratio is the largest ratio of its rows, and `ratios_low` the smallest (the laptop estimate of a figure is a band between the two); memory = laptop working set with the fold open / this machine's RSS with one malloc arena, at least 1; disk has no ratio until the laptop runs `perfreport flush`",
   "rows": [
     {
       "row": "SHA-256 of every file once",
@@ -124,6 +124,15 @@
     "multi": 7.12,
     "single": 6.94,
     "memory": 1.03,
+    "disk": null
+  },
+  "ratios_low": {
+    "sha": 4.36,
+    "open_cache": 2.08,
+    "open_nocache": 3.44,
+    "multi": 1.76,
+    "single": 3.61,
+    "memory": 1.0,
     "disk": null
   }
 }

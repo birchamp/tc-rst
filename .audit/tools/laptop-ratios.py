@@ -9,7 +9,7 @@ SHA, no AVX-512, Defender on). HERE_DIR holds what .audit/tools/laptop-ratios.sh
 machine with the same foldbench binary: c-N.txt, a-N.txt, p-N.txt, app-N.txt, every.txt and
 app1h-N.txt (the app's case with one malloc arena). Each ratio is laptop median / this machine's
 fastest round (other jobs slow the rest, and the fastest round makes the ratio larger, so the
-laptop estimates it gives are not low); a class takes the largest ratio of its rows. Memory is
+laptop estimates it gives are not low); a class takes the largest ratio of its rows (and `ratios_low` the smallest, so an estimate is a band). Memory is
 the laptop's working set with the fold open over this machine's resident set with one heap,
 never below 1. Standard library only.
 """
@@ -134,23 +134,28 @@ def main():
     c = lap["chapter"] / min(now["chapter"])
     checks.append({"row": "one Psalms chapter's USFM (microseconds, a check, not in a class)", "ratio": c})
     ratios = {}
+    low = {}
     for cls in ("sha", "open_cache", "open_nocache", "multi", "single"):
         ratios[cls] = round(max(r["ratio"] for r in rows if r["class"] == cls), 2)
+        low[cls] = round(min(r["ratio"] for r in rows if r["class"] == cls), 2)
     one_heap = min(now["rss_one_heap_mib"])
     memory = lap["ws_open_mib"] / one_heap
     ratios["memory"] = round(max(1.0, memory), 2)
+    low["memory"] = 1.0
     ratios["disk"] = None
+    low["disk"] = None
     doc = {
         "what": "this machine's speed against the reference laptop, from the laptop's own foldbench",
         "foldbench_commit": "58b6874e92ed993c4a7692eea31e336fa4d29dd0",
         "storage_commit_of_this_run": commit,
         "laptop": "Dell Latitude 7490, i5-8350U 4 cores / 8 threads, 7.9 GiB, WD Blue SATA SSD, Windows 10 19045, Defender on, no SHA, no AVX-512",
         "here": "see machine.txt next to this file",
-        "method": "laptop median / this machine's fastest of 5 rounds; a class takes the largest ratio of its rows; memory = laptop working set with the fold open / this machine's RSS with one malloc arena, at least 1; disk has no ratio until the laptop runs `perfreport flush`",
+        "method": "laptop median / this machine's fastest of 5 rounds; a class's ratio is the largest ratio of its rows, and `ratios_low` the smallest (the laptop estimate of a figure is a band between the two); memory = laptop working set with the fold open / this machine's RSS with one malloc arena, at least 1; disk has no ratio until the laptop runs `perfreport flush`",
         "rows": rows,
         "checks": checks,
         "memory": {"laptop_ws_open_mib": lap["ws_open_mib"], "here_rss_one_heap_mib": one_heap, "raw_ratio": round(memory, 3)},
         "ratios": ratios,
+        "ratios_low": low,
     }
     out_path.write_text(json.dumps(doc, indent=2) + "\n")
     for r in rows:

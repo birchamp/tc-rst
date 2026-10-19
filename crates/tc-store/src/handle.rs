@@ -983,6 +983,12 @@ impl ProjectHandle {
     /// Writes what is due (a seal and a materialization), releases the lock and stops the
     /// actor.
     pub fn close(self) -> Result<(), StoreError> {
+        self.close_counted().0
+    }
+
+    /// [`ProjectHandle::close`], and the counters as the close left them: a close is the one
+    /// action whose own cost a caller cannot read from the handle afterwards.
+    pub fn close_counted(self) -> (Result<(), StoreError>, StoreCounters) {
         self.stop_watching();
         // A repack stops and none starts: closing never waits for maintenance (§9.8).
         self.shared.begin_closing();
@@ -997,7 +1003,7 @@ impl ProjectHandle {
         if let Some(actor) = self.actor.lock().unwrap_or_else(|e| e.into_inner()).take() {
             let _ = actor.join();
         }
-        result
+        (result, self.counters())
     }
 }
 

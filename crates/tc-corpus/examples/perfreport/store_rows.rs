@@ -480,47 +480,138 @@ fn per(delta: &tc_store::StoreCounters, n: u64) -> String {
     )
 }
 
-/// "Materialize one book": the time from leaving the book to the writer being done, after one
-/// verse save or one decision.
+/// Verses of `book` whose alignment still links words to the original: the first edit of such
+/// a verse reflows its alignment (R25), so the batch changes the alignment file as well as
+/// the text.
+fn linked_verses(handle: &tc_store::ProjectHandle, book: BookId, n: usize) -> Vec<RecordKey> {
+    let snapshot = handle.snapshot();
+    let fold = snapshot.fold();
+    let chapters = fold.chapters_of(book);
+    let mut out = Vec::new();
+    let stride = (chapters.len() / n).max(1);
+    for chapter in chapters.iter().step_by(stride) {
+        for key in fold.chapter_keys(book, *chapter).alignments {
+            let Some(Record::Alignment {
+                book,
+                chapter,
+                verse,
+                value,
+            }) = fold.projected(&key)
+            else {
+                continue;
+            };
+            if value.alignments.iter().any(|g| !g.bottom_words.is_empty()) {
+                out.push(RecordKey::Verse(book, chapter, verse));
+                break;
+            }
+        }
+        if out.len() >= n {
+            break;
+        }
+    }
+    out
+}
+
+/// "Materialize one book": the time from leaving the book to the writer being done, after the
+/// first edit of an aligned verse (text and alignment files), a second edit of it (text
+/// only), an alignment save, a decision, and an edit in Jude.
 pub fn materialize(dir: &Path) -> Vec<Measured> {
     crate::common::header("materialize");
     let store = store(dir);
     let handle = open(&store, dir);
     let run = run_id();
+    let leave = |book: BookId| {
+        let before = handle.counters();
+        let started = Instant::now();
+        handle.leave(Leave::Book(book)).wait().expect("leave");
+        (ms(started), handle.counters().since(&before))
+    };
     let mut rows = Vec::new();
-    for (id, book, decide) in [
-        ("materialize.book", BookId::Psalms, false),
-        ("materialize.book_decision", BookId::Psalms, true),
-        ("materialize.jude", BookId::Jude, false),
-    ] {
-        let verses = verses_of(&handle, book, 20);
-        let decisions = decisions_of(&handle, book, 20);
-        let mut times = Vec::new();
-        let mut last = tc_store::StoreCounters::default();
-        for i in 0..20 {
-            if decide {
-                decide_one(&handle, &decisions[i % decisions.len()]);
-            } else {
-                save_one(
-                    &handle,
-                    &verses[i % verses.len()],
-                    format!("A saved verse {i} of run {run}"),
-                );
-            }
-            let before = handle.counters();
-            let started = Instant::now();
-            handle.leave(Leave::Book(book)).wait().expect("leave");
-            times.push(ms(started));
-            last = handle.counters().since(&before);
-        }
-        rows.push(
-            Measured::new(id, times, format!("the last run: {}", cost(&last)))
-                .with_fsyncs(last.fsyncs as f64),
-        );
-        handle.wait_idle();
-        std::thread::sleep(Duration::from_secs(3));
-        handle.wait_idle();
+    let verses = linked_verses(&handle, BookId::Psalms, 20);
+    let (mut first, mut second) = (Vec::new(), Vec::new());
+    let (mut first_cost, mut second_cost) = (
+        tc_store::StoreCounters::default(),
+        tc_store::StoreCounters::default(),
+    );
+    for (i, key) in verses.iter().enumerate() {
+        save_one(&handle, key, format!("A first edit {i} of run {run}"));
+        let (took, cost) = leave(BookId::Psalms);
+        first.push(took);
+        first_cost = cost;
+        save_one(&handle, key, format!("A second edit {i} of run {run}"));
+        let (took, cost) = leave(BookId::Psalms);
+        second.push(took);
+        second_cost = cost;
     }
+    rows.push(
+        Measured::new(
+            "materialize.book_first_edit",
+            first,
+            format!(
+                "{} aligned verses; the last: {}",
+                verses.len(),
+                cost(&first_cost)
+            ),
+        )
+        .with_fsyncs(first_cost.fsyncs as f64),
+    );
+    rows.push(
+        Measured::new(
+            "materialize.book",
+            second,
+            format!("the last: {}", cost(&second_cost)),
+        )
+        .with_fsyncs(second_cost.fsyncs as f64),
+    );
+    let alignments = alignments_of(&handle, BookId::Psalms, 20);
+    let (mut times, mut last) = (Vec::new(), tc_store::StoreCounters::default());
+    for key in &alignments {
+        align_one(&handle, key);
+        let (took, cost) = leave(BookId::Psalms);
+        times.push(took);
+        last = cost;
+    }
+    rows.push(
+        Measured::new(
+            "materialize.book_alignment",
+            times,
+            format!("the last: {}", cost(&last)),
+        )
+        .with_fsyncs(last.fsyncs as f64),
+    );
+    let decisions = decisions_of(&handle, BookId::Psalms, 20);
+    let (mut times, mut last) = (Vec::new(), tc_store::StoreCounters::default());
+    for key in &decisions {
+        decide_one(&handle, key);
+        let (took, cost) = leave(BookId::Psalms);
+        times.push(took);
+        last = cost;
+    }
+    rows.push(
+        Measured::new(
+            "materialize.book_decision",
+            times,
+            format!("the last: {}", cost(&last)),
+        )
+        .with_fsyncs(last.fsyncs as f64),
+    );
+    let jude = verses_of(&handle, BookId::Jude, 20);
+    let (mut times, mut last) = (Vec::new(), tc_store::StoreCounters::default());
+    for (i, key) in jude.iter().enumerate() {
+        save_one(&handle, key, format!("A Jude edit {i} of run {run}"));
+        let (took, cost) = leave(BookId::Jude);
+        times.push(took);
+        last = cost;
+    }
+    rows.push(
+        Measured::new(
+            "materialize.jude",
+            times,
+            format!("the last: {}", cost(&last)),
+        )
+        .with_fsyncs(last.fsyncs as f64),
+    );
+    handle.wait_idle();
     handle.close().expect("close");
     rows
 }
@@ -664,6 +755,7 @@ pub fn close(dir: &Path) -> Vec<Measured> {
     let run = run_id();
     let mut closes = Vec::new();
     let mut last = tc_store::StoreCounters::default();
+    let mut before = tc_store::StoreCounters::default();
     for i in 0..5usize {
         let handle = open(&store, dir);
         let verses = verses_of(&handle, BookId::Psalms, 10);
@@ -674,19 +766,22 @@ pub fn close(dir: &Path) -> Vec<Measured> {
             format!("Closed after {i} of run {run}"),
         );
         decide_one(&handle, &decisions[i % decisions.len()]);
-        let before = handle.counters();
+        before = handle.counters();
         let started = Instant::now();
-        let counters = handle.close();
+        let (result, counters) = handle.close_counted();
         closes.push(ms(started));
-        counters.expect("close");
-        last = tc_store::StoreCounters::default();
-        let _ = before;
+        result.expect("close");
+        last = counters.since(&before);
     }
-    vec![Measured::new(
-        "close",
-        closes,
-        format!("threads {STORE_THREADS}; {}", cost(&last)),
-    )]
+    let _ = before;
+    vec![
+        Measured::new(
+            "close",
+            closes,
+            format!("threads {STORE_THREADS}; the last: {}", cost(&last)),
+        )
+        .with_fsyncs(last.fsyncs as f64),
+    ]
 }
 
 /// One 1 KiB atomic write with its folder flush, 200 times: this drive's flush, the figure the
