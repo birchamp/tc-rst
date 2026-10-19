@@ -42,6 +42,10 @@ pub enum Pending {
     Profile,
     /// "Open project" in Open a project from Door43 (B9b): the open of the form as it stands.
     OpenDoor43,
+    /// Get source texts reads a package's rows from Door43's catalog (B9a, tC4 `loadPackage`).
+    Catalog,
+    /// Get source texts' Download (B9a, tC4 `downloadPackage`).
+    Download,
 }
 
 impl Pending {
@@ -57,6 +61,7 @@ impl Pending {
             Self::CheckSignIn => NetKind::CheckSignIn,
             Self::Profile => NetKind::Profile,
             Self::OpenDoor43 => NetKind::Open,
+            Self::Catalog | Self::Download => NetKind::Sources,
         }
     }
 }

@@ -28,8 +28,10 @@ use crate::views::modals::feedback::Feedback;
 use crate::views::modals::import::Import;
 use crate::views::modals::new_bible::{NewBible, NewObs};
 use crate::views::modals::open_door43::OpenFromDoor43;
+use crate::views::modals::project_settings::ProjectSettings;
 use crate::views::modals::share::ShareDialog;
 use crate::views::modals::sign_in::ShareSignIn;
+use crate::views::modals::source_texts::SourceTexts;
 use crate::views::open_progress::OpenProgress;
 use crate::views::understand::Understand;
 
@@ -71,13 +73,22 @@ pub fn App() -> impl IntoView {
         let (dialog, sh) = (ctx.s.layers.dialog.clone(), ctx.s.sh.clone());
         Memo::new(move |_| dialog.get() == Some(Dialog::Share) && sh.with(Option::is_some))
     };
+    let settings_open = {
+        let (dialog, st) = (ctx.s.layers.dialog.clone(), ctx.s.st.clone());
+        Memo::new(move |_| dialog.get() == Some(Dialog::Settings) && st.with(Option::is_some))
+    };
+    let sources_open = {
+        let dialog = ctx.s.layers.dialog.clone();
+        Memo::new(move |_| dialog.get() == Some(Dialog::Sources))
+    };
     view! {
         <div style=frame.to_style()>
             <TopBar />
             <ViewBoundary />
             {home_dialogs(&ctx.s)}
-            // ProjectSettings, SourceTexts (B9a), GatewayChange, UpgradeSet (C8), GuidedFix (B5a)
-            // mount here, before ShareSignIn.
+            {move || settings_open.get().then(|| view! { <ProjectSettings /> })}
+            {move || sources_open.get().then(|| view! { <SourceTexts /> })}
+            // GatewayChange, UpgradeSet (C8) and GuidedFix (B5a) mount here, before ShareSignIn.
             {move || sign_in_open.get().map(|_| view! { <ShareSignIn /> })}
             {move || share_open.get().then(|| view! { <ShareDialog /> })}
             {move || feedback_open.get().then(|| view! { <Feedback /> })}

@@ -22,6 +22,7 @@ mod app {
     mod save_refresh;
     mod share;
     mod shell;
+    mod sources;
     mod sse;
     mod understand;
 }

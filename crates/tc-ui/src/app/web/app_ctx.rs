@@ -42,7 +42,7 @@ use crate::app::shell::{CurrentProject, Editing, View};
 use crate::i18n::show_locale;
 
 /// The dialogs `s.modal` names (tC4 `tC4:src/state.jsx:476`). The units that port the others
-/// add theirs: ProjectSettings, SourceTexts (B9a), GuidedFix (B5a).
+/// add theirs: GuidedFix (B5a).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dialog {
     Feedback,
@@ -62,6 +62,10 @@ pub enum Dialog {
     OpenDoor43,
     /// Share on Door43; its form is `sh`.
     Share,
+    /// Project settings (M7); its form is `st`.
+    Settings,
+    /// Get source texts (M8); its form is `src`.
+    Sources,
 }
 
 /// A banner on Home: its text, and the "Ask for help" it offers (tC4 #378).
@@ -116,6 +120,11 @@ pub struct AppState {
     pub sh: ArcRwSignal<Option<ShareForm>>,
     /// Open a project from Door43's form (tC4 `od`, B9b).
     pub od: ArcRwSignal<Option<OpenForm>>,
+    /// Project settings' form (tC4 `st`, B9a).
+    pub st: ArcRwSignal<Option<crate::app::sources::SettingsForm>>,
+    /// Get source texts' form (tC4 `src`, B9a), kept across the dialog's openings as tC4
+    /// keeps it.
+    pub src: ArcRwSignal<crate::app::sources::SourcesForm>,
     /// A refused open, on Home (tC4 `bookError`; B3 sets it).
     pub book_error: ArcRwSignal<Option<HomeBanner>>,
     /// The checkpoint of the project just left failed (tC4 `commitError`; D1 sets it).
@@ -160,6 +169,8 @@ impl AppState {
             im: ArcRwSignal::new(None),
             sh: ArcRwSignal::new(None),
             od: ArcRwSignal::new(None),
+            st: ArcRwSignal::new(None),
+            src: ArcRwSignal::new(crate::app::sources::SourcesForm::default()),
             book_error: ArcRwSignal::new(None),
             commit_error: ArcRwSignal::new(None),
             syncing: ArcRwSignal::new(None),
@@ -413,6 +424,8 @@ impl Actions {
             Pending::Profile => self.profile_now(),
             Pending::Share(project) => self.share_now(*project),
             Pending::OpenDoor43 => self.open_door43_now(),
+            Pending::Catalog => self.catalog_now(),
+            Pending::Download => self.download_now(),
             // B10 runs the sync after its question.
             Pending::Sync(_) => {}
         }
@@ -436,8 +449,10 @@ impl Actions {
                     }
                 });
             }
+            Pending::Catalog => self.catalog_dropped(),
             // The sign-in step stays open and sends nothing (tC4: "Not now keeps the dialog").
-            Pending::Link(..)
+            Pending::Download
+            | Pending::Link(..)
             | Pending::SignIn { .. }
             | Pending::CheckSignIn
             | Pending::Profile
@@ -448,7 +463,7 @@ impl Actions {
 
     /// The server refused with `NeedsInternet`: the switch went off after the question
     /// (AD25). Ask once more; a second refusal for the same step drops it.
-    fn ask_again(&self, then: Pending) {
+    pub(super) fn ask_again(&self, then: Pending) {
         let asked = self.0.reasked.replace(true);
         let step = self
             .s()
@@ -732,6 +747,7 @@ impl Actions {
         s.im.try_set(None);
         s.sh.try_set(None);
         s.od.try_set(None);
+        s.st.try_set(None);
         self.0.share_flows.set(self.0.share_flows.get() + 1);
     }
 
@@ -757,9 +773,6 @@ impl Actions {
             tc_api::home::Door43Card::Local => Pending::Share(Box::new(ShareProject::of(card))),
         });
     }
-
-    /// A card's Settings: B9a opens the project's settings from Home.
-    pub fn open_settings(&self, _card: &HomeCard) {}
 
     /// A card's conflict chip: B11 opens the project's conflict review.
     pub fn open_project_conflicts(&self, _project: ProjectRef) {}
