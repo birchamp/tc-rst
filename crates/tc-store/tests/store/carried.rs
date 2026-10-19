@@ -722,6 +722,21 @@ fn checkpoint_serving_a_carried_file(
     (during, report)
 }
 
+/// The person's program saves `bytes` over the song once the writer has finished the
+/// checkpoint's job, whose reply comes before the rig looks at the folder that job left as a
+/// burrito, and before any later job could take the version in the folder into the entry
+/// itself: the job a save and a leave make waits until the bytes are there.
+fn save_after_the_checkpoint_job(rig: &Rig, handle: &ProjectHandle, folder: &Path, bytes: &[u8]) {
+    let hooks = rig.store.hooks().clone();
+    hooks.hold(tc_store::Point::BeforeMaterialize);
+    save_verse(handle, 1, 3, "my true child").unwrap();
+    let next = handle.leave(Leave::Mode);
+    hooks.wait_reached(tc_store::Point::BeforeMaterialize, 1);
+    rig.fs.put_unseen(&folder.join(SONG), bytes, None);
+    hooks.release(tc_store::Point::BeforeMaterialize);
+    next.wait().unwrap();
+}
+
 /// §5.13 C2 for carried files: a checkpoint's job runs on the snapshot its packs stand for, so
 /// it never puts an older version of a carried file back over a newer one recorded while its
 /// seal ran, and the person's next save continues the version in the folder: no conflict
@@ -746,7 +761,7 @@ fn a_checkpoint_job_never_places_an_older_version_over_a_newer_edit() {
     let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
     assert_eq!(commit_files(&repo, commit).get(SONG), Some(&v1));
     // At once, the person's program saves V3 over V2.
-    rig.fs.put_unseen(&folder.join(SONG), &v3, None);
+    save_after_the_checkpoint_job(&rig, &handle, &folder, &v3);
     handle.focus().wait().unwrap();
     handle.wait_idle();
     let fold = handle.snapshot().fold().clone();
@@ -756,6 +771,17 @@ fn a_checkpoint_job_never_places_an_older_version_over_a_newer_edit() {
         "V3 continues V2"
     );
     assert_eq!(fold.heads(&song_key()).len(), 1);
+    assert_eq!(
+        fold.projected(&song_key()).and_then(|r| match r {
+            Record::CarriedFile {
+                value: CarriedValue::Present { size, .. },
+                ..
+            } => Some(size),
+            _ => None,
+        }),
+        Some(v3.len() as u64),
+        "V3 was recorded"
+    );
     assert_eq!(rig.fs.peek(&folder.join(SONG)), Some(v3));
     assert_valid_burrito(&rig.fs, &folder);
     let handle = std::sync::Arc::try_unwrap(handle).unwrap_or_else(|_| panic!("no other owner"));
@@ -781,7 +807,7 @@ fn a_checkpoint_listing_keeps_the_placed_version_of_a_newer_edit() {
     assert_eq!(during.as_ref(), Some(&v2), "the seal served the edit");
     assert_eq!(rig.fs.peek(&folder.join(SONG)), Some(v2.clone()));
     assert_valid_burrito(&rig.fs, &folder);
-    rig.fs.put_unseen(&folder.join(SONG), &v3, None);
+    save_after_the_checkpoint_job(&rig, &handle, &folder, &v3);
     handle.focus().wait().unwrap();
     handle.wait_idle();
     let fold = handle.snapshot().fold().clone();
