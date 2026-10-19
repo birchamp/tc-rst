@@ -42,6 +42,18 @@
       "why": "Choosing a language whose Door43 code a Scripture Burrito cannot hold (about 470, such as acm-x-lebarabic) fills the Code box with a code it can hold that keeps every letter (acm-x-lebarabi-c) and says so in one sentence; when none can be made the box stays empty and the sentence says why. tC4 fills the Door43 code and stores \"Undetermined\" (#582). No baseline screen chooses a language.",
       "cites": "owner's answer to Q35 (TC4-DELTA-2026-10-19 §5); B2 step 1",
       "until": null
+    },
+    {
+      "id": "sync-alignments",
+      "why": "The sync result names the verses with two alignments to review under its line (\"1 verse has two alignments to review.\") and offers Review for them, where tC4 4.0 keeps the newest alignment and counts it among the conflicts that kept the newest version (#791; tc_ui test a_verse_with_two_alignments_is_named_and_offers_review). No baseline sync brings an alignment conflict, so no row shows it.",
+      "cites": "AGENTS.md \"Matching tC4\"; docs/PLAN.md (B10); #791",
+      "until": null
+    },
+    {
+      "id": "sync-fixed-sentence",
+      "why": "A sync that stops for a reason no other sentence names shows one fixed sentence, before and after the teammates' work was received, where tC4 4.0 shows \"The sync stopped: {reason}\" with Door43's words or an I/O reason that can name a file (tc_api test io_reason_renders_without_the_path; journey sync-button). No baseline sync stops so.",
+      "cites": "Q36 (TC4-DELTA-2026-10-19 §5); #724 item 6",
+      "until": null
     }
   ],
   "rows": {
@@ -92,6 +104,27 @@
       "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the DOM with every computed style is line for line tC4's (Home's header, the Bible card's 44 lines, each dialog), the region above the cards is pixel for pixel tC4's, and the Bible card differs only in the anti-aliasing of a card drawn at another fractional offset (docs/evidence/home-2026-10-19.md). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B2's rows and remove these residuals.",
       "until": null
     },
+    "en-understand-questions": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The user-comment box of each unit carries `readonly`: B3 shows the comment tC4's rule picks (APP-DESIGN §6.5, A-18) and C3 writes it (`editor/addComment`, R24), so until C3 lands nothing typed into the box could be saved, and a box that took typing would lose it (AGENTS.md: never lose a translator's text). Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel. C3 removes `readonly` and this residual.",
+      "until": "C3"
+    },
+    "en-understand-tit1": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The user-comment box of each unit carries `readonly`: B3 shows the comment tC4's rule picks (APP-DESIGN §6.5, A-18) and C3 writes it (`editor/addComment`, R24), so until C3 lands nothing typed into the box could be saved, and a box that took typing would lose it (AGENTS.md: never lose a translator's text). Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel. C3 removes `readonly` and this residual.",
+      "until": "C3"
+    },
+    "en-understand-tw-article": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The user-comment box of each unit carries `readonly`: B3 shows the comment tC4's rule picks (APP-DESIGN §6.5, A-18) and C3 writes it (`editor/addComment`, R24), so until C3 lands nothing typed into the box could be saved, and a box that took typing would lose it (AGENTS.md: never lose a translator's text). Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel. C3 removes `readonly` and this residual.",
+      "until": "C3"
+    },
     "feedback": {
       "layers": [
         "pixels",
@@ -123,6 +156,14 @@
         "dom"
       ],
       "why": "The banner's diagnosis after \"The project could not be opened.\": tC4 prints its fetch's error (`TypeError: Failed to fetch`, the gallery's patch), and the capture makes the rebuild's server answer the listing with an error, which the banner prints as the rebuild's error text (`internal error`). The banner, its Retry and the absence of \"No projects yet\" are tC4's; the pixels differ only along the shorter text.",
+      "until": null
+    },
+    "home-open-error": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4 reaches this state by writing a file outside the app and opening again: its store refuses the open, and the checkpoint of the project just left fails too, so tC4's Home shows both banners. The rebuild reads a file written outside the app as an outside edit and opens (STORAGE §11.1), so the Rust route answers `session/open` with a refusal it does give, a project file it cannot read (`replies/home-open-error.json`): the banner is tC4's, `The project could not be opened.` with the store's reason and Ask for help, and there is no checkpoint banner. The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up.",
       "until": null
     },
     "home-resume": {
@@ -194,6 +235,39 @@
       "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home behind the dialog lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the dialog's DOM with every computed style is line for line tC4's (the masked server line aside), and the Home behind it is B2's (see its rows). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B9b's rows with B2's and remove these residuals. The pixels differ inside the dialog as well, by ruling Q3: the note without tC4's \"Only public repositories can be opened.\" (masked, q3-where) is one line where tC4's is two, so the centred dialog is one line shorter and each of its lines is drawn half a line lower; the DOM of the dialog is tC4's line for line once the masked note is taken out.",
       "until": null
     },
+    "open-door43-refused": {
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home behind the dialog lists only the scenario's Bible project. Without that card the port is tC4's: the dialog's DOM with every computed style is line for line tC4's apart from the two masked lines of ruling Q3 (q3-where, and q3-refused: Q-21's openDoor43.refused.notOpened), with the refusal's code sync.clone-failed, \"No project was added.\" and Ask for help, and the Home behind it is B2's. The pixels differ inside the dialog as well, by Q3: the note is one line where tC4's is two, so the centred dialog sits half a line higher (B9b's open-door43). The open's refusal is scripted (`test/script`, the environment's door43Lacks) until E1b. The day the seed check passes, recapture it with B2's rows and remove this residual.",
+      "until": null
+    },
+    "open-progress-journal": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The overlay itself is tC4's (`OpenProgress.jsx`): its dialog, title, caption and bar, through its own 300 ms timer (A-22). The Rust route holds the open (`test/hold` at `open`) and answers `jobs/get` with the stage the case shows; STORAGE's phases map on tC4's three stages (Q-7). While the changes are read, the count names files (`open.changeFiles`, \"{done} of {total} files\", a rebuild key pending in nine languages, Q-10), where tC4's names saved actions: the store reads the project's change files, not tC4's journal segments, so tC4's words would misname what is counted (Q-7, a declared difference). Behind the overlay: The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up.",
+      "until": null
+    },
+    "open-progress-prepare": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The overlay itself is tC4's (`OpenProgress.jsx`): its dialog, title, caption and bar, through its own 300 ms timer (A-22). The Rust route holds the open (`test/hold` at `open`) and answers `jobs/get` with the stage the case shows; STORAGE's phases map on tC4's three stages (Q-7). The overlay's DOM and pixels are tC4's; behind it: The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up.",
+      "until": null
+    },
+    "open-progress-state": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The overlay itself is tC4's (`OpenProgress.jsx`): its dialog, title, caption and bar, through its own 300 ms timer (A-22). The Rust route holds the open (`test/hold` at `open`) and answers `jobs/get` with the stage the case shows; STORAGE's phases map on tC4's three stages (Q-7). The overlay's DOM and pixels are tC4's; behind it: The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up.",
+      "until": null
+    },
     "share-dialog": {
       "layers": [
         "pixels",
@@ -230,6 +304,15 @@
       "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home behind the dialog lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the dialog's DOM with every computed style is line for line tC4's (the masked server line aside), and the Home behind it is B2's (see its rows). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B9b's rows with B2's and remove these residuals.",
       "until": null
     },
+    "shared-home": {
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up, and the q2-obs-card mask has no element on the Rust page (`rustAbsent`). Without that card the port is tC4's: the DOM with every computed style is line for line tC4's, the region above the cards is pixel for pixel tC4's, and the shared Bible card reads \"On Door43\", \"Shared at facilitator-zq/sample_burrito\" and \"Sync with Door43\" as tC4's does. The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B10's rows with B2's, remove q2-obs-card's `rustAbsent` and these residuals.",
+      "until": null
+    },
     "signin-error": {
       "layers": [
         "pixels",
@@ -238,57 +321,49 @@
       "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home behind the dialog lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up. Without that card the port is tC4's: the dialog's DOM with every computed style is line for line tC4's (the masked server line aside), and the Home behind it is B2's (see its rows). The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B9b's rows with B2's and remove these residuals.",
       "until": null
     },
-    "en-understand-questions": {
-      "layers": [
-        "dom"
-      ],
-      "why": "The user-comment box of each unit carries `readonly`: B3 shows the comment tC4's rule picks (APP-DESIGN §6.5, A-18) and C3 writes it (`editor/addComment`, R24), so until C3 lands nothing typed into the box could be saved, and a box that took typing would lose it (AGENTS.md: never lose a translator's text). Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel. C3 removes `readonly` and this residual.",
-      "until": "C3"
-    },
-    "en-understand-tit1": {
-      "layers": [
-        "dom"
-      ],
-      "why": "The user-comment box of each unit carries `readonly`: B3 shows the comment tC4's rule picks (APP-DESIGN §6.5, A-18) and C3 writes it (`editor/addComment`, R24), so until C3 lands nothing typed into the box could be saved, and a box that took typing would lose it (AGENTS.md: never lose a translator's text). Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel. C3 removes `readonly` and this residual.",
-      "until": "C3"
-    },
-    "en-understand-tw-article": {
-      "layers": [
-        "dom"
-      ],
-      "why": "The user-comment box of each unit carries `readonly`: B3 shows the comment tC4's rule picks (APP-DESIGN §6.5, A-18) and C3 writes it (`editor/addComment`, R24), so until C3 lands nothing typed into the box could be saved, and a box that took typing would lose it (AGENTS.md: never lose a translator's text). Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel. C3 removes `readonly` and this residual.",
-      "until": "C3"
-    },
-    "home-open-error": {
+    "sync-failed": {
       "layers": [
         "pixels",
-        "dom"
+        "dom",
+        "meaning"
       ],
-      "why": "tC4 reaches this state by writing a file outside the app and opening again: its store refuses the open, and the checkpoint of the project just left fails too, so tC4's Home shows both banners. The rebuild reads a file written outside the app as an outside edit and opens (STORAGE §11.1), so the Rust route answers `session/open` with a refusal it does give, a project file it cannot read (`replies/home-open-error.json`): the banner is tC4's, `The project could not be opened.` with the store's reason and Ask for help, and there is no checkpoint banner. The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up.",
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up, and the q2-obs-card mask has no element on the Rust page (`rustAbsent`). Without that card the port is tC4's: the DOM with every computed style is line for line tC4's, the sync result toast is pixel for pixel tC4's (the bottom 160 px of the window, and the top 200 px), and what the DOM shows of the toast (`syncToast`: the line, the refusal's sentence and its code sync.clone-failed) is tC4's field by field. The sync's outcome is scripted (`test/script`, the environment's dropNextClone) until E1a recaptures it on a dropped connection. The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B10's rows with B2's, remove q2-obs-card's `rustAbsent` and these residuals.",
       "until": null
     },
-    "open-progress-journal": {
+    "sync-internet-consent": {
       "layers": [
         "pixels",
-        "dom"
+        "dom",
+        "meaning"
       ],
-      "why": "The overlay itself is tC4's (`OpenProgress.jsx`): its dialog, title, caption and bar, through its own 300 ms timer (A-22). The Rust route holds the open (`test/hold` at `open`) and answers `jobs/get` with the stage the case shows; STORAGE's phases map on tC4's three stages (Q-7). While the changes are read, the count names files (`open.changeFiles`, \"{done} of {total} files\", a rebuild key pending in nine languages, Q-10), where tC4's names saved actions: the store reads the project's change files, not tC4's journal segments, so tC4's words would misname what is counted (Q-7, a declared difference). Behind the overlay: The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up.",
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up, and the q2-obs-card mask has no element on the Rust page (`rustAbsent`). Without that card the port is tC4's: the question's DOM with every computed style is line for line tC4's (kind `sync`), and the Home behind the scrim is shared-home's. The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B10's rows with B2's, remove q2-obs-card's `rustAbsent` and these residuals.",
       "until": null
     },
-    "open-progress-prepare": {
+    "sync-ok": {
       "layers": [
         "pixels",
-        "dom"
+        "dom",
+        "meaning"
       ],
-      "why": "The overlay itself is tC4's (`OpenProgress.jsx`): its dialog, title, caption and bar, through its own 300 ms timer (A-22). The Rust route holds the open (`test/hold` at `open`) and answers `jobs/get` with the stage the case shows; STORAGE's phases map on tC4's three stages (Q-7). The overlay's DOM and pixels are tC4's; behind it: The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up.",
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up, and the q2-obs-card mask has no element on the Rust page (`rustAbsent`). Without that card the port is tC4's: the DOM with every computed style is line for line tC4's, the sync result toast is pixel for pixel tC4's (the bottom 160 px of the window, and the top 200 px), and what the DOM shows of the toast (`syncToast`: the line, the counts, the names, the notes, the links, the 5 missing versions by tC4's rule) is tC4's field by field. The sync's outcome is scripted (`test/script`) until E1a. The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B10's rows with B2's, remove q2-obs-card's `rustAbsent` and these residuals.",
       "until": null
     },
-    "open-progress-state": {
+    "sync-ok-restored": {
       "layers": [
         "pixels",
-        "dom"
+        "dom",
+        "meaning"
       ],
-      "why": "The overlay itself is tC4's (`OpenProgress.jsx`): its dialog, title, caption and bar, through its own 300 ms timer (A-22). The Rust route holds the open (`test/hold` at `open`) and answers `jobs/get` with the stage the case shows; STORAGE's phases map on tC4's three stages (Q-7). The overlay's DOM and pixels are tC4's; behind it: The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up.",
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up, and the q2-obs-card mask has no element on the Rust page (`rustAbsent`). Without that card the port is tC4's: the DOM with every computed style is line for line tC4's, the sync result toast is pixel for pixel tC4's (the bottom 160 px of the window, and the top 200 px), and what the DOM shows of the toast (`syncToast`: the line, the counts, the names, the notes, the links, the 5 missing versions by tC4's rule) is tC4's field by field. The second sync's outcome is scripted (one change sent again) until E1a; the verse conflict it names is the fold's, from the first sync. The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B10's rows with B2's, remove q2-obs-card's `rustAbsent` and these residuals.",
+      "until": null
+    },
+    "sync-ok-teammates": {
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "why": "The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up, and the q2-obs-card mask has no element on the Rust page (`rustAbsent`). Without that card the port is tC4's: the DOM with every computed style is line for line tC4's, the sync result toast is pixel for pixel tC4's (the bottom 160 px of the window, and the top 200 px), and what the DOM shows of the toast (`syncToast`: the line, the counts, the names, the notes, the links, the 5 missing versions by tC4's rule) is tC4's field by field. The two teammates' versions of Titus 1:1 are written into the project by the scripted sync and folded, so the card's chip \"1 conflict · Review\" and the Titus tile's \"1 conflict\" come from the fold's own conflict, as tC4's do. The day the seed check passes (B1b's every_scenario_loads_its_bible_project_and_refuses_its_obs_project fails), recapture B10's rows with B2's, remove q2-obs-card's `rustAbsent` and these residuals.",
       "until": null
     },
     "understand-tit1": {

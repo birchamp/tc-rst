@@ -289,7 +289,8 @@ impl Message for ExportRefusal {
     tag = "type",
     content = "value",
     rename_all = "camelCase",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum SyncFailure {
     /// The project and the repository cannot sync as they are. Found at the gate or by
@@ -311,7 +312,8 @@ pub enum SyncFailure {
     tag = "type",
     content = "value",
     rename_all = "camelCase",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum SyncBlock {
     /// The project has no Door43 repository (S0).
@@ -332,7 +334,8 @@ pub enum SyncBlock {
     tag = "type",
     content = "value",
     rename_all = "camelCase",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum SyncRefusal {
     Offline,
@@ -343,6 +346,8 @@ pub enum SyncRefusal {
         /// code's sentence alone (`tC4:src/views/SyncResult.jsx:47-51`, DELTA §3.15.2).
         server_message: String,
     },
+    /// Door43 refused the push for a reason of its own. Its words are for the operation
+    /// report only: a sync's message never shows a raw reply or a file path (Q36).
     RefRejected {
         server_message: String,
     },
@@ -353,6 +358,8 @@ pub enum SyncRefusal {
     RemoteMissing,
     Unreachable,
     ReadOnly,
+    /// A step failed for a reason no other variant names, such as a full disk. The reason is
+    /// for the operation report only (Q36).
     Io {
         reason: String,
     },
@@ -415,8 +422,8 @@ impl Message for SyncFailure {
             Ok((R::Busy { .. }, _)) => "syncResult.error.nonFastForward",
             Ok((R::Unreachable | R::RemoteMissing, false)) => "syncResult.error.cloneFailed",
             Ok((R::Unreachable | R::RemoteMissing, true)) => "syncResult.error.notSent",
-            Ok((R::RefRejected { .. }, _)) | Ok((R::Io { .. }, false)) => "syncResult.error.other",
-            Ok((R::Io { .. }, true)) => "syncResult.error.keptStopped",
+            Ok((R::RefRejected { .. } | R::Io { .. }, false)) => "syncResult.error.stopped",
+            Ok((R::RefRejected { .. } | R::Io { .. }, true)) => "syncResult.error.keptStopped",
             Ok((R::ReadOnly, _)) => "syncResult.error.readOnly",
         }
     }
@@ -430,10 +437,12 @@ impl Message for SyncFailure {
             Self::Blocked(
                 SyncBlock::NotShared | SyncBlock::ProjectMismatch | SyncBlock::Tc4TeamRepository,
             ) => Vec::new(),
+            // Q36: Door43's words and an I/O reason, which can hold a path on this computer,
+            // never reach the message; the refusal keeps them for the operation report.
             Self::BeforeIntake(refusal) | Self::AfterIntake(refusal) => match refusal {
-                R::RefRejected { server_message } => vec![("reason", server_message.clone())],
-                R::Io { reason } => vec![("reason", reason.clone())],
-                R::Offline
+                R::RefRejected { .. }
+                | R::Io { .. }
+                | R::Offline
                 | R::NotSignedIn
                 | R::AuthFailed
                 | R::NoWriteAccess { .. }

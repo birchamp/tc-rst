@@ -192,6 +192,9 @@ pub(crate) struct Inner {
     pub(crate) home: crate::home::SummaryCache,
     /// The open from Door43 until unit X (B9b).
     pub(crate) open_door43: crate::share::ScriptedOpenDoor43,
+    /// The sync with Door43 until unit X (B10): only a test scripts it.
+    #[cfg(feature = "test-hooks")]
+    pub(crate) sync: crate::sync::ScriptedSync,
     /// Calls in flight, for `test/quiet`.
     pub(crate) calls: AtomicUsize,
     quit: watch::Sender<bool>,
@@ -422,6 +425,8 @@ impl App {
             seed_job: Mutex::new(None),
             home: crate::home::SummaryCache::default(),
             open_door43: crate::share::ScriptedOpenDoor43::default(),
+            #[cfg(feature = "test-hooks")]
+            sync: crate::sync::ScriptedSync::default(),
             calls: AtomicUsize::new(0),
             quit: watch::channel(false).0,
             #[cfg(feature = "test-hooks")]

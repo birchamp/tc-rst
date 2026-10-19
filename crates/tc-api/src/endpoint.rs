@@ -173,6 +173,7 @@ unscoped!(
     crate::account::SignOut,
     crate::session::Open,
     crate::door43::OpenDoor43,
+    crate::door43::SyncProject,
 );
 #[cfg(feature = "test-hooks")]
 scoped!(crate::test::SaveVerse);
@@ -186,6 +187,7 @@ unscoped!(
     crate::test::Keychain,
     crate::test::Reset,
     crate::test::LastEdit,
+    crate::test::Script,
 );
 
 /// What an endpoint answers inside an HTTP 200 (AD9). On the wire it follows the crate's

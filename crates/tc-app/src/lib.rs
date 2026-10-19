@@ -38,6 +38,7 @@ pub mod session;
 pub mod share;
 pub mod sources;
 mod startup;
+pub mod sync;
 mod understand;
 pub mod wire;
 

@@ -339,10 +339,8 @@
       }
     },
     "code": null,
-    "key": "syncResult.error.other",
-    "vars": {
-      "reason": "protected branch hook declined"
-    },
+    "key": "syncResult.error.stopped",
+    "vars": {},
     "detail": null
   },
   {
@@ -422,10 +420,8 @@
       }
     },
     "code": null,
-    "key": "syncResult.error.other",
-    "vars": {
-      "reason": "No space left on device (os error 28)"
-    },
+    "key": "syncResult.error.stopped",
+    "vars": {},
     "detail": null
   },
   {
@@ -505,10 +501,8 @@
       }
     },
     "code": null,
-    "key": "syncResult.error.other",
-    "vars": {
-      "reason": "protected branch hook declined"
-    },
+    "key": "syncResult.error.keptStopped",
+    "vars": {},
     "detail": null
   },
   {
@@ -589,9 +583,7 @@
     },
     "code": null,
     "key": "syncResult.error.keptStopped",
-    "vars": {
-      "reason": "No space left on device (os error 28)"
-    },
+    "vars": {},
     "detail": null
   },
   {

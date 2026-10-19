@@ -114,6 +114,7 @@ macro_rules! endpoint_table {
             query [Share] "account/orgs": $crate::account::Orgs => $crate::account::ShareTargets;
 
             job [Open] "door43/open": $crate::door43::OpenDoor43 => $crate::ids::JobId;
+            job [Sync] "door43/sync": $crate::door43::SyncProject => $crate::ids::JobId;
 
             query "feedback/compose": $crate::feedback::Compose => $crate::feedback::FeedbackDraft;
 
@@ -155,6 +156,7 @@ macro_rules! test_hook_table {
             command "test/keychain": $crate::test::Keychain => $crate::test::KeychainView;
             command "test/reset": $crate::test::Reset => ();
             command "test/lastEdit": $crate::test::LastEdit => ();
+            command "test/script": $crate::test::Script => ();
         }
     };
 }

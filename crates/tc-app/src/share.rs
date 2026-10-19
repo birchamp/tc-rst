@@ -152,6 +152,11 @@ impl ScriptedOpenDoor43 {
             .pop_front()
             .unwrap_or(Err(ApiError::Unavailable(Feature::Sync)))
     }
+
+    #[cfg(feature = "test-hooks")]
+    pub(crate) fn clear(&self) {
+        lock(&self.scripted).clear();
+    }
 }
 
 impl App {

@@ -146,6 +146,12 @@ impl Planted {
         // later unit lands it.
         planted.edit_json("units.json", |u| u["landed"] = json!(PLANTED_LANDED));
         planted.edit_json("residuals.json", |r| r["rows"] = json!({}));
+        // A planted capture is tC4's own, so it draws every element a mask names.
+        planted.edit_json("masks.json", |m| {
+            for mask in m["masks"].as_array_mut().into_iter().flatten() {
+                mask.as_object_mut().map(|mask| mask.remove("rustAbsent"));
+            }
+        });
         planted
     }
 
@@ -1756,11 +1762,13 @@ fn normalization_unit_cases() {
             id: "build".into(),
             tc4: TargetSpec::Testid("about-version".into()),
             rust: TargetSpec::Testid("about-version".into()),
+            rust_absent: false,
         },
         DomMask {
             id: "where".into(),
             tc4: TargetSpec::Text("The project opens from".into()),
             rust: TargetSpec::Testid("open-door43-where".into()),
+            rust_absent: false,
         },
     ];
     let found = dom::compare(
@@ -1795,6 +1803,7 @@ fn normalization_unit_cases() {
         id: "where".into(),
         tc4: TargetSpec::Text("The project opens from".into()),
         rust: TargetSpec::Text("The project opens from git.door43.org. Only".into()),
+        rust_absent: false,
     }];
     let error = dom::compare(
         Side {
@@ -1815,6 +1824,40 @@ fn normalization_unit_cases() {
     assert!(
         matches!(&error, DomError::Mask(m) if m.contains("not in the rust DOM of x")),
         "{error:?}"
+    );
+    // A mask whose element the rebuild does not draw yet is taken out of tC4's side only, and
+    // fails the row once the rebuild draws it.
+    let absent = |rust: &str| {
+        [DomMask {
+            id: "card".into(),
+            tc4: TargetSpec::Testid("about-version".into()),
+            rust: TargetSpec::Testid(rust.into()),
+            rust_absent: true,
+        }]
+    };
+    let compare = |masks: &[DomMask]| {
+        dom::compare(
+            Side {
+                name: "tC4",
+                snapshot: &tc4,
+                rename: &[],
+            },
+            Side {
+                name: "rust",
+                snapshot: &rust,
+                rename: &[],
+            },
+            None,
+            masks,
+            "x",
+        )
+    };
+    let lacking = compare(&absent("share-card-obs")).unwrap();
+    assert!(!lacking.same && !lacking.first_diffs.is_empty());
+    let drawn = compare(&absent("about-version")).unwrap_err();
+    assert!(
+        matches!(&drawn, DomError::Mask(m) if m.contains("remove its `rustAbsent`")),
+        "{drawn:?}"
     );
 }
 

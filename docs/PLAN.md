@@ -143,6 +143,16 @@ rule that no one's work disappears without a word add these (unit B2):
   reads a verse only up to its first paragraph marker, so a poem verse whose words are on
   `\q` lines counts as not drafted there (#572).
 
+And these (unit B10):
+
+- After a sync, the result names the verses that teammates aligned differently ("1 verse has
+  two alignments to review."), and Review opens them. tC4 4.0 keeps the newest alignment and
+  counts it among the conflicts that kept the newest version, so a teammate's alignment can
+  disappear unannounced (#791).
+- A sync that stops for a reason no sentence names says so in one fixed sentence. Door43's
+  words and the reason, which can name a file on the translator's computer, stay in the
+  problem report. tC4 4.0 shows "The sync stopped: {reason}" (#724, Q36).
+
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9
 give the same outcomes, and STORAGE §9.9 keeps saves flowing while a sync runs. tC4 can

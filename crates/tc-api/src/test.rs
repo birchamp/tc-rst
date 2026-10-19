@@ -348,3 +348,67 @@ pub struct KeychainView {
     pub reads: u32,
     pub forgets: u32,
 }
+
+/// `test/script`: how the next job of a kind ends, until units X and E1b bring the real Door43
+/// open and sync (AD6, B10). A job with nothing scripted answers `Unavailable(Sync)`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Script {
+    pub request: RequestId,
+    pub next: Scripted,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum Scripted {
+    /// A `door43/open` fails so, as a clone from Door43 fails (tC4 refuses an open with the
+    /// sync's codes). Scripted opens wait in order.
+    OpenDoor43Fails(crate::refusal::SyncFailure),
+    /// The next `door43/sync` of `project` ends so, whatever was scripted for it before: a
+    /// test scripts what Door43 holds now.
+    Sync {
+        project: ProjectRef,
+        outcome: ScriptedSync,
+    },
+}
+
+/// How a scripted sync ends: what Door43 held, as a person's sync would find it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum ScriptedSync {
+    /// The sync completes. `teammates` changed one verse on Door43, each text by a teammate of
+    /// its own, all from the verse's current version: the sync receives their changes.
+    /// `restored` is how many changes Door43 had lost and the sync sends again.
+    Synced {
+        teammates: Option<TeammatesEdit>,
+        restored: u32,
+    },
+    Failed(crate::refusal::SyncFailure),
+}
+
+/// Teammates' versions of one verse.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TeammatesEdit {
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
+    pub book: tc_core::BookId,
+    pub chapter: u16,
+    pub verse: u16,
+    pub texts: Vec<String>,
+}

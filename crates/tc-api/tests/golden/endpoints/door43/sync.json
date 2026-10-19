@@ -1,0 +1,20 @@
+{
+  "path": "door43/sync",
+  "kind": "startJob",
+  "net": "sync",
+  "request": {
+    "request": "15151515151515151515151515151515",
+    "project": "sample_burrito"
+  },
+  "reply": {
+    "type": "ok",
+    "value": 21
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "sync"
+    }
+  }
+}
