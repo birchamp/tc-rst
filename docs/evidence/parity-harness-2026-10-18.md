@@ -46,3 +46,85 @@ counted by pixelmatch 7.1.0 with threshold 0 and anti-aliased pixels counted:
 The design-system gallery's screens (`parity/ds-gallery`) were captured on the cloud machine
 too, both sides. Its gate reads committed reports and recomputes nothing, so it still passes;
 whoever recaptures the gallery here must recapture both of its sides.
+
+## The masks, measured on tC4
+
+`parity/app/measure-masks.mjs` on this PC, from the recaptured baseline's screens; each
+rectangle was checked by eye against its crop of the baseline PNG (it covers its element and
+nothing else of note).
+
+| Mask | Screens | Rectangle (x, y, width, height) |
+|---|---|---|
+| `about-build` | `about` | 482, 314, 124, 17 (the `<strong>` "4.0.0-rc.1 (d310bf3)") |
+| `feedback-attachment` | `feedback` | 364, 585, 552, 59 (the `<pre>` of the attachment) |
+| `q2-obs-card` | `shared-home`, `sync-internet-consent`, `sync-failed`, `sync-ok`, `sync-ok-teammates`, `sync-ok-restored` | 866, 236, 138, 31 on each (the OBS card's "Upload changes") |
+| `q3-where` | `open-door43`, `open-door43-internet-consent` | 417, 242, 400, 38 (the note "The project opens from git.door43.org. Only public repositories can be opened.") |
+| `q3-where` | `open-door43-refused` | 417, 185, 400, 39 |
+| `q3-refused` | `open-door43-refused` | 417, 509, 446, 37 (the refusal's sentence) |
+
+tC4's note is a `display: contents` element with no box of its own, so `measureTargets`
+measures such an element by the range of what it holds.
+
+## M3: the gate's time
+
+`cargo test -p tc-ui --test screen_record` after a build, debug profile, 26 tests:
+
+| | Load | `a_planted_pixel_fails_the_gate` alone | The whole file (three runs) | `the_committed_record_passes_the_gate` |
+|---|---|---|---|---|
+| png crates unoptimized | 3.5–4.4 | 3.09 s | 3.81, 3.84, 4.02 s | — |
+| png, fdeflate, flate2, miniz_oxide, crc32fast and simd-adler32 at `opt-level = 3` (workspace `Cargo.toml`) | 4.9 | 0.96 s | 1.34, 1.26, 1.26 s | 0.09 s |
+
+The targets were under 2 s for the committed record and under 15 s for the file. The committed
+record decodes no PNG (no capture yet); it hashes the 62 baseline PNGs and DOM files.
+
+## M4: the Rust pixel count equals pixelmatch
+
+pixelmatch 7.1.0 (`parity/ds-gallery`, threshold 0, `includeAA: true`) and the gate's
+`pixels::compare_files`, on the cloud machine's PNG against this PC's:
+
+| Pair | pixelmatch | Rust |
+|---|---|---|
+| `home` | 52 | 52 |
+| `feedback` | 1,281 | 1,281 |
+| `help` | 78,263 | 78,263 |
+| `about` against itself with the red byte of (5, 5) flipped | 1 | 1 |
+| all 62 screens | the counts of the table above | the same 62 counts (`diff` of the two lists is empty) |
+
+## M5 and the browser tests of the Rust environment
+
+`TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app node --test parity/app/env-rust.test.mjs`
+(tc4 built with `--features test-hooks`; UI build `45a904a0b4623a99`, debug wasm): 10 of 10
+pass, 26.3 s, at 20:41 (load 3.39); an earlier run at 20:14 (load 13.6) passed 9 of 10, the
+tenth being the first form of E5 (below).
+
+- **M5.** E1: from `env.load` returning (the page's load event) to `settle` returning, with
+  `quietMs` 800 and `busy` (`test/quiet` and `__tcIdle`): 954 ms at load 3.4, 1,062 ms at load
+  13.6, so about 150 to 260 ms of boot before the quiet starts. When settle returned, no tracked
+  request was in flight, and a second tracker that counts only `/api/v1/events` held exactly
+  that request, still open.
+- E2: with the event stream counted, `settle` waits out a 2 s deadline naming
+  `GET …/api/v1/events`.
+- E4: with a `test/fieldStore` waiting at `test/hold { at: "save" }`, a shot with `quietMs` 200
+  and a 3 s deadline fails with "the app did not go quiet for 200 ms within 3 s; in flight:
+  nothing now; the server answered busy (test/quiet)" and still writes its PNG; `home()`'s
+  `test/reset` releases the hold, the store answers `written`, and the next shot settles.
+- E5: the page's CSP (`connect-src 'self'`) stops a page `fetch` to another origin before the
+  network; a navigation to `https://example.org/`, which the CSP does not cover, meets the
+  context's route, fails with `ERR_BLOCKED_BY_CLIENT` and is listed in `refused`. The plan's
+  first form of E5 expected the fetch itself in `refused`.
+- E6: across a language switch through the stand-in's picker, the picker and the sample line
+  keep their node numbers, the focus stays on the picker, and the sample's text changes language.
+
+A smoke run of `capture-rust.mjs --unit A6b --only home,about --layers dom` into a scratch
+folder under `target/` wrote both PNGs, both DOM files and a `captures.json` with this PC's
+machine, and failed both screens after 30 s, waiting for Home's project cards, which the Rust
+app does not have until B2: no baseline screen can be captured on the Rust side yet, so all 62
+rows of `parity/app/report.json` are `unported`.
+
+## The gate's planted tests
+
+`crates/tc-ui/tests/screen_record/planted.rs` runs the gate on the real baseline with Rust
+captures planted in a temporary `parity/app`. Each normalization and rule was also broken on
+purpose, one at a time, and the planted tests failed each time: no renumbering of generated ids
+(at least 8 tests failed), no folder renaming (at least 8), no asset paths (at least 8), no pixel count (4), failed rows not
+reported as `CaptureFailed` (2), home cards never compared (2).
