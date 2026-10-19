@@ -194,7 +194,8 @@ pub(crate) struct Writer {
     /// The count of unreadable values the person was last told of.
     pub values_told: Option<u32>,
     /// The intent a stopped materialization left (§5.10 M3): the md5s it names stand for the
-    /// app's own bytes until a group of this session ends cleanly.
+    /// app's own bytes until a group of this session ends cleanly. A path whose rename this
+    /// session saw go through names its new md5 only.
     pub open_intent: Option<Intent>,
     /// The open's first job runs: a long one shows progress.
     pub opening: bool,
@@ -230,6 +231,9 @@ pub(crate) struct Writer {
     pub heads_unwritten: BTreeMap<String, crate::manifest::HeadsFile>,
     /// The bytes of `metadata.json`'s heads file as this writer last wrote them.
     pub metadata_heads_written: Option<Vec<u8>>,
+    /// `metadata.json` was renamed into place and its heads file was not written after it: a
+    /// retry writes both again (§5.10).
+    pub metadata_heads_due: bool,
     /// Carried files handed to the actor to be recorded, with the blob and size they were
     /// stored as, until the actor answers (§11.4).
     pub pending_carried: BTreeMap<String, (tc_journal::GitOid, u64)>,
@@ -720,6 +724,7 @@ mod tests {
             shown_by_path: BTreeMap::new(),
             heads_unwritten: BTreeMap::new(),
             metadata_heads_written: None,
+            metadata_heads_due: false,
             pending_carried: BTreeMap::new(),
             deferred_paths: Vec::new(),
             waiting: BTreeMap::new(),

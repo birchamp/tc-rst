@@ -1992,10 +1992,17 @@ M4  For each p in D: write a temp, fsync, then **look at p once more** and renam
     treated as M1 treats it (held while §11.1 recording is not in place). A file that is gone
     by then is written (a deletion is never an edit, §6.2). The look happens once, before
     the first try of a rename a scanner holds; a retry that follows (§5.0 step 3) does not
-    repeat it, because the file is the one the look saw.
+    repeat it, because the file is the one the look saw. Once the rename of p has gone
+    through, the session's entry for p names the new bytes (unsettled, with no scope) and the
+    session's intent names only the new md5 for p, before its heads file is written and
+    whatever the group does next (below).
 M5  fsync every touched directory once.
 M6  Rebuild metadata.json from the files as they now are (a path skipped in M4 keeps its old
-    bytes), check it again, atomic_write(<root>, "metadata.json", …, SyncDir::Now).
+    bytes), check it again, atomic_write(<root>, "metadata.json", …, SyncDir::Now). The entry
+    M7 writes for it names the md5 of the bytes written here, which are not the ones M2 checked
+    when a path was skipped. Once the rename has gone through, the session's entry and intent
+    name them as for a derived file; its heads file is due until it is written, and a retry
+    that finds metadata.json equal to its bytes still goes on from M3 until then.
 M7  atomic_write(.tc, "materialized.json", manifest). The entry of each path M4 wrote has the
     size and mtime of the file renamed into place, the scope digest it was projected from, and
     is unsettled; every other entry keeps its own state, so an unsettled entry is never written
@@ -2012,18 +2019,33 @@ the group's own writes; M8 removes from it only the paths this group has written
 removed, and the end of a job without an error only those that were not refused. The md5s it names
 are the app's own in M1, in the last look before a rename, in a look at the folder (focus and
 watcher) and in a storage check, as they are at the open (§6.2): the retry, the next save and a
-focus never record the app's own bytes as an outside edit, and no false conflict follows. A file M1
-finds equal to the projection while its entry names other bytes or another scope (the group
-stopped between the rename and the heads file) gets its heads file written again, so a later
-outside edit has the right base (§11.1 X3). Until a write of the heads file goes through (the
-disk is full, a program holds `.tc/heads/…`), the session keeps in memory the heads file the
-bytes it renamed stand for, and every look at an outside edit of those bytes (the focus's, the
-watcher's, a retry's M1) takes that file as the base, not the one in the folder, which describes
-the bytes before: the person's edit of the app's save continues it and is no conflict with it,
-for as long as the writer fails. The same memory holds the heads file of a recorded outside edit
-that could not be written (§11.1 D7). A process that stops in that window loses the memory, and
-the next open finds the older heads file (§6.4 M6): an edit made in the window is then a conflict
-with the app's last save, kept and never replacing it.
+focus never record the app's own bytes as an outside edit, and no false conflict follows.
+
+The session knows more than the open does, and uses it: the open cannot tell whether the stopped
+rename happened, so it accepts the old and the new md5 of a path, but a session that saw the rename
+go through knows the old bytes are gone. From that moment the entry of the path names the new bytes
+and the session's intent names no other md5 for it, so the bytes of the save before are not the
+app's own any more. A program that puts them back (a revert: an older copy restored, a cloud client
+or a backup tool) has edited the file: the look at the folder, the watcher and the retry's M1
+record it with no base and list it as a conflict (§11.1 X3: a value equal to an older value of its
+record), and keep the bytes whole in `.tc/external/`, exactly as when no group had stopped. A
+stopped group must never turn a revert into the app's own write, which the next job would write
+over. The manifest file is not rewritten for this (an open that finds the older one finds the
+intent beside it, which names both md5s).
+
+A file M1 finds equal to the projection while its entry names other bytes or another scope (the
+group stopped between the rename and the heads file) gets its heads file written again, so a later
+outside edit has the right base (§11.1 X3). An entry that names the projection's bytes and is
+clean by stat is not read (M1) unless the session holds a heads file for the path that is not
+written yet: such a path is read, found equal and its heads file tried again. Until a write of
+the heads file goes through (the disk is full, a program holds `.tc/heads/…`), the session keeps
+in memory the heads file the bytes it renamed stand for, and every look at an outside edit of
+those bytes (the focus's, the watcher's, a retry's M1) takes that file as the base, not the one in
+the folder, which describes the bytes before: the person's edit of the app's save continues it and
+is no conflict with it, for as long as the writer fails. The same memory holds the heads file of a
+recorded outside edit that could not be written (§11.1 D7). A process that stops in that window
+loses the memory, and the next open finds the older heads file (§6.4 M6): an edit made in the
+window is then a conflict with the app's last save, kept and never replacing it.
 
 The burrito is valid before M4 and after M6; in between, `metadata.json` lags by milliseconds. A
 crash there is repaired at open (§6.4, rows M1 to M6).
@@ -4841,7 +4863,11 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the coherence view of an unverified section draft (current values, no parents) | `an_unverified_section_draft_that_holds_a_span_can_be_kept` |
 | the intent kept by the session after a group stopped (forget it once M4 fails) | `a_group_that_fails_after_a_rename_does_not_mistake_its_bytes_for_an_outside_edit`, `a_focus_after_a_group_stopped_does_not_take_its_bytes_for_an_outside_edit` |
 | the intent at the open (read the md5s of the intent as no one's) | `crash_materialize_intent_tells_its_bytes_from_an_outside_edit` |
-| the heads file written again for a converged file | `a_retry_that_finds_the_file_converged_writes_its_heads_file` |
+| the session's entry and intent after a rename (keep the old md5 as the app's own until M7) | `an_outside_revert_after_a_stopped_group_is_recorded_as_a_conflict`, `a_retry_after_a_stopped_group_does_not_write_over_an_outside_revert`, `an_outside_revert_of_metadata_json_after_a_stopped_group_is_an_edit` |
+| the heads file written again for a converged file (checked after a restart, which loses the session's memory) | `a_retry_that_finds_the_file_converged_writes_its_heads_file` |
+| a read of a path whose heads file is held in memory (take a settled entry as unchanged) | `a_file_with_an_unwritten_heads_file_is_not_taken_as_unchanged_when_its_entry_settles` |
+| the heads file of `metadata.json` due after its rename (take the file as current) | `a_retry_after_metadata_json_was_renamed_writes_its_heads_file` |
+| the entry of `metadata.json` naming the bytes M6 wrote (the md5 M2 checked) | `the_manifest_names_the_metadata_json_a_group_that_skipped_a_file_wrote` |
 | the heads file kept in memory while it cannot be written (read the one in the folder) | `an_outside_edit_of_the_bytes_a_stopped_group_left_continues_them`, `edits_made_while_the_heads_file_cannot_be_written_make_no_conflict` |
 | the heads file written when an outside edit is durable | `two_saves_from_a_program_that_keeps_the_file_open_are_no_conflict` |
 | the parents of a carried file's edit (the newest head instead of the placed version) | `an_edit_of_a_placed_file_does_not_replace_a_teammates_newer_version` |

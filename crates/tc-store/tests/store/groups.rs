@@ -645,7 +645,9 @@ fn a_focus_after_a_group_stopped_does_not_take_its_bytes_for_an_outside_edit() {
 
 /// The writer's own retry may find the file already equal to the projection, and then the
 /// heads file still describes the bytes before the stopped group: it is written again, so a
-/// later outside edit of the verse the file shows has the right base (§11.1 X3).
+/// later outside edit of the verse the file shows has the right base (§11.1 X3). The memory of
+/// the session would supply that base for as long as it lives, so the edit is made after a
+/// restart, which finds only what the retry wrote.
 #[test]
 fn a_retry_that_finds_the_file_converged_writes_its_heads_file() {
     let (rig, folder, handle, k) = fail_after_the_rename();
@@ -660,10 +662,10 @@ fn a_retry_that_finds_the_file_converged_writes_its_heads_file() {
             .peek(&folder.join(".tc/materialized.json"))
             .is_some_and(|m| String::from_utf8_lossy(&m).contains(&on_disk))
     });
-    let edited = String::from_utf8(rig.fs.peek(&usfm).unwrap())
-        .unwrap()
-        .replace("second save", "second save, mended outside");
-    rig.fs.put_unseen(&usfm, edited.as_bytes(), None);
+    handle.close().unwrap();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    mend_outside(&rig, &folder);
     handle.focus().wait().unwrap();
     handle.wait_idle();
     assert_eq!(
@@ -676,6 +678,167 @@ fn a_retry_that_finds_the_file_converged_writes_its_heads_file() {
         words_of(&handle, &verse(1, 1)),
         "second save, mended outside"
     );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// The external copies of `bytes` the project kept, as paths relative to the folder.
+fn external_copies_of(rig: &Rig, folder: &Path, bytes: &[u8]) -> Vec<String> {
+    rig.fs
+        .files_under(&folder.join(".tc/external"))
+        .into_iter()
+        .filter(|(_, held)| held == bytes)
+        .map(|(path, _)| path.display().to_string())
+        .collect()
+}
+
+/// §5.10, §6.2 rule 9: the group that stopped after its rename knows the file now holds the
+/// second save. The bytes of the save before it are no longer the app's own, so a program that
+/// puts them back (a revert) has made an edit: recorded with no base, listed as a conflict, and
+/// kept whole in `.tc/external/`, exactly as when no group had stopped.
+#[test]
+fn an_outside_revert_after_a_stopped_group_is_recorded_as_a_conflict() {
+    let (rig, folder, handle, k) = fail_after_the_rename();
+    let usfm = folder.join("ingredients/TIT.usfm");
+    let before = rig.fs.peek(&usfm).unwrap();
+    assert!(String::from_utf8_lossy(&before).contains("first save"));
+    rig.fs.fail_op(k, std::io::ErrorKind::StorageFull);
+    assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
+    assert!(
+        String::from_utf8_lossy(&rig.fs.peek(&usfm).unwrap()).contains("second save"),
+        "the rename happened"
+    );
+    rig.fs.put_unseen(&usfm, &before, None);
+    let looked = handle.focus().wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(
+        looked.found,
+        vec!["ingredients/TIT.usfm".to_owned()],
+        "the old bytes were taken for the app's own"
+    );
+    assert_eq!(outside_edit_notices(&handle), vec![(1, true)]);
+    assert_eq!(verse_text_conflicts(&handle), 1);
+    assert_eq!(external_copies_of(&rig, &folder, &before).len(), 1);
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// The same revert met by the writer's own retry instead of a look at the folder: the retry
+/// reads the old bytes at M1 and must not write the second save over them.
+#[test]
+fn a_retry_after_a_stopped_group_does_not_write_over_an_outside_revert() {
+    let (rig, folder, handle, k) = fail_after_the_rename();
+    let usfm = folder.join("ingredients/TIT.usfm");
+    let before = rig.fs.peek(&usfm).unwrap();
+    rig.fs.fail_op(k, std::io::ErrorKind::StorageFull);
+    assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
+    rig.fs.put_unseen(&usfm, &before, None);
+    // A save marks the book dirty and the next group starts at M0 and so at M1.
+    save_verse(&handle, 1, 2, "a save after the revert").unwrap();
+    handle.leave(Leave::Book(TIT)).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(outside_edit_notices(&handle), vec![(1, true)]);
+    assert_eq!(verse_text_conflicts(&handle), 1);
+    assert_eq!(external_copies_of(&rig, &folder, &before).len(), 1);
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// The same for `metadata.json`, which a group renames last: when the group stops at its heads
+/// file (it changed with a project detail saved in the same group), the bytes before are no
+/// longer the app's own either.
+#[test]
+fn an_outside_revert_of_metadata_json_after_a_stopped_group_is_an_edit() {
+    let (rig, folder, handle, _k) = fail_after_the_rename();
+    let name = tc_journal::RecordKey::ProjectMeta(tc_journal::MetaField::Name);
+    handle
+        .submit(Command::SetMeta {
+            shown: handle.mint(&name, None).unwrap(),
+            value: Some(tc_journal::Json::Obj(tc_journal::JsonMap::from([(
+                "en".to_owned(),
+                tc_journal::Json::from("Titus, second name"),
+            )]))),
+        })
+        .wait()
+        .unwrap();
+    let meta = folder.join("metadata.json");
+    let before = rig.fs.peek(&meta).unwrap();
+    let heads = folder.join(tc_store::layout::heads_file("metadata.json"));
+    rig.fs.set_busy(&heads, true);
+    assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
+    let after = rig.fs.peek(&meta).unwrap();
+    assert_ne!(before, after, "metadata.json was renamed into place");
+    assert!(String::from_utf8_lossy(&after).contains("Titus, second name"));
+    rig.fs.put_unseen(&meta, &before, None);
+    // The look finds the old bytes; the group it then tries fails at the heads file again.
+    let _ = handle.focus().wait();
+    let told = handle
+        .notices()
+        .into_iter()
+        .filter(|n| matches!(n.notice, Notice::MetadataEditedOutside { .. }))
+        .count();
+    assert_eq!(told, 1, "the old bytes were taken for the app's own");
+    assert_eq!(external_copies_of(&rig, &folder, &before).len(), 1);
+    rig.fs.set_busy(&heads, false);
+    handle.leave(Leave::Book(TIT)).wait().unwrap();
+    handle.wait_idle();
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// A retry of a group that stopped at the heads file of `metadata.json` writes that file: the
+/// bytes of `metadata.json` are the projection's already, and the retry is not "nothing to do".
+#[test]
+fn a_retry_after_metadata_json_was_renamed_writes_its_heads_file() {
+    let (rig, folder, handle, _k) = fail_after_the_rename();
+    let name = tc_journal::RecordKey::ProjectMeta(tc_journal::MetaField::Name);
+    handle
+        .submit(Command::SetMeta {
+            shown: handle.mint(&name, None).unwrap(),
+            value: Some(tc_journal::Json::Obj(tc_journal::JsonMap::from([(
+                "en".to_owned(),
+                tc_journal::Json::from("Titus, second name"),
+            )]))),
+        })
+        .wait()
+        .unwrap();
+    let heads = folder.join(tc_store::layout::heads_file("metadata.json"));
+    let before = rig.fs.peek(&heads);
+    rig.fs.set_busy(&heads, true);
+    assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
+    assert_eq!(rig.fs.peek(&heads), before, "the write was refused");
+    rig.fs.set_busy(&heads, false);
+    handle.leave(Leave::Book(TIT)).wait().unwrap();
+    handle.wait_idle();
+    assert_ne!(
+        rig.fs.peek(&heads),
+        before,
+        "the heads file that goes with the new project details"
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// A group that skipped a file another program holds lists the bytes it wrote in the manifest:
+/// the entry of `metadata.json` has the md5 of the file that is in the folder, so no look at
+/// the folder takes it for an edit.
+#[test]
+fn the_manifest_names_the_metadata_json_a_group_that_skipped_a_file_wrote() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    let usfm = folder.join("ingredients/TIT.usfm");
+    rig.fs.set_busy(&usfm, true);
+    save_verse(&handle, 1, 3, "held for a while").unwrap();
+    handle.leave(Leave::Book(TIT)).wait().unwrap();
+    let manifest = rig.fs.peek(&folder.join(".tc/materialized.json")).unwrap();
+    let manifest: serde_json::Value = serde_json::from_slice(&manifest).unwrap();
+    let listed = manifest["paths"]["metadata.json"]["md5"].as_str().unwrap();
+    let real = tc_journal::Md5::of(&rig.fs.peek(&folder.join("metadata.json")).unwrap()).to_hex();
+    assert_eq!(listed, real);
+    let looked = handle.focus().wait().unwrap();
+    assert!(looked.found.is_empty(), "{looked:?}");
+    rig.fs.set_busy(&usfm, false);
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
@@ -757,5 +920,51 @@ fn edits_made_while_the_heads_file_cannot_be_written_make_no_conflict() {
     handle.wait_idle();
     assert_eq!(verse_text_conflicts(&handle), 0);
     handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// §5.10: while the heads file of a file the stopped group renamed cannot be written, the
+/// file is never taken as "unchanged, nothing to do", also once its entry has settled by stat:
+/// each retry reads it, finds it equal to the projection and tries the heads file again, so
+/// a restart finds the heads file that goes with the bytes and the person's edit of the verse
+/// continues the app's save.
+#[test]
+fn a_file_with_an_unwritten_heads_file_is_not_taken_as_unchanged_when_its_entry_settles() {
+    let (rig, folder, handle, _k) = fail_after_the_rename();
+    let heads = folder.join(tc_store::layout::heads_file("ingredients/TIT.usfm"));
+    rig.fs.set_busy(&heads, true);
+    assert!(handle.leave(Leave::Book(TIT)).wait().is_err());
+    // Time passes, and a look at the folder that finds a file touched (same bytes, new time)
+    // writes the manifest, which is the time stamp a read settles an entry by (§6.2).
+    let project = folder.join(tc_store::layout::PROJECT_JSON);
+    let bytes = rig.fs.peek(&project).unwrap();
+    rig.fs.advance(Duration::from_secs(10));
+    rig.fs.put_unseen(&project, &bytes, None);
+    // A look at the folder tries the stopped group again, which fails at the heads file again.
+    assert!(handle.focus().wait().is_err());
+    // This look settles the renamed file's entry: its size and time are the entry's.
+    assert!(handle.focus().wait().is_err());
+    let read_before = handle.counters().derived_read;
+    wait_for("the retry to read the renamed file again", || {
+        handle.counters().derived_read > read_before
+    });
+    assert!(
+        !blocked_notices(&handle).is_empty(),
+        "the heads file is still not written, and the person is still told"
+    );
+    rig.fs.set_busy(&heads, false);
+    wait_for("the heads file to be written", || {
+        blocked_notices(&handle).is_empty()
+    });
+    handle.close().unwrap();
+    // A restart: the person's program saves the verse again, from the bytes the app wrote.
+    let reopened = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    reopened.wait_idle();
+    mend_outside(&rig, &folder);
+    reopened.focus().wait().unwrap();
+    reopened.wait_idle();
+    assert_eq!(outside_edit_notices(&reopened), vec![(1, false)]);
+    assert_eq!(verse_text_conflicts(&reopened), 0);
+    reopened.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }

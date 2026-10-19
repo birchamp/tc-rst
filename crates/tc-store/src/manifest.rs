@@ -190,6 +190,17 @@ impl Intent {
         out
     }
 
+    /// Names `new_md5` and nothing else for `path`: the write went through, so no earlier
+    /// bytes of the path are on disk (§5.10).
+    pub fn narrow_to(&mut self, path: &str, new_md5: &str) {
+        self.writes.retain(|w| w.path != path);
+        self.writes.push(IntentWrite {
+            path: path.to_owned(),
+            old_md5: None,
+            new_md5: new_md5.to_owned(),
+        });
+    }
+
     /// What the intent names about the paths `done` says are not settled yet.
     pub fn remaining(&self, done: impl Fn(&str) -> bool) -> Self {
         Self {

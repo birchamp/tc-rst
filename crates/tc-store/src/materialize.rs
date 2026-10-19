@@ -766,6 +766,7 @@ impl Writer {
             if let Some(e) = &entry
                 && e.md5 == r.md5.to_hex()
                 && self.clean_by_stat(&path)
+                && !self.heads_unwritten.contains_key(&path)
             {
                 unread.push(r.file);
                 continue;
@@ -962,8 +963,10 @@ impl Writer {
                     continue;
                 }
             }
-            self.write_heads(&path, &r.file, &r.digests, SyncDir::Deferred(&mut dirs))?;
             let nfc = is_text(&r.file).then(|| is_nfc(&String::from_utf8_lossy(&r.bytes)));
+            self.note_renamed(&path, r.md5.to_hex(), r.bytes.len() as u64, nfc);
+            self.written_seq.insert(path.clone(), self.seq);
+            self.write_heads(&path, &r.file, &r.digests, SyncDir::Deferred(&mut dirs))?;
             self.counters.add(&self.counters.derived_written, 1);
             written.push((
                 path.clone(),
@@ -992,14 +995,17 @@ impl Writer {
         // M6: metadata.json from the files as they now are (a path skipped in M4 keeps its
         // old bytes).
         let skipped = written.len() != planned.len();
-        let metadata = if skipped {
+        let (metadata, metadata_md5) = if skipped {
             let planned: BTreeMap<String, (Md5, u64, Option<bool>)> = written
                 .iter()
                 .map(|(p, _, m, s, n, _)| (p.clone(), (*m, *s, *n)))
                 .collect();
-            self.build_metadata(&planned, &departing)?
+            let metadata = self.build_metadata(&planned, &departing)?;
+            // The bytes written are not the ones M2 checked, and the entry names these.
+            let md5 = self.hash(&metadata);
+            (metadata, md5)
         } else {
-            metadata
+            (metadata, metadata_md5)
         };
         self.keep_outside_metadata(&intent_now, &metadata)?;
         let metadata_written = match atomic_write(
@@ -1020,6 +1026,8 @@ impl Writer {
             Err(e) => return Err(e.into_inner()),
         };
         if metadata_written {
+            self.note_renamed(METADATA, metadata_md5.clone(), metadata.len() as u64, None);
+            self.metadata_heads_due = true;
             self.write_metadata_heads(&heads_dir)?;
             self.wrote_group = true;
         }
@@ -1036,6 +1044,27 @@ impl Writer {
         // M8: what this group named is settled; what an earlier write left unsettled stays.
         self.settle_intent(intent_now.remaining(|path| !done.contains(path)))?;
         Ok(())
+    }
+
+    /// M4: `rel` was renamed into place, so the bytes there are the app's `md5`, whatever the
+    /// group does next. The entry names them at once (unsettled, with no scope and no time,
+    /// which M7 fills), and the session's intent names only them: the bytes before are no
+    /// longer the app's own, so a program that puts them back has made an edit (§11.1 X3),
+    /// also when the group stops before M7 (a full disk at the heads file). The manifest file
+    /// is not written here; an open that finds the older one finds the intent beside it.
+    fn note_renamed(&mut self, rel: &str, md5: String, size: u64, nfc: Option<bool>) {
+        if let Some(intent) = &mut self.open_intent {
+            intent.narrow_to(rel, &md5);
+        }
+        // No time yet: an unsettled entry is never clean by stat, so the next look reads the
+        // file, and M7 stats it once for every path.
+        self.manifest.paths.insert(
+            rel.to_owned(),
+            Entry {
+                nfc,
+                ..Entry::of(md5, size, 0, false)
+            },
+        );
     }
 
     /// The heads file of a derived file written (or found equal) from the fold in use: for
@@ -1128,6 +1157,7 @@ impl Writer {
     fn write_metadata_heads(&mut self, heads_dir: &std::path::Path) -> Result<(), StoreError> {
         let bytes = HeadsFile::of(&self.fold.metadata_heads(), &[]).to_bytes();
         if self.metadata_heads_written.as_deref() == Some(bytes.as_slice()) {
+            self.metadata_heads_due = false;
             return Ok(());
         }
         let name = layout::heads_file(METADATA);
@@ -1135,6 +1165,7 @@ impl Writer {
         atomic_write(&*self.vfs, heads_dir, name, &bytes, SyncDir::Now)
             .map_err(|e| e.into_inner())?;
         self.metadata_heads_written = Some(bytes);
+        self.metadata_heads_due = false;
         Ok(())
     }
 
@@ -1247,6 +1278,10 @@ impl Writer {
     /// Whether `metadata.json` on disk is what these bytes would write: its entry holds the
     /// same md5, and the file is as the app left it.
     fn metadata_is_current(&self, md5: &str) -> bool {
+        // The file was renamed but its heads file is still due: the next group goes on from M3.
+        if self.metadata_heads_due {
+            return false;
+        }
         let same_entry = self
             .manifest
             .paths

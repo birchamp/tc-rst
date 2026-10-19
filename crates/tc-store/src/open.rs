@@ -643,6 +643,7 @@ fn open_inner(
         shown_by_path: BTreeMap::new(),
         heads_unwritten: BTreeMap::new(),
         metadata_heads_written: None,
+        metadata_heads_due: false,
         pending_carried: BTreeMap::new(),
         deferred_paths: Vec::new(),
         waiting: BTreeMap::new(),
