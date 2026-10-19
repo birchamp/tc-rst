@@ -91,7 +91,10 @@ pub const ROWS: &[RowSpec] = &[
     row("mem.growth", "Project", "Memory growth with history (one heap), bytes per added change", "1.2 million changes", "tc-store", BYTES, Value, Memory, false),
     row("mem.growth_default_heap", "Project", "The same with the default heap", "1.2 million changes", "tc-store", BYTES_DEFAULT, Value, Memory, false),
     // three years
-    row("years.save", "Project", "Save p95 over months 31-36 against months 4-9", "36 months", "tc-store", Info, Value, Single, false),
+    row("years.save_p95", "Project", "Save p95, the last six months against months 4-9 (ratio)", "35 months", "tc-store", Info, Value, Single, false),
+    row("years.book_open_p95", "Project", "Open a book, the last six months against months 4-9 (ratio)", "35 months", "tc-store", Info, Value, Single, false),
+    row("years.fold_step_p95", "Project", "Fold step after a save, the last six months against months 4-9 (ratio)", "35 months", "tc-store", Info, Value, Single, false),
+    row("years.failures", "Project", "Three years: checks that failed (per-save counts changed, a ratio over its limit)", "35 months", "tc-store", CountLimit(0), Max, Count, false),
     // tc-check
     row("check.open_first", "Checking", "Open the Check screen, first time (derive, map, place, status)", "Psalms tN and tW", "tc-check", Ms(250.0), P95, Single, true),
     row("check.open_later", "Checking", "Open the Check screen again in the same session (derived again)", "Psalms tN and tW", "tc-check", Info, Median, Single, false),
@@ -114,6 +117,7 @@ pub const ROWS: &[RowSpec] = &[
     row("align.append", "Aligning", "Model update after an alignment save (background)", "one verse", "tc-align", Info, Median, Single, false),
     // tc-resources
     row("res.load_psalms", "Resources", "Load Psalms resources from the installed store, first time", "Psalms", "tc-resources", Ms(300.0), P95, Single, true),
+    row("res.load_psalms_warm", "Resources", "Load Psalms resources again, the store in the page cache", "Psalms", "tc-resources", Info, Median, Single, false),
     row("res.memory_psalms", "Resources", "Memory of one open book's resources", "Psalms", "tc-resources", MiB(60.0), Value, Memory, false),
     row("lex.load", "Resources", "Load a lexicon", "en_uhl, 8,674 entries", "tc-resources", Ms(100.0), P95, Single, true),
     row("lex.lookup", "Resources", "Look an entry up", "en_uhl", "tc-resources", Ms(1.0), P95, Single, true),

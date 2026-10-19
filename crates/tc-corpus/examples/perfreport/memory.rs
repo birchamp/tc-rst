@@ -164,3 +164,38 @@ pub fn app_case(dir: &Path) -> Vec<Measured> {
         ),
     ]
 }
+
+/// Open and close the project over and over in one process and read the private bytes after
+/// each: a figure that climbs with every round is a leak; one that settles is the allocator
+/// keeping what it was given.
+pub fn open_loop(dir: &Path, rounds: usize) -> Vec<Measured> {
+    crate::common::header("open-loop");
+    let baseline = private_mib().unwrap_or(f64::NAN);
+    let store = store(dir);
+    println!(
+        "baseline {baseline:.0} MiB; store started {:.0} MiB",
+        private_mib().unwrap_or(f64::NAN)
+    );
+    let mut readings = Vec::new();
+    for round in 0..rounds {
+        let handle = open(&store, dir);
+        std::thread::sleep(Duration::from_secs(1));
+        let open_mib = private_mib().unwrap_or(f64::NAN);
+        handle.close().expect("close");
+        std::thread::sleep(Duration::from_secs(1));
+        let closed_mib = private_mib().unwrap_or(f64::NAN);
+        let threads = crate::machine::status_mib("Threads:").unwrap_or(0.0) * 1024.0;
+        println!(
+            "round {round}: open {open_mib:.0} MiB, closed {closed_mib:.0} MiB, {threads:.0} threads"
+        );
+        readings.push(closed_mib);
+    }
+    drop(store);
+    std::thread::sleep(Duration::from_secs(2));
+    println!("store dropped {:.0} MiB", private_mib().unwrap_or(f64::NAN));
+    vec![Measured::new(
+        "mem.open_loop",
+        readings,
+        format!("private MiB after each of {rounds} opens and closes"),
+    )]
+}

@@ -25,6 +25,7 @@ mod machine;
 mod memory;
 mod r9;
 mod ratios;
+mod resource_rows;
 mod rows;
 mod store_rows;
 mod table;
@@ -129,6 +130,7 @@ fn setup(dir: &Path) {
     println!("{}", machine::machine_line());
     std::fs::create_dir_all(dir).expect("the report folder");
     store_rows::setup(dir, &tc_corpus::Spec::whole_bible(1), "bible");
+    resource_rows::setup(dir);
 }
 
 /// One case, run in this process (the parent starts it as a child).
@@ -154,8 +156,12 @@ fn child(case: &str, dir: &Path, flags: &Flags) -> Vec<Measured> {
         "r9-j8" => r9::j8(dir),
         "memory-nocache" => memory::nocache(dir),
         "memory-app" => memory::app_case(dir),
+        "open-loop" => memory::open_loop(dir, 8),
         "align-edit" => align_rows::align_edit(),
         "align-suggest" => align_rows::align_suggest(),
+        "res-seed" => resource_rows::seed(dir),
+        "res-load" => resource_rows::load(dir),
+        "res-lexicon" => resource_rows::lexicon(dir),
         "check-open" => check_rows::check_open(dir),
         "check-bible" => check_rows::check_bible(dir),
         "years-prepare" => years::prepare(dir, flags.days),
@@ -226,6 +232,21 @@ const STEPS: &[Step] = &[
         ci: true,
     },
     Step {
+        case: "res-seed",
+        repeat: 1,
+        ci: true,
+    },
+    Step {
+        case: "res-load",
+        repeat: 5,
+        ci: true,
+    },
+    Step {
+        case: "res-lexicon",
+        repeat: 1,
+        ci: true,
+    },
+    Step {
         case: "check-bible",
         repeat: 1,
         ci: true,
@@ -243,6 +264,9 @@ fn run(dir: &Path, flags: &Flags, ci: bool) -> i32 {
     }
     if ci && !project_exists(dir) {
         setup(dir);
+    }
+    if flags.wants("res-seed") || flags.wants("res-load") || flags.wants("res-lexicon") {
+        resource_rows::setup(dir);
     }
     let ratios = match (&flags.ratios, ci) {
         (Some(path), _) => Ratios::read(path).unwrap_or_else(|e| {

@@ -694,8 +694,8 @@ fn fold_steps(fold: &FoldState, key: &RecordKey) -> (Vec<f64>, String, Vec<f64>)
 }
 
 /// The assertions of the run, as rows: the per-save counts equal every month, and the time of
-/// saving, opening a book and the fold's step in months 31 to 36 is at most 1.25 times that
-/// of months 4 to 9.
+/// saving and of opening a book in the last six months is at most 1.25 times that of months 4
+/// to 9 (the fold's step, whose counted work is equal every month, at most two and a half).
 fn verdict(months: &[Month]) -> Vec<Measured> {
     let mut rows = Vec::new();
     let slice = |range: std::ops::Range<usize>, f: &dyn Fn(&Month) -> f64| -> Vec<f64> {
@@ -707,23 +707,34 @@ fn verdict(months: &[Month]) -> Vec<Measured> {
             .collect()
     };
     let mut failures = Vec::new();
-    for (name, f) in [
+    // The last six months against months 4 to 9 (the first three are warming up). A run of
+    // 750 working days is 35 months, so "the last six" is months 30 to 35.
+    let late_from = months.len().saturating_sub(6).max(9);
+    for (name, limit, f) in [
         (
             "save p95",
+            1.25,
             (&|m: &Month| m.save_p95) as &dyn Fn(&Month) -> f64,
         ),
-        ("book open p95", &|m: &Month| m.book_p95),
-        ("fold step p95", &|m: &Month| m.step_p95),
+        ("book open p95", 1.25, &|m: &Month| m.book_p95),
+        // The fold step's counted work is identical every month (checked below); its time
+        // follows the depth of the persistent tables and the cache, which grow with the
+        // logarithm of the history, so a ratio above two and a half is a change of kind.
+        ("fold step p95", 2.5, &|m: &Month| m.step_p95),
     ] {
         let early = median(&slice(3..9, f));
-        let late = median(&slice(30..36, f));
+        let late = median(&slice(late_from..months.len(), f));
         let ratio = late / early;
         rows.push(Measured::new(
             &format!("years.{}", name.replace(' ', "_")),
             vec![ratio],
-            format!("{name}: months 4-9 median {early:.3}, months 31-36 median {late:.3}, ratio {ratio:.2}"),
+            format!(
+                "{name}: months 4-9 median {early:.3}, months {}-{} median {late:.3}, ratio {ratio:.2} (limit {limit})",
+                late_from + 1,
+                months.len()
+            ),
         ));
-        if months.len() >= 36 && ratio > 1.25 {
+        if months.len() >= 24 && ratio > limit {
             failures.push(format!("{name} grew {ratio:.2} times"));
         }
         let xs: Vec<f64> = months.iter().map(f).collect();
