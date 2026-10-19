@@ -154,7 +154,8 @@ Evidence: `docs/evidence/electronite-spike-2026-10-17.md` and
 9. **The work** is 48 units in seven phases *(A-16, A-17)*. Phase 0 (14 units) can start now on
    main; one of them, the Electronite spike G0, must be run on Windows by the owner or a Windows
    runner. Phase 1 has 15 units: the seed spike B1a can start now on a branch cut from
-   `storage`, and the other 14 start when unit C merges. Phase 2 starts with the store adapter
+   `storage`, and the other 14 start when unit C merges *(B1a ran after unit C merged, on a
+   branch cut from `app`)*. Phase 2 starts with the store adapter
    C0, whose size depends on whether S1 provides R4, R5, R14 and R16 (§9.2).
 10. **Open questions.** 28 points need the owner (§12). The most urgent is Q-23: ten requests
     this design depends on (R1, R4, R5, R14, R16 and R19 to R23) are in no storage unit's task
@@ -176,7 +177,7 @@ Evidence: `docs/evidence/electronite-spike-2026-10-17.md` and
 | AD4 | Every write carries a `RequestId`. The browser buffer entry keeps the id with the text that was sent (`sent`) beside the current text. A per-session `ReplyCache` (1,024 entries, memory only) keys each id with a digest of the request body: a retry of a finished request gets the first reply, a retry of a request still running waits for its reply, and a retry whose body differs gets `ApiError::RequestReused`, never the cached `Ack`. A field is clean only when `Ack.saved` equals the NFC form of its current text. A new `ServerInstance` means the cache is gone: the UI goes Home and resends nothing. Each buffered entry is offered at the next open of its project, beside the entries of `drafts.json`, unless the stored value already equals its text; a comment entry is dropped when the newest comment at its target has its text (tC4's rule, `tC4:src/data/journal/journalingStore.ts:3048-3058`). *(A-2, A-3)* | A retry rebuilt from the same token after a lost reply would otherwise make a person conflict with their own save (STORAGE:1422-1428, 1447). A retry matched by id alone could carry newer text and be answered with the older text's `Ack`, or run twice while the first attempt waits on the actor. `AddComment` has no token and mints a new id each time (STORAGE:1536). After a restart the old page cannot reach the server on its new port (§5.2), so an in-place resend cannot happen. | An echo-only request tag; matching retries by id alone; resending in place after a server restart. |
 | AD5 | `Ack` arrives only after B3 and says exactly what was stored: `written`, the NFC text, the new tokens, new conflicts, `ViewSeq`, and the disk warning. | STORAGE:1415-1428. | An optimistic "Saved". |
 | AD6 | One seam to storage. Before S1, `MemoryBackend` executes no command: it answers `Unavailable`, or a scripted outcome under the `test-hooks` feature. | No second copy of STORAGE's B1–B2 rules. Save behaviour in the UI is still testable before S1. | Core-first's temporary command builder, whose deletion depended on S1 publishing a pure `build_batch`. |
-| AD7 | The fixture seed is STORAGE §13.2's state seed, with its checks, written as `tc_app::backend::seed::tc4_state_seed`. When unit I lands, `memory_seed_equals_tc_import_seed` runs and the copy is deleted. | §13.2 (STORAGE:3433-3442) requires byte-for-byte USFM and `vrs.json` and field-for-field sidecars. A checked seed cannot make a screen look right for the wrong reason. | A new `tc-import` crate now (unit I owns it); a seed without the check. |
+| AD7 | The fixture seed is STORAGE §13.2's state seed, with its checks, written as `tc_app::backend::seed::tc4_state_seed`. When unit I lands, `memory_seed_equals_tc_import_seed` runs and the copy is deleted. The check is §4.2's, and its mismatches on the parity scenarios are in `docs/evidence/state-seed-check-2026-10-18.md` (B1a). | §13.2 (STORAGE:3433-3442) requires byte-for-byte USFM and `vrs.json` and field-for-field sidecars. A checked seed cannot make a screen look right for the wrong reason. | A new `tc-import` crate now (unit I owns it); a seed without the check. |
 | AD8 | The open's progress is tc-store's reporter, forwarded unchanged. tc-app's own reporter times only tc-app's jobs. | STORAGE:1870-1891 gives the clock to the store, and S1's `open_shows_determinate_progress_by_300_ms` tests it. | A tc-app clock for the open and an invented `Preparing` phase. |
 | AD9 | Typed `POST /api/v1/<service>/<name>` with JSON. HTTP 200 carries `ReplyOf<E>`, the enum `Reply<E::Ok>`: `{"type": "ok", "value": …}` or `{"type": "err", "value": <ApiError>}`, the crate's one enum form, not serde's `{"Ok": …}` for a `Result` *(A1)*. Statuses are used only below the API: 401 token, 403 Host or Origin, 409 API version, 413 a body over its cap (8 MiB for an API body, the flow's cap for an upload), 503 while the server closes (§5.1). | One exhaustive Rust match in the UI. A proxy or auth failure cannot be mistaken for a domain refusal. | 422 for every error; a result type per area without one error enum. |
 | AD10 | Events come on one SSE stream, `GET /api/v1/events`, read with `fetch` and the token header. Frames carry a sequence number; a ring of 4,096 frames serves reconnects; a gap gives `Resync`. | Works the same in the shell, in Playwright and in a developer's browser, whether or not header injection reaches it. | `EventSource` (needs injection or a cookie); WebSocket (no headers; opaque to Playwright); polling. |
@@ -908,13 +909,29 @@ computer) makes every older token fail its MAC; that is how a draft becomes `Unv
 - **Projects.** It reads the parity state layout (`parity/tc4-baseline/fixtures/build-state.mjs:9-13`)
   and runs `seed::tc4_state_seed` on each project: `ProjectMeta`, `Versification`, books through
   the codec, pins from `resources.json` with the schema 1 → 2 migration, settings per top-level
-  key, decisions and alignments per record, OBS story records. It uses tc-journal's decoders:
-  `decode_alignments` (`storage:crates/tc-journal/src/fold/sidecar.rs:132`), `decode_decisions`
-  (`:229`) and `records_from_usfm` (`:340`), plus `tc_obs::decode_story`. It encodes the batches
-  with `encode_pending` and folds them with `FoldState::fold`, so the fold takes real verified
-  changes. Then it applies §13.2's check: the projection must reproduce every USFM file and
-  `vrs.json` byte for byte, and every sidecar record field for field. A mismatch fails the
-  scenario load.
+  key, decisions and alignments per record, each OBS story as its `StoryBase`, and an OBS
+  project's licence and front and back matter as `CarriedFile` records. It uses tc-journal's
+  decoders: `decode_alignments` (`crates/tc-journal/src/fold/sidecar.rs:132`), `decode_decisions`
+  (`:230`) and `records_from_usfm` (`:342`), each tC4 record first rewritten into the fields the
+  decoder reads (`markedInvalid` from `invalid`; `importedInvalid`, `userStatus` and
+  `verseTextMd5` for a decision). It seals the batches into packs with `tc_journal::pack::seal`
+  under a fixed Local sealer, reads them back with `read_pack` and folds what they hold with
+  `FoldState::fold`, so the fold takes real verified changes. Then it applies §13.2's check: the
+  projection must reproduce every USFM file, `vrs.json`, story file and carried file byte for
+  byte, every sidecar record field for field, and every free field of `metadata.json`, and every
+  derived file of the folder must be one the fold derives. "Field for field" is tC4's reading of
+  a record: an absent flag reads as false, a decision's absent `status` as tC4 derives it, an
+  alignment's `invalid` with the I-3 hash rule, a timestamp as its instant, record order not at
+  all. The differences the format makes by design and no tC4 screen shows are declared in the
+  seed's report, never silent: `verseEdits` recomputed, a decision file's `summary` dropped, an
+  empty `resources` or `languageSets` member added, a `schemaVersion: 1` `resources.json`
+  migrated. A mismatch fails the scenario load. *(B1a: pending files are for Local devices only,
+  and `encode_pending` refuses the seed's `Importer` device, so the seed seals packs as STORAGE
+  §13.1 T8 does. tc-obs's `decode_story` records cannot give a story file back through the fold,
+  which keeps the base's lines and splices frames differently, so a story's base is its file,
+  with no `Frame` or `StoryRef` record, as tC4 keeps a project with no journal; the check reads
+  every frame back through the fold and compares it with tC4's reading of the file. The OBS
+  project fails the check today: `docs/evidence/state-seed-check-2026-10-18.md`.)*
 - **Tokens.** Minted with a fixed test installation secret, so they are deterministic.
 - **Commands.** `Unavailable`. Under `test-hooks`, `test/script` queues outcomes: a fresh token
   for the displayed value (the fold does not change), `NotWritten`, `WrittenNotDurable`, a delay,
@@ -2388,11 +2405,12 @@ This breakdown was checked again after the red team *(A-16, A-17)*:
 
 ### Phase 1: after unit C merges (MemoryBackend)
 
-B1a starts now, on a branch cut from `storage`, because it needs tc-journal *(A-16)*.
+B1a starts now, on a branch cut from `storage`, because it needs tc-journal *(A-16)*. *(B1a: it was
+cut from the integration branch `app` after unit C had merged, like every other unit.)*
 
 | Unit | Scope | Depends on | Waits for | Tests | Done when |
 |---|---|---|---|---|---|
-| B1a Seed spike *(A-16)* | `crates/tc-app/src/backend/seed.rs` only: `tc4_state_seed` and §13.2's check on the two `.state` scenarios (`build-state.mjs` run on the tC4 checkout): `ProjectMeta`, `Versification`, books through the codec, pins with the schema 1 → 2 migration, settings, decisions, alignments, OBS story records | `storage` (tc-journal); rebased when C merges | C, if a mismatch is a spec question | the seed check on both scenarios: USFM and `vrs.json` byte for byte, sidecars field for field | the check passes on both scenarios, or each mismatch is written up with the record, the bytes and the rule involved and handed to unit C |
+| B1a Seed spike *(A-16)* | `crates/tc-app/src/backend/seed.rs` only: `tc4_state_seed` and §13.2's check on the `.state` scenarios (`sample`, `en-pins`, `shared`; `build-state.mjs` run on the tC4 checkout): `ProjectMeta`, `Versification`, books through the codec, pins with the schema 1 → 2 migration, settings, decisions, alignments, OBS story records *(B1a: built, with the check in `seed/check.rs` and the strict JSON reader and timestamps in `seed/strict.rs`, behind the feature `fixture-backend`. D1: `Tc4Folder::read` is the one reader; `tc4_state_seed(&Tc4Folder, ProjectId)` builds, seals, folds and checks, and returns the seed only when the check passes, else `SeedRefusal::Mismatches` with every mismatch. D2: every change by `Importer("tc4-seed")`, `cause: Import(Burrito { file_name: <the folder's name> })`, no parents, `seq` its index in its batch, `at` a decision's own `modifiedTimestamp`, else `meta.dateCreated`, else tC4's floor 2020-01-01. D3: one batch for the project, then one per book in canonical order or per story, records in key order, so the seed does not depend on the order of records in a file; batch ids from sha256("tc4-seed-batch\0" ‖ projectId ‖ label). D4: sealed with `pack::seal` under a fixed Local sealer, read back with `read_pack`, folded; never `encode_pending`, which refuses a non-Local device (§4.2). D5: a story's `StoryBase` is its file and nothing else, since `decode_story`'s records cannot give the files back through the fold (§4.2); an OBS project's licence and front and back matter are `CarriedFile` records by git blob id. D6: each tC4 decision gets `importedInvalid` from `invalidated`, `userStatus` from `status` (on an invalidated one only To do, or an Invalid that `userInvalid` marks as the person's own), and `verseTextMd5` from the text its target names in a fold of the project's texts, the text the projection compares. D7: the check reads as tC4 reads (§4.2); an absent `selections` is kept apart from `false`, since tC4's `isDecided` counts it as a selection. D8: a `schemaVersion: 1` `resources.json` migrates as BURRITO-SPEC §5.3 says, adding the bundled `en_twl` pin with its flavor when the file has no links pin. D9: JSON is read with a reader that refuses a repeated key, which serde_json would drop without a word. D10: `fixture_project_id` is the fixture backend's id rule, not an import rule. D11: the cargo tests assemble each scenario's projects from `fixtures/tc4` and the overlay `fixtures/parity-state` and check every file against `parity/app/state.sha256.json`, so they run on the exact bytes without node. D12: the mismatches the storage team owns are asserted exactly, so the test fails the day they are fixed. Outcome, the same in all three scenarios: `sample_burrito` passes (127 changes, three batches); `sample_burrito_obs` is refused with 53 mismatches, handed to the storage team in `docs/evidence/state-seed-check-2026-10-18.md`: frame 0 of every story reads with its number (STORAGE §7.7 against tC4's `TITLE_RE`), `checking/settings.json` is not among an OBS fold's derived files, and the OBS text pin's relationship makes `metadata.json` invalid for both language sets; two OBS edits outside the check (a title edit loses the number; an empty frame's edit takes another layout) are written up there too. B1b cannot load the OBS project of any scenario until the storage team fixes these. Declared differences from tC4 4.0: a `schemaVersion: 1` `resources.json` is migrated where tC4 refuses the project; `verseEdits` is recomputed; the check compares tC4's reading of each record where tC4 compares whole documents; `metadata.json`'s free fields are seeded and checked where tC4 leaves them to its server. A seed takes 5-6 ms per project in a release build after the first, which compiles the Burrito schema once, about 20 ms.)* | `storage` (tc-journal); rebased when C merges | C, if a mismatch is a spec question | the seed check on every scenario: USFM and `vrs.json` byte for byte, sidecars field for field | the check passes on every scenario, or each mismatch is written up with the record, the bytes and the rule involved and handed to unit C *(B1a: unit C had merged, so to the storage team)* |
 | B1b tc-app core and MemoryBackend | the seam with `EditToken` and `ReviewToken` *(A-7)*; `MemoryBackend` with scripted outcomes over B1a's seed; scenario loader with resources from `.state`; `SessionRegistry` with one open per folder and the close at Home *(A-8, A-25)*, epochs; the reply cache wired to sessions; `wire` for tokens, scopes and errors (each later unit adds its views); the key probes of §4.3 *(A-21)*; `AppCounters`, `CountingSnapshot`; tc-corpus loading; contract read cases | C, B1a, A1, A3 | — | contract read cases, including the token-kind cases; epoch refusal tests; `opens_of_one_folder_share_one_session` in both orders; `probe_finds_every_key_a_scan_finds`; `open_lists_no_key` | the count-test harness runs on Psalms and ten times Psalms |
 | B2 Home and project dialogs | `home/*`; `SummaryCache` (memory); cards, tiles, "—" rules; Resume card; toasts; M1, M2, M3 (server language search, versifications); M4 method step; M5 kind step | B1b, A5, A6b | — | `homeProjectCard` port; language-suggestions (UI part). `home_costs_projects_not_history` moves to C1a *(A-25)* | 11 screens in the report (§7.6) |
 | B3 Open and Understand | open job and the S14 overlay with its own 300 ms timer and tC4's three stages *(A-22)*; `editor/book`, `chapters`, `sources`; `helps/*`; `model::take_spans` and the tc-helps block renderer (port of `renderArticleBlocks`); highlights; book rail; helps panel with tabs, slots, article pane, resize; comment box (read) with tC4's selection rule *(A-18)* | B2 | Q-7 for the stage captions | J15 UI with a held open: the overlay shows at 300 ms with no event; `open_book_touches_one_book`; `helps_load_one_book`; `take_spans` differential test | 4 Understand screens |
@@ -2470,7 +2488,8 @@ application, and `tc4 serve` does not use it. The crash tests of the program sto
 write, `app/clientError`, left a stderr line and the application's leaves a report in memory,
 which a crash takes with it.)* A4a after A2; A4b after A3 and A4a;
 A6b after A6a, A2 and A4a; A5 after A4b and A6b; A7 after A6b; A8 after A5; A9 after A2 and A3. G0 is written now,
-with a stand-in server, and must report before B6 merges. B1a starts now on its storage branch.
+with a stand-in server, and must report before B6 merges. B1a starts now on its storage branch
+*(B1a: cut from `app` after unit C merged)*.
 
 In phase 1, B1b comes first, after unit C and B1a, and B2 after it. B3 and B9b can run in
 parallel after B2. B4a, B5a, B7 and B9a after B3. B4b after B4a. B5b and B6 after B5a, and B6
@@ -2489,7 +2508,9 @@ last.
    server, the shell, the harness and the gallery.
 2. **The seed is a second §13.2 until unit I lands.** It is checked byte for byte, compared with
    unit I's seed, and then deleted. B1a runs the check now, so mismatches reach unit C while it
-   is still changing tc-journal *(A-16)*. C1a recaptures every screen on disk.
+   is still changing tc-journal *(A-16)*. C1a recaptures every screen on disk. *(B1a: unit C had
+   merged; the mismatches went to the storage team in
+   `docs/evidence/state-seed-check-2026-10-18.md`.)*
 3. **The aligner round trip** may miss 30 ms with large verses, or on Windows with Defender and
    Electronite's processes. A2 measures it in this container and G0 in Electronite on Windows
    before B6 merges; the fallback needs an owner ruling (Q-13), and the pure view builder
