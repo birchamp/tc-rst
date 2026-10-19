@@ -507,11 +507,6 @@ async fn the_account_rows_a_later_unit_builds_say_so() {
         t.app.request(&sign_in).await.unwrap().into_result(),
         Err(ApiError::Unavailable(Feature::Account))
     );
-    let compose = tc_api::feedback::Compose { report: None };
-    assert_eq!(
-        t.app.request(&compose).await.unwrap().into_result(),
-        Err(ApiError::Unavailable(Feature::Feedback))
-    );
 }
 
 /// Every product row answers its golden request with a well-formed reply.

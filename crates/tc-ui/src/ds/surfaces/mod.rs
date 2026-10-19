@@ -199,7 +199,7 @@ fn dialog_layer(
 }
 
 /// The round ✕ at the top of a dialog or a drawer.
-fn dialog_close(label: String, on_close: Callback<()>) -> impl IntoView {
+fn dialog_close(label: Signal<String>, on_close: Callback<()>) -> impl IntoView {
     close_button(
         label,
         Callback::new(move |_: MouseEvent| on_close.run(())),
@@ -225,20 +225,22 @@ pub fn Drawer(
     title_dir: Option<String>,
     #[prop(optional, into)] width: Option<CssValue>,
     #[prop(optional)] on_close: Option<Callback<()>>,
-    #[prop(optional, into)] close_label: Option<String>,
+    /// The ✕'s title, which follows the shown language while the drawer is on screen.
+    #[prop(optional, into)]
+    close_label: Option<Signal<String>>,
     /// Extra attributes of the scrim.
     #[prop(optional)]
     attrs: Attrs,
     #[prop(optional)] children: Option<ChildrenFn>,
 ) -> impl IntoView {
-    let close_label = close_label.unwrap_or_else(|| "Close".into());
-    let label = Some(
+    let close_label = close_label.unwrap_or_else(|| Signal::from("Close"));
+    let label = Some(Signal::from(
         title
             .as_ref()
             .and_then(Content::as_text)
             .unwrap_or("Panel")
             .to_string(),
-    );
+    ));
     let content: ChildrenFn = Arc::new(move || {
         let mut s = Css::new();
         s.set(
@@ -246,12 +248,7 @@ pub fn Drawer(
             width.clone().unwrap_or_else(|| "var(--drawer-w)".into()),
         );
         s.extend(&css! { "max-width": "100%", "height": "100%", "display": "flex", "flex-direction": "column" });
-        let (eyebrow, title, title_dir, close_label) = (
-            eyebrow.clone(),
-            title.clone(),
-            title_dir.clone(),
-            close_label.clone(),
-        );
+        let (eyebrow, title, title_dir) = (eyebrow.clone(), title.clone(), title_dir.clone());
         let children = children.clone();
         let mut title_attrs = Attrs::new();
         if let Some(d) = title_dir {
@@ -366,7 +363,10 @@ pub fn Modal(
     #[prop(optional, into)] title: Option<Content>,
     #[prop(optional, into)] subtitle: Option<Content>,
     #[prop(optional, into)] width: Option<CssValue>,
-    #[prop(optional, into)] close_label: Option<String>,
+    /// The ✕'s title, which also names it. It follows the shown language while the dialog is
+    /// on screen: the App language dialog previews a language under its own ✕.
+    #[prop(optional, into)]
+    close_label: Option<Signal<String>>,
     #[prop(optional)] on_close: Option<Callback<()>>,
     /// Whether `on_close` is in force: the ✕, Escape and a press on the scrim. tC4's dialogs
     /// that run an action pass no `onClose` while it runs (`onClose={busy ? undefined :
@@ -377,10 +377,14 @@ pub fn Modal(
     /// Extra attributes of the scrim.
     #[prop(optional)]
     attrs: Attrs,
+    /// Attributes of the scrim whose values follow signals (tC4's App language dialog sets
+    /// `data-saving` while its save runs); `None` removes one.
+    #[prop(optional)]
+    live_attrs: Vec<(&'static str, Signal<Option<String>>)>,
     #[prop(optional)] children: Option<ChildrenFn>,
 ) -> impl IntoView {
     let id = crate::ds::next_id("tc-dlg");
-    let close_label = close_label.unwrap_or_else(|| "Close".into());
+    let close_label = close_label.unwrap_or_else(|| Signal::from("Close"));
     let labelled_by = Some(id.clone());
     let content: ChildrenFn = Arc::new(move || {
         let mut s = Css::new();
@@ -389,7 +393,7 @@ pub fn Modal(
             width.clone().unwrap_or_else(|| "var(--modal-w)".into()),
         );
         s.extend(&css! { "max-width": "100%", "max-height": "82vh", "overflow": "auto" });
-        let (title, subtitle, close_label) = (title.clone(), subtitle.clone(), close_label.clone());
+        let (title, subtitle) = (title.clone(), subtitle.clone());
         let (children, footer) = (children.clone(), footer.clone());
         let id = id.clone();
         view! {
@@ -399,10 +403,7 @@ pub fn Modal(
                         <Text attrs=Attrs::from([("id", id.as_str())]) role=TextRole::H3>{title.map(|t| t.view())}</Text>
                         {present(subtitle).map(|s| view! { <Text role=TextRole::Caption>{s.view()}</Text> })}
                     </Stack>
-                    {move || {
-                        let label = close_label.clone();
-                        on_close.filter(|_| closable.get()).map(|cb| dialog_close(label, cb))
-                    }}
+                    {move || on_close.filter(|_| closable.get()).map(|cb| dialog_close(close_label, cb))}
                 </Stack>
                 <Stack direction=Direction::Column gap=16 style=css! { "padding": "18px 24px 4px" }>
                     {children.map(|c| c())}
@@ -421,6 +422,7 @@ pub fn Modal(
         placement: LayerPlacement::Center,
         labelled_by,
         scrim_attrs: attrs,
+        scrim_live: live_attrs,
         ..dialog_layer(open, on_close, closable, content)
     })
 }

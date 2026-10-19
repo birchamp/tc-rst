@@ -3,6 +3,13 @@
 //! each element's node number, the focus and the scroll lock. Node numbers are renumbered by
 //! first appearance on each side, so they compare whatever else the page holds; a node one side
 //! draws again shows `#new` there.
+//!
+//! A DOM-first screen's sequence is compared within its scope (the dialog or the menu's panel).
+//! A step may close it ("Escape returns the focus to the trigger"): a scope that matches nothing
+//! on both sides is the marker `(scope absent)` on both, so the step compares equal, and on one
+//! side only it is a difference. Every scoped step also compares `<html lang dir>`, because the
+//! language and direction a preview sets are the app's state, not the Home behind the dialog
+//! (A5 D7).
 
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
@@ -10,7 +17,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use super::dom::{self, Side, Snapshot};
+use super::dom::{self, DomError, Side, Snapshot};
 use super::inputs::{Scope, TargetSpec};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -42,6 +49,9 @@ pub struct SequenceResult {
 
 static NODE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r" #(\d+)>$").unwrap());
 
+/// A scoped step whose scope matches nothing: the menu or the dialog has closed.
+const SCOPE_ABSENT: &str = "(scope absent)";
+
 /// Each step's lines, with the masks' elements taken out and node numbers renumbered by first
 /// appearance across the whole recording.
 fn lines(
@@ -59,11 +69,15 @@ fn lines(
             snapshot: &step.dom,
             rename,
         };
-        let prepared = dom::prepare(side, scope, masks)
-            .map_err(|e| format!("step {:?}: {}", step.label, e.message()))?;
-        let renumbered = prepared
-            .lines
+        let prepared = match dom::prepare(side, scope, masks) {
+            Ok(prepared) => prepared.lines,
+            Err(DomError::Scope(_)) if scope.is_some() => vec![SCOPE_ABSENT.to_owned()],
+            Err(e) => return Err(format!("step {:?}: {}", step.label, e.message())),
+        };
+        let html = scope.map(|_| step.dom.html.clone());
+        let renumbered = html
             .into_iter()
+            .chain(prepared)
             .map(|line| {
                 NODE.replace(&line, |c: &regex::Captures<'_>| {
                     let next = numbers.len() + 1;

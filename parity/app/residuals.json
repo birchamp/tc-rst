@@ -12,6 +12,18 @@
       "why": "The machine fingerprint lists every font face and its version, so a font added, removed or upgraded stops pixel comparisons until both sides are captured again on one machine. A fontconfig rule that changes which face draws a fallback glyph without changing the list is not caught.",
       "cites": "APP-DESIGN §7.3 layer 1",
       "until": null
+    },
+    {
+      "id": "astral-initials",
+      "why": "The project chip's initials take each word's first character. tC4's `w[0]` takes the first UTF-16 unit, so a word that starts outside the Basic Multilingual Plane (a mathematical letter, many CJK extension characters) gives half of a surrogate pair, a broken glyph; the rebuild gives the whole character (`tc_ui::app::shell::project_initials`, test `astral_initial_is_whole`). Every other name gives tC4's initials, JavaScript's `\\s` and full upper-casing included.",
+      "cites": "AGENTS.md \"Matching tC4\"; A5",
+      "until": null
+    },
+    {
+      "id": "feedback-waits-for-attachment",
+      "why": "tC4 composes the Feedback attachment in the page at once, so its Send never waits. The rebuild's server composes it (`feedback/compose`, A5 D8), and Send stays off until the attachment is shown, so nothing is sent that the dialog did not show (`tc_ui::app::feedback::can_send`). A compose that fails says so in the attachment box in the shown language (`feedback.attachmentFailed`), and opening the report again keeps the typed text and composes again (journey `a compose that fails keeps Send off and says so; the next opening keeps the text and composes again`; test `a_kept_report_whose_compose_failed_composes_again_with_its_text`). No baseline screen shows it: tC4 has no compose to wait for or to fail.",
+      "cites": "AGENTS.md \"Matching tC4\"; A5 D8",
+      "until": null
     }
   ],
   "rows": {}

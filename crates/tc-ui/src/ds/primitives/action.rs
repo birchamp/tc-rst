@@ -3,7 +3,7 @@
 use leptos::ev::{self, MouseEvent, PointerEvent};
 use leptos::prelude::*;
 
-use crate::ds::{Attrs, Css, Shape, Size, Tag, Tone, Weight, element, spread};
+use crate::ds::{Attrs, Css, Shape, Size, Tag, Tone, Weight, element, live, spread};
 
 /// The weight's own declarations (`WEIGHT` in Action.jsx) and its `data-i` role.
 fn weight_css(weight: Weight) -> (Css, &'static str) {
@@ -168,6 +168,10 @@ pub fn Action(
     on_pointer_down_capture: Option<Callback<PointerEvent>>,
     #[prop(optional, into)] style: Signal<Css>,
     #[prop(optional)] attrs: Attrs,
+    /// Attributes whose values follow signals (`None` removes one), such as the account
+    /// menu's `aria-checked` on its internet row, which stays open and keeps the focus.
+    #[prop(optional)]
+    live_attrs: Vec<(&'static str, Signal<Option<String>>)>,
     #[prop(optional)] children: Option<Children>,
 ) -> impl IntoView {
     let tag: Tag = if href.is_some() {
@@ -199,6 +203,7 @@ pub fn Action(
             })
         })
         .add_any_attr(spread(&attrs))
+        .add_any_attr(live(live_attrs))
         .on(ev::click, move |e| {
             if let Some(cb) = on_click
                 && !disabled.get_untracked()

@@ -1,0 +1,65 @@
+{
+  "ui": "/home/bot/tc-rst/.claude/worktrees/p0-a5/target/tc-ui-app-release",
+  "runs": 20,
+  "machine": {
+    "cpu": "12th Gen Intel(R) Core(TM) i7-12700",
+    "vcpus": 20,
+    "sha_ni": true,
+    "avx512f": false,
+    "load": [
+      3.36,
+      2.87,
+      2.59
+    ]
+  },
+  "preview": {
+    "dom": {
+      "runs": 20,
+      "median": 11.9,
+      "p95": 15,
+      "max": 15.1
+    },
+    "frame": {
+      "runs": 20,
+      "median": 13.9,
+      "p95": 17.1,
+      "max": 17.2
+    },
+    "longTasks": [],
+    "workDom": {
+      "runs": 20,
+      "median": 8.1,
+      "p95": 9.4,
+      "max": 10
+    },
+    "workFrame": {
+      "runs": 20,
+      "median": 11.1,
+      "p95": 15.3,
+      "max": 16.4
+    }
+  },
+  "boot": {
+    "runs": 20,
+    "median": 102.8,
+    "p95": 125.4,
+    "max": 131.2
+  },
+  "helpSwitch": {
+    "runs": 20,
+    "median": 29.6,
+    "p95": 42.4,
+    "max": 44.8
+  },
+  "machineAfter": {
+    "cpu": "12th Gen Intel(R) Core(TM) i7-12700",
+    "vcpus": 20,
+    "sha_ni": true,
+    "avx512f": false,
+    "load": [
+      3.43,
+      2.91,
+      2.61
+    ]
+  }
+}

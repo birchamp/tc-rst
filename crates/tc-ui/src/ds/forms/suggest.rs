@@ -35,8 +35,8 @@ pub fn SuggestField(
     let suggest =
         move || suggest(suggestions, value, on_change, on_choose, placeholder, attrs).into_any();
     crate::ds::Field(crate::ds::FieldProps {
-        label,
-        hint,
+        label: label.map(Signal::from),
+        hint: hint.map(Signal::from),
         id,
         style,
         children: Some(Box::new(suggest)),

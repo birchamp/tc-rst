@@ -1,7 +1,164 @@
 {
   "about": "The Rust app's captures: what capture-rust.mjs saw at each shot. The PNG and DOM files are beside it, in screens/ and dom/.",
-  "machine": null,
-  "build": null,
-  "projects": {},
-  "screens": []
+  "machine": {
+    "platform": "linux-x64",
+    "chromium": "141.0.7390.37",
+    "fonts": {
+      "count": 535,
+      "sha256": "a15fd0433b66112396faed20c7b88e11229781916faeaad035b9c8961a72eb33"
+    }
+  },
+  "build": {
+    "ui": "71e4a7c9e82fb4cb",
+    "commit": "dev",
+    "api": 1
+  },
+  "projects": {
+    "sample": {
+      "_local_/_local_/sample_burrito": "sample_burrito",
+      "_local_/_local_/sample_burrito_obs": "sample_burrito_obs"
+    }
+  },
+  "screens": [
+    {
+      "name": "account-menu",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "A5",
+      "backend": "memory",
+      "layers": [
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/account-menu.png",
+      "sha256": "7bc2b05f7c74769001a55c931bf5c193f3a01fdb6d1fdc18ab9e7ab5d10401a4",
+      "dom": "dom/account-menu.json",
+      "domSha256": "0103f8f43b98d492a5b044084b9bdc6c360b0a99347a5863d395bdb072fa8ff5"
+    },
+    {
+      "name": "app-language",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "A5",
+      "backend": "memory",
+      "layers": [
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/app-language.png",
+      "sha256": "4f8c1f7a586efc1534dc51f0b0cae018135ece1c8b5e84bf5d1213ebb46aa5db",
+      "dom": "dom/app-language.json",
+      "domSha256": "11b36d460f298f998b05da7793f5b26e6802fb0b5ca4341eb7fc287f16d4bb9b"
+    },
+    {
+      "name": "help",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "A5",
+      "backend": "memory",
+      "layers": [
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/help.png",
+      "sha256": "37468d371d1c6f351c7223307a74a4d6c7922eeb3c9375a7953ea7112baebef4",
+      "dom": "dom/help.json",
+      "domSha256": "026b481b7e214d2387c4ffdbc54f4534f829de2c5acc155694c0a86394f5ef4a"
+    },
+    {
+      "name": "about",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "A5",
+      "backend": "memory",
+      "layers": [
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {
+        "about-build": {
+          "x": 482,
+          "y": 314,
+          "width": 65,
+          "height": 17
+        }
+      },
+      "png": "screens/about.png",
+      "sha256": "4e7c4cf21a8ef1b94e87aea240bf822666aeb93a29bc122e842d092381c8b7e3",
+      "dom": "dom/about.json",
+      "domSha256": "5e929b3f56697b62fd05f6a43a76b69af83a7676fc7ddfb6a524c4d9dc9186d7"
+    },
+    {
+      "name": "feedback",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "A5",
+      "backend": "memory",
+      "layers": [
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {
+        "feedback-attachment": {
+          "x": 364,
+          "y": 585,
+          "width": 552,
+          "height": 59
+        }
+      },
+      "png": "screens/feedback.png",
+      "sha256": "06d58c8808c2dc61d51453a057b09245836f7965a60c81ff2a248cf7ff4879dd",
+      "dom": "dom/feedback.json",
+      "domSha256": "8d8210dfc1b7c6db1a4d378027e8a37fe1c837ee3c984f5a8a45ff80cf09d014"
+    },
+    {
+      "name": "license",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "A5",
+      "backend": "memory",
+      "layers": [
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/license.png",
+      "sha256": "7679f56a695faf00203fa7f5e6092ed563decba27e4c69a2a8d9a77ec856749b",
+      "dom": "dom/license.json",
+      "domSha256": "41cdd8ac9b12b0bfac5fdc227f3490ac803096a9d76671c3e98d1c390cf61930"
+    }
+  ]
 }

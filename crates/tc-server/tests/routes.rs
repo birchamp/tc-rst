@@ -52,6 +52,20 @@ fn static_routes_serve_the_ui_dir() {
     );
 }
 
+/// The help search form submits to `search.html?q=…`, and the page-swap shim fetches that
+/// address: a query names the same file.
+#[test]
+fn a_help_page_with_a_query_is_the_page() {
+    let server = TestServer::start(stub());
+    let page = server.get("/help/sub/page.html?q=offline");
+    assert_eq!(page.status, 200);
+    assert_eq!(page.body, b"<p>Sub</p>");
+    assert_eq!(
+        page.header("content-type"),
+        Some("text/html; charset=utf-8")
+    );
+}
+
 #[test]
 fn static_paths_never_leave_the_ui_dir() {
     let server = TestServer::start(stub());

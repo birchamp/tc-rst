@@ -17,6 +17,7 @@ pub mod config;
 pub mod counters;
 pub mod dispatch;
 pub mod events;
+pub mod feedback;
 pub mod flows;
 pub mod folders;
 mod handlers;

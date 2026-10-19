@@ -21,6 +21,9 @@ fn asset_path(tc4_path: &str) -> String {
     if tc4_path == "src/ui.css" {
         return "ui.css".into();
     }
+    if tc4_path == "LICENSE" || tc4_path == "COPYING" {
+        return format!("about/{tc4_path}");
+    }
     for (from, to) in [
         ("src/ds/", "ds/"),
         ("src/i18n/", "i18n/"),

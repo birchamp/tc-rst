@@ -328,6 +328,14 @@ impl Planted {
         self.rehash(name);
     }
 
+    /// The planted record as before `unit` landed: a planted run starts with no capture, so a
+    /// landed unit owes every layer it captures.
+    fn unland(&self, unit: &str) {
+        self.edit_json("units.json", |u| {
+            u["landed"].as_array_mut().unwrap().retain(|l| l != unit);
+        });
+    }
+
     fn edit_json(&self, file: &str, edit: impl FnOnce(&mut Value)) {
         let path = self.app().join(file);
         let mut value: Value = read_json(&path).unwrap();
@@ -750,6 +758,7 @@ fn a_dom_only_capture_compares_the_dialog_alone() {
 #[test]
 fn a_layer_whose_unit_has_landed_must_be_captured() {
     let p = Planted::new();
+    p.unland("A5");
     p.edit_json("units.json", |u| {
         u["landed"].as_array_mut().unwrap().push(json!("B2"))
     });
@@ -762,6 +771,14 @@ fn a_layer_whose_unit_has_landed_must_be_captured() {
         out.rules("account-menu"),
         [Rule::LayerOverdue, Rule::LayerOverdue],
         "pixels and meaning are B2's; the DOM is A5's"
+    );
+    p.edit_json("units.json", |u| {
+        u["landed"].as_array_mut().unwrap().push(json!("A5"))
+    });
+    assert_eq!(
+        p.run().rules("account-menu"),
+        [Rule::LayerOverdue, Rule::LayerOverdue, Rule::LayerOverdue],
+        "with A5 landed, its DOM is due too"
     );
     assert!(
         out.rules("understand-tit1").is_empty(),
@@ -856,6 +873,7 @@ fn every_screen_the_rebuild_differs_on_has_a_mask_citing_its_ruling() {
         assert_eq!(out.rules(screen), [Rule::MaskRuling], "{screen}");
     }
     let p = Planted::new();
+    p.unland("A5");
     p.edit_json("masks.json", |m| {
         m["masks"][2]["rects"]["about"] = json!({ "x": 1, "y": 1, "width": 2, "height": 2 })
     });
@@ -1003,6 +1021,79 @@ fn a_scoped_sequence_numbers_its_nodes_whatever_precedes_the_scope() {
     out.assert_clean(&["about"]);
 }
 
+/// The step's DOM with the dialog taken out, as after a key that closed it.
+fn without_dialog(step: &mut Step) {
+    let root = &mut step.dom.root;
+    let at = root
+        .iter()
+        .position(|l| l.contains(r#"role="dialog""#))
+        .unwrap();
+    let depth = root[at].len() - root[at].trim_start().len();
+    let end = (at + 1..root.len())
+        .find(|&i| root[i].len() - root[i].trim_start().len() <= depth)
+        .unwrap_or(root.len());
+    root.drain(at..end);
+    step.focus = "button \"\"".to_owned();
+}
+
+/// A5 D7: a step that closes the dialog of a DOM-first sequence compares equal when the dialog
+/// is gone on both sides.
+#[test]
+fn a_sequence_step_whose_scope_is_gone_on_both_sides_compares_equal() {
+    let mut p = Planted::new();
+    p.identity("about")["layers"] = json!(["dom"]);
+    let mut tc4 = recording(&numbered(&p.committed.baseline.join("dom/about.json")));
+    let mut rust = recording(&numbered(&p.app().join("dom/about.json")));
+    without_dialog(&mut tc4.steps[2]);
+    without_dialog(&mut rust.steps[2]);
+    write_recording(&p.paths().tc4_behaviour, &tc4);
+    write_recording(&p.app().join("behaviour"), &rust);
+    let out = p.run();
+    let row = out.row("about");
+    assert!(row.behaviour[0].same, "{:#?}", row.behaviour);
+    assert_eq!(row.status, Status::Same);
+    out.assert_clean(&["about"]);
+}
+
+#[test]
+fn a_sequence_step_whose_scope_is_gone_on_one_side_differs() {
+    let mut p = Planted::new();
+    p.identity("about")["layers"] = json!(["dom"]);
+    let tc4 = recording(&numbered(&p.committed.baseline.join("dom/about.json")));
+    let mut rust = recording(&numbered(&p.app().join("dom/about.json")));
+    without_dialog(&mut rust.steps[2]);
+    write_recording(&p.paths().tc4_behaviour, &tc4);
+    write_recording(&p.app().join("behaviour"), &rust);
+    let out = p.run();
+    let result = &out.row("about").behaviour[0];
+    assert!(!result.same);
+    let diff = result.first_diff.as_deref().unwrap();
+    assert!(
+        diff.starts_with("step 2") && diff.contains("(scope absent)"),
+        "{diff}"
+    );
+    assert_eq!(out.rules("about"), [Rule::DiffersWithoutResidual]);
+}
+
+#[test]
+fn a_scoped_sequence_compares_the_documents_lang_and_dir() {
+    let mut p = Planted::new();
+    p.identity("about")["layers"] = json!(["dom"]);
+    let tc4 = recording(&numbered(&p.committed.baseline.join("dom/about.json")));
+    let mut rust = recording(&numbered(&p.app().join("dom/about.json")));
+    rust.steps[1].dom.html = r#"<html dir="rtl" lang="ar">"#.to_owned();
+    write_recording(&p.paths().tc4_behaviour, &tc4);
+    write_recording(&p.app().join("behaviour"), &rust);
+    let out = p.run();
+    let result = &out.row("about").behaviour[0];
+    assert!(!result.same);
+    let diff = result.first_diff.as_deref().unwrap();
+    assert!(
+        diff.starts_with("step 1") && diff.contains(r#"lang="ar""#),
+        "{diff}"
+    );
+}
+
 #[test]
 fn a_masked_element_takes_no_part_in_a_sequence() {
     let mut p = Planted::new();
@@ -1146,6 +1237,7 @@ fn a_scope_that_matches_nothing_fails_the_row() {
 #[test]
 fn a_gallery_case_is_a_row_naming_its_units() {
     let p = Planted::new();
+    p.unland("A5");
     let out = p.run();
     let row = out.row("license");
     assert_eq!(row.kind, super::inputs::RowKind::Case);
@@ -1342,6 +1434,7 @@ fn a_case_capture_of_another_scenario_or_with_meaning_fails() {
 #[test]
 fn a_case_outside_section_7_4_or_without_its_scope_fails() {
     let mut p = Planted::new();
+    p.unland("A5");
     p.gallery_case("license");
     p.run().assert_clean(&["license"]);
     p.edit_json("cases.json", |c| c["cases"][0]["group"] = json!("about"));

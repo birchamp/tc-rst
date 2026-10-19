@@ -138,6 +138,7 @@ props_default!(
     FieldProps,
     InputProps,
     KeyValueGridProps,
+    ModalProps,
     ProgressBarProps,
     ProgressProps,
     RuleProps,

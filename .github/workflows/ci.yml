@@ -42,7 +42,9 @@ jobs:
   # settle must hold, as must the pure parts of the Rust environment (its browser tests skip
   # here: they need tc4 and Playwright), and the tC4 view-state gallery's record must agree with
   # itself (its states, calibration, cases and their files; its browser tests skip here: they
-  # need a tC4 clone and Playwright). Node built-ins only, so no install step.
+  # need a tC4 clone and Playwright), and every journey file of parity/app/journeys loads (a glob,
+  # so a new file cannot be left out; their browser tests skip here too). Node built-ins only, so
+  # no install step.
   parity-baseline:
     runs-on: ubuntu-latest
     steps:
@@ -50,4 +52,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --test parity/tc4-baseline/baseline.test.mjs parity/tc4-baseline/mock-server/server.test.mjs parity/app/state.test.mjs parity/app/observe.test.mjs parity/app/env-rust.test.mjs parity/view-gallery/view-gallery.test.mjs crates/tc-ui/app/recovery.test.mjs
+      - run: node --test parity/tc4-baseline/baseline.test.mjs parity/tc4-baseline/mock-server/server.test.mjs parity/app/state.test.mjs parity/app/observe.test.mjs parity/app/env-rust.test.mjs parity/view-gallery/view-gallery.test.mjs crates/tc-ui/app/recovery.test.mjs parity/app/journeys/*.test.mjs
