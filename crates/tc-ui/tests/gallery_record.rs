@@ -16,6 +16,10 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
+#[path = "support/plan_rulings.rs"]
+mod plan_rulings;
+use plan_rulings::plan_rulings;
+
 fn gallery_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../parity/ds-gallery")
 }
@@ -70,21 +74,18 @@ fn declares(residual: Option<&Value>, layer: &str) -> bool {
         .is_some_and(|layers| layers.iter().any(|l| l.as_str() == Some(layer)))
 }
 
-/// The lines of docs/PLAN.md under "Where the rebuild differs from tC4 4.0 on purpose", the
-/// section `screen_record` reads its rulings from.
-fn plan_differences() -> String {
+/// The rulings docs/PLAN.md lists among the differences from tC4 on purpose, read as
+/// `screen_record` reads them for its masks.
+fn plan_differences() -> BTreeSet<String> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../docs/PLAN.md");
     let plan = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
-    let mut lines = plan.lines();
-    lines
-        .by_ref()
-        .find(|l| l.starts_with("### Where the rebuild differs from tC4 4.0 on purpose"))
-        .expect("docs/PLAN.md lists the differences from tC4 on purpose");
-    lines
-        .take_while(|l| !l.starts_with('#'))
-        .collect::<Vec<_>>()
-        .join("\n")
+    let rulings = plan_rulings(&plan);
+    assert!(
+        !rulings.is_empty(),
+        "docs/PLAN.md lists no differences from tC4 on purpose"
+    );
+    rulings
 }
 
 /// One side of a DOM line pair, trimmed; a side with no line reads `(none)`.
@@ -94,13 +95,13 @@ fn side(v: &Value) -> String {
 }
 
 /// Everything wrong with the residual of case `id`, given its row in diff-report.json
-/// (`pixels`), its row in dom-report.json (`dom`) and PLAN's list of differences (`plan`).
+/// (`pixels`), its row in dom-report.json (`dom`) and the rulings PLAN lists (`rulings`).
 fn residual_problems(
     id: &str,
     residual: &Value,
     pixels: &Value,
     dom: &Value,
-    plan: &str,
+    rulings: &BTreeSet<String>,
 ) -> Vec<String> {
     let mut out = Vec::new();
     if residual["why"].as_str().is_none_or(|w| w.trim().is_empty()) {
@@ -108,7 +109,7 @@ fn residual_problems(
     }
     match residual["ruling"].as_str() {
         None => out.push(format!("{id}: the residual names no ruling")),
-        Some(ruling) if !plan.contains(&format!("({ruling})")) => out.push(format!(
+        Some(ruling) if !rulings.contains(ruling) => out.push(format!(
             "{id}: docs/PLAN.md does not list ({ruling}) among the differences from tC4"
         )),
         Some(_) => {}
@@ -277,7 +278,7 @@ fn every_declared_difference_names_exactly_what_differs() {
             .collect()
     };
     let (pixels, dom) = (row_of("diff-report.json"), row_of("dom-report.json"));
-    let plan = plan_differences();
+    let rulings = plan_differences();
     let mut problems = Vec::new();
     for (id, residual) in residuals() {
         if !spec.contains_key(&id) {
@@ -291,7 +292,7 @@ fn every_declared_difference_names_exactly_what_differs() {
             &residual,
             pixels.get(&id).unwrap_or(&Value::Null),
             dom.get(&id).unwrap_or(&Value::Null),
-            &plan,
+            &rulings,
         ));
     }
     assert!(problems.is_empty(), "{problems:#?}");
@@ -313,9 +314,12 @@ fn a_declared_difference_that_is_gone_or_wider_fails() {
         "errors": [],
         "lines": [{ "line": 15, "tc4": "      \"Chosen: EST\"", "port": "      \"Chosen: none\"" }],
     });
-    let plan = "- A Select that turns disabled takes no choice (#552).";
-    let problems =
-        |r: &Value, p: &Value, d: &Value, plan: &str| residual_problems("Select/x", r, p, d, plan);
+    let plan = &plan_rulings(&format!(
+        "{DIFFERENCES}\n\n- A Select that turns disabled takes no choice (#552).\n"
+    ));
+    let problems = |r: &Value, p: &Value, d: &Value, plan: &BTreeSet<String>| {
+        residual_problems("Select/x", r, p, d, plan)
+    };
     assert_eq!(
         problems(&residual, &pixels, &dom, plan),
         Vec::<String>::new()
@@ -337,7 +341,8 @@ fn a_declared_difference_that_is_gone_or_wider_fails() {
     assert!(!problems(&residual, &pixels, &wider, plan).is_empty());
 
     // A ruling PLAN does not list, a residual with no why, and an undeclared layer.
-    assert!(!problems(&residual, &pixels, &dom, "- (#553)").is_empty());
+    let other = &plan_rulings(&format!("{DIFFERENCES}\n\n- Something else (#553).\n"));
+    assert!(!problems(&residual, &pixels, &dom, other).is_empty());
     let mut no_why = residual.clone();
     no_why["why"] = json!(" ");
     assert!(!problems(&no_why, &pixels, &dom, plan).is_empty());
@@ -347,6 +352,31 @@ fn a_declared_difference_that_is_gone_or_wider_fails() {
     let mut unknown_layer = residual.clone();
     unknown_layer["layers"] = json!(["pixels", "dom", "dom"]);
     assert!(!problems(&unknown_layer, &pixels, &dom, plan).is_empty());
+}
+
+/// The heading of the section of docs/PLAN.md that lists the differences from tC4 on purpose.
+const DIFFERENCES: &str = "### Where the rebuild differs from tC4 4.0 on purpose";
+
+#[test]
+fn both_gates_read_an_owner_answer_and_a_tc4_issue_as_a_ruling() {
+    let plan = format!(
+        "## The goal\n\nNot a ruling here (Q9).\n\n{DIFFERENCES}\n\n\
+         - A check conflict is shown (Q1, AGENTS.md).\n\
+         - The aligner keeps verse order (Q15).\n\
+         - Urdu (Devanagari) reads left to right (#701).\n\
+         - A disabled Select takes no choice (#552, a declared difference).\n\
+         - Mentioned in passing: issue #12, Q13 and (see #14 below).\n\n\
+         ## Definition of done\n\nNot a ruling either (#99).\n"
+    );
+    let found: Vec<String> = plan_rulings(&plan).into_iter().collect();
+    assert_eq!(found, ["#552", "#701", "Q1", "Q15"]);
+    let real = plan_differences();
+    for ruling in ["Q2", "Q3", "#549", "#552", "#701"] {
+        assert!(
+            real.contains(ruling),
+            "docs/PLAN.md does not list {ruling}: {real:?}"
+        );
+    }
 }
 
 #[test]

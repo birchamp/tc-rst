@@ -11,6 +11,9 @@
 #![cfg(not(target_arch = "wasm32"))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+#[path = "support/plan_rulings.rs"]
+mod plan_rulings;
+
 mod screen_record {
     pub mod behaviour;
     pub mod design;
