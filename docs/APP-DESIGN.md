@@ -884,10 +884,10 @@ answered Q-2 with (a), so the shell sends the report and the server only compose
 ```rust
 // crates/tc-app/src/backend/mod.rs
 pub trait ProjectStore: Send + Sync + 'static {
-    /// Folders with ingredients/tc/project.json: the projects, and each folder that holds one
-    /// but cannot be listed, with its reason (C0: `Listing { projects, unusable }`, so no
-    /// folder that holds someone's work is left off Home, AD12; a declared difference from
-    /// tC4, §4.5). No lock, no fold.
+    /// The projects, and each folder that holds a project's files (project.json, metadata.json,
+    /// ingredients/ or .tc/) but cannot be opened as one, with its reason (C0: `Listing
+    /// { projects, unusable }`, so no folder that holds someone's work is left off Home, AD12;
+    /// a declared difference from tC4, §4.5). No lock, no fold.
     fn list(&self) -> Result<Listing, StoreError>;
     /// Derived files only: metadata.json, .tc/sync.json, tc/conflicts.json, the names of the
     /// pack and pending files, materialized.json's size and mtime. No lock, no fold.
@@ -1051,9 +1051,11 @@ no submit asked for, such as S2's outside edits and E1a's intakes, must not wait
 the events thread passes it on as `StoreCause::System` as soon as no submit is in flight or the
 relay has settled a reply the actor gave after it, so it waits at most for the actor's next reply;
 E1a maps an intake to `Intake` once tc-store's `Committed` names its devices); a close and a drop of
-tc-store's handle, which wait for the actor, on a thread of their own; a listing that reports a
-folder it cannot list instead of hiding it and leaves out tc-store's staging folders; and an open
-by the exact name the listing holds. Every fold step S1 makes after an open is a command's or a
+tc-store's handle, which wait for the actor, on a thread of their own; a listing that reads the
+projects folder itself, because tc-store's `Store::list` keeps only folders with a `project.json`,
+reports every folder that holds a project's files but cannot be opened, a link to one included,
+instead of hiding it, and leaves out tc-store's staging folders; and an open by the exact name the
+listing holds. Every fold step S1 makes after an open is a command's or a
 second writer's, and both send `Committed`, so `every_fold_step_reaches_the_seam` (consecutive
 seqs ending at the newest snapshot) stands in for the frontier check. Measurements:
 `docs/evidence/store-adapter-2026-10-19.md`.)*
@@ -1241,11 +1243,24 @@ B1b).
 
 - `ProjectRegistry` lists `<projects>/` through `ProjectStore::list` and orders cards by
   `lastUsed`. Each card comes from `peek` plus a summary file.
-- A folder whose `ingredients/tc/project.json` cannot be read as a project (C0's
-  `Listing.unusable`) is shown on Home with its name and the reason, and it opens nothing.
-  Declared difference from tC4, which never lists a folder with broken metadata
-  (`tC4:src/data/httpStore.ts:345-347`): a folder that holds someone's work never disappears
-  from Home without a word (C0, B2).
+- A folder that holds a project's files but cannot be opened as one (C0's `Listing.unusable`)
+  is shown on Home with its name and the reason, and it opens nothing: a `project.json` that
+  tc-store's open refuses or cannot read; a `project.json` that is missing while the folder
+  holds `metadata.json`, `ingredients/` or `.tc/` (a project that lost the file, whose journal
+  and drafts are still there, or a translationCore 4.0 project copied in, which Import brings
+  in, F1); a name tc-api cannot carry; and a link to such a folder elsewhere, which tc-store
+  never reads as project data (its checks of the lock, the drive and the cloud client would be
+  about the link), so the reason asks the person to move the folder in. A file, an empty folder
+  and a folder with none of those files hold no one's work and are not listed; tc-store's
+  staging folders are left out. Declared differences from tC4, which lists every local
+  repository whose `metadata.json` has a project flavor and nothing else
+  (`tC4:src/data/httpStore.ts:345-351`): a folder with broken or missing metadata, which tC4
+  hides, is shown with its reason, so a folder that holds someone's work never disappears from
+  Home without a word (C0, B2); and a translationCore 4.0 project, which tC4 opens, is shown
+  as unusable until Import brings it in, because this app opens only projects in its own format
+  (STORAGE §3.5, §13). When S2 restores a missing `project.json` from the HEAD tree at open
+  (STORAGE §3.5), the listing must count such a folder a project, as the open does:
+  `a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it` fails until it does.
 - A summary holds per-book drafted and total verses (tC4's `draftPercent`: a span counts every
   verse it covers; `""` and `___` are undrafted; `tC4:src/data/usfm/indexer.ts:216-228`),
   conflict counts by book and kind, the team's labels, OBS story percentages and the in-progress
@@ -2705,7 +2720,7 @@ cut from the integration branch `app` after unit C had merged, like every other 
 
 | Unit | Scope | Depends on | Waits for | Tests | Done when |
 |---|---|---|---|---|---|
-| C0 ◆ Store adapter *(A-5)* | `StoreBackend` over S1's `ProjectActor` (§4.2): thin if S1 provides R4, R5, R14 and R16; otherwise the command thread, the published snapshot, events from each `Delta`, its own `seq`, the frontier check *(C0: built thin, because S1 provides R4, R5, R14, R16, the O(1) snapshot and each command's `Delta`; no fallback and no frontier check (every fold step S1 makes after an open sends `Committed`, which `every_fold_step_reaches_the_seam` proves). D1: a command carries its `Origin` and `StoreCause::Command { origin }` reaches the pump, so a person's own save is `LocalSave { request }` (AD37); B1b's plan gave it to C2, but only the adapter can join the store's event to its command. D2: the listing is `Listing { projects, unusable }` and an open needs the exact listed name; staging folders are left out. A folder is a project in the listing exactly when tc-store's open would not refuse it as not a project: the listing reads `project.json`'s four fields as tc-store does, and every other folder with a `project.json` is unusable with its reason. Declared difference from tC4, which never lists a folder with broken metadata (`tC4:src/data/httpStore.ts:345-347`): Home shows an unusable folder with its reason (B2), so no one's work is hidden. D3: two unit read-only reasons in tc-api, `OpenOnAnotherComputer` and `FolderNotWritable` (§3.4). D4: `test/saveVerse` (§5.8) runs the contract cases that go through tc-app until C2. D5: three contract cases run another way than the table said (§4.2's note). D6: `AppDeps.store` is `StoreChoice` and `App::start` builds the store (§4.1). D7 *(added after the first verification)*: a batch with changes that no seam submit asked for (S2's outside edits, E1a's intakes) goes on as `StoreCause::System` as soon as it cannot be a submit's, so it holds the project's events back at most until the actor's next reply (§4.2's note); and since C0 makes tc-app depend on tc-store, CI's two clippy steps without test hooks build tc-store too and are among the gates (AGENTS.md). Evidence: `docs/evidence/store-adapter-2026-10-19.md`)* | S1, B1b | R4, R5, R14, R16 (fallback: built here); an O(1) snapshot and each command's `Delta` (no fallback: phase 2 waits) | every contract case of §4.2 that runs on the store, including `reads_never_wait_behind_a_long_command` | the contract suite passes on the store through C0, and the adversarial review's findings are fixed |
+| C0 ◆ Store adapter *(A-5)* | `StoreBackend` over S1's `ProjectActor` (§4.2): thin if S1 provides R4, R5, R14 and R16; otherwise the command thread, the published snapshot, events from each `Delta`, its own `seq`, the frontier check *(C0: built thin, because S1 provides R4, R5, R14, R16, the O(1) snapshot and each command's `Delta`; no fallback and no frontier check (every fold step S1 makes after an open sends `Committed`, which `every_fold_step_reaches_the_seam` proves). D1: a command carries its `Origin` and `StoreCause::Command { origin }` reaches the pump, so a person's own save is `LocalSave { request }` (AD37); B1b's plan gave it to C2, but only the adapter can join the store's event to its command. D2: the listing is `Listing { projects, unusable }` and an open needs the exact listed name; staging folders are left out. A folder is a project in the listing exactly when tc-store's open would not refuse it as not a project: the listing reads `project.json`'s four fields as tc-store does. The listing reads the projects folder itself, not tc-store's `Store::list`, which keeps only folders with a `project.json`: every other folder that holds a project's files (`project.json`, `metadata.json`, `ingredients/` or `.tc/`), and every link to a folder that does, is unusable with its reason, and a file or a folder with none of them is not listed *(after the second verification: a folder that had lost only its `project.json`, a translationCore 4.0 project copied in and a link to a project were at first left off without a word)*. Declared differences from tC4 (§4.5): Home shows an unusable folder with its reason (B2), so no one's work is hidden, and a translationCore 4.0 project is unusable until Import brings it in. D3: two unit read-only reasons in tc-api, `OpenOnAnotherComputer` and `FolderNotWritable` (§3.4). D4: `test/saveVerse` (§5.8) runs the contract cases that go through tc-app until C2. D5: three contract cases run another way than the table said (§4.2's note). D6: `AppDeps.store` is `StoreChoice` and `App::start` builds the store (§4.1). D7 *(added after the first verification)*: a batch with changes that no seam submit asked for (S2's outside edits, E1a's intakes) goes on as `StoreCause::System` as soon as it cannot be a submit's, so it holds the project's events back at most until the actor's next reply (§4.2's note); and since C0 makes tc-app depend on tc-store, CI's two clippy steps without test hooks build tc-store too and are among the gates (AGENTS.md). Evidence: `docs/evidence/store-adapter-2026-10-19.md`)* | S1, B1b | R4, R5, R14, R16 (fallback: built here); an O(1) snapshot and each command's `Delta` (no fallback: phase 2 waits) | every contract case of §4.2 that runs on the store, including `reads_never_wait_behind_a_long_command` | the contract suite passes on the store through C0, and the adversarial review's findings are fixed |
 | C1a Move the app onto the store *(A-17)* | app data on `atomic_write`; persisted summaries; parity projects on disk through S1's create and sealing API; the parity environment switched to the store | C0 | — | `home_costs_projects_not_history` on the store *(A-25)*; J15 on real `FaultFs` delays | every phase-1 screen captured so far is recaptured on `store` with the same report; `MemoryBackend` is deleted when the last B unit has moved |
 | C1b ◆ Offers and read-only modes *(A-3, A-9, A-10)* | draft offers at open: `drafts.json`, buffered entries and the shell's mirror, merged and filtered (§6.6); unverifiable drafts as text; read-only banners; `SecondWriter`; the copy offer, which carries the folder's drafts to the copy | C1a | R20 (fallback: "Copy text"); R7's copy command (fallback: the banner without the copy offer) | `relaunch_offers_buffered_and_mirrored_entries`; `draft_with_unverifiable_token_is_offered_as_text`; crash tests through `test/crash` (end the server while typing, relaunch, the text is offered, Keep makes a conflict when the verse changed); the copy carries drafts (with R7) | the tests pass and the adversarial review's findings are fixed |
 | C2 ◆ Translate saves | `saveVerse`, `saveLayout`, `saveSection` (on Save only), `draft`; Retry; `NotWritten`; `SavedWithDiskError`; Resume from saves and drafts | C1b, B4b | R6 (fallback: the envelope); R22 (fallback: saves that waited are counted) | J2; J6 edit part; `save_verse_touches_one_verse`; "Saved" never before B3 (held save); `draft_survives_panic`; `reload_anywhere_stores_the_last_text_once` on real saves *(A-2)* | J2 green |

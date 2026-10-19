@@ -16,7 +16,11 @@
 //!   as soon as it cannot be a submit's (`Origins::take`).
 //! - **Nothing blocks a tokio worker.** tc-store's close and drop wait for the actor's
 //!   background work and its join; both run on a thread of their own.
-//! - **The listing hides no folder** and opens only the exact names it lists.
+//! - **The listing hides no folder that holds a project's files.** It reads the projects
+//!   folder itself, where tc-store's `Store::list` keeps only folders with a `project.json`:
+//!   a folder that has lost that file, a translationCore 4.0 project copied in, and a link to
+//!   a project elsewhere are listed as unusable with the reason. It opens only the exact
+//!   names it lists.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -44,12 +48,42 @@ use super::{
 use crate::jobs::ProgressSink;
 
 /// The prefix of the staging folders tc-store builds a project in before it renames it into
-/// place (tc-store's private `STAGING`, `store.rs`). Such a folder holds a `project.json`
-/// while the create still writes it, and `Store::list` does not leave it out.
+/// place (tc-store's private `STAGING`, `store.rs`). Such a folder holds a project's files
+/// while a create, copy, join or import still writes them; tc-store's start removes those a
+/// crash left (STORAGE §6.4 N1).
 const STAGING: &str = ".staging-";
 
 /// `ingredients/tc/project.json`, relative to a project folder (STORAGE §3.5).
-const PROJECT_JSON: &str = "ingredients/tc/project.json";
+const PROJECT_JSON: &str = tc_store::layout::PROJECT_JSON;
+
+/// What a folder holds of a project when its `project.json` is gone: every Scripture Burrito
+/// has `metadata.json` and `ingredients/` (a translationCore 4.0 project has nothing more),
+/// and `.tc/` holds this app's saves not yet sealed and its unsaved drafts (STORAGE §3.6).
+/// A folder with none of them holds no one's work, and the listing leaves it out.
+const PROJECT_PARTS: [&str; 3] = [
+    tc_store::layout::METADATA,
+    tc_store::layout::INGREDIENTS,
+    tc_store::layout::TC,
+];
+
+/// Why a folder that holds a project's files but no `project.json` is unusable.
+const NO_PROJECT_JSON: &str = "ingredients/tc/project.json is missing: this may be a \
+    translationCore 4.0 project to import, or a project whose project.json was deleted";
+
+/// Why a link in the projects folder is unusable. tc-store reads no link as project data, and
+/// its checks of a folder (the lock, the drive, the cloud client) would be about the link,
+/// not the folder the work is in.
+const LINKED: &str = "this is a link to a folder elsewhere: translationCore opens only \
+    folders inside the projects folder, so move the folder here to open it";
+
+/// Whether a failed read found nothing there: no file, or a path through something that is
+/// not a folder (a link to a file).
+fn absent(error: &std::io::Error) -> bool {
+    matches!(
+        error.kind(),
+        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+    )
+}
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     // Every change made under these locks is a store of a whole value.
@@ -161,11 +195,32 @@ impl StoreBackend {
         }
     }
 
-    /// One listed folder, read as tc-store will read it at an open.
-    fn entry(&self, path: &Path) -> Option<Result<ProjectEntry, UnusableFolder>> {
-        let raw = path.file_name()?;
-        let lossy = raw.to_string_lossy().into_owned();
-        if lossy.starts_with(STAGING) {
+    /// One entry of the projects folder, read as tc-store will read it at an open: a project;
+    /// a folder that holds a project's files but cannot be opened, with the reason; or `None`
+    /// for an entry that holds no project (a file, a folder with none of a project's files, a
+    /// staging folder a create, copy, join or import is still writing).
+    fn entry(
+        &self,
+        entry: &tc_store::vfs::DirEntry,
+    ) -> Option<Result<ProjectEntry, UnusableFolder>> {
+        use tc_store::vfs::EntryKind;
+        let lossy = entry.name.to_string_lossy().into_owned();
+        match entry.kind {
+            EntryKind::File => return None,
+            EntryKind::Dir if lossy.starts_with(STAGING) => return None,
+            EntryKind::Dir | EntryKind::Other => {}
+        }
+        let path = self.projects.join(&entry.name);
+        let read = self.vfs.read(&path.join(PROJECT_JSON));
+        let holds_a_project = match &read {
+            Err(e) if absent(e) => PROJECT_PARTS
+                .iter()
+                .any(|part| self.vfs.metadata(&path.join(part)).is_ok()),
+            // A file that is there, or a folder that cannot be looked into: either may hold
+            // someone's work.
+            Ok(_) | Err(_) => true,
+        };
+        if !holds_a_project {
             return None;
         }
         let unusable = |reason: String| {
@@ -174,16 +229,19 @@ impl StoreBackend {
                 reason,
             }))
         };
-        let Some(name) = raw.to_str() else {
+        if entry.kind == EntryKind::Other {
+            return unusable(LINKED.to_owned());
+        }
+        let Some(name) = entry.name.to_str() else {
             return unusable("the folder's name is not valid Unicode".to_owned());
         };
         let folder = match ProjectRef::parse(name) {
             Ok(folder) => folder,
             Err(e) => return unusable(e.to_string()),
         };
-        let file = path.join(PROJECT_JSON);
-        let bytes = match self.vfs.read(&file) {
+        let bytes = match read {
             Ok(bytes) => bytes,
+            Err(e) if absent(&e) => return unusable(NO_PROJECT_JSON.to_owned()),
             Err(e) => return unusable(format!("{PROJECT_JSON} cannot be read: {e}")),
         };
         match project_json(&bytes) {
@@ -223,10 +281,16 @@ fn project_json(bytes: &[u8]) -> Result<(tc_journal::ProjectId, ProjectKind), St
 }
 
 impl ProjectStore for StoreBackend {
+    /// Reads the projects folder itself: tc-store's `Store::list` keeps only the folders with a
+    /// `project.json`, and would hide one that holds someone's work without it.
     fn list(&self) -> Result<Listing, StoreError> {
+        let entries = self
+            .vfs
+            .read_dir(&self.projects)
+            .map_err(|e| store_error(format!("{}: {e}", self.projects.display())))?;
         let mut listing = Listing::default();
-        for path in self.store.list().map_err(store_error)? {
-            match self.entry(&path) {
+        for entry in &entries {
+            match self.entry(entry) {
                 Some(Ok(entry)) => listing.projects.push(entry),
                 Some(Err(unusable)) => listing.unusable.push(unusable),
                 None => {}

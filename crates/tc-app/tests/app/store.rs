@@ -170,6 +170,46 @@ async fn a_save_through_the_app_survives_a_restart() {
     );
 }
 
+/// A link in the projects folder to a project elsewhere is listed as unusable with its reason,
+/// never hidden and never opened: tc-store reads no link as project data, and its checks of a
+/// folder would be about the link. A link to a file, or to nothing, holds no project.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_link_to_a_project_elsewhere_is_listed_as_unusable() {
+    use std::os::unix::fs::symlink;
+    let disk = OnDisk::new();
+    let elsewhere = disk.dir.path().join("elsewhere");
+    std::fs::create_dir(&elsewhere).unwrap();
+    let target = make_project(&disk.app_data(), &elsewhere, "titus_elsewhere");
+    symlink(&target, disk.projects.join("linked")).unwrap();
+    let file = disk.dir.path().join("a_file.txt");
+    std::fs::write(&file, b"x").unwrap();
+    symlink(&file, disk.projects.join("link_to_a_file")).unwrap();
+    symlink(
+        disk.dir.path().join("nothing"),
+        disk.projects.join("dangling"),
+    )
+    .unwrap();
+    let t = disk.start().await;
+
+    let store = t.app.sessions().store();
+    let listing = store.list().unwrap();
+    assert!(listing.projects.is_empty(), "{:?}", listing.projects);
+    let unusable: Vec<&str> = listing.unusable.iter().map(|u| u.name.as_str()).collect();
+    assert_eq!(unusable, ["linked"]);
+    assert!(
+        listing.unusable[0]
+            .reason
+            .contains("link to a folder elsewhere"),
+        "{}",
+        listing.unusable[0].reason
+    );
+    assert!(matches!(
+        store.open(&folder("linked"), open_progress()),
+        Err(tc_app::backend::OpenFailure::NotAProject)
+    ));
+}
+
 #[tokio::test]
 async fn the_app_starts_when_the_projects_folder_holds_no_project() {
     let disk = OnDisk::new();

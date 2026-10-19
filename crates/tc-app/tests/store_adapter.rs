@@ -370,18 +370,30 @@ async fn close_keeps_every_save_and_lets_go_of_the_lock() {
 
 const STAGING_FOLDER: &str = ".staging-create-0123456789abcdef";
 
-/// AD12: no folder that holds a project is left off Home. A folder whose `project.json` does
-/// not read, or whose name tc-api cannot carry, is listed as unusable with its reason; a
-/// staging folder a create is still writing is no project; a folder with no `project.json`
+/// Copies the files of a folder on this computer into the world's file system at `to`.
+fn put_tree(world: &StoreWorld, from: &Path, to: &Path) {
+    for entry in std::fs::read_dir(from).unwrap() {
+        let path = entry.unwrap().path();
+        let target = to.join(path.file_name().unwrap());
+        if path.is_dir() {
+            put_tree(world, &path, &target);
+        } else {
+            world.fs.put(&target, &std::fs::read(&path).unwrap(), None);
+        }
+    }
+}
+
+/// AD12: no folder that holds someone's work is left off Home. A folder whose `project.json`
+/// does not read, is missing while the folder holds a project's other files (its journal,
+/// its books, its unsaved drafts; a translationCore 4.0 project copied in), or whose name
+/// tc-api cannot carry, is listed as unusable with its reason; a staging folder a create is
+/// still writing is no project; a file, an empty folder or one with none of a project's files
 /// is neither.
 #[tokio::test]
 async fn list_names_each_project_and_reports_unusable_folders() {
     let world = store_world();
-    let project_json = |name: &str| {
-        Path::new(PROJECTS)
-            .join(name)
-            .join("ingredients/tc/project.json")
-    };
+    let projects = Path::new(PROJECTS);
+    let project_json = |name: &str| projects.join(name).join("ingredients/tc/project.json");
     let valid = world
         .fs
         .peek(&project_json("sample_burrito"))
@@ -399,9 +411,31 @@ async fn list_names_each_project_and_reports_unusable_folders() {
         &serde_json::to_vec(&two_fields).unwrap(),
         None,
     );
+    // A whole project, its journal and its books, that lost only its project.json.
+    for (rel, bytes) in store_world::files(&world.fs, &world.folder(&world.bible)) {
+        if rel != "ingredients/tc/project.json" {
+            world
+                .fs
+                .put(&projects.join("lost_project_json").join(rel), &bytes, None);
+        }
+    }
+    // A translationCore 4.0 project copied in: metadata.json and ingredients/, no tc/.
+    put_tree(
+        &world,
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/tc4/sample-burrito"),
+        &projects.join("tc4_sample"),
+    );
+    // Nothing left but this app's local state: unsaved text.
     world
         .fs
-        .put(&Path::new(PROJECTS).join("notes/readme.txt"), b"x", None);
+        .put(&projects.join("drafts_only/.tc/drafts.json"), b"[]", None);
+    // A project.json another program holds open.
+    world.fs.put(&project_json("held"), &valid, None);
+    world.fs.set_unreadable(&project_json("held"), true);
+    // No one's work: notes, a stray file, an empty folder.
+    world.fs.put(&projects.join("notes/readme.txt"), b"x", None);
+    world.fs.put(&projects.join("stray.txt"), b"x", None);
+    world.fs.create_dir(&projects.join("empty")).unwrap();
 
     let listing = world.backend.list().unwrap();
     let names: Vec<&str> = listing.projects.iter().map(|e| e.folder.as_str()).collect();
@@ -418,99 +452,158 @@ async fn list_names_each_project_and_reports_unusable_folders() {
         let handle = world.open(&entry.folder);
         assert_eq!(handle.facts().id, entry.id, "{}", entry.folder);
     }
-    let unusable: Vec<&str> = listing.unusable.iter().map(|u| u.name.as_str()).collect();
-    assert_eq!(unusable, ["...", "broken", "two_fields"]);
-    assert!(listing.unusable.iter().all(|u| !u.reason.is_empty()));
-    assert!(matches!(
-        world.backend.open(&folder("two_fields"), progress()),
-        Err(OpenFailure::NotAProject)
-    ));
+    let reasons: BTreeMap<&str, &str> = listing
+        .unusable
+        .iter()
+        .map(|u| (u.name.as_str(), u.reason.as_str()))
+        .collect();
+    assert_eq!(
+        reasons.keys().copied().collect::<Vec<_>>(),
+        [
+            "...",
+            "broken",
+            "drafts_only",
+            "held",
+            "lost_project_json",
+            "tc4_sample",
+            "two_fields"
+        ]
+    );
+    assert!(reasons.values().all(|reason| !reason.is_empty()));
+    for name in ["drafts_only", "lost_project_json", "tc4_sample"] {
+        assert!(
+            reasons[name].contains("project.json is missing"),
+            "{name}: {}",
+            reasons[name]
+        );
+    }
+    assert!(
+        reasons["tc4_sample"].contains("translationCore 4.0"),
+        "{}",
+        reasons["tc4_sample"]
+    );
+    assert!(
+        reasons["held"].contains("cannot be read"),
+        "{}",
+        reasons["held"]
+    );
+    for name in [
+        "two_fields",
+        "lost_project_json",
+        "tc4_sample",
+        "drafts_only",
+    ] {
+        assert!(
+            matches!(
+                world.backend.open(&folder(name), progress()),
+                Err(OpenFailure::NotAProject)
+            ),
+            "{name}"
+        );
+    }
+}
+
+/// Rewrites the fields of the JSON file at `file` in the world's files.
+fn edit_fields(
+    world: &StoreWorld,
+    file: &Path,
+    edit: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>),
+) {
+    let mut fields: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&world.fs.peek(file).unwrap()).unwrap();
+    edit(&mut fields);
+    world
+        .fs
+        .put(file, &serde_json::to_vec(&fields).unwrap(), None);
 }
 
 /// The listing reads `project.json` as tc-store's open reads it: over every way the file can
-/// be wrong or merely unusual, a folder is a project in the listing exactly when the open does
-/// not refuse it as not a project, and unusable with a reason otherwise. tc-store's reader is
-/// private to it, so this holds the adapter's copy to it.
+/// be wrong, missing or merely unusual, a folder is a project in the listing exactly when the
+/// open does not refuse it as not a project, and unusable with a reason otherwise. tc-store's
+/// reader is private to it, so this holds the adapter's copy to it.
 #[tokio::test]
 async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
-    type Edit = fn(&mut serde_json::Map<String, serde_json::Value>);
-    let cases: [(&str, Edit, bool); 10] = [
-        ("as written", |_| {}, true),
+    type Change = fn(&StoreWorld, &Path);
+    let cases: [(&str, Change, bool); 11] = [
+        ("as written", |_, _| {}, true),
         (
             "a field more",
-            |f| {
-                f.insert("note".into(), "kept".into());
+            |w, f| {
+                edit_fields(w, f, |m| {
+                    m.insert("note".into(), "kept".into());
+                });
             },
             true,
         ),
         (
             "no schemaVersion",
-            |f| {
-                f.remove("schemaVersion");
-            },
+            |w, f| edit_fields(w, f, |m| drop(m.remove("schemaVersion"))),
             false,
         ),
         (
             "no created",
-            |f| {
-                f.remove("created");
-            },
+            |w, f| edit_fields(w, f, |m| drop(m.remove("created"))),
             false,
         ),
         (
             "no projectId",
-            |f| {
-                f.remove("projectId");
-            },
+            |w, f| edit_fields(w, f, |m| drop(m.remove("projectId"))),
             false,
         ),
         (
             "schemaVersion as text",
-            |f| {
-                f.insert("schemaVersion".into(), "1".into());
+            |w, f| {
+                edit_fields(w, f, |m| {
+                    m.insert("schemaVersion".into(), "1".into());
+                });
             },
             false,
         ),
         (
             "a negative schemaVersion",
-            |f| {
-                f.insert("schemaVersion".into(), (-1).into());
+            |w, f| {
+                edit_fields(w, f, |m| {
+                    m.insert("schemaVersion".into(), (-1).into());
+                });
             },
             false,
         ),
         (
             "created as a number",
-            |f| {
-                f.insert("created".into(), 5.into());
+            |w, f| {
+                edit_fields(w, f, |m| {
+                    m.insert("created".into(), 5.into());
+                });
             },
             false,
         ),
         (
             "an unknown kind",
-            |f| {
-                f.insert("kind".into(), "psalter".into());
+            |w, f| {
+                edit_fields(w, f, |m| {
+                    m.insert("kind".into(), "psalter".into());
+                });
             },
             false,
         ),
         (
             "not a project id",
-            |f| {
-                f.insert("projectId".into(), "not an id".into());
+            |w, f| {
+                edit_fields(w, f, |m| {
+                    m.insert("projectId".into(), "not an id".into());
+                });
             },
             false,
         ),
+        // The folder keeps its journal, its books and its metadata.json.
+        ("deleted", |w, f| w.fs.delete(f).unwrap(), false),
     ];
-    for (case, edit, project) in cases {
+    for (case, change, project) in cases {
         let world = store_world();
         let file = world
             .folder(&world.bible)
             .join("ingredients/tc/project.json");
-        let mut fields: serde_json::Map<String, serde_json::Value> =
-            serde_json::from_slice(&world.fs.peek(&file).unwrap()).unwrap();
-        edit(&mut fields);
-        world
-            .fs
-            .put(&file, &serde_json::to_vec(&fields).unwrap(), None);
+        change(&world, &file);
 
         let listing = world.backend.list().unwrap();
         let listed = listing.projects.iter().any(|e| e.folder == world.bible);

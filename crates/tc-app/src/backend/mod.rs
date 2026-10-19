@@ -509,9 +509,9 @@ pub struct ProjectEntry {
 }
 
 /// What the projects folder holds: the projects, and every folder that holds a project's
-/// `ingredients/tc/project.json` but cannot be listed as one. Home shows the second kind with
-/// its reason, so no folder that holds someone's work is left off it (AD12, B2): a declared
-/// difference from tC4, whose listing hides such a folder (APP-DESIGN §4.5).
+/// files but cannot be opened as one. Home shows the second kind with its reason, so no folder
+/// that holds someone's work is left off it (AD12, B2): a declared difference from tC4, whose
+/// listing hides such a folder (APP-DESIGN §4.5).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Listing {
     /// By folder name.
@@ -520,8 +520,10 @@ pub struct Listing {
     pub unusable: Vec<UnusableFolder>,
 }
 
-/// A folder with `ingredients/tc/project.json` that cannot be listed as a project: a name
-/// tc-api cannot carry, or a `project.json` the store's open would refuse.
+/// A folder that holds a project's files (`ingredients/tc/project.json`, `metadata.json`,
+/// `ingredients/` or `.tc/`) but cannot be opened as a project: a `project.json` the store's
+/// open would refuse or cannot read, one that is missing beside the project's other files, a
+/// name tc-api cannot carry, or a link to such a folder elsewhere.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnusableFolder {
     /// The folder's name, with any byte that is not UTF-8 replaced.
@@ -566,8 +568,8 @@ pub enum CheckpointReason {
 
 /// The projects of this computer.
 pub trait ProjectStore: Send + Sync + 'static {
-    /// The projects this store holds, and the folders that hold one but cannot be listed.
-    /// No lock, no fold.
+    /// The projects this store holds, and the folders that hold a project's files but cannot
+    /// be opened as one. No lock, no fold.
     fn list(&self) -> Result<Listing, StoreError>;
 
     /// Opens `folder`. Blocking: called on the blocking pool. A second open of a folder whose
