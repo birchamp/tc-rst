@@ -6,10 +6,11 @@
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_DOOR43_FAKE=target/debug/tc-door43-fake \
 //     node --test parity/app/journeys/j11-sign-in.test.mjs
 //
-// Not here, with the unit that takes them: 2 (the share dialog's Change, B9b), 3 (the live leg on
-// qa.door43.org: no network in tests), 6b (tC4's login-check helper: 6 searches for the login
-// itself), 7c's upload half and 7d (they start at Share: B9b, E1b; 7d's refused resume is
-// tc-app's a_kept_token_door43_refuses_is_forgotten_with_a_notice), the share cases (B9b, E1b).
+// Not here: 2 (the share dialog's Change) is in share-open.test.mjs (B9b); with the unit that
+// takes them, 3 (the live leg on qa.door43.org: no network in tests), 6b (tC4's login-check
+// helper: 6 searches for the login itself), 7c's upload half and 7d (they start at the share's
+// run: E1b; 7d's refused resume is tc-app's a_kept_token_door43_refuses_is_forgotten_with_a_notice),
+// the share's run (E1b).
 import assert from 'node:assert/strict';
 import { FAKE_USER } from '../../tc4-baseline/mock-server/fake-door43.mjs';
 import {

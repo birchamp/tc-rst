@@ -336,3 +336,93 @@ fn a_sign_in_never_prints_the_password() {
     assert!(printed.contains("jdoe"));
     assert!(!printed.contains("correct horse"), "{printed}");
 }
+
+/// M6's rules, shared by the dialog and the server (tC4 `openSourceOf`, `openDefaultName`,
+/// `openRepoPathOf`, `repoPathInUse`; `test/openFromDoor43Dialog.test.tsx`).
+mod open_from_door43 {
+    use tc_api::door43::{ProjectName, RepoSource, default_project_name};
+    use tc_api::ids::ProjectRef;
+
+    const HOST: &str = "git.door43.org";
+
+    fn source(input: &str) -> Option<String> {
+        RepoSource::from_input(input, HOST).map(|s| s.to_string())
+    }
+
+    #[test]
+    fn a_repository_is_owner_slash_name_or_a_link_on_the_apps_server() {
+        let want = Some("anna_k/titus-team-draft".to_owned());
+        assert_eq!(source("anna_k/titus-team-draft"), want);
+        assert_eq!(source("  anna_k/titus-team-draft/  "), want);
+        assert_eq!(
+            source("https://git.door43.org/anna_k/titus-team-draft"),
+            want
+        );
+        assert_eq!(
+            source("https://git.door43.org/anna_k/titus-team-draft.git"),
+            want
+        );
+        assert_eq!(
+            source("https://GIT.door43.org/anna_k/titus-team-draft/"),
+            want
+        );
+        for refused in [
+            "",
+            "anna_k",
+            "anna_k/",
+            "/titus",
+            "anna k/titus",
+            "anna_k/titus/src",
+            "https://example.org/anna_k/titus-team-draft",
+            "https://user:pw@git.door43.org/anna_k/titus-team-draft",
+            "https://git.door43.org/anna_k",
+            "https://git.door43.org/anna_k/titus/src/branch/master",
+            "file:///tmp/anna_k/titus",
+            "ftp://git.door43.org/anna_k/titus",
+        ] {
+            assert_eq!(source(refused), None, "{refused:?}");
+        }
+    }
+
+    #[test]
+    fn a_repository_on_a_test_server_is_read_by_its_host_and_port() {
+        let host = "127.0.0.1:4141";
+        let found = RepoSource::from_input("http://127.0.0.1:4141/facilitator-zq/es-419_tit", host);
+        assert_eq!(
+            found.map(|s| s.to_string()).as_deref(),
+            Some("facilitator-zq/es-419_tit")
+        );
+        assert_eq!(
+            RepoSource::from_input("http://127.0.0.1:4142/facilitator-zq/es-419_tit", host),
+            None
+        );
+    }
+
+    #[test]
+    fn the_default_name_is_the_repository_name_with_each_run_of_other_signs_one_hyphen() {
+        assert_eq!(default_project_name("titus-team-draft"), "titus-team-draft");
+        assert_eq!(default_project_name("en_ult.v2"), "en_ult-v2");
+        assert_eq!(default_project_name("..a  b..c.."), "a-b-c");
+        assert_eq!(default_project_name("¿qué?"), "qu");
+        assert_eq!(default_project_name("..."), "");
+    }
+
+    #[test]
+    fn a_project_name_holds_letters_digits_hyphens_and_underscores() {
+        assert_eq!(ProjectName::parse(" titus_2 ").unwrap().as_str(), "titus_2");
+        for refused in ["", "  ", "my project", "a/b", "ñandú", "a.b", "a:b"] {
+            assert!(ProjectName::parse(refused).is_err(), "{refused:?}");
+        }
+    }
+
+    #[test]
+    fn a_name_in_use_is_found_without_letter_case() {
+        let listing = ["Jonah"];
+        assert!(ProjectName::parse("jonah").unwrap().in_use(listing));
+        assert!(!ProjectName::parse("jonah2").unwrap().in_use(listing));
+        assert_eq!(
+            ProjectName::parse("Titus_2").unwrap().folder(),
+            ProjectRef::parse("Titus_2").unwrap()
+        );
+    }
+}

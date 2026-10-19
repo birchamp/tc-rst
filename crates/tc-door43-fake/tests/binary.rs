@@ -10,7 +10,9 @@ use std::time::{Duration, Instant};
 
 use base64::Engine;
 use serde_json::{Value, json};
-use tc_door43_fake::seeded::{PARITY_EMAIL, PARITY_ORGS, PARITY_PASSWORD, PARITY_USER};
+use tc_door43_fake::seeded::{
+    PARITY_EMAIL, PARITY_LANGUAGE, PARITY_ORGS, PARITY_PASSWORD, PARITY_USER,
+};
 
 /// A running binary, with its own temporary folder so a test can see what it leaves.
 struct Running {
@@ -259,9 +261,9 @@ fn the_parity_account_is_the_baselines_fake_user() {
         "{{ username: '{PARITY_USER}', password: '{PARITY_PASSWORD}', email: '{PARITY_EMAIL}' }}"
     );
     assert!(text.contains(&user), "FAKE_USER is not {user}");
-    for (name, full_name, can_create) in PARITY_ORGS {
+    for (name, full_name, can_create, repositories) in PARITY_ORGS {
         let org = format!(
-            "{{ username: '{name}', fullName: '{full_name}', canCreateRepository: {can_create},"
+            "{{ username: '{name}', fullName: '{full_name}', canCreateRepository: {can_create}, repositories: {{ '{PARITY_LANGUAGE}': {repositories} }} }}"
         );
         assert!(text.contains(&org), "FAKE_ORGANIZATIONS lacks {org}");
     }

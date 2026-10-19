@@ -131,7 +131,7 @@
     {
       "id": "q3-where",
       "ruling": "Q3",
-      "why": "The rebuild opens private repositories after sign-in, so its note has no sentence that only public repositories can be opened; a new key replaces openDoor43.where. tC4's note has no test id: the unit that captures these screens sets `rust` to the rebuild's element.",
+      "why": "The rebuild opens private repositories after sign-in, so its note has no sentence that only public repositories can be opened; a new key, openDoor43.whereAny, replaces openDoor43.where. tC4's note has no test id; the rebuild's note starts with the same words, so the one text target finds it on both sides (B9b).",
       "target": {
         "text": "The project opens from"
       },

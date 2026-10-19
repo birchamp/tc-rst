@@ -51,9 +51,10 @@ its control port (the requests Door43 received, faults, held requests, tokens); 
 it with `withApp(body, { door43: true })` and `TC4_DOOR43_FAKE`.
 
 A screen whose dialog the Rust app reaches another way until its unit builds the trigger has a
-`rust` route in `screens.mjs` (A8: `share-signin` opens from the account menu until B9b's
-Share card opens it). `capture-rust.mjs` takes it only for a capture that claims no pixels
-(`screenRoute`): the pixels come the tC4 way, and the unit that captures them deletes the route.
+`rust` route in `screens.mjs` (A8's `share-signin` had one, through the account menu, until
+B9b's Share card reached it the tC4 way and B9b deleted it). `capture-rust.mjs` takes it only
+for a capture that claims no pixels (`screenRoute`): the pixels come the tC4 way, and the unit
+that captures them deletes the route.
 
 ## Gallery cases
 

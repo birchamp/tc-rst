@@ -42,6 +42,7 @@ mod app {
     mod scenario;
     mod seed;
     mod sessions;
+    mod share;
     pub mod state_seed;
     mod store;
     mod store_scenario;

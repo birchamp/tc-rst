@@ -369,6 +369,7 @@ fn field(p: Props) -> AnyView {
         label: p.str("label").map(Signal::from),
         hint: p.str("hint").map(Signal::from),
         error: p.str("error"),
+        live_error: None,
         required: p.flag("required"),
         optional: p.flag("optional"),
         disabled: p.bool("disabled"),

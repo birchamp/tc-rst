@@ -27,6 +27,8 @@ use crate::views::modals::add_project::AddProject;
 use crate::views::modals::feedback::Feedback;
 use crate::views::modals::import::Import;
 use crate::views::modals::new_bible::{NewBible, NewObs};
+use crate::views::modals::open_door43::OpenFromDoor43;
+use crate::views::modals::share::ShareDialog;
 use crate::views::modals::sign_in::ShareSignIn;
 
 /// tC4's `App`: the frame, the top bar, the screen in its boundary, and the dialogs in tC4's
@@ -63,15 +65,19 @@ pub fn App() -> impl IntoView {
                 .flatten()
         })
     };
+    let share_open = {
+        let (dialog, sh) = (ctx.s.layers.dialog.clone(), ctx.s.sh.clone());
+        Memo::new(move |_| dialog.get() == Some(Dialog::Share) && sh.with(Option::is_some))
+    };
     view! {
         <div style=frame.to_style()>
             <TopBar />
             <ViewBoundary />
             {home_dialogs(&ctx.s)}
-            // OpenFromDoor43 (B9b), ProjectSettings, SourceTexts (B9a), GatewayChange,
-            // UpgradeSet (C8), GuidedFix (B5a) mount here, before ShareSignIn, and ShareDialog
-            // (B9b, E1b) after it.
+            // ProjectSettings, SourceTexts (B9a), GatewayChange, UpgradeSet (C8), GuidedFix (B5a)
+            // mount here, before ShareSignIn.
             {move || sign_in_open.get().map(|_| view! { <ShareSignIn /> })}
+            {move || share_open.get().then(|| view! { <ShareDialog /> })}
             {move || feedback_open.get().then(|| view! { <Feedback /> })}
             <InternetDialog />
             // OpenProgress (B3) and the Inspector (late) mount here.
@@ -80,31 +86,35 @@ pub fn App() -> impl IntoView {
     .into_any()
 }
 
-/// Home's dialogs, in tC4's mount order (`tC4:src/App.jsx:138-142`): AddProject, NewBible,
-/// NewObs, AddBook, Import. Each is mounted while `s.modal` names it and its form is set.
+/// Home's dialogs, in tC4's mount order (`tC4:src/App.jsx:138-143`): AddProject, NewBible,
+/// NewObs, AddBook, Import, OpenFromDoor43. Each is mounted while `s.modal` names it and its
+/// form is set.
 fn home_dialogs(s: &AppState) -> impl IntoView + use<> {
     let dialog = {
-        let (dialog, np, ab, im) = (
+        let (dialog, np, ab, im, od) = (
             s.layers.dialog.clone(),
             s.np.clone(),
             s.ab.clone(),
             s.im.clone(),
+            s.od.clone(),
         );
         Memo::new(move |_| match dialog.get() {
             Some(Dialog::NewProject) if np.with(Option::is_none) => None,
             Some(Dialog::NewObs) if np.with(Option::is_none) => None,
             Some(Dialog::AddBook) if ab.with(Option::is_none) => None,
             Some(Dialog::Import) if im.with(Option::is_none) => None,
+            Some(Dialog::OpenDoor43) if od.with(Option::is_none) => None,
             other => other,
         })
     };
     let open = move |which: Dialog| Memo::new(move |_| dialog.get() == Some(which));
-    let (add_project, new_bible, new_obs, add_book, import) = (
+    let (add_project, new_bible, new_obs, add_book, import, open_door43) = (
         open(Dialog::AddProject),
         open(Dialog::NewProject),
         open(Dialog::NewObs),
         open(Dialog::AddBook),
         open(Dialog::Import),
+        open(Dialog::OpenDoor43),
     );
     view! {
         {move || add_project.get().then(|| view! { <AddProject /> })}
@@ -112,6 +122,7 @@ fn home_dialogs(s: &AppState) -> impl IntoView + use<> {
         {move || new_obs.get().then(|| view! { <NewObs /> })}
         {move || add_book.get().then(|| view! { <AddBook /> })}
         {move || import.get().then(|| view! { <Import /> })}
+        {move || open_door43.get().then(|| view! { <OpenFromDoor43 /> })}
     }
 }
 

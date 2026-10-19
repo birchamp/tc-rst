@@ -671,7 +671,7 @@ async fn each_held_download_waits_for_a_release_of_its_own() {
 async fn a_hold_fault_waits_for_its_release() {
     use tc_door43_fake::{Fault, FaultRule};
     let fake = FakeDoor43::start().await.unwrap();
-    seeded::parity_account(&fake);
+    seeded::parity_account(&fake).await.unwrap();
     let secret = fake
         .issue_token(
             seeded::PARITY_USER,

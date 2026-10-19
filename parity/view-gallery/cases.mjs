@@ -15,7 +15,6 @@ import path from 'node:path';
 import { applyPatch } from './lib.mjs';
 import { REPO } from './node-lib.mjs';
 import { stateNamed } from './states.mjs';
-import { FAKE_USER } from '../tc4-baseline/mock-server/fake-door43.mjs';
 
 /** tC4's repo path of the Bible sample. */
 const BIBLE = '_local_/_local_/sample_burrito';
@@ -323,21 +322,9 @@ export const CASES = [
     why: 'Not sent: the browser build, which has no desktop bridge (what tC4 itself answers here).' },
 
   // ---- sign-in -------------------------------------------------------------------------------
+  // B9b: the Rust side takes the state's own route, Share and then the sign-in step, against
+  // the fake Door43.
   { name: 'signin-error', group: 'sign-in', state: 'signin-error', scope: LAST_DIALOG, masks: ['signin-server'],
-    // A8: M12 from the account menu (Share is B9b's), signing in to the fake Door43.
-    rust: async (app, env) => {
-      const { page } = app;
-      if (!env.door43) throw new Error('signin-error needs the fake Door43: build it with `cargo build -p tc-door43-fake` and pass --door43-fake');
-      await app.home();
-      await page.getByTestId('account-menu').click();
-      await page.getByTestId('account-sign-in').click();
-      await page.getByLabel('Door43 username or email').fill(FAKE_USER.username);
-      await page.getByLabel('Password', { exact: true }).fill('wrong');
-      await page.getByTestId('signin-submit').click();
-      await page.getByTestId('net-confirm').click();
-      await page.getByTestId('signin-error').waitFor();
-      await page.evaluate(() => document.activeElement?.blur());
-    },
     why: 'The sign-in step after Door43 refused a wrong password.' },
 
   // ---- check-empty ---------------------------------------------------------------------------

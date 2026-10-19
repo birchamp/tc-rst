@@ -580,6 +580,10 @@ pub struct Listing {
     pub projects: Vec<ProjectEntry>,
     /// By folder name.
     pub unusable: Vec<UnusableFolder>,
+    /// The other entries, by name: files, folders with none of a project's files, staging
+    /// folders. Home lists none of them, but a project added under one of their names would
+    /// land on it (B9b D5).
+    pub others: Vec<String>,
 }
 
 /// A folder that holds a project's files (`ingredients/tc/project.json`, `metadata.json`,

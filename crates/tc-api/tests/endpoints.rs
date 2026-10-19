@@ -34,6 +34,10 @@ const PHASE_0: &[&str] = &[
     "home/card",
     "home/versifications",
     "home/languages",
+    // B9b: the share dialog's first step, the repository link, and Open from Door43.
+    "account/repoLink",
+    "account/orgs",
+    "door43/open",
     "test/quiet",
     "test/echo",
     "test/crash",
@@ -79,17 +83,28 @@ fn every_path_is_service_slash_name() {
 
 #[test]
 fn the_list_and_the_impls_agree() {
-    use tc_api::account::{HelpLink, ProfileLink, Resume, SignIn};
+    use tc_api::account::{HelpLink, Orgs, ProfileLink, RepoLink, Resume, SignIn};
+    use tc_api::door43::OpenDoor43;
     assert_eq!(<SignIn as Endpoint>::NET, Some(NetKind::SignIn));
     assert_eq!(<Resume as Endpoint>::NET, Some(NetKind::CheckSignIn));
     assert_eq!(<ProfileLink as Endpoint>::NET, Some(NetKind::Profile));
     assert_eq!(<HelpLink as Endpoint>::NET, Some(NetKind::HelpLink));
+    assert_eq!(<RepoLink as Endpoint>::NET, Some(NetKind::RepoLink));
+    assert_eq!(<Orgs as Endpoint>::NET, Some(NetKind::Share));
+    assert_eq!(<OpenDoor43 as Endpoint>::NET, Some(NetKind::Open));
+    assert_eq!(<OpenDoor43 as Endpoint>::KIND, Kind::StartJob);
     assert_eq!(<tc_api::app::Hello as Endpoint>::KIND, Kind::Query);
     for endpoint in ALL {
         let asks = endpoint.net.is_some();
         let expected = matches!(
             endpoint.path,
-            "account/signIn" | "account/resume" | "account/profileLink" | "account/helpLink"
+            "account/signIn"
+                | "account/resume"
+                | "account/profileLink"
+                | "account/helpLink"
+                | "account/repoLink"
+                | "account/orgs"
+                | "door43/open"
         );
         assert_eq!(
             asks, expected,

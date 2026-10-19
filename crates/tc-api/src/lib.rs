@@ -28,6 +28,7 @@ pub mod align;
 pub mod app;
 pub mod buffer;
 pub mod check;
+pub mod door43;
 pub mod endpoint;
 pub mod error;
 pub mod event;
@@ -98,6 +99,11 @@ macro_rules! endpoint_table {
                 => $crate::account::LinkView;
             query [HelpLink] "account/helpLink": $crate::account::HelpLink
                 => $crate::account::LinkView;
+            query [RepoLink] "account/repoLink": $crate::account::RepoLink
+                => $crate::account::LinkView;
+            query [Share] "account/orgs": $crate::account::Orgs => $crate::account::ShareTargets;
+
+            job [Open] "door43/open": $crate::door43::OpenDoor43 => $crate::ids::JobId;
 
             query "feedback/compose": $crate::feedback::Compose => $crate::feedback::FeedbackDraft;
 

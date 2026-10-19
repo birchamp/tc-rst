@@ -118,6 +118,10 @@
           }
         }
       ],
+      "others": [
+        "Notes",
+        "afile"
+      ],
       "resume": {
         "project": "sample_burrito",
         "place": {

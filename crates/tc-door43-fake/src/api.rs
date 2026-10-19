@@ -42,6 +42,7 @@ pub(crate) fn router(shared: Arc<Shared>) -> Router {
             "/api/v1/users/{username}/orgs/{org}/permissions",
             get(org_permissions),
         )
+        .route("/api/v1/repos/search", get(repos_search))
         .route("/api/v1/repos/{owner}/{repo}", get(repo_info))
         .route("/api/v1/repos/{owner}/{repo}/tags", get(list_tags))
         .route("/api/v1/repos/{owner}/{repo}/tags/{*tag}", get(one_tag))
@@ -868,6 +869,57 @@ fn repository_json(shared: &Shared, view: &RepoView, can_push: bool) -> Value {
             metadata: metadata.as_ref(),
         },
     )
+}
+
+/// `GET /api/v1/repos/search?owner=&lang=`: the repositories the caller may see, of `owner`
+/// (any case) and in the language `lang`, as `{"ok": true, "data": [...]}` with their number
+/// in `X-Total-Count`, which is all tC4 reads (`countRepositories`, `limit=1`). A token needs
+/// `read:repository`, which `write:repository` holds.
+async fn repos_search(
+    State(shared): AppState,
+    headers: HeaderMap,
+    Query(params): Query<Vec<(String, String)>>,
+) -> ApiResult {
+    let params = Params(params);
+    let caller = authenticate(&shared, &headers, &params)?;
+    if !matches!(caller, Caller::Anonymous) {
+        require(&caller, "read:repository")?;
+    }
+    let owner = params.get("owner");
+    let lang = params.get("lang");
+    let found: Vec<RepoRec> = {
+        let state = shared.state();
+        state
+            .repos
+            .iter()
+            .filter(|r| owner.is_none_or(|o| r.owner.eq_ignore_ascii_case(o)))
+            .filter(|r| lang.is_none_or(|l| r.language == l))
+            .filter(|r| {
+                !r.private || caller_login(&caller).is_some_and(|l| state.is_member(l, &r.owner))
+            })
+            .cloned()
+            .collect()
+    };
+    let total = found.len();
+    let max = shared.state().max_page_size;
+    let data: Vec<Value> = page(&found, &params, max)
+        .iter()
+        .map(|r| {
+            json!({
+                "id": r.id,
+                "owner": owner_json(&shared, &r.owner),
+                "name": r.name,
+                "full_name": format!("{}/{}", r.owner, r.name),
+                "private": r.private,
+                "language": r.language,
+            })
+        })
+        .collect();
+    let mut response = json_response(StatusCode::OK, json!({ "ok": true, "data": data }));
+    if let Ok(value) = HeaderValue::from_str(&total.to_string()) {
+        response.headers_mut().insert("x-total-count", value);
+    }
+    Ok(response)
 }
 
 /// The repository, when the caller may see it; private ones only to members.

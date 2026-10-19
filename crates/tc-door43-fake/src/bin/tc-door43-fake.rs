@@ -3,7 +3,7 @@
 //! second loopback server, its control port.
 //!
 //! It holds the parity account ([`seeded::parity_account`]: `facilitator-zq`, the user of tC4's
-//! own e2e fake) and nothing else. It prints one line on stdout,
+//! own e2e fake, with its organizations and their repositories) and nothing else. It prints one line on stdout,
 //! `{"url": "http://127.0.0.1:<port>", "control": "http://127.0.0.1:<port>"}`, and serves until
 //! its stdin closes or reads the line `{"quit":true}`; then its repositories' temporary folder
 //! goes and it exits with 0. A start that fails prints `{"error": "<reason>"}` and exits with 1.
@@ -64,7 +64,9 @@ async fn run() -> ExitCode {
         Ok(fake) => Arc::new(fake),
         Err(error) => return failed(&error.to_string()),
     };
-    seeded::parity_account(&fake);
+    if let Err(error) = seeded::parity_account(&fake).await {
+        return failed(&error.to_string());
+    }
     let listener = match tokio::net::TcpListener::bind("127.0.0.1:0").await {
         Ok(listener) => listener,
         Err(error) => return failed(&error.to_string()),

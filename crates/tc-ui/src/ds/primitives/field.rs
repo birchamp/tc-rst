@@ -77,6 +77,11 @@ pub fn Field(
     #[prop(optional, into)] label: Option<Signal<String>>,
     #[prop(optional, into)] hint: Option<Signal<String>>,
     #[prop(optional, into)] error: Option<String>,
+    /// An error that comes and goes while the field is on screen, under the control, which keeps
+    /// its node (and its focus) meanwhile, as React's re-render keeps it. The control takes
+    /// `invalid` from its own prop then, and its described-by list names the hint only.
+    #[prop(optional, into)]
+    live_error: Option<Signal<Option<String>>>,
     #[prop(optional)] required: bool,
     #[prop(optional)] optional: bool,
     #[prop(optional)] disabled: Option<bool>,
@@ -133,7 +138,20 @@ pub fn Field(
         let hid = hint_id.clone().unwrap_or_default();
         view! { <Text attrs=Attrs::from([("id", hid.as_str())]) role=TextRole::Caption tone=TextTone::Muted>{move || hint.get()}</Text> }
     });
-    let err_node = error.map(|e| error_line(err_id.clone().unwrap_or_default(), e));
+    let err_node = match live_error {
+        Some(live) => {
+            let live_id = format!("{id}-err");
+            (move || {
+                live.get()
+                    .filter(|e| !e.is_empty())
+                    .map(|e| error_line(live_id.clone(), e))
+            })
+            .into_any()
+        }
+        None => error
+            .map(|e| error_line(err_id.clone().unwrap_or_default(), e))
+            .into_any(),
+    };
     let body = provide(Some(ctx), move || children.map(|c| c()));
 
     match placement {

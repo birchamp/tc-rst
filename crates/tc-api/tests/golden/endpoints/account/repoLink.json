@@ -1,0 +1,21 @@
+{
+  "path": "account/repoLink",
+  "kind": "query",
+  "net": "repoLink",
+  "request": {
+    "url": "https://git.door43.org/Equipo-Ejemplo/sample_burrito"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "url": "https://git.door43.org/jdoe"
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "repoLink"
+    }
+  }
+}

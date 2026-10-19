@@ -33,6 +33,7 @@ pub mod replies;
 pub mod reports;
 mod seed;
 pub mod session;
+pub mod share;
 mod startup;
 pub mod wire;
 

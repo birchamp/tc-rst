@@ -15,7 +15,8 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use tc_api::account::{
     AccountNotice, AccountView, CancelSignIn, HelpLink, KeepState, KeychainState, LinkView,
-    ProfileLink, Resume, ResumeOutcome, ResumeView, SignIn, SignOut, State as AccountState, WebUrl,
+    OrgChoice, Orgs, ProfileLink, RepoLink, Resume, ResumeOutcome, ResumeView, ShareTargets,
+    SignIn, SignOut, State as AccountState, WebUrl,
 };
 use tc_api::align::AlignSave;
 use tc_api::app::{
@@ -28,6 +29,7 @@ use tc_api::check::{
     Category, CheckListRef, CheckPlace, CheckUnit, Dot, NoteCategory, RailRow, RailRowPatch,
     RowFlags, Tool,
 };
+use tc_api::door43::{OpenDoor43, ProjectName, RepoSource};
 use tc_api::error::{ApiError, Feature, Flow, SignInReason};
 use tc_api::event::{
     Aspect, ChangeCause, ChangeParts, ChangeScope, ChapterRef, CheckpointOutcome, Event,
@@ -416,6 +418,60 @@ impl Example for HelpLink {
     }
 }
 
+impl Example for JobId {
+    fn example() -> Self {
+        JobId::new(21)
+    }
+}
+
+impl Example for RepoLink {
+    fn example() -> Self {
+        RepoLink {
+            url: WebUrl::parse("https://git.door43.org/Equipo-Ejemplo/sample_burrito").unwrap(),
+        }
+    }
+}
+
+impl Example for Orgs {
+    fn example() -> Self {
+        Orgs {
+            language: "es-419".into(),
+        }
+    }
+}
+
+impl Example for ShareTargets {
+    fn example() -> Self {
+        ShareTargets {
+            user: "facilitator-zq".into(),
+            orgs: vec![
+                OrgChoice {
+                    name: "Equipo-Ejemplo".into(),
+                    full_name: "Equipo Ejemplo".into(),
+                    can_create: true,
+                    recommended: true,
+                },
+                OrgChoice {
+                    name: "es-419_gl".into(),
+                    full_name: "Latin American Spanish Gateway".into(),
+                    can_create: false,
+                    recommended: false,
+                },
+            ],
+        }
+    }
+}
+
+impl Example for OpenDoor43 {
+    fn example() -> Self {
+        OpenDoor43 {
+            request: request(20),
+            repo: RepoSource::new("facilitator-zq", "es-419_tit_equipo").unwrap(),
+            name: ProjectName::parse("es-419_tit_equipo").unwrap(),
+        }
+    }
+}
+
 impl Example for LinkView {
     fn example() -> Self {
         LinkView {
@@ -695,6 +751,7 @@ impl Example for HomeView {
                     },
                 },
             ],
+            others: vec!["Notes".into(), "afile".into()],
             resume: Some(LastEditView {
                 project: ProjectRef::parse("sample_burrito").unwrap(),
                 place: ResumePlace::Book {
