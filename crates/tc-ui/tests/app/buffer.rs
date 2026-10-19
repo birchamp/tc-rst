@@ -113,8 +113,7 @@ fn a_non_canonical_or_foreign_item_is_never_read_or_removed() {
             &ProjectRef::parse("copy").unwrap(),
             &ProjectId::parse(OTHER_ID).unwrap(),
         ),
-    )
-    .unwrap();
+    );
     for (item, value) in &foreign {
         assert_eq!(store.get(item).as_ref(), Some(value), "{item} is untouched");
     }

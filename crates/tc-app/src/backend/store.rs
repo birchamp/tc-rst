@@ -125,6 +125,8 @@ pub struct StoreBackend {
     /// Folders whose lock the person said names a computer that is closed (C1b): the next
     /// open of each takes the lock.
     trusted: Mutex<std::collections::BTreeSet<ProjectRef>>,
+    /// This server run, which each open's drafts record (C1b).
+    run: Mutex<Option<String>>,
 }
 
 impl std::fmt::Debug for StoreBackend {
@@ -153,6 +155,7 @@ impl StoreBackend {
             hooks,
             platform,
             trusted: Mutex::default(),
+            run: Mutex::default(),
         })
     }
 
@@ -376,6 +379,7 @@ impl ProjectStore for StoreBackend {
             // project again meanwhile.
             other_computer_closed: lock(&self.trusted).remove(folder),
             creation_pins: creation_pins(),
+            run: lock(&self.run).clone(),
         };
         let handle = self.store.open(&path, &options).map_err(open_failure)?;
         let handle = StoreHandle::start(handle).map_err(|reason| OpenFailure::Unreadable {
@@ -404,6 +408,10 @@ impl ProjectStore for StoreBackend {
 
     fn trust_lock(&self, folder: &ProjectRef) {
         lock(&self.trusted).insert(folder.clone());
+    }
+
+    fn name_run(&self, run: tc_api::ids::ServerInstance) {
+        *lock(&self.run) = Some(run.to_string());
     }
 
     /// Projects on disk have no seed to go back to: a parity scenario's store
@@ -1068,12 +1076,6 @@ impl ProjectHandle for StoreHandle {
             .as_ref()
             .map(|handle| handle.offered_drafts().into_iter().map(offered).collect())
             .unwrap_or_default()
-    }
-
-    fn name_run(&self, run: tc_api::ids::ServerInstance) {
-        if let Some(handle) = self.inner().as_ref() {
-            handle.name_run(run.to_string());
-        }
     }
 
     fn discard_draft(&self, id: u64) -> bool {

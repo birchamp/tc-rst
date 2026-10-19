@@ -8,6 +8,7 @@ mod app {
     mod buffer;
     mod cache;
     mod client;
+    mod draft_machine;
     mod effects;
     mod feedback;
     mod indicator;

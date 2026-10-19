@@ -229,6 +229,56 @@ impl machine::Record<Vec<ShownToken>> for FieldRecord<'_> {
         let head = token.heads().first()?;
         field_text(self.kind, Some(self.read.body(head)?.record))
     }
+
+    fn held_since(&self, version: &Vec<ShownToken>, text: &str) -> bool {
+        let (Some(key), Some(first)) = (&self.key, version.first()) else {
+            return false;
+        };
+        let Ok((token, _)) = DraftToken::parse(self.handle, first) else {
+            return false;
+        };
+        // The changes `version` is an ancestor of, back from the heads: a head on another
+        // branch is not after it.
+        let base = token.heads();
+        let mut memo: BTreeMap<tc_journal::ChangeId, bool> = BTreeMap::new();
+        let mut stack: Vec<(tc_journal::ChangeId, bool)> = self
+            .read
+            .heads(key)
+            .into_iter()
+            .map(|h| (h, false))
+            .collect();
+        while let Some((change, expanded)) = stack.pop() {
+            if memo.contains_key(&change) {
+                continue;
+            }
+            if base.contains(&change) {
+                memo.insert(change, true);
+                continue;
+            }
+            let parents = self
+                .read
+                .body(&change)
+                .map(|body| body.parents)
+                .unwrap_or_default();
+            if expanded {
+                let after = parents
+                    .iter()
+                    .any(|p| memo.get(p).copied().unwrap_or(false));
+                memo.insert(change, after);
+            } else {
+                stack.push((change, true));
+                stack.extend(parents.into_iter().map(|p| (p, false)));
+            }
+        }
+        memo.into_iter()
+            .filter(|(change, after)| *after && !base.contains(change))
+            .any(|(change, _)| {
+                self.read.body(&change).is_some_and(|body| {
+                    field_text(self.kind, Some(body.record))
+                        .is_some_and(|held| machine::same_text(&held, text))
+                })
+            })
+    }
 }
 
 /// One field's candidates, before the machine judges them.
@@ -241,7 +291,7 @@ struct Field {
 
 /// The offer of `session` for the buffered lines the UI sent (see the module documentation).
 /// Each text the machine offers is taken into `drafts.json` before this returns.
-pub fn offer(session: &ProjectSession, buffered: &[String]) -> OfferedDrafts {
+pub fn offer(session: &ProjectSession, buffered: &[String], mirror: bool) -> OfferedDrafts {
     let handle = session.handle();
     if matches!(handle.facts().mode, SessionMode::ReadOnly(_)) {
         return OfferedDrafts {
@@ -279,6 +329,7 @@ pub fn offer(session: &ProjectSession, buffered: &[String]) -> OfferedDrafts {
                 key,
                 instance: entry.instance,
                 text: entry.text,
+                at: entry.at,
             }),
         };
         fields
@@ -306,6 +357,7 @@ pub fn offer(session: &ProjectSession, buffered: &[String]) -> OfferedDrafts {
             Event::Offer {
                 candidates: field.candidates,
                 record: &record,
+                mirror,
             },
         );
         for action in actions {
@@ -433,7 +485,7 @@ impl Handle<Drafts> for App {
             .sessions()
             .reader(&req.at)
             .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
-        Ok(offer(&session, &req.buffered))
+        Ok(offer(&session, &req.buffered, req.mirror))
     }
 }
 

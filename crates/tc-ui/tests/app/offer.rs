@@ -117,18 +117,20 @@ fn settling_drops_only_the_offered_text() {
             key: tit4.clone(),
             instance: ServerInstance::from_bytes([1; 16]),
             text: "offered".to_owned(),
+            at: WallMs(10),
         },
         BufferSlot {
             key: tit5.clone(),
             instance: ServerInstance::from_bytes([1; 16]),
             text: "offered earlier".to_owned(),
+            at: WallMs(10),
         },
     ];
     let mut mirror = vec![
         changed(&tit4, &entry(1, "offered", 10)),
         changed(&tit5, &entry(1, "typed since", 30)),
     ];
-    let lines = settle(&mut store, &slots);
+    let lines = settle(&mut store, &slots, &[]);
     assert_eq!(lines.len(), 2);
     let left: Vec<String> = entries(&store).into_iter().map(|(_, e)| e.text).collect();
     assert_eq!(left, ["typed since"]);
@@ -164,8 +166,9 @@ fn the_copy_moves_the_buffer_and_the_mirror_entries() {
         ProjectRef::parse("en_ult - Copy").unwrap(),
         ProjectId::parse(ID).unwrap(),
     );
-    let lines = copy(&mut store, &mirror, (&from.0, &from.1), (&to.0, &to.1)).unwrap();
-    mirror.extend(lines);
+    let copied = copy(&mut store, &mirror, (&from.0, &from.1), (&to.0, &to.1));
+    assert!(copied.stayed.is_empty());
+    mirror.extend(copied.lines);
     let moved = merge(entries_of(&store, &to.0, &to.1), &current_lines(&mirror));
     let mut got: Vec<&str> = moved
         .iter()
@@ -191,7 +194,8 @@ fn the_copy_moves_the_buffer_and_the_mirror_entries() {
     assert_eq!(entries_of(&store, &other.project, &other.id).len(), 1);
 }
 
-/// A copy whose storage refuses removes nothing: both places keep the text.
+/// A copy whose storage refuses removes nothing: the item stays where it was, and the shell's
+/// mirror gets the entry under the copy.
 #[test]
 fn a_copy_that_cannot_write_removes_nothing() {
     let mut store = MemStore::new();
@@ -203,8 +207,12 @@ fn a_copy_that_cannot_write_removes_nothing() {
         ProjectId::parse(ID).unwrap(),
     );
     let copy_ref = ProjectRef::parse("copy").unwrap();
-    assert!(copy(&mut store, &[], (&project, &id), (&copy_ref, &id)).is_err());
+    let copied = copy(&mut store, &[], (&project, &id), (&copy_ref, &id));
     assert_eq!(store.items, before);
+    assert_eq!(copied.stayed.len(), 1);
+    let lines = current_lines(&copied.lines);
+    assert_eq!(texts(&lines), ["one"]);
+    assert!(lines[0].contains("\"copy\""), "{lines:?}");
 }
 
 #[test]

@@ -111,12 +111,15 @@ pub trait Record<V> {
     fn sole(&self) -> Option<V>;
     /// The text the record held at `version`, when this installation can read it.
     fn text_of(&self, version: &V) -> Option<String>;
+    /// Whether a version of the record after `version` held `text`: the text was stored, even
+    /// if another change has replaced it since.
+    fn held_since(&self, version: &V, text: &str) -> bool;
 }
 
 /// What a candidate holds, judged against the record.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verdict<V> {
-    /// A head of the record holds the text.
+    /// A head of the record holds the text, or a version after the one it was typed over did.
     Saved,
     /// The text is the version it was typed over, and no save of it landed: typed and undone.
     Undone,
@@ -137,10 +140,27 @@ pub fn classify<V: Clone>(candidate: &Candidate<V>, record: &dyn Record<V>) -> V
     if held(&candidate.text) {
         return Verdict::Saved;
     }
-    let landed = candidate.sent.as_deref().is_some_and(held);
+    // Stored after the version it was typed over, and replaced since: not unsaved typing.
+    if let Base::Verified(base) = &candidate.base
+        && record.held_since(base, &candidate.text)
+    {
+        return Verdict::Saved;
+    }
+    let landed = match (&candidate.sent, &candidate.base) {
+        // Whoever stored the text the entry sent, its later typing continues from it. Asking
+        // for this installation's own change instead would miss the save in a copy of the
+        // folder, which has a device of its own, and drop a text typed back as undone.
+        (Some(sent), Base::Verified(base)) => record.held_since(base, sent),
+        _ => false,
+    };
     if landed
         && heads.len() == 1
-        && let Base::Verified(_) = candidate.base
+        && heads.iter().all(|head| {
+            candidate
+                .sent
+                .as_deref()
+                .is_some_and(|s| same_text(head, s))
+        })
         && let Some(now) = record.sole()
     {
         return Verdict::Offer {
@@ -149,7 +169,11 @@ pub fn classify<V: Clone>(candidate: &Candidate<V>, record: &dyn Record<V>) -> V
             landed: true,
         };
     }
+    // An offered entry of drafts.json was judged when it was taken in, with the save it was
+    // waiting for, which it no longer names: a text it holds that is its version's own is a
+    // text typed back after that save, never undone.
     if !landed
+        && matches!(candidate.home, Home::Buffer(_))
         && let Base::Verified(version) = &candidate.base
         && record
             .text_of(version)
@@ -255,17 +279,22 @@ pub enum Event<'a, V> {
     /// The server run ended (a crash, a quit) and the app started again.
     Relaunch,
     /// An open asks what to offer: every candidate of the field in the buffer, the mirror and
-    /// `drafts.json`, but the page's own (the page leaves those out).
+    /// `drafts.json`, but the page's own (the page leaves those out). `mirror` says that the
+    /// candidates include the shell's mirror, which holds every keystroke and every removal of
+    /// each run: a run with no line of the field then ended with the field clean.
     Offer {
         candidates: Vec<Candidate<V>>,
         record: &'a dyn Record<V>,
+        mirror: bool,
     },
     /// *Keep* of the offer at this index.
     Keep(usize),
     /// *Discard* of the offer at this index.
     Discard(usize),
     /// The copy of a read-only project (§6.4): the folder is copied with its `drafts.json`, and
-    /// these slots, every one of the folder's in the buffer and the mirror, move to `to`.
+    /// these slots, every one of the folder's in the buffer and the mirror, move to `to`. The
+    /// page holds its own field on in the copy, which has the same project id, so the field's
+    /// tokens stand there too.
     Copy {
         slots: Vec<BufferSlot>,
         to: BufferKey,
@@ -290,7 +319,7 @@ pub enum Action<V> {
     Remove { text: String },
     /// `slot`'s buffer item and mirror line go, each only while it holds the slot's run and text.
     Settle(BufferSlot),
-    /// The copy: `slot` is written under `to` in the buffer and the mirror, then settled.
+    /// The copy: `slot` is written under `to`, in the buffer and the mirror, then settled.
     Rekey { slot: BufferSlot, to: BufferKey },
     /// `drafts.json`'s current entry of the field.
     Draft { text: String, base: V },
@@ -314,30 +343,48 @@ pub enum Action<V> {
     CopyFolder,
 }
 
-/// The stored drafts that are older copies of a buffer entry's typing, each with the index of
-/// that entry. One page edits a field per run and its buffer entry takes every keystroke, so a
-/// stored draft of a run whose own entry of the field, one that has a *Keep*, is at least as
-/// new holds nothing that entry does not.
-fn older_copies<V>(candidates: &[Candidate<V>]) -> Vec<(usize, usize)> {
+/// The stored drafts that hold nothing unsaved, each with the index of the buffer entry that
+/// supersedes it, if one does. One page edits a field per run and its buffer entry takes every
+/// keystroke, so a stored draft of a run whose own entry of the field, one that has a *Keep*,
+/// is at least as new holds nothing that entry does not. With the shell's mirror, a run with no
+/// entry of the field ended with the field clean: its save holds the draft's typing or newer.
+fn older_copies<V>(candidates: &[Candidate<V>], mirror: bool) -> Vec<(usize, Option<usize>)> {
     candidates
         .iter()
         .enumerate()
         .filter(|(_, copy)| matches!(copy.home, Home::Stored(_)))
         .filter_map(|(at, copy)| {
             let run = copy.run?;
-            candidates
+            let entries: Vec<(usize, &Candidate<V>)> = candidates
                 .iter()
                 .enumerate()
                 .filter(|(_, entry)| {
-                    matches!(entry.home, Home::Buffer(_))
-                        && entry.run == Some(run)
-                        && entry.at >= copy.at
-                        && entry.base.version().is_some()
+                    matches!(entry.home, Home::Buffer(_)) && entry.run == Some(run)
                 })
+                .collect();
+            if entries.is_empty() {
+                return mirror.then_some((at, None));
+            }
+            entries
+                .into_iter()
+                .filter(|(_, entry)| entry.at >= copy.at && entry.base.version().is_some())
                 .max_by_key(|(_, entry)| entry.at)
-                .map(|(newer, _)| (at, newer))
+                .map(|(newer, _)| (at, Some(newer)))
         })
         .collect()
+}
+
+/// One question being planned.
+struct Planned<V> {
+    offer: Offer<V>,
+    /// The person's own landed save decides what it keeps over.
+    landed: bool,
+    /// The candidates it stands for.
+    members: Vec<usize>,
+    /// Stored drafts of a run it takes over: an entry of a run is judged by that run's buffer
+    /// once, at the first open after it, and then the offer's own entry, of no run, holds the
+    /// text.
+    provisional: Vec<StoredDraftId>,
 }
 
 /// The open's plan for one field's candidates: the questions, what the places do, and the
@@ -345,23 +392,32 @@ fn older_copies<V>(candidates: &[Candidate<V>]) -> Vec<(usize, usize)> {
 fn plan<V: Clone>(
     mut candidates: Vec<Candidate<V>>,
     record: &dyn Record<V>,
+    mirror: bool,
 ) -> (Vec<Offer<V>>, Vec<Action<V>>, Vec<BufferSlot>) {
     candidates.sort_by_key(|candidate| std::cmp::Reverse(candidate.at));
-    let copies = older_copies(&candidates);
-    let mut offers: Vec<(Offer<V>, bool, Vec<usize>)> = Vec::new();
+    let copies = older_copies(&candidates, mirror);
+    let mut offers: Vec<Planned<V>> = Vec::new();
     let mut actions = Vec::new();
     let mut settle = Vec::new();
     // What each superseding entry's copies become once its text is held.
     let older_of = |index: usize| -> Vec<StoredDraftId> {
         copies
             .iter()
-            .filter(|(_, newer)| *newer == index)
+            .filter(|(_, newer)| *newer == Some(index))
             .filter_map(|(copy, _)| match candidates[*copy].home {
                 Home::Stored(id) => Some(id),
                 Home::Buffer(_) => None,
             })
             .collect()
     };
+    // A run that ended clean: its stored drafts go now.
+    for (copy, newer) in &copies {
+        if newer.is_none()
+            && let Home::Stored(id) = candidates[*copy].home
+        {
+            actions.push(Action::Unstore(id));
+        }
+    }
     for (index, candidate) in candidates.iter().enumerate() {
         if copies.iter().any(|(copy, _)| *copy == index) {
             continue;
@@ -375,60 +431,79 @@ fn plan<V: Clone>(
                 actions.extend(older_of(index).into_iter().map(Action::Unstore));
             }
             Verdict::Offer { keep, over, landed } => {
-                let stored = matches!(candidate.home, Home::Stored(_));
+                let (home, taken) = match (&candidate.home, candidate.run) {
+                    (Home::Stored(id), Some(_)) => (None, Some(*id)),
+                    (home, _) => (Some(home.clone()), None),
+                };
+                let stored = matches!(home, Some(Home::Stored(_)));
                 match offers
                     .iter_mut()
-                    .find(|(offer, _, _)| same_text(&offer.text, &candidate.text))
+                    .find(|p| same_text(&p.offer.text, &candidate.text))
                 {
-                    Some((offer, was_landed, members)) => {
+                    Some(p) => {
                         // One text, one question. The person's own landed save decides what
                         // Keep saves over; an entry already offered, the next.
-                        let better = (landed && !*was_landed)
-                            || (!*was_landed && stored && offer.stored().next().is_none());
+                        let better = (landed && !p.landed)
+                            || (!p.landed && stored && p.offer.stored().next().is_none());
                         if better {
-                            offer.keep = keep;
-                            offer.over = over;
-                            *was_landed = landed;
+                            p.offer.keep = keep;
+                            p.offer.over = over;
+                            p.landed = landed;
                         }
-                        offer.homes.push(candidate.home.clone());
-                        members.push(index);
+                        p.offer.homes.extend(home);
+                        p.provisional.extend(taken);
+                        p.members.push(index);
                     }
-                    None => offers.push((
-                        Offer {
+                    None => offers.push(Planned {
+                        offer: Offer {
                             text: candidate.text.clone(),
                             at: candidate.at,
                             keep,
                             over,
-                            homes: vec![candidate.home.clone()],
+                            homes: home.into_iter().collect(),
                         },
                         landed,
-                        vec![index],
-                    )),
+                        members: vec![index],
+                        provisional: taken.into_iter().collect(),
+                    }),
                 }
             }
         }
     }
     let mut planned = Vec::new();
-    for (offer, _, members) in offers {
+    for Planned {
+        mut offer,
+        members,
+        provisional,
+        ..
+    } in offers
+    {
         let slots: Vec<BufferSlot> = offer.slots().cloned().collect();
-        let older: Vec<StoredDraftId> = members.iter().flat_map(|m| older_of(*m)).collect();
-        match (&offer.over, offer.stored().next()) {
+        let mut older: Vec<StoredDraftId> = members.iter().flat_map(|m| older_of(*m)).collect();
+        let held = offer.stored().next().is_some();
+        match (offer.over.clone(), held) {
             // The text is in an offered entry already: its slots and copies can go.
-            (_, Some(_)) => {
+            (_, true) => {
                 settle.extend(slots);
+                older.extend(provisional);
                 actions.extend(older.into_iter().map(Action::Unstore));
             }
-            (Some(over), None) => actions.push(Action::Absorb {
-                text: offer.text.clone(),
-                at: offer.at,
-                over: over.clone(),
-                keep: offer.keep,
-                then: slots,
-                older,
-            }),
-            // "Copy text": the slots are its only home until Discard; no copy was set aside
-            // for it, since only an entry with a Keep supersedes one.
-            (None, None) => {}
+            (Some(over), false) => {
+                older.extend(provisional);
+                actions.push(Action::Absorb {
+                    text: offer.text.clone(),
+                    at: offer.at,
+                    over,
+                    keep: offer.keep,
+                    then: slots,
+                    older,
+                });
+            }
+            // "Copy text": no entry of its own can hold it, so what holds it now stays, until
+            // Discard.
+            (None, false) => offer
+                .homes
+                .extend(provisional.into_iter().map(Home::Stored)),
         }
         planned.push(offer);
     }
@@ -614,8 +689,15 @@ pub fn next<V: Clone>(
             settle.clear();
             (Live::Clean, Vec::new())
         }
-        (live, Event::Offer { candidates, record }) => {
-            let (planned, actions, slots) = plan(candidates, record);
+        (
+            live,
+            Event::Offer {
+                candidates,
+                record,
+                mirror,
+            },
+        ) => {
+            let (planned, actions, slots) = plan(candidates, record, mirror);
             offers = planned;
             settle.extend(slots);
             (live, actions)
@@ -648,9 +730,9 @@ pub fn next<V: Clone>(
             };
             (live, actions)
         }
-        // A read-only project offered nothing; its texts, the page's held ones among them,
-        // move to the copy, whose open offers them.
-        (_, Event::Copy { slots, to }) => {
+        // A read-only project offered nothing; its texts move to the copy, whose open offers
+        // those of other runs. The page's own text moves with it and stays the page's.
+        (live, Event::Copy { slots, to }) => {
             offers.clear();
             settle.clear();
             let mut actions = vec![Action::CopyFolder];
@@ -658,10 +740,29 @@ pub fn next<V: Clone>(
                 slot,
                 to: to.clone(),
             }));
-            (Live::Clean, actions)
+            (live, actions)
         }
+        // A slot the settling frees takes the page's own text at once: it is the only place
+        // that held none of it while another run's entry filled it.
         (live, Event::Settle) => {
-            let actions = settle.drain(..).map(Action::Settle).collect();
+            let mut actions: Vec<Action<V>> = settle.drain(..).map(Action::Settle).collect();
+            if !actions.is_empty() {
+                match &live {
+                    Live::Clean => {}
+                    Live::Typed { base, current } => actions.push(write(current, base, None)),
+                    Live::Sending {
+                        base,
+                        sent,
+                        current,
+                    }
+                    | Live::Landed {
+                        base,
+                        sent,
+                        current,
+                        ..
+                    } => actions.push(write(current, base, Some(sent))),
+                }
+            }
             (live, actions)
         }
     };

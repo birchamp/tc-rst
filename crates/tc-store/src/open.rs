@@ -61,6 +61,9 @@ pub struct OpenOptions {
     /// The pins a new project gets. A writable open of a project that holds no pin writes
     /// them, one change per group in one batch with cause `System(CreationPins)` (tC4 #766).
     pub creation_pins: Vec<(PinGroup, PinGroupValue)>,
+    /// The app's server run whose page sends this open's drafts (APP-DESIGN §6.6): each draft
+    /// records it, and a draft of this same run is that page's own typing, never offered to it.
+    pub run: Option<String>,
 }
 
 impl Default for OpenOptions {
@@ -69,6 +72,7 @@ impl Default for OpenOptions {
             progress: no_progress(),
             other_computer_closed: false,
             creation_pins: Vec::new(),
+            run: None,
         }
     }
 }
@@ -518,7 +522,7 @@ fn open_inner(
         folder.clone(),
         &project.fold,
         &signing,
-        device,
+        options.run.clone(),
         hooks.clone(),
         counters.clone(),
         read_only,

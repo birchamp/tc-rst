@@ -307,6 +307,29 @@ pub fn remove(
     Ok(Removal::Removed)
 }
 
+/// Removes the field's item of the run `instance` that a settled offer stood for: one that
+/// holds `text` in NFC, or an older text of that run, written at `at` or before. Newer text
+/// typed since stays, and so does an item of another run or one this build cannot read.
+pub fn remove_settled(
+    store: &mut dyn Store,
+    key: &BufferKey,
+    instance: ServerInstance,
+    text: &str,
+    at: WallMs,
+) -> Result<Removal, StoreError> {
+    let item = item_key(key)?;
+    let Some(stored) = store.get(&item) else {
+        return Ok(Removal::Absent);
+    };
+    match parse_entry(&stored) {
+        Some(entry)
+            if entry.instance == instance && (same_text(&entry.text, text) || entry.at <= at) => {}
+        _ => return Ok(Removal::Kept),
+    }
+    store.remove(&item)?;
+    Ok(Removal::Removed)
+}
+
 /// Every entry this build can read, by key. Items it cannot read are skipped.
 pub fn entries(store: &dyn Store) -> Vec<(BufferKey, BufferEntry)> {
     store

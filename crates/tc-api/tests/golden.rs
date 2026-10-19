@@ -561,6 +561,7 @@ impl Example for Drafts {
         Drafts {
             at: scope(),
             request: request(90),
+            mirror: true,
             buffered: vec![
                 serde_json::to_string(&BufferLine::Changed {
                     key: offered_key(),
@@ -578,6 +579,7 @@ impl Example for OfferedDrafts {
             key: offered_key(),
             instance: ServerInstance::from_bytes([0xab; 16]),
             text: "To Titus, a true son".into(),
+            at: WallMs(1_760_000_000_123),
         };
         OfferedDrafts {
             offers: vec![

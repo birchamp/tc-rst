@@ -397,6 +397,8 @@ impl ProjectStore for MemoryBackend {
     /// A memory project has no lock file.
     fn trust_lock(&self, _folder: &ProjectRef) {}
 
+    fn name_run(&self, _run: tc_api::ids::ServerInstance) {}
+
     #[cfg(feature = "test-hooks")]
     fn reset(&self) -> Result<(), StoreError> {
         let projects = lock(&self.projects);
@@ -579,8 +581,6 @@ impl ProjectHandle for MemoryHandle {
     fn offered_drafts(&self) -> Vec<OfferedDraft> {
         Vec::new()
     }
-
-    fn name_run(&self, _run: tc_api::ids::ServerInstance) {}
 
     fn discard_draft(&self, _id: u64) -> bool {
         false

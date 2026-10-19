@@ -10,7 +10,8 @@
     "request": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
     "buffered": [
       "{\"type\":\"changed\",\"value\":{\"key\":{\"project\":\"kr_ulb\",\"id\":\"6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50\",\"field\":{\"kind\":\"verse\",\"place\":\"TIT 1:4\"}},\"entry\":{\"api\":1,\"instance\":\"abababababababababababababababab\",\"base\":[\"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA\"],\"text\":\"To Titus, a true son\",\"sent\":null,\"at\":1760000000123,\"draft\":null}}}"
-    ]
+    ],
+    "mirror": true
   },
   "reply": {
     "type": "ok",
@@ -39,7 +40,8 @@
                   }
                 },
                 "instance": "abababababababababababababababab",
-                "text": "To Titus, a true son"
+                "text": "To Titus, a true son",
+                "at": 1760000000123
               }
             ]
           }
@@ -82,7 +84,8 @@
             }
           },
           "instance": "abababababababababababababababab",
-          "text": "Paul, a servant of God"
+          "text": "Paul, a servant of God",
+          "at": 1760000000123
         }
       ]
     }

@@ -736,6 +736,10 @@ pub trait ProjectStore: Send + Sync + 'static {
     /// read-only with `OpenOnAnotherComputer`.
     fn trust_lock(&self, folder: &ProjectRef);
 
+    /// Names this server run (§6.6): each open's drafts record it, and a draft of this run is
+    /// its page's own typing, never offered to it.
+    fn name_run(&self, run: tc_api::ids::ServerInstance);
+
     /// `test/reset`: every project back to its seed. The registry closes every session first.
     #[cfg(feature = "test-hooks")]
     fn reset(&self) -> Result<(), StoreError>;
@@ -777,10 +781,6 @@ pub trait ProjectHandle: Send + Sync {
 
     /// Drafts from an earlier session that differ from what their records hold (O12).
     fn offered_drafts(&self) -> Vec<OfferedDraft>;
-
-    /// Names the server run whose page sends this open's drafts (§6.6): each draft records
-    /// it, so the next open can tell that run's own newer buffer entry from other typing.
-    fn name_run(&self, run: tc_api::ids::ServerInstance);
 
     /// *Discard* of an offered draft: its entry leaves `drafts.json` (STORAGE §5.14), written
     /// before this returns. Whether the file holds the change.

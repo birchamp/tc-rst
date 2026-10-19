@@ -33,7 +33,7 @@ use std::time::{Duration, Instant};
 use tc_journal::command::{Draft, DraftField};
 use tc_journal::fold::FoldState;
 use tc_journal::record::{CheckValue, Record, VerseValue};
-use tc_journal::{BookId, DeviceId, RecordKey, ShownToken, TokenKey, WallTime};
+use tc_journal::{BookId, RecordKey, ShownToken, TokenKey, WallTime};
 
 /// At most one write a second.
 const EVERY: Duration = Duration::from_secs(1);
@@ -149,7 +149,7 @@ pub(crate) struct DraftWriter {
     next_id: AtomicU64,
     thread: Mutex<Option<JoinHandle<()>>>,
     /// The app's server run whose page sends this open's drafts.
-    run: Mutex<Option<String>>,
+    run: Option<String>,
 }
 
 struct Writer {
@@ -241,41 +241,12 @@ fn field_text(field: &DraftField, record: Option<&Record>) -> Option<String> {
     }
 }
 
-/// Whether this folder's device saved the record over the version `token` names: a change of
-/// the device on the way from the record's heads back to that version.
-fn own_save_since(fold: &FoldState, token: &ShownToken, device: DeviceId) -> bool {
-    let base = token.heads();
-    let mut seen = std::collections::BTreeSet::new();
-    let mut stack = fold.heads(token.key());
-    while let Some(change) = stack.pop() {
-        if base.contains(&change) || !seen.insert(change) {
-            continue;
-        }
-        let Some(body) = fold.body(&change) else {
-            continue;
-        };
-        if body.device == device {
-            return true;
-        }
-        stack.extend(body.parents);
-    }
-    false
-}
-
 /// Whether an entry of `drafts.json` is still unsaved text to offer at open (O12), and its
-/// draft and whether its tokens verify. An entry goes when the record holds its text (the
-/// value its token stands for, or any head now). An entry the last session wrote but no open
-/// offered goes when the device saved the record over the version the entry was typed over:
-/// that session's editor sent the save, so the save holds the entry's text or newer typing,
-/// and typing newer than the save is in the page's buffer, which keeps every keystroke. An
-/// entry an open offered is never taken for superseded: the person typed after it without
-/// seeing it.
-fn judge(
-    entry: &Entry,
-    fold: &FoldState,
-    signing: &TokenKey,
-    device: DeviceId,
-) -> Option<(Draft, bool)> {
+/// draft and whether its tokens verify. An entry goes when the record holds its text: any head
+/// now, or, for one no open offered yet, the value its token stands for. Whether a later save
+/// of its session superseded it is the app's to judge with the page's buffer (APP-DESIGN §6.6),
+/// which saw that session end.
+fn judge(entry: &Entry, fold: &FoldState, signing: &TokenKey) -> Option<(Draft, bool)> {
     let field = field_of(&entry.field)?;
     let mut verified = true;
     let mut shown = Vec::new();
@@ -313,9 +284,11 @@ fn judge(
                 .iter()
                 .filter_map(|h| fold.body(h))
                 .collect();
-            let saved = holds(then.as_ref()) || heads.iter().any(|b| holds(Some(&b.record)));
-            let superseded = !entry.offered && verified && own_save_since(fold, token, device);
-            !saved && !superseded
+            // An offered entry was judged against its own version already: one that holds it
+            // was typed back after a save it no longer names (APP-DESIGN §6.6).
+            let saved = (!entry.offered && holds(then.as_ref()))
+                || heads.iter().any(|b| holds(Some(&b.record)));
+            !saved
         }
         (_, None) => false,
     };
@@ -324,8 +297,8 @@ fn judge(
 
 impl DraftWriter {
     /// Starts the writer of a writable project. The last session's drafts that are still
-    /// unsaved are offered and marked so in the file, written before the open returns, so no
-    /// save of this session can be taken for one that superseded them.
+    /// unsaved are offered and marked so in the file, written before the open returns: from
+    /// then on only *Keep* or *Discard* removes them.
     #[expect(
         clippy::too_many_arguments,
         reason = "the open's parts the writer needs, each from its own step of the open"
@@ -335,7 +308,7 @@ impl DraftWriter {
         folder: Folder,
         fold: &FoldState,
         signing: &TokenKey,
-        device: DeviceId,
+        run: Option<String>,
         hooks: Arc<Hooks>,
         counters: Arc<Counters>,
         read_only: bool,
@@ -351,8 +324,23 @@ impl DraftWriter {
         let mut changed = false;
         let mut offered = Vec::new();
         let mut kept = BTreeMap::new();
+        let mut current = BTreeMap::new();
         for mut entry in entries {
-            let Some((draft, verified)) = judge(&entry, fold, signing, device) else {
+            // The same run's page typed it (a reopen in the same run): it holds that typing,
+            // so the entry stays its current draft, and a later run's open judges it.
+            if !entry.offered && entry.run.is_some() && entry.run == run {
+                if let Some(field) = field_of(&entry.field) {
+                    let keys: Vec<RecordKey> = entry
+                        .shown
+                        .iter()
+                        .filter_map(|t| ShownToken::parse_unverified(t).ok())
+                        .map(|t| t.key().clone())
+                        .collect();
+                    current.insert(draft_key(&field, &keys), entry);
+                }
+                continue;
+            }
+            let Some((draft, verified)) = judge(&entry, fold, signing) else {
                 changed = true;
                 continue;
             };
@@ -377,7 +365,7 @@ impl DraftWriter {
             offered: Arc::new(Mutex::new(offered)),
             next_id,
             thread: Mutex::new(None),
-            run: Mutex::new(None),
+            run,
         };
         if read_only {
             return writer;
@@ -386,7 +374,7 @@ impl DraftWriter {
         let mut state = Writer {
             vfs,
             folder,
-            current: BTreeMap::new(),
+            current,
             offered: kept,
             dirty: changed,
             last: None,
@@ -463,17 +451,11 @@ impl DraftWriter {
     /// The field's current draft. Drafts are not journal data, so their time is the system
     /// clock's.
     pub(crate) fn put(&self, draft: Draft) {
-        let run = self.run.lock().unwrap_or_else(|e| e.into_inner()).clone();
         self.send(Msg::Put(
             Box::new(draft),
             crate::clock::SystemClock.now(),
-            run,
+            self.run.clone(),
         ));
-    }
-
-    /// Names the app's server run whose page sends this open's drafts.
-    pub(crate) fn name_run(&self, run: String) {
-        *self.run.lock().unwrap_or_else(|e| e.into_inner()) = Some(run);
     }
 
     /// A save of these drafts' fields succeeded: their current entries go. Offered entries
@@ -518,9 +500,11 @@ impl DraftWriter {
     pub(crate) fn offer(&self, draft: Draft, verified: bool, at: WallTime) -> Option<u64> {
         let key = key_of(&draft);
         let mut offered = self.offered.lock().unwrap_or_else(|e| e.into_inner());
+        // Only an entry an earlier offer took in holds the text for good: one of a run goes
+        // once this one is written.
         if let Some((same, _)) = offered
             .iter()
-            .find(|(o, k)| *k == key && same_text(&o.draft.text, &draft.text))
+            .find(|(o, k)| *k == key && o.run.is_none() && same_text(&o.draft.text, &draft.text))
         {
             return Some(same.id);
         }
@@ -617,7 +601,9 @@ pub(crate) fn cleared_by(command: &tc_journal::command::Command, fold: &FoldStat
             },
             &[],
         )],
-        Command::KeepDraft { draft, .. } => vec![key_of(draft)],
+        // *Keep* answers an offered entry (`DraftWriter::kept`); the field's current draft is
+        // the page's typing since, which it still holds.
+        Command::KeepDraft { .. } => Vec::new(),
         _ => Vec::new(),
     }
 }

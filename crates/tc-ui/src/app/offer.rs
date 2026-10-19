@@ -55,31 +55,53 @@ pub fn buffered_lines(
 }
 
 /// Carries out the machine's settling of `slots` (`Action::Settle`): each buffer item goes
-/// only while it holds the slot's run and text, and the mirror gets a removal that names the
-/// text, so the shell keeps an entry its run wrote since. Returns the mirror's lines
-/// (`tc4Shell.bufferChanged`).
-pub fn settle(store: &mut dyn Store, slots: &[BufferSlot]) -> Vec<String> {
-    slots
+/// only while it holds the slot's run and its text or an older one, and the mirror gets a
+/// removal that names the text, so the shell keeps an entry its run wrote since. Then `own`,
+/// the save machine's entries of its fields (`SaveMachine::template`), are written again: an
+/// item the settling freed takes the page's text at once, where another run's entry kept it
+/// out. Returns the mirror's lines (`tc4Shell.bufferChanged`).
+pub fn settle(
+    store: &mut dyn Store,
+    slots: &[BufferSlot],
+    own: &[(BufferKey, BufferEntry)],
+) -> Vec<String> {
+    let mut lines: Vec<String> = slots
         .iter()
         .filter_map(|slot| {
             // A storage that refuses keeps the item: it is offered again, never lost.
-            let _ = buffer::remove(store, &slot.key, Some(&slot.text), slot.instance);
+            let _ = buffer::remove_settled(store, &slot.key, slot.instance, &slot.text, slot.at);
             buffer::removed_line_if(&slot.key, slot.instance, &slot.text).ok()
         })
-        .collect()
+        .collect();
+    if !slots.is_empty() {
+        for (key, entry) in own {
+            lines.extend(buffer::write_entry(store, key, entry).line);
+        }
+    }
+    lines
+}
+
+/// What the page's half of a copy did: the mirror's lines, and the slots whose item the
+/// browser's storage would not take under the copy, which stay where they were (the shell's
+/// mirror has their line under the copy all the same).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Copied {
+    pub lines: Vec<String>,
+    pub stayed: Vec<BufferSlot>,
 }
 
 /// The page's half of the copy of a read-only project (A-10, 6.4), the machine's
 /// `Action::Rekey`: every entry of `from` in the buffer and in the mirror is written under
 /// `to`, item and mirror line, and only once all are written are the old slots settled, so a
 /// failure leaves both and never neither. An entry only the mirror held goes with the others.
-/// Returns the mirror's lines.
+/// Every entry keeps its run: the page then holds its own run's entries as its fields in the
+/// copy (the glue's `restore` at the copy's open), and the copy's offer takes the others in.
 pub fn copy(
     store: &mut dyn Store,
     mirror: &[String],
     from: (&ProjectRef, &ProjectId),
     to: (&ProjectRef, &ProjectId),
-) -> Result<Vec<String>, StoreError> {
+) -> Copied {
     let entries = entries_of(&*store, mirror, from.0, from.1);
     let mut fields: BTreeMap<BufferKey, Vec<BufferSlot>> = BTreeMap::new();
     let mut held: BTreeMap<(BufferKey, ServerInstance), BufferEntry> = BTreeMap::new();
@@ -88,10 +110,11 @@ pub fn copy(
             key: key.clone(),
             instance: entry.instance,
             text: entry.text.clone(),
+            at: entry.at,
         });
         held.insert((key, entry.instance), entry);
     }
-    let mut lines = Vec::new();
+    let mut copied = Copied::default();
     let mut settled = Vec::new();
     for (key, slots) in fields {
         let target = BufferKey {
@@ -104,22 +127,31 @@ pub fn copy(
             Event::Copy { slots, to: target },
         );
         for action in actions {
-            match action {
-                Action::Rekey { slot, to } => {
-                    let Some(entry) = held.get(&(slot.key.clone(), slot.instance)) else {
-                        continue;
-                    };
-                    lines.push(rekey(store, &slot, &to, entry)?);
+            let Action::Rekey { slot, to } = action else {
+                // `CopyFolder` is the server's (`session/copy`).
+                continue;
+            };
+            let Some(entry) = held.get(&(slot.key.clone(), slot.instance)) else {
+                continue;
+            };
+            match rekey(store, &slot, &to, entry) {
+                Ok(line) => {
+                    copied.lines.push(line);
                     settled.push(slot);
                 }
-                // The server copied the folder and its `drafts.json` (`session/copy`).
-                Action::CopyFolder => {}
-                _ => {}
+                Err(_) => {
+                    copied.lines.extend(
+                        serde_json::to_string(entry)
+                            .ok()
+                            .and_then(|json| buffer::changed_line(&to, &json).ok()),
+                    );
+                    copied.stayed.push(slot);
+                }
             }
         }
     }
-    lines.extend(settle(store, &settled));
-    Ok(lines)
+    copied.lines.extend(settle(store, &settled, &[]));
+    copied
 }
 
 /// Writes `slot`'s entry under `to` and returns its mirror line. The buffer item moves as it

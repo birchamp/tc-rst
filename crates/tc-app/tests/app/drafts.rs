@@ -44,6 +44,7 @@ fn fresh() -> RequestId {
 /// app was ended.
 struct Rig {
     fs: FaultFs,
+    hooks: Arc<tc_store::Hooks>,
     t: TestApp,
     dir: tempfile::TempDir,
     bible: ProjectRef,
@@ -56,6 +57,7 @@ impl Rig {
         let t = start(&dir, world.store()).await;
         Rig {
             fs: world.fs.clone(),
+            hooks: world.hooks.clone(),
             t,
             dir,
             bible: world.bible.clone(),
@@ -65,9 +67,11 @@ impl Rig {
     /// The next launch on `platform`'s computer, over the files the ended app left.
     async fn relaunch_on(&mut self, platform: FakePlatform) {
         let fs = self.fs.crash(false);
-        let backend = Arc::new(backend_over(&fs, APP, platform, Arc::default()));
+        let hooks = Arc::new(tc_store::Hooks::default());
+        let backend = Arc::new(backend_over(&fs, APP, platform, hooks.clone()));
         self.t = start(&self.dir, backend).await;
         self.fs = fs;
+        self.hooks = hooks;
     }
 
     async fn relaunch(&mut self) {
@@ -93,12 +97,23 @@ impl Rig {
     }
 
     async fn offer(&self, session: &ProjectSession, buffered: &[String]) -> OfferedDrafts {
+        self.offer_with(session, buffered, false).await
+    }
+
+    /// The offer of a page in the shell, whose lines include the mirror's.
+    async fn offer_with(
+        &self,
+        session: &ProjectSession,
+        buffered: &[String],
+        mirror: bool,
+    ) -> OfferedDrafts {
         post(
             &self.t.app,
             &Drafts {
                 at: session.scope().clone(),
                 request: fresh(),
                 buffered: buffered.to_vec(),
+                mirror,
             },
         )
         .await
@@ -573,14 +588,18 @@ async fn a_second_writer_makes_the_project_read_only_and_the_copy_carries_its_dr
     .unwrap();
     assert_eq!(copy.project.as_str(), "sample_burrito - Copy");
     assert_eq!(&copy.id, session.id());
-    let lines = tc_ui::app::offer::copy(
+    let copied = tc_ui::app::offer::copy(
         &mut storage,
         &[],
         (&session.scope().project, session.id()),
         (&copy.project, &copy.id),
-    )
-    .unwrap();
-    assert_eq!(lines.len(), 2, "the copy's line and the folder's removal");
+    );
+    assert!(copied.stayed.is_empty());
+    assert_eq!(
+        copied.lines.len(),
+        2,
+        "the copy's line and the folder's removal"
+    );
     rig.t.app.sessions().leave_screen(session.scope()).unwrap();
     drop(session);
 
@@ -732,9 +751,15 @@ fn now_ms() -> i64 {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_stored_draft_gives_way_only_to_newer_typing_of_its_own_run() {
     let mut rig = Rig::new().await;
+    let (same, other) = (tit(2, 1), tit(2, 2));
+    // TIT 2:2: an earlier run's page typed a draft and the app ended.
+    let session = rig.open(&rig.bible.clone()).await;
+    rig.stored_draft(&session, &other, "typed by another run")
+        .await;
+    drop(session);
+    rig.relaunch().await;
     let session = rig.open(&rig.bible.clone()).await;
     let run = rig.t.app.instance();
-    let (same, other) = (tit(2, 1), tit(2, 2));
     // TIT 2:1: the draft and the buffer edit one version; the buffer is newer.
     rig.stored_draft(&session, &same, "But as for you, speak")
         .await;
@@ -745,26 +770,12 @@ async fn a_stored_draft_gives_way_only_to_newer_typing_of_its_own_run() {
         None,
         now_ms() + 60_000,
     );
-    // TIT 2:2: the draft was typed by another run's page, over the version the buffer
-    // entry edits too.
+    // TIT 2:2: this run saved and typed on, without answering the earlier run's draft.
     assert!(matches!(
         rig.save(&session, 1, &other, "Older men are to be sober")
             .await,
         Answer::Reply { .. }
     ));
-    session
-        .handle()
-        .name_run(ServerInstance::from_bytes([0x0e; 16]));
-    session
-        .handle()
-        .submit(StoreCommand::draft(
-            DraftField::Words,
-            vec![session.read().mint(&other, None).unwrap()],
-            "typed by another run".to_owned(),
-        ))
-        .await
-        .unwrap();
-    session.handle().wait_idle();
     let over_saved = entry(
         run,
         rig.token(&session, &other),
@@ -835,4 +846,38 @@ async fn a_stored_draft_gives_way_only_to_newer_typing_of_its_own_run() {
         ["TIT 2:2", "TIT 2:2"],
         "the older copy went too: {after:#?}"
     );
+}
+
+/// Finding 5: the session's own save replaced a draft, and the process ended before the
+/// writer rewrote `drafts.json`. Behind the shell's mirror, which holds no entry of that run
+/// for the verse (it ended clean), the older copy is not offered over the person's save, and
+/// does not come back.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_older_draft_is_not_offered_over_the_sessions_own_save() {
+    let mut rig = Rig::new().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let key = tit(3, 1);
+    rig.stored_draft(&session, &key, "Remind them to be").await;
+    rig.hooks.hold(tc_store::Point::BeforeDraftWrite);
+    assert!(matches!(
+        rig.save(&session, 1, &key, "Remind them to be subject")
+            .await,
+        Answer::Reply { .. }
+    ));
+    drop(session);
+    let hooks = rig.hooks.clone();
+    rig.relaunch().await;
+    hooks.release(tc_store::Point::BeforeDraftWrite);
+    let session = rig.open(&rig.bible.clone()).await;
+    let offers = rig.offer_with(&session, &[], true).await;
+    assert!(offers.offers.is_empty(), "{offers:#?}");
+    assert_eq!(
+        words(&session, &key).as_deref(),
+        Some("Remind them to be subject")
+    );
+    session.handle().wait_idle();
+    drop(session);
+    rig.relaunch().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    assert!(rig.offer_with(&session, &[], true).await.offers.is_empty());
 }

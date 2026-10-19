@@ -136,6 +136,10 @@ impl<S: ProjectStore> ProjectStore for CountingStore<S> {
         self.inner.trust_lock(folder);
     }
 
+    fn name_run(&self, run: tc_api::ids::ServerInstance) {
+        self.inner.name_run(run);
+    }
+
     #[cfg(feature = "test-hooks")]
     fn reset(&self) -> Result<(), StoreError> {
         self.inner.reset()
@@ -205,10 +209,6 @@ impl ProjectHandle for CountingHandle {
         self.inner.offered_drafts()
     }
 
-    fn name_run(&self, run: tc_api::ids::ServerInstance) {
-        self.inner.name_run(run);
-    }
-
     fn discard_draft(&self, id: u64) -> bool {
         self.inner.discard_draft(id)
     }
@@ -265,6 +265,10 @@ impl ProjectStore for SharedStore {
 
     fn trust_lock(&self, folder: &ProjectRef) {
         self.0.trust_lock(folder);
+    }
+
+    fn name_run(&self, run: tc_api::ids::ServerInstance) {
+        self.0.name_run(run);
     }
 
     #[cfg(feature = "test-hooks")]

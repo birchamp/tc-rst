@@ -4,7 +4,6 @@
 //! carried by a copy of a read-only project (R7).
 
 use crate::common::*;
-use std::sync::Arc;
 use tc_journal::command::{AlignmentEdit, Command, Draft, DraftField, SectionValue};
 use tc_journal::record::{AlignmentGroup, CommentTarget, SourceWord, TargetWord, VerseValue};
 use tc_journal::{ChapterNo, Record, RecordKey, VerseNo};
@@ -492,31 +491,31 @@ fn discard_leaves_the_fields_draft_typed_since() {
     handle.close().unwrap();
 }
 
-/// Finding 5: the session's own save replaced a draft, and the process ended before the
-/// writer rewrote `drafts.json`. The older copy is not offered over the person's save.
+/// APP-DESIGN §6.6: a draft records the app's run that typed it, so the app can tell whether
+/// that run's page kept newer typing (finding 5 is judged there, with the shell's mirror); an
+/// open of a later run offers it, and an open of the same run keeps it as that page's own.
 #[test]
-fn a_draft_the_sessions_own_save_superseded_is_not_offered() {
+fn a_draft_records_its_run_and_only_a_later_run_is_offered_it() {
     let (rig, folder) = titus();
-    let hooks = Arc::new(tc_store::Hooks::default());
-    let rig2 = rig_with_hooks(rig.fs.crash(false), hooks.clone());
-    let handle = rig2.store.open(&folder, &OpenOptions::default()).unwrap();
-    draft(&handle, DraftField::Words, &[verse(1, 6)], "older typing");
-    handle.wait_idle();
-    hooks.hold(tc_store::Point::BeforeDraftWrite);
-    save_verse(&handle, 1, 6, "older typing, saved later").unwrap();
-    let fs = rig2.fs.crash(false);
-    hooks.release(tc_store::Point::BeforeDraftWrite);
-    drop(handle);
-    let (_rig, handle) = reopen(fs, &folder);
+    let run = |name: &str| OpenOptions {
+        run: Some(name.to_owned()),
+        ..OpenOptions::default()
+    };
+    let handle = rig.store.open(&folder, &run("run-1")).unwrap();
+    draft(&handle, DraftField::Words, &[verse(1, 6)], "typed in run 1");
+    let fs = crashed_after_drafts(&rig, handle);
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = rig.store.open(&folder, &run("run-1")).unwrap();
     assert!(
         handle.offered_drafts().is_empty(),
-        "{:?}",
-        texts_offered(&handle)
+        "the same run's own typing"
     );
-    assert_eq!(
-        words(&handle, 1, 6).as_deref(),
-        Some("older typing, saved later")
-    );
+    let fs = crashed_after_drafts(&rig, handle);
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = rig.store.open(&folder, &run("run-2")).unwrap();
+    let offered = handle.offered_drafts();
+    assert_eq!(offered.len(), 1, "{offered:?}");
+    assert_eq!(offered[0].run.as_deref(), Some("run-1"));
     handle.close().unwrap();
 }
 

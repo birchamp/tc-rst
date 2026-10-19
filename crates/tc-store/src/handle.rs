@@ -678,13 +678,6 @@ impl ProjectHandle {
         self.drafts.discard(id)
     }
 
-    /// Names the app's server run whose page sends this open's drafts (APP-DESIGN §6.6): each
-    /// draft records it, so the next open can tell that run's own newer buffer entry, which
-    /// holds the same editor's newer text, from other typing.
-    pub fn name_run(&self, run: String) {
-        self.drafts.name_run(run);
-    }
-
     /// Takes an unsaved text in as an offered draft (APP-DESIGN §6.6), written before this
     /// returns its number; `None` when it could not be written, and the text stays where it
     /// was. A read-only project takes nothing.

@@ -15,7 +15,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::buffer::{BufferKey, FieldPlace};
-use crate::ids::{ProjectId, ProjectRef, RequestId, Scope, ServerInstance, ViewSeq};
+use crate::ids::{ProjectId, ProjectRef, RequestId, Scope, ServerInstance, ViewSeq, WallMs};
 use crate::token::ShownToken;
 use crate::write::{ConflictBrief, Stored};
 
@@ -33,6 +33,10 @@ pub struct Drafts {
     /// does not know, which a request's own fields would refuse. A line that does not parse, a
     /// removal, and an entry of another folder or project id are skipped.
     pub buffered: Vec<String>,
+    /// `buffered` includes the shell's mirror (`tc4Shell.takeBuffered`), which holds every
+    /// keystroke and every removal of each run: a run with no entry of a field ended with the
+    /// field clean, so its stored drafts of the field are older than its save.
+    pub mirror: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -135,8 +139,10 @@ pub struct Settles {
     pub buffered: Vec<BufferSlot>,
 }
 
-/// One buffer item, as a removal names it (§6.6): the field, the run, and the text the item
-/// must still hold to be removed, so a newer text typed meanwhile stays.
+/// One buffer item, as a removal names it (§6.6): the field, the run, the text the item must
+/// still hold to be removed, so a newer text typed meanwhile stays, and the entry's time: an
+/// item of the run no newer than it holds an older text of the same typing (a storage that
+/// refused the newer one), and goes too.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
@@ -144,6 +150,7 @@ pub struct BufferSlot {
     pub key: BufferKey,
     pub instance: ServerInstance,
     pub text: String,
+    pub at: WallMs,
 }
 
 /// The store's number of an offered draft of `drafts.json`, valid for the open that offered it.
