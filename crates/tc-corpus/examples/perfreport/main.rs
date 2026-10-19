@@ -10,6 +10,7 @@
 //! perfreport memory DIR                M2: private bytes a minute after the last action, both heaps
 //! perfreport growth DIR                M3: memory against history, 1.2 million changes
 //! perfreport years DIR [--days 750] [--open-every 1]   three simulated years
+//! perfreport render DIR --from FILE [--ratios FILE]   the table again from a saved results/<stamp>.json
 //! perfreport child CASE DIR [args]     one measurement in a process of its own (prints ROW lines)
 //! ```
 //!
@@ -50,6 +51,7 @@ fn main() {
             0
         }
         "run" => run(&dir, &flags, false),
+        "render" => render_command(&dir, &flags),
         "ci" => run(&dir, &flags, true),
         "r9" => r9_command(&dir, &flags),
         "memory" => memory_command(&dir, &flags),
@@ -87,6 +89,7 @@ struct Flags {
     days: u32,
     open_every: u32,
     months: Option<usize>,
+    from: Option<PathBuf>,
 }
 
 impl Flags {
@@ -113,6 +116,7 @@ impl Flags {
                     f.open_every = it.next().and_then(|v| v.parse().ok()).unwrap_or(1)
                 }
                 "--months" => f.months = it.next().and_then(|v| v.parse().ok()),
+                "--from" => f.from = it.next().map(PathBuf::from),
                 _ => {}
             }
         }
@@ -309,6 +313,39 @@ fn run(dir: &Path, flags: &Flags, ci: bool) -> i32 {
     report(dir, &measured, &ratios, ci, flags)
 }
 
+/// Prints the table again from the measurements a report saved (`results/<stamp>.json`),
+/// judged by this build's rows and by `--ratios`: the way to judge a run by the laptop's
+/// own ratios or by a changed budget without measuring it again.
+fn render_command(dir: &Path, flags: &Flags) -> i32 {
+    println!("{}", machine::machine_line());
+    let Some(from) = &flags.from else {
+        eprintln!("perfreport render DIR --from results/<stamp>.json [--ratios FILE]");
+        return 2;
+    };
+    let text = std::fs::read_to_string(from).unwrap_or_else(|e| {
+        eprintln!("{}: {e}", from.display());
+        std::process::exit(2);
+    });
+    let saved: Vec<serde_json::Value> = serde_json::from_str(&text).unwrap_or_default();
+    let measured: Vec<Measured> = saved
+        .iter()
+        .map(|row| {
+            let mut m = Measured::new(
+                row["id"].as_str().unwrap_or(""),
+                row["samples"]
+                    .as_array()
+                    .map(|a| a.iter().filter_map(serde_json::Value::as_f64).collect())
+                    .unwrap_or_default(),
+                row["note"].as_str().unwrap_or(""),
+            );
+            m.fsyncs = row["fsyncs"].as_f64();
+            m
+        })
+        .collect();
+    let ratios = Ratios::read_or_identity(flags.ratios.as_deref());
+    report_to(dir, &measured, &ratios, false, flags, false)
+}
+
 fn flush_median(measured: &[Measured]) -> Option<f64> {
     measured
         .iter()
@@ -317,6 +354,17 @@ fn flush_median(measured: &[Measured]) -> Option<f64> {
 }
 
 fn report(dir: &Path, measured: &[Measured], ratios: &Ratios, ci: bool, flags: &Flags) -> i32 {
+    report_to(dir, measured, ratios, ci, flags, true)
+}
+
+fn report_to(
+    dir: &Path,
+    measured: &[Measured],
+    ratios: &Ratios,
+    ci: bool,
+    flags: &Flags,
+    save: bool,
+) -> i32 {
     let mode = if ci {
         Mode::Ci(flags.tolerance)
     } else {
@@ -329,23 +377,25 @@ fn report(dir: &Path, measured: &[Measured], ratios: &Ratios, ci: bool, flags: &
     for m in measured.iter().filter(|m| !m.note.is_empty()) {
         println!("  {}: {}", m.id, m.note);
     }
-    let results = dir.join("results");
-    let _ = std::fs::create_dir_all(&results);
-    let stamp = common::run_id();
-    let _ = std::fs::write(
-        results.join(format!("{stamp}.tsv")),
-        table::tsv(rows::ROWS, measured, mode, ratios, flush_median(measured)),
-    );
-    let json: Vec<serde_json::Value> = measured
-        .iter()
-        .map(|m| {
-            serde_json::json!({"id": m.id, "samples": m.samples, "note": m.note, "fsyncs": m.fsyncs})
-        })
-        .collect();
-    let _ = std::fs::write(
-        results.join(format!("{stamp}.json")),
-        serde_json::to_string_pretty(&json).unwrap_or_default(),
-    );
+    if save {
+        let results = dir.join("results");
+        let _ = std::fs::create_dir_all(&results);
+        let stamp = common::run_id();
+        let _ = std::fs::write(
+            results.join(format!("{stamp}.tsv")),
+            table::tsv(rows::ROWS, measured, mode, ratios, flush_median(measured)),
+        );
+        let json: Vec<serde_json::Value> = measured
+            .iter()
+            .map(|m| {
+                serde_json::json!({"id": m.id, "samples": m.samples, "note": m.note, "fsyncs": m.fsyncs})
+            })
+            .collect();
+        let _ = std::fs::write(
+            results.join(format!("{stamp}.json")),
+            serde_json::to_string_pretty(&json).unwrap_or_default(),
+        );
+    }
     let failed: Vec<&str> = verdicts
         .iter()
         .filter(|(_, v)| *v == Verdict::Fail)

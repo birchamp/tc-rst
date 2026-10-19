@@ -243,7 +243,12 @@ pub fn laptop_band(
     let value = statistic(spec.on, samples);
     let value = if spec.class == Class::Mixed {
         let flush = fsyncs.zip(flush_ms).map_or(0.0, |(n, f)| n * f);
-        (value - flush).max(0.0)
+        // Flushes made together cost less than the sum of one at a time: when they outweigh
+        // the figure, the CPU part cannot be told, and no estimate is made.
+        if value - flush <= 0.0 {
+            return None;
+        }
+        value - flush
     } else {
         value
     };
@@ -275,7 +280,7 @@ pub fn verdict_laptop(
     }
     let slack = if spec.class == Class::Timer { 1.1 } else { 1.0 };
     let Some((low, high)) = laptop_band(spec, samples, fsyncs, flush_ms, ratios) else {
-        return Verdict::NotShown("the laptop's flush is not measured".into());
+        return Verdict::NotShown("the laptop's drive is not measured".into());
     };
     if low > limit * slack {
         Verdict::Fail

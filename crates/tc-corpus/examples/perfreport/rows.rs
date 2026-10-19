@@ -116,8 +116,8 @@ pub const ROWS: &[RowSpec] = &[
     row("align.train_nt", "Aligning", "Training the NT model (background)", "27 NT books", "tc-align", Info, Median, Single, false),
     row("align.append", "Aligning", "Model update after an alignment save (background)", "one verse", "tc-align", Info, Median, Single, false),
     // tc-resources
-    row("res.load_psalms", "Resources", "Load Psalms resources from the installed store, first time", "Psalms", "tc-resources", Ms(300.0), P95, Single, true),
-    row("res.load_psalms_warm", "Resources", "Load Psalms resources again, the store in the page cache", "Psalms", "tc-resources", Info, Median, Single, false),
+    row("res.load_psalms", "Resources", "Load Psalms resources from the installed store, first time (files out of the page cache)", "Psalms", "tc-resources", Ms(300.0), P95, Disk, true),
+    row("res.load_psalms_warm", "Resources", "Load Psalms resources, the store in the page cache (the CPU part of the row above)", "Psalms", "tc-resources", Ms(300.0), P95, Single, true),
     row("res.memory_psalms", "Resources", "Memory of one open book's resources", "Psalms", "tc-resources", MiB(60.0), Value, Memory, false),
     row("lex.load", "Resources", "Load a lexicon", "en_uhl, 8,674 entries", "tc-resources", Ms(100.0), P95, Single, true),
     row("lex.lookup", "Resources", "Look an entry up", "en_uhl", "tc-resources", Ms(1.0), P95, Single, true),

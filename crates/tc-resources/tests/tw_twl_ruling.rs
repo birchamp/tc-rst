@@ -19,10 +19,15 @@ use tc_resources::{
 
 use common::real::{BOOK_REPOS, export_with, store_with};
 
+/// Whether a folder of the path is called `name` (a separator of either kind).
+fn has_component(path: &std::path::Path, name: &str) -> bool {
+    path.components().any(|c| c.as_os_str() == name)
+}
+
 fn under(paths: &[PathBuf], repo: &str) -> Vec<PathBuf> {
     paths
         .iter()
-        .filter(|p| p.to_string_lossy().contains(&format!("/{repo}/")))
+        .filter(|p| has_component(p, repo))
         .cloned()
         .collect()
 }
@@ -144,7 +149,7 @@ fn articles_come_from_en_tw_only() {
     assert!(!got.body.contains("Tampered"));
     let payload: Vec<_> = under(&opened, "en_twl")
         .into_iter()
-        .filter(|p| p.to_string_lossy().contains("/payload/"))
+        .filter(|p| has_component(p, "payload"))
         .collect();
     assert!(
         payload.is_empty(),

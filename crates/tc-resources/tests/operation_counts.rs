@@ -56,9 +56,10 @@ fn loading_a_book_opens_only_its_files() {
     let (mut tw, mut ta, mut book_files) = (0usize, 0usize, 0usize);
     for path in &opened {
         let text = path.to_string_lossy();
-        if text.contains("/en_tw/") {
+        let in_repo = |name: &str| path.components().any(|c| c.as_os_str() == name);
+        if in_repo("en_tw") {
             tw += 1;
-        } else if text.contains("/en_ta/") {
+        } else if in_repo("en_ta") {
             ta += 1;
         } else {
             assert!(

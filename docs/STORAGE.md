@@ -4923,6 +4923,12 @@ corpora (tc-journal's tests run on `Spec::psalms` and `Spec::scaled(1, 10)`):
 | `a_verse_save_costs_nothing_per_year_of_history` (`tc-journal`) | the same save with 4,000 more changes of history, 500 of them on the saved verse, counts no more work |
 | `a_save_is_durable_while_a_large_batch_is_written`, `a_large_batch_shows_determinate_progress_by_300_ms`, `a_large_batch_keeps_its_values_in_the_packs` (`tc-store`) | a save is `Durable` while a 2,300-change upgrade waits in its worker; `Progress { work: Batch }` first comes at 300 ms or a little after and only grows, none for a batch that ends sooner; after the swap the fold reads the carried decisions from the packs (`values_read` rises) |
 | `a_save_is_durable_while_a_consolidation_is_held` (`tc-store`) | a month of packs merged by the worker: five saves are `Durable` while it is held before writing, and the packs are merged after |
+| `a_tools_decisions_read_only_their_own_records` (`tc-journal`) | `decisions(tool, Psalms)` projects and decodes at most one record per decision of the tool and per verse of the book (and a front for each chapter), on both corpora, and fewer than the book's decisions of both tools and its verses together: the other tool's decisions, the alignments and the comments are never read |
+| `decision_resources_are_read_without_decoding_decisions` (`tc-journal`) | `decision_resources` returns the resources of the same decisions in the same order as `decisions`, decoding at most one value in a hundred decisions, on both corpora |
+
+The domain crates pin their steps in their own tests (`tc-check/tests/operation_counts.rs`,
+`tc-align/tests/operation_counts.rs`, `tc-resources/tests/operation_counts.rs` and
+`bundle_seed.rs`), listed with their results in `docs/evidence/storage-scale-2026-10-19.md`.
 
 Where an earlier unit's row says "recorded" for a file that is not clean by stat, it is recorded;
 a file clean by stat whose bytes differ is held (§6.2). A pack a teammate sealed is put into the
