@@ -121,3 +121,35 @@ this section (dev unless named):
   as tC4's React gallery, behaviour scenarios 53 of 53, both reports unchanged;
 - A5's five dialog DOM captures, the license case and both Rust sequences taken again: only the
   build's folder name in the logo's address changed; every row stays as it was.
+
+## After the second verification
+
+The second verification found four minor problems, fixed on this branch, each with a test that
+fails without its fix:
+
+- a real double-click on the menu's internet row left the internet on, where tC4 turns it on and
+  off again: the journey `a_double_click_on_the_internet_row_turns_it_on_and_off_again` holds each
+  `net/set` reply back 250 ms and saw `[true, true]` sent and the internet on with the build
+  before the fix; with it, `[true, false]`, one request at a time, and the internet off;
+- the Feedback Message box's text stayed at its first value while the person typed: the new
+  behaviour sequence `feedback-typing`, recorded on both sides, differed at step 2 (`"hello"`
+  typed) with the build before the fix and is the same as tC4's after all 12 steps with it; it
+  also found that each keystroke drew the "not sent" callout again (step 11), fixed with it;
+- CI's node step left out `about.test.mjs`: `env-rust.test.mjs`'s new check failed on it;
+- the model's comment on `TurningOn`, and a failed compose shown in English with no way back
+  from "Ask for help": the host test `a_kept_report_whose_compose_failed_composes_again_with_its_text`
+  and the journey `a compose that fails keeps Send off and says so; the next opening keeps the
+  text and composes again` (which fails on the build before the fix).
+
+The runs again, on the build of the commit that adds this section (dev):
+
+- the journeys, `node --test parity/app/journeys/*.test.mjs`: 40 of 40 pass (account menu 5,
+  Feedback 6, the others as before);
+- A4a's smoke: 95 checks, none failed; A4b's no-loss suite: 141 checks, none failed;
+- CI's node step as CI runs it: 121 tests, 69 pass, 52 skipped (they need tc4 and Playwright),
+  none failed;
+- the design-system gallery after Input's textarea change: DOM 751 of 751 cases the same as tC4's
+  React gallery, behaviour scenarios 53 of 53, both reports unchanged;
+- the sequences `account-menu-keyboard` and `app-language-preview` taken again: only the build's
+  folder name in the logo's address changed, so the committed recordings were kept; the gate
+  reports `feedback` declared with `feedback-typing` the same after every step.
