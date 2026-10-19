@@ -8,6 +8,7 @@ PORT="${WINVM_PORT:-2222}"; USER="${WINVM_USER:-builder}"; KEY="${WINVM_KEY:-$HO
 SSH=(ssh -i "$KEY" -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$USER@127.0.0.1")
 rev="$(git -C "$REPO" rev-parse "${1:?commit}")"; shift
 bundle="$(mktemp --suffix=.bundle)"; trap 'rm -f "$bundle"' EXIT
-git -C "$REPO" bundle create "$bundle" "$rev" --all-reflogs >/dev/null 2>&1 || git -C "$REPO" bundle create "$bundle" "$rev" >/dev/null
+git -C "$REPO" update-ref refs/winvm/head "$rev"
+git -C "$REPO" bundle create "$bundle" refs/winvm/head >/dev/null 2>&1
 scp -i "$KEY" -P "$PORT" -o BatchMode=yes -q "$bundle" "$USER@127.0.0.1:C:/src/tc.bundle"
-"${SSH[@]}" "powershell -NoProfile -Command \"\$ErrorActionPreference='Stop'; Set-Location C:\\src; if (-not (Test-Path tc-rst\\.git)) { git clone -q --no-checkout tc.bundle tc-rst }; Set-Location tc-rst; git fetch -q ..\\tc.bundle; git checkout -q --force $rev; git clean -q -fdx -e target; \$env:Path = \\\"\$env:USERPROFILE\\.cargo\\bin;\$env:Path\\\"; $*\""
+"${SSH[@]}" "powershell -NoProfile -Command \"\$ErrorActionPreference='Stop'; Set-Location C:\\src; if (-not (Test-Path tc-rst\\.git)) { git clone -q --no-checkout tc.bundle tc-rst }; Set-Location tc-rst; git fetch -q ..\\tc.bundle refs/winvm/head; git checkout -q --force $rev; git clean -q -fdx -e target; \$env:Path = \\\"\$env:USERPROFILE\\.cargo\\bin;\$env:Path\\\"; $*\""
