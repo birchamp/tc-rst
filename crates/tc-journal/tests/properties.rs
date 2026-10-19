@@ -2104,7 +2104,7 @@ fn sidecar_decode_render() {
 /// would cost more than the verses it changed).
 #[test]
 fn shown_digests_of_a_render_equal_those_of_its_decode() {
-    team(CASES, &["book rendered"], |view, census| {
+    team(&["book rendered"], |view, census| {
         for book in view.state.projected_books() {
             let file = DerivedFile::Usfm(book);
             let Some(rendered) = view.state.render_with_digests(&file) else {
