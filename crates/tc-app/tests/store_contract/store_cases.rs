@@ -524,3 +524,53 @@ async fn draft_with_unverifiable_token_is_offered_as_text() {
     assert_eq!(offered[0].field, DraftField::Words);
     assert_eq!(offered[0].text, "hospitable, typed");
 }
+
+/// R26 (§9.2), STORAGE §5.14: a draft sent while a save of its field is in flight holds text
+/// typed after the text that save stores, so the save's landing must not erase it. The save
+/// is held at its durability point, a longer text is sent as the field's draft meanwhile, and
+/// the reopened project still offers that text. tc-store clears a field's draft entry on every
+/// successful save of the field, whatever its text, so this waits for R26; until then the
+/// browser buffer and the shell's mirror keep the text on the same computer, and C2's save
+/// machine sends the draft again after an `Ack` that leaves the field dirty (§6.6).
+#[tokio::test]
+#[ignore = "R26: tc-store clears a field's draft on every save of that field (APP-DESIGN §9.2)"]
+async fn a_save_never_erases_a_newer_draft_of_its_field() {
+    let world = store_world();
+    let key = tit(1, 12);
+    let handle = world.open(&world.bible);
+    let shown = token(handle.as_ref(), &key);
+    world.hooks.hold(Point::BeforeDurablePending);
+    let saving = handle.submit(StoreCommand::save_verse(
+        shown.clone(),
+        "first words".to_owned(),
+    ));
+    world.hooks.wait_reached(Point::BeforeDurablePending, 1);
+    let draft = handle
+        .submit(StoreCommand::draft(
+            DraftField::Words,
+            vec![shown],
+            "first words, then more typed".to_owned(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(draft.stored, Stored::Unchanged);
+    world.hooks.release(Point::BeforeDurablePending);
+    assert_eq!(saving.await.unwrap().stored, Stored::Durable);
+    handle.wait_idle();
+    handle.close().await.unwrap();
+
+    let handle = world.open(&world.bible);
+    assert_eq!(
+        words_of(&handle.snapshot(), &key).as_deref(),
+        Some("first words")
+    );
+    let offered = handle.offered_drafts();
+    assert_eq!(
+        offered
+            .iter()
+            .map(|draft| (draft.field.clone(), draft.text.as_str()))
+            .collect::<Vec<_>>(),
+        vec![(DraftField::Words, "first words, then more typed")],
+        "the text typed while the save was in flight"
+    );
+}

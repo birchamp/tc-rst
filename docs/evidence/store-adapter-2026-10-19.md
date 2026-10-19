@@ -91,6 +91,32 @@ equality on every counter that counts files).
   line to `Arc::default()`, the same value with and without the feature, and the same in
   tc-app's `StoreBackend::on_disk`, which the tc-store error had hidden; the storage branch
   should take the same line.)*
+- *(Found by the third verification.)* A save erases a newer draft of its field (R26,
+  APP-DESIGN §9.2). The actor calls `self.drafts.saved(cleared_by(&command, ..))` after every
+  successful command (`crates/tc-store/src/actor.rs`, `Msg::Command`), and the writer removes
+  the field's entry by its key whatever its text (`drafts.rs`, `DraftWriter::saved`), as STORAGE
+  §5.14 says ("A successful save of that field removes its entry"). A verse's draft goes at most
+  once a second while the field is dirty (APP-DESIGN §6.6), so a draft sent while a save waits
+  behind a checkpoint (up to 500 ms, RT-11) holds text typed after the saved text, and it is
+  gone when that save lands. `a_save_never_erases_a_newer_draft_of_its_field`
+  (`crates/tc-app/tests/store_contract/store_cases.rs`) holds a save at
+  `Point::BeforeDurablePending`, sends a longer draft, releases the save, reopens, and finds no
+  offer: `cargo test -p tc-app --test store_contract a_save_never_erases -- --include-ignored`
+  fails today with `left: []`, and passes with the actor's `drafts.saved` call taken out (tried,
+  not committed). The request: a save removes the entry only if its text equals the value the
+  save stored, or the entry was put before the command was submitted. The case is ignored until
+  then; C2's save machine sends the draft again after an `Ack` that leaves the field dirty
+  (APP-DESIGN §6.5).
+- *(Found by the third verification, outside C0's diff.)* tc-journal's property
+  `mixed_minor_versions_converge` (`crates/tc-journal/tests/properties.rs`, with
+  `failure_persistence: None`) failed twice in about seventy runs on the verifier's machine,
+  once on "VerseText {69, 70} is lost with newer fields" (`properties.rs:1253`, minimal input a
+  20-op script on 3 devices ending in `Edit { dev: 6, at: 190, stale: false, newer: true }` and
+  `Fork { a: 163, b: 202, what: 71, at: 97 }`) and once on "VerseStructure {42, 54, 68} added
+  without a newer field" (`:1278`). The property says a conflict disappears, or appears, when
+  some changes carry newer-minor fields, which could hide a conflict from the person. C0 ran it
+  48 more times at d29a3ee's tc-journal without a failure. Until the storage team fixes it, a
+  failure of `cargo test --workspace` there is rerun once before it is read as the branch's.
 - No other finding: the projection of records written through `ApplyUpgrade` gives the sample's
   Titus and Jonah back byte for byte (`chapter_view_equals_seed_usfm` on the store), and every
   contract case passes.
@@ -121,3 +147,12 @@ are as measured above), so M6 and M7 stand. Three things changed elsewhere:
   records what it removed; the start does not wait for it.
 - Two tests run submits on a four-thread runtime (15 rounds of 8 concurrent saves, and 20
   rounds of 8 saves racing a close); together they take under a second.
+
+## After the third verification
+
+Nothing on a save's path changed, so M6 and M7 stand. `report_removed_staging` now names an
+import's and a join's removal as tC4 does, which costs nothing measurable. One test was added
+on a four-thread runtime: four threads send drafts without pause while 400 saves run one after
+another (`saves_racing_drafts_are_each_announced_as_their_own_request`, about 0.3 s, 25,000 to
+64,000 drafts a run). With a draft's reply settled as the relay settles, 329 to 383 of the 400
+saves were announced as `System` in five runs; unchanged, it passed 30 runs out of 30.
