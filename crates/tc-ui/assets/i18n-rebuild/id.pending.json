@@ -26,12 +26,16 @@
   "refusal.open.lock-held",
   "refusal.open.lock-held-unnamed",
   "refusal.open.newer-format",
+  "syncResult.alignmentsMany",
+  "syncResult.alignmentsOne",
   "syncResult.error.keptStopped",
   "syncResult.error.needsNewerApp",
   "syncResult.error.notSent",
   "syncResult.error.projectMismatch",
   "syncResult.error.readOnly",
+  "syncResult.error.stopped",
   "syncResult.error.tc4TeamRepository",
+  "syncResult.error.unexpected",
   "syncResult.receivedKept",
   "upload.notWritten"
 ]

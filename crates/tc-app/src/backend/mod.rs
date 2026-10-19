@@ -785,6 +785,20 @@ pub trait ProjectStore: Send + Sync + 'static {
     #[cfg(feature = "test-hooks")]
     fn reset(&self) -> Result<(), StoreError>;
 
+    /// Teammates' versions of the verse `key` of `folder`, each by a teammate of its own, all
+    /// from the verse's current version, written into the project as a sync's intake would
+    /// (B10's scripted sync): the changes' ids. A store with no teammates refuses.
+    #[cfg(feature = "test-hooks")]
+    fn teammates_edit_verse(
+        &self,
+        folder: &ProjectRef,
+        key: &tc_journal::RecordKey,
+        texts: &[&str],
+    ) -> Result<Vec<tc_journal::ChangeId>, StoreError> {
+        let _ = (folder, key, texts);
+        Err(StoreError::Other("this store has no teammates".to_owned()))
+    }
+
     /// tc-store's hold points, which `test/hold` arms beside the app's own (C1a); `None` for a
     /// store that has none.
     #[cfg(feature = "test-hooks")]

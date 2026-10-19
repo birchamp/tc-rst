@@ -29,7 +29,7 @@ use tc_api::check::{
     Category, CheckListRef, CheckPlace, CheckUnit, Dot, NoteCategory, RailRow, RailRowPatch,
     RowFlags, Tool,
 };
-use tc_api::door43::{OpenDoor43, ProjectName, RepoSource};
+use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
 use tc_api::error::{ApiError, Feature, Flow, SignInReason};
 use tc_api::event::{
     Aspect, ChangeCause, ChangeParts, ChangeScope, ChapterRef, CheckpointOutcome, Event,
@@ -46,7 +46,7 @@ use tc_api::ids::{
     ReportId, RequestId, Scope, ServerInstance, StoryNo, UploadId, ViewSeq, WallMs,
 };
 use tc_api::jobs::{
-    Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress,
+    Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress, SyncResultView,
 };
 use tc_api::net::{NetView, Set, State as NetState};
 use tc_api::prefs::{
@@ -58,7 +58,8 @@ use tc_api::shown::{ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
     Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, Quiet,
-    QuietView, Release, Reset, SaveVerse, StoredDraft, StoredText, TokenBase,
+    QuietView, Release, Reset, SaveVerse, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
+    TeammatesEdit, TokenBase,
 };
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
@@ -472,6 +473,15 @@ impl Example for OpenDoor43 {
     }
 }
 
+impl Example for SyncProject {
+    fn example() -> Self {
+        SyncProject {
+            request: request(21),
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+        }
+    }
+}
+
 impl Example for LinkView {
     fn example() -> Self {
         LinkView {
@@ -849,6 +859,26 @@ impl Example for LastEdit {
     }
 }
 
+impl Example for Script {
+    fn example() -> Self {
+        Script {
+            request: request(22),
+            next: Scripted::Sync {
+                project: ProjectRef::parse("sample_burrito").unwrap(),
+                outcome: ScriptedSync::Synced {
+                    teammates: Some(TeammatesEdit {
+                        book: BookId::Titus,
+                        chapter: 1,
+                        verse: 1,
+                        texts: vec!["Pablo, siervo".into(), "Pablo, esclavo".into()],
+                    }),
+                    restored: 0,
+                },
+            },
+        }
+    }
+}
+
 fn golden_dir() -> PathBuf {
     common::crate_dir().join("tests/golden")
 }
@@ -1158,6 +1188,29 @@ fn events() -> Vec<Event> {
             kind: JobKind::Seed,
             project: None,
             state: JobState::Done(JobOutcome::Finished),
+        }),
+        Event::Job(JobView {
+            id: JobId::new(10),
+            kind: JobKind::Sync,
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+            state: JobState::Done(JobOutcome::Synced(SyncResultView {
+                received: 2,
+                from: vec![
+                    PersonLabel {
+                        who: Who::Teammate(1),
+                        computer: None,
+                    },
+                    PersonLabel {
+                        who: Who::Username("maria".into()),
+                        computer: None,
+                    },
+                ],
+                kept_newest: 0,
+                verse_conflicts: 1,
+                alignments: 0,
+                restored: 0,
+                missing_pins: 5,
+            })),
         }),
         Event::ProjectsChanged,
         Event::HomeCard {

@@ -33,6 +33,44 @@
     }
   },
   {
+    "type": "job",
+    "value": {
+      "id": 10,
+      "kind": "sync",
+      "project": "sample_burrito",
+      "state": {
+        "type": "done",
+        "value": {
+          "type": "synced",
+          "value": {
+            "received": 2,
+            "from": [
+              {
+                "who": {
+                  "type": "teammate",
+                  "value": 1
+                },
+                "computer": null
+              },
+              {
+                "who": {
+                  "type": "username",
+                  "value": "maria"
+                },
+                "computer": null
+              }
+            ],
+            "keptNewest": 0,
+            "verseConflicts": 1,
+            "alignments": 0,
+            "restored": 0,
+            "missingPins": 5
+          }
+        }
+      }
+    }
+  },
+  {
     "type": "projectsChanged"
   },
   {

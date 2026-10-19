@@ -9,6 +9,7 @@ use tc_core::BookId;
 
 use crate::error::ApiError;
 use crate::ids::{DownloadId, JobId, ProjectRef, RequestId};
+use crate::shown::PersonLabel;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
@@ -155,6 +156,33 @@ pub enum JobOutcome {
         download: DownloadId,
         file_name: String,
     },
+    /// A sync that completed (B10): what its toast shows.
+    Synced(SyncResultView),
+}
+
+/// What a completed sync brought and left (tC4's `report.facts` of an ok sync, which its toast
+/// reads, `tC4:src/views/SyncResult.jsx`). The conflict counts are the project's open
+/// conflicts after the sync, as tC4's are, so a second sync still names a conflict the first
+/// one brought.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct SyncResultView {
+    /// The teammates' changes this sync received.
+    pub received: u32,
+    /// Who sent them, each person once, named as the conflict review names them (#680).
+    pub from: Vec<PersonLabel>,
+    /// Open conflicts of kinds other than a verse's text and alignments (checks, comments,
+    /// settings): each shows its newest version until someone reviews it.
+    pub kept_newest: u32,
+    /// Open verse conflicts.
+    pub verse_conflicts: u32,
+    /// Verses with two alignments to review (#791).
+    pub alignments: u32,
+    /// Changes that Door43 had lost and this sync sent again.
+    pub restored: u32,
+    /// The project's pinned resource versions that this computer does not have (D88 point 6).
+    pub missing_pins: u32,
 }
 
 /// `jobs/get`: a job's state, or `None` when no job has this id or its outcome expired.

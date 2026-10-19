@@ -27,12 +27,16 @@
   "refusal.open.lock-held": "Another program is using this project (process {pid} on {host}). Close it, or restart the computer, then open the project again. Nothing was changed.",
   "refusal.open.lock-held-unnamed": "Another program is using this project. Close it, or restart the computer, then open the project again. Nothing was changed.",
   "refusal.open.newer-format": "This project was saved by a newer translationCore (project format {format}). Update translationCore, then open the project again. Nothing was changed.",
-  "syncResult.error.keptStopped": "Your teammates' changes were received and kept, but the sync stopped: {reason}",
+  "syncResult.alignmentsMany": "{n} verses have two alignments to review.",
+  "syncResult.alignmentsOne": "1 verse has two alignments to review.",
+  "syncResult.error.keptStopped": "Your teammates' changes were received and kept, but the sync stopped. Ask for help.",
   "syncResult.error.needsNewerApp": "A teammate uses a newer translationCore (project format {format}). Update translationCore, then sync again. Nothing changed.",
   "syncResult.error.notSent": "Your teammates' changes were received and kept, but tC4 could not send your changes to Door43. Sync again.",
   "syncResult.error.projectMismatch": "This Door43 repository holds a different project, so the sync stopped. Two projects are never combined. Nothing changed.",
   "syncResult.error.readOnly": "This project is open read-only, so it cannot sync.",
+  "syncResult.error.stopped": "The sync stopped. Nothing changed. Ask for help.",
   "syncResult.error.tc4TeamRepository": "This project is shared by translationCore 4, so the sync stopped. Nothing changed. Move the team to the new translationCore first.",
+  "syncResult.error.unexpected": "The sync stopped for a reason translationCore did not expect. Ask for help.",
   "syncResult.receivedKept": "Your teammates' changes were received and kept.",
   "upload.notWritten": "The file could not be copied into translationCore: {reason}. Nothing was changed."
 }

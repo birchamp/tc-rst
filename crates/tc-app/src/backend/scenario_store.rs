@@ -394,6 +394,17 @@ impl ProjectStore for ScenarioStore {
         self.backend.open(folder, progress)
     }
 
+    #[cfg(feature = "test-hooks")]
+    fn teammates_edit_verse(
+        &self,
+        folder: &ProjectRef,
+        key: &RecordKey,
+        texts: &[&str],
+    ) -> Result<Vec<ChangeId>, StoreError> {
+        ScenarioStore::teammates_edit_verse(self, folder, key, texts)
+            .map_err(|e| StoreError::Other(e.to_string()))
+    }
+
     /// Every written project opened or given teammates since it was written is written
     /// again, and every other entry of the projects folder (a project a journey created) is
     /// removed. The registry has closed every session, and each close waited for the store's

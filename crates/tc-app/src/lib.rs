@@ -35,6 +35,7 @@ mod seed;
 pub mod session;
 pub mod share;
 mod startup;
+pub mod sync;
 pub mod wire;
 
 pub use app::{Answer, App, AppDeps, CallFailure, FilesChoice, StartError, StoreChoice, Then};

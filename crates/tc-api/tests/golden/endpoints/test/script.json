@@ -1,0 +1,42 @@
+{
+  "path": "test/script",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "16161616161616161616161616161616",
+    "next": {
+      "type": "sync",
+      "value": {
+        "project": "sample_burrito",
+        "outcome": {
+          "type": "synced",
+          "value": {
+            "teammates": {
+              "book": "TIT",
+              "chapter": 1,
+              "verse": 1,
+              "texts": [
+                "Pablo, siervo",
+                "Pablo, esclavo"
+              ]
+            },
+            "restored": 0
+          }
+        }
+      }
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}
