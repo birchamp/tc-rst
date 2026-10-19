@@ -2060,7 +2060,7 @@ is split as `parity/ds-gallery` was:
 | `parity/app/driver.mjs` | `appDriver` over an environment (`AppEnv`: `load`, `catalog`, `projectId` and the four Door43 steps) |
 | `parity/app/observe.mjs` | the capture rules, `trackRequests`, `settle`, `captureScreen`, `observe`, `domSnapshot` rooted at `#root` |
 | `parity/app/env-tc4.mjs` | today's mock, `.state` and in-browser fake Door43; tC4's catalogs and journal writers |
-| `parity/app/env-rust.mjs` | launches `tc4 serve` with `--test-hooks`, an empty app-data and projects folder under `target/` and a dead `--door43`; `extraHTTPHeaders` with the token, and a context route that aborts every request to another origin before it is sent, so the token never leaves the machine *(A6b, D10)* |
+| `parity/app/env-rust.mjs` | launches `tc4 serve` with `--test-hooks`, `--scenario <state>` (the scenario's state built by `state.mjs` into the run folder, held by the memory backend; a `tc4` built with `--features test-hooks,fixture-backend`, B1b), an empty app-data and projects folder under `target/` and a dead `--door43`; `extraHTTPHeaders` with the token, and a context route that aborts every request to another origin before it is sent, so the token never leaves the machine *(A6b, D10)* |
 | `parity/tc4-baseline/capture.mjs` | a short entry over `env-tc4` |
 | `parity/app/capture-rust.mjs` | the Rust entry over `env-rust`: the same screens, driver and rules, into `parity/app/screens`, `dom` and `captures.json`, each capture naming the unit that made it and the layers it claims *(A6b)* |
 | `parity/app/behaviour.mjs` | the recorder of layer 4: a sequence's steps from a baseline screen, on either environment, with node numbers *(A6b)* |

@@ -436,6 +436,20 @@ pub fn install_resources(
         .collect()
 }
 
+/// Installs `resources` into the app's own resource store under `app_data`, the store
+/// `App::start` opens next (§4.2): what `tc4 serve --scenario` does before the app starts.
+pub fn install_resources_into(
+    app_data: &Path,
+    resources: &[SideloadedResource],
+) -> Result<Vec<Installed>, ScenarioError> {
+    let dir = app_data.join(crate::RESOURCES_FOLDER);
+    let store = ResourceStore::open(&dir).map_err(|e| ScenarioError::Install {
+        dir: dir.display().to_string(),
+        problem: e.to_string(),
+    })?;
+    install_resources(resources, &store)
+}
+
 impl MemoryBackend {
     /// A memory backend holding the scenario's projects that pass the seed's check, with the
     /// report of what was loaded and what was refused. It adds no teammate.

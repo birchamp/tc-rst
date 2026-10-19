@@ -6,7 +6,8 @@
 //        [--layers pixels,dom,meaning] [--backend memory|memory+scripted|store]
 //        [--tc4 target/debug/tc4] [--ui target/tc-ui-app] [--out parity/app]
 //
-// Needs `tc4` built with `--features test-hooks` and the UI folder of crates/tc-ui/build-app.sh.
+// Needs `tc4` built with `--features test-hooks,fixture-backend` (each scenario's projects are
+// loaded with `--scenario`) and the UI folder of crates/tc-ui/build-app.sh.
 // `--unit` names the unit of docs/APP-DESIGN.md §10 that captures (the gate checks it has
 // landed); `--layers` the layers the capture claims (`dom` alone is a DOM-first capture of a
 // screen whose pixels come later, APP-DESIGN 7.6).
