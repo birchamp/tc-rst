@@ -880,7 +880,7 @@ answered Q-2 with (a), so the shell sends the report and the server only compose
 | `lib.rs`, `config.rs`, `app.rs` | `App::start(AppConfig, AppDeps)`, `App::call` (bytes in, bytes out: the one entry tc-server routes to), `App::events`, `App::quit`, `App::sessions`, `App::read` (the request guard of queries), `App::counters`; `AppConfig { app_data, projects: Given(dir) \| Default, door43: ServerUrl, build, test_hooks }` (the UI folder is tc-server's); `AppDeps` holds what a test replaces: the clock, the keychain, the folder check, the app-data files, the project store (`StoreChoice::OnDisk`, tc-store over the projects folder, which `App::start` builds once the folder is chosen and checked; `StoreChoice::Given` for the memory backend in tests) and, with `test-hooks`, the process ender *(B1b: `AppDeps.sessions` became `AppDeps.store`)* *(C0: `NoProjects` is gone. The store is built inside `App::start`, after Q-4's folder is chosen, because that is the first moment the folder is known and tc-store makes a projects folder that is missing: a folder someone named is refused first, and `..AppDeps::production()` builds nothing)* |
 | `dispatch.rs`, `handlers.rs` | `Handle<E>` for every row of `endpoint_table!`, the internet check (AD25), which a write hands to the reply cache so it applies only to an id not yet sent, crash points on every write (§5.8) |
 | `replies.rs` | `ReplyCache` and `BodyDigest` (AD4); one per session for project-scoped writes, and one app-wide for writes of no project (B1b) |
-| `folders.rs` | the cloud-folder check of STORAGE §5.0, a copy of tc-store's until C1a, which deletes it |
+| `folders.rs` | the cloud-folder check of STORAGE §5.0, a copy of tc-store's kept until R28 *(C1a, D6: tc-store's own check calls every folder under a home that has Dropbox's settings folder `~/.dropbox` synced, and reads the process's environment, so the first-launch rule could not be tested for another computer)* |
 | `clock.rs` | the injected wall clock; timers use `tokio::time` |
 | `hooks.rs` | the `test` service (feature `test-hooks`, §5.8) |
 | `backend/{mod,memory,scenario,store,seed}.rs` | the seam (§4.2); `scenario.rs` reads a parity `.state` folder into the memory backend (B1b) |
@@ -907,8 +907,9 @@ pub trait ProjectStore: Send + Sync + 'static {
     /// { projects, unusable }`, so no folder that holds someone's work is left off Home, AD12;
     /// a declared difference from tC4, §4.5). No lock, no fold.
     fn list(&self) -> Result<Listing, StoreError>;
-    /// Derived files only: metadata.json, .tc/sync.json, tc/conflicts.json, the names of the
-    /// pack and pending files, materialized.json's size and mtime. No lock, no fold.
+    /// Derived files only: metadata.json, .tc/sync.json, tc/conflicts.json, and the summary
+    /// stamp: the names in .tc/pending/ and materialized.json's size and mtime (C1a, D8:
+    /// `StoreBackend::summary_stamp`, one listing and one stat). No lock, no fold.
     fn peek(&self, folder: &ProjectRef) -> Result<ProjectPeek, StoreError>;
     /// O1–O13 (STORAGE:1787-1868). Blocking: called on a job thread. Progress goes to `progress`
     /// from tc-store's own reporter thread (AD8).
@@ -1109,9 +1110,20 @@ seqs ending at the newest snapshot) stands in for the frontier check. Measuremen
   them phase 2 waits for a change to S1.
 - Either way the contract suite of this section is its test.
 
-C1a then moves the app onto the store: the parity scenario projects are written to disk through
-S1's create and sealing API with the same seed. The memory backend and its feature are deleted
-once the last phase-1 unit has moved to the store.
+C1a then moves the app onto the store: the parity scenario projects are written to disk with the
+same seed *(C1a, D1: `backend/scenario_store.rs`, as an import is written: a `Store::staging`
+folder, the fixed files, the very packs the seed sealed (same changes, same `Importer` device,
+same project id, AD36), the carried files, `Store::place`, one open at the final path that
+materializes every derived file, and a Scripture Burrito check. `Store::create` is not used: it
+gives a random id and writes the records at the run's time as this computer's changes, so the
+decisions' `modifiedTimestamp` and the screens would no longer be tC4's. `project.json`'s writer
+is private to tc-store, so the scenario writer writes its four fields in tc-store's order (R29).
+A scenario writes only into an empty projects folder. `test/reset` writes again each scenario
+project opened or given teammates since it was written and removes every other entry of the
+projects folder (D3); teammates are packs sealed by each teammate's own device, written while
+no session holds the project (D12). `ProjectStore::store_hooks` gives `test/hold` tc-store's
+hold points (D13).)* The memory backend and its feature are deleted once the last phase-1 unit
+has moved to the store: until then `tc4 serve --scenario <dir> --backend memory` keeps it.
 
 **Contract suite.** `tc-app/tests/store_contract.rs` defines `store_contract!(make_store)`. Each
 case is named after the rule it protects.
@@ -1299,9 +1311,13 @@ B1b).
   verse it covers; `""` and `___` are undrafted; `tC4:src/data/usfm/indexer.ts:216-228`),
   conflict counts by book and kind, the team's labels, OBS story percentages and the in-progress
   count.
-- The summary's stamp is SHA-256 over the sorted names of the pack and pending files (content
-  hashes, STORAGE §4.2–4.3) plus `materialized.json`'s size and mtime. Listing two directories
-  costs what one card touches.
+- The summary's stamp is SHA-256 over the sorted names in `.tc/pending/` (the saves not sealed
+  yet; content hashes, STORAGE §4.3) plus `.tc/materialized.json`'s size and mtime: one listing
+  and one stat per card, at any history *(C1a, D8: packs are not one folder, they are nested by
+  sealer and month under `ingredients/tc/changes/`, so listing them grows with the history; and
+  every seal, consolidation or intake rewrites `materialized.json`, which records the md5 of every
+  pack it lists. `StoreBackend::summary_stamp`; the summary files are `PrefsWriter::summary` and
+  `record_summary`, removed by `test/reset`)*.
 - While a project is open, its summary follows each delta and is written at close.
 - When a stamp differs (a folder received, copied or written by another installation), the card
   shows "—" (DELTA:928-933) and one background `HomeSummary` job reads the derived USFM files and
@@ -1424,11 +1440,16 @@ second click therefore gets the first click's reply from the reply cache: never 
 
 ### 4.9 App data
 
-All files are written by one `PrefsWriter` task with `tc_store::atomic_write`. It debounces
+All files are written by one `PrefsWriter` task with `tc_store::atomic_write`, except
+`app-lock.json`, which tc-server writes before the app exists. It debounces
 place as tC4 does (500 ms; `tC4:src/state.jsx:3818-3845`), and place is recorded when the person
 moves (mode, book, chapter, the verse an editor opens on), not per keystroke. It keeps unknown
 keys. A failed
-write keeps the value for the session and adds a report. Before S1 these files live in memory.
+write keeps the value for the session and adds a report. The files are on disk from C1a on
+*(C1a, D4: `DiskFiles` over tc-store's `Vfs`, chosen by `FilesChoice::OnDisk` in `App::start`;
+each write runs on the blocking pool, a write whose folder flush failed is kept and reported,
+and the open removes what a crash left of this writer's own temporary files and nothing else;
+the saved language survives a relaunch, tC4 #525)*.
 The shell's `drafts-buffer.log` is not among them: the shell writes it (AD21).
 
 | File | Content |
@@ -1436,7 +1457,7 @@ The shell's `drafts-buffer.log` is not among them: the shell writes it (AD21).
 | `prefs/app.json` (not in STORAGE §3.7, STORAGE:1093-1103) | `schemaVersion`, `appLocale`, `lastUsed`, `lastEdit`, `alignSuggestions` |
 | `prefs/<projectId>.json` | place per book or story, `draftUnit`, OBS story and recency |
 | `summaries/<folder hash>.json` | §4.5 |
-| `reports.json` | the last 50 operation reports, for Feedback and the dev Inspector |
+| `reports.json` | the last 50 operation reports, for Feedback and the dev Inspector, kept across launches *(C1a, D5: read before the launch's first report, so ids go on from the highest one the file named; written a second after the first change and at once at quit, leave and `test/reset`. Declared difference from tC4, which keeps its reports in memory only, so after a crash and a relaunch its "Ask for help" attaches nothing of what went wrong)* |
 | `uploads/`, `downloads/` | temporary; emptied at start and after use |
 | `resources/` | the machine's resource store (STORAGE §3.7), opened by `App::start`. A first launch with `--bundle <dir>` copies the bundled English suite into it as the `Seed` job (§4.6); `resources/.partial/`, where an interrupted copy or download stays, is emptied at each start. A leftover that cannot be removed (on Windows a scanner may hold one of its files) stops nothing: installs land by renaming a staging folder of their own name, so the start goes on and adds a `resources` report naming the folder, and the next start tries again. Only a `resources/` folder that cannot be made stops the start, as an app-data folder that cannot be made does (`AppData`, exit code 4) *(A9)* |
 | `app.lock` | `tc4 serve`'s guard for the restart case: an old `tc4` still exiting after a crash (AD39). The holder writes its pid to `app-lock.json` beside it (Windows lets no other process read a locked file), so a new `tc4` that waits for it can name the holder's process. The single instance on a machine is the shell's lock (§5.1) *(A-3)* |
@@ -1468,9 +1489,12 @@ projects were gone. Declared difference from tC4 (owner's answer Q-4): tC4 has n
 check (its profile is under the home folder, `tC4:scripts/desktop-bootstrap.cjs:29-32`), and
 it was not built for a synced folder. Telling the person on Home where their projects are is
 left to the owner. The check is a copy of
-tc-store's until C1a, with one difference reported to the storage team: Dropbox's settings
+tc-store's, with one difference reported to the storage team: Dropbox's settings
 folder `~/.dropbox`, which holds `info.json`, is not a sync marker (tc-store's copy calls
-every folder under such a home synced). Test builds also keep `test-hooks/fields.json`, the
+every folder under such a home synced). C1a keeps the copy until R28 (D6): tc-store's check also
+reads the process's environment, so the first-launch rule could no longer be tested for a
+Windows or OneDrive computer on Linux, and tc-store's open uses the same check for every
+project (risk 23). Test builds also keep `test-hooks/fields.json`, the
 fields of `test/fieldStore` (§5.8), written atomically before each `Ack`.
 
 ---
@@ -1487,7 +1511,10 @@ fields of `test/fieldStore` (§5.8), written atomically before each `Ack`.
   one project at the same time from separate machines.
 - `tc4 serve --app-data <dir> [--projects <dir>] --ui <dir> [--door43 <url>] [--bundle <dir>]`
   `[--backend memory --scenario <dir>] [--test-hooks] [--test-seed-pace <ms>]`. The last four
-  exist only with their cargo features. Without `--projects`, tc-app chooses the projects folder
+  exist only with their cargo features. `--scenario` writes the scenario's projects into the
+  `--projects` folder through the store, so it needs `--projects`, and that folder must exist and
+  be empty: a scenario never writes into a folder that holds anyone's work; `--backend memory`
+  keeps them in the memory backend, which writes nothing *(C1a, D2)*. Without `--projects`, tc-app chooses the projects folder
   (§4.9, Q-4). A `--projects` folder that does not exist stops the start with its path: an empty
   folder made in its place would look as if the person's projects were gone. `--bundle <dir>`
   names the bundled resource store the installer ships, read only, with its `BUNDLE-MANIFEST.json`
@@ -1776,8 +1803,8 @@ show a 401 page.
 
 | Hook | Use |
 |---|---|
-| `test/quiet` | `{busy}`: true while a request, job, actor queue or pending materialize is live; the capture's settle waits for false |
-| `test/hold`, `test/release` | hold a book read, a checkpoint, a materialize, a save before B3, a draft write, or a sync step (R8); replaces tC4's `e2e/helpers/checkpointHold.ts:14` |
+| `test/quiet` | `{busy}`: true while a request, job, actor queue or pending materialize is live; the capture's settle waits for false *(C1a, D13: on the store also while a store thread waits at a held point; tc-store has no non-blocking idle, so its background work after an open stays unseen until R30)* |
+| `test/hold`, `test/release` | hold a book read, a checkpoint, a materialize, a save before B3, a draft write, or a sync step (R8); replaces tC4's `e2e/helpers/checkpointHold.ts:14` *(C1a, D13: on the store each point also holds tc-store's matching point until released: `save` its durability point, `bookRead`, `checkpoint`, `materialize`, `draftWrite`; `test/reset` releases them)* |
 | `test/crash` | end `tc4` at a named point (after a reply is sent, before B3, while a draft is written) for the reload and relaunch tests of §6.6 *(A-2, A-3)*. The points are in tc-app's write path and apply to every write but the arming hooks (§10 A3): before the handler (`beforeStore`), after it (`beforeReply`), and after the reply, which the server does when `App::call` answers `then: EndProcess`. An arm that can never fire (a query, an arming hook, or `duringDraftWrite` before any write reaches it) is a bad request; the unit that adds draft writes (S1, C1b) accepts it. |
 | `test/fieldStore` | a write endpoint that goes through the real reply cache and records every text it stores, with holds and crash points, so A4b can prove the save machine's no-loss rules before any real save exists *(A-2)*. Its tokens carry the field and its version under a key kept with the fields, so they verify after a restart; a store over an older version is logged as `stale`, and an unchanged text answers with the token it came with, as the store does (STORAGE:1446-1447, STORAGE §5.1 step 4). |
 | `test/saveVerse` | a verse save through the real seam and store (C0): dispatch, the session's reply cache, `ProjectHandle::submit` and tc-store, so the contract cases of §4.2 that run through tc-app (the retries and the conflict case) run before `editor/saveVerse` exists. C2 moves those cases onto `editor/saveVerse` and deletes the hook |
@@ -1789,7 +1816,7 @@ show a 401 page.
 | `test/inspect` | fold facts journeys assert: heads, values, conflicts, commits, `.tc/` files |
 | `test/writeTeammate` | teammate changes through tc-journal and the store's sealing API (AD36) |
 | `test/counters` | operation counters |
-| `test/reset` | reset prefs, summaries and reports to the scenario seed, release every hold, disarm the crash, and turn the internet switch off as a launch finds it (tC4's switch is page state that a reload turns off, `tC4:e2e/helpers/door43Share.ts:21-25`), and forget the kept replies, so a request id may be used again in the next scenario (a write still running is kept, so its retry still waits for it); the harness's `home()`. The reset keeps no reply of its own either: running it again changes nothing, and a harness whose ids restart with each scenario sends it first with the id it used before, which a kept reply would answer without resetting anything |
+| `test/reset` | reset prefs, summaries and reports to the scenario seed (on the store the scenario's projects too: each one opened since it was written is written again, every other entry of the projects folder is removed, C1a D3), release every hold, disarm the crash, and turn the internet switch off as a launch finds it (tC4's switch is page state that a reload turns off, `tC4:e2e/helpers/door43Share.ts:21-25`), and forget the kept replies, so a request id may be used again in the next scenario (a write still running is kept, so its retry still waits for it); the harness's `home()`. The reset keeps no reply of its own either: running it again changes nothing, and a harness whose ids restart with each scenario sends it first with the id it used before, which a kept reply would answer without resetting anything |
 
 ---
 
@@ -2417,7 +2444,7 @@ is split as `parity/ds-gallery` was:
 | `parity/app/driver.mjs` | `appDriver` over an environment (`AppEnv`: `load`, `catalog`, `projectId` and the four Door43 steps) |
 | `parity/app/observe.mjs` | the capture rules, `trackRequests`, `settle`, `captureScreen`, `observe`, `domSnapshot` rooted at `#root` |
 | `parity/app/env-tc4.mjs` | today's mock, `.state` and in-browser fake Door43; tC4's catalogs and journal writers |
-| `parity/app/env-rust.mjs` | launches `tc4 serve` with `--test-hooks`, `--scenario <state>` (the scenario's state built by `state.mjs` into the run folder, held by the memory backend; a `tc4` built with `--features test-hooks,fixture-backend`, B1b), an empty app-data and projects folder under `target/` and a dead `--door43`; `extraHTTPHeaders` with the token, and a context route that aborts every request to another origin before it is sent, so the token never leaves the machine *(A6b, D10)* |
+| `parity/app/env-rust.mjs` | launches `tc4 serve` with `--test-hooks`, `--scenario <state>` (the scenario's state built by `state.mjs` into the run folder, its projects written into the run's projects folder and opened through the store, C1a, or held by the memory backend with `--backend memory`, B1b; a `tc4` built with `--features test-hooks,fixture-backend`), an empty app-data and projects folder under `target/` and a dead `--door43`; `extraHTTPHeaders` with the token, and a context route that aborts every request to another origin before it is sent, so the token never leaves the machine *(A6b, D10)* |
 | `parity/tc4-baseline/capture.mjs` | a short entry over `env-tc4` |
 | `parity/app/capture-rust.mjs` | the Rust entry over `env-rust`: the same screens, driver and rules, into `parity/app/screens`, `dom` and `captures.json`, each capture naming the unit that made it and the layers it claims *(A6b)* |
 | `parity/app/behaviour.mjs` | the recorder of layer 4: a sequence's steps from a baseline screen, on either environment, with node numbers *(A6b)* |
@@ -2449,7 +2476,8 @@ The Rust environment's seams:
   `parity/app/state.sha256.json`, the sha256 of every file as built from tC4 (A6a). The state's
   `provenance.json` names fixtures by their tC4 path and no longer records the tC4 root, so the
   two builds can be byte-identical.
-- `MemoryBackend` reads the same `.state/<scenario>`. Both apps start from the same bytes,
+- `MemoryBackend` reads the same `.state/<scenario>`, and from C1a on the store's scenario writer
+  writes its projects from it (the seed's own packs, §4.2). Both apps start from the same bytes,
   substitutes and absences included.
 - Bundle seeding is off during captures (Q-11).
 
@@ -2620,6 +2648,8 @@ or another case. *(A7)*
 - a layer is still missing after the unit that captures it has landed, or a capture names a unit
   that has not landed;
 - a row is still `memory+scripted` after the unit named in `pending_until` has landed;
+- a row is captured on the memory backend after C1a has landed (`MemoryAfterStore`): from then on
+  the parity environment runs on the store *(C1a, D9)*;
 - a mask cites a ruling docs/PLAN.md does not list (other than `build`), a screen where the
   rebuild differs on purpose has no mask citing its ruling, or the rebuild's masked element lies
   outside the mask's rectangle.
@@ -2634,7 +2664,9 @@ the unit that captures the screen again on its final backend; for an M+S screen 
 `pending_until` (the notes repeat it for two of them). The pixels unit also captures what the DOM
 shows. A row that names one unit for the DOM and another for the pixels is DOM-first: until the
 pixels unit captures the screen whole, its DOM is compared within the scope of
-`parity/app/scopes.json` (§7.3 layer 2) *(A6b, D7, D8)*.
+`parity/app/scopes.json` (§7.3 layer 2) *(A6b, D7, D8)*. From C1a on an "M" screen is captured
+on the store, so a screen first captured after C1a has landed needs no recapture by C1a; one
+captured before it is taken again by whichever of its unit and C1a lands second *(C1a, D7, D9)*.
 
 | Screen | Scenario | First capture | Recapture | Notes |
 |---|---|---|---|---|
@@ -2809,7 +2841,11 @@ tC4's spec assertions are the reference.
   allow it, because tests read whole folds to check results.)*
 
 Every count test runs the action on tc-corpus Psalms and on ten times Psalms and fails if a count
-grows (PERF:20-24). From B1b to C1a they run on `MemoryBackend`; from C1a on, on `StoreBackend` too.
+grows (PERF:20-24). From B1b to C1a they run on `MemoryBackend`; from C1a on, on `StoreBackend` too
+*(C1a, D10: the corpora written to tc-store's `FaultFs` as tc-store's own count tests write them;
+the store's counters join each row's cost; an open on the store folds the project, which is the
+store's budget (tc-store's `tests/store/opcount.rs`), so the open row holds the app's counts only
+there)*.
 *(B1b: the harness is `crates/tc-app/tests/op_counts/harness.rs`: `costs_what_it_touches(name,
 before, action)` runs an action through a fresh `App` over each corpus, compares `AppCounts` and
 the project's fold counters, and names every field that grew. Its rows are `open_lists_no_key`,
@@ -2942,6 +2978,10 @@ it today *(A-5)*.
 | R23 | `DraftField::Alignment`, so unsaved links survive a crash | S1 | provided by S1: tc-journal `command.rs` (`DraftField::Alignment`) *(C0)* | the server saves links 2 s after the last change; up to 2 s of links can be lost in a crash (Q-27) *(A-4)* (no longer needed) |
 | R24 | A way to revise a comment: a record that replaces the comment the box showed, kept in History | S1, owner (Q-24) | provided by S1: tc-journal `command.rs` (`Command::ReviseComment`) *(C0)* | each blur after a change adds a comment (§6.5) *(A-18)* (no longer needed) |
 | R26 | A save never erases a newer draft of its field: a successful save removes the field's `.tc/drafts.json` entry only if the entry's text equals the value the save stored, or the entry was put before the command was submitted (amends STORAGE §5.14, "A successful save of that field removes its entry"). Today tc-store's actor removes the entry by its key whatever its text (`actor.rs`, `drafts.rs` `cleared_by`, `DraftWriter::saved`), so the draft the UI sends while a verse's save waits behind a checkpoint (up to 500 ms, RT-11) is gone when that save lands, and a crash before the next save loses that text everywhere but the browser buffer and the shell's mirror of the same computer *(C0, found by its third verification)* | S1 | no | C2's save machine sends the field's `Draft` at once, with the reply's tokens, after an `Ack` that leaves the field dirty (§6.5), so the entry is back within one round trip; the browser buffer and the shell's mirror keep the text on the same computer meanwhile. `a_save_never_erases_a_newer_draft_of_its_field` (§4.2) is ignored until tc-store provides it |
+| R27 | tC4 #766: at the first open of a project whose pin groups are all empty, write the creation pins (one `Pins` change per group from `tc_resources::suite::project_pins()`, one batch) with a new `System` reason beside `PinCoverageBackfill`, before format 1.0; a project with any pin keeps its pins byte for byte (TC4-DELTA-2026-10-19 §3.3 item 4, §3.8 item 3). tc-app could only send `SetPins`, whose cause is `Edit`, so History would say the translator changed the resources *(C1a, D11)* | S2 or V | no | as tC4 at `d310bf3`: nothing is written at the open; Check shows "No resources pinned" with its guided fix (B5a); `open_writes_creation_pins_only_when_none_exist` is ignored until it lands |
+| R28 | tc-store's cloud check (`platform.rs`, `cloud_client`): `~/.dropbox` that holds `info.json` is Dropbox's settings folder, not a sync marker (today every project under such a home opens read-only, "copied by Dropbox", risk 23); and a way to give the check the environment as a value, so the app's first-launch rule can call it and be tested for another computer *(C1a, D6)* | S1 owner | no | `crates/tc-app/src/folders.rs` stays, with the right marker rule, for the first launch; projects on a Linux or macOS computer with Dropbox installed open read-only until R28 lands |
+| R29 | A public writer of `ingredients/tc/project.json` (or an import entry over `Store::staging` and `Store::place`), for unit I and for C1a's scenario writer *(C1a, D1)* | I | no | the scenario writer writes the four fields C0's listing and tc-store's open read, in tc-store's order; `the_store_scenario_holds_exactly_the_seed` opens what it wrote |
+| R30 | `ProjectHandle::is_idle()`: no queued command, no background job, no draft write pending, without blocking and without flushing drafts (`wait_idle` does both) *(C1a, D13)* | S1 owner | no | `test/quiet` counts the requests, jobs, sessions and held store points it sees; the open's storage check and a materialize after a save stay unseen (nothing a capture shows depends on them today) |
 
 **Who can add them** *(A-5)*. The task texts of units C, S1, S2 and P
 (`.audit/workflows/storage-chain-B.js:19-22, 30-33`) ask for none of R1, R4's handle surface,
@@ -3047,7 +3087,7 @@ cut from the integration branch `app` after unit C had merged, like every other 
 | Unit | Scope | Depends on | Waits for | Tests | Done when |
 |---|---|---|---|---|---|
 | C0 ◆ Store adapter *(A-5)* | `StoreBackend` over S1's `ProjectActor` (§4.2): thin if S1 provides R4, R5, R14 and R16; otherwise the command thread, the published snapshot, events from each `Delta`, its own `seq`, the frontier check *(C0: built thin, because S1 provides R4, R5, R14, R16, the O(1) snapshot and each command's `Delta`; no fallback and no frontier check (every fold step S1 makes after an open sends `Committed`, which `every_fold_step_reaches_the_seam` proves). D1: a command carries its `Origin` and `StoreCause::Command { origin }` reaches the pump, so a person's own save is `LocalSave { request }` (AD37); B1b's plan gave it to C2, but only the adapter can join the store's event to its command. D2: the listing is `Listing { projects, unusable }` and an open needs the exact listed name; staging folders are left out. A folder is a project in the listing exactly when tc-store's open would not refuse it as not a project: the listing reads `project.json`'s four fields as tc-store does. The listing reads the projects folder itself, not tc-store's `Store::list`, which keeps only folders with a `project.json`: every other folder that holds a project's files (`project.json`, `metadata.json`, `ingredients/` or `.tc/`), and every link to a folder that does, is unusable with its reason, and a file or a folder with none of them is not listed *(after the second verification: a folder that had lost only its `project.json`, a translationCore 4.0 project copied in and a link to a project were at first left off without a word)*. Declared differences from tC4 (§4.5): Home shows an unusable folder with its reason (B2), so no one's work is hidden, and a translationCore 4.0 project is unusable until Import brings it in. D3: two unit read-only reasons in tc-api, `OpenOnAnotherComputer` and `FolderNotWritable` (§3.4). D4: `test/saveVerse` (§5.8) runs the contract cases that go through tc-app until C2. D5: three contract cases run another way than the table said (§4.2's note). D6: `AppDeps.store` is `StoreChoice` and `App::start` builds the store (§4.1). D7 *(added after the first verification)*: a batch with changes that no seam submit asked for (S2's outside edits, E1a's intakes) goes on as `StoreCause::System` as soon as it cannot be a submit's: when no submit is in flight, or when the relay settles a stored or unchanged reply the actor gave after it; an error reply carries no `seq` and does not end the wait (§4.2's note; *after the second verification*, which found that the first text, "at most until the actor's next reply", did not hold behind an error reply); and since C0 makes tc-app depend on tc-store, CI's two clippy steps without test hooks build tc-store too and are among the gates (AGENTS.md). D8 *(added after the second verification)*: since C0 builds tc-store at `App::start`, every launch runs tc-store's start cleanup (STORAGE §6.4 N1), which removes the staging folders that a create, copy, join or import cut short left; C0 records each in the report log, an import as `import` refused with `import.write-failed` and a join as `open-door43`, each with facts `folder`, `interrupted` and `rolledBack`, as tC4's start records them, and a create or a copy, which tC4 makes no staging folder for, as `staging-removed` with facts `folder` and `kind` *(after the third verification, which found all four recorded as `staging-removed`)*; E1b tells the person of a removed join and F1 of a removed import, and a removed create or copy is recorded only (§4.2's note). D9 *(added after the third verification)*: tc-store clears a field's draft entry on every successful save of the field, so a draft sent while that save was in flight, which holds newer text, is gone when it lands; C0 asks the storage team for R26 (§9.2), adds `a_save_never_erases_a_newer_draft_of_its_field`, ignored until R26, and gives the fallback to C2 (§6.5). Evidence: `docs/evidence/store-adapter-2026-10-19.md`)* | S1, B1b | R4, R5, R14, R16 (fallback: built here); an O(1) snapshot and each command's `Delta` (no fallback: phase 2 waits) | every contract case of §4.2 that runs on the store, including `reads_never_wait_behind_a_long_command` | the contract suite passes on the store through C0, and the adversarial review's findings are fixed |
-| C1a Move the app onto the store *(A-17)* | app data on `atomic_write`; persisted summaries; parity projects on disk through S1's create and sealing API; the parity environment switched to the store | C0 | — | `home_costs_projects_not_history` on the store *(A-25)*; J15 on real `FaultFs` delays | every phase-1 screen captured so far is recaptured on `store` with the same report; `MemoryBackend` is deleted when the last B unit has moved |
+| C1a Move the app onto the store *(A-17)* | app data on `atomic_write`; persisted summaries; parity projects on disk through S1's create and sealing API; the parity environment switched to the store *(C1a: built as the row says, with these refinements, each written where the design text names it. D1: the parity projects are written as an import is, through `Store::staging` and `Store::place` with the very packs the seed sealed, not through `Store::create`, whose random id and run-time `Seed` changes would make the screens and §13.2's check no longer tC4's (§4.2; R29 for `project.json`'s writer). D2: `tc4 serve --scenario` runs on the store and needs an empty `--projects` folder; `--backend memory` keeps the memory backend (§5.1). D3: `test/reset` writes again each scenario project opened since it was written and removes every other entry of the projects folder, on the blocking pool after every session closed (§5.8). D4: app data is on disk through `tc_store::atomic_write` (`DiskFiles`, `FilesChoice`), each write on the blocking pool; `app-lock.json` stays tc-server's (§4.9; tC4 #525: the saved language survives a relaunch). D5: `reports.json` keeps the last 50 reports across launches, a declared difference from tC4 (§4.9). D6: `folders.rs` is kept until R28, because tc-store's check calls every folder under a home with `~/.dropbox` synced and reads the environment (§4.1, §4.9, risk 23). D7: persisted summaries, the store's half: the stamp and the summary files; Home's half (`SummaryCache`, the cards, the `HomeSummary` job, `home_costs_projects_not_history`) and the recapture of B2's and B3's screens are done by whichever of B2/B3 and C1a lands second, here B2 and B3 since C1a landed first (§4.5, §7.6). D8: the summary stamp lists `.tc/pending/` and stats `materialized.json`, never the packs, which are nested by sealer and month (§4.5). D9: the gate fails a capture on the memory backend once C1a has landed (`MemoryAfterStore`, §7.5). D10: the count rows run on the store too, the open row holding the app's counts there (§8.1). D11: tC4 #766 (creation pins at the first open) is R27, with its test ignored until it lands; fallback tC4 4.0's (§9.2). D12: teammates on the store are packs sealed by each teammate's own device, written while no session holds the project (AD36, §4.2). D13: `test/hold` arms tc-store's hold points and `test/quiet` counts a store thread waiting at one; tc-store's background work stays unseen until R30 (§5.8). tC4 #746: the scenario writer asks for its staging folder only after tc-store's start cleanup is over, so the cleanup never removes it, and nothing else in tc-app writes a project folder. `MemoryBackend` stays: every B unit after B1b still builds on it. Done when: account-menu, app-language, help, about, feedback and the `license` case recaptured on the store, the report the same row for row but each row's `by`, `backend` and Rust DOM hash, which moved only with the UI build id in the logo's link (each DOM equals a memory-backend capture of the same build byte for byte); the three behaviour recordings differ only in that build id; the journeys pass on the store (54). Tests: tc-app `store_scenario` (17, one ignored until R27: the scenario written, the same seed, tC4's bytes on disk, an occupied folder refused, #746, a crash at each of the 153 write points, reset, teammates, holds, the summary stamp, J15 on `FaultFs` delays), `app_data` (11), `reports` (13), the count rows on both backends; tc4 `scenario` (4) and its args cases; tc-ui's planted `a_memory_capture_fails_once_c1a_has_landed`. Evidence: `docs/evidence/app-on-store-2026-10-19.md`.)* | C0 | — | `home_costs_projects_not_history` on the store *(A-25)*; J15 on real `FaultFs` delays | every phase-1 screen captured so far is recaptured on `store` with the same report; `MemoryBackend` is deleted when the last B unit has moved |
 | C1b ◆ Offers and read-only modes *(A-3, A-9, A-10)* | draft offers at open: `drafts.json`, buffered entries and the shell's mirror, merged and filtered (§6.6); unverifiable drafts as text; read-only banners; `SecondWriter`; the copy offer, which carries the folder's drafts to the copy | C1a | R20 (fallback: "Copy text"); R7's copy command (fallback: the banner without the copy offer) | `relaunch_offers_buffered_and_mirrored_entries`; `draft_with_unverifiable_token_is_offered_as_text`; crash tests through `test/crash` (end the server while typing, relaunch, the text is offered, Keep makes a conflict when the verse changed); the copy carries drafts (with R7) | the tests pass and the adversarial review's findings are fixed |
 | C2 ◆ Translate saves | `saveVerse`, `saveLayout`, `saveSection` (on Save only), `draft`; the `Draft` sent at once after an `Ack` that leaves the field dirty (§6.5, R26's fallback) *(C0)*; Retry; `NotWritten`; `SavedWithDiskError`; Resume from saves and drafts | C1b, B4b | R6 (fallback: the envelope); R22 (fallback: saves that waited are counted) | J2; J6 edit part; `save_verse_touches_one_verse`; "Saved" never before B3 (held save); `draft_survives_panic`; `reload_anywhere_stores_the_last_text_once` on real saves *(A-2)*; `a_draft_sent_during_a_save_survives_a_crash` (R26's fallback, §6.5) *(C0)* | J2 green |
 | C3 ◆ Comments and OBS saves | `addComment` on blur only, with the reply cache and the offer rule *(A-18)*; `saveFrame`, `saveRef`; OBS editing lock | C1b, B3, B7 | R15 (fallback: buffer and mirror); Q-24 and R24 (fallback: each blur adds a comment) | J16, J21, J25; three pauses and a blur add one comment; a teammate's comment in the unit is untouched | green |
@@ -3198,6 +3238,12 @@ last.
     It is the storage team's (`docs/evidence/store-adapter-2026-10-19.md`); until it is fixed, a
     workspace test run that fails there is rerun once before the failure is read as a unit's
     *(C0)*.
+23. **Every project opens read-only on a Linux or macOS computer with Dropbox installed** (R28).
+    tc-store's cloud check takes any ancestor that holds `.dropbox` for a Dropbox folder, and
+    Dropbox's settings folder `~/.dropbox` is such an ancestor of every folder under the home, so
+    the open calls each project "copied by Dropbox" and no save is possible. tc-app's own copy of
+    the check (`folders.rs`, kept by C1a) has the right rule for the first launch, but every open
+    goes through tc-store's *(C1a, D6)*.
 
 ---
 
