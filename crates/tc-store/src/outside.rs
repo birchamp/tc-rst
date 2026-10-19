@@ -330,7 +330,7 @@ impl Writer {
             },
             OutsideFile::Derived(_) => tc_journal::outside::decode_file(&outside, bytes, &path),
         };
-        let decoded = match decoded {
+        let mut decoded = match decoded {
             Ok(decoded) => decoded,
             Err(reason) => return Examined::Undecodable { reason },
         };
@@ -358,6 +358,8 @@ impl Writer {
             self.notices_of_plan(rel, &plan, &decoded);
             return Examined::Nothing;
         }
+        self.shown_by_path
+            .insert(rel.to_owned(), std::mem::take(&mut decoded.digests));
         Examined::Plan(Box::new(plan), decoded.derived_fields)
     }
 
@@ -621,6 +623,79 @@ impl Writer {
         }
     }
 
+    /// D7: the heads file of `rel` after an outside edit was recorded. The bytes in the folder
+    /// are the person's, and may stay there for as long as a program keeps the file open
+    /// (Paratext on Windows) while that program saves them again; its next save starts from
+    /// these bytes, so the base it is compared with names the changes recorded for them, not
+    /// the version the app wrote. A record the batch left alone keeps the base it had; the
+    /// digests are those of the bytes found. Best effort: a heads file that cannot be written
+    /// leaves the next edit to conflict, never to replace.
+    fn write_edited_heads(
+        &mut self,
+        rel: &str,
+        changed: &[(RecordKey, ChangeId)],
+        shown: Vec<(RecordKey, tc_journal::outside::ShownDigest)>,
+    ) {
+        use crate::manifest::HeadsRecord;
+        let Some(file) = DerivedFile::from_path(rel) else {
+            return;
+        };
+        let outside = OutsideFile::Derived(file.clone());
+        let key_text = |key: &RecordKey| {
+            tc_journal::canon::encode_key(key)
+                .map(|j| j.to_canonical_string())
+                .unwrap_or_default()
+        };
+        let path = self.folder.path(&layout::heads_file(rel));
+        let mut records: std::collections::BTreeMap<String, HeadsRecord> = self
+            .vfs
+            .read(&path)
+            .ok()
+            .and_then(|bytes| HeadsFile::parse(&bytes))
+            .unwrap_or_else(|| HeadsFile::of(&self.fold.file_heads(&file), &[]))
+            .records
+            .into_iter()
+            .map(|r| (r.key.clone(), r))
+            .collect();
+        for (key, id) in changed.iter().filter(|(key, _)| outside.shows(key)) {
+            let text = key_text(key);
+            records
+                .entry(text.clone())
+                .or_insert_with(|| HeadsRecord {
+                    key: text,
+                    heads: Vec::new(),
+                    shown: None,
+                })
+                .heads = vec![*id.as_bytes()];
+        }
+        for (key, digest) in shown {
+            let text = key_text(&key);
+            records
+                .entry(text.clone())
+                .or_insert_with(|| HeadsRecord {
+                    key: text,
+                    heads: Vec::new(),
+                    shown: None,
+                })
+                .shown = Some(digest);
+        }
+        let heads = HeadsFile {
+            records: records.into_values().collect(),
+        };
+        let name = layout::heads_file(rel);
+        let name = name.rsplit('/').next().unwrap_or_default();
+        let dir = self.folder.path(layout::HEADS);
+        if crate::atomic::atomic_create_dirs(&*self.vfs, &dir).is_ok() {
+            let _ = crate::atomic::atomic_write(
+                &*self.vfs,
+                &dir,
+                name,
+                &heads.to_bytes(),
+                crate::atomic::SyncDir::Now,
+            );
+        }
+    }
+
     /// The writer's handling of what the actor answered to a plan (D7). `bytes` are the ones
     /// the plan was made of.
     pub(crate) fn recorded(
@@ -633,6 +708,7 @@ impl Writer {
     ) {
         self.pending_record.remove(&rel);
         let carried = self.pending_carried.remove(&rel);
+        let shown = self.shown_by_path.remove(&rel).unwrap_or_default();
         self.answer_taken_in(&rel, &outcome);
         match outcome {
             Recorded::Done {
@@ -642,7 +718,11 @@ impl Writer {
                 whitespace_only,
                 kept,
                 derived,
+                heads,
             } => {
+                if carried.is_none() {
+                    self.write_edited_heads(&rel, &heads, shown);
+                }
                 if let Ok(path) = RepoPath::parse_source(&rel) {
                     if let Some(batch) = batch {
                         self.notice(

@@ -140,6 +140,9 @@ pub(crate) enum Recorded {
         whitespace_only: u32,
         kept: u32,
         derived: u32,
+        /// The change that now stands for each record the batch changed: the base the bytes
+        /// on disk are the next edit's (§11.1 D7).
+        heads: Vec<(tc_journal::RecordKey, tc_journal::ChangeId)>,
     },
     /// The rules refuse the plan (a non-NFC identity in a sidecar): nothing is recorded.
     Refused(String),
@@ -211,6 +214,10 @@ pub(crate) struct Writer {
     /// Paths examined and sent to the actor, not yet recorded: nothing is written to them
     /// until the actor answers (D7).
     pub pending_record: BTreeMap<String, (tc_journal::Md5, Vec<u8>)>,
+    /// How each file examined and sent to the actor shows its records (§11.1 X3), kept until
+    /// the actor answers.
+    pub shown_by_path:
+        BTreeMap<String, Vec<(tc_journal::RecordKey, tc_journal::outside::ShownDigest)>>,
     /// The bytes of `metadata.json`'s heads file as this writer last wrote them.
     pub metadata_heads_written: Option<Vec<u8>>,
     /// Carried files handed to the actor to be recorded, with the blob and size they were
@@ -678,6 +685,7 @@ mod tests {
             carried_kept: None,
             wrote_group: false,
             pending_record: BTreeMap::new(),
+            shown_by_path: BTreeMap::new(),
             metadata_heads_written: None,
             pending_carried: BTreeMap::new(),
             deferred_paths: Vec::new(),

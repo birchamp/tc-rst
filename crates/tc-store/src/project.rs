@@ -477,22 +477,30 @@ impl Project {
         let Ok(path) = tc_journal::RepoPath::parse_source(rel) else {
             return Recorded::Refused("its name is not a name translationCore can record".into());
         };
-        let done = |batch, changes| Recorded::Done {
+        let done = |batch, changes, heads| Recorded::Done {
             batch,
             changes,
             unknown_base,
             whitespace_only,
             kept,
             derived,
+            heads,
         };
         let already = (rel.to_owned(), seen);
-        if self
+        if let Some(pending) = self
             .journal
             .pending
             .values()
-            .any(|p| p.reconciles.as_ref() == Some(&already))
+            .find(|p| p.reconciles.as_ref() == Some(&already))
         {
-            return done(None, 0);
+            // Recorded before (a crash between the batch and the file's rewrite): its changes
+            // are the base of the bytes in the folder all the same.
+            let heads = pending
+                .ids
+                .iter()
+                .filter_map(|id| Some((self.fold.change(id)?.key, *id)))
+                .collect();
+            return done(None, 0, heads);
         }
         let changes = u32::try_from(plan.changes.len()).unwrap_or(u32::MAX);
         let plan = Plan {
@@ -511,7 +519,12 @@ impl Project {
                     .first()
                     .and_then(|id| self.fold.change(id))
                     .map(|view| view.batch);
-                done(batch, changes)
+                let heads = reply
+                    .changes
+                    .iter()
+                    .filter_map(|id| Some((self.fold.change(id)?.key, *id)))
+                    .collect();
+                done(batch, changes, heads)
             }
             Err(CommandError::NotWritten(_)) => Recorded::NotWritten,
             Err(e) => Recorded::Refused(e.to_string()),

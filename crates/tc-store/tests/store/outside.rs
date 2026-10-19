@@ -1713,3 +1713,70 @@ fn every_kind_of_outside_edit_in_one_project_conserves() {
         &counted,
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// D7: a program that keeps the file open saves it twice
+// ---------------------------------------------------------------------------------------
+
+/// Paratext on Windows keeps the file open: the app records the first save but cannot write
+/// the file back, and the program saves the file again, from its own text. The second save
+/// continues the first (§11.1 D7); it is no conflict between the person's own edits.
+#[test]
+fn two_saves_from_a_program_that_keeps_the_file_open_are_no_conflict() {
+    let (rig, folder) = saved_and_closed();
+    let handle = open(&rig, &folder);
+    let usfm = usfm_path(&folder);
+    let written = rig.fs.peek(&usfm).unwrap();
+    rig.fs.set_busy(&usfm, true);
+    // The program writes CRLF line ends, which the app does not copy back, so the file stays
+    // different from the project's and is rewritten once the program lets go.
+    let crlf = |bytes: &[u8]| {
+        String::from_utf8(bytes.to_vec())
+            .unwrap()
+            .replace('\n', "\r\n")
+    };
+    let first_text = set_verse(&written, 1, 1, "Paul, a slave of God");
+    let first = crlf(&first_text).into_bytes();
+    rig.fs.put_unseen(&usfm, &first, None);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(recorded(&handle), vec![(1, false)]);
+    assert_eq!(
+        rig.fs.peek(&usfm),
+        Some(first.clone()),
+        "the file cannot be written while the program holds it"
+    );
+    let second_text = set_verse(&first_text, 1, 1, "Paul, a slave of God and an apostle");
+    let second = crlf(&second_text).into_bytes();
+    rig.fs.put_unseen(&usfm, &second, None);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    rig.fs.set_busy(&usfm, false);
+    // The writer's own retry reads the second save and records it.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while recorded(&handle).len() < 2 {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "never recorded: {:?}",
+            handle.notices()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    handle.wait_idle();
+    assert_eq!(
+        recorded(&handle),
+        vec![(1, false), (1, false)],
+        "both with the base of the bytes before them"
+    );
+    assert!(
+        verse_conflicts(&handle).is_empty(),
+        "{:?}",
+        verse_conflicts(&handle)
+    );
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("Paul, a slave of God and an apostle")
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
