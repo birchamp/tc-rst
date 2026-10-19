@@ -561,10 +561,14 @@ impl StoreHandle {
         };
         drop(relay);
         if let Err(job) = sent {
-            // The relay has gone, which only a close does, and a closed handle has no store:
-            // settle here all the same, so the reply is never lost.
-            let answer = settle(job.pending.wait(), &job.origin, &self.origins);
-            return Box::pin(async move { answer });
+            // The relay is gone while the store is open, which nothing but a panic in it could
+            // do: the reply is awaited here instead (tc-store's reply is a future too), so it
+            // is never lost and no thread blocks on it.
+            let origins = self.origins.clone();
+            return Box::pin(async move {
+                let result = job.pending.await;
+                settle(result, &job.origin, &origins)
+            });
         }
         Box::pin(async move { rx.await.unwrap_or(Err(CommandError::Closed)) })
     }
@@ -680,15 +684,10 @@ impl ProjectHandle for StoreHandle {
         if let Some(handle) = self.inner().as_ref() {
             return Snapshot::new(StoreSnapshot(handle.snapshot()));
         }
-        match self.closed.get() {
-            Some(closed) => closed.snapshot.clone(),
-            None => {
-                // Between taking the store and recording what it showed, a close holds the
-                // write lock, so this read waited for it: the record is there now.
-                let closed = self.closed.wait();
-                closed.snapshot.clone()
-            }
-        }
+        // `close` records what the store showed under the write lock in which it takes the
+        // store, so a read that finds no store finds the record (and `Drop` has the handle to
+        // itself): the wait returns at once.
+        self.closed.wait().snapshot.clone()
     }
 
     fn parse_edit(&self, token: &tc_api::ShownToken) -> Result<EditToken, TokenError> {
@@ -758,6 +757,8 @@ impl ProjectHandle for StoreHandle {
             .unwrap_or_default()
     }
 
+    /// Holds the handle's read lock while it waits, so a close meanwhile waits too: a test's
+    /// hook, never called by the product.
     #[cfg(feature = "test-hooks")]
     fn wait_idle(&self) {
         if let Some(handle) = self.inner().as_ref() {
