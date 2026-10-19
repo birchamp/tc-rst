@@ -64,6 +64,8 @@ mod imp {
         burrito_problems: Mutex<Vec<String>>,
         /// What a test does between two steps of a seal.
         seal_step: Mutex<Option<SealStepHook>>,
+        /// What a test does between two batches of a repack's removals of old objects.
+        prune_batch: Mutex<Option<PruneBatchHook>>,
         changed: Condvar,
     }
 
@@ -77,6 +79,17 @@ mod imp {
     impl std::fmt::Debug for SealStepHook {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             f.write_str("SealStepHook")
+        }
+    }
+
+    /// What a test does between two batches of a repack's removals; it is told how many
+    /// objects were removed so far.
+    #[derive(Clone)]
+    struct PruneBatchHook(Arc<dyn Fn(u64) + Send + Sync>);
+
+    impl std::fmt::Debug for PruneBatchHook {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("PruneBatchHook")
         }
     }
 
@@ -112,6 +125,25 @@ mod imp {
                 .clone();
             if let Some(step) = step {
                 (step.0)();
+            }
+        }
+
+        /// From now on `step` runs on the repack's thread before each batch of removals of
+        /// unreachable old objects (§9.8), with the number removed so far, outside any lock a
+        /// commit waits for: a test begins a commit there.
+        pub fn at_prune_batch(&self, step: impl Fn(u64) + Send + Sync + 'static) {
+            *self.prune_batch.lock().unwrap_or_else(|e| e.into_inner()) =
+                Some(PruneBatchHook(Arc::new(step)));
+        }
+
+        pub(crate) fn prune_batch_reached(&self, pruned: u64) {
+            let step = self
+                .prune_batch
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            if let Some(step) = step {
+                (step.0)(pruned);
             }
         }
 
@@ -245,6 +277,8 @@ mod imp {
 
     impl Hooks {
         pub(crate) fn seal_step_reached(&self) {}
+
+        pub(crate) fn prune_batch_reached(&self, _pruned: u64) {}
 
         pub(crate) fn looks_at_burrito(&self) -> bool {
             false

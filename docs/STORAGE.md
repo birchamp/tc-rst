@@ -3702,14 +3702,24 @@ than 14 days is neither packed nor removed.
 
 **A commit being made.** The walk decides once what is reachable, and the unreachable objects
 older than 14 days go later; a checkpoint's tree can name an old object nothing references (a
-blob an abandoned checkpoint stored) before the actor has moved the branch to the commit. Two
-things keep it: `ensure_blob` writes through the object database when the object exists, which
-only brings its time up to date (libgit2 does what git does) and counts no second write; and the
-repack prunes nothing unreachable when a commit was being made at its start, is being made at the
-moment it would prune, or was made during its run. The writer marks the span from the start of
-the tree build to the branch's move (the actor ends it; the carried-versions reference is
-covered the same way); every handle on the repository shares the mark. The objects are pruned by
-the next run.
+blob an abandoned checkpoint stored, which the manifest or `ensure_blob` names again) before the
+actor has moved the branch to the commit. Three things keep it:
+
+- `ensure_blob` writes through the object database when the object exists, which only brings its
+  time up to date (libgit2 does what git does) and counts no second write.
+- The writer marks the span from the start of the tree build to the branch's move (the actor ends
+  it; the carried-versions reference is covered the same way), and every handle on the repository
+  shares the mark. A repack removes unreachable objects in batches of 128, each batch under the
+  lock the mark is kept under, and a batch is removed only if no commit is being made, none was
+  being made when the run started and none has begun since. Beginning a commit waits for the
+  batch that is being removed, never for the run, and every batch after it finds the commit and
+  stops the removals; what a commit names (a blob it takes from the manifest without writing it
+  again, one `ensure_blob` freshened) is therefore never removed after the commit began, and what
+  went before it was gone when the tree build looked.
+- Before each unlink the repack looks at the file's time: an object written again since the run
+  listed it (a blob stored outside a commit, such as a carried file's) is left.
+
+The objects that stay are pruned by the next run.
 
 ### 9.9 Editing during a sync
 

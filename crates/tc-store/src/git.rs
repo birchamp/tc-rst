@@ -23,8 +23,7 @@ use git2::{
 use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard};
 use tc_journal::GitOid;
 
 /// The branch a new repository starts on.
@@ -124,14 +123,29 @@ pub struct Author {
     pub time_ms: i64,
 }
 
+/// The commits being made from objects the database may hold unreferenced (§9.8), shared by
+/// every handle on the repository ([`Git::another`]) so a repack on its own thread sees them.
+#[derive(Debug, Default)]
+struct Making {
+    /// The commits between [`Git::commit_begin`] and [`Git::commit_end`] now.
+    active: u32,
+    /// Every [`Git::commit_begin`] there has been.
+    begun: u64,
+}
+
+/// What a repack saw of the commits when it started: it prunes only if nothing changed since
+/// ([`Git::while_no_commit`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CommitMarks {
+    active: u32,
+    begun: u64,
+}
+
 /// See the module documentation.
 pub struct Git {
     repo: Repository,
     counters: Arc<Counters>,
-    /// Odd while a commit is being made from objects the database may hold unreferenced, even
-    /// when none is; every commit made adds two. Shared by every handle on the repository
-    /// ([`Git::another`]), so a repack on its own thread sees it ([`Git::commit_begin`]).
-    making: Arc<AtomicU64>,
+    making: Arc<Mutex<Making>>,
 }
 
 impl std::fmt::Debug for Git {
@@ -364,22 +378,48 @@ impl Git {
         })
     }
 
+    fn lock_making(&self) -> MutexGuard<'_, Making> {
+        self.making.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     /// A commit is about to be made from a tree that may name objects the database already
     /// holds and nothing references (a blob an abandoned checkpoint stored, older than the
     /// 14 days a repack waits): until [`Git::commit_end`], which follows the move of the
-    /// branch, a repack removes no unreachable object (§9.8).
+    /// branch, a repack removes no unreachable object (§9.8). It waits for the batch of
+    /// removals a repack is making this moment, never for more.
     pub fn commit_begin(&self) {
-        self.making.fetch_add(1, Ordering::AcqRel);
+        let mut making = self.lock_making();
+        making.active += 1;
+        making.begun += 1;
     }
 
     /// The commit made since [`Git::commit_begin`] is referenced, or was given up.
     pub fn commit_end(&self) {
-        self.making.fetch_add(1, Ordering::AcqRel);
+        let mut making = self.lock_making();
+        making.active = making.active.saturating_sub(1);
     }
 
-    /// Where the commits are now: odd while one is being made.
-    pub(crate) fn commit_generation(&self) -> u64 {
-        self.making.load(Ordering::Acquire)
+    /// Where the commits are now.
+    pub(crate) fn commit_marks(&self) -> CommitMarks {
+        let making = self.lock_making();
+        CommitMarks {
+            active: making.active,
+            begun: making.begun,
+        }
+    }
+
+    /// Runs `remove` if no commit is being made, none was begun since `marks`, and none was
+    /// being made then; `None` otherwise. No commit begins while it runs: `commit_begin` waits
+    /// for it, so an object a commit has freshened or named is never removed by a decision
+    /// taken before (§9.8).
+    pub(crate) fn while_no_commit<T>(
+        &self,
+        marks: CommitMarks,
+        remove: impl FnOnce() -> T,
+    ) -> Option<T> {
+        let making = self.lock_making();
+        let quiet = marks.active == 0 && making.active == 0 && making.begun == marks.begun;
+        quiet.then(remove)
     }
 
     /// The repository's `.git` folder.
@@ -977,6 +1017,146 @@ mod tests {
             "the commit is referenced; nothing names it"
         );
         assert!(!git.has(orphan));
+    }
+
+    /// Unreachable objects old enough to prune, each stored and aged, and a repack that runs
+    /// `between` before each batch of removals (with the number removed so far). The
+    /// repack's result, the objects and what `between` did are returned.
+    fn orphans_and_a_repack(
+        count: usize,
+        between: impl Fn(&Git, &[(Vec<u8>, GitOid)], u64) + Send + Sync + 'static,
+    ) -> (Git, Vec<(Vec<u8>, GitOid)>, crate::repack::Repacked) {
+        let (dir, git) = fresh();
+        // The folder lives as long as the handle that points into it.
+        std::mem::forget(dir);
+        let orphans: Vec<(Vec<u8>, GitOid)> = (0..count)
+            .map(|i| {
+                let bytes = format!("an orphan, number {i}").into_bytes();
+                let oid = git.write_blob(&bytes).unwrap();
+                age(&git, oid, 20);
+                (bytes, oid)
+            })
+            .collect();
+        let hooks = Hooks::default();
+        let (other, seen) = (git.another().unwrap(), orphans.clone());
+        let other = std::sync::Mutex::new(other);
+        hooks.at_prune_batch(move |pruned| {
+            let other = other.lock().unwrap();
+            between(&other, &seen, pruned);
+        });
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let done = git
+            .repack(
+                std::time::SystemTime::now(),
+                &hooks,
+                &stop,
+                crate::repack::MAX_RAW,
+            )
+            .unwrap();
+        (git, orphans, done)
+    }
+
+    /// §9.8: a checkpoint that begins its commit while a repack is removing the objects it
+    /// found unreachable may name an old one that way (`entry.blob` of an earlier checkpoint
+    /// that was abandoned): no object it names is removed, whatever the repack decided
+    /// earlier. The batch before it was removed before the commit began, and the commit's tree
+    /// build stores those again.
+    #[test]
+    fn a_commit_that_begins_during_the_removals_loses_no_object() {
+        let named = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (git, orphans, done) = {
+            let named = named.clone();
+            orphans_and_a_repack(300, move |other, orphans, pruned| {
+                if pruned == 0 || !named.lock().unwrap().is_empty() {
+                    return;
+                }
+                other.commit_begin();
+                let mut named = named.lock().unwrap();
+                named.extend(
+                    orphans
+                        .iter()
+                        .map(|(_, oid)| *oid)
+                        .filter(|oid| other.has(*oid)),
+                );
+            })
+        };
+        let named = named.lock().unwrap().clone();
+        assert!(
+            !named.is_empty(),
+            "the commit began between two batches of removals"
+        );
+        assert_eq!(done.pruned as usize, orphans.len() - named.len());
+        for oid in &named {
+            assert!(git.has(*oid), "the commit names an object that was removed");
+        }
+        // The commit is referenced or given up: the next run may prune what nothing names.
+        git.commit_end();
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let later = git
+            .repack(
+                std::time::SystemTime::now(),
+                &Hooks::default(),
+                &stop,
+                crate::repack::MAX_RAW,
+            )
+            .unwrap();
+        assert_eq!(later.pruned as usize, named.len());
+    }
+
+    /// No commit begins while a batch of removals runs: `commit_begin` waits for it, so an
+    /// object the commit then names is never one the batch was about to remove.
+    #[test]
+    fn a_commit_cannot_begin_while_a_batch_of_removals_runs() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let (_dir, git) = fresh();
+        let other = git.another().unwrap();
+        let begun = AtomicBool::new(false);
+        let marks = git.commit_marks();
+        std::thread::scope(|scope| {
+            let begun = &begun;
+            let removed = git.while_no_commit(marks, move || {
+                scope.spawn(move || {
+                    other.commit_begin();
+                    begun.store(true, Ordering::SeqCst);
+                });
+                std::thread::sleep(std::time::Duration::from_millis(200));
+                begun.load(Ordering::SeqCst)
+            });
+            assert_eq!(removed, Some(false), "a commit began during the removals");
+        });
+        assert!(begun.load(Ordering::SeqCst), "the commit began afterwards");
+        // A commit was begun since the marks were taken: nothing is removed.
+        assert!(git.while_no_commit(marks, || ()).is_none());
+        git.commit_end();
+        assert!(git.while_no_commit(marks, || ()).is_none());
+        assert!(git.while_no_commit(git.commit_marks(), || ()).is_some());
+    }
+
+    /// Whatever a repack decided, an object written again since it listed the loose files
+    /// (a blob a command stored outside any commit) is as young as the write made it, and
+    /// stays.
+    #[test]
+    fn an_object_written_again_since_the_listing_is_not_pruned() {
+        let kept = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (git, orphans, done) = {
+            let kept = kept.clone();
+            orphans_and_a_repack(200, move |other, orphans, pruned| {
+                if pruned == 0 || !kept.lock().unwrap().is_empty() {
+                    return;
+                }
+                let mut kept = kept.lock().unwrap();
+                for (bytes, oid) in orphans {
+                    if other.has(*oid) {
+                        other.ensure_blob(bytes).unwrap();
+                        kept.push(*oid);
+                    }
+                }
+            })
+        };
+        let kept = kept.lock().unwrap().clone();
+        assert!(!kept.is_empty());
+        assert_eq!(done.pruned as usize, orphans.len() - kept.len());
+        assert!(kept.iter().all(|oid| git.has(*oid)));
     }
 
     /// A repository is made for bytes: nothing is converted, objects and references are

@@ -44,6 +44,9 @@ pub const REPACK_BYTES: u64 = 64 * 1024 * 1024;
 /// One run packs the loose objects that take this many bytes before compression, at most
 /// (one object that is larger runs alone). The rest waits for the next run.
 pub const MAX_RAW: u64 = 96 * 1024 * 1024;
+/// The unreachable objects removed while holding off a commit's start: it waits for one batch
+/// at most (§9.8).
+const PRUNE_BATCH: usize = 128;
 
 /// What a repack did.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -249,7 +252,7 @@ impl Git {
     ) -> Result<Repacked, GitError> {
         let repo = self.repo();
         let objects = repo.path().join("objects");
-        let generation = self.commit_generation();
+        let marks = self.commit_marks();
         let loose = list_loose(&objects)?;
         let mut done = Repacked::default();
         if loose.is_empty() {
@@ -297,13 +300,24 @@ impl Git {
             }
         }
         // The walk found nothing reaching these; a commit made since may name them. Nothing
-        // unreachable goes while one is being made or was made during the run: the next run
-        // has them again.
-        let quiet = generation.is_multiple_of(2) && self.commit_generation() == generation;
-        for oid in plan.prune.iter().filter(|_| quiet) {
-            if remove_loose(&by_oid[oid].path) {
-                done.pruned += 1;
+        // unreachable goes while one is being made or after one was begun during the run (the
+        // next run has them again), and a commit cannot begin while a batch is removed: it
+        // waits for the batch, and the batches after it find it.
+        for batch in plan.prune.chunks(PRUNE_BATCH) {
+            hooks.prune_batch_reached(done.pruned);
+            if stop.load(Ordering::Acquire) {
+                break;
             }
+            let removed = self.while_no_commit(marks, || {
+                batch
+                    .iter()
+                    .filter(|oid| prune_if_unchanged(by_oid[*oid]))
+                    .count()
+            });
+            let Some(removed) = removed else {
+                break;
+            };
+            done.pruned += removed as u64;
         }
         remove_empty_folders(&objects);
 
@@ -562,6 +576,15 @@ fn packed_among(pack_dir: &Path, candidates: &HashSet<Oid>) -> Result<HashSet<Oi
         }
     }
     Ok(found)
+}
+
+/// Removes an unreachable loose object unless its file was written again since the repack
+/// listed it (something freshened it, as git does for an object it is given again).
+fn prune_if_unchanged(listed: &Loose) -> bool {
+    let unchanged = std::fs::metadata(&listed.path)
+        .and_then(|meta| meta.modified())
+        .is_ok_and(|modified| modified == listed.modified);
+    unchanged && remove_loose(&listed.path)
 }
 
 /// Removes a loose object file. `false` when it could not be removed now; a later repack
