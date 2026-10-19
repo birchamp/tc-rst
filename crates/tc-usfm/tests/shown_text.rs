@@ -293,52 +293,36 @@ const HIDDEN: &[&str] = &[
     "hidden-ts",
 ];
 
-/// What tC4 shows of every verse in `fixtures/usfm/shown-text-vectors.json`, made by
-/// `tools/gen-shown-text-vectors.mjs` with tC4's own `verseText` at PR #800's head 5dcd147:
-/// tC4's aligned fixtures, drafts with notes and other markers between words, and the md5 of
-/// every verse of the ULT and UST v91 Genesis and Psalms. The codec finds the verses usfm-js
-/// finds. The one difference is the declared one ([`HIDDEN`]). `main`, tC4 main's text where
-/// it differs, holds exactly the drafts where PR #800's space is the only change.
-#[test]
-fn the_shown_text_is_what_tc4_reads() {
+/// Compares the shown text of every case of a vector file in the format of
+/// `fixtures/usfm/shown-text-vectors.json` with tC4's, and the codec's verses of each book
+/// with usfm-js's; returns how many cases held a text and how many an md5.
+fn check_vectors(file: &serde_json::Value) -> (usize, usize) {
     use std::collections::{BTreeMap, BTreeSet};
-    let file: serde_json::Value =
-        serde_json::from_str(&read("fixtures/usfm/shown-text-vectors.json")).unwrap();
-    assert_eq!(file["tc4"], "5dcd1472f9a3dec36bbc2f4e811c40d1387e7068");
-    assert_eq!(file["main"], "9ad4d5c506466819e5b10f255bbb4a36d394e498");
-    let cases = file["cases"].as_array().unwrap();
     let mut by_book: BTreeMap<&str, Vec<&serde_json::Value>> = BTreeMap::new();
-    for case in cases {
+    for case in file["cases"].as_array().unwrap() {
         by_book
             .entry(case["book"].as_str().unwrap())
             .or_default()
             .push(case);
     }
+    let key = |case: &serde_json::Value| {
+        format!(
+            "{}:{}",
+            case["chapter"].as_str().unwrap(),
+            case["verse"].as_str().unwrap()
+        )
+    };
     let mut wrong = Vec::new();
     let (mut texts, mut digests) = (0, 0);
     for (book, cases) in &by_book {
-        let ours: BTreeMap<String, String> =
-            verses(&vector_book(&file, book)).into_iter().collect();
-        let keys: BTreeSet<String> = cases
-            .iter()
-            .map(|c| {
-                format!(
-                    "{}:{}",
-                    c["chapter"].as_str().unwrap(),
-                    c["verse"].as_str().unwrap()
-                )
-            })
-            .collect();
+        let ours: BTreeMap<String, String> = verses(&vector_book(file, book)).into_iter().collect();
+        let keys: BTreeSet<String> = cases.iter().map(|c| key(c)).collect();
         if keys != ours.keys().cloned().collect::<BTreeSet<_>>() {
             wrong.push(format!("{book}: the codec's verses are not usfm-js's"));
             continue;
         }
         for case in cases {
-            let key = format!(
-                "{}:{}",
-                case["chapter"].as_str().unwrap(),
-                case["verse"].as_str().unwrap()
-            );
+            let key = key(case);
             let shown = shown_text_v1(&ours[&key]);
             match (case["text"].as_str(), case["md5"].as_str()) {
                 (Some(theirs), None) if HIDDEN.contains(book) => {
@@ -364,8 +348,26 @@ fn the_shown_text_is_what_tc4_reads() {
         }
     }
     assert_eq!(wrong, Vec::<String>::new());
-    assert_eq!((texts, digests), (160, 7983));
-    let with_main: BTreeSet<&str> = cases
+    (texts, digests)
+}
+
+/// What tC4 shows of every verse in `fixtures/usfm/shown-text-vectors.json`, made by
+/// `tools/gen-shown-text-vectors.mjs` with tC4's own `verseText` at PR #800's head 5dcd147:
+/// tC4's aligned fixtures, drafts with notes and other markers between words, and the md5 of
+/// every verse of the ULT and UST v91 Genesis and Psalms. The codec finds the verses usfm-js
+/// finds. The one difference is the declared one ([`HIDDEN`]). `main`, tC4 main's text where
+/// it differs, holds exactly the drafts where PR #800's space is the only change.
+#[test]
+fn the_shown_text_is_what_tc4_reads() {
+    use std::collections::BTreeSet;
+    let file: serde_json::Value =
+        serde_json::from_str(&read("fixtures/usfm/shown-text-vectors.json")).unwrap();
+    assert_eq!(file["tc4"], "5dcd1472f9a3dec36bbc2f4e811c40d1387e7068");
+    assert_eq!(file["main"], "9ad4d5c506466819e5b10f255bbb4a36d394e498");
+    assert_eq!(check_vectors(&file), (160, 7983));
+    let with_main: BTreeSet<&str> = file["cases"]
+        .as_array()
+        .unwrap()
         .iter()
         .filter(|c| c.get("main").is_some())
         .map(|c| c["book"].as_str().unwrap())
@@ -387,6 +389,22 @@ fn the_shown_text_is_what_tc4_reads() {
             "two-notes",
         ])
     );
+}
+
+/// The long parity run: every verse of every book of the ULT v91 and UST v91 (47,723 verses),
+/// against a dump of tC4's text made by `tools/dump-shown-text.mjs` and named by
+/// `TC_USFM_SHOWN_TEXT_DUMP` (about 12 MB, so not committed).
+#[test]
+#[ignore = "needs a dump of tC4's text; see the doc comment"]
+fn the_shown_text_is_what_tc4_reads_on_a_dump() {
+    let Some(path) = std::env::var_os("TC_USFM_SHOWN_TEXT_DUMP") else {
+        return;
+    };
+    let file: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let (texts, digests) = check_vectors(&file);
+    eprintln!("{texts} verses as tC4 {} shows them", file["tc4"]);
+    assert_eq!((texts, digests), (47_723, 0));
 }
 
 const ARCHIVES: &[(&str, &str)] = &[
