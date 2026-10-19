@@ -18,6 +18,8 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
+mod align_rows;
+mod check_rows;
 mod common;
 mod machine;
 mod memory;
@@ -152,6 +154,10 @@ fn child(case: &str, dir: &Path, flags: &Flags) -> Vec<Measured> {
         "r9-j8" => r9::j8(dir),
         "memory-nocache" => memory::nocache(dir),
         "memory-app" => memory::app_case(dir),
+        "align-edit" => align_rows::align_edit(),
+        "align-suggest" => align_rows::align_suggest(),
+        "check-open" => check_rows::check_open(dir),
+        "check-bible" => check_rows::check_bible(dir),
         "years-prepare" => years::prepare(dir, flags.days),
         "years-run" => years::run(dir, flags.open_every, flags.months),
         other => {
@@ -211,6 +217,16 @@ const STEPS: &[Step] = &[
     },
     Step {
         case: "flush",
+        repeat: 1,
+        ci: true,
+    },
+    Step {
+        case: "check-open",
+        repeat: 20,
+        ci: true,
+    },
+    Step {
+        case: "check-bible",
         repeat: 1,
         ci: true,
     },

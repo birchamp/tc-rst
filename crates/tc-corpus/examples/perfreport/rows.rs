@@ -94,7 +94,9 @@ pub const ROWS: &[RowSpec] = &[
     row("years.save", "Project", "Save p95 over months 31-36 against months 4-9", "36 months", "tc-store", Info, Value, Single, false),
     // tc-check
     row("check.open_first", "Checking", "Open the Check screen, first time (derive, map, place, status)", "Psalms tN and tW", "tc-check", Ms(250.0), P95, Single, true),
-    row("check.open_cached", "Checking", "Open the Check screen from the cache", "Psalms tN and tW", "tc-check", Ms(20.0), P95, Single, true),
+    row("check.open_later", "Checking", "Open the Check screen again in the same session (derived again)", "Psalms tN and tW", "tc-check", Info, Median, Single, false),
+    row("check.open_decisions", "Checking", "Open the Check screen with only the lists cached (decisions projected and placed again)", "Psalms tN and tW", "tc-check", Info, Median, Single, false),
+    row("check.open_cached", "Checking", "Open the Check screen from the cache (session held; rows patched)", "Psalms tN and tW", "tc-check", Ms(20.0), P95, Single, true),
     row("check.rail", "Checking", "Rail filter, sort or grouping", "Psalms", "tc-check", Ms(16.0), P95, Single, true),
     row("check.decision_counts", "Checking", "Progress counts after a decision", "Psalms", "tc-check", Ms(1.0), P95, Single, true),
     row("check.reassess", "Checking", "Re-assess one verse's checks after an edit", "one verse", "tc-check", Ms(1.0), P95, Single, true),
@@ -106,6 +108,7 @@ pub const ROWS: &[RowSpec] = &[
     row("align.edits", "Aligning", "Every aligner edit of that verse", "PSA 42:4", "tc-align", Ms(30.0), P95, Single, true),
     row("align.reflow", "Aligning", "Reflow alignments after a verse edit", "one verse", "tc-align", Ms(2.0), P95, Single, true),
     row("align.suggest", "Aligning", "Suggestions for one verse", "NT + GEN + PSA of ULT v91", "tc-align", Ms(50.0), P95, Single, true),
+    row("align.suggest_longest", "Aligning", "Suggestions for the NT verse with the most candidates", "NT model", "tc-align", Info, Median, Single, false),
     row("align.train_ot", "Aligning", "Training the OT model (background)", "GEN + PSA", "tc-align", Info, Median, Single, false),
     row("align.train_nt", "Aligning", "Training the NT model (background)", "27 NT books", "tc-align", Info, Median, Single, false),
     row("align.append", "Aligning", "Model update after an alignment save (background)", "one verse", "tc-align", Info, Median, Single, false),

@@ -58,6 +58,16 @@ pub fn open(store: &Store, dir: &Path) -> ProjectHandle {
     handle
 }
 
+/// Runs `work` on a pool of the reference laptop's four cores: the fold's and the
+/// suggestion engine's parallel steps use the pool they are called in.
+pub fn on_pool<T: Send>(work: impl FnOnce() -> T + Send) -> T {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(STORE_THREADS)
+        .build()
+        .expect("a pool")
+        .install(work)
+}
+
 pub fn ms(since: Instant) -> f64 {
     since.elapsed().as_secs_f64() * 1000.0
 }
