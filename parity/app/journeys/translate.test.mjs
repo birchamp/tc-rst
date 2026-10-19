@@ -8,7 +8,7 @@
 //     node --test parity/app/journeys/translate.test.mjs
 import assert from 'node:assert/strict';
 import { newRequestId } from '../env-rust.mjs';
-import { browserTest, recordRequests, sleep, until, withApp } from './kit.mjs';
+import { browserTest, catalog, choose, openLanguage, recordRequests, sleep, until, withApp } from './kit.mjs';
 
 const BIBLE = 'sample_burrito';
 const titus = (page) => page.getByTestId(`project-${BIBLE}`).getByRole('button', { name: /Titus/ });
@@ -239,4 +239,57 @@ browserTest('cross_frame_translate_shows_the_mapped_source_verse', async () => {
     // One row per project verse, each with its own verse of the translation.
     assert.equal(await page.getByTestId('draft-target-text').count(), 16);
   }, { scenario: 'en-pins' });
+});
+
+// tC4 app-language e (Translate's half; the comment's is C3's): a verse typed before a language
+// switch is saved by the card's blur and survives the switch; the book and chapter stay, and the
+// card opens again in the new language on the same text.
+browserTest('app_language_e_a_verse_typed_before_the_switch_survives_it', async () => {
+  await withApp(async ({ page, env }) => {
+    const es = catalog('es-419');
+    const TEXT = 'Pablo, siervo de Dios y apóstol de Jesucristo.';
+    await openTranslate(page);
+    await page.getByRole('button', { name: '2', exact: true }).click();
+    await page.getByRole('heading', { name: 'Titus 2' }).waitFor();
+    await page.getByRole('tab', { name: 'Verse', exact: true }).click();
+    await page.getByRole('button', { name: 'start this verse' }).first().click();
+    await box(page, 1).fill(TEXT);
+    // Opening the menu leaves the card: its blur saves the text.
+    await openLanguage(page);
+    await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    await choose(page, 'es-419');
+    await page.getByTestId('language-apply').click();
+    await until('the dialog closes', async () => (await page.getByTestId('language-dialog').count()) === 0);
+    await page.getByRole('heading', { name: 'Titus 2' }).waitFor();
+    assert.ok((await page.getByTestId('draft-target-text').first().textContent()).includes(TEXT));
+    const view = await env.call('editor/chapters', { at: (await env.call('app/hello', {})).sessions[0].at, book: 'TIT' });
+    assert.equal(view.chapters[1].verses[0].words.value, TEXT);
+    await page.getByTitle(es['draft.editVerse']).first().click();
+    const label = es['draft.verseLabel'].replace('{n}', '1');
+    assert.equal(await page.getByLabel(label, { exact: true }).inputValue(), TEXT);
+    await page.getByRole('button', { name: es['draft.cancelVerse'], exact: true }).click();
+    await page.getByLabel(label, { exact: true }).waitFor({ state: 'detached' });
+  }, { hooks: true });
+}, { hooks: true });
+
+// tC4 app-language i (#657, the left-to-right project's half; a right-to-left project is made by
+// C6's create): scripture follows the project, not the interface. Under Arabic the page reads
+// right to left, and the source, the translation and the verse card read left to right.
+browserTest('app_language_i_scripture_follows_the_project_under_an_arabic_interface', async () => {
+  await withApp(async ({ page }) => {
+    const ar = catalog('ar');
+    await titus(page).click();
+    await page.getByTestId('understand-unit-s1').waitFor();
+    await page.getByTestId('mode-switch').getByRole('tab', { name: ar['nav.draft'] }).click();
+    await page.getByTestId('draft-target-text').first().waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.dir), 'rtl');
+    const direction = (locator) => locator.evaluate((el) => getComputedStyle(el).direction);
+    assert.equal(await direction(page.getByTestId('draft-source-text').first()), 'ltr');
+    assert.equal(await direction(page.getByTestId('draft-target-text').first()), 'ltr');
+    await page.getByRole('tab', { name: ar['understand.byVerse'], exact: true }).click();
+    await page.getByTitle(ar['draft.editVerse']).first().click();
+    const card = page.getByLabel(ar['draft.verseLabel'].replace('{n}', '1'), { exact: true });
+    assert.equal(await direction(card), 'ltr');
+    assert.equal(await card.getAttribute('dir'), 'ltr');
+  }, { locale: 'ar' });
 });
