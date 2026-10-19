@@ -814,6 +814,9 @@ impl Actions {
             self.drop_pending(Pending::OpenDoor43);
             return;
         };
+        // After a sign-in step took its place, the dialog shows again for the open's end.
+        self.patch_od(|od| od.busy = true);
+        self.s().layers.dialog.try_set(Some(Dialog::OpenDoor43));
         let this = self.clone();
         spawn_local(async move {
             let request = OpenDoor43 {
@@ -866,14 +869,29 @@ impl Actions {
     }
 
     /// The end of a job this page started: its outcome, or why it did not finish. Its state
-    /// comes with the event stream, which the runtime reads again after a gap.
+    /// comes with the event stream, which the runtime reads again after a gap; a job the page
+    /// has not heard of for a second is asked for, and one the server no longer knows (a new
+    /// server run) ended without an outcome.
     async fn job_end(&self, job: tc_api::ids::JobId) -> Result<JobOutcome, ApiError> {
+        let mut unheard = 0u32;
         loop {
-            let state = self
+            let mut state = self
                 .s()
                 .server
                 .jobs
                 .with_untracked(|jobs| jobs.get(&job).map(|view| view.state.clone()));
+            if state.is_none() {
+                unheard += 1;
+                if unheard.is_multiple_of(20) {
+                    match self.0.runtime.api().call(&tc_api::jobs::Get { job }).await {
+                        Ok(Some(view)) => state = Some(view.state),
+                        Ok(None) => {
+                            return Err(ApiError::Unavailable(tc_api::error::Feature::Sync));
+                        }
+                        Err(_) => {}
+                    }
+                }
+            }
             match state {
                 Some(JobState::Done(outcome)) => return Ok(outcome),
                 Some(JobState::Failed(error)) => return Err(error),
