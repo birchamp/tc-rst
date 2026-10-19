@@ -266,6 +266,20 @@ fn words_after_a_nested_character_span_bank_and_weave() {
     }
 }
 
+/// A character span or a paragraph marker right before a letter, and adjacent ruby words: the
+/// bank holds the export's words, so a value that places every word weaves (before, it held
+/// "Lords", "Yahwehque" and "神愛").
+#[test]
+fn words_beside_a_span_or_paragraph_marker_bank_and_weave() {
+    for plain in [
+        "the \\add Lord\\add*s house",
+        "Yahweh\\q2 que",
+        "\\rb 神|かみ\\rb*\\rb 愛|あい\\rb* x",
+    ] {
+        banks_the_export_words_and_weaves(plain);
+    }
+}
+
 /// The aligner's bank ([`TargetVerse`]) is the export's word list for every verse of the
 /// shown-text vectors' drafts with no word markup: notes, cross references, figures and
 /// other markers between words.

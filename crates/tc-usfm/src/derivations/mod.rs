@@ -71,15 +71,17 @@ pub fn plain_text_v1(content: &str) -> String {
 /// - Not shown: footnotes, cross references and figures, a section heading's own text, the
 ///   items of a `\li1` list, and the text usfm-js keeps for a marker it does not know
 ///   (`\qm1`), as in tC4.
-/// - Words never join across an object left out. Where one stands between two characters
+/// - Words never join across a marker: an object left out, or the start or end of a
+///   character span or paragraph marker. Where an object left out stands between two characters
 ///   that are not whitespace, the space or line break usfm-js keeps after its end marker is
 ///   put back: `siervo\f + \ft o esclavo\f* de` shows "siervo de" (tC4 #795). Where usfm-js
 ///   keeps none (`siervo\f + \ft o esclavo\f*de`) and the two characters would read as one
 ///   word or number, a space is put back. tC4's open PR #800 does the first for notes, cross
 ///   references and figures only; the rebuild does both for every object left out (`\va`,
-///   `\vp`, `\ca`, `\rq`, `\cat`, `\ts\*` …), a declared difference, so the words are the
-///   ones the export weaves. Words still join where usfm-js misreads alignment markup (UST
-///   2SA 23:8), as in tC4.
+///   `\vp`, `\ca`, `\rq`, `\cat`, `\ts\*` …), and puts a space back at the start or end of
+///   a span or paragraph marker where the two characters would join (`the \add Lord\add*s`,
+///   `Yahweh\q2 que`), a declared difference, so the words are the ones the export weaves.
+///   Words still join where usfm-js misreads alignment markup (UST 2SA 23:8), as in tC4.
 ///
 /// It is never hashed: hashes are of [`plain_text_v1`]. It is not one of `format.json`'s
 /// derivations (`docs/STORAGE.md` §12.1), since no fold output reads it, but it decides

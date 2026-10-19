@@ -73,7 +73,11 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
   words never join and can be checked, aligned and exported. tC4's open PR #800 does this for
   notes, cross references and figures only (C46). Where the marker is followed by a letter
   with no space (`siervo\f + \ft o esclavo\f*de`), the shown text puts a space between the
-  two words, as the export splits them; tC4 shows "siervode".
+  two words, as the export splits them; tC4 shows "siervode". So it does where a letter
+  follows the start or end of a character span or a paragraph marker directly:
+  `the \add Lord\add*s house` shows "the Lord s house", `Yahweh\q2 que` "Yahweh que" and
+  adjacent ruby `\rb 神|かみ\rb*\rb 愛|あい\rb*` "神 愛", where tC4 joins "Lords",
+  "Yahwehque" and "神愛", which the export cannot weave.
 - The words of a character span after a span nested in it show in Translate, Check, Align and
   print: `\wj Worship the \+nd Lord\+nd* your God\wj*` shows "Worship the Lord your God",
   where tC4 shows "Worship the " and hides from Check and the Align bank words the export

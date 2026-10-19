@@ -286,10 +286,16 @@ fn any_skipped_marker_between_words_keeps_its_space() {
 /// apart, as the export splits them, though usfm-js keeps no character after its end marker:
 /// a space is put back between two characters that would read as one word or number, and
 /// nothing between a word and punctuation (a declared difference: tC4, PR #800 too, shows
-/// "siervode", which the export cannot weave, #796).
+/// "siervode", which the export cannot weave, #796). So does the start or end of a character
+/// span or a paragraph marker: tC4 shows "Lords", "Yahwehque" and "神愛".
 #[test]
 fn a_skipped_marker_right_before_a_letter_leaves_a_space() {
     for (content, shown) in [
+        ("the \\add Lord\\add*s house", "the Lord s house"),
+        ("the \\nd Lord\\nd*s house", "the Lord s house"),
+        ("x\\add y\\add* z", "x y z"),
+        ("Yahweh\\q2 que", "Yahweh que"),
+        ("\\rb 神|かみ\\rb*\\rb 愛|あい\\rb* x", "神 愛 x"),
         (
             "Pablo, siervo\\f + \\ft o esclavo\\f*de Dios.",
             "Pablo, siervo de Dios.",

@@ -24,7 +24,9 @@
 //! words come in file order and none twice. On the ULT and UST v91 this changes no verse.
 //!
 //! The pieces are joined as they are, so the file's whitespace and line breaks stay, with
-//! two additions, so that words never join across an object the walk leaves out.
+//! two additions, so that words never join across a marker: an object left out, or the start
+//! or end of the object of any marker but a word or an alignment milestone (whose markup the
+//! import's split removes).
 //!
 //! First (tC4 #795, the rule of tC4's open PR #800 at 5dcd147): usfm-js keeps the space or
 //! line break after an object's end marker in its `nextChar`, which a skipped object takes
@@ -40,10 +42,12 @@
 //! chunk milestone `\ts\*` either, which tC4 joins.
 //!
 //! Second: usfm-js keeps no `nextChar` when the end marker is followed by anything but a
-//! space or a line break (`siervo\f + \ft o esclavo\f*de`). Where none was offered and the
-//! characters on either side of the skipped objects would read as one word or number to tC4's
-//! tokenizer ([`crate::words`]), a space is put back: "siervo de". Nothing is put back before
-//! punctuation (`siervo\f …\f*, de`). tC4, PR #800 too, shows "siervode".
+//! space or a line break (`siervo\f + \ft o esclavo\f*de`), and none at the start or end of
+//! a span or paragraph (`the \add Lord\add*s house`, `Yahweh\q2 que`, adjacent ruby
+//! `\rb 神|かみ\rb*\rb 愛|あい\rb*`). Where none was offered and the characters on either side
+//! of the marker would read as one word or number to tC4's tokenizer ([`crate::words`]), a
+//! space is put back: "siervo de", "Lord s", "Yahweh que", "神 愛". Nothing is put back before
+//! punctuation (`siervo\f …\f*, de`). tC4, PR #800 too, joins them.
 //!
 //! A joined word can be neither checked nor aligned, and the export, which splits words at
 //! every marker, cannot weave it (#796), so both additions beyond PR #800 are a declared
@@ -73,13 +77,13 @@ pub(super) fn text(parsed: &Parsed) -> Result<JsStr, Thrown> {
         on_path: vec![false; heap.len()],
         text: Vec::new(),
         gap: Vec::new(),
-        skipped: false,
+        apart: false,
         last: None,
     };
     for (_, verse) in &parsed.verses {
         // tC4 tokenizes each verse on its own.
         walk.gap.clear();
-        walk.skipped = false;
+        walk.apart = false;
         walk.last = None;
         walk.verse(*verse)?;
     }
@@ -99,6 +103,14 @@ enum Step<'h> {
     Nothing,
 }
 
+/// A list on the path of the walk.
+struct Frame {
+    list: Ref,
+    at: usize,
+    /// The list is the `children` of a marker's object, so leaving it ends the marker.
+    marker: bool,
+}
+
 struct Walk<'h> {
     heap: &'h Heap,
     /// The lists on the path of the walk, to find a list inside itself.
@@ -106,8 +118,8 @@ struct Walk<'h> {
     text: JsStr,
     /// The `nextChar` the first object skipped since the last text offered.
     gap: JsStr,
-    /// Whether an object was skipped since the last text.
-    skipped: bool,
+    /// Whether a marker stands between the last text and the next.
+    apart: bool,
     /// The last code unit of the last text.
     last: Option<u16>,
 }
@@ -115,39 +127,46 @@ struct Walk<'h> {
 impl<'h> Walk<'h> {
     /// `walk(vObj.verseObjects)` for one verse, with its own stack of lists and positions.
     fn verse(&mut self, verse: Ref) -> Result<(), Thrown> {
-        let mut stack: Vec<(Ref, usize)> = Vec::new();
-        self.enter(verse, &mut stack)?;
-        while let Some((list, at)) = stack.last_mut() {
-            let Some(&object) = self.heap.elems(*list).get(*at) else {
-                if let Some(seen) = self.on_path.get_mut(*list) {
+        let heap = self.heap;
+        let mut stack: Vec<Frame> = Vec::new();
+        self.enter(verse, false, &mut stack)?;
+        while let Some(frame) = stack.last_mut() {
+            let Some(&object) = heap.elems(frame.list).get(frame.at) else {
+                if let Some(seen) = self.on_path.get_mut(frame.list) {
                     *seen = false;
                 }
+                self.apart |= frame.marker;
                 stack.pop();
                 continue;
             };
-            *at += 1;
-            match step(self.heap, object)? {
-                Step::Skip => self.skip(object),
+            frame.at += 1;
+            let marker = is_marker(heap, object);
+            self.apart |= marker;
+            match step(heap, object)? {
+                Step::Skip => {
+                    self.apart = true;
+                    self.offer(heap.get(object, &Key::NextChar));
+                }
                 Step::Nothing => {}
                 Step::Text(text, children) => {
                     self.push(text);
-                    if let Some(list) = children {
-                        self.enter(list, &mut stack)?;
+                    match children {
+                        Some(list) => self.enter(list, marker, &mut stack)?,
+                        None => self.apart |= marker,
                     }
                 }
-                Step::Walk(list) => self.enter(list, &mut stack)?,
+                Step::Walk(list) => self.enter(list, marker, &mut stack)?,
             }
         }
         Ok(())
     }
 
     /// PR #800's `noteGap`, for every skipped object (see the module documentation).
-    fn skip(&mut self, object: Ref) {
-        self.skipped = true;
+    fn offer(&mut self, space: Option<&Val>) {
         if self.gap.is_empty()
-            && let Some(Val::Str(next)) = self.heap.get(object, &Key::NextChar)
+            && let Some(Val::Str(space)) = space
         {
-            self.gap.clone_from(next);
+            self.gap.clone_from(space);
         }
     }
 
@@ -159,23 +178,27 @@ impl<'h> Walk<'h> {
             {
                 if !self.gap.is_empty() {
                     self.text.extend_from_slice(&self.gap);
-                } else if self.skipped && would_join(before, first) {
+                } else if self.apart && would_join(before, first) {
                     self.text.push(u16::from(b' '));
                 }
             }
             self.gap.clear();
-            self.skipped = false;
+            self.apart = false;
             self.last = Some(last);
         }
         self.text.extend_from_slice(text);
     }
 
-    fn enter(&mut self, list: Ref, stack: &mut Vec<(Ref, usize)>) -> Result<(), Thrown> {
+    fn enter(&mut self, list: Ref, marker: bool, stack: &mut Vec<Frame>) -> Result<(), Thrown> {
         match self.on_path.get_mut(list) {
             Some(seen) if !*seen => *seen = true,
             _ => return Err(Thrown),
         }
-        stack.push((list, 0));
+        stack.push(Frame {
+            list,
+            at: 0,
+            marker,
+        });
         Ok(())
     }
 }
@@ -224,6 +247,13 @@ fn step(heap: &Heap, object: Ref) -> Result<Step<'_>, Thrown> {
         },
         _ => Ok(Step::Skip),
     }
+}
+
+/// Whether `object` is a marker's whose start and end keep words apart: anything but plain
+/// text, a word or an alignment milestone.
+fn is_marker(heap: &Heap, object: Ref) -> bool {
+    let is = |key: &Key, value: &str| heap.s(object, key).is_some_and(|s| eq(s, value));
+    heap.s(object, &Key::Tag).is_some() && !is(&Key::Type, "word") && !is(&Key::Tag, "zaln")
 }
 
 /// Whether the code units `a` then `b` read as one word or number to tC4's tokenizer, so that

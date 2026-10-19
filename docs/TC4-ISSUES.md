@@ -79,8 +79,8 @@ Other findings from the verifiers that are not bugs in shipped behavior:
 - #525: until C1a, a chosen interface language is lost at relaunch, because the production
   config keeps app data in memory.
 
-Found by FIX-text (2026-10-19), as tC4 has them, reported and not changed
-(`docs/evidence/shown-text-2026-10-19.md`):
+Found by FIX-text (2026-10-19) (`docs/evidence/shown-text-2026-10-19.md`); each says whether
+the rebuild fixed it or does as tC4 does:
 
 - **Hidden verse text.** The shown text hides the items of a `\li` list and the lines of a
   marker usfm-js 3.4.3 does not know and keeps as `content` (`\qm1`), as tC4's `verseText`
@@ -102,6 +102,12 @@ Found by FIX-text (2026-10-19), as tC4 has them, reported and not changed
   tC4's `verseText` shows only "Worship the ", so Check and the Align bank miss words the export
   counts, and a bank without them cannot be woven (#796). Fixed in the rebuild as a declared
   difference (`docs/PLAN.md`); no ULT or UST v91 verse has one.
+- **Words that join across a span or paragraph marker** (`the \add Lord\add*s house`,
+  `Yahweh\q2 que`, adjacent ruby): tC4 banks "Lords", "Yahwehque" and "神愛", which the export
+  splits. Fixed in the rebuild as a declared difference (`docs/PLAN.md`;
+  `a_skipped_marker_right_before_a_letter_leaves_a_space`). The woven form of a ruby word
+  (`\rb \w 神|…\w*|かみ\rb*`) still shows its gloss ("神|かみ"); the import's split reads it
+  back to the plain form, whose bank is the export's.
 - **A stray end marker** (`a\nd* b` with no `\nd`) hides the text after it, which usfm-js keeps
   as the marker's `content`. tC4 does the same.
 
