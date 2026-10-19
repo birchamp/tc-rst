@@ -6,7 +6,8 @@
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_DOOR43_FAKE=target/debug/tc-door43-fake \
 //     node --test parity/app/journeys/internet-consent.test.mjs
 //
-// Not here, with the unit that takes them: the Share halves of a, b and d (B9b, E1b), the "in a
+// Not here: the Share halves of a, b and d up to the share's check step are in share-open.test.mjs
+// (B9b), and the share's run with them goes to E1b; with the unit that takes them, the "in a
 // project" halves of c and e (B3, B5a); i and j ran in A5. tC4's f2 (a gate that cannot be read)
 // has no counterpart: the switch is the server's, with no separate gate (APP-DESIGN 5.6 item 2).
 import assert from 'node:assert/strict';

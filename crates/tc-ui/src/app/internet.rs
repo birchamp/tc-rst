@@ -9,11 +9,15 @@ use tc_api::account::WebUrl;
 use tc_api::endpoint::NetKind;
 use tc_api::ids::ProjectRef;
 
-/// A link whose address the UI holds: the help pages' (A5); B9b adds the shared repository.
-/// The profile is [`Pending::Profile`], whose address the server gives.
+use crate::app::share::ShareProject;
+
+/// A link whose address the UI holds: the help pages' (A5) and a shared repository's, the share
+/// dialog's "Open on Door43" (B9b). The profile is [`Pending::Profile`], whose address the
+/// server gives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LinkKind {
     Help,
+    Repo,
 }
 
 /// The step to run once the question is answered, or once the sign-in that a step needed is
@@ -24,8 +28,9 @@ pub enum Pending {
     Feedback,
     /// A page of another site, opened in the system browser.
     Link(LinkKind, WebUrl),
-    /// A Home card's "Share on Door43" (B2 asks; B9b runs the share).
-    Share(ProjectRef),
+    /// A Home card's "Share on Door43" (B2 asks): the sign-in if needed, then the dialog on
+    /// its where-it-goes step, reading the organizations (B9b).
+    Share(Box<ShareProject>),
     /// A Home card's "Sync with Door43" (B2 asks; B10 runs the sync).
     Sync(ProjectRef),
     /// The sign-in step's Sign in (M12), sent once the internet is on: tC4 asks when the
@@ -35,6 +40,8 @@ pub enum Pending {
     CheckSignIn,
     /// The account menu's "Open my page on Door43".
     Profile,
+    /// "Open project" in Open a project from Door43 (B9b): the open of the form as it stands.
+    OpenDoor43,
 }
 
 impl Pending {
@@ -43,11 +50,13 @@ impl Pending {
         match self {
             Self::Feedback => NetKind::Feedback,
             Self::Link(LinkKind::Help, _) => NetKind::HelpLink,
+            Self::Link(LinkKind::Repo, _) => NetKind::RepoLink,
             Self::Share(_) => NetKind::Share,
             Self::Sync(_) => NetKind::Sync,
             Self::SignIn { .. } => NetKind::SignIn,
             Self::CheckSignIn => NetKind::CheckSignIn,
             Self::Profile => NetKind::Profile,
+            Self::OpenDoor43 => NetKind::Open,
         }
     }
 }
