@@ -3711,15 +3711,6 @@ the tree build to the branch's move (the actor ends it; the carried-versions ref
 covered the same way); every handle on the repository shares the mark. The objects are pruned by
 the next run.
 
-A commit being made can name an object the walk found unreachable: a blob an abandoned checkpoint
-stored (`HeadMoved`, G1), older than 14 days, which the tree reuses. Two things keep the repack
-from removing it before the branch has moved. The writer's `ensure_blob` writes through the
-object database even when it holds the object, which libgit2 answers by bringing the loose
-file's time up to date (as git does). And the repository's handles share a counter that is odd
-while a commit is being made (from the start of the tree build to the move of the branch, or its
-giving up) and goes up by two for every commit: a repack that began, or ran, while the counter
-was odd or moved removes no unreachable object that run, and the next run has them again.
-
 ### 9.9 Editing during a sync
 
 The worker never holds the project. A verse that receives a teammate's change while it is open
@@ -3874,7 +3865,9 @@ X3  For each key k in the union of the decoded keys and the heads file's keys:
       editor that rewrites line endings (a web editor that drops CR) or trims lines touches
       every verse but changes none. Such keys are counted in a `WhitespaceOnlyEdit` notice
       ("Line endings in ROM.usfm were changed by the web editor; translationCore keeps the
-      file's line endings"). For a key that did change, if written(k) has CRLF line endings and
+      file's line endings"). A book's digests are taken after the same normalization, so a file
+      whose every digest equals its base but whose bytes differ looks at no key: it is reported
+      as one whitespace-only rewrite that counts the records the file shows. For a key that did change, if written(k) has CRLF line endings and
       found(k) has none, found(k) gets CRLF back, so a fixed typo is the only difference
       recorded. The tests below count only changed keys.
       found ≠ written → one External change with value found(k) and parents:
@@ -3922,15 +3915,7 @@ gives them from its pending file), a record it left alone keeps its base, and th
 those of the bytes found (kept from the examination, so the file is decoded once). A program that
 keeps the file open (Paratext on Windows) may save it again from these bytes while the app cannot
 write the file back; that save is an edit of the recorded bytes, not of the version the app wrote
-before, so the person's two saves are one line of changes and no conflict. The heads file of the path is
-written then too, before the rewrite: for each record the batch changed it names the batch's
-change as the heads, for each record of a book's USFM the digest of the bytes found, and the
-other records keep the base they had. The bytes stay in the folder for as long as a program
-keeps the file open (Paratext on Windows, §5.10), and that program's next save starts from
-them: compared with the base from before the first edit it would be a sibling of the first, a
-conflict between the person's own two saves. A file the materialization finds already equal to
-the projection (the write stopped after its rename, or the projection moved with the same bytes)
-gets its heads file written again as well. The same acceptance follows
+before, so the person's two saves are one line of changes and no conflict. The same acceptance follows
 a plan that records nothing (a rewrite of line ends only, or a file whose records all equal
 what the project shows) and a file that could not be decoded; if the disk refused the batch,
 nothing is accepted and the file is looked at again with the next job. A decoded record that
@@ -4035,11 +4020,6 @@ paths break the grammar or have a dot segment are foreign entries (§9.4), kept 
   the record, which may be a teammate's version the folder never showed; a project that holds
   no such version records it by the rules for a new file below; or `[]` by the revert rule (the
   bytes are an older version's).
-  The version the app placed is the one the manifest entry's blob names, not the newest head of
-  the record: the changes of `CarriedFile(path)` whose blob is that one (the heads among them,
-  else the newest), so a teammate's version the folder never showed is a sibling of the edit and
-  the two are a conflict, and an entry that names no recorded version gives the rules for a
-  version the project did not place.
   A new file nobody tracked: an External change with no parents; where a removed file was, it
   replaces the removal. A session with no repository (`HistoryUnavailable`) cannot keep the
   bytes and records nothing; the file is left as it is.
@@ -4413,6 +4393,15 @@ days a year.
 | Join | ≈ 250–400 MiB full clone, or ≈ 120 MiB exchange file | packs deflate ≈ 5x in the zip |
 | USB export | ≈ 120 MiB, 5–15 s on USB 2 | |
 | Memory | ≈ 100 MiB typical, ≈ 350 MiB peak; measured folded state 170 MB of heap with 4 MB of allocator overhead (205 MB with 15 MB before the compaction of 2026-10-17); with glibc malloc an open with the fold cache peaks at 281–294 MiB RSS and leaves 217–232 MiB with the fold open, the first open without a cache peaks at 317–324 MiB (450–456 MiB before), and the app's case (one open, then saves, decisions, alignments, resolutions, conflict lists, 20 projections of Psalms and snapshots, in a process of its own) peaks at and keeps 302–310 MiB; with jemalloc 315–319, 256–261, 348–356 and 340–373 MiB; the peak is met, the steady 150 MiB is **missed** by the fold's tables alone (`docs/evidence/storage-fold-2026-10-16.md`). The owner's rows of 2026-10-18 (400 MiB steady, 450 MiB peak, private bytes, the close and the whole-project materialize included) were measured by unit S2 on the whole Bible (`docs/evidence/storage-materialize-2026-10-18.md`): with one heap 302 MiB a minute after 200 saves and 200 decisions, 323 MiB at the peak (the whole-project job, then the close); with glibc's default heap 404 MiB and 457 MiB, which misses by 4 and 7 MiB; the laptop is estimated at the one-heap figures | ≈ 280 B of tables per change: each change's entry 96 B (its first parent, sequence number, value's place and fingerprint, and shape inline; what few changes have beside the table), each batch's 28 B, each record's 144 B (identity strings of up to 15 bytes inline), three position-index slots; values are byte ranges read on demand and dropped when a book is idle; the open folds each file as it arrives and parses a file's lines one at a time, so its peak holds the tables, the cache's bytes and a few files' inputs; the fold's parallel steps run on one worker pool; glibc keeps each worker thread's heap at its high-water mark (41–50 MiB after an open, about 120 MiB after the app's case); meeting 150 MiB needs the fold to keep only the heads and the open books' histories in memory |
+
+**Rows of the project store that are not met or not shown** (unit S2, 2026-10-18;
+`docs/PERFORMANCE.md` "Rows of the project store that are open" has the table and what would change
+each): the checkpoint (500 ms) is missed by the laptop estimate; a save during a checkpoint is at
+the edge of 25 ms p95, and the month's consolidation is still one actor step; one book's
+materialize (1 s) and the close (3 s) are estimated at both sides of their budgets; and the
+memory (400 MiB steady, 450 MiB peak) is met with one heap and missed by 3 to 11 MiB with glibc's
+default heap, which makes the whole-project job 3.5 times slower. They stay open until the owner
+chooses a remedy, or a measurement on the reference laptop shows them met.
 
 An aligned NT project is about a quarter of these figures. Rows that say "measured" were
 measured on this format with the `tc-corpus` whole-Bible corpus, release builds
@@ -4823,8 +4812,6 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the materialization after a failed seal | `a_seal_that_fails_after_its_pack_leaves_a_valid_burrito` |
 | the draft writer ending before the lock is released | `nothing_is_written_into_the_folder_after_the_lock_is_released` |
 | the coherence view of an unverified section draft (current values, no parents) | `an_unverified_section_draft_that_holds_a_span_can_be_kept` |
-| the look at a file just before its rename (rename over what M1 read) | `an_outside_save_during_the_rename_window_is_never_overwritten` |
-| the compare-and-swap reading the bytes (trust an entry's size and mtime) | `the_compare_and_swap_reads_a_file_whose_size_and_mtime_are_unchanged` |
 | the intent kept by the session after a group stopped (forget it once M4 fails) | `a_group_that_fails_after_a_rename_does_not_mistake_its_bytes_for_an_outside_edit`, `a_focus_after_a_group_stopped_does_not_take_its_bytes_for_an_outside_edit` |
 | the intent at the open (read the md5s of the intent as no one's) | `crash_materialize_intent_tells_its_bytes_from_an_outside_edit` |
 | the heads file written again for a converged file | `a_retry_that_finds_the_file_converged_writes_its_heads_file` |
@@ -4835,6 +4822,8 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the freshening of a reused blob and the repack's guard while a commit is made | `a_blob_a_new_commit_names_again_is_kept_young`, `a_repack_prunes_nothing_while_a_commit_is_being_made` (`git.rs`) |
 | the removal of a `Failed` notice by a job that wrote | `a_group_that_fails_after_a_rename_does_not_mistake_its_bytes_for_an_outside_edit` |
 | the revert rule and the removal rule of the planner (switch either off) | `every_kind_of_outside_edit_in_one_project_conserves`, `outside_edit_reconcile_conserves` |
+| the look at a file just before its rename (rename over what M1 read) | `an_outside_save_during_the_rename_window_is_never_overwritten` |
+| the compare-and-swap reading the bytes (trust an entry's size and mtime) | `the_compare_and_swap_reads_a_file_whose_size_and_mtime_are_unchanged` |
 | the writer thread (materialize on the actor, as unit S1 did) | `a_save_is_durable_while_a_materialize_is_held`, `a_save_is_durable_while_a_checkpoint_is_held`, `a_save_is_durable_while_the_tree_is_built`, `the_opens_first_materialization_runs_after_the_open_returns` |
 | a job never goes back to an older snapshot | `a_job_from_an_older_snapshot_never_writes_over_newer_bytes` (`writer.rs`) |
 | marking by book (mark every file of the project) | `a_book_change_marks_only_that_books_files`, `a_books_materialize_touches_only_that_books_files` |
