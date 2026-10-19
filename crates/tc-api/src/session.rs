@@ -2,13 +2,15 @@
 //!
 //! At an open after a restart or a crash, unsaved text can be in three places: the project's
 //! `.tc/drafts.json`, the page's draft buffer and the shell's mirror. The UI sends the folder's
-//! buffered entries with `session/drafts`; the server merges them with the stored drafts and
-//! answers what to offer. An offer carries what *Keep* sends back, so the server keeps no state
-//! between the two requests and a reload simply asks again.
+//! buffered entries with `session/drafts`; the server judges every text against the record
+//! (`model::draft`), takes each unsaved one into `drafts.json` as an offered entry before it
+//! answers, and answers the questions and the buffer slots the page then drops. *Keep* and
+//! *Discard* name an offered entry by its number, so one place answers each question, and a
+//! reload simply asks again.
 //!
-//! A read-only project is copied with `session/copy`; the copy takes the folder's
-//! `drafts.json`, and the UI moves its buffered entries to the copy, whose first open offers
-//! them.
+//! A read-only project offers nothing and takes nothing in. It is copied with `session/copy`;
+//! the copy takes the folder's `drafts.json`, and the UI moves the folder's buffer items and
+//! mirror lines to the copy, whose first open offers them.
 
 use serde::{Deserialize, Serialize};
 
@@ -17,16 +19,19 @@ use crate::ids::{ProjectId, ProjectRef, RequestId, Scope, ServerInstance, ViewSe
 use crate::token::ShownToken;
 use crate::write::{ConflictBrief, Stored};
 
-/// `session/drafts`: what to offer of the open project's unsaved text.
+/// `session/drafts`: what to offer of the open project's unsaved text. A command: the texts it
+/// offers are written into `drafts.json` before it answers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Drafts {
     pub at: Scope,
+    pub request: RequestId,
     /// The folder's buffered entries, page and mirror merged (`tc_ui::app::buffer::merge`),
-    /// each a `changed` [`BufferLine`](crate::buffer::BufferLine) as JSON text: an entry keeps
-    /// keys this build does not know, which a request's own fields would refuse. A line that
-    /// does not parse, a removal, and an entry of another folder or project id are skipped.
+    /// but those the page's save machine holds, each a `changed`
+    /// [`BufferLine`](crate::buffer::BufferLine) as JSON text: an entry keeps keys this build
+    /// does not know, which a request's own fields would refuse. A line that does not parse, a
+    /// removal, and an entry of another folder or project id are skipped.
     pub buffered: Vec<String>,
 }
 
@@ -44,15 +49,16 @@ pub struct OfferedDrafts {
         )
     )]
     pub offers: Vec<DraftOffer>,
-    /// Buffered entries whose text the project already holds: the UI removes them, each only
-    /// while its item still holds that text.
+    /// Buffer slots whose text is held elsewhere now: by the record, or by an offered entry of
+    /// `drafts.json` written before this answer. The UI drops them, each only while its item
+    /// and its mirror line still hold that text.
     #[cfg_attr(
         feature = "proptest",
         proptest(
             strategy = "proptest::collection::vec(proptest::arbitrary::any::<BufferSlot>(), 0..2)"
         )
     )]
-    pub saved: Vec<BufferSlot>,
+    pub settle: Vec<BufferSlot>,
 }
 
 /// One unsaved text.
@@ -111,7 +117,8 @@ pub enum Keep {
     CopyText,
 }
 
-/// The stored drafts and buffered entries one offer stands for.
+/// Where one offer's text is: an offered entry of `drafts.json`, and, for "Copy text", which
+/// no entry can hold, the buffer slots.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
@@ -155,7 +162,7 @@ pub struct KeepDraft {
     pub kind: DraftKind,
     pub shown: Vec<ShownToken>,
     pub text: String,
-    /// The offer's other stored drafts, discarded once the text is kept.
+    /// The offer's entries of `drafts.json`, which go once the text is kept.
     pub discard: Vec<StoredDraftId>,
 }
 
@@ -170,8 +177,8 @@ pub struct KeptDraft {
     pub new_conflicts: Vec<ConflictBrief>,
 }
 
-/// `session/discardDraft`: *Discard* of an offer's stored drafts. The UI removes the
-/// buffered entries itself.
+/// `session/discardDraft`: *Discard* of an offer's entries of `drafts.json`, written before the
+/// answer. The UI drops the offer's buffer slots itself.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -182,8 +189,10 @@ pub struct DiscardDraft {
 }
 
 /// `session/copy`: the copy offer of a read-only project (§6.4, STORAGE §5.0). The copy is a
-/// new folder in the projects folder, with every save and the folder's `drafts.json`; it
-/// opens writable unless its own place makes it read-only.
+/// new folder in the projects folder, with every save and the folder's `drafts.json`. It is
+/// refused (`CreateRefusal::CopyUnsafe`) when the projects folder itself is on a drive that
+/// cannot keep a project safe or is copied by a cloud client: the copy would open read-only
+/// for the same reason.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -192,8 +201,8 @@ pub struct CopyProject {
     pub request: RequestId,
 }
 
-/// The copy. The UI moves the folder's buffered entries to `project` with `id`
-/// (`tc_ui::app::buffer::rekey`), then opens it; its first open offers them.
+/// The copy. The UI moves the folder's buffer items and mirror lines to `project` with `id`
+/// (`tc_ui::app::offer::copy`), then opens it; its first open offers them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]

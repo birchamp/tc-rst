@@ -31,6 +31,15 @@ use tc_ui::app::buffer::{self as page, MemStore};
 use super::common::{Parts, TestApp, post, rid, tit};
 use crate::store_world::{APP, backend_over, folder, store_world, words_of};
 
+/// A request id no other request of the test binary uses.
+fn fresh() -> RequestId {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    let mut bytes = [0xd7u8; 16];
+    bytes[8..].copy_from_slice(&NEXT.fetch_add(1, Ordering::Relaxed).to_be_bytes());
+    RequestId::from_bytes(bytes)
+}
+
 /// One computer's app over a project folder's files; `relaunch` is the next launch after the
 /// app was ended.
 struct Rig {
@@ -88,6 +97,7 @@ impl Rig {
             &self.t.app,
             &Drafts {
                 at: session.scope().clone(),
+                request: fresh(),
                 buffered: buffered.to_vec(),
             },
         )
@@ -287,13 +297,19 @@ async fn relaunch_offers_buffered_and_mirrored_entries() {
         assert_eq!(offer.kind, DraftKind::Words);
         assert_eq!(offer.keep, Keep::Save);
     }
-    assert_eq!(offer_at(&offers, "TIT 1:6").settles.stored.len(), 1);
+    // Each text is in one offered entry of drafts.json now, and the page drops its slots.
+    for place in ["TIT 1:4", "TIT 1:5", "TIT 1:6"] {
+        let offer = offer_at(&offers, place);
+        assert_eq!(offer.settles.stored.len(), 1, "{place}");
+        assert!(offer.settles.buffered.is_empty(), "{place}");
+    }
+    let settled: Vec<&BufferKey> = offers.settle.iter().map(|slot| &slot.key).collect();
     assert_eq!(
-        offer_at(&offers, "TIT 1:4").settles.buffered[0].key,
-        key_of(&session, "TIT 1:4")
+        settled.len(),
+        3,
+        "the saved slot, and the two taken in: {settled:?}"
     );
-    assert_eq!(offers.saved.len(), 1, "{:?}", offers.saved);
-    assert_eq!(offers.saved[0].key, key_of(&session, "TIT 1:7"));
+    assert!(settled.contains(&&key_of(&session, "TIT 1:7")));
 
     for (n, offer) in offers.offers.iter().enumerate() {
         let kept = rig.keep(&session, 40 + n as u8, offer).await.unwrap();
@@ -542,7 +558,7 @@ async fn a_second_writer_makes_the_project_read_only_and_the_copy_carries_its_dr
         .collect();
     let offers = rig.offer(&session, &buffered).await;
     assert!(
-        offers.offers.is_empty() && offers.saved.is_empty(),
+        offers.offers.is_empty() && offers.settle.is_empty(),
         "{offers:?}"
     );
 
@@ -557,13 +573,14 @@ async fn a_second_writer_makes_the_project_read_only_and_the_copy_carries_its_dr
     .unwrap();
     assert_eq!(copy.project.as_str(), "sample_burrito - Copy");
     assert_eq!(&copy.id, session.id());
-    let moved = page::rekey(
+    let lines = tc_ui::app::offer::copy(
         &mut storage,
+        &[],
         (&session.scope().project, session.id()),
         (&copy.project, &copy.id),
     )
     .unwrap();
-    assert_eq!(moved, 1);
+    assert_eq!(lines.len(), 2, "the copy's line and the folder's removal");
     rig.t.app.sessions().leave_screen(session.scope()).unwrap();
     drop(session);
 
@@ -645,10 +662,11 @@ fn now_ms() -> i64 {
 }
 
 /// `drafts.json` is written at most once a second, so after a crash it holds an older copy of
-/// the typing the buffer kept: offered once, as the buffer's text, and settled with it. A draft
-/// over another version of the verse is other typing, and is offered beside it.
+/// the typing the buffer kept: one page edits a field per run, so a stored draft of a run whose
+/// own buffer entry of the field is newer goes once that entry is taken in, whatever version
+/// it was typed over. A draft another run typed is other typing, and is offered beside it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_stored_draft_gives_way_only_to_newer_typing_of_the_same_version() {
+async fn a_stored_draft_gives_way_only_to_newer_typing_of_its_own_run() {
     let mut rig = Rig::new().await;
     let session = rig.open(&rig.bible.clone()).await;
     let run = rig.t.app.instance();
@@ -663,8 +681,8 @@ async fn a_stored_draft_gives_way_only_to_newer_typing_of_the_same_version() {
         None,
         now_ms() + 60_000,
     );
-    // TIT 2:2: the draft edits the version before a save; the buffer, the saved one.
-    let before_save = session.read().mint(&other, None).unwrap();
+    // TIT 2:2: the draft was typed by another run's page, over the version the buffer
+    // entry edits too.
     assert!(matches!(
         rig.save(&session, 1, &other, "Older men are to be sober")
             .await,
@@ -672,10 +690,13 @@ async fn a_stored_draft_gives_way_only_to_newer_typing_of_the_same_version() {
     ));
     session
         .handle()
+        .name_run(ServerInstance::from_bytes([0x0e; 16]));
+    session
+        .handle()
         .submit(StoreCommand::draft(
             DraftField::Words,
-            vec![before_save],
-            "typed over the older version".to_owned(),
+            vec![session.read().mint(&other, None).unwrap()],
+            "typed by another run".to_owned(),
         ))
         .await
         .unwrap();
@@ -703,12 +724,13 @@ async fn a_stored_draft_gives_way_only_to_newer_typing_of_the_same_version() {
         .collect();
     assert_eq!(at_same.len(), 1, "{offers:#?}");
     assert_eq!(at_same[0].text, "But as for you, speak what fits");
-    assert_eq!(
-        at_same[0].settles.stored.len(),
-        1,
-        "the older copy goes with it"
+    assert_eq!(at_same[0].settles.stored.len(), 1, "taken in");
+    assert!(
+        offers
+            .settle
+            .iter()
+            .any(|slot| slot.key == key_of(&session, "TIT 2:1"))
     );
-    assert_eq!(at_same[0].settles.buffered.len(), 1);
     let mut at_other: Vec<&str> = offers
         .offers
         .iter()
@@ -720,7 +742,7 @@ async fn a_stored_draft_gives_way_only_to_newer_typing_of_the_same_version() {
         at_other,
         [
             "Older men are to be sober, dignified",
-            "typed over the older version"
+            "typed by another run"
         ]
     );
 
@@ -738,5 +760,15 @@ async fn a_stored_draft_gives_way_only_to_newer_typing_of_the_same_version() {
     assert!(
         again.offers.iter().all(|o| o.place.as_str() != "TIT 2:1"),
         "{again:#?}"
+    );
+    drop(session);
+    rig.relaunch().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let after = rig.offer(&session, &[]).await;
+    let places: Vec<&str> = after.offers.iter().map(|o| o.place.as_str()).collect();
+    assert_eq!(
+        places,
+        ["TIT 2:2", "TIT 2:2"],
+        "the older copy went too: {after:#?}"
     );
 }

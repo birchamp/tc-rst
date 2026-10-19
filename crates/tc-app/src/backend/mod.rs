@@ -529,6 +529,8 @@ pub struct OfferedDraft {
     /// The store's number for it, for C1b's keep and discard.
     pub id: u64,
     pub field: DraftField,
+    /// The server run whose page typed it, when the store recorded one.
+    pub run: Option<tc_api::ids::ServerInstance>,
     pub text: String,
     /// Every token verifies under this installation's key. Otherwise the offer shows the
     /// text alone, and Keep writes it with no parents, as a conflict (R20, §6.6).
@@ -555,12 +557,14 @@ impl OfferedDraft {
 
     pub(in crate::backend) fn new(
         id: u64,
+        run: Option<tc_api::ids::ServerInstance>,
         verified: bool,
         at: tc_journal::WallTime,
         draft: Draft,
     ) -> Self {
         Self {
             id,
+            run,
             field: draft.field.clone(),
             text: draft.text.clone(),
             verified,
@@ -686,6 +690,10 @@ pub enum OpenFailure {
 pub enum CopyFailure {
     #[error("a folder with that name exists")]
     NameExists,
+    /// The projects folder itself is on a drive that cannot keep a project safe, or a cloud
+    /// client copies it: a copy there would open read-only for the same reason (C1b).
+    #[error("the projects folder cannot keep a copy safe: {0:?}")]
+    Unsafe(ReadOnlyReason),
     #[error("{0}")]
     Failed(String),
 }
@@ -770,8 +778,26 @@ pub trait ProjectHandle: Send + Sync {
     /// Drafts from an earlier session that differ from what their records hold (O12).
     fn offered_drafts(&self) -> Vec<OfferedDraft>;
 
-    /// *Discard* of an offered draft: its entry leaves `drafts.json` (STORAGE §5.14).
-    fn discard_draft(&self, id: u64);
+    /// Names the server run whose page sends this open's drafts (§6.6): each draft records
+    /// it, so the next open can tell that run's own newer buffer entry from other typing.
+    fn name_run(&self, run: tc_api::ids::ServerInstance);
+
+    /// *Discard* of an offered draft: its entry leaves `drafts.json` (STORAGE §5.14), written
+    /// before this returns. Whether the file holds the change.
+    fn discard_draft(&self, id: u64) -> bool;
+
+    /// Takes an unsaved text in as an offered draft of `drafts.json` (APP-DESIGN §6.6),
+    /// written before this returns its number; the same text of the field already offered
+    /// keeps its own. `None` when it could not be written (a read-only project, a disk that
+    /// refuses): the text stays where it was.
+    fn offer_draft(
+        &self,
+        field: DraftField,
+        shown: Vec<DraftToken>,
+        text: String,
+        verified: bool,
+        at: tc_journal::WallTime,
+    ) -> Option<u64>;
 
     /// Blocks until the store's queue is empty and its background work is done: a test
     /// calls it before it counts.

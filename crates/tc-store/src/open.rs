@@ -518,6 +518,7 @@ fn open_inner(
         folder.clone(),
         &project.fold,
         &signing,
+        device,
         hooks.clone(),
         counters.clone(),
         read_only,

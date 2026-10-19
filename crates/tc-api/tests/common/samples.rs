@@ -34,6 +34,9 @@ pub fn create() -> Vec<CreateRefusal> {
         CreateRefusal::Failed {
             reason: s("No space left on device (os error 28)"),
         },
+        CreateRefusal::CopyUnsafe {
+            reason: tc_api::write::ReadOnlyReason::CloudSynced,
+        },
     ]
 }
 

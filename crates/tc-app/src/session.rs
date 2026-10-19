@@ -567,6 +567,7 @@ impl SessionRegistry {
         handle: Arc<dyn ProjectHandle>,
     ) -> Arc<ProjectSession> {
         let epoch = Epoch::new(self.inner.epochs.fetch_add(1, Ordering::SeqCst));
+        handle.name_run(self.inner.bus.instance());
         let first = handle.snapshot();
         let session = Arc::new(ProjectSession {
             scope: Scope {

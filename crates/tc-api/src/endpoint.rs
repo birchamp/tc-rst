@@ -154,6 +154,7 @@ scoped!(
     crate::prefs::SetDraftUnit,
     crate::prefs::SetAlignSuggestions,
     crate::prefs::RecordPlace,
+    crate::session::Drafts,
     crate::session::KeepDraft,
     crate::session::DiscardDraft,
     crate::session::CopyProject,

@@ -23,6 +23,9 @@ tc-core = { path = "../tc-core" }
 serde.workspace = true
 serde_json = { workspace = true, optional = true }
 thiserror.workspace = true
+# The NFC the draft machine compares texts with (`model::draft`), the crate and version the
+# server and the UI normalize with.
+unicode-normalization.workspace = true
 proptest = { workspace = true, optional = true }
 proptest-derive = { workspace = true, optional = true }
 

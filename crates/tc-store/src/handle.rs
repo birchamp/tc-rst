@@ -21,10 +21,12 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::task::{Context, Poll, Waker};
 use std::time::Instant;
-use tc_journal::command::Command;
+use tc_journal::command::{Command, Draft};
 use tc_journal::fold::{Delta, FoldState, ProjectKind};
 use tc_journal::token::{TokenError, TokenKind};
-use tc_journal::{BookId, ChangeId, DeviceId, ProjectId, RecordKey, ShownToken, TokenKey};
+use tc_journal::{
+    BookId, ChangeId, DeviceId, ProjectId, RecordKey, ShownToken, TokenKey, WallTime,
+};
 
 // ---------------------------------------------------------------------------------------
 // A value that arrives later
@@ -671,9 +673,26 @@ impl ProjectHandle {
         self.drafts.offered()
     }
 
-    /// Discards an offered draft.
-    pub fn discard_draft(&self, id: u64) {
-        self.drafts.discard(id);
+    /// Discards an offered draft, written before this returns: whether the file holds it.
+    pub fn discard_draft(&self, id: u64) -> bool {
+        self.drafts.discard(id)
+    }
+
+    /// Names the app's server run whose page sends this open's drafts (APP-DESIGN §6.6): each
+    /// draft records it, so the next open can tell that run's own newer buffer entry, which
+    /// holds the same editor's newer text, from other typing.
+    pub fn name_run(&self, run: String) {
+        self.drafts.name_run(run);
+    }
+
+    /// Takes an unsaved text in as an offered draft (APP-DESIGN §6.6), written before this
+    /// returns its number; `None` when it could not be written, and the text stays where it
+    /// was. A read-only project takes nothing.
+    pub fn offer_draft(&self, draft: Draft, verified: bool, at: WallTime) -> Option<u64> {
+        if let Mode::ReadOnly(_) = self.facts().mode {
+            return None;
+        }
+        self.drafts.offer(draft, verified, at)
     }
 
     /// Leaving a book or a mode: derived files are written now (§5.10).

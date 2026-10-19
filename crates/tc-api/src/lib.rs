@@ -35,6 +35,7 @@ pub mod feedback;
 pub mod home;
 pub mod ids;
 pub mod jobs;
+pub mod model;
 pub mod net;
 pub mod prefs;
 pub mod query;
@@ -82,7 +83,7 @@ macro_rules! endpoint_table {
             command "prefs/setAlignSuggestions": $crate::prefs::SetAlignSuggestions => ();
             command "prefs/recordPlace": $crate::prefs::RecordPlace => ();
 
-            query "session/drafts": $crate::session::Drafts => $crate::session::OfferedDrafts;
+            command "session/drafts": $crate::session::Drafts => $crate::session::OfferedDrafts;
             command "session/keepDraft": $crate::session::KeepDraft => $crate::session::KeptDraft;
             command "session/discardDraft": $crate::session::DiscardDraft => ();
             command "session/copy": $crate::session::CopyProject => $crate::session::ProjectCopy;

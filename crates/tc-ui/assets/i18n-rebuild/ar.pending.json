@@ -20,6 +20,7 @@
   "prepare.title",
   "readOnly.cloudSynced",
   "readOnly.copy",
+  "readOnly.copyUnsafe",
   "readOnly.folderNotWritable",
   "readOnly.needsNewerApp",
   "readOnly.openOnAnotherComputer",

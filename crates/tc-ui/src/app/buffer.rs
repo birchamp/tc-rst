@@ -347,27 +347,60 @@ pub fn removed_line(key: &BufferKey, instance: ServerInstance) -> Result<String,
     encode(&BufferLine::Removed {
         key: key.clone(),
         instance,
+        text: None,
+    })
+}
+
+/// The mirror's line that drops the run `instance`'s entry of a field only while it holds
+/// `text`: an offer's slot settled, whose run may have written newer text since (6.6).
+pub fn removed_line_if(
+    key: &BufferKey,
+    instance: ServerInstance,
+    text: &str,
+) -> Result<String, StoreError> {
+    encode(&BufferLine::Removed {
+        key: key.clone(),
+        instance,
+        text: Some(text.to_owned()),
     })
 }
 
 /// What the shell's `takeBuffered` returns from the lines it holds (5.7): the last line per
-/// field and server run, with the entries a removal of the same run ended left out. A line that
-/// does not parse (a torn last line) is skipped. The shell does this in JavaScript (G1); this is
-/// the contract its tests and the tests of the page play.
+/// field and server run, with the entries a removal of the same run ended left out. A removal
+/// that names a text ends the entry only while the entry holds that text (NFC). A line that does
+/// not parse (a torn last line) is skipped. The shell does this in JavaScript (G1); this is the
+/// contract its tests and the tests of the page play.
 pub fn current_lines(lines: &[String]) -> Vec<String> {
-    let mut newest: BTreeMap<(BufferKey, ServerInstance), Option<&String>> = BTreeMap::new();
+    let mut newest: BTreeMap<(BufferKey, ServerInstance), Option<(&String, String)>> =
+        BTreeMap::new();
     for line in lines {
         let Ok(parsed) = serde_json::from_str::<BufferLine>(line) else {
             continue;
         };
         let slot = (parsed.key().clone(), parsed.instance());
-        let kept = match parsed {
-            BufferLine::Changed { .. } => Some(line),
-            BufferLine::Removed { .. } => None,
-        };
-        newest.insert(slot, kept);
+        match parsed {
+            BufferLine::Changed { entry, .. } => {
+                newest.insert(slot, Some((line, entry.text)));
+            }
+            BufferLine::Removed { text: None, .. } => {
+                newest.insert(slot, None);
+            }
+            BufferLine::Removed {
+                text: Some(text), ..
+            } => {
+                if let Some(Some((_, held))) = newest.get(&slot)
+                    && same_text(held, &text)
+                {
+                    newest.insert(slot, None);
+                }
+            }
+        }
     }
-    newest.into_values().flatten().cloned().collect()
+    newest
+        .into_values()
+        .flatten()
+        .map(|(line, _)| line.clone())
+        .collect()
 }
 
 /// The page's entries merged with what the shell's mirror gave (`takeBuffered`): the newest
@@ -400,37 +433,4 @@ pub fn merge(
         .into_iter()
         .map(|((key, _), entry)| (key, entry))
         .collect()
-}
-
-/// The copy of a read-only project takes its folder's entries (A-10, 6.4): every item of
-/// `from` that this build can read is written under `to`, as it is, and only when all are written are the old items
-/// removed, so a failure leaves both and never neither. Returns how many moved.
-pub fn rekey(
-    store: &mut dyn Store,
-    from: (&ProjectRef, &ProjectId),
-    to: (&ProjectRef, &ProjectId),
-) -> Result<usize, StoreError> {
-    let mut moved = Vec::new();
-    for item in store.keys() {
-        let Some(key) = parse_item_key(&item) else {
-            continue;
-        };
-        if key.project != *from.0 || key.id != *from.1 {
-            continue;
-        }
-        let Some(text) = store.get(&item).filter(|text| parse_entry(text).is_some()) else {
-            continue;
-        };
-        let new_key = BufferKey {
-            project: to.0.clone(),
-            id: to.1.clone(),
-            field: key.field,
-        };
-        store.set(&item_key(&new_key)?, &text)?;
-        moved.push(item);
-    }
-    for item in &moved {
-        store.remove(item)?;
-    }
-    Ok(moved.len())
 }

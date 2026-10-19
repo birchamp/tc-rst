@@ -14,8 +14,8 @@ use tc_api::ids::RequestId;
 use tc_api::ids::{ProjectId, ProjectRef, ServerInstance, WallMs};
 use tc_ui::app::buffer::{
     MemStore, Removal, Store, StoreError, changed_line, current_lines, entries, entries_of,
-    input_to_entry, item_key, merge, nfc, parse_item_key, read, rekey, remove, removed_line, write,
-    write_entry,
+    input_to_entry, item_key, merge, nfc, parse_item_key, read, remove, removed_line,
+    removed_line_if, write, write_entry,
 };
 
 const ID: &str = "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50";
@@ -102,8 +102,9 @@ fn a_non_canonical_or_foreign_item_is_never_read_or_removed() {
         remove(&mut store, &key("TIT 1:2"), Some("x"), inst()).unwrap(),
         Removal::Kept
     );
-    rekey(
+    tc_ui::app::offer::copy(
         &mut store,
+        &[],
         (
             &ProjectRef::parse("en_ult").unwrap(),
             &ProjectId::parse(ID).unwrap(),
@@ -226,59 +227,6 @@ fn merge_keeps_the_newest_entry_per_field_and_skips_torn_lines() {
     );
 }
 
-fn folder(name: &str, id: &str) -> (ProjectRef, ProjectId) {
-    (
-        ProjectRef::parse(name).unwrap(),
-        ProjectId::parse(id).unwrap(),
-    )
-}
-
-#[test]
-fn rekey_moves_every_entry_of_the_folder_and_nothing_else() {
-    let mut store = MemStore::new();
-    let mut with_later = serde_json::to_value(entry("one", 1)).unwrap();
-    with_later["later"] = json!(1);
-    store
-        .set(&item_key(&key("TIT 1:1")).unwrap(), &with_later.to_string())
-        .unwrap();
-    write(&mut store, &key("TIT 1:2"), &entry("two", 1)).unwrap();
-    write(
-        &mut store,
-        &key_in("en_ult", OTHER_ID, "TIT 1:1"),
-        &entry("other id", 1),
-    )
-    .unwrap();
-    let (from, from_id) = folder("en_ult", ID);
-    let (to, to_id) = folder("en_ult (copy)", ID);
-    assert_eq!(
-        rekey(&mut store, (&from, &from_id), (&to, &to_id)).unwrap(),
-        2
-    );
-    assert!(entries_of(&store, &from, &from_id).is_empty());
-    let moved = entries_of(&store, &to, &to_id);
-    assert_eq!(moved.len(), 2);
-    let raw = store
-        .get(&item_key(&key_in("en_ult (copy)", ID, "TIT 1:1")).unwrap())
-        .unwrap();
-    assert!(raw.contains("\"later\":1"), "moved as it is: {raw}");
-    assert_eq!(
-        entries_of(&store, &from, &ProjectId::parse(OTHER_ID).unwrap()).len(),
-        1
-    );
-}
-
-#[test]
-fn rekey_that_cannot_write_removes_nothing() {
-    let mut store = MemStore::new();
-    write(&mut store, &key("TIT 1:1"), &entry("one", 1)).unwrap();
-    let before = store.items.clone();
-    store.fail_writes = true;
-    let (from, from_id) = folder("en_ult", ID);
-    let (to, to_id) = folder("copy", ID);
-    assert!(rekey(&mut store, (&from, &from_id), (&to, &to_id)).is_err());
-    assert_eq!(store.items, before);
-}
-
 fn golden() -> Value {
     let path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../tc-api/tests/golden/types/buffer.json");
@@ -294,7 +242,16 @@ fn the_lines_have_the_golden_form() {
             BufferLine::Changed { key, entry } => {
                 changed_line(key, &serde_json::to_string(entry).unwrap()).unwrap()
             }
-            BufferLine::Removed { key, instance } => removed_line(key, *instance).unwrap(),
+            BufferLine::Removed {
+                key,
+                instance,
+                text: None,
+            } => removed_line(key, *instance).unwrap(),
+            BufferLine::Removed {
+                key,
+                instance,
+                text: Some(text),
+            } => removed_line_if(key, *instance, text).unwrap(),
         };
         let built: Value = serde_json::from_str(&built).unwrap();
         assert_eq!(&built, line, "line {n}");
@@ -563,4 +520,24 @@ fn merge_keeps_two_runs_entries_of_one_field() {
     let mut texts: Vec<&str> = merged.iter().map(|(_, e)| e.text.as_str()).collect();
     texts.sort_unstable();
     assert_eq!(texts, ["typed after it", "typed before the restart"]);
+}
+
+/// A removal that names a text ends the run's entry only while the entry holds that text: an
+/// offer's slot settled after its run typed on keeps the newer text (C1b, finding 8).
+#[test]
+fn a_removal_that_names_a_text_keeps_newer_text_of_its_run() {
+    let k = key("TIT 1:4");
+    let offered = entry("offered", 1);
+    let newer = entry("typed since", 2);
+    let lines = vec![
+        changed_line(&k, &serde_json::to_string(&offered).unwrap()).unwrap(),
+        changed_line(&k, &serde_json::to_string(&newer).unwrap()).unwrap(),
+        removed_line_if(&k, inst(), "offered").unwrap(),
+    ];
+    let kept = current_lines(&lines);
+    assert_eq!(kept.len(), 1);
+    assert!(kept[0].contains("typed since"), "{kept:?}");
+    let mut settled = lines[..1].to_vec();
+    settled.push(removed_line_if(&k, inst(), "offered").unwrap());
+    assert!(current_lines(&settled).is_empty());
 }

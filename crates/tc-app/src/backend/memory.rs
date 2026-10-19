@@ -18,7 +18,7 @@ use std::time::Duration;
 use tc_api::event::{CheckpointOutcome, SessionMode};
 use tc_api::ids::ProjectRef;
 use tc_api::write::ReadOnlyReason;
-use tc_journal::command::Command;
+use tc_journal::command::{Command, DraftField};
 use tc_journal::fold::{Delta, FoldInput, FoldState, ProjectKind};
 use tc_journal::token::TokenError;
 use tc_journal::{Change, ChangeId, DeviceId, GitOid, RecordKey, ShownToken, TokenKey};
@@ -26,9 +26,10 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use super::seed::StateSeed;
 use super::{
-    BoxFuture, CheckpointReason, CommandError, CopyFailure, EditToken, Listing, OfferedDraft,
-    OpenFailure, ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore, Published, ReviewToken,
-    Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError, StoreEvent, StoreReply, Stored,
+    BoxFuture, CheckpointReason, CommandError, CopyFailure, DraftToken, EditToken, Listing,
+    OfferedDraft, OpenFailure, ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore, Published,
+    ReviewToken, Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError, StoreEvent,
+    StoreReply, Stored,
 };
 use crate::jobs::ProgressSink;
 
@@ -579,7 +580,22 @@ impl ProjectHandle for MemoryHandle {
         Vec::new()
     }
 
-    fn discard_draft(&self, _id: u64) {}
+    fn name_run(&self, _run: tc_api::ids::ServerInstance) {}
+
+    fn discard_draft(&self, _id: u64) -> bool {
+        false
+    }
+
+    fn offer_draft(
+        &self,
+        _field: DraftField,
+        _shown: Vec<DraftToken>,
+        _text: String,
+        _verified: bool,
+        _at: tc_journal::WallTime,
+    ) -> Option<u64> {
+        None
+    }
 
     /// Nothing runs in the background.
     #[cfg(feature = "test-hooks")]

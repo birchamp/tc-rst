@@ -560,6 +560,7 @@ impl Example for Drafts {
         };
         Drafts {
             at: scope(),
+            request: request(90),
             buffered: vec![
                 serde_json::to_string(&BufferLine::Changed {
                     key: offered_key(),
@@ -611,7 +612,7 @@ impl Example for OfferedDrafts {
                     settles: Settles::default(),
                 },
             ],
-            saved: vec![BufferSlot {
+            settle: vec![BufferSlot {
                 text: "Paul, a servant of God".into(),
                 ..slot
             }],
@@ -889,6 +890,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "prefs/setDraftUnit",
             "session/copy",
             "session/discardDraft",
+            "session/drafts",
             "session/keepDraft",
             "session/otherComputerClosed",
             "test/saveVerse",
@@ -1190,7 +1192,8 @@ fn buffer() -> Value {
         "lines": wire_samples(&[
             BufferLine::Changed { key: verse.clone(), entry: saving },
             BufferLine::Changed { key: comment.clone(), entry: typed },
-            BufferLine::Removed { key: verse, instance: ServerInstance::from_bytes([0xab; 16]) },
+            BufferLine::Removed { key: verse.clone(), instance: ServerInstance::from_bytes([0xab; 16]), text: None },
+            BufferLine::Removed { key: verse, instance: ServerInstance::from_bytes([0xab; 16]), text: Some("Paul, a servant".into()) },
         ]),
     })
 }

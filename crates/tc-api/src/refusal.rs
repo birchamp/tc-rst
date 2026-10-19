@@ -183,6 +183,12 @@ pub enum CreateRefusal {
     Failed {
         reason: String,
     },
+    /// A copy of a read-only project would open read-only for the same reason: the projects
+    /// folder itself is on a drive that cannot keep a project safe, or a cloud client copies
+    /// it (C1b). No copy is made.
+    CopyUnsafe {
+        reason: crate::write::ReadOnlyReason,
+    },
 }
 
 impl Message for CreateRefusal {
@@ -193,18 +199,19 @@ impl Message for CreateRefusal {
         match self {
             Self::NameInUse { .. } => "wizard.nameInUse",
             Self::Failed { .. } => "wizard.error",
+            Self::CopyUnsafe { .. } => "readOnly.copyUnsafe",
         }
     }
     fn vars(&self) -> Vec<(&'static str, String)> {
         match self {
             Self::NameInUse { abbr } => vec![("abbr", abbr.clone())],
-            Self::Failed { .. } => Vec::new(),
+            Self::Failed { .. } | Self::CopyUnsafe { .. } => Vec::new(),
         }
     }
     fn detail(&self) -> Option<&str> {
         match self {
             Self::Failed { reason } => Some(reason),
-            Self::NameInUse { .. } => None,
+            Self::NameInUse { .. } | Self::CopyUnsafe { .. } => None,
         }
     }
 }

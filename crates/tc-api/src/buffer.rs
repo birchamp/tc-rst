@@ -210,10 +210,14 @@ pub enum BufferLine {
         key: BufferKey,
         entry: BufferEntry,
     },
-    /// The field became clean in the run `instance`; another run's entry of it stays.
+    /// The field became clean in the run `instance`; another run's entry of it stays. With
+    /// `text`, the entry goes only while it holds that text (NFC): an offer's slot settled,
+    /// whose run may have written newer text since (§6.6).
     Removed {
         key: BufferKey,
         instance: ServerInstance,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        text: Option<String>,
     },
 }
 

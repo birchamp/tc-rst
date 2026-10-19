@@ -35,7 +35,7 @@ use tc_api::event::{CheckpointOutcome, SessionMode};
 use tc_api::ids::{ProjectRef, WallMs};
 use tc_api::jobs::{OpenPhase, Phase};
 use tc_api::write::ReadOnlyReason;
-use tc_journal::command::Command;
+use tc_journal::command::{Command, Draft, DraftField};
 use tc_journal::fold::{FoldState, ProjectKind};
 use tc_journal::keys::PinGroup;
 use tc_journal::record::PinGroupValue;
@@ -45,10 +45,10 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
 
 use super::{
-    BoxFuture, CheckpointReason, CommandError, CopyFailure, EditToken, Listing, OfferedDraft,
-    OpenFailure, Origin, ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore, Published,
-    ReviewToken, Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError, StoreEvent,
-    StoreReply, Stored, SummaryStamp, UnusableFolder,
+    BoxFuture, CheckpointReason, CommandError, CopyFailure, DraftToken, EditToken, Listing,
+    OfferedDraft, OpenFailure, Origin, ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore,
+    Published, ReviewToken, Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError,
+    StoreEvent, StoreReply, Stored, SummaryStamp, UnusableFolder,
 };
 use crate::clock::Clock;
 use crate::jobs::ProgressSink;
@@ -119,6 +119,9 @@ pub struct StoreBackend {
     projects: PathBuf,
     vfs: Arc<dyn tc_store::Vfs>,
     hooks: Arc<tc_store::Hooks>,
+    /// What the projects folder is: a copy of a read-only project is made only where it can
+    /// be written safely (C1b).
+    platform: Arc<dyn tc_store::Platform>,
     /// Folders whose lock the person said names a computer that is closed (C1b): the next
     /// open of each takes the lock.
     trusted: Mutex<std::collections::BTreeSet<ProjectRef>>,
@@ -140,6 +143,7 @@ impl StoreBackend {
     ) -> Result<Self, StoreError> {
         let projects = config.projects.clone();
         let vfs = config.vfs.clone();
+        let platform = config.platform.clone();
         let store =
             tc_store::Store::start_with_hooks(config, hooks.clone()).map_err(store_error)?;
         Ok(Self {
@@ -147,6 +151,7 @@ impl StoreBackend {
             projects,
             vfs,
             hooks,
+            platform,
             trusted: Mutex::default(),
         })
     }
@@ -379,10 +384,17 @@ impl ProjectStore for StoreBackend {
         Ok(handle)
     }
 
+    /// The copy goes into the projects folder, so it is refused where the projects folder
+    /// itself is what made the project read-only: a copy there would be read-only too.
     fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), CopyFailure> {
         let from = self
             .listed(folder)
             .map_err(|_| CopyFailure::Failed(format!("{folder} is not in the projects folder")))?;
+        if let Some(place) = self.platform.folder(&self.projects).unsafe_folder {
+            return Err(CopyFailure::Unsafe(read_only_reason(
+                &tc_store::ReadOnlyReason::UnsafeFolder(place),
+            )));
+        }
         match self.store.copy_project(&from, name.as_str()) {
             Ok(_) => Ok(()),
             Err(tc_store::CreateError::NameExists(_)) => Err(CopyFailure::NameExists),
@@ -619,7 +631,11 @@ fn reply(reply: tc_store::StoreReply) -> StoreReply {
 }
 
 fn offered(draft: tc_store::OfferedDraft) -> OfferedDraft {
-    OfferedDraft::new(draft.id, draft.verified, draft.at, draft.draft)
+    let run = draft
+        .run
+        .as_deref()
+        .and_then(|run| tc_api::ids::ServerInstance::parse(run).ok());
+    OfferedDraft::new(draft.id, run, draft.verified, draft.at, draft.draft)
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1054,10 +1070,34 @@ impl ProjectHandle for StoreHandle {
             .unwrap_or_default()
     }
 
-    fn discard_draft(&self, id: u64) {
+    fn name_run(&self, run: tc_api::ids::ServerInstance) {
         if let Some(handle) = self.inner().as_ref() {
-            handle.discard_draft(id);
+            handle.name_run(run.to_string());
         }
+    }
+
+    fn discard_draft(&self, id: u64) -> bool {
+        self.inner()
+            .as_ref()
+            .is_some_and(|handle| handle.discard_draft(id))
+    }
+
+    fn offer_draft(
+        &self,
+        field: DraftField,
+        shown: Vec<DraftToken>,
+        text: String,
+        verified: bool,
+        at: tc_journal::WallTime,
+    ) -> Option<u64> {
+        let draft = Draft {
+            field,
+            shown: shown.into_iter().map(|token| token.0).collect(),
+            text,
+        };
+        self.inner()
+            .as_ref()
+            .and_then(|handle| handle.offer_draft(draft, verified, at))
     }
 
     /// Holds the handle's read lock while it waits, so a close meanwhile waits too: a test's

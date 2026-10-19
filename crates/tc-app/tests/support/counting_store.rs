@@ -205,8 +205,23 @@ impl ProjectHandle for CountingHandle {
         self.inner.offered_drafts()
     }
 
-    fn discard_draft(&self, id: u64) {
-        self.inner.discard_draft(id);
+    fn name_run(&self, run: tc_api::ids::ServerInstance) {
+        self.inner.name_run(run);
+    }
+
+    fn discard_draft(&self, id: u64) -> bool {
+        self.inner.discard_draft(id)
+    }
+
+    fn offer_draft(
+        &self,
+        field: tc_journal::command::DraftField,
+        shown: Vec<tc_app::backend::DraftToken>,
+        text: String,
+        verified: bool,
+        at: tc_journal::WallTime,
+    ) -> Option<u64> {
+        self.inner.offer_draft(field, shown, text, verified, at)
     }
 
     #[cfg(feature = "test-hooks")]

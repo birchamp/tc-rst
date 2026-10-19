@@ -113,6 +113,21 @@
   },
   {
     "wire": {
+      "type": "create",
+      "value": {
+        "type": "copyUnsafe",
+        "value": {
+          "reason": "cloudSynced"
+        }
+      }
+    },
+    "code": null,
+    "key": "readOnly.copyUnsafe",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
       "type": "import",
       "value": "writeFailed"
     },

@@ -20,6 +20,7 @@
   "prepare.title": "Preparing translationCore4",
   "readOnly.cloudSynced": "This folder is copied to other computers by a cloud service. Two computers saving into one project folder can lose work. Copy the project to a folder that is not synced?",
   "readOnly.copy": "Copy the project",
+  "readOnly.copyUnsafe": "A copy made here would be read-only too: the projects folder itself is on a drive that cannot keep a project safe, or a cloud service copies it. Nothing you saved is lost.",
   "readOnly.folderNotWritable": "This project's folder cannot be written to now (the disk may be full). Nothing you saved is lost. Free some space, then open the project again.",
   "readOnly.needsNewerApp": "This project needs a newer version of translationCore to save changes. You can read and export it.",
   "readOnly.openOnAnotherComputer": "This project may be open on another computer. Copy the project to work on it here, or, if that computer is closed, say so and open it again.",

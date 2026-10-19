@@ -2,33 +2,27 @@
 //! `session/discardDraft`, and the copy offer of a read-only project, `session/copy` (§6.4).
 //!
 //! Unsaved text of an earlier run is in up to three places: the project's `.tc/drafts.json`
-//! (the store offers the drafts whose text differs from what their records hold, O12), the
-//! page's draft buffer and the shell's mirror (the UI sends those as `buffered`). [`offer`]
-//! merges them:
+//! (the store's offered entries, O12), the page's draft buffer and the shell's mirror (the UI
+//! sends those as `buffered`, but the fields its own save machine holds). The decisions are
+//! `tc_api::model::draft`'s table; this module carries out its actions on `drafts.json` and
+//! the record, and gives the page the slots it drops:
 //!
 //! - Only entries of this folder and project id count (A-9), and never a test field.
-//! - An entry whose text the record holds now, or whose text is the value it was editing,
-//!   holds nothing unsaved: it is `saved`, and the UI removes it.
-//! - A stored draft gives way to a buffered entry of its field at least as new that edits the
-//!   same version (the same tokens): the buffer takes every keystroke, `drafts.json` at most
-//!   one write a second, so it is the older copy of the same typing. Otherwise every distinct
-//!   text of a field is offered, the newest first: two runs' entries of one field (a restart
-//!   behind a reused port, §6.6) are two texts, and so is a draft of a folder copied from
-//!   another computer.
-//! - An entry whose `sent` text the record holds now is kept over the record's own token: the
-//!   save it waited for landed before the crash, and the newer text continues from it (A4b).
-//!   Any other is kept over its own tokens, so a record changed since becomes a conflict.
-//! - A token whose MAC fails is offered as text, kept as a separate version (R20).
-//!
-//! A read-only project offers nothing (STORAGE §5.14): nothing can be kept there, and the
-//! entries wait for the copy or a writable open.
+//! - Each unsaved text is taken into `drafts.json` as an offered entry before the answer, and
+//!   only then are its buffer slots answered in `settle`; *Keep* and *Discard* then name that
+//!   entry by its number.
+//! - A read-only project offers nothing and takes nothing in (STORAGE §5.14): the entries wait
+//!   for the copy or a writable open.
 
 use std::collections::BTreeMap;
 
 use serde_json::json;
-use tc_api::buffer::{BufferEntry, BufferKey, BufferLine, FieldKind, FieldPlace};
+use tc_api::buffer::{BufferLine, FieldKind, FieldPlace};
 use tc_api::event::SessionMode;
 use tc_api::ids::ProjectRef;
+use tc_api::model::draft::{
+    self as machine, Action, Base, Candidate, Event, FieldDraft, Home, Offer,
+};
 use tc_api::refusal::CreateRefusal;
 use tc_api::session::{
     BufferSlot, CopyProject, DiscardDraft, DraftKind, DraftOffer, Drafts, Keep, KeepDraft,
@@ -38,8 +32,7 @@ use tc_api::{ApiError, NotSaved, Refusal, ShownToken};
 use tc_journal::command::DraftField;
 use tc_journal::keys::CheckTarget;
 use tc_journal::record::{CheckValue, VerseValue};
-use tc_journal::{Record, RecordKey};
-use unicode_normalization::UnicodeNormalization;
+use tc_journal::{Record, RecordKey, WallTime};
 
 use crate::app::App;
 use crate::backend::{CopyFailure, DraftToken, OfferedDraft, ProjectHandle, StoreCommand};
@@ -48,31 +41,6 @@ use crate::dispatch::Handle;
 use crate::reports::facts;
 use crate::session::ProjectSession;
 use crate::wire;
-
-fn nfc(text: &str) -> String {
-    text.nfc().collect()
-}
-
-fn same_text(a: &str, b: &str) -> bool {
-    nfc(a) == nfc(b)
-}
-
-/// One unsaved text before the merge.
-struct Candidate {
-    /// The field: its kind and record, or its place for a field with no token.
-    identity: String,
-    kind: DraftKind,
-    place: FieldPlace,
-    text: String,
-    /// Milliseconds since the Unix epoch.
-    at: i64,
-    keep: Keep,
-    shown: Vec<ShownToken>,
-    /// The tokens of the version the editor showed, as the editor held them.
-    base: Vec<ShownToken>,
-    stored: Option<StoredDraftId>,
-    slot: Option<BufferSlot>,
-}
 
 /// `kind` of a buffered field; `None` for a field of no project (a test field).
 fn kind_of_field(kind: FieldKind) -> Option<DraftKind> {
@@ -178,36 +146,6 @@ fn identity(kind: DraftKind, key: Option<&RecordKey>, place: &FieldPlace) -> Str
     }
 }
 
-/// A stored draft of `drafts.json`, as the store offers it.
-fn stored_candidate(draft: &OfferedDraft) -> Candidate {
-    let kind = kind_of_draft(&draft.field);
-    let first = draft.keys().next().cloned();
-    let place = field_place(&match (&first, &draft.field) {
-        (Some(key), _) => place_of(key),
-        (None, DraftField::UserComment { target }) => place_of(&comment_place(target)),
-        (None, _) => String::new(),
-    });
-    let shown = draft.wire_tokens().unwrap_or_default();
-    let keep = if shown.is_empty() && draft.keys().next().is_some() {
-        // A token tc-api cannot carry: the text is still offered.
-        Keep::CopyText
-    } else {
-        keep_for(kind, first.is_some(), draft.verified)
-    };
-    Candidate {
-        identity: identity(kind, first.as_ref(), &place),
-        kind,
-        place,
-        text: draft.text.clone(),
-        at: draft.at.0,
-        keep,
-        base: shown.clone(),
-        shown,
-        stored: Some(StoredDraftId(draft.id)),
-        slot: None,
-    }
-}
-
 /// The record a comment's target names, for its place.
 fn comment_place(target: &tc_journal::record::CommentTarget) -> RecordKey {
     use tc_journal::record::CommentTarget;
@@ -222,126 +160,100 @@ fn comment_place(target: &tc_journal::record::CommentTarget) -> RecordKey {
     }
 }
 
-/// What *Keep* can do for a field: a section's save and a new comment's need the units that
-/// build their editors (B4b with R6, C3 with R15), so until then the offer is "Copy text".
-fn keep_for(kind: DraftKind, has_token: bool, verified: bool) -> Keep {
-    match (kind, has_token) {
-        (DraftKind::Section, _) | (DraftKind::Comment, false) => Keep::CopyText,
-        (_, false) => Keep::CopyText,
-        (_, true) if verified => Keep::Save,
-        (_, true) => Keep::AsVersion,
+/// The tokens a version stands for, as the store reads them: `None` when one does not parse.
+fn parse_tokens(
+    handle: &dyn ProjectHandle,
+    shown: &[ShownToken],
+) -> Option<Vec<(DraftToken, bool)>> {
+    shown
+        .iter()
+        .map(|token| DraftToken::parse(handle, token).ok())
+        .collect()
+}
+
+/// A field's base as the machine judges it. A section's save and a new comment's need the
+/// units that build their editors (B4b with R6, C3 with R15), so until then their texts have no
+/// *Keep*: "Copy text".
+fn base_of(
+    handle: &dyn ProjectHandle,
+    kind: DraftKind,
+    shown: Vec<ShownToken>,
+) -> Base<Vec<ShownToken>> {
+    let keepable = match kind {
+        DraftKind::Section => false,
+        DraftKind::Comment => !shown.is_empty(),
+        _ => true,
+    };
+    match parse_tokens(handle, &shown) {
+        Some(tokens) if keepable && !tokens.is_empty() => {
+            if tokens.iter().all(|(_, verified)| *verified) {
+                Base::Verified(shown)
+            } else {
+                Base::Unverified(shown)
+            }
+        }
+        _ => Base::None,
     }
 }
 
-/// What one buffered entry offers: `Ok(None)` when it holds nothing unsaved, `Err(slot)`
-/// when its text is already stored.
-fn buffered_candidate(
-    handle: &dyn ProjectHandle,
-    read: &CountingSnapshot,
-    key: BufferKey,
-    entry: BufferEntry,
-) -> Result<Option<Candidate>, BufferSlot> {
-    let slot = BufferSlot {
-        key: key.clone(),
-        instance: entry.instance,
-        text: entry.text.clone(),
-    };
-    let Some(kind) = kind_of_field(key.field.kind) else {
-        return Ok(None);
-    };
-    let place = key.field.place.clone();
-    let parsed: Option<Vec<(DraftToken, bool)>> = entry
-        .base
-        .iter()
-        .map(|token| DraftToken::parse(handle, token).ok())
-        .collect();
-    let first = parsed
-        .as_ref()
-        .and_then(|tokens| tokens.first())
-        .map(|(token, _)| token.key().clone());
-    let verified = parsed
-        .as_ref()
-        .is_some_and(|tokens| tokens.iter().all(|(_, verified)| *verified));
-    let current = first
-        .as_ref()
-        .and_then(|key| field_text(kind, read.projected(key)));
-    if current
-        .as_deref()
-        .is_some_and(|now| same_text(now, &entry.text))
-    {
-        return Err(slot);
+/// What the store holds of one field, for the machine.
+struct FieldRecord<'a> {
+    handle: &'a dyn ProjectHandle,
+    read: &'a CountingSnapshot,
+    kind: DraftKind,
+    key: Option<RecordKey>,
+}
+
+impl machine::Record<Vec<ShownToken>> for FieldRecord<'_> {
+    fn heads(&self) -> Vec<String> {
+        let Some(key) = &self.key else {
+            return Vec::new();
+        };
+        self.read
+            .heads(key)
+            .iter()
+            .filter_map(|head| self.read.body(head))
+            .filter_map(|body| field_text(self.kind, Some(body.record)))
+            .collect()
     }
-    // The value the person started from: an entry back at it was typed and undone.
-    let base = parsed
-        .as_ref()
-        .filter(|_| verified)
-        .and_then(|tokens| tokens.first())
-        .and_then(|(token, _)| token.heads().first().copied())
-        .and_then(|head| read.body(&head))
-        .and_then(|body| field_text(kind, Some(body.record)));
-    if base
-        .as_deref()
-        .is_some_and(|then| same_text(then, &entry.text))
-    {
-        return Err(slot);
+
+    fn sole(&self) -> Option<Vec<ShownToken>> {
+        let key = self.key.as_ref()?;
+        (self.read.heads(key).len() == 1).then_some(())?;
+        let token = self.read.mint(key, None).ok()?;
+        Some(vec![wire::token::shown(&token).ok()?])
     }
-    let mut shown = match &parsed {
-        Some(_) => entry.base.clone(),
-        None => Vec::new(),
-    };
-    let landed = verified
-        && entry.sent.as_ref().is_some_and(|sent| {
-            current
-                .as_deref()
-                .is_some_and(|now| same_text(now, &sent.text))
-        });
-    if landed
-        && let Some(key) = &first
-        && let Some(token) = read
-            .mint(key, None)
-            .ok()
-            .and_then(|token| wire::token::shown(&token).ok())
-        && let Some(slot) = shown.first_mut()
-    {
-        *slot = token;
+
+    fn text_of(&self, version: &Vec<ShownToken>) -> Option<String> {
+        let (token, _) = DraftToken::parse(self.handle, version.first()?).ok()?;
+        let head = token.heads().first()?;
+        field_text(self.kind, Some(self.read.body(head)?.record))
     }
-    let keep = if parsed.is_none() {
-        Keep::CopyText
-    } else {
-        keep_for(kind, first.is_some(), verified)
-    };
-    Ok(Some(Candidate {
-        identity: identity(kind, first.as_ref(), &place),
-        kind,
-        place,
-        text: entry.text,
-        at: entry.at.0,
-        keep,
-        shown,
-        base: entry.base,
-        stored: None,
-        slot: Some(slot),
-    }))
+}
+
+/// One field's candidates, before the machine judges them.
+struct Field {
+    kind: DraftKind,
+    place: FieldPlace,
+    key: Option<RecordKey>,
+    candidates: Vec<Candidate<Vec<ShownToken>>>,
 }
 
 /// The offer of `session` for the buffered lines the UI sent (see the module documentation).
+/// Each text the machine offers is taken into `drafts.json` before this returns.
 pub fn offer(session: &ProjectSession, buffered: &[String]) -> OfferedDrafts {
     let handle = session.handle();
     if matches!(handle.facts().mode, SessionMode::ReadOnly(_)) {
         return OfferedDrafts {
             offers: Vec::new(),
-            saved: Vec::new(),
+            settle: Vec::new(),
         };
     }
     let read = session.read();
-    let mut saved = Vec::new();
-    let mut groups: BTreeMap<String, Vec<Candidate>> = BTreeMap::new();
+    let mut fields: BTreeMap<String, Field> = BTreeMap::new();
     for draft in handle.offered_drafts() {
-        let candidate = stored_candidate(&draft);
-        groups
-            .entry(candidate.identity.clone())
-            .or_default()
-            .push(candidate);
+        let (id, field) = stored_field(handle.as_ref(), &draft);
+        fields.entry(id).or_insert(field.0).candidates.push(field.1);
     }
     for line in buffered {
         let Ok(BufferLine::Changed { key, entry }) = serde_json::from_str::<BufferLine>(line)
@@ -351,77 +263,176 @@ pub fn offer(session: &ProjectSession, buffered: &[String]) -> OfferedDrafts {
         if key.project != session.scope().project || key.id != *session.id() {
             continue;
         }
-        match buffered_candidate(handle.as_ref(), &read, key, entry) {
-            Ok(Some(candidate)) => groups
-                .entry(candidate.identity.clone())
-                .or_default()
-                .push(candidate),
-            Ok(None) => {}
-            Err(slot) => saved.push(slot),
-        }
+        let Some(kind) = kind_of_field(key.field.kind) else {
+            continue;
+        };
+        let record = parse_tokens(handle.as_ref(), &entry.base)
+            .and_then(|tokens| tokens.first().map(|(token, _)| token.key().clone()));
+        let place = key.field.place.clone();
+        let candidate = Candidate {
+            text: entry.text.clone(),
+            at: entry.at.0,
+            base: base_of(handle.as_ref(), kind, entry.base),
+            sent: entry.sent.map(|sent| sent.text),
+            run: Some(entry.instance),
+            home: Home::Buffer(BufferSlot {
+                key,
+                instance: entry.instance,
+                text: entry.text,
+            }),
+        };
+        fields
+            .entry(identity(kind, record.as_ref(), &place))
+            .or_insert(Field {
+                kind,
+                place,
+                key: record,
+                candidates: Vec::new(),
+            })
+            .candidates
+            .push(candidate);
     }
     let mut offers: Vec<(i64, DraftOffer)> = Vec::new();
-    for (_, mut group) in groups {
-        // A stored draft over the very version a buffered entry of the field edits, and no
-        // newer than it, is the older copy of that typing. One over another version (a folder
-        // copied from another computer, an edit begun elsewhere) is other typing and is offered.
-        let lagging: Vec<StoredDraftId> = group
-            .iter()
-            .filter(|stored| {
-                stored.slot.is_none()
-                    && group.iter().any(|buffered| {
-                        buffered.slot.is_some()
-                            && buffered.at >= stored.at
-                            && buffered.base == stored.base
-                    })
-            })
-            .filter_map(|c| c.stored)
-            .collect();
-        group.retain(|c| !(c.stored.is_some_and(|id| lagging.contains(&id))));
-        group.sort_by_key(|c| std::cmp::Reverse(c.at));
-        let mut kept: Vec<(i64, DraftOffer)> = Vec::new();
-        for candidate in group {
-            let settles = Settles {
-                stored: candidate.stored.into_iter().collect(),
-                buffered: candidate.slot.into_iter().collect(),
-            };
-            match kept
-                .iter_mut()
-                .find(|(_, offer)| same_text(&offer.text, &candidate.text))
-            {
-                Some((_, offer)) => {
-                    offer.settles.stored.extend(settles.stored);
-                    offer.settles.buffered.extend(settles.buffered);
+    let mut settle = Vec::new();
+    for (_, field) in fields {
+        let record = FieldRecord {
+            handle: handle.as_ref(),
+            read: &read,
+            kind: field.kind,
+            key: field.key.clone(),
+        };
+        let (mut state, actions) = machine::next(
+            FieldDraft::default(),
+            Event::Offer {
+                candidates: field.candidates,
+                record: &record,
+            },
+        );
+        for action in actions {
+            match action {
+                Action::Absorb {
+                    text,
+                    at,
+                    over,
+                    keep,
+                    then,
+                    older,
+                } => {
+                    let taken = absorb(handle.as_ref(), &read, field.kind, &over, &text, keep, at);
+                    if let Some(id) = taken
+                        && let Some(offer) = state.offers.iter_mut().find(|o| o.text == text)
+                    {
+                        machine::absorbed(offer, id);
+                        settle.extend(then);
+                        for copy in older {
+                            handle.discard_draft(copy.0);
+                        }
+                    }
                 }
-                None => kept.push((
-                    candidate.at,
-                    DraftOffer {
-                        kind: candidate.kind,
-                        place: candidate.place,
-                        text: candidate.text,
-                        keep: candidate.keep,
-                        shown: candidate.shown,
-                        settles,
-                    },
-                )),
+                Action::Unstore(id) => {
+                    handle.discard_draft(id.0);
+                }
+                // An open's plan writes nothing else.
+                other => debug_assert!(false, "an open planned {other:?}"),
             }
         }
-        if let Some((_, newest)) = kept.first_mut() {
-            newest.settles.stored.extend(lagging);
-        }
-        offers.extend(kept);
+        settle.append(&mut state.settle);
+        offers.extend(state.offers.into_iter().map(|offer| {
+            (
+                offer.at,
+                DraftOffer {
+                    kind: field.kind,
+                    place: field.place.clone(),
+                    settles: Settles {
+                        stored: offer.stored().collect(),
+                        buffered: offer.slots().cloned().collect(),
+                    },
+                    text: offer.text,
+                    keep: offer.keep,
+                    shown: offer.over.unwrap_or_default(),
+                },
+            )
+        }));
     }
-    offers
-        .sort_by(|(a_at, a), (b_at, b)| (a.place.as_str(), *a_at).cmp(&(b.place.as_str(), *b_at)));
+    offers.sort_by(|(a_at, a), (b_at, b)| {
+        (a.place.as_str(), std::cmp::Reverse(*a_at))
+            .cmp(&(b.place.as_str(), std::cmp::Reverse(*b_at)))
+    });
     OfferedDrafts {
         offers: offers.into_iter().map(|(_, offer)| offer).collect(),
-        saved,
+        settle,
     }
+}
+
+/// A stored draft of `drafts.json` as the machine's candidate, with its field.
+fn stored_field(
+    handle: &dyn ProjectHandle,
+    draft: &OfferedDraft,
+) -> (String, (Field, Candidate<Vec<ShownToken>>)) {
+    let kind = kind_of_draft(&draft.field);
+    let first = draft.keys().next().cloned();
+    let place = field_place(&match (&first, &draft.field) {
+        (Some(key), _) => place_of(key),
+        (None, DraftField::UserComment { target }) => place_of(&comment_place(target)),
+        (None, _) => String::new(),
+    });
+    // A token tc-api cannot carry is still offered, as text.
+    let shown = draft.wire_tokens().unwrap_or_default();
+    let candidate = Candidate {
+        text: draft.text.clone(),
+        at: draft.at.0,
+        base: base_of(handle, kind, shown),
+        sent: None,
+        run: draft.run,
+        home: Home::Stored(StoredDraftId(draft.id)),
+    };
+    (
+        identity(kind, first.as_ref(), &place),
+        (
+            Field {
+                kind,
+                place,
+                key: first,
+                candidates: Vec::new(),
+            },
+            candidate,
+        ),
+    )
+}
+
+/// Writes an offered entry of `drafts.json` for a text the buffer held: its number, or `None`
+/// when it could not be written, and the slots stay.
+fn absorb(
+    handle: &dyn ProjectHandle,
+    read: &CountingSnapshot,
+    kind: DraftKind,
+    over: &[ShownToken],
+    text: &str,
+    keep: Keep,
+    at: i64,
+) -> Option<StoredDraftId> {
+    let tokens: Vec<DraftToken> = parse_tokens(handle, over)?
+        .into_iter()
+        .map(|(token, _)| token)
+        .collect();
+    let field = draft_field(kind, &tokens, read).ok()?;
+    handle
+        .offer_draft(
+            field,
+            tokens,
+            text.to_owned(),
+            keep == Keep::Save,
+            WallTime(at),
+        )
+        .map(StoredDraftId)
 }
 
 impl Handle<Drafts> for App {
     async fn handle(&self, req: Drafts) -> Result<OfferedDrafts, ApiError> {
-        let session = self.read(&req.at)?;
+        let session = self
+            .sessions()
+            .reader(&req.at)
+            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
         Ok(offer(&session, &req.buffered))
     }
 }
@@ -460,18 +471,76 @@ fn draft_field(
     })
 }
 
+/// The one question a *Keep* or a *Discard* answers, as the machine holds it: the request
+/// carries what the offer said, so the server keeps nothing between the two.
+fn answered(
+    text: &str,
+    shown: &[ShownToken],
+    stored: &[StoredDraftId],
+) -> FieldDraft<Vec<ShownToken>> {
+    let mut homes: Vec<Home> = stored.iter().copied().map(Home::Stored).collect();
+    homes.dedup();
+    FieldDraft {
+        offers: vec![Offer {
+            text: text.to_owned(),
+            at: 0,
+            // The store decides from the tokens whether Keep writes over them or with no
+            // parents (R20).
+            keep: Keep::Save,
+            over: Some(shown.to_vec()),
+            homes,
+        }],
+        ..FieldDraft::default()
+    }
+}
+
 impl Handle<KeepDraft> for App {
     /// The offer's text, saved as its field's save over the offer's tokens (STORAGE §5.14),
-    /// then the offer's other stored drafts discarded. No lock is held across the wait: the
-    /// write's lease keeps the session open.
+    /// then the offer's entries of `drafts.json` gone, as the machine's *Keep* says. No lock
+    /// is held across the wait: the write's lease keeps the session open.
     async fn handle(&self, req: KeepDraft) -> Result<KeptDraft, ApiError> {
         let session = self
             .sessions()
             .reader(&req.at)
             .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
         let handle = session.handle().clone();
-        let shown = req
-            .shown
+        let (_, actions) = machine::next(
+            answered(&req.text, &req.shown, &req.discard),
+            Event::Keep(0),
+        );
+        let mut kept = None;
+        for action in actions {
+            match action {
+                Action::Keep { text, over, .. } => {
+                    kept = Some(
+                        self.keep(&session, req.kind, req.request, &over, text)
+                            .await?,
+                    );
+                }
+                Action::Unstore(id) => {
+                    handle.discard_draft(id.0);
+                }
+                other => debug_assert!(false, "Keep planned {other:?}"),
+            }
+        }
+        kept.ok_or_else(|| ApiError::BadRequest {
+            field: "shown".to_owned(),
+            reason: "Keep names the record of its text".to_owned(),
+        })
+    }
+}
+
+impl App {
+    async fn keep(
+        &self,
+        session: &ProjectSession,
+        kind: DraftKind,
+        request: tc_api::RequestId,
+        over: &[ShownToken],
+        text: String,
+    ) -> Result<KeptDraft, ApiError> {
+        let handle = session.handle().clone();
+        let shown = over
             .iter()
             .map(|token| DraftToken::parse(handle.as_ref(), token).map(|(token, _)| token))
             .collect::<Result<Vec<_>, _>>()
@@ -483,9 +552,9 @@ impl Handle<KeepDraft> for App {
                 field: "shown".to_owned(),
                 reason: "Keep names the record of its text".to_owned(),
             })?;
-        let field = draft_field(req.kind, &shown, &session.read())?;
+        let field = draft_field(kind, &shown, &session.read())?;
         let me = handle.facts().device;
-        let command = StoreCommand::keep_draft(field, shown, req.text).requested_by(req.request);
+        let command = StoreCommand::keep_draft(field, shown, text).requested_by(request);
         let reply =
             handle.submit(command).await.map_err(|error| {
                 match wire::error::command_error(error) {
@@ -496,9 +565,6 @@ impl Handle<KeepDraft> for App {
                     ),
                 }
             })?;
-        for id in req.discard {
-            handle.discard_draft(id.0);
-        }
         let read = session.read();
         let (stored, _) = wire::error::stored(&reply.stored);
         let new_conflicts =
@@ -517,13 +583,21 @@ impl Handle<KeepDraft> for App {
 }
 
 impl Handle<DiscardDraft> for App {
+    /// The offer's entries of `drafts.json` go, each written before the answer, so a
+    /// discarded text never comes back after a crash.
     async fn handle(&self, req: DiscardDraft) -> Result<(), ApiError> {
         let session = self
             .sessions()
             .reader(&req.at)
             .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
-        for id in req.stored {
-            session.handle().discard_draft(id.0);
+        let (_, actions) = machine::next(answered("", &[], &req.stored), Event::Discard(0));
+        for action in actions {
+            match action {
+                Action::Unstore(id) => {
+                    session.handle().discard_draft(id.0);
+                }
+                other => debug_assert!(false, "Discard planned {other:?}"),
+            }
         }
         Ok(())
     }
@@ -557,19 +631,27 @@ impl Handle<CopyProject> for App {
                 match store.copy(&folder, &name) {
                     Ok(()) => return Ok(name),
                     Err(CopyFailure::NameExists) => continue,
-                    Err(CopyFailure::Failed(reason)) => return Err(reason),
+                    Err(CopyFailure::Unsafe(reason)) => {
+                        return Err(CreateRefusal::CopyUnsafe { reason });
+                    }
+                    Err(CopyFailure::Failed(reason)) => {
+                        return Err(CreateRefusal::Failed { reason });
+                    }
                 }
             }
-            Err("every copy name is taken".to_owned())
+            Err(CreateRefusal::Failed {
+                reason: "every copy name is taken".to_owned(),
+            })
         })
         .await
-        .map_err(|e| e.to_string())
-        .and_then(|copied| copied);
+        .unwrap_or_else(|e| {
+            Err(CreateRefusal::Failed {
+                reason: e.to_string(),
+            })
+        });
         match copied {
             Ok(project) => Ok(ProjectCopy { project, id }),
-            Err(reason) => Err(ApiError::Refused(Refusal::Create(CreateRefusal::Failed {
-                reason,
-            }))),
+            Err(refusal) => Err(ApiError::Refused(Refusal::Create(refusal))),
         }
     }
 }

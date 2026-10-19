@@ -4,6 +4,7 @@
 //! carried by a copy of a read-only project (R7).
 
 use crate::common::*;
+use std::sync::Arc;
 use tc_journal::command::{AlignmentEdit, Command, Draft, DraftField, SectionValue};
 use tc_journal::record::{AlignmentGroup, CommentTarget, SourceWord, TargetWord, VerseValue};
 use tc_journal::{ChapterNo, Record, RecordKey, VerseNo};
@@ -400,5 +401,138 @@ fn a_dismissed_notice_of_a_held_file_keeps_its_copy() {
     assert!(handle.notices().iter().all(|n| n.id != notice.id));
     assert!(rig.fs.peek(&copy).is_some(), "the file is still held");
     assert_eq!(rig.fs.peek(&usfm), Some(edited), "the edited file stays");
+    handle.close().unwrap();
+}
+
+fn texts_offered(handle: &ProjectHandle) -> Vec<String> {
+    let mut texts: Vec<String> = handle
+        .offered_drafts()
+        .into_iter()
+        .map(|o| o.draft.text)
+        .collect();
+    texts.sort();
+    texts
+}
+
+/// APP-DESIGN §6.6 (C1b, finding 1): one field can hold two offered texts, the last session's
+/// draft and a text taken in from the page's buffer. *Keep* of one leaves the other offered,
+/// at a reload and after a crash, until the person answers it.
+#[test]
+fn keeping_one_of_two_offered_texts_of_a_field_leaves_the_other() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    draft(
+        &handle,
+        DraftField::Words,
+        &[verse(1, 4)],
+        "from drafts.json",
+    );
+    let fs = crashed_after_drafts(&rig, handle);
+    let (rig, handle) = reopen(fs, &folder);
+    let buffered = Draft {
+        field: DraftField::Words,
+        shown: vec![handle.mint(&verse(1, 4), None).unwrap()],
+        text: "from the buffer".into(),
+    };
+    let id = handle
+        .offer_draft(buffered.clone(), true, tc_journal::WallTime(1))
+        .unwrap();
+    assert_eq!(
+        handle.offer_draft(buffered.clone(), true, tc_journal::WallTime(2)),
+        Some(id),
+        "one text, one entry"
+    );
+    assert_eq!(
+        texts_offered(&handle),
+        ["from drafts.json", "from the buffer"]
+    );
+    handle
+        .submit(Command::KeepDraft {
+            draft: buffered,
+            section: Vec::new(),
+        })
+        .wait()
+        .unwrap();
+    assert_eq!(words(&handle, 1, 4).as_deref(), Some("from the buffer"));
+    assert_eq!(texts_offered(&handle), ["from drafts.json"]);
+    let fs = crashed_after_drafts(&rig, handle);
+    let (_rig, handle) = reopen(fs, &folder);
+    assert_eq!(texts_offered(&handle), ["from drafts.json"]);
+    handle.close().unwrap();
+}
+
+/// Finding 9: *Discard* of an offered text removes that entry, written before it returns,
+/// and never the field's draft typed after the offer.
+#[test]
+fn discard_leaves_the_fields_draft_typed_since() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    draft(
+        &handle,
+        DraftField::Words,
+        &[verse(1, 5)],
+        "offered, discarded",
+    );
+    let fs = crashed_after_drafts(&rig, handle);
+    let (rig, handle) = reopen(fs, &folder);
+    let offered = handle.offered_drafts();
+    draft(
+        &handle,
+        DraftField::Words,
+        &[verse(1, 5)],
+        "typed after the offer",
+    );
+    handle.wait_idle();
+    assert!(handle.discard_draft(offered[0].id));
+    // No flush: the discard was written before it returned.
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let (_rig, handle) = reopen(fs, &folder);
+    assert_eq!(texts_offered(&handle), ["typed after the offer"]);
+    handle.close().unwrap();
+}
+
+/// Finding 5: the session's own save replaced a draft, and the process ended before the
+/// writer rewrote `drafts.json`. The older copy is not offered over the person's save.
+#[test]
+fn a_draft_the_sessions_own_save_superseded_is_not_offered() {
+    let (rig, folder) = titus();
+    let hooks = Arc::new(tc_store::Hooks::default());
+    let rig2 = rig_with_hooks(rig.fs.crash(false), hooks.clone());
+    let handle = rig2.store.open(&folder, &OpenOptions::default()).unwrap();
+    draft(&handle, DraftField::Words, &[verse(1, 6)], "older typing");
+    handle.wait_idle();
+    hooks.hold(tc_store::Point::BeforeDraftWrite);
+    save_verse(&handle, 1, 6, "older typing, saved later").unwrap();
+    let fs = rig2.fs.crash(false);
+    hooks.release(tc_store::Point::BeforeDraftWrite);
+    drop(handle);
+    let (_rig, handle) = reopen(fs, &folder);
+    assert!(
+        handle.offered_drafts().is_empty(),
+        "{:?}",
+        texts_offered(&handle)
+    );
+    assert_eq!(
+        words(&handle, 1, 6).as_deref(),
+        Some("older typing, saved later")
+    );
+    handle.close().unwrap();
+}
+
+/// An offered text is marked so in the file at the open that offers it: a save of the field
+/// in that session, which the person made without seeing it, never supersedes it.
+#[test]
+fn an_offered_draft_outlives_the_next_sessions_save_of_its_field() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    draft(&handle, DraftField::Words, &[verse(1, 7)], "never answered");
+    let fs = crashed_after_drafts(&rig, handle);
+    let (rig, handle) = reopen(fs, &folder);
+    assert_eq!(texts_offered(&handle), ["never answered"]);
+    save_verse(&handle, 1, 7, "typed without answering").unwrap();
+    let fs = crashed_after_drafts(&rig, handle);
+    let (_rig, handle) = reopen(fs, &folder);
+    assert_eq!(texts_offered(&handle), ["never answered"]);
     handle.close().unwrap();
 }
