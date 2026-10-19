@@ -195,6 +195,12 @@ pub(crate) struct Inner {
     /// The sync with Door43 until unit X (B10): only a test scripts it.
     #[cfg(feature = "test-hooks")]
     pub(crate) sync: crate::sync::ScriptedSync,
+    /// The client resources are read and downloaded with, on the production server whatever
+    /// the account's server is (tC4 #120, B9a).
+    pub(crate) resources_door43: Result<Door43Client, String>,
+    /// The (package, book) pairs this app session downloaded, which Get source texts counts
+    /// per package (tC4 `installedSrc`, B9a).
+    pub(crate) downloaded: Mutex<std::collections::BTreeSet<(String, tc_core::BookId)>>,
     /// Calls in flight, for `test/quiet`.
     pub(crate) calls: AtomicUsize,
     quit: watch::Sender<bool>,
@@ -404,6 +410,11 @@ impl App {
         let internet = InternetSwitch::new();
         let door43 =
             Door43Client::new(config.door43.clone(), internet.clone()).map_err(|e| e.to_string());
+        let resources_door43 = Door43Client::new(
+            crate::resources::resources_server(&config.door43),
+            internet.clone(),
+        )
+        .map_err(|e| e.to_string());
         let inner = Inner {
             config,
             projects,
@@ -427,6 +438,8 @@ impl App {
             open_door43: crate::share::ScriptedOpenDoor43::default(),
             #[cfg(feature = "test-hooks")]
             sync: crate::sync::ScriptedSync::default(),
+            resources_door43,
+            downloaded: Mutex::new(std::collections::BTreeSet::new()),
             calls: AtomicUsize::new(0),
             quit: watch::channel(false).0,
             #[cfg(feature = "test-hooks")]

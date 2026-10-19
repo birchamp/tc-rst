@@ -63,11 +63,16 @@ use tc_api::prefs::{
     SetLocale,
 };
 use tc_api::refusal::Message;
+use tc_api::resources::{
+    Catalog, CatalogView, Download, FromInstalls, GatewayPackage, GatewayRef, PackageRole,
+    PackageRow, Seen, SourceGateway, Sources as SourceTexts, SourcesView as SourceTextsView,
+};
 use tc_api::session::{
     BufferSlot, Close, CopyProject, DiscardDraft, DraftKind, DraftOffer, Drafts, Keep, KeepDraft,
     KeptDraft, KeptPlace, OfferedDrafts, Open, OpenUnit, OpenedProject, OtherComputerClosed,
     ProjectCopy, Settles, StoredDraftId,
 };
+use tc_api::settings::{CurrentGateway, GatewayCard, SettingsView, ViewFromHome};
 use tc_api::shown::{ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
@@ -492,6 +497,118 @@ impl Example for SyncProject {
         SyncProject {
             request: request(21),
             project: ProjectRef::parse("sample_burrito").unwrap(),
+        }
+    }
+}
+
+impl Example for ViewFromHome {
+    fn example() -> Self {
+        ViewFromHome {
+            project: ProjectRef::parse("es-419_tit_equipo").unwrap(),
+        }
+    }
+}
+
+fn spanish() -> GatewayRef {
+    GatewayRef {
+        language: "es-419".into(),
+        owner: "es-419_gl".into(),
+    }
+}
+
+fn english_package() -> GatewayPackage {
+    GatewayPackage {
+        gateway: GatewayRef {
+            language: "en".into(),
+            owner: "unfoldingWord".into(),
+        },
+        name: "English".into(),
+        autonym: "English".into(),
+        direction: Direction::Ltr,
+        seen: Seen {
+            tn: "v89".into(),
+            tw: "v89".into(),
+            ta: "v89".into(),
+        },
+    }
+}
+
+impl Example for SettingsView {
+    fn example() -> Self {
+        SettingsView {
+            language_name: "Español".into(),
+            direction: Direction::Ltr,
+            font: Some("Charis SIL".into()),
+            gateway: GatewayCard {
+                current: Some(CurrentGateway {
+                    gateway: spanish(),
+                    autonym: "Español (Latinoamérica)".into(),
+                }),
+                options: FromInstalls::Listed(vec![english_package()]),
+            },
+        }
+    }
+}
+
+impl Example for SourceTexts {
+    fn example() -> Self {
+        SourceTexts { at: scope() }
+    }
+}
+
+impl Example for SourceTextsView {
+    fn example() -> Self {
+        SourceTextsView {
+            gateways: vec![SourceGateway {
+                package: english_package(),
+                installed: 1,
+            }],
+            current: Some(spanish()),
+            checkable: FromInstalls::Failed {
+                reason: "resources/dcs: permission denied".into(),
+            },
+            pinned: true,
+        }
+    }
+}
+
+impl Example for Catalog {
+    fn example() -> Self {
+        Catalog {
+            at: scope(),
+            gateway: spanish(),
+            book: BookId::Titus,
+        }
+    }
+}
+
+impl Example for CatalogView {
+    fn example() -> Self {
+        CatalogView {
+            rows: vec![
+                PackageRow {
+                    role: PackageRole::Text,
+                    repo: "es-419_glt".into(),
+                    desc: "Texto Puente Literal".into(),
+                },
+                PackageRow {
+                    role: PackageRole::WordLinks,
+                    repo: "es-419_twl".into(),
+                    desc: "Enlaces de palabras".into(),
+                },
+            ],
+        }
+    }
+}
+
+impl Example for Download {
+    fn example() -> Self {
+        Download {
+            request: request(21),
+            at: scope(),
+            gateway: spanish(),
+            book: BookId::Titus,
+            repos: vec!["es-419_glt".into(), "es-419_tn".into()],
         }
     }
 }
@@ -1452,6 +1569,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",
+            "resources/download",
             "session/close",
             "session/copy",
             "session/discardDraft",

@@ -43,7 +43,9 @@ pub mod net;
 pub mod prefs;
 pub mod query;
 pub mod refusal;
+pub mod resources;
 pub mod session;
+pub mod settings;
 pub mod shown;
 #[cfg(feature = "test-hooks")]
 pub mod test;
@@ -132,6 +134,14 @@ macro_rules! endpoint_table {
 
             query "helps/passage": $crate::helps::Passage => $crate::helps::PassageView;
             query "helps/article": $crate::helps::Article => $crate::helps::ArticleView;
+
+            query "settings/viewFromHome": $crate::settings::ViewFromHome
+                => $crate::settings::SettingsView;
+
+            query "resources/sources": $crate::resources::Sources => $crate::resources::SourcesView;
+            query [Sources] "resources/catalog": $crate::resources::Catalog
+                => $crate::resources::CatalogView;
+            job [Sources] "resources/download": $crate::resources::Download => $crate::ids::JobId;
         }
     };
 }

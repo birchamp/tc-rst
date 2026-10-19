@@ -251,12 +251,12 @@ the rebuild fixed it or does as tC4 does:
 | #528 | Each release in its own folder | covered | tc-resources | `c29_an_upgraded_bundle_copies_only_its_new_install` | None. |
 | #504 | Bundle the latest English releases | covered | tc-resources | `fetched_lock.rs` (8 tests) | None. |
 | #580 | Invalid stays Invalid after a language change and back | covered | tc-check | `a_change_back_to_the_resource_a_decision_was_made_against_revives_it` | A decision invalidated only by the change becomes valid again; tC4 brings it back as To do (STORAGE §7.7 difference). |
-| #579 | Name a gateway language the same way everywhere | unit todo | B9a, C8 | `gateway_change_dialog_names_both_languages_by_autonym` | Use the autonym, never the code, including both buttons. |
+| #579 | Name a gateway language the same way everywhere | unit todo | C8 (B9a done) | `gateway_change_dialog_names_both_languages_by_autonym` | Use the autonym, never the code, including both buttons. B9a: Project settings and Get source texts name a package by its autonym (`settings_from_home_show_the_sample_as_tc4_does`, journey `source-texts`). |
 | #621 | Superscript verse numbers in the simplified tab | covered | B3 | `simplified_tab_verse_numbers_are_superscript` | Done by B3 (§3). |
 | #619 | Quotes and bold in helps | unit todo | B5b (B3 done) | `article_shows_no_raw_quote_or_bold_marks` | As in §3, with #628's differences. |
 | #601 | Sticky article header | covered | B3 | `article_close_button_visible_after_scroll` | Done by B3 (§3). |
 | #602 | Resize the helps panel | unit todo | B4a (B3 done) | `helps_panel_width_follows_the_divider_drag` | As in §3. |
-| #606 | Third-party licenses in About, offline | unit todo | A5, B9a, G1 | `about_lists_aquifer_attribution_offline` | Also list each installed Aquifer resource's attribution (CC BY-SA). |
+| #606 | Third-party licenses in About, offline | unit todo | A5, G1 | `about_lists_aquifer_attribution_offline` | Also list each installed Aquifer resource's attribution (CC BY-SA). B9a: nothing in the app installs an Aquifer resource yet (APP-DESIGN §4.6), so the attribution goes with the unit that first installs one. |
 | #532 | Show a verse's new draft on return to the check | unit todo | B5b, C4 | `check_shows_new_draft_after_switching_back` | Read the verse again on return or when the book text arrives. |
 | #42 | Keyboard pass on the Check pages | unit todo | B5a, B5b | port of `check-keyboard.spec.ts` and `checkKeyboard.test.tsx` | Include the focus-rule table and #769's heading stops. |
 | #513 | Resuming into tN stalls | unit todo | B5a | `resume_and_tab_click_open_the_tool_once` | One open session that settles. |
@@ -264,7 +264,7 @@ the rebuild fixed it or does as tC4 does:
 | #722 | Verse button missing after the UGNT upgrade | unit todo | C8, B6 | J12 `ugnt_upgrade_marks_1_1_invalid_in_align` | The pin moves only after the download. |
 | #766 | A project with no pins gets the creation pins | unit todo | I, F1, E1b, C1a | `open_writes_creation_pins_only_when_none_exist` | Build now, as a declared difference, until the reference includes #766. |
 | #763 | Help shows rc.1 pages | reference change | A5 | help case b `help_home_shows_no_rc1_build_text_offline` | Vendor tc-website dbb7cd0 when the reference moves. |
-| #641 | The checking language row never finishes loading | not applicable | B9a | B9a settings-contract test | One server read; no client-side lost update. |
+| #641 | The checking language row never finishes loading | covered | B9a | `a_reply_for_another_projects_settings_changes_nothing`; `settings_from_home_show_the_sample_as_tc4_does` | One server read, `settings/viewFromHome`; a reply lands only on its own project's form. |
 | #583 | Three journey tests fail on main | not applicable | — | — | tC4 test fixes. |
 | #615 | Understand journey after Resume | not applicable | — | — | tC4 journey order. |
 | #700 | Cache the bundle in packaging CI | not applicable | — | — | tC4 CI. |
@@ -323,7 +323,7 @@ the rebuild fixed it or does as tC4 does:
 | #536 | Flaky "nothing auto-committed" journey | not applicable | D1 | D1 `a_save_makes_no_commit` | tC4 journey race. |
 | #501 | Opening Check changes `resources.json` | covered | tc-journal; C8 | `projection_ignores_installed_resources` | C8 ports J12's "pins never move without the accept". |
 | #506 | QA server label on the card | unit todo | B2 | `debug_card_names_qa_server` | No top-bar label. |
-| #120 | Development builds use QA for account and write calls | unit todo | A8, B9a, B9b | `debug_build_downloads_resources_from_production` | Only account and write calls use the QA server. |
+| #120 | Development builds use QA for account and write calls | unit todo | A8, B9b (B9a done) | `a_development_build_downloads_resources_from_production` | Only account and write calls use the QA server. B9a: Get source texts reads and downloads from production when the account server is QA (`tc_app::resources::resources_server`). |
 | #708 | An ops-log record stays open | covered | tc-store | same test as #707 | Duplicate of #707. |
 | #372 | First share to Door43 (J11) | unit todo | E1b, A8, B9b | J11 port | Never force a push. |
 | #373 | Publish and import journeys | unit todo | D2, F1, I | J7, J9 and J23 ports | Validate every export and import against SB 1.0. |
@@ -482,8 +482,9 @@ Follow-ups the fix units left (2026-10-19):
   placement (#568); x-ref per verse (#409); marking row (#726); invalid after a UGNT upgrade
   (#722); the inline-markup guard (#553); right-to-left case (#29).
 - **B7:** a story project opens at story 1 (#507).
-- **B9a:** autonyms (#579); Aquifer attribution (#606); downloads always from production
-  (#120).
+- **B9a:** autonyms (#579); downloads always from production (#120); one settings read
+  (#641). The Aquifer attribution (#606) and Q34's Portuguese Bible (#720) wait for a unit that
+  installs an Aquifer resource (APP-DESIGN §4.6).
 - **B9b:** QA only for account and write calls (#120); J11 steps up to the check step (#372).
   The team-access line for every project (#724) is on the share's done step, which is E1b's
   (APP-DESIGN B9b D4).

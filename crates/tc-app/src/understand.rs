@@ -80,6 +80,14 @@ pub(crate) struct BookCache {
     books: tokio::sync::Mutex<Vec<Arc<LoadedBook>>>,
 }
 
+impl BookCache {
+    /// Every book is read again at its next need: a download may have installed what one
+    /// lacked.
+    pub(crate) async fn forget(&self) {
+        self.books.lock().await.clear();
+    }
+}
+
 fn not_found(what: &str) -> ApiError {
     ApiError::BadRequest {
         field: "book".to_owned(),
@@ -89,7 +97,7 @@ fn not_found(what: &str) -> ApiError {
 
 /// The project's pins, from its `Pins` records; none when no group has a record (tC4's "no
 /// pins recorded", which shows every help as not included).
-fn project_pins(read: &CountingSnapshot) -> Result<Option<ProjectPins>, String> {
+pub(crate) fn project_pins(read: &CountingSnapshot) -> Result<Option<ProjectPins>, String> {
     let mut pins = ProjectPins::default();
     let mut any = false;
     for group in PinGroup::ALL {

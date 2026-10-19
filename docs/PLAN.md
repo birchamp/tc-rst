@@ -119,8 +119,9 @@ owner is told of each:
 
 - Urdu in Devanagari script (`ur-deva`) reads left to right and is named उर्दू (#701). tC4 4.0's
   registry says right to left and names it اردو in Arabic script, so its helps would read
-  backwards. The Source texts screen draws that row in Devanagari; B9a masks it with a mask that
-  cites `#701` (APP-DESIGN §7.5).
+  backwards. The Source texts screen draws that row in Devanagari; B9a explains it with a residual
+  of `source-texts` that cites `#701` (APP-DESIGN §7.5): the row lies below the dialog's visible
+  part, where no mask can cover it.
 - A story project's own pictures are found by their path below `ingredients/`, outside
   `checking/`, `tc/` and `content/` (#549). tC4 4.0 takes only an ingredient with the role
   `x-obsimages`, which the rebuild's `metadata.json` does not write for a carried file and

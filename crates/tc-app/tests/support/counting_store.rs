@@ -121,6 +121,14 @@ impl<S: ProjectStore> ProjectStore for CountingStore<S> {
         self.inner.summary_files(folder, books, watch)
     }
 
+    fn derived_file(
+        &self,
+        folder: &ProjectRef,
+        file: &tc_journal::fold::DerivedFile,
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        self.inner.derived_file(folder, file)
+    }
+
     fn open(
         &self,
         folder: &ProjectRef,
@@ -275,6 +283,14 @@ impl ProjectStore for SharedStore {
         watch: &SummaryWatch,
     ) -> Result<SummaryFiles, StoreError> {
         self.0.summary_files(folder, books, watch)
+    }
+
+    fn derived_file(
+        &self,
+        folder: &ProjectRef,
+        file: &tc_journal::fold::DerivedFile,
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        self.0.derived_file(folder, file)
     }
 
     fn open(

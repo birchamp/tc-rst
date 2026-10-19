@@ -498,7 +498,7 @@ impl SummaryCache {
             .collect();
     }
 
-    fn listed(&self, folder: &ProjectRef) -> Option<ProjectEntry> {
+    pub(crate) fn listed(&self, folder: &ProjectRef) -> Option<ProjectEntry> {
         lock(&self.state).listed.get(folder).cloned()
     }
 

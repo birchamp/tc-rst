@@ -53,6 +53,11 @@ const PHASE_0: &[&str] = &[
     "door43/open",
     // B10: the sync of a shared project, and the scripted outcomes of the open and the sync.
     "door43/sync",
+    // B9a: Project settings from Home, and Get source texts with its downloads.
+    "settings/viewFromHome",
+    "resources/sources",
+    "resources/catalog",
+    "resources/download",
     "test/quiet",
     "test/echo",
     "test/crash",
@@ -111,6 +116,14 @@ fn the_list_and_the_impls_agree() {
     assert_eq!(<OpenDoor43 as Endpoint>::KIND, Kind::StartJob);
     assert_eq!(<SyncProject as Endpoint>::NET, Some(NetKind::Sync));
     assert_eq!(<SyncProject as Endpoint>::KIND, Kind::StartJob);
+    assert_eq!(
+        <tc_api::resources::Download as Endpoint>::NET,
+        Some(NetKind::Sources)
+    );
+    assert_eq!(
+        <tc_api::resources::Download as Endpoint>::KIND,
+        Kind::StartJob
+    );
     assert_eq!(<tc_api::app::Hello as Endpoint>::KIND, Kind::Query);
     for endpoint in ALL {
         let asks = endpoint.net.is_some();
@@ -124,6 +137,8 @@ fn the_list_and_the_impls_agree() {
                 | "account/orgs"
                 | "door43/open"
                 | "door43/sync"
+                | "resources/catalog"
+                | "resources/download"
         );
         assert_eq!(
             asks, expected,
