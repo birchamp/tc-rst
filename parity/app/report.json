@@ -21,7 +21,7 @@
       }
     },
     "build": {
-      "ui": "9ab062ff5414ecd6",
+      "ui": "2b0da4a20aa51100",
       "commit": "dev",
       "api": 1
     }
@@ -277,7 +277,7 @@
       "backend": "memory",
       "dom": {
         "tc4Sha256": "4100164bf99c99ea1c5c5e261cacef98d26a8fc198dad8351b783aa41643080f",
-        "rustSha256": "9f386a627378cec6b79a99a79484b98a68049b9d6999c519858eefe259bf4436",
+        "rustSha256": "8b61f0ede4a389c8118aac4345b911c0a127f4b5448cbeffb29068fd4ed3c466",
         "scope": {
           "attr": "data-testid",
           "value": "account-menu-panel",
@@ -310,7 +310,7 @@
       "backend": "memory",
       "dom": {
         "tc4Sha256": "7523ea5a6320acccf059e220730146e28d3f4b58081cdc47403d233f43b22d6a",
-        "rustSha256": "4bcbf645b057c52a4a080a3753b189c61769451b69292865a2a727df3b40671e",
+        "rustSha256": "176892d8d5eabc678f06648954ff9c0ee23c14e2b464fcdab587ce4c693dad0b",
         "scope": {
           "attr": "role",
           "value": "dialog",
@@ -343,7 +343,7 @@
       "backend": "memory",
       "dom": {
         "tc4Sha256": "70cbde356b4399aa75d1e10c76ba6a789330f0de89438413045c6f4c97496751",
-        "rustSha256": "8921b0ea6f78f1c106566ffe5b6a4a34126167e4ec691ef9c98c35799fe47c3e",
+        "rustSha256": "bacc0fd041947ec74bf71b2305d1c3d764d8a5161843cd6f27298a18cabcdc75",
         "scope": {
           "attr": "role",
           "value": "dialog",
@@ -368,7 +368,7 @@
       "backend": "memory",
       "dom": {
         "tc4Sha256": "bdb34c05fd77d1f129490346b90f5003a6a97eb81aa58c06e5208b3117d0768b",
-        "rustSha256": "22ab558e91a6eed9b87cb06ac7b1172675bd4cb70d85bc3fa5e26e7605ea9c9a",
+        "rustSha256": "bca99411280c2c2eefe4c534a1a085466d0ee17ffebb2dc5cc51e02c167d0b74",
         "scope": {
           "attr": "role",
           "value": "dialog",
@@ -395,7 +395,7 @@
       "backend": "memory",
       "dom": {
         "tc4Sha256": "cde6f3aacb3ae32801aaa5594a359e29b68b51ba39957506142d26270cf8582f",
-        "rustSha256": "7c0e3aee32046f7ebdb6a3d73b94716d23db426c903f4ce8393ea574d56d0aa2",
+        "rustSha256": "2d6e75b30d0a828392ed2d06b77ed5a0ef1c3bfcbd8952343bc9d7b8689393c0",
         "scope": {
           "attr": "role",
           "value": "dialog",
@@ -1097,7 +1097,7 @@
       "backend": "memory",
       "dom": {
         "tc4Sha256": "72a64f4130c5e29edf7a05a147b1ac44a825d61fe1150836d73807b406a85dff",
-        "rustSha256": "c36b107c4e5dd80ed8e896208bbbb43858d4295585f1297c683cdb752704207f",
+        "rustSha256": "5fc99afcad7e082e46b495ef1e2ec930e37d760197690744ba56f3bfd52eb24c",
         "scope": {
           "attr": "role",
           "value": "dialog",
