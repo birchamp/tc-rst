@@ -669,8 +669,6 @@ pub(crate) struct Built {
     pub(crate) roles: BTreeMap<String, Role>,
     /// The free fields of `metadata.json`, by dotted path, as the folder holds them.
     pub(crate) meta_fields: Vec<(String, Value)>,
-    /// `resources.json` as the projection must give it back: the file, or its migration.
-    pub(crate) expected_resources: Option<Value>,
     /// The records seeded from each alignment and decision file, by its path.
     pub(crate) sidecar_records: BTreeMap<String, Vec<Record>>,
     pub(crate) declared: Vec<DeclaredDifference>,
@@ -747,7 +745,6 @@ pub(crate) fn build(folder: &Tc4Folder, project: ProjectId) -> Result<Built, See
             METADATA,
         ));
     }
-    let mut expected_resources = None;
     let mut carried = BTreeMap::new();
     let mut books: BTreeMap<BookId, BookFiles<'_>> = BTreeMap::new();
     let mut stories: BTreeMap<StoryNo, (&str, &[u8])> = BTreeMap::new();
@@ -767,7 +764,6 @@ pub(crate) fn build(folder: &Tc4Folder, project: ProjectId) -> Result<Built, See
             Role::Resources => {
                 let pins = pins_records(path, &read_json(path, bytes)?)?;
                 project_items.extend(pins.records.into_iter().map(|r| item(r, path)));
-                expected_resources = Some(pins.expected);
                 declared.extend(pins.declared);
             }
             Role::Settings => {
@@ -957,7 +953,6 @@ pub(crate) fn build(folder: &Tc4Folder, project: ProjectId) -> Result<Built, See
         carried,
         roles,
         meta_fields,
-        expected_resources,
         sidecar_records,
         declared,
         notes,

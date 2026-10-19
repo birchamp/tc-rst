@@ -20,6 +20,7 @@ use tc_journal::{
     StoryNo, ToolId, VerseNo,
 };
 
+use super::records::pins_records;
 use super::strict::{canonical, first_difference, parse_utc_millis, read_json_strict};
 use super::{
     Built, CheckRule, DeclaredDifference, METADATA, Mismatch, Role, Tc4Folder, describe_key,
@@ -64,7 +65,7 @@ pub(super) fn check(folder: &Tc4Folder, built: &Built) -> Checked {
             Role::Alignments(book) => checker.alignments(path, bytes, book),
             Role::Decisions(tool, book) => checker.decisions(path, bytes, tool, Some(book)),
             Role::StoryDecisions(tool) => checker.decisions(path, bytes, tool, None),
-            Role::Resources => checker.resources(path),
+            Role::Resources => checker.resources(path, bytes),
             Role::Settings => checker.settings(path, bytes),
         }
     }
@@ -706,8 +707,13 @@ impl Checker<'_> {
 
     /// Rule 7: `resources.json` gives back the file, or its migration, but for an empty
     /// member the projection always writes.
-    fn resources(&mut self, path: &str) {
-        let Some(expected) = self.built.expected_resources.clone() else {
+    fn resources(&mut self, path: &str, bytes: &[u8]) {
+        // The builder refused a file it cannot read or migrate.
+        let Some(expected) = read_json_strict(bytes)
+            .ok()
+            .and_then(|doc| pins_records(path, &doc).ok())
+            .map(|pins| pins.expected)
+        else {
             return;
         };
         let Some(rendered) = self.built.fold.render(&DerivedFile::Resources) else {

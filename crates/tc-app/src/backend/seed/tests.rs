@@ -704,3 +704,214 @@ fn obs_frame_edits_project_other_bytes_than_tc4_writes_today() {
         decoded.reformatted
     );
 }
+
+/// `folder` with the file at `path` given other bytes, as if it changed after the build.
+fn changed(folder: &Tc4Folder, path: &str, edit: impl FnOnce(&[u8]) -> Vec<u8>) -> Tc4Folder {
+    let mut out = folder.clone();
+    let bytes = edit(&folder.files[path]);
+    out.files.insert(path.to_owned(), bytes);
+    out
+}
+
+/// `folder` with the JSON file at `path` edited.
+fn changed_json(folder: &Tc4Folder, path: &str, edit: impl FnOnce(&mut Value)) -> Tc4Folder {
+    changed(folder, path, |bytes| {
+        let mut doc: Value = serde_json::from_slice(bytes).unwrap();
+        edit(&mut doc);
+        serde_json::to_vec_pretty(&doc).unwrap()
+    })
+}
+
+/// The check's mismatches as (path, record, field, rule).
+fn found(
+    folder: &Tc4Folder,
+    built: &Built,
+) -> Vec<(String, Option<String>, Option<String>, CheckRule)> {
+    check::check(folder, built)
+        .mismatches
+        .into_iter()
+        .map(|m| (m.path, m.record, m.field, m.rule))
+        .collect()
+}
+
+#[test]
+fn a_book_or_vrs_json_the_projection_does_not_give_back_byte_for_byte_is_a_mismatch() {
+    let (folder, built) = bible();
+    let usfm = "ingredients/TIT.usfm";
+    let crlf = changed(&folder, usfm, |b| {
+        String::from_utf8(b.to_vec())
+            .unwrap()
+            .replace('\n', "\r\n")
+            .into_bytes()
+    });
+    let mismatches = check::check(&crlf, &built).mismatches;
+    assert_eq!(
+        found(&crlf, &built),
+        [(usfm.to_owned(), None, None, CheckRule::UsfmBytes)]
+    );
+    assert!(
+        mismatches[0].source.starts_with("line 1: "),
+        "{}",
+        mismatches[0]
+    );
+    assert!(
+        mismatches[0].source.ends_with("\\r\\n\""),
+        "{}",
+        mismatches[0]
+    );
+    let vrs = "ingredients/vrs.json";
+    let spaced = changed(&folder, vrs, |b| [b, b" "].concat());
+    assert_eq!(
+        found(&spaced, &built),
+        [(vrs.to_owned(), None, None, CheckRule::VrsBytes)]
+    );
+}
+
+#[test]
+fn a_story_the_projection_does_not_give_back_byte_for_byte_is_a_mismatch() {
+    // The OBS sample has mismatches of its own (the write-up); only the new ones count.
+    let folder = sample("sample-burrito-obs");
+    let built = build(&folder, fixture_project_id("sample_burrito_obs")).unwrap();
+    let before = found(&folder, &built);
+    let path = "ingredients/content/07.md";
+    let changed = changed(&folder, path, |b| [b, b"\n"].concat());
+    let new: Vec<_> = found(&changed, &built)
+        .into_iter()
+        .filter(|m| !before.contains(m))
+        .collect();
+    assert_eq!(new, [(path.to_owned(), None, None, CheckRule::StoryBytes)]);
+}
+
+#[test]
+fn a_carried_file_the_projection_does_not_place_or_keep_is_a_mismatch() {
+    let licence = "ingredients/LICENSE.md";
+    let bible = sample("sample-burrito");
+    let mut files: Vec<(String, Vec<u8>)> = bible.files().clone().into_iter().collect();
+    files.push((METADATA.into(), bible.metadata().to_vec()));
+    files.push((licence.into(), b"CC BY-SA 4.0\n".to_vec()));
+    let folder = Tc4Folder::from_files("sample_burrito", files).unwrap();
+    let mut built = build(&folder, fixture_project_id("sample_burrito")).unwrap();
+    assert_eq!(found(&folder, &built), []);
+    // Other bytes at the path: another blob than the one placed there.
+    let other = changed(&folder, licence, |_| b"CC BY 4.0\n".to_vec());
+    let mismatches = check::check(&other, &built).mismatches;
+    assert_eq!(
+        found(&other, &built),
+        [(licence.to_owned(), None, None, CheckRule::CarriedFile)]
+    );
+    assert!(
+        mismatches[0].projected.contains("of 13 bytes"),
+        "{}",
+        mismatches[0]
+    );
+    // The blob placed, but its bytes not kept.
+    let oid = built.fold.carried_files()[0].oid;
+    built.carried.remove(&oid);
+    let mismatches = check::check(&folder, &built).mismatches;
+    assert_eq!(
+        found(&folder, &built),
+        [(licence.to_owned(), None, None, CheckRule::CarriedFile)]
+    );
+    assert_eq!(mismatches[0].projected, "no bytes kept under that blob");
+}
+
+#[test]
+fn a_resources_or_settings_document_the_projection_does_not_give_back_is_a_mismatch() {
+    let (folder, built) = bible();
+    let resources = "ingredients/checking/resources.json";
+    let pinned = changed_json(&folder, resources, |doc| {
+        doc["languageSets"]["primary"]["translationNotes"]["version"] = json!("v67");
+    });
+    let mismatches = check::check(&pinned, &built).mismatches;
+    assert_eq!(
+        found(&pinned, &built),
+        [(
+            resources.to_owned(),
+            None,
+            Some("languageSets.primary.translationNotes.version".to_owned()),
+            CheckRule::DocumentField
+        )]
+    );
+    assert_eq!(
+        (
+            mismatches[0].source.as_str(),
+            mismatches[0].projected.as_str()
+        ),
+        ("\"v67\"", "\"v66\"")
+    );
+    let settings = "ingredients/checking/settings.json";
+    let tools = changed_json(&folder, settings, |doc| {
+        doc["checkCategories"]["translationNotes"] = json!(["translate", "figures"]);
+    });
+    assert_eq!(
+        found(&tools, &built),
+        [(
+            settings.to_owned(),
+            None,
+            Some("checkCategories.translationNotes".to_owned()),
+            CheckRule::DocumentField
+        )]
+    );
+}
+
+#[test]
+fn a_record_only_one_side_has_is_a_mismatch() {
+    let (folder, built) = bible();
+    let alignments = "ingredients/checking/alignments/TIT.json";
+    let moved = changed_json(&folder, alignments, |doc| {
+        let verses = doc["chapters"]["1"].as_object_mut().unwrap();
+        let record = verses.remove("1").unwrap();
+        verses.insert("2".into(), record);
+    });
+    assert_eq!(
+        found(&moved, &built),
+        [
+            (
+                alignments.to_owned(),
+                Some("TIT 1:2".to_owned()),
+                None,
+                CheckRule::RecordMissing
+            ),
+            (
+                alignments.to_owned(),
+                Some("TIT 1:1".to_owned()),
+                None,
+                CheckRule::RecordAdded
+            ),
+        ]
+    );
+    let decisions = "ingredients/checking/translationWords/TIT.json";
+    let renamed = changed_json(&folder, decisions, |doc| {
+        doc["decisions"][0]["contextId"]["checkId"] = json!("zz99");
+    });
+    assert_eq!(
+        found(&renamed, &built),
+        [
+            (
+                decisions.to_owned(),
+                Some("translationWords TIT 1:1 zz99 #1".to_owned()),
+                None,
+                CheckRule::RecordMissing
+            ),
+            (
+                decisions.to_owned(),
+                Some("translationWords TIT 1:1 a9p2 #1".to_owned()),
+                None,
+                CheckRule::RecordAdded
+            ),
+        ]
+    );
+}
+
+proptest::proptest! {
+    /// The scope reader keeps a range as `ScopeRange` reads it, so a text it reads must be
+    /// the only text of its value, or the scope would come back written another way.
+    #[test]
+    fn scope_ranges_read_only_their_own_text(
+        text in "[0-9:-]{0,9}|[0-9]{1,4}(:[0-9]{1,3})?(-[0-9]{1,3}(:[0-9]{1,3})?)?"
+    ) {
+        if let Ok(range) = text.parse::<tc_journal::record::ScopeRange>() {
+            proptest::prop_assert_eq!(range.to_string(), text);
+        }
+    }
+}

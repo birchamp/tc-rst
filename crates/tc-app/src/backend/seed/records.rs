@@ -149,16 +149,11 @@ pub(super) fn scopes_of(meta: &Map<String, Value>) -> Result<BTreeMap<BookId, Sc
             let text = range
                 .as_str()
                 .ok_or_else(|| bad(format!("a scope range of {code} is not text")))?;
+            // A range comes back as it is written: `ScopeRange` reads only the one text of
+            // each value (`scope_ranges_read_only_their_own_text`).
             let read: ScopeRange = text
                 .parse()
                 .map_err(|e| bad(format!("{code} {text:?}: {e}")))?;
-            // A range written another way would come back in another form.
-            if read.to_string() != text {
-                return Err(bad(format!(
-                    "{code} {text:?} would be written {:?}",
-                    read.to_string()
-                )));
-            }
             parsed.push(read);
         }
         let scope = match ScopeRanges::new(parsed) {
