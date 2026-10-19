@@ -188,6 +188,8 @@ pub(crate) struct Inner {
     pub(crate) resources: ResourceStore,
     /// The `Seed` job, when this launch started one.
     pub(crate) seed_job: Mutex<Option<JobId>>,
+    /// Home's summaries (B2).
+    pub(crate) home: crate::home::SummaryCache,
     /// Calls in flight, for `test/quiet`.
     pub(crate) calls: AtomicUsize,
     quit: watch::Sender<bool>,
@@ -416,6 +418,7 @@ impl App {
             startup,
             resources,
             seed_job: Mutex::new(None),
+            home: crate::home::SummaryCache::default(),
             calls: AtomicUsize::new(0),
             quit: watch::channel(false).0,
             #[cfg(feature = "test-hooks")]

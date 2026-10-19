@@ -21,8 +21,8 @@
 //! # What [`weave`] writes
 //!
 //! - Every target word becomes `\w word|x-occurrence="n" x-occurrences="m"\w*`, counted
-//!   by [`target_words`]. A word in no group is written the same way, outside any
-//!   milestone.
+//!   by [`target_words`], the one word list of a verse. A word in no group is written the
+//!   same way, outside any milestone.
 //! - A group's milestones open before its first word and close after its last word, with
 //!   the text between its words inside them. The group is cut into several runs, each
 //!   with its own copy of the milestones, where its words are not next to each other or
@@ -117,8 +117,8 @@
 use crate::Error;
 use crate::doc::{Document, Milestone, Node, Span};
 use crate::markers;
-use crate::text::{self, Flow, offset_in};
-use crate::words::{self, TokenKind};
+use crate::text::{Flow, offset_in};
+use crate::words::{self, TokenKind, WordToken};
 use std::collections::HashMap;
 
 /// A word of the target text: its text and its occurrence in the verse.
@@ -127,6 +127,16 @@ pub struct TargetWord {
     pub text: String,
     pub occurrence: u32,
     pub occurrences: u32,
+}
+
+impl From<&WordToken<'_>> for TargetWord {
+    fn from(word: &WordToken<'_>) -> Self {
+        Self {
+            text: word.text.to_owned(),
+            occurrence: word.occurrence,
+            occurrences: word.occurrences,
+        }
+    }
 }
 
 /// An original-language word, as a `\zaln-s` milestone describes it.
@@ -161,7 +171,7 @@ pub struct AlignedVerse {
     /// The verse with all alignment markup removed.
     pub plain: String,
     /// Every word of the verse text of `plain` in order, aligned or not, numbered by
-    /// occurrence: the same list as `target_words(&plain)` whenever that succeeds.
+    /// occurrence: `target_words(&plain)`.
     pub words: Vec<TargetWord>,
     /// The alignment groups in verse order, one per run. Their targets carry the numbers
     /// of `words`.
@@ -200,12 +210,29 @@ pub fn strip_alignment(body: &str) -> Result<String, Error> {
     Ok(parse_aligned(body)?.plain)
 }
 
-/// The target words of a plain verse body, numbered by occurrence: the words [`weave`]
-/// wraps in `\w`. They are the words of [`crate::words`] in verse text, outside notes,
-/// figures, headings and sidebars (see [`crate::text`]). Fails like [`weave`] when the
-/// verse has word markup.
-pub fn target_words(plain: &str) -> Result<Vec<TargetWord>, Error> {
-    Ok(flatten(plain)?.slots)
+/// The words of a verse's content in order, numbered by occurrence: the one word list of a
+/// verse. The aligner banks them (`tc_align::TargetVerse`), the import's split numbers its
+/// aligned words by them ([`parse_aligned`]), and [`weave`] wraps them in `\w`, so a value
+/// that places every word the aligner banks weaves.
+///
+/// They are the words of [`crate::words`] in verse text, outside notes, figures, headings
+/// and sidebars (see [`crate::text`]), each stretch of text between two markers tokenized on
+/// its own, so words never join across a marker. An attribute list (`|x-occurrence="1"`) is
+/// not text. Word markup is read through: the text of a `\w` is verse text like that of
+/// any character span and a `\zaln` milestone holds none, so a verse with its alignment
+/// inline has the words of the plain text the split gives ([`parse_aligned`]). [`weave`]
+/// refuses such a verse.
+pub fn target_words(content: &str) -> Vec<TargetWord> {
+    flatten(content)
+        .words
+        .iter()
+        .map(TargetWord::from)
+        .collect()
+}
+
+/// [`target_words`] with each word's byte offset in `content`.
+pub(crate) fn word_tokens(content: &str) -> Vec<WordToken<'_>> {
+    flatten(content).words
 }
 
 /// Write `groups` into a plain verse body. See the module documentation for the form.
@@ -223,8 +250,12 @@ pub fn target_words(plain: &str) -> Result<Vec<TargetWord>, Error> {
 /// as `\w grace|strong="G5485"\w*`. weave aligns only verses without word markup, because
 /// it writes every word as `\w` and its own words could not be told apart from those.
 pub fn weave(plain: &str, groups: &[AlignmentGroup]) -> Result<String, Error> {
-    let flat = flatten(plain)?;
-    let owner = assign(&flat.slots, groups)?;
+    let flat = flatten(plain);
+    if flat.word_markup {
+        return Err(Error::WordMarkup);
+    }
+    let slots: Vec<TargetWord> = flat.words.iter().map(TargetWord::from).collect();
+    let owner = assign(&slots, groups)?;
     let mut out = Output::default();
     let mut pending: Vec<Piece<'_>> = Vec::new();
     // The open run: its group, how many `\zaln-s` it opened, and its last word.
@@ -248,7 +279,7 @@ pub fn weave(plain: &str, groups: &[AlignmentGroup]) -> Result<String, Error> {
             }
             open = Some((g, groups[g].sources.len(), slot));
         }
-        let word = &flat.slots[slot];
+        let word = &slots[slot];
         out.raw(&format!(
             "\\w {}|x-occurrence=\"{}\" x-occurrences=\"{}\"\\w*",
             word.text, word.occurrence, word.occurrences
@@ -397,13 +428,16 @@ enum Piece<'a> {
     Word(usize),
 }
 
-/// A plain verse body as text, markup and word slots, in order.
+/// A verse body as text, markup and word slots, in order.
 struct Flat<'a> {
     pieces: Vec<Piece<'a>>,
-    slots: Vec<TargetWord>,
+    /// The words of the verse, numbered by occurrence, with their offsets in the body.
+    words: Vec<WordToken<'a>>,
     /// Whether word `i` may continue a run that ends with word `i - 1`: only text that
     /// tC4 keeps as one piece stands between them.
     joins: Vec<bool>,
+    /// Whether the body holds word markup outside notes, which [`weave`] refuses.
+    word_markup: bool,
 }
 
 /// What stands between the last word and the current position.
@@ -415,7 +449,8 @@ enum Gap {
     Text(u32),
 }
 
-fn flatten(plain: &str) -> Result<Flat<'_>, Error> {
+/// The one walk behind [`target_words`] and [`weave`].
+fn flatten(plain: &str) -> Flat<'_> {
     let doc = Document::parse(plain);
     let mut flattener = Flattener {
         plain,
@@ -424,27 +459,15 @@ fn flatten(plain: &str) -> Result<Flat<'_>, Error> {
         joins: Vec::new(),
         flow: Flow::default(),
         gap: Gap::Markup,
+        word_markup: false,
     };
-    flattener.nodes(doc.nodes())?;
-    let Flattener {
-        pieces,
-        words,
-        joins,
-        ..
-    } = flattener;
-    let slots = words::number_occurrences(words)
-        .into_iter()
-        .map(|w| TargetWord {
-            text: w.text.to_owned(),
-            occurrence: w.occurrence,
-            occurrences: w.occurrences,
-        })
-        .collect();
-    Ok(Flat {
-        pieces,
-        slots,
-        joins,
-    })
+    flattener.nodes(doc.nodes());
+    Flat {
+        pieces: flattener.pieces,
+        words: words::number_occurrences(flattener.words),
+        joins: flattener.joins,
+        word_markup: flattener.word_markup,
+    }
 }
 
 struct Flattener<'a> {
@@ -454,35 +477,38 @@ struct Flattener<'a> {
     joins: Vec<bool>,
     flow: Flow,
     gap: Gap,
+    word_markup: bool,
 }
 
 impl<'a> Flattener<'a> {
-    fn nodes(&mut self, nodes: &[Node<'a>]) -> Result<(), Error> {
+    fn nodes(&mut self, nodes: &[Node<'a>]) {
         for node in nodes {
+            // Any word markup outside notes, closed or not, in verse text or not: weave
+            // never reads markup or attribute text as words.
+            self.word_markup |= match node {
+                Node::Marker(m) => is_word_markup(m.name()),
+                Node::Span(span) => span.name() == "w",
+                Node::Milestone(m) => is_zaln(m),
+                _ => false,
+            };
             match node {
                 // Notes are copied whole, whatever markup they hold.
                 Node::Span(span) if markers::is_non_text_span(span.name()) => self.leaves(node),
-                // Any word markup outside notes, closed or not, in verse text or not: weave
-                // never reads markup or attribute text as words.
-                Node::Marker(m) if is_word_markup(m.name()) => return Err(Error::WordMarkup),
-                Node::Span(span) if span.name() == "w" => return Err(Error::WordMarkup),
-                Node::Milestone(m) if is_zaln(m) => return Err(Error::WordMarkup),
                 Node::Marker(marker) => {
                     self.flow = self.flow.after(marker);
                     self.raw(marker.raw());
                 }
                 Node::Text(text) if self.flow.is_verse_text() => self.text(text),
-                // A span in a heading is walked too, so that word markup in it is refused;
+                // A span in a heading is walked too, so that word markup in it is found;
                 // its text is copied, not tokenized.
                 Node::Span(span) => {
                     self.raw(span.open.raw());
-                    self.nodes(&span.children)?;
+                    self.nodes(&span.children);
                     self.span_end(span);
                 }
                 other => self.leaves(other),
             }
         }
-        Ok(())
     }
 
     /// Verse text: its words become slots, the rest stays text.
@@ -726,20 +752,13 @@ impl Strip {
     /// Number every word of the plain verse, and give each aligned word the number of the
     /// word that stands where it stood.
     fn finish(self) -> Result<AlignedVerse, Error> {
-        let counted = text::verse_words(&self.plain);
+        let counted = word_tokens(&self.plain);
         let by_start: HashMap<usize, usize> = counted
             .iter()
             .enumerate()
             .map(|(i, w)| (w.start, i))
             .collect();
-        let words: Vec<TargetWord> = counted
-            .iter()
-            .map(|w| TargetWord {
-                text: w.text.to_owned(),
-                occurrence: w.occurrence,
-                occurrences: w.occurrences,
-            })
-            .collect();
+        let words: Vec<TargetWord> = counted.iter().map(TargetWord::from).collect();
         let mut placed = Vec::with_capacity(self.written.len());
         let mut renumbered = Vec::new();
         for (written, start) in self.written {
@@ -945,7 +964,7 @@ mod tests {
             let woven = weave(plain, &[]).unwrap();
             let parsed = parse_aligned(&woven).unwrap();
             assert_eq!(parsed.plain, plain, "{woven:?}");
-            assert_eq!(parsed.words, target_words(plain).unwrap());
+            assert_eq!(parsed.words, target_words(plain));
         }
         // A space after a marker that it would not join is still written as a line break.
         let woven = weave("\\p  abc", &[]).unwrap();
@@ -956,7 +975,6 @@ mod tests {
     fn runs_are_cut_where_tc4_cuts_them() {
         let all = |plain: &str| {
             let words: Vec<(String, u32, u32)> = target_words(plain)
-                .unwrap()
                 .into_iter()
                 .map(|w| (w.text, w.occurrence, w.occurrences))
                 .collect();
@@ -1111,21 +1129,28 @@ mod tests {
         assert!(parsed.groups.is_empty());
     }
 
+    /// weave refuses word markup anywhere outside notes, and the word list reads through
+    /// it: a `\w`'s text is a word where it stands in verse text, its attributes never are.
     #[test]
-    fn weave_never_reads_markup_as_words() {
-        for plain in [
-            "a \\w b",
-            "a \\w b\\w* c",
-            "a b\\w* c",
-            "\\add \\+w a\\+w*\\add*",
-            "\\s1 \\fqa \\w \\fqa*",
-            "\\s1 Head \\bd x \\w y|lemma=\"y\"\\w*\\bd*\n\\p a",
-            "a \\zaln-e b",
-            "a \\zaln-s |x-content=\"α\"\\*b\\zaln-e\\*",
-            "\\s Head \\w x|x-occurrence=\"1\" x-occurrences=\"1\"\\w*\n\\p a",
+    fn weave_refuses_word_markup_and_the_word_list_reads_through_it() {
+        for (plain, words) in [
+            ("a \\w b", &["a", "b"][..]),
+            ("a \\w b\\w* c", &["a", "b", "c"]),
+            ("a b\\w* c", &["a", "b", "c"]),
+            ("\\add \\+w a\\+w*\\add*", &["a"]),
+            ("\\s1 \\fqa \\w \\fqa*", &[]),
+            ("\\s1 Head \\bd x \\w y|lemma=\"y\"\\w*\\bd*\n\\p a", &["a"]),
+            ("a \\zaln-e b", &["a", "b"]),
+            ("a \\zaln-s |x-content=\"α\"\\*b\\zaln-e\\*", &["a", "b"]),
+            (
+                "\\s Head \\w x|x-occurrence=\"1\" x-occurrences=\"1\"\\w*\n\\p a",
+                &["a"],
+            ),
+            ("\\w y|lemma=\"z q\"\\w*", &["y"]),
         ] {
             assert_eq!(weave(plain, &[]), Err(Error::WordMarkup), "{plain:?}");
-            assert_eq!(target_words(plain), Err(Error::WordMarkup), "{plain:?}");
+            let found: Vec<String> = target_words(plain).into_iter().map(|w| w.text).collect();
+            assert_eq!(found, words, "{plain:?}");
         }
     }
 
@@ -1140,7 +1165,7 @@ mod tests {
             vec![(target("a", 1, 1), target("a", 1, 2))]
         );
         assert_eq!(parsed.groups[0].targets, vec![target("a", 1, 2)]);
-        assert_eq!(parsed.words, target_words(&parsed.plain).unwrap());
+        assert_eq!(parsed.words, target_words(&parsed.plain));
         let woven = weave(&parsed.plain, &parsed.groups).unwrap();
         let again = parse_aligned(&woven).unwrap();
         assert_eq!(again.plain, parsed.plain);
@@ -1359,7 +1384,7 @@ mod tests {
             ]
         );
         assert_eq!(weave(&parsed.plain, &parsed.groups).unwrap(), verse);
-        assert_eq!(target_words(&parsed.plain).unwrap(), parsed.words);
+        assert_eq!(target_words(&parsed.plain), parsed.words);
     }
 
     /// usfm-js shows the text of `\d`, `\sp`, `\qa` and `\lit` as verse text wherever it

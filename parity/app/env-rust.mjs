@@ -22,6 +22,8 @@ export const PROJECTS = {
   sample: { [BIBLE]: 'sample_burrito', [OBS]: 'sample_burrito_obs' },
   'en-pins': { [BIBLE]: 'sample_burrito', [OBS]: 'sample_burrito_obs' },
   shared: { [BIBLE]: 'sample_burrito', [OBS]: 'sample_burrito_obs' },
+  // No scenario: tc-store over a projects folder the caller fills.
+  store: {},
 };
 
 /** The requests a shot waits for: the API and pictures, never the event stream, which stays
@@ -35,22 +37,13 @@ export function rustTracks(url) {
 /** A request id as tc-api spells it: 16 random bytes in lowercase hex. */
 export const newRequestId = () => crypto.randomBytes(16).toString('hex');
 
-/** Whether `parity/app/units.json` lists `unit` as landed. */
-export function landed(unit) {
-  const units = JSON.parse(fs.readFileSync(path.join(REPO, 'parity', 'app', 'units.json'), 'utf8'));
-  return units.landed.includes(unit);
-}
-
-/** What Home looks like when the Rust app has drawn it (A5 D6): both project cards once unit B2
- * ports Home; before that the top bar's account button, because the stand-in Home draws no
- * project. */
-export async function rustHomeReady(page, card) {
-  if (landed('B2')) {
-    await card(BIBLE).waitFor();
-    await card(OBS).waitFor();
-  } else {
-    await page.getByTestId('account-menu').waitFor();
-  }
+/** What Home looks like when the Rust app has drawn it (B2 D13): every card `home/list` names,
+ * or `+ Add a project` when it names none. The cards are the server's, so a scenario whose
+ * project the seed check refuses (the OBS sample, B1a §4.1-4.3) is not waited for. */
+export async function rustHomeReady(page, call) {
+  await page.getByTestId('add-project').waitFor();
+  const home = await call('home/list', {});
+  for (const card of home.cards) await page.getByTestId(`project-${card.project}`).waitFor();
 }
 
 /** A Door43 step the Rust environment cannot take yet. */
@@ -191,16 +184,19 @@ function apiCall(base, token, endpoint, body) {
  * `door43` is a started fake Door43 (`startDoor43Fake`), which `tc4` then signs in to;
  * without it Door43 is a port nothing listens on.
  */
-export async function startRustEnv({ scenario, tc4, ui, door43, backend = 'store', runDir = path.join(REPO, 'target', 'parity-rust', `${process.pid}-${Date.now()}`) }) {
+export async function startRustEnv({ scenario, tc4, ui, seed, door43, backend = 'store', runDir = path.join(REPO, 'target', 'parity-rust', `${process.pid}-${Date.now()}`) }) {
   if (!PROJECTS[scenario]) throw new Error(`no scenario ${scenario}; the scenarios are ${Object.keys(PROJECTS).join(', ')}`);
   const dir = path.join(runDir, scenario);
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(path.join(dir, 'appdata'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'projects'), { recursive: true });
+  // `store`: tc-store over a projects folder `seed(folder)` fills, with no scenario (B2's
+  // journey of a folder that cannot be opened).
+  if (scenario === 'store') seed?.(path.join(dir, 'projects'));
   // stdin stays open: a closed stdin makes tc4 quit.
   const child = spawn(path.resolve(tc4), [
     'serve', '--app-data', path.join(dir, 'appdata'), '--projects', path.join(dir, 'projects'), '--ui', path.resolve(ui),
-    '--door43', door43?.url ?? DEAD_DOOR43, '--test-hooks', ...scenarioArgs(scenario, dir, backend),
+    '--door43', door43?.url ?? DEAD_DOOR43, '--test-hooks', ...(scenario === 'store' ? [] : scenarioArgs(scenario, dir, backend)),
   ], { stdio: ['pipe', 'pipe', 'inherit'] });
   const lines = readline.createInterface({ input: child.stdout })[Symbol.asyncIterator]();
   const exited = new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal })));
@@ -269,7 +265,7 @@ export async function startRustEnv({ scenario, tc4, ui, door43, backend = 'store
       await page.goto('about:blank');
       await page.goto(`${origin}/#t=${token}`);
     },
-    homeReady: rustHomeReady,
+    homeReady: (page) => rustHomeReady(page, call),
     /** The run's app-data folder, where a test can make a save fail (A4b's P7). */
     appData: path.join(dir, 'appdata'),
     /** Work the request tracker cannot see: the server's (`test/quiet`) and the page's own

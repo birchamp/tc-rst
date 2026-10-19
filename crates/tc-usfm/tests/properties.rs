@@ -9,7 +9,7 @@ use common::links;
 use proptest::prelude::*;
 use proptest::test_runner::FileFailurePersistence;
 use std::collections::HashMap;
-use tc_usfm::text::{normalize_whitespace, verse_words};
+use tc_usfm::text::normalize_whitespace;
 use tc_usfm::words::{TokenKind, classify, words};
 use tc_usfm::{
     AlignmentGroup, Book, Document, Error, SourceWord, TargetWord, display_text, parse_aligned,
@@ -332,26 +332,12 @@ proptest! {
     }
 
     #[test]
-    fn verse_words_and_target_words_agree(verse in plain_verse(true)) {
-        let a: Vec<(String, u32, u32)> = verse_words(&verse)
-            .into_iter()
-            .map(|w| (w.text.to_owned(), w.occurrence, w.occurrences))
-            .collect();
-        let b: Vec<(String, u32, u32)> = target_words(&verse)
-            .unwrap()
-            .into_iter()
-            .map(|w| (w.text, w.occurrence, w.occurrences))
-            .collect();
-        prop_assert_eq!(a, b);
-    }
-
-    #[test]
     fn woven_verses_take_apart_into_what_was_woven(
         verse in plain_verse(false),
         runs in proptest::collection::vec((1usize..4, 0usize..4), 1..12),
         split in any::<bool>(),
     ) {
-        let slots = target_words(&verse).unwrap();
+        let slots = target_words(&verse);
         let groups = group_words(&slots, &runs, split);
         let woven = weave(&verse, &groups).unwrap();
         let parsed = parse_aligned(&woven).unwrap();
@@ -367,12 +353,29 @@ proptest! {
         verse in plain_verse(true),
         runs in proptest::collection::vec((1usize..4, 0usize..4), 1..12),
     ) {
-        let slots = target_words(&verse).unwrap();
+        let slots = target_words(&verse);
         let groups = group_words(&slots, &runs, false);
         let parsed = parse_aligned(&weave(&verse, &groups).unwrap()).unwrap();
         prop_assert_eq!(display_text(&parsed.plain), display_text(&verse));
         prop_assert_eq!(parsed.plain.replace('\n', " "), verse.replace('\n', " "));
         prop_assert_eq!(links(&parsed.groups), links(&groups));
+    }
+
+    /// Weaving an alignment into a verse changes none of its words, with notes and other
+    /// markers right after a word, and nested alignments of up to three source words: the
+    /// woven verse, read through, has the plain verse's words, and so does its split
+    /// (tC4 #782, #795, #796).
+    #[test]
+    fn woven_verses_keep_the_words_of_their_plain_text(
+        verse in note_verse(),
+        runs in proptest::collection::vec((1usize..4, 0usize..4), 1..12),
+        split in any::<bool>(),
+    ) {
+        let slots = target_words(&verse);
+        let groups = group_words(&slots, &runs, split);
+        let woven = weave(&verse, &groups).unwrap();
+        prop_assert_eq!(&target_words(&woven), &slots);
+        prop_assert_eq!(&parse_aligned(&woven).unwrap().words, &slots);
     }
 
     #[test]
@@ -436,6 +439,73 @@ fn plain_verse(line_breaks: bool) -> impl Strategy<Value = String> {
     }
     let gap = proptest::sample::select(gaps);
     let end = proptest::sample::select(&["", ".", ".\n", ",\n\n", "\n\\p\n"][..]);
+    (
+        proptest::sample::select(&["", "{", "“"][..]),
+        proptest::collection::vec((word.clone(), gap), 1..20),
+        word,
+        end,
+    )
+        .prop_map(|(start, middle, last, end)| {
+            let mut out = start.to_owned();
+            for (w, g) in middle {
+                out.push_str(w);
+                out.push_str(g);
+            }
+            out.push_str(last);
+            out.push_str(end);
+            out
+        })
+}
+
+/// A plain verse whose words may have a note, a cross reference, a figure or another marker
+/// the shown text leaves out right after them, with or without a space before the next word;
+/// a character span with a span, a note, a cross reference or a figure nested in it; a
+/// character span or a paragraph marker right before the next word; a `\li1` item, a `\qm1`
+/// line or the text of a marker usfm-js does not know (`\pp`, a custom `\zx`). No ruby: its
+/// woven form shows the gloss (`\rb \w 神|…\w*|かみ\rb*`).
+fn note_verse() -> impl Strategy<Value = String> {
+    let word = proptest::sample::select(WORDS);
+    let gap = proptest::sample::select(
+        &[
+            " ",
+            ", ",
+            "—",
+            " {",
+            "} ",
+            ". ",
+            " “",
+            "” ",
+            " \\f + \\ft note\\f* ",
+            "\\f + \\ft note\\f* ",
+            "\\f + \\ft note\\f*",
+            "\\f + \\ft note\\f*,",
+            "\\fig a|src=\"b\"\\fig*",
+            "\\ts\\*",
+            " \\wj dijo \\+nd Señor\\+nd* tu Dios\\wj* ",
+            " \\add a \\+nd b \\+add c\\+add* d\\+nd* e\\add* ",
+            "\\f + \\ft a\\f*\\f + \\ft b\\f* ",
+            "\\x - \\xt Rom 1:1\\x* ",
+            "\\fig a|src=\"b\"\\fig* ",
+            "\\va 2\\va* ",
+            "\\ts\\* ",
+            "\\rq Rom 1\\rq* ",
+            "\\fe + \\ft n\\fe* ",
+            "\n\\q2 ",
+            ", \\nd x\\nd* ",
+            " \\wj a\\f + \\ft n\\f* b\\wj* ",
+            " \\wj a \\fig x|src=\"y\"\\fig* b\\wj*",
+            " \\add a\\x - \\xt R\\x*b\\add* ",
+            " \\add a \\+nd b\\f + \\ft n\\f* c\\+nd* d\\add* ",
+            " \\wj a\\f + \\fq q\\fq* r\\f* b\\wj* ",
+            " \\add Lord\\add*",
+            "\\q2 ",
+            "\n\\li1 ",
+            "\n\\qm1 ",
+            "\n\\pp ",
+            " \\zx a\\zx* ",
+        ][..],
+    );
+    let end = proptest::sample::select(&["", ".", ".\n", "\\f + \\ft end\\f*", "\n\\p\n"][..]);
     (
         proptest::sample::select(&["", "{", "“"][..]),
         proptest::collection::vec((word.clone(), gap), 1..20),

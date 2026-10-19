@@ -63,6 +63,57 @@ The project owner ruled on these points on 2026-10-16 (`docs/TC4-DELTA-2026-10-1
 - One damaged incoming file is salvaged. It does not stop the whole sync or open (Q4).
 - Every other question in that §5 follows its recommendation.
 
+Under AGENTS.md "Matching tC4" (2026-10-19):
+
+- Words inside nested alignments show in Translate, Check, Align and print, such as Genesis
+  1:1 "the heavens" and a Psalm's "Selah" aligned inside `\qs` (tC4 #782, on tC4 main at
+  9ad4d5c). The reference d310bf3 drops them (Q32 of `docs/TC4-DELTA-2026-10-19.md`).
+- A footnote, cross reference, figure or any other marker the shown text leaves out (`\va`,
+  `\vp`, `\ca`, `\rq`, `\cat`, `\ts\*` …) between two words keeps the space after it, so the
+  words never join and can be checked, aligned and exported. tC4's open PR #800 does this for
+  notes, cross references and figures only (C46). Where the marker is followed by a letter
+  with no space (`siervo\f + \ft o esclavo\f*de`), the shown text puts a space between the
+  two words, as the export splits them; tC4 shows "siervode". So it does where a letter
+  follows the start or end of a character span or a paragraph marker directly:
+  `the \add Lord\add*s house` shows "the Lord s house", `Yahweh\q2 que` "Yahweh que" and
+  adjacent ruby `\rb 神|かみ\rb*\rb 愛|あい\rb*` "神 愛", where tC4 joins "Lords",
+  "Yahwehque" and "神愛", which the export cannot weave.
+- The words of a character span after a span nested in it show in Translate, Check, Align and
+  print: `\wj Worship the \+nd Lord\+nd* your God\wj*` shows "Worship the Lord your God",
+  where tC4 shows "Worship the " and hides from Check and the Align bank words the export
+  counts (#796).
+- The words after a character span that holds a footnote, cross reference or figure show:
+  `\wj Blessed are the poor\f + \ft Or humble\f* in spirit\wj* and he went on` shows "… in
+  spirit and he went on", where tC4 hides "and he went on" (usfm-js keeps it as the `content`
+  of the span's end marker), so Check and the Align bank miss it, a woven alignment for the
+  verse cannot be made, and the store's verse save drops the links to it. So does the text
+  after a stray end marker (`a\nd* b`). The note's own words stay hidden.
+- Align, across a verse edit, moves each link with its own word, by position: deleting or
+  adding an earlier copy of a repeated word leaves the link on the word it was on. A link
+  whose word cannot be followed for sure goes back to the word bank and is listed, and the
+  verse is not marked for review (#789, Q30 (a)). tC4 4.0 moves the link to another copy of
+  the word, unannounced (#789 is open in tC4).
+- Align opens a verse with a card for every word of the pinned original-language verse,
+  comparing words in NFC; a link to a word the pin lacks goes back to the word bank and is
+  listed, and the verse needs review on the rail and when it opens (#790). tC4 shows the stored cards as they are, so the sample's TIT 1:1 offers 11
+  of UGNT's 17 Greek words. Suggestions compare original-language words in NFC (#793), so
+  Hebrew alignments imported from tC4 4.0, which stores them in NFC, train suggestions for
+  the pinned UHB.
+- Align's "The draft changed" notice and the rail's Invalid follow one rule: the text, the
+  words, the span or the original-language text changed, or the alignment is marked for
+  re-review (#787, #796). tC4 shows the notice only for a changed text or changed words, and
+  its rail calls an alignment valid when only its words are wrong.
+- A carry-over that loses no link is saved when the translator leaves the verse
+  (APP-DESIGN AD19); tC4 writes nothing at open (#787).
+- A verse that still holds the alignment markup of the file it was added from does not
+  open in Align, and no verse save writes an alignment over it (#794). This is tC4's open
+  PR #799.
+- The items of a `\li1` list, a `\qm1` line, a table cell and the text of a marker usfm-js
+  does not know (a typo such as `\pp`, a custom `\zx`) show, where tC4 hides them (usfm-js
+  keeps their text as `content`) while the export counts their words: UST EXO 15:21
+  keeps the 28 words the import placed at open and at the next verse save, where tC4's text
+  drops 11.
+
 These differences follow the owner's rule in AGENTS.md ("Matching tC4", 2026-10-17), and the
 owner is told of each:
 
@@ -79,6 +130,18 @@ owner is told of each:
   The gallery's three `Select/disabled-while-open` cases differ from tC4 on purpose
   (`parity/ds-gallery/residuals.json`); the `-script` one chooses the row in the same task as the
   switch-off, before the list can close.
+
+The owner's answers of 2026-10-19 (`docs/TC4-DELTA-2026-10-19.md` §5) and the rebuild's own
+rule that no one's work disappears without a word add these (unit B2):
+
+- Home lists every folder that holds a project's files but cannot be opened, with its name
+  and the reason, and offers nothing to press. tC4 4.0 leaves such a folder off Home.
+- Choosing a language whose Door43 code a Scripture Burrito cannot hold (such as
+  `acm-x-lebarabic`) fills the Code box with a code it can hold that keeps every letter
+  (`acm-x-lebarabi-c`), and one sentence says so. tC4 4.0 stores "Undetermined" (#582, Q35).
+- A book tile counts a verse as drafted when it has words, whatever line they are on. tC4 4.0
+  reads a verse only up to its first paragraph marker, so a poem verse whose words are on
+  `\q` lines counts as not drafted there (#572).
 
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9

@@ -1,6 +1,6 @@
 //! The query cache's glue (APP-DESIGN 6.2): it holds the values and runs the fetches, and the
-//! [`Registry`] decides every other thing. No phase-0 endpoint is a cached read, so the first
-//! user is the Home screen; this file stays thin on purpose.
+//! [`Registry`] decides every other thing. Its first users are Home's reads (B2), whose
+//! [`CachedQuery`] rows are at the end; this file stays thin on purpose.
 
 use std::any::Any;
 use std::cell::RefCell;
@@ -213,5 +213,19 @@ impl QueryCache {
 
     pub(super) fn is_current(&self, at: &Scope) -> bool {
         self.0.registry.borrow().is_current(at)
+    }
+}
+
+impl CachedQuery for tc_api::home::List {
+    /// Home: read again when the projects change.
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        crate::app::cache::ReadOf::App(vec![AppTopic::Projects])
+    }
+}
+
+impl CachedQuery for tc_api::home::Card {
+    /// One card: read again when its summary is computed or changes.
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        crate::app::cache::ReadOf::App(vec![AppTopic::HomeCard(self.project.clone())])
     }
 }

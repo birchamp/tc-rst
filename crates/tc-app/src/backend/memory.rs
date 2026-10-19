@@ -29,8 +29,9 @@ use super::{
     BoxFuture, CheckpointReason, CommandError, CopyFailure, DraftToken, EditToken, Listing,
     OfferedDraft, OpenFailure, ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore, Published,
     ReviewToken, Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError, StoreEvent,
-    StoreReply, Stored,
+    StoreReply, Stored, SummaryFiles, SummaryStamp, SummaryWatch,
 };
+use crate::counters::CountingSnapshot;
 use crate::jobs::ProgressSink;
 
 /// The installation secret of every memory backend: tokens are the same on every run and in
@@ -40,12 +41,7 @@ const MEMORY_INSTALLATION_SECRET: [u8; 32] = *b"tc4-memory-backend-test-secret!!
 /// The memory backend's own device in every project: "this computer", whose person is mine.
 pub const MEMORY_DEVICE: [u8; 15] = [0xB1; 15];
 
-/// Where a shared project lives on Door43: the `origin` of its remote list.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Door43Remote {
-    pub owner: String,
-    pub repo: String,
-}
+pub use super::Door43Remote;
 
 /// A project the memory backend holds.
 #[derive(Debug, Clone)]
@@ -185,6 +181,8 @@ struct Live {
     submitted: Vec<Command>,
     /// How far each teammate's sequence has gone in this project.
     teammates: teammates::Teammates,
+    /// Raised by every change of `current`: the project's Home summary stamp (B2 D8).
+    version: u64,
 }
 
 impl ProjectState {
@@ -214,6 +212,7 @@ impl ProjectState {
                 subscribers: Vec::new(),
                 submitted: Vec::new(),
                 teammates: teammates::Teammates::new(),
+                version: 0,
             }),
         }
     }
@@ -243,6 +242,7 @@ impl ProjectState {
         // Snapshots taken before keep the fold they had: the step works on a copy of the
         // shared state, which shares every part it does not touch.
         let delta = Arc::make_mut(&mut live.current).add(changes.into_iter().map(FoldInput::from));
+        live.version += 1;
         if live.open.is_some() {
             live.seq += 1;
             self.publish(&mut live);
@@ -347,7 +347,127 @@ impl MemoryBackend {
     }
 }
 
+impl MemoryBackend {
+    /// The project now and its version, without opening it.
+    fn current(
+        &self,
+        folder: &ProjectRef,
+    ) -> Result<(Arc<ProjectState>, Snapshot, u64), StoreError> {
+        let state = self.state(folder).map_err(|e| match e {
+            MemoryError::UnknownFolder(_) => StoreError::NotAProject,
+            e => StoreError::Other(e.to_string()),
+        })?;
+        let (snapshot, version) = {
+            let live = lock(&state.live);
+            let snapshot = Snapshot::new(SignedFold {
+                fold: live.current.clone(),
+                seq: live.seq,
+                signing: state.signing.clone(),
+            });
+            (snapshot, live.version)
+        };
+        Ok((state, snapshot, version))
+    }
+}
+
+/// `metadata.json` as a document, built from the fold's project details as tc-store builds
+/// the file (its fields by path, the books' scope), without its derived parts.
+fn metadata_document(fold: &FoldState) -> serde_json::Value {
+    let source = fold.metadata_source_nfc(
+        (
+            u64::from(tc_journal::FORMAT_MAJOR),
+            u64::from(tc_journal::FORMAT_MINOR),
+        ),
+        true,
+    );
+    let mut root = serde_json::Map::new();
+    for (path, value) in source.fields {
+        set_path(&mut root, &path, value);
+    }
+    set_path(&mut root, "type.flavorType.currentScope", source.scope);
+    serde_json::Value::Object(root)
+}
+
+fn set_path(
+    root: &mut serde_json::Map<String, serde_json::Value>,
+    path: &str,
+    value: serde_json::Value,
+) {
+    let mut at = root;
+    let mut segments = path.split('.').peekable();
+    while let Some(segment) = segments.next() {
+        if segments.peek().is_none() {
+            at.insert(segment.to_owned(), value);
+            return;
+        }
+        let next = at
+            .entry(segment.to_owned())
+            .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+        if !next.is_object() {
+            *next = serde_json::Value::Object(serde_json::Map::new());
+        }
+        let serde_json::Value::Object(map) = next else {
+            return;
+        };
+        at = map;
+    }
+}
+
 impl ProjectStore for MemoryBackend {
+    fn peek(&self, folder: &ProjectRef) -> Result<super::ProjectPeek, StoreError> {
+        let (state, snapshot, version) = self.current(folder)?;
+        Ok(super::ProjectPeek {
+            metadata: Ok(metadata_document(snapshot.fold())),
+            remote: state.seeded.remote.clone(),
+            // The fold's version, in the store's form: no pending save, no manifest.
+            stamp: Some(SummaryStamp::of(
+                &[format!("tc4-memory-summary-{version}")],
+                &[],
+            )),
+        })
+    }
+
+    fn summary_files(
+        &self,
+        folder: &ProjectRef,
+        books: &[tc_journal::BookId],
+        watch: &SummaryWatch,
+    ) -> Result<SummaryFiles, StoreError> {
+        use tc_journal::fold::DerivedFile;
+        let cancelled = || StoreError::Other("cancelled".to_owned());
+        let (state, snapshot, _) = self.current(folder)?;
+        let reads = CountingSnapshot::new(snapshot, watch.counters.clone());
+        let missing = |what: &str| format!("the project holds no {what}");
+        let mut files = SummaryFiles::default();
+        for book in books {
+            watch.cancel.check().map_err(|_| cancelled())?;
+            let usfm = reads.book_usfm(*book).ok_or_else(|| missing(book.code()));
+            files.books.push((*book, usfm));
+        }
+        if state.seeded.kind == ProjectKind::Stories {
+            let mut stories = Vec::new();
+            for n in 1..=tc_api::ids::StoryNo::COUNT {
+                watch.cancel.check().map_err(|_| cancelled())?;
+                let Some(story) = tc_journal::StoryNo::new(n) else {
+                    continue;
+                };
+                if let Some(bytes) = reads.render(&DerivedFile::Story(story)) {
+                    let text = String::from_utf8(bytes)
+                        .map_err(|_| "the story is not valid UTF-8".to_owned());
+                    stories.push((n, text));
+                }
+            }
+            files.stories = Some(Ok(stories));
+            files.resources = Some(
+                reads
+                    .render(&DerivedFile::Resources)
+                    .ok_or_else(|| missing("resources.json")),
+            );
+        }
+        files.conflicts = Ok(reads.render(&DerivedFile::Conflicts));
+        Ok(files)
+    }
+
     fn list(&self) -> Result<Listing, StoreError> {
         // By folder name: the map is ordered by it. A memory project is never unusable.
         Ok(Listing {
@@ -415,6 +535,7 @@ impl ProjectStore for MemoryBackend {
             let mut fold = state.seeded.fold.clone();
             fold.own_counters();
             live.current = Arc::new(fold);
+            live.version += 1;
             live.scripts.clear();
             live.submitted.clear();
             live.mode = SessionMode::Writable;

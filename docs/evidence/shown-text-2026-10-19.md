@@ -1,0 +1,190 @@
+# The shown text before and after FIX-text (2026-10-19)
+
+Unit FIX-text changed `tc_usfm::shown_text_v1`, the text Translate, Check, the Align bank, the
+print model and the store's verse-save reflow read, to a port of tC4's `verseText` at 9ad4d5c
+(#782: words under `\zaln` at any depth) with tC4 PR #800's space after a note between two words
+(#795), widened to every marker the walk leaves out, to a space where usfm-js keeps none after
+the marker and the words would join, and to the words after a character span nested in another
+(declared differences, `docs/PLAN.md`). Nothing hashed changed: `plain_text_v1` and every fold
+output are byte-identical.
+
+- Branch `app-ftext`, measured at `335ae8e` (the walk is unchanged since `667eac2`). "Before" is
+  the same tree with `crates/tc-usfm/src/derivations/mod.rs` of `8d3690f` (the code of `c1bfa78`).
+  The census and the parity run were taken again after the review fixes (the space where no
+  `nextChar` is kept, the nested spans); only ULT 2SA 23:8 moved, as noted below.
+- Machine: the owner's Linux PC (`docs/evidence/linux-machine-2026-10-18.md`), shared with other
+  agents' builds; load average 17 to 23 during the timings.
+- Data: `bundle/en/en_ult_v91.sb.zip` and `en_ust_v91.sb.zip`, each verse cut by
+  `tc_usfm::codec::decompose` with its alignment markup inline (content = `words + layout`), as a
+  tC4 4.0 book added from aligned USFM holds it and as the import keeps a verse it cannot split.
+
+## Words lost and joined
+
+From `shown_text_census_of_the_bundle` (`cargo test --release -p tc-align --test shown_words --
+--ignored --nocapture` at `d86689d`; removed with the fourth review's one word list, below). "Lose `\w` words": the file's `\w` words (notes left out) are not all in
+the shown words, in order. "Differ from split": the verse's shown words are not the shown words of
+its split plain text (`parse_aligned`). "Kept as written": `split_aligned` gives `None`, so the
+import keeps the markup. "Bank is not export": on the split plain text, the shown words are not
+`target_words`.
+
+| | ULT before | ULT after | UST before | UST after |
+|---|---:|---:|---:|---:|
+| verses | 23,900 | 23,900 | 23,823 | 23,823 |
+| lose `\w` words | 10,514 | 0 | 19,787 | 2 |
+| differ from split | 10,502 | 0 | 19,752 | 0 |
+| Genesis: lose words | 633 of 1,533 | 0 | 1,305 of 1,533 | 0 |
+| Psalms: lose words | 236 of 2,461 | 0 | 1,346 of 2,456 | 0 |
+| kept as written | 269 | 269 | 261 | 261 |
+| kept as written and lose words | 68 | 0 | 229 | 2 |
+| split refused | 4 | 4 | 39 | 39 |
+| bank is not export | 49 | 0 | 2 | 0 |
+
+The before column equals the planner's measurement at `c1bfa78` (`.audit/plans/FIX-text.md` F1).
+Before, the 49 ULT verses whose bank was not the export's were all a footnote joining two words
+(1CO 5:13, 9:20, 10:9, 15:49; 1TH 2:7, 3:2, 4:9; 2CO 1:12, 7:8, 12:15; 2TH 2:13; 2TI 2:3, 2:14,
+4:1; ACT 3:22; COL 4:8; DEU 14:14; EPH 1:15; HEB 1:8, 9:14; LUK 2:33, 10:1, 18:28; MAT 5:22, 5:44,
+5:47, 6:33, 7:14, 8:18, 9:8, 15:6, 17:4, 18:14, 24:7, 26:28; MRK 3:32, 7:9, 10:24, 11:3, 15:12;
+PRO 1:27, 2:7, 4:26, 8:24, 22:20, 23:26; REV 8:13; ROM 5:1, 13:11), and the UST's were LUK 8:43
+(a footnote join) and EXO 15:21.
+
+After, what is left is what tC4 does too:
+
+- UST 2SA 23:8 ("HeonceHe", "killed800"): alignment markup usfm-js misreads. UST 1KI 10:12
+  splits "such" into the aligned words "s" and "uch", shown as "such". The import cannot split
+  either, so they stay as written, and tC4 #794's fix keeps them out of the aligner. ULT 2SA
+  23:8 ("spearagainst" in tC4, an unbalanced `\zaln-e\*` that usfm-js makes an object of, with
+  the line break after it) lost a word until the review fixes; the space put back where no
+  `nextChar` is kept now keeps "spear against" apart.
+- UST EXO 15:21 lost its song until the second review: its aligned form shows "Sing to Yahweh
+  … enemies." (the words stand beside a `\qm1` object, a marker usfm-js 3.4.3 does not know),
+  but in the split plain text they are the `\qm1` object's `content`, which tC4's `verseText`
+  hides while the export counts them, so the bank held 17 of its 28 words and 11 of the 28
+  words the import placed dropped at open and at the next verse save. The walk now shows the
+  content of a paragraph marker, and all 28 are kept
+  (`imported_ust_exo_15_21_opens_with_all_its_links`).
+
+The tests that hold these numbers: `every_genesis_and_psalms_verse_of_the_bundle_keeps_every_word`
+(all 7,983 Genesis and Psalms verses of both, the shown text) in
+`crates/tc-usfm/tests/shown_text.rs`, and, for the bank, the fourth review's property below.
+
+## Links kept at open
+
+`imported_mat_5_22_opens_with_all_44_links` (`crates/tc-align/tests/bank_words.rs`): the ULT verse
+split as the import splits it, opened against the UGNT v0.34 verse.
+
+| Verse | Links the split places | Kept at open, before | Kept at open, after |
+|---|---:|---:|---:|
+| MAT 5:22 | 44 | 42 (2 dropped, "brotherwill") | 44 |
+| MAT 5:44 | 17 | 15 (2 dropped, "enemiesand") | 17 |
+| 1TH 3:2 | 24 | 22 (2 dropped, "Godin") | 24 |
+
+## Parity with tC4
+
+`tools/dump-shown-text.mjs` runs tC4's own `verseText` over every verse usfm-js finds in every book
+of both archives (47,723 verses), and `the_shown_text_is_what_tc4_reads_on_a_dump` (ignored, with
+`TC_USFM_SHOWN_TEXT_DUMP`) compares `shown_text_v1` of the codec's cut with it:
+
+- against tC4 PR #800's head `5dcd1472f9a3dec36bbc2f4e811c40d1387e7068`: **2 of 47,723 differ**,
+  both declared in the test's list: ULT 2SA 23:8 as written, "spear against" where tC4 shows
+  "spearagainst", and UST EXO 15:21 as written, whose `\qm1` holds the "“" that opens its song
+  (after the second review); the wider separator rule, the nested spans, the text after a
+  span's end marker and the space at a span's or paragraph's edge change no other published
+  verse;
+- against tC4 main `9ad4d5c506466819e5b10f255bbb4a36d394e498`: 93 differ, each a verse where main
+  joins two words across a note ("judgesthe", "myselfin" …).
+
+The committed `fixtures/usfm/shown-text-vectors.json` (8,143 cases: tC4's aligned fixtures, 26
+drafts, and the md5 of every Genesis and Psalms verse of both) holds the same comparison in CI.
+
+## The separator rule
+
+PR #800 puts the character after a note's end marker back only for `\f`, `\fe`, `\ef`, `\x`,
+`\ex` and `\fig`. In tC4 5dcd147, `siervo<marker> de Dios` still shows "siervode Dios" for
+`\va 2\va*`, `\vp 1b\vp*`, `\ca 3\ca*`, `\rq …\rq*`, `\cat …\cat*`, `\ndx …\ndx*`, `\pro …\pro*`,
+a lone `\xt …\xt*`, `\fdc …\fdc*` and the chunk milestone `\ts\*` (the `hidden-*` drafts of the
+vectors hold six of them). The rebuild lets every skipped object offer it.
+`woven_verses_show_the_words_of_their_plain_text` (`crates/tc-usfm/tests/properties.rs`, since the
+fourth review `woven_verses_keep_the_words_of_their_plain_text`) passed
+30,000 cases with the rebuild's rule and fails at once with PR #800's alone (minimal case
+`a\va 2\va* a`).
+
+The first review found two holes, both fixed: a marker followed by a letter with no space
+(`siervo\f + \ft o esclavo\f*de`, `a\fig …\fig*b`, `Je\ts\*sus`) still joined, because usfm-js
+keeps a `nextChar` only for a space or a line break; and the words of a character span after a
+span nested in it (`\wj Worship the \+nd Lord\+nd* your God\wj*`) were hidden, as tC4 hides
+them. The walk now puts a space back where the characters on either side would read as one word
+or number, and walks the children of a span with text. The property's generator holds both
+cases now; with them it passes 5,000 cases and fails at once on the walk before the fixes
+(minimal case `a\fig a|src="b"\fig*a`).
+
+## The second review
+
+The second review found valid USFM where the bank was still not the export's word list, all
+fixed (declared differences, `docs/PLAN.md`):
+
+- the words after a character span that holds a footnote, cross reference or figure
+  (`\wj Blessed are the poor\f + \ft Or humble\f* in spirit\wj* and he went on`: the bank had 8
+  of the 15 words, and in the review's run a reflow after one edit elsewhere in the verse
+  dropped 8 links), which usfm-js keeps as the `content` of the span's end marker; the walk
+  now shows that content and keeps the note's own parts hidden;
+- the items of a `\li1` list and a `\qm1` line (UST EXO 15:21, above), which usfm-js keeps as
+  the marker's `content`; the bank/export check names no exception now;
+- a letter right after the start or end of a span or a paragraph marker (`the \add Lord\add*s
+  house`, `Yahweh\q2 que`, adjacent ruby): the walk now puts a space back there too.
+
+The census and the parity run above were taken again after these fixes. The woven-verse property
+(`woven_verses_show_the_words_of_their_plain_text`), whose generator now holds all three, passes
+20,000 cases.
+
+## The third review
+
+The third review found that the second review's fix showed the `content` of a marker usfm-js
+does not know only for USFM's paragraph markers, so a typo such as `\pp` or `\qq`, or a custom
+`\z` marker (`a\n\zpara b c`, `a \zx b\zx* c`), still hid words the export counts. Rule 5 now
+also shows the `content` of a marker that USFM reads as a character marker, that usfm-js has no
+properties for and that is not a note or another span the export leaves out. The census above
+is unchanged (no ULT or UST v91 verse holds such a marker), and the parity run against PR #800's
+head still differs on the same 2 of 47,723 verses. The woven-verse property, whose generator now
+holds `\pp` lines and `\zx` spans, passes 10,000 cases and fails at once on the walk before the
+fix (minimal case `a\n\pp a`).
+
+## The fourth review: one word list
+
+The fourth review found two more places where the bank was not the export's word list, both from
+keeping two word extractors in step: the attributes of a marker usfm-js does not know
+(`a \zx b|x-note="the hidden word"\zx* c` banked "x", "note", "the", "hidden" and "word"), and
+the text after a heading that an unknown marker follows (`\s A heading \zx with|x-y="z"\zx*
+more` banked the heading's words, which the export leaves out). Neither can be woven.
+
+The fix removes the second extractor. `tc_usfm::target_words` is the one word list of a verse:
+`tc_align::TargetVerse` banks it, `parse_aligned` numbers the import's aligned words by it, and
+`weave` wraps it in `\w` (one walk, `flatten` in `crates/tc-usfm/src/align.rs`; weave also refuses
+word markup it meets on the way). It reads word markup through, so a verse kept as written banks
+the words of its split plain text, "the heavens" and the Psalms' "Yahweh" included (#782), and it
+tokenizes each stretch of text between two markers on its own, so no word joins across a note
+(#795). `text::verse_words` and `VerseUnit::words`, a third walk, are gone. The shown text still
+renders the verse for Translate, Check and the aligner, and decides no word of an alignment.
+
+`the_bank_is_the_export_for_every_verse_of_the_bundle_and_the_fixtures`
+(`crates/tc-align/tests/bank_words.rs`) places every banked word of every verse of the ULT v91 and
+UST v91 (all 66 books, alignment inline as the codec cuts it) and of 29 fixture books and drafts on
+a card of its own, weaves it into the import's split plain text and reads it back: 48,109 verses
+weave exactly the bank, 45 are kept as written (the split refuses them, so the export writes their
+bytes) and 1 holds a glossary `\w` word, which weave refuses. The proptest
+`the_bank_is_the_export_for_generated_verses` does the same for generated verses with unknown
+markers and their attributes, headings, notes, nested spans, paragraph markers and nested `\zaln`
+milestones (512 cases a run). With the bank taken from the shown text again, the proptest and
+`the_bank_is_the_export_for_every_vector` fail at once, on the two cases above; no bundle verse
+holds either.
+
+## Cost
+
+Release builds, the same machine and load as above.
+
+| | Before | After |
+|---|---:|---:|
+| `shown_text_v1` over the 7,983 Genesis and Psalms verses of both (contents cut beforehand), best of 5 | 902 ms | 833 ms, 860 ms (two runs) |
+| Aligner open, PSA 42:4 (`cargo test --release -p tc-align --test psalms`), median | 37.9 µs, 65.7 µs | 37.7 µs, 69.9 µs, 54.1 µs |
+
+The parse of usfm-js's port takes nearly all of the 108 µs per verse; the walk adds nothing
+measurable on this loaded machine. No budget changes.

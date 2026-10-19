@@ -10,7 +10,6 @@
 mod api;
 pub mod app_ctx;
 pub(crate) mod bridge;
-mod home_stand_in;
 pub(crate) mod js;
 mod panic;
 #[cfg(feature = "test-hooks")]
@@ -566,6 +565,7 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
                 home: t(keys::app::BACK_TO_HOME, &[]),
             });
         });
+        keep_held(provided.state());
         page(after.clone(), probe)
     });
     // Kept, not forgotten: the boot error replaces the app when a session meets a server of
@@ -660,6 +660,37 @@ fn show_boot_error(reason: String) {
 
 /// The boot error in the saved language when its catalog is installed, else in English. It
 /// replaces the app if the app is on the page.
+/// `window.__tcHeld`: how much of what only events carry the page holds (`{jobs, checkpoints,
+/// blocked, alignSaves}`), for the smoke: a restart forgets all of it (B2 D14, which took it off
+/// the stand-in Home).
+fn keep_held(state: &ServerState) {
+    let state = state.clone();
+    leptos::prelude::Effect::new(move |_| {
+        let held = js_sys::Object::new();
+        let counts = [
+            ("jobs", state.jobs.with(std::collections::BTreeMap::len)),
+            (
+                "checkpoints",
+                state.checkpoints.with(std::collections::HashMap::len),
+            ),
+            (
+                "blocked",
+                state.blocked.with(std::collections::HashMap::len),
+            ),
+            (
+                "alignSaves",
+                state.align_saves.with(std::collections::HashMap::len),
+            ),
+        ];
+        for (name, count) in counts {
+            let _ = js_sys::Reflect::set(&held, &name.into(), &JsValue::from_f64(count as f64));
+        }
+        if let Ok(window) = web_sys::window().ok_or(()) {
+            let _ = js_sys::Reflect::set(&window, &"__tcHeld".into(), &held);
+        }
+    });
+}
+
 fn mount_boot_error(reason: String) {
     js::mark("tc4:boot-error");
     // The app's view comes off the page before the error goes on it.

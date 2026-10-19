@@ -22,11 +22,13 @@ use crate::tokens::{Align, Border, Corner, Edge, Elevation, Inset, Radius, Shado
 /// stays in the card, and `cursor: default`. All three may change while the tile is on screen.
 #[component]
 pub fn BookTile(
-    #[prop(into)] name: String,
+    /// A signal, so a tile's words follow a language preview in place (B2).
+    #[prop(into)]
+    name: Signal<String>,
     #[prop(optional, into)] percent: Signal<f64>,
     /// Replaces the percentage ("—" when the progress is unknown).
     #[prop(optional, into)]
-    meta: Option<String>,
+    meta: Signal<Option<String>>,
     #[prop(optional, into)] meta_title: Option<String>,
     #[prop(optional)] layout: TileLayout,
     #[prop(optional, into)] active: Signal<bool>,
@@ -47,7 +49,7 @@ pub fn BookTile(
         title.set("title", t);
     }
     let figure = move || {
-        meta.clone()
+        meta.get()
             .unwrap_or_else(|| format!("{}%", js_number(percent.get())))
     };
     crate::ds::Surface(crate::ds::SurfaceProps {
@@ -77,7 +79,7 @@ pub fn BookTile(
                     style=css! { "margin-bottom": if row { 7 } else { 8 } }
                 >
                     <Text role=TextRole::Ui truncate=true style=css! { "font-size": if row { "var(--fs-ui-md)" } else { "var(--fs-ui)" } }>
-                        {name}
+                        {move || name.get()}
                     </Text>
                     <Text role=TextRole::LabelNum attrs=title>{figure}</Text>
                 </Stack>

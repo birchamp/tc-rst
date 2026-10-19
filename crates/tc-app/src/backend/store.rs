@@ -48,7 +48,8 @@ use super::{
     BoxFuture, CheckpointReason, CommandError, CopyFailure, DraftToken, EditToken, Listing,
     OfferedDraft, OpenFailure, Origin, ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore,
     Published, ReviewToken, Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError,
-    StoreEvent, StoreReply, Stored, SummaryStamp, UnusableFolder,
+    StoreEvent, StoreReply, Stored, SummaryFiles, SummaryStamp, SummaryWatch, UnusableFolder,
+    UnusableReason,
 };
 use crate::clock::Clock;
 use crate::jobs::ProgressSink;
@@ -73,15 +74,16 @@ const PROJECT_PARTS: [&str; 3] = [
     tc_store::layout::TC,
 ];
 
-/// Why a folder that holds a project's files but no `project.json` is unusable.
-const NO_PROJECT_JSON: &str = "ingredients/tc/project.json is missing: this may be a \
-    translationCore 4.0 project to import, or a project whose project.json was deleted";
+/// `.tc/sync.json` (STORAGE §3.6): the last confirmed Door43 state, with the remote.
+const SYNC_JSON: &str = ".tc/sync.json";
 
-/// Why a link in the projects folder is unusable. tc-store reads no link as project data, and
-/// its checks of a folder (the lock, the drive, the cloud client) would be about the link,
-/// not the folder the work is in.
-const LINKED: &str = "this is a link to a folder elsewhere: translationCore opens only \
-    folders inside the projects folder, so move the folder here to open it";
+/// The conflicts file, whose verse conflicts a card counts.
+const CONFLICTS: &str = "ingredients/tc/conflicts.json";
+
+/// `rel`, a path of the layout with `/` between its parts, under `root`.
+fn under(root: &Path, rel: &str) -> PathBuf {
+    rel.split('/').fold(root.to_owned(), |p, part| p.join(part))
+}
 
 /// Whether a failed read found nothing there: no file, or a path through something that is
 /// not a folder (a link to a file).
@@ -201,6 +203,7 @@ impl StoreBackend {
     /// What a Home card's summary of `folder` is computed from (APP-DESIGN §4.5, C1a D8): one
     /// listing of `.tc/pending/` and one stat of `.tc/materialized.json`, no file read, no lock
     /// and no fold, at any history. A temporary file a crash left is no save and is left out.
+    /// With no manifest (a copy never opened here), also a stat of each file the summary reads.
     pub fn summary_stamp(&self, folder: &ProjectRef) -> Result<SummaryStamp, StoreError> {
         // The card's folder comes from the listing, so its name is the listed one: no second
         // listing of the projects folder here.
@@ -208,9 +211,7 @@ impl StoreBackend {
             return Err(store_error(format!("{folder} is a staging folder")));
         }
         let root = self.projects.join(folder.as_str());
-        let pending_dir = tc_store::layout::PENDING
-            .split('/')
-            .fold(root.clone(), |p, part| p.join(part));
+        let pending_dir = under(&root, tc_store::layout::PENDING);
         let pending: Vec<String> = match self.vfs.read_dir(&pending_dir) {
             Ok(entries) => entries
                 .into_iter()
@@ -221,15 +222,57 @@ impl StoreBackend {
             Err(e) if absent(&e) => Vec::new(),
             Err(e) => return Err(store_error(format!("{}: {e}", pending_dir.display()))),
         };
-        let manifest_path = tc_store::layout::MANIFEST
-            .split('/')
-            .fold(root, |p, part| p.join(part));
-        let manifest = match self.vfs.metadata(&manifest_path) {
-            Ok(meta) => Some((meta.len, meta.mtime_ns)),
-            Err(e) if absent(&e) => None,
-            Err(e) => return Err(store_error(format!("{}: {e}", manifest_path.display()))),
+        let mut files = vec![self.stat(&root, tc_store::layout::MANIFEST)?];
+        if files[0].1.is_none() {
+            for rel in self.summary_sources(&root)? {
+                files.push(self.stat(&root, &rel)?);
+            }
+        }
+        Ok(SummaryStamp::of(&pending, &files))
+    }
+
+    /// The size and modification time of `rel` under `root`; `None` when it is missing.
+    fn stat(&self, root: &Path, rel: &str) -> Result<(String, Option<(u64, i64)>), StoreError> {
+        let path = under(root, rel);
+        match self.vfs.metadata(&path) {
+            Ok(meta) => Ok((rel.to_owned(), Some((meta.len, meta.mtime_ns)))),
+            Err(e) if absent(&e) => Ok((rel.to_owned(), None)),
+            Err(e) => Err(store_error(format!("{}: {e}", path.display()))),
+        }
+    }
+
+    /// The files under `root` a summary reads (`summary_files`): `metadata.json`, which names
+    /// the books, `conflicts.json`, and each book and story file. One listing of
+    /// `ingredients/`, and one of `ingredients/content/` in a story project.
+    fn summary_sources(&self, root: &Path) -> Result<Vec<String>, StoreError> {
+        use tc_store::vfs::EntryKind;
+        let list = |rel: &str| match self.vfs.read_dir(&under(root, rel)) {
+            Ok(entries) => Ok(entries),
+            Err(e) if absent(&e) => Ok(Vec::new()),
+            Err(e) => Err(store_error(format!("{rel}: {e}"))),
         };
-        Ok(SummaryStamp::of(&pending, manifest))
+        let mut sources = vec![tc_store::layout::METADATA.to_owned(), CONFLICTS.to_owned()];
+        for entry in list(tc_store::layout::INGREDIENTS)? {
+            let Some(name) = entry.name.to_str() else {
+                continue;
+            };
+            match entry.kind {
+                EntryKind::File if name.ends_with(".usfm") => {
+                    sources.push(format!("ingredients/{name}"));
+                }
+                EntryKind::Dir if name == "content" => {
+                    for story in list("ingredients/content")? {
+                        if let Some(name) =
+                            story.name.to_str().filter(|n| story_number(n).is_some())
+                        {
+                            sources.push(format!("ingredients/content/{name}"));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(sources)
     }
 
     /// The staging folders tc-store's start removed (STORAGE §6.4 N1). It waits for that
@@ -289,32 +332,42 @@ impl StoreBackend {
         if !holds_a_project {
             return None;
         }
-        let unusable = |reason: String| {
+        let unusable = |reason: UnusableReason| {
             Some(Err(UnusableFolder {
                 name: lossy.clone(),
                 reason,
             }))
         };
         if entry.kind == EntryKind::Other {
-            return unusable(LINKED.to_owned());
+            return unusable(UnusableReason::Link);
         }
         let Some(name) = entry.name.to_str() else {
-            return unusable("the folder's name is not valid Unicode".to_owned());
+            return unusable(UnusableReason::NameNotText);
         };
-        let folder = match ProjectRef::parse(name) {
-            Ok(folder) => folder,
-            Err(e) => return unusable(e.to_string()),
+        let Ok(folder) = ProjectRef::parse(name) else {
+            return unusable(UnusableReason::NameNotAllowed);
         };
         let bytes = match read {
             Ok(bytes) => bytes,
-            Err(e) if absent(&e) => return unusable(NO_PROJECT_JSON.to_owned()),
-            Err(e) => return unusable(format!("{PROJECT_JSON} cannot be read: {e}")),
+            Err(e) if absent(&e) => return unusable(UnusableReason::NoProjectFile),
+            Err(e) => return unusable(UnusableReason::ProjectFileUnreadable(e.to_string())),
         };
         match project_json(&bytes) {
             Ok((id, kind)) => Some(Ok(ProjectEntry { folder, id, kind })),
-            Err(reason) => unusable(format!("{PROJECT_JSON}: {reason}")),
+            Err(reason) => unusable(UnusableReason::ProjectFileDamaged(reason)),
         }
     }
+}
+
+/// `NN.md`, a story of Open Bible Stories (1 to 50), as tC4's `listStories` reads the content
+/// folder.
+fn story_number(name: &str) -> Option<u8> {
+    let digits = name.strip_suffix(".md")?;
+    if digits.len() != 2 || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let n: u8 = digits.parse().ok()?;
+    (1..=50).contains(&n).then_some(n)
 }
 
 /// What a listing reads of `project.json`, read as tc-store's open reads it (its private
@@ -346,7 +399,104 @@ fn project_json(bytes: &[u8]) -> Result<(tc_journal::ProjectId, ProjectKind), St
     Ok((id, kind))
 }
 
+impl StoreBackend {
+    fn read_text(&self, path: &Path) -> Result<String, String> {
+        let bytes = self.vfs.read(path).map_err(|e| e.to_string())?;
+        String::from_utf8(bytes).map_err(|_| "the file is not valid UTF-8".to_owned())
+    }
+}
+
+/// The Door43 remote `.tc/sync.json` names. A file that is missing or does not read names
+/// none: the card then says the project is only on this computer, never that it is shared.
+fn sync_remote(bytes: &[u8]) -> Option<super::Door43Remote> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Sync {
+        remote_url: String,
+    }
+    let sync: Sync = serde_json::from_slice(bytes).ok()?;
+    super::Door43Remote::parse_url(&sync.remote_url)
+}
+
 impl ProjectStore for StoreBackend {
+    fn peek(&self, folder: &ProjectRef) -> Result<super::ProjectPeek, StoreError> {
+        let path = self.listed(folder).map_err(|failure| match failure {
+            OpenFailure::NotAProject => StoreError::NotAProject,
+            OpenFailure::Unreadable { reason } => StoreError::Other(reason),
+            other => store_error(format!("{other:?}")),
+        })?;
+        let metadata = self
+            .vfs
+            .read(&path.join(tc_store::layout::METADATA))
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()));
+        let remote = self
+            .vfs
+            .read(&path.join(SYNC_JSON))
+            .ok()
+            .and_then(|bytes| sync_remote(&bytes));
+        Ok(super::ProjectPeek {
+            metadata,
+            remote,
+            stamp: self.summary_stamp(folder).ok(),
+        })
+    }
+
+    fn summary_files(
+        &self,
+        folder: &ProjectRef,
+        books: &[tc_journal::BookId],
+        watch: &SummaryWatch,
+    ) -> Result<SummaryFiles, StoreError> {
+        let cancelled = || store_error("cancelled");
+        let path = self
+            .listed(folder)
+            .map_err(|_| store_error("not a project"))?;
+        let ingredients = path.join(tc_store::layout::INGREDIENTS);
+        let mut files = SummaryFiles::default();
+        for book in books {
+            watch.cancel.check().map_err(|_| cancelled())?;
+            let usfm = self.read_text(&ingredients.join(format!("{}.usfm", book.code())));
+            files.books.push((*book, usfm));
+        }
+        let kind = self
+            .vfs
+            .read(&path.join(PROJECT_JSON))
+            .ok()
+            .and_then(|bytes| project_json(&bytes).ok())
+            .map(|(_, kind)| kind);
+        if kind == Some(ProjectKind::Stories) {
+            let content = ingredients.join("content");
+            files.stories = Some(match self.vfs.read_dir(&content) {
+                Err(e) => Err(e.to_string()),
+                Ok(entries) => {
+                    let mut numbers: Vec<u8> = entries
+                        .iter()
+                        .filter_map(|entry| story_number(entry.name.to_str()?))
+                        .collect();
+                    numbers.sort_unstable();
+                    let mut stories = Vec::new();
+                    for n in numbers {
+                        watch.cancel.check().map_err(|_| cancelled())?;
+                        stories.push((n, self.read_text(&content.join(format!("{n:02}.md")))));
+                    }
+                    Ok(stories)
+                }
+            });
+            files.resources = Some(
+                self.vfs
+                    .read(&ingredients.join("checking/resources.json"))
+                    .map_err(|e| e.to_string()),
+            );
+        }
+        files.conflicts = match self.vfs.read(&under(&path, CONFLICTS)) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(e) if absent(&e) => Ok(None),
+            Err(e) => Err(e.to_string()),
+        };
+        Ok(files)
+    }
+
     /// Reads the projects folder itself: tc-store's `Store::list` keeps only the folders with a
     /// `project.json`, and would hide one that holds someone's work without it.
     fn list(&self) -> Result<Listing, StoreError> {

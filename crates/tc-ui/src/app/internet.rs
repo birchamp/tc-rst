@@ -7,6 +7,7 @@
 
 use tc_api::account::WebUrl;
 use tc_api::endpoint::NetKind;
+use tc_api::ids::ProjectRef;
 
 /// A link whose address the UI holds: the help pages' (A5); B9b adds the shared repository.
 /// The profile is [`Pending::Profile`], whose address the server gives.
@@ -23,6 +24,10 @@ pub enum Pending {
     Feedback,
     /// A page of another site, opened in the system browser.
     Link(LinkKind, WebUrl),
+    /// A Home card's "Share on Door43" (B2 asks; B9b runs the share).
+    Share(ProjectRef),
+    /// A Home card's "Sync with Door43" (B2 asks; B10 runs the sync).
+    Sync(ProjectRef),
     /// The sign-in step's Sign in (M12), sent once the internet is on: tC4 asks when the
     /// password is sent, not when the step opens. `flow` names the step it was pressed in.
     SignIn { flow: u64 },
@@ -38,6 +43,8 @@ impl Pending {
         match self {
             Self::Feedback => NetKind::Feedback,
             Self::Link(LinkKind::Help, _) => NetKind::HelpLink,
+            Self::Share(_) => NetKind::Share,
+            Self::Sync(_) => NetKind::Sync,
             Self::SignIn { .. } => NetKind::SignIn,
             Self::CheckSignIn => NetKind::CheckSignIn,
             Self::Profile => NetKind::Profile,

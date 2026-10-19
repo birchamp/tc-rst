@@ -62,17 +62,19 @@ export const LOCALES = [...fs.readFileSync(path.join(REPO, 'crates', 'tc-ui', 's
 export const LABEL = Object.fromEntries(LOCALES.map((l) => [l.id, l.label]));
 
 /**
- * A browser, a `tc4` and a page, Home loaded in `locale` (the probe page with `probe`), then
+ * A browser, a `tc4` and a page, Home loaded in `locale` (the probe page with `probe`; with
+ * `seed(folder)`, tc-store over a projects folder it fills instead of the sample scenario), then
  * `body({ env, page, context, errors, allow })`. `init(context, env)` runs before the page
  * exists (routes, init scripts). `allow(re)` lets a console error matching `re` pass. With
  * `door43`, tc4 signs in to a fake Door43 of its own (`env.door43`).
  */
-export async function withApp(body, { locale = 'en', probe = false, init, door43: fake = false } = {}) {
+export async function withApp(body, { locale = 'en', probe = false, init, seed, door43: fake = false } = {}) {
   const browser = await setup.chromium.launch({ args: CHROMIUM_ARGS });
   const door43 = fake ? await startDoor43Fake(setup.door43) : undefined;
+  const scenario = seed ? 'store' : 'sample';
   let env;
   try {
-    env = await startRustEnv({ scenario: 'sample', tc4: setup.tc4, ui: probe ? setup.hooks : setup.ui, door43 });
+    env = await startRustEnv({ scenario, seed, tc4: setup.tc4, ui: probe ? setup.hooks : setup.ui, door43 });
   } catch (error) {
     await door43?.close();
     await browser.close();
@@ -135,7 +137,6 @@ export async function openLanguage(page) {
 /** A language chosen in the App language dialog's list, by mouse. */
 export async function choose(page, id) {
   await page.getByTestId('language-select').click();
-  // The list's options: the stand-in Home's own <select> has options of the same names.
   await page.getByRole('listbox').getByRole('option', { name: LABEL[id], exact: true }).click();
   await until(`the select shows ${LABEL[id]}`, async () => (await page.getByTestId('language-select').textContent()).includes(LABEL[id]));
 }
@@ -143,8 +144,8 @@ export async function choose(page, id) {
 /** The test id of the focused element, or its role. */
 export const focused = (page) => page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.getAttribute('role') ?? document.activeElement?.tagName ?? null);
 
-/** The app shows `id`: the account button's name, the stand-in Home's sample line, `<html
- * lang>`, and, while the App language dialog is open, its title, hint, Apply and Cancel. */
+/** The app shows `id`: the account button's name, Home's title when Home shows, `<html lang>`,
+ * and, while the App language dialog is open, its title, hint, Apply and Cancel. */
 export async function expectLanguage(page, id) {
   const c = catalog(id);
   const en = catalog('en');
@@ -152,8 +153,8 @@ export async function expectLanguage(page, id) {
   await until(`the page in ${id}`, async () => {
     const lang = await page.evaluate(() => document.documentElement.lang);
     const label = await trigger(page).getAttribute('aria-label');
-    const sample = await page.getByTestId('runtime-sample').textContent().catch(() => null);
-    return lang === id && label === want('account.label.out') && (sample === null || sample === want('account.language'));
+    const title = await page.locator('main h1').textContent({ timeout: 500 }).catch(() => null);
+    return lang === id && label === want('account.label.out') && (title === null || title === want('home.yourProjects'));
   });
   if (await page.getByTestId('language-dialog').count()) {
     const dialog = page.locator('[data-testid="language-dialog"] [role="dialog"]');

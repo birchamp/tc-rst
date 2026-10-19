@@ -53,7 +53,7 @@ pub use model::{
 };
 pub use open_enum::UnknownValue;
 pub use path::{IngredientPath, PathRule, collision_form};
-pub use schema::{SchemaLoadError, schema_ready};
+pub use schema::{SchemaLoadError, is_language_tag, schema_ready};
 pub use scope::{Scope, ScopeBook, ScopeRange};
 pub use time::{Timestamp, TimestampError};
 pub use validate::{

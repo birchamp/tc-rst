@@ -44,3 +44,11 @@ refused into an unsafe projects folder (Q-30); a screen open never joins a left 
 session. Proof: tc-api `tests/draft_next.rs` (every pair), tc-ui `tests/app/draft_machine.rs`
 (the model-based property; each of the nine findings put back is caught), and the tc-store and
 tc-app cases.
+
+## Main merged (2026-10-19)
+
+Merged claude/focused-ride-5uzj7p (B2's Home, FIX-text, FIX-align, the owner's USB answer). B2's
+`drafted` module sits beside C1b's `drafts`; Home's test store delegates `copy`, `trust_lock` and
+`name_run`. The owner answered Q-30 with (c): "Copy to this computer" goes into the local
+projects folder with no folder to pick. C6's row now builds that; C1b's `CopyUnsafe` refusal
+stands until C6 lands.

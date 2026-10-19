@@ -492,8 +492,10 @@ pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) ->
         let rects: Vec<_> = record.masks_of(name).map(|m| m.rects[*name]).collect();
         let drawn = pixels::read(&tc4_png)
             .and_then(|a| Ok((a, pixels::read(&paths.app.join(&capture.png))?)))
-            .and_then(|(a, b)| pixels::encode(&pixels::diff_image(&a, &b, &rects)));
-        match (drawn, std::fs::read(paths.app.join(rel))) {
+            .map(|(a, b)| pixels::diff_image(&a, &b, &rects));
+        // Compared as pixels, not as bytes: the PNG encoder's compression follows the features
+        // a build unifies (a workspace run and `-p tc-ui` give other bytes for one image).
+        match (drawn, pixels::read(&paths.app.join(rel))) {
             (Ok(drawn), Ok(committed)) if drawn == committed => {}
             (Err(e), _) => out.add(Some(name), Rule::StaleDiff, e),
             _ => out.add(

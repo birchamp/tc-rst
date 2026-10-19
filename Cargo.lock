@@ -3193,6 +3193,7 @@ dependencies = [
  "tc-usfm",
  "tc-versification",
  "thiserror 2.0.21",
+ "unicode-normalization",
  "zip",
 ]
 
@@ -3221,6 +3222,7 @@ dependencies = [
  "ring",
  "serde",
  "serde_json",
+ "sha1",
  "tc-api",
  "tc-app",
  "tc-burrito",
@@ -3238,6 +3240,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "unicode-general-category",
  "unicode-normalization",
  "zip",
 ]

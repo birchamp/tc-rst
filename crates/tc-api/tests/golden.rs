@@ -34,6 +34,11 @@ use tc_api::event::{
     EventFrame, RecordChange, SessionEvent, SessionMode, StartupProgress, StartupState,
 };
 use tc_api::feedback::{Compose, FeedbackDraft};
+use tc_api::home::{
+    BookTileView, Card, Door43Card, HomeCard, HomeView, LanguageSuggestion, Languages,
+    LanguagesView, LastEditView, List, ProjectKind, RecentStory, RepoPlace, ResumePlace,
+    StoriesView, StoryTileView, UnusableCard, UnusableReason, Versifications, VersificationsView,
+};
 use tc_api::ids::{
     AlignerId, ConflictRef, Epoch, JobId, LocaleId, ProjectId, ProjectRef, RecordRef, RefPart,
     ReportId, RequestId, Scope, ServerInstance, StoryNo, UploadId, ViewSeq, WallMs,
@@ -51,11 +56,11 @@ use tc_api::session::{
     BufferSlot, CopyProject, DiscardDraft, DraftKind, DraftOffer, Drafts, Keep, KeepDraft,
     KeptDraft, OfferedDrafts, OtherComputerClosed, ProjectCopy, Settles, StoredDraftId,
 };
-use tc_api::shown::{ConflictMarker, PersonLabel, Shown, Who};
+use tc_api::shown::{ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
-    Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, Quiet, QuietView,
-    Release, Reset, SaveVerse, StoredDraft, StoredText, TokenBase,
+    Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, Quiet,
+    QuietView, Release, Reset, SaveVerse, StoredDraft, StoredText, TokenBase,
 };
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
@@ -752,6 +757,188 @@ impl Example for Reset {
     fn example() -> Self {
         Reset {
             request: request(18),
+        }
+    }
+}
+
+impl Example for List {
+    fn example() -> Self {
+        List {}
+    }
+}
+
+fn bible_card() -> HomeCard {
+    HomeCard {
+        project: ProjectRef::parse("sample_burrito").unwrap(),
+        name: "Español Biblia".into(),
+        tag: Known::Known("es-419".into()),
+        dir: Direction::Ltr,
+        kind: ProjectKind::Bible,
+        door43: Door43Card::Shared {
+            place: RepoPlace {
+                owner: "jdoe".into(),
+                name: "es-419_tit_text_reg".into(),
+                server: Some("qa.door43.org".into()),
+            },
+        },
+        books: Known::Known(vec![
+            BookTileView {
+                book: BookId::Titus,
+                drafted: Known::Known(11),
+                conflicts: 1,
+            },
+            BookTileView {
+                book: BookId::Jonah,
+                drafted: Known::Unknown,
+                conflicts: 0,
+            },
+        ]),
+        stories: None,
+        conflicts: Known::Known(1),
+    }
+}
+
+fn story_card() -> HomeCard {
+    HomeCard {
+        project: ProjectRef::parse("sample_burrito_obs").unwrap(),
+        name: "Historias".into(),
+        tag: Known::Unknown,
+        dir: Direction::Rtl,
+        kind: ProjectKind::Stories,
+        door43: Door43Card::Local,
+        books: Known::Known(Vec::new()),
+        stories: Some(StoriesView {
+            drafted: Known::Known(1),
+            stories: vec![
+                StoryTileView {
+                    story: StoryNo::new(1).unwrap(),
+                    title: "La Creación".into(),
+                    drafted: Known::Known(13),
+                },
+                StoryTileView {
+                    story: StoryNo::new(2).unwrap(),
+                    title: String::new(),
+                    drafted: Known::Unknown,
+                },
+            ],
+            recent: vec![RecentStory {
+                story: StoryNo::new(1).unwrap(),
+                at: WallMs(1_792_378_282_100),
+            }],
+        }),
+        conflicts: Known::Unknown,
+    }
+}
+
+impl Example for HomeView {
+    fn example() -> Self {
+        HomeView {
+            cards: vec![story_card(), bible_card()],
+            unusable: vec![
+                UnusableCard {
+                    name: "broken".into(),
+                    reason: UnusableReason::NoProjectFile,
+                },
+                UnusableCard {
+                    name: "damaged".into(),
+                    reason: UnusableReason::ProjectFileDamaged {
+                        reason: "projectId is not a UUID".into(),
+                    },
+                },
+            ],
+            resume: Some(LastEditView {
+                project: ProjectRef::parse("sample_burrito").unwrap(),
+                place: ResumePlace::Book {
+                    book: BookId::Titus,
+                    chapter: 1,
+                    verse: RefPart::parse("1").unwrap(),
+                },
+                mode: PlaceMode::Draft,
+                tool: None,
+                snippet: "Pablo, siervo de Dios".into(),
+            }),
+        }
+    }
+}
+
+impl Example for Card {
+    fn example() -> Self {
+        Card {
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+        }
+    }
+}
+
+impl Example for HomeCard {
+    fn example() -> Self {
+        bible_card()
+    }
+}
+
+impl Example for Versifications {
+    fn example() -> Self {
+        Versifications {}
+    }
+}
+
+impl Example for VersificationsView {
+    fn example() -> Self {
+        VersificationsView {
+            names: vec!["eng".into(), "org".into(), "lxx".into()],
+        }
+    }
+}
+
+impl Example for Languages {
+    fn example() -> Self {
+        Languages {
+            query: "Lebanese Arabic".into(),
+        }
+    }
+}
+
+impl Example for LanguagesView {
+    fn example() -> Self {
+        LanguagesView {
+            suggestions: vec![
+                LanguageSuggestion {
+                    name: "Lebanese Arabic".into(),
+                    own: Some("عربي لبناني".into()),
+                    code: Some("acm-x-lebarabi-c".into()),
+                    door43: Some("acm-x-lebarabic".into()),
+                    dir: Direction::Rtl,
+                },
+                LanguageSuggestion {
+                    name: "Hausa".into(),
+                    own: None,
+                    code: Some("ha".into()),
+                    door43: None,
+                    dir: Direction::Ltr,
+                },
+                LanguageSuggestion {
+                    name: "Unnamed".into(),
+                    own: None,
+                    code: None,
+                    door43: Some("-x-".into()),
+                    dir: Direction::Ltr,
+                },
+            ],
+        }
+    }
+}
+
+impl Example for LastEdit {
+    fn example() -> Self {
+        LastEdit {
+            request: request(19),
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+            place: ResumePlace::Story {
+                story: StoryNo::new(3).unwrap(),
+                frame: 2,
+            },
+            mode: PlaceMode::Draft,
+            snippet: "Pablo,  xapóstol".into(),
+            at: WallMs(1_792_378_282_100),
         }
     }
 }

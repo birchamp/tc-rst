@@ -1,126 +1,98 @@
-# Handoff: moving the rebuild to the owner's Linux machine (2026-10-18)
+# Handoff: continuing the rebuild (kept current)
 
-Written by the cloud session that built everything so far, for the session that continues on the
-owner's Linux machine. Read this first, then `AGENTS.md` (the rules), `docs/PLAN.md`,
-`docs/APP-DESIGN.md` (start with "Owner's answers" and "G0 results"), `docs/PERFORMANCE.md`, and
-`docs/STORAGE.md` on branch `storage`.
+Written for the next session that continues this work, on the owner's Linux PC. It is updated at
+each milestone; `.audit/STATUS.md` is regenerated automatically whenever main moves and is the
+authoritative list of what is done and what is next. Read, in order:
 
-## Folders
+1. `.audit/STATUS.md`: every unit, done or not, what each waits for, and the lane's restart command.
+2. This file: the machine, the Windows VM, the runs in flight and how to resume them.
+3. `.audit/PROGRESS.md`: the written summary, and what needs the owner.
+4. `AGENTS.md` (the rules), `docs/PLAN.md` (P1 to P10 define done), `docs/APP-DESIGN.md` ("Owner's
+   answers", §10's units), `docs/STORAGE.md` (on the storage and s2-verify branches),
+   `docs/TC4-ISSUES.md` and `docs/TC4-DELTA-2026-10-19.md` (tC4's issues per unit, the owner's answers
+   in §5), and the `ruling` lines of `.audit/rebuild.tsv` (one line per decision and merge).
 
-| Path | What | How to get it |
-|---|---|---|
-| `~/tc-rst` | this repository | `git clone https://github.com/birchamp/tc-rst ~/tc-rst` |
-| `~/unfoldingword/translationcore4` | tC4 4.0, the reference app, read-only | clone `unfoldingWord/translationcore4`, `git checkout d310bf3`, `npm ci` |
-| `~/tc-rst/.claude/worktrees/<name>` | one git worktree per unit an agent builds | agents create them |
-| `~/tc-rst/.claude/worktrees/.cargo/config.toml` | build settings for every worktree (not in git) | create it, below |
+## How the owner wants the work done
 
-Optional references the research notes cite (`.audit/research/`): Pankosmia `pankosmia-web`,
-`proskomma-core`, `scripture-burrito`, `uW-Tools-Collab`, and two Aquifer probes. The cloud
-machine kept them in `/home/user/ref`; clone them only when a task needs one.
+- Short, plain sentences. Ask only questions a translator would notice, with each answer's effect
+  and a recommendation; decide technical choices and say so. Keep working unless truly blocked.
+- **Hours, not days (2026-10-19):** one verification pass; fix only blockers and majors (minors go
+  to `.audit/minors.tsv`); simplest change; reuse tested work; deterministic tests over reading.
+- **Robustness (2026-10-19):** no piles of special cases. Logic that decides about a translator's
+  work is an explicit typed state machine (state enum, event enum, one pure exhaustive `next()`,
+  an executor for I/O) proven by a model-based property test with crashes and restarts, and each
+  known bug seeded back to show the test catches it. S2 and C1b are being rebuilt this way.
+- Merge into `claude/focused-ride-5uzj7p` in a separate worktree, run the full gates there, then
+  push main (standing authorization). Push only main and `storage`. Never record a token or password.
+- Speed is judged against tC4 doing the same work on the reference laptop, not Word or Edge.
+- Default models for every agent. Never message an agent a workflow is still running (it starts a
+  second copy); pass notes through the next step or a restart.
 
-## Tools
+## The machine
 
-- Rust stable with `rustup target add wasm32-unknown-unknown`. The cloud machine ran 1.97; the
-  Windows laptop 1.99, whose new clippy lints are fixed on main.
-- Node 22.
-- Playwright **1.56.1** with its Chromium (141.0.7390.37, build 1194): `npx playwright@1.56.1
-  install chromium`. The tC4 parity baseline (`parity/tc4-baseline/README.md`) was captured with
-  exactly this browser, so pixel comparisons only hold with it, on Linux.
-- For the Electronite spike tests only: Electronite 37.1.0 for Linux (GitHub releases of
-  `unfoldingWord/electronite`), `xvfb-run`, and optionally PowerShell 7 (`pwsh`).
-- Python 3 for the tools in `.audit/tools/`.
-
-`~/tc-rst/.claude/worktrees/.cargo/config.toml`:
-
-```toml
-# Each worktree builds in its own target folder; a shared one let worktrees overwrite each
-# other's crates. Line tables only keep each folder smaller.
-[profile.dev]
-debug = "line-tables-only"
-
-[profile.test]
-debug = "line-tables-only"
-```
-
-Never share one `target` between worktrees (`.audit/rebuild.tsv`, 2026-10-18). Prune with
-`python3 -I .audit/tools/prune-target.py <worktree>/target` when the disk gets full.
-
-## Branches
-
-| Branch | State |
+| What | Where |
 |---|---|
-| `claude/focused-ride-5uzj7p` | main. Everything finished is here: the domain crates, tc-journal, tc-store (storage unit S1), phase-0 units A1, A2, A3, A6a, A10, A11, G0's evidence, the Windows fixes and Door43's tree ids. Push here. |
-| `storage` | storage unit S2 in progress (plan `.audit/plans/S2.md`): writer thread, held-file retries, per-book groups, Git foundation and checkpoint commit done; outside edits, carried files and pins choice under way. The last commit (`0d7d4f7`, "WIP") is the stopped builder's unreviewed work. The owner allowed pushing this branch. |
-| `phase0` | integration branch of phase 0 (A1, A2, A3, A6a, A10, A11 merged; all on main) |
-| `p0-a4a` | unit A4a (tc-ui runtime: transport, cache, language) built from its plan; its independent verification had not run yet |
-| `p0-a9` | unit A9 (first-launch seeding) built up to step 8 of its plan (the seedbench measurement, design text and final checks remain); the last commit ("WIP") is unreviewed |
-| `windows-fixes`, `door43-facts`, `g0-windows` | the owner's Windows session; all merged into main |
+| Repository | `/home/bot/tc-rst` (main checked out; worktrees under `.claude/worktrees/`) |
+| Build folders | each worktree's `target` is a link to `/var/tmp/tc-rst-target/<worktree>` (the root drive has the room); never share one |
+| Tools | Rust 1.99.1, Node 22, wasm-bindgen 0.2.129, Playwright 1.56.1 under the home folder; every shell that runs them starts with `. ~/.tc-env` (it also caps `RUST_TEST_THREADS=4` and sets the Playwright override) |
+| tC4 | `~/unfoldingword/translationcore4` at `d310bf3`, read-only, for builders; `~/unfoldingword/tc4-ref`, the same commit with `npm ci`, for parity and gallery runs (`TC4_ROOT`) |
+| Machine record | `docs/evidence/linux-machine-2026-10-18.md` (its CPU has SHA instructions; the reference laptop does not) |
 
-Ask the owner before pushing any other branch. Commit messages end with the two attribution lines
-the session gives; never put a model name in a commit or a file.
+## The Windows VM (builds and tests)
 
-## Restarting the work
+- The owner's Windows 11 VM: `~/win11-vm.sh start | stop | status`; SSH `builder@127.0.0.1:2222`
+  with the key `~/.ssh/tc-vm` (never the owner's password); MSVC, Rust 1.99.1, Git, Node.
+- `.audit/tools/winvm/run.sh <commit> '<powershell>'` ships a commit as a git bundle and runs a
+  command in `C:\src\<name>`; give each concurrent caller its own `WINVM_DIR`. Run cargo through
+  `cmd /c` so its stderr is not taken for an error. `gates.ps1` runs fmt, clippy, the tests and the
+  wasm check.
+- The watcher runs `gates.ps1` on each new main as a systemd user unit (`tc-wingate-<sha>`), one
+  at a time, and reports only problems.
 
-Workflow caches do not move between sessions, so restart each run with arguments that skip
-finished units and let in-progress builders continue from their branch:
+## The reference laptop (measurements only)
 
-```js
-Workflow({ scriptPath: '.audit/workflows/storage-chain-B.js',
-  args: { root: '<abs path of ~/tc-rst>', tc4: '<abs path of tC4>', scratch: '<a scratch dir>',
-          skip: ['C', 'S1'], cont: ['S2'] } })
-Workflow({ scriptPath: '.audit/workflows/app-phase0.js',
-  args: { root: '<abs path of ~/tc-rst>', tc4: '<abs path of tC4>',
-          onMain: ['a1', 'a6a', 'a10', 'a11', 'a2', 'a3'], cont: ['a4a', 'a9'] } })
-```
+The owner's Windows 10 laptop (4 cores, no SHA, 8 GB, SATA SSD, Defender on) runs a separate
+Claude session, "Part 3 complete", reachable with SendMessage. It only measures what needs that
+hardware (`.audit/tasks/windows-track.md`); it does not build or test. Its results so far:
+tC4 4.0.0-rc.2 with Psalms uses 709 MiB; Home 2.7 s warm and 13.2 s cold; Psalm 1 in Translate
+6.3 s warm and 18.9 s cold. A relayed approval is not enough for it to install software: the
+owner says yes in its own chat.
 
-Before that, recreate the storage worktree: `git worktree add .claude/worktrees/storage storage`.
-The phase-0 builders recreate their own worktrees from their branches. On a bigger machine,
-edit each script's machine sentence ("4 CPUs shared ... cargo -j 2") to match the machine.
+## Runs and how to resume them
 
-Owner's model policy: on 2026-10-18 the owner first asked for Opus to plan and review, Sonnet to edit
-and Haiku to read; later that day, on a larger subscription, the owner lifted it. Every agent now
-uses the session's default model.
+Workflow caches do not survive a new session. Check `git worktree list` and each branch's log
+before restarting; a builder told `cont` continues its branch.
 
-## What is left
+- **The lane** (`.audit/workflows/build-lane.js`): every remaining app unit, built from main,
+  verified once, merged straight into main. Restart with the command at the end of
+  `.audit/STATUS.md`; add `cont: { <unit>: '<branch>' }` for units whose branch has work (look for
+  branches named `lane-<unit>` or `app-<unit>` that are not merged), and `skip` for units another
+  run handles. C1b continues on `lane-c1b` as a state machine; its note is in `.audit/rebuild.tsv`
+  (2026-10-19, "C1b's three no-loss reviewers").
+- **S2's redesign** (`.audit/workflows/s2-placement-redesign.js`) on the worktree
+  `.claude/worktrees/s2-verify` (branch `s2-verify`, from `19e7fd2`): a placement ledger and a typed
+  state machine with a model-based property test. When it is green: merge `s2-verify` into main;
+  merge `s2-verify` into `storage` (which holds unit P's partial work after `19e7fd2`); then restart
+  `.audit/workflows/storage-chain-B.js` with `skip: ['C', 'S1', 'S2'], cont: ['P']` (then T, X, I, V).
+  Rerun it with `resumeFromRunId` only in the same session.
+- **FIX-align** (`.audit/workflows/fix-text-align.js`, its second half) on `lane-falign`; if it is not
+  on main, rerun the script (FIX-text is already merged, so that half finds nothing to do).
+- **The watcher**: the scratch script `watch.py` of the session that started it tails the runs'
+  journals; a new session writes its own (the shape is in `.audit/tools/README.md`). It also
+  regenerates `.audit/STATUS.md` and starts the VM gates on each new main.
 
-- Storage chain: S2 (materialize off the actor, Git, held-file retries) → P (scale against the
-  reference laptop) → X (sync and USB exchange) → I (tC4 and tC3 import).
-- App layer: phase 0 A4a, A9, A4b, A6b, A5, A7, A8; then phases 1 to 6
-  (`docs/APP-DESIGN.md` §10): 41 of 48 units are left.
-- Windows track (`.audit/tasks/windows-track.md`, done by the owner's Windows session): task 5
-  (memory of Word, a browser, tC4 and Paratext with Psalms open, against our 1 GiB and 400 MiB
-  limits), task 6 (the Windows hazards from its build report). Merge their branches after the
-  Linux gates.
-- After a unit's gate is green: merge its branch into main in a separate worktree, run the full
-  gates there (`cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D
-  warnings`, `cargo test --workspace`, and the two wasm32 clippy runs of tc-ui), push, remove
-  the worktree.
+## What needs the owner
 
-## Owner rulings to keep in mind
+- Freezing the project format 1.0 (unit V cuts the capsules then).
+- Q-9: signing off the conflict-choice designs before C7b.
+- G2: a person reviews the P7 screenshot differences.
+- Any OWNER QUESTION a builder reports.
 
-All are in the documents; this is where to find them.
+## Owner rulings (pointers)
 
-- Match tC4 4.0, but follow what the translator needs where tC4 works against a feature
-  (`AGENTS.md`, "Matching tC4").
-- Storage design: option B (`docs/JOURNAL-DECISION-2026-10-16.md`).
-- Budgets of 2026-10-18 (`docs/BUDGET-REVIEW-2026-10-17.md`, `docs/PERFORMANCE.md`): saving never
-  interrupts the person (25 ms while background work runs); adding a book shows a progress bar;
-  the whole app 1 GiB, the project store 400 MiB steady.
-- Single instance per computer; people work together only from separate computers
-  (`docs/APP-DESIGN.md`, "Owner's answers").
-- Q-1: the header filter. Q-6: an edited verse's alignment is reflowed in the same batch.
-
-## Owner ruling on tC4 alignment stamps (2026-10-18)
-
-tC4's aligner stamps an alignment with the hash of the verse as it displays it, while its own
-fold checks another hash, so tC4 alignments on poetry verses look stale. The importer re-stamps an
-alignment only when its aligned words still match the verse word for word, records each
-re-stamp in the project's history, and leaves every other alignment flagged. The owner expects
-tC4 imports to be rare, so unit I stays lean: correct and lossless first, no extra polish.
-
-## Records
-
-- `.audit/rebuild.tsv`: one line per decision and merge, oldest first.
-- `.audit/research/`: research notes behind the designs.
-- `docs/evidence/`: every measurement, with its machine.
-- `.audit/workflows/README.md`: what each workflow script did.
+All are lines of type `ruling` in `.audit/rebuild.tsv`. The most used: single instance per
+computer; Q-6 reflow in the same batch as the text; tC4 alignment stamps re-stamped on import only
+when words match; a window within 1 s and no splash screen; the cold open counted only after unit
+P measures it five times; Q30 a link follows its word, no review mark; Q33 Aquifer helps drive
+checks once tC4 settles its pin; Q34 the AI-linked Portuguese Bible as a labelled reading pane;
+Q35 offer a valid language code and keep Door43's; S2 and C1b as state machines.

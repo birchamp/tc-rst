@@ -29,7 +29,7 @@ use tc_api::jobs::{OpenPhase, Phase};
 use tc_app::StoreChoice;
 use tc_app::backend::{
     CheckpointReason, CommandError, EditToken, OpenFailure, Origin, ProjectHandle, ProjectStore,
-    StoreCause, StoreCommand, StoreEvent, StoreReply, Stored,
+    StoreCause, StoreCommand, StoreEvent, StoreReply, Stored, UnusableReason,
 };
 use tc_app::config::ProjectsFolder;
 use tc_app::events::Next;
@@ -720,10 +720,11 @@ async fn list_names_each_project_and_reports_unusable_folders() {
         let handle = world.open(&entry.folder);
         assert_eq!(handle.facts().id, entry.id, "{}", entry.folder);
     }
-    let reasons: BTreeMap<&str, &str> = listing
+    // Each with its reason, which Home says in words (B2 D9).
+    let reasons: BTreeMap<&str, &UnusableReason> = listing
         .unusable
         .iter()
-        .map(|u| (u.name.as_str(), u.reason.as_str()))
+        .map(|u| (u.name.as_str(), &u.reason))
         .collect();
     assert_eq!(
         reasons.keys().copied().collect::<Vec<_>>(),
@@ -737,22 +738,20 @@ async fn list_names_each_project_and_reports_unusable_folders() {
             "two_fields"
         ]
     );
-    assert!(reasons.values().all(|reason| !reason.is_empty()));
+    assert_eq!(reasons["..."], &UnusableReason::NameNotAllowed);
     for name in ["drafts_only", "lost_project_json", "tc4_sample"] {
+        assert_eq!(reasons[name], &UnusableReason::NoProjectFile, "{name}");
+    }
+    for name in ["broken", "two_fields"] {
         assert!(
-            reasons[name].contains("project.json is missing"),
-            "{name}: {}",
+            matches!(reasons[name], UnusableReason::ProjectFileDamaged(r) if !r.is_empty()),
+            "{name}: {:?}",
             reasons[name]
         );
     }
     assert!(
-        reasons["tc4_sample"].contains("translationCore 4.0"),
-        "{}",
-        reasons["tc4_sample"]
-    );
-    assert!(
-        reasons["held"].contains("cannot be read"),
-        "{}",
+        matches!(reasons["held"], UnusableReason::ProjectFileUnreadable(r) if !r.is_empty()),
+        "{:?}",
         reasons["held"]
     );
     for name in [
@@ -884,7 +883,7 @@ async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
         assert_eq!(listed, project, "{case}: listed as a project");
         assert_eq!(listed, !not_a_project, "{case}: the listing and the open");
         assert_eq!(
-            unusable.is_some_and(|u| !u.reason.is_empty()),
+            unusable.is_some(),
             !project,
             "{case}: listed as unusable with a reason"
         );

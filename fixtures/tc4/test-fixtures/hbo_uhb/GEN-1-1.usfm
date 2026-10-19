@@ -1,0 +1,21 @@
+\id GEN unfoldingWord® Hebrew Bible
+\usfm 3.0
+\ide UTF-8
+\h Genesis
+\toc1 The Book of Genesis
+\toc2 Genesis
+\toc3 Gen
+\mt Genesis
+
+\c 1
+\p
+
+\v 1
+\w בְּ⁠רֵאשִׁ֖ית|lemma="רֵאשִׁית" strong="b:H7225" x-morph="He,R:Ncfsa"\w*
+\w בָּרָ֣א|lemma="בָּרָא" strong="H1254a" x-morph="He,Vqp3ms"\w*
+\w אֱלֹהִ֑ים|lemma="אֱלֹהִים" strong="H0430" x-morph="He,Ncmpa"\w*
+\w אֵ֥ת|lemma="אֵת" strong="H0853" x-morph="He,To"\w*
+\w הַ⁠שָּׁמַ֖יִם|lemma="שָׁמַיִם" strong="d:H8064" x-morph="He,Td:Ncmpa"\w*
+\w וְ⁠אֵ֥ת|lemma="אֵת" strong="c:H0853" x-morph="He,C:To"\w*
+\w הָ⁠אָֽרֶץ|lemma="אֶרֶץ" strong="d:H0776" x-morph="He,Td:Ncbsa"\w*׃
+

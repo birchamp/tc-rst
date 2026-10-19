@@ -7,6 +7,7 @@
 
 pub mod account_menu;
 pub mod help_panel;
+pub mod home;
 pub mod modals;
 
 use std::cell::{Cell, RefCell};

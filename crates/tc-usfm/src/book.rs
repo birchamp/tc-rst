@@ -47,7 +47,6 @@ use crate::Error;
 use crate::doc::{Document, Node};
 use crate::markers::MarkerClass;
 use crate::text::{self, offset_in};
-use crate::words::WordToken;
 use std::ops::Range;
 use tc_core::VerseSpan;
 
@@ -162,11 +161,6 @@ impl<'a> VerseUnit<'a> {
     /// The readable text of the body, never hashed. See [`crate::text`].
     pub fn display_text(&self) -> String {
         text::display_text(self.body)
-    }
-
-    /// The words of the body, numbered by occurrence. Offsets are relative to the body.
-    pub fn words(&self) -> Vec<WordToken<'a>> {
-        text::verse_words(self.body)
     }
 
     fn key(&self) -> Option<(u16, VerseSpan)> {

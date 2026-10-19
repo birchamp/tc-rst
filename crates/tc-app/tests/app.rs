@@ -20,6 +20,7 @@ mod app {
     mod app_start;
     pub mod common;
     mod dispatch;
+    mod drafted;
     mod drafts;
     mod events;
     mod feedback;
@@ -27,10 +28,12 @@ mod app {
     mod flows;
     mod folders;
     mod hello;
+    mod home;
     mod hooks;
     mod internet;
     mod jobs;
     mod keychain;
+    mod language_search;
     mod memory;
     mod prefs;
     mod projects_root;

@@ -11,7 +11,7 @@ use md5::{Digest, Md5};
 use proptest::prelude::*;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use tc_usfm::{SelectionCount, plain_text_v1, selections_v1, tokenize_v1};
+use tc_usfm::{SelectionCount, plain_text_v1, selections_v1, shown_text_v1, tokenize_v1};
 
 fn fixtures() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures")
@@ -165,6 +165,8 @@ fn derivations_never_panic() {
         |text, census| {
             let plain = plain_text_v1(&text);
             prop_assert_eq!(plain.trim(), plain.as_str());
+            let shown = shown_text_v1(&text);
+            prop_assert_eq!(shown.trim(), shown.as_str());
             census.saw(if plain.is_empty() { "no text" } else { "text" });
             let words = tokenize_v1(&plain);
             let selections: Vec<SelectionCount<'_>> = words
@@ -226,14 +228,23 @@ fn hostile_verses(bytes: usize) -> Vec<(&'static str, String)> {
         ),
         ("nested markers with no text", fill("\\add ")),
         (
+            "nested alignments",
+            format!(
+                "{}\\w x\\w*{}",
+                fill("\\zaln-s |x-content=\"a\"\\*"),
+                "\\zaln-e\\*".repeat(bytes / 24)
+            ),
+        ),
+        ("notes between words", fill("a\\f + \\ft n\\f*")),
+        (
             "a long selection",
             format!("{}\u{0}{}b", "a".repeat(bytes), "a".repeat(bytes / 4)),
         ),
     ]
 }
 
-/// The time `selections_v1` takes on the verse (it parses the verse as `plain_text_v1`
-/// does, then walks it), the best of `runs`.
+/// The time `selections_v1` (it parses the verse as `plain_text_v1` does, then walks it)
+/// and `shown_text_v1` take on the verse, the best of `runs`.
 fn time_derivations(verse: &str, runs: usize) -> Duration {
     // The text after U+0000 is a selection to count in the text before it.
     let (text, selection) = verse.split_once('\u{0}').unwrap_or((verse, "x"));
@@ -245,6 +256,7 @@ fn time_derivations(verse: &str, runs: usize) -> Duration {
         .map(|_| {
             let start = Instant::now();
             let _ = selections_v1(text, &selections);
+            let _ = shown_text_v1(text);
             start.elapsed()
         })
         .min()
@@ -294,13 +306,24 @@ fn a_verse_of_several_megabytes_takes_seconds() {
     assert!(took < limit, "{} bytes took {took:?}", verse.len());
 }
 
+/// The verses whose `\li1` list items the rebuild shows and tC4 hides, though the export
+/// counts their words (a declared difference, `docs/PLAN.md`), as (book, chapter, verse).
+const LISTED: &[(&str, &str, &str)] = &[
+    (
+        "fixtures/tc4/test-fixtures/usfm-corpus/exotic-poetry-footnotes.usfm",
+        "2",
+        "2",
+    ),
+    ("lists", "1", "1"),
+];
+
 /// What tC4's Check screen and aligner read of each verse of a draft
 /// (`fixtures/usfm/check-text-vectors.json`, made by `tools/gen-check-text-vectors.mjs` with
 /// tC4's own `verseTextIndex`): whether the verse is drafted, by the body tC4's indexer finds
 /// ([`tc_usfm::codec::is_drafted`]), and the text it shows ([`tc_usfm::shown_text_v1`]), for
 /// every verse of tC4's plain drafts and of drafts written for poetry, superscriptions,
-/// lists, notes and CRLF line ends. The one difference is a verse whose `\v` stands inside a
-/// line, which tC4 does not index and the rebuild reads (§7.7).
+/// lists, notes and CRLF line ends. The differences are a verse whose `\v` stands inside a
+/// line, which tC4 does not index and the rebuild reads (§7.7), and the verses of [`LISTED`].
 #[test]
 fn the_check_text_is_what_tc4_reads() {
     use std::collections::BTreeMap;
@@ -374,8 +397,15 @@ fn the_check_text_is_what_tc4_reads() {
                 }
                 drafted += 1;
                 let shown = tc_usfm::shown_text_v1(&content);
-                if shown != case["text"].as_str().unwrap() {
-                    wrong.push(format!("{book} {key:?}: {shown:?} != {}", case["text"]));
+                let theirs = case["text"].as_str().unwrap();
+                let expected = if LISTED.contains(&(*book, &key.0, &key.1)) {
+                    assert_eq!(theirs, "The list has these members:\nThe list ends here.");
+                    "The list has these members:\nthe first member,\na nested member,\nthe last member.\nThe list ends here."
+                } else {
+                    theirs
+                };
+                if shown != expected {
+                    wrong.push(format!("{book} {key:?}: {shown:?} != {expected:?}"));
                 }
             }
         }

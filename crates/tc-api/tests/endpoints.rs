@@ -1,5 +1,5 @@
 //! The endpoint list (APP-DESIGN §3.3, §3.9): one row per endpoint, the phase-0 set and the
-//! rows each later unit adds.
+//! rows of the units that have landed since.
 #![cfg(not(target_arch = "wasm32"))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -35,6 +35,11 @@ const PHASE_0: &[&str] = &[
     "session/discardDraft",
     "session/copy",
     "session/otherComputerClosed",
+    // B2: Home and its dialogs.
+    "home/list",
+    "home/card",
+    "home/versifications",
+    "home/languages",
     "test/quiet",
     "test/echo",
     "test/crash",
@@ -46,6 +51,7 @@ const PHASE_0: &[&str] = &[
     "test/fieldDraft",
     "test/keychain",
     "test/reset",
+    "test/lastEdit",
 ];
 
 #[test]

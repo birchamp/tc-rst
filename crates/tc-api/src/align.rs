@@ -39,12 +39,16 @@ pub enum BankSelection {
     Armed(Vec<u32>),
 }
 
-/// Whether the aligner shows the verse text as it is now.
+/// Whether the open verse's stored alignment still vouches for it (`tc_align::Aligner::is_stale`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub enum Freshness {
     Current,
-    /// The verse text changed since the aligner opened it.
+    /// When the verse opened, its stored alignment needed review: the verse's text or words,
+    /// its span or its original-language text changed since it was made, or it is marked for
+    /// re-review (tC4 #787, #796). The view shows `align.stale` ("The draft changed since this
+    /// alignment was made. Check that the words still line up.") until the first edit, Mark
+    /// valid, or keeping the carried-over links.
     Stale,
 }

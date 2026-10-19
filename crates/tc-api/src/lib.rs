@@ -108,6 +108,12 @@ macro_rules! endpoint_table {
                 => $crate::account::LinkView;
 
             query "feedback/compose": $crate::feedback::Compose => $crate::feedback::FeedbackDraft;
+
+            query "home/list": $crate::home::List => $crate::home::HomeView;
+            query "home/card": $crate::home::Card => $crate::home::HomeCard;
+            query "home/versifications": $crate::home::Versifications
+                => $crate::home::VersificationsView;
+            query "home/languages": $crate::home::Languages => $crate::home::LanguagesView;
         }
     };
 }
@@ -131,6 +137,7 @@ macro_rules! test_hook_table {
             command "test/fieldDraft": $crate::test::FieldDraft => ();
             command "test/keychain": $crate::test::Keychain => $crate::test::KeychainView;
             command "test/reset": $crate::test::Reset => ();
+            command "test/lastEdit": $crate::test::LastEdit => ();
         }
     };
 }

@@ -1,0 +1,45 @@
+{
+  "path": "home/languages",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "query": "Lebanese Arabic"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "suggestions": [
+        {
+          "name": "Lebanese Arabic",
+          "own": "عربي لبناني",
+          "code": "acm-x-lebarabi-c",
+          "door43": "acm-x-lebarabic",
+          "dir": "rtl"
+        },
+        {
+          "name": "Hausa",
+          "own": null,
+          "code": "ha",
+          "door43": null,
+          "dir": "ltr"
+        },
+        {
+          "name": "Unnamed",
+          "own": null,
+          "code": null,
+          "door43": "-x-",
+          "dir": "ltr"
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

@@ -243,7 +243,8 @@ test('every state of states.mjs is recorded, as states.mjs describes it', () => 
 test('every case names a recorded state, a §7.4 group and a unique name', () => {
   const names = CASES.map((c) => c.name);
   assert.equal(new Set(names).size, names.length, 'two cases share a name');
-  assert.equal(groups.length, 18);
+  // B2 D10 moved three Home cases into home-held, home-open and home-checkpoint.
+  assert.equal(groups.length, 21);
   for (const c of CASES) {
     assert.match(c.name, /^[a-z0-9]+(-[a-z0-9]+)*$/, `${c.name} is not kebab-case`);
     assert.ok(!SCREEN_LIST.some((s) => s.name === c.name), `case ${c.name} is named like a baseline screen`);
