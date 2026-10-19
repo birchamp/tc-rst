@@ -524,6 +524,19 @@ impl Writer {
             self.settle_intent(left.remaining(|path| !refused.contains(path)))?;
         }
         self.retry_blocked(&report, &processed);
+        if failed.is_none() {
+            // A job that could not write told the person once (R16); the one that wrote
+            // what was left takes the notice away.
+            self.shared.remove_notices_matching(|n| {
+                matches!(
+                    n,
+                    Notice::MaterializeBlocked {
+                        reason: Blocked::Failed { .. },
+                        ..
+                    }
+                )
+            });
+        }
         self.shared.emit(crate::handle::StoreEvent::Materialized {
             paths: report.written.clone(),
         });

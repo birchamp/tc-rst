@@ -586,6 +586,12 @@ fn a_group_that_fails_after_a_rename_does_not_mistake_its_bytes_for_an_outside_e
     let failed = handle.leave(Leave::Book(TIT)).wait();
     assert!(failed.is_err(), "the group stopped: {failed:?}");
     assert!(
+        blocked_notices(&handle)
+            .iter()
+            .any(|(_, reason)| matches!(reason, Blocked::Failed { .. })),
+        "the person is told derived files could not be written"
+    );
+    assert!(
         String::from_utf8_lossy(&rig.fs.peek(&folder.join("ingredients/TIT.usfm")).unwrap())
             .contains("second save"),
         "the rename happened"
@@ -607,6 +613,11 @@ fn a_group_that_fails_after_a_rename_does_not_mistake_its_bytes_for_an_outside_e
     assert!(
         String::from_utf8_lossy(&rig.fs.peek(&folder.join("ingredients/TIT.usfm")).unwrap())
             .contains("third save")
+    );
+    assert!(
+        blocked_notices(&handle).is_empty(),
+        "the notice goes when a job has written what was left: {:?}",
+        blocked_notices(&handle)
     );
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
