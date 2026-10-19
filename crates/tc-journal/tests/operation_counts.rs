@@ -432,3 +432,211 @@ fn a_book_lists_its_files_from_its_own_records() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// Unit P: the editor's other interactive actions (docs/PERFORMANCE.md "Editor")
+// ---------------------------------------------------------------------------------------
+
+/// What the text of Psalms holds: its header, chapter front and verse records, and the values
+/// those records' heads hold (a conflict has several).
+fn psalms_text(state: &FoldState) -> (u64, u64) {
+    let keys: Vec<RecordKey> = state
+        .record_keys()
+        .into_iter()
+        .filter(|k| match k {
+            RecordKey::Verse(b, ..) | RecordKey::ChapterFront(b, _) | RecordKey::BookHeader(b) => {
+                *b == PSALMS
+            }
+            _ => false,
+        })
+        .collect();
+    let values = keys.iter().map(|k| state.heads(k).len() as u64).sum();
+    (keys.len() as u64, values)
+}
+
+/// Opening a book renders that book's text and nothing else. The two corpora hold Psalms
+/// with different histories (a few records have two heads in one and not in the other), so
+/// the count is held to what the book itself holds: one projection of each of its header,
+/// chapter front and verse records, one value decoded and read for each head, and no
+/// listing of the project's other records.
+#[test]
+fn opening_a_book_costs_that_book() {
+    for (corpus, state) in [("Psalms", psalms()), ("ten times larger", larger())] {
+        let state = fork(state);
+        let (records, values) = psalms_text(&state);
+        let before = state.counters();
+        let usfm = state.book_usfm(PSALMS).expect("Psalms projects");
+        assert!(usfm.contains("\\c 150"));
+        let counts = state.counters().since(&before);
+        eprintln!("open a book, {corpus}: {counts:?} ({records} records, {values} values)");
+        assert!(
+            counts.records_projected <= records && counts.records_projected > 2_000,
+            "{corpus}: opening Psalms projected {} records; it holds {records}",
+            counts.records_projected
+        );
+        assert!(
+            counts.values_decoded <= values && counts.values_read <= values,
+            "{corpus}: opening Psalms decoded {} and read {} values; it holds {values}",
+            counts.values_decoded,
+            counts.values_read
+        );
+        assert_eq!(counts.changes_indexed, 0, "{corpus}: {counts:?}");
+        assert_eq!(counts.keys_recomputed, 0, "{corpus}: {counts:?}");
+        assert_eq!(counts.conflicts_built, 0, "{corpus}: {counts:?}");
+        assert_eq!(counts.books_checked, 0, "{corpus}: {counts:?}");
+    }
+}
+
+/// Moving to a chapter reads that chapter's keys and projects its records: the same work on
+/// the corpus ten times larger, and exactly the chapter's verse and front records.
+#[test]
+fn moving_to_a_chapter_costs_that_chapter() {
+    let measure = |state: &FoldState| {
+        let state = fork(state);
+        let chapter = common_chapter();
+        let before = state.counters();
+        let keys = state.chapter_keys(PSALMS, chapter);
+        let usfm = state.chapter_usfm(PSALMS, chapter).expect("it projects");
+        assert!(usfm.contains(&format!("\\c {chapter}")));
+        let counts = state.counters().since(&before);
+        let records = keys.verses.len() + usize::from(keys.front.is_some());
+        assert_eq!(
+            counts.records_projected, records as u64,
+            "a chapter projects its {records} verse and front records: {counts:?}"
+        );
+        counts
+    };
+    assert_no_growth("move to a chapter", measure(psalms()), measure(larger()));
+}
+
+/// The project-wide conflict counts a save leaves are kept by the step itself: reading them
+/// builds no conflict, whatever the project holds. Psalms with two thousand more conflicts (2,000
+/// decisions on which two devices disagree) saves a verse and reads the counts with the same work as the plain Psalms corpus and the one ten times larger, and
+/// the counts differ before and after only by what the save changed (nothing: the verse was
+/// not in a conflict).
+#[test]
+fn the_conflict_counts_after_a_save_cost_nothing_per_conflict() {
+    let many = {
+        let mut state = psalms().clone();
+        let decisions: Vec<RecordKey> = state
+            .record_keys()
+            .into_iter()
+            .filter(|k| matches!(k, RecordKey::Check(c) if c.book() == Some(PSALMS)))
+            .filter(|k| state.heads(k).len() == 1)
+            .take(2_000)
+            .collect();
+        assert_eq!(
+            decisions.len(),
+            2_000,
+            "Psalms has enough decisions to disagree on"
+        );
+        let (mut maria, mut juan) = (Dev::new(210), Dev::new(211));
+        let mut changes = Vec::new();
+        for (i, key) in decisions.iter().enumerate() {
+            let Some(Record::Check {
+                key: check,
+                value: CheckValue::Decision(decision),
+            }) = state.projected(key)
+            else {
+                continue;
+            };
+            let parents = state.shown_heads(key, None);
+            for (dev, name) in [(&mut maria, "Maria"), (&mut juan, "Juan")] {
+                let mut said = decision.clone();
+                said.comment = Some(format!("{name} {i}"));
+                let record = Record::Check {
+                    key: check.clone(),
+                    value: CheckValue::Decision(said),
+                };
+                changes.extend(dev.batch(vec![(record, parents.clone())], Cause::Edit));
+            }
+        }
+        state.add(changes.into_iter().map(FoldInput::from));
+        state
+    };
+    assert!(
+        many.conflict_count() >= psalms().conflict_count() + 1_900,
+        "{} conflicts against {}",
+        many.conflict_count(),
+        psalms().conflict_count()
+    );
+    let measure = |label: &str, state: &FoldState| {
+        let mut state = fork(state);
+        let (key, record) = text_verse(&state);
+        eprintln!("{label}: saving {key:?}");
+        let counts_before = state.conflict_counts().clone();
+        let parents = state.shown_heads(&key, None);
+        let mut dev = Dev::new(212);
+        let change = dev.batch(
+            vec![(reword(&record, "a saved verse"), parents)],
+            Cause::Edit,
+        );
+        let before = state.counters();
+        state.add(change.into_iter().map(FoldInput::from));
+        let counts = state.conflict_counts().clone();
+        let work = state.counters().since(&before);
+        assert_eq!(work.conflicts_built, 0, "{work:?}");
+        assert_eq!(
+            counts, counts_before,
+            "a save outside a conflict changes no count"
+        );
+        work
+    };
+    let (small, big, crowded) = (
+        measure("Psalms", psalms()),
+        measure("larger", larger()),
+        measure("crowded", &many),
+    );
+    assert_no_growth("conflict counts after a save, ten times larger", small, big);
+    assert_eq!(
+        crowded, small,
+        "two thousand conflicts changed what a save and its counts cost"
+    );
+}
+
+/// The history axis alone: the same save on the same records, in a project that has had
+/// three more years of work, 4,000 more changes in Psalms and 500 of them on the saved verse
+/// itself (a chain of 500 ancestors). The ten-times corpus mixes history with books and
+/// devices; a corpus with a third of the history is a different set of records (fewer decisions
+/// are made), so it would not isolate the axis.
+#[test]
+fn a_verse_save_costs_nothing_per_year_of_history() {
+    let grown = {
+        let mut state = psalms().clone();
+        let (key, _) = text_verse(&state);
+        let mut dev = Dev::new(213);
+        for i in 0..500 {
+            let record = state.projected(&key).expect("the verse");
+            let parents = state.shown_heads(&key, None);
+            let change = dev.batch(
+                vec![(reword(&record, &format!("an earlier save {i}")), parents)],
+                Cause::Edit,
+            );
+            state.add(change.into_iter().map(FoldInput::from));
+        }
+        let others: Vec<RecordKey> = state
+            .record_keys()
+            .into_iter()
+            .filter(|k| matches!(k, RecordKey::Verse(b, c, _) if *b == PSALMS && c.get() != common_chapter()))
+            .filter(|k| matches!(state.projected(k), Some(Record::Verse { value: VerseValue::Text { .. }, .. })))
+            .take(3_500)
+            .collect();
+        assert!(others.len() > 2_000);
+        for (i, other) in others.iter().chain(others.iter()).enumerate() {
+            let record = state.projected(other).expect("a verse");
+            let parents = state.shown_heads(other, None);
+            let change = dev.batch(
+                vec![(reword(&record, &format!("history {i}")), parents)],
+                Cause::Edit,
+            );
+            state.add(change.into_iter().map(FoldInput::from));
+        }
+        state
+    };
+    assert!(grown.len() >= psalms().len() + 4_000);
+    assert_no_growth(
+        "verse save, 4,000 more changes of history",
+        verse_save(psalms()),
+        verse_save(&grown),
+    );
+}
