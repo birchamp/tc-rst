@@ -313,6 +313,109 @@ fn another_verse_opens_with_nothing_selected() {
     assert!(aligner.selection().is_empty() && !aligner.is_armed());
 }
 
+// ---- #788 a card click places the shown selection: tC4's
+// `test/align-shown-selection.test.tsx` (at tC4 main 9ad4d5c) on its inputs, the
+// conformance sample's TIT 1:1 record and draft ----
+
+/// The sample record open on its draft, with "escogidos" proposed for the ἐκλεκτῶν card
+/// (index 8) when `suggested`, after `selected` were selected.
+fn sample_open(selected: &[&str], suggested: bool) -> Aligner {
+    let (stored, text) = sample_tit_1_1();
+    let source = tc_align::SourceVerse::new(
+        stored
+            .alignments
+            .iter()
+            .flat_map(|g| g.top_words.clone())
+            .collect(),
+    );
+    let mut aligner =
+        Aligner::open(Some(&stored), TargetVerse::new(&text), &source, basis(1)).unwrap();
+    assert_eq!(aligner.value().alignments[8].top_words[0].word, "ἐκλεκτῶν");
+    select(&mut aligner, selected);
+    if suggested {
+        suggest(&mut aligner, 8, "escogidos");
+    }
+    aligner
+}
+
+#[test]
+fn b1_the_only_selected_word_became_a_suggestion_so_no_card_takes_a_click() {
+    let mut aligner = sample_open(&["escogidos"], true);
+    assert!(aligner.shown_bank().iter().all(|w| w.word != "escogidos"));
+    assert!(aligner.selection().is_empty());
+    assert!(
+        !aligner.is_armed(),
+        "no card looks armed, every chip shows the idle hint"
+    );
+    let before = aligner.value().clone();
+    assert_eq!(aligner.place_selection(0), Err(EditError::NothingToPlace));
+    assert_eq!(aligner.place_selection(4), Err(EditError::NothingToPlace));
+    assert_eq!(aligner.value(), &before);
+}
+
+#[test]
+fn b1_a_suggestion_moved_one_of_two_selected_words_so_a_click_places_only_the_other() {
+    let mut aligner = sample_open(&["escogidos", "fe"], true);
+    assert_eq!(texts(&aligner.selection()), ["fe"]);
+    assert!(aligner.is_armed());
+    assert_eq!(aligner.place_selection(0), Ok(1));
+    assert_eq!(
+        texts(&aligner.value().alignments[0].bottom_words),
+        ["Pablo", "fe"]
+    );
+    // escogidos stays in the bank, still proposed for its own card.
+    assert!(
+        aligner
+            .value()
+            .word_bank
+            .iter()
+            .any(|w| w.word == "escogidos")
+    );
+    assert_eq!(aligner.proposals().len(), 1);
+}
+
+#[test]
+fn b2_a_drag_and_a_card_click_with_the_same_shown_selection_place_the_same_words() {
+    for suggested in [true, false] {
+        let dragging = sample_open(&["escogidos", "fe"], suggested);
+        let shown = dragging.selection();
+        assert_eq!(
+            texts(&shown),
+            if suggested {
+                vec!["fe"]
+            } else {
+                vec!["fe", "escogidos"]
+            }
+        );
+        let carried = dragging.dragged_words(at(&dragging, "fe"));
+        assert_eq!(carried, shown);
+        let mut dropped = dragging;
+        dropped.place_many(4, &carried).unwrap();
+        let mut clicked = sample_open(&["escogidos", "fe"], suggested);
+        clicked.place_selection(4).unwrap();
+        assert_eq!(clicked.value(), dropped.value(), "suggested: {suggested}");
+    }
+}
+
+#[test]
+fn b3_a_selection_with_no_suggestion_places_what_linking_each_word_places_and_clears() {
+    let mut aligner = sample_open(&["fe", "escogidos"], false);
+    assert_eq!(texts(&aligner.selection()), ["fe", "escogidos"]);
+    assert!(aligner.is_armed());
+    assert_eq!(aligner.place_selection(4), Ok(2));
+    assert_eq!(
+        texts(&aligner.value().alignments[4].bottom_words),
+        ["fe", "escogidos"]
+    );
+    let mut by_hand = sample_open(&[], false);
+    for word in ["fe", "escogidos"] {
+        let w = by_hand.shown_bank()[at(&by_hand, word)].clone();
+        by_hand.place(4, &w).unwrap();
+    }
+    assert_eq!(aligner.value(), by_hand.value());
+    assert!(aligner.selection().is_empty() && !aligner.is_armed());
+}
+
 // ---- #735 repeated words carry their occurrence numbers ----
 
 #[test]
