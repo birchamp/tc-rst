@@ -40,6 +40,13 @@
 //! [`FakeProxy`] is a proxy that refuses every request and records its first line, for
 //! tests of which proxy a client uses.
 //!
+//! The binary `tc-door43-fake` runs one as a process, seeded with the parity account of
+//! [`seeded::parity_account`], for the browser tests of the app. It prints one line,
+//! `{"url": …, "control": …}`, and serves until its stdin closes or reads `{"quit":true}`.
+//! `control` is a second loopback server the tests call: `GET /requests`,
+//! `POST /requests/clear`, `POST /faults`, `POST /release`, `POST /tokens`,
+//! `GET /tokens/{login}` and `GET /secret/{login}/{name}` (see the binary's source).
+//!
 //! The fake needs `git` in `PATH`, with `git http-backend` (part of git's core tools).
 
 // The `Repository` answer has about 80 fields, past the `json!` macro's default depth.
@@ -221,6 +228,11 @@ pub enum Fault {
     /// A download comes without `Content-Length`, as an answer built while it is sent
     /// does.
     NoContentLength,
+    /// The request waits until the test calls [`FakeDoor43::release_held`], then is answered
+    /// normally (with the next fault that applies, if any). A test can act while a client
+    /// waits for Door43's answer. Each held request waits for a release of its own, as a held
+    /// download does.
+    Hold,
 }
 
 impl Fault {
@@ -436,8 +448,9 @@ pub(crate) struct Shared {
     state: Mutex<State>,
     pub git: Git,
     pub url: String,
-    /// The releases of the downloads [`Fault::HoldBody`] holds, oldest first: one per
-    /// download, so a release can never pass to a download that has not started yet.
+    /// The releases of the requests [`Fault::Hold`] holds and the downloads
+    /// [`Fault::HoldBody`] holds, oldest first: one per request, so a release can never pass
+    /// to one that has not started yet.
     held: Mutex<VecDeque<oneshot::Sender<()>>>,
 }
 
@@ -648,6 +661,18 @@ impl FakeDoor43 {
             .ok_or_else(|| FakeError::Invalid(format!("no user {login}")))
     }
 
+    /// The secret of `login`'s token named `name`, for tests that search files and replies
+    /// for it. `None` when there is no such token.
+    pub fn token_secret(&self, login: &str, name: &str) -> Option<String> {
+        self.shared
+            .state()
+            .user(login)?
+            .tokens
+            .iter()
+            .find(|t| t.name == name)
+            .map(|t| t.sha1.clone())
+    }
+
     /// The tokens `login` holds, without their secrets.
     pub fn tokens_of(&self, login: &str) -> Vec<FakeToken> {
         self.shared
@@ -670,8 +695,8 @@ impl FakeDoor43 {
         self.shared.state().faults.push(rule);
     }
 
-    /// Lets the oldest download that [`Fault::HoldBody`] holds, and that no release has
-    /// freed yet, send the rest of its bytes. A release that comes after the fake began to
+    /// Lets the oldest request that [`Fault::Hold`] holds, or download that
+    /// [`Fault::HoldBody`] holds, and that no release has freed yet, go on. A release that comes after the fake began to
     /// answer, but before the download reaches its hold, is kept for that download. A
     /// release with no such download does nothing; it is never kept for a later download.
     /// A download the client dropped counts until the server notices, so a release after

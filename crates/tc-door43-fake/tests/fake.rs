@@ -666,3 +666,50 @@ async fn each_held_download_waits_for_a_release_of_its_own() {
     let rest = second.bytes().await.unwrap();
     assert_eq!(AFTER + rest.len(), whole.len());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_hold_fault_waits_for_its_release() {
+    use tc_door43_fake::{Fault, FaultRule};
+    let fake = FakeDoor43::start().await.unwrap();
+    seeded::parity_account(&fake);
+    let secret = fake
+        .issue_token(
+            seeded::PARITY_USER,
+            "translationCore",
+            &["write:repository", "write:user"],
+        )
+        .unwrap();
+    assert_eq!(
+        fake.token_secret(seeded::PARITY_USER, "translationCore"),
+        Some(secret.clone())
+    );
+    fake.inject(FaultRule::once("GET", "/api/v1/user", Fault::Hold));
+    let url = format!("{}/api/v1/user", fake.url());
+    let held = tokio::spawn({
+        let (url, secret) = (url.clone(), secret.clone());
+        async move {
+            http()
+                .get(url)
+                .header("Authorization", format!("token {secret}"))
+                .send()
+                .await
+                .unwrap()
+                .status()
+                .as_u16()
+        }
+    });
+    for _ in 0..500 {
+        if !fake.requests().is_empty() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+    }
+    assert_eq!(fake.requests().len(), 1, "recorded before it is held");
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    assert!(!held.is_finished(), "it waits for its release");
+    // The hold was used up: the next request answers at once.
+    let (status, _, _) = get(&fake, "/api/v1/user", Some(&secret)).await;
+    assert_eq!(status, 200);
+    fake.release_held();
+    assert_eq!(held.await.unwrap(), 200);
+}

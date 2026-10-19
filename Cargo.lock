@@ -3161,6 +3161,7 @@ dependencies = [
  "tc-core",
  "tc-corpus",
  "tc-door43",
+ "tc-door43-fake",
  "tc-journal",
  "tc-obs",
  "tc-resources",

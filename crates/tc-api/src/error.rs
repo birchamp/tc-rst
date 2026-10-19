@@ -102,9 +102,6 @@ pub enum Feature {
     Import,
     /// Export files: D2.
     Export,
-    /// Door43 sign-in, resume, sign-out and the profile link: unit A8. Until it lands, the
-    /// account service answers only what needs no Door43 step.
-    Account,
     /// The Feedback dialog's attachment: unit A5.
     Feedback,
 }

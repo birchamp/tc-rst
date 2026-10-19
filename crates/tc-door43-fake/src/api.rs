@@ -231,6 +231,11 @@ async fn observe(State(shared): AppState, request: Request, next: Next) -> Respo
                 }
                 return response;
             }
+            Fault::Hold => {
+                // A release that is dropped (the fake is going) ends the wait too.
+                let released = shared.hold();
+                let _ = released.await;
+            }
             Fault::RedirectTo(location) => {
                 let mut response = StatusCode::FOUND.into_response();
                 if let Ok(value) = HeaderValue::from_str(&location) {

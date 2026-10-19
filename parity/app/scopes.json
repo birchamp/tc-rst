@@ -26,17 +26,7 @@
       "value": "dialog",
       "which": "first"
     },
-    "share-internet-consent": {
-      "attr": "role",
-      "value": "dialog",
-      "which": "last"
-    },
     "share-signin": {
-      "attr": "role",
-      "value": "dialog",
-      "which": "last"
-    },
-    "open-door43-internet-consent": {
       "attr": "role",
       "value": "dialog",
       "which": "last"

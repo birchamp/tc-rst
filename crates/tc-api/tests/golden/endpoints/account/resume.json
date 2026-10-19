@@ -12,7 +12,9 @@
       "account": {
         "user": null,
         "kept": "notKept",
-        "notice": "savedRefused"
+        "notice": "savedRefused",
+        "server": "git.door43.org",
+        "keychain": "works"
       }
     }
   },

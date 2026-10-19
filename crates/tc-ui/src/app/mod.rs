@@ -5,8 +5,8 @@
 //! call and the boot's token and build checks ([`client`], [`boot`]), what a screen holds while
 //! a read is in flight ([`load`]), which reads a change makes stale ([`cache`]), and the
 //! shell's decisions: the view and its screen ([`shell`]), the internet question
-//! ([`internet`]), the Feedback report ([`feedback`]) and the App language dialog
-//! ([`language`]). Only the
+//! ([`internet`]), the Door43 sign-in step ([`account`]), the Feedback report ([`feedback`])
+//! and the App language dialog ([`language`]). Only the
 //! glue that runs them in a browser (`fetch`, the DOM, the page's storage) is in `web`, for
 //! wasm32 with the `app` feature, and it holds no decision of its own.
 //!
@@ -14,6 +14,7 @@
 //! WebAssembly stops the whole UI.
 #![deny(clippy::indexing_slicing)]
 
+pub mod account;
 pub mod boot;
 pub mod buffer;
 pub mod cache;

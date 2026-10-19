@@ -144,9 +144,7 @@ fn section_7_6_names_every_baseline_screen_with_its_units() {
             "help",
             "about",
             "feedback",
-            "share-internet-consent",
-            "share-signin",
-            "open-door43-internet-consent"
+            "share-signin"
         ]
     );
     for unit in ["A1", "A4a", "A6b", "B1a", "C7b", "E1a", "G0", "G2"] {
