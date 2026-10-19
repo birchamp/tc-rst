@@ -164,8 +164,7 @@ impl Project {
         let number = self.source.add(&abs);
         let loaded = load_pack(&rel, &back, self.id, number);
         if let Some(section) = loaded.section {
-            self.index.sections.insert(rel.clone(), section);
-            self.index.changed = true;
+            self.index.add(&rel, section);
         }
         let replaces_copy = replaces.clone();
         self.journal.packs.insert(
@@ -408,9 +407,7 @@ impl Project {
                         SyncDir::Deferred(&mut run.dirs),
                     )?;
                     self.journal.pending.remove(&rel);
-                    if self.index.sections.remove(&rel).is_some() {
-                        self.index.changed = true;
-                    }
+                    self.index.forget(&rel);
                     if removed {
                         run.report.removed.push(rel);
                     }
@@ -567,10 +564,7 @@ impl Project {
                 },
             );
             if let Some(section) = &pack.section {
-                self.index
-                    .sections
-                    .insert(pack.rel.clone(), section.clone());
-                self.index.changed = true;
+                self.index.add(&pack.rel, section.clone());
             }
         }
         if !done.new.is_empty() {
@@ -601,9 +595,7 @@ impl Project {
                 SyncDir::Deferred(&mut run.dirs),
             )?;
             self.journal.packs.remove(&old.rel);
-            if self.index.sections.remove(&old.rel).is_some() {
-                self.index.changed = true;
-            }
+            self.index.forget(&old.rel);
             if removed {
                 run.gone.push((old.new_rel, old.rel));
             }

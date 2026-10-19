@@ -498,11 +498,21 @@ fn the_fold_cache_is_kept_by_every_open_of_the_same_encoding() {
         counters.journal_files_cached, counters.journal_files_read,
         "{counters:?}"
     );
-    // A damaged cache gives nothing and is written again.
-    let mut damaged = written.clone();
-    let last = damaged.len() - 1;
-    damaged[last] ^= 0x40;
-    fs.put(&index, &damaged, None);
+    // A damaged cache gives nothing and is written again. (A byte in every section of the
+    // base: it may also hold the sections of files that are gone.)
+    let damage = |bytes: &[u8]| {
+        let mut damaged = bytes.to_vec();
+        for at in (128..damaged.len()).step_by(32) {
+            damaged[at] ^= 0x40;
+        }
+        damaged
+    };
+    fs.put(&index, &damage(&written), None);
+    // And the delta file, which holds the sections made since the base was written.
+    let delta = folder.join(".tc/index.delta.bin");
+    if let Some(bytes) = fs.peek(&delta) {
+        fs.put(&delta, &damage(&bytes), None);
+    }
     let (after_damage, _) = open_once(&fs, &folder);
     assert!(
         after_damage.journal_files_cached < after_damage.journal_files_read,
@@ -901,5 +911,68 @@ fn reading_a_book_reads_only_its_values() {
         "reading Psalms read {} bytes in the corpus and {} in the one ten times larger",
         read[0].0,
         read[1].0
+    );
+}
+
+/// The close writes the sections made since the fold cache was written, not the cache again
+/// (the cache of a whole Bible is 65 MB, and a session adds a few files): `index.bin` keeps its
+/// bytes, a small `index.delta.bin` holds the new sections, and the next open takes every file
+/// from the two. The same on the corpus ten times larger.
+#[test]
+fn a_close_writes_the_sections_it_made_and_not_the_cache() {
+    let mut sizes = Vec::new();
+    for corpus in [psalms(), psalms_x10()] {
+        let fs = corpus.fs.copy();
+        let rig = rig_as(fs.clone(), APP, "host-1");
+        let handle = rig
+            .store
+            .open(&corpus.folder, &OpenOptions::default())
+            .unwrap();
+        handle.wait_idle();
+        let base_path = corpus.folder.join(".tc/index.bin");
+        let delta_path = corpus.folder.join(".tc/index.delta.bin");
+        let base = fs.peek(&base_path).expect("the cache");
+        let key = handle
+            .snapshot()
+            .fold()
+            .chapter_keys(tc_journal::BookId::Psalms, 23)
+            .verses
+            .first()
+            .cloned()
+            .unwrap();
+        let shown = handle.mint(&key, None).unwrap();
+        handle
+            .submit(tc_journal::command::Command::SaveVerse {
+                shown,
+                words: "A save the close seals".into(),
+            })
+            .wait()
+            .unwrap();
+        handle.close().unwrap();
+        assert_eq!(
+            fs.peek(&base_path).as_deref(),
+            Some(base.as_slice()),
+            "the cache was not written again"
+        );
+        let delta = fs
+            .peek(&delta_path)
+            .expect("the sections made in the session");
+        assert!(
+            delta.len() < 256 * 1024 && delta.len() * 50 < base.len(),
+            "the delta is {} bytes against a cache of {}",
+            delta.len(),
+            base.len()
+        );
+        sizes.push(delta.len());
+        // The next open takes every file from the base and the delta.
+        let (counters, _) = open_once(&fs, &corpus.folder);
+        assert_eq!(
+            counters.journal_files_cached, counters.journal_files_read,
+            "{counters:?}"
+        );
+    }
+    assert!(
+        sizes[1] < sizes[0] * 4,
+        "the delta follows the session, not the project: {sizes:?}"
     );
 }

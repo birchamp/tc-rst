@@ -685,7 +685,7 @@ pub(crate) struct Background {
     pub vfs: Arc<dyn crate::vfs::Vfs>,
     pub counters: Arc<Counters>,
     pub folder: crate::layout::Folder,
-    pub index: Option<Vec<tc_journal::index::Section>>,
+    pub index: Option<crate::project::IndexWrite>,
     pub project: ProjectId,
     pub check: Vec<String>,
     pub stamp_ns: i64,
@@ -864,10 +864,10 @@ impl ProjectHandle {
         let spawned = std::thread::Builder::new()
             .name("tc-store background".into())
             .spawn(move || {
-                if let Some(sections) = job.index {
+                if let Some(write) = job.index {
                     let _guard = index_lock.lock().unwrap_or_else(|e| e.into_inner());
                     let dir = job.folder.path(crate::layout::TC);
-                    crate::open::write_index_file(&*job.vfs, &dir, job.project, &sections);
+                    crate::open::write_index_file(&*job.vfs, &dir, job.project, &write);
                 }
                 if !job.check.is_empty() {
                     let results = crate::open::storage_check(

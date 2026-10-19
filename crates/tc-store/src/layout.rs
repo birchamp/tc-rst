@@ -15,6 +15,9 @@ pub const DEVICE: &str = ".tc/device.json";
 pub const MANIFEST: &str = ".tc/materialized.json";
 pub const INTENT: &str = ".tc/materialize.intent.json";
 pub const INDEX: &str = ".tc/index.bin";
+/// The sections added since `index.bin` was written (§3.6): a session adds a few files, and
+/// rewriting the cache of a whole Bible (65 MB) for them was most of a close.
+pub const INDEX_DELTA: &str = ".tc/index.delta.bin";
 pub const DRAFTS: &str = ".tc/drafts.json";
 pub const QUARANTINE_LIST: &str = ".tc/quarantine.json";
 pub const INTAKE: &str = ".tc/intake.json";

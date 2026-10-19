@@ -26,7 +26,8 @@ use crate::error::StoreError;
 use crate::handle::{Mode, ProjectFacts, ProjectHandle, Shared};
 use crate::hooks::Hooks;
 use crate::layout::{
-    self, FORMAT_JSON, Folder, INDEX, LOCK, MANIFEST, PACKS, PENDING, PROJECT_JSON, QUARANTINE, TC,
+    self, FORMAT_JSON, Folder, INDEX, INDEX_DELTA, LOCK, MANIFEST, PACKS, PENDING, PROJECT_JSON,
+    QUARANTINE, TC,
 };
 use crate::load::{
     FileRead, JournalFile, JournalKind, LoadSetup, list, load_streaming, relocation,
@@ -420,11 +421,8 @@ fn open_inner(
     // O8: the journal, in parallel, from the fold cache where it stands.
     let files = list(&*vfs, &folder)
         .map_err(|e| OpenError::Unreadable(StoreError::io("list", &folder.path(PACKS), e)))?;
-    let index = vfs
-        .read(&folder.path(INDEX))
-        .ok()
-        .and_then(|bytes| Index::parse(bytes, id).ok())
-        .map(Arc::new);
+    let cache_files = read_cache(&*vfs, &folder, id);
+    let index = cache_files.merged.clone();
     let bytes_total: u64 = files.iter().map(|f| f.size).sum();
     tracker.phase(Phase::Reading, files.len() as u64, bytes_total);
     let source = Arc::new(FileSource::new(vfs.clone()));
@@ -457,7 +455,8 @@ fn open_inner(
             counters.add(&counters.journal_files_cached, u64::from(facts.cached));
         }
     }
-    let (mut journal, index_cache) = journal_of(reads, index.as_deref(), &mut notices);
+    let (mut journal, index_cache) = journal_of(reads, &cache_files, &mut notices);
+    drop(cache_files);
     if !journal.unreadable.is_empty() && vfs.read(&folder.path(PROJECT_JSON)).is_err() {
         // Not one file a cloud client holds back: the folder itself stopped being readable.
         return Err(OpenError::Unreadable(StoreError::Other(
@@ -913,16 +912,69 @@ fn gates(
     })
 }
 
+/// The fold cache as the open finds it (§3.6): the base file and the delta file of the sections
+/// added since, which take the place of the base's of the same paths.
+struct CacheFiles {
+    /// Both, for the loader to look files up in.
+    merged: Option<Arc<Index>>,
+    /// The delta alone: its sections are the ones the actor keeps.
+    delta: Option<Index>,
+    /// The base is usable, and the delta is not so large that it is time to write it again.
+    base_ok: bool,
+}
+
+/// The delta file may grow to this much before the cache is written whole again: a quarter of
+/// the base, but not under 4 MiB.
+fn delta_limit(base_bytes: usize) -> usize {
+    (base_bytes / 4).max(4 * 1024 * 1024)
+}
+
+fn read_cache(vfs: &dyn Vfs, folder: &Folder, id: ProjectId) -> CacheFiles {
+    let base_bytes = vfs.read(&folder.path(INDEX)).ok();
+    let base_len = base_bytes.as_ref().map_or(0, Vec::len);
+    let base = base_bytes.and_then(|bytes| Index::parse(bytes, id).ok());
+    let delta_bytes = vfs.read(&folder.path(INDEX_DELTA)).ok();
+    let delta_len = delta_bytes.as_ref().map_or(0, Vec::len);
+    let delta = delta_bytes.and_then(|bytes| Index::parse(bytes, id).ok());
+    // A delta stands for a base it was written beside: with no base it is a few sections of
+    // files, which are read again.
+    let Some(base) = base else {
+        return CacheFiles {
+            merged: delta.clone().map(Arc::new),
+            delta,
+            base_ok: false,
+        };
+    };
+    let base_ok = delta_len <= delta_limit(base_len);
+    let merged = match delta.clone() {
+        Some(delta) => base.with_delta(delta),
+        None => base,
+    };
+    CacheFiles {
+        merged: Some(Arc::new(merged)),
+        delta,
+        base_ok,
+    }
+}
+
 /// What the open's reads say of each journal file, the notices they call for, and the fold
 /// cache's sections that stand.
 fn journal_of(
     reads: Vec<FileRead>,
-    index: Option<&Index>,
+    files: &CacheFiles,
     notices: &mut Vec<(Notice, Option<String>)>,
 ) -> (Journal, IndexCache) {
+    let index = files.merged.as_deref();
     let mut journal = Journal::default();
-    let mut cache = IndexCache::default();
-    let mut used = 0usize;
+    // Sections of files that are gone stay in the base until it is written again, which a
+    // quarter of them (a consolidated month) makes worth doing.
+    let cached = index.map_or(0, Index::len);
+    let stale = cached.saturating_sub(reads.len());
+    let mut cache = IndexCache {
+        rebuild: !files.base_ok || stale > cached / 4 + 32,
+        ..IndexCache::default()
+    };
+    cache.changed = cache.rebuild;
     for read in reads {
         let rel = read.file.rel.clone();
         let facts = match read.outcome {
@@ -939,16 +991,27 @@ fn journal_of(
                 continue;
             }
         };
-        let section = match (facts.cached, facts.made) {
-            (true, _) => index.and_then(|i| i.section(&facts.key)).cloned(),
-            (false, made) => {
-                cache.changed |= made.is_some();
-                made
+        match (facts.cached, facts.made) {
+            (true, _) => {
+                if let Some(section) = index.and_then(|i| i.section(&facts.key)) {
+                    let in_delta = files
+                        .delta
+                        .as_ref()
+                        .and_then(|d| d.section(&facts.key))
+                        .cloned();
+                    if let Some(section) = in_delta {
+                        cache.delta.insert(rel.clone(), section);
+                    } else if cache.rebuild {
+                        // The whole cache is written again: a section for every file.
+                        cache.fresh.insert(rel.clone(), section.clone());
+                    }
+                }
             }
-        };
-        if let Some(section) = section {
-            used += 1;
-            cache.sections.insert(rel.clone(), section);
+            (false, Some(made)) => {
+                cache.changed = true;
+                cache.fresh.insert(rel.clone(), made);
+            }
+            (false, None) => {}
         }
         match facts.facts {
             Facts::Pack(pack) => {
@@ -1017,8 +1080,6 @@ fn journal_of(
             }
         }
     }
-    let cached = index.map_or(0, Index::len);
-    cache.changed |= used != cached;
     (journal, cache)
 }
 
@@ -1144,9 +1205,7 @@ impl Project {
                     SyncDir::Deferred(&mut dirs),
                 )?;
                 self.journal.pending.remove(&rel);
-                if self.index.sections.remove(&rel).is_some() {
-                    self.index.changed = true;
-                }
+                self.index.forget(&rel);
             }
         }
         // Packs a valid pack's `replaces` lists and whose every change it holds: a
@@ -1187,9 +1246,7 @@ impl Project {
                 if self.relocate_to_packs(&rel, JournalKind::Pack, number, &holders)? {
                     atomic_remove_if_free(&*self.vfs, &abs, SyncDir::Deferred(&mut dirs))?;
                     self.journal.packs.remove(&rel);
-                    if self.index.sections.remove(&rel).is_some() {
-                        self.index.changed = true;
-                    }
+                    self.index.forget(&rel);
                     self.dirty.metadata = true;
                 }
             }
@@ -1409,12 +1466,26 @@ impl Project {
     /// The sections of the fold cache (§3.6) if they changed since it was last written:
     /// sections share their bytes, so this copies no change, and the file is written from
     /// them piece by piece ([`write_index_file`]).
-    pub(crate) fn index_bytes_later(&mut self) -> Option<Vec<tc_journal::index::Section>> {
-        if !self.index.changed {
+    pub(crate) fn index_bytes_later(&mut self) -> Option<crate::project::IndexWrite> {
+        use crate::project::IndexWrite;
+        let cache = &mut self.index;
+        if cache.rebuild {
+            // Every file has a section in `fresh`: they are the new base, and the delta is
+            // empty.
+            cache.rebuild = false;
+            cache.changed = false;
+            let mut all: Vec<tc_journal::index::Section> =
+                cache.fresh.drain().map(|(_, s)| s).collect();
+            all.extend(cache.delta.drain().map(|(_, s)| s));
+            return Some(IndexWrite::Base(all));
+        }
+        if !cache.changed {
             return None;
         }
-        self.index.changed = false;
-        Some(self.index.sections.values().cloned().collect())
+        cache.changed = false;
+        let fresh: Vec<(String, tc_journal::index::Section)> = cache.fresh.drain().collect();
+        cache.delta.extend(fresh);
+        Some(IndexWrite::Delta(cache.delta.values().cloned().collect()))
     }
 }
 
@@ -1426,8 +1497,13 @@ pub(crate) fn write_index_file(
     vfs: &dyn Vfs,
     dir: &Path,
     project: ProjectId,
-    sections: &[tc_journal::index::Section],
+    write: &crate::project::IndexWrite,
 ) {
+    use crate::project::IndexWrite;
+    let (name, sections) = match write {
+        IndexWrite::Base(sections) => ("index.bin", sections),
+        IndexWrite::Delta(sections) => ("index.delta.bin", sections),
+    };
     let mut fill = |out: &mut crate::atomic::Sink<'_>| -> Result<(), StoreError> {
         Index::encode_to(project, sections.iter(), &mut |bytes: &[u8]| {
             out(bytes).map_err(|e| StoreError::io("write", dir, e))
@@ -1436,12 +1512,20 @@ pub(crate) fn write_index_file(
     let _ = crate::atomic::atomic_write_streamed(
         vfs,
         dir,
-        "index.bin",
+        name,
         &mut fill,
         crate::atomic::SyncDir::Now,
         &crate::atomic::HeldRetry::SAVE,
         &mut || Ok(true),
     );
+    if matches!(write, IndexWrite::Base(_)) {
+        // The delta stood for the old base.
+        let _ = crate::atomic::atomic_remove(
+            vfs,
+            &dir.join("index.delta.bin"),
+            crate::atomic::SyncDir::Now,
+        );
+    }
 }
 
 /// O14's reads, off the actor: each path's md5, size and mtime, and the newest time stamp

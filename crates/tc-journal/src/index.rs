@@ -675,6 +675,13 @@ impl Index {
         Ok(Self { sections })
     }
 
+    /// This index with the sections of `delta` taking the place of those of the same paths:
+    /// the base file and the sections added since (`.tc/index.delta.bin`, §3.6).
+    pub fn with_delta(mut self, delta: Self) -> Self {
+        self.sections.extend(delta.sections);
+        self
+    }
+
     /// The section that stands for exactly the file `key` names, if the index holds one.
     pub fn section(&self, key: &FileKey) -> Option<&Section> {
         self.sections.get(&key.path).filter(|s| s.key == *key)
@@ -696,6 +703,13 @@ impl Index {
 
     pub fn is_empty(&self) -> bool {
         self.sections.is_empty()
+    }
+}
+
+impl Section {
+    /// The bytes the section takes in an index file.
+    pub fn encoded_len(&self) -> usize {
+        self.body().len() + 10
     }
 }
 

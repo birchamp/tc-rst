@@ -214,8 +214,7 @@ impl Project {
         let number = self.source.add(&abs);
         let loaded = load_pack(rel, bytes, self.id, number);
         if let Some(section) = loaded.section {
-            self.index.sections.insert(rel.to_owned(), section);
-            self.index.changed = true;
+            self.index.add(rel, section);
         }
         let Facts::Pack(pack) = loaded.facts else {
             return Err(StoreError::Other(format!("{rel} is not a pack")));

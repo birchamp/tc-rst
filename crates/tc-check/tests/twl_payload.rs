@@ -90,7 +90,10 @@ fn payload_links_derive_the_same_checks_as_rc_links_in_all_59_books() {
         books += 1;
     }
     assert_eq!(books, 59);
-    assert_eq!(rows, 85_764, "every TWL row of the release is accounted for");
+    assert_eq!(
+        rows, 85_764,
+        "every TWL row of the release is accounted for"
+    );
 }
 
 /// Psalms: the export's links, the same links written as rc links, and the repository's own

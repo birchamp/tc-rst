@@ -88,11 +88,46 @@ impl Journal {
     }
 }
 
-/// The fold cache's sections, kept up to date as files are read and written (§3.6).
+/// What the actor knows of the fold cache (§3.6): the sections made since it was last written,
+/// and the small delta file's. The base file's sections are not held: its 65 MB would stay
+/// beside the fold for as long as the project is open (a third of the memory growth per
+/// change), and the open's background work or the close writes only what is new.
 #[derive(Debug, Default)]
 pub(crate) struct IndexCache {
-    pub sections: HashMap<String, Section>,
+    /// Made since the cache was written: seals, consolidations, a large batch, a file read
+    /// without a section.
+    pub fresh: HashMap<String, Section>,
+    /// The sections the delta file holds (the files added since the base was written).
+    pub delta: HashMap<String, Section>,
+    /// The base is missing, of another build or too far behind the delta: the whole cache is
+    /// written again, from `fresh`, which then holds a section for every file.
+    pub rebuild: bool,
     pub changed: bool,
+}
+
+impl IndexCache {
+    /// A section of a file made in this session.
+    pub fn add(&mut self, rel: &str, section: Section) {
+        self.fresh.insert(rel.to_owned(), section);
+        self.changed = true;
+    }
+
+    /// The file is gone: its section is not carried on. A section only the base file holds
+    /// stays there, harmlessly, until the base is written again.
+    pub fn forget(&mut self, rel: &str) {
+        let held = self.fresh.remove(rel).is_some();
+        if self.delta.remove(rel).is_some() || held {
+            self.changed = true;
+        }
+    }
+}
+
+/// What the cache writes next.
+pub(crate) enum IndexWrite {
+    /// The whole cache, `index.bin`; the delta file goes.
+    Base(Vec<Section>),
+    /// The delta file, `index.delta.bin`: every section added since the base.
+    Delta(Vec<Section>),
 }
 
 /// What to write again (§5.0 B5): the actor marks books and files, and the writer expands

@@ -384,8 +384,7 @@ impl Actor {
                 },
             );
             if let Some(section) = pack.section {
-                self.project.index.sections.insert(pack.rel, section);
-                self.project.index.changed = true;
+                self.project.index.add(&pack.rel, section);
             }
         }
         self.project.durable_max_seq = self.project.durable_max_seq.max(last_seq);
