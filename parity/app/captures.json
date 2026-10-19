@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "2b0da4a20aa51100",
+    "ui": "71e4a7c9e82fb4cb",
     "commit": "dev",
     "api": 1
   },
@@ -39,7 +39,7 @@
       "png": "screens/account-menu.png",
       "sha256": "7bc2b05f7c74769001a55c931bf5c193f3a01fdb6d1fdc18ab9e7ab5d10401a4",
       "dom": "dom/account-menu.json",
-      "domSha256": "8b61f0ede4a389c8118aac4345b911c0a127f4b5448cbeffb29068fd4ed3c466"
+      "domSha256": "0103f8f43b98d492a5b044084b9bdc6c360b0a99347a5863d395bdb072fa8ff5"
     },
     {
       "name": "app-language",
@@ -60,7 +60,7 @@
       "png": "screens/app-language.png",
       "sha256": "4f8c1f7a586efc1534dc51f0b0cae018135ece1c8b5e84bf5d1213ebb46aa5db",
       "dom": "dom/app-language.json",
-      "domSha256": "176892d8d5eabc678f06648954ff9c0ee23c14e2b464fcdab587ce4c693dad0b"
+      "domSha256": "11b36d460f298f998b05da7793f5b26e6802fb0b5ca4341eb7fc287f16d4bb9b"
     },
     {
       "name": "help",
@@ -81,7 +81,7 @@
       "png": "screens/help.png",
       "sha256": "37468d371d1c6f351c7223307a74a4d6c7922eeb3c9375a7953ea7112baebef4",
       "dom": "dom/help.json",
-      "domSha256": "bacc0fd041947ec74bf71b2305d1c3d764d8a5161843cd6f27298a18cabcdc75"
+      "domSha256": "026b481b7e214d2387c4ffdbc54f4534f829de2c5acc155694c0a86394f5ef4a"
     },
     {
       "name": "about",
@@ -109,7 +109,7 @@
       "png": "screens/about.png",
       "sha256": "4e7c4cf21a8ef1b94e87aea240bf822666aeb93a29bc122e842d092381c8b7e3",
       "dom": "dom/about.json",
-      "domSha256": "bca99411280c2c2eefe4c534a1a085466d0ee17ffebb2dc5cc51e02c167d0b74"
+      "domSha256": "5e929b3f56697b62fd05f6a43a76b69af83a7676fc7ddfb6a524c4d9dc9186d7"
     },
     {
       "name": "feedback",
@@ -137,7 +137,7 @@
       "png": "screens/feedback.png",
       "sha256": "06d58c8808c2dc61d51453a057b09245836f7965a60c81ff2a248cf7ff4879dd",
       "dom": "dom/feedback.json",
-      "domSha256": "2d6e75b30d0a828392ed2d06b77ed5a0ef1c3bfcbd8952343bc9d7b8689393c0"
+      "domSha256": "8d8210dfc1b7c6db1a4d378027e8a37fe1c837ee3c984f5a8a45ff80cf09d014"
     },
     {
       "name": "license",
@@ -158,7 +158,7 @@
       "png": "screens/license.png",
       "sha256": "7679f56a695faf00203fa7f5e6092ed563decba27e4c69a2a8d9a77ec856749b",
       "dom": "dom/license.json",
-      "domSha256": "5fc99afcad7e082e46b495ef1e2ec930e37d760197690744ba56f3bfd52eb24c"
+      "domSha256": "41cdd8ac9b12b0bfac5fdc227f3490ac803096a9d76671c3e98d1c390cf61930"
     }
   ]
 }

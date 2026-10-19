@@ -105,3 +105,19 @@ All on the build of this commit (dev unless named):
   and recovery tests: 69 pass, 6 skipped (they need a tC4 checkout);
 - the design-system gallery after D13: DOM 751 of 751 cases the same as tC4's React gallery,
   behaviour scenarios 53 of 53; `dom-report.json` and `scenario-report.json` unchanged.
+
+## After the verification
+
+The verification found two faults, fixed in `108dad1` (About's focus hold outlived About: a close
+inside its ten frames panicked and reloaded the page) and `fb22ae8` (the account menu's name
+stayed in the old language after Apply). The runs again, on the build of the commit that adds
+this section (dev unless named):
+
+- the journeys: 38 of 38 pass (shell 6, account menu 4, App language 9, Help 9, Feedback 5, and
+  About's 5, new); About's 5 fail on the build before `108dad1`, App language b fails on the
+  build before `fb22ae8`; About's 5 also pass on the release build;
+- A4a's smoke: 95 checks, none failed; A4b's no-loss suite: 141 checks, none failed;
+- the design-system gallery after Layer's `label` became a signal: DOM 751 of 751 cases the same
+  as tC4's React gallery, behaviour scenarios 53 of 53, both reports unchanged;
+- A5's five dialog DOM captures, the license case and both Rust sequences taken again: only the
+  build's folder name in the logo's address changed; every row stays as it was.
