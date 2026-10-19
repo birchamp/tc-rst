@@ -32,3 +32,15 @@ state: an offer carries what Keep sends back.
 6. tc-ui: the banner per reason and the offer's words and settle step as pure functions, with
    the rebuild keys in every locale (pending where untranslated).
 7. Design text: §3.9 rows, §6.6 notes, the row's note.
+
+## Redesign after the no-loss reviews (2026-10-19)
+
+Steps 3 and 6's special cases are replaced by one machine, `tc_api::model::draft` (APP-DESIGN
+§6.6, "The draft machine"): `FieldDraft { live, offers, settle }`, one event list, one
+exhaustive `next`. `session/drafts` became a command that takes every unsaved text into
+`drafts.json` (tc-store: current and offered entries, the run recorded) before answering;
+supersession is judged with the shell's mirror (`mirror`); the copy moves mirror entries and is
+refused into an unsafe projects folder (Q-30); a screen open never joins a left read-only
+session. Proof: tc-api `tests/draft_next.rs` (every pair), tc-ui `tests/app/draft_machine.rs`
+(the model-based property; each of the nine findings put back is caught), and the tc-store and
+tc-app cases.
