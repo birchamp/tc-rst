@@ -16,6 +16,8 @@ url.workspace = true
 [dev-dependencies]
 md-5.workspace = true
 proptest.workspace = true
+# A project's own picture as the rebuild's metadata.json lists it: a carried file, with no role.
+tc-burrito = { path = "../tc-burrito" }
 # The default picture pack must stay the pin tc-resources ships.
 tc-resources = { path = "../tc-resources" }
 # The tests read the OBS exports in bundle/en.

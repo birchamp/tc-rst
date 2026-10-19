@@ -10,7 +10,10 @@
 //! thing, else by place, quote and occurrence, with the group id breaking a tie. A
 //! decision neither pass can place stays where it is: its resource no longer matches,
 //! so it computes as invalidated, and it is kept, so pinning the old resource again
-//! makes it valid again. The plan never deletes or rewrites a decision's judgement.
+//! makes it valid again. (When the list keeps its resource and only the decision's
+//! article left the translation words that filter it, tC4 #661, the decision still
+//! matches and waits off the list for the article to come back.) The plan never deletes
+//! or rewrites a decision's judgement.
 //!
 //! This returns a plan; the caller writes it. For each placed decision the plan names
 //! the new check, so the caller can record the new resource and the new check's
@@ -90,8 +93,11 @@ pub enum Outcome {
         /// decision's `MovedTo`.)
         contested: bool,
     },
-    /// No check on the new list is this decision's. Nothing is written; it computes as
-    /// invalidated and is kept.
+    /// No check on the new list is this decision's. Nothing is written: the decision is
+    /// kept, and a session lists it off the list. It computes as invalidated when the
+    /// change moved its resource; when only its article left the translation words that
+    /// filter a Words list (tC4 #661), its resource still matches, and it shows again as it
+    /// was if a later release carries the article again.
     Unplaced,
 }
 
@@ -323,8 +329,10 @@ pub struct Summary {
     /// Of those, the ones that count as decided after the change (tC4 #580: the
     /// figure the dialog shows, so it equals what the check screen will say).
     pub decided_after: usize,
-    /// Decisions that held against the current resource and would no longer: the
-    /// checks to check again.
+    /// Decisions that held against the current resource and find no check on the new
+    /// list: checks to check again on the new resource, or, when only the decision's
+    /// article left the translation words that filter a Words list (tC4 #661), decisions
+    /// kept off the list.
     pub invalidated: usize,
     /// Decisions that already did not hold and still find no check.
     pub still_unplaced: usize,

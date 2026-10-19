@@ -13,7 +13,7 @@
 //! Open Bible Stories helps quote the gateway story text itself; [`highlight_plain`]
 //! finds such a quote in plain text.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use unicode_general_category::{GeneralCategory, get_general_category};
 use unicode_normalization::UnicodeNormalization;
@@ -64,6 +64,9 @@ pub struct VerseToken {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AlignedVerse {
     alignments: Vec<Vec<SourceWord>>,
+    /// [`normalize_word`] of each source word, parallel to `alignments`: a verse normalizes
+    /// each word once, not once per quote word and group it is compared with.
+    keys: Vec<Vec<String>>,
     tokens: Vec<VerseToken>,
 }
 
@@ -74,6 +77,8 @@ impl AlignedVerse {
 
     /// Adds a group of original words and returns its id.
     pub fn add_alignment(&mut self, sources: Vec<SourceWord>) -> AlignmentId {
+        self.keys
+            .push(sources.iter().map(|s| normalize_word(&s.content)).collect());
         self.alignments.push(sources);
         AlignmentId(self.alignments.len() - 1)
     }
@@ -132,8 +137,9 @@ pub enum MatchQuality {
     /// Every occurrence of the quote: asked for with occurrence `-1`, or the occurrence is
     /// unrecorded and the quote occurs more than once.
     AllOccurrences,
-    /// The quote did not match as a whole, so every word that renders any quote word is
-    /// lit. Visible, but not a confirmed rendering.
+    /// The quote did not match in the original order, so the shortest run of groups that
+    /// renders every quote word the verse has is lit (tC4 #773). Visible, but not a
+    /// confirmed rendering.
     Approximate,
 }
 
@@ -210,6 +216,8 @@ fn quote_words(quote: &str) -> Vec<String> {
 /// One run of consecutive words that render the same alignment.
 struct Group<'a> {
     sources: &'a [SourceWord],
+    /// The sources' normalized words, in the same order.
+    keys: &'a [String],
     tokens: Vec<usize>,
 }
 
@@ -221,13 +229,17 @@ fn groups(verse: &AlignedVerse) -> Vec<Group<'_>> {
             // Text and unaligned words between two words of one group do not split it.
             continue;
         };
-        let Some(sources) = verse.sources(id).filter(|s| !s.is_empty()) else {
+        let (Some(sources), Some(keys)) = (
+            verse.sources(id).filter(|s| !s.is_empty()),
+            verse.keys.get(id.0),
+        ) else {
             continue;
         };
         match out.last_mut() {
             Some(group) if previous == Some(id) => group.tokens.push(i),
             _ => out.push(Group {
                 sources,
+                keys,
                 tokens: vec![i],
             }),
         }
@@ -236,17 +248,39 @@ fn groups(verse: &AlignedVerse) -> Vec<Group<'_>> {
     out
 }
 
-type Instance = (String, u32);
+/// One original word instance of the verse: its surface form as the alignment writes it
+/// and its occurrence (tC4's `${content}#${occurrence}`). Two forms of one word that differ
+/// in an accent are two instances.
+type Instance<'a> = (&'a str, u32);
 
-fn has(group: &Group, word: &str, occurrence: Option<u32>) -> bool {
+fn has(group: &Group<'_>, word: &str, occurrence: Option<u32>) -> bool {
+    group
+        .keys
+        .iter()
+        .zip(group.sources)
+        .any(|(key, s)| key == word && occurrence.is_none_or(|o| s.occurrence == o))
+}
+
+/// The instances of `word` among `group`'s original words.
+fn instances_of<'a>(group: &Group<'a>, word: &str) -> impl Iterator<Item = Instance<'a>> {
+    group
+        .keys
+        .iter()
+        .zip(group.sources)
+        .filter(move |(key, _)| *key == word)
+        .map(|(_, s)| (s.content.as_str(), s.occurrence))
+}
+
+/// True when `group` renders one of `instances`.
+fn renders(group: &Group<'_>, instances: &BTreeSet<Instance<'_>>) -> bool {
     group
         .sources
         .iter()
-        .any(|s| normalize_word(&s.content) == word && occurrence.is_none_or(|o| s.occurrence == o))
+        .any(|s| instances.contains(&(s.content.as_str(), s.occurrence)))
 }
 
-struct Candidate {
-    instances: BTreeSet<Instance>,
+struct Candidate<'a> {
+    instances: BTreeSet<Instance<'a>>,
     span: usize,
 }
 
@@ -261,23 +295,19 @@ struct Candidate {
 /// ἐκλεκτῶν is "of" and "the chosen people").
 ///
 /// This is tC4's matcher. It needs the gateway to keep the original word order, which it
-/// often does not. When no candidate completes, every group that renders a quote word is
-/// lit; that is [`MatchQuality::Exact`] when the verse holds each quote word exactly as
-/// often as the quote does (so nothing else can be meant), and
-/// [`MatchQuality::Approximate`] otherwise. tC4 lights the same words in both cases.
+/// often does not. When no candidate completes, a one-word quote resolves through the
+/// alignment's own occurrence numbers, and a longer one lights the shortest run of groups
+/// that renders each of its words (`shortest_run`, tC4 #773): lighting every group that
+/// renders any quote word let a repeated אֶת or כָּל pull in words from elsewhere in the
+/// verse (en_tn GEN 33:5 mix3). That is [`MatchQuality::Exact`] when the verse holds each
+/// quote word exactly as often as the quote does (so nothing else can be meant), and
+/// [`MatchQuality::Approximate`] otherwise.
 pub fn highlight_quote(verse: &AlignedVerse, quote: &Quote, occurrence: Occurrence) -> Highlight {
     let words = quote_words(quote.as_str());
     let Some(first) = words.first() else {
         return Highlight::none();
     };
     let groups = groups(verse);
-    let instances_of = |g: &Group, word: &str| -> Vec<Instance> {
-        g.sources
-            .iter()
-            .filter(|s| normalize_word(&s.content) == word)
-            .map(|s| (s.content.clone(), s.occurrence))
-            .collect()
-    };
 
     let mut candidates = Vec::new();
     for start in 0..groups.len() {
@@ -310,7 +340,7 @@ pub fn highlight_quote(verse: &AlignedVerse, quote: &Quote, occurrence: Occurren
         });
     }
 
-    let mut classes: Vec<Vec<Candidate>> = Vec::new();
+    let mut classes: Vec<Vec<Candidate<'_>>> = Vec::new();
     for c in candidates {
         let shared = classes
             .iter()
@@ -320,32 +350,36 @@ pub fn highlight_quote(verse: &AlignedVerse, quote: &Quote, occurrence: Occurren
             None => classes.push(vec![c]),
         }
     }
-    let tightest = |class: &Vec<Candidate>| -> Option<BTreeSet<Instance>> {
+    fn tightest<'a>(class: &[Candidate<'a>]) -> Option<BTreeSet<Instance<'a>>> {
         class
             .iter()
             .min_by_key(|c| c.span)
             .map(|c| c.instances.clone())
-    };
+    }
 
-    let chosen: Option<(BTreeSet<Instance>, MatchQuality)> = match occurrence {
+    let chosen: Option<(BTreeSet<Instance<'_>>, MatchQuality)> = match occurrence {
         Occurrence::Nth(n) => {
             let k = usize::try_from(n.get()).unwrap_or(usize::MAX);
             classes
                 .get(k - 1)
-                .and_then(tightest)
+                .and_then(|c| tightest(c))
                 .map(|i| (i, MatchQuality::Exact))
         }
         // An item not tied to words has no occurrence to honor; tC treats it as the first.
         Occurrence::NotTied => classes
             .first()
-            .and_then(tightest)
+            .and_then(|c| tightest(c))
             .map(|i| (i, MatchQuality::Exact)),
         Occurrence::All | Occurrence::Unrecorded => {
             let quality = match (occurrence, classes.len()) {
                 (Occurrence::Unrecorded, 1) => MatchQuality::Exact,
                 _ => MatchQuality::AllOccurrences,
             };
-            let all: BTreeSet<Instance> = classes.iter().filter_map(tightest).flatten().collect();
+            let all: BTreeSet<Instance<'_>> = classes
+                .iter()
+                .filter_map(|c| tightest(c))
+                .flatten()
+                .collect();
             (!all.is_empty()).then_some((all, quality))
         }
     };
@@ -354,10 +388,7 @@ pub fn highlight_quote(verse: &AlignedVerse, quote: &Quote, occurrence: Occurren
     let quality = match chosen {
         Some((instances, quality)) => {
             for g in &groups {
-                if g.sources
-                    .iter()
-                    .any(|s| instances.contains(&(s.content.clone(), s.occurrence)))
-                {
+                if renders(g, &instances) {
                     lit.extend(g.tokens.iter().copied());
                 }
             }
@@ -365,15 +396,24 @@ pub fn highlight_quote(verse: &AlignedVerse, quote: &Quote, occurrence: Occurren
         }
         None => {
             // No such occurrence of the whole quote. A one-word quote still resolves
-            // through the alignment's own occurrence numbers; a longer one lights every
-            // group holding any quote word, so the reader sees something, marked as such.
+            // through the alignment's own occurrence numbers (never occurrence 1's words
+            // for occurrence 2); a longer one lights the shortest run that renders it.
             let exact = match occurrence {
                 Occurrence::Nth(n) if words.len() == 1 => Some(n.get()),
                 _ => None,
             };
-            for g in &groups {
-                if words.iter().any(|w| has(g, w, exact)) {
-                    lit.extend(g.tokens.iter().copied());
+            if words.len() > 1 {
+                let run = shortest_run(&groups, &words);
+                for g in &groups {
+                    if renders(g, &run) {
+                        lit.extend(g.tokens.iter().copied());
+                    }
+                }
+            } else {
+                for g in &groups {
+                    if has(g, first, exact) {
+                        lit.extend(g.tokens.iter().copied());
+                    }
                 }
             }
             if exact.is_some() {
@@ -394,6 +434,61 @@ pub fn highlight_quote(verse: &AlignedVerse, quote: &Quote, occurrence: Occurren
     }
 }
 
+/// The original-word instances of the shortest run of groups, in gateway order, that names
+/// every quote word the verse has, each as many times as the quote names it, capped by the
+/// instances the verse has; a word the verse lacks drops out (tC4 `shortestRunInstances`,
+/// #773). A run holds every instance it saw, and is measured over every group those
+/// instances are rendered by, not over the run itself: en_ult GEN 49:6 renders תָּבֹא#1 as
+/// "Do … let … enter", so a run from "enter" only looks short. Of equally short runs the
+/// first wins, as in tC4 (en_tn PSA 63:1 ovd5 is such a tie).
+fn shortest_run<'v>(groups: &[Group<'v>], words: &[String]) -> BTreeSet<Instance<'v>> {
+    let mut need: BTreeMap<&str, usize> = BTreeMap::new();
+    for w in words {
+        *need.entry(w.as_str()).or_default() += 1;
+    }
+    need.retain(|word, n| {
+        let in_verse: BTreeSet<Instance<'_>> =
+            groups.iter().flat_map(|g| instances_of(g, word)).collect();
+        *n = (*n).min(in_verse.len());
+        *n > 0
+    });
+    let mut best: Option<(BTreeSet<Instance<'v>>, usize)> = None;
+    for (start, first) in groups.iter().enumerate() {
+        if !need.keys().any(|w| has(first, w, None)) {
+            continue;
+        }
+        let mut seen: BTreeMap<&str, BTreeSet<Instance<'v>>> =
+            need.keys().map(|w| (*w, BTreeSet::new())).collect();
+        for group in groups.iter().skip(start) {
+            for (word, instances) in &mut seen {
+                instances.extend(instances_of(group, word));
+            }
+            if !need
+                .iter()
+                .all(|(w, n)| seen.get(w).is_some_and(|s| s.len() >= *n))
+            {
+                continue;
+            }
+            let instances: BTreeSet<Instance<'v>> = seen.values().flatten().copied().collect();
+            let mut marked = groups
+                .iter()
+                .enumerate()
+                .filter(|(_, g)| renders(g, &instances))
+                .map(|(i, _)| i);
+            // Group `start` renders one of the instances seen, so `marked` is never empty.
+            let Some(from) = marked.next() else {
+                break;
+            };
+            let extent = marked.next_back().map_or(0, |to| to - from);
+            if best.as_ref().is_none_or(|(_, shortest)| extent < *shortest) {
+                best = Some((instances, extent));
+            }
+            break;
+        }
+    }
+    best.map(|(instances, _)| instances).unwrap_or_default()
+}
+
 fn first_occurrence(occurrence: Occurrence) -> bool {
     match occurrence {
         Occurrence::Nth(n) => n.get() == 1,
@@ -405,18 +500,14 @@ fn first_occurrence(occurrence: Occurrence) -> bool {
 /// Then the quote can occur only once, and every instance of its words belongs to it, so
 /// lighting every group that renders a quote word is certain even though the gateway
 /// renders the words in another order (`μιᾶς γυναικὸς ἀνήρ`, "a husband of one wife").
-fn unambiguous(groups: &[Group], words: &[String]) -> bool {
-    let mut wanted: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+fn unambiguous(groups: &[Group<'_>], words: &[String]) -> bool {
+    let mut wanted: BTreeMap<&str, usize> = BTreeMap::new();
     for w in words {
         *wanted.entry(w.as_str()).or_default() += 1;
     }
     wanted.into_iter().all(|(word, count)| {
-        let instances: BTreeSet<(&str, u32)> = groups
-            .iter()
-            .flat_map(|g| g.sources.iter())
-            .filter(|s| normalize_word(&s.content) == word)
-            .map(|s| (s.content.as_str(), s.occurrence))
-            .collect();
+        let instances: BTreeSet<Instance<'_>> =
+            groups.iter().flat_map(|g| instances_of(g, word)).collect();
         instances.len() == count
     })
 }

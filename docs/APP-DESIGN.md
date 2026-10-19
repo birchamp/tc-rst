@@ -690,7 +690,7 @@ pub struct VerseRow {
 pub enum VerseView { Text { words: String, layout: LayoutView, last: u16 }, Covered { by: u16 }, Absent }
 
 // source panes carry token runs and highlight word indices; the UI never matches quotes
-// (tc_helps::highlight_quote, crates/tc-helps/src/highlight.rs:268).
+// (tc_helps::highlight_quote, crates/tc-helps/src/highlight.rs:305).
 pub struct SourcePane { pub id: String, pub name: String, pub version: String, pub dir: Direction,
                         pub chapters: Vec<SourceChapter> }
 
@@ -2469,7 +2469,11 @@ The Rust environment's seams:
    `parity/app/masks.json` with the ruling it cites: the build line in `about`, the build and
    platform lines in `feedback`, and the Q2 and Q3 text on the nine `rebuildDiffers` screens
    (`parity/tc4-baseline/README.md`, "Where the rebuild differs on purpose"; the ninth,
-   `open-door43-internet-consent`, shows the Q3 note behind its scrim and was added by A6b).
+   `open-door43-internet-consent`, shows the Q3 note behind its scrim and was added by A6b),
+   and, from B9a, the Urdu (Devanagari) row of `source-texts` under tC4 #701. A ruling is an
+   owner's answer (`Q3`) or a tC4 issue (`#701`) that PLAN lists in parentheses; the baseline's
+   `rebuildDiffers` marks the screens of the owner's answers only, since the issues came after
+   its capture *(FIX-misc)*.
    Fallback glyphs come from the machine's fonts: on the owner's Linux PC the same tC4 commit,
    Chromium build and capture gave other pixels than on the cloud machine on 57 of the 62
    screens and the same DOM on all 62. So both captures record their `machine` (platform,
@@ -3033,7 +3037,7 @@ cut from the integration branch `app` after unit C had merged, like every other 
 | B6 Align: read and session | `align/index`, `open`, `edit`, `keepReflow`, `flush` over a server `Aligner`; the click queue *(A-14)*; the server's save timer on scripted outcomes, `AlignSave` in the indicator and the close guard *(A-4)*, read again from the view's `save` with each refresh, so a `Resync` cannot leave "Saving" standing (§5.4); the pure view builder *(A-14)*; bank, cards, lenses, occurrence numbers, multi-select, drag; marking row; training job and `Suggest` events, with the status read again after a `Resync` (§5.4) | B5a | G0's round trip before B6 merges; Q-13 if it misses 30 ms. B6 can start before G0 reports, because the pure view builder makes Q-13's fallback a switch | J5 steps that do not save; `align_open_touches_one_verse`; `align_click_round_trip_p95` within 30 ms; `fast_clicks_are_queued_not_refused`; `unsaved_links_hold_the_close_guard`; `resync_restores_the_align_save_state` | 6 Align screens |
 | B7 OBS | story rail; OBS Understand, Translate, Check; `/media/obs` | B3, B5a | — | `story_open_touches_one_story` | 6 OBS screens |
 | B8 Community Checking preview | the screen over A10's model; page setup; export items listed; the preview's pages: tC4 measures and splits them in the view (`tC4:src/views/print/PrintPages.jsx`), so the UI applies the page setup to each page's parts with `model::print_parts`, the twin of `tc_export::book::print_parts` (§3.8) | B4a, B7, A10 | — | print preview scenarios on Titus and the OBS sample; the `print_parts` differential test | `en-community-checking` |
-| B9a Settings, source texts, downloads | M7 (read, and `viewFromHome` per AD14); M8 steps 1 and 2; download jobs over A11's streaming (`install_dcs_watched`, with a `DownloadWatch` over the job's counters and cancel token); A11's streaming in tc-resources' `AquiferClient` before an Aquifer asset gets a `Download` job (§4.6). tC4 shows only the repository being fetched (`sources.progress`) and has no Cancel; a byte count or a Cancel button is a declared difference for the owner (AGENTS.md, "Matching tC4") | B2, B3, A11 | — | settings-contract (read part); cancel leaves no partial install | `project-settings`, `source-texts` |
+| B9a Settings, source texts, downloads | M7 (read, and `viewFromHome` per AD14); M8 steps 1 and 2; download jobs over A11's streaming (`install_dcs_watched`, with a `DownloadWatch` over the job's counters and cancel token); A11's streaming in tc-resources' `AquiferClient` before an Aquifer asset gets a `Download` job (§4.6). tC4 shows only the repository being fetched (`sources.progress`) and has no Cancel; a byte count or a Cancel button is a declared difference for the owner (AGENTS.md, "Matching tC4"). `source-texts` draws the Urdu (Devanagari) row as उर्दू, left to right, where tC4 draws اردو: a mask in `parity/app/masks.json` covers that row and cites `#701`, which docs/PLAN.md lists among the differences on purpose (FIX-misc) | B2, B3, A11 | — | settings-contract (read part); cancel leaves no partial install | `project-settings`, `source-texts` |
 | B9b Share steps and Open from Door43 | share target and check steps against the fake; R12 (count and the fake's route); M6 form with `ScriptedOpenDoor43`; shared state on cards | A8, B2 | — | `openFromDoor43Dialog` port; internet-consent share and open cases | 6 screens (§7.6) |
 | B10 Scripted sync and conflict chips | `ScriptedSync`; `SyncResultView`; X10 toast; X12 chips and tile counts from fold conflicts | B9b | — | `syncButton` toast ports; sync refusal closed-set test through the UI | 7 screens; milestone: 62 of 62 in the report |
 | B11 Conflict review: read side | review tabs, grouping, labels, colours, clock warning; detail; History; Detached; Notices; "2 versions" markers in Translate, Align and Check; resolve on scripted outcomes with the double-submit rule *(A-27)* | B4a, B5b, B6 | — | `actorLabel` port; gallery case S4 Text tab against tC4's verse review; a second click gets the first reply | J18's UI steps on scripted outcomes |
