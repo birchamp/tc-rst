@@ -167,8 +167,8 @@ fn rail_row(
     actions: &Actions,
     row: &RailRow,
     terms: &[String],
-    active: bool,
-    stop: bool,
+    active: Signal<Option<u32>>,
+    stop: Signal<Option<u32>>,
     style_extra: Option<Css>,
 ) -> AnyView {
     let index = row.index;
@@ -181,22 +181,28 @@ fn rail_row(
         .unwrap_or_default();
     let flags = row.flags;
     let dot = rail::dot_id(flags.dot);
-    let mut style = crate::css! {
-        "border": format!("var(--stroke) solid {}", if active { "var(--accent)" } else { "var(--border)" }),
-        "text-align": "start",
-        "cursor": "pointer",
-        "font-family": "inherit",
-        "border-radius": "var(--radius-md)",
-        "padding": "10px 12px",
-        "width": "100%",
-        "display": "flex",
-        "align-items": "center",
-        "gap": 10,
-        "background": if active { "var(--surface-accent-soft)" } else { "var(--surface-card)" },
+    // The selection moves without drawing the row again, so the row with the focus keeps it.
+    let is_active = move || active.get() == Some(index);
+    let style = move || {
+        let on = is_active();
+        let mut style = crate::css! {
+            "border": format!("var(--stroke) solid {}", if on { "var(--accent)" } else { "var(--border)" }),
+            "text-align": "start",
+            "cursor": "pointer",
+            "font-family": "inherit",
+            "border-radius": "var(--radius-md)",
+            "padding": "10px 12px",
+            "width": "100%",
+            "display": "flex",
+            "align-items": "center",
+            "gap": 10,
+            "background": if on { "var(--surface-accent-soft)" } else { "var(--surface-card)" },
+        };
+        if let Some(extra) = &style_extra {
+            style.extend(extra);
+        }
+        style.to_style()
     };
-    if let Some(extra) = style_extra {
-        style.extend(&extra);
-    }
     let dot_style = crate::css! {
         "width": 9,
         "height": 9,
@@ -233,10 +239,10 @@ fn rail_row(
             type="button"
             data-i="choice"
             data-tone="accent"
-            data-selected=active.then_some("true")
+            data-selected=move || is_active().then_some("true")
             data-rail-index=index.to_string()
-            tabindex=if stop { "0" } else { "-1" }
-            aria-current=active.then_some("true")
+            tabindex=move || if stop.get() == Some(index) { "0" } else { "-1" }
+            aria-current=move || is_active().then_some("true")
             title=format!("{locator} · {group}")
             data-ref=locator.clone()
             data-check-id=row.check_id.clone()
@@ -246,7 +252,7 @@ fn rail_row(
             data-bookmarked=if flags.bookmarked { "1" } else { "0" }
             data-commented=if flags.commented { "1" } else { "0" }
             data-save-error="0"
-            style=style.to_style()
+            style=style
             on:click=move |_| actions.select_check(index)
         >
             <span style=dot_style.to_style()></span>
@@ -447,98 +453,144 @@ fn check_rail(s: &AppState, actions: &Actions, rail: &Rail, tool: Tool, book: Bo
     };
     let scroll_top = RwSignal::new(0.0_f64);
     let list_ref = NodeRef::<leptos::html::Div>::new();
-    let list = {
-        let (c, rows, terms, actions, unit) = (
-            c.clone(),
+    let active: Signal<Option<u32>> = {
+        let c = c.clone();
+        Signal::derive(move || c.active.get())
+    };
+    let stop: Signal<Option<u32>> = Memo::new(move |_| {
+        let current = active.get();
+        layout.with(|(_, order)| tab_stop(order, current))
+    })
+    .into();
+    let by_index: Arc<std::collections::HashMap<u32, usize>> = Arc::new(
+        rows.iter()
+            .enumerate()
+            .map(|(at, row)| (row.index, at))
+            .collect(),
+    );
+    let list = if rows.len() <= VIRTUAL_FROM {
+        // tC4's DOM: a group of rows under its heading. Drawn again only when the filter or the
+        // sort changes.
+        let (rows, terms, actions, unit) =
+            (rows.clone(), terms.clone(), actions.clone(), unit.clone());
+        (move || {
+            layout.with(|(groups, _)| {
+                let overline = crate::css! { "margin": "0 0 6px" };
+                let column =
+                    crate::css! { "display": "flex", "flex-direction": "column", "gap": 6 };
+                groups
+                    .iter()
+                    .map(|g| {
+                        let label = group_label(g.label, &terms, &unit);
+                        let buttons: Vec<AnyView> = g
+                            .rows
+                            .iter()
+                            .filter_map(|&at| rows.get(at))
+                            .map(|row| rail_row(&actions, row, &terms, active, stop, None))
+                            .collect();
+                        view! {
+                            <div>
+                                <Overline tag="p" style=overline.clone()>{label}</Overline>
+                                <div style=column.to_style()>{buttons}</div>
+                            </div>
+                        }
+                        .into_any()
+                    })
+                    .collect::<Vec<_>>()
+            })
+        })
+        .into_any()
+    } else {
+        // A-24: fixed heights, the rows in view and the tab stop mounted, each line keyed, so a
+        // scroll or a move of the selection never draws the focused row again.
+        let plan = {
+            let rows = rows.clone();
+            Memo::new(move |_| {
+                layout.with(|(groups, _)| {
+                    let indices: Vec<Vec<u32>> = groups
+                        .iter()
+                        .map(|g| {
+                            g.rows
+                                .iter()
+                                .filter_map(|&at| rows.get(at).map(|r| r.index))
+                                .collect()
+                        })
+                        .collect();
+                    let labels: Vec<GroupLabel> = groups.iter().map(|g| g.label).collect();
+                    (RailLayout::new(&indices), labels)
+                })
+            })
+        };
+        let lines = Memo::new(move |_| {
+            let height = list_ref
+                .get()
+                .map_or(800.0, |el| f64::from(el.client_height()));
+            let keep: Vec<u32> = stop.get().into_iter().chain(active.get()).collect();
+            plan.with(|(plan, _)| {
+                // A filter that shortens the list clamps the browser's scroll without a scroll
+                // event: the window follows the clamp.
+                let top = scroll_top.get().min((plan.height - height).max(0.0));
+                let window = plan.window(top, height);
+                plan.mounted(window, &keep)
+            })
+        });
+        let spacer = move || {
+            plan.with(|(plan, _)| {
+                format!("position: relative; height: {}px; flex: none;", plan.height)
+            })
+        };
+        let (rows, terms, actions, unit, by_index) = (
             rows.clone(),
             terms.clone(),
             actions.clone(),
             unit.clone(),
+            by_index.clone(),
         );
-        move || {
-            let active = c.active.get();
-            layout.with(|(groups, order)| {
-                let stop = tab_stop(order, active);
-                let by_index = |i: u32| rows.iter().find(|r| r.index == i);
-                if rows.len() <= VIRTUAL_FROM {
-                    let overline = crate::css! { "margin": "0 0 6px" };
-                    let column = crate::css! { "display": "flex", "flex-direction": "column", "gap": 6 };
-                    groups
-                        .iter()
-                        .map(|g| {
-                            let label = group_label(g.label, &terms, &unit);
-                            let buttons: Vec<AnyView> = g
-                                .rows
-                                .iter()
-                                .filter_map(|&at| rows.get(at))
-                                .map(|row| {
-                                    rail_row(&actions, row, &terms, Some(row.index) == active, Some(row.index) == stop, None)
-                                })
-                                .collect();
-                            view! {
-                                <div>
-                                    <Overline tag="p" style=overline.clone()>{label}</Overline>
-                                    <div style=column.to_style()>{buttons}</div>
-                                </div>
-                            }
-                            .into_any()
-                        })
-                        .collect::<Vec<_>>()
-                } else {
-                    // A-24: fixed heights, the rows in view and the tab stop mounted.
-                    let indices: Vec<Vec<u32>> = groups
-                        .iter()
-                        .map(|g| g.rows.iter().filter_map(|&at| rows.get(at).map(|r| r.index)).collect())
-                        .collect();
-                    let plan = RailLayout::new(&indices);
-                    let height = list_ref
-                        .get_untracked()
-                        .map_or(800.0, |el| f64::from(el.client_height()));
-                    let window = plan.window(scroll_top.get(), height);
-                    let keep: Vec<u32> = stop.into_iter().chain(active).collect();
-                    let lines = plan.mounted(window, &keep);
-                    let place = |y: f64, h: f64| {
-                        crate::css! {
-                            "position": "absolute",
-                            "top": y,
-                            "left": 0,
-                            "right": 0,
-                            "height": h,
-                        }
-                    };
-                    let mut out: Vec<AnyView> = vec![view! {
-                        <div style=format!("position: relative; height: {}px; flex: none;", plan.height)></div>
-                    }
-                    .into_any()];
-                    for (line, y) in lines {
-                        match line {
-                            Line::Header(n) => {
-                                let label = groups
-                                    .get(n)
-                                    .map(|g| group_label(g.label, &terms, &unit))
-                                    .unwrap_or_default();
-                                out.push(view! {
-                                    <Overline tag="p" style=place(y, crate::app::check::HEADER_HEIGHT).merge(&crate::css! { "margin": 0 })>{label}</Overline>
-                                }.into_any());
-                            }
-                            Line::Row(index) => {
-                                if let Some(row) = by_index(index) {
-                                    out.push(rail_row(
-                                        &actions,
-                                        row,
-                                        &terms,
-                                        Some(index) == active,
-                                        Some(index) == stop,
-                                        Some(place(y, crate::app::check::ROW_HEIGHT - 6.0)),
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                    out
+        // Lines are placed from the list's padding edge; the list's 14 px padding comes first.
+        let place = |y: f64, h: f64| {
+            crate::css! {
+                "position": "absolute",
+                "top": y + 14.0,
+                "left": 14,
+                "right": 14,
+                "height": h,
+            }
+        };
+        view! {
+            <div style=spacer></div>
+            <For
+                each=move || {
+                    // For moves a kept row with insertBefore, which blurs it: the row that had the
+                    // focus gets it back (ds::keyed_list does the same).
+                    crate::ds::refocus_after_moves();
+                    lines.get()
                 }
-            })
+                key=|(line, y): &(Line, f64)| (*line, y.to_bits())
+                children=move |(line, y): (Line, f64)| match line {
+                    Line::Header(n) => {
+                        let label = plan.with_untracked(|(_, labels)| {
+                            labels.get(n).map(|l| group_label(*l, &terms, &unit)).unwrap_or_default()
+                        });
+                        view! {
+                            <Overline tag="p" style=place(y, crate::app::check::HEADER_HEIGHT).merge(&crate::css! { "margin": 0 })>{label}</Overline>
+                        }
+                        .into_any()
+                    }
+                    Line::Row(index) => match by_index.get(&index).and_then(|&at| rows.get(at)) {
+                        Some(row) => rail_row(
+                            &actions,
+                            row,
+                            &terms,
+                            active,
+                            stop,
+                            Some(place(y, crate::app::check::ROW_HEIGHT - 6.0)),
+                        ),
+                        None => ().into_any(),
+                    },
+                }
+            />
         }
+        .into_any()
     };
     let list_style = crate::css! {
         "flex": 1,

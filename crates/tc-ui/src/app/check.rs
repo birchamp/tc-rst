@@ -214,7 +214,7 @@ pub const GROUP_GAP: f64 = 16.0;
 pub const OVERSCAN: usize = 8;
 
 /// One line of a virtual rail.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Line {
     /// The heading of group `n`.
     Header(usize),
