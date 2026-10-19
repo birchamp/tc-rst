@@ -7,6 +7,7 @@ mod app {
     pub mod common;
     mod dispatch;
     mod events;
+    mod feedback;
     mod field_store;
     mod flows;
     mod folders;

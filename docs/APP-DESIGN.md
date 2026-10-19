@@ -452,7 +452,7 @@ pub enum ApiError {
     NeedsInternet(NetKind),                     // nothing was sent
     NeedsSignIn(SignInReason),                  // NotSignedIn | TokenRejected | PrivateRepository (Q3)
     Busy(Flow),                                 // a one-at-a-time flow runs (AD31)
-    Unavailable(Feature),                       // the backend cannot do this yet (before S1, X, I; in phase 0 also the account rows until A8 and the feedback attachment until A5)
+    Unavailable(Feature),                       // the backend cannot do this yet (before S1, X, I; in phase 0 also the account rows until A8; A5 built the feedback attachment)
     Internal { report: ReportId },              // a bug; "Ask for help" carries the report
 }
 
@@ -1195,7 +1195,7 @@ There is no `ProjectIndex` *(A-21)*: §4.3 says how each read finds its keys.
 | `account` | `InternetSwitch`, `mint_token` (`crates/tc-door43/src/client.rs:397`), `session_for_token` (`:436`), `list_orgs` (`:442`) | `Keychain` trait: `OsKeychain` (`keyring`, Q-3) and `MemKeychain`; "no keychain on this computer" kept |
 | `door43`, `exchange`, `import` | `SyncPort`, `ExchangePort`, `ImportPort` | map reports to view types and refusals to §3.5 |
 | `export` | tc-export | warns while conflicts are open (STORAGE:2696-2697); checkpoints first from D1 |
-| `feedback` | `ReportLog` | port of `tC4:src/data/feedback.ts:7-31` |
+| `feedback` | `ReportLog` | port of `tC4:src/data/feedback.ts:7-31` *(A5, D8: `tc_app::feedback`. The attachment is `translationCore {version} ({commit}) · {platform}`, then `no Report`, or `Report: {op}, {endedAt}` and the report as JSON indented by two spaces in tC4's `Report` key order: `op`, `ok`, `code` when a refusal has one, then the rebuild's `key` (a refusal's sentence) or `reason` (what failed without one), `facts`, `startedAt`, `endedAt` in `toISOString`'s form. `{platform}` is the server's `std::env::consts`, `Linux x86_64`, `Windows x86_64` or `macOS aarch64`, not `navigator.platform`, which says `MacIntel` on Apple silicon and `Win32` on 64-bit Windows (tC4 #731). The text is English whatever the app language, as tC4's; the server composes from its own log, which `test/reset` empties, so a parity capture shows `no Report` as tC4's does.)* |
 
 ### 4.8 Plans and proposals
 

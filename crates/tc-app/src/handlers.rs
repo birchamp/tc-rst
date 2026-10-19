@@ -1,7 +1,7 @@
 //! One handler per product endpoint of phase 0 (APP-DESIGN §3.9). `dispatch` routes to them,
 //! and an endpoint row without a handler here does not compile.
 //!
-//! The account and feedback rows that later units build answer `Unavailable` until then.
+//! The account rows that unit A8 builds answer `Unavailable` until then.
 
 use serde_json::json;
 use tc_api::account::{
@@ -18,6 +18,7 @@ use tc_api::{API_VERSION, ApiError, NotSaved, Refusal};
 
 use crate::app::{App, lock};
 use crate::dispatch::Handle;
+use crate::feedback;
 use crate::reports::{ReportOp, ReportOutcome, facts};
 use crate::sessions::SessionInfo;
 
@@ -216,8 +217,13 @@ impl Handle<ProfileLink> for App {
 }
 
 impl Handle<Compose> for App {
-    /// Unit A5 composes the attachment from the report log.
-    async fn handle(&self, _req: Compose) -> Result<FeedbackDraft, ApiError> {
-        Err(ApiError::Unavailable(Feature::Feedback))
+    /// The attachment from this server's own report log, in English (A5, D8).
+    async fn handle(&self, req: Compose) -> Result<FeedbackDraft, ApiError> {
+        let inner = &self.inner;
+        let line = feedback::version_line(&inner.config.build, &feedback::platform());
+        let report = inner.reports.to_attach(req.report);
+        Ok(FeedbackDraft {
+            attachment: feedback::attachment_text(&line, report.as_ref()),
+        })
     }
 }
