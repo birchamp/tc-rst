@@ -489,6 +489,9 @@ pub struct FoldState {
     /// the state itself.
     pub(crate) records: Option<Arc<super::cow::FxMap<ChangeIdx, Arc<Record>>>>,
     pub(crate) counters: Arc<CounterCells>,
+    /// Reads of a value the source could not give (§2.6), counted apart from the counters so
+    /// a state given counters of its own keeps counting them.
+    pub(crate) unreadable_reads: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl FoldState {
@@ -549,6 +552,7 @@ impl FoldState {
             source: None,
             records: None,
             counters: Arc::new(CounterCells::default()),
+            unreadable_reads: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 
@@ -2212,8 +2216,23 @@ impl FoldState {
             file: value.file,
             len: value.len,
         };
-        let bytes = self.source.as_ref()?.read(at)?;
-        (super::value::fingerprint(&bytes) == value.fingerprint()).then(|| Arc::from(bytes))
+        let bytes = self
+            .source
+            .as_ref()
+            .and_then(|source| source.read(at))
+            .filter(|bytes| super::value::fingerprint(bytes) == value.fingerprint());
+        if bytes.is_none() {
+            self.unreadable_reads
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        bytes.map(Arc::from)
+    }
+
+    /// How many reads of a value the source could not give so far (§2.6). A projection that
+    /// moved it showed a version it could not read as absent, and is not written.
+    pub fn values_unreadable(&self) -> u64 {
+        self.unreadable_reads
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
