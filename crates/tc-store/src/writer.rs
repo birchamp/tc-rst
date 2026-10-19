@@ -2,7 +2,7 @@
 //!
 //! The actor commits batches and seals; this thread owns everything about derived files: the
 //! manifest, the holds, the busy paths, the byte copies in `.tc/external/`, the heads files,
-//! the materialize intent and `metadata.json`. A materialization runs here, from a snapshot
+//! the placement ledger and `metadata.json`. A materialization runs here, from a snapshot
 //! the actor published, so a save never waits for a derived file, however long a book takes
 //! or however slowly a scanner lets go of a file (owner ruling 2026-10-18).
 //!

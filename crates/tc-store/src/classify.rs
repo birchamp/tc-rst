@@ -227,8 +227,31 @@ impl Writer {
             None => Disk::Missing,
         };
         let facts = self.facts_of(rel, &disk, projection, heads_readable);
-        let actions = self.apply(rel, Event::Read(disk), &facts);
+        let actions = self.read_event(rel, disk, &facts)?;
         self.perform(rel, bytes, actions)
+    }
+
+    /// Hands a read to the ledger. A rename a stopped process made may be in the page cache
+    /// only: once the ledger takes its bytes as placed, they are flushed, so a power cut cannot
+    /// put back the bytes before it while the ledger names these (§6.4).
+    pub(crate) fn read_event(
+        &mut self,
+        rel: &str,
+        disk: Disk,
+        facts: &Facts,
+    ) -> Result<Vec<Action>, StoreError> {
+        let renamed = matches!((&self.state_of(rel), &disk),
+            (State::Writing { new, .. }, Disk::Bytes { md5 }) if new == md5);
+        let actions = self.apply(rel, Event::Read(disk), facts);
+        if renamed {
+            let path = self.folder.path(rel);
+            let (dir, _) = self.folder.dir_and_name(rel);
+            self.vfs
+                .sync_file(&path)
+                .and_then(|()| self.vfs.sync_dir(&dir))
+                .map_err(|e| StoreError::io("flush", &path, e))?;
+        }
+        Ok(actions)
     }
 
     /// Performs the actions of a read's decision.

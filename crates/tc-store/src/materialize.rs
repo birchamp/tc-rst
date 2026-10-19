@@ -1,11 +1,12 @@
-//! Materialize derived files (`docs/STORAGE.md` §5.10, M0 to M8): write the derived files
-//! whose projection changed and `metadata.json`, with an intent file, a manifest and a
-//! compare-and-swap, so the app never writes over a file it did not write last (I8).
+//! Materialize derived files (`docs/STORAGE.md` §5.10, M0 to M7): write the derived files
+//! whose projection changed and `metadata.json`, reading every path first and naming every
+//! write in the placement ledger before its rename (`crate::ledger`, §6.2), so the app never
+//! writes over bytes it cannot say it wrote while the fold holds what they show (I8).
 //!
-//! A derived file that changed outside the app is not written over: a copy of its bytes goes
-//! to `.tc/external/`, and the file is either held (its time says nothing was saved, so the
-//! bytes are storage damage, §6.2) or examined and recorded as changes (§11.1, `outside`),
-//! and then written again from the project. Carried files are placed from the object database
+//! Bytes the ledger keeps are not written over: a copy goes to `.tc/external/`, and the file
+//! is either held (its time says nothing was saved, so the bytes are storage damage, §6.2) or
+//! examined and recorded as changes (§11.1, `outside`), and then written again from the
+//! project. Carried files are placed from the object database
 //! (`carried`); they and the fixed files are listed in `metadata.json` as their bytes are on
 //! disk (I7), read or verified by stat as a derived file is.
 //!
@@ -1033,7 +1034,7 @@ impl Writer {
             },
             true,
         );
-        for action in self.apply(METADATA, Event::Read(disk_md5), &facts) {
+        for action in self.read_event(METADATA, disk_md5, &facts)? {
             match action {
                 Action::Record(base) => {
                     self.keep_edited_metadata(&disk, base)?;

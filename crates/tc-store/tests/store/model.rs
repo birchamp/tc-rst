@@ -11,7 +11,8 @@
 //!   took every copy of it (a journal line cut away, and no file in the folder showing it; for a
 //!   save of the session that runs, the session holds it until its next seal, and a kill before
 //!   that takes it unless a file still shows it); a
-//!   member of a batch that lost another member waits for the rest (§7.4) and counts as kept,
+//!   member of a batch that lost another member waits for the rest (§7.4), and a save the
+//!   journal lost that is in a byte copy in `.tc/external/` (with its notice), count as kept,
 //!   unless a file in the folder showed it when the open read the journal: those bytes are then
 //!   the record of it, and the app must record them, not write the file over without it;
 //! - every put is in the folder still, is what the project would write there, or is copied to
@@ -805,6 +806,7 @@ impl Run {
             return Ok(());
         }
         let mut lost = Vec::new();
+        let fs = self.fs();
         for save in &self.saves {
             if save.fate == Fate::Destroyed {
                 continue;
@@ -812,12 +814,19 @@ impl Run {
             if self.in_history(save) {
                 continue;
             }
-            if !save.shown && self.waiting(save) {
+            if !save.shown && (self.waiting(save) || self.text_in_external(&save.text)) {
                 continue;
             }
             // While a session runs, a copy in the folder the next open reads (a journal line,
             // a pack HEAD holds, a file showing it) is not lost yet.
             if !settled && self.on_disk(&save.text) {
+                continue;
+            }
+            // A file another program holds is not read yet: what it shows is not lost yet.
+            if self.locked.iter().any(|rel| {
+                fs.peek(&self.folder.join(rel))
+                    .is_some_and(|b| contains(&b, &save.text))
+            }) {
                 continue;
             }
             if save.fate == Fate::InMemory && !settled {

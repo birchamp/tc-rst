@@ -231,7 +231,7 @@ impl Writer {
         }
     }
 
-    /// The size and time of an entry whose bytes the read found to be the entry's.
+    /// The size and time of bytes the read found to be the ones the ledger placed.
     fn take_stat_of(&mut self, rel: &str, len: u64, mtime: i64) {
         let settled = self.settles(mtime);
         self.note(

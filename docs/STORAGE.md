@@ -2268,7 +2268,8 @@ file the ledger does not name as the app's is held, not removed (§6.2). A file 
 ## 6. Open and recovery
 
 Every multi-file operation is a sequence of idempotent steps whose partial result is either
-valid on its own or named by an intent file. A materialization writes an intent; a seal and a
+valid on its own or named by the placement ledger. A materialization names its writes in the
+ledger before their renames (§5.10 M3, §6.2); a seal and a
 consolidation leave pending files or packs that the redundancy rules recognize; an intake writes
 immutable packs, each valid alone. Recovery never rolls back: it completes the operation from
 bytes already on local disk. There is no scratch copy of the project and no marker that can lock
@@ -2773,6 +2774,7 @@ next starts, so power loss is covered by the same rows (the row says where a los
 | M4 | materialize | files written, `metadata.json` not | `metadata.json` stale: the folder is not a valid burrito | O10 rewrites it | after |
 | M5 | materialize | `metadata.json` written, manifest not | manifest stale | O9: `d == e` → refresh | after |
 | M6 | materialize | a program put the old bytes back after a rename and before M7 | `Writing{old, new}`, `d = old`, another size or mtime | O9: R9, recorded with no base and kept in `.tc/external/`: at worst an extra conflict | after |
+| M7 | materialize | killed after a rename, before its directory flush; reopened without a power cut | the rename in the page cache only | O9: `d = new`, the file and its directory are flushed before the ledger names the bytes placed, so a later power cut cannot put the old bytes back under it | after |
 | G1 | commit | objects written, ref not moved | HEAD old, loose orphans | the next checkpoint commits again; repack drops orphans | after (git is not the truth) |
 | G2 | commit | ref lock file left | `refs/heads/<b>.lock` | O2 removes it | after |
 | G3 | commit | power loss loses the ref rename | HEAD at the previous commit | the next checkpoint commits again | after |
@@ -4052,8 +4054,9 @@ X3  For each key k in the union of the decoded keys and the heads file's keys:
     only when the decoded `invalidated` is false.
 X4  One batch, cause External { source: LocalFile { path, seen_md5 }, unknown_base }, this
     device; the pending header
-    carries reconciles {path, seenMd5}. If a pending or sealed batch already reconciles the same
-    path and md5, nothing is written (crash rows X1, X2).
+    carries reconciles {path, seenMd5}. A record that a pending batch reconciling the same
+    path and md5 already changed is not recorded again (crash rows X1, X2); a record it did not
+    change is (the fold may have lost since a change the bytes show, §6.2), in a batch of its own.
 X5  Fold. A known-base change whose parents are no longer the heads (the app or a teammate
     changed k after the file was written) is a sibling of the newer head: a conflict. An
     unknown-base change is a conflict with the current head unless the values are equal.
@@ -4740,6 +4743,8 @@ and the on-disk end state, not only what the fold returns.
 | L112 | `metadata.json` renamed by a group killed before M7, then put back by another program while closed: taken for the app's own and written over | `metadata.json` is decided by the same table, at M1 and at M6's last look (§5.10, §6.2) | `a_revert_of_metadata_json_after_a_kill_past_its_rename_is_kept` |
 | L113 | A save's journal line cut while the app runs and the version it saved replaced by a newer save: the job writes the book file, the last copy of the older version, over, because the fold's index still holds the change | `holds` reads the value of every version the bytes show that the projection no longer reads (§6.2) | `random_histories_lose_no_work` |
 | L114 | A project detail whose value can no longer be read: the token rule leaves its head out of `metadata.json`'s heads, so the ledger names nothing to ask the fold about, and a later write drops the detail | the ledger names the version the projection shows when the token rule leaves it out (§3.6) | `random_histories_lose_no_work` |
+| L115 | Bytes recorded once (a save the fold still held was skipped by its digest), then the journal loses that save and the next look records the same bytes again: a batch that reconciles the same path and md5 makes the second recording write nothing, and the file is written over without the save | only the records the earlier batch changed are left out of the second recording (§11.1 X4) | `random_histories_lose_no_work_long` |
+| L116 | A process killed after a rename and before its directory flush; the next open takes the new bytes as placed and writes nothing, so the rename stays in the page cache; the journal line of a save the file shows is cut, and a power cut puts the bytes before the rename back: the save is gone | a read that settles `Writing` on its new bytes flushes the file and its directory before the ledger names them placed (§6.2, §6.4 M7) | `random_histories_lose_no_work_long` |
 
 ---
 
@@ -4815,7 +4820,8 @@ action runs, and the action runs once under each model; a save the disk answered
 "Saved" is present (the model drops an unflushed rename, so this fails if `atomic_write` skips
 the rename flush of §5.0 step 4 or open deletes a complete temp file); no batch is half applied;
 the folder passes `tc_burrito::check` after open, including after a crash inside every write
-group of I7 (seal, consolidation, intake packs, materialization); no intent file is left; a
+group of I7 (seal, consolidation, intake packs, materialization); no path is left in the ledger's
+`Writing` state; a
 second open changes nothing. The restart's own work must survive a power cut as well: after
 each kill the project is opened again and closed (which seals and materializes what the kill
 left), and a power cut is taken after that; every change the folder held before the close must
@@ -5010,7 +5016,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the coherence view of an unverified section draft (current values, no parents) | `an_unverified_section_draft_that_holds_a_span_can_be_kept` |
 | the session's `Placed{new}` after a rename of a group that stopped (keep `Writing`) | `a_group_that_fails_after_a_rename_does_not_mistake_its_bytes_for_an_outside_edit`, `a_focus_after_a_group_stopped_does_not_take_its_bytes_for_an_outside_edit`, `an_outside_revert_after_a_stopped_group_is_recorded_as_a_conflict`, `a_retry_after_a_stopped_group_does_not_write_over_an_outside_revert`, `an_outside_revert_of_metadata_json_after_a_stopped_group_is_an_edit` |
 | a `Writing` state kept until a read decides it (drop it when a group could not read the path) | `a_group_keeps_the_intent_of_a_path_it_could_not_read` |
-| `Writing` at the open (read its md5s as no one's) | `crash_materialize_intent_tells_its_bytes_from_an_outside_edit` |
+| `Writing` at the open (read its md5s as no one's) | `crash_materialize_ledger_tells_its_bytes_from_an_outside_edit` |
 | the heads of new bytes written before their rename (after it) | `a_retry_that_finds_the_file_converged_writes_its_heads_file`, `a_crash_after_a_rename_leaves_no_stale_heads_file_for_a_later_edit`, `a_close_while_the_heads_file_is_held_leaves_no_stale_heads_file_for_a_later_edit`, `a_heads_file_the_open_could_not_write_is_written_by_a_later_open`, `metadata_json_is_not_renamed_before_its_heads_are_written` |
 | the ledger's transition table (any row that writes over bytes it does not name, or that the fold does not hold) | `every_pair_of_the_table_keeps_every_byte`, `the_reviews_cases_are_kept`, `random_histories_lose_no_work` |
 | the stored size of a carried file waiting to be recorded (the size of the bytes kept in memory, none) | `a_carried_file_waiting_to_be_recorded_is_listed_as_it_is` |

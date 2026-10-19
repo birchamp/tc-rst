@@ -3,7 +3,8 @@
 //! kill point; at each, the files a killed process leaves and the files a power cut leaves
 //! (under both power-loss models) are opened again, and the open must show the action's
 //! before or after state, every save that was reported saved, no half batch, a valid
-//! burrito and no intent file, and a second open must change nothing.
+//! burrito and no write left unsettled in the placement ledger, and a second open must change
+//! nothing.
 
 use crate::common::*;
 use std::collections::BTreeMap;
@@ -45,9 +46,10 @@ fn reopen_checked(fs: FaultFs, folder: &Path) -> (Rig, ProjectHandle) {
         .unwrap_or_else(|e| panic!("the open after a crash failed: {e}"));
     handle.wait_idle();
     let all = files(&rig.fs, folder);
+    let manifest = String::from_utf8_lossy(&all[".tc/materialized.json"]).into_owned();
     assert!(
-        !all.contains_key(".tc/materialize.intent.json"),
-        "an intent file is left after the open"
+        !manifest.contains("\"state\":\"writing\""),
+        "a write is left unsettled in the ledger after the open: {manifest}"
     );
     assert!(
         !all.keys().any(|p| p.contains("/.~") || p.starts_with(".~")),
@@ -431,14 +433,14 @@ fn crash_materialize_rewrites_forward() {
     });
 }
 
-/// §6.2 row `d in {o, n}`, §16.7: the intent tells the bytes of the app's own interrupted write
-/// from an outside edit when the fold the open ends with is not the one the killed job worked
-/// from. A teammate changed the verse the job was writing before the next open: the file the
-/// job left holds the verse as the job projected it, which neither the manifest nor the new
-/// projection names, and only the intent says it is the app's own. Read as an edit it would
-/// be recorded and make a conflict between the app's text and the teammate's.
+/// §6.2 R4 to R8, §16.7: the ledger tells the bytes of the app's own interrupted write from an
+/// outside edit when the fold the open ends with is not the one the killed job worked from. A
+/// teammate changed the verse the job was writing before the next open: the file the job left
+/// holds the verse as the job projected it, which the new projection does not name, and only
+/// the ledger's `Writing` state says it is the app's own. Read as an edit it would be recorded
+/// and make a conflict between the app's text and the teammate's.
 #[test]
-fn crash_materialize_intent_tells_its_bytes_from_an_outside_edit() {
+fn crash_materialize_ledger_tells_its_bytes_from_an_outside_edit() {
     use std::sync::Mutex;
     use tc_journal::fold::{ConflictKind, Notice};
     use tc_journal::record::VerseValue;

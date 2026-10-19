@@ -487,8 +487,8 @@ impl Project {
 }
 
 impl Project {
-    /// Commits the plan of an outside edit as one batch (§11.1 X4). A file whose bytes a
-    /// pending batch already reconciles is not recorded twice.
+    /// Commits the plan of an outside edit as one batch (§11.1 X4). A record a pending batch
+    /// that reconciles the same bytes already changed is not recorded twice.
     pub(crate) fn record_outside(
         &mut self,
         rel: &str,
@@ -512,24 +512,30 @@ impl Project {
             heads,
         };
         let already = (rel.to_owned(), seen);
-        if let Some(pending) = self
+        // Recorded before (a crash between the batch and the file's rewrite, or a look that
+        // found the same bytes again): the changes of those batches are the base of the bytes
+        // in the folder all the same, and only a record they did not change is recorded now
+        // (the fold may have lost since a change the bytes show, §6.2).
+        let earlier: Vec<(tc_journal::RecordKey, tc_journal::ChangeId)> = self
             .journal
             .pending
             .values()
-            .find(|p| p.reconciles.as_ref() == Some(&already))
-        {
-            // Recorded before (a crash between the batch and the file's rewrite): its changes
-            // are the base of the bytes in the folder all the same.
-            let heads = pending
-                .ids
-                .iter()
-                .filter_map(|id| Some((self.fold.change(id)?.key, *id)))
-                .collect();
-            return done(None, 0, heads);
+            .filter(|p| p.reconciles.as_ref() == Some(&already))
+            .flat_map(|p| p.ids.iter())
+            .filter_map(|id| Some((self.fold.change(id)?.key, *id)))
+            .collect();
+        let mut planned = plan.changes;
+        if !earlier.is_empty() {
+            let keys: std::collections::BTreeSet<&tc_journal::RecordKey> =
+                earlier.iter().map(|(key, _)| key).collect();
+            planned.retain(|c| !keys.contains(&c.record.key()));
+            if planned.is_empty() {
+                return done(None, 0, earlier);
+            }
         }
-        let changes = u32::try_from(plan.changes.len()).unwrap_or(u32::MAX);
+        let changes = u32::try_from(planned.len()).unwrap_or(u32::MAX);
         let plan = Plan {
-            changes: plan.changes,
+            changes: planned,
             skipped: Vec::new(),
             kept: Vec::new(),
         };
@@ -544,11 +550,13 @@ impl Project {
                     .first()
                     .and_then(|id| self.fold.change(id))
                     .map(|view| view.batch);
-                let heads = reply
-                    .changes
-                    .iter()
-                    .filter_map(|id| Some((self.fold.change(id)?.key, *id)))
-                    .collect();
+                let mut heads = earlier;
+                heads.extend(
+                    reply
+                        .changes
+                        .iter()
+                        .filter_map(|id| Some((self.fold.change(id)?.key, *id))),
+                );
                 done(batch, changes, heads)
             }
             Err(CommandError::NotWritten(_)) => Recorded::NotWritten,

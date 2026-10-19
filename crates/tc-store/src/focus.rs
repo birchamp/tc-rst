@@ -1,10 +1,9 @@
 //! Looking at the folder after something may have changed it (`docs/STORAGE.md` §11.1): the
 //! window got focus, the watcher told some paths, or the person chose to take in a held file.
 //!
-//! None of these projects a file. A path whose size and time are those of its settled entry
-//! is the app's own and costs a stat; any other is read, and its md5 says whether it is the
-//! app's (the entry's, so only its stat is taken again) or an outside edit, which is examined
-//! and recorded by [`Writer::found_outside`] like any other.
+//! None of these projects a file. A path whose size and time are those of the bytes the ledger
+//! placed, settled, is the app's own and costs a stat; any other is read and decided by the
+//! ledger (§6.2): the app's own bytes take their stat again, others are recorded or held.
 
 use crate::classify::Next;
 use crate::error::StoreError;
@@ -200,7 +199,7 @@ impl Writer {
                     md5: self.hash(&disk),
                 };
                 let facts = self.facts_of(rel, &md5, Projection::NotAsked, true);
-                let actions = self.apply(rel, ledger::Event::Read(md5), &facts);
+                let actions = self.read_event(rel, md5, &facts)?;
                 for action in actions {
                     match action {
                         // `metadata.json` is written over at once after a copy; a fixed file
