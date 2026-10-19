@@ -31,8 +31,8 @@ The Windows VM runs the full gates on each new main (`.audit/tools/winvm/`).
 | Phase | Units done | Running | Waiting |
 |---|---|---|---|
 | 0 | all: A1 to A11 and G0 | | |
-| 1 | B1a, B1b, B2 | B3, B9b | B4a to B11 after B3 |
-| 2 | C0, C1a | C1b (state-machine rebuild) | C2 to C8 with their B units |
+| 1 | B1a, B1b, B2, B3, B9b | B4a, B5a, B9a, B10 | B4b, B5b, B6, B7, B8, B11 after them |
+| 2 | C0, C1a, C1b | | C2 to C8 with their B units |
 | 3 | | | D1 (S2, C2, C5), D2 (S2, B8) |
 | 4 | | | E1a, E1b, E2 (X and their units) |
 | 5 | | | F1 (I, C1a) |
@@ -50,7 +50,7 @@ The Windows VM runs the full gates on each new main (`.audit/tools/winvm/`).
 
 ## tC4 issue sweep
 
-Sweep fixes on main: FIX-helps, FIX-misc, FIX-text, FIX-quit, FIX-proxy (hazard 6); FIX-align running (`fix-text-align.js`).
+Sweep fixes on main: all six (FIX-helps, FIX-misc, FIX-text, FIX-align, FIX-quit, FIX-proxy).
 
 Every few days, and before a unit's verification when tC4 has moved, rerun
 `tc4-issue-sweep.js` with tC4's newest `main` as `tip`. Its results live in

@@ -66,19 +66,15 @@ Workflow caches do not survive a new session. Check `git worktree list` and each
 before restarting; a builder told `cont` continues its branch.
 
 - **The lane** (`.audit/workflows/build-lane.js`): every remaining app unit, built from main,
-  verified once, merged straight into main. Restart with the command at the end of
-  `.audit/STATUS.md`; add `cont: { <unit>: '<branch>' }` for units whose branch has work (look for
-  branches named `lane-<unit>` or `app-<unit>` that are not merged), and `skip` for units another
-  run handles. C1b continues on `lane-c1b` as a state machine; its note is in `.audit/rebuild.tsv`
-  (2026-10-19, "C1b's three no-loss reviewers").
+  verified once (reachable scenarios only), merged straight into main. Restart with the command at the
+  end of `.audit/STATUS.md`; add `cont: { <unit>: '<branch>' }` for each unit whose branch has unmerged
+  work (branches `lane-<unit>`), and give a continuing builder a note when its state needs one.
 - **S2's redesign** (`.audit/workflows/s2-placement-redesign.js`) on the worktree
   `.claude/worktrees/s2-verify` (branch `s2-verify`, from `19e7fd2`): a placement ledger and a typed
   state machine with a model-based property test. When it is green: merge `s2-verify` into main;
   merge `s2-verify` into `storage` (which holds unit P's partial work after `19e7fd2`); then restart
   `.audit/workflows/storage-chain-B.js` with `skip: ['C', 'S1', 'S2'], cont: ['P']` (then T, X, I, V).
   Rerun it with `resumeFromRunId` only in the same session.
-- **FIX-align** (`.audit/workflows/fix-text-align.js`, its second half) on `lane-falign`; if it is not
-  on main, rerun the script (FIX-text is already merged, so that half finds nothing to do).
 - **The watcher**: the scratch script `watch.py` of the session that started it tails the runs'
   journals; a new session writes its own (the shape is in `.audit/tools/README.md`). It also
   regenerates `.audit/STATUS.md` and starts the VM gates on each new main.
