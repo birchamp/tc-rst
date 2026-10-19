@@ -22,8 +22,9 @@ use tc_app::config::ProjectsFolder;
 use tc_app::session::ProjectSession;
 use tc_app::wire::token::shown;
 use tc_app::{Answer, StoreChoice};
-use tc_journal::command::DraftField;
-use tc_journal::{RecordKey, WallTime};
+use tc_journal::command::{AlignmentEdit, DraftField};
+use tc_journal::record::TargetWord;
+use tc_journal::{BookId, ChapterNo, Record, RecordKey, VerseNo, WallTime};
 use tc_store::FakePlatform;
 use tc_store::fault::FaultFs;
 use tc_ui::app::buffer::{self as page, MemStore};
@@ -66,7 +67,16 @@ impl Rig {
 
     /// The next launch on `platform`'s computer, over the files the ended app left.
     async fn relaunch_on(&mut self, platform: FakePlatform) {
-        let fs = self.fs.crash(false);
+        self.start_over(self.fs.crash(false), platform).await;
+    }
+
+    /// The next launch after the computer lost power.
+    async fn power_cut(&mut self) {
+        self.start_over(self.fs.crash(true), FakePlatform::default())
+            .await;
+    }
+
+    async fn start_over(&mut self, fs: FaultFs, platform: FakePlatform) {
         let hooks = Arc::new(tc_store::Hooks::default());
         let backend = Arc::new(backend_over(&fs, APP, platform, hooks.clone()));
         self.t = start(&self.dir, backend).await;
@@ -888,6 +898,105 @@ async fn a_keystroke_during_the_draft_request_is_the_one_text_offered() {
     let offers = rig.offer_with(&session, &buffered, true).await;
     let texts: Vec<&str> = offers.offers.iter().map(|o| o.text.as_str()).collect();
     assert_eq!(texts, ["But as for you, speak!"], "{offers:#?}");
+}
+
+/// A power cut after typing began in a field saved before: `drafts.json`, written with a sync,
+/// holds the draft, and the shell's mirror, synced at most once a second, lost its lines. No
+/// save of the field came after the draft, so the open offers it, and the next open again.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_power_cut_that_takes_the_mirrors_last_lines_keeps_the_draft() {
+    let mut rig = Rig::new().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let key = tit(2, 7);
+    assert!(matches!(
+        rig.save(&session, 1, &key, "Show yourself").await,
+        Answer::Reply { .. }
+    ));
+    rig.stored_draft(&session, &key, "Show yourself in all respects a model")
+        .await;
+    drop(session);
+
+    rig.power_cut().await;
+    for _ in 0..2 {
+        let session = rig.open(&rig.bible.clone()).await;
+        let offers = rig.offer_with(&session, &[], true).await;
+        let texts: Vec<&str> = offers.offers.iter().map(|o| o.text.as_str()).collect();
+        assert_eq!(
+            texts,
+            ["Show yourself in all respects a model"],
+            "{offers:#?}"
+        );
+        assert_eq!(words(&session, &key).as_deref(), Some("Show yourself"));
+        drop(session);
+        rig.relaunch().await;
+    }
+}
+
+/// The aligner's unsaved links (R23) have no buffer entry and no mirror line: the open after
+/// the app ended offers them behind the shell's mirror, and Keep saves them.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_aligners_unsaved_links_are_offered_behind_the_mirror() {
+    let mut rig = Rig::new().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let (verse, alignment) = (
+        tit(1, 1),
+        RecordKey::Alignment(
+            BookId::Titus,
+            ChapterNo::new(1).unwrap(),
+            VerseNo::new(1).unwrap(),
+        ),
+    );
+    // The first links of a verse with none yet: its words in the bank, the verse marked done.
+    let links = AlignmentEdit {
+        alignments: Vec::new(),
+        word_bank: vec![TargetWord {
+            word: "Paul".into(),
+            occurrence: 1,
+            occurrences: 1,
+            extra: Default::default(),
+        }],
+        done: true,
+    }
+    .to_json();
+    let read = session.read();
+    session
+        .handle()
+        .submit(StoreCommand::draft(
+            DraftField::Alignment,
+            vec![
+                read.mint(&alignment, None).unwrap(),
+                read.mint(&verse, None).unwrap(),
+            ],
+            links.clone(),
+            WallTime(START_MS),
+        ))
+        .await
+        .unwrap();
+    session.handle().wait_idle();
+    drop((read, session));
+
+    rig.relaunch().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let offers = rig.offer_with(&session, &[], true).await;
+    assert_eq!(offers.offers.len(), 1, "{offers:#?}");
+    let offer = &offers.offers[0];
+    assert_eq!(
+        (offer.kind, offer.text.as_str()),
+        (DraftKind::Alignment, links.as_str())
+    );
+    rig.keep(&session, 60, offer).await.unwrap();
+    let Some(Record::Alignment { value, .. }) = session.read().projected(&alignment) else {
+        panic!("TIT 1:1 lost its alignment");
+    };
+    assert_eq!(
+        AlignmentEdit {
+            alignments: value.alignments,
+            word_bank: value.word_bank,
+            done: value.done,
+        }
+        .to_json(),
+        links
+    );
 }
 
 /// Finding 5: the session's own save replaced a draft, and the process ended before the

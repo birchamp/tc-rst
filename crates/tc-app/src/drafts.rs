@@ -231,14 +231,30 @@ impl machine::Record<Vec<ShownToken>> for FieldRecord<'_> {
     }
 
     fn held_since(&self, version: &Vec<ShownToken>, text: &str) -> bool {
+        self.after(version).into_iter().any(|body| {
+            field_text(self.kind, Some(body.record))
+                .is_some_and(|held| machine::same_text(&held, text))
+        })
+    }
+
+    fn saved_here_since(&self, version: &Vec<ShownToken>, at: i64) -> bool {
+        let me = self.handle.facts().device;
+        self.after(version)
+            .into_iter()
+            .any(|body| body.device == me && body.at.0 >= at)
+    }
+}
+
+impl FieldRecord<'_> {
+    /// The changes of the record after `version`: those it is an ancestor of, back from the
+    /// heads. A head on another branch is not after it.
+    fn after(&self, version: &[ShownToken]) -> Vec<tc_journal::ChangeBody> {
         let (Some(key), Some(first)) = (&self.key, version.first()) else {
-            return false;
+            return Vec::new();
         };
         let Ok((token, _)) = DraftToken::parse(self.handle, first) else {
-            return false;
+            return Vec::new();
         };
-        // The changes `version` is an ancestor of, back from the heads: a head on another
-        // branch is not after it.
         let base = token.heads();
         let mut memo: BTreeMap<tc_journal::ChangeId, bool> = BTreeMap::new();
         let mut stack: Vec<(tc_journal::ChangeId, bool)> = self
@@ -272,12 +288,8 @@ impl machine::Record<Vec<ShownToken>> for FieldRecord<'_> {
         }
         memo.into_iter()
             .filter(|(change, after)| *after && !base.contains(change))
-            .any(|(change, _)| {
-                self.read.body(&change).is_some_and(|body| {
-                    field_text(self.kind, Some(body.record))
-                        .is_some_and(|held| machine::same_text(&held, text))
-                })
-            })
+            .filter_map(|(change, _)| self.read.body(&change))
+            .collect()
     }
 }
 

@@ -2414,7 +2414,12 @@ and `drafts.json`'s offered entries), newest first:
    while the draft's request is on its way is newer than the draft, not older than the time the
    store received it (C1b, after its fourth review). Behind the shell's mirror (`session/drafts`'s
    `mirror`), a run with no entry of the field ended with the field clean, so its stored drafts
-   are older than its save and go (finding 5).
+   are older than its save and go (finding 5), but only when the record proves that save: a
+   version after the draft's own, written on this computer at or after the draft's time
+   (`Record::saved_here_since`). The mirror is synced at most once a second while `drafts.json`
+   is synced at each write, so a power cut can take the lines of typing whose draft the file
+   holds, and the aligner's links (R23) never have a line; either draft is offered (C1b, after
+   its fourth review).
 2. **Verdicts.** `Saved`: a head holds the text, or a version after the one it was typed over did
    (versions on another branch are not after it); the slot settles, the entry goes. `Undone`: a
    buffer entry back at its own version with no save of it landed; an offered entry is never
@@ -2450,8 +2455,8 @@ Rules the places keep:
   to close and opens afresh, so the one-time trust is used then (finding 6).
 
 The property (`tc_ui` `tests/app/draft_machine.rs`) plays random interleavings of typing, drafts,
-saves, landings, replies, refusals, reloads, crashes and relaunches (a page at a new origin and a
-full storage among them), teammates' changes, offers, keeps, discards, settling, a second writer
+saves, landings, replies, refusals, reloads, crashes and relaunches (a page at a new origin, a
+full storage and a power cut that takes the mirror's lines since its last sync among them), teammates' changes, offers, keeps, discards, settling, a second writer
 and its copy, another computer's lock and an unsafe projects folder, over the real buffer and
 mirror functions and models of `drafts.json` and the record, with an observation (a crash, a
 relaunch and the open's offer) possible between any two steps. It holds that the last text of
@@ -2459,9 +2464,11 @@ every run's typing of a field that reached a place a crash does not take is stor
 answered; that every offered text is such an unanswered text; that a copy is never read-only for
 the folder it was made in; that "That computer is closed" ends that lock; and that an offer never
 settles the text of a field the page holds. Each finding put back breaks it within the cases the
-test tries. Without the shell's mirror, or after the storage refused a write, nothing tells a run's
-older text from its last: an older one may be offered beside the last, never instead of it, which
-A4b already accepts for a refused write.
+test tries. The page asks for the offer at every open, before its editors take input, so a run's
+stored drafts are judged before that run's page saves the field. Without the shell's mirror, after
+a power cut took its last lines, or after the storage refused a write, nothing tells a run's older
+text from its last: an older one may be offered beside the last, never instead of it, which A4b
+already accepts for a refused write.
 
 ### 6.7 Flows and dialogs
 

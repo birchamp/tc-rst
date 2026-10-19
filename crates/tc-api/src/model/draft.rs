@@ -27,8 +27,9 @@
 //!   one of its run ([`Action::Settle`]): newer typing in the same slot stays, and the page
 //!   writes its own text again into what the settling freed.
 //! - **A run's stored draft is judged by that run's buffer**, once: it goes behind the run's
-//!   newer entry of the field, or, behind the shell's mirror, when the run has none (it ended
-//!   clean); otherwise the offer's own entry takes it over.
+//!   newer entry of the field, or, behind the shell's mirror, when the run has none and the
+//!   record holds a save of the field made here after the draft (it ended clean); otherwise
+//!   the offer's own entry takes it over.
 //! - **The page's own fields are never offered**: a field this run's save machine holds saves
 //!   itself, so the page leaves it out of what it sends (§6.6, `buffered_lines`).
 
@@ -118,6 +119,9 @@ pub trait Record<V> {
     /// Whether a version of the record after `version` held `text`: the text was stored, even
     /// if another change has replaced it since.
     fn held_since(&self, version: &V, text: &str) -> bool;
+    /// Whether this computer wrote a version of the record after `version` at or after `at`:
+    /// a save of the field that came after typing whose last keystroke was at `at`.
+    fn saved_here_since(&self, version: &V, at: i64) -> bool;
 }
 
 /// What a candidate holds, judged against the record.
@@ -285,7 +289,8 @@ pub enum Event<'a, V> {
     /// An open asks what to offer: every candidate of the field in the buffer, the mirror and
     /// `drafts.json`, but the page's own (the page leaves those out). `mirror` says that the
     /// candidates include the shell's mirror, which holds every keystroke and every removal of
-    /// each run: a run with no line of the field then ended with the field clean.
+    /// each run up to its last sync: a run with no line of the field, whose save of the field
+    /// the record holds after its draft, then ended with the field clean.
     Offer {
         candidates: Vec<Candidate<V>>,
         record: &'a dyn Record<V>,
@@ -352,8 +357,15 @@ pub enum Action<V> {
 /// supersedes it, if one does. One page edits a field per run and its buffer entry takes every
 /// keystroke, so a stored draft of a run whose own entry of the field, one that has a *Keep*,
 /// is at least as new holds nothing that entry does not. With the shell's mirror, a run with no
-/// entry of the field ended with the field clean: its save holds the draft's typing or newer.
-fn older_copies<V>(candidates: &[Candidate<V>], mirror: bool) -> Vec<(usize, Option<usize>)> {
+/// entry of the field ended with the field clean, but only a save of the field on this
+/// computer after the draft proves it: the mirror is synced at most once a second, so a power
+/// cut can take the lines of typing whose draft `drafts.json` already holds, and the aligner's
+/// links have no buffer entry at all.
+fn older_copies<V>(
+    candidates: &[Candidate<V>],
+    record: &dyn Record<V>,
+    mirror: bool,
+) -> Vec<(usize, Option<usize>)> {
     candidates
         .iter()
         .enumerate()
@@ -368,7 +380,11 @@ fn older_copies<V>(candidates: &[Candidate<V>], mirror: bool) -> Vec<(usize, Opt
                 })
                 .collect();
             if entries.is_empty() {
-                return mirror.then_some((at, None));
+                let saved = copy
+                    .base
+                    .version()
+                    .is_some_and(|base| record.saved_here_since(base, copy.at));
+                return (mirror && saved).then_some((at, None));
             }
             entries
                 .into_iter()
@@ -400,7 +416,7 @@ fn plan<V: Clone>(
     mirror: bool,
 ) -> (Vec<Offer<V>>, Vec<Action<V>>, Vec<BufferSlot>) {
     candidates.sort_by_key(|candidate| std::cmp::Reverse(candidate.at));
-    let copies = older_copies(&candidates, mirror);
+    let copies = older_copies(&candidates, record, mirror);
     let mut offers: Vec<Planned<V>> = Vec::new();
     let mut actions = Vec::new();
     let mut settle = Vec::new();

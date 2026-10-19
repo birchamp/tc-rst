@@ -16,7 +16,8 @@ use tc_api::session::{BufferSlot, Keep, StoredDraftId};
 
 type V = u32;
 
-/// Version 0 holds "seed", 1 "saved"; 1 descends from 0 and is the only head.
+/// Version 0 holds "seed", 1 "saved"; 1 descends from 0, is the only head, and this computer
+/// wrote it at 5.
 struct Rec;
 
 impl Record<V> for Rec {
@@ -31,6 +32,9 @@ impl Record<V> for Rec {
     }
     fn held_since(&self, version: &V, text: &str) -> bool {
         *version == 0 && text == "saved"
+    }
+    fn saved_here_since(&self, version: &V, at: i64) -> bool {
+        *version == 0 && at <= 5
     }
 }
 
@@ -373,14 +377,15 @@ fn the_rows_of_the_findings() {
     assert!(!actions.contains(&Action::Unstore(StoredDraftId(2))));
     // 5: a run with no buffer entry of the field, behind the shell's mirror, ended clean: its
     // stored draft goes; without the mirror nothing says so, and it is offered.
-    let stale = || Candidate {
+    let draft = |at: i64, base: V| Candidate {
         text: "older".to_owned(),
-        at: 1,
-        base: Base::Verified(0),
+        at,
+        base: Base::Verified(base),
         sent: None,
         run: Some(ServerInstance::from_bytes([3; 16])),
         home: Home::Stored(StoredDraftId(6)),
     };
+    let stale = || draft(1, 0);
     let (state, actions) = next(
         FieldDraft::default(),
         Event::Offer {
@@ -400,6 +405,21 @@ fn the_rows_of_the_findings() {
         },
     );
     assert_eq!(state.offers.len(), 1);
+    // Only a save made here after the draft says the run ended clean: a power cut took the
+    // mirror's lines of typing after the last save (at 6, or over version 1), and the aligner's
+    // links never have a line.
+    for typed_after in [draft(6, 0), draft(1, 1)] {
+        let (state, actions) = next(
+            FieldDraft::default(),
+            Event::Offer {
+                candidates: vec![typed_after],
+                record: &record,
+                mirror: true,
+            },
+        );
+        assert_eq!(state.offers.len(), 1);
+        assert!(!actions.contains(&Action::Unstore(StoredDraftId(6))));
+    }
     // 8: settling writes the page's own text again into what it freed.
     let owned = FieldDraft {
         live: Live::Typed {

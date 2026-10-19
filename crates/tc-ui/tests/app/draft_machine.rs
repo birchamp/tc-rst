@@ -1,6 +1,6 @@
 //! The draft machine (`tc_api::model::draft`, APP-DESIGN §6.6, C1b) as a model-based property:
-//! random interleavings of typing, saves, replies, refusals, drafts, reloads, crashes and
-//! relaunches, offers, keeps, discards, settling, a second writer and its copy, another
+//! random interleavings of typing, saves, replies, refusals, drafts, reloads, crashes, power
+//! cuts and relaunches, offers, keeps, discards, settling, a second writer and its copy, another
 //! computer's lock and an unsafe projects folder, with an observation (a crash, a relaunch and
 //! the offer) possible between any two steps.
 //!
@@ -13,9 +13,9 @@
 //! - **I1, no loss**: at a writable open, the last text of every run's typing of a field that
 //!   reached a place that outlives a crash is stored, offered, or was answered.
 //! - **I2, nothing stale or answered comes back**: every offered text is the unanswered last
-//!   text of some run's typing. Without the shell's mirror, or when the storage refused a
-//!   write, nothing tells an older text of a run from its last one, and an older one may be
-//!   offered beside it, never instead of it.
+//!   text of some run's typing. Without the shell's mirror, after a power cut took its last
+//!   lines, or when the storage refused a write, nothing tells an older text of a run from its
+//!   last one, and an older one may be offered beside it, never instead of it.
 //! - **I3**: a copy is never read-only because of the projects folder it was made in.
 //! - **I4**: after "That computer is closed" the project is not read-only for that lock.
 //! - **I5**: an offer during a run never settles the text of a field the page's save machine
@@ -97,6 +97,10 @@ enum Op {
     Crash,
     /// The app starts again and the page comes back at a new origin, its storage empty.
     CrashNewOrigin,
+    /// The computer loses power: the mirror loses up to this many of its lines since its last
+    /// sync (it syncs at most once a second, and at each launch), the page's storage is gone,
+    /// and `drafts.json`, written with a sync, stays.
+    PowerCut(usize),
     /// The browser's storage refuses writes, or takes them again.
     StorageFull,
     StorageOk,
@@ -128,6 +132,7 @@ fn op() -> impl Strategy<Value = Op> {
         1 => Just(Op::Reload),
         4 => Just(Op::Crash),
         1 => Just(Op::CrashNewOrigin),
+        2 => (1..4usize).prop_map(Op::PowerCut),
         1 => Just(Op::StorageFull),
         1 => Just(Op::StorageOk),
         4 => Just(Op::Offer),
@@ -191,6 +196,13 @@ fn fragment() -> impl Strategy<Value = Vec<Op>> {
         ]),
         // A draft reaches drafts.json.
         f.clone().prop_map(|f| vec![Op::DraftTick(f), Op::Flush]),
+        // Typing whose draft is synced, and a power cut before the mirror's sync.
+        (f.clone(), t.clone()).prop_map(|(f, a)| vec![
+            Op::Type(f, a),
+            Op::DraftTick(f),
+            Op::Flush,
+            Op::PowerCut(3)
+        ]),
         // The person answers the first question of a field.
         (f.clone(), any::<bool>()).prop_map(|(f, keep)| vec![if keep {
             Op::Keep(f, 0)
@@ -223,6 +235,8 @@ type V = u32;
 struct Version {
     field: usize,
     text: String,
+    /// When this computer wrote it; `None` for another computer's (a teammate's, the seed).
+    made: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -240,24 +254,25 @@ impl Store {
             heads: [Vec::new(), Vec::new()],
         };
         for field in 0..FIELDS {
-            let v = store.add(field, SEED_TEXT, &[]);
+            let v = store.add(field, SEED_TEXT, &[], None);
             store.heads[field] = vec![v];
         }
         store
     }
 
-    fn add(&mut self, field: usize, text: &str, parents: &[V]) -> V {
+    fn add(&mut self, field: usize, text: &str, parents: &[V], made: Option<i64>) -> V {
         self.versions.push(Version {
             field,
             text: text.to_owned(),
+            made,
         });
         self.parents.push(parents.to_vec());
         V::try_from(self.versions.len() - 1).unwrap()
     }
 
     /// A save over `over`: what it replaced goes, a head it did not know stays beside it.
-    fn save(&mut self, field: usize, text: &str, over: V) -> V {
-        let v = self.add(field, text, &[over]);
+    fn save(&mut self, field: usize, text: &str, over: V, made: Option<i64>) -> V {
+        let v = self.add(field, text, &[over], made);
         self.heads[field].retain(|head| *head != over);
         self.heads[field].push(v);
         v
@@ -331,6 +346,13 @@ impl Record<V> for FieldRecord<'_> {
     fn held_since(&self, version: &V, text: &str) -> bool {
         self.0.held_since(self.1, *version, text)
     }
+    fn saved_here_since(&self, version: &V, at: i64) -> bool {
+        self.0.between(self.1, *version).iter().any(|v| {
+            self.0.versions[*v as usize]
+                .made
+                .is_some_and(|made| made >= at)
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -393,6 +415,8 @@ struct Item {
     /// The storage refused a write of the stretch: its item keeps an older text, which A4b
     /// prefers to none, and which an offer may bring back beside the saved one.
     refused: bool,
+    /// A power cut took the mirror's line of its text: an older line of the run may stand.
+    cut: bool,
     /// Every text of the stretch: when the last one reached no such place (a browser with no
     /// shell, whose item holds another run's entry or whose storage is full), an earlier one
     /// is the best left, and offering it is no fault (A4b keeps an older text over none).
@@ -442,6 +466,8 @@ struct World {
     next_id: u64,
     storage: MemStore,
     mirror: Vec<String>,
+    /// The mirror's lines a power cut cannot take: those of its last sync.
+    synced: usize,
     run: u8,
     clock: i64,
     folder: ProjectRef,
@@ -452,6 +478,8 @@ struct World {
     lock_elsewhere: bool,
     trusted: bool,
     unsafe_place: bool,
+    /// The open asked for the offer: the page asks at every open, before its editors take input.
+    asked: bool,
     /// By field, run and stretch: a stretch begins when the page holds no text of the field.
     items: BTreeMap<(usize, u8, u32), Item>,
     stretch: [u32; FIELDS],
@@ -487,6 +515,7 @@ impl World {
             next_id: 1,
             storage: MemStore::new(),
             mirror: Vec::new(),
+            synced: 0,
             run: 1,
             clock: 1_000,
             folder: ProjectRef::parse("en_ult").unwrap(),
@@ -497,6 +526,7 @@ impl World {
             lock_elsewhere: false,
             trusted: false,
             unsafe_place: false,
+            asked: false,
             items: BTreeMap::new(),
             stretch: [0; FIELDS],
         }
@@ -624,9 +654,12 @@ impl World {
         }
     }
 
-    fn typed(&mut self, field: usize, text: &str) {
+    fn typed(&mut self, field: usize, text: &str) -> Check {
         if self.mode != Mode::Writable {
-            return;
+            return Ok(());
+        }
+        if !self.asked {
+            self.offer()?;
         }
         let at = self.tick();
         let shown = self.store.shown(field);
@@ -650,6 +683,7 @@ impl World {
                 in_mirror: false,
                 in_file: false,
                 refused: false,
+                cut: false,
                 history: Vec::new(),
             });
         if fresh {
@@ -681,6 +715,7 @@ impl World {
             },
         );
         self.carry_out(field, actions);
+        Ok(())
     }
 
     fn landed(&mut self, field: usize) {
@@ -690,7 +725,8 @@ impl World {
         let Some((text, base)) = self.inflight[field].take() else {
             return;
         };
-        let over = self.store.save(field, &text, base);
+        let made = Some(self.tick());
+        let over = self.store.save(field, &text, base, made);
         // tc-store's `cleared_by`: a save removes the field's current draft.
         self.drafts.current.remove(&field);
         if let Some(item) = self.items.get_mut(&(field, self.run, self.stretch[field])) {
@@ -733,6 +769,7 @@ impl World {
     /// tc-store's open: the file is judged, what is still unsaved is offered and marked so,
     /// written before the open returns.
     fn open(&mut self) {
+        self.asked = false;
         self.mode = if self.unsafe_place {
             Mode::ReadOnly(Why::Unsafe)
         } else if self.lock_elsewhere && !self.trusted {
@@ -776,7 +813,36 @@ impl World {
         self.inflight = Default::default();
         self.run += 1;
         self.drafts = DraftsFile::default();
+        // The shell reads its log and replaces it, synced, at each launch.
+        self.synced = self.mirror.len();
         self.open();
+    }
+
+    fn power_cut(&mut self, lines: usize) {
+        let keep = self.synced.max(self.mirror.len().saturating_sub(lines));
+        self.mirror.truncate(keep);
+        let none = |_: &BufferKey, _: ServerInstance| false;
+        let left: Vec<(BufferKey, ServerInstance, String)> =
+            offer::buffered_lines(&MemStore::new(), &self.mirror, &self.folder, &id(), &none)
+                .iter()
+                .filter_map(|line| match serde_json::from_str(line) {
+                    Ok(BufferLine::Changed { key, entry }) => {
+                        Some((key, entry.instance, entry.text))
+                    }
+                    _ => None,
+                })
+                .collect();
+        let keys: Vec<BufferKey> = (0..FIELDS).map(|f| self.key(f)).collect();
+        for ((field, run, _), item) in &mut self.items {
+            let kept = left.iter().any(|(key, of, text)| {
+                *key == keys[*field] && *of == instance(*run) && same_text(text, &item.text)
+            });
+            item.cut |= item.in_mirror && !kept;
+            item.in_mirror &= kept;
+            item.in_storage = false;
+        }
+        self.storage = MemStore::new();
+        self.relaunch();
     }
 
     // --- the offer ----------------------------------------------------------------------
@@ -793,6 +859,7 @@ impl World {
         if self.mode != Mode::Writable {
             return Ok(());
         }
+        self.asked = true;
         let owned = |key: &BufferKey, run: ServerInstance| self.owned(key, run);
         let none = |_: &BufferKey, _: ServerInstance| false;
         let lines = offer::buffered_lines(
@@ -933,7 +1000,8 @@ impl World {
         for action in actions {
             match action {
                 Action::Keep { text, over, .. } => {
-                    self.store.save(field, &text, over);
+                    let made = Some(self.tick());
+                    self.store.save(field, &text, over, made);
                     // tc-store's `kept`: the offered entries of the field with this text.
                     let all = self.seeded(Seed::KeepTakesTheFieldsOtherTexts);
                     self.drafts
@@ -1147,7 +1215,7 @@ impl World {
                 let open = self.items.iter().any(|((f, _, _), item)| {
                     *f == field
                         && (((item.open() || item.undone()) && same_text(&item.text, text))
-                            || ((!item.durable() || item.refused || !self.shell)
+                            || ((!item.durable() || item.refused || item.cut || !self.shell)
                                 && item.history.iter().any(|t| same_text(t, text))))
                 });
                 prop_assert!(
@@ -1161,7 +1229,7 @@ impl World {
 
     fn apply(&mut self, op: &Op) -> Check {
         match *op {
-            Op::Type(f, t) => self.typed(f, TEXTS[t]),
+            Op::Type(f, t) => self.typed(f, TEXTS[t])?,
             Op::DraftTick(f) => {
                 if self.mode == Mode::Writable {
                     let actions = self.step(f, Event::DraftTick);
@@ -1182,7 +1250,7 @@ impl World {
             Op::Refuse(f) => self.refused(f),
             Op::Teammate(f, t) => {
                 let over = self.store.shown(f);
-                self.store.save(f, TEXTS[t], over);
+                self.store.save(f, TEXTS[t], over, None);
             }
             Op::Reload => {
                 for field in 0..FIELDS {
@@ -1198,6 +1266,7 @@ impl World {
                 }
                 self.relaunch();
             }
+            Op::PowerCut(lines) => self.power_cut(lines),
             Op::StorageFull => self.storage.fail_writes = true,
             Op::StorageOk => self.storage.fail_writes = false,
             Op::Offer => self.offer()?,
