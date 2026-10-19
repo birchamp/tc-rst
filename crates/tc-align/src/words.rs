@@ -345,6 +345,7 @@ pub struct TargetVerse {
     /// Each word text's places in the verse, by occurrence, so that a word's place is
     /// found without a scan: the verse-order sort runs after every edit.
     places: HashMap<String, Vec<usize>>,
+    aligned_in_text: bool,
 }
 
 impl TargetVerse {
@@ -369,7 +370,15 @@ impl TargetVerse {
             text: derived.shown().to_owned(),
             words,
             places,
+            aligned_in_text: holds_zaln(content),
         }
+    }
+
+    /// The verse still holds the `\zaln` markup of an aligned file it was added from (tC4
+    /// #794): that markup is its alignment, so it does not open in the aligner and no
+    /// reflow writes over it.
+    pub fn holds_alignment_markup(&self) -> bool {
+        self.aligned_in_text
     }
 
     /// The shown text: what the aligner shows. It decides no word ([`TargetVerse::words`]).
@@ -430,6 +439,17 @@ impl fmt::Debug for TargetVerse {
             .field("words", &self.words)
             .finish_non_exhaustive()
     }
+}
+
+/// tC4's `holdsInlineAlignment` (PR #799): `\zaln-s` followed by anything but a letter,
+/// digit or `_`.
+fn holds_zaln(content: &str) -> bool {
+    content.match_indices("\\zaln-s").any(|(at, m)| {
+        content[at + m.len()..]
+            .chars()
+            .next()
+            .is_none_or(|c| !(c.is_ascii_alphanumeric() || c == '_'))
+    })
 }
 
 /// Identity of a target word inside one verse: its text plus its occurrence.
