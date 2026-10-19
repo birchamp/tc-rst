@@ -1,7 +1,7 @@
 //! The storage seam's contract (APP-DESIGN §4.2): the cases every backend passes, each named
 //! after the rule it protects. `store_contract!` runs them on one backend; this file runs them
-//! on the memory backend, and C0 adds `store_contract!(store, crate::store_fixture)` with the cases
-//! only the store can run.
+//! on the memory backend and on the store (unit C0), and `store_cases` holds the cases only the
+//! store can run, `through_app` those that run through tc-app's request path.
 // Tests read whole folds to check results; the lint on whole-fold walks guards the product's
 // paths (crates/tc-app/clippy.toml).
 #![allow(
@@ -15,6 +15,12 @@
 mod common;
 #[path = "support/counting_store.rs"]
 mod counting_store;
+#[path = "store_contract/store_cases.rs"]
+mod store_cases;
+#[path = "support/store_world.rs"]
+mod store_world;
+#[path = "store_contract/through_app.rs"]
+mod through_app;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -87,6 +93,19 @@ fn memory_fixture() -> ContractFixture {
     }
 }
 
+/// The store over its world (`support/store_world.rs`): the sample project, the same with two
+/// heads on Titus 1:1, and a project of another id, all written through tc-store's create.
+fn store_fixture() -> ContractFixture {
+    let world = store_world::store_world();
+    ContractFixture {
+        store: world.store(),
+        bible: world.bible.clone(),
+        sources: world.sources.clone(),
+        conflicted: world.conflicted.clone(),
+        other: world.other.clone(),
+    }
+}
+
 /// The contract cases, on the backend `$make` builds.
 macro_rules! store_contract {
     ($name:ident, $make:path) => {
@@ -111,11 +130,16 @@ macro_rules! store_contract {
                 $make()
             }
 
+            /// Opens `folder` and waits until the open's background work is done: the store's
+            /// snapshots share their fold's counters with the actor's fold, so the open's
+            /// storage check would count into a case that counts fold work.
             fn open(
                 store: &Arc<dyn ProjectStore>,
                 folder: &tc_api::ids::ProjectRef,
             ) -> Arc<dyn ProjectHandle> {
-                store.open(folder, open_progress()).unwrap()
+                let handle = store.open(folder, open_progress()).unwrap();
+                handle.wait_idle();
+                handle
             }
 
             fn counted(handle: &dyn ProjectHandle) -> CountingSnapshot {
@@ -292,7 +316,7 @@ macro_rules! store_contract {
                 std::fs::create_dir(&projects).unwrap();
                 let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
                     config.projects = ProjectsFolder::Given(projects.clone());
-                    deps.store = store.clone();
+                    deps.store = tc_app::StoreChoice::Given(store.clone());
                 })
                 .await;
                 (dir, t, store)
@@ -375,3 +399,4 @@ macro_rules! store_contract {
 }
 
 store_contract!(memory, crate::memory_fixture);
+store_contract!(store, crate::store_fixture);

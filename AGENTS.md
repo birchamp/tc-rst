@@ -49,6 +49,11 @@ that writes project data.
   `crates/tc-ui` must also pass
   `cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings`, with
   and without `--features gallery`. CI runs all of these.
+- The workspace build always has the test hooks, through dev-dependencies, so it never sees
+  the code a release build compiles. A change to a crate that `tc-app`, `tc-server` or `tc4`
+  builds (`tc-store` among them) must also pass CI's two steps without them:
+  `cargo clippy -p tc-app --lib -- -D warnings` and
+  `cargo clippy -p tc-server -p tc4 --lib --bins -- -D warnings`.
 
 ## Performance
 

@@ -34,6 +34,7 @@ const PHASE_0: &[&str] = &[
     "test/hold",
     "test/release",
     "test/fieldStore",
+    "test/saveVerse",
     "test/fieldLog",
     "test/fieldDraft",
     "test/reset",

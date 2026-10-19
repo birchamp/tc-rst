@@ -497,7 +497,7 @@ pub async fn try_start(
         folders: Arc::new(HostFolders::new(host.clone())),
         host,
         files: parts.files.clone(),
-        store: parts.store.clone(),
+        store: tc_app::StoreChoice::Given(parts.store.clone()),
         ender: parts.ender.clone(),
     };
     edit(&mut config, &mut deps);

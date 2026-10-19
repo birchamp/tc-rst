@@ -16,9 +16,10 @@ use tempfile::TempDir;
 /// tag of the fixture backend's seed (feature `fixture-backend`). Since B1b `tc4 serve
 /// --scenario` calls the seed in a build with the feature, so the tag and the flag guard the
 /// release binary as well as `release_build_resolves_no_fixture_backend_and_no_test_hook`.
-const HOOK_TEXT: [&str; 12] = [
+const HOOK_TEXT: [&str; 13] = [
     "test/crash",
     "test/fieldStore",
+    "test/saveVerse",
     "test/fieldLog",
     "test/fieldDraft",
     "test/echo",
