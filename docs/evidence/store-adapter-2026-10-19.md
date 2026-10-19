@@ -106,3 +106,18 @@ the seam was 1.8 s and 1.5 s in these runs. Three more runs with each close prin
 closes a path) showed one slow close on each path, 1.35 s on the seam and 1.59 s on tc-store's
 own, and 450 to 790 ms for every other close on both; the code before the fix gave 590 and
 717 ms in two runs. So the slow close is the disk's now and then, not the adapter's.
+
+## After the second verification
+
+Nothing on a save's path changed (`submit_journal`, the relay, the events thread and `Origins`
+are as measured above), so M6 and M7 stand. Three things changed elsewhere:
+
+- `StoreBackend::list` reads the projects folder itself. A project folder costs one read of
+  `project.json`, where `Store::list` and the old entry check cost a stat and a read; a folder
+  without a readable `project.json` costs up to three more stats (`metadata.json`,
+  `ingredients/`, `.tc/`). The listing still costs the folder's entries, never a project's
+  history.
+- `App::start` starts one short-lived thread that waits for tc-store's start cleanup and
+  records what it removed; the start does not wait for it.
+- Two tests run submits on a four-thread runtime (15 rounds of 8 concurrent saves, and 20
+  rounds of 8 saves racing a close); together they take under a second.
