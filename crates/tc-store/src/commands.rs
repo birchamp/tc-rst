@@ -286,13 +286,13 @@ fn anchor_of(chapter: ChapterNo, verse: VerseNo, value: &VerseValue) -> ChapterV
 }
 
 /// The reflowed alignment of a verse whose text changed, in the batch of the text (R25,
-/// §5.1): every link whose word the new text still has is kept, its occurrence updated, the
-/// others go back to the bank, and the value is stamped for the new text (tC4 #213,
-/// `tc_align::reflow`). Its parents are the alignment's heads the actor holds, so an
+/// §5.1): every link that follows its own word into the new text is kept, its occurrence
+/// updated, the others go back to the bank, and the value is stamped for the new text (tC4
+/// #213, #789, `tc_align::reflow_edit` from the old text). Its parents are the alignment's heads the actor holds, so an
 /// alignment edit made elsewhere at the same time is a visible conflict with the reflow. No
 /// reflow when the alignment is in conflict, when its span is not the verse's span any more
-/// (a span was made or broken: a person aligns again), or when `tc_align::reflow` leaves the
-/// value as it is.
+/// (a span was made or broken: a person aligns again), or when `tc_align::reflow_edit` leaves
+/// the value as it is.
 fn reflow(
     ctx: &Ctx<'_>,
     book: BookId,
@@ -310,7 +310,13 @@ fn reflow(
     else {
         return None;
     };
-    let VerseValue::Text { last: old_last, .. } = old else {
+    let VerseValue::Text {
+        words: old_words,
+        layout: old_layout,
+        last: old_last,
+        ..
+    } = old
+    else {
         return None;
     };
     if old_last != last {
@@ -332,8 +338,9 @@ fn reflow(
     if value.span_end.get() != span {
         return None;
     }
+    let before = TargetVerse::new(&format!("{old_words}{old_layout}"));
     let target = TargetVerse::new(&format!("{words}{layout}"));
-    let reflowed = tc_align::reflow(&value, &target).ok()?;
+    let reflowed = tc_align::reflow_edit(&value, &before, &target).ok()?;
     Some(change(
         Record::Alignment {
             book,

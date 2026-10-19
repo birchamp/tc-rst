@@ -16,6 +16,7 @@ use tc_core::Testament;
 fn open(stored: Option<&AlignmentValue>, text: &str) -> Aligner {
     Aligner::open(
         stored,
+        None,
         TargetVerse::new(text),
         &source_verse(UGNT, "1:1"),
         basis(1),
@@ -163,7 +164,10 @@ fn a_stored_alignment_made_for_other_text_opens_reflowed_and_says_what_it_droppe
     let stored = paul_and_servant();
     let edited = "Paul, a slave of God and an apostle of Jesus Christ";
     let mut aligner = open(Some(&stored), edited);
-    assert!(!aligner.is_stale());
+    assert!(
+        aligner.is_stale(),
+        "the draft changed since the alignment was made"
+    );
     assert_eq!(aligner.value().placed(), 1);
     assert_eq!(aligner.dropped().len(), 1);
     assert_eq!(aligner.dropped()[0].word.word, "servant");
@@ -177,6 +181,7 @@ fn a_stored_alignment_made_for_other_text_opens_reflowed_and_says_what_it_droppe
     assert!(stored.is_stale_against(&TargetVerse::new(edited)));
     aligner.keep_reflow();
     assert!(aligner.is_changed());
+    assert!(!aligner.is_stale(), "kept: the notice clears");
 
     let mut edited_after = open(Some(&stored), edited);
     edited_after
@@ -196,7 +201,7 @@ fn a_carry_over_that_drops_nothing_is_saved_as_tc4_saves_it() {
     assert!(aligner.dropped().is_empty());
     assert!(aligner.is_changed());
     assert_eq!(aligner.value().placed(), 2);
-    assert!(!aligner.is_stale());
+    assert!(aligner.is_stale(), "saved on leaving, and shown as changed");
 }
 
 #[test]
@@ -276,7 +281,7 @@ fn suggestions_from_a_model_trained_on_titus_are_proposals_for_bank_words_only()
 fn a_verse_with_no_original_words_or_no_target_words_does_not_open() {
     use tc_align::{SourceVerse, Unavailable};
     let refused = |verse: &str, source: &SourceVerse| {
-        Aligner::open(None, TargetVerse::new(verse), source, basis(1)).unwrap_err()
+        Aligner::open(None, None, TargetVerse::new(verse), source, basis(1)).unwrap_err()
     };
     // tC4 shows its "missing" notice: no cards to place on, and no Mark valid that
     // vouches for a verse nothing could be aligned in.
@@ -296,6 +301,7 @@ fn a_verse_with_no_original_words_or_no_target_words_does_not_open() {
     assert_eq!(
         Aligner::open(
             Some(&stored),
+            None,
             TargetVerse::new(TEXT),
             &SourceVerse::default(),
             basis(1)

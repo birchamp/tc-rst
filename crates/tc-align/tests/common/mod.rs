@@ -69,6 +69,52 @@ pub fn source_verse(file: &str, reference: &str) -> SourceVerse {
     SourceVerse::from_book(&Book::parse(&text), chapter, verses).unwrap()
 }
 
+pub const SAMPLE_TIT: &str = "fixtures/tc4/sample-burrito/ingredients/TIT.usfm";
+pub const SAMPLE_TIT_ALIGNMENTS: &str =
+    "fixtures/tc4/sample-burrito/ingredients/checking/alignments/TIT.json";
+
+/// tC4's conformance sample: its TIT alignment file.
+pub fn sample_alignments() -> Value {
+    serde_json::from_str(&read(SAMPLE_TIT_ALIGNMENTS)).unwrap()
+}
+
+/// tC4's conformance sample TIT 1:1: its record, as a value, and the verse's content.
+pub fn sample_tit_1_1() -> (AlignmentValue, String) {
+    let value = record::from_record(&sample_alignments()["chapters"]["1"]["1"], basis(1)).unwrap();
+    (value, verse_body(SAMPLE_TIT, "1:1"))
+}
+
+/// A file of an archive of the bundled resources (`bundle/en`).
+pub fn bundle_entry(archive: &str, entry: &str) -> String {
+    use std::io::Read;
+    let file = std::fs::File::open(fixture(&format!("bundle/en/{archive}"))).unwrap();
+    let mut zip = zip::ZipArchive::new(file).unwrap();
+    let mut text = String::new();
+    zip.by_name(entry)
+        .unwrap_or_else(|e| panic!("{archive} {entry}: {e}"))
+        .read_to_string(&mut text)
+        .unwrap();
+    text
+}
+
+/// Every verse of a book as the codec cuts it: `chapter:verse` and its content.
+pub fn codec_verses(raw: &str) -> Vec<(String, String)> {
+    use tc_usfm::codec;
+    let parts = codec::decompose(raw).unwrap();
+    let mut out = Vec::new();
+    for (c, chapter) in &parts.chapters {
+        for (v, part) in &chapter.verses {
+            if let codec::VersePart::Text(verse) = part {
+                out.push((
+                    format!("{c}:{}", codec::label(*v, verse.last)),
+                    codec::join_verse(&verse.words, &verse.layout),
+                ));
+            }
+        }
+    }
+    out
+}
+
 /// A verse or span from verse 1 to `span_end`, not renumbered.
 pub fn basis(span_end: u16) -> Basis {
     Basis::run(

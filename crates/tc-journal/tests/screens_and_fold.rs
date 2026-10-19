@@ -267,6 +267,8 @@ struct Compared {
     alignments: usize,
     invalid: usize,
     off_run: usize,
+    /// Alignments the rail calls invalid and the fold does not: see `compare_alignments`.
+    words_not_the_verse: usize,
 }
 
 /// Compares every decision file and alignment file of `state` with what the screens
@@ -404,15 +406,25 @@ fn compare_alignments(state: &FoldState, pins: &ProjectPins, book: BookId, out: 
             out.off_run += 1;
             continue;
         };
+        let verse = TargetVerse::new(content);
         let run = AlignedRun {
             anchor: anchor.get(),
             run_start: start,
             run_end: *last,
-            text_md5: TargetVerse::new(content).md5(),
+            text_md5: verse.md5(),
             source_sha,
         };
-        let shown = verse_status(Some(&value), Some(&run));
-        assert_eq!(shown.state == VerseState::Invalid, invalid, "{at}");
+        let shown = verse_status(Some(&value), Some((&run, &verse)), None);
+        // The rail reads `tc_align::needs_review`: the fold's rule, and also whether every
+        // word the alignment holds is a word of the verse, which the fold's `invalid` does not
+        // read yet (tC4 #796; the corpus stamps a save with the current text's hash over the
+        // words of an earlier one). Every other state agrees.
+        if shown.state == VerseState::Invalid && !invalid {
+            assert!(value.is_valid(&run), "{at}");
+            out.words_not_the_verse += 1;
+        } else {
+            assert_eq!(shown.state == VerseState::Invalid, invalid, "{at}");
+        }
         out.alignments += 1;
         out.invalid += usize::from(invalid);
     }
@@ -829,6 +841,7 @@ fn alignments_follow_their_text_on_the_rail_as_in_the_file() {
         imported.invalid, 0,
         "an aligned import is valid: {imported:?}"
     );
+    assert_eq!(imported.words_not_the_verse, 0, "{imported:?}");
 
     // Join 1:3 into 1:2's run with new words, edit 2:1, and renumber 3:15 as 3:16 with
     // its text unchanged.
@@ -855,6 +868,7 @@ fn alignments_follow_their_text_on_the_rail_as_in_the_file() {
     let edited = compare(&state);
     assert_eq!(edited.alignments + edited.off_run, 46, "{edited:?}");
     assert_eq!(edited.invalid, 2, "the joined run and 2:1: {edited:?}");
+    assert_eq!(edited.words_not_the_verse, 0, "{edited:?}");
     assert_eq!(
         edited.off_run, 1,
         "1:3 is shown at no run of its own: {edited:?}"
@@ -900,4 +914,6 @@ fn the_psalms_corpus_files_are_what_the_screens_compute() {
     assert!(compared.verse_edits > 0, "{compared:?}");
     assert!(compared.invalidated > 0, "{compared:?}");
     assert!(compared.no_text > 0, "{compared:?}");
+    // The corpus saves alignments with the hash of the text but the words of the ULT.
+    assert_eq!(compared.words_not_the_verse, 168, "{compared:?}");
 }

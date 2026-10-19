@@ -23,6 +23,7 @@
 
 use super::TokenSeed;
 use std::collections::HashMap;
+use unicode_normalization::UnicodeNormalization;
 
 /// A word of a sentence with wordMAP's positional metrics, built as tC4 builds it:
 /// `new Token(seed)` and then uw-wordmapbooster's `updateTokenLocations`.
@@ -45,22 +46,28 @@ fn utf16_len(s: &str) -> usize {
 /// Tokens for one sentence. `updateTokenLocations` renumbers positions and occurrences
 /// from the order and the texts, whatever the seeds said. (It also sets a character
 /// position, which no algorithm tC4 runs reads.)
+///
+/// Every sentence the engine learns or is asked reaches it here, so the text and lemma are
+/// put in NFC here, once (tC4 #793): tC4 4.0 stores Hebrew source words in NFC and the pinned
+/// UHB writes them otherwise, and a key must not tell the two apart.
 pub(crate) fn tokens(seeds: &[TokenSeed]) -> Vec<Token> {
+    let nfc = |text: &str| text.nfc().collect::<String>();
+    let texts: Vec<String> = seeds.iter().map(|s| nfc(&s.text)).collect();
     let joined: usize =
-        seeds.iter().map(|s| utf16_len(&s.text)).sum::<usize>() + seeds.len().saturating_sub(1);
+        texts.iter().map(|t| utf16_len(t)).sum::<usize>() + seeds.len().saturating_sub(1);
     let mut seen: HashMap<&str, u32> = HashMap::new();
     let mut out: Vec<Token> = Vec::with_capacity(seeds.len());
-    for (position, seed) in seeds.iter().enumerate() {
-        let n = seen.entry(seed.text.as_str()).or_default();
+    for (position, (seed, text)) in seeds.iter().zip(&texts).enumerate() {
+        let n = seen.entry(text.as_str()).or_default();
         *n += 1;
         out.push(Token {
-            text: seed.text.clone(),
+            text: text.clone(),
             position,
             sentence_token_len: seeds.len(),
             sentence_char_len: joined,
             occurrence: *n,
             occurrences: 0,
-            lemma: seed.lemma.clone().unwrap_or_default(),
+            lemma: seed.lemma.as_deref().map(nfc).unwrap_or_default(),
             morph: seed.morph.clone().unwrap_or_default(),
         });
     }

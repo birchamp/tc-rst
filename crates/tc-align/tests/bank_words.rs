@@ -13,7 +13,6 @@
 mod common;
 
 use proptest::prelude::*;
-use std::io::Read;
 use tc_align::{
     Aligner, Alignment, AlignmentGroup, AlignmentValue, Basis, SourceVerse, SourceWord,
     TargetVerse, TargetWord,
@@ -22,35 +21,9 @@ use tc_core::VerseSpan;
 use tc_journal::alignment::split_aligned;
 use tc_journal::ids::VerseNo;
 use tc_journal::json::JsonMap;
-use tc_usfm::{Book, codec};
+use tc_usfm::Book;
 
-fn bundle_entry(archive: &str, entry: &str) -> String {
-    let file = std::fs::File::open(common::fixture(&format!("bundle/en/{archive}"))).unwrap();
-    let mut zip = zip::ZipArchive::new(file).unwrap();
-    let mut text = String::new();
-    zip.by_name(entry)
-        .unwrap_or_else(|e| panic!("{archive} {entry}: {e}"))
-        .read_to_string(&mut text)
-        .unwrap();
-    text
-}
-
-/// Every verse of a book as the codec cuts it: `chapter:verse` and its content.
-fn verses(raw: &str) -> Vec<(String, String)> {
-    let parts = codec::decompose(raw).unwrap();
-    let mut out = Vec::new();
-    for (c, chapter) in &parts.chapters {
-        for (v, part) in &chapter.verses {
-            if let codec::VersePart::Text(verse) = part {
-                out.push((
-                    format!("{c}:{}", codec::label(*v, verse.last)),
-                    codec::join_verse(&verse.words, &verse.layout),
-                ));
-            }
-        }
-    }
-    out
-}
+use common::{bundle_entry, codec_verses as verses};
 
 fn verse_of(raw: &str, reference: &str) -> String {
     verses(raw)
@@ -116,7 +89,8 @@ fn a_tc4_imported_verse_with_nested_zaln_banks_every_word() {
         "dcs::unfoldingWord/hbo_uhb@v3.0.0".into(),
         None,
     );
-    let aligner = Aligner::open(Some(&value), TargetVerse::new(&plain), &source, basis).unwrap();
+    let aligner =
+        Aligner::open(Some(&value), None, TargetVerse::new(&plain), &source, basis).unwrap();
     assert_eq!(value.placed(), 10);
     assert_eq!(aligner.value().placed(), 10);
     assert!(aligner.dropped().is_empty());
@@ -161,7 +135,7 @@ fn open_imported(
     let basis = Basis::run(verse_no(verse), verse_no(verse), source_name.into(), None);
     let target = TargetVerse::new(&plain);
     let bank = target.words().iter().map(|w| w.word.clone()).collect();
-    let aligner = Aligner::open(Some(&value), target, &source, basis).unwrap();
+    let aligner = Aligner::open(Some(&value), None, target, &source, basis).unwrap();
     (
         bank,
         value.placed(),
