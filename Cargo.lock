@@ -3193,6 +3193,7 @@ dependencies = [
  "tc-usfm",
  "tc-versification",
  "thiserror 2.0.21",
+ "unicode-normalization",
  "zip",
 ]
 

@@ -40,23 +40,21 @@ fn text_strategy() -> impl Strategy<Value = String> {
     })
 }
 
+fn source_word(w: &str) -> SourceWord {
+    SourceWord {
+        word: w.to_owned(),
+        strong: Some("G1".to_owned()),
+        lemma: Some(w.to_lowercase()),
+        morph: Some("Gr,N,,,,,NMS,".to_owned()),
+        occurrence: 1,
+        occurrences: 1,
+        extra: tc_journal::json::JsonMap::new(),
+    }
+}
+
 fn source_strategy() -> impl Strategy<Value = SourceVerse> {
-    prop::collection::vec(prop::sample::select(&SOURCE_WORDS[..]), 1..8).prop_map(|words| {
-        SourceVerse::new(
-            words
-                .into_iter()
-                .map(|w| SourceWord {
-                    word: w.to_owned(),
-                    strong: Some("G1".to_owned()),
-                    lemma: Some(w.to_lowercase()),
-                    morph: Some("Gr,N,,,,,NMS,".to_owned()),
-                    occurrence: 1,
-                    occurrences: 1,
-                    extra: tc_journal::json::JsonMap::new(),
-                })
-                .collect(),
-        )
-    })
+    prop::collection::vec(prop::sample::select(&SOURCE_WORDS[..]), 1..8)
+        .prop_map(|words| SourceVerse::new(words.into_iter().map(source_word).collect()))
 }
 
 #[derive(Debug, Clone)]
@@ -344,7 +342,10 @@ proptest! {
                     }
                 }
                 for drop in &next.dropped {
-                    prop_assert!(new_verse.position(&drop.word).is_none());
+                    // Gone, or it is not clear which copy it is now: the changed verse holds
+                    // another number of copies of it, or more than one (#789).
+                    let count = new_verse.words().iter().filter(|w| w.word == drop.word.word).count();
+                    prop_assert!(new_verse.position(&drop.word).is_none() || count != drop.word.occurrences as usize || count > 1);
                     prop_assert!(value.alignments[drop.card].bottom_words.contains(&drop.word));
                 }
                 prop_assert!(!next.value.is_stale_against(&new_verse));
@@ -367,7 +368,7 @@ proptest! {
         let (mut stored, _) = edited(&source, &text, &ops);
         stored.marked_invalid = flagged;
         let new_verse = TargetVerse::new(&new_text);
-        let aligner = Aligner::open(Some(&stored), new_verse.clone(), &source, basis(1)).unwrap();
+        let aligner = Aligner::open(Some(&stored), None, new_verse.clone(), &source, basis(1)).unwrap();
         prop_assert_eq!(
             sorted(aligner.value().all_target_words().cloned()),
             sorted(new_verse.words().to_vec())
@@ -388,7 +389,7 @@ proptest! {
     ) {
         let (stored, _) = edited(&source, &text, &ops);
         let verse = TargetVerse::new(&new_text);
-        let mut value = Aligner::open(Some(&stored), verse.clone(), &source, basis(1)).unwrap().into_value();
+        let mut value = Aligner::open(Some(&stored), None, verse.clone(), &source, basis(1)).unwrap().into_value();
         for op in &more {
             if apply(&mut value, &verse, op) {
                 value.settle(&verse);
@@ -415,7 +416,7 @@ proptest! {
     ) {
         let (value, _) = edited(&source, &text, &ops);
         let verse = TargetVerse::new(&new_text);
-        let mut aligner = Aligner::open(stored.then_some(&value), verse.clone(), &source, basis(1)).unwrap();
+        let mut aligner = Aligner::open(stored.then_some(&value), None, verse.clone(), &source, basis(1)).unwrap();
         let source_order: Vec<SourceWord> = source.words().to_vec();
         assert_shown_in_verse_order(&aligner, &verse)?;
         for step in &steps {
@@ -460,7 +461,7 @@ proptest! {
         for group in &mut stored.alignments {
             group.bottom_words.reverse();
         }
-        let aligner = Aligner::open(Some(&stored), verse.clone(), &source, basis(1)).unwrap();
+        let aligner = Aligner::open(Some(&stored), None, verse.clone(), &source, basis(1)).unwrap();
         prop_assert!(!aligner.is_changed(), "order alone is not saved");
         assert_shown_in_verse_order(&aligner, &verse)?;
         let mut sorted_stored = stored.clone();
@@ -486,5 +487,116 @@ proptest! {
         read.word_bank = back.word_bank;
         prop_assert_eq!(links(&read), links(&value));
         prop_assert_eq!(read.total(), value.total());
+    }
+}
+
+/// A verse of words from a small vocabulary, so that words repeat, and an edit that only
+/// inserts words or only deletes some: where each old word went, `None` when deleted.
+#[derive(Debug, Clone)]
+struct OneWayEdit {
+    before: Vec<&'static str>,
+    after: Vec<&'static str>,
+    went: Vec<Option<usize>>,
+}
+
+const FEW_WORDS: [&str; 3] = ["de", "Dios", "y"];
+
+fn one_way_edit() -> impl Strategy<Value = OneWayEdit> {
+    let words = || prop::collection::vec(prop::sample::select(&FEW_WORDS[..]), 1..10);
+    (
+        words(),
+        prop::bool::ANY,
+        prop::collection::vec(
+            (
+                any::<prop::sample::Index>(),
+                prop::sample::select(&FEW_WORDS[..]),
+            ),
+            0..4,
+        ),
+        prop::collection::vec(prop::bool::ANY, 10),
+    )
+        .prop_map(|(before, insert, inserts, keep)| {
+            if insert {
+                // Each old word is preceded by the words inserted at its place.
+                let mut at: BTreeMap<usize, Vec<&'static str>> = BTreeMap::new();
+                for (index, word) in inserts {
+                    at.entry(index.index(before.len() + 1))
+                        .or_default()
+                        .push(word);
+                }
+                let (mut after, mut went) = (Vec::new(), Vec::new());
+                for (i, word) in before.iter().enumerate() {
+                    after.extend(at.get(&i).into_iter().flatten());
+                    went.push(Some(after.len()));
+                    after.push(*word);
+                }
+                after.extend(at.get(&before.len()).into_iter().flatten());
+                OneWayEdit {
+                    before,
+                    after,
+                    went,
+                }
+            } else {
+                let (mut after, mut went) = (Vec::new(), Vec::new());
+                for (i, word) in before.iter().enumerate() {
+                    if keep[i] {
+                        went.push(Some(after.len()));
+                        after.push(*word);
+                    } else {
+                        went.push(None);
+                    }
+                }
+                OneWayEdit {
+                    before,
+                    after,
+                    went,
+                }
+            }
+        })
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 512, ..ProptestConfig::default() })]
+
+    /// An edit that only inserts or only deletes words: every link the reflow keeps is on
+    /// the very word it was on, and every link to a deleted word is dropped (#789).
+    #[test]
+    fn a_link_never_moves_to_another_copy_of_its_word(edit in one_way_edit(), every in 1usize..4) {
+        let before = TargetVerse::new(&edit.before.join(" "));
+        let after = TargetVerse::new(&edit.after.join(" "));
+        let source = SourceVerse::new(
+            SOURCE_WORDS[..3].iter().map(|w| source_word(w)).collect(),
+        );
+        let mut value = bootstrap(&source, &before, basis(1));
+        // Link every `every`-th word, to cards in turn; remember which old word each is.
+        let mut linked = BTreeMap::new();
+        for (i, word) in before.words().iter().enumerate().filter(|(i, _)| i % every == 0) {
+            value.link(i % 3, word).unwrap();
+            linked.insert((word.word.clone(), word.occurrence), (i, i % 3));
+        }
+        value.settle(&before);
+        let next = match tc_align::reflow_edit(&value, &before, &after) {
+            Ok(next) => next,
+            Err(NoReflow::NoWords) => { prop_assert!(after.words().is_empty()); return Ok(()); }
+            Err(NoReflow::Current) => { prop_assert_eq!(&edit.before, &edit.after); return Ok(()); }
+            Err(other) => { prop_assert!(false, "unexpected {:?}", other); return Ok(()); }
+        };
+        prop_assert_eq!(value.placed(), next.value.placed() + next.dropped.len());
+        let mut kept = 0;
+        for (card, group) in next.value.alignments.iter().enumerate() {
+            for word in &group.bottom_words {
+                let j = after.position(word).unwrap();
+                let came_from = linked
+                    .values()
+                    .find(|(i, c)| *c == card && edit.went[*i] == Some(j));
+                prop_assert!(came_from.is_some(), "{:?} on card {} is not the word linked there", word, card);
+                kept += 1;
+            }
+        }
+        for drop in &next.dropped {
+            let (_, card) = linked[&(drop.word.word.clone(), drop.word.occurrence)];
+            prop_assert_eq!(card, drop.card);
+        }
+        prop_assert_eq!(kept + next.dropped.len(), linked.len());
     }
 }

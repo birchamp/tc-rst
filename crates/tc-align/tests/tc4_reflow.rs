@@ -10,7 +10,7 @@ use tc_align::bootstrap;
 
 use common::*;
 use tc_align::{
-    AlignmentValue, NoReflow, SourceVerse, SourceWord, TargetVerse, TargetWord, reflow,
+    AlignmentValue, NoReflow, SourceVerse, SourceWord, TargetVerse, TargetWord, reflow, reflow_edit,
 };
 
 fn greek(text: &str, strong: &str, lemma: &str) -> SourceWord {
@@ -29,12 +29,17 @@ const TEXT: &str = "Pablo, siervo de Dios y de Dios";
 
 /// Pablo on Παῦλος, siervo on δοῦλος and Dios(2) on θεοῦ.
 fn linked() -> AlignmentValue {
+    linked_on(TEXT)
+}
+
+/// [`linked`] made against `text`, which holds TEXT's words.
+fn linked_on(text: &str) -> AlignmentValue {
     let source = SourceVerse::new(vec![
         greek("Παῦλος", "G39720", "Παῦλος"),
         greek("δοῦλος", "G14010", "δοῦλος"),
         greek("θεοῦ", "G23160", "θεός"),
     ]);
-    let verse = TargetVerse::new(TEXT);
+    let verse = TargetVerse::new(text);
     let mut value = bootstrap(&source, &verse, basis(1));
     for (card, text, occurrence) in [(0, "Pablo", 1), (1, "siervo", 1), (2, "Dios", 2)] {
         let word = value
@@ -61,7 +66,7 @@ fn placed(value: &AlignmentValue) -> Vec<Vec<String>> {
 fn a_link_whose_target_word_is_still_present_is_kept_and_a_new_word_is_banked() {
     let before = linked();
     let text = "Pablo, siervo de Dios y apóstol de Dios";
-    let next = reflow(&before, &TargetVerse::new(text)).unwrap();
+    let next = reflow_edit(&before, &TargetVerse::new(TEXT), &TargetVerse::new(text)).unwrap();
     assert_eq!(
         placed(&next.value),
         [["Pablo/1/1"], ["siervo/1/1"], ["Dios/2/2"]]
@@ -85,8 +90,9 @@ fn a_link_whose_target_word_is_still_present_is_kept_and_a_new_word_is_banked() 
 
 #[test]
 fn a_changed_word_loses_its_link_and_its_replacement_is_banked() {
-    let next = reflow(
+    let next = reflow_edit(
         &linked(),
+        &TargetVerse::new(TEXT),
         &TargetVerse::new("Pablo, esclavo de Dios y de Dios"),
     )
     .unwrap();
@@ -106,21 +112,32 @@ fn a_changed_word_loses_its_link_and_its_replacement_is_banked() {
 
 #[test]
 fn occurrence_numbers_are_recomputed_for_the_new_text() {
-    // Removing the first "Dios" makes the old Dios(2) vanish (identity is text and
-    // occurrence); the surviving "Dios" is Dios(1), total 1, in the bank.
-    let next = reflow(&linked(), &TargetVerse::new("Pablo, siervo de y de Dios")).unwrap();
+    // Without the earlier text, a verse with one "Dios" fewer does not say which went, so
+    // the link of Dios(2) goes back to the bank and is reported (#789, Q30 (a)); tC4 drops
+    // it as gone.
+    let shorter = TargetVerse::new("Pablo, siervo de y de Dios");
+    let next = reflow(&linked(), &shorter).unwrap();
     assert_eq!(
         placed(&next.value),
         [vec!["Pablo/1/1"], vec!["siervo/1/1"], vec![]]
     );
     assert!(show(&next.value.word_bank).contains(&"Dios/1/1".to_owned()));
+    assert_eq!(next.dropped.len(), 1);
+    // With it, the first "Dios" is the one deleted: the link stays on its own word.
+    let edit = reflow_edit(&linked(), &TargetVerse::new(TEXT), &shorter).unwrap();
+    assert_eq!(
+        placed(&edit.value),
+        [["Pablo/1/1"], ["siervo/1/1"], ["Dios/1/1"]]
+    );
+    assert!(edit.dropped.is_empty());
     // A kept word whose total changed carries the new total.
-    let more = reflow(
-        &linked(),
-        &TargetVerse::new("Pablo, siervo de Dios y de Dios de Dios"),
-    )
-    .unwrap();
-    assert_eq!(placed(&more.value)[2], ["Dios/2/3"]);
+    let more = TargetVerse::new("Dios: Pablo, siervo de Dios y de Dios");
+    let edit = reflow_edit(&linked(), &TargetVerse::new(TEXT), &more).unwrap();
+    assert_eq!(placed(&edit.value)[2], ["Dios/3/3"]);
+    assert_eq!(
+        placed(&reflow(&linked(), &more).unwrap().value)[2],
+        Vec::<String>::new()
+    );
 }
 
 #[test]
@@ -164,8 +181,8 @@ fn reflow_never_creates_a_link_the_translator_did_not_make() {
     assert!(show(&next.value.word_bank).contains(&"Pablo/2/2".to_owned()));
 }
 
-/// Every placed word is either still placed (by text and occurrence) or reported
-/// dropped, and the value holds every word of the new text exactly once.
+/// Every placed word is either still placed or reported dropped, every kept link is on a
+/// word of the same text, and the value holds every word of the new text exactly once.
 fn assert_no_loss(
     before: &AlignmentValue,
     after: &tc_align::Reflowed,
@@ -184,7 +201,14 @@ fn assert_no_loss(
                 .contains(&drop.word),
             "{at}"
         );
-        assert!(verse.position(&drop.word).is_none(), "{at}");
+    }
+    for (old, new) in before.alignments.iter().zip(&after.value.alignments) {
+        for word in &new.bottom_words {
+            assert!(
+                old.bottom_words.iter().any(|w| w.word == word.word),
+                "{at}: no new link"
+            );
+        }
     }
     let mut held: Vec<TargetWord> = after.value.all_target_words().cloned().collect();
     let mut words = verse.words().to_vec();
@@ -194,14 +218,35 @@ fn assert_no_loss(
     assert_eq!(held, words, "{at}");
 }
 
+fn count(verse: &TargetVerse) -> std::collections::BTreeMap<String, usize> {
+    let mut n = std::collections::BTreeMap::<String, usize>::new();
+    for w in verse.words() {
+        *n.entry(w.word.clone()).or_default() += 1;
+    }
+    n
+}
+
+/// The texts the edit gave another number of copies.
+fn recounted(before: &TargetVerse, after: &TargetVerse) -> std::collections::BTreeSet<String> {
+    let (old, new) = (count(before), count(after));
+    old.keys()
+        .chain(new.keys())
+        .filter(|t| old.get(*t) != new.get(*t))
+        .cloned()
+        .collect()
+}
+
 #[test]
 fn reflow_matches_tc4_on_edited_en_ult_verses_and_drops_nothing_silently() {
     let mut reflowed = 0;
     let mut refused = 0;
     let mut dropped = 0;
+    let mut unclear = 0;
     for case in vectors("reflow-vectors.json") {
         let reference = case["ref"].as_str().unwrap();
         let stored = value_of(&case["record"]);
+        let before = TargetVerse::new(case["text"].as_str().unwrap());
+        assert!(!stored.is_stale_against(&before), "{reference}");
         for edit in case["edits"].as_array().unwrap() {
             let name = edit["edit"].as_str().unwrap();
             let at = format!("{reference} {name}");
@@ -219,23 +264,43 @@ fn reflow_matches_tc4_on_edited_en_ult_verses_and_drops_nothing_silently() {
                     other => panic!("{at}: tC4 left {other} alone"),
                 };
                 assert_eq!(reason, wanted, "{at}");
+                assert_eq!(reflow_edit(&value, &before, &verse), Err(reason), "{at}");
                 refused += 1;
                 continue;
             }
             let ours = ours.unwrap_or_else(|e| panic!("{at}: {e:?}"));
-            let theirs = value_of(expected);
+            // Without the earlier text, a link whose word the edit gave another number of
+            // copies, or that the edited verse holds more than once, goes back to the bank,
+            // reported (#789, Q30 (a)); every other link is tC4's.
+            let recounted = recounted(&before, &verse);
+            let repeated = count(&verse);
+            let mut theirs = value_of(expected);
+            for group in &mut theirs.alignments {
+                let before = group.bottom_words.len();
+                group
+                    .bottom_words
+                    .retain(|w| !recounted.contains(&w.word) && repeated[&w.word] == 1);
+                unclear += before - group.bottom_words.len();
+            }
             assert_eq!(cards(&ours.value), cards(&theirs), "{at}");
-            assert_eq!(ours.value.word_bank, theirs.word_bank, "{at}");
-            assert_eq!(ours.value.done, theirs.done, "{at}");
+            assert_eq!(ours.value.done, ours.value.is_fully_aligned(), "{at}");
             assert_eq!(ours.value.target_verse_md5, theirs.target_verse_md5, "{at}");
             assert!(!ours.value.marked_invalid, "{at}");
             assert_no_loss(&value, &ours, &verse, &at);
+            // With it, each link follows its own word; where no linked word was recounted,
+            // that is tC4's result.
+            let edited = reflow_edit(&value, &before, &verse).unwrap();
+            assert_no_loss(&value, &edited, &verse, &at);
+            if recounted.is_empty() {
+                assert_eq!(cards(&edited.value), cards(&value_of(expected)), "{at}");
+            }
             dropped += ours.dropped.len();
             reflowed += 1;
         }
     }
     assert_eq!((reflowed, refused), (16 * 4, 16 * 2 + 1));
     assert!(dropped > 0);
+    assert!(unclear > 0);
 }
 
 #[test]
@@ -246,8 +311,9 @@ fn a_word_held_on_two_cards_is_kept_on_the_first_and_reported_dropped_from_the_s
     let pablo = twice.alignments[0].bottom_words[0].clone();
     twice.alignments[2].bottom_words.push(pablo.clone());
     assert!(twice.well_formed().is_err());
-    let next = reflow(
+    let next = reflow_edit(
         &twice,
+        &TargetVerse::new(TEXT),
         &TargetVerse::new("Pablo, siervo de Dios y apóstol de Dios"),
     )
     .unwrap();
@@ -298,4 +364,139 @@ fn a_word_keeps_its_extra_fields_across_a_reflow_while_it_stays_in_the_verse() {
         "banked words keep theirs"
     );
     assert_eq!(next.value.well_formed(), Ok(()));
+}
+
+// ---- #789 a link follows its own word (the owner's Q30 (a)) ----
+
+/// The sample's TIT 1:1 with Θεοῦ¹ on Dios¹ (card 2) and Θεοῦ² on Dios² (card 9), and its
+/// text.
+fn sample() -> (AlignmentValue, String) {
+    let (stored, text) = sample_tit_1_1();
+    assert_eq!(placed(&stored)[2], ["Dios/1/2"]);
+    assert_eq!(placed(&stored)[9], ["Dios/2/2"]);
+    (stored, text)
+}
+
+#[test]
+fn deleting_an_earlier_copy_keeps_the_link_on_its_physical_word() {
+    // tC4 #789's case: delete "de Dios" after "siervo".
+    let (stored, text) = sample();
+    let before = TargetVerse::new(&text);
+    let after = TargetVerse::new(&text.replacen("siervo de Dios", "siervo", 1));
+    let next = reflow_edit(&stored, &before, &after).unwrap();
+    assert!(placed(&next.value)[2].is_empty());
+    assert_eq!(
+        placed(&next.value)[9],
+        ["Dios/1/1"],
+        "Θεοῦ² keeps its own Dios"
+    );
+    assert_eq!(next.dropped.len(), 1);
+    assert_eq!(
+        (next.dropped[0].card, next.dropped[0].word.occurrence),
+        (2, 1)
+    );
+    // Nothing is marked for review (Q30 (a)).
+    assert!(!next.value.marked_invalid);
+    let run = basis(1).aligned_run(&after);
+    assert_ne!(
+        tc_align::verse_status(Some(&next.value), Some((&run, &after)), None).state,
+        tc_align::VerseState::Invalid
+    );
+    // Without the earlier text it is not clear which Dios went: both links go back to the
+    // bank, reported, and neither lands on the other card.
+    let unclear = reflow(&stored, &after).unwrap();
+    assert!(placed(&unclear.value)[2].is_empty() && placed(&unclear.value)[9].is_empty());
+    assert_eq!(unclear.dropped.len(), 2);
+    assert!(show(&unclear.value.word_bank).contains(&"Dios/1/1".to_owned()));
+}
+
+#[test]
+fn inserting_an_earlier_copy_renumbers() {
+    let (stored, text) = sample();
+    let before = TargetVerse::new(&text);
+    let after = TargetVerse::new(&text.replacen("Pablo,", "Pablo de Dios,", 1));
+    let next = reflow_edit(&stored, &before, &after).unwrap();
+    assert_eq!(placed(&next.value)[2], ["Dios/2/3"]);
+    assert_eq!(placed(&next.value)[9], ["Dios/3/3"]);
+    assert!(show(&next.value.word_bank).contains(&"Dios/1/3".to_owned()));
+    assert!(next.dropped.is_empty());
+}
+
+#[test]
+fn delete_then_readd_never_reattaches_an_old_link() {
+    let (stored, text) = sample();
+    let t1 = TargetVerse::new(&text);
+    // Two saves: "Dios" deleted after "siervo de", then typed back.
+    let deleted = TargetVerse::new(&text.replacen("siervo de Dios", "siervo de", 1));
+    let first = reflow_edit(&stored, &t1, &deleted).unwrap();
+    assert!(placed(&first.value)[2].is_empty());
+    assert_eq!(first.dropped.len(), 1);
+    let second = reflow_edit(&first.value, &deleted, &t1).unwrap();
+    assert!(
+        placed(&second.value)[2].is_empty(),
+        "the old link stays off"
+    );
+    assert_eq!(placed(&second.value)[9], ["Dios/2/2"]);
+    assert!(show(&second.value.word_bank).contains(&"Dios/1/2".to_owned()));
+    // One save that deletes it and types it elsewhere: the new copy is another word.
+    let moved =
+        TargetVerse::new(&text.replacen("Pablo, siervo de Dios", "Pablo, Dios, siervo de", 1));
+    let next = reflow_edit(&stored, &t1, &moved).unwrap();
+    assert!(placed(&next.value)[2].is_empty());
+    assert_eq!(placed(&next.value)[9], ["Dios/2/2"]);
+    assert_eq!(next.dropped.len(), 1);
+}
+
+#[test]
+fn without_the_earlier_text_a_link_never_moves_to_a_retyped_copy_of_its_word() {
+    // The first Dios deleted and another typed earlier: the verse still holds two.
+    let (stored, text) = sample();
+    let moved =
+        TargetVerse::new(&text.replacen("Pablo, siervo de Dios", "Pablo, Dios, siervo de", 1));
+    let next = reflow(&stored, &moved).unwrap();
+    assert!(
+        placed(&next.value)[2].is_empty(),
+        "Θεοῦ¹ does not take the new Dios"
+    );
+    assert!(placed(&next.value)[9].is_empty());
+    let dropped: Vec<_> = next
+        .dropped
+        .iter()
+        .map(|d| (d.card, show(std::slice::from_ref(&d.word))))
+        .collect();
+    assert_eq!(
+        dropped,
+        [
+            (2, vec!["Dios/1/2".to_owned()]),
+            (9, vec!["Dios/2/2".to_owned()])
+        ]
+    );
+    assert!(show(&next.value.word_bank).contains(&"Dios/1/2".to_owned()));
+    // A link to a word the verse holds once is clear.
+    assert_eq!(placed(&next.value)[0], ["Pablo/1/1"]);
+}
+
+#[test]
+fn a_value_stamped_with_the_shown_text_as_tc4_stamps_keeps_its_links_to_repeated_words() {
+    // A `\qs` Selah written over lines: the shown text has it, the hashed text does not.
+    let text = "Pablo, siervo de Dios y de Dios\n\\qs\nSelah\n\\qs*\n";
+    let verse = TargetVerse::new(text);
+    let mut value = linked_on(text);
+    value.target_verse_md5 = tc_align::Md5::of(verse.text().as_bytes());
+    assert_ne!(value.target_verse_md5, verse.md5());
+    let next = reflow(&value, &verse).unwrap();
+    assert!(next.dropped.is_empty());
+    assert_eq!(placed(&next.value)[2], ["Dios/2/2"]);
+    assert_eq!(next.value.target_verse_md5, verse.md5());
+}
+
+#[test]
+fn a_reflow_from_text_the_value_was_not_made_against_counts_instead() {
+    let (stored, text) = sample();
+    let other = TargetVerse::new("Pablo, siervo de Dios");
+    let after = TargetVerse::new(&text.replacen("siervo de Dios", "siervo", 1));
+    assert_eq!(
+        reflow_edit(&stored, &other, &after),
+        reflow(&stored, &after)
+    );
 }

@@ -15,7 +15,7 @@ States: **done** (merged into main), **running**, **next** (its dependencies are
 | J1, J2 | tc-journal: model, codecs, fold, conflicts | done |
 | C | converge with main | done |
 | S1 | tc-store: store I/O, open, saves | done |
-| S2 | materialize off the actor, Git, held-file retries, outside edits | gated; extra verify loop running on `s2-verify` before main |
+| S2 | materialize off the actor, Git, held-file retries, outside edits | redesign as a placement ledger and a typed state machine with a model-based property test (`s2-placement-redesign.js`), then main |
 | P | scale against the reference laptop | about 23 commits built on `storage`; continues when the chain restarts |
 | T | the storage side of the tC4 issue sweep | waits: P |
 | X | Door43 sync and USB exchange | waits: P |
@@ -24,15 +24,15 @@ States: **done** (merged into main), **running**, **next** (its dependencies are
 
 ## App layer (`docs/APP-DESIGN.md` §10)
 
-Phase 0 runs in `app-phase0.js` (integration branch `phase0`); phases 1 to 6 run in
-`app-layer.js` (integration branch `app`). Both mark each merged unit with `ready/<unit>`, and the
-orchestrating session merges it into main with `merge-main.js`.
+Every remaining unit runs in `build-lane.js`: built from main, one verification pass, fixes only for
+blockers and majors (minors in `.audit/minors.tsv`), then merged straight into main with one gate run.
+The Windows VM runs the full gates on each new main (`.audit/tools/winvm/`).
 
 | Phase | Units done | Running | Waiting |
 |---|---|---|---|
-| 0 | A1, A2, A3, A4a, A4b, A5, A6a, A6b, A7, A9, A10, A11, G0 (run on Windows) | A8 | |
-| 1 | B1a, B1b | | B2 (next), B3 to B11 after B2 |
-| 2 | C0 (merging) | | C1a, C1b, then C2 to C8 with their B units |
+| 0 | all: A1 to A11 and G0 | | |
+| 1 | B1a, B1b, B2 | B3, B9b | B4a to B11 after B3 |
+| 2 | C0, C1a | C1b (state-machine rebuild) | C2 to C8 with their B units |
 | 3 | | | D1 (S2, C2, C5), D2 (S2, B8) |
 | 4 | | | E1a, E1b, E2 (X and their units) |
 | 5 | | | F1 (I, C1a) |
@@ -43,13 +43,14 @@ orchestrating session merges it into main with `merge-main.js`.
 | Task | State |
 |---|---|
 | 1 to 4, 6 (build, Door43 facts, G0, hazards) | done and merged |
-| 5: memory of Word, a browser, tC4 and Paratext against our 1 GiB and 400 MiB limits | running (`windows-memory`) |
-| 7: rerun at main; hazard 6's PAC and WPAD lookup | waits: task 5 (`windows-proxy`) |
-| Door43's push refusal in tc-door43-fake and the client | running (`windows-push-refusal`) |
+| 5: memory and startup of Word, Edge and tC4 (Paratext needs a registration) | done: tC4 709 MiB; Home 2.7 s warm, 13.2 s cold |
+| 7: rerun at main; hazard 6 | done; hazard 6 built in the VM and merged |
+| Builds and tests | moved to the Windows VM on the Linux PC; the laptop only measures |
+| Door43's push refusal in tc-door43-fake and the client | merged |
 
 ## tC4 issue sweep
 
-Fix run `tc4fix` (app-layer.js with a unit list): FIX-text, FIX-align, FIX-helps, FIX-misc, running.
+Sweep fixes on main: FIX-helps, FIX-misc, FIX-text, FIX-quit, FIX-proxy (hazard 6); FIX-align running (`fix-text-align.js`).
 
 Every few days, and before a unit's verification when tC4 has moved, rerun
 `tc4-issue-sweep.js` with tC4's newest `main` as `tip`. Its results live in
