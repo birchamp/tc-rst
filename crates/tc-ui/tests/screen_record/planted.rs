@@ -865,6 +865,40 @@ fn every_screen_the_rebuild_differs_on_has_a_mask_citing_its_ruling() {
     assert!(p.run().global().iter().any(|f| f.rule == Rule::MaskRuling));
 }
 
+/// B9a masks the Urdu row of `source-texts` under tC4 #701, which docs/PLAN.md lists among the
+/// differences on purpose, as the gallery's residuals cite #552.
+#[test]
+fn a_mask_may_cite_a_tc4_issue_that_plan_lists() {
+    let p = Planted::new();
+    let mask = |ruling: &str| {
+        json!({
+            "id": "ur-deva-name",
+            "ruling": ruling,
+            "why": "tC4 names Urdu (Devanagari) اردو in Arabic script; the rebuild names it उर्दू and reads its helps left to right.",
+            "target": { "text": "اردو" },
+            "rust": { "text": "उर्दू" },
+            "rects": { "source-texts": { "x": 400, "y": 300, "width": 120, "height": 20 } },
+            "meaning": null,
+        })
+    };
+    p.edit_json("masks.json", |m| {
+        m["masks"].as_array_mut().unwrap().push(mask("#701"))
+    });
+    p.run().assert_clean(&["source-texts"]);
+    // An issue PLAN does not list is refused as an owner's answer it does not list is.
+    p.edit_json("masks.json", |m| {
+        *m["masks"].as_array_mut().unwrap().last_mut().unwrap() = mask("#7010")
+    });
+    let out = p.run();
+    let refused: Vec<_> = out
+        .global()
+        .into_iter()
+        .filter(|f| f.rule == Rule::MaskRuling)
+        .collect();
+    assert_eq!(refused.len(), 1, "{refused:?}");
+    assert!(refused[0].message.contains("#7010"), "{}", refused[0]);
+}
+
 /// A DOM file as a behaviour step, each element numbered.
 fn numbered(file: &Path) -> Snapshot {
     number(read_json(file).unwrap())

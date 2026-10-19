@@ -3298,6 +3298,7 @@ dependencies = [
  "md-5",
  "proptest",
  "serde_json",
+ "tc-burrito",
  "tc-helps",
  "tc-resources",
  "thiserror 2.0.21",
