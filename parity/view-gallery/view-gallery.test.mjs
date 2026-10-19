@@ -9,17 +9,26 @@
 // 1.56.1 (parity/tc4-baseline/node_modules); without them each of its tests is skipped and
 // says why. Only Node built-ins are imported at the top.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { SCREEN_LIST } from '../app/screens.mjs';
+import { galleryGroups } from '../app/units.mjs';
 import { stateExportsSource, stateStub } from './build.mjs';
+import { CASES, caseSteps } from './cases.mjs';
 import { applyPatch, domDigestInput, encodeValue, makeActions, renumberIds, reviveValue, traceArgs } from './lib.mjs';
-import { HERE, STATES_DIR, filesUnder, joinParts, partsOf, sha256, splitParts } from './node-lib.mjs';
+import { HERE, REPO, STATES_DIR, filesUnder, joinParts, partsOf, sha256, splitParts } from './node-lib.mjs';
 import { STATES } from './states.mjs';
+import { stepProblem } from './steps.mjs';
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 const statesIndex = readJson(path.join(HERE, 'states.json'));
+const casesFile = readJson(path.join(REPO, 'parity', 'app', 'cases.json'));
+const calibration = readJson(path.join(HERE, 'calibration.json'));
+const masks = readJson(path.join(REPO, 'parity', 'app', 'masks.json')).masks;
+const groups = galleryGroups(fs.readFileSync(path.join(REPO, 'docs', 'APP-DESIGN.md'), 'utf8'));
 
 // ---- the pure helpers ----------------------------------------------------------------------
 
@@ -227,4 +236,139 @@ test('every state of states.mjs is recorded, as states.mjs describes it', () => 
     );
   }
   assert.equal(new Set(STATES.map((s) => s.name)).size, STATES.length);
+});
+
+// ---- the cases and their record --------------------------------------------------------------
+
+test('every case names a recorded state, a §7.4 group and a unique name', () => {
+  const names = CASES.map((c) => c.name);
+  assert.equal(new Set(names).size, names.length, 'two cases share a name');
+  assert.equal(groups.length, 18);
+  for (const c of CASES) {
+    assert.match(c.name, /^[a-z0-9]+(-[a-z0-9]+)*$/, `${c.name} is not kebab-case`);
+    assert.ok(!SCREEN_LIST.some((s) => s.name === c.name), `case ${c.name} is named like a baseline screen`);
+    assert.ok(STATES.some((s) => s.name === c.state), `case ${c.name} starts from ${c.state}, which states.mjs does not record`);
+    const group = groups.find((g) => g.group === c.group);
+    assert.ok(group, `case ${c.name}: group ${c.group} is not in §7.4`);
+    assert.equal(c.scope !== undefined, group.dom !== group.pixels, `case ${c.name}: a scope exactly when its group is DOM-first (${group.dom}, ${group.pixels})`);
+    if (c.scope) assert.deepEqual(Object.keys(c.scope).sort(), ['attr', 'value', 'which']);
+    for (const step of caseSteps(c)) assert.equal(stepProblem(step), null, `case ${c.name}`);
+    for (const id of c.masks ?? []) assert.ok(masks.some((m) => m.id === id), `case ${c.name} names the mask ${id}, which masks.json does not have`);
+    assert.ok(typeof c.why === 'string' && c.why.length > 20, `case ${c.name} says nothing of what it shows`);
+    assert.ok(c.patch === undefined || typeof c.patch === 'function');
+  }
+  for (const g of groups) assert.ok(CASES.some((c) => c.group === g.group), `§7.4 group ${g.group} has no case`);
+});
+
+test('cases.json agrees with cases.mjs, §7.4 and the files', () => {
+  assert.deepEqual(casesFile.cases.map((e) => e.name), CASES.map((c) => c.name), 'cases.json is not every case of cases.mjs in order: capture again');
+  assert.match(casesFile.tc4.commit, /^[0-9a-f]{40}$/);
+  assert.equal(casesFile.tc4.commit, statesIndex.tc4.commit, 'the cases were captured from another tC4 than the states were recorded from');
+  assert.deepEqual(casesFile.machine, calibration.machine, 'the cases and the calibration come from two machines');
+  const named = new Set();
+  for (const c of CASES) {
+    const entry = casesFile.cases.find((e) => e.name === c.name);
+    const state = STATES.find((s) => s.name === c.state);
+    const group = groups.find((g) => g.group === c.group);
+    assert.deepEqual(
+      [entry.group, entry.state, entry.scenario, entry.locale, entry.domUnit, entry.pixelsUnit, entry.scope],
+      [c.group, c.state, state.scenario, state.locale, group.dom, group.pixels, c.scope ?? null],
+      `cases.json's entry of ${c.name} is not what cases.mjs and §7.4 give: capture again`,
+    );
+    assert.equal(entry.patch.length > 0, c.patch !== undefined, `${c.name}: the keys its patch sets`);
+    for (const [file, sha] of [[entry.png, entry.sha256], [entry.dom, entry.domSha256], [entry.actions, entry.actionsSha256]]) {
+      assert.equal(sha256(fs.readFileSync(path.join(HERE, file))), sha, `parity/view-gallery/${file} is not the file cases.json names`);
+      named.add(file);
+    }
+    const dom = readJson(path.join(HERE, entry.dom));
+    assert.equal(dom.screen, c.name);
+    assert.ok(dom.root.length > 1 && dom.root[1].trimStart().startsWith('<'), `${entry.dom}: nothing was drawn under #root`);
+    const trace = readJson(path.join(HERE, entry.actions));
+    assert.equal(trace.case, c.name);
+    assert.ok(Array.isArray(trace.calls) && trace.calls.every((call) => typeof call.name === 'string' && typeof call.at === 'string'));
+  }
+  for (const dir of ['screens', 'dom', 'actions']) {
+    for (const rel of filesUnder(path.join(HERE, dir))) assert.ok(named.has(`${dir}/${rel}`), `parity/view-gallery/${dir}/${rel} belongs to no case`);
+  }
+  // A mask's rectangle on a case: exactly the cases that show its element.
+  for (const mask of masks) {
+    for (const name of Object.keys(mask.rects)) {
+      if (SCREEN_LIST.some((s) => s.name === name)) continue;
+      const c = CASES.find((x) => x.name === name);
+      assert.ok(c && (c.masks ?? []).includes(mask.id), `masks.json gives mask ${mask.id} a rectangle on ${name}, which does not show it`);
+    }
+  }
+  for (const c of CASES) for (const id of c.masks ?? []) assert.ok(masks.find((m) => m.id === id).rects[c.name], `mask ${id} has no rectangle on ${c.name}`);
+});
+
+test('calibration.json shows every state renders as tC4 rendered it', () => {
+  assert.deepEqual(calibration.states.map((e) => e.name), statesIndex.states.map((e) => e.name));
+  for (const entry of calibration.states) {
+    const state = statesIndex.states.find((e) => e.name === entry.name);
+    assert.equal(entry.equal, true, `${entry.name} does not draw as tC4 drew it`);
+    assert.deepEqual([entry.png, entry.dom], [state.real.png, state.real.dom], `${entry.name}: calibration.json disagrees with states.json`);
+  }
+});
+
+test('a reply file names its case and holds tc-api replies', () => {
+  const dir = path.join(HERE, 'replies');
+  for (const rel of filesUnder(dir)) {
+    const name = rel.replace(/\.json$/, '');
+    assert.ok(rel.endsWith('.json') && CASES.some((c) => c.name === name), `replies/${rel} names no case`);
+    const file = readJson(path.join(dir, rel));
+    assert.equal(file.case, name);
+    assert.ok(Array.isArray(file.replies));
+    for (const r of file.replies) {
+      assert.match(r.endpoint, /^[a-z][a-zA-Z]*\/[a-zA-Z][\w-]*$/, `replies/${rel}: an endpoint is <service>/<name>`);
+      assert.ok(['memory', 'hand'].includes(r.source), `replies/${rel}: source is memory or hand`);
+      assert.ok('request' in r && 'reply' in r);
+    }
+  }
+});
+
+// ---- with a tC4 clone and a browser -----------------------------------------------------------
+
+function browserSetup() {
+  const root = process.env.TC4_ROOT;
+  if (!root || !fs.existsSync(path.join(root, 'node_modules', 'vite', 'package.json'))) return { skip: 'set TC4_ROOT to a tC4 clone with node_modules (parity/view-gallery/README.md, "Setup")' };
+  const playwright = process.env.PLAYWRIGHT_MODULE ?? path.join(REPO, 'parity', 'tc4-baseline', 'node_modules', 'playwright');
+  if (!fs.existsSync(path.join(playwright, 'package.json'))) return { skip: 'Playwright 1.56.1 is not installed: npm ci in parity/tc4-baseline' };
+  return {};
+}
+
+const runs = [];
+const capture = (args) => spawnSync(process.execPath, [path.join(HERE, 'capture.mjs'), ...args], { encoding: 'utf8', env: process.env, timeout: 30 * 60_000 });
+
+test('every case renders with no console error', { timeout: 30 * 60_000, skip: browserSetup().skip }, () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'gallery-run1-'));
+  const run = capture(['--out', out]);
+  assert.equal(run.status, 0, `capture.mjs failed:\n${run.stdout.slice(-4000)}\n${run.stderr.slice(-2000)}`);
+  assert.doesNotMatch(run.stdout, /FAILED|DIFFERS/);
+  const cases = readJson(path.join(out, 'cases.json')).cases;
+  assert.equal(cases.length, CASES.length);
+  for (const entry of cases) {
+    assert.ok(fs.statSync(path.join(out, entry.png)).size > 0);
+    const dom = readJson(path.join(out, entry.dom));
+    assert.ok(dom.root.length > 1, `${entry.name}: nothing under #root`);
+    assert.ok(fs.existsSync(path.join(out, entry.actions)));
+  }
+  runs.push(out);
+});
+
+test('two captures are byte-identical', { timeout: 30 * 60_000, skip: browserSetup().skip }, () => {
+  assert.equal(runs.length, 1, 'the first capture did not run');
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'gallery-run2-'));
+  const run = capture(['--no-build', '--out', out]);
+  assert.equal(run.status, 0, run.stdout.slice(-4000));
+  const files = (dir) => filesUnder(dir).map((rel) => [rel, sha256(fs.readFileSync(path.join(dir, rel)))]);
+  assert.deepEqual(files(out), files(runs[0]));
+  runs.push(out);
+});
+
+test('a fresh capture equals the committed record', { timeout: 60_000, skip: browserSetup().skip }, async () => {
+  assert.ok(runs.length >= 1, 'the first capture did not run');
+  const { compareWithCommitted } = await import('./capture.mjs');
+  const machine = readJson(path.join(runs[0], 'cases.json')).machine;
+  assert.deepEqual(compareWithCommitted(runs[0], machine), [], 'files that differ from the committed record');
+  for (const dir of runs) fs.rmSync(dir, { recursive: true, force: true });
 });

@@ -1,0 +1,15 @@
+{
+  "case": "upgrade-repin",
+  "calls": [
+    {
+      "at": "mount",
+      "name": "runPreflight",
+      "args": []
+    },
+    {
+      "at": "mount",
+      "name": "loadPickerProgress",
+      "args": []
+    }
+  ]
+}

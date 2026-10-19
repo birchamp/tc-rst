@@ -1,0 +1,15 @@
+{
+  "case": "check-empty-missing",
+  "calls": [
+    {
+      "at": "mount",
+      "name": "runPreflight",
+      "args": []
+    },
+    {
+      "at": "mount",
+      "name": "refreshCheckDraft",
+      "args": []
+    }
+  ]
+}

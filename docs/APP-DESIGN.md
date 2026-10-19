@@ -2038,19 +2038,63 @@ The Rust environment's seams:
 
 ### 7.4 The tC4 view-state gallery
 
-Many states have no baseline. A Vite app mounts tC4's real views from the checkout with
-`src/state.jsx` replaced by a stub through an alias, as `parity/ds-gallery/vite.config.mjs:15-19`
-already aliases tC4's design system. The 34 view files under `src/views` and `src/App.jsx` import
-from `state.jsx`; the stub exports what they use: `useApp`, `SCRIPT_FONTS`, `SUITE_VERSION`,
-`door43` and `isOldTestament`. `actions` records each call, so tC4's action trace can be compared
-with the Rust screen's requests and navigation.
+Many states have no baseline. `parity/view-gallery` is a Vite app that mounts tC4's real
+`App.jsx` from a tC4 clone, built by the clone's own Vite, React plugin and node polyfills in
+release mode with tC4's base and defines, as `npm run build` builds tC4, with `src/state.jsx`
+replaced by a stub through a resolver plugin that fails the build if tC4's file is ever loaded
+(the way `parity/ds-gallery/vite.config.mjs:15-19` aliases tC4's design system). The 32 view
+files under `src/views` and `src/App.jsx` import from `state.jsx`; the stub exports what they use:
+`useApp`, `SCRIPT_FONTS`, `SUITE_VERSION`, `door43` and `isOldTestament`, the second and the last
+cut from `state.jsx`'s own source. `useApp` answers tC4's value `{ s, book, progress, sourceModel,
+actions, BOOK_NAMES, locale }`, with `book` and `sourceModel` derived as tC4's provider derives
+them. `actions` records each call, so tC4's action trace can be compared with the Rust screen's
+requests and navigation; it answers the two selectors the views call while drawing
+(`sourceGateways`, `installedCountFor`) with tC4's own code, and otherwise returns nothing unless
+the case gives a reply. *(A7: the text said 34 view files; 32 import `state.jsx`.)*
 
-A case has three parts: a tC4 `s` fragment, the matching tc-api replies, and steps. The replies are
-recorded from `MemoryBackend` where the state exists there, and written by hand only where it
-cannot exist yet. Cases cover: S4 Text tab; S12; S14 with its three captions; M9; M10; M18; the
-License dialog; net failed; share progress and done; import steps after `kind`; Add a book pick and
-USFM steps; Feedback sent and not sent; the sign-in error; the check empty states; the align
-unavailable states; Home loading, empty and error; the Resume card; the import toast.
+A case has four parts: a recorded tC4 state, a patch, steps, and the matching tc-api replies. A
+recorded state is the whole `s` of real tC4, read from its React tree after the driver took it,
+against the baseline's mock, to a baseline screen or a few steps further, with the replies of the
+read-only actions the view draws. The patch is tC4's reducer `set` patch, written only where the
+mock cannot go, and built from recorded values wherever it can be. Every recorded state renders
+in the gallery as tC4 rendered it: calibration draws each with no patch and compares it with real
+tC4's own capture at that moment, pixels byte for byte and DOM after the gate's id renumbering
+(`parity/view-gallery/calibration.json`). The replies are recorded from `MemoryBackend` where the
+state exists there and written by hand only where it cannot exist yet, by the unit that ports the
+case's group, in `parity/view-gallery/replies/<case>.json`: `MemoryBackend` is B1b's and a screen's
+view types are its unit's (§10), so no reply exists when the gallery is built. *(A7: the text
+said "a tC4 `s` fragment" and replies recorded from `MemoryBackend`; a whole recorded state needs
+no hand-written fixture where the mock reaches the state, which is what risk 17 asks.)*
+
+The groups, which the gate reads (keep the backticks and the four cells):
+
+| Group | tC4 view and states | DOM | Pixels |
+|---|---|---|---|
+| `S4` | the verse conflict review that tC4's Text tab is (`ConflictReview.jsx`): unselected, a version selected, a version of mine | B11 | B11 |
+| `S12` | OBS Community Checking (`CommunityChecking.jsx`, `StoryCommunityChecking`), with its layout choice | B8 | B8 |
+| `S14` | the open overlay (`OpenProgress.jsx`) with its three captions | B3 | B3 |
+| `M9` | the release upgrade confirmation (`UpgradeSet.jsx`): a set, harmless, blocked, failed, scripture text, re-pin | C8 | C8 |
+| `M10` | the gateway change (`GatewayChange.jsx`): the change, busy, blocked, failed to apply, failed preview | C8 | C8 |
+| `M18` | "Remove all the text of section …?" (`SectionEditor.jsx:244-255`, tC4 #600) | B4b | B4b |
+| `license` | the License dialog (`AccountMenu.jsx`, `LicenseDialog`) | A5 | B2 |
+| `net-failed` | "tC4 could not use the internet" (`AccountMenu.jsx`, `InternetDialog`) | A8 | B2 |
+| `share` | share progress and done (`ShareDialog.jsx`) | E1b | E1b |
+| `import` | the import steps after `kind` (`Import.jsx`): files, the review of USFM and of tC3, working, failed | F1 | F1 |
+| `add-book` | Add a book, the pick and USFM steps (`AddBook.jsx`) | C6 | C6 |
+| `feedback` | Feedback sending, sent and not sent (`Feedback.jsx`) | G1 | G1 |
+| `sign-in` | the sign-in error (`ShareSignIn.jsx`) | A8 | B9b |
+| `check-empty` | the check empty states (`Check.jsx`: `CheckEmpty`, deriving, an error, a filter with no match, a picker card with no items) | B5a | B5a |
+| `align-unavailable` | the align unavailable states (`Align.jsx`, `AlignBlocked`), loading and an error | B6 | B6 |
+| `home` | Home loading, empty and with an error (`Home.jsx`) | B2 | B2 |
+| `resume` | the Resume card (`Home.jsx`, `ResumeCard`) | B2 | B2 |
+| `import-toast` | the import toast (`Home.jsx`) | F1 | F1 |
+
+A group whose DOM unit comes first is DOM-first, as in §7.6: its cases name their dialog in
+`scope`, and the DOM layer compares only that subtree until the pixels unit captures the case
+whole. `parity/app/cases.json` lists every case with its group, scenario, units, scope, the keys
+its patch sets and the sha256 of its tC4 screenshot, DOM and action trace, and the machine that
+captured them; `parity/view-gallery/README.md` says how a case is written, recorded and captured.
+*(A7)*
 
 ### 7.5 Report and gate
 
