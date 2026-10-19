@@ -46,6 +46,16 @@ const boot = {
 };
 window.tc4Boot = boot;
 
+// A browser that blocks the site's storage throws from the `localStorage` and `sessionStorage`
+// getters themselves, not only from their methods; everything here reaches them through this.
+function store(name) {
+  try {
+    return window[name] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function onInput(event) {
   const started = performance.now();
   const field = tracked.get(event.target);
@@ -55,7 +65,7 @@ function onInput(event) {
     const text = typeof target.value === 'string' ? target.value : (target.textContent ?? '');
     let result = { line: null, stored: false };
     try {
-      result = R.inputToEntry(localStorage, field.itemKey, text, Date.now(), field.template);
+      result = R.inputToEntry(store('localStorage'), field.itemKey, text, Date.now(), field.template);
     } catch {
       result = { line: null, stored: false };
     }
@@ -86,7 +96,7 @@ window.addEventListener('beforeunload', (event) => {
 
 function ownMarker() {
   try {
-    const marker = JSON.parse(sessionStorage.getItem(R.CRASH_KEY));
+    const marker = JSON.parse(store('sessionStorage').getItem(R.CRASH_KEY));
     if (marker && marker.page === page) return marker;
   } catch {
     // No marker: an abort that skipped the panic hook still counts.
@@ -99,7 +109,8 @@ function onTrap(error) {
   handled = true;
   const marker = ownMarker();
   const message = marker?.message ?? String(error?.message ?? error);
-  if (R.countPanic(sessionStorage, Date.now()) === 'reload') {
+  // A page that cannot reach sessionStorage cannot count its panics: 'stop' (6.8).
+  if (R.countPanic(store('sessionStorage'), Date.now()) === 'reload') {
     location.reload();
     return;
   }
@@ -114,12 +125,12 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 function showStatic(message) {
-  const text = R.calloutText(sessionStorage);
+  const text = R.calloutText(store('sessionStorage'));
   const { root, button } = R.buildStaticCallout(document, text, message);
   button.addEventListener('click', () => {
     for (const key of [R.CRASH_KEY, R.PANICS_KEY, R.NAV_KEY]) {
       try {
-        sessionStorage.removeItem(key);
+        store('sessionStorage').removeItem(key);
       } catch {
         // A blocked storage keeps nothing to remove.
       }
@@ -137,13 +148,13 @@ function postDrafts() {
   let token = null;
   let instance = null;
   try {
-    token = sessionStorage.getItem(R.TOKEN_KEY);
-    instance = sessionStorage.getItem(R.INSTANCE_KEY);
+    token = store('sessionStorage').getItem(R.TOKEN_KEY);
+    instance = store('sessionStorage').getItem(R.INSTANCE_KEY);
   } catch {
     token = null;
   }
   if (!token) return;
-  const requests = R.draftRequests(localStorage, instance, () => R.randomId(crypto));
+  const requests = R.draftRequests(store('localStorage'), instance, () => R.randomId(crypto));
   for (const { path, body } of requests) {
     fetch(`/api/v1/${path}`, {
       method: 'POST',

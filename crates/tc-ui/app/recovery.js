@@ -127,9 +127,13 @@ export function inputToEntry(store, itemKey, text, now, templateText) {
 /**
  * The drafts to post after three panics (6.8): one per buffer entry of the server run
  * `instance` (the run the page last met, which the page keeps in INSTANCE_KEY) that has a draft
- * call, its body with a fresh `request` and the entry's `text` added. Each draft names its own
- * open, so one of a project that is not open is refused by the server and changes nothing;
- * entries of another run wait for the offer at their project's next open.
+ * call and no save in flight, its body with a fresh `request` and the entry's `text` added. Each
+ * draft names its own open, so one of a project that is not open is refused by the server and
+ * changes nothing; entries of another run wait for the offer at their project's next open. An
+ * entry with a save in flight (`sent`) gets no draft, as the save machine sends none then: its
+ * tokens are those from before that save, so a draft over them would stand beside the person's
+ * own save as a conflict, and the entry stays in the buffer and the mirror, with its save, for
+ * the offer (6.6).
  */
 export function draftRequests(store, instance, freshId) {
   if (typeof instance !== 'string' || instance === '') return [];
@@ -153,6 +157,7 @@ export function draftRequests(store, instance, freshId) {
       continue;
     }
     if (!key || !entry || entry.instance !== instance || typeof entry.text !== 'string') continue;
+    if (entry.sent != null) continue;
     const draft = entry.draft;
     if (!draft || typeof draft.path !== 'string' || !DRAFT_PATH.test(draft.path) || typeof draft.body !== 'string') continue;
     let body;

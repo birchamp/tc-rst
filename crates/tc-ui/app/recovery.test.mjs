@@ -32,6 +32,8 @@ function storage(entries = {}, { blocked = false } = {}) {
 const KEY = golden.keys[0];
 const ITEM = golden.itemKeys[0];
 const ENTRY = golden.entries[0];
+/** The golden entry with no save in flight: one the static callout posts a draft for. */
+const UNSENT = { ...ENTRY, sent: null };
 
 test('three_page_loads_in_10_s_stop_the_reloads', () => {
   const session = storage();
@@ -123,10 +125,10 @@ test('the_line_matches_tc_api_golden', () => {
 });
 
 test('drafts_only_of_the_current_run_and_with_a_draft_call', () => {
-  const otherRun = { ...ENTRY, instance: '00000000000000000000000000000000' };
+  const otherRun = { ...UNSENT, instance: '00000000000000000000000000000000' };
   const otherFolder = { ...KEY, project: 'other' };
   const local = storage({
-    [ITEM]: JSON.stringify(ENTRY),
+    [ITEM]: JSON.stringify(UNSENT),
     [golden.itemKeys[1]]: JSON.stringify(golden.entries[1]),
     [R.BUFFER_PREFIX + JSON.stringify(otherFolder)]: JSON.stringify(otherRun),
     'tc4.token': 'x',
@@ -140,14 +142,33 @@ test('drafts_only_of_the_current_run_and_with_a_draft_call', () => {
 });
 
 test('a_draft_request_adds_request_and_text_and_keeps_the_rest', () => {
-  const local = storage({ [ITEM]: JSON.stringify(ENTRY) });
+  const local = storage({ [ITEM]: JSON.stringify(UNSENT) });
   const [request] = R.draftRequests(local, ENTRY.instance, () => 'abc');
   assert.deepEqual(JSON.parse(request.body), { ...JSON.parse(ENTRY.draft.body), request: 'abc', text: ENTRY.text });
 });
 
+test('an_entry_with_a_save_in_flight_gets_no_draft', () => {
+  // Its tokens are those from before the save: a draft over them would stand beside the
+  // person's own save as a conflict. The entry stays, with its save, for the offer (6.6).
+  const local = storage({ [ITEM]: JSON.stringify(ENTRY) });
+  assert.deepEqual(R.draftRequests(local, ENTRY.instance, () => 'id'), []);
+  assert.deepEqual(JSON.parse(local.getItem(ITEM)), ENTRY, 'and it stays in the buffer');
+});
+
+test('a_store_the_browser_refuses_to_hand_out_is_handled_as_none', () => {
+  // boot.js reaches localStorage and sessionStorage through a getter that gives null when the
+  // browser throws from the getter itself (site data blocked).
+  assert.equal(R.countPanic(null, 1000), 'stop', 'a page that cannot count stops at once');
+  assert.deepEqual(R.calloutText(null), R.ENGLISH);
+  assert.deepEqual(R.draftRequests(null, ENTRY.instance, () => 'id'), []);
+  const { line, stored } = R.inputToEntry(null, ITEM, 'kept by the shell', 4, JSON.stringify(UNSENT));
+  assert.equal(stored, false);
+  assert.equal(JSON.parse(line).value.entry.text, 'kept by the shell', 'the mirror still gets it');
+});
+
 test('a_draft_call_to_another_place_is_not_posted', () => {
   for (const path of ['../evil', 'test/fieldDraft?x=1', 'http://example.com/x', '']) {
-    const entry = { ...ENTRY, draft: { ...ENTRY.draft, path } };
+    const entry = { ...UNSENT, draft: { ...ENTRY.draft, path } };
     assert.deepEqual(R.draftRequests(storage({ [ITEM]: JSON.stringify(entry) }), ENTRY.instance, () => 'id'), [], path);
   }
 });
