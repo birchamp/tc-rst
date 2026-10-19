@@ -45,16 +45,24 @@ pub fn settings_values(
 }
 
 /// The primary set's gateway language as `resources.json` names it (tC4 `pinnedGateway`): no
-/// pins, or a file that does not name one, is no current checking language.
-pub fn pinned_gateway(resources: Option<&[u8]>) -> Option<CurrentGateway> {
-    let doc: Value = serde_json::from_slice(resources?).ok()?;
-    let gateway = doc.pointer("/languageSets/primary/gatewayLanguage")?;
-    let language = gateway.get("languageId")?.as_str()?.to_owned();
-    let owner = gateway.get("owner")?.as_str()?.to_owned();
-    Some(CurrentGateway {
-        autonym: tc_resources::gateways::display_name(&language),
-        gateway: GatewayRef { language, owner },
-    })
+/// pins, or a file that does not name one, is no current checking language. A file that does not
+/// parse is an error, never "no checking language yet" (tC4 `readJsonSidecarWithMd5` throws).
+pub fn pinned_gateway(resources: Option<&[u8]>) -> Result<Option<CurrentGateway>, String> {
+    let Some(bytes) = resources else {
+        return Ok(None);
+    };
+    let doc: Value = serde_json::from_slice(bytes)
+        .map_err(|e| format!("{}: {e}", DerivedFile::Resources.path()))?;
+    let named = || {
+        let gateway = doc.pointer("/languageSets/primary/gatewayLanguage")?;
+        let language = gateway.get("languageId")?.as_str()?.to_owned();
+        let owner = gateway.get("owner")?.as_str()?.to_owned();
+        Some(CurrentGateway {
+            autonym: tc_resources::gateways::display_name(&language),
+            gateway: GatewayRef { language, owner },
+        })
+    };
+    Ok(named())
 }
 
 fn unreadable(reason: String) -> ApiError {
@@ -88,6 +96,7 @@ impl Handle<ViewFromHome> for App {
         })?;
         let (language_name, direction, font) =
             settings_values(settings.as_deref()).map_err(unreadable)?;
+        let current = pinned_gateway(resources.as_deref()).map_err(unreadable)?;
         let kind = crate::home::api_kind(entry.kind);
         let books = card_facts(&peek.metadata, &entry.folder, kind)
             .books
@@ -111,7 +120,7 @@ impl Handle<ViewFromHome> for App {
             direction,
             font,
             gateway: GatewayCard {
-                current: pinned_gateway(resources.as_deref()),
+                current,
                 options,
             },
         })
@@ -144,22 +153,21 @@ mod tests {
         );
         let pins = br#"{"schemaVersion":2,"languageSets":{"primary":{"gatewayLanguage":
             {"languageId":"es-419","owner":"es-419_gl"}}}}"#;
-        let current = pinned_gateway(Some(pins)).unwrap();
+        let current = pinned_gateway(Some(pins)).unwrap().unwrap();
         assert_eq!(current.autonym, "Español (Latinoamérica)");
         assert_eq!(current.gateway.key(), "es-419::es-419_gl");
     }
 
     #[test]
     fn no_pins_is_no_checking_language_never_english() {
-        assert_eq!(pinned_gateway(None), None);
-        assert_eq!(pinned_gateway(Some(br#"{"schemaVersion":2}"#)), None);
-        assert_eq!(pinned_gateway(Some(b"not json")), None);
+        assert_eq!(pinned_gateway(None), Ok(None));
+        assert_eq!(pinned_gateway(Some(br#"{"schemaVersion":2}"#)), Ok(None));
     }
 
     #[test]
     fn a_language_the_registry_does_not_name_shows_its_tag() {
         let pins = br#"{"languageSets":{"primary":{"gatewayLanguage":
             {"languageId":"xx","owner":"someone"}}}}"#;
-        assert_eq!(pinned_gateway(Some(pins)).unwrap().autonym, "xx");
+        assert_eq!(pinned_gateway(Some(pins)).unwrap().unwrap().autonym, "xx");
     }
 }

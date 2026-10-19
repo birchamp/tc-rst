@@ -179,10 +179,11 @@ async fn on_the_store(dir: &Path) -> (FaultFs, TestApp) {
     (fs, t)
 }
 
-fn settings_path() -> std::path::PathBuf {
+fn checking_file(name: &str) -> std::path::PathBuf {
     Path::new(PROJECTS)
         .join(SAMPLE)
-        .join("ingredients/checking/settings.json")
+        .join("ingredients/checking")
+        .join(name)
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -195,7 +196,7 @@ async fn settings_from_home_read_what_the_project_files_hold() {
     let (fs, t) = on_the_store(dir.path()).await;
     let settings = r#"{"schemaVersion":1,"checkingLanguage":"en","textDirection":"rtl",
         "textFont":"Charis SIL","languageName":"Español"}"#;
-    fs.put(&settings_path(), settings.as_bytes(), None);
+    fs.put(&checking_file("settings.json"), settings.as_bytes(), None);
     let view = ok(&t.app, &settings_from_home(SAMPLE)).await;
     assert_eq!(view.direction, Direction::Rtl);
     assert_eq!(view.font.as_deref(), Some("Charis SIL"));
@@ -204,7 +205,7 @@ async fn settings_from_home_read_what_the_project_files_hold() {
     assert_eq!(current.gateway, gateway("es-419", "es-419_gl"));
     assert_eq!(current.autonym, "Español (Latinoamérica)");
     assert_eq!(
-        fs.peek(&settings_path()).unwrap(),
+        fs.peek(&checking_file("settings.json")).unwrap(),
         settings.as_bytes(),
         "nothing is written"
     );
@@ -216,15 +217,32 @@ async fn a_settings_file_another_program_holds_is_stated_not_defaulted() {
     // project's real direction and font.
     let dir = tempfile::tempdir().unwrap();
     let (fs, t) = on_the_store(dir.path()).await;
-    fs.set_unreadable(&settings_path(), true);
+    fs.set_unreadable(&checking_file("settings.json"), true);
     match err(&t.app, &settings_from_home(SAMPLE)).await {
         ApiError::Refused(Refusal::Open(OpenRefusal::Unreadable { reason })) => {
             assert!(reason.contains("settings.json"), "{reason}");
         }
         other => panic!("{other:?}"),
     }
-    fs.set_unreadable(&settings_path(), false);
+    fs.set_unreadable(&checking_file("settings.json"), false);
     ok(&t.app, &settings_from_home(SAMPLE)).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pins_another_program_saved_broken_are_stated_not_no_checking_language() {
+    let dir = tempfile::tempdir().unwrap();
+    let (fs, t) = on_the_store(dir.path()).await;
+    fs.put(
+        &checking_file("resources.json"),
+        br#"{"schemaVersion":2, "languageSets": {"#,
+        None,
+    );
+    match err(&t.app, &settings_from_home(SAMPLE)).await {
+        ApiError::Refused(Refusal::Open(OpenRefusal::Unreadable { reason })) => {
+            assert!(reason.contains("resources.json"), "{reason}");
+        }
+        other => panic!("{other:?}"),
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
