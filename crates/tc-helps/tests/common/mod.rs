@@ -23,6 +23,28 @@ pub fn aquifer(rel: &str) -> String {
     fixture(&format!("aquifer/{rel}"))
 }
 
+/// A text file of the repository: `bundle/en/<export>.zip:<entry>` reads one entry of a
+/// burrito export, any other path a file. Paths are relative to the repository root.
+pub fn repo_text(source: &str) -> String {
+    use std::io::Read;
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let Some((zip_path, entry)) = source.split_once(".zip:") else {
+        let path = root.join(source);
+        return std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    };
+    let path = root.join(format!("{zip_path}.zip"));
+    let file = std::fs::File::open(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let mut archive = zip::ZipArchive::new(file).unwrap_or_else(|e| panic!("{source}: {e}"));
+    let mut text = String::new();
+    archive
+        .by_name(entry)
+        .unwrap_or_else(|e| panic!("{source}: {e}"))
+        .read_to_string(&mut text)
+        .unwrap_or_else(|e| panic!("{source}: {e}"));
+    text
+}
+
 /// Every `<repo>/ingredients/<BOOK>.tsv` of a burrito export in `bundle/en/`, such as
 /// `en_tn_v91.sb.zip`, by book code, in code order.
 pub fn export_tables(zip_name: &str) -> Vec<(String, String)> {

@@ -175,6 +175,7 @@ unscoped!(
     crate::test::Release,
     crate::test::FieldStore,
     crate::test::FieldDraft,
+    crate::test::Keychain,
     crate::test::Reset,
     crate::test::LastEdit,
 );

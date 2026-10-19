@@ -64,21 +64,45 @@ pub(crate) struct TagInfo {
     pub commit: String,
 }
 
+/// What Gitea's pre-receive hook prints to an account that may read a repository but not
+/// write to it, before it exits 1 (`fail()` in Gitea's `cmd/hook.go`; measured on Door43 in
+/// docs/evidence/door43-live-2026-10-17.md, step 6). It reads its input first, as Gitea's does.
+const DECLINING_PRE_RECEIVE: &str = "#!/bin/sh\n\
+    cat >/dev/null\n\
+    printf 'error:\\nerror: User permission denied for writing.\\nerror:\\n' >&2\n\
+    exit 1\n";
+
 #[derive(Debug, Clone)]
 pub(crate) struct Git {
     /// `GIT_PROJECT_ROOT`: repositories live at `<root>/<owner>/<repo>.git`, lowercased.
     pub root: PathBuf,
     /// A private `HOME` so no user config applies.
     home: PathBuf,
+    /// A `core.hooksPath` whose pre-receive hook refuses every push as Door43 refuses an
+    /// account without write access, after `git receive-pack` has read and unpacked the pack.
+    pub declining_hooks: PathBuf,
 }
 
 impl Git {
     pub(crate) async fn new(base: &Path) -> Result<Self, FakeError> {
         let root = base.join("repos");
         let home = base.join("home");
+        let declining_hooks = base.join("declining-hooks");
         std::fs::create_dir_all(&root)?;
         std::fs::create_dir_all(&home)?;
-        let git = Self { root, home };
+        std::fs::create_dir_all(&declining_hooks)?;
+        let hook = declining_hooks.join("pre-receive");
+        std::fs::write(&hook, DECLINING_PRE_RECEIVE)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755))?;
+        }
+        let git = Self {
+            root,
+            home,
+            declining_hooks,
+        };
         let version = git.command(None).arg("--version").output().await;
         match version {
             Ok(out) if out.status.success() => Ok(git),

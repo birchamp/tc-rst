@@ -5,6 +5,7 @@
 //   node parity/app/capture-rust.mjs --unit <A5|B2|...> (--only a,b,... | --all | --case c,d,...)
 //        [--layers pixels,dom,meaning] [--backend memory|memory+scripted|store]
 //        [--tc4 target/debug/tc4] [--ui target/tc-ui-app] [--out parity/app]
+//        [--door43-fake target/debug/tc-door43-fake]
 //
 // Needs `tc4` built with `--features test-hooks,fixture-backend` (each scenario's projects are
 // loaded with `--scenario`) and the UI folder of crates/tc-ui/build-app.sh.
@@ -13,7 +14,11 @@
 // screen whose pixels come later, APP-DESIGN 7.6). `--case` captures cases of the tC4
 // view-state gallery (parity/view-gallery/cases.mjs, APP-DESIGN 7.4), which have no meaning
 // layer: each through its `rust` route, or, for a case with no patch and no replies on a state
-// whose route uses only the driver, that route and the case's steps.
+// whose route uses only the driver, that route and the case's steps. A screen whose dialog the
+// Rust app reaches another way until its unit's trigger exists has a `rust` route, used only by
+// a capture that claims no pixels (`screenRoute`). `--door43-fake` (by default
+// target/debug/tc-door43-fake when it is there) gives each scenario's tc4 a fake Door43 on
+// loopback to sign in to (A8).
 //
 // Writes into `--out`: screens/<name>.png, dom/<name>.json and captures.json, whose entries are
 // merged by name, screens in the order of the screen list and then cases in the order of
@@ -25,7 +30,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { appDriver } from './driver.mjs';
-import { REPO, startRustEnv } from './env-rust.mjs';
+import { REPO, startDoor43Fake, startRustEnv } from './env-rust.mjs';
 import { CHROMIUM_ARGS, captureScreen, machineFingerprint, measureTargets, trackRequests } from './observe.mjs';
 import { BIBLE, OBS, SCREEN_LIST } from './screens.mjs';
 import { repoUnits } from './units.mjs';
@@ -77,6 +82,16 @@ export function mergeCaptures(previous, captured, screenList, cases) {
   ].filter(Boolean);
 }
 
+/** How the Rust app reaches baseline screen `screen` in a capture of `layers`: its `rust` route
+ * when it has one and the capture claims no pixels, else tC4's route. A `rust` route reaches the
+ * dialog another way than tC4 (A8: the account menu's sign-in opens the same M12 that Share
+ * opens), so its pixels must come the tC4 way, from the trigger its unit builds. */
+export function screenRoute(screen, layers) {
+  if (!screen.rust) return screen.run;
+  if (layers.includes('pixels')) throw new Error(`${screen.name}: a screen's Rust route reaches its dialog another way: capture its pixels the tC4 way, from its unit's trigger`);
+  return screen.rust;
+}
+
 /** How the Rust app reaches gallery case `c`: its `rust` route, or the route of its state and
  * its steps when the case is that state as tC4 drew it and the route uses only the driver. */
 export function caseRoute(c, state) {
@@ -90,8 +105,15 @@ export function caseRoute(c, state) {
   return null;
 }
 
-async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit, layers, backend, masks }) {
-  const env = await startRustEnv({ scenario, tc4, ui });
+async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit, layers, backend, masks, door43Fake }) {
+  const door43 = door43Fake ? await startDoor43Fake(door43Fake) : undefined;
+  let env;
+  try {
+    env = await startRustEnv({ scenario, tc4, ui, door43 });
+  } catch (error) {
+    await door43?.close();
+    throw error;
+  }
   const entries = [];
   try {
     const context = await browser.newContext(env.contextOptions);
@@ -107,8 +129,9 @@ async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit,
       const refusedBefore = new Set(env.refused());
       process.stdout.write(`  ${screen.name} ... `);
       const file = path.join(out, 'screens', `${screen.name}.png`);
-      // A gallery case's route takes the environment too (a state's route may need it).
-      const shot = screen.kind === 'case' ? { ...screen, run: (driver) => screen.run(driver, env) } : screen;
+      // A route takes the environment too (a state's route, or one that needs the fake Door43).
+      const route = screen.kind === 'case' ? screen.run : screenRoute(screen, layers);
+      const shot = { ...screen, run: (driver) => route(driver, env) };
       const { error, homeCards, syncToast, dom } = await captureScreen({
         page, app, screen: shot, inFlight, file, busy: () => env.busy(page), failureTestIds: env.failureTestIds,
       });
@@ -142,6 +165,7 @@ async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit,
     return { entries, build: await env.build(), projects: env.projects };
   } finally {
     await env.close();
+    await door43?.close();
   }
 }
 
@@ -161,6 +185,8 @@ async function main() {
   const tc4 = argValue('--tc4') ?? path.join(REPO, 'target', 'debug', 'tc4');
   const ui = argValue('--ui') ?? path.join(REPO, 'target', 'tc-ui-app');
   const out = path.resolve(argValue('--out') ?? path.join(REPO, 'parity', 'app'));
+  const defaultFake = path.join(REPO, 'target', 'debug', 'tc-door43-fake');
+  const door43Fake = argValue('--door43-fake') ?? (fs.existsSync(defaultFake) ? defaultFake : undefined);
   const unknown = (only ?? []).filter((name) => !SCREEN_LIST.some((s) => s.name === name));
   if (unknown.length) throw new Error(`no such screens: ${unknown.join(', ')}`);
   const unknownCases = (caseNames ?? []).filter((name) => !CASES.some((c) => c.name === name));
@@ -197,7 +223,7 @@ async function main() {
   try {
     for (const scenario of [...new Set(selected.map((s) => s.scenario))]) {
       console.log(`scenario ${scenario}`);
-      const run = await captureScenario(browser, scenario, selected.filter((s) => s.scenario === scenario), { tc4, ui, out, unit, layers, backend, masks });
+      const run = await captureScenario(browser, scenario, selected.filter((s) => s.scenario === scenario), { tc4, ui, out, unit, layers, backend, masks, door43Fake });
       captured.push(...run.entries);
       projects[scenario] = run.projects;
       build = run.build;

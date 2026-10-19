@@ -3,7 +3,8 @@
   "kind": "command",
   "net": null,
   "request": {
-    "request": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"
+    "request": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+    "signIn": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"
   },
   "reply": {
     "type": "ok",

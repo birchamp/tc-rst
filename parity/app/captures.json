@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "cf0b546e8b0db4c2",
+    "ui": "8f282a77cb61affe",
     "commit": "dev",
     "api": 1
   },
@@ -43,7 +43,7 @@
       "png": "screens/home.png",
       "sha256": "86eebce10e6faadb77d06970f2dc469261766fae4dad2e270dbaa76e97fc4540",
       "dom": "dom/home.json",
-      "domSha256": "fcbba3ccd12dd9ed1b0cb61470c92475ecd0876151300ce40a3ea263eb7aff7e"
+      "domSha256": "afcb234dcb6ea8ba3c3da206aae47f10c798bfa94da1ad7a294ec5808e91f2a1"
     },
     {
       "name": "add-project",
@@ -68,7 +68,7 @@
       "png": "screens/add-project.png",
       "sha256": "2d95703d1d9dfe8e128a2af0bf6d4b78adf3f77f51ab3d6835ed6fc0be321e2e",
       "dom": "dom/add-project.json",
-      "domSha256": "d77cc83d7a89aa092602e19f6bf5f10b3ee5ba75622b962956cebca0db062f06"
+      "domSha256": "bd82090ae251c62f5b94ad3b1028a037ac9106147d5697ec4e485c4d3ae09ae7"
     },
     {
       "name": "new-bible",
@@ -93,7 +93,7 @@
       "png": "screens/new-bible.png",
       "sha256": "6f8a27c11a512eabcf1365c08e5710d912b069ecd65071a6b815d535c3b0cf04",
       "dom": "dom/new-bible.json",
-      "domSha256": "9c16df3d440020ba3583df890f8d49430b9eff73e7ce4bdc9e737b9adc235ece"
+      "domSha256": "2e80087a1ac60f49d084d8d50511bacef0b9283bfbc1a9c6b37702e453bd555c"
     },
     {
       "name": "import",
@@ -118,7 +118,35 @@
       "png": "screens/import.png",
       "sha256": "2e2bbe70d756ebce7502a11222f4f649c9f5e0bae04ce86c150c00a1b3d3f03e",
       "dom": "dom/import.json",
-      "domSha256": "9635ca8005fe211acde02b2150c3279119815f7978c6f442939f0545c632665a"
+      "domSha256": "1cd85142cba4d331b4c2ecafb1fd42cce02663cde8a564101ab49c07b3667eeb"
+    },
+    {
+      "name": "share-signin",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "A8",
+      "backend": "memory",
+      "layers": [
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {
+        "signin-server": {
+          "x": 404,
+          "y": 224,
+          "width": 472,
+          "height": 20
+        }
+      },
+      "png": "screens/share-signin.png",
+      "sha256": "4705d2bf05d5623598a10fd5863f3f89c18ce3d5f3894f8a09dcf8a4f6476446",
+      "dom": "dom/share-signin.json",
+      "domSha256": "0c311faaa7f1a1367c4bf686519a40f2b1f5d041a9210224fe76ecbea370b80c"
     },
     {
       "name": "account-menu",
@@ -143,7 +171,7 @@
       "png": "screens/account-menu.png",
       "sha256": "8737f483073955d7d56a81c13fa9076acf8e809e8be91d10d23ffb0fc8985070",
       "dom": "dom/account-menu.json",
-      "domSha256": "375b9e3a9f038d2bc9ceb27d4ee4a0a9dabbe993c4f0c7ca171adec5855a1a41"
+      "domSha256": "5c3b2d35d108ca7020be77ca42d4ad7c2184159e4e752dde139a83b547cfe531"
     },
     {
       "name": "app-language",
@@ -168,7 +196,7 @@
       "png": "screens/app-language.png",
       "sha256": "b3cf2ac8d8494f33646b09d74c33cfd79177a1473d13258676c842a0c7dca5eb",
       "dom": "dom/app-language.json",
-      "domSha256": "17c080004cc1785f76ec5b6dd788b33dcdb00a98efc045ac97d019a6de06a4cb"
+      "domSha256": "340d3e7181efd0bb952eeaa5c1a1d174ab081c83250f7f7e0b73b3cd736b2b18"
     },
     {
       "name": "help",
@@ -191,7 +219,7 @@
       "png": "screens/help.png",
       "sha256": "37468d371d1c6f351c7223307a74a4d6c7922eeb3c9375a7953ea7112baebef4",
       "dom": "dom/help.json",
-      "domSha256": "4d822ac4cc77664592a2f76314008d2a97244db29234b2c3f4d70bd177b03ed8"
+      "domSha256": "887de163fa4fe3b7c590e70c0e0bb54564b21f6fc373929ee5bc2c3327e409e6"
     },
     {
       "name": "about",
@@ -223,7 +251,7 @@
       "png": "screens/about.png",
       "sha256": "0f2bde2f1a730289cda790ab1acf005cd8d414db2f017eeb55c183029cdb25b5",
       "dom": "dom/about.json",
-      "domSha256": "bf58a1eea2cce010a2e017efd80f772271a907b6eec62b38e018427c6a4dd5fe"
+      "domSha256": "4fdf52eec12f03440dfbad3a1c10fe3bb342976c866deb84dd211f044a977548"
     },
     {
       "name": "feedback",
@@ -253,7 +281,7 @@
       "png": "screens/feedback.png",
       "sha256": "23a628784f5cde1e960736cbced1a97af2d848b310d4559be4f18ab809ce009c",
       "dom": "dom/feedback.json",
-      "domSha256": "90716040688f6f587155e81483fb762ed4df9ef1eb743de5cb499f09c4d3df20"
+      "domSha256": "fa667baaf060640efb29adfe052ba3aac3bfe898a60b5f344e0d815a91010f2a"
     },
     {
       "name": "new-obs",
@@ -278,7 +306,7 @@
       "png": "screens/new-obs.png",
       "sha256": "3532b4295e471edf9ae585499f162b1b12f697d17250fa8c19edd4d771120f25",
       "dom": "dom/new-obs.json",
-      "domSha256": "1dd90f31c670b73234dac0eb05d72c7cfd2b67ed0110aee5d4e1b86f834d8ac5"
+      "domSha256": "9aa7a31ee0127c6940a7d4e53a98ffb09bc533d897d3c7a1c6f42bceec27b04b"
     },
     {
       "name": "add-book",
@@ -303,7 +331,7 @@
       "png": "screens/add-book.png",
       "sha256": "9fb4487699f22ba1c333f73712b3b4ffcb4f2bd754506f82ea1e9b3cef6c138c",
       "dom": "dom/add-book.json",
-      "domSha256": "783fe7e37839eb8eab72501f86642f450dbe030a90e46e13d42989e9bef84544"
+      "domSha256": "6ee5adbeba55299cedcd9dafc68e8b4d12370d6e3bcf6d9aa1c7f4aa0e69f9e5"
     },
     {
       "name": "license",
@@ -325,7 +353,7 @@
       "png": "screens/license.png",
       "sha256": "ac95625a8c200093edc32afca90d0fefc192db7d00714d99a3d769061a66b5a1",
       "dom": "dom/license.json",
-      "domSha256": "f7f41f870c866347318d0111029ded7bcf4d2f70a59b70dc37a4739542c962d0"
+      "domSha256": "029848e385d31ba13fe59bf547ae0c5db0368b3f0956bcd9cbcef3155a8fd17d"
     },
     {
       "name": "net-failed",
@@ -349,7 +377,35 @@
       "png": "screens/net-failed.png",
       "sha256": "a620223367aeb7f2dff1d75937388e3285a5c63f229453700aef047d25ed5a7c",
       "dom": "dom/net-failed.json",
-      "domSha256": "739df8180ceac23dbc5aea621e68f0ba96ffa51c566ca712000eafc20c4293ea"
+      "domSha256": "1008f61a547a2cb7101965c6edf934d1c2b2d5ef642d971de9d7069e1c52d511"
+    },
+    {
+      "name": "signin-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "A8",
+      "backend": "memory",
+      "layers": [
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {
+        "signin-server": {
+          "x": 404,
+          "y": 192,
+          "width": 472,
+          "height": 21
+        }
+      },
+      "png": "screens/signin-error.png",
+      "sha256": "18d1f05c2c4a72b0efe0ec7846e9c09595e48db4148060781a46ff2f91a1d43e",
+      "dom": "dom/signin-error.json",
+      "domSha256": "041a21a6779dca48e6e46d009e4f643b9d984c7a528fd4bc36f1bf9e0a61670e"
     },
     {
       "name": "home-empty",
@@ -371,7 +427,7 @@
       "png": "screens/home-empty.png",
       "sha256": "f1e26c0784e1a9e26504707a0e5542d30ab0f08e35023123d6340e3376b0e0f7",
       "dom": "dom/home-empty.json",
-      "domSha256": "8038a3aa914e9f05d0570fb2248cfefc2c0c2c42bdc8f29a5485875a889f8491"
+      "domSha256": "3a6bf7e0e1f560dfdc58c88ebfff317303c84b5360d190c4f602f00fe7dfd96b"
     },
     {
       "name": "home-list-error",
@@ -393,7 +449,7 @@
       "png": "screens/home-list-error.png",
       "sha256": "85218517891b73f5f5c900e50a65c3fc33bab3042a44f38c223ef7dad5ee298d",
       "dom": "dom/home-list-error.json",
-      "domSha256": "200cee1827b9e747b881ad1e530a33a82821a46d114639a235de3d9b9f26d069"
+      "domSha256": "a18adbe7b458a76c7a6cb6e5c3b53fc43462d98f05c653a2121a1640a5072e90"
     },
     {
       "name": "home-resume",
@@ -417,7 +473,7 @@
       "png": "screens/home-resume.png",
       "sha256": "5b6810495cd9f47b4e74b72f98590fd90b3ff61328749cc89d7d9847c9a37583",
       "dom": "dom/home-resume.json",
-      "domSha256": "df244bc765795feb3059dbdf36e32643c79ca8906e5d74c22fa36795fd514bf1"
+      "domSha256": "96967c377bfe3d902188b5cba97918f95d4674391c5c1a3d796761336bb5681a"
     }
   ]
 }

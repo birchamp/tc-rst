@@ -9,13 +9,15 @@ use tc_api::account::WebUrl;
 use tc_api::endpoint::NetKind;
 use tc_api::ids::ProjectRef;
 
-/// A link the help pages hand over (A5). A8 adds the profile, B9b the shared repository.
+/// A link whose address the UI holds: the help pages' (A5); B9b adds the shared repository.
+/// The profile is [`Pending::Profile`], whose address the server gives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LinkKind {
     Help,
 }
 
-/// The step to run once the question is answered. A8 and the flow units add theirs (6.7).
+/// The step to run once the question is answered, or once the sign-in that a step needed is
+/// done (6.7). The flow units add theirs (`Share`, `Sync`, `OpenDoor43`, …).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pending {
     /// Feedback's Send: the shell sends the report.
@@ -26,6 +28,13 @@ pub enum Pending {
     Share(ProjectRef),
     /// A Home card's "Sync with Door43" (B2 asks; B10 runs the sync).
     Sync(ProjectRef),
+    /// The sign-in step's Sign in (M12), sent once the internet is on: tC4 asks when the
+    /// password is sent, not when the step opens. `flow` names the step it was pressed in.
+    SignIn { flow: u64 },
+    /// The account menu's "Sign-in saved on this computer": Door43 checks the kept token.
+    CheckSignIn,
+    /// The account menu's "Open my page on Door43".
+    Profile,
 }
 
 impl Pending {
@@ -36,6 +45,9 @@ impl Pending {
             Self::Link(LinkKind::Help, _) => NetKind::HelpLink,
             Self::Share(_) => NetKind::Share,
             Self::Sync(_) => NetKind::Sync,
+            Self::SignIn { .. } => NetKind::SignIn,
+            Self::CheckSignIn => NetKind::CheckSignIn,
+            Self::Profile => NetKind::Profile,
         }
     }
 }

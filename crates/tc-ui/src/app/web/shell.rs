@@ -8,6 +8,7 @@ use tc_api::ids::ServerInstance;
 
 use super::app_ctx::{Actions, AppState, Dialog, use_app};
 use super::{ViewError, js, panic};
+use crate::app::account::SignInFlow;
 use crate::app::save::indicator::{Indicator, IndicatorStatus, Retry};
 use crate::app::shell::{
     CurrentProject, NAV_KEY, NavSnapshot, Screen, View, boundary_key, in_project, project_initials,
@@ -26,6 +27,7 @@ use crate::views::modals::add_project::AddProject;
 use crate::views::modals::feedback::Feedback;
 use crate::views::modals::import::Import;
 use crate::views::modals::new_bible::{NewBible, NewObs};
+use crate::views::modals::sign_in::ShareSignIn;
 
 /// tC4's `App`: the frame, the top bar, the screen in its boundary, and the dialogs in tC4's
 /// mount order, which is their stacking order (`tC4:src/App.jsx:138-154`).
@@ -46,10 +48,20 @@ pub fn App() -> impl IntoView {
         "font-family": "var(--font-ui)",
         "overflow": "hidden",
     };
-    // Memos, so a keystroke in the report, which changes `fb`, never draws the dialog again.
+    // Memos, so a keystroke in the report, which changes `fb`, or in the sign-in step, which
+    // changes `sign_in`, never draws the dialog again.
     let feedback_open = {
         let (dialog, fb) = (ctx.s.layers.dialog.clone(), ctx.s.fb.clone());
         Memo::new(move |_| dialog.get() == Some(Dialog::Feedback) && fb.with(Option::is_some))
+    };
+    // A step opened again is a new dialog, as tC4's is (a new `si`).
+    let sign_in_open = {
+        let (dialog, step) = (ctx.s.layers.dialog.clone(), ctx.s.sign_in.clone());
+        Memo::new(move |_| {
+            (dialog.get() == Some(Dialog::SignIn))
+                .then(|| step.with(SignInFlow::flow))
+                .flatten()
+        })
     };
     view! {
         <div style=frame.to_style()>
@@ -57,8 +69,9 @@ pub fn App() -> impl IntoView {
             <ViewBoundary />
             {home_dialogs(&ctx.s)}
             // OpenFromDoor43 (B9b), ProjectSettings, SourceTexts (B9a), GatewayChange,
-            // UpgradeSet (C8), GuidedFix (B5a), ShareSignIn (A8), ShareDialog (B9b, E1b) mount
-            // here, in this order.
+            // UpgradeSet (C8), GuidedFix (B5a) mount here, before ShareSignIn, and ShareDialog
+            // (B9b, E1b) after it.
+            {move || sign_in_open.get().map(|_| view! { <ShareSignIn /> })}
             {move || feedback_open.get().then(|| view! { <Feedback /> })}
             <InternetDialog />
             // OpenProgress (B3) and the Inspector (late) mount here.

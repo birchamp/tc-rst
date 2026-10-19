@@ -6,33 +6,36 @@
 // which the environment's `--scenario` needs since B1b), `TC4_UI` (the folder of
 // crates/tc-ui/build-app.sh) and Playwright (PLAYWRIGHT_MODULE, or
 // parity/tc4-baseline/node_modules) are there; a test of the no-loss probe also needs
-// `TC4_UI_HOOKS` (`build-app.sh --test-hooks`). Otherwise it is skipped and says why, so CI's
-// node job runs these files with no browser. Each test starts its own `tc4` and ends it, and
+// `TC4_UI_HOOKS` (`build-app.sh --test-hooks`), and a test that signs in to Door43 needs
+// `TC4_DOOR43_FAKE` (`cargo build -p tc-door43-fake`). Otherwise it is skipped and says why, so
+// CI's node job runs these files with no browser. Each test starts its own `tc4` and ends it, and
 // fails on a page error, a console error or a request to another origin it did not expect.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
-import { REPO, newRequestId, startRustEnv } from '../env-rust.mjs';
+import { REPO, newRequestId, startDoor43Fake, startRustEnv } from '../env-rust.mjs';
 import { CHROMIUM_ARGS, domSnapshot } from '../observe.mjs';
 
 function browserSetup() {
-  const { TC4_BIN, TC4_UI, TC4_UI_HOOKS } = process.env;
+  const { TC4_BIN, TC4_UI, TC4_UI_HOOKS, TC4_DOOR43_FAKE } = process.env;
   if (!TC4_BIN || !TC4_UI) return { skip: 'set TC4_BIN (tc4 built with --features test-hooks,fixture-backend) and TC4_UI (target/tc-ui-app)' };
   try {
     const dir = process.env.PLAYWRIGHT_MODULE ?? path.join(REPO, 'parity', 'tc4-baseline', 'node_modules', 'playwright');
-    return { tc4: TC4_BIN, ui: TC4_UI, hooks: TC4_UI_HOOKS, chromium: createRequire(import.meta.url)(dir).chromium };
+    return { tc4: TC4_BIN, ui: TC4_UI, hooks: TC4_UI_HOOKS, door43: TC4_DOOR43_FAKE, chromium: createRequire(import.meta.url)(dir).chromium };
   } catch (error) {
     return { skip: `Playwright does not resolve (${error.code ?? error.message}): npm ci in parity/tc4-baseline` };
   }
 }
 export const setup = browserSetup();
 
-/** A test that needs `tc4` and a browser; `hooks` also needs the probe build. */
-export function browserTest(name, body, { hooks = false, timeout = 120_000 } = {}) {
+/** A test that needs `tc4` and a browser; `hooks` also needs the probe build, `door43` the fake
+ * Door43. */
+export function browserTest(name, body, { hooks = false, door43 = false, timeout = 120_000 } = {}) {
   let skip = setup.skip ?? false;
   if (!skip && hooks && !setup.hooks) skip = 'set TC4_UI_HOOKS (build-app.sh --test-hooks --out target/tc-ui-app-hooks)';
+  if (!skip && door43 && !setup.door43) skip = 'set TC4_DOOR43_FAKE (cargo build -p tc-door43-fake)';
   return test(name, { skip, timeout }, body);
 }
 
@@ -62,12 +65,21 @@ export const LABEL = Object.fromEntries(LOCALES.map((l) => [l.id, l.label]));
  * A browser, a `tc4` and a page, Home loaded in `locale` (the probe page with `probe`; with
  * `seed(folder)`, tc-store over a projects folder it fills instead of the sample scenario), then
  * `body({ env, page, context, errors, allow })`. `init(context, env)` runs before the page
- * exists (routes, init scripts). `allow(re)` lets a console error matching `re` pass.
+ * exists (routes, init scripts). `allow(re)` lets a console error matching `re` pass. With
+ * `door43`, tc4 signs in to a fake Door43 of its own (`env.door43`).
  */
-export async function withApp(body, { locale = 'en', probe = false, init, seed } = {}) {
+export async function withApp(body, { locale = 'en', probe = false, init, seed, door43: fake = false } = {}) {
   const browser = await setup.chromium.launch({ args: CHROMIUM_ARGS });
+  const door43 = fake ? await startDoor43Fake(setup.door43) : undefined;
   const scenario = seed ? 'store' : 'sample';
-  const env = await startRustEnv({ scenario, seed, tc4: setup.tc4, ui: probe ? setup.hooks : setup.ui });
+  let env;
+  try {
+    env = await startRustEnv({ scenario, seed, tc4: setup.tc4, ui: probe ? setup.hooks : setup.ui, door43 });
+  } catch (error) {
+    await door43?.close();
+    await browser.close();
+    throw error;
+  }
   try {
     const context = await browser.newContext(env.contextOptions);
     await env.prepare(context);
@@ -87,6 +99,7 @@ export async function withApp(body, { locale = 'en', probe = false, init, seed }
     return result;
   } finally {
     await env.close();
+    await door43?.close();
     await browser.close();
   }
 }
@@ -187,3 +200,47 @@ export const snapshot = (page) => page.evaluate(domSnapshot, {});
 
 /** tC4's committed DOM file of baseline screen `name`. */
 export const tc4Dom = (name) => JSON.parse(fs.readFileSync(path.join(REPO, 'parity', 'tc4-baseline', 'dom', `${name}.json`), 'utf8'));
+
+/** `test/keychain`: the test keychain's mode and what it holds, then, with `relaunch`, the
+ * account as a launch finds it. Answers `{ mode, holds, keeps, reads, forgets }`. */
+export const keychain = (env, { mode, token, nothing = false, relaunch = false } = {}) => env.call('test/keychain', {
+  request: newRequestId(),
+  mode: mode ?? null,
+  holds: token !== undefined ? { type: 'token', value: token } : nothing ? { type: 'nothing' } : null,
+  relaunch,
+});
+
+/** Counts the internet questions the page opens, as tC4's journeys count them: an init script
+ * that watches for `net-ask` to appear. Read it with `asks(page)`. */
+export async function countAsks(context) {
+  await context.addInitScript(() => {
+    window.__tcAsks = 0;
+    const seen = new WeakSet();
+    new MutationObserver(() => {
+      for (const node of document.querySelectorAll('[data-testid="net-ask"]')) {
+        if (!seen.has(node)) { seen.add(node); window.__tcAsks += 1; }
+      }
+    }).observe(document, { childList: true, subtree: true });
+  });
+}
+export const asks = (page) => page.evaluate(() => window.__tcAsks);
+
+/** Every key and value of the page's localStorage and sessionStorage, as one text. */
+export const storageDump = (page) => page.evaluate(() => JSON.stringify([
+  Object.entries(localStorage), Object.entries(sessionStorage),
+]));
+
+/** The files under `dir` whose bytes hold `text`. */
+export function filesHolding(dir, text) {
+  const found = [];
+  const needle = Buffer.from(text);
+  const walk = (d) => {
+    for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, entry.name);
+      if (entry.isDirectory()) walk(p);
+      else if (entry.isFile() && fs.readFileSync(p).includes(needle)) found.push(p);
+    }
+  };
+  walk(dir);
+  return found;
+}

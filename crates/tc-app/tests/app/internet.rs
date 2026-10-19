@@ -5,11 +5,11 @@ use std::sync::Arc;
 
 use tc_api::account::{HelpLink, LinkView, SignIn, WebUrl};
 use tc_api::endpoint::NetKind;
-use tc_api::error::Feature;
 use tc_api::event::Event;
 use tc_api::ids::RequestId;
 use tc_api::net::{NetView, Set, State};
-use tc_api::{ApiError, Reply};
+use tc_api::refusal::SignInRefusal;
+use tc_api::{ApiError, Refusal, Reply};
 use tc_app::events::Next;
 use tc_app::{Answer, App};
 
@@ -76,7 +76,7 @@ async fn a_net_endpoint_is_refused_while_offline_and_never_cached() {
     let again = t.app.request(&sign_in(7)).await.unwrap();
     assert_eq!(
         again.into_result(),
-        Err(ApiError::Unavailable(Feature::Account)),
+        Err(ApiError::Refused(Refusal::SignIn(SignInRefusal::Offline))),
         "the refusal was not kept under the request id"
     );
     let help = t.app.request(&HelpLink { url: url.clone() }).await.unwrap();
@@ -105,10 +105,10 @@ async fn a_retry_of_a_net_write_that_ran_gets_its_reply_not_needs_internet() {
     let t = TestApp::start_in(dir.path(), |_, _| {}).await;
     set(&t.app, 1, true).await;
     let first = t.app.call("account/signIn", &body_of(&sign_in(7))).await;
-    let first_reply: Reply<()> = reply_in(&first);
+    let first_reply: Reply<tc_api::account::AccountView> = reply_in(&first);
     assert_eq!(
         first_reply,
-        Reply::Err(ApiError::Unavailable(Feature::Account))
+        Reply::Err(ApiError::Refused(Refusal::SignIn(SignInRefusal::Offline)))
     );
 
     // The switch goes off after the write ran, and the reply was lost: the UI retries.
@@ -132,7 +132,7 @@ async fn a_retry_of_a_net_write_that_ran_gets_its_reply_not_needs_internet() {
     let again = t.app.request(&sign_in(9)).await.unwrap();
     assert_eq!(
         again.into_result(),
-        Err(ApiError::Unavailable(Feature::Account))
+        Err(ApiError::Refused(Refusal::SignIn(SignInRefusal::Offline)))
     );
 }
 

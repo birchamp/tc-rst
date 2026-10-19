@@ -40,6 +40,18 @@ pixels unit captures it whole. `--backend memory+scripted` marks a screen captur
 job outcomes. `--case <names>` captures gallery cases instead (below). Playwright comes from
 `parity/tc4-baseline/node_modules` (`npm ci` there).
 
+Door43 stays on this machine. Without a fake, `tc4 serve` is pointed at a port nothing listens
+on. A screen or case that signs in needs the fake Door43 (A8): `cargo build -p tc-door43-fake`,
+and `capture-rust.mjs` starts `target/debug/tc-door43-fake` for each scenario when it is there
+(`--door43-fake <bin>` names another). `startDoor43Fake` in `env-rust.mjs` starts it and answers
+its control port (the requests Door43 received, faults, held requests, tokens); the journeys get
+it with `withApp(body, { door43: true })` and `TC4_DOOR43_FAKE`.
+
+A screen whose dialog the Rust app reaches another way until its unit builds the trigger has a
+`rust` route in `screens.mjs` (A8: `share-signin` opens from the account menu until B9b's
+Share card opens it). `capture-rust.mjs` takes it only for a capture that claims no pixels
+(`screenRoute`): the pixels come the tC4 way, and the unit that captures them deletes the route.
+
 ## Gallery cases
 
 Many states have no baseline screen. `parity/view-gallery` draws them with tC4's own views over
@@ -109,6 +121,6 @@ The DOM and meaning layers compare on any machine.
 
 `node --test parity/app/observe.test.mjs parity/app/env-rust.test.mjs` (CI runs both; the
 browser tests of `env-rust.test.mjs` run with `TC4_BIN=target/debug/tc4
-TC4_UI=target/tc-ui-app`), `node --test parity/view-gallery/view-gallery.test.mjs` (CI runs its
+TC4_UI=target/tc-ui-app`, and the fake Door43's with `TC4_DOOR43_FAKE`), `node --test parity/view-gallery/view-gallery.test.mjs` (CI runs its
 record checks; its browser tests run with `TC4_ROOT`), and
 `cargo test -p tc-ui --test screen_record`.

@@ -6,3 +6,4 @@ pub mod feedback;
 pub mod import;
 pub mod language_name_field;
 pub mod new_bible;
+pub mod sign_in;

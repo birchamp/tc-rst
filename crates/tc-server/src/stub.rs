@@ -19,7 +19,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use axum::body::Bytes;
-use tc_api::account::{AccountView, KeepState};
+use tc_api::account::{AccountView, KeepState, KeychainState};
 use tc_api::app::{
     AppPrefsView, BUILD_COMMIT, BUILD_VERSION, BuildInfo, ClientError, Hello, HelloView, Quit,
 };
@@ -146,6 +146,8 @@ impl Stub {
                 user: None,
                 kept: KeepState::NotKept,
                 notice: None,
+                server: "git.door43.org".to_owned(),
+                keychain: KeychainState::Missing,
             },
             sessions: Vec::new(),
             prefs: AppPrefsView {

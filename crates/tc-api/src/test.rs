@@ -249,8 +249,9 @@ pub enum TokenBase {
 }
 
 /// `test/reset`: prefs, summaries and reports back to the scenario's seed, every hold
-/// released, the armed crash disarmed, and the internet switch off as a launch finds it; the
-/// parity harness's `home()`.
+/// released, the armed crash disarmed, the internet switch off as a launch finds it, and the
+/// account as a launch finds it with the test keychain working and empty; the parity
+/// harness's `home()`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -272,4 +273,76 @@ pub struct LastEdit {
     /// Kept as given, spaces included.
     pub snippet: String,
     pub at: WallMs,
+}
+
+/// `test/keychain`: the test keychain's behaviour and what it holds, then, with `relaunch`,
+/// the account as a launch finds it: every sign-in in flight cancelled, the session and the
+/// notice gone, the keychain read once (A8). A journey uses it where tC4's use a fake
+/// keychain and a reload. The token is never in the view.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Keychain {
+    pub request: RequestId,
+    /// How the keychain behaves from now on; `None` keeps its mode.
+    pub mode: Option<KeychainMode>,
+    /// What it holds from now on; `None` keeps what it holds.
+    pub holds: Option<KeychainHolds>,
+    /// Read the account again as a launch does.
+    pub relaunch: bool,
+}
+
+/// How the test keychain behaves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum KeychainMode {
+    Working,
+    /// This computer has no keychain: nothing is kept, a read answers that there is none.
+    None,
+    /// Keeping fails; reading and forgetting work.
+    FailingKeep,
+    /// Forgetting fails; keeping and reading work.
+    FailingForget,
+    /// The kept bytes cannot be opened: the next read removes them and fails.
+    Unreadable,
+}
+
+/// What the test keychain holds.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    deny_unknown_fields
+)]
+pub enum KeychainHolds {
+    Nothing,
+    /// A Door43 token, as an earlier session kept it.
+    Token(String),
+}
+
+/// A token never reaches a log line, not even a test's.
+impl std::fmt::Debug for KeychainHolds {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Nothing => f.write_str("Nothing"),
+            Self::Token(_) => f.write_str("Token(..)"),
+        }
+    }
+}
+
+/// What the test keychain is and has done. The token itself never comes back.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct KeychainView {
+    pub mode: KeychainMode,
+    /// Whether it holds a token.
+    pub holds: bool,
+    /// The calls it was asked, since the last `test/reset`.
+    pub keeps: u32,
+    pub reads: u32,
+    pub forgets: u32,
 }
