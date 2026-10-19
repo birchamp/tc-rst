@@ -37,13 +37,13 @@ what changed for each finding, which parts were done another way, and why.
   second launch is blocked; people work on one project at the same time from separate machines.
   tC4 4.0 already works this way (D39, `tC4:docs/DECISIONS.md:458-474`).
 - The other questions follow their recommendations in §12.
-- **USB sticks and synced folders (2026-10-19).** Projects live on the computer; USB sticks are for
-  passing work along (save work for a teammate, receive work). A project whose folder is on a
-  FAT32 or exFAT drive, or in a folder a cloud service syncs, opens read-only with "Copy to this
-  computer": the person picks a safe folder (the app's local projects folder by default; the app
-  checks the choice is neither unsafe nor synced), the project is copied there with every unsaved
-  text, the person keeps working in the copy, and Home lists it. Nothing the person typed is lost,
-  and pulling the stick out cannot lose work. The project is never edited on the stick.
+- **USB sticks and synced folders (2026-10-19).** Projects live in the one projects folder the app
+  chooses (Q-4); a translator never picks where a project goes. Projects come in by creating,
+  importing, opening from Door43 or receiving work, all into that folder, as in tC4. USB sticks pass
+  work along (save work for a teammate, receive work). Only if the projects folder itself is on a
+  FAT32 or exFAT drive or in a folder a cloud service syncs does a project open read-only; then
+  "Copy to this computer" copies it, with every unsaved text, into the app's local projects folder
+  (checked safe), with no folder to choose, and Home lists it. Nothing the person typed is lost.
 
 ## G0 results on the reference laptop (2026-10-17)
 
