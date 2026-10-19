@@ -23,5 +23,5 @@ $f = ($r | ForEach-Object { if ($_ -match '(\d+) failed') { [int]$Matches[1] } }
 Write-Output "tests: $p passed, $f failed"
 foreach ($g in $failed) {
   Write-Output "---- $g"
-  Select-String -Path "$logs\$g.log" -Pattern '^error|FAILED|panicked at|^---- ' | Select-Object -First 30 | ForEach-Object { $_.Line }
+  Select-String -CaseSensitive -Path "$logs\$g.log" -Pattern '^error','\.\.\. FAILED','panicked at' | Select-Object -First 30 | ForEach-Object { $_.Line }
 }
