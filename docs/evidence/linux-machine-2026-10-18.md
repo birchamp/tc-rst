@@ -9,7 +9,7 @@ this file.
 | SHA instructions | yes (`sha_ni`) |
 | AVX-512 | no (`avx2` only) |
 | Memory | 61 GiB |
-| Disks | the checkout on a Samsung 870 EVO SATA SSD (`/home`, ext4); a Samsung 980 PRO NVMe (`/storage`, btrfs) is unused |
+| Disks | the checkout on a Samsung 870 EVO SATA SSD (`/home`, ext4); build folders on another 870 EVO (`/`, through links to `/var/tmp/tc-rst-target/<worktree>`); a Samsung 980 PRO NVMe (`/storage`, btrfs) is unused |
 | OS | Ubuntu 26.04.1 LTS, Linux 7.0.0-38, glibc 2.43 |
 | Rust | 1.99.1 stable, with `wasm32-unknown-unknown` |
 | Node | 22.23.3 |

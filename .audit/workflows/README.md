@@ -16,6 +16,7 @@ folder cannot lose them. Each runs with the Workflow tool; a run can resume from
 | `app-layer.js` | Phases 1 to 6 of the app layer: each unit starts once its dependencies are on main or merged into the `app` branch; verified (three lenses for no-loss units), fixed, merged into `app`, and marked `ready/<unit>` for main |
 | `tc4-issue-sweep.js` | Maps every tC4 commit after the reference and every open or recent tC4 issue onto the rebuild (covered with its test, same bug, a later unit, not applicable, owner question), verified by a skeptic per area; rerun with a newer `tip` to sweep again |
 | `verify-loop.js` | Checks a unit on its own branch until an independent checker finds no blocker or major (check, fix, up to three rounds), then the gates; used when a chain's own rounds ran out |
+| `merge-queue.js` | Merges several refs into main one after another through `merge-main.js`, pushing each as a fast-forward once its gates are green; stops at the first that is not |
 
 `../research/` holds the research notes the early units read (recovered on 2026-10-16 from the
 agents' transcripts after a scratch folder was cleared).
