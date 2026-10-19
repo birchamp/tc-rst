@@ -173,6 +173,9 @@ pub(crate) struct Writer {
     /// The fold the job runs on, and its sequence number.
     pub fold: FoldState,
     pub seq: u64,
+    /// The sequence number of the fold each derived path was last written or found equal
+    /// from, so a checkpoint's tree never takes the bytes of a newer fold for its own.
+    pub written_seq: BTreeMap<String, u64>,
     pub packs: BTreeMap<String, PackFacts>,
     pub complete: bool,
     /// The expected packs that are missing or unreadable, which is why `complete` is false.
@@ -268,6 +271,22 @@ impl Writer {
         self.complete = complete;
     }
 
+    /// Takes the view of a checkpoint's job: exactly the snapshot its packs stand for, even
+    /// when a look at the folder ran on a newer one meanwhile. The commit shows the project
+    /// as the packs hold it, never a save they lack (§5.13 C3); the paths a newer snapshot
+    /// wrote are rendered again for the tree ([`Writer::stale_paths`]).
+    fn begin_exact(
+        &mut self,
+        snapshot: &Snapshot,
+        packs: BTreeMap<String, PackFacts>,
+        complete: bool,
+    ) {
+        self.fold = snapshot.fold().clone();
+        self.seq = snapshot.seq();
+        self.packs = packs;
+        self.complete = complete;
+    }
+
     /// Runs a materialization job.
     fn run(&mut self, job: MaterializeJob) {
         let MaterializeJob {
@@ -280,7 +299,11 @@ impl Writer {
             reply,
             checkpoint,
         } = job;
-        self.begin(&snapshot, packs, complete);
+        if checkpoint.is_some() {
+            self.begin_exact(&snapshot, packs, complete);
+        } else {
+            self.begin(&snapshot, packs, complete);
+        }
         self.packs_missing = missing;
         self.dirty.absorb(dirty);
         self.opening = origin == Origin::Open;
@@ -667,6 +690,7 @@ mod tests {
             copied_outside: BTreeSet::new(),
             fold,
             seq: 1,
+            written_seq: BTreeMap::new(),
             packs: BTreeMap::new(),
             complete: true,
             packs_missing: Vec::new(),

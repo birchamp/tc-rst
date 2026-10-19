@@ -269,16 +269,29 @@ impl Actor {
         // list yet: a write group (I7).
         self.project.shared.open_group();
         let restored = self.project.restore_expected_packs(false);
+        // The commit shows the project as its packs hold it: the fold as the seal starts. A
+        // save served between the seal's steps is a pending file the seal never reads, so
+        // neither the snapshot nor the marks the writer gets include it (C3); it belongs to
+        // the next checkpoint and to a materialization of its own.
+        let at_seal = self.project.shared.snapshot();
+        let marks = std::mem::take(&mut self.project.dirty);
         // A seal that failed after it renamed a pack leaves `metadata.json` without that
         // pack (I7), so the files are written anyway; the seal's error comes first.
         let sealed = restored.and_then(|()| self.seal_serving());
+        let served = self.project.shared.seq() != at_seal.seq();
+        // What a served command marked waits for a job of its own; what the seal marked is the
+        // new packs, which the writer's job lists.
+        self.due = served.then(|| Instant::now() + MATERIALIZE_AFTER);
+        if !served {
+            self.project.dirty = Default::default();
+        }
         let device = self.project.device;
         let Some(reply) = reply else {
             // The periodic checkpoint nobody waits for: the writer's answer is dropped.
             let (_unused, resolver) = pending(|| Err(StoreError::Other("no one waits".into())));
-            return self.send_checkpoint(reason, sealed, device, resolver);
+            return self.send_checkpoint(reason, sealed, device, resolver, at_seal, marks);
         };
-        self.send_checkpoint(reason, sealed, device, reply);
+        self.send_checkpoint(reason, sealed, device, reply, at_seal, marks);
     }
 
     fn send_checkpoint(
@@ -287,17 +300,16 @@ impl Actor {
         sealed: Result<crate::seal::SealReport, StoreError>,
         device: tc_journal::DeviceId,
         reply: Resolver<Result<CheckpointReport, StoreError>>,
+        snapshot: crate::handle::Snapshot,
+        marks: crate::project::Dirty,
     ) {
-        self.due = None;
         let checkpoint = CheckpointJob {
             reason,
             sealed,
             device,
             reply,
         };
-        let job = self
-            .project
-            .materialize_job(Origin::Checkpoint, None, Some(checkpoint));
+        let job = self.project.checkpoint_job(snapshot, marks, checkpoint);
         let sent = self
             .project
             .writer

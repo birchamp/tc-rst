@@ -1088,6 +1088,7 @@ impl Writer {
         let digests = self.fold.scope_digests(&files);
         for (path, _, md5, size, nfc, scope) in written {
             let meta = self.vfs.metadata(&self.folder.path(&path)).ok();
+            self.written_seq.insert(path.clone(), self.seq);
             self.manifest.paths.insert(
                 path,
                 Entry {
@@ -1107,6 +1108,7 @@ impl Writer {
                 digests: shown,
             } = found;
             let digest = digests.next().map(|d| d.to_hex());
+            self.written_seq.insert(path.clone(), self.seq);
             // The file holds the projection, but the heads file describes the bytes the entry
             // names: after a write that stopped between its rename and its heads file, or a
             // projection that changed with the same bytes, it is stale, and a later edit
@@ -1137,6 +1139,7 @@ impl Writer {
         }
         for file in unread {
             let digest = digests.next().map(|d| d.to_hex());
+            self.written_seq.insert(file.path(), self.seq);
             if let Some(entry) = self.manifest.paths.get_mut(&file.path())
                 && entry.scope != digest
             {

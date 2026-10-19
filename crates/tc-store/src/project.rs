@@ -293,6 +293,27 @@ impl Project {
         }
     }
 
+    /// The checkpoint's job: the snapshot its packs stand for, with the marks made before it
+    /// (the new packs are listed in `metadata.json` as well).
+    pub fn checkpoint_job(
+        &mut self,
+        snapshot: crate::handle::Snapshot,
+        mut dirty: Dirty,
+        checkpoint: crate::writer::CheckpointJob,
+    ) -> crate::writer::MaterializeJob {
+        dirty.metadata = true;
+        crate::writer::MaterializeJob {
+            snapshot,
+            dirty,
+            packs: self.pack_facts(),
+            complete: self.journal.complete(),
+            missing: self.journal.blocked_packs(),
+            origin: crate::writer::Origin::Checkpoint,
+            reply: None,
+            checkpoint: Some(checkpoint),
+        }
+    }
+
     pub fn ctx(&self) -> Ctx<'_> {
         Ctx {
             fold: &self.fold,

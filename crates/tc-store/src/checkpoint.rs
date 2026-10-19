@@ -389,10 +389,21 @@ impl Writer {
     }
 
     /// The derived paths whose bytes on disk are not the snapshot's projection: held, refused
-    /// by another program, or left dirty by the last job. A tree takes these from the
-    /// snapshot, never from the disk (§9.4).
+    /// by another program, left dirty by the last job, waiting to be recorded as an outside
+    /// edit, or written from a newer snapshot. A tree takes these from the snapshot, never
+    /// from the disk (§9.4).
     fn stale_paths(&self) -> BTreeSet<String> {
         let mut stale: BTreeSet<String> = self.busy.keys().cloned().collect();
+        // Bytes found there wait to be recorded, and nothing was written over them (§11.1 D7).
+        stale.extend(self.pending_record.keys().cloned());
+        // A look at the folder that ran on a newer snapshot than the checkpoint's wrote
+        // saves the checkpoint's packs do not hold.
+        stale.extend(
+            self.written_seq
+                .iter()
+                .filter(|(_, written)| **written > self.seq)
+                .map(|(path, _)| path.clone()),
+        );
         for book in &self.dirty.books {
             stale.extend(self.fold.book_files(*book).iter().map(DerivedFile::path));
         }

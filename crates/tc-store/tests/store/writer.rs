@@ -236,3 +236,142 @@ fn a_save_is_served_between_the_steps_of_a_seal() {
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+/// §5.13 C3: the commit shows the project as its packs hold it. A save served between the
+/// steps of the seal is a pending file the packs lack, so the tree lacks it too (another
+/// computer's anchor check would otherwise read it as an edit made on Door43); the next
+/// checkpoint commits it.
+#[test]
+fn a_commit_made_while_a_save_is_served_shows_only_what_its_packs_hold() {
+    use std::sync::Mutex;
+    let (rig, folder) = titus();
+    let handle = Arc::new(open(&rig, &folder));
+    save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
+    let steps = Arc::new(Mutex::new(0));
+    {
+        let (handle, steps) = (handle.clone(), steps.clone());
+        rig.store.hooks().at_seal_step(move || {
+            let mut steps = steps.lock().unwrap();
+            *steps += 1;
+            if *steps == 2 {
+                let shown = handle.mint(&verse(1, 2), None).unwrap();
+                drop(handle.submit(tc_journal::command::Command::SaveVerse {
+                    shown,
+                    words: "saved while the seal runs".into(),
+                }));
+            }
+        });
+    }
+    let report = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    rig.store.hooks().at_seal_step(|| {});
+    handle.wait_idle();
+    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    let repo = repo_of(&rig.fs, &folder);
+    let project = project_of(&rig.fs, &folder);
+    let tree = commit_files(&repo, commit);
+    let text = String::from_utf8(tree["ingredients/TIT.usfm"].clone()).unwrap();
+    assert!(text.contains("Paul, a servant"));
+    assert!(
+        !text.contains("saved while the seal runs"),
+        "the tree shows a save its packs lack"
+    );
+    assert_eq!(
+        tree_differs_from_its_packs(&repo, commit, project, tc_journal::fold::ProjectKind::Bible),
+        Vec::<String>::new()
+    );
+    // The save is not lost: the next job writes it, and the next checkpoint commits it.
+    let handle = Arc::try_unwrap(handle).unwrap_or_else(|_| panic!("no other owner"));
+    handle.leave(Leave::Book(TIT)).wait().unwrap();
+    assert!(
+        String::from_utf8(rig.fs.peek(&usfm(&folder)).unwrap())
+            .unwrap()
+            .contains("saved while the seal runs"),
+        "the file shows the save"
+    );
+    let next = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    let next = git2::Oid::from_bytes(next.commit.expect("a second commit").as_bytes()).unwrap();
+    assert!(
+        String::from_utf8(commit_files(&repo, next)["ingredients/TIT.usfm"].clone())
+            .unwrap()
+            .contains("saved while the seal runs")
+    );
+    assert_eq!(
+        tree_differs_from_its_packs(&repo, next, project, tc_journal::fold::ProjectKind::Bible),
+        Vec::<String>::new()
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+    assert_commits_valid(&rig.fs, &folder);
+}
+
+/// The writer's own retry of a file a program held may run on a newer snapshot than the
+/// checkpoint's while the seal serves a save: the file it writes then holds a save the
+/// checkpoint's packs lack, and the tree takes that file from the checkpoint's snapshot, not
+/// from the disk (§5.13 C3).
+#[test]
+fn a_retry_that_wrote_a_newer_snapshot_does_not_reach_the_tree() {
+    use std::sync::Mutex;
+    let (rig, folder) = titus();
+    let handle = Arc::new(open(&rig, &folder));
+    let path = usfm(&folder);
+    rig.fs.set_busy(&path, true);
+    save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
+    handle.leave(Leave::Book(TIT)).wait().unwrap();
+    let steps = Arc::new(Mutex::new(0));
+    {
+        let (handle, steps, fs) = (handle.clone(), steps.clone(), rig.fs.clone());
+        rig.store.hooks().at_seal_step(move || {
+            let mut steps = steps.lock().unwrap();
+            *steps += 1;
+            if *steps == 2 {
+                let shown = handle.mint(&verse(1, 2), None).unwrap();
+                drop(handle.submit(tc_journal::command::Command::SaveVerse {
+                    shown,
+                    words: "saved while the seal runs".into(),
+                }));
+            }
+            if *steps == 3 {
+                // The program lets go, and the writer's retry runs before the seal ends.
+                fs.set_busy(&usfm(Path::new("/projects/Titus")), false);
+                std::thread::sleep(Duration::from_millis(1500));
+            }
+        });
+    }
+    let report = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    rig.store.hooks().at_seal_step(|| {});
+    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    assert!(
+        String::from_utf8(rig.fs.peek(&path).unwrap())
+            .unwrap()
+            .contains("saved while the seal runs"),
+        "the retry wrote the newer snapshot"
+    );
+    let repo = repo_of(&rig.fs, &folder);
+    let text =
+        String::from_utf8(commit_files(&repo, commit)["ingredients/TIT.usfm"].clone()).unwrap();
+    assert!(
+        !text.contains("saved while the seal runs"),
+        "the tree shows a save its packs lack"
+    );
+    assert_eq!(
+        tree_differs_from_its_packs(
+            &repo,
+            commit,
+            project_of(&rig.fs, &folder),
+            tc_journal::fold::ProjectKind::Bible
+        ),
+        Vec::<String>::new()
+    );
+    let handle = Arc::try_unwrap(handle).unwrap_or_else(|_| panic!("no other owner"));
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}

@@ -463,3 +463,60 @@ fn a_checkpoint_after_one_save_writes_only_changed_trees() {
         "{small:?} {large:?}"
     );
 }
+
+/// `bytes` of a USFM file with the text of TIT c:v replaced.
+fn with_verse(bytes: &[u8], c: u16, v: u16, text: &str) -> Vec<u8> {
+    let s = String::from_utf8(bytes.to_vec()).unwrap();
+    let chapter = s.find(&format!("\n\\c {c}\n")).unwrap();
+    let marker = format!("\\v {v} ");
+    let at = chapter + s[chapter..].find(&marker).unwrap() + marker.len();
+    let end = at + s[at..].find('\n').unwrap();
+    format!("{}{}{}", &s[..at], text, &s[end..]).into_bytes()
+}
+
+/// §5.13 C3: a file whose outside edit waits to be recorded was not written over, but the
+/// tree still takes it from the snapshot, never from an older checkpoint's blob: the commit
+/// holds the saves its packs hold.
+#[test]
+fn a_commit_takes_a_file_waiting_for_an_outside_edit_from_the_snapshot() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 3, "my true child").unwrap();
+    assert!(checkpoint(&handle).commit.is_some());
+    save_verse(&handle, 1, 1, "saved in the app").unwrap();
+    let usfm = folder.join("ingredients/TIT.usfm");
+    let edited = with_verse(
+        &rig.fs.peek(&usfm).unwrap(),
+        1,
+        2,
+        "to Titus, edited by a program",
+    );
+    rig.fs.put_unseen(&usfm, &edited, None);
+    let report = checkpoint(&handle);
+    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    let repo = repo_of(&rig.fs, &folder);
+    let text =
+        String::from_utf8(commit_files(&repo, commit)["ingredients/TIT.usfm"].clone()).unwrap();
+    assert!(
+        text.contains("saved in the app"),
+        "the commit lacks a save its packs hold"
+    );
+    assert_eq!(
+        tree_differs_from_its_packs(
+            &repo,
+            commit,
+            project_of(&rig.fs, &folder),
+            tc_journal::fold::ProjectKind::Bible
+        ),
+        Vec::<String>::new()
+    );
+    handle.wait_idle();
+    // The outside edit is recorded all the same, and the file shows both.
+    assert_eq!(
+        words(&handle, 1, 2).as_deref(),
+        Some("to Titus, edited by a program")
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+    assert_commits_valid(&rig.fs, &folder);
+}

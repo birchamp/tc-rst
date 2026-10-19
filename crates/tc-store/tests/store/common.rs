@@ -423,3 +423,37 @@ pub fn damage_text(rig: &Rig, folder: &Path, rel: &str, from: &str, to: &str) ->
     rig.fs.put(&path, &damaged, Some(mtime));
     damaged
 }
+
+/// The derived files of a commit's tree whose bytes are not the projection of the packs the
+/// same tree holds (§5.13 C3): what another computer's anchor check (§11.2 D1) compares, so a
+/// difference would be read there as an edit made on Door43.
+pub fn tree_differs_from_its_packs(
+    repo: &git2::Repository,
+    commit: git2::Oid,
+    project: ProjectId,
+    kind: ProjectKind,
+) -> Vec<String> {
+    use tc_journal::fold::{FoldInput, FoldState};
+    let files = commit_files(repo, commit);
+    let mut inputs: Vec<FoldInput> = Vec::new();
+    for (rel, bytes) in &files {
+        if rel.starts_with("ingredients/tc/changes/") {
+            let read = tc_journal::pack::read_pack(rel, bytes, project);
+            inputs.extend(read.entries.into_iter().map(FoldInput::from));
+        }
+    }
+    let fold = FoldState::fold(kind, inputs);
+    let mut differs = Vec::new();
+    for file in fold.derived_files() {
+        let path = file.path();
+        if path == "ingredients/tc/conflicts.json" {
+            continue;
+        }
+        match (fold.render(&file), files.get(&path)) {
+            (Some(projected), Some(in_tree)) if &projected == in_tree => {}
+            (Some(_), _) => differs.push(path),
+            (None, _) => {}
+        }
+    }
+    differs
+}
