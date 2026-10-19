@@ -440,6 +440,10 @@ Follow-ups the fix units left (2026-10-19):
 - **B5a, C4 (Check):** the Check screen still picks its selectable target words from the shown
   text; take them from `tc_usfm::target_words`, as the aligner and the export do (FIX-text), so an
   unknown marker's `|attributes` never show as words.
+- **C6 (or a C1b follow-up):** build the owner's "Copy to this computer" answer (APP-DESIGN, Owner's
+  answers, 2026-10-19): for a project on a FAT32 or exFAT drive or in a synced folder, copy it with its
+  unsaved texts to a folder the person picks (the local projects folder by default, checked safe), and
+  list it on Home. C1b shipped the interim refusal (`CreateRefusal::CopyUnsafe`).
 - **D2 (export):** the export and the aligner share `tc_usfm::target_words` and
   `tc_align::needs_review`; keep it that way.
 
