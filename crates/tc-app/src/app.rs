@@ -325,7 +325,10 @@ impl App {
         // Without the flag no `test-hooks/` folder is made.
         #[cfg(feature = "test-hooks")]
         let hooks = if config.test_hooks {
-            Some(TestHooks::new(&config.app_data, ender).map_err(StartError::TestFields)?)
+            Some(
+                TestHooks::new(&config.app_data, ender, store.store_hooks())
+                    .map_err(StartError::TestFields)?,
+            )
         } else {
             None
         };

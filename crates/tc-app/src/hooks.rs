@@ -5,7 +5,9 @@
 //!   points live in the generic write path (`dispatch`), because only that path knows where
 //!   "before the change is durable" and "before the reply" are, so every write has them.
 //! - **Holds** (`test/hold`, `test/release`) stop the next operation that reaches a point
-//!   until it is released.
+//!   until it is released. On the store (C1a) each point also holds tc-store's matching point
+//!   (`save` its durability point, `bookRead`, `checkpoint`, `materialize`, `draftWrite`) until
+//!   it is released, and `test/quiet` counts a store thread waiting there.
 //! - **`test/saveVerse`** saves a verse through the real seam and store (unit C0), so the
 //!   contract cases that run through tc-app go through dispatch, the session's reply cache and
 //!   the store before C2's `editor/saveVerse` exists. C2 moves them there and deletes it.
@@ -120,11 +122,19 @@ pub(crate) struct TestHooks {
 }
 
 impl TestHooks {
-    pub(crate) fn new(app_data: &Path, ender: Arc<dyn Ender>) -> Result<Self, String> {
+    pub(crate) fn new(
+        app_data: &Path,
+        ender: Arc<dyn Ender>,
+        store: Option<Arc<tc_store::Hooks>>,
+    ) -> Result<Self, String> {
         Ok(Self {
             dead: AtomicBool::new(false),
             crash: Mutex::new(None),
-            holds: Holds::default(),
+            holds: Holds {
+                points: Mutex::default(),
+                store,
+                armed: Mutex::default(),
+            },
             fields: TestFields::load(app_data)?,
             ender,
         })
@@ -207,9 +217,25 @@ enum HoldState {
     Holding(Arc<Notify>),
 }
 
-#[derive(Default)]
 struct Holds {
     points: Mutex<HashMap<HoldPoint, HoldState>>,
+    /// The store's own hold points, when the projects are on the store.
+    store: Option<Arc<tc_store::Hooks>>,
+    /// The store points armed now, each with how often a store thread had reached it held
+    /// when it was armed: a thread waits there now when the count has grown since.
+    armed: Mutex<HashMap<HoldPoint, u64>>,
+}
+
+/// tc-store's point for each of the app's (C1a).
+fn store_point(at: HoldPoint) -> tc_store::Point {
+    use tc_store::Point;
+    match at {
+        HoldPoint::Save => Point::BeforeDurablePending,
+        HoldPoint::BookRead => Point::BeforeBookRead,
+        HoldPoint::Checkpoint => Point::BeforeCheckpoint,
+        HoldPoint::Materialize => Point::BeforeMaterialize,
+        HoldPoint::DraftWrite => Point::BeforeDraftWrite,
+    }
 }
 
 impl Holds {
@@ -219,6 +245,13 @@ impl Holds {
         lock(&self.points)
             .entry(at)
             .or_insert_with(|| HoldState::Armed(Arc::new(Notify::new())));
+        if let Some(store) = &self.store {
+            let point = store_point(at);
+            lock(&self.armed)
+                .entry(at)
+                .or_insert_with(|| store.reached(point));
+            store.hold(point);
+        }
     }
 
     /// Where an operation passes a hold point: waits there if the point is armed.
@@ -244,6 +277,10 @@ impl Holds {
         if let Some(HoldState::Holding(notify)) = lock(&self.points).remove(&at) {
             notify.notify_one();
         }
+        if let Some(store) = &self.store {
+            lock(&self.armed).remove(&at);
+            store.release(store_point(at));
+        }
     }
 
     fn release_all(&self) {
@@ -253,13 +290,26 @@ impl Holds {
                 notify.notify_one();
             }
         }
+        if let Some(store) = &self.store {
+            let armed: Vec<HoldPoint> = lock(&self.armed).drain().map(|(at, _)| at).collect();
+            for at in armed {
+                store.release(store_point(at));
+            }
+        }
     }
 
     fn holding(&self) -> usize {
-        lock(&self.points)
+        let app = lock(&self.points)
             .values()
             .filter(|state| matches!(state, HoldState::Holding(_)))
-            .count()
+            .count();
+        let store = self.store.as_ref().map_or(0, |store| {
+            lock(&self.armed)
+                .iter()
+                .filter(|(at, then)| store.reached(store_point(**at)) > **then)
+                .count()
+        });
+        app + store
     }
 }
 
@@ -761,7 +811,12 @@ impl Handle<Reset> for App {
         // Every session closes after its leave checkpoint, then every project goes back to
         // its seed. Epochs go on counting, so a page from before the reset is stale.
         self.inner.sessions.close_all().await;
-        if let Err(error) = self.inner.sessions.store().reset() {
+        // On the store a reset writes projects again and flushes them: the blocking pool's.
+        let store = self.inner.sessions.store().clone();
+        let reset = tokio::task::spawn_blocking(move || store.reset())
+            .await
+            .unwrap_or_else(|e| Err(crate::backend::StoreError::Other(e.to_string())));
+        if let Err(error) = reset {
             return Err(self.internal(
                 "the projects could not be reset",
                 crate::reports::facts(serde_json::json!({"reason": error.to_string()})),

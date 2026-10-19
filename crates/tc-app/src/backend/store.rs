@@ -167,6 +167,13 @@ impl StoreBackend {
         &self.store
     }
 
+    /// The store's file system: C1a's scenario writer writes through it, so its tests run on
+    /// tc-store's `FaultFs`.
+    #[cfg(any(feature = "test-hooks", feature = "fixture-backend"))]
+    pub fn vfs(&self) -> &Arc<dyn tc_store::Vfs> {
+        &self.vfs
+    }
+
     /// The holds a test places on the store's threads.
     pub fn hooks(&self) -> &Arc<tc_store::Hooks> {
         &self.hooks
@@ -331,11 +338,16 @@ impl ProjectStore for StoreBackend {
         Ok(handle)
     }
 
-    /// Projects on disk have no seed to go back to: C1a's scenario store writes its projects
-    /// again here.
+    /// Projects on disk have no seed to go back to: a parity scenario's store
+    /// (`scenario_store`) writes its projects again.
     #[cfg(feature = "test-hooks")]
     fn reset(&self) -> Result<(), StoreError> {
         Ok(())
+    }
+
+    #[cfg(feature = "test-hooks")]
+    fn store_hooks(&self) -> Option<Arc<tc_store::Hooks>> {
+        Some(self.hooks.clone())
     }
 }
 

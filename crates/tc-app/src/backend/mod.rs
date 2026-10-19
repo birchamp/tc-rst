@@ -36,6 +36,8 @@ pub mod memory;
 #[cfg(feature = "fixture-backend")]
 pub mod scenario;
 #[cfg(feature = "fixture-backend")]
+pub mod scenario_store;
+#[cfg(feature = "fixture-backend")]
 pub mod seed;
 pub mod store;
 
@@ -584,6 +586,13 @@ pub trait ProjectStore: Send + Sync + 'static {
     /// `test/reset`: every project back to its seed. The registry closes every session first.
     #[cfg(feature = "test-hooks")]
     fn reset(&self) -> Result<(), StoreError>;
+
+    /// tc-store's hold points, which `test/hold` arms beside the app's own (C1a); `None` for a
+    /// store that has none.
+    #[cfg(feature = "test-hooks")]
+    fn store_hooks(&self) -> Option<Arc<tc_store::Hooks>> {
+        None
+    }
 }
 
 /// One open project.

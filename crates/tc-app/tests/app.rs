@@ -40,5 +40,6 @@ mod app {
     mod sessions;
     pub mod state_seed;
     mod store;
+    mod store_scenario;
     mod wire;
 }

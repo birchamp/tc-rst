@@ -935,6 +935,33 @@ fn a_record_only_one_side_has_is_a_mismatch() {
     );
 }
 
+#[test]
+fn the_seed_packs_hold_exactly_its_changes() {
+    // C1a writes these packs into a project folder: read back, they give every change of the
+    // seed's batches once and nothing else, sealed at the project's creation time.
+    let (_, built) = bible();
+    let mut read = Vec::new();
+    for pack in &built.packs {
+        let back = read_pack(&pack.path.to_string(), &pack.bytes, built.project);
+        assert!(back.is_valid(), "{}: {:?}", pack.path, back.status);
+        read.extend(back.entries.iter().map(|entry| entry.id()));
+    }
+    let mut written: Vec<_> = built
+        .batches
+        .iter()
+        .flat_map(|b| b.changes.iter().map(Change::id))
+        .collect();
+    read.sort();
+    written.sort();
+    assert!(!written.is_empty());
+    assert_eq!(read, written);
+    // The sample's `meta.dateCreated`.
+    assert_eq!(
+        Some(built.created.0),
+        parse_utc_millis("2026-07-02T12:00:00.000Z")
+    );
+}
+
 proptest::proptest! {
     /// The scope reader keeps a range as `ScopeRange` reads it, so a text it reads must be
     /// the only text of its value, or the scope would come back written another way.
