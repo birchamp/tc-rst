@@ -37,6 +37,8 @@ use tc_api::jobs::{OpenPhase, Phase};
 use tc_api::write::ReadOnlyReason;
 use tc_journal::command::Command;
 use tc_journal::fold::{FoldState, ProjectKind};
+use tc_journal::keys::PinGroup;
+use tc_journal::record::PinGroupValue;
 use tc_journal::token::TokenError;
 use tc_journal::{ChangeId, RecordKey, ShownToken};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
@@ -160,6 +162,13 @@ impl StoreBackend {
         &self.store
     }
 
+    /// The store's file system: C1a's scenario writer writes through it, so its tests run on
+    /// tc-store's `FaultFs`.
+    #[cfg(any(feature = "test-hooks", feature = "fixture-backend"))]
+    pub fn vfs(&self) -> &Arc<dyn tc_store::Vfs> {
+        &self.vfs
+    }
+
     /// The holds a test places on the store's threads.
     pub fn hooks(&self) -> &Arc<tc_store::Hooks> {
         &self.hooks
@@ -168,6 +177,40 @@ impl StoreBackend {
     /// The projects folder.
     pub fn projects(&self) -> &Path {
         &self.projects
+    }
+
+    /// What a Home card's summary of `folder` is computed from (APP-DESIGN §4.5, C1a D8): one
+    /// listing of `.tc/pending/` and one stat of `.tc/materialized.json`, no file read, no lock
+    /// and no fold, at any history. A temporary file a crash left is no save and is left out.
+    pub fn summary_stamp(&self, folder: &ProjectRef) -> Result<SummaryStamp, StoreError> {
+        // The card's folder comes from the listing, so its name is the listed one: no second
+        // listing of the projects folder here.
+        if folder.as_str().starts_with(STAGING) {
+            return Err(store_error(format!("{folder} is a staging folder")));
+        }
+        let root = self.projects.join(folder.as_str());
+        let pending_dir = tc_store::layout::PENDING
+            .split('/')
+            .fold(root.clone(), |p, part| p.join(part));
+        let pending: Vec<String> = match self.vfs.read_dir(&pending_dir) {
+            Ok(entries) => entries
+                .into_iter()
+                .filter(|e| e.kind == tc_store::vfs::EntryKind::File)
+                .filter_map(|e| e.name.to_str().map(str::to_owned))
+                .filter(|name| tc_store::atomic::temp_target(name).is_none())
+                .collect(),
+            Err(e) if absent(&e) => Vec::new(),
+            Err(e) => return Err(store_error(format!("{}: {e}", pending_dir.display()))),
+        };
+        let manifest_path = tc_store::layout::MANIFEST
+            .split('/')
+            .fold(root, |p, part| p.join(part));
+        let manifest = match self.vfs.metadata(&manifest_path) {
+            Ok(meta) => Some((meta.len, meta.mtime_ns)),
+            Err(e) if absent(&e) => None,
+            Err(e) => return Err(store_error(format!("{}: {e}", manifest_path.display()))),
+        };
+        Ok(SummaryStamp::of(&pending, manifest))
     }
 
     /// The staging folders tc-store's start removed (STORAGE §6.4 N1). It waits for that
@@ -295,52 +338,6 @@ fn project_json(bytes: &[u8]) -> Result<(tc_journal::ProjectId, ProjectKind), St
 }
 
 impl StoreBackend {
-    /// What a Home summary of `folder` was computed from (C1a D8): SHA-256 over
-    /// `tc4-summary-stamp\0`, each name of `.tc/pending/` that is not a temporary file in
-    /// byte order followed by `\0`, then `\x01`, the size (u64 LE) and the mtime (i64 LE, in
-    /// nanoseconds) of `.tc/materialized.json`, or `\x00` when it is missing. A save adds a
-    /// pending file and a checkpoint rewrites the manifest, so either gives a new stamp. One
-    /// listing and one stat; no file is opened.
-    pub fn summary_stamp(&self, folder: &ProjectRef) -> Result<SummaryStamp, StoreError> {
-        let path = self
-            .listed(folder)
-            .map_err(|_| store_error("not a project"))?;
-        Ok(self.stamp_at(&path))
-    }
-
-    fn stamp_at(&self, path: &Path) -> SummaryStamp {
-        let mut pending: Vec<Vec<u8>> = self
-            .vfs
-            .read_dir(&path.join(tc_store::layout::PENDING))
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|entry| {
-                entry
-                    .name
-                    .to_str()
-                    .is_none_or(|name| tc_store::atomic::temp_target(name).is_none())
-            })
-            .map(|entry| entry.name.as_encoded_bytes().to_vec())
-            .collect();
-        pending.sort();
-        let manifest = match self.vfs.metadata(&path.join(tc_store::layout::MANIFEST)) {
-            Ok(meta) => {
-                let mut bytes = vec![1];
-                bytes.extend_from_slice(&meta.len.to_le_bytes());
-                bytes.extend_from_slice(&meta.mtime_ns.to_le_bytes());
-                bytes
-            }
-            Err(_) => vec![0],
-        };
-        let mut parts: Vec<&[u8]> = vec![b"tc4-summary-stamp\0"];
-        for name in &pending {
-            parts.push(name);
-            parts.push(b"\0");
-        }
-        parts.push(&manifest);
-        SummaryStamp::of(&parts)
-    }
-
     fn read_text(&self, path: &Path) -> Result<String, String> {
         let bytes = self.vfs.read(path).map_err(|e| e.to_string())?;
         String::from_utf8(bytes).map_err(|_| "the file is not valid UTF-8".to_owned())
@@ -377,7 +374,7 @@ impl ProjectStore for StoreBackend {
         Ok(super::ProjectPeek {
             metadata,
             remote,
-            stamp: self.stamp_at(&path),
+            stamp: self.summary_stamp(folder)?,
         })
     }
 
@@ -467,6 +464,7 @@ impl ProjectStore for StoreBackend {
             // C1b lets the person say that the computer the lock names is closed; until then
             // such a project opens read-only.
             other_computer_closed: false,
+            creation_pins: creation_pins(),
         };
         let handle = self.store.open(&path, &options).map_err(open_failure)?;
         let handle = StoreHandle::start(handle).map_err(|reason| OpenFailure::Unreadable {
@@ -475,11 +473,16 @@ impl ProjectStore for StoreBackend {
         Ok(handle)
     }
 
-    /// Projects on disk have no seed to go back to: C1a's scenario store writes its projects
-    /// again here.
+    /// Projects on disk have no seed to go back to: a parity scenario's store
+    /// (`scenario_store`) writes its projects again.
     #[cfg(feature = "test-hooks")]
     fn reset(&self) -> Result<(), StoreError> {
         Ok(())
+    }
+
+    #[cfg(feature = "test-hooks")]
+    fn store_hooks(&self) -> Option<Arc<tc_store::Hooks>> {
+        Some(self.hooks.clone())
     }
 }
 
@@ -637,6 +640,17 @@ pub(crate) fn open_phase(phase: tc_store::Phase) -> OpenPhase {
         // An open never reports it: tc-store uses it for work no open does.
         Store::Working => OpenPhase::WritingFiles,
     }
+}
+
+/// The pins a new project gets (tC4 `INSTALLED_SUITE`), which an open writes into a project
+/// that holds none (tC4 #766): every group or, should one not convert, none.
+fn creation_pins() -> Vec<(PinGroup, PinGroupValue)> {
+    let pins = tc_resources::suite::project_pins();
+    PinGroup::ALL
+        .into_iter()
+        .map(|group| Ok((group, pins.group_value(group)?)))
+        .collect::<Result<_, tc_resources::GroupError>>()
+        .unwrap_or_default()
 }
 
 /// tc-store's reports of an open, forwarded unchanged into the open's sink: the store's

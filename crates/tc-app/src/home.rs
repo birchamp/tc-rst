@@ -414,6 +414,8 @@ enum Kept {
 
 struct Queued {
     folder: ProjectRef,
+    /// The project's id, which the kept summary names.
+    project: tc_journal::ProjectId,
     books: Vec<BookId>,
     /// The stamp read before the summary's files: a save meanwhile gives a newer one, so
     /// the next card sees this summary stale.
@@ -423,13 +425,16 @@ struct Queued {
 #[derive(Default)]
 struct CacheState {
     kept: HashMap<ProjectRef, (SummaryStamp, Kept)>,
+    /// The projects of the last listing, so a card's own read needs no listing of its own.
+    listed: HashMap<ProjectRef, ProjectEntry>,
     queue: VecDeque<Queued>,
     running: Option<(ProjectRef, CancelToken)>,
     /// Raised by a reset: a job of an earlier generation stores nothing.
     generation: u64,
 }
 
-/// The summaries of this launch (§4.4; C1a keeps them across launches). One job at a time.
+/// The summaries of this launch, over those app data keeps across launches (§4.4, C1a's D7).
+/// One job at a time.
 #[derive(Default)]
 pub(crate) struct SummaryCache {
     state: Mutex<CacheState>,
@@ -461,16 +466,43 @@ impl SummaryCache {
         }
     }
 
-    /// Queues one summary of `folder` unless one is queued or running.
-    fn ensure(&self, deps: &JobDeps, folder: ProjectRef, books: Vec<BookId>, stamp: SummaryStamp) {
+    /// Keeps `summary` as this launch's for `folder` at `stamp`.
+    fn keep(&self, folder: ProjectRef, stamp: SummaryStamp, summary: Arc<Summary>) {
+        lock(&self.state)
+            .kept
+            .insert(folder, (stamp, Kept::Ready(summary)));
+    }
+
+    /// The projects of the last listing.
+    fn remember_listing(&self, entries: &[ProjectEntry]) {
+        lock(&self.state).listed = entries
+            .iter()
+            .map(|entry| (entry.folder.clone(), entry.clone()))
+            .collect();
+    }
+
+    fn listed(&self, folder: &ProjectRef) -> Option<ProjectEntry> {
+        lock(&self.state).listed.get(folder).cloned()
+    }
+
+    /// Queues one summary of `entry`'s folder unless one is queued or running.
+    fn ensure(
+        &self,
+        deps: &JobDeps,
+        entry: &ProjectEntry,
+        books: Vec<BookId>,
+        stamp: SummaryStamp,
+    ) {
         let mut state = lock(&self.state);
-        let busy = state.running.as_ref().is_some_and(|(f, _)| *f == folder)
-            || state.queue.iter().any(|q| q.folder == folder);
+        let folder = &entry.folder;
+        let busy = state.running.as_ref().is_some_and(|(f, _)| f == folder)
+            || state.queue.iter().any(|q| q.folder == *folder);
         if busy {
             return;
         }
         state.queue.push_back(Queued {
-            folder,
+            folder: folder.clone(),
+            project: entry.id,
             books,
             stamp,
         });
@@ -535,9 +567,7 @@ impl SummaryCache {
             job_deps
                 .counters
                 .add(crate::counters::AppCounter::SummariesComputed, 1);
-            job_deps
-                .app
-                .summary_done(generation, next.folder, next.stamp, outcome);
+            job_deps.app.summary_done(generation, &next, outcome);
             if cancel.is_cancelled() || job_cancel.is_cancelled() {
                 Err(JobEnd::Cancelled)
             } else {
@@ -611,27 +641,48 @@ impl App {
 
     /// A summary job ended: its summary is kept (or its failure, until the next Home visit),
     /// its card is told to read again, and the next queued job starts.
-    fn summary_done(
-        &self,
-        generation: u64,
-        folder: ProjectRef,
-        stamp: SummaryStamp,
-        summary: Option<Summary>,
-    ) {
+    fn summary_done(&self, generation: u64, job: &Queued, summary: Option<Summary>) {
         let cache = &self.inner.home;
         let mut state = lock(&cache.state);
         if state.generation != generation {
             return;
         }
         state.running = None;
-        let ready = summary.is_some();
-        let kept = summary.map_or(Kept::Failed, |s| Kept::Ready(Arc::new(s)));
-        state.kept.insert(folder.clone(), (stamp, kept));
+        let summary = summary.map(Arc::new);
+        let kept = summary.clone().map_or(Kept::Failed, Kept::Ready);
+        state.kept.insert(job.folder.clone(), (job.stamp, kept));
         SummaryCache::start_next(&mut state, &self.job_deps());
         drop(state);
-        if ready {
-            self.inner.bus.publish(Event::HomeCard { project: folder });
+        if let Some(summary) = summary {
+            // App data keeps it for the next launch (C1a's D7).
+            if let Ok(value) = serde_json::to_value(&*summary) {
+                self.inner.prefs.record_summary(
+                    job.folder.clone(),
+                    crate::prefs::StoredSummary {
+                        project: job.project,
+                        stamp: job.stamp,
+                        summary: value,
+                    },
+                );
+            }
+            self.inner.bus.publish(Event::HomeCard {
+                project: job.folder.clone(),
+            });
         }
+    }
+
+    /// The summary app data keeps for `folder`, when it was computed at `stamp` and reads as
+    /// a summary: what a launch shows with no job (C1a's D7). A kept summary that does not
+    /// read is no summary.
+    fn kept_summary(&self, folder: &ProjectRef, stamp: SummaryStamp) -> Option<Arc<Summary>> {
+        let stored = self.inner.prefs.summary(folder)?;
+        if stored.stamp != stamp {
+            return None;
+        }
+        let summary: Summary = serde_json::from_value(stored.summary).ok()?;
+        let summary = Arc::new(summary);
+        self.inner.home.keep(folder.clone(), stamp, summary.clone());
+        Some(summary)
     }
 
     /// One card: its frame now, its counts from the kept summary, and a summary queued when
@@ -643,13 +694,16 @@ impl App {
             Lookup::Ready(summary) => Some(summary),
             Lookup::Failed => None,
             Lookup::Missing => {
-                self.inner.home.ensure(
-                    &self.job_deps(),
-                    entry.folder.clone(),
-                    facts.books.clone().unwrap_or_default(),
-                    peek.stamp,
-                );
-                None
+                let kept = self.kept_summary(&entry.folder, peek.stamp);
+                if kept.is_none() {
+                    self.inner.home.ensure(
+                        &self.job_deps(),
+                        entry,
+                        facts.books.clone().unwrap_or_default(),
+                        peek.stamp,
+                    );
+                }
+                kept
             }
         };
         let card = card(
@@ -699,6 +753,8 @@ impl Handle<List> for App {
                 crate::reports::facts(serde_json::json!({"reason": e.to_string()})),
             )
         })?;
+        let entries: Vec<ProjectEntry> = peeks.iter().map(|(entry, _)| entry.clone()).collect();
+        self.inner.home.remember_listing(&entries);
         let mut cards: Vec<(HomeCard, i64)> = peeks
             .iter()
             // A folder that went away between the listing and its peek is not shown.
@@ -724,10 +780,20 @@ impl Handle<List> for App {
 impl Handle<Card> for App {
     async fn handle(&self, req: Card) -> Result<HomeCard, ApiError> {
         let folder = req.project;
+        // The card's project as the last listing named it, so a card's read costs its own
+        // files and no listing (§8.2); a folder Home has not listed yet is looked for.
+        let listed = self.inner.home.listed(&folder);
         let read = self
             .with_store(move |store| {
-                let listing = store.list().ok()?;
-                let entry = listing.projects.into_iter().find(|e| e.folder == folder)?;
+                let entry = match listed {
+                    Some(entry) => entry,
+                    None => store
+                        .list()
+                        .ok()?
+                        .projects
+                        .into_iter()
+                        .find(|e| e.folder == folder)?,
+                };
                 let peek = store.peek(&entry.folder).ok()?;
                 Some((entry, peek))
             })

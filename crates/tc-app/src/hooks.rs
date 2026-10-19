@@ -5,7 +5,9 @@
 //!   points live in the generic write path (`dispatch`), because only that path knows where
 //!   "before the change is durable" and "before the reply" are, so every write has them.
 //! - **Holds** (`test/hold`, `test/release`) stop the next operation that reaches a point
-//!   until it is released.
+//!   until it is released. On the store (C1a) each point also holds tc-store's matching point
+//!   (`save` its durability point, `bookRead`, `checkpoint`, `materialize`, `draftWrite`) until
+//!   it is released, and `test/quiet` counts a store thread waiting there.
 //! - **`test/saveVerse`** saves a verse through the real seam and store (unit C0), so the
 //!   contract cases that run through tc-app go through dispatch, the session's reply cache and
 //!   the store before C2's `editor/saveVerse` exists. C2 moves them there and deletes it.
@@ -22,12 +24,11 @@
 //!   draft never delays a store (R22); it takes the lane only for the write of the file that
 //!   drafts and stores share.
 //!
-//! Unit C1a replaces the atomic write here with `tc_store::atomic_write`.
+//! The fields' file is written as every app-data file is: by `tc_store::atomic_write` (C1a).
 
 use std::collections::{BTreeMap, HashMap};
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use base64::Engine as _;
@@ -134,11 +135,16 @@ impl TestHooks {
         app_data: &Path,
         ender: Arc<dyn Ender>,
         keychain: Option<Arc<MemKeychain>>,
+        store: Option<Arc<tc_store::Hooks>>,
     ) -> Result<Self, String> {
         Ok(Self {
             dead: AtomicBool::new(false),
             crash: Mutex::new(None),
-            holds: Holds::default(),
+            holds: Holds {
+                points: Mutex::default(),
+                store,
+                armed: Mutex::default(),
+            },
             fields: TestFields::load(app_data)?,
             ender,
             keychain,
@@ -222,9 +228,25 @@ enum HoldState {
     Holding(Arc<Notify>),
 }
 
-#[derive(Default)]
 struct Holds {
     points: Mutex<HashMap<HoldPoint, HoldState>>,
+    /// The store's own hold points, when the projects are on the store.
+    store: Option<Arc<tc_store::Hooks>>,
+    /// The store points armed now, each with how often a store thread had reached it held
+    /// when it was armed: a thread waits there now when the count has grown since.
+    armed: Mutex<HashMap<HoldPoint, u64>>,
+}
+
+/// tc-store's point for each of the app's (C1a).
+fn store_point(at: HoldPoint) -> tc_store::Point {
+    use tc_store::Point;
+    match at {
+        HoldPoint::Save => Point::BeforeDurablePending,
+        HoldPoint::BookRead => Point::BeforeBookRead,
+        HoldPoint::Checkpoint => Point::BeforeCheckpoint,
+        HoldPoint::Materialize => Point::BeforeMaterialize,
+        HoldPoint::DraftWrite => Point::BeforeDraftWrite,
+    }
 }
 
 impl Holds {
@@ -234,6 +256,13 @@ impl Holds {
         lock(&self.points)
             .entry(at)
             .or_insert_with(|| HoldState::Armed(Arc::new(Notify::new())));
+        if let Some(store) = &self.store {
+            let point = store_point(at);
+            lock(&self.armed)
+                .entry(at)
+                .or_insert_with(|| store.reached(point));
+            store.hold(point);
+        }
     }
 
     /// Where an operation passes a hold point: waits there if the point is armed.
@@ -259,6 +288,10 @@ impl Holds {
         if let Some(HoldState::Holding(notify)) = lock(&self.points).remove(&at) {
             notify.notify_one();
         }
+        if let Some(store) = &self.store {
+            lock(&self.armed).remove(&at);
+            store.release(store_point(at));
+        }
     }
 
     fn release_all(&self) {
@@ -268,50 +301,41 @@ impl Holds {
                 notify.notify_one();
             }
         }
+        if let Some(store) = &self.store {
+            let armed: Vec<HoldPoint> = lock(&self.armed).drain().map(|(at, _)| at).collect();
+            for at in armed {
+                store.release(store_point(at));
+            }
+        }
     }
 
     fn holding(&self) -> usize {
-        lock(&self.points)
+        let app = lock(&self.points)
             .values()
             .filter(|state| matches!(state, HoldState::Holding(_)))
-            .count()
+            .count();
+        let store = self.store.as_ref().map_or(0, |store| {
+            lock(&self.armed)
+                .iter()
+                .filter(|(at, then)| store.reached(store_point(**at)) > **then)
+                .count()
+        });
+        app + store
     }
 }
 
 // --- The atomic file write ---------------------------------------------------------------
 
-static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-/// Writes `dir/name` so a reader sees the old bytes or the new ones, never a part: a
-/// temporary file in the same folder, flushed to disk, renamed over the target, and the
-/// folder flushed too. On an error the temporary file is removed.
-fn write_file_atomically(dir: &Path, name: &str, bytes: &[u8]) -> std::io::Result<()> {
-    let n = TEMP_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let temp = dir.join(format!("{name}.{}.{n}.tmp", std::process::id()));
-    let result = (|| {
-        let mut file = std::fs::File::create(&temp)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
-        drop(file);
-        std::fs::rename(&temp, dir.join(name))?;
-        sync_folder(dir)
-    })();
-    if result.is_err() {
-        // The first error is the one worth reporting.
-        let _ = std::fs::remove_file(&temp);
+/// Writes `dir/name` through `tc_store::atomic_write`, so a reader sees the old bytes or the
+/// new ones, never a part. Bytes in place whose folder flush failed count as written: the test
+/// fields need the bytes there, not the flush.
+fn write_file_atomically(dir: &Path, name: &str, bytes: &[u8]) -> Result<(), String> {
+    let fs = tc_store::StdFs;
+    tc_store::atomic_create_dirs(&fs, dir).map_err(|e| e.to_string())?;
+    match tc_store::atomic_write(&fs, dir, name, bytes, tc_store::SyncDir::Now) {
+        Ok(()) | Err(tc_store::WriteError::WrittenNotDurable(_)) => Ok(()),
+        Err(error @ tc_store::WriteError::NotWritten(_)) => Err(error.to_string()),
     }
-    result
-}
-
-#[cfg(unix)]
-fn sync_folder(dir: &Path) -> std::io::Result<()> {
-    std::fs::File::open(dir)?.sync_all()
-}
-
-/// Windows cannot flush a folder; a rename there is as durable as the file system makes it.
-#[cfg(not(unix))]
-fn sync_folder(_dir: &Path) -> std::io::Result<()> {
-    Ok(())
 }
 
 // --- Test fields -------------------------------------------------------------------------
@@ -484,7 +508,7 @@ impl TestFields {
             .await
         {
             Ok(Ok(())) => Ok(()),
-            Ok(Err(e)) => Err(NotSaved::Disk(e.to_string())),
+            Ok(Err(e)) => Err(NotSaved::Disk(e)),
             Err(stopped) => Err(NotSaved::Disk(crate::jobs::stop_reason(stopped))),
         }
     }
@@ -860,7 +884,12 @@ impl Handle<Reset> for App {
         // Every session closes after its leave checkpoint, then every project goes back to
         // its seed. Epochs go on counting, so a page from before the reset is stale.
         self.inner.sessions.close_all().await;
-        if let Err(error) = self.inner.sessions.store().reset() {
+        // On the store a reset writes projects again and flushes them: the blocking pool's.
+        let store = self.inner.sessions.store().clone();
+        let reset = tokio::task::spawn_blocking(move || store.reset())
+            .await
+            .unwrap_or_else(|e| Err(crate::backend::StoreError::Other(e.to_string())));
+        if let Err(error) = reset {
             return Err(self.internal(
                 "the projects could not be reset",
                 crate::reports::facts(serde_json::json!({"reason": error.to_string()})),
@@ -870,14 +899,16 @@ impl Handle<Reset> for App {
         self.inner.home.reset();
         // A launch starts with no kept replies, so a request id may be used again.
         self.inner.replies.forget_settled();
-        self.inner.prefs.reset().await;
         // The account as a launch finds it, on a computer whose keychain works and holds
         // nothing, so one captured screen's sign-in cannot reach the next.
         if let Some(keychain) = &hooks.keychain {
             keychain.reset();
         }
         self.relaunch_account().await;
+        // The log after anything that reports, and before the prefs reset, which writes
+        // `reports.json` as the log then holds it.
         self.inner.reports.clear();
+        self.inner.prefs.reset().await;
         self.set_internet(false);
         Ok(())
     }

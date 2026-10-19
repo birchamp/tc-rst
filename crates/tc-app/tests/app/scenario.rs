@@ -19,7 +19,7 @@ use super::state_seed::{bible_declared, obs_written_up, tuple};
 const SCENARIOS: [&str; 3] = ["sample", "en-pins", "shared"];
 
 /// Each scenario, assembled once per test binary.
-fn scenario(name: &str) -> &'static ScenarioState {
+pub(crate) fn scenario(name: &str) -> &'static ScenarioState {
     static STATES: OnceLock<BTreeMap<&'static str, ScenarioState>> = OnceLock::new();
     &STATES.get_or_init(|| {
         SCENARIOS

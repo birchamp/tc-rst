@@ -418,7 +418,8 @@ impl ProjectStore for MemoryBackend {
         Ok(super::ProjectPeek {
             metadata: Ok(metadata_document(snapshot.fold())),
             remote: state.seeded.remote.clone(),
-            stamp: SummaryStamp::of(&[b"tc4-memory-summary\0", &version.to_le_bytes()]),
+            // The fold's version, in the store's form: no pending save, no manifest.
+            stamp: SummaryStamp::of(&[format!("tc4-memory-summary-{version}")], None),
         })
     }
 

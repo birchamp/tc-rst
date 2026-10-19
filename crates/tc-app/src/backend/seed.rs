@@ -41,7 +41,7 @@ use std::path::Path;
 use serde_json::Value;
 use tc_journal::fold::{DerivedFile, FoldInput, FoldState, ProjectKind, records_from_usfm};
 use tc_journal::json::Json;
-use tc_journal::pack::{PackSpec, read_pack, seal};
+use tc_journal::pack::{EncodedPack, PackSpec, read_pack, seal};
 use tc_journal::record::{BookPresence, PresentHow, Scope, VersificationValue};
 use tc_journal::{
     BatchId, BatchRef, BookId, Cause, Change, ChangeBody, CheckTarget, DeviceId, DeviceKind,
@@ -337,6 +337,12 @@ pub struct StateSeed {
     pub fold: FoldState,
     /// Carried files' bytes by git blob id.
     pub carried: BTreeMap<GitOid, Vec<u8>>,
+    /// The packs the changes were sealed into, as read back for the fold: what a project
+    /// folder of this seed holds under `ingredients/tc/changes/` (unit C1a writes them).
+    pub packs: Vec<EncodedPack>,
+    /// When the project was made (`meta.dateCreated`, else the seed's floor): the time the
+    /// packs were sealed at, and `project.json`'s `created`.
+    pub created: WallTime,
     pub report: SeedReport,
 }
 
@@ -634,6 +640,8 @@ pub fn tc4_state_seed(folder: &Tc4Folder, project: ProjectId) -> Result<StateSee
         batches: built.batches,
         fold: built.fold,
         carried: built.carried,
+        packs: built.packs,
+        created: built.created,
         report: SeedReport {
             declared,
             ignored: folder.ignored.clone(),
@@ -683,6 +691,8 @@ pub(crate) struct Built {
     pub(crate) batches: Vec<SeedBatch>,
     pub(crate) fold: FoldState,
     pub(crate) carried: BTreeMap<GitOid, Vec<u8>>,
+    pub(crate) packs: Vec<EncodedPack>,
+    pub(crate) created: WallTime,
     pub(crate) roles: BTreeMap<String, Role>,
     /// The free fields of `metadata.json`, by dotted path, as the folder holds them.
     pub(crate) meta_fields: Vec<(String, Value)>,
@@ -960,7 +970,7 @@ pub(crate) fn build(folder: &Tc4Folder, project: ProjectId) -> Result<Built, See
         items.extend(attached.remove(&label).unwrap_or_default());
         batches.push(batch(label, items, &ctx)?);
     }
-    let fold = seal_and_fold(&ctx, kind, project_at, &batches)?;
+    let (fold, packs) = seal_and_fold(&ctx, kind, project_at, &batches)?;
     Ok(Built {
         project,
         kind,
@@ -968,6 +978,8 @@ pub(crate) fn build(folder: &Tc4Folder, project: ProjectId) -> Result<Built, See
         batches,
         fold,
         carried,
+        packs,
+        created: project_at,
         roles,
         meta_fields,
         sidecar_records,
@@ -1041,12 +1053,13 @@ fn batch(label: BatchLabel, items: Vec<Item>, ctx: &Ctx) -> Result<SeedBatch, Se
 
 /// Seals every change into packs of a fixed Local sealer, reads the packs back and folds
 /// what they hold (AD36): the fold takes changes exactly as a project's packs give them.
+/// Returns the packs too, so a project folder of the seed holds these very bytes.
 fn seal_and_fold(
     ctx: &Ctx,
     kind: ProjectKind,
     sealed: WallTime,
     batches: &[SeedBatch],
-) -> Result<FoldState, SeedRefusal> {
+) -> Result<(FoldState, Vec<EncodedPack>), SeedRefusal> {
     let mut sealer = [0u8; 15];
     sealer.copy_from_slice(&sha256(&[b"tc4-seed-sealer\0", ctx.project.as_bytes()])[..15]);
     let spec = PackSpec {
@@ -1093,7 +1106,7 @@ fn seal_and_fold(
             "the packs do not give back every change".into(),
         ));
     }
-    Ok(FoldState::fold(kind, inputs))
+    Ok((FoldState::fold(kind, inputs), packs.packs))
 }
 
 // ---------------------------------------------------------------------------------------

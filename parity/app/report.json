@@ -42,7 +42,7 @@
       "locale": "en",
       "status": "differs",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "32893eee72bafcd3fb29915193f83a3e2bab1c56102c470587744f47e9197793",
         "rustSha256": "86eebce10e6faadb77d06970f2dc469261766fae4dad2e270dbaa76e97fc4540",
@@ -212,7 +212,7 @@
       "locale": "en",
       "status": "differs",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "13eb313397adb2535a15accd4b94259377e88516879c63d580c8e0a32eddeafb",
         "rustSha256": "2d95703d1d9dfe8e128a2af0bf6d4b78adf3f77f51ab3d6835ed6fc0be321e2e",
@@ -250,7 +250,7 @@
       "locale": "en",
       "status": "differs",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "ba14b01111c3045ea55f89ddb65369431b1a9600097ac594f449ea859a6c42d7",
         "rustSha256": "6f8a27c11a512eabcf1365c08e5710d912b069ecd65071a6b815d535c3b0cf04",
@@ -288,7 +288,7 @@
       "locale": "en",
       "status": "differs",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "c67132b97754b830b89ed475df02d82cd1a571064febe97bf4520d191b4943c7",
         "rustSha256": "2e2bbe70d756ebce7502a11222f4f649c9f5e0bae04ce86c150c00a1b3d3f03e",
@@ -341,11 +341,11 @@
         "pixels": "B9b",
         "meaning": "B9b"
       },
-      "by": "A8",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "dom": {
         "tc4Sha256": "50ce0b62fdbbba09090d0cd2a1723dd2279a4be58558ac618f686ca847fa25c5",
-        "rustSha256": "0c311faaa7f1a1367c4bf686519a40f2b1f5d041a9210224fe76ecbea370b80c",
+        "rustSha256": "4920efdd5acd141e756d0284e019346efd06b18affe1229fb5e757a1997c3e20",
         "scope": {
           "attr": "role",
           "value": "dialog",
@@ -389,7 +389,7 @@
       "locale": "en",
       "status": "differs",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "c4c368d76cf9b1f1dfaea68a5a5bfde89b55d5f681faa448af970c5175211699",
         "rustSha256": "8737f483073955d7d56a81c13fa9076acf8e809e8be91d10d23ffb0fc8985070",
@@ -435,7 +435,7 @@
       "locale": "en",
       "status": "differs",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "81622a506fdd40cb265927abe2a1b1de390e49ea4184888b06c152589679cc69",
         "rustSha256": "b3cf2ac8d8494f33646b09d74c33cfd79177a1473d13258676c842a0c7dca5eb",
@@ -481,7 +481,7 @@
       "locale": "en",
       "status": "differs",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "37468d371d1c6f351c7223307a74a4d6c7922eeb3c9375a7953ea7112baebef4",
         "rustSha256": "37468d371d1c6f351c7223307a74a4d6c7922eeb3c9375a7953ea7112baebef4",
@@ -517,7 +517,7 @@
       "locale": "en",
       "status": "differs",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "5c89cf6c07230a4fa45d799b65ca0289c1111c3a6c0adc618e32024c1040ca50",
         "rustSha256": "0f2bde2f1a730289cda790ab1acf005cd8d414db2f017eeb55c183029cdb25b5",
@@ -557,7 +557,7 @@
       "locale": "en",
       "status": "differs",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "dba64f1bc9ad562113b1a63f16fd01635ba67831e98afe6eeb7f13f6edecc318",
         "rustSha256": "23a628784f5cde1e960736cbced1a97af2d848b310d4559be4f18ab809ce009c",
@@ -603,7 +603,7 @@
       "locale": "en",
       "status": "differs",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "c2a46c3fa775c7bda99152a21dbcec6ea793b7358c7d4aa4dbd3e75f91876065",
         "rustSha256": "3532b4295e471edf9ae585499f162b1b12f697d17250fa8c19edd4d771120f25",
@@ -641,7 +641,7 @@
       "locale": "en",
       "status": "differs",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "2953a757c65fa799441b59b81345b78da9e7604f23df61f974ef1eed5364d59e",
         "rustSha256": "9fb4487699f22ba1c333f73712b3b4ffcb4f2bd754506f82ea1e9b3cef6c138c",
@@ -1332,7 +1332,7 @@
       "locale": "en",
       "status": "differs",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "e39a73040e1a2c7ec324c19765f47a1e8a35733e85d0074d5a509c34bf6d9c66",
         "rustSha256": "ac95625a8c200093edc32afca90d0fefc192db7d00714d99a3d769061a66b5a1",
@@ -1363,7 +1363,7 @@
       "locale": "en",
       "status": "differs",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "b4b9821412d7c75e6622806dc761b7a3fc8e5d080198460f880994df511378f4",
         "rustSha256": "a620223367aeb7f2dff1d75937388e3285a5c63f229453700aef047d25ed5a7c",
@@ -1616,11 +1616,11 @@
       "missing": {
         "pixels": "B9b"
       },
-      "by": "A8",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "dom": {
         "tc4Sha256": "5bfbedea38b54a0cbd8081d83700fb43b98be3d6310fff7f20485d1c23b7b55f",
-        "rustSha256": "041a21a6779dca48e6e46d009e4f643b9d984c7a528fd4bc36f1bf9e0a61670e",
+        "rustSha256": "a75105df29c3da7d97019b07d0267220b09591f74b544f209600fff184f0884e",
         "scope": {
           "attr": "role",
           "value": "dialog",
@@ -1849,7 +1849,7 @@
       "locale": "en",
       "status": "same",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "f1e26c0784e1a9e26504707a0e5542d30ab0f08e35023123d6340e3376b0e0f7",
         "rustSha256": "f1e26c0784e1a9e26504707a0e5542d30ab0f08e35023123d6340e3376b0e0f7",
@@ -1874,7 +1874,7 @@
       "locale": "en",
       "status": "differs",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "054b0a01c3422dbcae63d5df0c69529c1f64edea6350c7ed014ac1114e3d8e4c",
         "rustSha256": "85218517891b73f5f5c900e50a65c3fc33bab3042a44f38c223ef7dad5ee298d",
@@ -1923,7 +1923,7 @@
       "locale": "en",
       "status": "differs",
       "by": "B2",
-      "backend": "memory",
+      "backend": "store",
       "pixels": {
         "tc4Sha256": "11b853096cdc40caef04764544faf31dcc34202a078d8f9b3d63bfcb902e1262",
         "rustSha256": "5b6810495cd9f47b4e74b72f98590fd90b3ff61328749cc89d7d9847c9a37583",

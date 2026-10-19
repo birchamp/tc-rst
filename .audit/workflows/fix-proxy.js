@@ -1,0 +1,36 @@
+export const meta = {
+  name: 'fix-proxy',
+  description: 'Finish hazard 6 from the Windows session\'s audited draft: the system proxy lookup through proxy-watch under conditions a to j, built on Linux and tested in the Windows VM, verified once, merged into main',
+  phases: [{ title: 'Build' }, { title: 'Verify' }, { title: 'Merge' }],
+}
+const R = args.root
+const WT = `${R}/.claude/worktrees/lane-fproxy`
+const ENV = "In every shell command that runs cargo, source ~/.tc-env first ('. ~/.tc-env && ...'); use cargo -j 6."
+const VM = `The Windows 11 VM on this PC builds and tests Windows code: commit first, then run WINVM_DIR=tc-proxy ${R}/.audit/tools/winvm/run.sh <commit> '<powershell command>' from the worktree's repository (it ships that commit to C:\\src\\tc-proxy as a git bundle, checks it out and runs the command there with cargo on PATH). Run cargo through cmd so its progress on stderr is not taken for an error, for example: cmd /c "cargo test -p tc-door43 --test windows_proxy > C:\\src\\proxy.log 2>&1"; type C:\\src\\proxy.log. The VM has 6 cores and is shared with an automatic gate run; one cargo command at a time.`
+const CTX = `You work on the Rust rebuild of translationCore 4, a Bible translation app (AGENTS.md is the rule book: no unsafe in our crates; no network in tests). ${ENV} ${VM} End each commit message with 'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>'. Speed matters: reuse the draft, smallest changes, deterministic tests.`
+const TASK = `Hazard 6 (tC4-era Windows hazard; docs/TC4-ISSUES.md #710 area; .audit/tasks/windows-track.md task 7): system_proxy_finder() in tc-door43 returns None everywhere, so a translator on a network that sets its proxy by PAC or WPAD cannot reach Door43. The owner's Windows session surveyed the crates and audited one: read docs/evidence/proxy-watch-audit-2026-10-19.md on branch windows-proxy-draft (the pick proxy-watch =0.3.1 with its sha256, and conditions (a) to (j)). Its uncompiled draft is commit f23d90a on that branch: ProxyAnswer {Through(Url), Direct} replacing Option<Url>, an outer timeout with a stuck-finder test, crates/tc-door43/src/winproxy.rs (WinHttpFinder), FakePacScript in tc-door43-fake, tests/windows_proxy.rs (#[cfg(windows)]), and the pinned dependency. Finish it: meet every condition (a) to (j) (in particular three answers Proxy, Direct and NoAnswer; every error is NoAnswer, never Direct; *_PROXY variables first; the outer timeout keeps for_turn_on; a new resolver per lookup and never reset_auto_proxy; the test PAC served over loopback http with a unique path; never run proxy-watch's own ignored tests; ship its MIT notice), make it compile and pass clippy on Linux and on Windows (the windows-gnu clippy in CI too), and make the Windows tests pass in the VM.`
+
+phase('Build')
+const built = await agent(`${CTX}\n\nCreate the worktree: git -C ${R} worktree add -b lane-fproxy ${WT} origin/windows-proxy-draft (if it exists, cd there and continue), then mkdir -p /var/tmp/tc-rst-target/lane-fproxy and ln -s /var/tmp/tc-rst-target/lane-fproxy ${WT}/target. Merge claude/focused-ride-5uzj7p into it first (main moved a lot since 3e86a49). Then:\n${TASK}\nFinal answer: commits, how each condition (a) to (j) is met (file and test), the Windows test results from the VM, and the Linux test counts of tc-door43 and tc-resources.`, { label: 'build:FIX-proxy', phase: 'Build' })
+if (!built) return { ok: false, why: 'builder died' }
+
+phase('Verify')
+const ISSUE = { type: 'object', properties: { title: { type: 'string' }, severity: { type: 'string', enum: ['blocker', 'major', 'minor'] }, evidence: { type: 'string' }, fix: { type: 'string' } }, required: ['title', 'severity', 'evidence', 'fix'] }
+const V = { type: 'object', properties: { problems: { type: 'array', items: ISSUE }, summary: { type: 'string' } }, required: ['problems', 'summary'] }
+let v = await agent(`${CTX}\n\nVERIFY FIX-proxy in ${WT} (do not commit; leave it clean). Task:\n${TASK}\nBuilder said:\n<<<\n${built}\n>>>\nCheck each condition (a) to (j) against the code and a test that would fail without it; rerun the Windows tests in the VM yourself once; confirm no unsafe in our crates and the internet switch still gates every lookup. Report blockers and majors with evidence; minors in one line of summary.`, { label: 'verify:FIX-proxy', phase: 'Verify', schema: V })
+if (!v) return { ok: false, why: 'verifier died', built }
+let serious = v.problems.filter(p => p.severity !== 'minor')
+if (serious.length) {
+  const fx = await agent(`${CTX}\n\nIn ${WT}, fix only these with the smallest change, each with a test that fails without it, and rerun the Windows tests in the VM:\n${JSON.stringify(serious, null, 1)}\nCommit.`, { label: 'fix:FIX-proxy', phase: 'Verify' })
+  if (!fx) return { ok: false, why: 'fixer died', built }
+  v = await agent(`${CTX}\n\nIn ${WT} (do not commit), check only these fixes deterministically (run their tests; revert each fix and see the test fail; rerun the Windows tests in the VM):\n${JSON.stringify(serious, null, 1)}\nFixer said:\n<<<\n${fx}\n>>>\nReport remaining blockers and majors only.`, { label: 'check:FIX-proxy', phase: 'Verify', schema: V })
+  if (!v) return { ok: false, why: 'checker died', built }
+  serious = v.problems.filter(p => p.severity !== 'minor')
+  if (serious.length) return { ok: false, why: 'blockers or majors remain', serious, built }
+}
+
+phase('Merge')
+const M = { type: 'object', properties: { merged: { type: 'boolean' }, pushed: { type: 'boolean' }, sha: { type: 'string' }, summary: { type: 'string' } }, required: ['merged', 'pushed', 'summary'] }
+const MW = `${R}/.claude/worktrees/merge-main`
+const m = await agent(`${CTX}\n\nMerge lane-fproxy into claude/focused-ride-5uzj7p and push it. The owner authorized this standing step (merge into main in a separate worktree, run the full gates there, then push main; push only claude/focused-ride-5uzj7p): when every gate is green, push without asking again. Use the worktree ${MW}: cd there, make sure git status is clean, git fetch origin, git checkout --detach origin/claude/focused-ride-5uzj7p, git merge --no-ff lane-fproxy -m 'Merge FIX-proxy: a translator behind an automatic proxy (PAC or WPAD) reaches Door43 on Windows' (plus the attribution line). Gates once: cargo fmt --all -- --check; cargo clippy --workspace --all-targets -j 6 -- -D warnings; cargo test --workspace -j 6 --no-fail-fast; cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets -j 6 -- -D warnings with no features and with --features gallery, app and test-hooks; cargo clippy -p tc-api --target wasm32-unknown-unknown --all-targets -j 6 -- -D warnings; cargo clippy -p tc-server -p tc4 --lib --bins -- -D warnings; cargo clippy -p tc-app --lib -- -D warnings. Fix only what the merge broke. Then git fetch origin; if origin moved, merge it and rerun the gates only if the new commits touch Rust or Cargo files; git push origin HEAD:claude/focused-ride-5uzj7p (never force); in ${R} run git merge --ff-only origin/claude/focused-ride-5uzj7p (leave local edits alone if they block it). Report merged, pushed, sha, test counts.`, { label: 'merge:FIX-proxy', phase: 'Merge', schema: M })
+return { ok: !!(m && m.pushed), merge: m, built, verify: v }

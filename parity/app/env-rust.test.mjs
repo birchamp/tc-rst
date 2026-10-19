@@ -40,7 +40,10 @@ test('a scenario reaches tc4 as the state folder it was built into', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-env-rust-'));
   try {
     const args = scenarioArgs('shared', dir);
+    // The store by default (C1a); the memory backend only when asked for.
     assert.deepEqual(args, ['--scenario', path.join(dir, 'state')]);
+    assert.deepEqual(scenarioArgs('shared', dir, 'memory'), ['--scenario', path.join(dir, 'state'), '--backend', 'memory']);
+    assert.throws(() => scenarioArgs('shared', dir, 'memory+scripted'), /store or memory/);
     for (const file of ['client_settings/uw-tc4.json', 'repos/_local_/_local_/sample_burrito/metadata.json',
       'repos/_local_/_local_/sample_burrito/.remotes.json', 'repos/_local_/_sideloaded_/en_tn/metadata.json']) {
       assert.ok(fs.existsSync(path.join(args[1], file)), file);

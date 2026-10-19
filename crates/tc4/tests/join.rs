@@ -79,11 +79,13 @@ fn tc4_serve_answers_hello_with_real_state() {
     assert_eq!(first.quit().code(), Some(0));
     drop(first);
 
-    // Every launch is a new instance, and a launch starts with the switch off.
+    // Every launch is a new instance, and a launch starts with the switch off; the chosen
+    // language is kept on disk (tC4 #525, unit C1a).
     let mut second = start(&dirs);
     let again = hello(&second);
     assert_ne!(again["instance"], before["instance"]);
     assert_eq!(again["internet"], false);
+    assert_eq!(again["prefs"]["appLocale"], "pt-BR");
     assert_eq!(second.quit().code(), Some(0));
 }
 
