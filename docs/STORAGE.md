@@ -4923,6 +4923,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the draft writer ending before the lock is released | `nothing_is_written_into_the_folder_after_the_lock_is_released` |
 | the coherence view of an unverified section draft (current values, no parents) | `an_unverified_section_draft_that_holds_a_span_can_be_kept` |
 | the intent kept by the session after a group stopped (forget it once M4 fails) | `a_group_that_fails_after_a_rename_does_not_mistake_its_bytes_for_an_outside_edit`, `a_focus_after_a_group_stopped_does_not_take_its_bytes_for_an_outside_edit` |
+| M8 settling only what the group wrote, found equal or removed (keep those and drop the rest) | `a_group_keeps_the_intent_of_a_path_it_could_not_read` |
 | the intent at the open (read the md5s of the intent as no one's) | `crash_materialize_intent_tells_its_bytes_from_an_outside_edit` |
 | the session's entry and intent after a rename (keep the old md5 as the app's own until M7) | `an_outside_revert_after_a_stopped_group_is_recorded_as_a_conflict`, `a_retry_after_a_stopped_group_does_not_write_over_an_outside_revert`, `an_outside_revert_of_metadata_json_after_a_stopped_group_is_an_edit` |
 | the heads file written again for a converged file (checked after a restart, which loses the session's memory) | `a_retry_that_finds_the_file_converged_writes_its_heads_file` |

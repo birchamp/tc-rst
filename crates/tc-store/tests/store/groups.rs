@@ -1080,3 +1080,48 @@ fn a_heads_file_the_open_could_not_write_is_written_by_a_later_open() {
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+/// §5.10 M8: a group settles from the intent only the paths it wrote, found equal or removed.
+/// The process is killed right after the rename of `TIT.usfm`, and the open cannot read the file
+/// (a program holds it), so the open's first job leaves it; the person saves the verse again.
+/// That job must keep the intent of `TIT.usfm`: the retry that reads the file later finds the
+/// second save there while the manifest still names the first, and only the intent says it is
+/// the app's own. Taken for an outside edit, it would be listed as a conflict with the third
+/// save, between the person's own two edits.
+#[test]
+fn a_group_keeps_the_intent_of_a_path_it_could_not_read() {
+    let (rig, folder, handle, k) = fail_after_the_rename();
+    let usfm = folder.join("ingredients/TIT.usfm");
+    rig.fs.kill_before(k, false);
+    let _ = handle.leave(Leave::Book(TIT)).wait();
+    assert!(rig.fs.is_dead(), "killed at the heads file");
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    assert!(String::from_utf8_lossy(&rig.fs.peek(&usfm).unwrap()).contains("second save"));
+    rig.fs.set_unreadable(&usfm, true);
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    // The open's first job meets the file it cannot read, and ends.
+    handle.wait_idle();
+    save_verse(&handle, 1, 1, "third save").unwrap();
+    handle.leave(Leave::Book(TIT)).wait().unwrap();
+    rig.fs.set_unreadable(&usfm, false);
+    wait_for("the retry to write the third save", || {
+        String::from_utf8_lossy(&rig.fs.peek(&usfm).unwrap()).contains("third save")
+    });
+    handle.wait_idle();
+    assert_eq!(outside_edit_notices(&handle), Vec::<(u32, bool)>::new());
+    assert_eq!(
+        verse_text_conflicts(&handle),
+        0,
+        "a conflict with its own save"
+    );
+    assert_eq!(words_of(&handle, &verse(1, 1)), "third save");
+    assert_eq!(
+        rig.fs.files_under(&folder.join(".tc/external")).len(),
+        0,
+        "the app's own bytes were examined as an outside edit"
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}

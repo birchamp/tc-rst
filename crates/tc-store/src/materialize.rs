@@ -900,7 +900,7 @@ impl Writer {
             done.insert(METADATA.to_owned());
             self.finish_entries(Vec::new(), converged, unread, &gone, &[], None)?;
             if self.open_intent.is_some() {
-                let left = intent_now.remaining(|path| !done.contains(path));
+                let left = intent_now.remaining(|path| done.contains(path));
                 self.settle_intent(left)?;
             }
             return Ok(());
@@ -1060,7 +1060,7 @@ impl Writer {
         }
         self.finish_entries(written, converged, unread, &gone, &removing, metadata_entry)?;
         // M8: what this group named is settled; what an earlier write left unsettled stays.
-        self.settle_intent(intent_now.remaining(|path| !done.contains(path)))?;
+        self.settle_intent(intent_now.remaining(|path| done.contains(path)))?;
         Ok(())
     }
 
