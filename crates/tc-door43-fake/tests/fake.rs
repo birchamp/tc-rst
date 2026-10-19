@@ -405,6 +405,70 @@ async fn a_push_without_write_access_is_declined_by_the_pre_receive_hook() {
     );
 }
 
+/// As Gitea: a private repository does not exist for a push from someone who may not read it,
+/// so its refs are never advertised to them, even with a token that may write repositories.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_private_repository_is_not_found_by_a_non_member_push() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    fake.add_user(tc_door43_fake::FakeUser {
+        login: "outsider".into(),
+        email: "outsider@example.org".into(),
+        password: "outsider-pass".into(),
+        one_time_code: None,
+    });
+    fake.add_repo(tc_door43_fake::RepoSeed {
+        owner: seeded::TEAM_ORG.into(),
+        name: "secret-project".into(),
+        subject: String::new(),
+        language: "en".into(),
+        topics: vec![],
+        private: true,
+        commits: vec![tc_door43_fake::CommitSeed {
+            message: "x".into(),
+            files: vec![tc_door43_fake::SeedFile::regular(
+                "a.txt",
+                b"private".to_vec(),
+            )],
+            tag: None,
+            release: None,
+        }],
+    })
+    .await
+    .unwrap();
+    let token = fake
+        .issue_token("outsider", "push", &["write:repository"])
+        .unwrap();
+    let repo = format!("/{}/secret-project.git", seeded::TEAM_ORG);
+
+    let (status, _, body) = get(
+        &fake,
+        &format!("{repo}/info/refs?service=git-receive-pack"),
+        Some(&token),
+    )
+    .await;
+    assert_eq!(status, 404, "{}", String::from_utf8_lossy(&body));
+    assert!(!String::from_utf8_lossy(&body).contains("refs/heads/"));
+
+    let command = "0000000000000000000000000000000000000000 \
+                   1111111111111111111111111111111111111111 refs/heads/tc-probe\0report-status\n";
+    let mut request = format!("{:04x}{command}0000", command.len() + 4).into_bytes();
+    request.extend(b"PACK\0\0\0\x02\0\0\0\0");
+    let posted = http()
+        .post(format!("{}{repo}/git-receive-pack", fake.url()))
+        .header("Authorization", format!("token {token}"))
+        .header("Content-Type", "application/x-git-receive-pack-request")
+        .body(request)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(posted.status().as_u16(), 404);
+    assert!(
+        fake.resolve(seeded::TEAM_ORG, "secret-project", "refs/heads/tc-probe")
+            .await
+            .is_err()
+    );
+}
+
 /// `git clone` of `owner/name` with `login` and `secret` given by a credential helper.
 async fn clone_as(
     fake: &FakeDoor43,

@@ -16,6 +16,11 @@ pub(crate) struct CgiRequest<'a> {
     pub headers: &'a HeaderMap,
     /// Set after a successful sign-in; `git http-backend` refuses a push without it.
     pub remote_user: Option<&'a str>,
+    /// The account may read the repository but not write to it. Its push runs with
+    /// [`crate::git::Git::declining_hooks`], so git itself answers as Door43 does: HTTP 200,
+    /// the pack read and unpacked (with git's own progress on side band 2 for a large one),
+    /// then the hook's text and every ref declined. Nothing is written.
+    pub refuse_writes: bool,
     pub body: Vec<u8>,
 }
 
@@ -36,6 +41,11 @@ async fn run_backend(shared: &Shared, request: CgiRequest<'_>) -> Result<Respons
             .to_owned()
     };
     let mut command = shared.git.command(None);
+    if request.refuse_writes {
+        let mut setting = std::ffi::OsString::from("core.hooksPath=");
+        setting.push(&shared.git.declining_hooks);
+        command.arg("-c").arg(setting);
+    }
     command
         .arg("http-backend")
         .env("GIT_PROJECT_ROOT", &shared.git.root)
@@ -158,78 +168,6 @@ impl Service {
             named(path_tail)
         }
     }
-}
-
-/// Door43's answer to `POST git-receive-pack` from an account without write access, as
-/// measured on 2026-10-18 (docs/evidence/door43-live-2026-10-17.md, step 6): HTTP 200, the
-/// text of Gitea's pre-receive hook on side band 2, then a status report that unpacks the
-/// pack and refuses every ref. Nothing is written.
-pub(crate) fn declined(request: &[u8]) -> Response {
-    let (refs, capabilities) = commands(request);
-    let wants = |name: &str| capabilities.split(' ').any(|c| c == name);
-    let mut report = Vec::new();
-    if wants("report-status") || wants("report-status-v2") {
-        report.extend(pkt(b"unpack ok\n"));
-        for name in &refs {
-            report.extend(pkt(
-                format!("ng {name} pre-receive hook declined\n").as_bytes()
-            ));
-        }
-        report.extend(b"0000");
-    }
-    let body = if wants("side-band-64k") || wants("side-band") {
-        let mut body = Vec::new();
-        for line in [
-            "error:\n",
-            "error: User permission denied for writing.\n",
-            "error:\n",
-        ] {
-            body.extend(pkt(&[b"\x02", line.as_bytes()].concat()));
-        }
-        for chunk in report.chunks(990) {
-            body.extend(pkt(&[b"\x01", chunk].concat()));
-        }
-        body.extend(b"0000");
-        body
-    } else {
-        report
-    };
-    let mut response = Response::new(Body::from(body));
-    response.headers_mut().insert(
-        axum::http::header::CONTENT_TYPE,
-        HeaderValue::from_static("application/x-git-receive-pack-result"),
-    );
-    response
-}
-
-/// The refs a receive-pack request updates, and the capabilities its first command asks for.
-fn commands(request: &[u8]) -> (Vec<String>, String) {
-    let mut refs = Vec::new();
-    let mut capabilities = String::new();
-    let mut rest = request;
-    while let Some(len) = rest
-        .get(..4)
-        .and_then(|h| std::str::from_utf8(h).ok())
-        .and_then(|h| usize::from_str_radix(h, 16).ok())
-    {
-        if len < 4 || len > rest.len() {
-            break;
-        }
-        let line = String::from_utf8_lossy(&rest[4..len]);
-        rest = &rest[len..];
-        let (command, caps) = line.split_once('\0').unwrap_or((&line, ""));
-        if refs.is_empty() && !caps.is_empty() {
-            capabilities = caps.trim_end().to_owned();
-        }
-        if let [_, _, name] = command.split_whitespace().collect::<Vec<_>>()[..] {
-            refs.push(name.to_owned());
-        }
-    }
-    (refs, capabilities)
-}
-
-fn pkt(payload: &[u8]) -> Vec<u8> {
-    [format!("{:04x}", payload.len() + 4).as_bytes(), payload].concat()
 }
 
 pub(crate) fn exists(dir: &Path) -> bool {
