@@ -3,10 +3,12 @@
 # wasm32 and bound with wasm-bindgen, beside tC4's CSS, fonts, images and catalogs and the
 # page that loads them (APP-DESIGN 5.3, 6.9).
 #
-#   crates/tc-ui/build-app.sh [--release] [--out DIR]
+#   crates/tc-ui/build-app.sh [--release] [--test-hooks] [--out DIR]
 #
 # --release builds with the `wasm-release` profile (size-optimised, LTO); the default is the
-# dev profile, which builds faster and runs the same code. Output: target/tc-ui-app/ unless
+# dev profile, which builds faster and runs the same code. --test-hooks builds the `test-hooks`
+# feature: the no-loss probe page at `/?probe=fields` and its panic triggers, for
+# `app/no-loss.mjs` only. The installer never builds it. Output: target/tc-ui-app/ unless
 # --out is given:
 #
 #   index.html              the page, with the build's folder name in its links (no-store)
@@ -24,10 +26,12 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 PROFILE=dev
 DIR=debug
+FEATURES=app
 OUT="$ROOT/target/tc-ui-app"
 while [ $# -gt 0 ]; do
   case "$1" in
     --release) PROFILE=wasm-release; DIR=wasm-release ;;
+    --test-hooks) FEATURES=test-hooks ;;
     --out) OUT="$2"; shift ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
@@ -47,7 +51,7 @@ if [ "$have" != "$want" ]; then
 fi
 
 cargo build -j "${CARGO_JOBS:-2}" -p tc-ui --lib --target wasm32-unknown-unknown \
-  --profile "$PROFILE" --features app --manifest-path "$ROOT/Cargo.toml"
+  --profile "$PROFILE" --features "$FEATURES" --manifest-path "$ROOT/Cargo.toml"
 
 # Where cargo put the wasm: CARGO_TARGET_DIR or build.target-dir move it out of ./target.
 TARGET_DIR="$(cargo metadata --format-version 1 --no-deps --manifest-path "$ROOT/Cargo.toml" |
@@ -64,7 +68,7 @@ STAGE="$TARGET_DIR/tc-ui-app-stage"
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 "$BINDGEN" --target web --no-typescript --out-dir "$STAGE" "$WASM"
-cp "$HERE/app/boot.js" "$HERE/assets/ui.css" "$STAGE/"
+cp "$HERE/app/boot.js" "$HERE/app/recovery.js" "$HERE/assets/ui.css" "$STAGE/"
 cp -r "$HERE/assets/ds" "$STAGE/ds"
 cp -r "$HERE/assets/images" "$STAGE/images"
 cp -r "$HERE/assets/i18n" "$STAGE/i18n"
