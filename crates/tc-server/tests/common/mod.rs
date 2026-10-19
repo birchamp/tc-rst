@@ -274,7 +274,19 @@ impl TestServer {
 
     pub fn send(&self, request: &Req) -> Response {
         let mut stream = self.connect();
-        stream.write_all(&request.to_bytes()).unwrap();
+        // A server that refuses a request may answer and close before the body is all sent;
+        // its answer is what the test reads.
+        if let Err(e) = stream.write_all(&request.to_bytes()) {
+            assert!(
+                matches!(
+                    e.kind(),
+                    std::io::ErrorKind::BrokenPipe
+                        | std::io::ErrorKind::ConnectionAborted
+                        | std::io::ErrorKind::ConnectionReset
+                ),
+                "writing a request: {e}"
+            );
+        }
         read_response(&mut stream)
     }
 }

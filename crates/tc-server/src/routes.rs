@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use axum::body::{Body, Bytes};
+use axum::body::{Body, BodyDataStream, Bytes};
 use axum::extract::{Path, Request, State};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
@@ -84,8 +84,9 @@ pub(crate) fn error_reply(status: StatusCode, error: ApiError) -> Response {
 
 /// What reading a request body can end with.
 pub(crate) enum BodyError {
-    /// More than the cap, by the declared length or by the bytes that came.
-    TooLarge,
+    /// More than the cap, by the declared length or by the bytes that came. It holds the rest
+    /// of the body, for [`too_large`].
+    TooLarge(BodyDataStream),
     /// The client went away or sent a broken body.
     Broken,
 }
@@ -97,15 +98,15 @@ pub(crate) async fn read_body(
     declared: Option<u64>,
     limit: usize,
 ) -> Result<Bytes, BodyError> {
+    let mut stream = body.into_data_stream();
     if declared.is_some_and(|length| length > limit as u64) {
-        return Err(BodyError::TooLarge);
+        return Err(BodyError::TooLarge(stream));
     }
     let mut collected = Vec::new();
-    let mut stream = body.into_data_stream();
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|_| BodyError::Broken)?;
         if collected.len() + chunk.len() > limit {
-            return Err(BodyError::TooLarge);
+            return Err(BodyError::TooLarge(stream));
         }
         collected.extend_from_slice(&chunk);
     }
@@ -122,7 +123,24 @@ pub(crate) fn declared_length(request: &Request) -> Option<u64> {
         .ok()
 }
 
-pub(crate) fn too_large() -> Response {
+/// The most bytes of a refused body that are read and dropped after its 413.
+const DRAIN_LIMIT: usize = 64 * 1024 * 1024;
+
+/// 413 for a body over its cap. It goes out at once, and `rest` is read and dropped, up to
+/// [`DRAIN_LIMIT`] bytes, before the connection closes: a socket closed on unread bytes resets
+/// the connection, and the reset can destroy the 413 before a client that is still sending
+/// reads it (Windows does: os error 10053), so a browser would report a connection error
+/// instead of "too large".
+pub(crate) fn too_large(mut rest: BodyDataStream) -> Response {
+    tokio::spawn(async move {
+        let mut dropped = 0;
+        while let Some(Ok(chunk)) = rest.next().await {
+            dropped += chunk.len();
+            if dropped > DRAIN_LIMIT {
+                break;
+            }
+        }
+    });
     let mut response = (StatusCode::PAYLOAD_TOO_LARGE, "request body too large").into_response();
     let headers = response.headers_mut();
     headers.insert(header::CONNECTION, HeaderValue::from_static("close"));
@@ -147,7 +165,7 @@ pub(crate) async fn api<B: Backend>(
     let declared = declared_length(&request);
     let body = match read_body(request.into_body(), declared, state.shared.limits.api_body).await {
         Ok(body) => body,
-        Err(BodyError::TooLarge) => return too_large(),
+        Err(BodyError::TooLarge(rest)) => return too_large(rest),
         Err(BodyError::Broken) => return StatusCode::BAD_REQUEST.into_response(),
     };
     // The gate accepted this request before the quit began, so a body read during the drain
