@@ -21,16 +21,26 @@ struct Pushed {
     remote_text: String,
 }
 
-/// Push one new commit to `branch` of `url`, signed in as `login` with `token`.
-async fn push(url: String, login: &str, token: String, branch: &str) -> Pushed {
+/// Push one new commit to `branch` of `url`, signed in as `login` with `token`. The commit
+/// holds `files` files; files after the first differ in one line, so libgit2 sends most of
+/// them as deltas.
+async fn push(url: String, login: &str, token: String, branch: &str, files: usize) -> Pushed {
     let login = login.to_owned();
     let branch = branch.to_owned();
     tokio::task::spawn_blocking(move || {
         let dir = tempfile::tempdir().unwrap();
         let local = git2::Repository::init_bare(dir.path()).unwrap();
-        let blob = local.blob(b"hello\n").unwrap();
         let mut tree = local.treebuilder(None).unwrap();
+        let blob = local.blob(b"hello\n").unwrap();
         tree.insert("README.md", blob, 0o100_644).unwrap();
+        let verses: String = (1..=80)
+            .map(|verse| format!("\\v {verse} In the beginning was the Word.\n"))
+            .collect();
+        for file in 1..files {
+            let blob = local.blob(format!("\\id {file:03}\n{verses}").as_bytes());
+            tree.insert(format!("{file:03}.usfm"), blob.unwrap(), 0o100_644)
+                .unwrap();
+        }
         let tree = local.find_tree(tree.write().unwrap()).unwrap();
         let signature = git2::Signature::now("Test", "test@example.org").unwrap();
         let reference = format!("refs/heads/{branch}");
@@ -89,7 +99,7 @@ async fn a_push_without_write_access_is_no_write_access_and_makes_no_branch() {
         .unwrap();
     let url = fake.clone_url(seeded::READ_ONLY_ORG, "es-419_tn");
 
-    let pushed = push(url, seeded::USER, token, "tc-probe").await;
+    let pushed = push(url, seeded::USER, token, "tc-probe", 1).await;
 
     // As Door43: libgit2 sees no HTTP error, only the declined ref.
     assert!(pushed.result.is_ok(), "{:?}", pushed.result);
@@ -148,6 +158,7 @@ async fn the_same_push_lands_where_the_account_may_write() {
         session.username.as_str(),
         session.token.expose_secret().to_owned(),
         "main",
+        1,
     )
     .await;
 
@@ -158,5 +169,91 @@ async fn the_same_push_lands_where_the_account_may_write() {
             .await
             .unwrap(),
         pushed.commit
+    );
+}
+
+/// A first share sends hundreds of objects. Door43's `git receive-pack` resolves their deltas
+/// before its hook runs, and writes git's progress on the side band that carries the hook's
+/// text. Only the hook's text is Door43's answer.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_large_push_without_write_access_reports_only_door43s_words() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    let target: RepoRef = repo(&format!("{}/es-419_tn", seeded::READ_ONLY_ORG));
+    let token = fake
+        .issue_token(seeded::USER, "push", &["write:repository"])
+        .unwrap();
+    let url = fake.clone_url(seeded::READ_ONLY_ORG, "es-419_tn");
+
+    let pushed = push(url, seeded::USER, token, "tc-probe", 150).await;
+
+    assert!(pushed.result.is_ok(), "{:?}", pushed.result);
+    assert!(
+        pushed.remote_text.starts_with("Resolving deltas:"),
+        "the push should have carried git's progress: {:?}",
+        pushed.remote_text
+    );
+    let [(_, Some(status))] = &pushed.statuses[..] else {
+        panic!("one declined ref expected: {:?}", pushed.statuses);
+    };
+    assert_eq!(status, "pre-receive hook declined");
+    let error = refused_push(&target, status, &pushed.remote_text);
+    assert!(
+        matches!(
+            &error,
+            Door43Error::NoWriteAccess { server_message, .. }
+                if server_message == "User permission denied for writing."
+        ),
+        "{error:?}"
+    );
+    assert!(
+        fake.resolve(seeded::READ_ONLY_ORG, "es-419_tn", "refs/heads/tc-probe")
+            .await
+            .is_err()
+    );
+}
+
+/// Door43 answers a receive-pack request with HTTP 403 before any hook runs when the token
+/// lacks `write:repository`. libgit2 reports that as an HTTP error, not as
+/// `ErrorCode::Auth`, and the push never counts as a success (STORAGE.md §9.5).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_403_on_push_is_an_http_error_and_makes_no_branch() {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    let client = client(&fake);
+    let session = client
+        .mint_token(&credentials(), &token_name(), &TokenScope::FOR_SHARING)
+        .await
+        .unwrap();
+    let created = client
+        .create_repo(
+            &session,
+            &NewRepoOwner::SignedInUser,
+            &"pushed-project".parse().unwrap(),
+            Visibility::Public,
+        )
+        .await
+        .unwrap();
+    let reader = fake
+        .issue_token(seeded::USER, "reader", &["read:repository"])
+        .unwrap();
+
+    let pushed = push(
+        created.clone_url.to_string(),
+        seeded::USER,
+        reader,
+        "main",
+        1,
+    )
+    .await;
+
+    // libgit2 passes neither the status code nor the body, only this message.
+    let error = pushed.result.unwrap_err();
+    assert_eq!(error.class(), git2::ErrorClass::Http, "{error:?}");
+    assert_eq!(error.code(), git2::ErrorCode::GenericError, "{error:?}");
+    assert_eq!(error.message(), "unexpected http status code: 403");
+    assert!(pushed.statuses.is_empty(), "{:?}", pushed.statuses);
+    assert!(
+        fake.resolve(seeded::USER, "pushed-project", "main")
+            .await
+            .is_err()
     );
 }

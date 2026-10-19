@@ -3363,19 +3363,37 @@ po.remote_callbacks(cb).proxy_options(proxy_auto());
 let res = origin.push(&[format!("refs/heads/{b}:refs/heads/{b}")], Some(&mut po));
 ```
 
-- `Ok` and no rejection → confirm.
-- `ErrorCode::NotFastForward`, or a rejection that says "non-fast-forward" or "fetch first":
-  someone pushed after S3. `attempt += 1`; after 6 attempts refuse `sync.busy` ("Door43 is busy
+- `Ok` and no rejection → confirm. A rejected ref is never a success, though `push` returned
+  `Ok`.
+- A rejected ref goes through `tc_door43::refused_push(repo, status, &remote_text)`. It keeps
+  Door43's own lines of the side band and drops git's progress, such as the `Resolving deltas:
+  …` that `git receive-pack` writes there for a pack above 100 objects, because libgit2 never
+  asks it to be quiet.
+- `ErrorCode::NotFastForward` or `Door43Error::RefMoved`: someone pushed after S3. libgit2
+  compares the push with the advertisement it has just read and refuses a non-fast-forward
+  itself, before it sends anything (`NotFastForward`). A race lost on the server comes back as
+  the ref status `failed to update ref`, with `cannot lock ref … is at X but expected Y` on the
+  side band (`RefMoved`). `attempt += 1`; after 6 attempts refuse `sync.busy` ("Door43 is busy
   with other syncs. Your work is saved on this computer. Try again in a minute."). Otherwise wait
   `min(2^attempt, 16) s × U(0.7, 1.3)` and go back to S3. A retry costs one incremental fetch,
   the intake of the few new packs and one tree build, about a second, not a new clone.
-- Any other rejection goes through `tc_door43::refused_push(repo, status, &remote_text)`.
-  Door43 refuses a push without write access with HTTP 200, never 403: the ref's status is
-  `pre-receive hook declined` and the side band says `User permission denied for writing.`
-  (measured 2026-10-18, `docs/evidence/door43-live-2026-10-17.md` step 6). That is
-  `Door43Error::NoWriteAccess` → `sync.no-write-access`, offering "Save an exchange file
-  instead" (§10). Any other text (protected branch, another hook) is `RefRejected` →
-  `sync.ref-rejected` with Door43's own text. `ErrorCode::Auth` → `sync.auth-failed`.
+- `Door43Error::NoWriteAccess` → `sync.no-write-access`, offering "Save an exchange file
+  instead" (§10). Door43 refuses a push from an account that may read the repository but not
+  write to it inside an HTTP 200: the ref's status is `pre-receive hook declined` and the side
+  band says `User permission denied for writing.` (measured 2026-10-18,
+  `docs/evidence/door43-live-2026-10-17.md` step 6).
+- `Door43Error::RefRejected` (a protected branch, another hook) → `sync.ref-rejected` with
+  Door43's own text.
+- An `Err` of class `ErrorClass::Http` with the message `unexpected http status code: 403` →
+  `sync.no-write-access` (`NoWriteAccess` with that message), offering the exchange file. Gitea
+  answers 403 to the receive-pack request itself, before any hook runs, for a token without
+  `write:repository` (as `tc-door43-fake` does) and for a repository that takes no push, such
+  as a mirror. libgit2 passes neither the status code nor the body, only that message, and
+  never reports a 403 as `ErrorCode::Auth` (`tc-door43` test
+  `a_403_on_push_is_an_http_error_and_makes_no_branch`). The app pushes only with the token it
+  minted with `TokenScope::FOR_SHARING`, which holds `write:repository`, so the 403 is the
+  repository's: a new sign-in would mint the same scopes and meet the same 403.
+- `ErrorCode::Auth` or HTTP 401 → `sync.auth-failed`.
 - Never a force push.
 
 **Confirm** (tC4 F11): `origin.connect_auth(Direction::Fetch, Some(cb), Some(proxy))`, then

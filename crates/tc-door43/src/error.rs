@@ -20,7 +20,9 @@ pub enum Door43Error {
         cause: UnreachableCause,
     },
     /// 401 or 403 from the REST API: the password or token was refused, or the token lacks
-    /// a scope. A git push without write access is never a 403; see `NoWriteAccess`.
+    /// a scope. Door43 refuses a git push from an account that may read the repository but
+    /// not write to it inside an HTTP 200, by its pre-receive hook (`NoWriteAccess`).
+    /// STORAGE.md §9.5 says what an HTTP 403 on a push means.
     #[error("{route}: Door43 refused the sign-in ({status}): {message}")]
     AuthFailed {
         route: String,
@@ -35,10 +37,19 @@ pub enum Door43Error {
         route: String,
         server_message: String,
     },
-    /// A push whose ref Door43 refused for another reason, such as a protected branch or a
-    /// push that is not a fast-forward. `server_message` is Door43's text and the ref's status.
+    /// A push whose ref Door43 refused for another reason, such as a protected branch or
+    /// another server hook. `server_message` is Door43's text and the ref's status.
     #[error("{route}: Door43 refused the push: {server_message}")]
     RefRejected {
+        route: String,
+        server_message: String,
+    },
+    /// A push whose ref Door43 could not move (`failed to update ref`) because another push
+    /// moved or held the branch after this push read it. Fetch again and retry, as for a push
+    /// that is not a fast-forward (STORAGE.md §9.5). `server_message` is Door43's text and
+    /// the ref's status.
+    #[error("{route}: another push moved the branch first: {server_message}")]
+    RefMoved {
         route: String,
         server_message: String,
     },
