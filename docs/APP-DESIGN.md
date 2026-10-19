@@ -1984,8 +1984,11 @@ The Rust environment's seams:
    whose Chromium is older (Electron 37 uses Chromium 138), so P7's comparison engine is not
    the shipped one. That is a declared residual in `residuals.json`, and G2 adds one capture run
    of the Rust app inside Electronite on the release pipeline, compared with the Chromium 141
-   run of the same build (Q-28). *(A-34)* `pixelmatch` with threshold 0,
-   anti-aliasing counted (`parity/ds-gallery/diff.mjs:47`). Declared masks, each a rectangle in
+   run of the same build (Q-28). *(A-34)* A pixel counts when any of its channel bytes
+   differ, which on these opaque screenshots is exactly what `pixelmatch` counts with threshold
+   0 and anti-aliasing counted (`parity/ds-gallery/diff.mjs:47`); the gate counts in Rust, and
+   on all 62 pairs of the cloud machine's and the Linux PC's baselines it gave pixelmatch's
+   counts *(A6b, D2)*. Declared masks, each a rectangle in
    `parity/app/masks.json` with the ruling it cites: the build line in `about`, the build and
    platform lines in `feedback`, and the Q2 and Q3 text on the nine `rebuildDiffers` screens
    (`parity/tc4-baseline/README.md`, "Where the rebuild differs on purpose"; the ninth,
@@ -2007,13 +2010,31 @@ The Rust environment's seams:
    (`tC4:src/ds/components/primitives/Layer.jsx:62-67`). A style is named by the first 12 hex
    digits of its sha256 and spelled out once per file, which cuts the 62 files from 12.8 MB to
    5.2 MB; two lines are equal exactly when their elements are. The snapshot records values as
-   rendered; the comparison applies the normalizations to both sides, each listed and tested:
-   project test ids through the scenario map; generated ids `tc-[fg]\d+` renumbered by first
-   appearance; hashed asset names; picture `src` by file name; comment nodes skipped (already).
+   rendered; the comparison normalizes them by these rules, each listed and tested, and
+   rewrites nothing else, so a test id, a text, a style or an attribute that differs is a
+   difference: the Rust side's project folders become tC4's repo paths where they end an
+   attribute value, through the scenario map (tC4's ids are the reference, so this rule applies
+   to the Rust side only); same-origin asset paths (`src`, `href` and `poster` values that start
+   with `/`, and `url(/…)` in a style) become their file name without a Vite hash, while other
+   URLs compare as they are, so a wrong external link still shows *(A6b, D5)*; each mask's
+   element and its subtree are taken out and compared as the mask's part; generated ids
+   `tc-(f|g|dlg|cfm|rg)\d+` (the counters of tC4's `Field`, `FieldGroup`, `Modal`,
+   `ConfirmDialog` and `Radio`, which tc-ui mints too) are renumbered per prefix by first
+   appearance, in the rest and in each mask's part on its own, so a masked difference cannot
+   shift the ids after it *(A6b, D4)*; comment nodes are skipped (already). A DOM-first capture
+   (§7.6: a screen whose DOM unit comes before its pixels unit) compares only the subtree that
+   `parity/app/scopes.json` names, the dialog or the account menu's panel, because the Home
+   behind it is not the port's until its pixels unit; a capture that claims pixels compares
+   the whole page *(A6b, D8)*.
 3. **Meaning.** `observe`'s `homeCards` and `syncToast` (`capture.mjs:914-960`) field by field.
    Declared difference: under Q2 the OBS card's action is `sync`, not `upload`.
+   `syncToast.missingVersions` is left out: tC4's capture lists the versions by tC4's own rule,
+   which the Rust capture does not have; their count, `missingPins`, is compared *(A6b)*.
 4. **Behaviour.** `scenarios.mjs`-style sequences on full screens: DOM, focus, scroll lock and node
-   identity after each step (`parity/ds-gallery/scenarios.mjs:137-151`).
+   identity after each step (`parity/ds-gallery/scenarios.mjs:137-151`). Node numbers are
+   renumbered by first appearance on each side, so they compare whatever else the page holds;
+   the masks' elements take no part, and a DOM-first screen's sequence is compared within its
+   scope *(A6b)*.
 
 ### 7.4 The tC4 view-state gallery
 
@@ -2034,14 +2055,32 @@ unavailable states; Home loading, empty and error; the Resume card; the import t
 ### 7.5 Report and gate
 
 `parity/app/report.json` holds, per screen and gallery case: pixel count, diff image, DOM diff,
-meaning diff, masks used, the backend phase (`memory`, `memory+scripted`, `store`), `pending_until`
-(the unit that must recapture a scripted screen), and a status (`same`, `declared`, or `differs`
-with a reason). `crates/tc-ui/tests/screen_record.rs` fails when:
+meaning diff, behaviour, masks used, the backend phase (`memory`, `memory+scripted`, `store`),
+`pending_until` (the unit that must recapture a scripted screen: its Recapture unit in §7.6),
+and a status: `same`; `declared`, every difference inside a mask; `differs`, explained in
+`residuals.json`; `unported`, no layer captured yet, with `missing` naming the unit of §7.6 that
+captures each layer; or `failed`: a capture error, a page error, a view or boot error, a refused
+request, the settle deadline, pixels from another machine, or a mask or scope the comparison
+could not find *(A6b, D6, D7)*. The report is what `crates/tc-ui/tests/screen_record.rs`
+computes from the committed captures: every `cargo test` recomputes the four layers in Rust
+from `parity/tc4-baseline` and `parity/app` and fails when the committed file differs, so the
+report cannot be stale or edited by hand, a planted difference fails `cargo test` itself, and
+CI's rust job runs the whole comparison with no browser; Node only captures, and
+`UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record` rewrites the report and its diff
+images *(A6b, D1)*. `parity/app/units.json` lists the units that have landed, because CI checks
+out one commit and cannot read that from history. `screen_record.rs` fails when:
 
 - a baseline screen or gallery case has no row;
-- a row is `differs` without an entry in `parity/app/residuals.json`;
-- a row's PNG hash disagrees with the committed capture;
-- a row is still `memory+scripted` after the unit named in `pending_until` has landed.
+- a row is `differs` without an entry in `parity/app/residuals.json`, or an entry explains a row
+  that does not differ;
+- a row is `failed`, whatever `residuals.json` says;
+- a row's PNG or DOM hash disagrees with the committed capture, or a file belongs to no capture;
+- a layer is still missing after the unit that captures it has landed, or a capture names a unit
+  that has not landed;
+- a row is still `memory+scripted` after the unit named in `pending_until` has landed;
+- a mask cites a ruling docs/PLAN.md does not list (other than `build`), a screen where the
+  rebuild differs on purpose has no mask citing its ruling, or the rebuild's masked element lies
+  outside the mask's rectangle.
 
 This follows `crates/tc-ui/tests/gallery_record.rs` and meets P7: "a human reviews the
 differences, and the differences are listed" (PLAN:112-115).
@@ -2049,7 +2088,11 @@ differences, and the differences are listed" (PLAN:112-115).
 ### 7.6 The 62 baseline screens
 
 "M" is `MemoryBackend` with real fixture data. "M+S" is a scripted job outcome. "Recapture" is
-the unit that captures the screen again on its final backend.
+the unit that captures the screen again on its final backend; for an M+S screen it is also its
+`pending_until` (the notes repeat it for two of them). The pixels unit also captures what the DOM
+shows. A row that names one unit for the DOM and another for the pixels is DOM-first: until the
+pixels unit captures the screen whole, its DOM is compared within the scope of
+`parity/app/scopes.json` (§7.3 layer 2) *(A6b, D7, D8)*.
 
 | Screen | Scenario | First capture | Recapture | Notes |
 |---|---|---|---|---|

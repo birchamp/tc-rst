@@ -207,6 +207,11 @@ export async function startRustEnv({ scenario, tc4, ui, runDir = path.join(REPO,
         }
       }
       fs.rmSync(dir, { recursive: true, force: true });
+      try {
+        fs.rmdirSync(runDir);
+      } catch {
+        // another scenario of the run still has its folder there
+      }
     },
   };
 }

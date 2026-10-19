@@ -1,0 +1,769 @@
+{
+  "about": "What the four layers of APP-DESIGN §7.3 find for every baseline screen (manifest order) and gallery case: pixels, the DOM, what the DOM shows (meaning) and behaviour, between tC4's record (parity/tc4-baseline) and the Rust app's captures (captures.json). crates/tc-ui/tests/screen_record.rs computes it from the committed files and fails when this file differs; UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record rewrites it. Status: same, declared (every difference inside a mask of masks.json), differs (explained in residuals.json), unported (`missing` names the unit that captures each layer), failed (nothing excuses it).",
+  "baseline": {
+    "tc4Commit": "d310bf304cfee784f4ca45dee474a3faf0d5616e",
+    "machine": {
+      "platform": "linux-x64",
+      "chromium": "141.0.7390.37",
+      "fonts": {
+        "count": 535,
+        "sha256": "a15fd0433b66112396faed20c7b88e11229781916faeaad035b9c8961a72eb33"
+      }
+    }
+  },
+  "rust": null,
+  "totals": {
+    "rows": 62,
+    "same": 0,
+    "declared": 0,
+    "differs": 0,
+    "unported": 62,
+    "failed": 0
+  },
+  "rows": [
+    {
+      "name": "home",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "B2",
+        "meaning": "B2"
+      }
+    },
+    {
+      "name": "understand-tit1",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B3",
+        "dom": "B3",
+        "meaning": "B3"
+      }
+    },
+    {
+      "name": "translate-tit1",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B4a",
+        "dom": "B4a",
+        "meaning": "B4a"
+      }
+    },
+    {
+      "name": "check-picker",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5a",
+        "dom": "B5a",
+        "meaning": "B5a"
+      }
+    },
+    {
+      "name": "check-tn-session",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5b",
+        "dom": "B5b",
+        "meaning": "B5b"
+      }
+    },
+    {
+      "name": "align-workspace",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B6",
+        "dom": "B6",
+        "meaning": "B6"
+      }
+    },
+    {
+      "name": "align-original",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B6",
+        "dom": "B6",
+        "meaning": "B6"
+      }
+    },
+    {
+      "name": "align-workspace-row",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B6",
+        "dom": "B6",
+        "meaning": "B6"
+      }
+    },
+    {
+      "name": "ar-align-workspace-row",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "ar",
+      "status": "unported",
+      "missing": {
+        "pixels": "B6",
+        "dom": "B6",
+        "meaning": "B6"
+      }
+    },
+    {
+      "name": "align-workspace-620",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B6",
+        "dom": "B6",
+        "meaning": "B6"
+      }
+    },
+    {
+      "name": "ar-align-workspace-620",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "ar",
+      "status": "unported",
+      "missing": {
+        "pixels": "B6",
+        "dom": "B6",
+        "meaning": "B6"
+      }
+    },
+    {
+      "name": "project-settings",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B9a",
+        "dom": "B9a",
+        "meaning": "B9a"
+      }
+    },
+    {
+      "name": "add-project",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "B2",
+        "meaning": "B2"
+      }
+    },
+    {
+      "name": "new-bible",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "B2",
+        "meaning": "B2"
+      }
+    },
+    {
+      "name": "import",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "B2",
+        "meaning": "B2"
+      }
+    },
+    {
+      "name": "share-internet-consent",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B9b",
+        "dom": "A8",
+        "meaning": "B9b"
+      }
+    },
+    {
+      "name": "share-signin",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B9b",
+        "dom": "A8",
+        "meaning": "B9b"
+      }
+    },
+    {
+      "name": "share-dialog",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B9b",
+        "dom": "B9b",
+        "meaning": "B9b"
+      }
+    },
+    {
+      "name": "share-dialog-check",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B9b",
+        "dom": "B9b",
+        "meaning": "B9b"
+      }
+    },
+    {
+      "name": "account-menu",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "A5",
+        "meaning": "B2"
+      }
+    },
+    {
+      "name": "app-language",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "A5",
+        "meaning": "B2"
+      }
+    },
+    {
+      "name": "help",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "A5",
+        "meaning": "B2"
+      }
+    },
+    {
+      "name": "about",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "A5",
+        "meaning": "B2"
+      }
+    },
+    {
+      "name": "feedback",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "A5",
+        "meaning": "B2"
+      }
+    },
+    {
+      "name": "new-obs",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "B2",
+        "meaning": "B2"
+      }
+    },
+    {
+      "name": "add-book",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B2",
+        "dom": "B2",
+        "meaning": "B2"
+      }
+    },
+    {
+      "name": "source-texts",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B9a",
+        "dom": "B9a",
+        "meaning": "B9a"
+      }
+    },
+    {
+      "name": "guided-fix",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5a",
+        "dom": "B5a",
+        "meaning": "B5a"
+      }
+    },
+    {
+      "name": "obs-understand",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B7",
+        "dom": "B7",
+        "meaning": "B7"
+      }
+    },
+    {
+      "name": "obs-translate",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B7",
+        "dom": "B7",
+        "meaning": "B7"
+      }
+    },
+    {
+      "name": "obs-check-picker",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B7",
+        "dom": "B7",
+        "meaning": "B7"
+      }
+    },
+    {
+      "name": "open-door43",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B9b",
+        "dom": "B9b",
+        "meaning": "B9b"
+      }
+    },
+    {
+      "name": "open-door43-internet-consent",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B9b",
+        "dom": "A8",
+        "meaning": "B9b"
+      }
+    },
+    {
+      "name": "open-door43-refused",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B10",
+        "dom": "B10",
+        "meaning": "B10"
+      }
+    },
+    {
+      "name": "en-understand-tit1",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B3",
+        "dom": "B3",
+        "meaning": "B3"
+      }
+    },
+    {
+      "name": "en-understand-tw-article",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B3",
+        "dom": "B3",
+        "meaning": "B3"
+      }
+    },
+    {
+      "name": "en-understand-questions",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B3",
+        "dom": "B3",
+        "meaning": "B3"
+      }
+    },
+    {
+      "name": "en-translate-tit1",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B4a",
+        "dom": "B4a",
+        "meaning": "B4a"
+      }
+    },
+    {
+      "name": "en-translate-section-editor",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B4b",
+        "dom": "B4b",
+        "meaning": "B4b"
+      }
+    },
+    {
+      "name": "en-translate-verse-editor",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B4a",
+        "dom": "B4a",
+        "meaning": "B4a"
+      }
+    },
+    {
+      "name": "en-check-picker",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5a",
+        "dom": "B5a",
+        "meaning": "B5a"
+      }
+    },
+    {
+      "name": "en-check-tw-session",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5b",
+        "dom": "B5b",
+        "meaning": "B5b"
+      }
+    },
+    {
+      "name": "en-check-tw-article",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5b",
+        "dom": "B5b",
+        "meaning": "B5b"
+      }
+    },
+    {
+      "name": "en-check-tn-session",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5b",
+        "dom": "B5b",
+        "meaning": "B5b"
+      }
+    },
+    {
+      "name": "en-check-ta-drawer",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5b",
+        "dom": "B5b",
+        "meaning": "B5b"
+      }
+    },
+    {
+      "name": "en-community-checking",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B8",
+        "dom": "B8",
+        "meaning": "B8"
+      }
+    },
+    {
+      "name": "en-obs-understand",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B7",
+        "dom": "B7",
+        "meaning": "B7"
+      }
+    },
+    {
+      "name": "en-obs-translate",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B7",
+        "dom": "B7",
+        "meaning": "B7"
+      }
+    },
+    {
+      "name": "en-obs-check-tn-session",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B7",
+        "dom": "B7",
+        "meaning": "B7"
+      }
+    },
+    {
+      "name": "ar-check-tw-session",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "ar",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5b",
+        "dom": "B5b",
+        "meaning": "B5b"
+      }
+    },
+    {
+      "name": "en-check-tw-session-620",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5b",
+        "dom": "B5b",
+        "meaning": "B5b"
+      }
+    },
+    {
+      "name": "ar-check-tw-session-620",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "ar",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5b",
+        "dom": "B5b",
+        "meaning": "B5b"
+      }
+    },
+    {
+      "name": "en-check-tn-session-row",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5b",
+        "dom": "B5b",
+        "meaning": "B5b"
+      }
+    },
+    {
+      "name": "ar-check-tn-session-row",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "ar",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5b",
+        "dom": "B5b",
+        "meaning": "B5b"
+      }
+    },
+    {
+      "name": "en-check-tn-session-620",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5b",
+        "dom": "B5b",
+        "meaning": "B5b"
+      }
+    },
+    {
+      "name": "ar-check-tn-session-620",
+      "kind": "screen",
+      "scenario": "en-pins",
+      "locale": "ar",
+      "status": "unported",
+      "missing": {
+        "pixels": "B5b",
+        "dom": "B5b",
+        "meaning": "B5b"
+      }
+    },
+    {
+      "name": "shared-home",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B10",
+        "dom": "B10",
+        "meaning": "B10"
+      }
+    },
+    {
+      "name": "sync-internet-consent",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B10",
+        "dom": "B10",
+        "meaning": "B10"
+      }
+    },
+    {
+      "name": "sync-failed",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B10",
+        "dom": "B10",
+        "meaning": "B10"
+      }
+    },
+    {
+      "name": "sync-ok",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B10",
+        "dom": "B10",
+        "meaning": "B10"
+      }
+    },
+    {
+      "name": "sync-ok-teammates",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B10",
+        "dom": "B10",
+        "meaning": "B10"
+      }
+    },
+    {
+      "name": "sync-ok-restored",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "status": "unported",
+      "missing": {
+        "pixels": "B10",
+        "dom": "B10",
+        "meaning": "B10"
+      }
+    }
+  ]
+}
