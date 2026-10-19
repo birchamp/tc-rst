@@ -136,6 +136,18 @@ The census and the parity run above were taken again after these fixes. The wove
 (`woven_verses_show_the_words_of_their_plain_text`), whose generator now holds all three, passes
 20,000 cases.
 
+## The third review
+
+The third review found that the second review's fix showed the `content` of a marker usfm-js
+does not know only for USFM's paragraph markers, so a typo such as `\pp` or `\qq`, or a custom
+`\z` marker (`a\n\zpara b c`, `a \zx b\zx* c`), still hid words the export counts. Rule 5 now
+also shows the `content` of a marker that USFM reads as a character marker, that usfm-js has no
+properties for and that is not a note or another span the export leaves out. The census above
+is unchanged (no ULT or UST v91 verse holds such a marker), and the parity run against PR #800's
+head still differs on the same 2 of 47,723 verses. The woven-verse property, whose generator now
+holds `\pp` lines and `\zx` spans, passes 10,000 cases and fails at once on the walk before the
+fix (minimal case `a\n\pp a`).
+
 ## Cost
 
 Release builds, the same machine and load as above.

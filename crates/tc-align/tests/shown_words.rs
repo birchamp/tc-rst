@@ -299,9 +299,10 @@ fn words_after_a_nested_character_span_bank_and_weave() {
 }
 
 /// A character span or a paragraph marker right before a letter, adjacent ruby words, the
-/// items of a `\li1` list and a `\qm1` line: the bank holds the export's words, so a value
-/// that places every word weaves (before, it held "Lords", "Yahwehque" and "神愛", and none
-/// of the list's or the line's words).
+/// items of a `\li1` list, a `\qm1` line and the text of a marker usfm-js does not know (`\pp`,
+/// a custom `\z` marker): the bank holds the export's words, so a value that places every word
+/// weaves (before, it held "Lords", "Yahwehque" and "神愛", and none of the list's, the
+/// line's or the unknown marker's words).
 #[test]
 fn words_beside_a_span_or_paragraph_marker_bank_and_weave() {
     for plain in [
@@ -310,6 +311,9 @@ fn words_beside_a_span_or_paragraph_marker_bank_and_weave() {
         "\\rb 神|かみ\\rb*\\rb 愛|あい\\rb* x",
         "a\n\\li1 b c\n\\li2 d e",
         "a\n\\qm1 b c",
+        "a\n\\pp b c",
+        "a\n\\zpara b c",
+        "a \\zx b\\zx* c",
     ] {
         banks_the_export_words_and_weaves(plain);
     }

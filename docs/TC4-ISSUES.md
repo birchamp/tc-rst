@@ -87,7 +87,9 @@ the rebuild fixed it or does as tC4 does:
   `target_words` counts their words, so Check and the Align bank cannot reach them. In UST
   v91 EXO 15:21 the split plain text hid "Sing to Yahweh … enemies.", so 11 of the 28 words
   the import placed dropped at open and at the next verse save. Fixed in the rebuild as a
-  declared difference (`docs/PLAN.md`): the content of a paragraph marker but `\esb` is shown
+  declared difference (`docs/PLAN.md`): the content of a paragraph marker but `\esb`, and of a
+  marker usfm-js does not know that USFM reads as a character marker (a typo such as `\pp`, a
+  custom `\zx`, with or without its end marker), is shown
   (`list_items_and_unknown_paragraph_lines_show`, `imported_ust_exo_15_21_opens_with_all_its_links`).
 - **Words that still join** in text that still holds alignment markup, where usfm-js misreads
   it (UST 2SA 23:8 "HeonceHe" and "killed800"). tC4 (PR #800 included) does the same. UST 1KI

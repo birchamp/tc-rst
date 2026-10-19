@@ -483,8 +483,9 @@ fn plain_verse(line_breaks: bool) -> impl Strategy<Value = String> {
 /// A plain verse whose words may have a note, a cross reference, a figure or another marker
 /// the shown text leaves out right after them, with or without a space before the next word;
 /// a character span with a span, a note, a cross reference or a figure nested in it; a
-/// character span or a paragraph marker right before the next word; or a `\li1` item or
-/// `\qm1` line. No ruby: its woven form shows the gloss (`\rb \w 神|…\w*|かみ\rb*`).
+/// character span or a paragraph marker right before the next word; a `\li1` item, a `\qm1`
+/// line or the text of a marker usfm-js does not know (`\pp`, a custom `\zx`). No ruby: its
+/// woven form shows the gloss (`\rb \w 神|…\w*|かみ\rb*`).
 fn note_verse() -> impl Strategy<Value = String> {
     let word = proptest::sample::select(WORDS);
     let gap = proptest::sample::select(
@@ -523,6 +524,8 @@ fn note_verse() -> impl Strategy<Value = String> {
             "\\q2 ",
             "\n\\li1 ",
             "\n\\qm1 ",
+            "\n\\pp ",
+            " \\zx a\\zx* ",
         ][..],
     );
     let end = proptest::sample::select(&["", ".", ".\n", "\\f + \\ft end\\f*", "\n\\p\n"][..]);

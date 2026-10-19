@@ -70,7 +70,8 @@ pub fn plain_text_v1(content: &str) -> String {
 ///   whitespace and line breaks. Also, where tC4 hides them (declared differences): the text
 ///   after the end marker of a span that holds a note, a cross reference or a figure, or after
 ///   a stray end marker, which usfm-js keeps as the end marker's `content`; and the items of
-///   a `\li1` list, a `\qm1` line and a table cell, which it keeps as the marker's `content`.
+///   a `\li1` list, a `\qm1` line, a table cell and the text of a marker usfm-js does not know
+///   (`\pp`, a custom `\zx`), which it keeps as the marker's `content`.
 /// - Not shown: footnotes, cross references and figures, also inside a character span, and a
 ///   section heading's own text.
 /// - Words never join across a marker: an object left out, or the start or end of a

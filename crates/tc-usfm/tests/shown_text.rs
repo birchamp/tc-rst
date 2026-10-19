@@ -369,14 +369,21 @@ fn words_after_a_span_that_holds_a_note_show() {
     }
 }
 
-/// The items of a `\li1` list, a line of a marker usfm-js does not know (`\qm1`) and a table
-/// cell show (a declared difference: usfm-js keeps their text as `content`, which tC4 hides
-/// from Check and the Align bank while the export counts it).
+/// The items of a `\li1` list, a line of a marker usfm-js does not know (`\qm1`, a typo such
+/// as `\pp`, a custom `\z` marker, with or without an end marker) and a table cell show (a
+/// declared difference: usfm-js keeps their text as `content`, which tC4 hides from Check and
+/// the Align bank while the export counts it).
 #[test]
 fn list_items_and_unknown_paragraph_lines_show() {
     for (content, shown) in [
         ("a\n\\li1 b c\n\\li2 d e", "a\nb c\nd e"),
         ("a\n\\qm1 b c", "a\nb c"),
+        ("a\n\\pp b c", "a\nb c"),
+        ("a\n\\qq b c", "a\nb c"),
+        ("a\n\\zpara b c", "a\nb c"),
+        ("a \\zx b\\zx* c", "a b c"),
+        ("a \\zfoo b\\zfoo* c", "a b c"),
+        ("\\wj a \\+zx b\\+zx* c\\wj* d", "a b c d"),
         ("a\n\\tr \\tc1 b\\tc2 c", "a\nb c"),
         ("a\n\\li1 b \\nd c\\nd*s d", "a\nb c s d"),
         ("a\n\\esb b\n\\esbe c", "a\nc"),

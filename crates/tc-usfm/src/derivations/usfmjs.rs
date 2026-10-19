@@ -51,7 +51,7 @@ pub(super) struct Props {
     pub usfm3_milestone: bool,
 }
 
-fn props(tag: Option<&[u16]>) -> Option<&'static Props> {
+pub(super) fn props(tag: Option<&[u16]>) -> Option<&'static Props> {
     let tag = tag?;
     PROPERTIES
         .binary_search_by(|(name, _)| cmp_ascii(tag, name).reverse())

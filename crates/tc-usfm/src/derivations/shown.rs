@@ -13,7 +13,8 @@
 //!    then its `children` are walked if they are a list.
 //! 5. An object with a string `content` gives that content, and then its `children`, when
 //!    the content is verse text: the object of an end marker (a `tag` ending in `*` that is
-//!    not a milestone's `\*`), or of a paragraph marker but `\esb` ([`MarkerClass::Paragraph`]).
+//!    not a milestone's `\*`), of a paragraph marker but `\esb` ([`MarkerClass::Paragraph`]),
+//!    or of a character marker usfm-js does not know, as the export counts its text.
 //! 6. Otherwise its `children` are walked, if it has any; an object with neither (a cross
 //!    reference, a figure, a marker usfm-js keeps no text for) is skipped.
 //!
@@ -32,8 +33,11 @@
 //!   he went on` gives an object `{tag: "wj*", content: "and he went on"}`, which tC4 hides,
 //!   as it hides the text after a stray end marker (`a\nd* b`). usfm-js also keeps the text
 //!   of a paragraph marker it does not know as `content`: the items of a `\li1` list, a
-//!   `\qm1` line, a table cell `\tc1`. On the ULT and UST v91 rule 5 changes one verse from
-//!   tC4's text: UST EXO 15:21 as written, whose `\qm1` holds the "“" that opens its song.
+//!   `\qm1` line, a table cell `\tc1`; and of any marker it does not know, which USFM reads as
+//!   a character marker: a typo such as `\pp` or `\qq`, a custom `\zx` (`a \zx b\zx* c` gives
+//!   `{tag: "zx", content: "b"}`, then `{tag: "zx*", content: "c"}`). On the ULT and UST v91
+//!   rule 5 changes one verse from tC4's text: UST EXO 15:21 as written, whose `\qm1` holds
+//!   the "“" that opens its song.
 //!
 //! A note, cross reference or figure that usfm-js reads inside a character span has no
 //! `endTag`, and the objects of its parts follow it (`ft`, `fq`, `fq*` …), so every object
@@ -83,8 +87,8 @@
 //! nothing.
 
 use super::js::{JsStr, eq, is_space, to_string};
-use super::usfmjs::{Heap, Key, Parsed, Ref, Thrown, Val, truthy};
-use crate::markers::{MarkerClass, classify};
+use super::usfmjs::{Heap, Key, Parsed, Ref, Thrown, Val, props, truthy};
+use crate::markers::{MarkerClass, classify, is_non_text_span};
 use crate::words::TokenKind;
 
 /// Notes, cross references and figures.
@@ -304,15 +308,22 @@ fn step(heap: &Heap, object: Ref) -> Result<Step<'_>, Thrown> {
 }
 
 /// Whether the `content` usfm-js keeps for an object of `tag` is verse text (rule 5): the
-/// tag of an end marker but a milestone's `\*`, or of a paragraph marker but `\esb`.
+/// tag of an end marker but a milestone's `\*`, of a paragraph marker but `\esb`, or of a
+/// character marker usfm-js does not know (a typo such as `\pp`, a custom `\z` marker) but a
+/// note's or another span the export leaves out ([`is_non_text_span`]).
 fn content_is_verse_text(tag: &[u16]) -> bool {
     match tag.split_last() {
         Some((&star, name)) if star == u16::from(b'*') => {
             name.last().is_some_and(|&unit| unit != u16::from(b'\\'))
         }
         _ => {
-            let tag = to_string(tag);
-            classify(&tag) == MarkerClass::Paragraph && tag != "esb"
+            let text = to_string(tag);
+            let name = text.strip_prefix('+').unwrap_or(&text);
+            match classify(name) {
+                MarkerClass::Paragraph => name != "esb",
+                MarkerClass::Character => props(Some(tag)).is_none() && !is_non_text_span(name),
+                _ => false,
+            }
         }
     }
 }
