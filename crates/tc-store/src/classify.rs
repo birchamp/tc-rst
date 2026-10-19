@@ -60,6 +60,18 @@ impl Writer {
             }
             (Some(entry), state) => {
                 if entry.state != state {
+                    // The scope digest stands for the bytes placed or held: once the entry
+                    // stands for other bytes (a read found a write's new bytes, a hold), it is
+                    // unknown until a job sets it, so the next open looks at the path instead of
+                    // taking the old placement's scope for these bytes' (L123).
+                    let md5 = |s: &State| match s {
+                        State::Placed { placed } => Some(placed.md5.clone()),
+                        State::Held { held } => Some(held.md5.clone()),
+                        State::Writing { .. } | State::Unknown => None,
+                    };
+                    if md5(&entry.state) != md5(&state) {
+                        entry.scope = None;
+                    }
                     entry.state = state;
                     self.manifest_changed = true;
                 }
