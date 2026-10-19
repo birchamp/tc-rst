@@ -30,6 +30,9 @@ tc-app = { path = ".", features = ["test-hooks"] }
 tc-api = { path = "../tc-api", features = ["server", "test-hooks", "proptest"] }
 proptest.workspace = true
 tempfile.workspace = true
+# The UI's save machine and draft buffer, played against the real test/fieldStore (A4b). tc-ui's
+# host build is its pure modules only.
+tc-ui = { path = "../tc-ui" }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "sync", "time", "test-util"] }
 
 [lints]

@@ -1817,7 +1817,14 @@ aligner's `AlignSave`, as tC4's counts `alignSaveState` (`:3718-3720`). On close
   whose text the stored value already equals (and a comment entry whose text the newest comment
   at its target has), and offers the rest: "Unsaved text from your last session was found for
   Titus 1:4. Keep it / Discard." (STORAGE:1757-1759). Keep saves with the entry's token, so a
-  verse changed since becomes a conflict. *(A-3)*
+  verse changed since becomes a conflict. *(A-3)* *(A4b: one exception, for C1b and the server's merge: an entry whose
+  `sent` text the stored value equals in NFC is kept over the stored value's token. The save it
+  was waiting for landed before the crash (a crash before the reply, or after it with the reply
+  unread), and the newer text the person typed continues from it; kept over the entry's own
+  older token, it would stand beside the person's own save as a conflict. tc-app's
+  `crash_anywhere_stores_the_last_text_once` plays the offer with this rule, and fails without
+  it. A change anyone else made since makes the stored value differ from `sent`, so it still
+  becomes a conflict.)*
 - **A draft whose token no longer verifies** (a new installation secret after an app-data reset
   or a reinstall, or a folder copied to another computer) is offered as text beside the current
   value: "Unsaved text from your last session was found for Titus 1:4, but this computer cannot
