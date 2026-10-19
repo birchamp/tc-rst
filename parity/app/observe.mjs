@@ -169,7 +169,8 @@ function defaultFontList() {
  * `{ testid }` (the first element with that `data-testid`) or `{ text }` (the first element,
  * in document order, whose first text run starts with the text). Answers
  * `{ [id]: { x, y, width, height } | null }` in whole pixels that cover the element, clipped to
- * the viewport; null when nothing matches or nothing of it is in the viewport.
+ * the viewport; null when nothing matches or nothing of it is in the viewport. An element with
+ * no box of its own (`display: contents`) is measured by what it holds.
  */
 export function measureTargets(page, targets) {
   return page.evaluate((list) => {
@@ -199,7 +200,14 @@ export function measureTargets(page, targets) {
         out[id] = null;
         continue;
       }
-      const r = el.getBoundingClientRect();
+      let r = el.getBoundingClientRect();
+      // An element with `display: contents` has no box; its children are laid out in its
+      // parent's (tC4's Open from Door43 note is one).
+      if (r.width === 0 || r.height === 0) {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        r = range.getBoundingClientRect();
+      }
       const left = Math.max(0, Math.floor(r.left));
       const top = Math.max(0, Math.floor(r.top));
       const right = Math.min(innerWidth, Math.ceil(r.right));
