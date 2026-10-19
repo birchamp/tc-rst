@@ -646,6 +646,7 @@ fn open_inner(
         metadata_heads_due: false,
         pending_carried: BTreeMap::new(),
         deferred_paths: Vec::new(),
+        unclassified: std::collections::BTreeSet::new(),
         waiting: BTreeMap::new(),
         collecting: false,
         found: Vec::new(),

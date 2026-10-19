@@ -798,6 +798,9 @@ impl Writer {
                     let d = self.hash(&disk);
                     let new = r.md5.to_hex();
                     let ours = entry.as_ref().map(|e| e.md5.as_str());
+                    // The open could not read this path (§6.2): what it asks of every other path
+                    // is asked here, once.
+                    let unclassified = self.unclassified.remove(&path);
                     if d == new {
                         let nfc = is_text(&r.file).then(|| is_nfc(&String::from_utf8_lossy(&disk)));
                         converged.insert(
@@ -812,8 +815,16 @@ impl Writer {
                     } else if ours == Some(d.as_str())
                         || intent_now.md5s_of(&path).contains(&d.as_str())
                     {
-                        seen.insert(path.clone(), stat);
-                        writes.push((path, r));
+                        // The app's bytes may be the only copy of changes a journal file lost.
+                        if self.manifest.ahead.contains(&path)
+                            || (unclassified && self.shows_lost_changes(&path))
+                        {
+                            self.found_outside(&path, &disk, false)?;
+                            report.recorded.push(path);
+                        } else {
+                            seen.insert(path.clone(), stat);
+                            writes.push((path, r));
+                        }
                     } else if self.clean_by_stat(&path) {
                         // Changed although its size and time did not: storage damage, held.
                         self.hold(&path, &disk, true)?;
@@ -1063,6 +1074,7 @@ impl Writer {
         if let Some(intent) = &mut self.open_intent {
             intent.narrow_to(rel, &md5);
         }
+        self.manifest_changed |= self.manifest.ahead.remove(rel);
         // No time yet: an unsettled entry is never clean by stat, so the next look reads the
         // file, and M7 stats it once for every path.
         self.manifest.paths.insert(
@@ -1348,14 +1360,22 @@ impl Writer {
             return Ok(());
         };
         let d = md5_hex(&disk);
+        if d == md5_hex(new) {
+            return Ok(());
+        }
         let ours = self
             .manifest
             .paths
             .get(METADATA)
             .is_some_and(|e| e.md5 == d)
-            || intent.md5s_of(METADATA).contains(&d.as_str())
-            || d == md5_hex(new);
-        if ours {
+            || intent.md5s_of(METADATA).contains(&d.as_str());
+        // The app's own bytes are stale, unless they show project details no journal file
+        // holds any more: then they are the only copy of them (§6.2). The open left the
+        // question of its heads file to the first write that reads the file.
+        let unclassified = self.unclassified.remove(METADATA);
+        let lost = self.manifest.ahead.contains(METADATA)
+            || (ours && unclassified && self.shows_lost_changes(METADATA));
+        if ours && !lost {
             return Ok(());
         }
         self.keep_edited_metadata(&disk).map(|_| ())

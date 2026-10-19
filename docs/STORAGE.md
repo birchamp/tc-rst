@@ -1155,7 +1155,7 @@ None of these files is project data that another device needs. Each is written w
 | `lock` | `{host, pid, device, at}` | exclusive advisory lock (`std::fs::File::try_lock`) while the project is open. It guards the folder against a process a crash left running and against other programs; translationCore itself runs once per computer (§5.0). A lock another process holds refuses the open (O1), and the content names the holder in the error. It is written through the locked handle (truncate, write, flush), never with `atomic_write`: a new file renamed over it would be a file whose lock nobody holds, and another process could take it |
 | `device.json` | `{device, fingerprint, created}` | this folder's Local device (§6.3) |
 | `pending/<device>-<hash32>.batch` | header + change lines (§4.2) | saves not yet sealed: the commit point of every save |
-| `materialized.json` | `{minor, derivations, paths: {<path>: {md5, size, mtimeNs, settled, scope, held, oid, nfc}}, packs: {<path>: {md5, size, fingerprint}}, headsDue: [<path>]}`: the format minor and derivation versions (§12.1) the files were projected with; per derived or carried path what was written (md5, size, mtime), whether its bytes were read back after its timestamp tick was over (`settled`), the digest of the heads its projection stands for (`scope`), and the bytes the app holds there without writing over them (`held`: their md5, why they are held, and the path of their copy in `.tc/external/`), §6.2; for a USFM or story file whether its bytes are NFC (`nfc`), so `metadata.json` states its `normalization` without projecting every book again; per derived path the git blob that holds exactly those bytes once a checkpoint stored it (`blob`, §9.4); per pack the md5 that `metadata.json` lists and its blob, which also makes the manifest's pack list part of the expected pack set (§4.4: a listed pack that is gone and that no valid pack's `replaces` names is missing); the paths whose heads file a write could not put on disk (`headsDue`, §5.10) | the manifest: what the app last wrote (§5.10). Its own mtime, which the filesystem sets when it is written, is a time stamp that settles entries (§6.2) |
+| `materialized.json` | `{minor, derivations, paths: {<path>: {md5, size, mtimeNs, settled, scope, held, oid, nfc}}, packs: {<path>: {md5, size, fingerprint}}, headsDue: [<path>], aheadOfJournal: [<path>]}`: the format minor and derivation versions (§12.1) the files were projected with; per derived or carried path what was written (md5, size, mtime), whether its bytes were read back after its timestamp tick was over (`settled`), the digest of the heads its projection stands for (`scope`), and the bytes the app holds there without writing over them (`held`: their md5, why they are held, and the path of their copy in `.tc/external/`), §6.2; for a USFM or story file whether its bytes are NFC (`nfc`), so `metadata.json` states its `normalization` without projecting every book again; per derived path the git blob that holds exactly those bytes once a checkpoint stored it (`blob`, §9.4); per pack the md5 that `metadata.json` lists and its blob, which also makes the manifest's pack list part of the expected pack set (§4.4: a listed pack that is gone and that no valid pack's `replaces` names is missing); the paths whose heads file a write could not put on disk (`headsDue`, §5.10); the paths whose bytes show changes a seal found in no journal file and not in the fold's bytes either (`aheadOfJournal`, §5.11 K1, §6.2) | the manifest: what the app last wrote (§5.10). Its own mtime, which the filesystem sets when it is written, is a time stamp that settles entries (§6.2) |
 | `heads/<escaped path>.bin` | postcard `HeadsFile` (version 2; version 1 is read, without digests): for every record the file was built from, the heads the written bytes stand for, by the token rule of §2.7 (every head of a settled or merged record; only the provisional candidate and its equal heads for a conflict), and, for a book's USFM, a 16-byte digest of how the written file showed the record (MD5 of its piece of the file after line ends and blanks at line ends are normalized, `tc_journal::outside::shown_digest`). `metadata.json` has one too (its project details, no digests), written after the file | the base of an outside edit (§11.1); an outside editor saw only the provisional text, so its edit never resolves a conflict. The digests let the examination skip every record whose decoded digest equals its base digest, so it costs the records that differ (§14); a heads file without them is as good, and costs the book |
 | `materialize.intent.json` | `{writes: [{path, oldMd5, newMd5}], removes: [path]}` | present only during a materialization |
 | `quarantine/…` | damaged pending files, byte copies; change lines too long for any pack (§5.11 K1) | kept until the person dismisses the notice |
@@ -1980,7 +1980,9 @@ M1  Compare-and-swap check. For each p in D ∪ X present on disk: d = md5(disk)
     materialization goes on without it; otherwise it is recorded first (§11.1), which commits a
     batch and changes the fold, then the materialization starts again at M0. Recording always
     ends: a file no decoder reads (§11.1 X2) is kept as a byte copy with a notice, and the write
-    proceeds.
+    proceeds. A d that is the app's own is recorded the same way when the bytes show changes no
+    journal file holds (§6.2): the manifest marks p (`aheadOfJournal`), or O9 could not read p
+    and its heads file names a change the fold does not hold.
 M2  Build metadata.json for the planned result (total, §3.4) and run tc_burrito::check on it in
     memory. A failure is a bug report; nothing is written. Every file is listed as its bytes
     are on disk (I7): a derived file by the manifest or the planned bytes, and the fixed files
@@ -2132,8 +2134,13 @@ K1  L = every verified change line of every pending file, deduplicated by id, so
     holds changes of that K1 cannot take (a program holds it open and the read fails, or a
     change it lost is in neither the file nor the fold's bytes) is left where it is, never
     removed, and listed in the seal's report as unsealed; the person is told once
-    (`FileUnreadable`, which goes when a later seal takes the file). A file of a newer format
-    was never read by the fold, so nothing of it is lacking and it is left without a word.
+    (`FileUnreadable`, which goes when a later seal takes the file). The changes it lost for
+    good are in no journal file any more, and a derived file the app wrote from them (the book
+    file of a save) is their only copy: the writer marks every derived path whose record has
+    such a change as its head in the manifest (`aheadOfJournal`), at once and durably, so the
+    next open records those bytes instead of writing them over (§6.2), even when their heads
+    file cannot say so. A file of a newer format was never read by the fold, so nothing of it
+    is lacking and it is left without a word.
 K2  For each chunk: atomic_create_dirs(ingredients/tc/changes/<me>/<yyyy-mm>);
     atomic_write(<that dir>, "<pack32>.ndjson", header + lines, SyncDir::Now). Each line set
     aside: atomic_write(.tc/quarantine, "<id>.line", line, SyncDir::Now); it is listed with the
@@ -2617,6 +2624,7 @@ the projection (computed when the rules above call for it):
 | Disk | Condition | Meaning | Action |
 |---|---|---|---|
 | present | `d == e` | converged | refresh the manifest entry (a hold ends) |
+| present | `d == m` or `d ∈ {o, n}`, and the bytes show changes no journal file holds (the manifest marks `p` as `aheadOfJournal`, or its heads file names a change the fold does not hold: a pending file another program removed or cut short) | written by this app, and the only copy of those changes | §11.1, base = the heads file, each record's heads cut to those the fold holds (a record that lost a head is compared in full, not skipped by its digest), so the bytes are kept in `.tc/external/`, recorded, and conflict with any version the project holds that they do not show; the mark goes once they are recorded or written over |
 | present | `d == m` or `d ∈ {o, n}` | written by this app; stale (a crash after a save, before its materialization) or interrupted | rewrite from the fold, or remove it if the projection no longer has `p` |
 | present | held, `d` = the held md5 | held (above) | nothing; the notice stays listed |
 | present | held, `d` ≠ the held md5 | changed again outside the app | §11.1 in unknown-base mode; the hold ends |
@@ -2629,7 +2637,11 @@ the projection (computed when the rules above call for it):
 | present | not a path the app derives | carried | §11.4 |
 
 Because the manifest records what this app wrote, the app never records its own stale file as a
-person's edit, and never overwrites a person's edit as if it were stale. An unsettled entry,
+person's edit, and never overwrites a person's edit as if it were stale. Nor does it write over
+its own bytes when they are the last copy of a save the journal lost: O9 reads the heads file of
+a stale path it is about to rewrite (only those: an open after no change reads none), and a path
+O9 could not read is asked the same by the first compare-and-swap that reads it (M1, and M6 for
+`metadata.json`, whose project details are kept with a copy and recorded the same way). An unsettled entry,
 or one on a network drive, whose `d ≠ m` is never held: it falls to the rows below it, and the
 edit is recorded.
 
@@ -4924,6 +4936,9 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the commit after a seal that left a file unsealed (commit the snapshot) | `a_commit_waits_for_a_pending_file_the_seal_could_not_read`, `a_pending_file_read_at_the_open_and_cut_short_in_place_stops_the_commit` |
 | K1 taking the lines a file that no longer verifies lost from the fold's bytes (leave such a file unsealed, which the next open drops) | `a_pending_file_cut_inside_a_line_is_sealed_from_memory`, `a_pending_file_changed_inside_a_line_is_sealed_from_memory_and_kept_in_quarantine`, `a_pending_file_replaced_by_one_of_a_newer_format_is_sealed_from_memory_and_kept` |
 | K1's comparison with the ids the fold took from a pending file (drop a removed file, seal what a cut file holds) | `a_pending_file_deleted_outside_is_sealed_from_memory`, `a_pending_file_cut_short_at_a_line_is_sealed_from_memory`, `a_pending_file_read_at_the_open_and_deleted_is_sealed_from_the_open_handle` |
+| the app's own bytes that show changes no journal file holds recorded, not rewritten (O9, M1, M6) | `a_book_file_holding_a_save_whose_pending_file_was_deleted_before_a_crash_is_recorded`, `a_book_file_the_open_could_not_read_is_asked_the_same_at_its_compare_and_swap`, `metadata_json_holding_a_project_detail_whose_pending_file_was_deleted_is_recorded` |
+| the heads of an outside edit's base cut to those the fold holds (compare with a digest of a version the journal lost) | `a_book_file_holding_a_save_its_pending_file_lost_in_place_is_recorded_at_the_next_open`, `a_book_file_holding_a_save_whose_pending_file_was_deleted_before_a_crash_is_recorded` |
+| the manifest's `aheadOfJournal`, marked by a seal that lost changes for good | `a_book_file_a_seal_marked_is_recorded_even_when_its_heads_file_lags` |
 | K4 taking a pending file another program removed after K1 as removed (fail the seal with the removal's error) | `a_pending_file_removed_outside_during_the_seal_ends_the_seal_as_removed` |
 | the values of a pending file that lost lines left where the fold reads them (move them to the pack's offsets) | `a_pending_file_read_at_the_open_and_replaced_cut_short_is_sealed_from_the_open_handle` |
 | the checkpoint job's carried placements leaving a path a newer snapshot placed or recorded (place the older version) | `a_checkpoint_job_never_places_an_older_version_over_a_newer_edit` |

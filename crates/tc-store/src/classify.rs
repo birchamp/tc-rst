@@ -128,6 +128,9 @@ impl Writer {
             && (self.clean_by_stat(METADATA) || self.metadata_matches_entry());
         if !metadata_ok {
             self.dirty.metadata = true;
+            // Its bytes are read and compared when it is written (M6), which asks then what
+            // is asked here of every other path (§6.2).
+            self.unclassified.insert(METADATA.to_owned());
         }
         tracker.add(1, 0);
         if intent.is_some() && self.dirty.is_empty() {
@@ -138,6 +141,65 @@ impl Writer {
         }
         self.renew_hold_notices();
         Ok(unread)
+    }
+
+    /// Whether the bytes the app wrote at `rel` show changes no journal file holds any more
+    /// (§6.2): a seal found such changes and marked the path (§5.11 K1), or the heads file the
+    /// bytes stand for names a change the fold does not hold (a pending file another program
+    /// removed or cut short before a crash). Those bytes are the only copy of that work.
+    pub(crate) fn shows_lost_changes(&self, rel: &str) -> bool {
+        if self.manifest.ahead.contains(rel) {
+            return true;
+        }
+        self.counters.add(&self.counters.heads_read, 1);
+        self.heads_of(rel).is_some_and(|heads| {
+            heads.records.iter().any(|record| {
+                record
+                    .heads
+                    .iter()
+                    .any(|id| !self.fold.holds(&tc_journal::ChangeId::from_bytes(*id)))
+            })
+        })
+    }
+
+    /// K1 found changes that neither their pending file nor the fold's bytes hold (§5.11): the
+    /// derived files the fold shows them in are the only copy of that work. The manifest marks
+    /// them at once, so the next open records their bytes instead of taking them for the app's
+    /// own stale bytes, even when their heads file does not name the changes (§6.2).
+    pub(crate) fn mark_ahead(&mut self, lost: &[tc_journal::ChangeId]) {
+        // The records whose head a lost change is: the files that read them showed it, when
+        // its value could still be read. (The token rule's heads leave out a head whose value
+        // cannot be read, so the records' heads are asked.)
+        let keys: BTreeSet<tc_journal::RecordKey> = lost
+            .iter()
+            .filter_map(|id| self.fold.change(id))
+            .filter(|view| self.fold.heads(&view.key).contains(&view.id))
+            .map(|view| view.key)
+            .collect();
+        if keys.is_empty() {
+            return;
+        }
+        let names = |heads: &[(tc_journal::RecordKey, Vec<tc_journal::ChangeId>)]| {
+            heads.iter().any(|(key, _)| keys.contains(key))
+        };
+        let mut marked: Vec<String> = self
+            .fold
+            .derived_files()
+            .iter()
+            .filter(|file| names(&self.fold.file_heads(file)))
+            .map(DerivedFile::path)
+            .collect();
+        if names(&self.fold.metadata_heads()) {
+            marked.push(METADATA.to_owned());
+        }
+        let mut changed = false;
+        for path in marked {
+            changed |= self.manifest.ahead.insert(path);
+        }
+        if changed {
+            self.manifest_changed = true;
+            let _ = self.write_manifest();
+        }
     }
 
     /// The bytes of a derived file: `None` when it is gone, the reason when it cannot be
@@ -159,6 +221,7 @@ impl Writer {
     /// again (M1) and writes it when it can.
     fn unreadable_derived(&mut self, rel: &str, file: &DerivedFile, reason: String) {
         self.dirty.files.insert(file.clone());
+        self.unclassified.insert(rel.to_owned());
         self.notice(
             Notice::FileUnreadable {
                 path: rel.into(),
@@ -295,6 +358,11 @@ impl Writer {
             return self.found_outside(rel, disk, true);
         }
         if ours {
+            if self.shows_lost_changes(rel) {
+                // The app wrote these bytes, but they show changes no journal file holds any
+                // more: they are the only copy of that work, recorded, never written over.
+                return self.found_outside(rel, disk, false);
+            }
             self.dirty.files.insert(file.clone());
             return Ok(());
         }

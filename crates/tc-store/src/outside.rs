@@ -66,11 +66,18 @@ impl Writer {
             let Some(key) = key else {
                 return Base::Unknown;
             };
-            records.push(BaseRecord {
-                key,
-                heads: record.heads.into_iter().map(ChangeId::from_bytes).collect(),
-                shown: record.shown,
-            });
+            let named = record.heads.len();
+            let heads: Vec<ChangeId> = record
+                .heads
+                .into_iter()
+                .map(ChangeId::from_bytes)
+                .filter(|id| self.fold.holds(id))
+                .collect();
+            // A head no journal file holds any more (a pending file lost it): the bytes may
+            // show it, so the record is compared with what the fold holds, not skipped by a
+            // digest of a version the project no longer has (§6.2).
+            let shown = (heads.len() == named).then_some(record.shown).flatten();
+            records.push(BaseRecord { key, heads, shown });
         }
         Base::Heads(records)
     }
@@ -430,6 +437,7 @@ impl Writer {
         entry.blob = None;
         entry.nfc = is_text_path(rel)
             .then(|| unicode_normalization::is_nfc(&String::from_utf8_lossy(bytes)));
+        self.manifest.ahead.remove(rel);
         self.manifest_changed = true;
         self.shared.remove_notices_of(rel);
         if let Some(file) = DerivedFile::from_path(rel) {

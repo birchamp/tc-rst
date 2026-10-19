@@ -103,6 +103,16 @@ pub struct Manifest {
         skip_serializing_if = "BTreeSet::is_empty"
     )]
     pub heads_due: BTreeSet<String>,
+    /// Paths whose bytes show changes a seal found in no journal file and not in the fold's
+    /// bytes either (§5.11 K1): those bytes are the only copy of that work, so the next look at
+    /// the path records them as an outside edit instead of writing them over as the app's own
+    /// stale bytes (§6.2), after a restart too.
+    #[serde(
+        rename = "aheadOfJournal",
+        default,
+        skip_serializing_if = "BTreeSet::is_empty"
+    )]
+    pub ahead: BTreeSet<String>,
 }
 
 impl Default for Manifest {
@@ -113,6 +123,7 @@ impl Default for Manifest {
             paths: BTreeMap::new(),
             packs: BTreeMap::new(),
             heads_due: BTreeSet::new(),
+            ahead: BTreeSet::new(),
         }
     }
 }

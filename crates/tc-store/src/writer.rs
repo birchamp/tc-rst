@@ -239,6 +239,9 @@ pub(crate) struct Writer {
     pub pending_carried: BTreeMap<String, (tc_journal::GitOid, u64)>,
     /// Paths the open found that need a read, looked at once the actor runs (§6.1 O9).
     pub deferred_paths: Vec<String>,
+    /// Derived paths O9 could not read: the first compare-and-swap that reads one asks what the
+    /// open would have asked, whether its bytes show changes no journal file holds (§6.2).
+    pub unclassified: BTreeSet<String>,
     /// Who asked for a held file to be taken in, answered when the batch is durable.
     pub waiting: BTreeMap<String, Resolver<Result<crate::reply::TakenIn, StoreError>>>,
     /// The open classifies: a changed path is collected, and the open records it itself.
@@ -315,6 +318,11 @@ impl Writer {
             self.begin_exact(&snapshot, packs, complete);
         } else {
             self.begin(&snapshot, packs, complete);
+        }
+        if let Some(Ok(sealed)) = checkpoint.as_ref().map(|c| &c.sealed)
+            && !sealed.lost.is_empty()
+        {
+            self.mark_ahead(&sealed.lost);
         }
         self.packs_missing = missing;
         self.dirty.absorb(dirty);
@@ -727,6 +735,7 @@ mod tests {
             metadata_heads_due: false,
             pending_carried: BTreeMap::new(),
             deferred_paths: Vec::new(),
+            unclassified: BTreeSet::new(),
             waiting: BTreeMap::new(),
             collecting: false,
             found: Vec::new(),

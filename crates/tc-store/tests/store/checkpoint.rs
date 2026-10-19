@@ -1137,3 +1137,315 @@ fn a_pending_file_replaced_by_one_of_a_newer_format_is_sealed_from_memory_and_ke
     handle.close().unwrap();
     assert_commits_valid(&rig.fs, &folder);
 }
+
+/// Whether a version of the verse `c:v` in the project holds `text`.
+fn a_version_holds(handle: &ProjectHandle, c: u16, v: u16, text: &str) -> bool {
+    let snapshot = handle.snapshot();
+    let fold = snapshot.fold();
+    fold.history(&verse(c, v)).iter().any(|id| {
+        matches!(
+            fold.body(id).map(|b| b.record),
+            Some(Record::Verse {
+                value: tc_journal::record::VerseValue::Text { words, .. },
+                ..
+            }) if words == text
+        )
+    })
+}
+
+/// The notices of an outside edit of `TIT.usfm` recorded, with the copy each keeps.
+fn recorded_edits_of_titus(handle: &ProjectHandle) -> Vec<(u32, bool, Option<String>)> {
+    handle
+        .notices()
+        .into_iter()
+        .filter_map(|n| match n.notice {
+            Notice::OutsideEditRecorded {
+                path,
+                changes,
+                unknown_base,
+                ..
+            } if path.as_str() == "ingredients/TIT.usfm" => Some((changes, unknown_base, n.copy)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// §6.2: the book file is the only copy of a save whose pending file lost it. The open must not
+/// take it for the app's own stale bytes: its heads file names the save, which the fold no longer
+/// holds, so it is recorded as an outside edit (a copy kept, the person told), and the save is a
+/// version of its verse again. The base is what the fold holds of the heads the file stood for,
+/// so a version the project holds and the file does not show is in conflict with the save, never
+/// replaced by it.
+fn assert_the_book_file_gave_the_save_back(
+    rig: &Rig,
+    folder: &Path,
+    handle: &ProjectHandle,
+    text: &str,
+) {
+    assert!(
+        a_version_holds(handle, 1, 1, text),
+        "the save is lost: {:?}, {:?}",
+        words(handle, 1, 1),
+        notices(handle)
+    );
+    let told = recorded_edits_of_titus(handle);
+    assert_eq!(told.len(), 1, "{:?}", notices(handle));
+    let copy = told[0].2.clone().expect("the notice keeps the copy");
+    let kept = rig.fs.peek(&folder.join(&copy)).expect("the copy is there");
+    assert!(String::from_utf8_lossy(&kept).contains(text));
+}
+
+fn verse_text_conflicts(handle: &ProjectHandle) -> usize {
+    handle
+        .snapshot()
+        .fold()
+        .conflicts()
+        .filter(|c| matches!(c.kind, tc_journal::fold::ConflictKind::VerseText))
+        .count()
+}
+
+/// §6.2, §5.11 K1: a pending file the open read, cut short in place by another program, so that
+/// the save it held is in neither the file nor the fold's bytes. The seal leaves it unsealed and
+/// the close goes through; the next open finds the book file showing the save, which no journal
+/// file holds any more, and records it instead of writing the book over without it.
+#[test]
+fn a_book_file_holding_a_save_its_pending_file_lost_in_place_is_recorded_at_the_next_open() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 1, "saved before a crash").unwrap();
+    handle.leave(tc_store::Leave::Mode).wait().unwrap();
+    handle.wait_idle();
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = open(&rig, &folder);
+    let usfm = folder.join("ingredients/TIT.usfm");
+    assert!(String::from_utf8_lossy(&rig.fs.peek(&usfm).unwrap()).contains("saved before a crash"));
+    let pending = pending_files(&rig, &folder).remove(0);
+    let bytes = rig.fs.peek(&pending).unwrap();
+    let header = bytes.iter().position(|b| *b == b'\n').unwrap() + 1;
+    rig.fs.cut_in_place(&pending, header);
+    let report = checkpoint(&handle);
+    assert_eq!(
+        report.skipped,
+        Some(CheckpointSkip::SealFailed),
+        "{report:?}"
+    );
+    handle.close().unwrap();
+    let handle = open(&rig, &folder);
+    assert_the_book_file_gave_the_save_back(&rig, &folder, &handle, "saved before a crash");
+    // The verse had only the seed's text before, which a person's text replaces.
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before a crash")
+    );
+    let usfm = String::from_utf8(rig.fs.peek(&usfm).unwrap()).unwrap();
+    assert!(usfm.contains("saved before a crash"), "{usfm}");
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// §6.2: a save is written to the book file, another program deletes its pending file, and the
+/// process is killed before any seal. The next open finds the book file showing a save no journal
+/// file holds, and records it instead of writing the book over without it.
+#[test]
+fn a_book_file_holding_a_save_whose_pending_file_was_deleted_before_a_crash_is_recorded() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 1, "the text before").unwrap();
+    assert!(checkpoint(&handle).commit.is_some());
+    save_verse(&handle, 1, 1, "saved before the file was deleted").unwrap();
+    handle.leave(tc_store::Leave::Mode).wait().unwrap();
+    handle.wait_idle();
+    let usfm = folder.join("ingredients/TIT.usfm");
+    assert!(
+        String::from_utf8_lossy(&rig.fs.peek(&usfm).unwrap())
+            .contains("saved before the file was deleted")
+    );
+    let pending = pending_files(&rig, &folder);
+    assert_eq!(pending.len(), 1, "{pending:?}");
+    rig.fs.delete(&pending[0]).unwrap();
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = open(&rig, &folder);
+    assert_the_book_file_gave_the_save_back(
+        &rig,
+        &folder,
+        &handle,
+        "saved before the file was deleted",
+    );
+    // The save's parent is not known any more: the text before stays beside it, in conflict.
+    assert!(a_version_holds(&handle, 1, 1, "the text before"));
+    assert_eq!(verse_text_conflicts(&handle), 1);
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// §5.11 K1, §6.2: the seal that leaves a pending file unsealed because a save is lost from it
+/// marks the files that show the save in the manifest, so the next open records them even when
+/// their heads file cannot say so (here it describes the bytes before the save, as after a write
+/// of the heads file that failed). Once recorded, the mark goes: a later open records nothing
+/// again.
+#[test]
+fn a_book_file_a_seal_marked_is_recorded_even_when_its_heads_file_lags() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let heads = folder.join(tc_store::layout::heads_file("ingredients/TIT.usfm"));
+    let older = rig.fs.peek(&heads).expect("a heads file");
+    save_verse(&handle, 1, 1, "saved before a crash").unwrap();
+    handle.leave(tc_store::Leave::Mode).wait().unwrap();
+    handle.wait_idle();
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = open(&rig, &folder);
+    let pending = pending_files(&rig, &folder).remove(0);
+    let bytes = rig.fs.peek(&pending).unwrap();
+    let header = bytes.iter().position(|b| *b == b'\n').unwrap() + 1;
+    rig.fs.cut_in_place(&pending, header);
+    let report = checkpoint(&handle);
+    assert_eq!(
+        report.skipped,
+        Some(CheckpointSkip::SealFailed),
+        "{report:?}"
+    );
+    handle.close().unwrap();
+    let manifest =
+        String::from_utf8(rig.fs.peek(&folder.join(".tc/materialized.json")).unwrap()).unwrap();
+    assert!(manifest.contains("aheadOfJournal"), "{manifest}");
+    rig.fs.put_unseen(&heads, &older, None);
+    let handle = open(&rig, &folder);
+    assert_the_book_file_gave_the_save_back(&rig, &folder, &handle, "saved before a crash");
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before a crash")
+    );
+    handle.close().unwrap();
+    let manifest =
+        String::from_utf8(rig.fs.peek(&folder.join(".tc/materialized.json")).unwrap()).unwrap();
+    assert!(!manifest.contains("aheadOfJournal"), "{manifest}");
+    let handle = open(&rig, &folder);
+    assert_eq!(recorded_edits_of_titus(&handle), Vec::new());
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before a crash")
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// Whether a version of the project's name holds `text`.
+fn a_name_holds(handle: &ProjectHandle, text: &str) -> bool {
+    let key = RecordKey::ProjectMeta(tc_journal::MetaField::Name);
+    let snapshot = handle.snapshot();
+    let fold = snapshot.fold();
+    fold.history(&key).iter().any(|id| {
+        matches!(
+            fold.body(id).map(|b| b.record),
+            Some(Record::ProjectMeta { value: Some(value), .. })
+                if format!("{value:?}").contains(text)
+        )
+    })
+}
+
+/// §6.2 for `metadata.json`: a project detail saved, written to `metadata.json`, and lost from
+/// the journal (another program deleted its pending file before a crash). The open must not
+/// write `metadata.json` over as stale: it holds the only copy of the detail, which is recorded
+/// (a copy kept, the person told) and stands beside the name before it.
+#[test]
+fn metadata_json_holding_a_project_detail_whose_pending_file_was_deleted_is_recorded() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 3, "my true child").unwrap();
+    assert!(checkpoint(&handle).commit.is_some());
+    let name = RecordKey::ProjectMeta(tc_journal::MetaField::Name);
+    handle
+        .submit(Command::SetMeta {
+            shown: handle.mint(&name, None).unwrap(),
+            value: Some(tc_journal::Json::Obj(tc_journal::JsonMap::from([(
+                "en".to_owned(),
+                tc_journal::Json::from("Titus, a name saved before a crash"),
+            )]))),
+        })
+        .wait()
+        .unwrap();
+    handle.leave(tc_store::Leave::Mode).wait().unwrap();
+    handle.wait_idle();
+    let meta = folder.join("metadata.json");
+    let written = rig.fs.peek(&meta).unwrap();
+    assert!(String::from_utf8_lossy(&written).contains("Titus, a name saved before a crash"));
+    let pending = pending_files(&rig, &folder);
+    assert_eq!(pending.len(), 1, "{pending:?}");
+    rig.fs.delete(&pending[0]).unwrap();
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = open(&rig, &folder);
+    handle.wait_idle();
+    assert!(
+        a_name_holds(&handle, "Titus, a name saved before a crash"),
+        "the detail is lost: {:?}",
+        notices(&handle)
+    );
+    let copies: Vec<String> = handle
+        .notices()
+        .into_iter()
+        .filter(|n| matches!(n.notice, Notice::MetadataEditedOutside { .. }))
+        .filter_map(|n| n.copy)
+        .collect();
+    assert_eq!(copies.len(), 1, "{:?}", notices(&handle));
+    assert_eq!(rig.fs.peek(&folder.join(&copies[0])), Some(written));
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// The same loss, and the book file cannot be read when the open classifies it (a program holds
+/// it): the compare-and-swap that reads it later asks what the open would have asked, and
+/// records it instead of writing the book over without the save.
+#[test]
+fn a_book_file_the_open_could_not_read_is_asked_the_same_at_its_compare_and_swap() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 1, "the text before").unwrap();
+    assert!(checkpoint(&handle).commit.is_some());
+    save_verse(&handle, 1, 1, "saved before the file was deleted").unwrap();
+    handle.leave(tc_store::Leave::Mode).wait().unwrap();
+    handle.wait_idle();
+    let pending = pending_files(&rig, &folder);
+    rig.fs.delete(&pending[0]).unwrap();
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    let usfm = folder.join("ingredients/TIT.usfm");
+    rig.fs.set_unreadable(&usfm, true);
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    assert!(
+        notices(&handle).iter().any(
+            |n| matches!(n, Notice::FileUnreadable { path, .. } if path.ends_with("TIT.usfm"))
+        ),
+        "{:?}",
+        notices(&handle)
+    );
+    rig.fs.set_unreadable(&usfm, false);
+    let started = std::time::Instant::now();
+    while recorded_edits_of_titus(&handle).is_empty() {
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "the writer's retry never recorded the book file: {:?} {:?}",
+            words(&handle, 1, 1),
+            notices(&handle)
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    handle.wait_idle();
+    assert_the_book_file_gave_the_save_back(
+        &rig,
+        &folder,
+        &handle,
+        "saved before the file was deleted",
+    );
+    assert_eq!(verse_text_conflicts(&handle), 1);
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
