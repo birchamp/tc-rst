@@ -69,10 +69,15 @@ if (-not $NoLaunch) {
       minutes_since_boot = $before.minutes_since_boot
     }
     ($seen | ConvertTo-Json -Compress) | Out-File -Append -Encoding utf8 (Join-Path (Split-Path -Parent $Out) 'launch-failures.jsonl')
-    if (-not $link.TargetPath) { throw "tC4 did not start: $why, and the shortcut $Shortcut names no target." }
-    $start = @{ FilePath = $link.TargetPath; ErrorAction = 'Stop' }
-    if ($link.Arguments) { $start.ArgumentList = $link.Arguments }
-    if ($link.WorkingDirectory) { $start.WorkingDirectory = $link.WorkingDirectory }
+    # Two minutes after a boot the shortcut was not there at all (shortcut_exists false), and it
+    # is again later with its old timestamp. Then use what it holds: the installed tC4 and its
+    # app folder, as the shortcut names them.
+    $home4 = "$env:LOCALAPPDATA\Programs\translationCore4"
+    $target = if ($link.TargetPath) { $link.TargetPath } else { "$home4\electronite\electron.exe" }
+    $arguments = if ($link.Arguments) { $link.Arguments } else { "`"$home4\electron`"" }
+    $workdir = if ($link.WorkingDirectory) { $link.WorkingDirectory } else { $home4 }
+    if (-not (Test-Path -LiteralPath $target)) { throw "tC4 did not start: $why, and its program $target is missing too." }
+    $start = @{ FilePath = $target; ArgumentList = $arguments; WorkingDirectory = $workdir; ErrorAction = 'Stop' }
     $sw.Restart()
     Start-Process @start
     $launch = 'target (the shortcut failed)'
