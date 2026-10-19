@@ -333,3 +333,32 @@ cargo run --release -p tc-app --features fixture-backend --example state_seed_be
 - **Machine:** the owner's Linux PC, Intel Core i7-12700 (20 threads), 61 GB; the CPU **has**
   SHA instructions (`sha_ni`) and no AVX-512 (`avx512f` absent). Other agents were building on
   it (load average 5.6 to 6.1). No budget applies to this fixture path.
+
+## 9. Seen while running the gates: a storage property test failed once
+
+Not a finding of the seed check, and in code this unit did not touch: in one of three runs of
+`cargo test --workspace` on this branch, tc-journal's property test
+`mixed_minor_versions_converge` (`crates/tc-journal/tests/properties.rs:1179`) failed with
+"VerseText {78, 79} is lost with newer fields at crates/tc-journal/tests/properties.rs:1253".
+Two reruns of the test passed: its cases are random (`failure_persistence: None`,
+`tests/common/mod.rs:858-861`), so it fails only on some seeds. The shrunk input, for a
+regression test:
+
+```text
+Script { devices: 3, last_books_removed: true, ops: [
+  Edit { dev: 0, at: 0, stale: false, newer: false }, Renumber { dev: 0, at: 49 },
+  Carried { dev: 0, path: 1, value: 205 }, Drag { dev: 177, at: 204 },
+  Fork { a: 241, b: 57, what: 208, at: 198 }, Profile { dev: 172, value: 137 },
+  Layout { dev: 115, at: 29 }, Fork { a: 182, b: 183, what: 155, at: 229 },
+  Edit { dev: 255, at: 179, stale: false, newer: true }, Renumber { dev: 29, at: 242 },
+  Renumber { dev: 251, at: 191 }, Exchange { from: 3, to: 4, mode: 105, seed: 208 },
+  Setting { dev: 161, path: 167, value: 63 }, Renumber { dev: 10, at: 14 },
+  Fork { a: 160, b: 92, what: 23, at: 101 }, Resolve { dev: 163, pick: 117, how: 215 },
+  Layout { dev: 226, at: 123 }, CarryOver { dev: 252, check: 223 },
+  Stray { dev: 242, at: 7, covered: true }, Fork { a: 144, b: 130, what: 235, at: 179 } ] }
+```
+
+The assertion (`properties.rs:1244-1253`) means that a verse-text conflict the plain history
+lists, between its changes 78 and 79, is neither listed nor grown into a larger conflict when
+the same history carries newer-minor fields: a conflict a person should see would not be shown.
+It goes to the storage team with the rest of this file.
