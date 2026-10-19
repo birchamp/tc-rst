@@ -1873,13 +1873,17 @@ in Chromium against the real `tc4`, with the request filter of AD11
    which forgets both copies of that token. Resume's outcomes are tC4's `ResumeOutcome`; a
    sign-out or sign-in that lands while a resume waits for Door43 wins. Cancel stops the sign-in
    wherever it is: `account/cancelSignIn { signIn }` names it, and a cancel that comes before its
-   sign-in makes it send nothing, one that comes while it waits for its turn or for Door43 drops
-   it there, and one that comes after it ended signs that session out and forgets the token it
-   kept. In every timing nobody is signed in by that sign-in and no token it minted is kept. tC4
-   lets a cancelled sign-in run to its end and then signs out, which also empties the keychain;
-   here the next sign-in does not wait for Door43's answer to the cancelled one, and a token an
-   earlier session kept survives a cancel: a declared difference, the person sees the same "not
-   signed in", sooner.)*
+   sign-in makes it send nothing, one that comes while it waits for its turn drops it there, one
+   that comes while Door43 answers its token calls drops it there and signs out, and one that
+   comes after it ended signs that session out and forgets the token it kept. In every timing
+   nobody is signed in by that sign-in and no token it minted is kept. tC4 lets a cancelled
+   sign-in run to its end and then signs out, which also empties the keychain; here the next
+   sign-in does not wait for Door43's answer to the cancelled one, and a token an earlier session
+   kept survives a cancel that comes before the token calls: a declared difference, the person
+   sees the same "not signed in", sooner. A cancel once the token calls started signs out as
+   tC4's does, because Door43 may already have replaced that token, and keeping it would show a
+   saved sign-in that the next check finds refused (the A8 lane run, minor 6 of A8's
+   verification).)*
 7. Private repositories (Q3, PLAN:51-54): `door43/open` fetches without credentials first; on 401
    or 404 with no session the job ends with `NeedsSignIn(PrivateRepository)`, the UI shows M12 and
    runs the open again.
