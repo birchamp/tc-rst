@@ -14,7 +14,7 @@ use serde::Deserialize;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt as _, AsyncWrite, AsyncWriteExt as _};
 
 use crate::log::warn;
-use crate::state::Shared;
+use crate::state::{Phase, Shared};
 
 /// What ended the run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,15 +95,15 @@ pub(crate) async fn gate(
 ) -> Response {
     let path = request.uri().path();
     if path == tc_api::endpoint::EVENTS_PATH || path == tc_api::upload::UPLOADS_PATH {
-        if shared.is_closing() {
+        if shared.phase.get() != Phase::Serving {
             return closing_response();
         }
         return next.run(request).await;
     }
-    // Counted before the closing flag is read, and both with `SeqCst`: a request that sees
-    // "not closing" is then always seen by the drain, so none slips between the two.
+    // Counted before the phase is read, and both with `SeqCst`: a request that sees `Serving`
+    // is then always seen by the drain, so none slips between the two.
     let _in_flight = InFlight::enter(Arc::clone(&shared));
-    if shared.is_closing() {
+    if shared.phase.get() != Phase::Serving {
         return closing_response();
     }
     next.run(request).await

@@ -1515,14 +1515,18 @@ fields of `test/fieldStore` (§5.8), written atomically before each `Ack`.
   `{"url":"http://127.0.0.1:PORT/","token":"<43 chars base64url>"}`. The token is never logged.
 - On stdin `{"quit":true}`, when stdin closes (the shell died; on Windows this needs the shell
   to start it detached, AD39), on Ctrl+C or SIGTERM, and when the UI calls `app/quit`, it quits:
-  new requests get 503, and so does one whose body is still arriving; requests being answered get
-  up to 1 s to finish, and a call whose client went away still runs to its end; then it saves
+  new requests get 503; requests being answered, those whose body is still arriving among them,
+  get up to 1 s to finish, a body that outlasts that second gets 503 and is not run, and a call
+  whose client went away still runs to its end; then it saves
   every aligner session's unsaved links (AD18), checkpoints every session and closes the actors.
   The whole close takes at most 5 s: what was written stays, and work still running then is cut
   (a cut checkpoint runs again at the next open). It then ends the event streams, answers
   `{"closed":true}` if stdin is still open, and exits. *(A-3, A-4; A2: the drain comes before the quit work, so a save accepted before the
   quit reaches an open backend and its reply reaches the UI. The first draft quit first and
-  drained after, which let a save in flight meet a closing backend.)*
+  drained after, which let a save in flight meet a closing backend. FIX-quit: a request the
+  server accepted before the quit gets its reply even when its body is read during the drain;
+  the first rule answered it 503 whenever the quit began while its body was being read, though
+  the backend was still open and the drain was waiting for it.)*
 
 ### 5.2 Security
 
