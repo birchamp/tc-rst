@@ -414,6 +414,150 @@ fn a_crash_while_a_scenario_project_is_written_leaves_no_half_project() {
     }
 }
 
+// --- the summary stamp (§4.5, D8) ----------------------------------------------------------
+
+/// The stamp is the same while nothing changes; a save (a pending file) changes it, and a
+/// checkpoint (which seals it and rewrites the manifest) changes it again.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_summary_stamp_follows_saves_and_seals() {
+    let fs = FaultFs::new();
+    let (store, _) = scenario_on(&fs, "sample");
+    let sample = folder(SAMPLE);
+    let first = store.backend().summary_stamp(&sample).unwrap();
+    assert_eq!(store.backend().summary_stamp(&sample).unwrap(), first);
+    let handle = open_sample(&store);
+    crate::store_world::save(handle.as_ref(), &tit(1, 1), "a save not sealed yet")
+        .await
+        .unwrap();
+    let saved = store.backend().summary_stamp(&sample).unwrap();
+    assert_ne!(saved, first);
+    handle
+        .checkpoint(tc_app::backend::CheckpointReason::Other("test".into()))
+        .await;
+    handle.wait_idle();
+    let sealed = store.backend().summary_stamp(&sample).unwrap();
+    assert_ne!(sealed, saved);
+    assert_ne!(sealed, first);
+    assert_eq!(
+        tc_app::backend::SummaryStamp::parse_hex(&sealed.to_hex()),
+        Some(sealed)
+    );
+}
+
+/// The stamp reads no file: one listing of `.tc/pending/` and one stat of the manifest, the same
+/// with a longer history (two teammates' packs more).
+#[test]
+fn a_summary_stamp_lists_one_folder_and_stats_one_file_at_any_history() {
+    let fs = FaultFs::new();
+    let counters = Arc::new(tc_store::counters::Counters::default());
+    let counted = tc_store::counters::CountingVfs::new(Arc::new(fs.clone()), counters.clone());
+    let backend = StoreBackend::start(
+        StoreConfig {
+            app_data: PathBuf::from(APP),
+            projects: PathBuf::from(PROJECTS),
+            vfs: Arc::new(counted),
+            platform: Arc::new(FakePlatform::default()),
+            clock: Arc::new(ManualClock::at(START_MS)),
+            threads: 2,
+        },
+        Arc::default(),
+    )
+    .unwrap();
+    let (store, _) = ScenarioStore::write(backend, scenario("shared")).unwrap();
+    let cost = || {
+        let before = counters.read();
+        store.backend().summary_stamp(&folder(SAMPLE)).unwrap();
+        counters.read().since(&before)
+    };
+    let short = cost();
+    assert_eq!((short.listings, short.stats), (1, 1), "{short:?}");
+    assert_eq!((short.files_opened, short.bytes_read), (0, 0), "{short:?}");
+    store
+        .teammates_edit_verse(&folder(SAMPLE), &tit(1, 1), &["one", "two"])
+        .unwrap();
+    assert_eq!(cost(), short);
+}
+
+// --- tC4 #766: the creation pins at the first open (R27) -----------------------------------
+
+/// tC4 #766 (TC4-DELTA-2026-10-19 §3.12.4): an existing project whose pin groups are all empty
+/// gets the creation pins at its first open, in one batch of a System cause, never `Edit`, so
+/// History does not say the translator changed the resources; a second open writes nothing,
+/// and a project with pins keeps its `resources.json` byte for byte. The write needs a new
+/// `SystemReason` (a format addition before 1.0) inside tc-store's open: R27. Until it lands
+/// the rebuild does what tC4 4.0 does at d310bf3: nothing is written at the open, and Check
+/// shows "No resources pinned" with its guided fix (B5a).
+#[test]
+#[ignore = "R27: tc-store writes the creation pins at the first open (TC4-DELTA-2026-10-19 §3.8 item 3)"]
+fn open_writes_creation_pins_only_when_none_exist() {
+    use tc_journal::{Cause, PinGroup, RecordKey};
+    let groups = [
+        PinGroup::Primary,
+        PinGroup::Fallback,
+        PinGroup::OriginalLanguage,
+        PinGroup::Lexicon,
+        PinGroup::ExtraScripture,
+    ];
+    let world = crate::store_world::store_world();
+    let made = world
+        .backend
+        .store()
+        .create(&tc_store::NewProject {
+            name: "no_pins".to_owned(),
+            kind: tc_journal::fold::ProjectKind::Bible,
+            records: crate::store_world::sample_records(&world.sources, None),
+            books: Vec::new(),
+        })
+        .unwrap();
+    let opened = world.open(&folder("no_pins"));
+    let fold = opened.snapshot().fold().clone();
+    let mut batches = std::collections::BTreeSet::new();
+    for group in groups {
+        let key = RecordKey::Pins(group);
+        assert!(
+            fold.projected(&key).is_some(),
+            "{group:?} is pinned at the first open"
+        );
+        let head = fold.heads(&key)[0];
+        let body = fold.body(&head).unwrap();
+        assert!(
+            matches!(body.cause, Cause::System(_)),
+            "{group:?}: {:?}",
+            body.cause
+        );
+        batches.insert(body.batch.id);
+    }
+    assert_eq!(batches.len(), 1, "one batch");
+    assert!(
+        world
+            .fs
+            .peek(&made.join("ingredients/checking/resources.json"))
+            .is_some()
+    );
+    let changes = fold.record_keys().len();
+    drop(opened);
+    let again = world.open(&folder("no_pins"));
+    assert_eq!(
+        again.snapshot().fold().record_keys().len(),
+        changes,
+        "the second open writes nothing"
+    );
+    drop(again);
+    // A project with pins keeps them byte for byte.
+    let sample = Path::new(PROJECTS).join(SAMPLE);
+    let fs = FaultFs::new();
+    let (store, _) = scenario_on(&fs, "sample");
+    let before = fs
+        .peek(&sample.join("ingredients/checking/resources.json"))
+        .unwrap();
+    drop(open_sample(&store));
+    assert_eq!(
+        fs.peek(&sample.join("ingredients/checking/resources.json"))
+            .unwrap(),
+        before
+    );
+}
+
 // --- test/hold and test/quiet on the store ------------------------------------------------
 
 /// `test/hold save` holds tc-store's durability point: the save's reply waits, `test/quiet`

@@ -46,7 +46,7 @@ use super::{
     BoxFuture, CheckpointReason, CommandError, EditToken, Listing, OfferedDraft, OpenFailure,
     Origin, ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore, Published, ReviewToken,
     Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError, StoreEvent, StoreReply, Stored,
-    UnusableFolder,
+    SummaryStamp, UnusableFolder,
 };
 use crate::clock::Clock;
 use crate::jobs::ProgressSink;
@@ -182,6 +182,40 @@ impl StoreBackend {
     /// The projects folder.
     pub fn projects(&self) -> &Path {
         &self.projects
+    }
+
+    /// What a Home card's summary of `folder` is computed from (APP-DESIGN §4.5, C1a D8): one
+    /// listing of `.tc/pending/` and one stat of `.tc/materialized.json`, no file read, no lock
+    /// and no fold, at any history. A temporary file a crash left is no save and is left out.
+    pub fn summary_stamp(&self, folder: &ProjectRef) -> Result<SummaryStamp, StoreError> {
+        // The card's folder comes from the listing, so its name is the listed one: no second
+        // listing of the projects folder here.
+        if folder.as_str().starts_with(STAGING) {
+            return Err(store_error(format!("{folder} is a staging folder")));
+        }
+        let root = self.projects.join(folder.as_str());
+        let pending_dir = tc_store::layout::PENDING
+            .split('/')
+            .fold(root.clone(), |p, part| p.join(part));
+        let pending: Vec<String> = match self.vfs.read_dir(&pending_dir) {
+            Ok(entries) => entries
+                .into_iter()
+                .filter(|e| e.kind == tc_store::vfs::EntryKind::File)
+                .filter_map(|e| e.name.to_str().map(str::to_owned))
+                .filter(|name| tc_store::atomic::temp_target(name).is_none())
+                .collect(),
+            Err(e) if absent(&e) => Vec::new(),
+            Err(e) => return Err(store_error(format!("{}: {e}", pending_dir.display()))),
+        };
+        let manifest_path = tc_store::layout::MANIFEST
+            .split('/')
+            .fold(root, |p, part| p.join(part));
+        let manifest = match self.vfs.metadata(&manifest_path) {
+            Ok(meta) => Some((meta.len, meta.mtime_ns)),
+            Err(e) if absent(&e) => None,
+            Err(e) => return Err(store_error(format!("{}: {e}", manifest_path.display()))),
+        };
+        Ok(SummaryStamp::of(&pending, manifest))
     }
 
     /// The staging folders tc-store's start removed (STORAGE §6.4 N1). It waits for that

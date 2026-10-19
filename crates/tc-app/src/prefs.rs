@@ -62,6 +62,7 @@ use tc_store::{SyncDir, Vfs, WriteError};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
+use crate::backend::SummaryStamp;
 use crate::clock::Clock;
 use crate::reports::{OperationReport, ReportLog, ReportOp, ReportOutcome, facts};
 
@@ -314,6 +315,69 @@ async fn write_file(
     tokio::task::spawn_blocking(move || files.write(&path, &bytes))
         .await
         .unwrap_or_else(|stopped| Err(AppDataError(crate::jobs::stop_reason(stopped))))
+}
+
+/// Removes `path`, on the blocking pool when the files wait on a disk.
+async fn remove_file(files: &Arc<dyn AppDataFiles>, path: AppDataPath) -> Result<(), AppDataError> {
+    if !files.blocks() {
+        return files.remove(&path);
+    }
+    let files = files.clone();
+    tokio::task::spawn_blocking(move || files.remove(&path))
+        .await
+        .unwrap_or_else(|stopped| Err(AppDataError(crate::jobs::stop_reason(stopped))))
+}
+
+// ---- summaries ------------------------------------------------------------------------------
+
+/// A Home card's summary as app data keeps it (APP-DESIGN §4.5, C1a): the project it is of,
+/// what it was computed from, and the summary itself. Its shape is B2's (`Summary`), which
+/// parses it at its boundary; this layer keeps it as JSON.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StoredSummary {
+    pub project: tc_journal::ProjectId,
+    pub stamp: SummaryStamp,
+    pub summary: Value,
+}
+
+/// `summaries/<hash>.json`.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SummaryFile {
+    schema_version: u64,
+    folder: String,
+    project_id: String,
+    stamp: String,
+    summary: Value,
+}
+
+impl StoredSummary {
+    fn bytes(&self, folder: &ProjectRef) -> Vec<u8> {
+        let file = SummaryFile {
+            schema_version: FILE_SCHEMA,
+            folder: folder.as_str().to_owned(),
+            project_id: self.project.to_string(),
+            stamp: self.stamp.to_hex(),
+            summary: self.summary.clone(),
+        };
+        let mut bytes = serde_json::to_vec(&file).unwrap_or_default();
+        bytes.push(b'\n');
+        bytes
+    }
+
+    /// The summary a file keeps for `folder`; `None` for a file that cannot be read, of another
+    /// schema, or of another folder (two names whose hashes met).
+    fn read(bytes: &[u8], folder: &ProjectRef) -> Option<Self> {
+        let file: SummaryFile = serde_json::from_slice(bytes).ok()?;
+        if file.schema_version != FILE_SCHEMA || file.folder != folder.as_str() {
+            return None;
+        }
+        Some(Self {
+            project: tc_journal::ProjectId::parse(&file.project_id)?,
+            stamp: SummaryStamp::parse_hex(&file.stamp)?,
+            summary: file.summary,
+        })
+    }
 }
 
 // ---- reports.json --------------------------------------------------------------------------
@@ -708,6 +772,8 @@ struct Shared {
     reports: ReportLog,
     clock: Arc<dyn Clock>,
     docs: Mutex<Docs>,
+    /// The summaries read or recorded, by folder; `None` for a folder whose file there is not.
+    summaries: Mutex<HashMap<ProjectRef, Option<StoredSummary>>>,
 }
 
 impl Shared {
@@ -833,6 +899,9 @@ enum Msg {
         project: ProjectId,
         edit: LastEdit,
     },
+    Summary {
+        folder: ProjectRef,
+    },
     Flush {
         reply: oneshot::Sender<()>,
     },
@@ -861,6 +930,7 @@ impl PrefsWriter {
                 app: Doc::default(),
                 projects: HashMap::new(),
             }),
+            summaries: Mutex::default(),
         });
         let app = shared.load(&AppDataPath::app_prefs());
         lock(&shared.docs).app = app;
@@ -964,6 +1034,28 @@ impl PrefsWriter {
     pub fn align_suggestions(&self, folder: &ProjectRef) -> Option<bool> {
         lock(&self.shared.docs).app.align_suggestions(folder)
     }
+
+    /// The summary kept for `folder`, read on the first ask (a file of a few hundred bytes);
+    /// `None` when there is none, it cannot be read, or it is of another folder.
+    pub fn summary(&self, folder: &ProjectRef) -> Option<StoredSummary> {
+        if let Some(known) = lock(&self.shared.summaries).get(folder) {
+            return known.clone();
+        }
+        let read = match self.shared.files.read(&AppDataPath::summary(folder)) {
+            Ok(Some(bytes)) => StoredSummary::read(&bytes, folder),
+            Ok(None) | Err(_) => None,
+        };
+        lock(&self.shared.summaries)
+            .entry(folder.clone())
+            .or_insert(read)
+            .clone()
+    }
+
+    /// Keeps `summary` for `folder`: readers see it now, and it is written at once.
+    pub fn record_summary(&self, folder: ProjectRef, summary: StoredSummary) {
+        lock(&self.shared.summaries).insert(folder.clone(), Some(summary));
+        self.send(Msg::Summary { folder });
+    }
 }
 
 struct Task {
@@ -1023,6 +1115,16 @@ impl Task {
                 lock(&self.shared.docs).app.set_last_edit(&edit);
                 self.pending
                     .insert(Target::App, Instant::now() + LAST_EDIT_WRITE_AFTER);
+            }
+            Msg::Summary { folder } => {
+                let bytes = lock(&self.shared.summaries)
+                    .get(&folder)
+                    .and_then(|kept| kept.as_ref().map(|s| s.bytes(&folder)));
+                if let Some(bytes) = bytes {
+                    let path = AppDataPath::summary(&folder);
+                    let written = write_file(&self.shared.files, path.clone(), bytes).await;
+                    self.shared.report_write(&path, &written);
+                }
             }
             Msg::Flush { reply } => {
                 self.write_pending(true).await;
@@ -1103,6 +1205,18 @@ impl Task {
         };
         for target in targets {
             self.write_now(&target).await;
+        }
+        // Every summary this writer read or wrote goes: the projects go back to their seed.
+        let summaries: Vec<ProjectRef> = lock(&self.shared.summaries)
+            .drain()
+            .map(|(f, _)| f)
+            .collect();
+        for folder in summaries {
+            let path = AppDataPath::summary(&folder);
+            if let Err(error) = remove_file(&self.shared.files, path.clone()).await {
+                self.shared
+                    .report(&path, &format!("could not be removed: {error}"));
+            }
         }
         if self.shared.reports.version() != self.reports_written {
             self.write_now(&Target::Reports).await;

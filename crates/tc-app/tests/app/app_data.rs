@@ -11,8 +11,9 @@ use serde_json::{Value, json};
 use tc_api::ids::{LocaleId, ProjectId, WallMs};
 use tc_api::prefs::{PlaceChange, PlaceMode, PlaceUpdate, SetLocale};
 use tc_app::FilesChoice;
+use tc_app::backend::SummaryStamp;
 use tc_app::clock::ManualClock;
-use tc_app::prefs::{AppDataFiles, AppDataPath, DiskFiles, PrefsWriter, Written};
+use tc_app::prefs::{AppDataFiles, AppDataPath, DiskFiles, PrefsWriter, StoredSummary, Written};
 use tc_app::reports::{ReportLog, ReportOp};
 use tc_store::Vfs;
 use tc_store::fault::FaultFs;
@@ -420,4 +421,68 @@ async fn an_unreadable_prefs_file_on_disk_is_kept_aside_before_it_is_replaced() 
         b"{broken"
     );
     assert_eq!(reports.all()[0].op, ReportOp::PrefsWrite);
+}
+
+// --- Home summaries (§4.5, C1a) ----------------------------------------------------------
+
+fn stored(n: u8) -> StoredSummary {
+    StoredSummary {
+        project: tc_journal::ProjectId::from_bytes([n; 16]),
+        stamp: SummaryStamp::of(&[format!("pending-{n}")], Some((u64::from(n), 7))),
+        summary: json!({"books": n, "unknownToThisLayer": [1, 2]}),
+    }
+}
+
+#[tokio::test]
+async fn a_summary_is_kept_across_a_relaunch_and_never_used_for_another_folder() {
+    let fs = FaultFs::new();
+    let titus = tc_api::ids::ProjectRef::parse("titus").unwrap();
+    let jonah = tc_api::ids::ProjectRef::parse("jonah").unwrap();
+    {
+        let prefs = PrefsWriter::start(disk(&fs), ReportLog::new(), Arc::new(ManualClock::new(1)));
+        assert_eq!(prefs.summary(&titus), None);
+        prefs.record_summary(titus.clone(), stored(1));
+        assert_eq!(
+            prefs.summary(&titus),
+            Some(stored(1)),
+            "readers see it at once"
+        );
+        wait_for_files(&prefs).await;
+    }
+    // Titus's file planted under Jonah's name: two folder names whose hashes met.
+    let bytes = disk(&fs)
+        .read(&AppDataPath::summary(&titus))
+        .unwrap()
+        .unwrap();
+    disk(&fs)
+        .write(&AppDataPath::summary(&jonah), &bytes)
+        .unwrap();
+    let prefs = PrefsWriter::start(disk(&fs), ReportLog::new(), Arc::new(ManualClock::new(1)));
+    assert_eq!(prefs.summary(&titus), Some(stored(1)));
+    assert_eq!(
+        prefs.summary(&jonah),
+        None,
+        "never another folder's summary"
+    );
+}
+
+#[tokio::test]
+async fn a_reset_removes_every_summary() {
+    let fs = FaultFs::new();
+    let titus = tc_api::ids::ProjectRef::parse("titus").unwrap();
+    let prefs = PrefsWriter::start(disk(&fs), ReportLog::new(), Arc::new(ManualClock::new(1)));
+    prefs.record_summary(titus.clone(), stored(2));
+    wait_for_files(&prefs).await;
+    let path = AppDataPath::summary(&titus);
+    assert!(disk(&fs).read(&path).unwrap().is_some());
+    prefs.reset().await;
+    assert_eq!(disk(&fs).read(&path).unwrap(), None);
+    assert_eq!(prefs.summary(&titus), None);
+    assert!(
+        !files_of(&fs)
+            .iter()
+            .any(|f| f.starts_with("summaries/") && !temporary(f)),
+        "{:?}",
+        files_of(&fs)
+    );
 }
