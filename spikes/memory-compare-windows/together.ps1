@@ -19,11 +19,13 @@ for ($i = 0; $i -lt 3; $i++) {
     commit_limit_mb = [math]::Round((Get-Counter '\Memory\Commit Limit').CounterSamples[0].CookedValue / 1MB)
     word_mib = & $sum 'WINWORD*' 'WINWORD'
     edge_mib = & $sum 'msedge*' 'msedge'
+    tc4_mib = & $sum 'electron*' 'electron'
+    tc4_server_mib = & $sum 'server*' 'server'
     claude_app_mib = & $sum 'claude*' 'claude'
     builds_running = @(Get-Process cargo, rustc, link -ErrorAction SilentlyContinue).Count
   }
 }
 $ram = (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory
-$result = [pscustomobject]@{ label = 'Everything together: Word (Psalms) and Edge (Psalms)'; total_ram_mb = [math]::Round($ram / 1MB); readings = $rows }
+$result = [pscustomobject]@{ label = $(if (Get-Process electron -ErrorAction SilentlyContinue) { 'Everything together: Word (Psalms), Edge (Psalms) and tC4 4.0 (Psalms, Translation Words check)' } else { 'Everything together: Word (Psalms) and Edge (Psalms)' }); total_ram_mb = [math]::Round($ram / 1MB); readings = $rows }
 ($result | ConvertTo-Json -Depth 4 -Compress) | Out-File -Append -Encoding utf8 'C:\tc4-g0\memory\readings.jsonl'
 $result | ConvertTo-Json -Depth 4

@@ -180,7 +180,9 @@ names none for (hazard 6, below).
 - **Hazard 2** (a save's rename blocked by a scanner): `tc-store`, on the `storage` branch.
   The held-file helper there and the one in `tc-resources` follow one policy and become one
   helper when `storage` lands.
-- **Hazard 6, proxy auto-configuration: not fixed, so task 6 is not done.** The constructor
+- **Hazard 6, proxy auto-configuration: the Windows finder is built (2026-10-19), on
+  `proxy-watch` =0.3.1, chosen by the orchestrating session as a technical choice the owner
+  leaves to it and told to the owner the same day.** The constructor
   and the rules around it are done and tested on Linux against a local proxy that refuses
   every request (`tests/proxy.rs` in `tc-door43`, `tests/aquifer_proxy.rs` in
   `tc-resources`): one `Http` builds both clients, a server on this computer is never
@@ -193,16 +195,21 @@ names none for (hazard 6, below).
   own; it now reads them itself (hyper-util's matcher, which reqwest uses) and falls back to
   them, and `tests/proxy.rs` runs a copy of its binary with `HTTPS_PROXY` set to check it.
   The first commit message of the constructor (`f02d606`) said that a finder's proxy was
-  used "ahead of the system's own settings"; that is true only since this fix. What is
-  missing is the finder for Windows, which asks WinHTTP
-  (`WinHttpGetIEProxyConfigForCurrentUser`, `WinHttpGetProxyForUrl`). It needs FFI, and
-  `AGENTS.md` forbids `unsafe`, so the owner must choose: a crate that opts out of the
-  workspace's `forbid(unsafe_code)` for that one call (a few dozen lines over `windows-sys`,
-  which is already locked), or a vetted dependency that wraps WinHTTP safely. The test the task asks
-  for, against a local PAC file, then passes the PAC file to `WinHttpGetProxyForUrl` as
-  `WINHTTP_AUTOPROXY_CONFIG_URL` (`file:///...`), so it needs no change to the computer's
-  proxy settings. Until then reqwest's system proxy applies: the `*_PROXY` variables and the
-  manual proxy setting, not a PAC script or WPAD.
+  used "ahead of the system's own settings"; that is true only since this fix. The finder for
+  Windows, which asks WinHTTP (`WinHttpGetIEProxyConfigForCurrentUser`, then `WinHttpGetProxyForUrlEx` with WPAD and the
+  PAC URL), is `tc_door43::WinHttpFinder` (`src/winproxy.rs`), and `system_proxy_finder()`
+  returns it on Windows. It makes no FFI call itself: the WinHTTP calls are proxy-watch
+  `=0.3.1`'s (Cargo.lock checksum `aa5464483809f28430fadd3e7e09cf724e2c4b1e771895fb5066b5a2f523be44`),
+  chosen and audited in `docs/evidence/proxy-watch-audit-2026-10-19.md`, whose conditions (a)
+  to (j) it meets. A finder now answers a proxy, going directly, or nothing; only nothing
+  falls back to the system's settings, so a PAC script's `DIRECT` is not overridden by the
+  manual proxy, and every failed lookup is nothing, never directly. The audit measured that
+  WinHTTP refuses a `file:///` PAC URL (12006), so the plan above for the test does not work:
+  `tests/windows_proxy.rs` serves each script over loopback http at a path of its own instead,
+  because WinHTTP keeps a script's answers for its URL for the whole computer. The crate's
+  unsafe code relies on two undocumented WinHTTP behaviours (its `src/pac/winhttp.rs:411-416`
+  and `443-457`): a call that returns at once never also calls back, and a call cancelled by
+  closing its handle no longer reads its arguments.
 - **The refused-connection flake: changed, not yet confirmed on Windows.** The code was right:
   Windows refuses a closed loopback port after about two seconds and sometimes not before
   the connect timeout, whatever the client is. The test now connects to loopback port 0,

@@ -2,3 +2,12 @@ allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true
 allow-dbg-in-tests = true
+# proxy-watch, which tc-door43's Windows proxy lookup uses (docs/evidence/proxy-watch-audit-2026-10-19.md).
+# The paths resolve only where it is built, on Windows.
+disallowed-methods = [
+  { path = "proxy_watch::pac::WinHttpPacResolver::reset_auto_proxy", reason = "it clears WinHTTP's proxy cache for the whole computer", allow-invalid = true },
+  { path = "proxy_watch::pac::WinHttpPacResolver::resolve", reason = "the audit covers resolve_config only", allow-invalid = true },
+]
+disallowed-types = [
+  { path = "proxy_watch::ProxyWatcher", reason = "nobody audited its behaviour", allow-invalid = true },
+]

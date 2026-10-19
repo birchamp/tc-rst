@@ -61,7 +61,7 @@ mod smart_http;
 mod zipping;
 
 pub use git::SeedMode;
-pub use proxy::FakeProxy;
+pub use proxy::{FakePacScript, FakeProxy};
 
 use git::Git;
 use std::collections::{HashMap, VecDeque};
