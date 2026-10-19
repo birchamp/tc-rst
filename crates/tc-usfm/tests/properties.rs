@@ -13,7 +13,7 @@ use tc_usfm::text::{normalize_whitespace, verse_words};
 use tc_usfm::words::{TokenKind, classify, words};
 use tc_usfm::{
     AlignmentGroup, Book, Document, Error, SourceWord, TargetWord, display_text, parse_aligned,
-    target_words, weave,
+    shown_text_v1, target_words, weave,
 };
 
 /// Pieces that exercise the lexer: markers of every shape, separators, attributes,
@@ -375,6 +375,32 @@ proptest! {
         prop_assert_eq!(links(&parsed.groups), links(&groups));
     }
 
+    /// The words the aligner banks of a verse (its shown text's) are the words the export
+    /// weaves (`target_words`), and weaving an alignment into it changes none of them, with
+    /// notes and other markers the shown text leaves out right after a word, and nested
+    /// alignments of up to three source words (tC4 #782, #795, #796).
+    #[test]
+    fn woven_verses_show_the_words_of_their_plain_text(
+        verse in note_verse(),
+        runs in proptest::collection::vec((1usize..4, 0usize..4), 1..12),
+        split in any::<bool>(),
+    ) {
+        let slots = target_words(&verse).unwrap();
+        let groups = group_words(&slots, &runs, split);
+        let woven = weave(&verse, &groups).unwrap();
+        let triples = |words: &[TargetWord]| -> Vec<(String, u32, u32)> {
+            words.iter().map(|w| (w.text.clone(), w.occurrence, w.occurrences)).collect()
+        };
+        let shown = |text: &str| -> Vec<(String, u32, u32)> {
+            words(&shown_text_v1(text))
+                .into_iter()
+                .map(|w| (w.text.to_owned(), w.occurrence, w.occurrences))
+                .collect()
+        };
+        prop_assert_eq!(shown(&verse), triples(&slots));
+        prop_assert_eq!(shown(&woven), triples(&slots));
+    }
+
     #[test]
     fn any_aligned_verse_reads_back_after_one_weave(verse in aligned_verse()) {
         let (aligned, plain, expected) = verse;
@@ -436,6 +462,55 @@ fn plain_verse(line_breaks: bool) -> impl Strategy<Value = String> {
     }
     let gap = proptest::sample::select(gaps);
     let end = proptest::sample::select(&["", ".", ".\n", ",\n\n", "\n\\p\n"][..]);
+    (
+        proptest::sample::select(&["", "{", "“"][..]),
+        proptest::collection::vec((word.clone(), gap), 1..20),
+        word,
+        end,
+    )
+        .prop_map(|(start, middle, last, end)| {
+            let mut out = start.to_owned();
+            for (w, g) in middle {
+                out.push_str(w);
+                out.push_str(g);
+            }
+            out.push_str(last);
+            out.push_str(end);
+            out
+        })
+}
+
+/// A plain verse whose words may have a note, a cross reference, a figure or another marker
+/// the shown text leaves out right after them, with or without a space before the next word.
+/// A `\nd` span is always closed: text after a stray `\nd*` is hidden from the shown text,
+/// as in tC4, and so are `\li` items and `\qm` lines, which this verse never holds.
+fn note_verse() -> impl Strategy<Value = String> {
+    let word = proptest::sample::select(WORDS);
+    let gap = proptest::sample::select(
+        &[
+            " ",
+            ", ",
+            "—",
+            " {",
+            "} ",
+            ". ",
+            " “",
+            "” ",
+            " \\f + \\ft note\\f* ",
+            "\\f + \\ft note\\f* ",
+            "\\f + \\ft note\\f*,",
+            "\\f + \\ft a\\f*\\f + \\ft b\\f* ",
+            "\\x - \\xt Rom 1:1\\x* ",
+            "\\fig a|src=\"b\"\\fig* ",
+            "\\va 2\\va* ",
+            "\\ts\\* ",
+            "\\rq Rom 1\\rq* ",
+            "\\fe + \\ft n\\fe* ",
+            "\n\\q2 ",
+            ", \\nd x\\nd* ",
+        ][..],
+    );
+    let end = proptest::sample::select(&["", ".", ".\n", "\\f + \\ft end\\f*", "\n\\p\n"][..]);
     (
         proptest::sample::select(&["", "{", "“"][..]),
         proptest::collection::vec((word.clone(), gap), 1..20),

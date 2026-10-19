@@ -388,3 +388,156 @@ fn the_shown_text_is_what_tc4_reads() {
         ])
     );
 }
+
+const ARCHIVES: &[(&str, &str)] = &[
+    ("bundle/en/en_ult_v91.sb.zip", "en_ult"),
+    ("bundle/en/en_ust_v91.sb.zip", "en_ust"),
+];
+
+/// The `.usfm` entries of a bundle archive.
+fn bundle_books(archive: &str) -> Vec<String> {
+    let file = std::fs::File::open(root().join(archive)).unwrap();
+    let zip = zip::ZipArchive::new(file).unwrap();
+    zip.file_names()
+        .filter(|n| n.ends_with(".usfm"))
+        .map(str::to_owned)
+        .collect()
+}
+
+fn target_words(plain: &str) -> Option<Vec<(String, u32, u32)>> {
+    let found = tc_usfm::target_words(plain).ok()?;
+    Some(
+        found
+            .into_iter()
+            .map(|w| (w.text, w.occurrence, w.occurrences))
+            .collect(),
+    )
+}
+
+/// Every verse of the ULT v91 and UST v91 Genesis and Psalms, with its alignment markup
+/// inline as a tC4 4.0 book added from aligned USFM holds it, keeps every word:
+///
+/// 1. the `\w` words of the file appear in its shown words in order (tC4's `holdsInOrder`);
+/// 2. the import's split reads it apart, and the words shown of the split plain text are the
+///    same, so a verse the import keeps as written banks what its split form banks;
+/// 3. the export's words of the split plain text (`target_words`) are those words too.
+///
+/// Before the fix, 633 + 236 ULT and 1,305 + 1,346 UST verses failed 1 or 2.
+#[test]
+fn every_genesis_and_psalms_verse_of_the_bundle_keeps_every_word() {
+    let mut counts = Vec::new();
+    let mut wrong = Vec::new();
+    for (archive, id) in ARCHIVES {
+        for book in ["GEN", "PSA"] {
+            let raw = bundle_entry(archive, &format!("{id}/ingredients/{book}.usfm"));
+            let all = verses(&raw);
+            counts.push(all.len());
+            for (reference, content) in &all {
+                let at = format!("{id} {book} {reference}");
+                let shown = words(&shown_text_v1(content));
+                if !holds_in_order(&shown, &raw_words(content)) {
+                    wrong.push(format!(
+                        "{at}: loses \\w words: {:?}",
+                        shown_text_v1(content)
+                    ));
+                }
+                let Ok(split) = tc_usfm::parse_aligned(content) else {
+                    wrong.push(format!("{at}: the split refuses it"));
+                    continue;
+                };
+                let plain = words(&shown_text_v1(&split.plain));
+                if plain != shown {
+                    wrong.push(format!("{at}: split {plain:?}, as written {shown:?}"));
+                }
+                if target_words(&split.plain).as_ref() != Some(&plain) {
+                    wrong.push(format!("{at}: the export splits it otherwise"));
+                }
+            }
+        }
+    }
+    assert_eq!(wrong, Vec::<String>::new());
+    assert_eq!(counts, [1533, 2461, 1533, 2456]);
+}
+
+/// The verses whose text tC4's `verseText` hides while the export counts it, which this
+/// check therefore names (TC4-ISSUES §1, "Found by FIX-text"): the items of a `\li` list and
+/// a line of a marker usfm-js does not know (`\qm1`), whose words are top-level siblings of
+/// the marker in the aligned form but its `content` in the plain one.
+const HIDDEN_BY_TC4: &[&str] = &[
+    "fixtures/tc4/test-fixtures/usfm-corpus/exotic-poetry-footnotes.usfm 2:2",
+    "check-text-vectors lists 1:1",
+    "check-text-vectors lists 1:2",
+    "en_ust EXO 15:21",
+];
+
+/// The tC4 #796 word list, tc-usfm's part: the words the aligner banks (the shown text's)
+/// are the words the export weaves (`target_words`) for every verse with no word markup of
+/// every plain fixture, every draft of the check-text and shown-text vectors, and the split
+/// plain text of every verse of the ULT v91 and UST v91, but for [`HIDDEN_BY_TC4`].
+#[test]
+fn the_bank_and_the_export_split_every_plain_verse_into_the_same_words() {
+    let mut books: Vec<(String, String)> = [
+        "fixtures/tc4/sample-burrito/ingredients/TIT.usfm",
+        "fixtures/tc4/sample-burrito/ingredients/JON.usfm",
+        "fixtures/tc4/test-fixtures/usfm-corpus/exotic-poetry-footnotes.usfm",
+        "fixtures/tc4/test-fixtures/usfm-corpus/exotic-partial-book.usfm",
+        "fixtures/tc4/test-fixtures/usfm-corpus/sample-JON-span.usfm",
+        "fixtures/tc4/test-fixtures/usfm-corpus/sample-TIT-draft.usfm",
+        "fixtures/tc4/conformance-fixtures/import/usfm/32-JON.usfm",
+        "fixtures/tc4/conformance-fixtures/import/usfm/57-TIT.usfm",
+        "fixtures/tc4/conformance-fixtures/import/usfm/no-id.sfm",
+        "fixtures/tc4/conformance-fixtures/import/damaged/57-TIT-unclosed.usfm",
+    ]
+    .iter()
+    .map(|f| ((*f).to_owned(), read(f)))
+    .collect();
+    for (file, name) in [
+        (
+            "fixtures/usfm/check-text-vectors.json",
+            "check-text-vectors",
+        ),
+        (
+            "fixtures/usfm/shown-text-vectors.json",
+            "shown-text-vectors",
+        ),
+    ] {
+        let vectors: serde_json::Value = serde_json::from_str(&read(file)).unwrap();
+        for (draft, raw) in vectors["drafts"].as_object().unwrap() {
+            books.push((format!("{name} {draft}"), raw.as_str().unwrap().to_owned()));
+        }
+    }
+    let mut differ = Vec::new();
+    let (mut compared, mut marked_up) = (0, 0);
+    for (name, raw) in &books {
+        for (reference, content) in verses(raw) {
+            let Some(export) = target_words(&content) else {
+                marked_up += 1;
+                continue;
+            };
+            compared += 1;
+            if words(&shown_text_v1(&content)) != export {
+                differ.push(format!("{name} {reference}"));
+            }
+        }
+    }
+    let (mut plains, mut refused) = (0, 0);
+    for (archive, id) in ARCHIVES {
+        for entry in bundle_books(archive) {
+            let book = entry.rsplit('/').next().unwrap().trim_end_matches(".usfm");
+            for (reference, content) in verses(&bundle_entry(archive, &entry)) {
+                let Ok(split) = tc_usfm::parse_aligned(&content) else {
+                    refused += 1;
+                    continue;
+                };
+                plains += 1;
+                let export = target_words(&split.plain);
+                if export.is_none() || words(&shown_text_v1(&split.plain)) != export.unwrap() {
+                    differ.push(format!("{id} {book} {reference}"));
+                }
+            }
+        }
+    }
+    assert_eq!(differ, HIDDEN_BY_TC4);
+    assert_eq!((compared, marked_up), (427, 5));
+    assert_eq!((plains, refused), (47_680, 43));
+}
