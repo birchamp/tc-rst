@@ -14,7 +14,25 @@
 //! 5. Otherwise its `children` are walked, if it has any; an object with neither (a cross
 //!    reference, a figure, a marker usfm-js keeps no text for) is skipped.
 //!
-//! The pieces are joined as they are, so the file's whitespace and line breaks stay.
+//! The pieces are joined as they are, so the file's whitespace and line breaks stay, with one
+//! addition (tC4 #795, the rule of tC4's open PR #800 at 5dcd147): usfm-js keeps the character
+//! after an object's end marker in its `nextChar`, which a skipped object takes with it, so
+//! `siervo\f + \ft o esclavo\f* de` would read "siervode". A skipped object therefore offers
+//! its `nextChar`, and the first one offered since the last text is put back before the next
+//! text when the text before it ends in a character that is not whitespace and the next text
+//! starts with one: "siervo de", while `siervo \f …\f* de` and `siervo\f …\f*, de` keep the
+//! text they have. Characters are UTF-16 code units and whitespace is JavaScript's `\s`, as
+//! in tC4's `slice(-1)` and `/^\S/`.
+//!
+//! PR #800 lets only a footnote, a cross reference, an extended note and a figure offer it
+//! (`tag` `f`, `fe`, `ef`, `x`, `ex` or `fig`). The rebuild lets every skipped object offer
+//! it, so words never join across `\va`, `\vp`, `\ca`, `\rq`, `\cat`, `\ndx`, `\pro`, a lone
+//! `\xt`, `\fdc` or the chunk milestone `\ts\*` either, which tC4 joins: a joined word can be
+//! neither checked nor aligned, and the export cannot weave it (#796). This is a declared
+//! difference (`docs/PLAN.md`); on the ULT and UST v91 it gives tC4's text on every verse.
+//! Words still join where usfm-js misreads the markup around a note that stands inside an
+//! alignment run right before `\zaln-e\*`, or around an unbalanced `\zaln-e\*` (the separator
+//! lands in the `content` of an object usfm-js makes of the end marker), as in tC4.
 //!
 //! JavaScript recursion runs out of stack a few thousand levels down; this walk keeps its own
 //! stack and has no depth limit, as the other derivations (`docs/STORAGE.md` §7.7). Where the
@@ -24,7 +42,7 @@
 //! string is iterated character by character, and a character has no property, so it gives
 //! nothing.
 
-use super::js::{JsStr, eq};
+use super::js::{JsStr, eq, is_space};
 use super::usfmjs::{Heap, Key, Parsed, Ref, Thrown, Val, truthy};
 
 /// The shown text of every verse of `parsed`, in order, joined and not yet trimmed; `Err`
@@ -35,8 +53,13 @@ pub(super) fn text(parsed: &Parsed) -> Result<JsStr, Thrown> {
         heap,
         on_path: vec![false; heap.len()],
         text: Vec::new(),
+        gap: Vec::new(),
+        last: None,
     };
     for (_, verse) in &parsed.verses {
+        // tC4 tokenizes each verse on its own.
+        walk.gap.clear();
+        walk.last = None;
         walk.verse(*verse)?;
     }
     Ok(walk.text)
@@ -60,6 +83,10 @@ struct Walk<'h> {
     /// The lists on the path of the walk, to find a list inside itself.
     on_path: Vec<bool>,
     text: JsStr,
+    /// The `nextChar` the first object skipped since the last text offered.
+    gap: JsStr,
+    /// The last code unit of the last text.
+    last: Option<u16>,
 }
 
 impl<'h> Walk<'h> {
@@ -77,12 +104,37 @@ impl<'h> Walk<'h> {
             };
             *at += 1;
             match step(self.heap, object)? {
-                Step::Skip | Step::Nothing => {}
-                Step::Text(text) => self.text.extend_from_slice(text),
+                Step::Skip => self.skip(object),
+                Step::Nothing => {}
+                Step::Text(text) => self.push(text),
                 Step::Walk(list) => self.enter(list, &mut stack)?,
             }
         }
         Ok(())
+    }
+
+    /// PR #800's `noteGap`, for every skipped object (see the module documentation).
+    fn skip(&mut self, object: Ref) {
+        if self.gap.is_empty()
+            && let Some(Val::Str(next)) = self.heap.get(object, &Key::NextChar)
+        {
+            self.gap.clone_from(next);
+        }
+    }
+
+    /// PR #800's `push`.
+    fn push(&mut self, text: &[u16]) {
+        if let (Some(&first), Some(&last)) = (text.first(), text.last()) {
+            if !self.gap.is_empty()
+                && self.last.is_some_and(|unit| !is_space(unit))
+                && !is_space(first)
+            {
+                self.text.extend_from_slice(&self.gap);
+            }
+            self.gap.clear();
+            self.last = Some(last);
+        }
+        self.text.extend_from_slice(text);
     }
 
     fn enter(&mut self, list: Ref, stack: &mut Vec<(Ref, usize)>) -> Result<(), Thrown> {

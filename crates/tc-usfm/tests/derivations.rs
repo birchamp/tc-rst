@@ -11,7 +11,7 @@ use md5::{Digest, Md5};
 use proptest::prelude::*;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use tc_usfm::{SelectionCount, plain_text_v1, selections_v1, tokenize_v1};
+use tc_usfm::{SelectionCount, plain_text_v1, selections_v1, shown_text_v1, tokenize_v1};
 
 fn fixtures() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures")
@@ -165,6 +165,8 @@ fn derivations_never_panic() {
         |text, census| {
             let plain = plain_text_v1(&text);
             prop_assert_eq!(plain.trim(), plain.as_str());
+            let shown = shown_text_v1(&text);
+            prop_assert_eq!(shown.trim(), shown.as_str());
             census.saw(if plain.is_empty() { "no text" } else { "text" });
             let words = tokenize_v1(&plain);
             let selections: Vec<SelectionCount<'_>> = words
@@ -226,14 +228,23 @@ fn hostile_verses(bytes: usize) -> Vec<(&'static str, String)> {
         ),
         ("nested markers with no text", fill("\\add ")),
         (
+            "nested alignments",
+            format!(
+                "{}\\w x\\w*{}",
+                fill("\\zaln-s |x-content=\"a\"\\*"),
+                "\\zaln-e\\*".repeat(bytes / 24)
+            ),
+        ),
+        ("notes between words", fill("a\\f + \\ft n\\f*")),
+        (
             "a long selection",
             format!("{}\u{0}{}b", "a".repeat(bytes), "a".repeat(bytes / 4)),
         ),
     ]
 }
 
-/// The time `selections_v1` takes on the verse (it parses the verse as `plain_text_v1`
-/// does, then walks it), the best of `runs`.
+/// The time `selections_v1` (it parses the verse as `plain_text_v1` does, then walks it)
+/// and `shown_text_v1` take on the verse, the best of `runs`.
 fn time_derivations(verse: &str, runs: usize) -> Duration {
     // The text after U+0000 is a selection to count in the text before it.
     let (text, selection) = verse.split_once('\u{0}').unwrap_or((verse, "x"));
@@ -245,6 +256,7 @@ fn time_derivations(verse: &str, runs: usize) -> Duration {
         .map(|_| {
             let start = Instant::now();
             let _ = selections_v1(text, &selections);
+            let _ = shown_text_v1(text);
             start.elapsed()
         })
         .min()

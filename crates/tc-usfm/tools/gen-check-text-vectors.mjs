@@ -1,5 +1,5 @@
 // Generates fixtures/usfm/check-text-vectors.json: what tC4's Check screen and aligner read
-// of each verse of a draft (`verseTextIndex`, src/state.jsx:352 at d310bf3).
+// of each verse of a draft (`verseTextIndex` of src/state.jsx).
 //
 // For every verse tC4's indexer finds (`indexBook`, src/data/usfm/indexer.ts):
 //
@@ -8,20 +8,24 @@
 //   paragraph-level marker, `\v` or `\c`; the verse is drafted when that body, trimmed, is
 //   neither empty nor the stub `___`. A poetry verse whose text starts on a `\q1` line has
 //   an empty body, so tC4 reads it as undrafted.
-// - `text`, for a drafted verse: `verseText` of src/data/bookModel.js:15 over usfm-js's
-//   whole-book parse (`parseChapters`), the top-level `text` of each verse object, or the
-//   `text` of its children one level down, joined and trimmed. It is what the Check screen
-//   shows and selects in and what the aligner splits into words
-//   (`buildAlignmentSession`, src/state.jsx:1183).
+// - `text`, for a drafted verse: `verseText` of src/data/bookModel.js over usfm-js's
+//   whole-book parse (`parseChapters`), joined and trimmed. It is what the Check screen
+//   shows and selects in and what the aligner splits into words (`buildAlignmentSession`
+//   of src/state.jsx). At d310bf3 it reads each verse object's `text`, or its children's
+//   one level down; from 9ad4d5c on (#782) it is `tokensText(tokenizeVerse(vObj))` of
+//   src/data/sourceHighlight.ts, which reads words at any depth, and PR #800 (5dcd147) adds
+//   the space after a note between two words. No draft here nests an alignment or holds a
+//   note between two words, so the file is the same from all three.
 //
-// The script runs tC4's own code: `indexBook` is imported from the checkout, and
-// `verseTextIndex`, `parseChapters` and `verseText` are read out of src/state.jsx and
-// src/data/bookModel.js and run as written (bookModel.js itself imports modules Node cannot
-// load without tC4's bundler).
+// The script runs tC4's own code: `indexBook`, `tokenizeVerse` and `tokensText` are imported
+// from the checkout, and `verseTextIndex`, `parseChapters` and `verseText` are read out of
+// src/state.jsx and src/data/bookModel.js and run as written (bookModel.js itself imports
+// modules Node cannot load without tC4's bundler).
 //
 // Needs Node 22.18 or later, which runs tC4's TypeScript as it is. Run from the repository
-// root with the tC4 checkout whose node_modules hold usfm-js 3.4.3:
-//   node crates/tc-usfm/tools/gen-check-text-vectors.mjs <tC4 checkout> > fixtures/usfm/check-text-vectors.json
+// root with a tC4 tree (a checkout, or a `git archive` of a commit) whose node_modules hold
+// usfm-js 3.4.3:
+//   node crates/tc-usfm/tools/gen-check-text-vectors.mjs <tC4 tree> > fixtures/usfm/check-text-vectors.json
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -38,6 +42,9 @@ for (const [name, version] of Object.entries(pinned)) {
 const require = createRequire(import.meta.url);
 const usfm = require(path.join(nm, "usfm-js"));
 const { indexBook } = await import(pathToFileURL(path.join(tc4, "src/data/usfm/indexer.ts")).href);
+const { tokenizeVerse, tokensText } = await import(
+  pathToFileURL(path.join(tc4, "src/data/sourceHighlight.ts")).href
+);
 
 /** The source of one top-level declaration of `file`, from `start` to the line that closes it. */
 const declaration = (file, start, end) => {
@@ -52,9 +59,12 @@ const parseChapters = new Function(
   "usfm",
   `${declaration("src/data/bookModel.js", "export const parseChapters = ", "\n};")} return parseChapters;`,
 )(usfm);
+// Unused at d310bf3, where verseText reads the objects itself.
 const verseText = new Function(
+  "tokenizeVerse",
+  "tokensText",
   `${declaration("src/data/bookModel.js", "export const verseText = ", ".trim();")} return verseText;`,
-)();
+)(tokenizeVerse, tokensText);
 const verseTextIndex = new Function(
   "parseChapters",
   "indexBook",

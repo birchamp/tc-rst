@@ -69,6 +69,13 @@ pub fn plain_text_v1(content: &str) -> String {
 /// - Not shown: footnotes, cross references and figures, a section heading's own text, the
 ///   items of a `\li` list, and the text usfm-js keeps for a marker it does not know
 ///   (`\qm1`), as in tC4.
+/// - Where a footnote or any other object left out stands between two characters that are
+///   not whitespace, the character usfm-js keeps after its end marker is put back, so the
+///   words on either side never join: `siervo\f + \ft o esclavo\f* de` shows "siervo de"
+///   (tC4 #795). tC4's open PR #800 does this for notes, cross references and figures only;
+///   the rebuild does it for every object left out (`\va`, `\vp`, `\ca`, `\rq`, `\cat`,
+///   `\ts\*` …), a declared difference. Words still join where usfm-js misreads a note inside
+///   an alignment run or an unbalanced `\zaln-e\*`, as in tC4.
 ///
 /// It is never hashed: hashes are of [`plain_text_v1`]. It is not one of `format.json`'s
 /// derivations (`docs/STORAGE.md` §12.1), since no fold output reads it, but it decides
