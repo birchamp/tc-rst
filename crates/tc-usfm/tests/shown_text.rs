@@ -369,11 +369,29 @@ fn words_after_a_span_that_holds_a_note_show() {
     }
 }
 
-/// The verses on which the rebuild keeps words apart that tC4 (PR #800 included) joins, with
-/// tC4's joined text and the rebuild's: a marker other than a note, a cross reference or a
-/// figure between "siervo" and "de", and notes that usfm-js misreads inside an alignment run,
-/// where it keeps no character after the note.
-const SPACED: &[(&str, &str, &str)] = &[
+/// The items of a `\li1` list, a line of a marker usfm-js does not know (`\qm1`) and a table
+/// cell show (a declared difference: usfm-js keeps their text as `content`, which tC4 hides
+/// from Check and the Align bank while the export counts it).
+#[test]
+fn list_items_and_unknown_paragraph_lines_show() {
+    for (content, shown) in [
+        ("a\n\\li1 b c\n\\li2 d e", "a\nb c\nd e"),
+        ("a\n\\qm1 b c", "a\nb c"),
+        ("a\n\\tr \\tc1 b\\tc2 c", "a\nb c"),
+        ("a\n\\li1 b \\nd c\\nd*s d", "a\nb c s d"),
+        ("a\n\\esb b\n\\esbe c", "a\nc"),
+    ] {
+        assert_eq!(shown_text_v1(content), shown, "{content}");
+    }
+}
+
+/// The verses on which the rebuild shows what tC4 (PR #800 included) does not, with tC4's text
+/// and the rebuild's (declared differences, `docs/PLAN.md`): words kept apart that tC4 joins
+/// (a marker other than a note, a cross reference or a figure between "siervo" and "de", and
+/// notes that usfm-js misreads inside an alignment run, where it keeps no character after the
+/// note), and the items of a `\li1` list and the text of a `\qm1` line, which tC4 hides (UST
+/// EXO 15:21 as written holds the opening quotation mark of its song in its `\qm1`).
+const DECLARED: &[(&str, &str, &str)] = &[
     ("hidden-va 1:1", "siervode", "siervo de"),
     ("hidden-vp 1:1", "siervode", "siervo de"),
     ("hidden-ca 1:1", "siervode", "siervo de"),
@@ -385,6 +403,16 @@ const SPACED: &[(&str, &str, &str)] = &[
         "bundle/en/en_ult_v91.sb.zip en_ult/ingredients/2SA.usfm 23:8",
         "spearagainst",
         "spear against",
+    ),
+    (
+        "bundle/en/en_ust_v91.sb.zip en_ust/ingredients/EXO.usfm 15:21",
+        "song:\nSing",
+        "song:\n“Sing",
+    ),
+    (
+        "fixtures/tc4/test-fixtures/usfm-corpus/exotic-poetry-footnotes.usfm 2:2",
+        "members:\nThe list",
+        "members:\nthe first member,\na nested member,\nthe last member.\nThe list",
     ),
 ];
 
@@ -419,17 +447,17 @@ fn check_vectors(file: &serde_json::Value) -> (usize, usize) {
         for case in cases {
             let key = key(case);
             let shown = shown_text_v1(&ours[&key]);
-            let spaced = SPACED
+            let declared = DECLARED
                 .iter()
                 .find(|(at, ..)| *at == format!("{book} {key}"));
             match (case["text"].as_str(), case["md5"].as_str()) {
                 (Some(theirs), None) => {
                     texts += 1;
-                    let expected = spaced.map_or_else(
+                    let expected = declared.map_or_else(
                         || theirs.to_owned(),
                         |(_, joined, apart)| theirs.replacen(joined, apart, 1),
                     );
-                    if shown != expected || spaced.is_some() && shown == theirs {
+                    if shown != expected || declared.is_some() && shown == theirs {
                         wrong.push(format!("{book} {key}: {shown:?} against tC4's {theirs:?}"));
                     }
                 }
@@ -451,7 +479,7 @@ fn check_vectors(file: &serde_json::Value) -> (usize, usize) {
 /// `tools/gen-shown-text-vectors.mjs` with tC4's own `verseText` at PR #800's head 5dcd147:
 /// tC4's aligned fixtures, drafts with notes and other markers between words, and the md5 of
 /// every verse of the ULT and UST v91 Genesis and Psalms. The codec finds the verses usfm-js
-/// finds. The differences are the declared ones ([`SPACED`]). `main`, tC4 main's text where
+/// finds. The differences are the declared ones ([`DECLARED`]). `main`, tC4 main's text where
 /// it differs, holds exactly the drafts where PR #800's space is the only change.
 #[test]
 fn the_shown_text_is_what_tc4_reads() {
@@ -573,21 +601,10 @@ fn every_genesis_and_psalms_verse_of_the_bundle_keeps_every_word() {
     assert_eq!(counts, [1533, 2461, 1533, 2456]);
 }
 
-/// The verses whose text tC4's `verseText` hides while the export counts it, which this
-/// check therefore names (TC4-ISSUES §1, "Found by FIX-text"): the items of a `\li` list and
-/// a line of a marker usfm-js does not know (`\qm1`), whose words are top-level siblings of
-/// the marker in the aligned form but its `content` in the plain one.
-const HIDDEN_BY_TC4: &[&str] = &[
-    "fixtures/tc4/test-fixtures/usfm-corpus/exotic-poetry-footnotes.usfm 2:2",
-    "check-text-vectors lists 1:1",
-    "check-text-vectors lists 1:2",
-    "en_ust EXO 15:21",
-];
-
 /// The tC4 #796 word list, tc-usfm's part: the words the aligner banks (the shown text's)
 /// are the words the export weaves (`target_words`) for every verse with no word markup of
 /// every plain fixture, every draft of the check-text and shown-text vectors, and the split
-/// plain text of every verse of the ULT v91 and UST v91, but for [`HIDDEN_BY_TC4`].
+/// plain text of every verse of the ULT v91 and UST v91.
 #[test]
 fn the_bank_and_the_export_split_every_plain_verse_into_the_same_words() {
     let mut books: Vec<(String, String)> = [
@@ -651,7 +668,7 @@ fn the_bank_and_the_export_split_every_plain_verse_into_the_same_words() {
             }
         }
     }
-    assert_eq!(differ, HIDDEN_BY_TC4);
+    assert_eq!(differ, Vec::<String>::new());
     assert_eq!((compared, marked_up), (427, 5));
     assert_eq!((plains, refused), (47_680, 43));
 }

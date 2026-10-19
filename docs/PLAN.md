@@ -88,6 +88,10 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
   of the span's end marker), so Check and the Align bank miss it, a woven alignment for the
   verse cannot be made, and the store's verse save drops the links to it. So does the text
   after a stray end marker (`a\nd* b`). The note's own words stay hidden.
+- The items of a `\li1` list, a `\qm1` line and a table cell show, where tC4 hides them
+  (usfm-js keeps their text as `content`) while the export counts their words: UST EXO 15:21
+  keeps the 28 words the import placed at open and at the next verse save, where tC4's text
+  drops 11.
 
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9

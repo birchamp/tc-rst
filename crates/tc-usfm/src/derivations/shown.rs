@@ -13,7 +13,7 @@
 //!    then its `children` are walked if they are a list.
 //! 5. An object with a string `content` gives that content, and then its `children`, when
 //!    the content is verse text: the object of an end marker (a `tag` ending in `*` that is
-//!    not a milestone's `\*`).
+//!    not a milestone's `\*`), or of a paragraph marker but `\esb` ([`MarkerClass::Paragraph`]).
 //! 6. Otherwise its `children` are walked, if it has any; an object with neither (a cross
 //!    reference, a figure, a marker usfm-js keeps no text for) is skipped.
 //!
@@ -30,7 +30,10 @@
 //!   marker's `content`, and it cannot match the end of a span that holds a note, a cross
 //!   reference or a figure: `\wj Blessed are the poor\f + \ft Or humble\f* in spirit\wj* and
 //!   he went on` gives an object `{tag: "wj*", content: "and he went on"}`, which tC4 hides,
-//!   as it hides the text after a stray end marker (`a\nd* b`).
+//!   as it hides the text after a stray end marker (`a\nd* b`). usfm-js also keeps the text
+//!   of a paragraph marker it does not know as `content`: the items of a `\li1` list, a
+//!   `\qm1` line, a table cell `\tc1`. On the ULT and UST v91 rule 5 changes one verse from
+//!   tC4's text: UST EXO 15:21 as written, whose `\qm1` holds the "“" that opens its song.
 //!
 //! A note, cross reference or figure that usfm-js reads inside a character span has no
 //! `endTag`, and the objects of its parts follow it (`ft`, `fq`, `fq*` …), so every object
@@ -79,8 +82,9 @@
 //! string is iterated character by character, and a character has no property, so it gives
 //! nothing.
 
-use super::js::{JsStr, eq, is_space};
+use super::js::{JsStr, eq, is_space, to_string};
 use super::usfmjs::{Heap, Key, Parsed, Ref, Thrown, Val, truthy};
+use crate::markers::{MarkerClass, classify};
 use crate::words::TokenKind;
 
 /// Notes, cross references and figures.
@@ -300,11 +304,17 @@ fn step(heap: &Heap, object: Ref) -> Result<Step<'_>, Thrown> {
 }
 
 /// Whether the `content` usfm-js keeps for an object of `tag` is verse text (rule 5): the
-/// tag of an end marker but a milestone's `\*`.
+/// tag of an end marker but a milestone's `\*`, or of a paragraph marker but `\esb`.
 fn content_is_verse_text(tag: &[u16]) -> bool {
-    tag.split_last().is_some_and(|(&star, name)| {
-        star == u16::from(b'*') && name.last().is_some_and(|&unit| unit != u16::from(b'\\'))
-    })
+    match tag.split_last() {
+        Some((&star, name)) if star == u16::from(b'*') => {
+            name.last().is_some_and(|&unit| unit != u16::from(b'\\'))
+        }
+        _ => {
+            let tag = to_string(tag);
+            classify(&tag) == MarkerClass::Paragraph && tag != "esb"
+        }
+    }
 }
 
 /// Whether `object` is a marker's whose start and end keep words apart: anything but plain

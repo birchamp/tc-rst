@@ -194,7 +194,9 @@ fn fixture_verses(rel: &str) -> Vec<(String, String)> {
 
 /// tC4's way 3 of `test/bookModel-nested-alignment.test.ts`: a verse that nests no alignment
 /// (plain, footnoted, poetry with line breaks, aligned one level deep) keeps the text it had
-/// before #782, so a stored Check selection or an alignment still matches it.
+/// before #782, so a stored Check selection or an alignment still matches it. The one verse
+/// that differs holds a `\li1` list, whose items tC4 hides (a declared difference, rule 5 of
+/// `shown.rs`).
 #[test]
 fn a_verse_with_no_nested_alignment_keeps_its_one_level_text() {
     let mut compared = 0;
@@ -219,7 +221,7 @@ fn a_verse_with_no_nested_alignment_keeps_its_one_level_text() {
             }
         }
     }
-    assert_eq!(differ, Vec::<String>::new());
+    assert_eq!(differ, ["usfm-corpus/exotic-poetry-footnotes.usfm 2:2"]);
     assert!(compared > 50, "{compared}");
     let poem = fixture_verses("usfm-corpus/exotic-poetry-footnotes.usfm");
     let (_, four_five) = poem.iter().find(|(r, _)| r == "1:4-5").unwrap();

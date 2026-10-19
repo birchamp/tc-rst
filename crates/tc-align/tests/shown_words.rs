@@ -148,6 +148,42 @@ fn a_verse_kept_as_written_shows_yahweh() {
     assert!(triples(verse.words()).contains(&("Yahweh".to_owned(), 1, 1)));
 }
 
+/// Splits a bundle verse as the import splits it and opens it against its source; returns
+/// its bank, the links the split placed, the links kept at open and the links dropped.
+fn open_imported(
+    (archive, id): (&str, &str),
+    (source_archive, source_id, source_name): (&str, &str, &str),
+    book: &str,
+    chapter: u16,
+    verse: u16,
+) -> (Vec<String>, usize, usize, usize) {
+    let raw = bundle_entry(archive, &format!("{id}/ingredients/{book}.usfm"));
+    let content = verse_of(&raw, &format!("{chapter}:{verse}"));
+    let (plain, value) = split_aligned(&content, verse_no(verse)).unwrap();
+    let original = bundle_entry(
+        source_archive,
+        &format!("{source_id}/ingredients/{book}.usfm"),
+    );
+    let source =
+        SourceVerse::from_book(&Book::parse(&original), chapter, VerseSpan::single(verse)).unwrap();
+    let basis = Basis::run(verse_no(verse), verse_no(verse), source_name.into(), None);
+    let target = TargetVerse::new(&plain);
+    let bank = target.words().iter().map(|w| w.word.clone()).collect();
+    let aligner = Aligner::open(Some(&value), target, &source, basis).unwrap();
+    (
+        bank,
+        value.placed(),
+        aligner.value().placed(),
+        aligner.dropped().len(),
+    )
+}
+
+const UGNT: (&str, &str, &str) = (
+    "el-x-koine_ugnt_v0.34.sb.zip",
+    "el-x-koine_ugnt",
+    common::SOURCE_NT,
+);
+
 /// TC4-ISSUES row 3: after the import's split, the ULT's MAT 5:22, 5:44 and 1TH 3:2 hold a
 /// footnote right after a word. The words on either side stay apart, so every link the
 /// import placed is kept when the verse opens (before, "brotherwill" dropped 2 of 44).
@@ -158,42 +194,35 @@ fn imported_mat_5_22_opens_with_all_44_links() {
         ("MAT", 5, 44, 17, ["enemies", "and"]),
         ("1TH", 3, 2, 24, ["God", "in"]),
     ] {
-        let raw = bundle_entry(
-            "en_ult_v91.sb.zip",
-            &format!("en_ult/ingredients/{book}.usfm"),
-        );
-        let content = verse_of(&raw, &format!("{chapter}:{verse}"));
-        let (plain, value) = split_aligned(&content, verse_no(verse)).unwrap();
-        let greek = bundle_entry(
-            "el-x-koine_ugnt_v0.34.sb.zip",
-            &format!("el-x-koine_ugnt/ingredients/{book}.usfm"),
-        );
-        let source =
-            SourceVerse::from_book(&Book::parse(&greek), chapter, VerseSpan::single(verse))
-                .unwrap();
-        let basis = Basis::run(
-            verse_no(verse),
-            verse_no(verse),
-            common::SOURCE_NT.into(),
-            None,
-        );
-        let target = TargetVerse::new(&plain);
-        let shown: Vec<&str> = target.words().iter().map(|w| w.word.as_str()).collect();
-        assert!(
-            shown.windows(2).any(|pair| pair == apart),
-            "{book} {chapter}:{verse}: {:?}",
-            target.text()
-        );
-        assert_eq!(target.words().len(), links, "{book} {chapter}:{verse}");
-        let aligner = Aligner::open(Some(&value), target, &source, basis).unwrap();
-        assert_eq!(value.placed(), links, "{book} {chapter}:{verse}");
-        assert_eq!(aligner.value().placed(), links, "{book} {chapter}:{verse}");
-        assert!(
-            aligner.dropped().is_empty(),
-            "{book} {chapter}:{verse}: {:?}",
-            aligner.dropped()
+        let at = format!("{book} {chapter}:{verse}");
+        let (bank, placed, kept, dropped) =
+            open_imported(("en_ult_v91.sb.zip", "en_ult"), UGNT, book, chapter, verse);
+        assert!(bank.windows(2).any(|pair| pair == apart), "{at}: {bank:?}");
+        assert_eq!(
+            (bank.len(), placed, kept, dropped),
+            (links, links, links, 0),
+            "{at}"
         );
     }
+}
+
+/// UST EXO 15:21 holds its song in two `\qm1` lines, whose text usfm-js keeps as `content`.
+/// The bank holds those words, so all 28 links the import placed are kept at open (before,
+/// "Sing to Yahweh … enemies." was hidden from the bank, which held 17 words, and 11 dropped).
+#[test]
+fn imported_ust_exo_15_21_opens_with_all_its_links() {
+    let uhb = (
+        "hbo_uhb_v3.0.0.sb.zip",
+        "hbo_uhb",
+        "dcs::unfoldingWord/hbo_uhb@v3.0.0",
+    );
+    let (bank, placed, kept, dropped) =
+        open_imported(("en_ust_v91.sb.zip", "en_ust"), uhb, "EXO", 15, 21);
+    assert!(
+        bank.windows(2).any(|pair| pair == ["song", "Sing"]),
+        "{bank:?}"
+    );
+    assert_eq!((bank.len(), placed, kept, dropped), (28, 28, 28, 0));
 }
 
 /// Checks that the bank of `plain` is the export's word list, and that a value placing every
@@ -269,15 +298,18 @@ fn words_after_a_nested_character_span_bank_and_weave() {
     }
 }
 
-/// A character span or a paragraph marker right before a letter, and adjacent ruby words: the
-/// bank holds the export's words, so a value that places every word weaves (before, it held
-/// "Lords", "Yahwehque" and "神愛").
+/// A character span or a paragraph marker right before a letter, adjacent ruby words, the
+/// items of a `\li1` list and a `\qm1` line: the bank holds the export's words, so a value
+/// that places every word weaves (before, it held "Lords", "Yahwehque" and "神愛", and none
+/// of the list's or the line's words).
 #[test]
 fn words_beside_a_span_or_paragraph_marker_bank_and_weave() {
     for plain in [
         "the \\add Lord\\add*s house",
         "Yahweh\\q2 que",
         "\\rb 神|かみ\\rb*\\rb 愛|あい\\rb* x",
+        "a\n\\li1 b c\n\\li2 d e",
+        "a\n\\qm1 b c",
     ] {
         banks_the_export_words_and_weaves(plain);
     }

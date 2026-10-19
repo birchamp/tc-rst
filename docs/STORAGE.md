@@ -2762,12 +2762,13 @@ The derivation functions live in `tc-usfm` and are versioned (§12):
 screens show, and split into words, `tc_usfm::shown_text_v1(content)`: tC4's `verseText` of
 `src/data/bookModel.js:15` (through `verseTextIndex`, `src/state.jsx:352`, at d310bf3), which the
 Check screen shows and taps and the aligner banks (`src/state.jsx:1183`). It parses `"\v 1 " +
-content` with usfm-js 3.4.3 as `plain_text_v1` does and joins each verse object's `text`, or else
-the `text` of its children one level down, trimmed with JavaScript's `trim`. So a Psalm's
-superscription and its `\qs Selah\qs*` are words to check and to align, while a footnote and
-the items of a `\li` list are not shown, as in tC4. (`tc_usfm::display_text`, the readable text
-of `src/views/verseText.js`, which tC4's source panes show, keeps the list items; it is no
-verse's shown text.) Every hash is
+content` with usfm-js 3.4.3 as `plain_text_v1` does and joins the `text` of the verse objects at
+any depth (tC4 9ad4d5c, #782), trimmed with JavaScript's `trim`. So a Psalm's superscription and
+its `\qs Selah\qs*` are words to check and to align, while a footnote is not shown. Where tC4
+hides words the export counts (the items of a `\li` list, the words after a span that holds a
+footnote), the rebuild shows them, a declared difference (`docs/PLAN.md`; the rules are in
+`crates/tc-usfm/src/derivations/shown.rs`). (`tc_usfm::display_text`, the readable text of
+`src/views/verseText.js`, which tC4's source panes show, is no verse's shown text.) Every hash is
 of `plain_text_v1`, never of the shown text (`TargetText::md5`, `TargetText::shown` in
 `tc_journal::decision`). The two texts differ on many verses: `plain_text_v1` keeps a poetry
 line break as a line break, drops the text of a `\qs` written over lines (the ULT's Selah)
