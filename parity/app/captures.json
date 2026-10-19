@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "a1a0367dbfc7b70e",
+    "ui": "819d225a3c3bfded",
     "commit": "dev",
     "api": 1
   },
@@ -25,8 +25,8 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "A8",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "layers": [
         "dom"
       ],
@@ -44,9 +44,9 @@
         }
       },
       "png": "screens/share-signin.png",
-      "sha256": "4705d2bf05d5623598a10fd5863f3f89c18ce3d5f3894f8a09dcf8a4f6476446",
+      "sha256": "fd452e64bb7138f897bb15b29338b544864cb33f8d7ca35b391f90014c2259a6",
       "dom": "dom/share-signin.json",
-      "domSha256": "0c311faaa7f1a1367c4bf686519a40f2b1f5d041a9210224fe76ecbea370b80c"
+      "domSha256": "4920efdd5acd141e756d0284e019346efd06b18affe1229fb5e757a1997c3e20"
     },
     {
       "name": "account-menu",
@@ -193,8 +193,8 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "A8",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "layers": [
         "dom"
       ],
@@ -205,17 +205,17 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/net-failed.png",
-      "sha256": "f8ac76b4e6f9582186df32a003d65782072e5ef9d1bf9d512a9d73e7d959f8ef",
+      "sha256": "5a220510a31831e3f9801f169691330697f9e0931189aa178f810332b1da7bce",
       "dom": "dom/net-failed.json",
-      "domSha256": "96062629b7f4ae323a7eb1fe00628328bb918298bfd7d81ea0b4077151f0753b"
+      "domSha256": "6b744235dfec824bea5a6ce9d6c6aaa74c251d5efa2715159f91e86faadb1e77"
     },
     {
       "name": "signin-error",
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "A8",
-      "backend": "memory",
+      "by": "C1a",
+      "backend": "store",
       "layers": [
         "dom"
       ],
@@ -233,9 +233,9 @@
         }
       },
       "png": "screens/signin-error.png",
-      "sha256": "18d1f05c2c4a72b0efe0ec7846e9c09595e48db4148060781a46ff2f91a1d43e",
+      "sha256": "2e29ca8201721bb65de996ee39cb2afa153d681871c2d93310f84646919fbb92",
       "dom": "dom/signin-error.json",
-      "domSha256": "041a21a6779dca48e6e46d009e4f643b9d984c7a528fd4bc36f1bf9e0a61670e"
+      "domSha256": "a75105df29c3da7d97019b07d0267220b09591f74b544f209600fff184f0884e"
     }
   ]
 }
