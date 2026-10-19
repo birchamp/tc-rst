@@ -107,8 +107,8 @@ store, differ only in that build id. `env-rust.test.mjs` and every journey ran o
   that check for every project (`open.rs`, O5). On a Linux or macOS computer with Dropbox
   installed, every project opens read-only "copied by Dropbox" today (risk 23). tc-app's
   `folders.rs` keeps the right rule for the first launch.
-- R27: the creation pins at the first open (tC4 #766) need a new `SystemReason` and a write in
-  tc-store's open; `open_writes_creation_pins_only_when_none_exist` fails today exactly there
-  ("Primary is pinned at the first open") and is ignored until R27 lands.
+- R27 is built by C1a: the creation pins at the first open (tC4 #766) are one batch of
+  `System(CreationPins)` written by tc-store's open; `open_writes_creation_pins_only_when_none_exist`
+  passes.
 - R29: a public `project.json` writer (the scenario writer writes the four fields itself).
 - R30: a non-blocking `ProjectHandle::is_idle()` for `test/quiet`.

@@ -478,18 +478,15 @@ fn a_summary_stamp_lists_one_folder_and_stats_one_file_at_any_history() {
     assert_eq!(cost(), short);
 }
 
-// --- tC4 #766: the creation pins at the first open (R27) -----------------------------------
+// --- tC4 #766: the creation pins at the first open ----------------------------------------
 
 /// tC4 #766 (TC4-DELTA-2026-10-19 §3.12.4): an existing project whose pin groups are all empty
 /// gets the creation pins at its first open, in one batch of a System cause, never `Edit`, so
 /// History does not say the translator changed the resources; a second open writes nothing,
-/// and a project with pins keeps its `resources.json` byte for byte. The write needs a new
-/// `SystemReason` (a format addition before 1.0) inside tc-store's open: R27. Until it lands
-/// the rebuild does what tC4 4.0 does at d310bf3: nothing is written at the open, and Check
-/// shows "No resources pinned" with its guided fix (B5a).
-#[test]
-#[ignore = "R27: tc-store writes the creation pins at the first open (TC4-DELTA-2026-10-19 §3.8 item 3)"]
-fn open_writes_creation_pins_only_when_none_exist() {
+/// and a project with pins keeps its `resources.json` byte for byte. A declared difference
+/// from tC4 4.0 at d310bf3, where such a project opens with "No resources pinned".
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn open_writes_creation_pins_only_when_none_exist() {
     use tc_journal::{Cause, PinGroup, RecordKey};
     let groups = [
         PinGroup::Primary,
@@ -534,15 +531,15 @@ fn open_writes_creation_pins_only_when_none_exist() {
             .peek(&made.join("ingredients/checking/resources.json"))
             .is_some()
     );
-    let changes = fold.record_keys().len();
-    drop(opened);
+    let changes = fold.len();
+    opened.close().await.unwrap();
     let again = world.open(&folder("no_pins"));
     assert_eq!(
-        again.snapshot().fold().record_keys().len(),
+        again.snapshot().fold().len(),
         changes,
         "the second open writes nothing"
     );
-    drop(again);
+    again.close().await.unwrap();
     // A project with pins keeps them byte for byte.
     let sample = Path::new(PROJECTS).join(SAMPLE);
     let fs = FaultFs::new();
@@ -550,7 +547,7 @@ fn open_writes_creation_pins_only_when_none_exist() {
     let before = fs
         .peek(&sample.join("ingredients/checking/resources.json"))
         .unwrap();
-    drop(open_sample(&store));
+    open_sample(&store).close().await.unwrap();
     assert_eq!(
         fs.peek(&sample.join("ingredients/checking/resources.json"))
             .unwrap(),

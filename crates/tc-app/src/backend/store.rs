@@ -37,6 +37,8 @@ use tc_api::jobs::{OpenPhase, Phase};
 use tc_api::write::ReadOnlyReason;
 use tc_journal::command::Command;
 use tc_journal::fold::{FoldState, ProjectKind};
+use tc_journal::keys::PinGroup;
+use tc_journal::record::PinGroupValue;
 use tc_journal::token::TokenError;
 use tc_journal::{ChangeId, RecordKey, ShownToken};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
@@ -364,6 +366,7 @@ impl ProjectStore for StoreBackend {
             // C1b lets the person say that the computer the lock names is closed; until then
             // such a project opens read-only.
             other_computer_closed: false,
+            creation_pins: creation_pins(),
         };
         let handle = self.store.open(&path, &options).map_err(open_failure)?;
         let handle = StoreHandle::start(handle).map_err(|reason| OpenFailure::Unreadable {
@@ -539,6 +542,17 @@ pub(crate) fn open_phase(phase: tc_store::Phase) -> OpenPhase {
         // An open never reports it: tc-store uses it for work no open does.
         Store::Working => OpenPhase::WritingFiles,
     }
+}
+
+/// The pins a new project gets (tC4 `INSTALLED_SUITE`), which an open writes into a project
+/// that holds none (tC4 #766): every group or, should one not convert, none.
+fn creation_pins() -> Vec<(PinGroup, PinGroupValue)> {
+    let pins = tc_resources::suite::project_pins();
+    PinGroup::ALL
+        .into_iter()
+        .map(|group| Ok((group, pins.group_value(group)?)))
+        .collect::<Result<_, tc_resources::GroupError>>()
+        .unwrap_or_default()
 }
 
 /// tc-store's reports of an open, forwarded unchanged into the open's sink: the store's

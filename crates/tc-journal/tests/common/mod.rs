@@ -739,7 +739,11 @@ pub fn arb_cause() -> impl Strategy<Value = Cause> {
         import.prop_map(Cause::Import),
         Just(Cause::Seed),
         Just(Cause::StartOver),
-        Just(Cause::System(SystemReason::PinCoverageBackfill)),
+        prop::sample::select(vec![
+            SystemReason::PinCoverageBackfill,
+            SystemReason::CreationPins
+        ])
+        .prop_map(Cause::System),
     ]
 }
 
