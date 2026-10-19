@@ -486,3 +486,54 @@ async fn a_reset_removes_every_summary() {
         files_of(&fs)
     );
 }
+
+/// C1a's D7: C1a keeps the summaries across launches, and Home's half (Home keeping its
+/// summaries with `PrefsWriter::record_summary`, and §8.2's test of the Home row on the store)
+/// is built by whichever of B2 and C1a lands second. This fails the first tree whose
+/// `parity/app/units.json` lists both until that half is there.
+#[test]
+fn home_keeps_its_summaries_once_b2_and_c1a_have_landed() {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let units: Value = serde_json::from_slice(
+        &std::fs::read(manifest.join("../../parity/app/units.json")).unwrap(),
+    )
+    .unwrap();
+    let landed = |unit: &str| {
+        units["landed"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|u| u == unit)
+    };
+    if !(landed("B2") && landed("C1a")) {
+        return;
+    }
+    let library = rust_sources(&manifest.join("src"), &manifest.join("src/prefs.rs"));
+    let tests = rust_sources(&manifest.join("tests"), Path::new(""));
+    let mut owed = Vec::new();
+    if !library.contains("record_summary(") {
+        owed.push("nothing in tc-app's library calls `PrefsWriter::record_summary`, so every launch computes Home's summaries again");
+    }
+    // Split so that this file does not name the test it looks for.
+    if !tests.contains(concat!("fn home_costs_projects", "_not_history(")) {
+        owed.push("§8.2's `home_costs_projects_not_history` on the store is missing");
+    }
+    assert!(
+        owed.is_empty(),
+        "B2 and C1a have both landed: whichever landed second owes Home's half of C1a's D7: {owed:#?}"
+    );
+}
+
+/// Every Rust file under `dir` but `except`, one after the other.
+fn rust_sources(dir: &Path, except: &Path) -> String {
+    let mut all = String::new();
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            all += &rust_sources(&path, except);
+        } else if path.extension().is_some_and(|e| e == "rs") && path != except {
+            all += &std::fs::read_to_string(&path).unwrap();
+        }
+    }
+    all
+}
