@@ -188,9 +188,11 @@ browserTest('check_keyboard_on_a_psalms_sized_rail', async () => {
 });
 
 // PERF:78 (APP-DESIGN §8.2, "Rail filter, sort, group"): a filter or a sort on a rail of Psalms'
-// size paints within 16 ms and sends no request. The budget holds in a release build
-// (`build-app.sh --release`); run with TC4_PERF=1 and that build in TC4_UI to hold the times
-// to it, else the times are printed.
+// size fits in a frame (16 ms) and sends no request. What is timed is the update's work, from the
+// click to the list drawn and laid out (its effects run, then a forced layout); the frame after it
+// is reported beside it, since it also waits for the screen's next refresh. The budget holds in a
+// release build (`build-app.sh --release`): run with TC4_PERF=1 and that build in TC4_UI to hold
+// the times to it, else they are printed.
 browserTest('rail_filter_and_sort_paint_within_a_frame_on_a_psalms_sized_rail', async () => {
   await withApp(async ({ page }) => {
     await openCheck(page);
@@ -199,25 +201,29 @@ browserTest('rail_filter_and_sort_paint_within_a_frame_on_a_psalms_sized_rail', 
     await page.getByTestId('check-progress').waitFor();
     const requests = recordRequests(page);
     const mark = requests.mark();
-    const times = await page.evaluate(async () => {
+    const { work, frames } = await page.evaluate(async () => {
       const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
-      const out = [];
+      const task = () => new Promise((resolve) => setTimeout(resolve, 0));
+      const work = [];
+      const frames = [];
       const ids = ['filter-bookmarked', 'filter-all', 'sort-byCategory', 'sort-byVerse', 'filter-todo', 'filter-all'];
       for (let round = 0; round < 5; round += 1) {
         for (const id of ids) {
           await frame();
           const start = performance.now();
           document.querySelector(`[data-testid="${id}"]`).click();
+          await task();
+          void document.querySelector('[data-testid="check-list"]').getBoundingClientRect().height;
+          work.push(performance.now() - start);
           await frame();
-          out.push(performance.now() - start);
+          frames.push(performance.now() - start);
         }
       }
-      return out;
+      return { work, frames };
     });
     assert.deepEqual(requests.api(mark), [], 'a filter or a sort sends no request');
-    const sorted = [...times].sort((a, b) => a - b);
-    const p95 = sorted[Math.floor(sorted.length * 0.95)];
-    console.log(`rail filter/sort, click to frame on 8,212 rows: p50 ${sorted[Math.floor(sorted.length / 2)].toFixed(1)} ms, p95 ${p95.toFixed(1)} ms`);
-    if (process.env.TC4_PERF === '1') assert.ok(p95 <= 16, `p95 ${p95.toFixed(1)} ms over the 16 ms budget`);
+    const p = (xs, q) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length * q)];
+    console.log(`rail filter/sort on 8,212 rows: work p50 ${p(work, 0.5).toFixed(1)} ms, p95 ${p(work, 0.95).toFixed(1)} ms; to the next frame p50 ${p(frames, 0.5).toFixed(1)} ms, p95 ${p(frames, 0.95).toFixed(1)} ms`);
+    if (process.env.TC4_PERF === '1') assert.ok(p(work, 0.95) <= 16, `work p95 ${p(work, 0.95).toFixed(1)} ms over the 16 ms budget`);
   });
 });

@@ -21,7 +21,7 @@
       }
     },
     "build": {
-      "ui": "dc273aaca7b2e0e2",
+      "ui": "dbcd00d5e96a62f2",
       "commit": "dev",
       "api": 1
     }
@@ -2202,7 +2202,7 @@
       },
       "dom": {
         "tc4Sha256": "ea55ef943049fd5b96cbb0175f3170bbc6a7bd59d4aa3833c5620c5e11ff4d22",
-        "rustSha256": "49de22159c2d2b60ff746d94869a96ef753b95d266775bd4dd24c63acc56a085",
+        "rustSha256": "1f1f108b16ff0ed51d15f63a373fa509aeb927eeecdf324686c799a21717be3d",
         "scope": null,
         "same": false,
         "declared": [],

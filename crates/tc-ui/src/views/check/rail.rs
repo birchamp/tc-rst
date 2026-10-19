@@ -600,7 +600,8 @@ fn check_rail(s: &AppState, actions: &Actions, rail: &Rail, tool: Tool, book: Bo
         "display": "flex",
         "flex-direction": "column",
         "gap": 16,
-        "position": "relative",
+        // A virtual rail places its lines from the list; a whole one is tC4's list as it is.
+        "position": (rows.len() > VIRTUAL_FROM).then_some("relative"),
     };
     let nothing = {
         let c = c.clone();

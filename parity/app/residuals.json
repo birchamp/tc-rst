@@ -330,7 +330,7 @@
         "pixels",
         "dom"
       ],
-      "why": "The item detail beside the rail is unit B5b's, which captures this case again with its session screens: until then the detail column is empty. The rail is tC4's line for line but for one count: the sample's decision gr8c (Titus 1:4) is stored invalidated with no status, which tC4 shows red but leaves out of Invalid (`status === 'invalid'`), and the journal's rule (STORAGE §7.7, tc_journal::decision::assess) shows as Invalid, as tC4 shows every decision it invalidates itself. So Invalid reads 1 where tC4 reads 0, and the filter that matches nothing, which the case presses, is Bookmarked rather than Invalid."
+      "why": "The item detail beside the rail is unit B5b's, which captures this case again with its session screens: until then the detail column is empty. The rail is tC4's line for line but for one count: the sample's decision gr8c (Titus 1:4) is stored invalidated with no status, which tC4 shows red but leaves out of Invalid (`status === 'invalid'`), and the journal's rule (STORAGE §7.7, tc_journal::decision::assess) shows as Invalid, as tC4 shows every decision it invalidates itself. So Invalid reads 1 where tC4 reads 0, and the filter that matches nothing, which the case presses, is Bookmarked rather than Invalid. The rail header's bar carries tC4 #764's declared difference (see check-picker)."
     }
   }
 }
