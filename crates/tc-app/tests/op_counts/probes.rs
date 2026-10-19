@@ -221,7 +221,9 @@ fn beyond_versification() -> MemoryProject {
 
 fn with_teammates() -> MemoryProject {
     let mut project = sample_bible();
-    let changes = teammates::edit_verse(&project.fold, &tit(1, 1), &["one", "two"]).unwrap();
+    let changes = teammates::Teammates::new()
+        .edit_verse(&project.fold, &tit(1, 1), &["one", "two"])
+        .unwrap();
     project.fold.add(changes.into_iter().map(FoldInput::from));
     assert_eq!(project.fold.heads(&tit(1, 1)).len(), 2);
     project

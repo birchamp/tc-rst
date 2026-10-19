@@ -17,7 +17,7 @@ use tc_api::shown::{PersonLabel, Who};
 use tc_api::test::Reset;
 use tc_api::write::ReadOnlyReason;
 use tc_api::{ApiError, NotSaved};
-use tc_app::backend::memory::{MemoryBackend, MemoryProject, Scripted, teammates};
+use tc_app::backend::memory::{MemoryBackend, MemoryProject, Scripted};
 use tc_app::backend::{CheckpointReason, OpenFailure, StoreCommand};
 use tc_app::events::{Next, Subscription};
 use tc_app::reports::{ReportOp, ReportOutcome};
@@ -544,8 +544,10 @@ async fn test_reset_closes_every_session_and_puts_the_seed_back() {
     let f = started(vec![("sample_burrito", sample_bible())]).await;
     let project = folder("sample_burrito");
     f.open("sample_burrito").await;
-    let fold = f.backend().fold(&project).unwrap();
-    let changes = teammates::edit_verse(&fold, &tit(1, 1), &["one", "two"]).unwrap();
+    let changes = f
+        .backend()
+        .teammates_edit_verse(&project, &tit(1, 1), &["one", "two"])
+        .unwrap();
     f.backend().teammate_edits(&project, changes).unwrap();
     assert_eq!(
         f.backend().fold(&project).unwrap().heads(&tit(1, 1)).len(),
@@ -571,8 +573,10 @@ async fn teammates_on_an_open_project_send_one_changed_event() {
     let project = folder("sample_burrito");
     let mut sub = f.events();
     let at = f.open("sample_burrito").await;
-    let fold = f.backend().fold(&project).unwrap();
-    let changes = teammates::edit_verse(&fold, &tit(1, 1), &["one", "two"]).unwrap();
+    let changes = f
+        .backend()
+        .teammates_edit_verse(&project, &tit(1, 1), &["one", "two"])
+        .unwrap();
     f.backend().teammate_edits(&project, changes).unwrap();
     let events = events_of(&mut sub, &at, |e| matches!(e, SessionEvent::Changed { .. })).await;
     let teammate = |n| PersonLabel {

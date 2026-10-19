@@ -987,11 +987,20 @@ computer) makes every older token fail its MAC; that is how a draft becomes `Unv
   for the displayed value (the fold does not change), `NotWritten`, `WrittenNotDurable`, a delay,
   a switch to read-only, or a teammate's head added before the reply (a change encoded by
   tc-journal for another device and given to `FoldState::add`). Drafts and leaves are no-ops.
-- **Teammates.** `memory::teammates::edit_verse` writes teammates' heads the same way (one
+  *(B1b: the fresh token names exactly the heads the command's token named, signed again. The
+  first build minted it from the newest snapshot, so after a scripted teammate's head on the
+  record being saved, the "saved" reply's token listed the teammate's change as seen and the next
+  save would have replaced it unseen (I4); the store's reply names only the new change, which
+  continues only what the person saw (STORAGE:1449-1455).)*
+- **Teammates.** `MemoryBackend::teammates_edit_verse` writes teammates' heads the same way (one
   change per text, each by its own Local device, all on the record's current heads), and
   `MemoryBackend::teammate_edits` folds them as an intake would, so the conflict chip and the
   sync toast read a real fold conflict. B10's scripted sync and `test/writeTeammate` call them
-  when a screen's steps ask. *(B1b: the first text had the `shared` scenario load two teammates'
+  when a screen's steps ask. *(B1b: each call continues each teammate's sequence, which the
+  backend keeps per project (`memory::teammates::Teammates`; a test that builds a fold by hand
+  keeps its own), and a batch's id comes from its device and number. The first build gave every
+  edit sequence number 1, so a teammate's second edit claimed the same device and number as the
+  first, a `DuplicateDevice` anomaly whose notice tC4 never shows.)* *(B1b: the first text had the `shared` scenario load two teammates'
   heads on Titus 1:1. tC4 shows `shared-home`, `sync-internet-consent`, `sync-failed` and
   `sync-ok` without a conflict (`parity/tc4-baseline/README.md:407-410`); only after "Door43
   main: two teammates change Titus 1:1" (`sync-ok-teammates`) does the card show "1 conflict ·

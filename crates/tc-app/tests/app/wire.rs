@@ -151,7 +151,9 @@ async fn change_scope_of_two_teammates_editing_titus_1_1() {
     let project = folder("sample_burrito");
     let handle = backend.open(&project, progress()).unwrap();
     let before = handle.snapshot();
-    let changes = teammates::edit_verse(before.fold(), &tit(1, 1), &["one", "two"]).unwrap();
+    let changes = backend
+        .teammates_edit_verse(&project, &tit(1, 1), &["one", "two"])
+        .unwrap();
     let delta = backend.teammate_edits(&project, changes).unwrap();
     let after = handle.snapshot();
     let me = DeviceId::local(MEMORY_DEVICE);

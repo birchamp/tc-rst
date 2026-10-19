@@ -15,7 +15,7 @@ use tc_app::backend::{
 use tc_app::jobs::ProgressSink;
 use tc_journal::command::Command;
 use tc_journal::fold::Resolved;
-use tc_journal::{ChangeId, RecordKey};
+use tc_journal::{ChangeId, DeviceSeq, RecordKey};
 
 use super::common::{folder, sample_backend, tit};
 
@@ -35,8 +35,13 @@ fn save(handle: &dyn ProjectHandle, key: &RecordKey, words: &str) -> StoreComman
 }
 
 fn two_teammates(backend: &MemoryBackend) -> Vec<tc_journal::Change> {
-    let fold = backend.fold(&folder("sample_burrito")).unwrap();
-    teammates::edit_verse(&fold, &tit(1, 1), &["Paul, a servant", "Paul, a slave"]).unwrap()
+    backend
+        .teammates_edit_verse(
+            &folder("sample_burrito"),
+            &tit(1, 1),
+            &["Paul, a servant", "Paul, a slave"],
+        )
+        .unwrap()
 }
 
 #[tokio::test]
@@ -232,6 +237,98 @@ async fn scripted_teammate_heads_reach_the_fold_before_the_reply() {
         }
         other => panic!("{other:?}"),
     }
+}
+
+#[tokio::test]
+async fn a_reply_lists_only_what_the_screen_showed_when_a_teammate_changed_that_record() {
+    let backend = sample_backend();
+    let project = folder("sample_burrito");
+    let handle = open(&backend);
+    let shown = handle.snapshot().mint(&tit(1, 1), None).unwrap();
+    let shown_heads = shown.heads().to_vec();
+    // One teammate's change continues the version the screen shows; two make a conflict.
+    for texts in [
+        &["a teammate's words"][..],
+        &["one teammate", "another teammate"],
+    ] {
+        let theirs = backend
+            .teammates_edit_verse(&project, &tit(1, 1), texts)
+            .unwrap();
+        let ids: Vec<ChangeId> = theirs.iter().map(|c| c.id()).collect();
+        backend
+            .script(
+                &project,
+                Scripted::TeammateHeads(theirs, Box::new(Scripted::Written)),
+            )
+            .unwrap();
+        let reply = handle
+            .submit(StoreCommand::save_verse(
+                shown.clone(),
+                "the person's words".to_owned(),
+            ))
+            .await
+            .unwrap();
+        let newest = handle.snapshot();
+        let mut heads = newest.fold().heads(&tit(1, 1));
+        heads.retain(|head| ids.contains(head));
+        assert!(!heads.is_empty(), "the teammates' change reached the fold");
+        assert_eq!(reply.seq, newest.seq());
+        // The token names the version the person saw, never the teammates' change: a save
+        // with it makes a conflict with their words instead of replacing them unseen (I4).
+        assert_eq!(reply.tokens.len(), 1);
+        assert_eq!(reply.tokens[0].0, tit(1, 1));
+        assert_eq!(
+            reply.tokens[0].1.heads(),
+            shown_heads.as_slice(),
+            "{texts:?}"
+        );
+        assert!(reply.tokens[0].1.heads().iter().all(|h| !ids.contains(h)));
+        // It is this project's token, as a minted one is.
+        let wire = reply.tokens[0].1.to_wire().unwrap();
+        assert_eq!(
+            handle.parse_edit(&wire).unwrap().heads(),
+            shown_heads.as_slice()
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_teammate_who_edits_again_continues_their_sequence() {
+    let backend = sample_backend();
+    let project = folder("sample_burrito");
+    let first = backend
+        .teammates_edit_verse(&project, &tit(1, 1), &["first words"])
+        .unwrap();
+    backend.teammate_edits(&project, first.clone()).unwrap();
+    let second = backend
+        .teammates_edit_verse(&project, &tit(1, 1), &["second words"])
+        .unwrap();
+    backend.teammate_edits(&project, second.clone()).unwrap();
+    let fold = backend.fold(&project).unwrap();
+    assert_eq!(
+        fold.anomalies().collect::<Vec<_>>(),
+        Vec::<&tc_journal::fold::Anomaly>::new(),
+        "no notice that a screen of tC4 would not show"
+    );
+    let (first, second) = (first[0].body(), second[0].body());
+    assert_eq!(first.device, teammates::device(1));
+    assert_eq!(second.device, teammates::device(1));
+    assert_eq!((first.seq, second.seq), (DeviceSeq(1), DeviceSeq(2)));
+    assert_ne!(first.batch.id, second.batch.id);
+    assert!(first.at < second.at);
+    let second_id = fold.projected_change(&tit(1, 1)).unwrap();
+    assert_eq!(fold.heads(&tit(1, 1)), [second_id]);
+    let history = fold.history(&tit(1, 1));
+    assert_eq!(history.last(), Some(&second_id));
+    // A fold built by hand keeps its own sequences the same way.
+    let mut by_hand = teammates::Teammates::new();
+    let seed = sample_backend().fold(&project).unwrap();
+    let one = by_hand.edit_verse(&seed, &tit(1, 2), &["x"]).unwrap();
+    let two = by_hand.edit_verse(&seed, &tit(1, 3), &["y"]).unwrap();
+    assert_eq!(
+        (one[0].body().seq, two[0].body().seq),
+        (DeviceSeq(1), DeviceSeq(2))
+    );
 }
 
 #[tokio::test(start_paused = true)]

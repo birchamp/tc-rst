@@ -99,7 +99,8 @@ impl MemoryProject {
 /// What a command submitted to an open handle does instead of running (AD6).
 #[derive(Debug, Clone)]
 pub enum Scripted {
-    /// A fresh edit token for each displayed value; the fold does not change; durable.
+    /// A fresh edit token for each displayed value, naming the heads the command's token
+    /// named; the fold does not change; durable.
     Written,
     /// As `Written`, with the disk's warning.
     WrittenNotDurable(String),
@@ -181,6 +182,8 @@ struct Live {
     scripts: VecDeque<Scripted>,
     subscribers: Vec<UnboundedSender<StoreEvent>>,
     submitted: Vec<Command>,
+    /// How far each teammate's sequence has gone in this project.
+    teammates: teammates::Teammates,
 }
 
 impl ProjectState {
@@ -209,6 +212,7 @@ impl ProjectState {
                 scripts: VecDeque::new(),
                 subscribers: Vec::new(),
                 submitted: Vec::new(),
+                teammates: teammates::Teammates::new(),
             }),
         }
     }
@@ -293,6 +297,22 @@ impl MemoryBackend {
     pub fn script(&self, folder: &ProjectRef, outcome: Scripted) -> Result<(), MemoryError> {
         lock(&self.state(folder)?.live).scripts.push_back(outcome);
         Ok(())
+    }
+
+    /// Teammates' edits of `key` in `folder`'s project as it is now
+    /// ([`teammates::Teammates::edit_verse`]), each continuing its teammate's sequence in this
+    /// project, so a teammate who edits again never repeats a sequence number. Not folded:
+    /// hand them to [`Self::teammate_edits`], or script them as [`Scripted::TeammateHeads`].
+    pub fn teammates_edit_verse(
+        &self,
+        folder: &ProjectRef,
+        key: &RecordKey,
+        texts: &[&str],
+    ) -> Result<Vec<Change>, MemoryError> {
+        let state = self.state(folder)?;
+        let mut live = lock(&state.live);
+        let fold = live.current.clone();
+        live.teammates.edit_verse(&fold, key, texts)
     }
 
     /// Adds teammates' changes to `folder`'s fold, as an intake would. An open handle
@@ -381,6 +401,9 @@ impl ProjectStore for MemoryBackend {
             live.scripts.clear();
             live.submitted.clear();
             live.mode = SessionMode::Writable;
+            // The seed holds no teammate's change, so a run after a reset makes the same
+            // changes as the first.
+            live.teammates = teammates::Teammates::new();
         }
         Ok(())
     }
@@ -437,23 +460,23 @@ impl MemoryHandle {
         }
     }
 
-    /// A fresh edit token for each displayed value, from the newest snapshot: what the
-    /// screen shows after a save that changed nothing.
+    /// A fresh edit token for each displayed value: what the screen shows after a save that
+    /// changed nothing. Each token names exactly the heads the command's token named, signed
+    /// again, never the record's heads in the newest snapshot: a teammate's change that
+    /// arrived meanwhile (a scripted `TeammateHeads`) would be listed as seen, and the next
+    /// save would replace it unseen (I4). For a resolution, those are every head it reviewed.
+    /// The reply's `seq` is the newest snapshot's, which holds everything folded so far.
     fn written(
         state: &ProjectState,
         shown: &[(RecordKey, Vec<ChangeId>)],
         stored: Stored,
     ) -> Result<StoreReply, CommandError> {
-        let snapshot = lock(&state.live).published.clone();
+        let seq = lock(&state.live).published.seq();
         let tokens = shown
             .iter()
             .map(|(key, heads)| {
-                let displayed = match heads.as_slice() {
-                    [one] => Some(*one),
-                    _ => None,
-                };
-                snapshot
-                    .mint(key, displayed)
+                ShownToken::mint(&state.signing, key.clone(), heads.iter().copied())
+                    .and_then(EditToken::from_journal)
                     .map(|token| (key.clone(), token))
                     .map_err(CommandError::BadToken)
             })
@@ -462,7 +485,7 @@ impl MemoryHandle {
             tokens,
             new_conflicts: Vec::new(),
             stored,
-            seq: snapshot.seq(),
+            seq,
             changes: Vec::new(),
         })
     }
@@ -546,6 +569,10 @@ pub mod teammates {
 
     /// 2026-10-01T00:00:00Z: later than any seeded change.
     const TEAMMATE_TIME: i64 = 1_790_812_800_000;
+    const MINUTE: i64 = 60_000;
+    /// A teammate's next edit is a day after their last, so a record's History lists a
+    /// teammate's edits in the order they made them.
+    const DAY: i64 = 24 * 60 * MINUTE;
 
     /// Teammate `n`'s device: a Local device whose bytes sort by `n`, so the screens number
     /// it "Teammate n" (no profile names it).
@@ -556,55 +583,87 @@ pub mod teammates {
         DeviceId::local(random)
     }
 
-    /// One change per text, each by its own teammate (Teammate 1, 2, … in that order), all
-    /// with the record's current heads as parents: what "two teammates change Titus 1:1
-    /// from the same version" writes. Each is a batch of one.
-    pub fn edit_verse(
-        fold: &FoldState,
-        key: &RecordKey,
-        texts: &[&str],
-    ) -> Result<Vec<Change>, MemoryError> {
-        let not_text = || MemoryError::NotATextVerse(format!("{key:?}"));
-        let record = fold.projected(key).ok_or_else(not_text)?;
-        let parents = fold.heads(key);
-        texts
-            .iter()
-            .zip(1u8..)
-            .map(|(text, n)| {
-                let mut record = record.clone();
-                let Record::Verse {
-                    value: VerseValue::Text { words, .. },
-                    ..
-                } = &mut record
-                else {
-                    return Err(not_text());
-                };
-                *words = (*text).to_owned();
-                let device = device(n);
-                let digest = ring::digest::digest(
-                    &ring::digest::SHA256,
-                    &[
-                        b"tc4-teammate-batch\0".as_slice(),
-                        device.as_bytes().as_slice(),
-                    ]
-                    .concat(),
-                );
-                let mut batch = [0u8; 16];
-                batch.copy_from_slice(&digest.as_ref()[..16]);
-                let batch = BatchRef::new(BatchId::from_bytes(batch), 1)
-                    .ok_or_else(|| MemoryError::Change("an empty batch".to_owned()))?;
-                Change::new(ChangeBody {
-                    v: 0,
-                    record,
-                    parents: parents.clone(),
-                    device,
-                    seq: DeviceSeq(1),
-                    at: WallTime(TEAMMATE_TIME + i64::from(n) * 60_000),
-                    batch,
-                    cause: Cause::Edit,
+    /// The teammates of one project and how far each one's sequence has gone. Each edit
+    /// continues its teammate's sequence: a Local device's changes are numbered 1, 2, 3, …,
+    /// and two changes that claim one device and number are a `DuplicateDevice` anomaly,
+    /// which would put a notice on screens tC4 shows without one. The memory backend keeps
+    /// one per project ([`MemoryBackend::teammates_edit_verse`]); a test that builds a fold
+    /// by hand keeps its own.
+    #[derive(Debug, Clone, Default)]
+    pub struct Teammates {
+        /// Each teammate's last sequence number; absent before their first edit.
+        last: BTreeMap<u8, u64>,
+    }
+
+    impl Teammates {
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        /// One change per text, each by its own teammate (Teammate 1, 2, … in that order),
+        /// all with the record's current heads in `fold` as parents: what "two teammates
+        /// change Titus 1:1 from the same version" writes. Each is a batch of one whose id is
+        /// derived from its device and number, and each continues its teammate's sequence.
+        /// Nothing is counted when an edit cannot be made.
+        pub fn edit_verse(
+            &mut self,
+            fold: &FoldState,
+            key: &RecordKey,
+            texts: &[&str],
+        ) -> Result<Vec<Change>, MemoryError> {
+            let not_text = || MemoryError::NotATextVerse(format!("{key:?}"));
+            let record = fold.projected(key).ok_or_else(not_text)?;
+            let parents = fold.heads(key);
+            let mut last = self.last.clone();
+            let changes = texts
+                .iter()
+                .zip(1u8..)
+                .map(|(text, n)| {
+                    let mut record = record.clone();
+                    let Record::Verse {
+                        value: VerseValue::Text { words, .. },
+                        ..
+                    } = &mut record
+                    else {
+                        return Err(not_text());
+                    };
+                    *words = (*text).to_owned();
+                    let seq = last.get(&n).map_or(1, |seq| seq + 1);
+                    last.insert(n, seq);
+                    let device = device(n);
+                    let digest = ring::digest::digest(
+                        &ring::digest::SHA256,
+                        &[
+                            b"tc4-teammate-batch\0".as_slice(),
+                            device.as_bytes().as_slice(),
+                            seq.to_be_bytes().as_slice(),
+                        ]
+                        .concat(),
+                    );
+                    let mut batch = [0u8; 16];
+                    batch.copy_from_slice(&digest.as_ref()[..16]);
+                    let batch = BatchRef::new(BatchId::from_bytes(batch), 1)
+                        .ok_or_else(|| MemoryError::Change("an empty batch".to_owned()))?;
+                    let days = i64::try_from(seq - 1).unwrap_or(i64::MAX);
+                    Change::new(ChangeBody {
+                        v: 0,
+                        record,
+                        parents: parents.clone(),
+                        device,
+                        seq: DeviceSeq(seq),
+                        at: WallTime(
+                            TEAMMATE_TIME
+                                .saturating_add(days.saturating_mul(DAY))
+                                .saturating_add(i64::from(n) * MINUTE),
+                        ),
+                        batch,
+                        cause: Cause::Edit,
+                    })
+                    .map_err(|e| MemoryError::Change(e.to_string()))
                 })
-                .map_err(|e| MemoryError::Change(e.to_string()))
-            })
-            .collect()
+                .collect::<Result<Vec<_>, _>>()?;
+            self.last = last;
+            Ok(changes)
+        }
     }
 }

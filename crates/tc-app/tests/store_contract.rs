@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use tc_api::ids::ProjectRef;
 use tc_app::backend::ProjectStore;
-use tc_app::backend::memory::{MemoryBackend, MemoryProject, teammates};
+use tc_app::backend::memory::{MemoryBackend, MemoryProject};
 use tc_app::backend::scenario::ScenarioState;
 use tc_journal::fold::ProjectKind;
 use tc_journal::{BookId, ProjectId, RecordKey};
@@ -56,13 +56,13 @@ fn memory_fixture() -> ContractFixture {
                 .unwrap(),
         )
         .unwrap();
-    let fold = backend.fold(&teammates_folder).unwrap();
-    let changes = teammates::edit_verse(
-        &fold,
-        &common::tit(1, 1),
-        &["Paul, a servant of God", "Paul, a slave of God"],
-    )
-    .unwrap();
+    let changes = backend
+        .teammates_edit_verse(
+            &teammates_folder,
+            &common::tit(1, 1),
+            &["Paul, a servant of God", "Paul, a slave of God"],
+        )
+        .unwrap();
     backend.teammate_edits(&teammates_folder, changes).unwrap();
     let other = common::folder("another_project");
     backend
