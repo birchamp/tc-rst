@@ -57,6 +57,14 @@ pub fn set_context(view: Option<&str>, project: Option<ProjectRef>) {
 /// already borrowed"); the marker and the report keep the first panic, which is the cause.
 static PANICKED: AtomicBool = AtomicBool::new(false);
 
+/// Whether the page's WebAssembly has panicked. Its state may then lag what `boot.js` captured
+/// since (the keystroke whose handler panicked, and any after it), so nothing it decides may
+/// reach the buffer, the mirror or the server: `boot.js` reloads, and the buffer brings the
+/// text back.
+pub(super) fn has_panicked() -> bool {
+    PANICKED.load(Ordering::SeqCst)
+}
+
 fn hook(info: &std::panic::PanicHookInfo<'_>) {
     console_error_panic_hook::hook(info);
     if PANICKED.swap(true, Ordering::SeqCst) {

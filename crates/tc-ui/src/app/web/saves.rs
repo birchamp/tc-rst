@@ -472,7 +472,9 @@ impl Saves {
         };
         let weak = Rc::downgrade(&self.0);
         let listener = Closure::<dyn FnMut()>::new(move || {
-            if let Some(inner) = weak.upgrade() {
+            if let Some(inner) = weak.upgrade()
+                && !super::panic::has_panicked()
+            {
                 f(&Saves(inner));
             }
         });
@@ -516,8 +518,13 @@ impl Saves {
     }
 
     /// Carries out the machine's commands, then brings everything that follows the fields up
-    /// to date.
+    /// to date. Nothing after a panic: the aborted instance's closures can still run (a timer,
+    /// a late reply, `pagehide`), and their writes would put the machine's older text over the
+    /// keystrokes `boot.js` kept.
     fn run(&self, commands: Vec<Command>) {
+        if super::panic::has_panicked() {
+            return;
+        }
         for command in commands {
             match command {
                 Command::Write { key, entry, mirror } => self.write(&key, entry, mirror),
@@ -639,6 +646,9 @@ impl Saves {
     /// Everything that follows the fields: the busy count, the timer, the indicator, the close
     /// guard, `boot.js`'s templates, and whoever waits for a change.
     fn after(&self) {
+        if super::panic::has_panicked() {
+            return;
+        }
         let (busy, deadline, worst) = self
             .machine(|m| Some((m.busy(), m.next_deadline(), m.worst())))
             .unwrap_or((0, None, Worst::Error));

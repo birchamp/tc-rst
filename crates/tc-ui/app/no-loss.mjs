@@ -178,9 +178,10 @@ async function openContext(browser, server, { bridge = null, initScripts = [] } 
 
 /**
  * A stub of the shell bridge (APP-DESIGN 5.7): `bufferChanged` appends to a log in node,
- * `takeBuffered` returns the last line per field with removed fields left out (a model of G1's
- * reduction of `drafts-buffer.log`), `setCanClose` records each value, and `onCloseRequested`
- * keeps the page's answer function as `window.__tc4Close`.
+ * `takeBuffered` returns the last line per field and server run, with the entries a removal of
+ * the same run ended left out (a model of G1's reduction of `drafts-buffer.log`, and of tc-ui's
+ * `buffer::current_lines`), `setCanClose` records each value, and `onCloseRequested` keeps the
+ * page's answer function as `window.__tc4Close`.
  */
 class Bridge {
   constructor() {
@@ -197,7 +198,8 @@ class Bridge {
       } catch {
         continue;
       }
-      const key = JSON.stringify(parsed.value.key);
+      const run = parsed.type === 'removed' ? parsed.value.instance : parsed.value.entry?.instance;
+      const key = `${JSON.stringify(parsed.value.key)} ${run}`;
       if (parsed.type === 'removed') newest.delete(key);
       else newest.set(key, line);
     }
@@ -247,6 +249,29 @@ function watch(page) {
     await (dialog.type() === 'beforeunload' ? dialog.accept() : dialog.dismiss()).catch(() => {});
   });
   return log;
+}
+
+/** The entries the mirror holds for a probe field, parsed. */
+function mirrored(bridge, place = 'probe-a') {
+  return bridge
+    .current()
+    .map((line) => JSON.parse(line))
+    .filter((line) => line.type === 'changed' && line.value.key.field.place === place)
+    .map((line) => line.value.entry);
+}
+
+/** The probe field's `localStorage` item, as the page's buffer names it (APP-DESIGN 6.6). */
+function probeItem(place = 'probe-a') {
+  return `tc4.drafts.v2:${JSON.stringify({ project: PROBE_PROJECT, id: PROBE_ID, field: { kind: 'test', place } })}`;
+}
+
+async function readItem(page, item) {
+  return page.evaluate((key) => localStorage.getItem(key), item);
+}
+
+/** RT-15, A4b: the reload after a panic is never held behind "Leave site?". */
+function noLeaveQuestion(name, log) {
+  check(`${name}: no "Leave site?" held the reload`, !log.dialogs.includes('beforeunload'), log.dialogs);
 }
 
 async function openProbe(page, url, token) {
@@ -382,6 +407,7 @@ async function panicInInput(browser, dropListener) {
         check('P1b: without the capture listener the keystroke is lost', JSON.stringify(stored) === '["draft"]', stored);
       } else {
         check('P1: the callout replaces the fields after the reload', fieldsGone);
+        noLeaveQuestion('P1', log);
         check('P1: the callout names the panic', message.includes('a panic in an input handler'), message);
         await untilStores(server, ['draft', 'draftX'], 'P1: the panicking keystroke is saved', 'probe-a', 6000);
         await sleep(2500);
@@ -410,6 +436,7 @@ async function caseP2(browser) {
       await page.waitForSelector('[data-testid=view-error]', { timeout: 20000 });
       await sleep(2000);
       check('P2: one panic with trapping closures reloads once', log.navigations === 2, log.navigations);
+      noLeaveQuestion('P2', log);
       const panics = JSON.parse(await page.evaluate(() => sessionStorage.getItem('tc4.panics.v1')));
       check('P2: one page load that ended in a panic is counted', Array.isArray(panics) && panics.length === 1, panics);
       const alive = await page.evaluate(() => typeof window.__tc4Probe?.state('probe-a'));
@@ -445,6 +472,7 @@ async function caseP3(browser) {
       await until(() => page.$('[data-testid=view-error]'), 20000, 'the static callout');
       await sleep(3000);
       check('P3: three panics, three page loads, then no more', log.navigations === 3, log.navigations);
+      noLeaveQuestion('P3', log);
       const alive = await page.evaluate(() => typeof window.__tc4Probe?.state('probe-a'));
       check('P3: the static callout is drawn without the WebAssembly', alive !== 'string', alive);
       const html = await calloutHtml(page);
@@ -645,9 +673,10 @@ async function caseP8(browser) {
 async function caseP9(browser) {
   const first = await Server.start();
   const proxy = await Proxy.start(first);
+  const bridge = new Bridge();
   let second = null;
   try {
-    await withPage(browser, first, {}, async (page, log) => {
+    await withPage(browser, first, { bridge }, async (page, log) => {
       await openProbe(page, proxy.url, first.token);
       await first.command('test/crash', { at: 'beforeReply', path: 'test/fieldStore' });
       await typeInto(page, 'a', 'Stored once');
@@ -658,13 +687,14 @@ async function caseP9(browser) {
       const crashedAt = Date.now();
       second = await Server.start(first.run);
       proxy.server = second;
-      // The lost reply's resend first asks app/hello, which names another run: the field is
-      // dropped and nothing is sent (D8). A page that has read no frame cannot tell the new run
-      // from a reconnect by its event stream alone; the check before a resend does not need it.
+      // The lost reply's resend first asks app/hello, which names another run: nothing is sent,
+      // and the field, whose editor is on screen, is held (D8). A page that has read no frame
+      // cannot tell the new run from a reconnect by its event stream alone; the check before a
+      // resend does not need it.
       await until(
-        async () => (await page.evaluate(() => window.__tc4Probe.state('probe-a'))) === 'none' || (await second.log()).stores.length > 1,
+        async () => (await page.evaluate(() => window.__tc4Probe.state('probe-a'))) === 'held' || (await second.log()).stores.length > 1,
         20000,
-        'the field is dropped, or a resend stored',
+        'the field is held, or a resend stored',
       );
       await sleep(3000);
       const stored = texts(await second.log());
@@ -675,6 +705,27 @@ async function caseP9(browser) {
       check('P9: the page asked app/hello before any resend', hellos.length >= 1, hellos.length);
       const kept = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('tc4.drafts.v2:')).length);
       check('P9: the entry stays in the storage for the offer', kept === 1, kept);
+      // The resend's discovery goes through the runtime's one restart path (AD4).
+      check('P9: the page shows the restart', (await page.$('[data-testid=probe-restarted]')) !== null);
+      const newRun = (await second.call('app/hello')).instance;
+      const keptRun = await page.evaluate(() => sessionStorage.getItem('tc4.instance.v1'));
+      check('P9: the page keeps the new run for boot.js', keptRun === newRun, { keptRun, newRun });
+      // Typing into the editor still on screen is buffered, in the old run's entry beside the
+      // save that run never answered, and is never sent.
+      await typeInto(page, 'a', ' more');
+      await sleep(2500);
+      const entry = JSON.parse(await readItem(page, probeItem()));
+      check(
+        'P9: typing after the restart goes on into the old run\'s entry',
+        entry.text === 'Stored once more' && entry.sent?.text === 'Stored once' && entry.instance !== newRun,
+        entry,
+      );
+      check('P9: and into the mirror', mirrored(bridge).some((e) => e.text === 'Stored once more' && e.instance !== newRun), mirrored(bridge));
+      check('P9: the field stays held and unsaved', (await page.evaluate(() => window.__tc4Probe.state('probe-a'))) === 'held' && (await indicatorState(page)) === 'dirty');
+      check('P9: nothing is sent', JSON.stringify(texts(await second.log())) === '["Stored once"]');
+      const answer = await page.evaluate(() => window.__tc4Close());
+      check('P9: a close request with held text answers false, so the shell asks', answer === false, answer);
+      check('P9: setCanClose(false) while held text stands', bridge.canClose.at(-1) === false, bridge.canClose);
       await page.reload();
       await page.waitForSelector(`${field('a')}[data-ready=true]`, { timeout: 20000 });
       await sleep(3000);
@@ -714,6 +765,132 @@ async function caseP10(browser) {
     });
   } finally {
     await server.stop();
+  }
+}
+
+/** 6.6: a field whose item holds another run's entry; its keystrokes reach the mirror at once. */
+async function caseP11(browser) {
+  const server = await Server.start();
+  const bridge = new Bridge();
+  try {
+    await withPage(browser, server, { bridge }, async (page, log) => {
+      await openProbe(page, server.url, server.token);
+      const run = (await server.call('app/hello')).instance;
+      const token = (await server.log('probe-a')).current.token;
+      const dead = { api: 1, instance: 'f'.repeat(32), base: [token], text: 'dead', sent: null, at: 1, draft: null };
+      const deadText = JSON.stringify(dead);
+      await page.evaluate(([item, text]) => localStorage.setItem(item, text), [probeItem(), deadText]);
+      await page.reload();
+      await page.waitForSelector(`${field('a')}[data-ready=true]`, { timeout: 20000 });
+      await typeInto(page, 'a', ' alive');
+      const before = mirrored(bridge).filter((e) => e.instance === run);
+      check('P11: typing into a field whose item is another run\'s reaches the mirror at once', before.some((e) => e.text === ' alive'), before);
+      check('P11: before any save', texts(await server.log()).length === 0);
+      check('P11: the other run\'s entry is left for the offer', (await readItem(page, probeItem())) === deadText);
+      await page.evaluate(() => sessionStorage.setItem('tc4.test.panicOnInput', '1'));
+      await page.keyboard.type('!');
+      await page.waitForSelector('[data-testid=view-error]', { timeout: 20000 });
+      noLeaveQuestion('P11', log);
+      const after = mirrored(bridge).filter((e) => e.instance === run);
+      check('P11: the keystroke whose handler panicked is in the mirror', after.some((e) => e.text === ' alive!'), after);
+      check('P11: the other run\'s entry is still there', (await readItem(page, probeItem())) === deadText);
+      await clean('P11', page, log, PANIC_PATTERNS);
+    });
+  } finally {
+    await server.stop();
+  }
+}
+
+/** Two tabs of one browser on one field: tab B types and reloads while tab A's save is held. */
+async function caseP12(browser) {
+  const server = await Server.start();
+  const context = await openContext(browser, server);
+  try {
+    const tabA = await context.newPage();
+    const logA = watch(tabA);
+    const tabB = await context.newPage();
+    const logB = watch(tabB);
+    await openProbe(tabA, server.url, server.token);
+    await openProbe(tabB, server.url, server.token);
+    await server.command('test/hold', { at: 'save' });
+    await typeInto(tabA, 'a', 'A1');
+    await blur(tabA);
+    await until(async () => (await indicatorState(tabA)) === 'saving', 5000, 'tab A saving');
+    await typeInto(tabB, 'a', 'B1');
+    await tabB.reload();
+    await tabB.waitForSelector(`${field('a')}[data-ready=true]`, { timeout: 20000 });
+    await server.command('test/release', { at: 'save' });
+    await untilStores(server, ['A1', 'B1'], 'P12: both texts');
+    await sleep(2500);
+    const logged = await server.log();
+    check(
+      'P12: a second tab that reloads keeps both texts as a conflict, never stores over the first tab\'s unseen',
+      JSON.stringify(logged.stores.map((s) => [s.text, s.base])) === '[["A1","current"],["B1","stale"]]',
+      logged.stores,
+    );
+    await clean('P12 (tab A)', tabA, logA);
+    await clean('P12 (tab B)', tabB, logB);
+  } finally {
+    await context.close();
+    await server.stop();
+  }
+}
+
+/** tC4 drains its schedulers on `pagehide`: leaving the page in a browser saves the text. */
+async function caseP13(browser) {
+  const server = await Server.start();
+  try {
+    await withPage(browser, server, {}, async (page, log) => {
+      await openProbe(page, server.url, server.token);
+      await typeInto(page, 'b', 'left with the page');
+      await page.goto('about:blank');
+      check('P13: leaving with unsaved text asks first', log.dialogs.includes('beforeunload'), log.dialogs);
+      await untilStores(server, ['left with the page'], 'P13: leaving the page saves the text', 'probe-b', 5000);
+      check('P13: leaving the page saves the text', true);
+    });
+  } finally {
+    await server.stop();
+  }
+}
+
+/**
+ * The mirror after a crash and a restart behind a reused port: run 1's unsaved text stays in the
+ * shell's mirror when run 2 types into the same field and saves it (5.7: lines per field and run).
+ */
+async function caseP14(browser) {
+  const first = await Server.start();
+  const proxy = await Proxy.start(first);
+  const bridge = new Bridge();
+  let second = null;
+  try {
+    await withPage(browser, first, { bridge }, async (page, log) => {
+      await openProbe(page, proxy.url, first.token);
+      await first.command('test/crash', { at: 'beforeStore', path: 'test/fieldStore' });
+      await typeInto(page, 'a', 'R1');
+      await blur(page);
+      await first.exited;
+      const oldRun = mirrored(bridge).find((e) => e.text === 'R1')?.instance;
+      check('P14: the mirror holds run 1\'s unsaved text', typeof oldRun === 'string', bridge.lines);
+      second = await Server.start(first.run);
+      proxy.server = second;
+      await page.reload();
+      await page.waitForSelector(`${field('a')}[data-ready=true]`, { timeout: 20000 });
+      const buffered = JSON.parse(await page.evaluate(([project, id]) => window.__tc4Probe.buffered(project, id), [PROBE_PROJECT, PROBE_ID]));
+      check('P14: run 2\'s page is offered run 1\'s text', buffered.some(([, e]) => e.text === 'R1' && e.instance === oldRun), buffered);
+      await typeInto(page, 'a', 'R2');
+      await blur(page);
+      await untilStores(second, ['R2'], 'P14: run 2 saves its text');
+      await until(async () => (await indicatorState(page)) === 'saved', 5000, 'saved');
+      const left = mirrored(bridge);
+      check('P14: saving run 2\'s text leaves run 1\'s in the mirror', left.some((e) => e.text === 'R1' && e.instance === oldRun), left);
+      check('P14: and run 2\'s is gone from it', !left.some((e) => e.instance !== oldRun), left);
+      await clean('P14', page, log, [/Failed to load resource/, /net::/, /hello could not be read/, /event stream/]);
+    });
+  } finally {
+    await proxy.stop();
+    await first.stop({ keep: true });
+    if (second) await second.stop();
+    else fs.rmSync(first.run, { recursive: true, force: true });
   }
 }
 
@@ -923,6 +1100,10 @@ async function noLoss() {
     ['P8', () => caseP8(browser)],
     ['P9', () => caseP9(browser)],
     ['P10', () => caseP10(browser)],
+    ['P11', () => caseP11(browser)],
+    ['P12', () => caseP12(browser)],
+    ['P13', () => caseP13(browser)],
+    ['P14', () => caseP14(browser)],
   ];
   try {
     for (const [name, run] of cases) {
