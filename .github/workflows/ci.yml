@@ -25,6 +25,10 @@ jobs:
       # tc-app's library without test hooks, as a release build has it; every other build
       # has them through the self dev-dependency.
       - run: cargo clippy -p tc-app --lib -- -D warnings
+      # tc-store's library and the performance report without the test holds, as perfreport
+      # (docs/PERFORMANCE.md rule 5) builds the store.
+      - run: cargo clippy -p tc-store --lib -- -D warnings
+      - run: cargo clippy -p tc-corpus --example perfreport -- -D warnings
       - run: cargo test --workspace
       # tc-ui's components compile for wasm32 only, so the host steps above never see them.
       - run: cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings
@@ -32,6 +36,22 @@ jobs:
       - run: cargo clippy -p tc-ui --target wasm32-unknown-unknown --all-targets --features app -- -D warnings
       # tc-api's types are the UI's too, so they must build for wasm32 as well.
       - run: cargo clippy -p tc-api --target wasm32-unknown-unknown --all-targets -- -D warnings
+
+  # docs/PERFORMANCE.md rule 5: the release benchmarks of every budget that tc-journal, tc-store,
+  # tc-check, tc-align and tc-resources own, on the whole-Bible corpus (`perfreport ci`). A row
+  # fails only above three times its budget, because CI machines vary; the verdicts against the
+  # reference laptop come from `perfreport run --ratios` (docs/evidence/storage-scale-*). The
+  # report is built alone (-p tc-corpus), so the store has no test holds.
+  perf:
+    runs-on: ubuntu-latest
+    needs: rust
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p tc-corpus --example perfreport
+      - run: target/release/examples/perfreport ci "$RUNNER_TEMP/perf" --tolerance 3
 
   # The tC4 visual-parity baseline: its screenshots (by sha256), DOM snapshots, manifest, README
   # and the owner's rulings in docs/PLAN.md must agree, the mock server must answer the sync

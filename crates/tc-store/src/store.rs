@@ -178,7 +178,11 @@ impl Store {
     /// Opens the application data and starts the cleanup of staging folders a crash left
     /// (N1) on a thread of its own.
     pub fn start(config: StoreConfig) -> Result<Self, StoreError> {
-        Self::start_with_hooks(config, Arc::new(Hooks::default()))
+        // Without `test-hooks` the holds are a unit struct, which clippy rather would not see
+        // built with `default()`; with the feature they are a table.
+        #[allow(clippy::default_constructed_unit_structs)]
+        let hooks = Hooks::default();
+        Self::start_with_hooks(config, Arc::new(hooks))
     }
 
     /// [`Store::start`] with the holds a test places (APP-DESIGN R8).

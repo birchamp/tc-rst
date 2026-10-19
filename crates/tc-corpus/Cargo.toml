@@ -23,6 +23,19 @@ ring.workspace = true
 sha2.workspace = true
 # foldbench reads files on the worker pool the fold itself uses, as an open does.
 rayon.workspace = true
+# perfreport (docs/PERFORMANCE.md rule 5): the budgets of the storage core and of the domain
+# crates, measured end to end on this corpus. Not shipped.
+tc-store = { path = "../tc-store" }
+tc-check = { path = "../tc-check" }
+tc-align = { path = "../tc-align" }
+tc-resources = { path = "../tc-resources" }
+tc-helps = { path = "../tc-helps" }
+tempfile.workspace = true
+sysinfo.workspace = true
+
+[target.'cfg(unix)'.dev-dependencies]
+# posix_fadvise(DONTNEED) and sync: a cold disk cache without privileges.
+rustix.workspace = true
 
 [lints]
 workspace = true

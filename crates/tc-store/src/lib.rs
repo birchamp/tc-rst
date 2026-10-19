@@ -76,7 +76,12 @@ pub use notices::StoreNotice;
 pub use open::{LockHolder, OpenError, OpenOptions};
 pub use platform::{FakePlatform, FolderFacts, Platform, StdPlatform, UnsafeFolder};
 pub use progress::{Phase, Progress, ProgressSink};
+pub use repack::{REPACK_BYTES, REPACK_OBJECTS};
 pub use reply::{CommandError, FocusReport, ReadOnlyReason, Refusal, StoreReply, Stored, TakenIn};
 pub use store::{CreateError, NewProject, RemovedStaging, StagingKind, Store, StoreConfig};
 pub use training::{EditorText, TrainingVerse};
 pub use vfs::{StdFs, Vfs};
+
+/// Whether this build holds the tests' hold points (`test-hooks`): a report of the store's
+/// speed says so, because a hold point is a mutex check on a hot path.
+pub const TEST_HOOKS: bool = cfg!(feature = "test-hooks");
