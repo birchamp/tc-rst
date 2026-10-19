@@ -670,3 +670,75 @@ async fn hello_lists_the_open_sessions_with_their_roles_and_modes() {
     assert_eq!(sessions[0].at, screen);
     assert_eq!(sessions[1].id.as_str(), sample_bible().id.to_string());
 }
+
+#[tokio::test]
+async fn quit_during_an_open_closes_that_session_once_it_has_opened() {
+    let f = one_project().await;
+    let project = folder("kr_ulb");
+    f.store.hold_open(&project);
+    let opening = {
+        let sessions = f.sessions().clone();
+        let project = project.clone();
+        tokio::spawn(async move { sessions.open_screen(&project, open_progress()).await })
+    };
+    super::common::until("the open reaches the store", || {
+        f.store.opens(&project) == 1
+    })
+    .await;
+    let quit = {
+        let app = f.t.app.clone();
+        tokio::spawn(async move { app.quit().await })
+    };
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(!quit.is_finished(), "the quit waits for the open");
+    f.store.release_open(&project);
+    assert!(opening.await.unwrap().is_ok());
+    tokio::time::timeout(Duration::from_secs(5), quit)
+        .await
+        .expect("the quit ends")
+        .unwrap();
+    assert_eq!(f.store.closes(&project), 1);
+    assert!(f.sessions().open_sessions().is_empty());
+    assert!(!f.sessions().busy());
+}
+
+#[tokio::test]
+async fn a_screen_open_waits_for_another_folders_screen_open_and_leaves_it() {
+    let f = started(vec![("first", empty(1)), ("second", empty(2))]).await;
+    f.store.hold_open(&folder("first"));
+    let first = {
+        let sessions = f.sessions().clone();
+        tokio::spawn(async move {
+            sessions
+                .open_screen(&folder("first"), open_progress())
+                .await
+        })
+    };
+    super::common::until("the first open reaches the store", || {
+        f.store.opens(&folder("first")) == 1
+    })
+    .await;
+    let second = {
+        let sessions = f.sessions().clone();
+        tokio::spawn(async move {
+            sessions
+                .open_screen(&folder("second"), open_progress())
+                .await
+        })
+    };
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert_eq!(
+        f.store.opens(&folder("second")),
+        0,
+        "it waits for the first open"
+    );
+    f.store.release_open(&folder("first"));
+    let first = first.await.unwrap().unwrap().at;
+    let second = second.await.unwrap().unwrap().at;
+    f.settled("first").await;
+    assert_eq!(f.store.closes(&folder("first")), 1);
+    let open = f.sessions().open_sessions();
+    assert_eq!(open.len(), 1, "one folder has the screen");
+    assert_eq!(open[0].at, second);
+    assert!(f.t.app.read(&first).is_err());
+}

@@ -161,6 +161,8 @@ struct RegistryInner {
     epochs: AtomicU64,
     slot_ids: AtomicU64,
     slots: Mutex<BTreeMap<ProjectRef, Slot>>,
+    /// Woken whenever an open, a leave checkpoint or a close ends.
+    changed: tokio::sync::Notify,
 }
 
 /// Every open project of this server run. Clones share the registry.
@@ -243,6 +245,7 @@ impl SessionRegistry {
                 epochs: AtomicU64::new(1),
                 slot_ids: AtomicU64::new(1),
                 slots: Mutex::new(BTreeMap::new()),
+                changed: tokio::sync::Notify::new(),
             }),
         }
     }
@@ -271,17 +274,35 @@ impl SessionRegistry {
         folder: &ProjectRef,
         progress: ProgressSink,
     ) -> Result<OpenSession, OpenFailure> {
-        let elsewhere: Vec<Scope> = {
-            let slots = lock(&self.inner.slots);
-            slots
-                .iter()
-                .filter(|(other, slot)| *other != folder && slot.screen)
-                .filter_map(|(_, slot)| slot.session().map(|s| s.scope.clone()))
-                .collect()
-        };
-        for scope in elsewhere {
-            // Its screen user may have just left; then there is nothing to leave.
-            let _ = self.leave_screen(&scope);
+        loop {
+            let (open, opening): (Vec<Scope>, Vec<ProjectRef>) = {
+                let slots = lock(&self.inner.slots);
+                let others = || {
+                    slots
+                        .iter()
+                        .filter(|(other, slot)| *other != folder && slot.screen)
+                };
+                (
+                    others()
+                        .filter_map(|(_, slot)| slot.session().map(|s| s.scope.clone()))
+                        .collect(),
+                    others()
+                        .filter(|(_, slot)| matches!(slot.phase, Phase::Opening(_)))
+                        .map(|(other, _)| other.clone())
+                        .collect(),
+                )
+            };
+            for scope in &open {
+                // Its screen user may have just left; then there is nothing to leave.
+                let _ = self.leave_screen(scope);
+            }
+            if opening.is_empty() {
+                break;
+            }
+            // Another folder's screen open is running: it ends first, then it is left.
+            for other in &opening {
+                self.settled(other).await;
+            }
         }
         let (session, mut guard) = self.join(folder, Role::Screen, progress).await?;
         // The screen stays a user until it leaves: `leave_screen`, a screen open elsewhere,
@@ -428,6 +449,7 @@ impl SessionRegistry {
                 }
             };
             tx.send_replace(Some(outcome));
+            registry.inner.changed.notify_waiters();
         });
     }
 
@@ -563,6 +585,7 @@ impl SessionRegistry {
                 }
             }
             done.send_replace(true);
+            registry.inner.changed.notify_waiters();
             registry.maybe_close(&session.scope.project, slot_id);
         });
         Ok(())
@@ -661,32 +684,41 @@ impl SessionRegistry {
     }
 
     /// `app/quit` and `test/reset`: the screen leaves with its checkpoint, side users are let
-    /// go, and every session closes once its writes are done.
+    /// go, and every session closes once its writes are done. Resolves when no session is
+    /// left, an open that was running included.
     pub async fn close_all(&self) {
-        let screens: Vec<Scope> = {
-            let mut slots = lock(&self.inner.slots);
-            for slot in slots.values_mut() {
-                // Their leases count out of a slot that no longer counts them.
-                slot.side = 0;
+        loop {
+            let changed = self.inner.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            let (screens, folders) = {
+                let mut slots = lock(&self.inner.slots);
+                for slot in slots.values_mut() {
+                    // Their leases count out of a slot that no longer counts them.
+                    slot.side = 0;
+                }
+                let screens: Vec<Scope> = slots
+                    .values()
+                    .filter(|slot| slot.screen)
+                    .filter_map(|slot| slot.session().map(|s| s.scope.clone()))
+                    .collect();
+                let folders: Vec<(ProjectRef, u64)> = slots
+                    .iter()
+                    .map(|(folder, slot)| (folder.clone(), slot.id))
+                    .collect();
+                (screens, folders)
+            };
+            if folders.is_empty() {
+                return;
             }
-            slots
-                .values()
-                .filter(|slot| slot.screen)
-                .filter_map(|slot| slot.session().map(|s| s.scope.clone()))
-                .collect()
-        };
-        for scope in &screens {
-            let _ = self.leave_screen(scope);
-        }
-        let folders: Vec<(ProjectRef, u64)> = lock(&self.inner.slots)
-            .iter()
-            .map(|(folder, slot)| (folder.clone(), slot.id))
-            .collect();
-        for (folder, slot_id) in &folders {
-            self.maybe_close(folder, *slot_id);
-        }
-        for (folder, _) in &folders {
-            self.settled(folder).await;
+            for scope in &screens {
+                let _ = self.leave_screen(scope);
+            }
+            for (folder, slot_id) in &folders {
+                self.maybe_close(folder, *slot_id);
+            }
+            // An open, a checkpoint, a write or a close ends: look again.
+            changed.await;
         }
     }
 
@@ -781,6 +813,7 @@ impl SessionRegistry {
                 event: SessionEvent::Closed,
             });
             done.send_replace(true);
+            registry.inner.changed.notify_waiters();
         });
     }
 }
