@@ -1,7 +1,7 @@
 {
   "about": "translationCore 4 design-system baseline. Each case is one component in one state inside a fixed-size frame; screens/<component>/<state>.png is how tC4 draws it. A port renders the same case by the same protocol and compares images.",
   "source": {
-    "repo": "/home/user/unfoldingword/translationcore4",
+    "repo": "/home/bot/unfoldingword/translationcore4",
     "commit": "d310bf304cfee784f4ca45dee474a3faf0d5616e",
     "version": "4.0.0-rc.1",
     "ds": "src/ds",
@@ -19,7 +19,7 @@
       "focus": "Press Tab until the first element inside the frame that matches `target` has the focus. Keyboard focus is what makes :focus-visible match.",
       "hover": "Move the pointer to the centre of the first element inside the frame that matches `target`.",
       "press": "Move the pointer to the centre of the target and press the primary button without releasing it (:active).",
-      "click": "Click the centre of the target.",
+      "click": "Click the centre of the target. With `force`, click it without waiting for it to be enabled: Playwright takes a label's control as the element that must be enabled, and a case may press the label of a field that is off.",
       "key": "Press `key` on the focused element.",
       "type": "Type `text` into the focused element, one key at a time.",
       "select": "Select the text from the start of the first element inside the frame that matches `target` to the end of the first that matches `to` (`target` when absent), by script, as one range."
@@ -29,7 +29,7 @@
     "output": "screens/<component>/<state>.png, the frame element only, 1 CSS px = 1 image px."
   },
   "nodes": {
-    "element": "{ \"$el\": \"<Name>\", \"props\": { ... } } — a DS export (index.js) when the name is capitalised, an HTML or SVG tag when it is lower case. `children` is a prop.",
+    "element": "{ \"$el\": \"<Name>\", \"props\": { ... } } — a DS export (index.js) when the name is capitalised, an HTML or SVG tag when it is lower case. `children` is a prop. An HTML element may take `onClickCapture`, a callback called in the click's capture phase, before the component under test sees the click.",
     "callback": "{ \"$fn\": \"noop\" } — a callback that does nothing. Several components draw a control only when they are given a callback (Modal's ✕, Toast's action, Breadcrumb's links, a clickable Surface).",
     "asset": "{ \"$asset\": \"<path>\" } — a file of the tC4 checkout, by its path relative to the checkout, served as a URL.",
     "json": "Everything else is a plain JSON value. Style objects are React inline styles: camelCase properties, a bare number means px except on unitless properties (lineHeight, flex, opacity, fontWeight, zIndex). defaultValue is the initial value of an uncontrolled field.",
@@ -158,7 +158,7 @@
     {
       "name": "Select",
       "file": "components/forms/Select.jsx",
-      "cases": 19
+      "cases": 21
     },
     {
       "name": "SuggestField",
@@ -8392,6 +8392,457 @@
         ]
       },
       "isolate": true
+    },
+    {
+      "id": "Select/disabled-while-open",
+      "component": "Select",
+      "state": "disabled-while-open",
+      "file": "components/forms/Select.jsx",
+      "frame": {
+        "width": 340,
+        "height": 500,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "label": "Book",
+        "options": [
+          {
+            "value": "RUT",
+            "label": "Ruth",
+            "code": "RUT"
+          },
+          {
+            "value": "EST",
+            "label": "Esther",
+            "code": "EST"
+          },
+          {
+            "value": "JON",
+            "label": "Jonah",
+            "code": "JON"
+          },
+          {
+            "value": "MIC",
+            "label": "Micah",
+            "code": "MIC"
+          },
+          {
+            "value": "MAT",
+            "label": "Matthew",
+            "code": "MAT"
+          },
+          {
+            "value": "MRK",
+            "label": "Mark",
+            "code": "MRK"
+          },
+          {
+            "value": "LUK",
+            "label": "Luke",
+            "code": "LUK"
+          },
+          {
+            "value": "JHN",
+            "label": "John",
+            "code": "JHN"
+          },
+          {
+            "value": "GAL",
+            "label": "Galatians",
+            "code": "GAL"
+          },
+          {
+            "value": "TIT",
+            "label": "Titus",
+            "code": "TIT"
+          },
+          {
+            "value": "PHM",
+            "label": "Philemon",
+            "code": "PHM"
+          },
+          {
+            "value": "JUD",
+            "label": "Jude",
+            "code": "JUD"
+          }
+        ],
+        "value": "RUT",
+        "onChange": {
+          "$fn": "set",
+          "cell": "picked",
+          "from": "0.target.value"
+        },
+        "searchPlaceholder": "Search books",
+        "disabled": {
+          "$cell": "off"
+        }
+      },
+      "render": {
+        "$el": "div",
+        "props": {
+          "onClickCapture": {
+            "$fn": "set",
+            "cell": "off",
+            "value": true
+          },
+          "style": {
+            "display": "flex",
+            "flexDirection": "column",
+            "gap": 8
+          },
+          "children": [
+            {
+              "$el": "Select",
+              "props": {
+                "label": "Book",
+                "options": [
+                  {
+                    "value": "RUT",
+                    "label": "Ruth",
+                    "code": "RUT"
+                  },
+                  {
+                    "value": "EST",
+                    "label": "Esther",
+                    "code": "EST"
+                  },
+                  {
+                    "value": "JON",
+                    "label": "Jonah",
+                    "code": "JON"
+                  },
+                  {
+                    "value": "MIC",
+                    "label": "Micah",
+                    "code": "MIC"
+                  },
+                  {
+                    "value": "MAT",
+                    "label": "Matthew",
+                    "code": "MAT"
+                  },
+                  {
+                    "value": "MRK",
+                    "label": "Mark",
+                    "code": "MRK"
+                  },
+                  {
+                    "value": "LUK",
+                    "label": "Luke",
+                    "code": "LUK"
+                  },
+                  {
+                    "value": "JHN",
+                    "label": "John",
+                    "code": "JHN"
+                  },
+                  {
+                    "value": "GAL",
+                    "label": "Galatians",
+                    "code": "GAL"
+                  },
+                  {
+                    "value": "TIT",
+                    "label": "Titus",
+                    "code": "TIT"
+                  },
+                  {
+                    "value": "PHM",
+                    "label": "Philemon",
+                    "code": "PHM"
+                  },
+                  {
+                    "value": "JUD",
+                    "label": "Jude",
+                    "code": "JUD"
+                  }
+                ],
+                "value": "RUT",
+                "onChange": {
+                  "$fn": "set",
+                  "cell": "picked",
+                  "from": "0.target.value"
+                },
+                "searchPlaceholder": "Search books",
+                "disabled": {
+                  "$cell": "off"
+                }
+              }
+            },
+            {
+              "$el": "Text",
+              "props": {
+                "role": "caption",
+                "children": [
+                  "Chosen: ",
+                  {
+                    "$cell": "picked"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "cells": {
+        "off": false,
+        "picked": "none"
+      },
+      "steps": [
+        {
+          "do": "focus",
+          "target": "[role=\"combobox\"]"
+        },
+        {
+          "do": "key",
+          "key": "ArrowDown"
+        },
+        {
+          "do": "click",
+          "target": "[role=\"option\"]:nth-child(2)"
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onChange"
+        ]
+      },
+      "isolate": true,
+      "note": "tC4 #552: the Select turns off as a row is clicked in its open list. tC4 takes the choice; the port closes the list and takes none (residuals.json)."
+    },
+    {
+      "id": "Select/disabled-while-open-label",
+      "component": "Select",
+      "state": "disabled-while-open-label",
+      "file": "components/forms/Select.jsx",
+      "frame": {
+        "width": 340,
+        "height": 500,
+        "padding": 16,
+        "background": "#F7FAFC"
+      },
+      "document": {
+        "lang": "en",
+        "dir": "ltr"
+      },
+      "props": {
+        "label": "Book",
+        "options": [
+          {
+            "value": "RUT",
+            "label": "Ruth",
+            "code": "RUT"
+          },
+          {
+            "value": "EST",
+            "label": "Esther",
+            "code": "EST"
+          },
+          {
+            "value": "JON",
+            "label": "Jonah",
+            "code": "JON"
+          },
+          {
+            "value": "MIC",
+            "label": "Micah",
+            "code": "MIC"
+          },
+          {
+            "value": "MAT",
+            "label": "Matthew",
+            "code": "MAT"
+          },
+          {
+            "value": "MRK",
+            "label": "Mark",
+            "code": "MRK"
+          },
+          {
+            "value": "LUK",
+            "label": "Luke",
+            "code": "LUK"
+          },
+          {
+            "value": "JHN",
+            "label": "John",
+            "code": "JHN"
+          },
+          {
+            "value": "GAL",
+            "label": "Galatians",
+            "code": "GAL"
+          },
+          {
+            "value": "TIT",
+            "label": "Titus",
+            "code": "TIT"
+          },
+          {
+            "value": "PHM",
+            "label": "Philemon",
+            "code": "PHM"
+          },
+          {
+            "value": "JUD",
+            "label": "Jude",
+            "code": "JUD"
+          }
+        ],
+        "value": "RUT",
+        "onChange": {
+          "$fn": "set",
+          "cell": "picked",
+          "from": "0.target.value"
+        },
+        "searchPlaceholder": "Search books",
+        "disabled": {
+          "$cell": "off"
+        }
+      },
+      "render": {
+        "$el": "div",
+        "props": {
+          "onClickCapture": {
+            "$fn": "set",
+            "cell": "off",
+            "value": true
+          },
+          "style": {
+            "display": "flex",
+            "flexDirection": "column",
+            "gap": 8
+          },
+          "children": [
+            {
+              "$el": "Select",
+              "props": {
+                "label": "Book",
+                "options": [
+                  {
+                    "value": "RUT",
+                    "label": "Ruth",
+                    "code": "RUT"
+                  },
+                  {
+                    "value": "EST",
+                    "label": "Esther",
+                    "code": "EST"
+                  },
+                  {
+                    "value": "JON",
+                    "label": "Jonah",
+                    "code": "JON"
+                  },
+                  {
+                    "value": "MIC",
+                    "label": "Micah",
+                    "code": "MIC"
+                  },
+                  {
+                    "value": "MAT",
+                    "label": "Matthew",
+                    "code": "MAT"
+                  },
+                  {
+                    "value": "MRK",
+                    "label": "Mark",
+                    "code": "MRK"
+                  },
+                  {
+                    "value": "LUK",
+                    "label": "Luke",
+                    "code": "LUK"
+                  },
+                  {
+                    "value": "JHN",
+                    "label": "John",
+                    "code": "JHN"
+                  },
+                  {
+                    "value": "GAL",
+                    "label": "Galatians",
+                    "code": "GAL"
+                  },
+                  {
+                    "value": "TIT",
+                    "label": "Titus",
+                    "code": "TIT"
+                  },
+                  {
+                    "value": "PHM",
+                    "label": "Philemon",
+                    "code": "PHM"
+                  },
+                  {
+                    "value": "JUD",
+                    "label": "Jude",
+                    "code": "JUD"
+                  }
+                ],
+                "value": "RUT",
+                "onChange": {
+                  "$fn": "set",
+                  "cell": "picked",
+                  "from": "0.target.value"
+                },
+                "searchPlaceholder": "Search books",
+                "disabled": {
+                  "$cell": "off"
+                }
+              }
+            },
+            {
+              "$el": "Text",
+              "props": {
+                "role": "caption",
+                "children": [
+                  "Chosen: ",
+                  {
+                    "$cell": "picked"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "cells": {
+        "off": false,
+        "picked": "none"
+      },
+      "steps": [
+        {
+          "do": "focus",
+          "target": "[role=\"combobox\"]"
+        },
+        {
+          "do": "key",
+          "key": "ArrowDown"
+        },
+        {
+          "do": "click",
+          "target": "[role=\"option\"]:nth-child(2)"
+        },
+        {
+          "do": "click",
+          "target": "label",
+          "force": true
+        }
+      ],
+      "needs": {
+        "callbacks": [
+          "onChange"
+        ]
+      },
+      "isolate": true,
+      "note": "The same, then a press on the label of the field that is now off: the list stays closed and nothing is chosen."
     },
     {
       "id": "SuggestField/value",

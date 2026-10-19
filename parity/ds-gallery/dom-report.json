@@ -1,6 +1,6 @@
 {
   "same": 751,
-  "total": 751,
+  "total": 753,
   "cases": [
     {
       "id": "Badge/accent-md",
@@ -1609,6 +1609,38 @@
       "same": true,
       "errors": [],
       "diffs": []
+    },
+    {
+      "id": "Select/disabled-while-open",
+      "same": false,
+      "errors": [],
+      "diffs": [
+        "line 15\n    tC4:        \"Chosen: EST\"\n    port:       \"Chosen: none\""
+      ],
+      "why": "tC4 #552 (still open at 9ad4d5c): a Select made disabled while its list is open keeps the list, and a row click still calls onChange, so tC4's caption reads EST. The port closes the list when the Select turns disabled and takes no choice while it is disabled, so its caption reads none. Declared difference (AGENTS.md, Matching tC4; docs/PLAN.md).",
+      "lines": [
+        {
+          "line": 15,
+          "tc4": "      \"Chosen: EST\"",
+          "port": "      \"Chosen: none\""
+        }
+      ]
+    },
+    {
+      "id": "Select/disabled-while-open-label",
+      "same": false,
+      "errors": [],
+      "diffs": [
+        "line 15\n    tC4:        \"Chosen: EST\"\n    port:       \"Chosen: none\""
+      ],
+      "why": "tC4 #552 (still open at 9ad4d5c): a Select made disabled while its list is open keeps the list, and a row click still calls onChange, so tC4's caption reads EST. The port closes the list when the Select turns disabled and takes no choice while it is disabled, so its caption reads none. The press on the label of the field that is now off changes nothing on either side. Declared difference (AGENTS.md, Matching tC4; docs/PLAN.md).",
+      "lines": [
+        {
+          "line": 15,
+          "tc4": "      \"Chosen: EST\"",
+          "port": "      \"Chosen: none\""
+        }
+      ]
     },
     {
       "id": "SuggestField/value",

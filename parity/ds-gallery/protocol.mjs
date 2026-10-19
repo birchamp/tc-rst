@@ -77,7 +77,9 @@ async function runStep(page, step) {
     case 'focus': return focusByKeyboard(page, step.target);
     case 'hover': return target.hover();
     case 'press': await target.hover(); return page.mouse.down();
-    case 'click': return target.click();
+    /* `force` skips Playwright's wait for the target to be enabled, which for a label waits
+       on the label's control: a press on the label of a field that is off. */
+    case 'click': return target.click(step.force ? { force: true } : undefined);
     case 'key': return page.keyboard.press(step.key);
     case 'type': return page.keyboard.type(step.text);
     case 'select': return selectText(page, step.target, step.to ?? step.target);

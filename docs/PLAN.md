@@ -74,6 +74,10 @@ owner is told of each:
   `checking/`, `tc/` and `content/` (#549). tC4 4.0 takes only an ingredient with the role
   `x-obsimages`, which the rebuild's `metadata.json` does not write for a carried file and
   Pankosmia's rescan drops, so a project's own pictures would never show.
+- A Select that turns disabled while its list is open closes the list, and a choice made then
+  changes nothing (#552). tC4 4.0 keeps the list open, and a row click still changes the value.
+  The gallery's two `Select/disabled-while-open` cases differ from tC4 on purpose
+  (`parity/ds-gallery/residuals.json`).
 
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9

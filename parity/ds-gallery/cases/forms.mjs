@@ -38,6 +38,17 @@ const DIRECTIONS = [
 
 const select = (props) => ({ label: 'Script font', options: FONTS, value: FONTS[0], onChange: noop, ...props });
 const OPEN = [click('[role="combobox"]')];
+/* tC4 #552: the click that chooses a row also turns the Select off, in its capture phase, as a
+   screen that turns a form busy at that moment would. tC4 still takes the choice; the port
+   closes the list and keeps the value (residuals.json). The caption shows what onChange handed
+   over. */
+const offOnChoose = (n) => el('div', {
+  onClickCapture: setTo('off', true),
+  style: { display: 'flex', flexDirection: 'column', gap: 8 },
+  children: [n, el('Text', { role: 'caption', children: ['Chosen: ', cell('picked')] })],
+});
+const offWhileOpen = select({ label: 'Book', options: bookOptions(false), value: 'RUT', searchPlaceholder: 'Search books', disabled: cell('off'), onChange: set('picked', '0.target.value') });
+const OFF_WHILE_OPEN = [focus('[role="combobox"]'), key('ArrowDown'), click('[role="option"]:nth-child(2)')];
 
 export default [
   ...group('Checkbox', { frame: { width: 64, height: 60 } }, [
@@ -153,6 +164,10 @@ export default [
     ], value: 'JON' }), { frame: { height: 400 }, steps: OPEN, note: 'A group name that comes back later in the list starts a section of its own, with its own rows.' }],
     ['open-duplicate-values', select({ options: ['Charis SIL', 'Charis SIL', 'Awami Nastaliq'], value: 'Awami Nastaliq' }), { frame: { height: 260 }, steps: OPEN, note: 'Two options with one value are two rows.' }],
     ['rtl-open', select({ label: 'السفر', options: BOOKS.slice(0, 5).map(([, code], i) => ({ value: code, label: ['راعوث', 'أستير', 'يونان', 'ميخا', 'متى'][i], code })), value: 'JON' }), { document: AR, frame: { height: 330 }, steps: OPEN }],
+    ['disabled-while-open', offWhileOpen, { frame: { height: 500 }, cells: { off: false, picked: 'none' }, wrap: offOnChoose, steps: OFF_WHILE_OPEN,
+      note: 'tC4 #552: the Select turns off as a row is clicked in its open list. tC4 takes the choice; the port closes the list and takes none (residuals.json).' }],
+    ['disabled-while-open-label', offWhileOpen, { frame: { height: 500 }, cells: { off: false, picked: 'none' }, wrap: offOnChoose, steps: [...OFF_WHILE_OPEN, { ...click('label'), force: true }],
+      note: 'The same, then a press on the label of the field that is now off: the list stays closed and nothing is chosen.' }],
   ]),
 
   ...group('SuggestField', { frame: { width: 340, height: 100 } }, [
