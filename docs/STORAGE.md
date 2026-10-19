@@ -2759,21 +2759,24 @@ The derivation functions live in `tc-usfm` and are versioned (§12):
   (`SelectionText::occurrences`), so it fits until the text changes.
 
 **Shown text and hashed text.** tC4 reads a verse two ways, and so does the rebuild. The
-screens show, and split into words, `tc_usfm::shown_text_v1(content)`: tC4's `verseText` of
+screens show `tc_usfm::shown_text_v1(content)`: tC4's `verseText` of
 `src/data/bookModel.js:15` (through `verseTextIndex`, `src/state.jsx:352`, at d310bf3), which the
-Check screen shows and taps and the aligner banks (`src/state.jsx:1183`). It parses `"\v 1 " +
-content` with usfm-js 3.4.3 as `plain_text_v1` does and joins each verse object's `text`, or else
-the `text` of its children one level down, trimmed with JavaScript's `trim`. So a Psalm's
-superscription and its `\qs Selah\qs*` are words to check and to align, while a footnote and
-the items of a `\li` list are not shown, as in tC4. (`tc_usfm::display_text`, the readable text
-of `src/views/verseText.js`, which tC4's source panes show, keeps the list items; it is no
-verse's shown text.) Every hash is
+Check screen shows and taps and tC4's aligner banks (`src/state.jsx:1183`). The rebuild's aligner
+banks `tc_usfm::target_words(content)` instead, the words the export weaves, so a value that
+places every banked word weaves (tC4 #796); the shown text decides no word of an alignment. It parses `"\v 1 " +
+content` with usfm-js 3.4.3 as `plain_text_v1` does and joins the `text` of the verse objects at
+any depth (tC4 9ad4d5c, #782), trimmed with JavaScript's `trim`. So a Psalm's superscription and
+its `\qs Selah\qs*` are words to check and to align, while a footnote is not shown. Where tC4
+hides words the export counts (the items of a `\li` list, the words after a span that holds a
+footnote), the rebuild shows them, a declared difference (`docs/PLAN.md`; the rules are in
+`crates/tc-usfm/src/derivations/shown.rs`). (`tc_usfm::display_text`, the readable text of
+`src/views/verseText.js`, which tC4's source panes show, is no verse's shown text.) Every hash is
 of `plain_text_v1`, never of the shown text (`TargetText::md5`, `TargetText::shown` in
 `tc_journal::decision`). The two texts differ on many verses: `plain_text_v1` keeps a poetry
 line break as a line break, drops the text of a `\qs` written over lines (the ULT's Selah)
 and runs a verse's slot on into a heading. So an edit of a word the hash leaves out keeps the
 hash: the aligner opens a stored value as it is only when its hash matches and it holds
-exactly the shown verse's words, and otherwise carries it over (`tc_align::Aligner::open`).
+exactly the verse's words, and otherwise carries it over (`tc_align::Aligner::open`).
 tC4's aligner stamps `targetVerseMd5` with the md5 of its shown text (`stampTargetVerse`,
 `src/data/align/edit.ts:230`), while its fold (`journal/fold.mjs:934`) and export
 (`src/data/export/weave.mjs:23`) compare it with `verseTextMd5`, so on such a verse tC4's

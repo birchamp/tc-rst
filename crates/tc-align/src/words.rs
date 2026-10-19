@@ -326,15 +326,17 @@ fn source_word(span: &Span<'_>) -> Result<SourceWord, Error> {
 /// words numbered by occurrence, and the hash an alignment records of it.
 ///
 /// It is made from the verse's content (`words + layout` of its verse record, the USFM
-/// after `\v N `). The words are the words of the text tC4's aligner shows and banks
-/// ([`TargetText::shown`], `tc_usfm::shown_text_v1`: tC4's `verseText` of
-/// `src/data/bookModel.js:15` through `verseTextIndex`, `src/state.jsx:1183` at d310bf3), so a
-/// Psalm's superscription and its `\qs` Selah are words to align, and a `\li` list item is
-/// not, as in tC4. The hash is the journal's ([`TargetText::md5`], md5 of `plain_text_v1`), the one the
-/// fold checks an alignment with (§7.7), so an alignment the aligner saves is valid in the
-/// alignment files. (tC4's aligner stamps the md5 of its shown text instead, which its own
-/// fold and export reject on every verse where the two texts differ, such as a verse with a
-/// poetry line break.)
+/// after `\v N `). The words are `tc_usfm::target_words` of the content, the words the export
+/// weaves, so a value that places every word the aligner banks weaves (tC4 #796): a word
+/// never joins the next across a footnote or other marker (#795), and every word of a nested
+/// alignment, such as Genesis 1:1 "the heavens", a Psalm's superscription and its `\qs` Selah
+/// are words to align (#782). The text is the one tC4's aligner shows ([`TargetText::shown`],
+/// `tc_usfm::shown_text_v1`), for display only: it decides no word. The hash is the
+/// journal's ([`TargetText::md5`], md5 of `plain_text_v1`), the one the fold checks an
+/// alignment with (§7.7), so an alignment the aligner saves is valid in the alignment files.
+/// (tC4's aligner stamps the md5 of its shown text instead, which its own fold and export
+/// reject on every verse where the two texts differ, such as a verse with a poetry line
+/// break.)
 #[derive(Clone, PartialEq, Eq)]
 pub struct TargetVerse {
     text: String,
@@ -349,11 +351,10 @@ impl TargetVerse {
     /// The verse whose content is `content`.
     pub fn new(content: &str) -> Self {
         let derived = TargetText::new(content.to_owned());
-        let text = derived.shown().to_owned();
-        let words: Vec<TargetWord> = tc_usfm::words::words(&text)
+        let words: Vec<TargetWord> = tc_usfm::target_words(content)
             .into_iter()
             .map(|w| TargetWord {
-                word: w.text.to_owned(),
+                word: w.text,
                 occurrence: w.occurrence,
                 occurrences: w.occurrences,
                 extra: JsonMap::new(),
@@ -365,13 +366,13 @@ impl TargetVerse {
         }
         Self {
             md5: derived.md5(),
-            text,
+            text: derived.shown().to_owned(),
             words,
             places,
         }
     }
 
-    /// The shown text: what the aligner shows and splits into words.
+    /// The shown text: what the aligner shows. It decides no word ([`TargetVerse::words`]).
     pub fn text(&self) -> &str {
         &self.text
     }

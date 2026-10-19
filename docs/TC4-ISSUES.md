@@ -51,10 +51,10 @@ The first four come from tC4's commit range; the rest come from the issue triage
 | # | Issue | Failing scenario | Crate | Regression test | Fix |
 |---|---|---|---|---|---|
 | 1 | #773 | GEN 33:5 note mix3 is titled "his eyes … the women … whom God has graciously given to your servant". gyfv, r2u9 and h9hm are also wrong; only zczu is right. 38 of the 2,224 Genesis Notes checks take this path. | tc-helps (`highlight_quote`, used by `CheckItem::title`) | `a_reordered_quote_lights_only_its_own_phrase` (tC4's five vectors on `GEN-773.usfm`, plus TIT 2:2 "in love") | Port `shortestRunInstances` into the multi-word fallback. Keep the single-word and strict paths. h9hm is a plain note, so it affects only the helps highlight. |
-| 2 | #782 | The shown text of en_ult Genesis 1:1's aligned content is "In the beginning God created  and the earth."; the aligner has 8 words and no "heavens". PSA 34:4, kept as written, has no "Yahweh". 633 of 1,533 Genesis verses with markup lose words; 67 of the 265 en_ult verses the import keeps as written lose words. | tc-usfm (`shown_text_v1`), read by tc-align and tc-journal | `shown_text_reads_words_inside_nested_alignments`; `a_verse_kept_as_written_shows_yahweh`; `selah_inside_qs_shows`; plus a tC4-imported verse with nested `\zaln` | Walk `\zaln` and word nodes at any depth, as tC4 9ad4d5c does. Regenerate the vectors. Update STORAGE §11. Land before format 1.0. |
-| 3 | #795 | After the import split, MAT 5:22 shows "brotherwill", MAT 5:44 "enemiesand" and 1TH 3:2 "Godin" (12 Matthew and 3 1 Thessalonians verses). Opening MAT 5:22 in Align drops 2 of its 44 links, and "brotherwill" can never be aligned. | tc-usfm (`shown_text_v1`), tc-align | `a_footnote_between_words_keeps_its_space`; `imported_mat_5_22_opens_with_all_44_links` | Keep the character after `\f*` or `\x*` when the note sits between two non-space characters (tC4 PR #800). Same change as #782. |
+| 2 | #782 | The shown text of en_ult Genesis 1:1's aligned content is "In the beginning God created  and the earth."; the aligner has 8 words and no "heavens". PSA 34:4, kept as written, has no "Yahweh". 633 of 1,533 Genesis verses with markup lose words; 67 of the 265 en_ult verses the import keeps as written lose words. | tc-usfm (`shown_text_v1`), read by tc-align and tc-journal | `shown_text_reads_words_inside_nested_alignments`; `a_verse_kept_as_written_shows_yahweh`; `selah_inside_qs_shows`; plus a tC4-imported verse with nested `\zaln` | Walk `\zaln` and word nodes at any depth, as tC4 9ad4d5c does. Add tC4's vectors (`fixtures/usfm/shown-text-vectors.json`); the existing vectors do not change. Update STORAGE §7.7 ("Shown text and hashed text"). Land before format 1.0. |
+| 3 | #795 | After the import split, MAT 5:22 shows "brotherwill", MAT 5:44 "enemiesand" and 1TH 3:2 "Godin" (12 Matthew and 3 1 Thessalonians verses). Opening MAT 5:22 in Align drops 2 of its 44 links, and "brotherwill" can never be aligned. | tc-usfm (`shown_text_v1`), tc-align | `a_footnote_between_words_keeps_its_space`; `imported_mat_5_22_opens_with_all_44_links` | Keep the character after `\f*` or `\x*` when the note sits between two non-space characters (tC4 PR #800), and after every other marker the shown text leaves out (`\va`, `\vp`, `\ca`, `\rq`, `\cat`, `\ts\*`…), which PR #800 does not (declared difference, PLAN). Same change as #782. |
 | 4 | #787 | A record saved for "Pablo, siervo de Dios", reopened against "Pablo, esclavo de Dios", gives `is_stale()` false. "The draft changed" never shows after a sync, a kept version or an outside edit changed the verse. | tc-align (`Aligner::open`, `is_stale`), tc-api (`Freshness`) | `a_stale_value_opens_with_the_draft_changed_notice` | Set a stale flag at open (hash differed, or the word set changed; order alone does not count); keep it until the first edit or Mark valid. Keep the save on leaving (AD19). |
-| 5 | #796 (word list) | For "Pablo, siervo\f + \ft o esclavo\f* de Dios", the bank holds "siervode" but the export expects "siervo" and "de". After every word is placed and the verse is marked valid, `weave_verse` fails with `TargetWordNotFound("siervode")`, so the export drops the verse's alignment with no message. | tc-align (`TargetVerse`), tc-usfm | `a_footnote_right_after_a_word_banks_both_words_and_weaves`; a CI check that `TargetVerse` words equal `target_words` on every fixture verse with no word markup | Same shown-text fix as #795. Do not switch `TargetVerse` to `target_words`, which fails on content with word markup. |
+| 5 | #796 (word list) | For "Pablo, siervo\f + \ft o esclavo\f* de Dios", the bank holds "siervode" but the export expects "siervo" and "de". After every word is placed and the verse is marked valid, `weave_verse` fails with `TargetWordNotFound("siervode")`, so the export drops the verse's alignment with no message. | tc-align (`TargetVerse`), tc-usfm | `the_bank_is_the_export_for_every_vector`, `the_bank_is_the_export_for_every_verse_of_the_bundle_and_the_fixtures` (every verse of the ULT and UST v91 and the fixtures) and the proptest `the_bank_is_the_export_for_generated_verses` (`tc-align/tests/bank_words.rs`): every banked word placed weaves, and the woven verse holds exactly the bank | Done by FIX-text: `TargetVerse` banks `tc_usfm::target_words`, the export's own list, which reads word markup through; the shown text decides no word. |
 | 6 | #796 (review rule) | (1) After a source upgrade the rail shows Invalid, but the open verse shows no notice. (2) A record with the current hash that holds "siervo" for "Pablo, esclavo de Dios" shows Valid 4/4; it opens with a dropped link and the export fails. (3) Editing "Selah" to "Pause" inside `\qs` keeps the old alignment, and the rail stays Valid. | tc-align (`value.rs`, `aligner.rs`), tc-store (reflow, R25) | `a_record_holding_a_word_the_verse_lacks_is_invalid_on_the_rail`; `after_a_source_upgrade_the_open_verse_shows_the_banner`; `a_verse_edit_of_a_word_the_hash_leaves_out_reflows_its_alignment` (tc-store) | One `needs_review` predicate for the rail, the banner, the Mark valid gate and D2. The store's reflow also carries a record whose words differ from the verse, not only one whose hash differs. |
 | 7 | #794 | The en_ult TIT 1:1 aligned body opens in the aligner with 29 words. Its hashed text is punctuation only, so a save vouches for nothing, and the next verse edit restamps it. | tc-align (`Aligner::open`), tc-store (reflow) | `a_verse_that_holds_alignment_markup_does_not_open` (tc-align); `a_verse_edit_of_an_inline_aligned_verse_writes_no_alignment` (tc-store) | Add `Unavailable::AlignedInText`; the reflow skips such a verse; D2 keeps its bytes. This notice wins over the others, as in tC4 PR #799. |
 | 8 | #793 | A memory trained on JON 1:1-12 with NFC Hebrew source words (as tC4 4.0 stores them) gets 45 of 70 right for JON 1:13-17 asked with the raw words, against 51 asked in NFC: 12% fewer for every Hebrew project imported from tC4 4.0. | tc-align (suggest keys, `words.rs`) | `memory_trained_on_nfc_records_suggests_for_raw_source_words` (equal right counts) | NFC in the engine's keys (text and lemma), in training and questions. Compare in NFC where stored cards meet the pinned text. |
@@ -80,6 +80,43 @@ Other findings from the verifiers that are not bugs in shipped behavior:
   to add. The S2 `.bak` test passes even with the `.bak` rule deleted.
 - #525: until C1a, a chosen interface language is lost at relaunch, because the production
   config keeps app data in memory.
+
+Found by FIX-text (2026-10-19) (`docs/evidence/shown-text-2026-10-19.md`); each says whether
+the rebuild fixed it or does as tC4 does:
+
+- **Hidden verse text.** tC4's `verseText` hides the items of a `\li` list and the lines of a
+  marker usfm-js 3.4.3 does not know and keeps as `content` (`\qm1`), while the export's
+  `target_words` counts their words, so Check and the Align bank cannot reach them. In UST
+  v91 EXO 15:21 the split plain text hid "Sing to Yahweh … enemies.", so 11 of the 28 words
+  the import placed dropped at open and at the next verse save. Fixed in the rebuild as a
+  declared difference (`docs/PLAN.md`): the content of a paragraph marker but `\esb`, and of a
+  marker usfm-js does not know that USFM reads as a character marker (a typo such as `\pp`, a
+  custom `\zx`, with or without its end marker), is shown
+  (`list_items_and_unknown_paragraph_lines_show`, `imported_ust_exo_15_21_opens_with_all_its_links`).
+- **Words that still join** in text that still holds alignment markup, where usfm-js misreads
+  it (UST 2SA 23:8 "HeonceHe" and "killed800"). tC4 (PR #800 included) does the same. UST 1KI
+  10:12, whose markup splits "such" into the aligned words "s" and "uch", shows "such". Neither
+  is in Genesis or Psalms; the import cannot split them, so it keeps them as written, and #794
+  keeps them out of the aligner. ULT 2SA 23:8 ("spearagainst" in tC4) and a note inside an
+  alignment run no longer join: a space is put back where a left-out object stands between two
+  letters with no space kept after it.
+- **Words after a nested character span** (`\wj Worship the \+nd Lord\+nd* your God\wj*`):
+  tC4's `verseText` shows only "Worship the ", so Check and the Align bank miss words the export
+  counts, and a bank without them cannot be woven (#796). Fixed in the rebuild as a declared
+  difference (`docs/PLAN.md`); no ULT or UST v91 verse has one.
+- **Words that join across a span or paragraph marker** (`the \add Lord\add*s house`,
+  `Yahweh\q2 que`, adjacent ruby): tC4 banks "Lords", "Yahwehque" and "神愛", which the export
+  splits. Fixed in the rebuild as a declared difference (`docs/PLAN.md`;
+  `a_skipped_marker_right_before_a_letter_leaves_a_space`). The woven form of a ruby word
+  (`\rb \w 神|…\w*|かみ\rb*`) still shows its gloss ("神|かみ"); the import's split reads it
+  back to the plain form, whose bank is the export's.
+- **Text after a character span that holds a note** (`\wj Blessed are the poor\f + \ft Or
+  humble\f* in spirit\wj* and he went on`, valid USFM common in red-letter Gospels), and after
+  a stray end marker (`a\nd* b`): usfm-js keeps it as the `content` of the end marker's own
+  object, which tC4 hides, so the bank lacks words the export counts and the verse save drops
+  their links. Fixed in the rebuild as a declared difference (`docs/PLAN.md`;
+  `words_after_a_span_that_holds_a_note_show`). The rebuild's walk of a span's children had
+  also shown the words of a character span nested in such a note; they stay hidden now.
 
 ## 2. Align
 

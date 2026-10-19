@@ -267,10 +267,11 @@ fn the_no_text_rule_reads_the_body_tc4s_indexer_reads() {
 }
 
 /// §7.7: the text the Check screen shows and the aligner banks is tC4's `verseText` of its
-/// book model: the items of a `\li` list are not shown, as in tC4
-/// (`fixtures/usfm/check-text-vectors.json`), though the hash reads the content.
+/// book model, but for the declared differences: the items of a `\li` list are shown and
+/// banked, as the export counts them, where tC4 hides them
+/// (`fixtures/usfm/check-text-vectors.json`); the hash reads the content.
 #[test]
-fn the_shown_text_leaves_out_what_tc4_does_not_show() {
+fn the_shown_text_shows_the_list_items_tc4_hides() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../fixtures/tc4/test-fixtures/usfm-corpus/exotic-poetry-footnotes.usfm");
     let parts = tc_usfm::codec::decompose(&std::fs::read_to_string(path).unwrap()).unwrap();
@@ -282,14 +283,15 @@ fn the_shown_text_leaves_out_what_tc4_does_not_show() {
     let text = TargetText::new(content.clone());
     assert_eq!(
         text.shown(),
-        "The list has these members:\nThe list ends here."
+        "The list has these members:\nthe first member,\na nested member,\nthe last member.\nThe list ends here."
     );
     let aligner = tc_align::TargetVerse::new(&content);
     let words: Vec<&str> = aligner.words().iter().map(|w| w.word.as_str()).collect();
     assert_eq!(
         words,
         [
-            "The", "list", "has", "these", "members", "The", "list", "ends", "here"
+            "The", "list", "has", "these", "members", "the", "first", "member", "a", "nested",
+            "member", "the", "last", "member", "The", "list", "ends", "here"
         ]
     );
 }

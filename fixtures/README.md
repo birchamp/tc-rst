@@ -5,9 +5,12 @@ Tests read these files read-only. Do not edit them.
 ## `tc4/`
 
 Copied from translationCore 4 at commit `d494a9d6ba9f4cdcc09faff9038c93159106045b`
-(https://github.com/unfoldingWord/translationCore4), on 2026-10-14. Later copies name their
-commit in their own README row: `tc4/test-fixtures/en_ult/GEN-1.usfm` and `GEN-773.usfm` come
-from `9ad4d5c` (2026-10-19).
+(https://github.com/unfoldingWord/translationCore4), on 2026-10-14. Five files and the README
+of `tc4/test-fixtures/` come from tC4 commit `9ad4d5c506466819e5b10f255bbb4a36d394e498`
+(2026-10-19), byte for byte, for tC4 #782, #768 and #773: `en_ult/GEN-1-1.usfm`,
+`en_ult/GEN-1.usfm`, `en_ult/GEN-773.usfm`, `en_ult/PSA-3.usfm`, `hbo_uhb/GEN-1-1.usfm` and
+`README.md`; everything else is still from `d494a9d`. tc-helps' `tests/highlight.rs` reads
+`en_ult/GEN-1.usfm` and `en_ult/GEN-773.usfm`, as tC4's `test/sourceHighlight.test.ts` does.
 
 | Path here | Path in tC4 | Provenance |
 |---|---|---|

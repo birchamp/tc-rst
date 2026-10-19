@@ -63,6 +63,37 @@ The project owner ruled on these points on 2026-10-16 (`docs/TC4-DELTA-2026-10-1
 - One damaged incoming file is salvaged. It does not stop the whole sync or open (Q4).
 - Every other question in that §5 follows its recommendation.
 
+Under AGENTS.md "Matching tC4" (2026-10-19):
+
+- Words inside nested alignments show in Translate, Check, Align and print, such as Genesis
+  1:1 "the heavens" and a Psalm's "Selah" aligned inside `\qs` (tC4 #782, on tC4 main at
+  9ad4d5c). The reference d310bf3 drops them (Q32 of `docs/TC4-DELTA-2026-10-19.md`).
+- A footnote, cross reference, figure or any other marker the shown text leaves out (`\va`,
+  `\vp`, `\ca`, `\rq`, `\cat`, `\ts\*` …) between two words keeps the space after it, so the
+  words never join and can be checked, aligned and exported. tC4's open PR #800 does this for
+  notes, cross references and figures only (C46). Where the marker is followed by a letter
+  with no space (`siervo\f + \ft o esclavo\f*de`), the shown text puts a space between the
+  two words, as the export splits them; tC4 shows "siervode". So it does where a letter
+  follows the start or end of a character span or a paragraph marker directly:
+  `the \add Lord\add*s house` shows "the Lord s house", `Yahweh\q2 que` "Yahweh que" and
+  adjacent ruby `\rb 神|かみ\rb*\rb 愛|あい\rb*` "神 愛", where tC4 joins "Lords",
+  "Yahwehque" and "神愛", which the export cannot weave.
+- The words of a character span after a span nested in it show in Translate, Check, Align and
+  print: `\wj Worship the \+nd Lord\+nd* your God\wj*` shows "Worship the Lord your God",
+  where tC4 shows "Worship the " and hides from Check and the Align bank words the export
+  counts (#796).
+- The words after a character span that holds a footnote, cross reference or figure show:
+  `\wj Blessed are the poor\f + \ft Or humble\f* in spirit\wj* and he went on` shows "… in
+  spirit and he went on", where tC4 hides "and he went on" (usfm-js keeps it as the `content`
+  of the span's end marker), so Check and the Align bank miss it, a woven alignment for the
+  verse cannot be made, and the store's verse save drops the links to it. So does the text
+  after a stray end marker (`a\nd* b`). The note's own words stay hidden.
+- The items of a `\li1` list, a `\qm1` line, a table cell and the text of a marker usfm-js
+  does not know (a typo such as `\pp`, a custom `\zx`) show, where tC4 hides them (usfm-js
+  keeps their text as `content`) while the export counts their words: UST EXO 15:21
+  keeps the 28 words the import placed at open and at the next verse save, where tC4's text
+  drops 11.
+
 These differences follow the owner's rule in AGENTS.md ("Matching tC4", 2026-10-17), and the
 owner is told of each:
 
