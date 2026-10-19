@@ -2117,18 +2117,23 @@ K1  L = every verified change line of every pending file, deduplicated by id, so
     that long (a salvaged line, §4.4), and it must never stop the seal of every other line.
     What K1 takes of each pending file is compared with the change ids the fold took from it,
     whatever happened to the file. A change the file no longer holds (another program removed
-    the file, or cut it short at a line boundary, which still verifies) is taken from the
-    fold's own bytes, checked against its id: in memory for a file this session wrote, or read
-    through the handle the open kept. Its line goes into the pack, and the person is told
-    (`PendingWrittenAgain`, the file and how many changes). Such a file is removed by K4 like
-    any other (a removed one has nothing left to remove), and the fold's values of it are not
+    the file, cut it short at a line boundary, which still verifies, cut it inside a line or
+    changed a byte of a line, so that the line no longer verifies, or put a file of a newer
+    format or of another project at its name) is taken from the fold's own bytes, checked
+    against its id: in memory for a file this session wrote, or read through the handle the
+    open kept. Its line goes into the pack, and the person is told (`PendingWrittenAgain`, the
+    file and how many changes). The lines of a file that still verify are taken from the file,
+    as salvage takes them (§4.4). Such a file is removed by K4 like any other (a removed one has
+    nothing left to remove); one that no longer verifies is moved to `.tc/quarantine/` with its
+    bytes (`QuarantinedPending`), as the open moves a damaged pending file; one of a newer
+    format or of another project stays where it is, never removed, and the fold takes nothing
+    more from it (the next open reads it by §4.2). The fold's values of any of them are not
     moved to the pack's offsets: they stay where the fold reads them. A pending file the fold
-    holds changes of that K1 cannot take (a program holds it open and the read fails, its lines
-    no longer verify, or a change it lost is in neither the file nor the fold's bytes) is left
-    where it is, never removed, and listed in the seal's report as unsealed; the person is told
-    once (`FileUnreadable`, which goes when a later seal takes the file). A file of a newer
-    format was never read by the fold, so nothing of it is lacking and it is left without a
-    word.
+    holds changes of that K1 cannot take (a program holds it open and the read fails, or a
+    change it lost is in neither the file nor the fold's bytes) is left where it is, never
+    removed, and listed in the seal's report as unsealed; the person is told once
+    (`FileUnreadable`, which goes when a later seal takes the file). A file of a newer format
+    was never read by the fold, so nothing of it is lacking and it is left without a word.
 K2  For each chunk: atomic_create_dirs(ingredients/tc/changes/<me>/<yyyy-mm>);
     atomic_write(<that dir>, "<pack32>.ndjson", header + lines, SyncDir::Now). Each line set
     aside: atomic_write(.tc/quarantine, "<id>.line", line, SyncDir::Now); it is listed with the
@@ -4916,7 +4921,8 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | a read of a path whose heads file is held in memory (take a settled entry as unchanged) | `a_file_with_an_unwritten_heads_file_is_not_taken_as_unchanged_when_its_entry_settles` |
 | the heads file of `metadata.json` due after its rename (take the file as current) | `a_retry_after_metadata_json_was_renamed_writes_its_heads_file` |
 | the entry of `metadata.json` naming the bytes M6 wrote (the md5 M2 checked) | `the_manifest_names_the_metadata_json_a_group_that_skipped_a_file_wrote` |
-| the commit after a seal that left a file unsealed (commit the snapshot) | `a_commit_waits_for_a_pending_file_the_seal_could_not_read`, `a_commit_waits_for_a_pending_file_that_no_longer_verifies`, `a_pending_file_read_at_the_open_and_cut_short_in_place_stops_the_commit` |
+| the commit after a seal that left a file unsealed (commit the snapshot) | `a_commit_waits_for_a_pending_file_the_seal_could_not_read`, `a_pending_file_read_at_the_open_and_cut_short_in_place_stops_the_commit` |
+| K1 taking the lines a file that no longer verifies lost from the fold's bytes (leave such a file unsealed, which the next open drops) | `a_pending_file_cut_inside_a_line_is_sealed_from_memory`, `a_pending_file_changed_inside_a_line_is_sealed_from_memory_and_kept_in_quarantine`, `a_pending_file_replaced_by_one_of_a_newer_format_is_sealed_from_memory_and_kept` |
 | K1's comparison with the ids the fold took from a pending file (drop a removed file, seal what a cut file holds) | `a_pending_file_deleted_outside_is_sealed_from_memory`, `a_pending_file_cut_short_at_a_line_is_sealed_from_memory`, `a_pending_file_read_at_the_open_and_deleted_is_sealed_from_the_open_handle` |
 | K4 taking a pending file another program removed after K1 as removed (fail the seal with the removal's error) | `a_pending_file_removed_outside_during_the_seal_ends_the_seal_as_removed` |
 | the values of a pending file that lost lines left where the fold reads them (move them to the pack's offsets) | `a_pending_file_read_at_the_open_and_replaced_cut_short_is_sealed_from_the_open_handle` |

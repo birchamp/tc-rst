@@ -12,10 +12,11 @@
 //! bytes (§2.6).
 
 use crate::atomic::{
-    DirSet, SyncDir, atomic_create_dirs, atomic_remove, atomic_remove_if_free, atomic_write,
+    DirSet, HeldRetry, SyncDir, atomic_create_dirs, atomic_remove, atomic_remove_if_free,
+    atomic_write, rename_held,
 };
 use crate::error::StoreError;
-use crate::layout::{PACKS, QUARANTINE};
+use crate::layout::{PACKS, QUARANTINE, escaped};
 use crate::load::{JournalFile, JournalKind, relocation};
 use crate::project::{PackInfo, Project};
 use crate::vfs::is_not_found;
@@ -25,7 +26,9 @@ use tc_journal::consolidate::{OwnPack, consolidate, consolidation_groups};
 use tc_journal::fold::Notice;
 use tc_journal::index::load_pack;
 use tc_journal::line::encode_line;
-use tc_journal::pack::{EncodedPack, PackPath, PackRead, PackSpec, YearMonth, read_pack, seal};
+use tc_journal::pack::{
+    EncodedPack, PackError, PackPath, PackRead, PackSpec, YearMonth, read_pack, seal,
+};
 use tc_journal::pending::{PendingStatus, read_pending};
 use tc_journal::{ChangeId, PackName, Verified};
 
@@ -41,9 +44,9 @@ pub struct SealReport {
     /// The packs a consolidation wrote and the packs they replaced.
     pub consolidated: Vec<(String, Vec<String>)>,
     /// Pending files the fold holds the changes of that the seal could not take: a program
-    /// holds the file open, or its lines no longer verify. They stay as they are and the
-    /// snapshot shows their changes while no pack holds them, so the checkpoint makes no
-    /// commit (§5.13 C3); the next checkpoint reads them again.
+    /// holds the file open, or the file lost a change whose bytes the fold cannot give either.
+    /// They stay as they are and the snapshot shows their changes while no pack holds them, so
+    /// the checkpoint makes no commit (§5.13 C3); the next checkpoint reads them again.
     pub unsealed: Vec<String>,
 }
 
@@ -108,6 +111,14 @@ enum Found {
     /// It lost changes the fold took from it: the fold reads their values where it always did
     /// (memory, or the handle the open kept), so nothing is moved to the new pack's offsets.
     Partial,
+    /// Its lines no longer verify (cut inside a line, or changed in one). The changes it lost
+    /// are read as for a partial file, and K4 moves its bytes to `.tc/quarantine/`, as the open
+    /// does with a damaged pending file (§4.4).
+    Damaged { reason: PackError, salvaged: u32 },
+    /// Another program put a file of a newer format or of another project at its name. The
+    /// fold's changes of it are sealed from memory; the file stays, never removed, and the fold
+    /// takes nothing from it (the next open decides it, §4.2).
+    NotOurs(PendingStatus),
     /// Another program removed it.
     Gone,
 }
@@ -262,9 +273,10 @@ impl Project {
 
     /// K1: some of the pending files are read and their verified lines kept. What the seal
     /// takes of a file is compared with what the fold took from it, whatever happened to the
-    /// file: a change the file no longer holds (another program removed the file or cut it
-    /// short) is taken from the fold's memory when this session wrote it, and else the file is
-    /// left unsealed, so no commit shows a change no pack holds (§5.13 C3).
+    /// file: a change the file no longer holds (another program removed the file, cut it short
+    /// at a line or inside one, changed a line, or put another kind of file at its name) is
+    /// taken from the fold's own bytes when it can give them, and else the file is left
+    /// unsealed, so no commit shows a change no pack holds (§5.13 C3).
     fn seal_read(&mut self, run: &mut SealRun) {
         for _ in 0..READS_PER_STEP {
             let Some(rel) = run.unread.pop() else {
@@ -275,21 +287,28 @@ impl Project {
                 continue;
             }
             let abs = self.folder.path(&rel);
-            let (bytes, mut lines) = match self.vfs.read(&abs) {
+            // A damaged file gives the lines that still verify; one of a newer format or of
+            // another project gives none.
+            let (bytes, mut lines, status) = match self.vfs.read(&abs) {
                 Ok(bytes) => {
                     let read = read_pending(&bytes, self.id);
-                    if read.status != PendingStatus::Valid {
-                        self.leave_unsealed(run, &rel, "its lines no longer verify");
-                        continue;
-                    }
-                    (Some(bytes), read.entries)
+                    (Some(bytes), read.entries, read.status)
                 }
-                Err(e) if is_not_found(&e) => (None, Vec::new()),
+                Err(e) if is_not_found(&e) => (None, Vec::new(), PendingStatus::Valid),
                 Err(e) => {
                     self.leave_unsealed(run, &rel, &StoreError::io("read", &abs, e).to_string());
                     continue;
                 }
             };
+            let not_ours = matches!(
+                status,
+                PendingStatus::Newer { .. } | PendingStatus::Foreign { .. }
+            );
+            if not_ours && self.folded_from(&rel).is_empty() {
+                // A file of a newer format the fold never read: nothing of it is lacking.
+                continue;
+            }
+            let salvaged = u32::try_from(lines.len()).unwrap_or(u32::MAX);
             let mut ids: BTreeSet<ChangeId> = lines.iter().map(Verified::id).collect();
             let lost: Vec<ChangeId> = self
                 .folded_from(&rel)
@@ -316,15 +335,20 @@ impl Project {
                 ids.extend(lost.iter().copied());
                 lines.extend(again);
             }
-            let found = match bytes {
-                None if ids.is_empty() => {
+            let found = match (bytes, status) {
+                (None, _) if ids.is_empty() => {
                     // Gone, and the fold holds nothing of it (a file of a newer format).
                     self.journal.pending.remove(&rel);
                     continue;
                 }
-                None => Found::Gone,
-                Some(_) if !lost.is_empty() => Found::Partial,
-                Some(bytes) => Found::Whole(bytes),
+                (None, _) => Found::Gone,
+                (Some(_), PendingStatus::Damaged(reason)) => Found::Damaged { reason, salvaged },
+                (
+                    Some(_),
+                    status @ (PendingStatus::Newer { .. } | PendingStatus::Foreign { .. }),
+                ) => Found::NotOurs(status),
+                (Some(_), PendingStatus::Valid) if !lost.is_empty() => Found::Partial,
+                (Some(bytes), PendingStatus::Valid) => Found::Whole(bytes),
             };
             self.shared.remove_notices_matching(
                 |n| matches!(n, Notice::FileUnreadable { path, .. } if **path == *rel),
@@ -338,6 +362,27 @@ impl Project {
             } else {
                 SealPhase::Build
             };
+        }
+    }
+
+    /// K4 for a pending file whose lines no longer verify: its bytes move to `.tc/quarantine/`,
+    /// as the open moves a damaged pending file (§4.4). `false` when another program holds it
+    /// (the next open quarantines it) or removed it.
+    fn quarantine_if_free(&mut self, rel: &str, dirs: &mut DirSet) -> Result<bool, StoreError> {
+        let dir = self.folder.path(QUARANTINE);
+        atomic_create_dirs(&*self.vfs, &dir)?;
+        let from = self.folder.path(rel);
+        let to = dir.join(escaped(rel));
+        match rename_held(&*self.vfs, &from, &to, &HeldRetry::SAVE) {
+            Ok(()) => {
+                dirs.add_dir(&dir);
+                if let Some(parent) = from.parent() {
+                    dirs.add_dir(parent);
+                }
+                Ok(true)
+            }
+            Err(e) if self.vfs.is_held(&e) || is_not_found(&e) => Ok(false),
+            Err(e) => Err(StoreError::io("move to quarantine", &from, e)),
         }
     }
 
@@ -468,13 +513,38 @@ impl Project {
                             continue;
                         }
                     }
-                    // A pending file a scanner still holds stays; the next open removes it (O7).
+                    // A pending file a scanner still holds stays; the next open removes it (O7),
+                    // or quarantines it when it does not verify.
                     let removed = match found {
                         Found::Whole(_) | Found::Partial => atomic_remove_if_free(
                             &*self.vfs,
                             &self.folder.path(&rel),
                             SyncDir::Deferred(&mut run.dirs),
                         )?,
+                        Found::Damaged { reason, salvaged } => {
+                            let moved = self.quarantine_if_free(&rel, &mut run.dirs)?;
+                            if moved {
+                                self.notice(
+                                    Notice::QuarantinedPending {
+                                        file: rel.as_str().into(),
+                                        reason,
+                                        salvaged,
+                                    },
+                                    None,
+                                );
+                            }
+                            moved
+                        }
+                        Found::NotOurs(status) => {
+                            if let Some(info) = self.journal.pending.get_mut(&rel) {
+                                info.status = status;
+                                info.ids.clear();
+                            }
+                            if self.index.sections.remove(&rel).is_some() {
+                                self.index.changed = true;
+                            }
+                            continue;
+                        }
                         Found::Gone => false,
                     };
                     self.journal.pending.remove(&rel);

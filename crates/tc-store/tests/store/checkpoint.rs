@@ -635,10 +635,12 @@ fn a_pending_file_of_a_newer_format_does_not_stop_a_commit() {
     assert_commits_valid(&rig.fs, &folder);
 }
 
-/// A pending file that was valid when the project opened and no longer verifies (its bytes
-/// were changed by something else): the seal cannot take its lines, so no commit shows them.
+/// A pending file of this session that no longer verifies (something else changed a byte of
+/// its last line): the seal cannot take that line from the file, and takes it from the
+/// session's memory, checked against its id. The commit's tree is what its packs hold, the
+/// changed bytes are kept in `.tc/quarantine/`, and the person is told.
 #[test]
-fn a_commit_waits_for_a_pending_file_that_no_longer_verifies() {
+fn a_pending_file_changed_inside_a_line_is_sealed_from_memory_and_kept_in_quarantine() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     save_verse(&handle, 1, 3, "my true child").unwrap();
@@ -650,19 +652,39 @@ fn a_commit_waits_for_a_pending_file_that_no_longer_verifies() {
     bytes[last] ^= 0x20;
     rig.fs.put_unseen(&pending, &bytes, None);
     let report = checkpoint(&handle);
-    assert_eq!(report.commit, None);
-    assert_eq!(report.skipped, Some(CheckpointSkip::SealFailed));
-    assert!(
-        notices(&handle)
-            .iter()
-            .any(|n| matches!(n, Notice::FileUnreadable { .. }))
-    );
+    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    let repo = repo_of(&rig.fs, &folder);
     assert_eq!(
-        rig.fs.peek(&pending),
-        Some(bytes),
-        "the file is never removed"
+        tree_differs_from_its_packs(
+            &repo,
+            commit,
+            project_of(&rig.fs, &folder),
+            tc_journal::fold::ProjectKind::Bible
+        ),
+        Vec::<String>::new()
+    );
+    assert!(
+        String::from_utf8(commit_files(&repo, commit)["ingredients/TIT.usfm"].clone())
+            .unwrap()
+            .contains("saved before the file was damaged")
+    );
+    assert_eq!(written_again(&handle).len(), 1, "{:?}", notices(&handle));
+    assert_eq!(quarantined(&handle).len(), 1, "{:?}", notices(&handle));
+    assert!(
+        rig.fs
+            .files_under(&folder.join(".tc/quarantine"))
+            .values()
+            .any(|kept| *kept == bytes),
+        "the changed bytes are kept"
     );
     handle.close().unwrap();
+    let handle = open(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before the file was damaged")
+    );
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
 }
 
 /// The batch of an outside edit of `metadata.json` is a pending file whose header names
@@ -987,6 +1009,130 @@ fn a_pending_file_removed_outside_during_the_seal_ends_the_seal_as_removed() {
     assert_eq!(
         words(&handle, 1, 1).as_deref(),
         Some("saved before the file was removed")
+    );
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
+}
+
+/// The notices that say a pending file was moved to `.tc/quarantine/`.
+fn quarantined(handle: &ProjectHandle) -> Vec<(String, u32)> {
+    notices(handle)
+        .into_iter()
+        .filter_map(|n| match n {
+            Notice::QuarantinedPending { file, salvaged, .. } => Some((file.to_string(), salvaged)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// §5.11 K1: a pending file of this session cut short inside a line (another program wrote it
+/// back torn) no longer verifies, which is as likely as a cut at a line. The session holds the
+/// save's line in memory, so the seal writes it into its pack as for a file cut at a line, the
+/// torn file goes to `.tc/quarantine/` with its bytes, and the save is in the project and in the
+/// book file after the next open.
+#[test]
+fn a_pending_file_cut_inside_a_line_is_sealed_from_memory() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 3, "my true child").unwrap();
+    assert!(checkpoint(&handle).commit.is_some());
+    save_verse(&handle, 1, 1, "saved before the file was torn").unwrap();
+    handle.leave(tc_store::Leave::Mode).wait().unwrap();
+    handle.wait_idle();
+    let pending = pending_files(&rig, &folder).remove(0);
+    let bytes = rig.fs.peek(&pending).unwrap();
+    let torn = bytes[..bytes.len() - 20].to_vec();
+    rig.fs.put_unseen(&pending, &torn, None);
+    let report = checkpoint(&handle);
+    assert_eq!(report.skipped, None, "{report:?}: {:?}", notices(&handle));
+    assert_eq!(report.sealed.len(), 1, "{report:?}");
+    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    let repo = repo_of(&rig.fs, &folder);
+    assert_eq!(
+        tree_differs_from_its_packs(
+            &repo,
+            commit,
+            project_of(&rig.fs, &folder),
+            tc_journal::fold::ProjectKind::Bible
+        ),
+        Vec::<String>::new()
+    );
+    assert_eq!(written_again(&handle).len(), 1, "{:?}", notices(&handle));
+    let kept = quarantined(&handle);
+    assert_eq!(kept.len(), 1, "{:?}", notices(&handle));
+    assert!(pending.ends_with(&kept[0].0), "{kept:?} {pending:?}");
+    assert!(
+        rig.fs.peek(&pending).is_none(),
+        "the torn file left .tc/pending"
+    );
+    assert!(
+        rig.fs
+            .files_under(&folder.join(".tc/quarantine"))
+            .values()
+            .any(|held| *held == torn),
+        "the torn bytes are kept"
+    );
+    handle.close().unwrap();
+    let handle = open(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before the file was torn")
+    );
+    let usfm =
+        String::from_utf8(rig.fs.peek(&folder.join("ingredients/TIT.usfm")).unwrap()).unwrap();
+    assert!(usfm.contains("saved before the file was torn"), "{usfm}");
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+    assert_commits_valid(&rig.fs, &folder);
+}
+
+/// K1: another program puts a pending file of a newer format at the name of one of this
+/// session's saves. The fold took the save from the file this session wrote, and holds its
+/// line in memory: the seal writes it into its pack, and the newer file stays as it is, never
+/// removed and never read (§4.2).
+#[test]
+fn a_pending_file_replaced_by_one_of_a_newer_format_is_sealed_from_memory_and_kept() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 3, "my true child").unwrap();
+    assert!(checkpoint(&handle).commit.is_some());
+    save_verse(&handle, 1, 1, "saved before the file was replaced").unwrap();
+    let pending = pending_files(&rig, &folder).remove(0);
+    let text = String::from_utf8(rig.fs.peek(&pending).unwrap()).unwrap();
+    let header = text.lines().next().unwrap().split('\t').next().unwrap();
+    let header = header.replacen("\"pending\":1", "\"pending\":2", 1);
+    let newer = format!(
+        "{header}\t{}\n{{\"a body this app does not read\":true}}\n",
+        sha2::Sha256::digest(header.as_bytes())
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>()
+    );
+    rig.fs.put_unseen(&pending, newer.as_bytes(), None);
+    let report = checkpoint(&handle);
+    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    let repo = repo_of(&rig.fs, &folder);
+    assert_eq!(
+        tree_differs_from_its_packs(
+            &repo,
+            commit,
+            project_of(&rig.fs, &folder),
+            tc_journal::fold::ProjectKind::Bible
+        ),
+        Vec::<String>::new()
+    );
+    assert_eq!(written_again(&handle).len(), 1, "{:?}", notices(&handle));
+    assert_eq!(rig.fs.peek(&pending), Some(newer.clone().into_bytes()));
+    // The next checkpoint leaves it alone too, and finds no second writer in it.
+    save_verse(&handle, 1, 2, "a later save").unwrap();
+    let again = checkpoint(&handle);
+    assert!(again.commit.is_some(), "{again:?}");
+    assert_eq!(rig.fs.peek(&pending), Some(newer.into_bytes()));
+    handle.close().unwrap();
+    let handle = open(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before the file was replaced")
     );
     handle.close().unwrap();
     assert_commits_valid(&rig.fs, &folder);
