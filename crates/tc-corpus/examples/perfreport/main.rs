@@ -238,7 +238,7 @@ const STEPS: &[Step] = &[
     },
     Step {
         case: "res-load",
-        repeat: 5,
+        repeat: 20,
         ci: true,
     },
     Step {

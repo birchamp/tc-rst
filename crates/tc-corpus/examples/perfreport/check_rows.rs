@@ -460,7 +460,7 @@ fn check_bible_in(dir: &Path) -> Vec<Measured> {
     let mut at_risk = 0;
     let (mut units_found, mut decisions_found) = (0, 0);
     let mut unit_keys: Vec<(ToolId, BookId)> = Vec::new();
-    for _ in 0..5 {
+    for _ in 0..21 {
         let started = Instant::now();
         let mut resources: Vec<(ToolId, BookId, Vec<std::sync::Arc<ResourceRef>>)> = Vec::new();
         for ordinal in 1..=66u8 {
