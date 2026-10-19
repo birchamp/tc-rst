@@ -42,6 +42,18 @@
       "why": "Choosing a language whose Door43 code a Scripture Burrito cannot hold (about 470, such as acm-x-lebarabic) fills the Code box with a code it can hold that keeps every letter (acm-x-lebarabi-c) and says so in one sentence; when none can be made the box stays empty and the sentence says why. tC4 fills the Door43 code and stores \"Undetermined\" (#582). No baseline screen chooses a language.",
       "cites": "owner's answer to Q35 (TC4-DELTA-2026-10-19 §5); B2 step 1",
       "until": null
+    },
+    {
+      "id": "sync-alignments",
+      "why": "The sync result names the verses with two alignments to review under its line (\"1 verse has two alignments to review.\") and offers Review for them, where tC4 4.0 keeps the newest alignment and counts it among the conflicts that kept the newest version (#791; tc_ui test a_verse_with_two_alignments_is_named_and_offers_review). No baseline sync brings an alignment conflict, so no row shows it.",
+      "cites": "AGENTS.md \"Matching tC4\"; docs/PLAN.md (B10); #791",
+      "until": null
+    },
+    {
+      "id": "sync-fixed-sentence",
+      "why": "A sync that stops for a reason no other sentence names shows one fixed sentence, before and after the teammates' work was received, where tC4 4.0 shows \"The sync stopped: {reason}\" with Door43's words or an I/O reason that can name a file (tc_api test io_reason_renders_without_the_path; journey sync-button). No baseline sync stops so.",
+      "cites": "Q36 (TC4-DELTA-2026-10-19 §5); #724 item 6",
+      "until": null
     }
   ],
   "rows": {
