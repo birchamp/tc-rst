@@ -32,7 +32,7 @@ pub mod watchdog;
 use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::time::Duration;
 
 use axum::Router;
@@ -60,7 +60,7 @@ pub use statics::CSP;
 pub use token::{AddressLine, LaunchToken};
 pub use uploads::{Upload, Uploads};
 
-use state::{AppState, Shared};
+use state::{AppState, Phase, PhaseCell, Shared};
 
 /// The sizes and times the server keeps to. [`Limits::default`] holds the product's values;
 /// tests pass smaller ones.
@@ -215,7 +215,7 @@ impl Server {
             #[cfg(feature = "test-hooks")]
             ender,
             test_hooks: AtomicBool::new(false),
-            closing: AtomicBool::new(false),
+            phase: PhaseCell::new(),
             in_flight: AtomicUsize::new(0),
             streams_end: watch::channel(false).0,
         });
@@ -245,15 +245,19 @@ impl Server {
     #[cfg(feature = "test-hooks")]
     #[must_use]
     pub fn with_test_hooks(self) -> Self {
-        self.shared.test_hooks.store(true, Ordering::Relaxed);
+        self.shared
+            .test_hooks
+            .store(true, std::sync::atomic::Ordering::Relaxed);
         self
     }
 
     /// Serves until the shell, the application or a signal says to quit, then closes, all
-    /// within [`Limits::close_within`]: new requests get 503; requests being answered and
-    /// backend calls still running get [`Limits::drain_within`] to finish, so a save accepted
-    /// before the quit reaches a backend that is still open and its reply reaches the UI;
-    /// then the backend's quit work runs with what is left of the budget; the event streams
+    /// within [`Limits::close_within`]: new requests get 503; requests being answered, those
+    /// whose body is still arriving among them, and backend calls still running get
+    /// [`Limits::drain_within`] to finish, so a save accepted before the quit reaches a
+    /// backend that is still open and its reply reaches the UI; a body that outlasts the
+    /// drain gets 503 and is not run; then the backend's quit work runs with what is left
+    /// of the budget; the event streams
     /// end; and unless stdin had closed, `{"closed":true}` goes to the shell. The caller then
     /// ends the process.
     pub async fn run<B, R, W>(
@@ -302,10 +306,12 @@ impl Server {
             }
         };
 
-        shared.closing.store(true, Ordering::SeqCst);
+        shared.phase.enter(Phase::Draining);
         let deadline = tokio::time::Instant::now() + shared.limits.close_within;
         let drain_within = shared.limits.drain_within.min(shared.limits.close_within);
-        if lifecycle::drain(&shared, drain_within).await {
+        let drained_any = lifecycle::drain(&shared, drain_within).await;
+        shared.phase.enter(Phase::Closing);
+        if drained_any {
             // The replies that just finished are handed to their sockets by tasks of
             // their own; let them run before the backend closes.
             tokio::time::sleep(Duration::from_millis(25)).await;
