@@ -233,21 +233,26 @@ impl Checker<'_> {
         for anomaly in anomalies {
             match &anomaly {
                 Anomaly::InvalidForBurrito { key, reason, .. } => {
-                    let field = match key {
-                        RecordKey::ProjectMeta(field) => Some(field.path()),
-                        _ => None,
+                    // What the record gives metadata.json: a free field, a book's scope, or
+                    // a pin group's relationships.
+                    let (record, field) = match key {
+                        RecordKey::ProjectMeta(field) => (None, field.path()),
+                        RecordKey::BookPresence(_) => (Some(describe_key(key)), "scope".into()),
+                        _ => (Some(describe_key(key)), "relationships".into()),
                     };
                     let source = self
                         .built
                         .meta_fields
                         .iter()
-                        .find(|(path, _)| Some(path) == field.as_ref())
-                        .map(|(_, v)| v.to_string())
-                        .unwrap_or_else(|| describe_key(key));
+                        .find(|(path, _)| *path == field)
+                        .map_or_else(
+                            || format!("the value of {}", describe_key(key)),
+                            |(_, v)| v.to_string(),
+                        );
                     self.push(
                         &path_of_key(key),
-                        None,
-                        field.as_deref(),
+                        record,
+                        Some(&field),
                         source,
                         format!("left out of metadata.json: {reason}"),
                         CheckRule::FoldAnomaly,

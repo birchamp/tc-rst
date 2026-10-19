@@ -564,3 +564,74 @@ fn alignment_reading_applies_i3() {
     b.insert("wordBank".into(), json!([{"word": "b"}, {"word": "a"}]));
     assert_eq!(fields(&a, &b, Some(now)), ["wordBank"]);
 }
+
+/// The Bible sample's built seed, and its check before any change.
+fn bible() -> (Tc4Folder, Built) {
+    let folder = sample("sample-burrito");
+    let built = build(&folder, fixture_project_id("sample_burrito")).unwrap();
+    assert!(check::check(&folder, &built).mismatches.is_empty());
+    (folder, built)
+}
+
+#[test]
+fn round_trip_rule_finds_a_record_the_projection_does_not_give_back() {
+    // A seeded alignment the fold never saw: decoding the projected sidecar gives the record
+    // the fold holds, so the check names the difference.
+    let (folder, mut built) = bible();
+    let path = "ingredients/checking/alignments/TIT.json";
+    let records = built.sidecar_records.get_mut(path).unwrap();
+    let Record::Alignment { value, .. } = &mut records[0] else {
+        panic!("not an alignment");
+    };
+    value.dismissed = true;
+    let found = check::check(&folder, &built).mismatches;
+    let rules: Vec<(&str, CheckRule)> = found.iter().map(|m| (m.path.as_str(), m.rule)).collect();
+    assert_eq!(rules, [(path, CheckRule::RoundTrip)], "{found:?}");
+    assert_eq!(found[0].record.as_deref(), Some("alignment TIT 1:1"));
+}
+
+#[test]
+fn a_seeded_change_the_fold_does_not_show_is_a_mismatch() {
+    let (folder, mut built) = bible();
+    let batch = built
+        .batches
+        .iter_mut()
+        .find(|b| b.label == BatchLabel::Book(BookId::Titus))
+        .unwrap();
+    let at = batch
+        .changes
+        .iter()
+        .position(|c| matches!(c.body().record, Record::Verse { .. }))
+        .unwrap();
+    let mut body = batch.changes[at].body().clone();
+    if let Record::Verse {
+        value: tc_journal::record::VerseValue::Text { words, .. },
+        ..
+    } = &mut body.record
+    {
+        words.push_str(" (never folded)");
+    }
+    batch.changes[at] = Change::new(body).unwrap();
+    let found = check::check(&folder, &built).mismatches;
+    let rules: Vec<CheckRule> = found.iter().map(|m| m.rule).collect();
+    assert_eq!(rules, [CheckRule::NotProvisional], "{found:?}");
+    assert_eq!(found[0].path, "ingredients/TIT.usfm");
+}
+
+#[test]
+fn a_derived_file_the_fold_does_not_list_is_a_mismatch() {
+    // The file-set rule alone sees what a materialize would drop: an OBS project's
+    // settings.json renders, but the fold does not list it among its files.
+    let folder = sample("sample-burrito-obs");
+    let built = build(&folder, fixture_project_id("sample_burrito_obs")).unwrap();
+    let path = "ingredients/checking/settings.json";
+    assert!(built.fold.render(&DerivedFile::Settings).is_some());
+    assert!(!built.fold.derived_files().contains(&DerivedFile::Settings));
+    let found = check::check(&folder, &built).mismatches;
+    let at_settings: Vec<CheckRule> = found
+        .iter()
+        .filter(|m| m.path == path)
+        .map(|m| m.rule)
+        .collect();
+    assert_eq!(at_settings, [CheckRule::FileNotDerived]);
+}
