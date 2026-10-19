@@ -27,6 +27,7 @@ pub mod reports;
 mod seed;
 pub mod sessions;
 mod startup;
+pub mod wire;
 
 pub use app::{Answer, App, AppDeps, CallFailure, StartError, Then};
 pub use dispatch::Handle;

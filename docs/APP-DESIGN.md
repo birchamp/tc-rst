@@ -580,7 +580,8 @@ pub enum ChangeCause { LocalSave { request: RequestId }, Intake { from: Vec<Pers
 pub enum ChangeScope { Parts(ChangeParts), Everything } // a list over its cap gives Everything *(A-30)*
 pub struct ChangeParts {                                 // tc-app's form of the fold's Delta (STORAGE:628-629)
     pub chapters: Vec<ChapterRef>,                       // { book, chapter }
-    pub books: Vec<BookId>, pub stories: Vec<StoryNo>,
+    pub books: Vec<BookId>, pub stories: Vec<StoryNo>,   // books: changed as a whole (presence, header,
+                                                         // layout), never tc-journal's Delta.books (B1b)
     pub checks: Vec<CheckListRef>,                       // { tool, unit }; an open rail asks `check/rows { since }`
                                                          // for the rows that changed; never the whole rail *(A-12)*
     pub records: Vec<RecordChange>,                      // { record, by: Option<PersonLabel> }; capped at 256
@@ -607,6 +608,17 @@ pub enum Phase {
 `JobOutcome` is typed per kind: `Opened(OpenedSession)`, `Synced(SyncResultView)`,
 `ExportReady { download, file_name }`, `PlanReady { plan, consequences }`, `Created { project }`.
 A final outcome stays readable through `jobs/get` for 10 minutes.
+
+*(B1b: `tc_app::wire::scope::change_scope` builds `ChangeParts` from a fold `Delta`. tc-journal
+fills `Delta.books` when a key of a book becomes active for the first time (a first decision on a
+check, a first alignment of a verse, a new comment), not when the book changed as a whole, and
+`QueryKey::CheckList(Book(b))` depends on `books`: copying it would refetch every rail of the book on
+a first decision, against AD17 and C4's `decision_refetches_no_rail`. So `books` comes from
+`BookPresence`, `BookHeader` and `BookLayout` keys only. A comment's place is in its value, not its
+key, so the event pump reads each comment of a delta once to name its chapter, check list or story;
+a comment it cannot read makes the scope `Everything`. A `Versification` key, a key whose
+`RecordRef` would pass 4,096 bytes, and a story number tc-api cannot carry make it `Everything` too.
+The mapping is one `match` over every `RecordKey` kind with no catch-all.)*
 
 What unit A1 built *(A1)*: the frame, `Event`, and the session events `Opened`, `Closed`, `Mode`,
 `Changed`, `Checkpoint`, `MaterializeBlocked` and `AlignSave`; `ChangeScope::bounded` turns a

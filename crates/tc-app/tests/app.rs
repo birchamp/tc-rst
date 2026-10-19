@@ -29,4 +29,5 @@ mod app {
     mod reports;
     mod seed;
     mod state_seed;
+    mod wire;
 }
