@@ -71,8 +71,73 @@ export function scenarioArgs(scenario, dir) {
 }
 
 /** A port nothing listens on: Door43 stays on this machine even if the internet switch were
- * turned on. B9b replaces it with tc-door43-fake. */
+ * turned on. A run that signs in passes a started tc-door43-fake instead (A8). */
 const DEAD_DOOR43 = 'http://127.0.0.1:9/';
+
+/** A plain HTTP request to the fake Door43's control port; answers the parsed JSON body. */
+function controlCall(base, method, route, body) {
+  const text = body === undefined ? '' : JSON.stringify(body);
+  return new Promise((resolve, reject) => {
+    const request = http.request(new URL(route, base), {
+      method,
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(text) },
+    }, (response) => {
+      const parts = [];
+      response.on('data', (part) => parts.push(part));
+      response.on('end', () => {
+        const reply = Buffer.concat(parts).toString('utf8');
+        if (response.statusCode !== 200) return reject(new Error(`fake Door43 ${method} ${route}: status ${response.statusCode} ${reply.slice(0, 200)}`));
+        resolve(reply ? JSON.parse(reply) : null);
+      });
+    });
+    request.on('error', reject);
+    request.end(text);
+  });
+}
+
+/**
+ * Starts the fake Door43 (`cargo build -p tc-door43-fake`; APP-DESIGN 7.1, R13) on loopback,
+ * seeded with tC4's parity account (`facilitator-zq`), and answers its address and its control
+ * port: the requests Door43 received (never a secret), faults, held requests, tokens.
+ */
+export async function startDoor43Fake(bin) {
+  // stdin stays open: a closed stdin makes the fake quit.
+  const child = spawn(path.resolve(bin), [], { stdio: ['pipe', 'pipe', 'inherit'] });
+  const lines = readline.createInterface({ input: child.stdout })[Symbol.asyncIterator]();
+  const exited = new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal })));
+  const first = await Promise.race([lines.next(), exited.then((end) => ({ done: true, end }))]);
+  if (first.done) throw new Error(`the fake Door43 ended before printing its address (exit ${first.end?.code ?? first.end?.signal})`);
+  const address = JSON.parse(first.value);
+  if (address.error) {
+    child.kill('SIGKILL');
+    throw new Error(`the fake Door43 did not start: ${address.error}`);
+  }
+  const control = (method, route, body) => controlCall(address.control, method, route, body);
+  return {
+    url: address.url,
+    host: new URL(address.url).host,
+    /** Every request Door43 received: `{ method, path, query, auth }`, auth `none`,
+     * `basic:<login>`, `token` or `other`. */
+    requests: () => control('GET', '/requests'),
+    clear: () => control('POST', '/requests/clear'),
+    /** `{ method?, path, times?, fault: { type: 'status', status, message } | { type: 'delay', ms } | { type: 'hold' } }` */
+    fault: (rule) => control('POST', '/faults', { method: null, times: null, ...rule }),
+    /** The oldest held request goes on. */
+    release: () => control('POST', '/release'),
+    issueToken: async (login, name, scopes) => (await control('POST', '/tokens', { login, name, scopes })).secret,
+    tokens: (login) => control('GET', `/tokens/${encodeURIComponent(login)}`),
+    secret: async (login, name) => (await control('GET', `/secret/${encodeURIComponent(login)}/${encodeURIComponent(name)}`)).secret,
+    async close() {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      child.stdin.write('{"quit":true}\n');
+      const timeout = new Promise((resolve) => setTimeout(() => resolve('timeout'), 5_000));
+      if (await Promise.race([exited, timeout]) === 'timeout') {
+        child.kill('SIGKILL');
+        await exited;
+      }
+    },
+  };
+}
 
 /** A POST to the API as the page makes it: Host, Origin, the token and the API header. Answers
  * the `ok` value; any other status, or an `err`, rejects with the endpoint and the reply. */
@@ -121,8 +186,10 @@ function apiCall(base, token, endpoint, body) {
  * build-app.sh made.
  * Every run gets its own app-data and projects folders under `runDir` (in target/, never the
  * person's own folders: without `--projects`, tc4 uses `~/translationCore4/projects`).
+ * `door43` is a started fake Door43 (`startDoor43Fake`), which `tc4` then signs in to;
+ * without it Door43 is a port nothing listens on.
  */
-export async function startRustEnv({ scenario, tc4, ui, runDir = path.join(REPO, 'target', 'parity-rust', `${process.pid}-${Date.now()}`) }) {
+export async function startRustEnv({ scenario, tc4, ui, door43, runDir = path.join(REPO, 'target', 'parity-rust', `${process.pid}-${Date.now()}`) }) {
   if (!PROJECTS[scenario]) throw new Error(`no scenario ${scenario}; the scenarios are ${Object.keys(PROJECTS).join(', ')}`);
   const dir = path.join(runDir, scenario);
   fs.rmSync(dir, { recursive: true, force: true });
@@ -131,7 +198,7 @@ export async function startRustEnv({ scenario, tc4, ui, runDir = path.join(REPO,
   // stdin stays open: a closed stdin makes tc4 quit.
   const child = spawn(path.resolve(tc4), [
     'serve', '--app-data', path.join(dir, 'appdata'), '--projects', path.join(dir, 'projects'), '--ui', path.resolve(ui),
-    '--door43', DEAD_DOOR43, '--test-hooks', ...scenarioArgs(scenario, dir),
+    '--door43', door43?.url ?? DEAD_DOOR43, '--test-hooks', ...scenarioArgs(scenario, dir),
   ], { stdio: ['pipe', 'pipe', 'inherit'] });
   const lines = readline.createInterface({ input: child.stdout })[Symbol.asyncIterator]();
   const exited = new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal })));
@@ -170,6 +237,8 @@ export async function startRustEnv({ scenario, tc4, ui, runDir = path.join(REPO,
     token,
     projects,
     call,
+    /** The fake Door43 tc4 signs in to, or null. */
+    door43: door43 ?? null,
     /** Nothing leaves the machine: every request to another origin is aborted before it is
      * sent, and listed (`refused`). `extraHTTPHeaders` would give the token to any origin. */
     async prepare(context) {

@@ -759,6 +759,8 @@ fn a_dom_only_capture_compares_the_dialog_alone() {
 fn a_layer_whose_unit_has_landed_must_be_captured() {
     let p = Planted::new();
     p.unland("A5");
+    // A8's DOM layers (share-signin, net-failed, signin-error) are not this test's.
+    p.unland("A8");
     p.edit_json("units.json", |u| {
         u["landed"].as_array_mut().unwrap().push(json!("B2"))
     });

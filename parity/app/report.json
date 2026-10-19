@@ -21,17 +21,17 @@
       }
     },
     "build": {
-      "ui": "71e4a7c9e82fb4cb",
+      "ui": "637cdd585357ec0f",
       "commit": "dev",
       "api": 1
     }
   },
   "totals": {
     "rows": 130,
-    "same": 4,
-    "declared": 2,
+    "same": 5,
+    "declared": 4,
     "differs": 0,
-    "unported": 124,
+    "unported": 121,
     "failed": 0
   },
   "rows": [
@@ -223,7 +223,7 @@
       "status": "unported",
       "missing": {
         "pixels": "B9b",
-        "dom": "A8",
+        "dom": "B9b",
         "meaning": "B9b"
       }
     },
@@ -232,11 +232,26 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
+      "status": "declared",
       "missing": {
         "pixels": "B9b",
-        "dom": "A8",
         "meaning": "B9b"
+      },
+      "by": "A8",
+      "backend": "memory",
+      "dom": {
+        "tc4Sha256": "50ce0b62fdbbba09090d0cd2a1723dd2279a4be58558ac618f686ca847fa25c5",
+        "rustSha256": "0c311faaa7f1a1367c4bf686519a40f2b1f5d041a9210224fe76ecbea370b80c",
+        "scope": {
+          "attr": "role",
+          "value": "dialog",
+          "which": "last"
+        },
+        "same": false,
+        "declared": [
+          "signin-server"
+        ],
+        "firstDiffs": []
       }
     },
     {
@@ -520,7 +535,7 @@
       "status": "unported",
       "missing": {
         "pixels": "B9b",
-        "dom": "A8",
+        "dom": "B9b",
         "meaning": "B9b"
       }
     },
@@ -1121,10 +1136,23 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
+      "status": "same",
       "missing": {
-        "pixels": "B2",
-        "dom": "A8"
+        "pixels": "B2"
+      },
+      "by": "A8",
+      "backend": "memory",
+      "dom": {
+        "tc4Sha256": "d6c89f7dea144f3e136cd1ea30f4ac4e35865a6c3bfbf51520fa9db7519ae643",
+        "rustSha256": "96062629b7f4ae323a7eb1fe00628328bb918298bfd7d81ea0b4077151f0753b",
+        "scope": {
+          "attr": "role",
+          "value": "dialog",
+          "which": "last"
+        },
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -1352,10 +1380,25 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
+      "status": "declared",
       "missing": {
-        "pixels": "B9b",
-        "dom": "A8"
+        "pixels": "B9b"
+      },
+      "by": "A8",
+      "backend": "memory",
+      "dom": {
+        "tc4Sha256": "5bfbedea38b54a0cbd8081d83700fb43b98be3d6310fff7f20485d1c23b7b55f",
+        "rustSha256": "041a21a6779dca48e6e46d009e4f643b9d984c7a528fd4bc36f1bf9e0a61670e",
+        "scope": {
+          "attr": "role",
+          "value": "dialog",
+          "which": "last"
+        },
+        "same": false,
+        "declared": [
+          "signin-server"
+        ],
+        "firstDiffs": []
       }
     },
     {

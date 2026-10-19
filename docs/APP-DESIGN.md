@@ -2683,12 +2683,12 @@ pixels unit captures the screen whole, its DOM is compared within the scope of
 | `en-community-checking` | en-pins | B8, M | D2 | print model in tc-export |
 | `project-settings` | sample | B9a, M | C6 | — |
 | `source-texts` | sample | B9a, M | C8 | opens the project behind the dialog |
-| `share-internet-consent` | sample | A8 DOM; B9b pixels | — | kind `share` |
+| `share-internet-consent` | sample | B9b, M | — | kind `share` |
 | `share-signin` | sample | A8 DOM; B9b pixels | — | name notice; fake Door43 |
 | `share-dialog` | sample | B9b, M + fake | E1b | "Recommended" needs R12 |
 | `share-dialog-check` | sample | B9b, M + fake | E1b | — |
 | `open-door43` | sample | B9b, M | — | Q3 text masked |
-| `open-door43-internet-consent` | sample | A8 DOM; B9b pixels | — | kind `open`; Q3 text masked behind the scrim |
+| `open-door43-internet-consent` | sample | B9b, M | — | kind `open`; Q3 text masked behind the scrim |
 | `shared-home` | shared | B10, M | E1a | Q2 mask |
 | `sync-internet-consent` | shared | B10, M | — | Q2 mask behind the scrim |
 | `open-door43-refused` | sample | B10, M+S | E1b | Q3 text (Q-21); `pending_until: E1b` |

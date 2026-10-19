@@ -14,6 +14,7 @@ import path from 'node:path';
 import { applyPatch } from './lib.mjs';
 import { REPO } from './node-lib.mjs';
 import { stateNamed } from './states.mjs';
+import { FAKE_USER } from '../tc4-baseline/mock-server/fake-door43.mjs';
 
 /** tC4's repo path of the Bible sample. */
 const BIBLE = '_local_/_local_/sample_burrito';
@@ -237,6 +238,28 @@ export const CASES = [
     ],
     why: 'The License dialog from About (AccountMenu.jsx LicenseDialog).' },
   { name: 'net-failed', group: 'net-failed', state: 'home', scope: LAST_DIALOG, patch: () => ({ netFailed: true }),
+    // A8: the rebuild's switch is the server's; `net/set` answers an error, as when the switch
+    // cannot turn on, after the sign-in step's question (a 200 with an `err` body, so Chromium
+    // logs no failed load as a console error).
+    rust: async (app) => {
+      const { page } = app;
+      await app.home();
+      await page.route('**/api/v1/net/set', (route) => route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ type: 'err', value: { type: 'internal', value: { report: 0 } } }),
+      }));
+      try {
+        await page.getByTestId('account-menu').click();
+        await page.getByTestId('account-sign-in').click();
+        await page.getByLabel('Door43 username or email').fill(FAKE_USER.username);
+        await page.getByLabel('Password', { exact: true }).fill(FAKE_USER.password);
+        await page.getByTestId('signin-submit').click();
+        await page.getByTestId('net-confirm').click();
+        await page.getByTestId('net-failed').waitFor();
+      } finally {
+        await page.unroute('**/api/v1/net/set');
+      }
+    },
     why: '"tC4 could not use the internet": turning the internet on failed (AccountMenu.jsx InternetDialog). The mock\'s gate never fails.' },
 
   // ---- share ---------------------------------------------------------------------------------
@@ -305,7 +328,21 @@ export const CASES = [
     why: 'Not sent: the browser build, which has no desktop bridge (what tC4 itself answers here).' },
 
   // ---- sign-in -------------------------------------------------------------------------------
-  { name: 'signin-error', group: 'sign-in', state: 'signin-error', scope: LAST_DIALOG,
+  { name: 'signin-error', group: 'sign-in', state: 'signin-error', scope: LAST_DIALOG, masks: ['signin-server'],
+    // A8: M12 from the account menu (Share is B9b's), signing in to the fake Door43.
+    rust: async (app, env) => {
+      const { page } = app;
+      if (!env.door43) throw new Error('signin-error needs the fake Door43: build it with `cargo build -p tc-door43-fake` and pass --door43-fake');
+      await app.home();
+      await page.getByTestId('account-menu').click();
+      await page.getByTestId('account-sign-in').click();
+      await page.getByLabel('Door43 username or email').fill(FAKE_USER.username);
+      await page.getByLabel('Password', { exact: true }).fill('wrong');
+      await page.getByTestId('signin-submit').click();
+      await page.getByTestId('net-confirm').click();
+      await page.getByTestId('signin-error').waitFor();
+      await page.evaluate(() => document.activeElement?.blur());
+    },
     why: 'The sign-in step after Door43 refused a wrong password.' },
 
   // ---- check-empty ---------------------------------------------------------------------------
