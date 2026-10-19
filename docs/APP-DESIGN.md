@@ -1985,8 +1985,18 @@ The Rust environment's seams:
    run of the same build (Q-28). *(A-34)* `pixelmatch` with threshold 0,
    anti-aliasing counted (`parity/ds-gallery/diff.mjs:47`). Declared masks, each a rectangle in
    `parity/app/masks.json` with the ruling it cites: the build line in `about`, the build and
-   platform lines in `feedback`, and the Q2 and Q3 text on the eight `rebuildDiffers` screens
-   (`parity/tc4-baseline/README.md:380-402`).
+   platform lines in `feedback`, and the Q2 and Q3 text on the nine `rebuildDiffers` screens
+   (`parity/tc4-baseline/README.md`, "Where the rebuild differs on purpose"; the ninth,
+   `open-door43-internet-consent`, shows the Q3 note behind its scrim and was added by A6b).
+   Fallback glyphs come from the machine's fonts: on the owner's Linux PC the same tC4 commit,
+   Chromium build and capture gave other pixels than on the cloud machine on 57 of the 62
+   screens and the same DOM on all 62. So both captures record their `machine` (platform,
+   Chromium version, and the count and sha256 of `fc-list`'s sorted lines), the baseline is
+   recaptured on the machine that captures the Rust app (A6b recaptured it on the Linux PC), and
+   pixels are compared only between captures whose fingerprints are equal. A capture with no
+   font list (Windows, macOS) is compared by DOM and meaning only. A fontconfig rule that
+   changes a fallback without changing the list is not caught; `residuals.json` lists it.
+   *(A6b, D3)*
 2. **DOM.** `domSnapshot` (`parity/ds-gallery/protocol.mjs:174-220`) rooted at `#root`. tC4's
    snapshot per screen is recorded once and committed as `parity/tc4-baseline/dom/<screen>.json`,
    with its sha256 in `manifest.json`. Beside `#root` it records the attributes of `<html>`
@@ -2095,7 +2105,7 @@ the unit that captures the screen again on its final backend.
 | `share-dialog` | sample | B9b, M + fake | E1b | "Recommended" needs R12 |
 | `share-dialog-check` | sample | B9b, M + fake | E1b | — |
 | `open-door43` | sample | B9b, M | — | Q3 text masked |
-| `open-door43-internet-consent` | sample | A8 DOM; B9b pixels | — | kind `open` |
+| `open-door43-internet-consent` | sample | A8 DOM; B9b pixels | — | kind `open`; Q3 text masked behind the scrim |
 | `shared-home` | shared | B10, M | E1a | Q2 mask |
 | `sync-internet-consent` | shared | B10, M | — | Q2 mask behind the scrim |
 | `open-door43-refused` | sample | B10, M+S | E1b | Q3 text (Q-21); `pending_until: E1b` |
@@ -2162,10 +2172,12 @@ tC4's spec assertions are the reference.
   `--features harness`, beside today's two runs (`.github/workflows/ci.yml:11-25`).
   `screen_record.rs` gates the committed report in `cargo test`.
 - **Later (G2)**: an `app-e2e` job builds the wasm with wasm-bindgen 0.2.129, builds `tc4` with
-  `test-hooks`, installs Chromium build 1194 in a pinned image with this container's fonts, and
-  runs the journeys, the DOM and meaning layers, and the perf specs on Psalms. Pixels gate only on
-  the pinned image, because fallback glyphs come from the machine
-  (`parity/ds-gallery/README.md:294-308`). The whole-Bible perf run is nightly.
+  `test-hooks`, installs Chromium build 1194 in a pinned image with the fonts of the machine
+  that captured the baseline, and runs the journeys, the DOM and meaning layers, and the perf
+  specs on Psalms. Pixels gate only where the machine fingerprint equals the baseline's
+  (§7.3 layer 1), because fallback glyphs come from the machine
+  (`parity/ds-gallery/README.md:294-308`): until the pinned image exists, on the machine that
+  captured the baseline (the owner's Linux PC since A6b). The whole-Bible perf run is nightly.
 
 ---
 
@@ -2506,7 +2518,10 @@ last.
    fixture screens; rebuild-only DOM has no reference.
 7. **Silent settle timeouts** would give screenshots that look valid. The event stream is excluded,
    `test/quiet` is added, and a screen that hits the deadline fails.
-8. **Machine-dependent glyphs.** Both captures run on one image until CI has a pinned one.
+8. **Machine-dependent glyphs.** Both captures run on one image until CI has a pinned one. Each
+   capture records its machine's fingerprint, and pixels are compared only between equal
+   fingerprints (§7.3 layer 1), so a capture from another machine fails the gate instead of
+   showing the machine's fonts as differences of the port.
 9. **Header injection** may miss a request type in Electronite v37. G0 probes every type early
    and G1 again; the fallback is capability URLs.
 10. **A panic** loses a navigation that was in flight when it happened. Typed text is not lost:

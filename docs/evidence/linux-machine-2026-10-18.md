@@ -25,3 +25,6 @@ this file.
 - The parity baseline (`parity/tc4-baseline`) was captured on the cloud machine with the same
   Chromium build. The system fonts here may differ, so the parity harness must show that the
   baseline reproduces here before a pixel difference is trusted.
+- The baseline did not reproduce here: 57 of its 62 PNGs differ from the cloud machine's by
+  fonts, and none of its DOM snapshots differ. Unit A6b recaptured it here and made every capture
+  record its machine (docs/evidence/parity-harness-2026-10-18.md).
