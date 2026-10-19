@@ -18,14 +18,23 @@ photographed live in `parity/app`, which the Rust app's capture shares (see "The
   in `history/d494a9d/`.
 - Help pages: tc-website `cdfdf9b7d534e7574beb3fcf44678973cdc5f9d7`, the commit that tC4 pins in
   `scripts/fetch-help.mjs`. The pin is the same at both commits.
-- Output: 62 screenshots at device scale 1, in `screens/`, 8,094,421 bytes (7.7 MiB) in total.
+- Output: 62 screenshots at device scale 1, in `screens/`, 8,058,301 bytes (7.7 MiB) in total.
   Each is 1280x800, except the six screens whose name ends in `-620`, which are 620x800. 49 are
   complete and 13 are incomplete. `manifest.json` lists each screenshot with the steps that
   reach it and its sha256. The 42 screens of the first baseline were captured again; 20 screens
   were added for `d310bf3` ("Screens added for d310bf3").
 - DOM snapshots: one per screen, in `dom/`, taken at the shot ("DOM snapshots").
 - Browser: Chromium 141.0.7390.37, headless, through Playwright 1.56.1. This Playwright version
-  matches the Chromium build 1194 in `/opt/pw-browsers`.
+  matches the Chromium build 1194, which is in Playwright's own cache (`~/.cache/ms-playwright`)
+  on the owner's Linux PC, run as Playwright's Ubuntu 24.04 build
+  (`PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64`,
+  `docs/evidence/linux-machine-2026-10-18.md`).
+- Machine: the screenshots were captured on the owner's Linux PC on 2026-10-18 ("Recaptured on
+  the Linux PC"). `manifest.json` `machine` records the platform, the Chromium version and the
+  sha256 of the system's font list (`fc-list`, 535 lines, `a15fd0433b66…`), because fallback
+  glyphs come from the machine. The Rust capture (`parity/app`) compares pixels only with a
+  capture whose machine has the same fingerprint; the DOM and what the DOM shows compare on any
+  machine.
 - Two consecutive full runs at `d310bf3` gave byte-identical PNGs, first for the 42 screens,
   then for 50, then for 59, then for 61, and then for all 62. The pairs for 61 and 62 also
   gave the same `manifest.json`. Each `sync-` screen captured alone, from a fresh state, gave
@@ -122,6 +131,11 @@ recorded one, tC4's fixtures changed at that commit. Copy the folders that `REPO
 `parity/app/state.mjs` lists from `$S/tc4` into `fixtures/tc4/`, record in `fixtures/README.md`
 which commit they now come from, and run the check again. The Rust crates' tests read the same
 copies, so run `cargo test --workspace` as well.
+
+On a machine whose tC4 checkout has no `node_modules` or `public/help` (the owner's Linux PC),
+leave out the `ln` and `cp` lines: `capture.mjs` runs `npm ci` in the clone and fetches the help
+pages from GitHub itself. Never commit a capture whose `manifest.json` `client` says `WITHOUT`
+the help pages.
 
 The link to `node_modules` works only while the two commits have the same dependencies. From
 `d494a9d` to `d310bf3`, `package.json` changed only its `test:desktop` script. The copy of
@@ -451,6 +465,7 @@ The entry of each screen in `manifest.json` has the same note in `rebuildDiffers
 | Screen | Ruling | What the rebuild shows |
 |---|---|---|
 | `open-door43` | Q3 | The note has no sentence that only public repositories can be opened. A new key replaces `openDoor43.where` in all 10 languages. A private repository opens after sign-in. |
+| `open-door43-internet-consent` | Q3 | Behind the scrim, the note of the Open a project from Door43 dialog has no sentence that only public repositories can be opened (see `open-door43`). |
 | `open-door43-refused` | Q3 | tC4's sentence for this refusal, `openDoor43.refused.other`, says "Make sure that the repository is public". The rebuild opens private repositories, so its sentence must not say this. The delta document replaces only `openDoor43.where`, so the new text of this sentence is not decided yet. When Door43 answers 401 or 404 and nobody is signed in, the rebuild shows the sign-in step instead of this refusal. |
 | `shared-home` | Q2 | The OBS card reads "Sync with Door43", like the Bible card. The rebuild syncs OBS projects too. |
 | `sync-internet-consent` | Q2 | Behind the scrim, the OBS card reads "Sync with Door43". |
@@ -561,6 +576,27 @@ The run also controls the following:
 - The browser can reach no origin except the mock server and the faked Door43. Any other request
   is refused and listed in `refusedExternalRequests` in the manifest. The list is empty.
 
+### Recaptured on the Linux PC
+
+The screenshots were first captured on the cloud machine. On 2026-10-18 the rebuild moved to the
+owner's Linux PC, where the same tC4 commit, the same Chromium build and the same capture gave
+other pixels on 57 of the 62 screens: the PC's system fonts differ, and so do the fallback
+glyphs Chromium draws from them. Home's "stories →" arrow, for example, is thin here and bold on
+the cloud machine (x 295–304, y 366–375). Nothing else changed:
+
+| | Cloud machine against this PC |
+|---|---|
+| PNGs | 57 of 62 differ |
+| DOM snapshots | 62 of 62 byte-identical |
+| `homeCards`, `syncToast`, `status`, `absentReads` | all equal |
+| Pixels that differ (pixelmatch, threshold 0) | 0 on 5 screens: `obs-understand`, `obs-translate`, `en-obs-understand`, `en-obs-translate`, `en-understand-questions`; 48 to 96 on 21 screens: Home, Understand and Translate, and the dialogs over Home that leave its arrow in view (one or two glyphs); 154 to 1,416 on 12 other dialogs; 1,707 to 3,249 on 18 check, align and OBS check screens; 3,945 `guided-fix`; 5,152 `source-texts`; 10,931 `align-workspace-row`; 49,452 `align-original`; 66,388 `align-workspace`; 78,263 `help` |
+| Two consecutive full runs here | byte-identical PNGs, DOM files and `manifest.json` |
+
+So the screenshots here are this PC's: the parity harness compares the Rust app's pixels with
+them only on a machine with the same `machine` fingerprint, and the DOM snapshots, which did not
+change, on any machine. The cloud machine's screenshots are in git, in the commits before the
+recapture (`git show 01befe2:parity/tc4-baseline/screens/<name>.png`).
+
 ## Using the baseline for the Rust rebuild
 
 `.state/<scenario>/repos` uses the Pankosmia working-directory layout. Local projects are under
@@ -572,4 +608,7 @@ a fresh state of the same scenario (`npm run state -- --scenario <name>`). A ste
 with "Door43" changes Door43, not the app: do it on the rebuild's fake Door43. A screen with a
 `viewport` in the manifest uses that window size, and a screen with a `locale` uses that app
 language. A screen with `rebuildDiffers` matches tC4 except for what that note says ("Where the
-rebuild differs on purpose"). The two renderers differ, so a comparison needs a tolerance.
+rebuild differs on purpose"). `parity/app` compares the Rust app's screens with these: exact
+pixel counts on one machine, the DOM, and what the DOM shows, with the declared masks of
+`parity/app/masks.json` and every other difference listed in `parity/app/residuals.json`
+(`parity/app/README.md`).

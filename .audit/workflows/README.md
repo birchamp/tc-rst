@@ -13,6 +13,7 @@ folder cannot lose them. Each runs with the Workflow tool; a run can resume from
 | `app-layer-design.js` | Designs `tc-api`, `tc-app`, `tc-server` and the screen port; writes `docs/APP-DESIGN.md` |
 | `app-phase0.js` | Phase 0 of the app layer: the Windows Electronite spike package (G0) and units A1 to A11, merged into `phase0` |
 | `merge-main.js` | Merges one branch or `ready/<unit>` ref into main in `.claude/worktrees/merge-main` with the full gates; branches no chain reviewed (the Windows session's) get an independent review and fixes first; the main session pushes |
+| `app-layer.js` | Phases 1 to 6 of the app layer: each unit starts once its dependencies are on main or merged into the `app` branch; verified (three lenses for no-loss units), fixed, merged into `app`, and marked `ready/<unit>` for main |
 
 `../research/` holds the research notes the early units read (recovered on 2026-10-16 from the
 agents' transcripts after a scratch folder was cleared).

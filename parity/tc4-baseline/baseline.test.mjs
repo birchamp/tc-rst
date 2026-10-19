@@ -143,6 +143,18 @@ test('the check fails on a PNG or a DOM snapshot that differs from the manifest 
   }
 });
 
+test('the manifest records the machine of its screenshots', () => {
+  // Fallback glyphs come from the system's fonts, so pixels compare only between captures of
+  // one machine (APP-DESIGN 7.3 layer 1); parity/app reads this fingerprint.
+  const { machine } = manifest;
+  assert.ok(machine, 'manifest.json has no machine');
+  assert.match(machine.platform, /^[a-z0-9]+-[a-z0-9]+$/);
+  assert.equal(`Chromium ${machine.chromium} `, manifest.browser.slice(0, `Chromium ${machine.chromium} `.length), 'the machine names another Chromium than the browser');
+  assert.ok(machine.fonts && Number.isInteger(machine.fonts.count) && machine.fonts.count > 0, 'the machine lists no fonts');
+  assert.match(machine.fonts.sha256, /^[0-9a-f]{64}$/);
+  assert.ok(readme.includes(machine.fonts.sha256.slice(0, 12)), `the README does not name the font list ${machine.fonts.sha256.slice(0, 12)}`);
+});
+
 test('the README lists every screen of the manifest in order, with its scenario, view, steps, what it shows and status', () => {
   const rows = screenRows(section(readme, 'The screenshots'));
   assert.deepEqual(rows.map((r) => r.name), manifest.screens.map((s) => s.name));

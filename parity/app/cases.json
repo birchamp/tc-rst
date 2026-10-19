@@ -1,0 +1,4 @@
+{
+  "about": "The cases of the tC4 view-state gallery (APP-DESIGN §7.4), which unit A7 builds: each case's tC4 screenshot and DOM, under parity/, and the unit that captures the Rust side. Each case needs a row in report.json. Empty until A7.",
+  "cases": []
+}

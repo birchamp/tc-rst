@@ -1,0 +1,18 @@
+{
+  "about": "Differences that are listed and explained rather than fixed (PLAN P7: a human reviews the differences, and the differences are listed). `rows` explains a report row whose status is `differs`, naming exactly the layers it differs in (`pixels`, `dom`, `meaning`, `behaviour`), so a difference on another layer still fails; `general` lists differences no single row shows. A failed row is never a residual.",
+  "general": [
+    {
+      "id": "engine",
+      "why": "P7 compares screenshots taken in Chromium 141 (Playwright 1.56.1, build 1194). The product ships in Electronite v37, whose Chromium is 138, so the comparison engine is not the shipped one. G2 adds one capture run of the Rust app inside Electronite, compared with the Chromium 141 run of the same build (Q-28).",
+      "cites": "RT-34, Q-28",
+      "until": "G2"
+    },
+    {
+      "id": "fontconfig-rules",
+      "why": "The machine fingerprint lists every font face and its version, so a font added, removed or upgraded stops pixel comparisons until both sides are captured again on one machine. A fontconfig rule that changes which face draws a fallback glyph without changing the list is not caught.",
+      "cites": "APP-DESIGN §7.3 layer 1",
+      "until": null
+    }
+  ],
+  "rows": {}
+}
