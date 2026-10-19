@@ -110,7 +110,7 @@ fn json(text: &str) -> tc_journal::Json {
 /// The records of the sample project: its details, its versification, and each book through
 /// tc-journal's codec. tc-store's own `AddBook` seeds tC4's blank book from a source, so the
 /// sample's text comes in as records, as the fixture seed brings it (`backend/seed.rs`).
-fn sample_records(sources: &BTreeMap<BookId, Vec<u8>>, vrs: Option<&[u8]>) -> Vec<Record> {
+pub fn sample_records(sources: &BTreeMap<BookId, Vec<u8>>, vrs: Option<&[u8]>) -> Vec<Record> {
     let meta = |field: MetaField, value: &str| Record::ProjectMeta {
         field,
         value: Some(json(value)),

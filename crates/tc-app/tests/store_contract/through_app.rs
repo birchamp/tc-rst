@@ -40,7 +40,7 @@ impl Rig {
         std::fs::create_dir(&projects).unwrap();
         let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
             config.projects = ProjectsFolder::Given(projects.clone());
-            deps.store = store.clone();
+            deps.store = tc_app::StoreChoice::Given(store.clone());
         })
         .await;
         Rig {

@@ -544,7 +544,8 @@ pub enum OpenFailure {
     NewerFormat {
         major: u16,
     },
-    /// This build has no backend that opens projects (before C0).
+    /// The open ended with no outcome (the session registry's own arm, for an open whose
+    /// result never came). No backend answers it since C0.
     Unavailable,
 }
 
@@ -619,28 +620,4 @@ pub trait ProjectHandle: Send + Sync {
 
     /// Closes the project and lets go of its lock.
     fn close(self: Arc<Self>) -> BoxFuture<Result<(), StoreError>>;
-}
-
-/// The store of a build with no backend (release builds before C0): it lists nothing, and
-/// opening anything is `Unavailable`.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct NoProjects;
-
-impl ProjectStore for NoProjects {
-    fn list(&self) -> Result<Listing, StoreError> {
-        Ok(Listing::default())
-    }
-
-    fn open(
-        &self,
-        _folder: &ProjectRef,
-        _progress: ProgressSink,
-    ) -> Result<Arc<dyn ProjectHandle>, OpenFailure> {
-        Err(OpenFailure::Unavailable)
-    }
-
-    #[cfg(feature = "test-hooks")]
-    fn reset(&self) -> Result<(), StoreError> {
-        Ok(())
-    }
 }
