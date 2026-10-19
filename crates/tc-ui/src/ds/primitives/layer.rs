@@ -213,7 +213,10 @@ pub fn Layer(
     #[prop(optional)]
     scrim_live: Vec<(&'static str, Signal<Option<String>>)>,
     #[prop(optional, into)] role: Option<String>,
-    #[prop(optional, into)] label: Option<String>,
+    /// The panel's accessible name, which follows the shown language while the layer is on
+    /// screen (React draws `label` again on every render).
+    #[prop(optional, into)]
+    label: Option<Signal<String>>,
     #[prop(optional, into)] labelled_by: Option<String>,
     /// A press on the panel (React passes `onMouseDown` through `...rest`).
     #[prop(optional)]
@@ -596,7 +599,7 @@ pub fn Layer(
                 role=role.clone()
                 tabindex="-1"
                 aria-modal=modal.then_some("true")
-                aria-label=label.clone()
+                aria-label=move || label.map(|l| l.get())
                 aria-labelledby=labelled_by.clone()
                 data-layer-placement=anchored.then_some(placement.as_str())
                 data-side=move || if anchored { pos().map(|p| p.side.as_str()) } else { None }

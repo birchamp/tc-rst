@@ -234,13 +234,13 @@ pub fn Drawer(
     #[prop(optional)] children: Option<ChildrenFn>,
 ) -> impl IntoView {
     let close_label = close_label.unwrap_or_else(|| Signal::from("Close"));
-    let label = Some(
+    let label = Some(Signal::from(
         title
             .as_ref()
             .and_then(Content::as_text)
             .unwrap_or("Panel")
             .to_string(),
-    );
+    ));
     let content: ChildrenFn = Arc::new(move || {
         let mut s = Css::new();
         s.set(

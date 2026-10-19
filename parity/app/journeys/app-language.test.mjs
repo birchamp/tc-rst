@@ -69,6 +69,11 @@ browserTest('b. Apply saves the choice and closes after the write; a reload star
     await openMenu(page);
     const row = await page.getByTestId('account-language').textContent();
     assert.ok(row.includes(catalog('es-419')['account.language']) && row.includes(LABEL['es-419']), row);
+    // The menu's own name follows the language too, as the button's does (§6.9).
+    const name = catalog('es-419')['account.label.out'];
+    assert.notEqual(name, catalog('en')['account.label.out']);
+    assert.equal(await page.locator('[role="menu"]').getAttribute('aria-label'), name, 'the menu is named in Spanish');
+    assert.equal(await trigger(page).getAttribute('aria-label'), name);
     await page.keyboard.press('Escape');
     await page.reload();
     await expectLanguage(page, 'es-419');

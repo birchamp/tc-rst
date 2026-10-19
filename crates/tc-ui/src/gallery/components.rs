@@ -457,7 +457,7 @@ fn layer(p: Props) -> AnyView {
         scrim_attrs: Attrs::new(),
         scrim_live: Vec::new(),
         role: p.str("role"),
-        label: p.str("label"),
+        label: p.str("label").map(Signal::from),
         labelled_by: p.str("labelledBy"),
         on_mouse_down: handler(&p, "onMouseDown"),
         style: p.css("style"),

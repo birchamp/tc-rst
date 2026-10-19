@@ -107,7 +107,7 @@ pub fn HelpPanel(on_close: Callback<()>) -> impl IntoView {
         level: Level::Overlay,
         placement: LayerPlacement::End,
         role: Some("dialog".to_owned()),
-        label: Some(untrack(|| t(keys::account::HELP, &[]))),
+        label: Some(Signal::derive(|| t(keys::account::HELP, &[]))),
         dismiss: Dismiss::parse("escape"),
         trap_focus: true,
         lock_scroll: true,

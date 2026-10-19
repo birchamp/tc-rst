@@ -558,7 +558,7 @@ fn menu_layer<L: Fn() -> String + Clone + Send + Sync + 'static>(parts: MenuPart
         anchor_to: Some(anchor),
         align: LayerAlign::End,
         role: Some("menu".to_owned()),
-        label: Some(untrack(label)),
+        label: Some(Signal::derive(label)),
         dismiss: Dismiss::parse("outside escape"),
         on_dismiss: Signal::from(Some(Callback::new(move |_| open.set(false)))),
         ..crate::ds::LayerProps::new(content)
