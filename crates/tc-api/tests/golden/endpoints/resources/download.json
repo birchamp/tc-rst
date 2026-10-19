@@ -1,0 +1,32 @@
+{
+  "path": "resources/download",
+  "kind": "startJob",
+  "net": "sources",
+  "request": {
+    "request": "15151515151515151515151515151515",
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "gateway": {
+      "language": "es-419",
+      "owner": "es-419_gl"
+    },
+    "book": "TIT",
+    "repos": [
+      "es-419_glt",
+      "es-419_tn"
+    ]
+  },
+  "reply": {
+    "type": "ok",
+    "value": 21
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "sources"
+    }
+  }
+}

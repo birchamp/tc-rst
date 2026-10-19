@@ -382,6 +382,14 @@ impl ProjectStore for ScenarioStore {
         self.backend.summary_files(folder, books, watch)
     }
 
+    fn derived_file(
+        &self,
+        folder: &ProjectRef,
+        file: &tc_journal::fold::DerivedFile,
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        self.backend.derived_file(folder, file)
+    }
+
     fn open(
         &self,
         folder: &ProjectRef,

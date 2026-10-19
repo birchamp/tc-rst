@@ -484,6 +484,20 @@ impl ProjectStore for StoreBackend {
         Ok(files)
     }
 
+    fn derived_file(
+        &self,
+        folder: &ProjectRef,
+        file: &tc_journal::fold::DerivedFile,
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        let path = self.listed(folder).map_err(|_| StoreError::NotAProject)?;
+        let rel = file.path();
+        match self.vfs.read(&under(&path, &rel)) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(e) if absent(&e) => Ok(None),
+            Err(e) => Err(store_error(format!("{rel}: {e}"))),
+        }
+    }
+
     /// Reads the projects folder itself: tc-store's `Store::list` keeps only the folders with a
     /// `project.json`, and would hide one that holds someone's work without it.
     fn list(&self) -> Result<Listing, StoreError> {

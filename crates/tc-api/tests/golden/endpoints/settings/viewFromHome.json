@@ -1,0 +1,53 @@
+{
+  "path": "settings/viewFromHome",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "project": "es-419_tit_equipo"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "languageName": "Español",
+      "direction": "ltr",
+      "font": "Charis SIL",
+      "gateway": {
+        "current": {
+          "gateway": {
+            "language": "es-419",
+            "owner": "es-419_gl"
+          },
+          "autonym": "Español (Latinoamérica)"
+        },
+        "options": {
+          "type": "listed",
+          "value": [
+            {
+              "gateway": {
+                "language": "en",
+                "owner": "unfoldingWord"
+              },
+              "name": "English",
+              "autonym": "English",
+              "direction": "ltr",
+              "seen": {
+                "tn": "v89",
+                "tw": "v89",
+                "ta": "v89"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

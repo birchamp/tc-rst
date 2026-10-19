@@ -772,6 +772,16 @@ pub trait ProjectStore: Send + Sync + 'static {
         watch: &SummaryWatch,
     ) -> Result<SummaryFiles, StoreError>;
 
+    /// One derived file of `folder` as the project holds it, read without a lock and without a
+    /// fold: the store's file, or the memory backend's rendering of it. `Ok(None)` when the
+    /// project has no such file. Blocking. Project settings opened from Home read their values
+    /// this way (AD14).
+    fn derived_file(
+        &self,
+        folder: &ProjectRef,
+        file: &tc_journal::fold::DerivedFile,
+    ) -> Result<Option<Vec<u8>>, StoreError>;
+
     /// Opens `folder`. Blocking: called on the blocking pool. A second open of a folder whose
     /// handle is live is `LockHeld` (STORAGE §6.1 O1), which the session registry exists to
     /// never meet. `progress` takes the store's own reports (AD8).

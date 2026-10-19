@@ -45,6 +45,11 @@ const PHASE_0: &[&str] = &[
     "account/repoLink",
     "account/orgs",
     "door43/open",
+    // B9a: Project settings from Home, and Get source texts with its downloads.
+    "settings/viewFromHome",
+    "resources/sources",
+    "resources/catalog",
+    "resources/download",
     "test/quiet",
     "test/echo",
     "test/crash",
@@ -100,6 +105,14 @@ fn the_list_and_the_impls_agree() {
     assert_eq!(<Orgs as Endpoint>::NET, Some(NetKind::Share));
     assert_eq!(<OpenDoor43 as Endpoint>::NET, Some(NetKind::Open));
     assert_eq!(<OpenDoor43 as Endpoint>::KIND, Kind::StartJob);
+    assert_eq!(
+        <tc_api::resources::Download as Endpoint>::NET,
+        Some(NetKind::Sources)
+    );
+    assert_eq!(
+        <tc_api::resources::Download as Endpoint>::KIND,
+        Kind::StartJob
+    );
     assert_eq!(<tc_api::app::Hello as Endpoint>::KIND, Kind::Query);
     for endpoint in ALL {
         let asks = endpoint.net.is_some();
@@ -112,6 +125,8 @@ fn the_list_and_the_impls_agree() {
                 | "account/repoLink"
                 | "account/orgs"
                 | "door43/open"
+                | "resources/catalog"
+                | "resources/download"
         );
         assert_eq!(
             asks, expected,

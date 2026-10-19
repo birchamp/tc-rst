@@ -332,6 +332,14 @@ impl ProjectStore for Summaries {
         self.inner.summary_files(folder, books, watch)
     }
 
+    fn derived_file(
+        &self,
+        folder: &ProjectRef,
+        file: &tc_journal::fold::DerivedFile,
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        self.inner.derived_file(folder, file)
+    }
+
     fn open(
         &self,
         folder: &ProjectRef,

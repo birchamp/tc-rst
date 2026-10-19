@@ -43,6 +43,7 @@ mod app {
     mod seed;
     mod sessions;
     mod share;
+    mod sources;
     pub mod state_seed;
     mod store;
     mod store_scenario;

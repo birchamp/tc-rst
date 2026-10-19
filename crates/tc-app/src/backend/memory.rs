@@ -468,6 +468,16 @@ impl ProjectStore for MemoryBackend {
         Ok(files)
     }
 
+    fn derived_file(
+        &self,
+        folder: &ProjectRef,
+        file: &tc_journal::fold::DerivedFile,
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        let (_, snapshot, _) = self.current(folder)?;
+        // The read the dialog makes is not one of a screen's counted reads.
+        Ok(CountingSnapshot::new(snapshot, Arc::default()).render(file))
+    }
+
     fn list(&self) -> Result<Listing, StoreError> {
         // By folder name: the map is ordered by it. A memory project is never unusable.
         Ok(Listing {

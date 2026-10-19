@@ -155,6 +155,7 @@ scoped!(
     crate::prefs::SetAlignSuggestions,
     crate::prefs::RecordPlace,
     crate::session::Close,
+    crate::resources::Download,
 );
 unscoped!(
     crate::app::Quit,
