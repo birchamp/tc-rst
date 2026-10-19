@@ -13,7 +13,7 @@ the record the gate in `cargo test` checks (docs/APP-DESIGN.md §7). The tC4 sid
 | `driver.mjs` | the steps a person takes, over an environment (`AppEnv`) |
 | `observe.mjs` | the capture rules: the browser, request tracking, `settle`, the screenshot, `observe` (what the DOM shows), `domSnapshot`, `machineFingerprint`, `measureTargets` |
 | `env-tc4.mjs` | tC4 against the Node mock of the Pankosmia API |
-| `env-rust.mjs` | `tc4 serve --test-hooks --scenario <state>` on empty folders under `target/`: the scenario's state built by `state.mjs` and held by the memory backend (B1b), the token header, `test/reset`, `test/quiet`, the event stream left out of the wait, every other origin aborted |
+| `env-rust.mjs` | `tc4 serve --test-hooks --scenario <state>` on empty folders under `target/`: the scenario's state built by `state.mjs`, its projects written into the run's projects folder and opened through the store (C1a; `backend: 'memory'` passes `--backend memory`, B1b's memory backend), the token header, `test/reset`, `test/quiet`, the event stream left out of the wait, every other origin aborted |
 | `capture-rust.mjs` | captures Rust screens into `screens/`, `dom/` and `captures.json` |
 | `behaviour.mjs` | records a sequence of steps from a baseline screen on either side (layer 4) |
 | `measure-masks.mjs` | measures each mask's rectangle on tC4's baseline screens |
@@ -36,8 +36,11 @@ git diff parity/app/report.json                  # review every row that changed
 
 `--unit` is the unit of §10 that captures. `--layers dom` is a DOM-first capture: a screen whose
 DOM unit comes before its pixels unit (§7.6), compared within its `scopes.json` scope until the
-pixels unit captures it whole. `--backend memory+scripted` marks a screen captured on scripted
-job outcomes. `--case <names>` captures gallery cases instead (below). Playwright comes from
+pixels unit captures it whole. Screens are captured on the store, the default since C1a: the
+gate fails a capture on `--backend memory` once C1a has landed (APP-DESIGN §7.5).
+`--backend memory+scripted` marks a screen captured on scripted job outcomes (on the memory
+backend, until its recapture unit lands). `--case <names>` captures gallery cases instead
+(below). Playwright comes from
 `parity/tc4-baseline/node_modules` (`npm ci` there).
 
 Door43 stays on this machine. Without a fake, `tc4 serve` is pointed at a port nothing listens

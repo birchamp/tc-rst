@@ -30,6 +30,7 @@ const HOOK_TEXT: [&str; 14] = [
     "test/keychain",
     "--test-seed-pace",
     "--scenario",
+    "--backend",
     "tc4-seed-batch",
 ];
 

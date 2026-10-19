@@ -334,16 +334,25 @@ fn every_enum_variant_has_its_documented_name() {
         assert!(text.contains("\"cause\":{\"seed\":{}}"), "{text}");
         assert!(text.contains("\"lead\":\"\\t\""), "{text}");
     }
-    let change = Change::new(body(
-        verse(MarkerTerm::Space),
-        Cause::System(tc_journal::SystemReason::PinCoverageBackfill),
-    ))
-    .unwrap();
-    assert!(
-        std::str::from_utf8(change.raw())
-            .unwrap()
-            .contains("\"cause\":{\"system\":\"pinCoverageBackfill\"}")
-    );
+    for (reason, name) in [
+        (
+            tc_journal::SystemReason::PinCoverageBackfill,
+            "\"cause\":{\"system\":\"pinCoverageBackfill\"}",
+        ),
+        (
+            tc_journal::SystemReason::CreationPins,
+            "\"cause\":{\"system\":\"creationPins\"}",
+        ),
+    ] {
+        let change = Change::new(body(verse(MarkerTerm::Space), Cause::System(reason))).unwrap();
+        let text = std::str::from_utf8(change.raw()).unwrap();
+        assert!(text.contains(name), "{text}");
+        let again = parse_change(change.id(), change.raw().clone());
+        assert_eq!(
+            again.as_change().map(|c| c.body().cause.clone()),
+            Some(Cause::System(reason))
+        );
+    }
 }
 
 #[test]

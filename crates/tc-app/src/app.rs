@@ -33,7 +33,7 @@ use crate::folders::{FolderCheck, HostFolders};
 #[cfg(feature = "test-hooks")]
 use crate::hooks::{Ender, ExitProcess, TestHooks};
 use crate::jobs::JobRegistry;
-use crate::prefs::{AppDataFiles, MemoryFiles, PrefsWriter};
+use crate::prefs::{AppDataFiles, DiskFiles, PrefsWriter, read_reports};
 use crate::replies::ReplyCache;
 use crate::reports::{ReportLog, ReportOp, ReportOutcome, facts};
 use crate::seed::{self, RESOURCES_FOLDER};
@@ -50,6 +50,16 @@ pub enum StoreChoice {
     Given(Arc<dyn ProjectStore>),
 }
 
+/// Where the app-data files are kept.
+pub enum FilesChoice {
+    /// The app-data folder on this computer's disk, each file written by
+    /// `tc_store::atomic_write` (unit C1a). Built by [`App::start`], which first makes the
+    /// folder.
+    OnDisk,
+    /// A test's files.
+    Given(Arc<dyn AppDataFiles>),
+}
+
 /// What a test replaces when it starts the app. [`AppDeps::production`] is what `tc4 serve`
 /// runs with.
 pub struct AppDeps {
@@ -61,8 +71,8 @@ pub struct AppDeps {
     pub folders: Arc<dyn FolderCheck>,
     /// The computer's home folder, local data folder and kind.
     pub host: HostEnv,
-    /// The app-data files `PrefsWriter` writes.
-    pub files: Arc<dyn AppDataFiles>,
+    /// The app-data files `PrefsWriter` writes: the app-data folder on disk, or a test's.
+    pub files: FilesChoice,
     /// The projects: tc-store on disk; the memory backend in tests and parity captures
     /// (feature `fixture-backend`).
     pub store: StoreChoice,
@@ -78,10 +88,10 @@ pub struct AppDeps {
 impl AppDeps {
     /// This computer's clock, folders and variables; no keychain (the operating system's comes
     /// with unit E1a, Q-3: a keychain in memory, which forgets at quit, is not "Stay signed in
-    /// on this computer", so the sign-in step hides that box until then, tC4 #496); in-memory
-    /// app data (§4.9: until unit C1a); the projects through tc-store, built by
-    /// [`App::start`]; and, with test hooks, an ender that ends the process. It builds nothing
-    /// itself: `..AppDeps::production()` evaluates it in full.
+    /// on this computer", so the sign-in step hides that box until then, tC4 #496); the
+    /// app-data folder and the projects through tc-store, both built by [`App::start`]; and,
+    /// with test hooks, an ender that ends the process. It builds nothing itself:
+    /// `..AppDeps::production()` evaluates it in full.
     pub fn production() -> Self {
         let host = HostEnv::current();
         Self {
@@ -89,7 +99,7 @@ impl AppDeps {
             keychain: Arc::new(MemKeychain::with_mode(MemKeychainMode::NoKeychain)),
             folders: Arc::new(HostFolders::new(host.clone())),
             host,
-            files: Arc::new(MemoryFiles::new()),
+            files: FilesChoice::OnDisk,
             store: StoreChoice::OnDisk,
             #[cfg(feature = "test-hooks")]
             ender: Arc::new(ExitProcess),
@@ -240,6 +250,12 @@ impl App {
             path: config.app_data.clone(),
             reason: e.to_string(),
         })?;
+        let files: Arc<dyn AppDataFiles> = match files {
+            FilesChoice::OnDisk => {
+                Arc::new(DiskFiles::open(Arc::new(tc_store::StdFs), &config.app_data))
+            }
+            FilesChoice::Given(files) => files,
+        };
 
         let projects = choose_projects_root(&config.projects, &host, folders.as_ref())?;
         if projects.chosen == RootChoice::Given && !folders.is_folder(&projects.path) {
@@ -282,8 +298,22 @@ impl App {
         let instance = ServerInstance::from_bytes(bytes);
 
         let bus = EventBus::new(instance);
-        let reports = ReportLog::new();
+        // The reports an earlier launch kept come first, so this launch's ids follow theirs.
+        let kept = read_reports(files.as_ref());
+        let reports = ReportLog::with_kept(kept.reports, kept.last_id);
         let now = clock.now();
+        if let Some(problem) = kept.problem {
+            let file = crate::prefs::AppDataPath::reports();
+            reports.add(
+                ReportOp::PrefsWrite,
+                ReportOutcome::Failed {
+                    reason: format!("{} {problem}", file.as_str()),
+                },
+                facts(json!({ "file": file.as_str() })),
+                now,
+                now,
+            );
+        }
         if let Some(record) = projects_folder_record(&projects) {
             reports.add(
                 ReportOp::ProjectsFolder,
@@ -315,7 +345,7 @@ impl App {
         #[cfg(feature = "test-hooks")]
         let hooks = if config.test_hooks {
             Some(
-                TestHooks::new(&config.app_data, ender, test_keychain)
+                TestHooks::new(&config.app_data, ender, test_keychain, store.store_hooks())
                     .map_err(StartError::TestFields)?,
             )
         } else {

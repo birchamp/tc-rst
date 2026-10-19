@@ -45,8 +45,10 @@ use std::time::Instant;
 use tc_journal::fold::{Anomaly, DerivedFile, FoldState, Notice, ProjectKind, RotationReason};
 use tc_journal::format::{FormatDoc, FormatGate};
 use tc_journal::index::{Facts, Index};
+use tc_journal::keys::{PinGroup, RecordKey};
 use tc_journal::pack::{PackStatus, read_pack};
 use tc_journal::pending::{PendingHeader, PendingStatus, Purpose, encode_pending, read_pending};
+use tc_journal::record::PinGroupValue;
 use tc_journal::{ChangeId, DeviceId, Md5, PackId, ProjectId, RepoPath, TokenKey, Verified};
 
 /// How to open a project.
@@ -56,6 +58,9 @@ pub struct OpenOptions {
     pub progress: ProgressSink,
     /// The person confirmed that the computer `.tc/lock` names is closed (§5.0).
     pub other_computer_closed: bool,
+    /// The pins a new project gets. A writable open of a project that holds no pin writes
+    /// them, one change per group in one batch with cause `System(CreationPins)` (tC4 #766).
+    pub creation_pins: Vec<(PinGroup, PinGroupValue)>,
 }
 
 impl Default for OpenOptions {
@@ -63,6 +68,7 @@ impl Default for OpenOptions {
         Self {
             progress: no_progress(),
             other_computer_closed: false,
+            creation_pins: Vec::new(),
         }
     }
 }
@@ -487,7 +493,7 @@ fn open_inner(
     }
     let mut unchecked: Vec<String> = Vec::new();
     if !read_only && write_failed.is_none() {
-        match repair_and_materialize(&mut project, tracker, identity) {
+        match repair_and_materialize(&mut project, tracker, identity, &options.creation_pins) {
             Ok(paths) => unchecked = paths,
             Err(e) => {
                 let reason = e.to_string();
@@ -547,6 +553,7 @@ fn repair_and_materialize(
     project: &mut Project,
     tracker: &Tracker,
     identity: Identity,
+    creation_pins: &[(PinGroup, PinGroupValue)],
 ) -> Result<Vec<String>, StoreError> {
     // O7.
     project.finish_interrupted()?;
@@ -554,6 +561,7 @@ fn repair_and_materialize(
     if let Identity::Minted { old: Some(old), .. } = identity {
         project.copy_profile(old)?;
     }
+    project.write_creation_pins(creation_pins)?;
     // O9, O10.
     let unchecked = project.classify(tracker)?;
     let paths = project.dirty_count();
@@ -1223,6 +1231,37 @@ impl Project {
                 parents: Vec::new(),
                 cause: tc_journal::Cause::Edit,
             }],
+            skipped: Vec::new(),
+        };
+        self.commit(plan)
+            .map(|_| ())
+            .map_err(|e| StoreError::Other(e.to_string()))
+    }
+
+    /// tC4 #766: a project that holds no pin gets the pins a new project gets. A journal
+    /// file that is missing or cannot be read may hold its pins, so nothing is written then.
+    fn write_creation_pins(
+        &mut self,
+        pins: &[(PinGroup, PinGroupValue)],
+    ) -> Result<(), StoreError> {
+        let holds_pin = PinGroup::ALL
+            .iter()
+            .any(|group| !self.fold.heads(&RecordKey::Pins(*group)).is_empty());
+        if holds_pin || !self.journal.complete() {
+            return Ok(());
+        }
+        let plan = crate::commands::Plan {
+            changes: pins
+                .iter()
+                .map(|(group, value)| tc_journal::command::PlannedChange {
+                    record: tc_journal::Record::Pins {
+                        group: *group,
+                        value: value.clone(),
+                    },
+                    parents: Vec::new(),
+                    cause: tc_journal::Cause::System(tc_journal::SystemReason::CreationPins),
+                })
+                .collect(),
             skipped: Vec::new(),
         };
         self.commit(plan)

@@ -16,6 +16,7 @@ mod store_world;
 
 mod app {
     mod account;
+    mod app_data;
     mod app_start;
     pub mod common;
     mod dispatch;
@@ -40,5 +41,6 @@ mod app {
     mod sessions;
     pub mod state_seed;
     mod store;
+    mod store_scenario;
     mod wire;
 }
