@@ -839,11 +839,22 @@ impl Writer {
         let metadata_md5 = self.hash(&metadata);
         // M1 for `metadata.json`: its bytes are read (unless clean by stat) and decided too.
         // They are written over whenever they are not these, since the folder must list its
-        // files (I7); bytes the ledger keeps are copied and recorded first.
-        let metadata_seen = self.look_at_metadata(&metadata_md5)?;
-        let metadata_current = self.manifest.paths.get(METADATA).and_then(Entry::md5)
-            == Some(metadata_md5.as_str())
-            && metadata_seen.1.as_deref() == Some(metadata_md5.as_str());
+        // files (I7); bytes the ledger keeps are copied and recorded first. A file that cannot
+        // be read while a write of it is unsettled waits: no second write begins before a
+        // read settles the first (§6.2), and the other files of the group are written.
+        let looked = self.look_at_metadata(&metadata_md5)?;
+        let metadata_waits = looked.is_none();
+        let metadata_seen = looked.unwrap_or((None, None));
+        let metadata_current = metadata_waits
+            || (self.manifest.paths.get(METADATA).and_then(Entry::md5)
+                == Some(metadata_md5.as_str())
+                && metadata_seen.1.as_deref() == Some(metadata_md5.as_str()));
+        if metadata_waits {
+            self.dirty.metadata = true;
+            self.reasons
+                .insert(METADATA.to_owned(), Blocked::FileUnreadable);
+            report.blocked.push(METADATA.to_owned());
+        }
         if writes.is_empty() && removing.is_empty() && metadata_current {
             // Nothing to write: only entries (scope digests, settled marks) may change.
             return self.finish_entries(Vec::new(), converged, unread, None);
@@ -870,9 +881,12 @@ impl Writer {
                 }
             }
         }
-        self.write_metadata_heads(&metadata_md5, SyncDir::Deferred(&mut dirs))?;
+        if !metadata_waits {
+            self.write_metadata_heads(&metadata_md5, SyncDir::Deferred(&mut dirs))?;
+        }
         dirs.sync(&*self.vfs)?;
-        for path in named.iter().map(|(p, _)| p.as_str()).chain([METADATA]) {
+        let metadata_named = (!metadata_waits).then_some(METADATA);
+        for path in named.iter().map(|(p, _)| p.as_str()).chain(metadata_named) {
             if !matches!(self.state_of(path), State::Writing { .. }) {
                 self.unattempted.insert(path.to_owned());
             }
@@ -885,12 +899,14 @@ impl Writer {
                 },
             );
         }
-        self.note(
-            METADATA,
-            Event::WriteBegun {
-                new: metadata_md5.clone(),
-            },
-        );
+        if !metadata_waits {
+            self.note(
+                METADATA,
+                Event::WriteBegun {
+                    new: metadata_md5.clone(),
+                },
+            );
+        }
         self.write_manifest()?;
         // M4: the files, each folder flushed once (M5).
         let mut dirs = DirSet::new();
@@ -986,6 +1002,9 @@ impl Writer {
             report.removed.push(path.clone());
         }
         dirs.sync(&*self.vfs)?;
+        if metadata_waits {
+            return self.finish_entries(written, converged, unread, None);
+        }
         // M6: metadata.json from the files as they now are (a path skipped in M4 keeps its
         // old bytes). Bytes other than the ones named are named before their rename too.
         let skipped = written.len() != planned.len();
@@ -1056,8 +1075,9 @@ impl Writer {
     /// M1 for `metadata.json`, before the ledger names its new bytes `new`: what is there is
     /// read and decided (§6.2). Bytes the ledger says to keep are copied and recorded (§11.1,
     /// `metadata.json` written over at once). Returns the file's size and time and the md5 of
-    /// its bytes as read.
-    fn look_at_metadata(&mut self, new: &str) -> Result<MetadataSeen, StoreError> {
+    /// its bytes as read; `None` when the file waits (it cannot be read while a write of it
+    /// is unsettled).
+    fn look_at_metadata(&mut self, new: &str) -> Result<Option<MetadataSeen>, StoreError> {
         let meta = self.vfs.metadata(&self.folder.path(METADATA)).ok();
         // Clean by stat: the bytes are the ones placed. They are decided before they are
         // written over, without a read unless the table keeps them: they may hold a save the
@@ -1070,10 +1090,10 @@ impl Writer {
                 .and_then(Entry::md5)
                 .map(str::to_owned);
             let Some(md5) = placed.clone() else {
-                return Ok((meta, placed));
+                return Ok(Some((meta, placed)));
             };
             if md5 == new {
-                return Ok((meta, placed));
+                return Ok(Some((meta, placed)));
             }
             let disk = ledger::Disk::Bytes { md5 };
             let projection = Projection::Bytes {
@@ -1082,7 +1102,7 @@ impl Writer {
             let facts = self.facts_of(METADATA, &disk, projection, true);
             let (_, actions) = ledger::next(&self.state_of(METADATA), &Event::Read(disk), &facts);
             if actions == [Action::Write] {
-                return Ok((meta, placed));
+                return Ok(Some((meta, placed)));
             }
         }
         let disk = match self.read_disk(METADATA) {
@@ -1098,9 +1118,16 @@ impl Writer {
                     newer_fold: false,
                 };
                 let _ = self.apply(METADATA, Event::Read(ledger::Disk::Missing), &facts);
-                return Ok((None, None));
+                return Ok(Some((None, None)));
             }
-            Disk::Unreadable => return Ok((meta, None)),
+            Disk::Unreadable => {
+                // R19: the state stays; a write the ledger has not seen settle waits.
+                self.note(METADATA, Event::Read(ledger::Disk::Unreadable));
+                if matches!(self.state_of(METADATA), State::Writing { .. }) {
+                    return Ok(None);
+                }
+                return Ok(Some((meta, None)));
+            }
         };
         self.counters.add(&self.counters.derived_read, 1);
         let d = md5_hex(&disk);
@@ -1131,7 +1158,7 @@ impl Writer {
                 | Action::Forget => {}
             }
         }
-        Ok((meta, Some(d)))
+        Ok(Some((meta, Some(d))))
     }
 
     /// M6's last look at `metadata.json`: when it changed since M1 read it and holds bytes

@@ -2352,8 +2352,57 @@ fn a_deleted_book_file_waiting_for_an_unreadable_value() -> Vec<Step> {
     ]
 }
 
+/// `metadata.json` renamed by a group killed right after the rename, then held unreadable at
+/// the next open while a checkpoint's job runs: the job must not begin a second write of it
+/// before a read settles the first, or the first write's bytes, its own, are found later as
+/// someone's edit (a false `MetadataEditedOutside` and a copy).
+fn a_held_metadata_json_after_a_kill_past_its_rename() -> Vec<Step> {
+    vec![
+        Step::KillAfterRename { file: File::Meta },
+        Step::Act {
+            act: Act::Save(1),
+            kill: None,
+        },
+        Step::Revert {
+            file: File::Meta,
+            back: 0,
+            told: false,
+        },
+        Step::Lock {
+            what: Holdable::File(File::Usfm),
+            on: true,
+        },
+        Step::Open,
+        Step::Act {
+            act: Act::Save(1),
+            kill: None,
+        },
+        Step::Lock {
+            what: Holdable::File(File::Usfm),
+            on: false,
+        },
+        Step::Lock {
+            what: Holdable::File(File::Meta),
+            on: true,
+        },
+        Step::Open,
+        Step::Act {
+            act: Act::Checkpoint,
+            kill: None,
+        },
+        Step::Lock {
+            what: Holdable::File(File::Meta),
+            on: false,
+        },
+    ]
+}
+
 fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
     vec![
+        (
+            "a_held_metadata_json_after_a_kill_past_its_rename",
+            a_held_metadata_json_after_a_kill_past_its_rename(),
+        ),
         (
             "a_deleted_book_file_waiting_for_an_unreadable_value",
             a_deleted_book_file_waiting_for_an_unreadable_value(),
@@ -2509,4 +2558,9 @@ fn a_metadata_json_found_after_a_kill_past_its_rename_is_never_taken_for_converg
 #[test]
 fn a_deleted_book_file_waiting_for_an_unreadable_value_fails_no_checkpoint() {
     assert_kept(&a_deleted_book_file_waiting_for_an_unreadable_value());
+}
+
+#[test]
+fn a_held_metadata_json_after_a_kill_past_its_rename_is_not_taken_for_an_edit() {
+    assert_kept(&a_held_metadata_json_after_a_kill_past_its_rename());
 }

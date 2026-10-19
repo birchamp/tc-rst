@@ -2716,7 +2716,8 @@ a conflict), and the saves come back with the file at the next open.
 (I7), so after a Record or a Hold it is written over at once; the copy and the recorded fields
 keep the person's bytes (§11.1, `MetadataEditedOutside`). Bytes about to be written over are
 decided even when clean by stat: the table is asked about the md5 the ledger placed, and the
-file is read only when the table keeps them. When a file the job cannot read or write leaves no valid listing (the only book file
+file is read only when the table keeps them. A `metadata.json` that cannot be read while a
+write of it is unsettled waits, as any path whose first write no read has settled (L125). When a file the job cannot read or write leaves no valid listing (the only book file
 held by another program, with no ledger entry or with no file to list), or a book file the folder
 lacks waits for a value that cannot be read (R15), nothing is written and the paths wait for the
 file (`MaterializeBlocked`): never a failed write that turns the project read-only or fails a
@@ -4773,6 +4774,7 @@ and the on-disk end state, not only what the fold returns.
 | L122 | A held book file with no ledger entry, or its path held where a rebuild must go, in a job whose files of no book are a group of their own: that group found the listing invalid and failed as a bug, turning the project read-only (L119's fix counted only its own group's blocked paths) | any path the job could not read or write excuses an invalid listing (§6.2) | `a_held_edited_book_file_with_its_manifest_lost_leaves_the_project_writable` |
 | L123 | `metadata.json` written by a group killed right after its rename, taken by the next session as the write's new bytes with the old placement's scope digest; the journal then lost the name the file shows, and the next open, whose fold no longer had it, found the stale digest equal to its own and took the file for converged: the name stayed hidden in the file, and the fold showed the old one | an entry's scope stands for the bytes it places or holds and is dropped when those change (§6.2) | `a_metadata_json_found_after_a_kill_past_its_rename_is_never_taken_for_converged` (`tests/store/model.rs`) |
 | L124 | A pending file the open read cut in place, so a value of the book can no longer be read, and the book file deleted: the book file waits for the value (R15), and a later checkpoint's job (or the close's) found no book to list, failed the build of `metadata.json` as a bug, and the checkpoint and the close failed | a book file the folder lacks and the group does not write excuses an invalid listing like a blocked path (§6.2) | `a_deleted_book_file_waiting_for_an_unreadable_value_fails_no_checkpoint` (`tests/store/model.rs`) |
+| L125 | `metadata.json` renamed by a group killed right after the rename, then held unreadable at the next open while a checkpoint's job ran: the job began a second write of it, so the ledger no longer named the first write's bytes, and the next read recorded the app's own bytes as an outside edit with a copy | `metadata.json` that cannot be read while a write of it is unsettled waits: no second write begins before a read settles the first (§6.2) | `a_held_metadata_json_after_a_kill_past_its_rename_is_not_taken_for_an_edit` (`tests/store/model.rs`) |
 
 ---
 
@@ -5062,6 +5064,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the open leaving a held damaged pending file for the next open (fail the open's write) | `a_damaged_pending_file_a_scanner_holds_leaves_the_project_writable` |
 | `secure_dir_chain` walking past the directories just made (stop at the first one) | `a_pack_in_a_folder_a_killed_seal_made_survives_a_power_cut` |
 | an entry's scope dropped when the entry comes to stand for other bytes (keep it) | `a_metadata_json_found_after_a_kill_past_its_rename_is_never_taken_for_converged` |
+| `metadata.json` waiting when it cannot be read during an unsettled write (begin a second write) | `a_held_metadata_json_after_a_kill_past_its_rename_is_not_taken_for_an_edit` |
 | `holds` asking for applied and readable changes (ask only whether the fold's index holds them) | `a_batch_cut_at_a_line_while_closed_is_kept_from_the_book_file`, `a_salvaged_change_whose_batch_lost_a_member_is_kept_from_the_book_file`, `a_book_file_whose_heads_were_put_back_is_recorded_not_written_over` |
 | R6, a rendering that read an unreadable value (write it) | `a_head_whose_value_can_no_longer_be_read_is_never_written_as_absent` |
 | the journal files a session left because another program held them (list them as unknown: a second writer) | `a_pending_file_the_seal_could_not_remove_is_no_second_writer`, `a_pending_file_the_open_could_not_remove_is_no_second_writer` |
