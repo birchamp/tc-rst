@@ -57,5 +57,9 @@ required-features = ["fixture-backend"]
 name = "memory_bench"
 required-features = ["fixture-backend"]
 
+[[example]]
+name = "store_adapter_bench"
+required-features = ["test-hooks"]
+
 [lints]
 workspace = true
