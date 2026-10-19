@@ -435,7 +435,10 @@ pub struct ConflictBrief { pub conflict: ConflictRef, pub record: RecordRef, pub
 pub enum NotSaved {                       // the text stays in the editor: "Not saved: <reason>. Retry"
     Refused(SaveRefusal),                 // B1 (STORAGE:1411-1413)
     Disk(String),                         // B3 NotWritten (STORAGE:1422-1424)
-    ReadOnly(ReadOnlyReason),             // O4, O5, SecondWriter
+    ReadOnly(ReadOnlyReason),             // NeedsNewerApp (O4), UnsafeDrive and CloudSynced
+                                          // (O5), SecondWriter; C0 adds OpenOnAnotherComputer
+                                          // (O1) and FolderNotWritable (a write the open
+                                          // needed failed, STORAGE §6.1)
     LookAgain,                            // Resolve over moved heads (STORAGE:1615-1616)
     PlanStale,                            // an upgrade or gateway plan over moved heads (STORAGE:1603-1606)
     StaleScope,                           // the project was closed or reopened under the field; the
