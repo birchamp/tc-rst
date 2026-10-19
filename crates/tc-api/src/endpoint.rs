@@ -175,6 +175,11 @@ unscoped!(
     crate::session::Open,
     crate::door43::OpenDoor43,
     crate::door43::SyncProject,
+    crate::settings::Save,
+    crate::create::Bible,
+    crate::create::Obs,
+    crate::create::AddBlankBooks,
+    crate::create::AddUsfmBooks,
 );
 #[cfg(feature = "test-hooks")]
 scoped!(crate::test::SaveVerse);

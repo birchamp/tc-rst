@@ -1,4 +1,5 @@
 [
+  "addBook.usfmDamaged",
   "drafts.offer.copyText",
   "drafts.offer.discard",
   "drafts.offer.found",
@@ -42,6 +43,10 @@
   "refusal.open.lock-held",
   "refusal.open.lock-held-unnamed",
   "refusal.open.newer-format",
+  "settings.changed",
+  "settings.directionNotSaved",
+  "settings.fontNotSaved",
+  "settings.fontNotSavedAfterDirection",
   "syncResult.alignmentsMany",
   "syncResult.alignmentsOne",
   "syncResult.error.keptStopped",
@@ -53,5 +58,6 @@
   "syncResult.error.tc4TeamRepository",
   "syncResult.error.unexpected",
   "syncResult.receivedKept",
-  "upload.notWritten"
+  "upload.notWritten",
+  "wizard.codeNotHeld"
 ]

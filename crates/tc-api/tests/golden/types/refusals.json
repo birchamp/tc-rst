@@ -100,6 +100,60 @@
     "wire": {
       "type": "create",
       "value": {
+        "type": "nameRequired"
+      }
+    },
+    "code": null,
+    "key": "wizard.nameRequired",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "create",
+      "value": {
+        "type": "codeRequired"
+      }
+    },
+    "code": null,
+    "key": "wizard.codeRequired",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "create",
+      "value": {
+        "type": "abbrRequired"
+      }
+    },
+    "code": null,
+    "key": "wizard.abbrRequired",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "create",
+      "value": {
+        "type": "codeNotHeld",
+        "value": {
+          "code": "acm-x-lebarabic",
+          "reason": "a language tag part is longer than eight letters"
+        }
+      }
+    },
+    "code": null,
+    "key": "wizard.codeNotHeld",
+    "vars": {
+      "code": "acm-x-lebarabic"
+    },
+    "detail": "a language tag part is longer than eight letters"
+  },
+  {
+    "wire": {
+      "type": "create",
+      "value": {
         "type": "failed",
         "value": {
           "reason": "No space left on device (os error 28)"
@@ -125,6 +179,65 @@
     "key": "readOnly.copyUnsafe",
     "vars": {},
     "detail": null
+  },
+  {
+    "wire": {
+      "type": "settings",
+      "value": {
+        "type": "changed"
+      }
+    },
+    "code": null,
+    "key": "settings.changed",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "settings",
+      "value": {
+        "type": "directionNotSaved",
+        "value": {
+          "reason": "No space left on device (os error 28)"
+        }
+      }
+    },
+    "code": null,
+    "key": "settings.directionNotSaved",
+    "vars": {},
+    "detail": "No space left on device (os error 28)"
+  },
+  {
+    "wire": {
+      "type": "settings",
+      "value": {
+        "type": "fontNotSaved",
+        "value": {
+          "reason": "No space left on device (os error 28)",
+          "directionSaved": false
+        }
+      }
+    },
+    "code": null,
+    "key": "settings.fontNotSaved",
+    "vars": {},
+    "detail": "No space left on device (os error 28)"
+  },
+  {
+    "wire": {
+      "type": "settings",
+      "value": {
+        "type": "fontNotSaved",
+        "value": {
+          "reason": "No space left on device (os error 28)",
+          "directionSaved": true
+        }
+      }
+    },
+    "code": null,
+    "key": "settings.fontNotSavedAfterDirection",
+    "vars": {},
+    "detail": "No space left on device (os error 28)"
   },
   {
     "wire": {

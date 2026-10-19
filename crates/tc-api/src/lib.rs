@@ -28,6 +28,7 @@ pub mod align;
 pub mod app;
 pub mod buffer;
 pub mod check;
+pub mod create;
 pub mod door43;
 pub mod editor;
 pub mod endpoint;
@@ -137,6 +138,15 @@ macro_rules! endpoint_table {
 
             query "settings/viewFromHome": $crate::settings::ViewFromHome
                 => $crate::settings::SettingsView;
+            command "settings/save": $crate::settings::Save => ();
+
+            command "create/bible": $crate::create::Bible => $crate::create::Created;
+            command "create/obs": $crate::create::Obs => $crate::create::Created;
+            command "create/addBlankBooks": $crate::create::AddBlankBooks
+                => $crate::create::BooksAdded;
+            query "create/reviewUsfm": $crate::create::ReviewUsfm => $crate::create::UsfmVerdict;
+            command "create/addUsfmBooks": $crate::create::AddUsfmBooks
+                => $crate::create::UsfmAdded;
 
             query "resources/sources": $crate::resources::Sources => $crate::resources::SourcesView;
             query [Sources] "resources/catalog": $crate::resources::Catalog
