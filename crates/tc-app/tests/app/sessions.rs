@@ -79,7 +79,7 @@ async fn started(projects: Vec<(&str, MemoryProject)>) -> Fixture {
     let store = Arc::new(CountingStore::new(backend));
     let dir = tempfile::tempdir().unwrap();
     let t = TestApp::start_with(dir.path(), &Parts::new(), |_, deps| {
-        deps.store = store.clone();
+        deps.store = tc_app::StoreChoice::Given(store.clone());
     })
     .await;
     Fixture {

@@ -172,7 +172,7 @@ impl Store {
     /// Opens the application data and starts the cleanup of staging folders a crash left
     /// (N1) on a thread of its own.
     pub fn start(config: StoreConfig) -> Result<Self, StoreError> {
-        Self::start_with_hooks(config, Arc::new(Hooks::default()))
+        Self::start_with_hooks(config, Arc::default())
     }
 
     /// [`Store::start`] with the holds a test places (APP-DESIGN R8).

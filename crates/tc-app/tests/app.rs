@@ -11,6 +11,8 @@
 
 #[path = "support/counting_store.rs"]
 mod counting_store;
+#[path = "support/store_world.rs"]
+mod store_world;
 
 mod app {
     mod app_start;
@@ -35,5 +37,6 @@ mod app {
     mod seed;
     mod sessions;
     pub mod state_seed;
+    mod store;
     mod wire;
 }

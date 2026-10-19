@@ -50,7 +50,8 @@ use tc_api::refusal::Message;
 use tc_api::shown::{ConflictMarker, PersonLabel, Shown, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
-    Hold, HoldPoint, Quiet, QuietView, Release, Reset, StoredDraft, StoredText, TokenBase,
+    Hold, HoldPoint, Quiet, QuietView, Release, Reset, SaveVerse, StoredDraft, StoredText,
+    TokenBase,
 };
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
@@ -509,6 +510,17 @@ impl Example for FieldStore {
     }
 }
 
+impl Example for SaveVerse {
+    fn example() -> Self {
+        SaveVerse {
+            at: scope(),
+            request: request(18),
+            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            words: "Paul, a servant of God".into(),
+        }
+    }
+}
+
 impl Example for Ack {
     fn example() -> Self {
         ack()
@@ -698,7 +710,8 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
         BTreeSet::from([
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
-            "prefs/setDraftUnit"
+            "prefs/setDraftUnit",
+            "test/saveVerse",
         ])
     );
 }

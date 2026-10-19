@@ -31,6 +31,6 @@ pub mod session;
 mod startup;
 pub mod wire;
 
-pub use app::{Answer, App, AppDeps, CallFailure, StartError, Then};
+pub use app::{Answer, App, AppDeps, CallFailure, StartError, StoreChoice, Then};
 pub use dispatch::Handle;
 pub use seed::RESOURCES_FOLDER;

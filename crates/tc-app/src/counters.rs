@@ -15,11 +15,12 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use tc_journal::fold::ConflictId;
 use tc_journal::fold::{
     BookView, ChapterKeys, Conflict, ConflictCounts, Counters, DerivedFile, KeyState, PersonLabel,
 };
 use tc_journal::token::TokenError;
-use tc_journal::{BookId, ChangeId, DeviceId, Record, RecordKey, ToolId};
+use tc_journal::{BookId, ChangeBody, ChangeId, DeviceId, Record, RecordKey, ToolId};
 
 use crate::backend::{EditToken, ReviewToken, Snapshot};
 
@@ -171,6 +172,18 @@ impl CountingSnapshot {
         let fold = self.snapshot.fold();
         let change = fold.projected_change(key)?;
         fold.change(&change).map(|view| view.device)
+    }
+
+    /// One change's body: who wrote it, when, and the record it holds.
+    pub fn body(&self, change: &ChangeId) -> Option<ChangeBody> {
+        self.count(AppCounter::RecordsRead, 1);
+        self.snapshot.fold().body(change)
+    }
+
+    /// One conflict, by its id.
+    pub fn conflict(&self, id: &ConflictId) -> Option<Conflict> {
+        self.count(AppCounter::RecordsRead, 1);
+        self.snapshot.fold().conflict(id).cloned()
     }
 
     /// An edit token for `key` as this snapshot shows it ([`Snapshot::mint`]).

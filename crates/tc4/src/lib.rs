@@ -123,7 +123,7 @@ fn scenario_deps(dir: &std::path::Path, app_data: &std::path::Path) -> Result<Ap
         installed.len()
     );
     Ok(AppDeps {
-        store: Arc::new(backend),
+        store: tc_app::StoreChoice::Given(Arc::new(backend)),
         ..AppDeps::production()
     })
 }

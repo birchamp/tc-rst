@@ -124,7 +124,7 @@ async fn app_over(dir: &Path, backend: MemoryBackend) -> App {
     App::start(
         config,
         AppDeps {
-            store: Arc::new(backend),
+            store: tc_app::StoreChoice::Given(Arc::new(backend)),
             ..AppDeps::production()
         },
     )

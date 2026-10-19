@@ -6,6 +6,9 @@
 //!   "before the change is durable" and "before the reply" are, so every write has them.
 //! - **Holds** (`test/hold`, `test/release`) stop the next operation that reaches a point
 //!   until it is released.
+//! - **`test/saveVerse`** saves a verse through the real seam and store (unit C0), so the
+//!   contract cases that run through tc-app go through dispatch, the session's reply cache and
+//!   the store before C2's `editor/saveVerse` exists. C2 moves them there and deletes it.
 //! - **Test fields** (`test/fieldStore`, `test/fieldLog`) are a write that goes through the
 //!   real reply cache and records every text it stores, so the UI's save machine can be
 //!   proved before any real save exists. They are durable (`test-hooks/fields.json`, written
@@ -38,7 +41,8 @@ use tc_api::ids::{ConflictRef, RecordRef, ViewSeq};
 use tc_api::shown::{PersonLabel, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, FieldDraft, FieldLog, FieldLogView, FieldStore, Hold,
-    HoldPoint, MAX_ECHO, Quiet, QuietView, Release, Reset, StoredDraft, StoredText, TokenBase,
+    HoldPoint, MAX_ECHO, Quiet, QuietView, Release, Reset, SaveVerse, StoredDraft, StoredText,
+    TokenBase,
 };
 use tc_api::write::{Ack, ConflictBrief, SavedValue, Stored, TokenUpdate};
 use tc_api::{ALL, ApiError, NotSaved, Shown, ShownToken};
@@ -46,8 +50,10 @@ use tokio::sync::Notify;
 use unicode_normalization::UnicodeNormalization;
 
 use crate::app::{App, lock};
+use crate::backend::StoreCommand;
 use crate::dispatch::Handle;
 use crate::replies::Outcome;
+use crate::wire;
 
 /// The exit code of a test crash. tc-server's `CRASH_EXIT_CODE` is the same value, and the
 /// join of the two asserts it.
@@ -717,6 +723,42 @@ impl Handle<FieldDraft> for App {
     async fn handle(&self, req: FieldDraft) -> Result<(), ApiError> {
         let hooks = self.hooks()?;
         hooks.fields.draft(hooks, req).await
+    }
+}
+
+impl Handle<SaveVerse> for App {
+    /// The words over the verse the token shows, through the screen's session and the store,
+    /// announced as this request's own save (AD37). No lock is held across the wait: the
+    /// write's lease keeps the session open.
+    async fn handle(&self, req: SaveVerse) -> Result<Ack, ApiError> {
+        self.hooks()?;
+        let session = self
+            .inner
+            .sessions
+            .reader(&req.at)
+            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let handle = session.handle().clone();
+        let shown = wire::token::edit_token(handle.as_ref(), &req.shown)?;
+        let me = handle.facts().device;
+        let command =
+            StoreCommand::save_verse(shown.clone(), req.words.clone()).requested_by(req.request);
+        match handle.submit(command).await {
+            Ok(reply) => {
+                wire::write::ack(&reply, &session.read(), &shown, &req.words, me).map_err(|e| {
+                    self.internal(
+                        "a save's reply could not be written",
+                        crate::reports::facts(json!({"reason": e.to_string()})),
+                    )
+                })
+            }
+            Err(error) => Err(match wire::error::command_error(error) {
+                Ok(api) => api,
+                Err(unworded) => self.internal(
+                    "the store refused a save no screen has words for yet",
+                    crate::reports::facts(json!({"reason": unworded.0})),
+                ),
+            }),
+        }
     }
 }
 

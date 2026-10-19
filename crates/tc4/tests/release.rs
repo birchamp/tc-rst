@@ -19,6 +19,7 @@ use tempfile::TempDir;
 const HOOK_TEXT: [&str; 12] = [
     "test/crash",
     "test/fieldStore",
+    "test/saveVerse",
     "test/fieldLog",
     "test/fieldDraft",
     "test/echo",

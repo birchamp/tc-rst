@@ -117,6 +117,26 @@ impl ProgressSink {
         state.done = state.done.saturating_add(n);
     }
 
+    /// A report another reporter made (tc-store's open, AD8), applied under the one lock: a new
+    /// phase starts its count again; within a phase the count never falls and the total
+    /// follows the report.
+    pub fn forward(&self, phase: Phase, done: u64, total: Option<u64>) {
+        let mut state = lock(&self.state);
+        if state.phase == phase {
+            state.done = state.done.max(done);
+            if total.is_some() {
+                state.total = total;
+            }
+        } else {
+            *state = ProgressState {
+                phase,
+                done,
+                total,
+                item: None,
+            };
+        }
+    }
+
     /// The count is at least `done`. A lower value changes nothing: counts never fall within
     /// a phase.
     pub fn reach(&self, done: u64) {
