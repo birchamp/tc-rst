@@ -214,6 +214,10 @@ impl Checker<'_> {
 
     /// Rule 1: one version of every record, no anomaly, and each seeded change is the value
     /// the fold shows.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "the seed check reads the whole fold once, when a fixture loads; no interactive path runs it"
+    )]
     fn fold_invariants(&mut self) {
         let fold = &self.built.fold;
         let conflicts: Vec<_> = fold
@@ -299,6 +303,10 @@ impl Checker<'_> {
 
     /// Rule 2: every derived file of the folder is one the fold derives, so a materialize
     /// writes it again; a file only `render` gives would be dropped.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "the seed check reads the whole fold once, when a fixture loads; no interactive path runs it"
+    )]
     fn file_set(&mut self) {
         let derived: BTreeSet<DerivedFile> = self.built.fold.derived_files().into_iter().collect();
         let roles: Vec<(String, Role)> = self

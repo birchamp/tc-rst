@@ -1,0 +1,23 @@
+# Clippy reads the clippy.toml nearest the crate, so this file replaces the workspace's: its four
+# keys first, as the root's clippy.toml has them.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-dbg-in-tests = true
+
+# No read in tc-app may cost the whole project (APP-DESIGN §4.3, §8.1, PERFORMANCE rule 1). These
+# walk every key, change, book or batch of a fold. The counted walks go through
+# `counters::CountingSnapshot`, the one place allowed to call them; the seed check of the fixture
+# backend reads a whole fold once when a fixture loads, with an `#[expect]` saying so. Test
+# crates allow the lint: tests read whole folds to check results.
+disallowed-methods = [
+  { path = "tc_journal::fold::FoldState::record_keys", reason = "lists and sorts every key of the project; use CountingSnapshot's range reads (APP-DESIGN §4.3)" },
+  { path = "tc_journal::fold::FoldState::frontier", reason = "walks every key of the project; tc-app never needs it" },
+  { path = "tc_journal::fold::FoldState::device_stats", reason = "walks every change of the project" },
+  { path = "tc_journal::fold::FoldState::derived_files", reason = "walks every book of the project; materializing is the store's" },
+  { path = "tc_journal::fold::FoldState::batch_changes", reason = "walks every batch of the project" },
+  { path = "tc_journal::fold::FoldState::conflicts", reason = "walks the whole conflict list: go through CountingSnapshot::conflicts, which counts it" },
+  { path = "tc_journal::fold::FoldState::conflicts_of", reason = "walks the whole conflict list, as conflicts does" },
+  { path = "tc_journal::fold::FoldState::render_book", reason = "renders every file of a book: go through CountingSnapshot::render_book, which counts it" },
+  { path = "tc_journal::fold::FoldState::book_usfm", reason = "projects a whole book: go through CountingSnapshot::book_usfm, which counts it" },
+]

@@ -1,6 +1,13 @@
 //! The behaviour of tc-app through its public API. One test binary, so the crate and its
 //! dependencies link once.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// Tests read whole folds to check results; the lint on whole-fold walks guards the product's
+// paths (crates/tc-app/clippy.toml).
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::disallowed_methods
+)]
 
 mod app {
     mod app_start;
@@ -15,6 +22,7 @@ mod app {
     mod internet;
     mod jobs;
     mod keychain;
+    mod memory;
     mod prefs;
     mod projects_root;
     mod replies;

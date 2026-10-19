@@ -12,6 +12,7 @@ pub mod backend;
 pub mod bundle;
 pub mod clock;
 pub mod config;
+pub mod counters;
 pub mod dispatch;
 pub mod events;
 pub mod flows;

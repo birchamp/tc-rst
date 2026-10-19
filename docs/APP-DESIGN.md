@@ -876,35 +876,54 @@ pub trait ProjectStore: Send + Sync + 'static {
 }
 
 pub trait ProjectHandle: Send + Sync {
-    fn facts(&self) -> ProjectFacts;                                // kind, mode, device, presentation
-    fn snapshot(&self) -> Snapshot;                                 // { fold: FoldState (O(1) clone), seq }
-    fn mint(&self, key: &RecordKey, displayed: Option<ChangeId>) -> EditToken;   // FoldState::token *(A-7)*
-    fn mint_review(&self, key: &RecordKey) -> ReviewToken;          // every head (FoldState::heads) *(A-7)*
-    fn parse_edit(&self, text: &str) -> Result<EditToken, TokenError>;     // refuses a bad MAC; the kind is
-    fn parse_review(&self, text: &str) -> Result<ReviewToken, TokenError>; // checked by prefix, and by MAC after R19
-    fn submit(&self, cmd: Command) -> CommandFuture;                // resolves after B6; never blocks the caller
-    fn subscribe(&self) -> Receiver<StoreEvent>;                    // Delta + cause + notices + mode
-    fn offered_drafts(&self) -> Vec<OfferedDraft>;                  // O12 (STORAGE:1857); Verified | Unverifiable *(A-9)*
-    fn leave(&self, what: Leave);                                   // materialize trigger (STORAGE:1639-1640)
-    fn checkpoint(&self, reason: CheckpointReason) -> CheckpointFuture;
-    fn counters(&self) -> StoreCounters;
-    fn close(self: Arc<Self>) -> CloseFuture;                       // materialize at close, release the lock
+    fn facts(&self) -> ProjectFacts;                                // id, kind, device, mode
+    fn snapshot(&self) -> Snapshot;                                 // the newest one: { fold, seq }, an Arc clone
+    fn parse_edit(&self, token: &tc_api::ShownToken) -> Result<EditToken, TokenError>;    // the MAC, then the kind
+    fn parse_review(&self, token: &tc_api::ReviewToken) -> Result<ReviewToken, TokenError>; // (R19, in tc-journal)
+    fn submit(&self, cmd: StoreCommand) -> BoxFuture<Result<StoreReply, CommandError>>; // after B6; never blocks
+    fn subscribe(&self) -> UnboundedReceiver<StoreEvent>;           // Committed { seq, delta, cause } | Mode
+    fn offered_drafts(&self) -> Vec<OfferedDraft>;                  // O12 (STORAGE:1857); Verified | Unverifiable *(A-9)*; C1b
+    fn leave(&self, what: Leave);                                   // materialize trigger (STORAGE:1639-1640); B3/D1
+    fn checkpoint(&self, reason: CheckpointReason) -> BoxFuture<CheckpointOutcome>;
+    fn counters(&self) -> StoreCounters;                            // C0
+    fn close(self: Arc<Self>) -> BoxFuture<Result<(), StoreError>>; // materialize at close, release the lock
+}
+impl Snapshot {                                                     // tokens come from the snapshot a screen read
+    pub fn mint(&self, key: &RecordKey, displayed: Option<ChangeId>) -> Result<EditToken, TokenError>; // *(A-7)*
+    pub fn mint_review(&self, key: &RecordKey) -> Result<ReviewToken, TokenError>;                     // every head
+}
+impl StoreCommand {                                                 // built only from the token kind it needs
+    pub fn save_verse(shown: EditToken, words: String) -> Self;     // each unit adds the constructors it sends
+    pub fn resolve(conflict: ConflictId, shown: Vec<ReviewToken>, choice: Choice) -> Self;
 }
 pub struct StoreReply { pub tokens: Vec<(RecordKey, EditToken)>, pub new_conflicts: Vec<ConflictId>,
-                        pub stored: Stored, pub disk_error: Option<String>, pub seq: u64 }
+                        pub stored: Stored, pub seq: u64, pub changes: Vec<ChangeId> }  // Stored::WrittenNotDurable(reason)
 /// tc-journal has one `ShownToken` for both kinds (`storage:crates/tc-journal/src/token.rs:54`).
 /// These two wrappers have no public constructor outside `backend`, so a review token cannot
 /// reach an edit by a conversion slip. R19 puts the kind under the MAC as well. *(A-7)*
 pub struct EditToken(tc_journal::ShownToken);
 pub struct ReviewToken(tc_journal::ShownToken);
-pub enum CommandError { Refused(RuleRefusal), NotWritten(String), LookAgain, PlanStale,
-                        ReadOnly(ReadOnlyReason), BadToken, Unavailable }
+pub enum CommandError { Refused(RuleRefusal), NotWritten(String), LookAgain, PlanStale,   // Refused, LookAgain,
+                        ReadOnly(ReadOnlyReason), BadToken(TokenError), Closed, Unavailable } // PlanStale: C0, C2
 
 /// Jobs owned by crates that do not exist yet. Each has a scripted double until its crate lands.
 pub trait SyncPort: Send + Sync { /* sync, share, join */ }
 pub trait ImportPort: Send + Sync { /* review, versions, run */ }
 pub trait ExchangePort: Send + Sync { /* export, identify, receive */ }
 ```
+
+*(B1b: built so in `crates/tc-app/src/backend/mod.rs`, with three changes to the first sketch.
+`mint` and `mint_review` moved from the handle to `Snapshot`: the handle mints from the newest
+snapshot, so a screen that read snapshot n while a teammate's change made n+1 would get a token
+listing a head the person never saw, and the save would supersede the teammate's change unseen
+(I4); tc-store's own `Snapshot::token` mints from the snapshot that was read. The parse functions
+take the wire types, so the journal token never leaves the backend, and `submit` takes a
+`StoreCommand` whose constructors take the right kind, which two `compile_fail` doctests prove. And
+`Snapshot` publishes through a small trait, so C0 can put tc-store's own snapshot, whose key stays
+inside tc-store, behind it. The names follow tc-store's `handle.rs` and `reply.rs` one to one. The
+memory backend makes none of `Refused`, `LookAgain` and `PlanStale`; C0 and C2 add them with
+`offered_drafts` (C1b), `leave` (B3, D1) and `counters` (C0), and `ProjectStore::peek` (B2) and
+`create` (the unit that builds create, with R2).)*
 
 `tc-app::wire` turns an `EditToken` into tc-api's `ShownToken` text with the prefix `st1.` and a
 `ReviewToken` into `rt1.` text; there is no conversion across kinds. The token key is derived
@@ -2270,10 +2289,17 @@ tC4's spec assertions are the reference.
 - tc-store's counters (R14), or C0's own counts of commands, replies and waits until R14 lands *(A-5)*.
 - `AppCounters`: `records_read`, `values_decoded`, `items_derived`, `rows_serialized`,
   `chapters_projected`, `book_resource_loads`, `summaries_computed`, `keys_probed`,
-  `saves_waiting_behind_a_draft_write` *(A-20, A-21)*.
-- `CountingSnapshot` wraps every snapshot a query gets. It counts `record_keys`, full conflict-list
-  walks, `render_book` and `book_usfm`, and fails a test whenever any path calls `record_keys`
-  outside the differential test of §4.3 *(A-21)*.
+  `saves_waiting_behind_a_draft_write` *(A-20, A-21)*, and `conflict_walks`, `books_rendered` and
+  `book_usfm` for the counted walks below (B1b).
+- `CountingSnapshot` wraps every snapshot a query gets. It counts the records it reads, the keys
+  R1's range reads return (`keys_probed`), full conflict-list walks, `render_book` and `book_usfm`
+  *(A-21)*. *(B1b: `crates/tc-app/clippy.toml` refuses `record_keys`, `frontier`, `device_stats`,
+  `derived_files`, `batch_changes`, `conflicts`, `conflicts_of`, `render_book` and `book_usfm`
+  anywhere in tc-app's code but `counters.rs`, whose counted wrappers carry an `#[expect]`, and B1a's
+  seed check, which reads a whole fold once when a fixture loads. A count fails only on a path a
+  test runs; the lint fails every path. B1b proved it fires on each path through the re-export
+  `tc_journal::fold::FoldState`. Test crates allow it, because tests read whole folds to check
+  results.)*
 
 Every count test runs the action on tc-corpus Psalms and on ten times Psalms and fails if a count
 grows (PERF:20-24). From B1b to C1a they run on `MemoryBackend`; from C1a on, on `StoreBackend` too.

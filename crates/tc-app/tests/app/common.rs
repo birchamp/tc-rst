@@ -522,3 +522,48 @@ pub async fn try_start(
     edit(&mut config, &mut deps);
     App::start(config, deps).await
 }
+
+// ---- Projects of the memory backend -------------------------------------------------------
+
+/// The repository's root.
+pub fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// The sample Bible project (`fixtures/tc4/sample-burrito`, Titus and Jonah) through B1a's
+/// seed, folded once per test binary. Each backend it is added to counts its own work.
+pub fn sample_bible() -> tc_app::backend::memory::MemoryProject {
+    use std::sync::OnceLock;
+    use tc_app::backend::memory::MemoryProject;
+    use tc_app::backend::seed::{Tc4Folder, fixture_project_id, tc4_state_seed};
+    static SEED: OnceLock<MemoryProject> = OnceLock::new();
+    SEED.get_or_init(|| {
+        let folder = Tc4Folder::read(&repo_root().join("fixtures/tc4/sample-burrito")).unwrap();
+        let seed = tc4_state_seed(&folder, fixture_project_id("sample_burrito")).unwrap();
+        MemoryProject::from_seed(seed, None)
+    })
+    .clone()
+}
+
+/// A verse of Titus.
+pub fn tit(chapter: u16, verse: u16) -> tc_journal::RecordKey {
+    tc_journal::RecordKey::Verse(
+        tc_journal::BookId::Titus,
+        tc_journal::ChapterNo::new(chapter).unwrap(),
+        tc_journal::VerseNo::new(verse).unwrap(),
+    )
+}
+
+/// A project folder name.
+pub fn folder(name: &str) -> ProjectRef {
+    ProjectRef::parse(name).unwrap()
+}
+
+/// A memory backend holding the sample Bible project as `sample_burrito`.
+pub fn sample_backend() -> tc_app::backend::memory::MemoryBackend {
+    let backend = tc_app::backend::memory::MemoryBackend::new();
+    backend
+        .add(folder("sample_burrito"), sample_bible())
+        .unwrap();
+    backend
+}
