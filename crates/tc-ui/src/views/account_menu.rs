@@ -6,8 +6,6 @@
 //! Opening the menu sends nothing: its account row shows only what this computer knows. Every
 //! text reads the shown language, so the App language preview rewrites it in place.
 
-use std::cell::Cell;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use leptos::html;
@@ -422,48 +420,36 @@ pub fn AccountMenu() -> impl IntoView {
 }
 
 /// The menu keeps its first row focused for its first frames: the Layer settles over them and
-/// can hand the focus back to the trigger (`tC4:AccountMenu.jsx:97-108`).
+/// can hand the focus back to the trigger (`tC4:AccountMenu.jsx:97-108`). The effect's cleanup
+/// cancels the frames, as React cancels tC4's when `open` changes or the menu unmounts.
 ///
 /// The first try waits for the next frame. React runs the Layer's effect, a child's, before
 /// this one, so the Layer notes the trigger as the element to give the focus back to; here this
 /// effect would run first, and on a menu opened again while the last one still fades out, it
 /// would focus that panel's first row before the Layer noted it, and the Layer would give the
 /// focus back to that row when the menu closes.
+///
+/// Each frame also stops the hold as soon as the menu closes: the effect whose cleanup cancels
+/// the frames runs later than the next frame, and a row focused then would take the focus from
+/// the dialog the row opened.
 fn hold_first_row(open: RwSignal<bool>, panel: NodeRef<html::Div>) {
-    let generation = Rc::new(Cell::new(0u64));
     Effect::new(move |_| {
-        let mine = generation.get() + 1;
-        generation.set(mine);
         if open.get() {
-            let generation = generation.clone();
-            request_animation_frame(move || hold(open, panel, 10, generation, mine));
+            super::each_frame(11, move || {
+                if !open.try_get_untracked().unwrap_or(false) {
+                    return false;
+                }
+                if let Some(panel) = panel.try_get_untracked().flatten() {
+                    let active = document().active_element();
+                    let inside = active.as_ref().is_some_and(|a| panel.contains(Some(a)));
+                    if !inside && let Some(first) = menu_rows(&panel).into_iter().next() {
+                        let _ = first.focus();
+                    }
+                }
+                true
+            });
         }
     });
-}
-
-/// One frame of the hold. It stops as soon as the menu closes, as React cancels tC4's frame
-/// when `open` changes: the effect that would bump the generation runs later than the next
-/// frame, and a row focused then would take the focus from the dialog the row opened.
-fn hold(
-    open: RwSignal<bool>,
-    panel: NodeRef<html::Div>,
-    tries: u32,
-    generation: Rc<Cell<u64>>,
-    mine: u64,
-) {
-    if generation.get() != mine || !open.try_get_untracked().unwrap_or(false) {
-        return;
-    }
-    if let Some(panel) = panel.get_untracked() {
-        let active = document().active_element();
-        let inside = active.as_ref().is_some_and(|a| panel.contains(Some(a)));
-        if !inside && let Some(first) = menu_rows(&panel).into_iter().next() {
-            let _ = first.focus();
-        }
-    }
-    if tries > 0 {
-        request_animation_frame(move || hold(open, panel, tries - 1, generation, mine));
-    }
 }
 
 /// The rows the keyboard moves between: `[role^="menuitem"]`.
@@ -713,8 +699,21 @@ fn AboutDialog(focus_read: bool, on_read: Callback<()>, on_close: Callback<()>) 
     let read = NodeRef::<html::Div>::new();
     if focus_read {
         // Back from License: the focus returns to "Read the license", held while the Layer
-        // puts it on its first control over its first frames.
-        hold_button(read, 10);
+        // puts it on its first control over its first frames. Closing About inside them ends
+        // the hold (`tC4:AccountMenu.jsx:298-309`).
+        let hold = move || {
+            let button = read
+                .try_get_untracked()
+                .flatten()
+                .and_then(|div| div.query_selector("button").ok().flatten())
+                .and_then(|b| b.dyn_into::<web_sys::HtmlElement>().ok());
+            if let Some(button) = button {
+                let _ = button.focus();
+            }
+            true
+        };
+        hold();
+        super::each_frame(10, hold);
     }
     let copyright = js_trim(LICENSE_TEXT.split('\n').next().unwrap_or_default()).to_owned();
     let body_style = body().with("color", "var(--text-body)").to_style();
@@ -759,19 +758,6 @@ fn AboutDialog(focus_read: bool, on_read: Callback<()>, on_close: Callback<()>) 
         children: Some(children),
         ..Default::default()
     })
-}
-
-fn hold_button(within: NodeRef<html::Div>, tries: u32) {
-    let button = within
-        .get_untracked()
-        .and_then(|div| div.query_selector("button").ok().flatten())
-        .and_then(|b| b.dyn_into::<web_sys::HtmlElement>().ok());
-    if let Some(button) = button {
-        let _ = button.focus();
-    }
-    if tries > 0 {
-        request_animation_frame(move || hold_button(within, tries - 1));
-    }
 }
 
 /// The LICENSE notice, then the whole GNU GPL version 2, in one region the keyboard can reach
