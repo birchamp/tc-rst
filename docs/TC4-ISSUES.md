@@ -469,9 +469,12 @@ Follow-ups the fix units left (2026-10-19):
   (#650, #657); resume shows no clickable picker (#518, with B5a); the sync toast's Download
   opens the project (B9a its Source texts) and closes the toast once open, and a failed open
   keeps it (#724).
-- **B4a:** the verse box shows all of `words` (#786); the source pane follows the verse
-  mapping (#131); verse-only statement (#118); "Draft section" pill (#728); reuse the divider
-  (#602); right-to-left and IME cases (#29, #657).
+- **B4a:** built: the verse box shows all of `words` (#786); a `\v` after a marker is a row
+  (#784); the source pane follows the verse mapping (#131, #118); the "Draft section" pill
+  (#728); the one divider (#602); the Arabic IME case (#29) and the interface half of #657.
+  Left: a right-to-left project's Translate screen waits for C6's create (#657); what an emptied
+  box stores is C2's (#786); the two Titus 1 screens' note titles are residuals until the
+  reference moves (C39).
 - **B4b:** emptied section save (#600); pin click-then-click (#598); state hints (#604);
   blank lines in a joined span (#575); VerseMarker label (#614); section-save tests (#786).
 - **B5a:** visible progress bars (#764); resume (#518, #513); keyboard pass (#42); opening
