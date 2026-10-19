@@ -89,6 +89,8 @@ struct Node {
 #[derive(Debug, Clone, Default)]
 struct Faults {
     kill_before: Option<u64>,
+    /// Stops the writer at the write point right after the next rename onto this path.
+    kill_after_rename: Option<PathBuf>,
     torn: bool,
     dead: bool,
     /// The write point that just stopped the writer was a write to tear.
@@ -435,6 +437,10 @@ impl Model {
             self.faults.tear_now = self.faults.torn && kind == OpKind::Write;
             return Err(killed());
         }
+        if kind == OpKind::Rename && self.faults.kill_after_rename.as_deref() == Some(path) {
+            self.faults.kill_after_rename = None;
+            self.faults.kill_before = Some(index + 1);
+        }
         self.log.push(Op {
             index,
             kind,
@@ -623,6 +629,20 @@ impl FaultFs {
         let mut model = self.model();
         model.faults.kill_before = Some(model.ops + n);
         model.faults.torn = torn;
+    }
+
+    /// Stops the writer at the write point right after its next rename onto `path`: the
+    /// rename reaches the disk, nothing after it does.
+    pub fn kill_after_rename(&self, path: &Path) {
+        self.model().faults.kill_after_rename = Some(path.to_owned());
+    }
+
+    /// Disarms [`FaultFs::kill_before`] and [`FaultFs::kill_after_rename`] when they did not
+    /// stop the writer.
+    pub fn disarm(&self) {
+        let mut model = self.model();
+        model.faults.kill_before = None;
+        model.faults.kill_after_rename = None;
     }
 
     /// Whether the writer was stopped.
