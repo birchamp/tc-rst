@@ -5,6 +5,7 @@
 
 pub mod aquifer_fake;
 pub mod bundled;
+pub mod real;
 
 use std::io::Write;
 use std::path::PathBuf;

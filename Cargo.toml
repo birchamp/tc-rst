@@ -128,3 +128,14 @@ opt-level = 3
 
 [profile.dev.package.simd-adler32]
 opt-level = 3
+
+# Installing the real exports of bundle/en (268 MB, 3,100 files) in a test checks every
+# ingredient's md5 and inflates every archive: unoptimized, the full suite took minutes.
+[profile.dev.package.md-5]
+opt-level = 3
+
+[profile.dev.package.zip]
+opt-level = 3
+
+[profile.dev.package.zlib-rs]
+opt-level = 3

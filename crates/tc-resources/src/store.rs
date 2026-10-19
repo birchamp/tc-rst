@@ -186,6 +186,22 @@ struct CheckRecord {
 thread_local! {
     static CONTENT_FILES_OPENED: Cell<u64> = const { Cell::new(0) };
     static CONTENT_FILES_WRITTEN: Cell<u64> = const { Cell::new(0) };
+    /// The paths of the content files this thread opens while [`with_opened_paths`] runs.
+    static OPENED_PATHS: std::cell::RefCell<Option<Vec<std::path::PathBuf>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Runs `f` and returns, with its result, the path of every installed content file the
+/// calling thread opened meanwhile, in the order opened (a file opened twice is listed twice).
+/// What the loading and seeding tests assert: which files an action opened, not only how
+/// many. Nothing is recorded outside this call.
+pub fn with_opened_paths<T>(f: impl FnOnce() -> T) -> (T, Vec<std::path::PathBuf>) {
+    OPENED_PATHS.with(|paths| *paths.borrow_mut() = Some(Vec::new()));
+    let out = f();
+    let paths = OPENED_PATHS
+        .with(|paths| paths.borrow_mut().take())
+        .unwrap_or_default();
+    (out, paths)
 }
 
 /// How many installed content files this thread has opened since it started, in any
@@ -204,6 +220,11 @@ pub fn content_files_written() -> u64 {
 
 fn read_content(path: &Path) -> std::io::Result<Vec<u8>> {
     CONTENT_FILES_OPENED.with(|opened| opened.set(opened.get() + 1));
+    OPENED_PATHS.with(|paths| {
+        if let Some(paths) = paths.borrow_mut().as_mut() {
+            paths.push(path.to_owned());
+        }
+    });
     fs::read(path)
 }
 

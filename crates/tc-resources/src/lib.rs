@@ -48,6 +48,7 @@
 //! (D95). Loading and everything else here works offline.
 
 mod aquifer;
+pub mod bundle;
 mod choice;
 mod dcs;
 mod error;
@@ -70,6 +71,7 @@ pub use aquifer::{
     AquiferClient, AquiferLimits, AquiferRelease, ReleaseAsset, install_aquifer,
     install_aquifer_zip, pin_aquifer_release,
 };
+pub use bundle::{BundleError, BundleInstalled, install_bundle};
 pub use choice::{
     AquiferHelps, CheckBlocker, CheckSources, HELPS_SOURCE_SETTING, HelpsChoice, check_sources,
 };
@@ -100,7 +102,7 @@ pub use sets::{
 };
 pub use store::{
     FileRecord, Installed, Inventory, Origin, Packaging, Receipt, ResourceStore, SeedPlan,
-    SeedReport, SeedWatch, Seeding, content_files_opened, content_files_written,
+    SeedReport, SeedWatch, Seeding, content_files_opened, content_files_written, with_opened_paths,
 };
 pub use tc_journal::keys::ToolId;
 pub use tc_journal::pins::{Collection, Ladder};
