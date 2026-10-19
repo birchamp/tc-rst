@@ -20,6 +20,7 @@ use crate::load::{JournalFile, JournalKind, relocation};
 use crate::project::{PackInfo, Project};
 use crate::vfs::is_not_found;
 use std::collections::BTreeSet;
+use tc_journal::change::parse_change;
 use tc_journal::consolidate::{OwnPack, consolidate, consolidation_groups};
 use tc_journal::fold::Notice;
 use tc_journal::index::load_pack;
@@ -78,8 +79,8 @@ pub(crate) struct SealRun {
     phase: SealPhase,
     /// The pending files not read yet (the next at the end).
     unread: Vec<String>,
-    /// The pending files read at K1, with their bytes and change ids.
-    files: Vec<(String, Vec<u8>, BTreeSet<ChangeId>)>,
+    /// The pending files read at K1.
+    files: Vec<ReadFile>,
     /// Their verified lines.
     lines: Vec<Verified>,
     packs: Vec<EncodedPack>,
@@ -89,6 +90,26 @@ pub(crate) struct SealRun {
     /// are all in it may go.
     held: BTreeSet<ChangeId>,
     dirs: DirSet,
+}
+
+/// A pending file K1 took.
+struct ReadFile {
+    rel: String,
+    found: Found,
+    /// The changes the seal packs for it: the lines it holds, and those the fold took from it
+    /// that it lost, from the fold's own bytes.
+    ids: BTreeSet<ChangeId>,
+}
+
+/// What K1 found of a pending file.
+enum Found {
+    /// Its bytes, which hold every change the fold took from it.
+    Whole(Vec<u8>),
+    /// It lost changes the fold took from it: the fold reads their values where it always did
+    /// (memory, or the handle the open kept), so nothing is moved to the new pack's offsets.
+    Partial,
+    /// Another program removed it.
+    Gone,
 }
 
 /// A pack written and read back.
@@ -239,7 +260,11 @@ impl Project {
         Ok(run)
     }
 
-    /// K1: some of the pending files are read and their verified lines kept.
+    /// K1: some of the pending files are read and their verified lines kept. What the seal
+    /// takes of a file is compared with what the fold took from it, whatever happened to the
+    /// file: a change the file no longer holds (another program removed the file or cut it
+    /// short) is taken from the fold's memory when this session wrote it, and else the file is
+    /// left unsealed, so no commit shows a change no pack holds (§5.13 C3).
     fn seal_read(&mut self, run: &mut SealRun) {
         for _ in 0..READS_PER_STEP {
             let Some(rel) = run.unread.pop() else {
@@ -250,28 +275,62 @@ impl Project {
                 continue;
             }
             let abs = self.folder.path(&rel);
-            let bytes = match self.vfs.read(&abs) {
-                Ok(bytes) => bytes,
-                Err(e) if is_not_found(&e) => {
-                    self.journal.pending.remove(&rel);
-                    continue;
+            let (bytes, mut lines) = match self.vfs.read(&abs) {
+                Ok(bytes) => {
+                    let read = read_pending(&bytes, self.id);
+                    if read.status != PendingStatus::Valid {
+                        self.leave_unsealed(run, &rel, "its lines no longer verify");
+                        continue;
+                    }
+                    (Some(bytes), read.entries)
                 }
+                Err(e) if is_not_found(&e) => (None, Vec::new()),
                 Err(e) => {
                     self.leave_unsealed(run, &rel, &StoreError::io("read", &abs, e).to_string());
                     continue;
                 }
             };
-            let read = read_pending(&bytes, self.id);
-            if read.status != PendingStatus::Valid {
-                self.leave_unsealed(run, &rel, "its lines no longer verify");
-                continue;
+            let mut ids: BTreeSet<ChangeId> = lines.iter().map(Verified::id).collect();
+            let lost: Vec<ChangeId> = self
+                .folded_from(&rel)
+                .into_iter()
+                .filter(|id| !ids.contains(id))
+                .collect();
+            if !lost.is_empty() {
+                let Some(again) = self.lines_in_memory(&lost) else {
+                    let reason = if bytes.is_none() {
+                        "another program removed it"
+                    } else {
+                        "another program removed saves from it"
+                    };
+                    self.leave_unsealed(run, &rel, reason);
+                    continue;
+                };
+                self.notice(
+                    Notice::PendingWrittenAgain {
+                        file: rel.as_str().into(),
+                        changes: u32::try_from(again.len()).unwrap_or(u32::MAX),
+                    },
+                    None,
+                );
+                ids.extend(lost.iter().copied());
+                lines.extend(again);
             }
+            let found = match bytes {
+                None if ids.is_empty() => {
+                    // Gone, and the fold holds nothing of it (a file of a newer format).
+                    self.journal.pending.remove(&rel);
+                    continue;
+                }
+                None => Found::Gone,
+                Some(_) if !lost.is_empty() => Found::Partial,
+                Some(bytes) => Found::Whole(bytes),
+            };
             self.shared.remove_notices_matching(
                 |n| matches!(n, Notice::FileUnreadable { path, .. } if **path == *rel),
             );
-            let ids = read.entries.iter().map(Verified::id).collect();
-            run.lines.extend(read.entries);
-            run.files.push((rel, bytes, ids));
+            run.lines.extend(lines);
+            run.files.push(ReadFile { rel, found, ids });
         }
         if run.unread.is_empty() {
             run.phase = if run.files.is_empty() {
@@ -280,6 +339,26 @@ impl Project {
                 SealPhase::Build
             };
         }
+    }
+
+    /// The changes the fold took from the pending file `rel`: none from a file it did not read
+    /// (a newer format).
+    fn folded_from(&self, rel: &str) -> Vec<ChangeId> {
+        match self.journal.pending.get(rel) {
+            Some(p) if p.status == PendingStatus::Valid => p.ids.clone(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// The lines of `ids` from the fold's own bytes, each checked against its id; `None` when
+    /// the fold cannot give one of them (its value lay in the file that lost it).
+    fn lines_in_memory(&self, ids: &[ChangeId]) -> Option<Vec<Verified>> {
+        ids.iter()
+            .map(|id| {
+                let raw = self.fold.raw(id)?;
+                (ChangeId::of(&raw) == *id).then(|| parse_change(*id, raw))
+            })
+            .collect()
     }
 
     /// K1 could not take `rel`. When the fold holds its changes (it was read, valid, at the
@@ -377,22 +456,27 @@ impl Project {
             SealPhase::Remove => {
                 // K4: a pending file goes only when a verified pack holds every change of it.
                 for _ in 0..REMOVALS_PER_STEP {
-                    let Some((rel, bytes, ids)) = run.files.pop() else {
+                    let Some(ReadFile { rel, found, ids }) = run.files.pop() else {
                         break;
                     };
                     if !ids.is_subset(&run.held) {
                         continue;
                     }
-                    let number = self.journal.pending.get(&rel).and_then(|p| p.number);
-                    if !self.relocate(&rel, JournalKind::Pending, number, &bytes, &run.written) {
-                        continue;
+                    if let Found::Whole(bytes) = &found {
+                        let number = self.journal.pending.get(&rel).and_then(|p| p.number);
+                        if !self.relocate(&rel, JournalKind::Pending, number, bytes, &run.written) {
+                            continue;
+                        }
                     }
                     // A pending file a scanner still holds stays; the next open removes it (O7).
-                    let removed = atomic_remove_if_free(
-                        &*self.vfs,
-                        &self.folder.path(&rel),
-                        SyncDir::Deferred(&mut run.dirs),
-                    )?;
+                    let removed = match found {
+                        Found::Whole(_) | Found::Partial => atomic_remove_if_free(
+                            &*self.vfs,
+                            &self.folder.path(&rel),
+                            SyncDir::Deferred(&mut run.dirs),
+                        )?,
+                        Found::Gone => false,
+                    };
                     self.journal.pending.remove(&rel);
                     if self.index.sections.remove(&rel).is_some() {
                         self.index.changed = true;

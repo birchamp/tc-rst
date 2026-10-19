@@ -753,6 +753,9 @@ pub enum Notice {
     OutsideEditUnreadable { path: RepoPath, copy: Box<str>, reason: Box<str> },
     FileMoved { from: Box<str>, to: Box<str> },                      // not a valid ingredient path
     MissingFileRebuilt { path: RepoPath },
+    /// A pending file of this session's saves was removed or cut short by another program
+    /// before the seal took it; the seal wrote the `changes` it lost from the fold's bytes (§5.11 K1).
+    PendingWrittenAgain { file: Box<str>, changes: u32 },
     /// A pack missing from the working tree or damaged there, written back from a valid blob
     /// in the object database (HEAD, the confirmed commit or R, §4.4).
     PackRestored { path: RepoPath, was: PackLoss },                  // Missing | Damaged
@@ -2104,12 +2107,21 @@ meanwhile is a pending file that K1 did not read, so K4 leaves it. Each one:
 K1  L = every verified change line of every pending file, deduplicated by id, sorted by
     (device, seq, id); split at line boundaries into chunks of at most 64 MiB. A line too long
     for a pack even alone with its header is set aside: only a change V7 quarantines can be
-    that long (a salvaged line, §4.4), and it must never stop the seal of every other line. A
-    pending file the fold holds the changes of that K1 cannot take (a program holds it open and
-    the read fails, or its lines no longer verify) is left where it is, never removed, and
-    listed in the seal's report as unsealed; the person is told once (`FileUnreadable`, which
-    goes when a later seal takes the file). A file of a newer format was never read by the
-    fold, so nothing of it is lacking and it is left without a word.
+    that long (a salvaged line, §4.4), and it must never stop the seal of every other line.
+    What K1 takes of each pending file is compared with the change ids the fold took from it,
+    whatever happened to the file. A change the file no longer holds (another program removed
+    the file, or cut it short at a line boundary, which still verifies) is taken from the
+    fold's own bytes, checked against its id: in memory for a file this session wrote, or read
+    through the handle the open kept. Its line goes into the pack, and the person is told
+    (`PendingWrittenAgain`, the file and how many changes). Such a file is removed by K4 like
+    any other (a removed one has nothing left to remove), and the fold's values of it are not
+    moved to the pack's offsets: they stay where the fold reads them. A pending file the fold
+    holds changes of that K1 cannot take (a program holds it open and the read fails, its lines
+    no longer verify, or a change it lost is in neither the file nor the fold's bytes) is left
+    where it is, never removed, and listed in the seal's report as unsealed; the person is told
+    once (`FileUnreadable`, which goes when a later seal takes the file). A file of a newer
+    format was never read by the fold, so nothing of it is lacking and it is left without a
+    word.
 K2  For each chunk: atomic_create_dirs(ingredients/tc/changes/<me>/<yyyy-mm>);
     atomic_write(<that dir>, "<pack32>.ndjson", header + lines, SyncDir::Now). Each line set
     aside: atomic_write(.tc/quarantine, "<id>.line", line, SyncDir::Now); it is listed with the
@@ -4882,7 +4894,9 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | a read of a path whose heads file is held in memory (take a settled entry as unchanged) | `a_file_with_an_unwritten_heads_file_is_not_taken_as_unchanged_when_its_entry_settles` |
 | the heads file of `metadata.json` due after its rename (take the file as current) | `a_retry_after_metadata_json_was_renamed_writes_its_heads_file` |
 | the entry of `metadata.json` naming the bytes M6 wrote (the md5 M2 checked) | `the_manifest_names_the_metadata_json_a_group_that_skipped_a_file_wrote` |
-| the commit after a seal that left a file unsealed (commit the snapshot) | `a_commit_waits_for_a_pending_file_the_seal_could_not_read`, `a_commit_waits_for_a_pending_file_that_no_longer_verifies` |
+| the commit after a seal that left a file unsealed (commit the snapshot) | `a_commit_waits_for_a_pending_file_the_seal_could_not_read`, `a_commit_waits_for_a_pending_file_that_no_longer_verifies`, `a_pending_file_read_at_the_open_and_cut_short_in_place_stops_the_commit` |
+| K1's comparison with the ids the fold took from a pending file (drop a removed file, seal what a cut file holds) | `a_pending_file_deleted_outside_is_sealed_from_memory`, `a_pending_file_cut_short_at_a_line_is_sealed_from_memory`, `a_pending_file_read_at_the_open_and_deleted_is_sealed_from_the_open_handle` |
+| the values of a pending file that lost lines left where the fold reads them (move them to the pack's offsets) | `a_pending_file_read_at_the_open_and_replaced_cut_short_is_sealed_from_the_open_handle` |
 | a pending file of a newer format left out of the unsealed (stop the commit for it) | `a_pending_file_of_a_newer_format_does_not_stop_a_commit` |
 | the `reconciles` path of a pending header read as the path of an outside edit's file (as an ingredient's, which `metadata.json` cannot be) | `a_pending_file_that_reconciles_metadata_json_verifies_and_caches_like_any_other` (`tc-journal/tests/index.rs`), `an_outside_edit_of_metadata_json_is_sealed_and_committed_with_its_packs`, `arbitrary_meta_never_blocks_commit` |
 | the heads file kept in memory while it cannot be written (read the one in the folder) | `an_outside_edit_of_the_bytes_a_stopped_group_left_continues_them`, `edits_made_while_the_heads_file_cannot_be_written_make_no_conflict` |

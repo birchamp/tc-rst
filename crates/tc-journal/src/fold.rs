@@ -655,6 +655,13 @@ pub enum Notice {
         path: RepoPath,
         was: PackLoss,
     },
+    /// A pending file of this session's saves was deleted or cut short by another program
+    /// before the seal took it. The session held the `changes` saves it lost in memory, and the
+    /// seal wrote them into its pack (§5.11 K1): nothing is lost.
+    PendingWrittenAgain {
+        file: Box<str>,
+        changes: u32,
+    },
     /// A file that could not be read. Never treated as damage; retried later.
     FileUnreadable {
         path: Box<str>,

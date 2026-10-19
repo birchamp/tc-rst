@@ -715,3 +715,232 @@ fn an_outside_edit_of_metadata_json_is_sealed_and_committed_with_its_packs() {
     assert_valid_burrito(&rig.fs, &folder);
     assert_commits_valid(&rig.fs, &folder);
 }
+
+/// The notices that say a pending file's saves were written again from memory.
+fn written_again(handle: &ProjectHandle) -> Vec<(String, u32)> {
+    notices(handle)
+        .into_iter()
+        .filter_map(|n| match n {
+            Notice::PendingWrittenAgain { file, changes } => Some((file.to_string(), changes)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// §5.11 K1, §5.13 C3: a pending file of this session's save deleted by another program (a
+/// cloud client, an antivirus) before the seal. The session holds the save's lines in memory:
+/// the seal writes them into its pack, the person is told, the commit's tree is what its packs
+/// hold, and the save is there after the next open.
+#[test]
+fn a_pending_file_deleted_outside_is_sealed_from_memory() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 3, "my true child").unwrap();
+    assert!(checkpoint(&handle).commit.is_some());
+    save_verse(&handle, 1, 1, "saved before the file was deleted").unwrap();
+    let pending = pending_files(&rig, &folder);
+    assert_eq!(pending.len(), 1, "{pending:?}");
+    rig.fs.delete(&pending[0]).unwrap();
+    let report = checkpoint(&handle);
+    assert_eq!(report.skipped, None, "{report:?}");
+    assert_eq!(report.sealed.len(), 1, "{report:?}");
+    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    let repo = repo_of(&rig.fs, &folder);
+    assert_eq!(
+        tree_differs_from_its_packs(
+            &repo,
+            commit,
+            project_of(&rig.fs, &folder),
+            tc_journal::fold::ProjectKind::Bible
+        ),
+        Vec::<String>::new()
+    );
+    let told = written_again(&handle);
+    assert_eq!(told.len(), 1, "{:?}", notices(&handle));
+    assert!(pending[0].ends_with(&told[0].0), "{told:?} {pending:?}");
+    assert!(told[0].1 >= 1);
+    handle.close().unwrap();
+    let handle = open(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before the file was deleted")
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+    assert_commits_valid(&rig.fs, &folder);
+}
+
+/// K1 compares the changes it read with the ones the fold took from the file: a pending file
+/// of this session cut short at a line boundary still verifies, and the lines it lost are
+/// sealed from memory.
+#[test]
+fn a_pending_file_cut_short_at_a_line_is_sealed_from_memory() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 3, "my true child").unwrap();
+    assert!(checkpoint(&handle).commit.is_some());
+    save_verse(&handle, 1, 1, "saved before the file was cut short").unwrap();
+    let pending = pending_files(&rig, &folder).remove(0);
+    let bytes = rig.fs.peek(&pending).unwrap();
+    let header = bytes.iter().position(|b| *b == b'\n').unwrap() + 1;
+    rig.fs.put_unseen(&pending, &bytes[..header], None);
+    let report = checkpoint(&handle);
+    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    let repo = repo_of(&rig.fs, &folder);
+    assert!(
+        String::from_utf8(commit_files(&repo, commit)["ingredients/TIT.usfm"].clone())
+            .unwrap()
+            .contains("saved before the file was cut short")
+    );
+    assert_eq!(
+        tree_differs_from_its_packs(
+            &repo,
+            commit,
+            project_of(&rig.fs, &folder),
+            tc_journal::fold::ProjectKind::Bible
+        ),
+        Vec::<String>::new()
+    );
+    assert_eq!(written_again(&handle).len(), 1, "{:?}", notices(&handle));
+    handle.close().unwrap();
+    let handle = open(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before the file was cut short")
+    );
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
+}
+
+/// A pending file the open read, deleted by another program before the seal: the fold reads
+/// its values through the handle the open kept, so the seal writes them into its pack, the
+/// person is told, and the save is there after the next open.
+#[test]
+fn a_pending_file_read_at_the_open_and_deleted_is_sealed_from_the_open_handle() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 1, "saved before a crash").unwrap();
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = open(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before a crash")
+    );
+    let pending = pending_files(&rig, &folder);
+    assert_eq!(pending.len(), 1, "{pending:?}");
+    rig.fs.delete(&pending[0]).unwrap();
+    let report = checkpoint(&handle);
+    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    let repo = repo_of(&rig.fs, &folder);
+    assert_eq!(
+        tree_differs_from_its_packs(
+            &repo,
+            commit,
+            project_of(&rig.fs, &folder),
+            tc_journal::fold::ProjectKind::Bible
+        ),
+        Vec::<String>::new()
+    );
+    assert_eq!(written_again(&handle).len(), 1, "{:?}", notices(&handle));
+    handle.close().unwrap();
+    let handle = open(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before a crash")
+    );
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
+}
+
+/// A pending file the open read, replaced by another program with a copy cut short at a line:
+/// the open's handle still reads the lines the new file lost, so the seal writes them into its
+/// pack, and the fold reads their values on after the file goes.
+#[test]
+fn a_pending_file_read_at_the_open_and_replaced_cut_short_is_sealed_from_the_open_handle() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 1, "saved before a crash").unwrap();
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = open(&rig, &folder);
+    let pending = pending_files(&rig, &folder).remove(0);
+    let bytes = rig.fs.peek(&pending).unwrap();
+    let header = bytes.iter().position(|b| *b == b'\n').unwrap() + 1;
+    rig.fs.put_unseen(&pending, &bytes[..header], None);
+    let report = checkpoint(&handle);
+    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    let repo = repo_of(&rig.fs, &folder);
+    assert_eq!(
+        tree_differs_from_its_packs(
+            &repo,
+            commit,
+            project_of(&rig.fs, &folder),
+            tc_journal::fold::ProjectKind::Bible
+        ),
+        Vec::<String>::new()
+    );
+    assert!(rig.fs.peek(&pending).is_none(), "the sealed file goes");
+    assert_eq!(written_again(&handle).len(), 1, "{:?}", notices(&handle));
+    // The value is read again after the seal (a later save of another verse renders the book).
+    save_verse(&handle, 1, 2, "a later save").unwrap();
+    handle.leave(tc_store::Leave::Mode).wait().unwrap();
+    handle.wait_idle();
+    let usfm =
+        String::from_utf8(rig.fs.peek(&folder.join("ingredients/TIT.usfm")).unwrap()).unwrap();
+    assert!(usfm.contains("saved before a crash"), "{usfm}");
+    assert!(
+        notices(&handle)
+            .iter()
+            .all(|n| !matches!(n, Notice::MaterializeBlocked { .. })),
+        "{:?}",
+        notices(&handle)
+    );
+    handle.close().unwrap();
+    let handle = open(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before a crash")
+    );
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
+}
+
+/// A pending file the open read, cut short in place by another program before the seal: the
+/// lines it lost are in neither the file nor memory, so the seal leaves the file as it is, no
+/// commit shows the save, and the person is told.
+#[test]
+fn a_pending_file_read_at_the_open_and_cut_short_in_place_stops_the_commit() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 1, "saved before a crash").unwrap();
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = open(&rig, &folder);
+    let pending = pending_files(&rig, &folder).remove(0);
+    let bytes = rig.fs.peek(&pending).unwrap();
+    let header = bytes.iter().position(|b| *b == b'\n').unwrap() + 1;
+    rig.fs.cut_in_place(&pending, header);
+    let repo = repo_of(&rig.fs, &folder);
+    let commits = commits_of(&repo).len();
+    let report = checkpoint(&handle);
+    assert_eq!(report.commit, None, "{report:?}");
+    assert_eq!(report.skipped, Some(CheckpointSkip::SealFailed));
+    assert_eq!(commits_of(&repo).len(), commits);
+    assert!(
+        notices(&handle).iter().any(
+            |n| matches!(n, Notice::FileUnreadable { path, .. } if pending.ends_with(&**path))
+        ),
+        "{:?}",
+        notices(&handle)
+    );
+    assert_eq!(
+        rig.fs.peek(&pending).map(|b| b.len()),
+        Some(header),
+        "the file is never removed"
+    );
+    drop(handle);
+}

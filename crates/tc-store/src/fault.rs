@@ -99,6 +99,9 @@ struct Faults {
     read_delay: Option<Duration>,
     reads_fail_from: Option<Instant>,
     unreadable: BTreeSet<PathBuf>,
+    /// Files another program cut short in place, at this length: a handle opened before
+    /// reads nothing past it either.
+    cut: BTreeMap<PathBuf, u64>,
     busy: BTreeSet<PathBuf>,
     /// Folders whose new files another program holds, each for this many refused renames
     /// or removals (`None`: until the hold is released).
@@ -697,6 +700,17 @@ impl FaultFs {
         }
     }
 
+    /// Another program truncates the file at `path` to `len` bytes in place (`O_TRUNC`, then
+    /// a shorter write): what a handle opened before reads past `len` fails too, as on a real
+    /// filesystem, where the handle and the path name one file.
+    pub fn cut_in_place(&self, path: &Path, len: usize) {
+        let Some(bytes) = self.peek(path) else {
+            return;
+        };
+        self.put_unseen(path, &bytes[..len.min(bytes.len())], None);
+        self.model().faults.cut.insert(path.to_owned(), len as u64);
+    }
+
     /// Another program holds `path` open: a rename onto it or from it, and a removal of it,
     /// fail (Windows), with the error a held file gives.
     pub fn set_busy(&self, path: &Path, on: bool) {
@@ -899,6 +913,14 @@ impl ReadHandle for FaultRead {
         let delay = {
             let mut model = self.fs.model();
             model.check_read(&self.path)?;
+            if model
+                .faults
+                .cut
+                .get(&self.path)
+                .is_some_and(|len| offset + buf.len() as u64 > *len)
+            {
+                return Err(io::ErrorKind::UnexpectedEof.into());
+            }
             model.bytes_read += buf.len() as u64;
             model.widest_io = model.widest_io.max(buf.len());
             model.faults.read_delay
