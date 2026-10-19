@@ -1459,7 +1459,7 @@ fn indicator_shows_the_worst_state() {
     ];
     for (fields, aligns, expected) in rows {
         assert_eq!(
-            indicator(fields, &aligns, false).state,
+            indicator(fields, &aligns, false, &[]).state,
             expected,
             "{fields:?} {aligns:?}"
         );
@@ -1469,14 +1469,15 @@ fn indicator_shows_the_worst_state() {
 
 #[test]
 fn checkpoint_error_shows_only_when_no_save_failed() {
-    assert!(indicator(Worst::Saved, &[], true).commit_error);
-    assert!(indicator(Worst::Dirty, &[], true).commit_error);
-    assert!(!indicator(Worst::Error, &[], true).commit_error);
+    assert!(indicator(Worst::Saved, &[], true, &[]).commit_error);
+    assert!(indicator(Worst::Dirty, &[], true, &[]).commit_error);
+    assert!(!indicator(Worst::Error, &[], true, &[]).commit_error);
     assert!(
         !indicator(
             Worst::Saved,
             &[AlignSave::Failed(NotSaved::LookAgain)],
-            true
+            true,
+            &[]
         )
         .commit_error
     );
@@ -1488,7 +1489,8 @@ fn all_clean_counts_aligners_not_checkpoints() {
     assert!(!all_clean(Worst::Saved, &[AlignSave::Unsaved]));
     assert!(!all_clean(Worst::Dirty, &[]));
     assert!(
-        indicator(Worst::Saved, &[], true).state == Worst::Saved && all_clean(Worst::Saved, &[])
+        indicator(Worst::Saved, &[], true, &[]).state == Worst::Saved
+            && all_clean(Worst::Saved, &[])
     );
 }
 

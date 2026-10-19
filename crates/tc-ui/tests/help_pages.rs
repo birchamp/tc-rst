@@ -81,7 +81,11 @@ fn every_help_page_has_the_bytes_tc_website_has_at_the_pin() {
     for (blob, path) in &list.files {
         let bytes = std::fs::read(help.join(path))
             .unwrap_or_else(|e| panic!("help/{path} is listed but cannot be read: {e}"));
-        assert_eq!(&git_blob_id(&bytes), blob, "help/{path} is not tc-website's");
+        assert_eq!(
+            &git_blob_id(&bytes),
+            blob,
+            "help/{path} is not tc-website's"
+        );
         assert!(listed.insert(path.clone()), "help/{path} is listed twice");
     }
     let mut present = BTreeSet::new();
@@ -125,5 +129,8 @@ fn help_pages_load_nothing_from_another_origin() {
         );
         checked += 1;
     }
-    assert!(checked > 50, "only {checked} pages and style sheets checked");
+    assert!(
+        checked > 50,
+        "only {checked} pages and style sheets checked"
+    );
 }

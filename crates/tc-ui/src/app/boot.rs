@@ -186,3 +186,23 @@ pub fn version_error_action(
     let server_api = error.version_mismatch()?;
     Some(build_action(BUILD_COMMIT, server_api, reloaded_for, keep))
 }
+
+/// Where a page that has met `hello` goes (APP-DESIGN 5.3, A5 D14).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartupAction {
+    /// The resources are ready: the app starts.
+    Proceed,
+    /// The first launch is still preparing the resources, or it failed: the page goes to the
+    /// first-launch window, `/prepare.html`, which shows the count or the failure and comes
+    /// back at `Ready`.
+    Prepare,
+}
+
+pub fn startup_action(state: &tc_api::event::StartupState) -> StartupAction {
+    match state {
+        tc_api::event::StartupState::Ready => StartupAction::Proceed,
+        tc_api::event::StartupState::Preparing(_) | tc_api::event::StartupState::Failed { .. } => {
+            StartupAction::Prepare
+        }
+    }
+}
