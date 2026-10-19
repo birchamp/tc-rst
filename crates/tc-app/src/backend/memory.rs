@@ -26,9 +26,9 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use super::seed::StateSeed;
 use super::{
-    BoxFuture, CheckpointReason, CommandError, EditToken, OpenFailure, ProjectEntry, ProjectFacts,
-    ProjectHandle, ProjectStore, Published, ReviewToken, Snapshot, StoreCause, StoreCommand,
-    StoreError, StoreEvent, StoreReply, Stored,
+    BoxFuture, CheckpointReason, CommandError, EditToken, Listing, OfferedDraft, OpenFailure,
+    ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore, Published, ReviewToken, Snapshot,
+    StoreCause, StoreCommand, StoreCounters, StoreError, StoreEvent, StoreReply, Stored,
 };
 use crate::jobs::ProgressSink;
 
@@ -347,15 +347,19 @@ impl MemoryBackend {
 }
 
 impl ProjectStore for MemoryBackend {
-    fn list(&self) -> Result<Vec<ProjectEntry>, StoreError> {
-        Ok(lock(&self.projects)
-            .iter()
-            .map(|(folder, state)| ProjectEntry {
-                folder: folder.clone(),
-                id: state.seeded.id,
-                kind: state.seeded.kind,
-            })
-            .collect())
+    fn list(&self) -> Result<Listing, StoreError> {
+        // By folder name: the map is ordered by it. A memory project is never unusable.
+        Ok(Listing {
+            projects: lock(&self.projects)
+                .iter()
+                .map(|(folder, state)| ProjectEntry {
+                    folder: folder.clone(),
+                    id: state.seeded.id,
+                    kind: state.seeded.kind,
+                })
+                .collect(),
+            unusable: Vec::new(),
+        })
     }
 
     fn open(
@@ -487,6 +491,7 @@ impl MemoryHandle {
             stored,
             seq,
             changes: Vec::new(),
+            skipped: Vec::new(),
         })
     }
 }
@@ -553,6 +558,20 @@ impl ProjectHandle for MemoryHandle {
         // A memory project has no git history to commit to.
         Box::pin(async { CheckpointOutcome::Unchanged })
     }
+
+    /// The memory backend touches no file.
+    fn counters(&self) -> StoreCounters {
+        StoreCounters::default()
+    }
+
+    /// Drafts are no-ops here (§4.2), so none is ever offered.
+    fn offered_drafts(&self) -> Vec<OfferedDraft> {
+        Vec::new()
+    }
+
+    /// Nothing runs in the background.
+    #[cfg(feature = "test-hooks")]
+    fn wait_idle(&self) {}
 
     fn close(self: Arc<Self>) -> BoxFuture<Result<(), StoreError>> {
         self.state.close(self.open);

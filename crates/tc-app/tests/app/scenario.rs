@@ -108,6 +108,7 @@ fn every_scenario_loads_its_bible_project_and_refuses_its_obs_project() {
         let listed: Vec<String> = backend
             .list()
             .unwrap()
+            .projects
             .into_iter()
             .map(|e| e.folder.to_string())
             .collect();

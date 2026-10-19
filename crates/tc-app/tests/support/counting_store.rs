@@ -10,9 +10,9 @@ use std::sync::{Arc, Condvar, Mutex};
 use tc_api::event::CheckpointOutcome;
 use tc_api::ids::ProjectRef;
 use tc_app::backend::{
-    BoxFuture, CheckpointReason, CommandError, EditToken, OpenFailure, ProjectEntry, ProjectFacts,
-    ProjectHandle, ProjectStore, ReviewToken, Snapshot, StoreCommand, StoreError, StoreEvent,
-    StoreReply,
+    BoxFuture, CheckpointReason, CommandError, EditToken, Listing, OfferedDraft, OpenFailure,
+    ProjectFacts, ProjectHandle, ProjectStore, ReviewToken, Snapshot, StoreCommand, StoreCounters,
+    StoreError, StoreEvent, StoreReply,
 };
 use tc_app::jobs::ProgressSink;
 use tc_journal::token::TokenError;
@@ -104,7 +104,7 @@ impl<S: ProjectStore> CountingStore<S> {
 }
 
 impl<S: ProjectStore> ProjectStore for CountingStore<S> {
-    fn list(&self) -> Result<Vec<ProjectEntry>, StoreError> {
+    fn list(&self) -> Result<Listing, StoreError> {
         self.inner.list()
     }
 
@@ -189,6 +189,19 @@ impl ProjectHandle for CountingHandle {
         })
     }
 
+    fn counters(&self) -> StoreCounters {
+        self.inner.counters()
+    }
+
+    fn offered_drafts(&self) -> Vec<OfferedDraft> {
+        self.inner.offered_drafts()
+    }
+
+    #[cfg(feature = "test-hooks")]
+    fn wait_idle(&self) {
+        self.inner.wait_idle();
+    }
+
     fn close(self: Arc<Self>) -> BoxFuture<Result<(), StoreError>> {
         *self
             .shared
@@ -207,7 +220,7 @@ impl ProjectHandle for CountingHandle {
 pub struct SharedStore(pub Arc<dyn ProjectStore>);
 
 impl ProjectStore for SharedStore {
-    fn list(&self) -> Result<Vec<ProjectEntry>, StoreError> {
+    fn list(&self) -> Result<Listing, StoreError> {
         self.0.list()
     }
 

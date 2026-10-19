@@ -77,6 +77,7 @@ async fn an_unknown_folder_is_not_a_project() {
     let listed: Vec<String> = backend
         .list()
         .unwrap()
+        .projects
         .into_iter()
         .map(|e| e.folder.to_string())
         .collect();

@@ -8,9 +8,10 @@
 //! inside never leaves the backend. A token is minted from the [`Snapshot`] a screen read, never
 //! from a newer one, so it lists only what the person saw (STORAGE §2.7, I4).
 //!
-//! Backends: [`NoProjects`] in a build with none (release builds before C0); with the feature
-//! `fixture-backend`, [`memory::MemoryBackend`] over STORAGE §13.2's state seed ([`seed`]) of
-//! the parity scenarios ([`scenario`]), never in a release build (AD35).
+//! Backends: [`store::StoreBackend`], tc-store over the projects folder (unit C0), in every
+//! build; with the feature `fixture-backend`, [`memory::MemoryBackend`] over STORAGE §13.2's
+//! state seed ([`seed`]) of the parity scenarios ([`scenario`]), never in a release build
+//! (AD35).
 
 use std::fmt;
 use std::future::Future;
@@ -21,12 +22,14 @@ use tc_api::event::{CheckpointOutcome, SessionMode};
 use tc_api::ids::ProjectRef;
 use tc_api::token::TokenTextError;
 use tc_api::write::ReadOnlyReason;
-use tc_journal::command::{Choice, Command};
+use tc_journal::command::{Choice, Command, Draft, DraftField, SectionValue};
 use tc_journal::fold::{ConflictId, Delta, FoldState, ProjectKind};
 use tc_journal::token::{TokenError, TokenKind};
-use tc_journal::{ChangeId, DeviceId, RecordKey, ShownToken};
+use tc_journal::{BookId, ChangeId, DeviceId, RecordKey, ShownToken};
 
 use crate::jobs::ProgressSink;
+
+pub use tc_store::{Refusal as RuleRefusal, StoreCounters, StoreNotice};
 
 #[cfg(feature = "fixture-backend")]
 pub mod memory;
@@ -34,6 +37,7 @@ pub mod memory;
 pub mod scenario;
 #[cfg(feature = "fixture-backend")]
 pub mod seed;
+pub mod store;
 
 /// A future a backend hands back; the caller awaits it without blocking a thread.
 pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
@@ -67,7 +71,6 @@ impl fmt::Debug for Snapshot {
 }
 
 impl Snapshot {
-    #[cfg(feature = "fixture-backend")]
     pub(in crate::backend) fn new(published: impl Published) -> Self {
         Self {
             inner: Arc::new(published),
@@ -206,9 +209,21 @@ impl ReviewToken {
 // Commands and replies
 // ---------------------------------------------------------------------------------------
 
+/// Who asked for a command (AD37). The `Committed` event of the batch it stores names this,
+/// so the `Changed` frame of a person's own save names their request and their field shows
+/// no "changed while you were typing".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Origin {
+    /// The UI request this command answers.
+    Request(tc_api::ids::RequestId),
+    /// The server's own work (a scripted step, the alignment save timer).
+    Server,
+}
+
 /// One command for the project (STORAGE §2.7), built only from the token kind it needs:
 /// an edit from an [`EditToken`], a resolution from [`ReviewToken`]s. Each unit that sends a
-/// command adds its constructor here.
+/// command adds its constructor here. A command is the server's own ([`Origin::Server`])
+/// until [`StoreCommand::requested_by`] names the request it answers.
 ///
 /// A review token cannot make an edit:
 ///
@@ -230,30 +245,93 @@ impl ReviewToken {
 /// }
 /// ```
 #[derive(Debug, Clone)]
-#[cfg_attr(
-    not(feature = "fixture-backend"),
-    expect(
-        dead_code,
-        reason = "no backend of a build without the fixture backend runs a command until C0's"
-    )
-)]
 pub struct StoreCommand {
     command: Command,
     /// Each record the command writes, with the heads its token named.
+    #[cfg_attr(
+        not(feature = "fixture-backend"),
+        expect(
+            dead_code,
+            reason = "only the memory backend answers from the displayed heads; the store reads its own"
+        )
+    )]
     shown: Vec<(RecordKey, Vec<ChangeId>)>,
+    origin: Origin,
 }
 
 impl StoreCommand {
+    fn new(command: Command, shown: Vec<(RecordKey, Vec<ChangeId>)>) -> Self {
+        Self {
+            command,
+            shown,
+            origin: Origin::Server,
+        }
+    }
+
     /// `SaveVerse` (STORAGE §5.1): the words over the verse the token shows.
     pub fn save_verse(shown: EditToken, words: String) -> Self {
         let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
-        Self {
-            command: Command::SaveVerse {
+        Self::new(
+            Command::SaveVerse {
                 shown: shown.0,
                 words,
             },
-            shown: listed,
-        }
+            listed,
+        )
+    }
+
+    /// `SaveSection` (STORAGE §5.2): one edit token per verse and chapter front the section
+    /// editor displayed, with its new value, or `None` for one displayed and left as it was;
+    /// and the book's layout token when the book has one. The store checks only what was
+    /// displayed, so a change made meanwhile elsewhere becomes a conflict, never a refusal.
+    pub fn save_section(
+        book: BookId,
+        shown: Vec<(EditToken, Option<SectionValue>)>,
+        layout: Option<EditToken>,
+    ) -> Self {
+        let listed = shown
+            .iter()
+            .map(|(t, _)| t)
+            .chain(layout.as_ref())
+            .map(|t| (t.key().clone(), t.heads().to_vec()))
+            .collect();
+        Self::new(
+            Command::SaveSection {
+                book,
+                shown: shown.into_iter().map(|(t, value)| (t.0, value)).collect(),
+                layout: layout.map(|t| t.0),
+            },
+            listed,
+        )
+    }
+
+    /// `Draft` (STORAGE §5.14): unsaved editor text with the tokens of what the editor
+    /// displayed. The store keeps it beside the actor (R22), so it writes no change and never
+    /// waits behind a command.
+    pub fn draft(field: DraftField, shown: Vec<EditToken>, text: String) -> Self {
+        let listed = shown
+            .iter()
+            .map(|t| (t.key().clone(), t.heads().to_vec()))
+            .collect();
+        Self::new(
+            Command::Draft(Draft {
+                field,
+                shown: shown.into_iter().map(|t| t.0).collect(),
+                text,
+            }),
+            listed,
+        )
+    }
+
+    /// The UI request this command answers: its batch's event is announced as that
+    /// request's own save (AD37).
+    pub fn requested_by(mut self, request: tc_api::ids::RequestId) -> Self {
+        self.origin = Origin::Request(request);
+        self
+    }
+
+    pub fn origin(&self) -> &Origin {
+        &self.origin
     }
 
     /// `Resolve` (STORAGE §5.9): one review token per record of the conflict.
@@ -262,14 +340,14 @@ impl StoreCommand {
             .iter()
             .map(|t| (t.key().clone(), t.heads().to_vec()))
             .collect();
-        Self {
-            command: Command::Resolve {
+        Self::new(
+            Command::Resolve {
                 conflict,
                 shown: shown.into_iter().map(|t| t.0).collect(),
                 choice,
             },
-            shown: listed,
-        }
+            listed,
+        )
     }
 
     /// The records the command writes, each with the heads its token named.
@@ -282,6 +360,12 @@ impl StoreCommand {
     #[cfg(feature = "fixture-backend")]
     pub(in crate::backend) fn journal(&self) -> &Command {
         &self.command
+    }
+
+    /// The journal's command and who asked for it, for the store, which runs the one and
+    /// announces the other.
+    pub(in crate::backend) fn into_parts(self) -> (Command, Origin) {
+        (self.command, self.origin)
     }
 }
 
@@ -308,15 +392,26 @@ pub struct StoreReply {
     pub seq: u64,
     /// The changes the batch wrote.
     pub changes: Vec<ChangeId>,
+    /// Conflicts a bulk choice left for a choice of their own (tc-store).
+    pub skipped: Vec<ConflictId>,
 }
 
-/// Why a command wrote nothing. C0 and C2 add the refusals tc-store makes (`Refused`,
-/// `LookAgain`, `PlanStale`); the memory backend produces none of them.
+/// Why a command wrote nothing (tc-store `CommandError`). The memory backend makes none of
+/// `Refused`, `LookAgain` and `PlanStale`.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CommandError {
+    /// A rule of the command refused it; nothing was written (STORAGE §5.0 B1).
+    #[error("{0}")]
+    Refused(RuleRefusal),
     /// The disk refused it; a retry uses the same token.
     #[error("not written: {0}")]
     NotWritten(String),
+    /// A resolution over heads that moved since the review was shown (STORAGE §5.9).
+    #[error("a newer change arrived; look again")]
+    LookAgain,
+    /// An upgrade plan made over heads that moved (STORAGE §5.8).
+    #[error("the project changed while the plan was made")]
+    PlanStale,
     #[error("the project is open read-only")]
     ReadOnly(ReadOnlyReason),
     #[error("the token was not made here for this project: {0}")]
@@ -329,11 +424,13 @@ pub enum CommandError {
     Unavailable,
 }
 
-/// Why the fold changed without a command of this app.
+/// Why the fold changed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StoreCause {
     /// Teammates' changes received by a sync or from a file.
     Intake { devices: Vec<DeviceId> },
+    /// A command of this app, with who asked for it as `submit` was given it.
+    Command { origin: Origin },
     /// A change the store made on its own.
     System,
 }
@@ -349,6 +446,48 @@ pub enum StoreEvent {
     },
     /// The project became writable or read-only.
     Mode(SessionMode),
+    /// A notice for the person (STORAGE §2.6): a second writer, a save the disk only half
+    /// confirmed, a file that could not be read. tc-store keeps the list too (C1b shows it).
+    Notice(StoreNotice),
+    /// Derived files were written (STORAGE §5.10); D1 shows what could not be.
+    Materialized { paths: Vec<String> },
+}
+
+/// A draft from an earlier session whose text differs from what its records hold (STORAGE
+/// §5.14, O12). tc-journal's tokens stay inside, as everywhere in the seam (AD3).
+#[derive(Debug, Clone)]
+pub struct OfferedDraft {
+    /// The store's number for it, for C1b's keep and discard.
+    pub id: u64,
+    pub field: DraftField,
+    pub text: String,
+    /// Every token verifies under this installation's key. Otherwise the offer shows the
+    /// text alone, and Keep writes it with no parents, as a conflict (R20, §6.6).
+    pub verified: bool,
+    pub at: tc_journal::WallTime,
+    #[expect(
+        dead_code,
+        reason = "C1b's keep_draft hands it back to the store as `KeepDraft`"
+    )]
+    draft: Draft,
+}
+
+impl OfferedDraft {
+    pub(in crate::backend) fn new(
+        id: u64,
+        verified: bool,
+        at: tc_journal::WallTime,
+        draft: Draft,
+    ) -> Self {
+        Self {
+            id,
+            field: draft.field.clone(),
+            text: draft.text.clone(),
+            verified,
+            at,
+            draft,
+        }
+    }
 }
 
 /// What a handle says of its project.
@@ -367,6 +506,26 @@ pub struct ProjectEntry {
     pub folder: ProjectRef,
     pub id: tc_journal::ProjectId,
     pub kind: ProjectKind,
+}
+
+/// What the projects folder holds: the projects, and every folder that holds a project's
+/// `ingredients/tc/project.json` but cannot be listed as one. Home shows the second kind with
+/// its reason, so no folder that holds someone's work is left off it (AD12, B2).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Listing {
+    /// By folder name.
+    pub projects: Vec<ProjectEntry>,
+    /// By folder name.
+    pub unusable: Vec<UnusableFolder>,
+}
+
+/// A folder with `ingredients/tc/project.json` that cannot be listed as a project: a name
+/// tc-api cannot carry, or a `project.json` that does not read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnusableFolder {
+    /// The folder's name, with any byte that is not UTF-8 replaced.
+    pub name: String,
+    pub reason: String,
 }
 
 /// Why a project did not open (STORAGE §6.1).
@@ -405,8 +564,9 @@ pub enum CheckpointReason {
 
 /// The projects of this computer.
 pub trait ProjectStore: Send + Sync + 'static {
-    /// The projects this store holds. No lock, no fold.
-    fn list(&self) -> Result<Vec<ProjectEntry>, StoreError>;
+    /// The projects this store holds, and the folders that hold one but cannot be listed.
+    /// No lock, no fold.
+    fn list(&self) -> Result<Listing, StoreError>;
 
     /// Opens `folder`. Blocking: called on the blocking pool. A second open of a folder whose
     /// handle is live is `LockHeld` (STORAGE §6.1 O1), which the session registry exists to
@@ -445,6 +605,18 @@ pub trait ProjectHandle: Send + Sync {
 
     fn checkpoint(&self, reason: CheckpointReason) -> BoxFuture<CheckpointOutcome>;
 
+    /// The store's operation counters (R14): files opened and created, flushes, renames,
+    /// commands and their queue waits. What a count test reads.
+    fn counters(&self) -> StoreCounters;
+
+    /// Drafts from an earlier session that differ from what their records hold (O12).
+    fn offered_drafts(&self) -> Vec<OfferedDraft>;
+
+    /// Blocks until the store's queue is empty and its background work is done: a test
+    /// calls it before it counts.
+    #[cfg(feature = "test-hooks")]
+    fn wait_idle(&self);
+
     /// Closes the project and lets go of its lock.
     fn close(self: Arc<Self>) -> BoxFuture<Result<(), StoreError>>;
 }
@@ -455,8 +627,8 @@ pub trait ProjectHandle: Send + Sync {
 pub struct NoProjects;
 
 impl ProjectStore for NoProjects {
-    fn list(&self) -> Result<Vec<ProjectEntry>, StoreError> {
-        Ok(Vec::new())
+    fn list(&self) -> Result<Listing, StoreError> {
+        Ok(Listing::default())
     }
 
     fn open(
