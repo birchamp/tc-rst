@@ -24,6 +24,8 @@ mod handlers;
 #[cfg(feature = "test-hooks")]
 pub mod hooks;
 pub mod jobs;
+mod js;
+pub mod language_search;
 pub mod prefs;
 pub mod replies;
 pub mod reports;

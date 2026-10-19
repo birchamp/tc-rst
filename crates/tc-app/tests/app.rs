@@ -28,6 +28,7 @@ mod app {
     mod internet;
     mod jobs;
     mod keychain;
+    mod language_search;
     mod memory;
     mod prefs;
     mod projects_root;
