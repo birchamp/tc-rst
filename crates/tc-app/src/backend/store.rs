@@ -193,15 +193,23 @@ impl StoreBackend {
     }
 }
 
-/// The two fields of `project.json` a listing needs. tc-store's own reader is private to it;
-/// this one reads the same two fields the same way, so a folder it lists is one tc-store
-/// opens, and every other field is left to tc-store.
+/// What a listing reads of `project.json`, read as tc-store's open reads it (its private
+/// `ProjectJson::parse`, `open.rs`): the same four fields required, with the same types, of
+/// which only `projectId` and `kind` are used. A folder the open would refuse as not a project
+/// is so listed as unusable with the reason, never offered as a project that then fails to
+/// open; `tests/store_adapter.rs`'s `a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it`
+/// holds the two readers together.
 fn project_json(bytes: &[u8]) -> Result<(tc_journal::ProjectId, ProjectKind), String> {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct File {
+        // Required because tc-store's reader requires them; their values are tc-store's.
+        #[serde(rename = "schemaVersion")]
+        _schema_version: u32,
         project_id: String,
         kind: String,
+        #[serde(rename = "created")]
+        _created: String,
     }
     let file: File = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
     let kind = match file.kind.as_str() {
@@ -1016,7 +1024,7 @@ mod tests {
     }
 
     #[test]
-    fn project_json_reads_the_two_fields_tc_store_reads() {
+    fn project_json_requires_the_four_fields_tc_store_requires() {
         let id = "6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50";
         let read = |text: &str| project_json(text.as_bytes());
         let bible = read(&format!(
@@ -1025,12 +1033,25 @@ mod tests {
         .unwrap();
         assert_eq!(bible.1, ProjectKind::Bible);
         assert_eq!(bible.0, tc_journal::ProjectId::parse(id).unwrap());
-        let obs = read(&format!(r#"{{"projectId":"{id}","kind":"obs"}}"#)).unwrap();
+        let obs = read(&format!(
+            r#"{{"schemaVersion":1,"projectId":"{id}","kind":"obs","created":"x","more":0}}"#
+        ))
+        .unwrap();
         assert_eq!(obs.1, ProjectKind::Stories);
-        assert!(read("{}").is_err());
-        assert!(read(&format!(r#"{{"projectId":"{id}","kind":"psalter"}}"#)).is_err());
-        assert!(read(r#"{"projectId":"not an id","kind":"bible"}"#).is_err());
-        assert!(read("not json").is_err());
+        for refused in [
+            "{}".to_owned(),
+            "not json".to_owned(),
+            format!(r#"{{"projectId":"{id}","kind":"bible"}}"#),
+            format!(r#"{{"schemaVersion":1,"projectId":"{id}","kind":"bible"}}"#),
+            format!(r#"{{"projectId":"{id}","kind":"bible","created":"x"}}"#),
+            format!(r#"{{"schemaVersion":"1","projectId":"{id}","kind":"bible","created":"x"}}"#),
+            format!(r#"{{"schemaVersion":1,"projectId":"{id}","kind":"bible","created":5}}"#),
+            format!(r#"{{"schemaVersion":1,"projectId":"{id}","kind":"psalter","created":"x"}}"#),
+            r#"{"schemaVersion":1,"projectId":"not an id","kind":"bible","created":"x"}"#
+                .to_owned(),
+        ] {
+            assert!(read(&refused).is_err(), "{refused}");
+        }
     }
 
     // ---- through the store -------------------------------------------------------------

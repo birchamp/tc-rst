@@ -389,6 +389,16 @@ async fn list_names_each_project_and_reports_unusable_folders() {
     world.fs.put(&project_json(STAGING_FOLDER), &valid, None);
     world.fs.put(&project_json("broken"), b"{}", None);
     world.fs.put(&project_json("..."), &valid, None);
+    // The id and the kind alone, which tc-store's open refuses as not a project: listed as
+    // unusable with its reason, never as a project that then fails to open.
+    let mut two_fields: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&valid).unwrap();
+    two_fields.retain(|field, _| field == "projectId" || field == "kind");
+    world.fs.put(
+        &project_json("two_fields"),
+        &serde_json::to_vec(&two_fields).unwrap(),
+        None,
+    );
     world
         .fs
         .put(&Path::new(PROJECTS).join("notes/readme.txt"), b"x", None);
@@ -409,8 +419,118 @@ async fn list_names_each_project_and_reports_unusable_folders() {
         assert_eq!(handle.facts().id, entry.id, "{}", entry.folder);
     }
     let unusable: Vec<&str> = listing.unusable.iter().map(|u| u.name.as_str()).collect();
-    assert_eq!(unusable, ["...", "broken"]);
+    assert_eq!(unusable, ["...", "broken", "two_fields"]);
     assert!(listing.unusable.iter().all(|u| !u.reason.is_empty()));
+    assert!(matches!(
+        world.backend.open(&folder("two_fields"), progress()),
+        Err(OpenFailure::NotAProject)
+    ));
+}
+
+/// The listing reads `project.json` as tc-store's open reads it: over every way the file can
+/// be wrong or merely unusual, a folder is a project in the listing exactly when the open does
+/// not refuse it as not a project, and unusable with a reason otherwise. tc-store's reader is
+/// private to it, so this holds the adapter's copy to it.
+#[tokio::test]
+async fn a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it() {
+    type Edit = fn(&mut serde_json::Map<String, serde_json::Value>);
+    let cases: [(&str, Edit, bool); 10] = [
+        ("as written", |_| {}, true),
+        (
+            "a field more",
+            |f| {
+                f.insert("note".into(), "kept".into());
+            },
+            true,
+        ),
+        (
+            "no schemaVersion",
+            |f| {
+                f.remove("schemaVersion");
+            },
+            false,
+        ),
+        (
+            "no created",
+            |f| {
+                f.remove("created");
+            },
+            false,
+        ),
+        (
+            "no projectId",
+            |f| {
+                f.remove("projectId");
+            },
+            false,
+        ),
+        (
+            "schemaVersion as text",
+            |f| {
+                f.insert("schemaVersion".into(), "1".into());
+            },
+            false,
+        ),
+        (
+            "a negative schemaVersion",
+            |f| {
+                f.insert("schemaVersion".into(), (-1).into());
+            },
+            false,
+        ),
+        (
+            "created as a number",
+            |f| {
+                f.insert("created".into(), 5.into());
+            },
+            false,
+        ),
+        (
+            "an unknown kind",
+            |f| {
+                f.insert("kind".into(), "psalter".into());
+            },
+            false,
+        ),
+        (
+            "not a project id",
+            |f| {
+                f.insert("projectId".into(), "not an id".into());
+            },
+            false,
+        ),
+    ];
+    for (case, edit, project) in cases {
+        let world = store_world();
+        let file = world
+            .folder(&world.bible)
+            .join("ingredients/tc/project.json");
+        let mut fields: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_slice(&world.fs.peek(&file).unwrap()).unwrap();
+        edit(&mut fields);
+        world
+            .fs
+            .put(&file, &serde_json::to_vec(&fields).unwrap(), None);
+
+        let listing = world.backend.list().unwrap();
+        let listed = listing.projects.iter().any(|e| e.folder == world.bible);
+        let unusable = listing
+            .unusable
+            .iter()
+            .find(|u| u.name == world.bible.as_str());
+        let opened = world.backend.open(&world.bible, progress());
+        let not_a_project = matches!(opened, Err(OpenFailure::NotAProject));
+        assert_eq!(listed, project, "{case}: listed as a project");
+        assert_eq!(listed, !not_a_project, "{case}: the listing and the open");
+        assert_eq!(
+            unusable.is_some_and(|u| !u.reason.is_empty()),
+            !project,
+            "{case}: listed as unusable with a reason"
+        );
+        if let Ok(handle) = opened {
+            handle.close().await.unwrap();
+        }
+    }
 }
 
 /// The registry opens only a folder it lists, by the name it listed: another spelling, or a
