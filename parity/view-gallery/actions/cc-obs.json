@@ -1,0 +1,10 @@
+{
+  "case": "cc-obs",
+  "calls": [
+    {
+      "at": "mount",
+      "name": "readPrintStories",
+      "args": []
+    }
+  ]
+}

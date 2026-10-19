@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use proptest::prelude::*;
-use tc_api::test::{Crash, CrashPoint, Hold, HoldPoint, Release, TokenBase};
+use tc_api::test::{Crash, CrashPoint, FieldDraft, Hold, HoldPoint, Release, TokenBase};
 use tc_api::write::Stored;
 use tc_api::{ApiError, NotSaved, Reply, ShownToken};
 use tc_app::{Answer, App, Then};
@@ -702,5 +702,107 @@ proptest! {
             .build()
             .unwrap();
         runtime.block_on(run_case(ops));
+    }
+}
+
+// --- Drafts -------------------------------------------------------------------------------
+
+fn draft_req(id: u8, field: &str, token: &ShownToken, text: &str) -> FieldDraft {
+    FieldDraft {
+        request: rid(id),
+        field: field.to_owned(),
+        shown: token.clone(),
+        text: text.to_owned(),
+    }
+}
+
+multi! {
+    async fn a_draft_is_kept_and_changes_no_value() {
+        let (_dir, t) = started().await;
+        let t0 = field_token(&t.app, "title").await;
+        let t1 = store(&t.app, 1, "title", &t0, "Saved").await.unwrap().tokens[0].token.clone();
+
+        post(&t.app, &draft_req(2, "title", &t1, "Saved and e\u{301}")).await.unwrap();
+        let log = field_log(&t.app, "title").await;
+        assert_eq!(log.current.value, "Saved");
+        assert_eq!(log.current.token, t1, "the value and its token are unchanged");
+        assert_eq!(log.stores.len(), 1);
+        let draft = log.draft.unwrap();
+        assert_eq!(draft.text, "Saved and \u{e9}", "kept in NFC");
+        assert_eq!(draft.request, rid(2));
+        assert_eq!(draft.base, TokenBase::Current);
+        assert_eq!(log.drafts, 1);
+
+        post(&t.app, &draft_req(3, "title", &t0, "Older base")).await.unwrap();
+        let log = field_log(&t.app, "title").await;
+        assert_eq!(log.draft.as_ref().unwrap().text, "Older base", "the newest replaces it");
+        assert_eq!(log.draft.unwrap().base, TokenBase::Stale);
+        assert_eq!(log.drafts, 2);
+        assert_eq!(log.stores.len(), 1);
+    }
+}
+
+multi! {
+    async fn a_draft_with_a_forged_or_foreign_token_is_bad_token() {
+        let (_dir, t) = started().await;
+        let other_dir = tempfile::tempdir().unwrap();
+        let other = TestApp::start_in(other_dir.path(), |_, _| {}).await;
+        let of_another_field = field_token(&t.app, "other").await;
+        let of_another_key = field_token(&other.app, "title").await;
+        for (n, token) in [of_another_field, of_another_key].into_iter().enumerate() {
+            let id = 10 + u8::try_from(n).unwrap();
+            let refused = post(&t.app, &draft_req(id, "title", &token, "x")).await;
+            assert_eq!(refused, Err(ApiError::NotSaved(NotSaved::BadToken)));
+        }
+        let log = field_log(&t.app, "title").await;
+        assert!(log.draft.is_none());
+        assert_eq!(log.drafts, 0);
+    }
+}
+
+multi! {
+    async fn a_draft_survives_a_restart() {
+        let (dir, t) = started().await;
+        let t0 = field_token(&t.app, "title").await;
+        post(&t.app, &draft_req(1, "title", &t0, "Typed")).await.unwrap();
+        let after = restarted(&dir).await;
+        let log = field_log(&after.app, "title").await;
+        assert_eq!(log.draft.unwrap().text, "Typed");
+        assert_eq!(log.drafts, 1);
+        assert_eq!(log.current.value, "");
+    }
+}
+
+multi! {
+    /// A draft waits at its hold before it takes the lane, so a held draft never delays a
+    /// save (R22 asks the same of the real store); and the two writes of the one file never
+    /// overwrite each other.
+    async fn a_held_draft_does_not_hold_a_store() {
+        let (_dir, t) = started().await;
+        let t0 = field_token(&t.app, "title").await;
+        post(&t.app, &Hold { request: rid(200), at: HoldPoint::DraftWrite }).await.unwrap();
+        let draft = {
+            let app = t.app.clone();
+            let body = body_of(&draft_req(1, "title", &t0, "Draft"));
+            tokio::spawn(async move { app.call("test/fieldDraft", &body).await })
+        };
+        until_held_count(&t.app, 1).await;
+
+        let ack = tokio::time::timeout(
+            Duration::from_secs(5),
+            store(&t.app, 2, "title", &t0, "Saved"),
+        )
+        .await
+        .expect("the store did not wait behind the held draft")
+        .unwrap();
+        assert_eq!(ack.stored, Stored::Written);
+
+        post(&t.app, &Release { request: rid(201), at: HoldPoint::DraftWrite }).await.unwrap();
+        assert!(matches!(draft.await.unwrap(), Answer::Reply { .. }));
+        let log = field_log(&t.app, "title").await;
+        assert_eq!(texts(&log), vec![("Saved".to_owned(), TokenBase::Current)]);
+        let kept = log.draft.unwrap();
+        assert_eq!(kept.text, "Draft");
+        assert_eq!(kept.base, TokenBase::Stale, "its token named the version before the store");
     }
 }

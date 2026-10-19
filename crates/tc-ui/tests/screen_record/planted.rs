@@ -1,8 +1,9 @@
-//! The planted tests: the gate run on the real tC4 baseline, docs and masks, with Rust captures
-//! planted in a temporary `parity/app`. An identity capture is tC4's own screenshot, and tC4's
-//! DOM rewritten as the Rust app writes it (project folders for repo paths, other generated id
-//! numbers, its own asset paths); it must come out `same`, and one planted difference must
-//! fail the gate.
+//! The planted tests: the gate run on the real tC4 baseline, gallery, docs and masks, with Rust
+//! captures planted in a temporary `parity/app`. An identity capture is tC4's own screenshot,
+//! and tC4's DOM rewritten as the Rust app writes it (project folders for repo paths, other
+//! generated id numbers, its own asset paths); it must come out `same`, and one planted
+//! difference must fail the gate. A gallery case is planted the same way from its gallery
+//! files, and a test that edits the gallery copies one case into a temporary gallery.
 
 use std::path::Path;
 use std::sync::LazyLock;
@@ -62,6 +63,8 @@ struct Planted {
     manifest: Value,
     captures: Value,
     report_override: Option<String>,
+    /// A temporary gallery holding the cases `gallery_case` copied, when a test made one.
+    gallery: Option<std::path::PathBuf>,
 }
 
 struct Outcome {
@@ -130,6 +133,7 @@ impl Planted {
             manifest,
             captures,
             report_override: None,
+            gallery: None,
         }
     }
 
@@ -141,8 +145,93 @@ impl Planted {
         Paths {
             app: self.app().to_owned(),
             tc4_behaviour: self.app().join("tc4-behaviour"),
+            gallery: self
+                .gallery
+                .clone()
+                .unwrap_or_else(|| self.committed.gallery.clone()),
             ..self.committed.clone()
         }
+    }
+
+    /// The committed gallery case `name`, as cases.json lists it.
+    fn case(&self, name: &str) -> Value {
+        let cases: Value = read_json(&self.committed.app.join("cases.json")).unwrap();
+        cases["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["name"] == name)
+            .unwrap_or_else(|| panic!("no gallery case {name}"))
+            .clone()
+    }
+
+    /// Copies the committed case `name` into a temporary gallery that holds only it, with a
+    /// cases.json that lists only it.
+    fn gallery_case(&mut self, name: &str) {
+        let case = self.case(name);
+        let gallery = self.app().join("gallery");
+        for sub in ["screens", "dom", "actions"] {
+            std::fs::create_dir_all(gallery.join(sub)).unwrap();
+        }
+        for key in ["png", "dom", "actions"] {
+            let rel = case[key].as_str().unwrap();
+            std::fs::copy(self.committed.gallery.join(rel), gallery.join(rel)).unwrap();
+        }
+        let others: Vec<String> =
+            read_json::<Value>(&self.app().join("cases.json")).unwrap()["cases"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|c| c["name"].as_str().filter(|n| *n != name).map(str::to_owned))
+                .collect();
+        self.edit_json("cases.json", |c| c["cases"] = json!([case]));
+        // The masks' rectangles on the cases left out go with them.
+        self.edit_json("masks.json", |m| {
+            for mask in m["masks"].as_array_mut().unwrap() {
+                let rects = mask["rects"].as_object_mut().unwrap();
+                rects.retain(|k, _| !others.contains(k));
+            }
+        });
+        self.gallery = Some(gallery);
+    }
+
+    /// Plants the Rust app's capture of gallery case `name` by `unit`, identical to the
+    /// gallery's: its PNG, and its DOM rewritten as the Rust app writes it.
+    fn identity_case(&mut self, name: &str, unit: &str, layers: &[&str]) -> &mut Value {
+        let case = self.case(name);
+        let gallery = self.paths().gallery;
+        std::fs::copy(
+            gallery.join(case["png"].as_str().unwrap()),
+            self.app().join(format!("screens/{name}.png")),
+        )
+        .unwrap();
+        let tc4_dom = std::fs::read_to_string(gallery.join(case["dom"].as_str().unwrap())).unwrap();
+        std::fs::write(
+            self.app().join(format!("dom/{name}.json")),
+            as_rust_writes(&tc4_dom),
+        )
+        .unwrap();
+        let entry = json!({
+            "name": name, "kind": "case", "scenario": case["scenario"], "locale": case["locale"],
+            "by": unit, "backend": "memory", "layers": layers,
+            "error": null, "pageErrors": [], "refused": [],
+            "homeCards": {}, "syncToast": null, "maskRects": {},
+            "png": format!("screens/{name}.png"), "sha256": "", "dom": format!("dom/{name}.json"), "domSha256": "",
+        });
+        self.captures["screens"].as_array_mut().unwrap().push(entry);
+        self.rehash(name);
+        self.land(unit);
+        self.entry(name)
+    }
+
+    /// Adds `unit` to the landed units, once.
+    fn land(&self, unit: &str) {
+        self.edit_json("units.json", |u| {
+            let landed = u["landed"].as_array_mut().unwrap();
+            if !landed.iter().any(|l| l == unit) {
+                landed.push(json!(unit));
+            }
+        });
     }
 
     fn baseline(&self, name: &str) -> Value {
@@ -239,6 +328,14 @@ impl Planted {
         self.rehash(name);
     }
 
+    /// The planted record as before `unit` landed: a planted run starts with no capture, so a
+    /// landed unit owes every layer it captures.
+    fn unland(&self, unit: &str) {
+        self.edit_json("units.json", |u| {
+            u["landed"].as_array_mut().unwrap().retain(|l| l != unit);
+        });
+    }
+
     fn edit_json(&self, file: &str, edit: impl FnOnce(&mut Value)) {
         let path = self.app().join(file);
         let mut value: Value = read_json(&path).unwrap();
@@ -308,7 +405,9 @@ fn an_identical_capture_is_same_on_every_layer() {
     }
     out.assert_clean(&["about", "shared-home"]);
     assert_eq!(out.report.totals.same, 2);
-    assert_eq!(out.report.totals.unported, 60);
+    let cases = Record::load(p.paths()).unwrap().cases.cases.len();
+    assert!(cases > 0, "the committed gallery has cases");
+    assert_eq!(out.report.totals.unported, 60 + cases);
 }
 
 #[test]
@@ -659,6 +758,7 @@ fn a_dom_only_capture_compares_the_dialog_alone() {
 #[test]
 fn a_layer_whose_unit_has_landed_must_be_captured() {
     let p = Planted::new();
+    p.unland("A5");
     p.edit_json("units.json", |u| {
         u["landed"].as_array_mut().unwrap().push(json!("B2"))
     });
@@ -672,20 +772,43 @@ fn a_layer_whose_unit_has_landed_must_be_captured() {
         [Rule::LayerOverdue, Rule::LayerOverdue],
         "pixels and meaning are B2's; the DOM is A5's"
     );
+    p.edit_json("units.json", |u| {
+        u["landed"].as_array_mut().unwrap().push(json!("A5"))
+    });
+    assert_eq!(
+        p.run().rules("account-menu"),
+        [Rule::LayerOverdue, Rule::LayerOverdue, Rule::LayerOverdue],
+        "with A5 landed, its DOM is due too"
+    );
     assert!(
         out.rules("understand-tit1").is_empty(),
         "B3's screen is not due"
     );
-    let due = out
+    let record = Record::load(p.paths()).unwrap();
+    let (cases, screens): (std::collections::BTreeSet<_>, std::collections::BTreeSet<_>) = out
         .failures
         .iter()
         .filter(|f| f.rule == Rule::LayerOverdue)
         .filter_map(|f| f.row.clone())
-        .collect::<std::collections::BTreeSet<_>>();
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .partition(|name| record.case(name).is_some());
     assert_eq!(
-        due.len(),
+        screens.len(),
         11,
-        "the six B2 screens and the five whose pixels are B2's: {due:?}"
+        "the six B2 screens and the five whose pixels are B2's: {screens:?}"
+    );
+    let b2_cases: std::collections::BTreeSet<_> = record
+        .cases
+        .cases
+        .iter()
+        .filter(|c| c.dom_unit.as_str() == "B2" || c.pixels_unit.as_str() == "B2")
+        .map(|c| c.name.clone())
+        .collect();
+    assert!(b2_cases.contains("license") && b2_cases.contains("home-empty"));
+    assert_eq!(
+        cases, b2_cases,
+        "every gallery case a B2 layer of is due too"
     );
 }
 
@@ -750,6 +873,7 @@ fn every_screen_the_rebuild_differs_on_has_a_mask_citing_its_ruling() {
         assert_eq!(out.rules(screen), [Rule::MaskRuling], "{screen}");
     }
     let p = Planted::new();
+    p.unland("A5");
     p.edit_json("masks.json", |m| {
         m["masks"][2]["rects"]["about"] = json!({ "x": 1, "y": 1, "width": 2, "height": 2 })
     });
@@ -897,6 +1021,79 @@ fn a_scoped_sequence_numbers_its_nodes_whatever_precedes_the_scope() {
     out.assert_clean(&["about"]);
 }
 
+/// The step's DOM with the dialog taken out, as after a key that closed it.
+fn without_dialog(step: &mut Step) {
+    let root = &mut step.dom.root;
+    let at = root
+        .iter()
+        .position(|l| l.contains(r#"role="dialog""#))
+        .unwrap();
+    let depth = root[at].len() - root[at].trim_start().len();
+    let end = (at + 1..root.len())
+        .find(|&i| root[i].len() - root[i].trim_start().len() <= depth)
+        .unwrap_or(root.len());
+    root.drain(at..end);
+    step.focus = "button \"\"".to_owned();
+}
+
+/// A5 D7: a step that closes the dialog of a DOM-first sequence compares equal when the dialog
+/// is gone on both sides.
+#[test]
+fn a_sequence_step_whose_scope_is_gone_on_both_sides_compares_equal() {
+    let mut p = Planted::new();
+    p.identity("about")["layers"] = json!(["dom"]);
+    let mut tc4 = recording(&numbered(&p.committed.baseline.join("dom/about.json")));
+    let mut rust = recording(&numbered(&p.app().join("dom/about.json")));
+    without_dialog(&mut tc4.steps[2]);
+    without_dialog(&mut rust.steps[2]);
+    write_recording(&p.paths().tc4_behaviour, &tc4);
+    write_recording(&p.app().join("behaviour"), &rust);
+    let out = p.run();
+    let row = out.row("about");
+    assert!(row.behaviour[0].same, "{:#?}", row.behaviour);
+    assert_eq!(row.status, Status::Same);
+    out.assert_clean(&["about"]);
+}
+
+#[test]
+fn a_sequence_step_whose_scope_is_gone_on_one_side_differs() {
+    let mut p = Planted::new();
+    p.identity("about")["layers"] = json!(["dom"]);
+    let tc4 = recording(&numbered(&p.committed.baseline.join("dom/about.json")));
+    let mut rust = recording(&numbered(&p.app().join("dom/about.json")));
+    without_dialog(&mut rust.steps[2]);
+    write_recording(&p.paths().tc4_behaviour, &tc4);
+    write_recording(&p.app().join("behaviour"), &rust);
+    let out = p.run();
+    let result = &out.row("about").behaviour[0];
+    assert!(!result.same);
+    let diff = result.first_diff.as_deref().unwrap();
+    assert!(
+        diff.starts_with("step 2") && diff.contains("(scope absent)"),
+        "{diff}"
+    );
+    assert_eq!(out.rules("about"), [Rule::DiffersWithoutResidual]);
+}
+
+#[test]
+fn a_scoped_sequence_compares_the_documents_lang_and_dir() {
+    let mut p = Planted::new();
+    p.identity("about")["layers"] = json!(["dom"]);
+    let tc4 = recording(&numbered(&p.committed.baseline.join("dom/about.json")));
+    let mut rust = recording(&numbered(&p.app().join("dom/about.json")));
+    rust.steps[1].dom.html = r#"<html dir="rtl" lang="ar">"#.to_owned();
+    write_recording(&p.paths().tc4_behaviour, &tc4);
+    write_recording(&p.app().join("behaviour"), &rust);
+    let out = p.run();
+    let result = &out.row("about").behaviour[0];
+    assert!(!result.same);
+    let diff = result.first_diff.as_deref().unwrap();
+    assert!(
+        diff.starts_with("step 1") && diff.contains(r#"lang="ar""#),
+        "{diff}"
+    );
+}
+
 #[test]
 fn a_masked_element_takes_no_part_in_a_sequence() {
     let mut p = Planted::new();
@@ -1033,6 +1230,244 @@ fn a_scope_that_matches_nothing_fails_the_row() {
         s["scopes"]["home"] = json!({ "attr": "role", "value": "main", "which": "first" })
     });
     assert_eq!(p.run().rules("home"), [Rule::ScopeNotDomFirst]);
+}
+
+// ---- the gallery cases -------------------------------------------------------------------------
+
+#[test]
+fn a_gallery_case_is_a_row_naming_its_units() {
+    let p = Planted::new();
+    p.unland("A5");
+    let out = p.run();
+    let row = out.row("license");
+    assert_eq!(row.kind, super::inputs::RowKind::Case);
+    assert_eq!(row.status, Status::Unported);
+    assert_eq!(
+        (row.scenario.as_str(), row.locale.as_str()),
+        ("sample", "en")
+    );
+    let missing: Vec<_> = row.missing.iter().map(|(l, u)| (*l, u.as_str())).collect();
+    assert_eq!(
+        missing,
+        [(Layer::Pixels, "B2"), (Layer::Dom, "A5")],
+        "a case has no meaning layer"
+    );
+    let row = out.row("conflict-review-mine");
+    assert_eq!(
+        (row.scenario.as_str(), row.status),
+        ("shared", Status::Unported)
+    );
+    out.assert_clean(&["license", "conflict-review-mine"]);
+}
+
+#[test]
+fn an_identical_gallery_capture_is_same() {
+    let mut p = Planted::new();
+    p.identity_case("open-progress-journal", "B3", &["pixels", "dom"]);
+    let out = p.run();
+    let row = out.row("open-progress-journal");
+    assert_eq!(row.status, Status::Same, "{row:#?}");
+    assert!(row.missing.is_empty());
+    assert_eq!(row.pixels.as_ref().unwrap().mismatched, 0);
+    assert!(row.dom.as_ref().unwrap().same);
+    assert!(row.meaning.is_none());
+    out.assert_clean(&["open-progress-journal"]);
+    // A planted pixel and a planted DOM difference fail it.
+    p.edit_png("open-progress-journal", |image| flip_red(image, 5, 5));
+    p.edit_dom("open-progress-journal", |t| {
+        t.replacen(
+            r#"data-testid=\"open-progress-stage\""#,
+            r#"data-testid=\"open-progress-step\""#,
+            1,
+        )
+    });
+    let out = p.run();
+    assert_eq!(out.row("open-progress-journal").status, Status::Differs);
+    assert_eq!(
+        out.row("open-progress-journal").differing(),
+        [DiffLayer::Pixels, DiffLayer::Dom].into()
+    );
+    assert_eq!(
+        out.rules("open-progress-journal"),
+        [Rule::DiffersWithoutResidual]
+    );
+}
+
+#[test]
+fn a_case_from_another_machine_fails() {
+    let mut p = Planted::new();
+    p.identity_case("open-progress-journal", "B3", &["pixels", "dom"]);
+    p.edit_json("cases.json", |c| {
+        c["machine"]["fonts"]["sha256"] = json!("0".repeat(64))
+    });
+    let out = p.run();
+    assert_eq!(out.row("open-progress-journal").status, Status::Failed);
+    assert_eq!(out.rules("open-progress-journal"), [Rule::OtherMachine]);
+    // The baseline's machine does not stand in for the gallery's.
+    let mut p = Planted::new();
+    p.identity_case("open-progress-journal", "B3", &["pixels", "dom"]);
+    assert_eq!(p.run().row("open-progress-journal").status, Status::Same);
+    p.captures["machine"]["fonts"]["sha256"] = json!("1".repeat(64));
+    assert_eq!(p.run().rules("open-progress-journal"), [Rule::OtherMachine]);
+}
+
+#[test]
+fn a_dom_first_case_compares_its_scope_alone() {
+    let mut p = Planted::new();
+    p.identity_case("license", "A5", &["dom"]);
+    // Outside the dialog: Home behind it, which is B2's to port.
+    p.edit_dom("license", |t| {
+        t.replacen(
+            r#"data-testid=\"add-project\""#,
+            r#"data-testid=\"add-a-project\""#,
+            1,
+        )
+    });
+    let out = p.run();
+    let row = out.row("license");
+    assert_eq!(row.status, Status::Same, "{row:#?}");
+    assert_eq!(
+        row.dom.as_ref().unwrap().scope,
+        Some(Scope {
+            attr: "role".into(),
+            value: "dialog".into(),
+            which: Which::Last
+        })
+    );
+    let missing: Vec<_> = row.missing.iter().map(|(l, u)| (*l, u.as_str())).collect();
+    assert_eq!(missing, [(Layer::Pixels, "B2")]);
+    out.assert_clean(&["license"]);
+    // Inside the dialog.
+    p.edit_dom("license", |t| {
+        t.replacen(
+            r#"data-testid=\"license-close\""#,
+            r#"data-testid=\"license-shut\""#,
+            1,
+        )
+    });
+    let out = p.run();
+    assert_eq!(out.row("license").status, Status::Differs);
+    assert!(out.row("license").dom.as_ref().unwrap().first_diffs[0].contains("license-shut"));
+}
+
+#[test]
+fn a_changed_or_stray_gallery_file_fails() {
+    let mut p = Planted::new();
+    p.gallery_case("home-empty");
+    p.run().assert_clean(&["home-empty"]);
+    p.edit_json("cases.json", |c| {
+        c["cases"][0]["domSha256"] = json!("0".repeat(64))
+    });
+    let out = p.run();
+    assert_eq!(out.rules("home-empty"), [Rule::HashMismatch]);
+    assert!(
+        out.failures[0]
+            .message
+            .starts_with("parity/view-gallery/dom/home-empty.json has sha256 "),
+        "{:#?}",
+        out.failures
+    );
+    let mut p = Planted::new();
+    p.gallery_case("home-empty");
+    std::fs::write(p.app().join("gallery/screens/x.png"), b"not a case").unwrap();
+    let out = p.run();
+    assert!(
+        out.global()
+            .iter()
+            .any(|f| f.rule == Rule::StrayFile && f.message.contains("view-gallery/screens/x.png")),
+        "{:#?}",
+        out.failures
+    );
+    // A trace is a file of the case too.
+    let mut p = Planted::new();
+    p.gallery_case("home-empty");
+    std::fs::write(p.app().join("gallery/actions/home-empty.json"), b"{}").unwrap();
+    assert_eq!(p.run().rules("home-empty"), [Rule::HashMismatch]);
+}
+
+#[test]
+fn a_case_whose_unit_has_landed_must_be_captured() {
+    let p = Planted::new();
+    p.land("B3");
+    let out = p.run();
+    assert_eq!(
+        out.rules("open-progress-state"),
+        [Rule::LayerOverdue, Rule::LayerOverdue]
+    );
+    let message = &out
+        .failures
+        .iter()
+        .find(|f| f.row.as_deref() == Some("open-progress-state"))
+        .unwrap()
+        .message;
+    assert!(
+        message.contains("capture-rust.mjs --unit B3 --case open-progress-state"),
+        "{message}"
+    );
+    // A DOM-first case owes its DOM to the first unit only.
+    let p = Planted::new();
+    p.land("A5");
+    assert_eq!(p.run().rules("license"), [Rule::LayerOverdue]);
+}
+
+#[test]
+fn a_case_capture_of_another_scenario_or_with_meaning_fails() {
+    let mut p = Planted::new();
+    p.identity_case("open-progress-journal", "B3", &["pixels", "dom"])["scenario"] =
+        json!("shared");
+    assert_eq!(
+        p.run().rules("open-progress-journal"),
+        [Rule::PlanDisagreesWithBaseline]
+    );
+    let mut p = Planted::new();
+    p.identity_case("open-progress-journal", "B3", &["pixels", "dom", "meaning"]);
+    let out = p.run();
+    let row = out.row("open-progress-journal");
+    assert_eq!(row.status, Status::Failed);
+    assert_eq!(
+        row.error.as_deref(),
+        Some("a gallery case has no meaning layer: capture it with --layers pixels,dom")
+    );
+    assert_eq!(out.rules("open-progress-journal"), [Rule::CaptureFailed]);
+}
+
+#[test]
+fn a_case_outside_section_7_4_or_without_its_scope_fails() {
+    let mut p = Planted::new();
+    p.unland("A5");
+    p.gallery_case("license");
+    p.run().assert_clean(&["license"]);
+    p.edit_json("cases.json", |c| c["cases"][0]["group"] = json!("about"));
+    assert_eq!(p.run().rules("license"), [Rule::CaseGroup]);
+    p.edit_json("cases.json", |c| {
+        c["cases"][0]["group"] = json!("license");
+        c["cases"][0]["pixelsUnit"] = json!("A5");
+    });
+    assert_eq!(
+        p.run().rules("license"),
+        [Rule::CaseGroup, Rule::CaseScope],
+        "other units than §7.4's; and a scope on a case one unit captures"
+    );
+    p.edit_json("cases.json", |c| {
+        c["cases"][0]["pixelsUnit"] = json!("B2");
+        c["cases"][0]["scope"] = Value::Null;
+    });
+    assert_eq!(p.run().rules("license"), [Rule::CaseScope]);
+    let mut p = Planted::new();
+    p.gallery_case("home-empty");
+    p.edit_json("cases.json", |c| c["cases"][0]["name"] = json!("home"));
+    let out = p.run();
+    assert!(
+        out.rules("home").contains(&Rule::DuplicateRow),
+        "{:#?}",
+        out.failures
+    );
+    p.edit_json("cases.json", |c| {
+        c["cases"][0]["name"] = json!("home-empty");
+        let again = c["cases"][0].clone();
+        c["cases"].as_array_mut().unwrap().push(again);
+    });
+    assert!(p.run().rules("home-empty").contains(&Rule::DuplicateRow));
 }
 
 // ---- the normalizations, each on its own ------------------------------------------------------

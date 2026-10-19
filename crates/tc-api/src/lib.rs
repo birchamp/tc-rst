@@ -26,6 +26,7 @@ mod arb;
 pub mod account;
 pub mod align;
 pub mod app;
+pub mod buffer;
 pub mod check;
 pub mod endpoint;
 pub mod error;
@@ -117,7 +118,9 @@ macro_rules! test_hook_table {
             command "test/hold": $crate::test::Hold => ();
             command "test/release": $crate::test::Release => ();
             command "test/fieldStore": $crate::test::FieldStore => $crate::write::Ack;
+            command "test/saveVerse": $crate::test::SaveVerse => $crate::write::Ack;
             query "test/fieldLog": $crate::test::FieldLog => $crate::test::FieldLogView;
+            command "test/fieldDraft": $crate::test::FieldDraft => ();
             command "test/reset": $crate::test::Reset => ();
         }
     };

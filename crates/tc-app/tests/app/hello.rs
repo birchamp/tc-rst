@@ -14,7 +14,7 @@ use tc_app::events::Next;
 use tc_app::reports::{ReportOp, ReportOutcome};
 use tc_app::{Answer, App, Then};
 
-use super::common::{Parts, TestApp, build, hello_value, open_session, rid, token};
+use super::common::{Parts, TestApp, build, hello_value, open_kr_ulb, rid, token};
 
 /// The row's "done when": `hello` has real state, in the bytes the server sends.
 #[tokio::test]
@@ -22,10 +22,9 @@ async fn hello_answers_real_state() {
     let dir = tempfile::tempdir().unwrap();
     let parts = Parts::new();
     parts.keychain.seed(token("kept-secret"));
-    let (scope, info, open) = open_session(3);
-    parts.sessions.add(scope, info, open.clone());
     let t = TestApp::start_with(dir.path(), &parts, |_, _| {}).await;
     let app = &t.app;
+    let open = open_kr_ulb(app).await;
 
     let answer = app.call("app/hello", b"{}").await;
     let Answer::Reply { body, then } = answer else {

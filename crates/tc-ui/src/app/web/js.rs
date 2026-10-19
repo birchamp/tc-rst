@@ -116,3 +116,85 @@ impl Drop for Watchdog {
         self.disarm();
     }
 }
+
+/// `performance.now()`, the save machine's clock; 0 without a `performance` object.
+pub(super) fn now_ms() -> f64 {
+    window()
+        .ok()
+        .and_then(|window| window.performance())
+        .map_or(0.0, |performance| performance.now())
+}
+
+/// `Date.now()`, the wall clock a buffer entry's `at` is in.
+pub(super) fn wall_ms() -> i64 {
+    // Milliseconds since 1970 fit an i64 for millions of years; the cast drops the fraction.
+    js_sys::Date::now() as i64
+}
+
+/// 16 random bytes from the platform, with `Math.random` only if `crypto` refuses.
+pub(super) fn random_bytes() -> [u8; 16] {
+    let mut bytes = [0u8; 16];
+    let filled = window()
+        .ok()
+        .and_then(|window| window.crypto().ok())
+        .is_some_and(|crypto| crypto.get_random_values_with_u8_array(&mut bytes).is_ok());
+    if !filled {
+        for byte in &mut bytes {
+            // A value in [0, 256), cut to a byte.
+            *byte = (js_sys::Math::random() * 256.0) as u8;
+        }
+    }
+    bytes
+}
+
+pub(super) fn random_request_id() -> tc_api::ids::RequestId {
+    tc_api::ids::RequestId::from_bytes(random_bytes())
+}
+
+/// The page's `localStorage`, as the draft buffer's store. Every call can fail: storage may be
+/// blocked or full.
+pub(super) struct LocalStore(Option<web_sys::Storage>);
+
+impl LocalStore {
+    pub(super) fn open() -> Self {
+        Self(
+            window()
+                .ok()
+                .and_then(|window| window.local_storage().ok().flatten()),
+        )
+    }
+}
+
+impl crate::app::buffer::Store for LocalStore {
+    fn keys(&self) -> Vec<String> {
+        let Some(storage) = &self.0 else {
+            return Vec::new();
+        };
+        let length = storage.length().unwrap_or(0);
+        (0..length)
+            .filter_map(|index| storage.key(index).ok().flatten())
+            .collect()
+    }
+
+    fn get(&self, item: &str) -> Option<String> {
+        self.0.as_ref()?.get_item(item).ok().flatten()
+    }
+
+    fn set(&mut self, item: &str, value: &str) -> Result<(), crate::app::buffer::StoreError> {
+        let storage = self.0.as_ref().ok_or_else(|| {
+            crate::app::buffer::StoreError::Refused("this page has no localStorage".to_owned())
+        })?;
+        storage
+            .set_item(item, value)
+            .map_err(|error| crate::app::buffer::StoreError::Refused(describe(&error)))
+    }
+
+    fn remove(&mut self, item: &str) -> Result<(), crate::app::buffer::StoreError> {
+        let storage = self.0.as_ref().ok_or_else(|| {
+            crate::app::buffer::StoreError::Refused("this page has no localStorage".to_owned())
+        })?;
+        storage
+            .remove_item(item)
+            .map_err(|error| crate::app::buffer::StoreError::Refused(describe(&error)))
+    }
+}

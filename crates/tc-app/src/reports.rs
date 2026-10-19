@@ -42,6 +42,12 @@ pub enum ReportOp {
     /// The machine's resource store at start: what an interrupted install left and could not
     /// be removed (§4.9).
     Resources,
+    /// A project's close that failed; the session is gone all the same.
+    Close,
+    /// A staging folder that an interrupted create or copy left, or one whose name does not say
+    /// its work, which tC4 has none of and tc-store's start removed (STORAGE §6.4 N1). A
+    /// removed import's or join's is `Import` or `OpenDoor43`, as tC4 reports them.
+    StagingRemoved,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

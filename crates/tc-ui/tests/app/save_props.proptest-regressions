@@ -1,0 +1,10 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 27ff912720c9dd8c69fa3ed026c29565ab3f82c91f1343e305c8acda1b0eabb6 # shrinks to steps = [Type(3, 1), Blur(3), Reload(true), Type(3, 2), Type(0, 0)]
+cc 91d62668fd88627884de20a9a5ad5c32d6dc576f053662d1e449c017bed37271 # shrinks to steps = [Type(0, 0), Type(0, 1), Gate, Type(0, 0), Reload(false)]
+cc 7cd4295d244e2392f9e1078ac98881691e54347e48333f26a7c13a54d98f2a20 # shrinks to steps = [Type(1, 1), Save(1), Deliver(0, Fail), Reload(false)]
+cc 0753b4fde3202f5eaad44e74efac831714f9ce139074706c5691b4e5e4d4dff9 # shrinks to steps = [Type(2, 1), Save(2), Deliver(0, LostAfter)]

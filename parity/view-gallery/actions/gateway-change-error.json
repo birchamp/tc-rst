@@ -1,0 +1,10 @@
+{
+  "case": "gateway-change-error",
+  "calls": [
+    {
+      "at": "mount",
+      "name": "loadUnderstand",
+      "args": []
+    }
+  ]
+}

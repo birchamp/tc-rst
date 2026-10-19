@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Import a project (translationCore 3, USFM or Scripture Burrito) · translationCore 4 Help</title>
+<meta name="description" content="Bring existing work into tC4 as a new project, from translationCore 3 project zips, USFM files or a Scripture Burrito zip.">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="icon" type="image/png" href="assets/tc_logo.png">
+<link rel="apple-touch-icon" href="assets/tc_logo.png">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button class="menu-btn" id="menu-btn" aria-label="Show topics" aria-controls="sidebar" aria-expanded="false">☰</button>
+  <a class="brand" href="index.html" aria-label="translationCore Help home"><img class="brand-logo" src="assets/translationcore-logo.png" alt="" width="25" height="28"><span class="wordmark">translationCore<span class="reg">®</span></span><span class="brand-rule" aria-hidden="true"></span><span class="brand-text">Help</span></a>
+  <form class="search" action="search.html" method="get" role="search" autocomplete="off">
+    <input id="q" name="q" type="search" placeholder="Search help (press /)" aria-label="Search help">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </form>
+</header>
+<div class="shell">
+<nav class="sidebar" id="sidebar" aria-label="Help topics">
+<details class="nav-group"><summary><a href="section-getting-started.html">Getting started</a></summary><ul>
+<li><a href="gs-install.html">Install and start tC4</a></li>
+<li><a href="gs-home.html">The Home screen</a></li>
+<li><a href="gs-modes.html">Understand, Translate and Check — the three modes</a></li>
+<li><a href="gs-save.html">Saving and checkpoints</a></li>
+<li><a href="gs-resume.html">Resume where you left off</a></li>
+<li><a href="gs-switch-project.html">Switch project or go back Home</a></li>
+</ul></details>
+<details class="nav-group" open><summary><a href="section-bible-projects.html">Bible projects</a></summary><ul>
+<li><a href="bp-new-bible.html">Create a Bible project</a></li>
+<li><a href="bp-add-book.html">Add a book</a></li>
+<li><a href="bp-open-book.html">Open a book and move between chapters</a></li>
+<li><a href="bp-import.html" class="current" aria-current="page">Import a project (translationCore 3, USFM or Scripture Burrito)</a></li>
+<li><a href="bp-export-pdf.html">Export a book as PDF</a></li>
+<li><a href="bp-export-usfm.html">Export a book as USFM (aligned or plain)</a></li>
+<li><a href="bp-export-burrito.html">Export a project as a Scripture Burrito</a></li>
+</ul></details>
+<details class="nav-group"><summary><a href="section-translate.html">Translate</a></summary><ul>
+<li><a href="tr-screen.html">The Translate screen</a></li>
+<li><a href="tr-source-texts.html">Source tabs — gateway texts and the original language</a></li>
+<li><a href="tr-draft-section.html">Draft a section</a></li>
+<li><a href="tr-place-verse-numbers.html">Place verse numbers</a></li>
+<li><a href="tr-verse-spans.html">Make or break a verse span</a></li>
+<li><a href="tr-verse-by-verse.html">Draft or revise one verse</a></li>
+<li><a href="tr-formatting.html">Paragraphs and poetry</a></li>
+<li><a href="tr-helps-panel.html">The helps panel in Translate</a></li>
+<li><a href="tr-edit-after-check.html">Editing a verse you already checked or aligned</a></li>
+</ul></details>
+<details class="nav-group"><summary><a href="section-understand.html">Understand</a></summary><ul>
+<li><a href="un-read-passage.html">Read a passage before you translate</a></li>
+<li><a href="un-notes.html">Translation notes and Translation Academy articles</a></li>
+<li><a href="un-word-links.html">Word links (Translation Words)</a></li>
+<li><a href="un-questions.html">Translation questions</a></li>
+<li><a href="un-simplified.html">The simplified text tab</a></li>
+<li><a href="un-user-comments.html">Write a user comment</a></li>
+</ul></details>
+<details class="nav-group"><summary><a href="section-check.html">Check</a></summary><ul>
+<li><a href="ck-tool-picker.html">Choose a checking tool</a></li>
+<li><a href="ck-translation-notes.html">Check with Translation Notes</a></li>
+<li><a href="ck-translation-words.html">Check with Translation Words</a></li>
+<li><a href="ck-decide.html">Decide on a check item (valid, invalid, to do)</a></li>
+<li><a href="ck-bookmarks.html">Bookmark a check</a></li>
+<li><a href="ck-comments.html">Write a check comment</a></li>
+<li><a href="ck-filter-sort.html">Filter and sort check items</a></li>
+<li><a href="ck-community-checking.html">Community Checking preview</a></li>
+</ul></details>
+<details class="nav-group"><summary><a href="section-align.html">Align</a></summary><ul>
+<li><a href="al-open.html">Open the Align tool</a></li>
+<li><a href="al-link-words.html">Link your words to the source</a></li>
+<li><a href="al-phrases.html">Align a phrase (merge and split cards)</a></li>
+<li><a href="al-modes.html">Align to the gateway text or the original language</a></li>
+<li><a href="al-suggestions.html">Alignment suggestions</a></li>
+<li><a href="al-mark-valid.html">Mark an alignment done</a></li>
+</ul></details>
+<details class="nav-group"><summary><a href="section-obs.html">Open Bible Stories</a></summary><ul>
+<li><a href="obs-create.html">Start an Open Bible Stories project</a></li>
+<li><a href="obs-story-tiles.html">Find a story on Home</a></li>
+<li><a href="obs-translate.html">Translate a story</a></li>
+<li><a href="obs-understand.html">Understand a story</a></li>
+<li><a href="obs-check.html">Check a story</a></li>
+<li><a href="obs-community-checking.html">Story preview and export</a></li>
+<li><a href="obs-export-markdown-pdf.html">Export stories as PDF or Markdown</a></li>
+</ul></details>
+<details class="nav-group"><summary><a href="section-resources.html">Resources and offline</a></summary><ul>
+<li><a href="rs-whats-included.html">What comes with the app</a></li>
+<li><a href="rs-source-texts.html">Download source texts</a></li>
+<li><a href="rs-checking-language.html">Change the checking language</a></li>
+<li><a href="rs-upgrade-helps.html">Update pinned helps</a></li>
+<li><a href="rs-upgrade-texts.html">Update scripture texts</a></li>
+<li><a href="rs-guided-fix.html">Fix a missing resource</a></li>
+<li><a href="rs-offline.html">Working offline</a></li>
+</ul></details>
+<details class="nav-group"><summary><a href="section-settings.html">Settings</a></summary><ul>
+<li><a href="st-project-settings.html">Project settings</a></li>
+<li><a href="st-where-projects-live.html">Where your projects are stored</a></li>
+<li><a href="st-app-language.html">Change the app language</a></li>
+</ul></details>
+<details class="nav-group"><summary><a href="section-troubleshooting.html">Troubleshooting and known limits</a></summary><ul>
+<li><a href="ts-save-problems.html">When a save fails</a></li>
+<li><a href="ts-protect-messages.html">Messages that protect your project</a></li>
+<li><a href="ts-crash-recovery.html">If the app closed unexpectedly or the window went blank</a></li>
+<li><a href="ts-platform.html">Windows, macOS and Linux notes</a></li>
+<li><a href="ts-share-door43.html">Share to Door43</a></li>
+<li><a href="ts-team-sync.html">Working as a team on several computers</a></li>
+<li><a href="ts-not-yet.html">Features not built yet</a></li>
+</ul></details>
+<details class="nav-group"><summary><a href="section-whats-new.html">What&#x27;s new</a></summary><ul>
+<li><a href="wn-alpha1.html">alpha.1 — First public build</a></li>
+<li><a href="wn-alpha2.html">alpha.2 — Check and align</a></li>
+<li><a href="wn-alpha4.html">alpha.4 — Open and resume</a></li>
+<li><a href="wn-alpha5.html">alpha.5 — Drafting for real</a></li>
+<li><a href="wn-alpha6.html">alpha.6 — Suggestions and resources</a></li>
+<li><a href="wn-alpha7.html">alpha.7 — Open Bible Stories</a></li>
+
+<li><a href="wn-add-a-project.html">Sep 27, 2026 — one + Add a project button on Home</a></li>
+<li><a href="wn-rc1.html">What&#x27;s new in 4.0 rc.1</a></li>
+</ul></details>
+</nav>
+<main id="main" class="content">
+<p class="crumbs"><a href="index.html">Help</a> › <a href="section-bible-projects.html">Bible projects</a></p>
+<h1>Import a project (translationCore 3, USFM or Scripture Burrito)</h1>
+<!-- tracking: status=shipped since=rc.1 -->
+<p class="lede">Bring existing work into tC4 as a new project, from translationCore 3 project zips, USFM files or a Scripture Burrito zip.</p>
+<p>Each import creates a new project. Nothing on this computer changes until you click <span class="ui">Import as a new Bible</span>.</p>
+<h2 id="steps">Steps</h2>
+<ol><li>On Home, click <span class="ui">+ Add a project</span>, then <span class="ui">Import a project</span> (1).</li></ol>
+<figure class="shot-inline" id="shot-1"><a href="img/bp-import-1.png"><img src="img/bp-import-1.png" alt="The Add a project dialog with three cards: New Bible, New Open Bible Stories, and Import a project, marked 1." width="520" height="346" loading="lazy"></a></figure>
+<ol start="2"><li>Choose the kind of file: <span class="ui">translationCore 3 project</span>, <span class="ui">USFM files</span> or <span class="ui">Scripture Burrito</span>.</li></ol>
+<figure class="shot-inline" id="shot-2"><a href="img/bp-import-2.png"><img src="img/bp-import-2.png" alt="Import, step 1 of 3: choose the kind of file you have, translationCore 3 project, USFM files or Scripture Burrito. Each import creates a new Bible. Nothing on this computer is changed until you confirm." width="560" height="438" loading="lazy"></a></figure>
+<ol start="3"><li>Drop your files on the drop area, or click it to choose them. Remove a wrong file with its ✕.</li><li>Click <span class="ui">Review files →</span>.</li><li>Read the review. A green dot means all is well. An orange dot means you need to act.</li><li>For a translationCore 3 project, choose <span class="ui">Look up on Door43</span> (needs the internet) or <span class="ui">Use installed versions</span> (1).</li></ol>
+<figure class="shot-inline overview" id="shot-3"><a href="img/bp-import-3.png"><img src="img/bp-import-3.png" alt="Step 3 of 3, Review what was found, for a translationCore 3 project: Titus, 3 chapters, 46 verses, 9 drafted, and what carries over. The orange Resource versions check offers Look up on Door43 and Use installed versions, marked 1. License, Details and Missing verses are green." width="760" height="660" loading="lazy"></a></figure>
+<ol start="7"><li>Check the <span class="ui">Bible name</span> and <span class="ui">Language code</span> and change them if needed.</li><li>Click <span class="ui">Import as a new Bible</span>. Home shows "{name} was imported", and the new card has an <span class="ui">Imported</span> badge.</li></ol>
+<p>To cancel, click <span class="ui">Cancel</span> or the ✕. Nothing is created.</p>
+<h2 id="if-the-import-button-stays-grey">If the import button stays grey</h2>
+<ul><li><strong>The name is already used.</strong> Type another Bible name.</li></ul>
+<figure class="shot-inline" id="shot-4"><a href="img/bp-import-4.png"><img src="img/bp-import-4.png" alt="The bottom of the review when the Bible name is already used: the name box is red with A project with this name is already on this computer. Change the Bible name, then import again. Import as a new Bible is greyed out." width="360" height="339" loading="lazy"></a></figure>
+<ul><li><strong>USFM files have no language code.</strong> Type it yourself, for example <code>es</code> or <code>es-419</code>.</li><li><strong>A file is damaged.</strong> A red "This file cannot be imported" box gives the reason. Nothing can be imported from that file. See <a href="ts-protect-messages.html">Messages that protect your project</a>.</li></ul>
+<h2 id="good-to-know">Good to know</h2>
+<ul><li>Each USFM file must be one book and start with an <code>\id</code> line.</li><li>All translationCore 3 zips in one import must be the same language.</li><li>A Scripture Burrito exported from tC4 also brings its alignments and checking decisions. See <a href="bp-export-burrito.html">Export a project as a Scripture Burrito</a>.</li><li>An imported USFM project has no source texts yet. Add them in <a href="st-project-settings.html">Project settings</a>.</li><li>The "was imported" message stays until you close it with its ✕.</li><li>To add a book to a project you already have, use <a href="bp-add-book.html">Add a book</a> › <span class="ui">Add books from USFM files</span>.</li></ul>
+<h2 id="related">Related topics</h2><ul class="related"><li><a href="bp-export-burrito.html">Export a project as a Scripture Burrito</a></li><li><a href="bp-add-book.html">Add a book</a></li><li><a href="st-project-settings.html">Project settings</a></li><li><a href="ts-protect-messages.html">Messages that protect your project</a></li></ul>
+</main>
+</div>
+<footer class="sitefoot">Documented from translationCore 4 build <code>b04c70f</code>, which includes v4.0.0-rc.1 plus later fixes. The app is the source of truth: if this page and the app disagree, the app is right — please tell us.</footer>
+<script src="search-index.js"></script>
+<script src="assets/search.js"></script>
+</body>
+</html>

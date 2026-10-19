@@ -19,7 +19,13 @@
           "text": "Paul, a servant of God",
           "base": "current"
         }
-      ]
+      ],
+      "draft": {
+        "request": "13131313131313131313131313131313",
+        "text": "Paul, a servant of God and",
+        "base": "current"
+      },
+      "drafts": 2
     }
   },
   "error": {

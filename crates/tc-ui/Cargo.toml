@@ -13,8 +13,13 @@ crate-type = ["cdylib", "rlib"]
 # The design-system gallery: renders every case of parity/ds-gallery/gallery-spec.json.
 gallery = ["dep:wasm-bindgen-futures", "dep:console_error_panic_hook"]
 # The application's runtime and page (APP-DESIGN section 6): the API client, the event stream,
-# the query cache, the server state and the language. Until unit A5 it mounts a stand-in root.
+# the query cache, the server state and the language. It mounts the port of tC4's `App.jsx`;
+# Home is A4a's stand-in until B2.
 app = ["dep:wasm-bindgen-futures", "dep:console_error_panic_hook"]
+# The no-loss probe page (APP-DESIGN 6.5-6.8, unit A4b): two test fields saved through tc-api's
+# test service, and the panic triggers the recovery tests need. Never in a release build:
+# `build-app.sh --test-hooks` builds it for the browser tests only.
+test-hooks = ["app", "tc-api/test-hooks"]
 
 # Every target: the pure parts (the style builder, the token enums, the layout arithmetic, and
 # the app's event parser, cache bookkeeping, call errors and language) compile on the host, so
@@ -27,6 +32,9 @@ tc-api = { path = "../tc-api" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+# The NFC the save machine compares with the server's stored text: the crate and version tc-app
+# and tc-journal normalize with, so the two sides agree on every character (APP-DESIGN 6.5).
+unicode-normalization = { workspace = true }
 
 [build-dependencies]
 serde_json = { workspace = true }
@@ -42,6 +50,7 @@ web-sys = { version = "0.3.106", features = [
   "AddEventListenerOptions",
   "Blob",
   "console",
+  "Crypto",
   "CssStyleDeclaration",
   "DataTransfer",
   "Document",

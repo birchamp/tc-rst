@@ -15,8 +15,9 @@ States: **done** (merged into main), **running**, **next** (its dependencies are
 | J1, J2 | tc-journal: model, codecs, fold, conflicts | done |
 | C | converge with main | done |
 | S1 | tc-store: store I/O, open, saves | done |
-| S2 | materialize off the actor, Git, held-file retries, outside edits | running: third fix round; then an extra verify loop (`verify-loop.js`) on the branch before main |
-| P | scale against the reference laptop | waits: S2 |
+| S2 | materialize off the actor, Git, held-file retries, outside edits | gated; extra verify loop running on `s2-verify` before main |
+| P | scale against the reference laptop | about 23 commits built on `storage`; continues when the chain restarts |
+| T | the storage side of the tC4 issue sweep | waits: P |
 | X | Door43 sync and USB exchange | waits: P |
 | I | tC4 and tC3 import | waits: X |
 | V | the CI gate that keeps old projects working (PLAN P10) | waits: I |
@@ -29,9 +30,9 @@ orchestrating session merges it into main with `merge-main.js`.
 
 | Phase | Units done | Running | Waiting |
 |---|---|---|---|
-| 0 | A1, A2, A3, A4a, A6a, A6b, A9, A10, A11, G0 (run on Windows) | A4b, A7 | A5 (A4b), A8 (A5) |
-| 1 | B1a | B1b | B2 (B1b, A5); B3 to B11 after B2 |
-| 2 | | | C0 (B1b), C1a, C1b, then C2 to C8 with their B units |
+| 0 | A1, A2, A3, A4a, A4b, A5, A6a, A6b, A7, A9, A10, A11, G0 (run on Windows) | A8 | |
+| 1 | B1a, B1b | | B2 (next), B3 to B11 after B2 |
+| 2 | C0 (merging) | | C1a, C1b, then C2 to C8 with their B units |
 | 3 | | | D1 (S2, C2, C5), D2 (S2, B8) |
 | 4 | | | E1a, E1b, E2 (X and their units) |
 | 5 | | | F1 (I, C1a) |
@@ -47,6 +48,8 @@ orchestrating session merges it into main with `merge-main.js`.
 | Door43's push refusal in tc-door43-fake and the client | running (`windows-push-refusal`) |
 
 ## tC4 issue sweep
+
+Fix run `tc4fix` (app-layer.js with a unit list): FIX-text, FIX-align, FIX-helps, FIX-misc, running.
 
 Every few days, and before a unit's verification when tC4 has moved, rerun
 `tc4-issue-sweep.js` with tC4's newest `main` as `tip`. Its results live in

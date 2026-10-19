@@ -62,6 +62,7 @@ fn every_shared_type_round_trips() {
     use tc_api::account::*;
     use tc_api::align::*;
     use tc_api::app::*;
+    use tc_api::buffer::*;
     use tc_api::check::*;
     use tc_api::error::*;
     use tc_api::event::*;
@@ -214,6 +215,16 @@ fn every_shared_type_round_trips() {
             EchoView,
             EchoWord,
             TokenBase,
+            StoredDraft,
+            // the draft buffer
+            BufferKey,
+            FieldKey,
+            FieldKind,
+            FieldPlace,
+            BufferEntry,
+            SentSave,
+            DraftCall,
+            BufferLine,
         ]
     });
 }

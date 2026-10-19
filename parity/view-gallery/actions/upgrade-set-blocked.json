@@ -1,0 +1,430 @@
+{
+  "case": "upgrade-set-blocked",
+  "calls": [
+    {
+      "at": "mount",
+      "name": "sourceGateways",
+      "args": []
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "en",
+          "org": "unfoldingWord",
+          "name": "English",
+          "autonym": "English",
+          "dir": "ltr",
+          "seen": {
+            "tn": "v89",
+            "tw": "v89",
+            "ta": "v89"
+          },
+          "hasTwl": true,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": true,
+          "key": "en::unfoldingWord"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "es-419",
+          "org": "es-419_gl",
+          "name": "Spanish (Latin American)",
+          "autonym": "Español (Latinoamérica)",
+          "dir": "ltr",
+          "seen": {
+            "tn": "v66",
+            "tw": "v37",
+            "ta": "v4"
+          },
+          "hasTwl": true,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": true,
+          "key": "es-419::es-419_gl"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "fr",
+          "org": "Xenizo",
+          "name": "French",
+          "autonym": "Français",
+          "dir": "ltr",
+          "seen": {
+            "tn": "v2.0",
+            "tw": "v2.0",
+            "ta": "v2.0"
+          },
+          "hasTwl": true,
+          "hasBible": false,
+          "hasTq": true,
+          "hasSimplified": false,
+          "key": "fr::Xenizo"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "fr",
+          "org": "MVHS",
+          "name": "French",
+          "autonym": "Français",
+          "dir": "ltr",
+          "seen": {
+            "tn": "v0.0.2",
+            "tw": "v0.0.1",
+            "ta": "v0.0.2"
+          },
+          "hasTwl": true,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": true,
+          "key": "fr::MVHS"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "ru",
+          "org": "ru_gl",
+          "name": "Russian",
+          "autonym": "Русский",
+          "dir": "ltr",
+          "seen": {
+            "tn": "v60.1",
+            "tw": "v14.2",
+            "ta": "v13.3"
+          },
+          "hasTwl": true,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": false,
+          "key": "ru::ru_gl"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "fa",
+          "org": "fa_gl",
+          "name": "Persian",
+          "autonym": "فارسی",
+          "dir": "rtl",
+          "seen": {
+            "tn": "v9",
+            "tw": "v9",
+            "ta": "v7.8"
+          },
+          "hasTwl": true,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": true,
+          "key": "fa::fa_gl"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "ar",
+          "org": "BSOJ",
+          "name": "Arabic",
+          "autonym": "العربية",
+          "dir": "rtl",
+          "seen": {
+            "tn": "v6.1",
+            "tw": "v5",
+            "ta": "v3"
+          },
+          "hasTwl": true,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": true,
+          "literal": "ar_avd",
+          "key": "ar::BSOJ"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "id",
+          "org": "bahtraku",
+          "name": "Indonesian",
+          "autonym": "Bahasa Indonesia",
+          "dir": "ltr",
+          "seen": {
+            "tn": "v25",
+            "tw": "v26",
+            "ta": "v30"
+          },
+          "hasTwl": true,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": true,
+          "key": "id::bahtraku"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "hi",
+          "org": "translationCore-Create-BCS",
+          "name": "Hindi",
+          "autonym": "हिन्दी",
+          "dir": "ltr",
+          "seen": {
+            "tn": "v9",
+            "tw": "v8",
+            "ta": "v7"
+          },
+          "hasTwl": true,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": true,
+          "key": "hi::translationCore-Create-BCS"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "bn",
+          "org": "translationCore-Create-BCS",
+          "name": "Bengali",
+          "autonym": "বাংলা",
+          "dir": "ltr",
+          "seen": {
+            "tn": "v6",
+            "tw": "v4",
+            "ta": "v5.0"
+          },
+          "hasTwl": true,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": true,
+          "key": "bn::translationCore-Create-BCS"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "gu",
+          "org": "translationCore-Create-BCS",
+          "name": "Gujarati",
+          "autonym": "ગુજરાતી",
+          "dir": "ltr",
+          "seen": {
+            "tn": "v6",
+            "tw": "v4",
+            "ta": "v4"
+          },
+          "hasTwl": true,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": true,
+          "key": "gu::translationCore-Create-BCS"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "kn",
+          "org": "translationCore-Create-BCS",
+          "name": "Kannada",
+          "autonym": "ಕನ್ನಡ",
+          "dir": "ltr",
+          "seen": {
+            "tn": "v6",
+            "tw": "v4",
+            "ta": "v4"
+          },
+          "hasTwl": true,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": true,
+          "key": "kn::translationCore-Create-BCS"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "mr",
+          "org": "translationCore-Create-BCS",
+          "name": "Marathi",
+          "autonym": "मराठी",
+          "dir": "ltr",
+          "seen": {
+            "tn": "v6",
+            "tw": "v4",
+            "ta": "v4"
+          },
+          "hasTwl": true,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": true,
+          "key": "mr::translationCore-Create-BCS"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "ne",
+          "org": "translationCore-Create-BCS",
+          "name": "Nepali",
+          "autonym": "नेपाली",
+          "dir": "ltr",
+          "seen": {
+            "tn": "v7",
+            "tw": "v5",
+            "ta": "v5"
+          },
+          "hasTwl": true,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": true,
+          "key": "ne::translationCore-Create-BCS"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "or",
+          "org": "translationCore-Create-BCS",
+          "name": "Odia",
+          "autonym": "ଓଡ଼ିଆ",
+          "dir": "ltr",
+          "seen": {
+            "tn": "v5",
+            "tw": "v4",
+            "ta": "v4"
+          },
+          "hasTwl": true,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": true,
+          "key": "or::translationCore-Create-BCS"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "te",
+          "org": "translationCore-Create-BCS",
+          "name": "Telugu",
+          "autonym": "తెలుగు",
+          "dir": "ltr",
+          "seen": {
+            "tn": "v6",
+            "tw": "v4",
+            "ta": "v4"
+          },
+          "hasTwl": true,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": true,
+          "key": "te::translationCore-Create-BCS"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "ml",
+          "org": "Door43-Catalog",
+          "name": "Malayalam",
+          "autonym": "മലയാളം",
+          "dir": "ltr",
+          "seen": {
+            "tn": "v14.2",
+            "tw": "v8.2",
+            "ta": "v10.3"
+          },
+          "hasTwl": false,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": false,
+          "key": "ml::Door43-Catalog"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "installedCountFor",
+      "args": [
+        {
+          "id": "ur-deva",
+          "org": "Door43-Catalog",
+          "name": "Urdu (Devanagari)",
+          "autonym": "اردو",
+          "dir": "rtl",
+          "seen": {
+            "tn": "v14.1",
+            "tw": "v8.3",
+            "ta": "v10.1"
+          },
+          "hasTwl": false,
+          "hasBible": true,
+          "hasTq": true,
+          "hasSimplified": false,
+          "key": "ur-deva::Door43-Catalog"
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "loadUnderstand",
+      "args": []
+    }
+  ]
+}

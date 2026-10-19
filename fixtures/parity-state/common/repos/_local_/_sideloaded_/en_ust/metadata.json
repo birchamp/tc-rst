@@ -1,0 +1,684 @@
+{
+  "format": "scripture burrito",
+  "meta": {
+    "version": "1.0.0",
+    "category": "source",
+    "generator": {
+      "softwareName": "go-rc2sb",
+      "softwareVersion": "v0.5.0",
+      "userName": ""
+    },
+    "defaultLocale": "en",
+    "dateCreated": "2026-09-27T00:37:14.977Z",
+    "normalization": "NFC"
+  },
+  "idAuthorities": {
+    "dcs": {
+      "id": "https://git.door43.org",
+      "name": {
+        "en": "Door43 Content Service"
+      }
+    }
+  },
+  "identification": {
+    "primary": {
+      "dcs": {
+        "unfoldingWord/en_ust": {
+          "revision": "85f274a74245cb418f85266e1a5b524bc3e91e9c",
+          "timestamp": "2026-09-27T00:37:14.977Z"
+        }
+      }
+    },
+    "name": {
+      "en": "unfoldingWord® Simplified Text"
+    },
+    "description": {
+      "en": "unfoldingWord® Simplified Text"
+    },
+    "abbreviation": {
+      "en": "UST"
+    }
+  },
+  "languages": [
+    {
+      "tag": "en",
+      "name": {
+        "en": "English"
+      },
+      "scriptDirection": "ltr"
+    }
+  ],
+  "type": {
+    "flavorType": {
+      "name": "scripture",
+      "flavor": {
+        "name": "textTranslation",
+        "usfmVersion": "3.0",
+        "translationType": "revision",
+        "audience": "common",
+        "projectType": "standard"
+      },
+      "currentScope": {
+        "TIT": []
+      }
+    }
+  },
+  "confidential": false,
+  "localizedNames": {
+    "book-1co": {
+      "abbr": {
+        "en": "1Co"
+      },
+      "short": {
+        "en": "First Corinthians"
+      },
+      "long": {
+        "en": "The First Letter of Paul to the Corinthians"
+      }
+    },
+    "book-1jn": {
+      "abbr": {
+        "en": "1Jn"
+      },
+      "short": {
+        "en": "First John"
+      },
+      "long": {
+        "en": "The First Letter of John"
+      }
+    },
+    "book-1ki": {
+      "abbr": {
+        "en": "1Ki"
+      },
+      "short": {
+        "en": "First Kings"
+      },
+      "long": {
+        "en": "The First Book of Kings"
+      }
+    },
+    "book-1pe": {
+      "abbr": {
+        "en": "1Pe"
+      },
+      "short": {
+        "en": "First Peter"
+      },
+      "long": {
+        "en": "The First Letter of Peter"
+      }
+    },
+    "book-1sa": {
+      "abbr": {
+        "en": "1Sa"
+      },
+      "short": {
+        "en": "First Samuel"
+      },
+      "long": {
+        "en": "The First Book of Samuel"
+      }
+    },
+    "book-1th": {
+      "abbr": {
+        "en": "1Th"
+      },
+      "short": {
+        "en": "First Thessalonians"
+      },
+      "long": {
+        "en": "The First Letter of Paul to the Thessalonians"
+      }
+    },
+    "book-1ti": {
+      "abbr": {
+        "en": "1Ti"
+      },
+      "short": {
+        "en": "First Timothy"
+      },
+      "long": {
+        "en": "The First Letter of Paul to Timothy"
+      }
+    },
+    "book-2co": {
+      "abbr": {
+        "en": "2Co"
+      },
+      "short": {
+        "en": "Second Corinthians"
+      },
+      "long": {
+        "en": "The Second Letter of Paul to the Corinthians"
+      }
+    },
+    "book-2jn": {
+      "abbr": {
+        "en": "2Jn"
+      },
+      "short": {
+        "en": "Second John"
+      },
+      "long": {
+        "en": "The Second Letter of John"
+      }
+    },
+    "book-2ki": {
+      "abbr": {
+        "en": "2Ki"
+      },
+      "short": {
+        "en": "Second Kings"
+      },
+      "long": {
+        "en": "The Second Book of Kings"
+      }
+    },
+    "book-2pe": {
+      "abbr": {
+        "en": "2Pe"
+      },
+      "short": {
+        "en": "Second Peter"
+      },
+      "long": {
+        "en": "The Second Letter of Peter"
+      }
+    },
+    "book-2sa": {
+      "abbr": {
+        "en": "2Sa"
+      },
+      "short": {
+        "en": "Second Samuel"
+      },
+      "long": {
+        "en": "The Second Book of Samuel"
+      }
+    },
+    "book-2th": {
+      "abbr": {
+        "en": "2Th"
+      },
+      "short": {
+        "en": "Second Thessalonians"
+      },
+      "long": {
+        "en": "The Second Letter of Paul to the Thessalonians"
+      }
+    },
+    "book-2ti": {
+      "abbr": {
+        "en": "2Ti"
+      },
+      "short": {
+        "en": "Second Timothy"
+      },
+      "long": {
+        "en": "The Second Letter of Paul to Timothy"
+      }
+    },
+    "book-3jn": {
+      "abbr": {
+        "en": "3Jn"
+      },
+      "short": {
+        "en": "Third John"
+      },
+      "long": {
+        "en": "The Third Letter of John"
+      }
+    },
+    "book-act": {
+      "abbr": {
+        "en": "Act"
+      },
+      "short": {
+        "en": "Acts"
+      },
+      "long": {
+        "en": "The Acts of the Apostles"
+      }
+    },
+    "book-col": {
+      "abbr": {
+        "en": "Col"
+      },
+      "short": {
+        "en": "Colossians"
+      },
+      "long": {
+        "en": "The Letter of Paul to the Colossians"
+      }
+    },
+    "book-deu": {
+      "abbr": {
+        "en": "Deu"
+      },
+      "short": {
+        "en": "Deuteronomy"
+      },
+      "long": {
+        "en": "The Book of Deuteronomy"
+      }
+    },
+    "book-eph": {
+      "abbr": {
+        "en": "Eph"
+      },
+      "short": {
+        "en": "Ephesians"
+      },
+      "long": {
+        "en": "The Letter of Paul to the Ephesians"
+      }
+    },
+    "book-est": {
+      "abbr": {
+        "en": "Est"
+      },
+      "short": {
+        "en": "Esther"
+      },
+      "long": {
+        "en": "The Book of Esther"
+      }
+    },
+    "book-exo": {
+      "abbr": {
+        "en": "Exo"
+      },
+      "short": {
+        "en": "Exodus"
+      },
+      "long": {
+        "en": "The Book of Exodus"
+      }
+    },
+    "book-ezr": {
+      "abbr": {
+        "en": "Ezr"
+      },
+      "short": {
+        "en": "Ezra"
+      },
+      "long": {
+        "en": "The Book of Ezra"
+      }
+    },
+    "book-gal": {
+      "abbr": {
+        "en": "Gal"
+      },
+      "short": {
+        "en": "Galatians"
+      },
+      "long": {
+        "en": "The Letter of Paul to the Galatians"
+      }
+    },
+    "book-gen": {
+      "abbr": {
+        "en": "Gen"
+      },
+      "short": {
+        "en": "Genesis"
+      },
+      "long": {
+        "en": "The Book of Genesis"
+      }
+    },
+    "book-hab": {
+      "abbr": {
+        "en": "Hab"
+      },
+      "short": {
+        "en": "Habakkuk"
+      },
+      "long": {
+        "en": "The Book of Habakkuk"
+      }
+    },
+    "book-hag": {
+      "abbr": {
+        "en": "Hag"
+      },
+      "short": {
+        "en": "Haggai"
+      },
+      "long": {
+        "en": "The Book of Haggai"
+      }
+    },
+    "book-heb": {
+      "abbr": {
+        "en": "Heb"
+      },
+      "short": {
+        "en": "Hebrews"
+      },
+      "long": {
+        "en": "The Letter to the Hebrews"
+      }
+    },
+    "book-jas": {
+      "abbr": {
+        "en": "Jas"
+      },
+      "short": {
+        "en": "James"
+      },
+      "long": {
+        "en": "The Letter of James"
+      }
+    },
+    "book-jdg": {
+      "abbr": {
+        "en": "Jdg"
+      },
+      "short": {
+        "en": "Judges"
+      },
+      "long": {
+        "en": "The Book of Judges"
+      }
+    },
+    "book-jhn": {
+      "abbr": {
+        "en": "Jhn"
+      },
+      "short": {
+        "en": "John"
+      },
+      "long": {
+        "en": "The Gospel of John"
+      }
+    },
+    "book-job": {
+      "abbr": {
+        "en": "Job"
+      },
+      "short": {
+        "en": "Job"
+      },
+      "long": {
+        "en": "The Book of Job"
+      }
+    },
+    "book-jol": {
+      "abbr": {
+        "en": "Jol"
+      },
+      "short": {
+        "en": "Joel"
+      },
+      "long": {
+        "en": "The Book of Joel"
+      }
+    },
+    "book-jon": {
+      "abbr": {
+        "en": "Jon"
+      },
+      "short": {
+        "en": "Jonah"
+      },
+      "long": {
+        "en": "The Book of Jonah"
+      }
+    },
+    "book-jos": {
+      "abbr": {
+        "en": "Jos"
+      },
+      "short": {
+        "en": "Joshua"
+      },
+      "long": {
+        "en": "The Book of Joshua"
+      }
+    },
+    "book-jud": {
+      "abbr": {
+        "en": "Jud"
+      },
+      "short": {
+        "en": "Jude"
+      },
+      "long": {
+        "en": "The Letter of Jude"
+      }
+    },
+    "book-lam": {
+      "abbr": {
+        "en": "Lam"
+      },
+      "short": {
+        "en": "Lamentations"
+      },
+      "long": {
+        "en": "The Book of Lamentations"
+      }
+    },
+    "book-lev": {
+      "abbr": {
+        "en": "Lev"
+      },
+      "short": {
+        "en": "Leviticus"
+      },
+      "long": {
+        "en": "The Book of Leviticus"
+      }
+    },
+    "book-luk": {
+      "abbr": {
+        "en": "Luk"
+      },
+      "short": {
+        "en": "Luke"
+      },
+      "long": {
+        "en": "The Gospel of Luke"
+      }
+    },
+    "book-mal": {
+      "abbr": {
+        "en": "Mal"
+      },
+      "short": {
+        "en": "Malachi"
+      },
+      "long": {
+        "en": "The Book of Malachi"
+      }
+    },
+    "book-mat": {
+      "abbr": {
+        "en": "Mat"
+      },
+      "short": {
+        "en": "Matthew"
+      },
+      "long": {
+        "en": "The Gospel of Matthew"
+      }
+    },
+    "book-mrk": {
+      "abbr": {
+        "en": "Mrk"
+      },
+      "short": {
+        "en": "Mark"
+      },
+      "long": {
+        "en": "The Gospel of Mark"
+      }
+    },
+    "book-nam": {
+      "abbr": {
+        "en": "Nam"
+      },
+      "short": {
+        "en": "Nahum"
+      },
+      "long": {
+        "en": "The Book of Nahum"
+      }
+    },
+    "book-neh": {
+      "abbr": {
+        "en": "Neh"
+      },
+      "short": {
+        "en": "Nehemiah"
+      },
+      "long": {
+        "en": "The Book of Nehemiah"
+      }
+    },
+    "book-oba": {
+      "abbr": {
+        "en": "Oba"
+      },
+      "short": {
+        "en": "Obadiah"
+      },
+      "long": {
+        "en": "The Book of Obadiah"
+      }
+    },
+    "book-phm": {
+      "abbr": {
+        "en": "Phm"
+      },
+      "short": {
+        "en": "Philemon"
+      },
+      "long": {
+        "en": "The Letter of Paul to Philemon"
+      }
+    },
+    "book-php": {
+      "abbr": {
+        "en": "Php"
+      },
+      "short": {
+        "en": "Philippians"
+      },
+      "long": {
+        "en": "The Letter of Paul to the Philippians"
+      }
+    },
+    "book-pro": {
+      "abbr": {
+        "en": "Pro"
+      },
+      "short": {
+        "en": "Proverbs"
+      },
+      "long": {
+        "en": "The Book of Proverbs"
+      }
+    },
+    "book-psa": {
+      "abbr": {
+        "en": "Psa"
+      },
+      "short": {
+        "en": "Psalms"
+      },
+      "long": {
+        "en": "The Book of Psalms"
+      }
+    },
+    "book-rev": {
+      "abbr": {
+        "en": "Rev"
+      },
+      "short": {
+        "en": "Revelation"
+      },
+      "long": {
+        "en": "The Book of Revelation"
+      }
+    },
+    "book-rom": {
+      "abbr": {
+        "en": "Rom"
+      },
+      "short": {
+        "en": "Romans"
+      },
+      "long": {
+        "en": "The Letter of Paul to the Romans"
+      }
+    },
+    "book-rut": {
+      "abbr": {
+        "en": "Rut"
+      },
+      "short": {
+        "en": "Ruth"
+      },
+      "long": {
+        "en": "The Book of Ruth"
+      }
+    },
+    "book-sng": {
+      "abbr": {
+        "en": "Sng"
+      },
+      "short": {
+        "en": "Song of Songs"
+      },
+      "long": {
+        "en": "The Song of Songs"
+      }
+    },
+    "book-tit": {
+      "abbr": {
+        "en": "Tit"
+      },
+      "short": {
+        "en": "Titus"
+      },
+      "long": {
+        "en": "The Letter of Paul to Titus"
+      }
+    },
+    "book-zep": {
+      "abbr": {
+        "en": "Zep"
+      },
+      "short": {
+        "en": "Zephaniah"
+      },
+      "long": {
+        "en": "The Book of Zephaniah"
+      }
+    }
+  },
+  "ingredients": {
+    "ingredients/TIT.usfm": {
+      "mimeType": "text/plain",
+      "checksum": {
+        "md5": "95a246124fd83c891409e38f53695cd9"
+      },
+      "size": 186101,
+      "scope": {
+        "TIT": []
+      }
+    }
+  },
+  "copyright": {
+    "shortStatements": [
+      {
+        "statement": "© unfoldingWord 2026, CC BY-SA 4.0",
+        "mimetype": "text/plain",
+        "lang": "en"
+      }
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "case": "section-empty-confirm",
+  "calls": [
+    {
+      "at": "mount",
+      "name": "loadUnderstand",
+      "args": []
+    }
+  ]
+}

@@ -9,11 +9,12 @@ this file.
 | SHA instructions | yes (`sha_ni`) |
 | AVX-512 | no (`avx2` only) |
 | Memory | 61 GiB |
-| Disks | the checkout on a Samsung 870 EVO SATA SSD (`/home`, ext4); a Samsung 980 PRO NVMe (`/storage`, btrfs) is unused |
+| Disks | the checkout on a Samsung 870 EVO SATA SSD (`/home`, ext4); build folders on another 870 EVO (`/`, through links to `/var/tmp/tc-rst-target/<worktree>`); a Samsung 980 PRO NVMe (`/storage`, btrfs) is unused |
 | OS | Ubuntu 26.04.1 LTS, Linux 7.0.0-38, glibc 2.43 |
 | Rust | 1.99.1 stable, with `wasm32-unknown-unknown` |
 | Node | 22.23.3 |
 | wasm-bindgen | 0.2.129 (`cargo install wasm-bindgen-cli --version 0.2.129 --locked`), for `crates/tc-ui/build-app.sh` |
+| tC4 clones | `~/unfoldingword/translationcore4` at `d310bf3`, read-only, for builders; `~/unfoldingword/tc4-ref`, the same commit with `npm ci`, for parity and gallery runs (`TC4_ROOT`) |
 | Playwright | 1.56.1, Chromium 141.0.7390.37 (build 1194), from Playwright's Ubuntu 24.04 build because 1.56.1 does not know 26.04 (`PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64`) |
 
 ## What this means for the numbers

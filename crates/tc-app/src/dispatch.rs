@@ -17,16 +17,22 @@
 //!    whether the id was sent: a retry of a write that ran, after the switch went off, gets
 //!    that write's reply and not a refusal that says it never happened;
 //! 3. a query runs in the caller's task and changes nothing;
-//! 4. a write goes through the [`ReplyCache`](crate::replies::ReplyCache): the first attempt
-//!    runs on a task of its own, so a dropped connection never stops it half way, and a retry
-//!    gets that attempt's reply. Every answer of a write is cached, refusals included: a
-//!    retry after a lost reply must get the same refusal, not run the write again. The one
-//!    exception is `test/reset` ([`kept_reply`]).
+//! 4. a write that names a project (`Write::at`) is checked against the screen's open
+//!    session before anything else (§4.3): a closed or replaced scope is
+//!    `NotSaved(StaleScope)`, answered before the internet check and never kept under the
+//!    request's id, because the UI resends the same id once it has reattached. The write
+//!    then holds the session open until it ends, whoever waits for its reply;
+//! 5. a write goes through the [`ReplyCache`](crate::replies::ReplyCache) of its session, or
+//!    the app-wide one when it names no project: the first attempt runs on a task of its
+//!    own, so a dropped connection never stops it half way, and a retry gets that attempt's
+//!    reply. Every answer of a write is cached, refusals included: a retry after a lost reply
+//!    must get the same refusal, not run the write again. The one exception is `test/reset`
+//!    ([`kept_reply`]).
 
 use std::future::Future;
 
 use serde_json::json;
-use tc_api::{ApiError, Endpoint, Reply, Write};
+use tc_api::{ApiError, Endpoint, NotSaved, Reply, Write};
 
 use crate::app::{Answer, App, Then};
 use crate::jobs::stop_reason;
@@ -135,6 +141,20 @@ impl App {
             Ok(req) => req,
             Err(error) => return self.error_answer(error),
         };
+        // A project's write runs only in the screen's open session, and the lease keeps that
+        // session open until the write ends. A refusal here is never cached: the same id comes
+        // back once the UI has reattached to the current session.
+        let lease = match req.at() {
+            Some(at) => match self.inner.sessions.writer(at) {
+                Some(lease) => Some(lease),
+                None => return self.error_answer(ApiError::NotSaved(NotSaved::StaleScope)),
+            },
+            None => None,
+        };
+        let replies = lease.as_ref().map_or_else(
+            || self.inner.replies.clone(),
+            |lease| lease.session().replies().clone(),
+        );
         // The cache applies this only to an id it has not seen.
         let refuse = self.needs_internet::<E>();
         // The digest is of the request as serde writes it again, not of the body's bytes:
@@ -154,6 +174,7 @@ impl App {
 
         let app = self.clone();
         let work = async move {
+            let _lease = lease;
             #[cfg(feature = "test-hooks")]
             if let Some(ended) = app.crash_at(CrashPoint::BeforeStore, path) {
                 return ended;
@@ -186,9 +207,7 @@ impl App {
             Outcome::Reply(bytes.into())
         };
 
-        match self
-            .inner
-            .replies
+        match replies
             .run(kept_reply(path), id, digest, refuse, work)
             .await
         {
@@ -263,6 +282,10 @@ mod tests {
     impl Write for Boom {
         fn request(&self) -> RequestId {
             self.request
+        }
+
+        fn at(&self) -> Option<&tc_api::Scope> {
+            None
         }
     }
 

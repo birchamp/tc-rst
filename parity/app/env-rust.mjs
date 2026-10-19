@@ -12,11 +12,12 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { CONTEXT_OPTIONS } from './observe.mjs';
 import { BIBLE, OBS } from './screens.mjs';
+import { buildScenarioState } from './state.mjs';
 
 export const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-/** The folders the Rust app gives the two projects of each scenario, by tC4 repo path. B1b's
- * scenario loader must create them under these names, or change this map. */
+/** The folders the Rust app gives the two projects of each scenario, by tC4 repo path: the
+ * names B1b's scenario loader gives them (`tc_app::backend::scenario`). */
 export const PROJECTS = {
   sample: { [BIBLE]: 'sample_burrito', [OBS]: 'sample_burrito_obs' },
   'en-pins': { [BIBLE]: 'sample_burrito', [OBS]: 'sample_burrito_obs' },
@@ -34,6 +35,24 @@ export function rustTracks(url) {
 /** A request id as tc-api spells it: 16 random bytes in lowercase hex. */
 export const newRequestId = () => crypto.randomBytes(16).toString('hex');
 
+/** Whether `parity/app/units.json` lists `unit` as landed. */
+export function landed(unit) {
+  const units = JSON.parse(fs.readFileSync(path.join(REPO, 'parity', 'app', 'units.json'), 'utf8'));
+  return units.landed.includes(unit);
+}
+
+/** What Home looks like when the Rust app has drawn it (A5 D6): both project cards once unit B2
+ * ports Home; before that the top bar's account button, because the stand-in Home draws no
+ * project. */
+export async function rustHomeReady(page, card) {
+  if (landed('B2')) {
+    await card(BIBLE).waitFor();
+    await card(OBS).waitFor();
+  } else {
+    await page.getByTestId('account-menu').waitFor();
+  }
+}
+
 /** A Door43 step the Rust environment cannot take yet. */
 export function notYet(step, unit) {
   return async () => {
@@ -41,10 +60,14 @@ export function notYet(step, unit) {
   };
 }
 
-/** Where B1b's `--backend memory --scenario <.state dir>` goes; today the app starts with no
- * projects whatever the scenario. */
-function scenarioArgs(_scenario) {
-  return [];
+/** Builds `scenario`'s state into `<dir>/state` from this repository's copies of tC4's fixtures,
+ * the same bytes the tC4 environment starts from (APP-DESIGN 7.2), and answers the flag that
+ * starts `tc4` on it: the memory backend holds its projects, and its sideloaded resources go into
+ * the app's store (unit B1b). */
+export function scenarioArgs(scenario, dir) {
+  const state = path.join(dir, 'state');
+  buildScenarioState({ scenario, out: state });
+  return ['--scenario', state];
 }
 
 /** A port nothing listens on: Door43 stays on this machine even if the internet switch were
@@ -94,7 +117,8 @@ function apiCall(base, token, endpoint, body) {
  * needs: the context options with the token, the route that keeps every request on this
  * machine, the requests a shot waits for, the failure callouts, and `busy` for `settle`.
  *
- * `tc4` is a binary built with `--features test-hooks`; `ui` is the folder build-app.sh made.
+ * `tc4` is a binary built with `--features test-hooks,fixture-backend`; `ui` is the folder
+ * build-app.sh made.
  * Every run gets its own app-data and projects folders under `runDir` (in target/, never the
  * person's own folders: without `--projects`, tc4 uses `~/translationCore4/projects`).
  */
@@ -107,7 +131,7 @@ export async function startRustEnv({ scenario, tc4, ui, runDir = path.join(REPO,
   // stdin stays open: a closed stdin makes tc4 quit.
   const child = spawn(path.resolve(tc4), [
     'serve', '--app-data', path.join(dir, 'appdata'), '--projects', path.join(dir, 'projects'), '--ui', path.resolve(ui),
-    '--door43', DEAD_DOOR43, '--test-hooks', ...scenarioArgs(scenario),
+    '--door43', DEAD_DOOR43, '--test-hooks', ...scenarioArgs(scenario, dir),
   ], { stdio: ['pipe', 'pipe', 'inherit'] });
   const lines = readline.createInterface({ input: child.stdout })[Symbol.asyncIterator]();
   const exited = new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal })));
@@ -116,7 +140,8 @@ export async function startRustEnv({ scenario, tc4, ui, runDir = path.join(REPO,
     fs.rmSync(dir, { recursive: true, force: true });
     const end = first.end ?? await exited;
     throw new Error(`tc4 ended before printing its address (exit ${end.code ?? end.signal}); `
-      + 'an exit 2 is the usage error of a tc4 built without `--features test-hooks`, which does not know --test-hooks');
+      + 'an exit 2 is the usage error of a tc4 built without `--features test-hooks,fixture-backend`, '
+      + 'which does not know --test-hooks or --scenario');
   }
   const address = JSON.parse(first.value);
   if (address.error) {
@@ -133,7 +158,7 @@ export async function startRustEnv({ scenario, tc4, ui, runDir = path.join(REPO,
   } catch (error) {
     child.kill('SIGKILL');
     fs.rmSync(dir, { recursive: true, force: true });
-    if (error.status === 404) throw new Error('tc4 answers no test hooks: start it with --test-hooks from a build with `--features test-hooks`');
+    if (error.status === 404) throw new Error('tc4 answers no test hooks: start it with --test-hooks from a build with `--features test-hooks,fixture-backend`');
     throw error;
   }
   const refused = new Set();
@@ -173,6 +198,9 @@ export async function startRustEnv({ scenario, tc4, ui, runDir = path.join(REPO,
       await page.goto('about:blank');
       await page.goto(`${origin}/#t=${token}`);
     },
+    homeReady: rustHomeReady,
+    /** The run's app-data folder, where a test can make a save fail (A4b's P7). */
+    appData: path.join(dir, 'appdata'),
     /** Work the request tracker cannot see: the server's (`test/quiet`) and the page's own
      * (`window.__tcIdle`, which also covers the catalogs it fetches). */
     async busy(page) {

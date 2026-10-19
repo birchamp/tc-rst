@@ -1,0 +1,15 @@
+{
+  "case": "check-empty-versification-unavailable",
+  "calls": [
+    {
+      "at": "mount",
+      "name": "runPreflight",
+      "args": []
+    },
+    {
+      "at": "mount",
+      "name": "refreshCheckDraft",
+      "args": []
+    }
+  ]
+}

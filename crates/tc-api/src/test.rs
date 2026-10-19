@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::RequestId;
+use crate::ids::{RequestId, Scope};
 use crate::shown::Shown;
 use crate::token::ShownToken;
 
@@ -162,6 +162,21 @@ pub struct FieldStore {
     pub text: String,
 }
 
+/// `test/saveVerse`: a verse save through the real storage seam and store (unit C0), so the
+/// contract cases that run through tc-app go through dispatch, the session's reply cache and
+/// the store before C2's `editor/saveVerse` exists. C2 moves those cases onto its endpoint
+/// and deletes this one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SaveVerse {
+    pub at: Scope,
+    pub request: RequestId,
+    /// The verse the field displayed.
+    pub shown: ShownToken,
+    pub words: String,
+}
+
 /// `test/fieldLog`: a test field's current value with its token, and every text stored
 /// into it, in order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -177,6 +192,35 @@ pub struct FieldLog {
 pub struct FieldLogView {
     pub current: Shown<String>,
     pub stores: Vec<StoredText>,
+    /// The newest draft `test/fieldDraft` kept for the field, if any.
+    pub draft: Option<StoredDraft>,
+    /// How many drafts the field was sent, so a test can count them.
+    pub drafts: u32,
+}
+
+/// `test/fieldDraft`: the draft of a test field, as `editor/draft` will keep a verse's in
+/// `.tc/drafts.json` (STORAGE §5.14). It keeps the newest text per field and changes neither
+/// the field's value nor its stores, so a test can show that the drafts `boot.js` posts after
+/// three panics reach the server (§6.8). Its token is checked as `test/fieldStore` checks one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FieldDraft {
+    pub request: RequestId,
+    pub field: String,
+    pub shown: ShownToken,
+    pub text: String,
+}
+
+/// A draft as `test/fieldLog` shows it: its request, its text in NFC, and which version of
+/// the field its token named.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct StoredDraft {
+    pub request: RequestId,
+    pub text: String,
+    pub base: TokenBase,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

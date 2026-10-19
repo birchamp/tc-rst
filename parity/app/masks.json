@@ -33,6 +33,42 @@
           "y": 585,
           "width": 552,
           "height": 59
+        },
+        "feedback-sending": {
+          "x": 364,
+          "y": 580,
+          "width": 552,
+          "height": 220
+        },
+        "feedback-not-sent-offline": {
+          "x": 364,
+          "y": 580,
+          "width": 552,
+          "height": 220
+        },
+        "feedback-not-sent-timeout": {
+          "x": 364,
+          "y": 580,
+          "width": 552,
+          "height": 220
+        },
+        "feedback-not-sent-refused": {
+          "x": 364,
+          "y": 580,
+          "width": 552,
+          "height": 220
+        },
+        "feedback-not-sent-not-configured": {
+          "x": 364,
+          "y": 580,
+          "width": 552,
+          "height": 220
+        },
+        "feedback-not-sent-no-desktop": {
+          "x": 364,
+          "y": 580,
+          "width": 552,
+          "height": 220
         }
       },
       "meaning": null

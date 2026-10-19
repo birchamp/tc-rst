@@ -4,20 +4,21 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
-use tc_api::app::{BuildInfo, OpenSession, SessionRole};
-use tc_api::event::{Event, SessionMode};
-use tc_api::ids::{Epoch, JobId, ProjectId, ProjectRef, RequestId, Scope, ServerInstance, WallMs};
+use tc_api::app::{BuildInfo, OpenSession};
+use tc_api::event::Event;
+use tc_api::ids::{Epoch, JobId, ProjectRef, RequestId, Scope, ServerInstance, WallMs};
 use tc_api::jobs::{JobKind, JobOutcome, JobState, JobView, Phase, Progress};
 use tc_api::prefs::PlaceMode;
 use tc_api::test::{FieldLog, FieldLogView, FieldStore};
 use tc_api::write::Ack;
 use tc_api::{ApiError, Endpoint, Reply, ShownToken};
 use tc_app::account::{Keychain, KeychainError, MemKeychain};
+use tc_app::backend::memory::{MemoryBackend, MemoryProject};
 use tc_app::clock::ManualClock;
 use tc_app::config::{AppConfig, HostEnv, HostOs, ProjectsFolder};
 use tc_app::events::{EventBus, Next, Subscription};
@@ -26,7 +27,6 @@ use tc_app::hooks::RecordingEnder;
 use tc_app::jobs::{JobCtx, JobEnd, JobRegistry, JobSpec};
 use tc_app::prefs::{EditUnit, LastEdit, MemoryFiles, PrefsWriter};
 use tc_app::reports::ReportLog;
-use tc_app::sessions::{SessionDirectory, SessionInfo};
 use tc_app::{App, AppDeps};
 use tc_door43::Token;
 
@@ -205,32 +205,6 @@ pub fn token(secret: &str) -> Token {
     Token::new(secret.to_owned()).unwrap()
 }
 
-/// Sessions a test opens by hand.
-#[derive(Default)]
-pub struct FakeSessions {
-    pub open: Mutex<Vec<(Scope, SessionInfo, OpenSession)>>,
-}
-
-impl FakeSessions {
-    pub fn add(&self, scope: Scope, info: SessionInfo, open: OpenSession) {
-        self.open.lock().unwrap().push((scope, info, open));
-    }
-}
-
-impl SessionDirectory for FakeSessions {
-    fn resolve(&self, at: &Scope) -> Option<SessionInfo> {
-        let open = self.open.lock().unwrap();
-        open.iter()
-            .find(|(scope, _, _)| scope == at)
-            .map(|(_, info, _)| info.clone())
-    }
-
-    fn open_sessions(&self) -> Vec<OpenSession> {
-        let open = self.open.lock().unwrap();
-        open.iter().map(|(_, _, session)| session.clone()).collect()
-    }
-}
-
 /// A keychain that counts its reads.
 pub struct CountingKeychain {
     pub inner: MemKeychain,
@@ -267,17 +241,28 @@ impl Keychain for CountingKeychain {
 pub struct Parts {
     pub files: Arc<MemoryFiles>,
     pub keychain: Arc<MemKeychain>,
-    pub sessions: Arc<FakeSessions>,
+    /// The projects: `kr_ulb`, an empty Bible project.
+    pub store: Arc<MemoryBackend>,
     pub clock: Arc<ManualClock>,
     pub ender: Arc<RecordingEnder>,
 }
 
 impl Parts {
     pub fn new() -> Self {
+        let store = MemoryBackend::new();
+        store
+            .add(
+                ProjectRef::parse("kr_ulb").unwrap(),
+                MemoryProject::empty(
+                    tc_journal::ProjectId::parse(PROJECT_ID).unwrap(),
+                    tc_journal::fold::ProjectKind::Bible,
+                ),
+            )
+            .unwrap();
         Self {
             files: Arc::new(MemoryFiles::new()),
             keychain: Arc::new(MemKeychain::new()),
-            sessions: Arc::new(FakeSessions::default()),
+            store: Arc::new(store),
             clock: Arc::new(ManualClock::new(1_000_000)),
             ender: Arc::new(RecordingEnder::default()),
         }
@@ -299,7 +284,7 @@ pub struct TestApp {
     pub local: PathBuf,
     pub files: Arc<MemoryFiles>,
     pub keychain: Arc<MemKeychain>,
-    pub sessions: Arc<FakeSessions>,
+    pub store: Arc<MemoryBackend>,
     pub clock: Arc<ManualClock>,
     pub ender: Arc<RecordingEnder>,
 }
@@ -329,7 +314,7 @@ impl TestApp {
             local: dir.join("local"),
             files: parts.files.clone(),
             keychain: parts.keychain.clone(),
-            sessions: parts.sessions.clone(),
+            store: parts.store.clone(),
             clock: parts.clock.clone(),
             ender: parts.ender.clone(),
         }
@@ -345,21 +330,17 @@ pub fn scope(epoch: u64) -> Scope {
     }
 }
 
-/// An open session of folder `kr_ulb` at `epoch`, as the directory and `hello` see it.
-pub fn open_session(epoch: u64) -> (Scope, SessionInfo, OpenSession) {
-    let at = scope(epoch);
-    let id = ProjectId::parse(PROJECT_ID).unwrap();
-    let info = SessionInfo {
-        project: at.project.clone(),
-        id: id.clone(),
-    };
-    let open = OpenSession {
-        at: at.clone(),
-        id,
-        mode: SessionMode::Writable,
-        role: SessionRole::Screen,
-    };
-    (at, info, open)
+/// Opens folder `kr_ulb` for the screen, as B3's open will.
+pub async fn open_kr_ulb(app: &App) -> OpenSession {
+    app.sessions()
+        .open_screen(&ProjectRef::parse("kr_ulb").unwrap(), open_progress())
+        .await
+        .unwrap()
+}
+
+/// A progress sink for an open.
+pub fn open_progress() -> tc_app::jobs::ProgressSink {
+    tc_app::jobs::ProgressSink::new(Phase::Open(tc_api::jobs::OpenPhase::ReadingChanges))
 }
 
 /// The `value` of `app/hello`, as the UI reads it.
@@ -516,9 +497,54 @@ pub async fn try_start(
         folders: Arc::new(HostFolders::new(host.clone())),
         host,
         files: parts.files.clone(),
-        sessions: parts.sessions.clone(),
+        store: tc_app::StoreChoice::Given(parts.store.clone()),
         ender: parts.ender.clone(),
     };
     edit(&mut config, &mut deps);
     App::start(config, deps).await
+}
+
+// ---- Projects of the memory backend -------------------------------------------------------
+
+/// The repository's root.
+pub fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// The sample Bible project (`fixtures/tc4/sample-burrito`, Titus and Jonah) through B1a's
+/// seed, folded once per test binary. Each backend it is added to counts its own work.
+pub fn sample_bible() -> tc_app::backend::memory::MemoryProject {
+    use std::sync::OnceLock;
+    use tc_app::backend::memory::MemoryProject;
+    use tc_app::backend::seed::{Tc4Folder, fixture_project_id, tc4_state_seed};
+    static SEED: OnceLock<MemoryProject> = OnceLock::new();
+    SEED.get_or_init(|| {
+        let folder = Tc4Folder::read(&repo_root().join("fixtures/tc4/sample-burrito")).unwrap();
+        let seed = tc4_state_seed(&folder, fixture_project_id("sample_burrito")).unwrap();
+        MemoryProject::from_seed(seed, None)
+    })
+    .clone()
+}
+
+/// A verse of Titus.
+pub fn tit(chapter: u16, verse: u16) -> tc_journal::RecordKey {
+    tc_journal::RecordKey::Verse(
+        tc_journal::BookId::Titus,
+        tc_journal::ChapterNo::new(chapter).unwrap(),
+        tc_journal::VerseNo::new(verse).unwrap(),
+    )
+}
+
+/// A project folder name.
+pub fn folder(name: &str) -> ProjectRef {
+    ProjectRef::parse(name).unwrap()
+}
+
+/// A memory backend holding the sample Bible project as `sample_burrito`.
+pub fn sample_backend() -> tc_app::backend::memory::MemoryBackend {
+    let backend = tc_app::backend::memory::MemoryBackend::new();
+    backend
+        .add(folder("sample_burrito"), sample_bible())
+        .unwrap();
+    backend
 }

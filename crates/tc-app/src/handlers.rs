@@ -1,7 +1,7 @@
 //! One handler per product endpoint of phase 0 (APP-DESIGN §3.9). `dispatch` routes to them,
 //! and an endpoint row without a handler here does not compile.
 //!
-//! The account and feedback rows that later units build answer `Unavailable` until then.
+//! The account rows that unit A8 builds answer `Unavailable` until then.
 
 use serde_json::json;
 use tc_api::account::{
@@ -18,8 +18,9 @@ use tc_api::{API_VERSION, ApiError, NotSaved, Refusal};
 
 use crate::app::{App, lock};
 use crate::dispatch::Handle;
+use crate::feedback;
 use crate::reports::{ReportOp, ReportOutcome, facts};
-use crate::sessions::SessionInfo;
+use crate::session::SessionInfo;
 
 /// The longest `app/clientError` message a report keeps. The UI sends a panic's message; a
 /// body of several megabytes in each of 50 kept reports would hold hundreds of megabytes.
@@ -40,8 +41,10 @@ fn cut(text: &str, max: usize) -> (&str, bool) {
 }
 
 impl App {
-    /// The project behind a scope. A scope this server run does not know is stale: a write
-    /// never gets `ApiError::StaleScope`, it gets `NotSaved::StaleScope` (A-19).
+    /// The project behind a scope. Dispatch checked a write's scope before it ran, and the
+    /// write's lease keeps the session open, so this fails only for a write that names no
+    /// session: a write never gets `ApiError::StaleScope`, it gets `NotSaved::StaleScope`
+    /// (A-19).
     fn session_of(&self, at: &tc_api::Scope) -> Result<SessionInfo, ApiError> {
         self.inner
             .sessions
@@ -216,8 +219,13 @@ impl Handle<ProfileLink> for App {
 }
 
 impl Handle<Compose> for App {
-    /// Unit A5 composes the attachment from the report log.
-    async fn handle(&self, _req: Compose) -> Result<FeedbackDraft, ApiError> {
-        Err(ApiError::Unavailable(Feature::Feedback))
+    /// The attachment from this server's own report log, in English (A5, D8).
+    async fn handle(&self, req: Compose) -> Result<FeedbackDraft, ApiError> {
+        let inner = &self.inner;
+        let line = feedback::version_line(&inner.config.build, &feedback::platform());
+        let report = inner.reports.to_attach(req.report);
+        Ok(FeedbackDraft {
+            attachment: feedback::attachment_text(&line, report.as_ref()),
+        })
     }
 }
