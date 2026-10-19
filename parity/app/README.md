@@ -13,7 +13,7 @@ the record the gate in `cargo test` checks (docs/APP-DESIGN.md §7). The tC4 sid
 | `driver.mjs` | the steps a person takes, over an environment (`AppEnv`) |
 | `observe.mjs` | the capture rules: the browser, request tracking, `settle`, the screenshot, `observe` (what the DOM shows), `domSnapshot`, `machineFingerprint`, `measureTargets` |
 | `env-tc4.mjs` | tC4 against the Node mock of the Pankosmia API |
-| `env-rust.mjs` | `tc4 serve --test-hooks` on empty folders under `target/`: the token header, `test/reset`, `test/quiet`, the event stream left out of the wait, every other origin aborted |
+| `env-rust.mjs` | `tc4 serve --test-hooks --scenario <state>` on empty folders under `target/`: the scenario's state built by `state.mjs` and held by the memory backend (B1b), the token header, `test/reset`, `test/quiet`, the event stream left out of the wait, every other origin aborted |
 | `capture-rust.mjs` | captures Rust screens into `screens/`, `dom/` and `captures.json` |
 | `behaviour.mjs` | records a sequence of steps from a baseline screen on either side (layer 4) |
 | `measure-masks.mjs` | measures each mask's rectangle on tC4's baseline screens |
@@ -27,7 +27,7 @@ its screens:
 
 ```sh
 . ~/.tc-env
-cargo build -p tc4 --features test-hooks        # target/debug/tc4
+cargo build -p tc4 --features test-hooks,fixture-backend   # target/debug/tc4
 crates/tc-ui/build-app.sh                        # target/tc-ui-app
 node parity/app/capture-rust.mjs --unit B2 --only home,add-project
 UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record

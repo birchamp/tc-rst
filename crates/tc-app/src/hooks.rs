@@ -645,6 +645,7 @@ impl Handle<Quiet> for App {
         let busy = self.inner.calls.load(Ordering::SeqCst) > 0
             || self.inner.replies.running() > 0
             || self.inner.jobs.live() > 0
+            || self.inner.sessions.busy()
             || hooks.holds.holding() > 0;
         Ok(QuietView { busy })
     }
@@ -726,8 +727,9 @@ impl Handle<FieldLog> for App {
 }
 
 impl Handle<Reset> for App {
-    /// The parity harness's `home()`: preferences and reports back to the seed, the crash
-    /// disarmed, every hold released, the kept replies forgotten (a write still running is
+    /// The parity harness's `home()`: every session closed, the projects and the preferences
+    /// and reports back to the seed, the crash disarmed, every hold released, the kept
+    /// replies forgotten (a write still running is
     /// kept, so its retry waits for it) and the internet off as a launch finds it (tC4's
     /// switch is page state that a reload turns off). The test fields are kept: tests name
     /// their own. The reset's own reply is not kept either (`dispatch::kept_reply`), so the
@@ -735,7 +737,17 @@ impl Handle<Reset> for App {
     async fn handle(&self, _req: Reset) -> Result<(), ApiError> {
         let hooks = self.hooks()?;
         *lock(&hooks.crash) = None;
+        // Holds go first: a held operation could keep a session from closing.
         hooks.holds.release_all();
+        // Every session closes after its leave checkpoint, then every project goes back to
+        // its seed. Epochs go on counting, so a page from before the reset is stale.
+        self.inner.sessions.close_all().await;
+        if let Err(error) = self.inner.sessions.store().reset() {
+            return Err(self.internal(
+                "the projects could not be reset",
+                crate::reports::facts(serde_json::json!({"reason": error.to_string()})),
+            ));
+        }
         // A launch starts with no kept replies, so a request id may be used again.
         self.inner.replies.forget_settled();
         self.inner.prefs.reset().await;
