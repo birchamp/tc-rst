@@ -284,6 +284,9 @@ fn loss_rename_retry_never_overwrites_outside_save() {
     rig.fs.set_busy(&usfm, true);
     save_verse(&handle, 1, 1, "a new first verse").unwrap();
     handle.leave(tc_store::Leave::Book(TIT)).wait().unwrap();
+    // The writer's job is over, and so is the look at the folder that follows it (the rig's):
+    // the outside save below belongs to the wait that follows, not to the state that look sees.
+    handle.wait_idle();
     // Paratext saves the file while the app waits to write it, then lets go of it.
     let outside = b"\\id TIT saved by Paratext\n".to_vec();
     rig.fs.put(&usfm, &outside, None);
