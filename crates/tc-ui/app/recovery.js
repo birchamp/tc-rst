@@ -9,6 +9,7 @@ export const CRASH_KEY = 'tc4.crash.v1';
 export const PANICS_KEY = 'tc4.panics.v1';
 export const TEXT_KEY = 'tc4.viewErrorText.v1';
 export const NAV_KEY = 'tc4.nav.v1';
+export const INSTANCE_KEY = 'tc4.instance.v1';
 export const TOKEN_KEY = 'tc4.token';
 export const BUFFER_PREFIX = 'tc4.drafts.v2:';
 export const PANIC_WINDOW_MS = 10000;
@@ -118,12 +119,14 @@ export function inputToEntry(store, itemKey, text, now, templateText) {
 }
 
 /**
- * The drafts to post after three panics (6.8): one per buffer entry of `project` (the folder
- * the page was in) that has a draft call, its body with a fresh `request` and the entry's
- * `text` added.
+ * The drafts to post after three panics (6.8): one per buffer entry of the server run
+ * `instance` (the run the page last met, which the page keeps in INSTANCE_KEY) that has a draft
+ * call, its body with a fresh `request` and the entry's `text` added. Each draft names its own
+ * open, so one of a project that is not open is refused by the server and changes nothing;
+ * entries of another run wait for the offer at their project's next open.
  */
-export function draftRequests(store, project, freshId) {
-  if (typeof project !== 'string' || project === '') return [];
+export function draftRequests(store, instance, freshId) {
+  if (typeof instance !== 'string' || instance === '') return [];
   const requests = [];
   let length = 0;
   try {
@@ -143,7 +146,7 @@ export function draftRequests(store, project, freshId) {
     } catch {
       continue;
     }
-    if (!key || key.project !== project || !entry || typeof entry.text !== 'string') continue;
+    if (!key || !entry || entry.instance !== instance || typeof entry.text !== 'string') continue;
     const draft = entry.draft;
     if (!draft || typeof draft.path !== 'string' || !DRAFT_PATH.test(draft.path) || typeof draft.body !== 'string') continue;
     let body;

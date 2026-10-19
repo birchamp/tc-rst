@@ -6,6 +6,7 @@
 //! borrowed would panic again in the hook and abort before the marker exists.
 
 use std::cell::RefCell;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use tc_api::app::ClientError;
 use tc_api::endpoint::{API_VERSION, API_VERSION_HEADER, TOKEN_HEADER};
@@ -51,8 +52,16 @@ pub fn set_context(view: Option<&str>, project: Option<ProjectRef>) {
     });
 }
 
+/// Set by the first panic of the page. The instance is aborted after it, but a closure it left
+/// registered can still run and panic again on the state the abort left behind ("RefCell
+/// already borrowed"); the marker and the report keep the first panic, which is the cause.
+static PANICKED: AtomicBool = AtomicBool::new(false);
+
 fn hook(info: &std::panic::PanicHookInfo<'_>) {
     console_error_panic_hook::hook(info);
+    if PANICKED.swap(true, Ordering::SeqCst) {
+        return;
+    }
     let message = info.to_string();
     let (page, view, project) = CONTEXT
         .try_with(|context| {

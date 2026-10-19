@@ -62,6 +62,7 @@ fn the_keys_are_the_ones_recovery_js_reads() {
         ("PANICS_KEY", PANICS_KEY),
         ("TEXT_KEY", VIEW_ERROR_TEXT_KEY),
         ("NAV_KEY", NAV_KEY),
+        ("INSTANCE_KEY", tc_ui::app::recovery::INSTANCE_KEY),
         ("TOKEN_KEY", tc_ui::app::boot::TOKEN_KEY),
         ("BUFFER_PREFIX", tc_api::buffer::BUFFER_ITEM_PREFIX),
     ] {

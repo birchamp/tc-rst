@@ -11,8 +11,8 @@
 //   WebAssembly.RuntimeError, or one `run_app` throws) is handled once; later traps of the same
 //   page are ignored. A page load that ended in a panic is counted in sessionStorage; the page
 //   reloads, and after three such loads within 10 s, or when sessionStorage cannot count them, it
-//   draws tC4's view-error callout as static DOM instead and posts the buffered drafts with a
-//   plain `fetch`.
+//   draws tC4's view-error callout as static DOM instead and posts the drafts of the server run
+//   the page last met with a plain `fetch`.
 //
 // The WebAssembly is imported only after this, with a dynamic import, so the listeners exist even
 // if the glue fails to load. It is started with the build folder it was served from, where the
@@ -31,6 +31,12 @@ const boot = {
   },
   // An array to collect the listener's own time per keystroke, for the measurements.
   measure: null,
+  // Whether anything is unsaved, which the WebAssembly says on every change when there is no
+  // shell bridge (APP-DESIGN 6.5).
+  unsaved: false,
+  setUnsaved(unsaved) {
+    boot.unsaved = Boolean(unsaved);
+  },
 };
 window.tc4Boot = boot;
 
@@ -61,6 +67,15 @@ window.addEventListener('input', onInput, true);
 
 let handled = false;
 
+// The close guard of a browser (tC4's `beforeunload`, `src/state.jsx:3684-3698`). Never under the
+// shell, whose close dialog it would silently refuse (tC4 #356), and never for the reload after a
+// panic: the buffer brings the text back, and a question would hold the reload.
+window.addEventListener('beforeunload', (event) => {
+  if (handled || window.tc4Shell || !boot.unsaved) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
 function ownMarker() {
   try {
     const marker = JSON.parse(sessionStorage.getItem(R.CRASH_KEY));
@@ -80,7 +95,7 @@ function onTrap(error) {
     location.reload();
     return;
   }
-  showStatic(message, marker?.project ?? null);
+  showStatic(message);
 }
 
 window.addEventListener('error', (event) => {
@@ -90,7 +105,7 @@ window.addEventListener('unhandledrejection', (event) => {
   if (R.isTrap(event.reason)) onTrap(event.reason);
 });
 
-function showStatic(message, project) {
+function showStatic(message) {
   const text = R.calloutText(sessionStorage);
   const { root, button } = R.buildStaticCallout(document, text, message);
   button.addEventListener('click', () => {
@@ -104,18 +119,20 @@ function showStatic(message, project) {
     location.reload();
   });
   document.getElementById('root')?.replaceChildren(root);
-  postDrafts(project);
+  postDrafts();
 }
 
-function postDrafts(project) {
+function postDrafts() {
   let token = null;
+  let instance = null;
   try {
     token = sessionStorage.getItem(R.TOKEN_KEY);
+    instance = sessionStorage.getItem(R.INSTANCE_KEY);
   } catch {
     token = null;
   }
   if (!token) return;
-  const requests = R.draftRequests(localStorage, project, () => R.randomId(crypto));
+  const requests = R.draftRequests(localStorage, instance, () => R.randomId(crypto));
   for (const { path, body } of requests) {
     fetch(`/api/v1/${path}`, {
       method: 'POST',
@@ -131,7 +148,7 @@ try {
   await wasm.default();
 } catch (error) {
   handled = true;
-  showStatic(String(error?.message ?? error), null);
+  showStatic(String(error?.message ?? error));
   throw error;
 }
 try {

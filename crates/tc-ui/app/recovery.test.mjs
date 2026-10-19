@@ -101,32 +101,33 @@ test('the_line_matches_tc_api_golden', () => {
   assert.equal(golden.itemKeys[0], R.BUFFER_PREFIX + JSON.stringify(golden.keys[0]));
 });
 
-test('drafts_only_for_the_current_folder_and_with_a_draft_call', () => {
+test('drafts_only_of_the_current_run_and_with_a_draft_call', () => {
+  const otherRun = { ...ENTRY, instance: '00000000000000000000000000000000' };
   const otherFolder = { ...KEY, project: 'other' };
   const local = storage({
     [ITEM]: JSON.stringify(ENTRY),
     [golden.itemKeys[1]]: JSON.stringify(golden.entries[1]),
-    [R.BUFFER_PREFIX + JSON.stringify(otherFolder)]: JSON.stringify(ENTRY),
+    [R.BUFFER_PREFIX + JSON.stringify(otherFolder)]: JSON.stringify(otherRun),
     'tc4.token': 'x',
     [`${R.BUFFER_PREFIX}garbage`]: '{}',
   });
   let n = 0;
-  const requests = R.draftRequests(local, KEY.project, () => `id${(n += 1)}`);
-  assert.equal(requests.length, 1, 'one entry of the folder has a draft call');
+  const requests = R.draftRequests(local, ENTRY.instance, () => `id${(n += 1)}`);
+  assert.equal(requests.length, 1, 'one entry of this run has a draft call');
   assert.equal(requests[0].path, ENTRY.draft.path);
-  assert.deepEqual(R.draftRequests(local, null, () => 'id'), [], 'no folder, no drafts');
+  assert.deepEqual(R.draftRequests(local, null, () => 'id'), [], 'no run known, no drafts');
 });
 
 test('a_draft_request_adds_request_and_text_and_keeps_the_rest', () => {
   const local = storage({ [ITEM]: JSON.stringify(ENTRY) });
-  const [request] = R.draftRequests(local, KEY.project, () => 'abc');
+  const [request] = R.draftRequests(local, ENTRY.instance, () => 'abc');
   assert.deepEqual(JSON.parse(request.body), { ...JSON.parse(ENTRY.draft.body), request: 'abc', text: ENTRY.text });
 });
 
 test('a_draft_call_to_another_place_is_not_posted', () => {
   for (const path of ['../evil', 'test/fieldDraft?x=1', 'http://example.com/x', '']) {
     const entry = { ...ENTRY, draft: { ...ENTRY.draft, path } };
-    assert.deepEqual(R.draftRequests(storage({ [ITEM]: JSON.stringify(entry) }), KEY.project, () => 'id'), [], path);
+    assert.deepEqual(R.draftRequests(storage({ [ITEM]: JSON.stringify(entry) }), ENTRY.instance, () => 'id'), [], path);
   }
 });
 

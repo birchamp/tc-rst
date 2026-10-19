@@ -95,6 +95,9 @@ struct Inner {
     /// Resolvers of the promises [`Saves::changed`] hands out.
     waiters: RefCell<Vec<Function>>,
     buffer_failure_reported: Cell<bool>,
+    /// `boot.js` and its capture listener are on the page. Without them the machine writes the
+    /// entry of every keystroke itself.
+    boot: bool,
 }
 
 /// The page's saves. Cheap to clone.
@@ -134,6 +137,10 @@ impl Saves {
                 next_hook: Cell::new(0),
                 waiters: RefCell::new(Vec::new()),
                 buffer_failure_reported: Cell::new(false),
+                boot: js::window().is_ok_and(|window| {
+                    Reflect::get(&window, &JsValue::from_str("tc4Boot"))
+                        .is_ok_and(|boot| boot.is_object())
+                }),
             }
         });
         Saves(inner)
@@ -172,6 +179,7 @@ impl Saves {
     }
 
     pub fn typed(&self, key: &BufferKey, text: &str, source: Source) {
+        let source = if self.0.boot { source } else { Source::Program };
         let commands = self.machine(|m| m.typed(key, text, source, js::now_ms()));
         self.run(commands);
     }
@@ -387,8 +395,10 @@ impl Saves {
     }
 
     /// The close guard (6.5): with the shell, `setCanClose` on every change and the gate on
-    /// a close request; in a browser, `beforeunload` while anything is unsaved, never under the
-    /// shell, where it would refuse the close silently (tC4 #356).
+    /// a close request; in a browser, `boot.js`'s `beforeunload` asks while anything is unsaved
+    /// (`tc4Boot.setUnsaved`), never under the shell, where it would refuse the close silently
+    /// (tC4 #356). The listener is `boot.js`'s, not the WebAssembly's, so the reload after a panic
+    /// is never held by a question: the buffer brings the text back.
     pub(super) fn guard_close(&self) {
         if bridge::has_bridge() {
             let saves = self.clone();
@@ -398,22 +408,6 @@ impl Saves {
                     Ok(JsValue::from_bool(saves.gate().await))
                 })
             });
-        } else if let Ok(window) = js::window() {
-            let saves = self.clone();
-            let listener = Closure::<dyn Fn(web_sys::BeforeUnloadEvent)>::new(
-                move |event: web_sys::BeforeUnloadEvent| {
-                    if !saves.all_clean() {
-                        event.prevent_default();
-                        event.set_return_value("");
-                    }
-                },
-            );
-            let _ = window.add_event_listener_with_callback(
-                "beforeunload",
-                listener.as_ref().unchecked_ref(),
-            );
-            // For the page's life.
-            listener.forget();
         }
         self.after();
     }
@@ -599,7 +593,11 @@ impl Saves {
         self.0.indicator.try_set(shown);
         let clean = indicator::all_clean(worst, &aligns);
         if self.0.can_close.replace(Some(clean)) != Some(clean) {
-            bridge::set_can_close(clean);
+            if bridge::has_bridge() {
+                bridge::set_can_close(clean);
+            } else {
+                boot_call("setUnsaved", &[JsValue::from_bool(!clean)]);
+            }
         }
         self.retrack();
         let waiters: Vec<Function> = std::mem::take(&mut *self.0.waiters.borrow_mut());

@@ -23,6 +23,9 @@ pub const VIEW_ERROR_TEXT_KEY: &str = "tc4.viewErrorText.v1";
 /// `sessionStorage`: the navigation snapshot A5 writes and restores after a reload. "Back to
 /// Home" in the static callout removes it, so the page that follows starts at Home.
 pub const NAV_KEY: &str = "tc4.nav.v1";
+/// `sessionStorage`: the server run the page last met (`hello.instance`). After three panics
+/// `boot.js` posts the drafts of the entries of this run.
+pub const INSTANCE_KEY: &str = "tc4.instance.v1";
 /// The longest panic message the hook sends: the server keeps the first 8 KiB, and a request
 /// sent with `keepalive` is capped at 64 KiB.
 pub const MAX_CLIENT_MESSAGE: usize = 8 * 1024;

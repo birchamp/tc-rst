@@ -223,6 +223,7 @@ impl Runtime {
             Effect::ReadJobs => self.read_jobs(),
             Effect::ReadEverything => self.0.cache.resync(),
             Effect::Restarted(instance) => {
+                js::session_set(crate::app::recovery::INSTANCE_KEY, &instance.to_string());
                 self.0.cache.restarted();
                 state.restarted(instance);
                 // The new run's jobs are not the old run's.
@@ -463,6 +464,11 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
     // Before anything mounts: `<html lang dir>` is the saved language's from the first paint.
     show_locale(hello.prefs.app_locale);
 
+    // The run whose drafts `boot.js` posts after three panics (6.8).
+    js::session_set(
+        crate::app::recovery::INSTANCE_KEY,
+        &hello.instance.to_string(),
+    );
     let state = ServerState::from_hello(&hello);
     let cache = QueryCache::new(api.clone());
     for session in &hello.sessions {
