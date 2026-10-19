@@ -11,6 +11,8 @@
 
 #[path = "support/counting_store.rs"]
 mod counting_store;
+#[path = "support/rail_differential.rs"]
+mod rail_differential;
 #[path = "support/store_world.rs"]
 mod store_world;
 

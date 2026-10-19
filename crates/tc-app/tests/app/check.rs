@@ -288,3 +288,48 @@ async fn open_check_preflight_offer_close_leaves_pins_unchanged() {
     assert!(backend.submitted(&project).is_empty());
     assert_eq!(pins(&backend), before);
 }
+
+/// The rail differential test on Titus: the UI's groups over the served rows equal
+/// tc-check's for every filter and mode of both tools, on both scenarios.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_rail_groups_equal_tc_checks_on_titus() {
+    for (name, tools) in [
+        ("sample", &[Tool::TranslationNotes][..]),
+        (
+            "en-pins",
+            &[Tool::TranslationNotes, Tool::TranslationWords][..],
+        ),
+    ] {
+        let state = scenario(name);
+        let (backend, _) = MemoryBackend::from_scenario(state).unwrap();
+        let backend = Arc::new(backend);
+        let dir = tempfile::tempdir().unwrap();
+        install_resources_into(&dir.path().join("app-data"), &state.resources().unwrap()).unwrap();
+        let store = backend.clone();
+        let t = TestApp::start_with(dir.path(), &Parts::new(), |_, deps| {
+            deps.store = tc_app::StoreChoice::Given(store);
+        })
+        .await;
+        let at = opened(&t.app).await.session.at;
+        let fold = backend.fold(&folder("sample_burrito")).unwrap();
+        for &tool in tools {
+            let session = open_tool(&t.app, &at, tool, None).await;
+            let RailRows::Full(rows) = &session.rows else {
+                panic!("{:?}", session.rows);
+            };
+            let (items, states) = crate::rail_differential::tc_check_side(
+                &dir.path().join("app-data/resources"),
+                &fold,
+                tool,
+                BookId::Titus,
+            );
+            crate::rail_differential::assert_groups_agree(
+                tool,
+                rows,
+                &session.terms,
+                &items,
+                &states,
+            );
+        }
+    }
+}

@@ -92,6 +92,11 @@ pub struct Scale {
 }
 
 impl Scale {
+    /// The memory backend that holds the project, on that backing.
+    pub fn memory(&self) -> Option<&MemoryBackend> {
+        self.memory.as_ref()
+    }
+
     /// Opens `psalms` for the screen.
     pub async fn open(&self) -> Scope {
         self.app
@@ -163,6 +168,14 @@ pub async fn scale(
     let dir = tempfile::tempdir().unwrap();
     let projects = dir.path().join("projects");
     std::fs::create_dir(&projects).unwrap();
+    // The corpus pins the English notes and words links of the bundle: the Check screen's lists
+    // derive from them. One store for every scale, which reads it and never installs.
+    std::fs::create_dir(dir.path().join("app-data")).unwrap();
+    std::os::unix::fs::symlink(
+        super::corpus::psalms_resources(),
+        dir.path().join("app-data/resources"),
+    )
+    .unwrap();
     let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
         config.projects = ProjectsFolder::Given(projects.clone());
         deps.store = tc_app::StoreChoice::Given(store);

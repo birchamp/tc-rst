@@ -3,7 +3,7 @@
 //! each written once to tc-store's in-memory file system as tc-store's own count tests write
 //! it (C1a, §8.1: the rows run on the store too).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use tc_app::backend::memory::MemoryProject;
@@ -168,5 +168,27 @@ pub fn store_corpora() -> &'static StoreCorpora {
     CORPORA.get_or_init(|| StoreCorpora {
         psalms: on_disk(&Spec::psalms(1)),
         larger: on_disk(&Spec::scaled(1, 10)),
+    })
+}
+
+#[allow(dead_code)]
+#[path = "../../examples/bundle_store/build.rs"]
+mod bundle_build;
+
+/// A resource store with the bundle's English notes, words links and words articles, the
+/// releases the corpus pins, built once per test binary.
+pub fn psalms_resources() -> &'static Path {
+    static STORE: OnceLock<PathBuf> = OnceLock::new();
+    STORE.get_or_init(|| {
+        let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("b5a-psalms-resources");
+        let _ = std::fs::remove_dir_all(&out);
+        let from = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bundle/en");
+        let wanted = ["en_tn", "en_twl", "en_tw"];
+        let built = bundle_build::build_bundle(&from, &out, &|pin| {
+            wanted.contains(&pin.repo.name().as_str())
+        })
+        .unwrap_or_else(|e| panic!("the corpus's resources could not be installed: {e}"));
+        assert_eq!(built.installed.len(), 3, "{built:?}");
+        out
     })
 }
