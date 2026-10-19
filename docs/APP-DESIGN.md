@@ -657,7 +657,7 @@ pub struct VerseRow {
 pub enum VerseView { Text { words: String, layout: LayoutView, last: u16 }, Covered { by: u16 }, Absent }
 
 // source panes carry token runs and highlight word indices; the UI never matches quotes
-// (tc_helps::highlight_quote, crates/tc-helps/src/highlight.rs:268).
+// (tc_helps::highlight_quote, crates/tc-helps/src/highlight.rs:305).
 pub struct SourcePane { pub id: String, pub name: String, pub version: String, pub dir: Direction,
                         pub chapters: Vec<SourceChapter> }
 
