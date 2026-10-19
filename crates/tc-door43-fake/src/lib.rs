@@ -23,9 +23,13 @@
 //!   not convert Resource Containers).
 //! - Git smart HTTP for clone, fetch and push: `/{owner}/{repo}.git/info/refs`,
 //!   `.../git-upload-pack`, `.../git-receive-pack`, served by `git http-backend` as CGI.
-//!   Push needs Basic auth with the password or a token with `write:repository`. A private
-//!   repository is cloned or fetched only by its owner or an organization member, with the
-//!   password or a token with `read:repository`; anyone else gets 404, as from Gitea.
+//!   Push needs Basic auth with the password or a token with `write:repository` (else 401, or
+//!   403 for a token without the scope). As on Door43, an account that may read the
+//!   repository but not write to it gets the advertisement and an HTTP 200 whose report
+//!   declines every ref, from a pre-receive hook that prints what Gitea's prints
+//!   (docs/evidence/door43-live-2026-10-17.md, step 6). A private repository is cloned,
+//!   fetched or pushed to only by its owner or an organization member, with the password or
+//!   a token with the scope; anyone else gets 404, as from Gitea.
 //!
 //! Auth works as Gitea's does: `Authorization: token <t>` or `Bearer <t>`, or Basic with a
 //! password or a token as the password, plus `X-GITEA-OTP` for an account with a one-time

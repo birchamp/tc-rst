@@ -1484,10 +1484,13 @@ async fn smart_http_route(
     let remote_user = match (service, &caller) {
         (Service::ReceivePack, Caller::Anonymous) => return challenge(),
         (Service::ReceivePack, caller) => match require(caller, "write:repository") {
-            Ok(login) if shared.state().can_write(&login, &rec.owner) => Some(login),
-            Ok(_) => {
-                return ApiError::new(StatusCode::FORBIDDEN, "no write access").into_response();
+            Ok(login) if rec.private && !shared.state().is_member(&login, &rec.owner) => {
+                return ApiError::not_found().into_response();
             }
+            // As Door43 (docs/evidence/door43-live-2026-10-17.md, step 6): an account that may
+            // read the repository gets the advertisement, and a push without write access is
+            // refused by the pre-receive hook inside git's report, with HTTP 200.
+            Ok(login) => Some(login),
             Err(error) => return error.into_response(),
         },
         (Service::UploadPack, Caller::Anonymous) if rec.private => return challenge(),
@@ -1501,6 +1504,10 @@ async fn smart_http_route(
         },
         (Service::UploadPack, caller) => caller_login(caller).map(str::to_owned),
     };
+    let refuse_writes = service == Service::ReceivePack
+        && remote_user
+            .as_deref()
+            .is_some_and(|login| !shared.state().can_write(login, &rec.owner));
     let dir = shared.git.repo_dir(&rec.owner, &rec.name);
     if !smart_http::exists(&dir) {
         return ApiError::not_found().into_response();
@@ -1518,6 +1525,7 @@ async fn smart_http_route(
             query: &query,
             headers: &headers,
             remote_user: remote_user.as_deref(),
+            refuse_writes,
             body: body.to_vec(),
         },
     )
