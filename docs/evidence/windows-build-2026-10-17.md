@@ -180,8 +180,9 @@ names none for (hazard 6, below).
 - **Hazard 2** (a save's rename blocked by a scanner): `tc-store`, on the `storage` branch.
   The held-file helper there and the one in `tc-resources` follow one policy and become one
   helper when `storage` lands.
-- **Hazard 6, proxy auto-configuration: the Windows finder is built (2026-10-19); the owner's
-  go-ahead on its dependency is still to be recorded here.** The constructor
+- **Hazard 6, proxy auto-configuration: the Windows finder is built (2026-10-19), on
+  `proxy-watch` =0.3.1, chosen by the orchestrating session as a technical choice the owner
+  leaves to it and told to the owner the same day.** The constructor
   and the rules around it are done and tested on Linux against a local proxy that refuses
   every request (`tests/proxy.rs` in `tc-door43`, `tests/aquifer_proxy.rs` in
   `tc-resources`): one `Http` builds both clients, a server on this computer is never
