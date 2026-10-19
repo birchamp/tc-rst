@@ -126,7 +126,7 @@ const UNUSED_TC4_CODES: &[(&str, &str)] = &[
     ),
     (
         "sync.failed",
-        "an uncoded failure shows its reason in syncResult.error.other",
+        "an uncoded failure shows one fixed sentence, never its reason (Q36)",
     ),
     ("sync.project-replaced", "no scratch clone"),
     ("sync.apply-pending", "no apply marker"),
@@ -297,7 +297,9 @@ const SHARED_SYNC_KEYS: &[(&str, &[&str])] = &[
         "syncResult.error.notSent",
         &["unreachable", "remoteMissing"],
     ),
-    ("syncResult.error.other", &["refRejected", "io"]),
+    // Q36: one fixed sentence for a failure no other sentence names, before and after intake.
+    ("syncResult.error.stopped", &["refRejected", "io"]),
+    ("syncResult.error.keptStopped", &["refRejected", "io"]),
 ];
 
 #[test]
@@ -433,7 +435,7 @@ fn sync_refusals_keep_delta_table_keys_and_tc4_codes() {
             SyncRefusal::RefRejected {
                 server_message: "hook declined".into(),
             },
-            "syncResult.error.other",
+            "syncResult.error.stopped",
             None,
         ),
     ];
@@ -441,31 +443,45 @@ fn sync_refusals_keep_delta_table_keys_and_tc4_codes() {
         let failure = before(refusal);
         assert_eq!((failure.key(), failure.code()), (key, code), "{failure:?}");
     }
-    let refused = before(SyncRefusal::RefRejected {
-        server_message: "hook declined".into(),
-    });
-    assert_eq!(refused.vars(), vec![("reason", "hook declined".to_owned())]);
 }
 
+/// tC4 #724 item 6, Q36: a sync's message is the code's sentence alone, as tC4's toast shows it
+/// ("The diagnosis never shows", DELTA §3.15.2; `tC4:src/views/SyncResult.jsx:47-51`), and,
+/// where tC4 shows "The sync stopped: {reason}", one fixed sentence: neither Door43's words
+/// nor an I/O reason, which can name a file on this computer, reaches the person. The refusal
+/// keeps them for the operation report. The share dialog shows its code's sentence alone too
+/// (`tC4:src/views/modals/ShareDialog.jsx:28-29`).
 #[test]
-fn no_sync_or_share_banner_shows_door43s_words_before_its_sentence() {
-    // tC4's failed sync toast shows the code's sentence alone: "The diagnosis never shows"
-    // (DELTA §3.15.2; `tC4:src/views/SyncResult.jsx:47-51`). Its share dialog does the same
-    // (`tC4:src/views/modals/ShareDialog.jsx:28-29`). Door43's message reaches a banner only
-    // through a `{reason}` placeholder, which `vars()` carries.
+fn io_reason_renders_without_the_path() {
+    let resolver = Resolver::load();
+    let path = "/home/ana/translationCore4/projects/es-419_tit/.git/index.lock";
+    let words = "protected branch hook declined";
+    for refused in [
+        SyncRefusal::Io {
+            reason: format!("{path}: No space left on device (os error 28)"),
+        },
+        SyncRefusal::RefRejected {
+            server_message: words.into(),
+        },
+    ] {
+        for failure in [
+            SyncFailure::BeforeIntake(refused.clone()),
+            SyncFailure::AfterIntake(refused.clone()),
+        ] {
+            let sentence = resolver.english(failure.key()).unwrap();
+            assert!(placeholders(sentence).is_empty(), "{failure:?}: {sentence}");
+            assert_eq!(failure.vars(), Vec::new(), "{failure:?}");
+            assert!(!sentence.contains(path) && !sentence.contains(words));
+        }
+    }
     for failure in samples::sync() {
         assert_eq!(failure.detail(), None, "{failure:?}");
+        let shown: Vec<_> = failure.vars().into_iter().map(|(name, _)| name).collect();
+        assert!(shown.iter().all(|name| *name == "format"), "{failure:?}");
     }
     for refusal in samples::share() {
         assert_eq!(refusal.detail(), None, "{refusal:?}");
     }
-    let rejected = SyncRefusal::RefRejected {
-        server_message: "hook declined".into(),
-    };
-    assert_eq!(
-        SyncFailure::BeforeIntake(rejected).vars(),
-        vec![("reason", "hook declined".to_owned())]
-    );
 }
 
 #[test]

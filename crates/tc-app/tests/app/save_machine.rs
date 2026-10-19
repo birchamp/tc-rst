@@ -464,7 +464,15 @@ impl World {
                     at: HoldPoint::Save,
                 })
                 .await;
-            super::common::until_quiet(&self.t.app).await;
+            // A crash point may end it while this waits: an ended app runs nothing either.
+            for _ in 0..5000 {
+                match self.t.app.request(&tc_api::test::Quiet {}).await {
+                    Ok(Reply::Ok(quiet)) if quiet.busy => {
+                        tokio::time::sleep(Duration::from_millis(1)).await;
+                    }
+                    _ => break,
+                }
+            }
         }
         self.t = TestApp::start_in(self.dir.path(), |_, _| {}).await;
         self.page = Page::new(&self.t.app, MemStore::new());

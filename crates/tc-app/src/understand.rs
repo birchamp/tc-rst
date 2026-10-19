@@ -104,6 +104,14 @@ pub(crate) struct BookCache {
     books: tokio::sync::Mutex<Vec<Arc<LoadedBook>>>,
 }
 
+impl BookCache {
+    /// Every book is read again at its next need: a download may have installed what one
+    /// lacked.
+    pub(crate) async fn forget(&self) {
+        self.books.lock().await.clear();
+    }
+}
+
 fn not_found(what: &str) -> ApiError {
     ApiError::BadRequest {
         field: "book".to_owned(),

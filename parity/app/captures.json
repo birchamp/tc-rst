@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "dbcd00d5e96a62f2",
+    "ui": "527f290d49bacc6a",
     "commit": "dev",
     "api": 1
   },
@@ -19,6 +19,10 @@
       "_local_/_local_/sample_burrito_obs": "sample_burrito_obs"
     },
     "sample": {
+      "_local_/_local_/sample_burrito": "sample_burrito",
+      "_local_/_local_/sample_burrito_obs": "sample_burrito_obs"
+    },
+    "shared": {
       "_local_/_local_/sample_burrito": "sample_burrito",
       "_local_/_local_/sample_burrito_obs": "sample_burrito_obs"
     }
@@ -550,6 +554,258 @@
       "domSha256": "ad7c62fef21970cc57ff439a0e65bf5f2ee7ac47a9d8becad95d04f48385c784"
     },
     {
+      "name": "open-door43-refused",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B10",
+      "backend": "memory+scripted",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {
+        "q3-where": {
+          "x": 417,
+          "y": 196,
+          "width": 234,
+          "height": 17
+        },
+        "q3-refused": {
+          "x": 417,
+          "y": 498,
+          "width": 446,
+          "height": 38
+        }
+      },
+      "png": "screens/open-door43-refused.png",
+      "sha256": "4322217dbf8e5d36927169787fcafc68438aa696d8f6774e7329f7402d874f28",
+      "dom": "dom/open-door43-refused.json",
+      "domSha256": "f0946e51655a18ddfe7bd804e875e1411da26055c24cff28bbdfa47e550e2b6e"
+    },
+    {
+      "name": "shared-home",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "by": "B10",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "sync"
+      },
+      "syncToast": null,
+      "maskRects": {
+        "q2-obs-card": null
+      },
+      "png": "screens/shared-home.png",
+      "sha256": "186e04fe56c2e793306b6621b73b6c77cc00f84562473a152eec15ca354144fb",
+      "dom": "dom/shared-home.json",
+      "domSha256": "9d4a3ae47cbfd9c8d5e4d0350bde996aaf2bb7b6e119ba9a03aaaae9dd9f9a0a"
+    },
+    {
+      "name": "sync-internet-consent",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "by": "B10",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "sync"
+      },
+      "syncToast": null,
+      "maskRects": {
+        "q2-obs-card": null
+      },
+      "png": "screens/sync-internet-consent.png",
+      "sha256": "0502905e0021b815ad40c881270ae32fb4accea777b0af1176c6569cd4cb2e3a",
+      "dom": "dom/sync-internet-consent.json",
+      "domSha256": "63b164f342ed46e504430cebfdc2b0ff16996f27dc05f1501e418ad8f219b0d6"
+    },
+    {
+      "name": "sync-failed",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "by": "B10",
+      "backend": "memory+scripted",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": false,
+        "code": "sync.clone-failed",
+        "text": "The sync did not complete. tC4 could not get the project from Door43. Nothing changed. Try again.",
+        "received": 0,
+        "newestWins": 0,
+        "verseConflicts": 0,
+        "from": null,
+        "restored": 0,
+        "missingPins": 0,
+        "links": []
+      },
+      "maskRects": {
+        "q2-obs-card": null
+      },
+      "png": "screens/sync-failed.png",
+      "sha256": "bb430471b9bfe80a530bf26e3dc82f872045bb452b801abddcf73fc4b9703e25",
+      "dom": "dom/sync-failed.json",
+      "domSha256": "14fa7f211cccbc36e96661392fbbc6735115d32cba90f3a4edb642d50f15d1de"
+    },
+    {
+      "name": "sync-ok",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "by": "B10",
+      "backend": "memory+scripted",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": true,
+        "code": null,
+        "text": "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to review This project now uses 5 resource versions that are not on this computer. Download",
+        "received": 0,
+        "newestWins": 0,
+        "verseConflicts": 0,
+        "from": null,
+        "restored": 0,
+        "missingPins": 5,
+        "links": [
+          "download"
+        ]
+      },
+      "maskRects": {
+        "q2-obs-card": null
+      },
+      "png": "screens/sync-ok.png",
+      "sha256": "55b3245ee896d8bfcab798f15fb9604cf1fc01f3d4f02f9b3c556f2d6a0a783e",
+      "dom": "dom/sync-ok.json",
+      "domSha256": "84737935b934ba9d260840ab41981d6284d15d039a4a21bb97e08b888d40e114"
+    },
+    {
+      "name": "sync-ok-teammates",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "by": "B10",
+      "backend": "memory+scripted",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": true,
+        "code": null,
+        "text": "Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Changes from: Teammate 1 · Teammate 2 This project now uses 5 resource versions that are not on this computer. Review Download",
+        "received": 2,
+        "newestWins": 0,
+        "verseConflicts": 1,
+        "from": "Changes from: Teammate 1 · Teammate 2",
+        "restored": 0,
+        "missingPins": 5,
+        "links": [
+          "review",
+          "download"
+        ]
+      },
+      "maskRects": {
+        "q2-obs-card": null
+      },
+      "png": "screens/sync-ok-teammates.png",
+      "sha256": "a838a7cdb486a4ab23966dd42ee7737049bc9b9a0dc9e4d440d708c5e2f95b10",
+      "dom": "dom/sync-ok-teammates.json",
+      "domSha256": "c3e8b13bce489f96613e9b006a1990b72dc1afe67f85734508ca33ae26b889f4"
+    },
+    {
+      "name": "sync-ok-restored",
+      "kind": "screen",
+      "scenario": "shared",
+      "locale": "en",
+      "by": "B10",
+      "backend": "memory+scripted",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "sync"
+      },
+      "syncToast": {
+        "ok": true,
+        "code": null,
+        "text": "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Door43 did not have 1 change from a teammate. tC4 sent it again. This project now uses 5 resource versions that are not on this computer. Review Download",
+        "received": 0,
+        "newestWins": 0,
+        "verseConflicts": 1,
+        "from": null,
+        "restored": 1,
+        "missingPins": 5,
+        "links": [
+          "review",
+          "download"
+        ]
+      },
+      "maskRects": {
+        "q2-obs-card": null
+      },
+      "png": "screens/sync-ok-restored.png",
+      "sha256": "f8c3159f6bcd6f40fb1ef3ccf8888fbced72625a9e19f81c0e8cdaf0d659b33b",
+      "dom": "dom/sync-ok-restored.json",
+      "domSha256": "a45642622da7e3cab0122397062b9890e8e08c07fd61fb1ae1047acd591164f8"
+    },
+    {
       "name": "en-understand-tit1",
       "kind": "screen",
       "scenario": "en-pins",
@@ -1077,6 +1333,54 @@
       "sha256": "d4e110ff6418bb3907d0042ee39795b146aa9311862d235aba45516b8b2caaae",
       "dom": "dom/home-open-error.json",
       "domSha256": "024baa2fdb33cbc7f54e1711d942314a5c40db2bb3482f908f4893c4a6780ecb"
+    },
+    {
+      "name": "project-settings",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B9a",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/project-settings.png",
+      "sha256": "3f03b454183a951c63275a5506dc4cd7977fafee5cb3830c84c6c1d9e6aa7f0c",
+      "dom": "dom/project-settings.json",
+      "domSha256": "9b3b7da08c44715b2dac42f6acc1c31bb5d64525979f0293b50e689cd79939e8"
+    },
+    {
+      "name": "source-texts",
+      "kind": "screen",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "B9a",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom",
+        "meaning"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {},
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/source-texts.png",
+      "sha256": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
+      "dom": "dom/source-texts.json",
+      "domSha256": "b18f63877e6a443863539bbf94a6550cf822e72df163332659734f5c9a19a349"
     },
     {
       "name": "home-resume",

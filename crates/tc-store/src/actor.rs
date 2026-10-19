@@ -129,6 +129,9 @@ impl Actor {
                     .and_then(|plan| self.project.commit(plan));
                 if result.is_ok() {
                     self.drafts.saved(cleared);
+                    if let tc_journal::command::Command::KeepDraft { draft, .. } = &*command {
+                        self.drafts.kept(draft);
+                    }
                     if !self.project.dirty.is_empty() {
                         self.due = Some(Instant::now() + MATERIALIZE_AFTER);
                     }

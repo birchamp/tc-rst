@@ -1,5 +1,5 @@
 {
-  "about": "Declared differences (APP-DESIGN §7.3): each mask names the element that may differ, the screens it applies to, the rectangle it covers in tC4's screenshot of each, and the ruling it cites (`build`, or an owner ruling that docs/PLAN.md lists under \"Where the rebuild differs from tC4 4.0 on purpose\"). `target` is tC4's element; `rust` is the rebuild's when it differs, null meaning the same as `target`; `<OBS>` and `<BIBLE>` stand for the two projects. `meaning` lists the values of what the DOM shows that may differ, as [tC4, rebuild] pairs. Rectangles are measured on tC4 by measure-masks.mjs on the baseline's machine; the gate fails a capture whose masked element lies outside its rectangle.",
+  "about": "Declared differences (APP-DESIGN §7.3): each mask names the element that may differ, the screens it applies to, the rectangle it covers in tC4's screenshot of each, and the ruling it cites (`build`, or an owner ruling that docs/PLAN.md lists under \"Where the rebuild differs from tC4 4.0 on purpose\"). `target` is tC4's element; `rust` is the rebuild's when it differs, null meaning the same as `target`; `<OBS>` and `<BIBLE>` stand for the two projects. `meaning` lists the values of what the DOM shows that may differ, as [tC4, rebuild] pairs. Rectangles are measured on tC4 by measure-masks.mjs on the baseline's machine; the gate fails a capture whose masked element lies outside its rectangle. `rustAbsent` says why the rebuild has no such element on these screens yet: the mask then takes tC4's element out alone, the rest of the row's difference is a residual's, and the gate fails once the rebuild draws the element.",
   "masks": [
     {
       "id": "about-build",
@@ -81,6 +81,7 @@
         "testid": "share-card-<OBS>"
       },
       "rust": null,
+      "rustAbsent": "The seed check refuses the OBS sample until the storage team's fix (APP-DESIGN §4.2, B1b; residuals.json), so the Rust Home has no OBS card to read \"Sync with Door43\".",
       "rects": {
         "shared-home": {
           "x": 866,
@@ -161,7 +162,7 @@
     {
       "id": "q3-refused",
       "ruling": "Q3",
-      "why": "tC4's refusal says to make sure that the repository is public; the rebuild opens private repositories, so its sentence must not say this (the new text is not decided yet). The unit that captures the screen sets `rust` to the rebuild's element.",
+      "why": "tC4's refusal says to make sure that the repository is public; the rebuild opens private repositories, so its sentence must not say this (Q-21: openDoor43.refused.notOpened). The rectangle covers the sentence on both sides: the rebuild's dialog sits half a line higher, by Q3's shorter note (B9b).",
       "target": {
         "text": "tC4 could not get the project from Door43."
       },
@@ -169,9 +170,9 @@
       "rects": {
         "open-door43-refused": {
           "x": 417,
-          "y": 509,
+          "y": 498,
           "width": 446,
-          "height": 37
+          "height": 48
         }
       },
       "meaning": null

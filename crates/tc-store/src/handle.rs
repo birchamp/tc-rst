@@ -21,10 +21,12 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::task::{Context, Poll, Waker};
 use std::time::Instant;
-use tc_journal::command::Command;
+use tc_journal::command::{Command, Draft};
 use tc_journal::fold::{Delta, FoldState, ProjectKind};
 use tc_journal::token::{TokenError, TokenKind};
-use tc_journal::{BookId, ChangeId, DeviceId, ProjectId, RecordKey, ShownToken, TokenKey};
+use tc_journal::{
+    BookId, ChangeId, DeviceId, ProjectId, RecordKey, ShownToken, TokenKey, WallTime,
+};
 
 // ---------------------------------------------------------------------------------------
 // A value that arrives later
@@ -561,11 +563,11 @@ impl ProjectHandle {
     /// Hands a command to the actor. The reply comes after the batch is durable and folded
     /// (B6); the caller never blocks. A draft goes to the draft writer instead (R22).
     pub fn submit(&self, command: Command) -> Pending<Result<StoreReply, CommandError>> {
-        if let Command::Draft(draft) = command {
+        if let Command::Draft { draft, at } = command {
             if let Mode::ReadOnly(reason) = self.facts().mode {
                 return ready(Err(CommandError::ReadOnly(reason)));
             }
-            self.drafts.put(draft);
+            self.drafts.put(draft, at);
             return ready(Ok(StoreReply {
                 tokens: Vec::new(),
                 new_conflicts: Vec::new(),
@@ -671,9 +673,19 @@ impl ProjectHandle {
         self.drafts.offered()
     }
 
-    /// Discards an offered draft.
-    pub fn discard_draft(&self, id: u64) {
-        self.drafts.discard(id);
+    /// Discards an offered draft, written before this returns: whether the file holds it.
+    pub fn discard_draft(&self, id: u64) -> bool {
+        self.drafts.discard(id)
+    }
+
+    /// Takes an unsaved text in as an offered draft (APP-DESIGN §6.6), written before this
+    /// returns its number; `None` when it could not be written, and the text stays where it
+    /// was. A read-only project takes nothing.
+    pub fn offer_draft(&self, draft: Draft, verified: bool, at: WallTime) -> Option<u64> {
+        if let Mode::ReadOnly(_) = self.facts().mode {
+            return None;
+        }
+        self.drafts.offer(draft, verified, at)
     }
 
     /// Leaving a book or a mode: derived files are written now (§5.10).

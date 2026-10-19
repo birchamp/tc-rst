@@ -16,8 +16,8 @@ use tc_api::test::LastEdit;
 use tc_api::{ApiError, Reply};
 use tc_app::backend::memory::MemoryBackend;
 use tc_app::backend::{
-    Door43Remote, Listing, OpenFailure, ProjectEntry, ProjectHandle, ProjectPeek, ProjectStore,
-    StoreError, SummaryFiles, SummaryStamp, SummaryWatch,
+    CopyFailure, Door43Remote, Listing, OpenFailure, ProjectEntry, ProjectHandle, ProjectPeek,
+    ProjectStore, StoreError, SummaryFiles, SummaryStamp, SummaryWatch,
 };
 use tc_app::events::{Next, Subscription};
 use tc_app::home::{card, card_facts, summary_of};
@@ -332,12 +332,32 @@ impl ProjectStore for Summaries {
         self.inner.summary_files(folder, books, watch)
     }
 
+    fn derived_file(
+        &self,
+        folder: &ProjectRef,
+        file: &tc_journal::fold::DerivedFile,
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        self.inner.derived_file(folder, file)
+    }
+
     fn open(
         &self,
         folder: &ProjectRef,
         progress: ProgressSink,
     ) -> Result<Arc<dyn ProjectHandle>, OpenFailure> {
         self.inner.open(folder, progress)
+    }
+
+    fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), CopyFailure> {
+        self.inner.copy(folder, name)
+    }
+
+    fn trust_lock(&self, folder: &ProjectRef) {
+        self.inner.trust_lock(folder);
+    }
+
+    fn name_run(&self, run: tc_api::ids::ServerInstance) {
+        self.inner.name_run(run);
     }
 
     #[cfg(feature = "test-hooks")]

@@ -163,7 +163,7 @@ impl Actions {
             OpenTarget::Book(book) => OpenUnit::Book(book),
             OpenTarget::Story(story) => OpenUnit::Story(story),
         };
-        self.open(project, Some(unit), None);
+        self.open(project, Some(unit), None, false);
     }
 
     /// The Resume card (tC4's `ResumeCard`): the project opens at the record's book and
@@ -181,10 +181,23 @@ impl Actions {
                 chapter,
                 tool: resume.tool,
             }),
+            false,
         );
     }
 
-    fn open(&self, project: ProjectRef, unit: Option<OpenUnit>, landing: Option<Landing>) {
+    /// Settings' "Manage source texts" (tC4 `openSettingsProject`, then `openSources`): the
+    /// project opens at its first book, and Get source texts shows over it.
+    pub fn open_then_sources(&self, project: ProjectRef) {
+        self.open(project, None, None, true);
+    }
+
+    fn open(
+        &self,
+        project: ProjectRef,
+        unit: Option<OpenUnit>,
+        landing: Option<Landing>,
+        sources: bool,
+    ) {
         let attempt = next(&OPENS);
         let s = self.s().clone();
         s.u.opening.try_set(Some(Opening::new(js::now_ms())));
@@ -216,7 +229,12 @@ impl Actions {
                 return;
             }
             match ended {
-                Some(Ok(opened)) => this.opened(opened, unit, landing),
+                Some(Ok(opened)) => {
+                    this.opened(opened, unit, landing);
+                    if sources {
+                        this.open_sources();
+                    }
+                }
                 Some(Err(error)) => {
                     let s = this.s();
                     s.u.opening.try_set(None);

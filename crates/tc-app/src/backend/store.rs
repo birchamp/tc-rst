@@ -35,7 +35,7 @@ use tc_api::event::{CheckpointOutcome, SessionMode};
 use tc_api::ids::{ProjectRef, WallMs};
 use tc_api::jobs::{OpenPhase, Phase};
 use tc_api::write::ReadOnlyReason;
-use tc_journal::command::Command;
+use tc_journal::command::{Command, Draft, DraftField};
 use tc_journal::fold::{FoldState, ProjectKind};
 use tc_journal::keys::PinGroup;
 use tc_journal::record::PinGroupValue;
@@ -45,10 +45,11 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
 
 use super::{
-    BoxFuture, CheckpointReason, CommandError, EditToken, Listing, OfferedDraft, OpenFailure,
-    Origin, ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore, Published, ReviewToken,
-    Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError, StoreEvent, StoreReply, Stored,
-    SummaryFiles, SummaryStamp, SummaryWatch, UnusableFolder, UnusableReason,
+    BoxFuture, CheckpointReason, CommandError, CopyFailure, DraftToken, EditToken, Listing,
+    OfferedDraft, OpenFailure, Origin, ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore,
+    Published, ReviewToken, Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError,
+    StoreEvent, StoreReply, Stored, SummaryFiles, SummaryStamp, SummaryWatch, UnusableFolder,
+    UnusableReason,
 };
 use crate::clock::Clock;
 use crate::jobs::ProgressSink;
@@ -120,6 +121,14 @@ pub struct StoreBackend {
     projects: PathBuf,
     vfs: Arc<dyn tc_store::Vfs>,
     hooks: Arc<tc_store::Hooks>,
+    /// What the projects folder is: a copy of a read-only project is made only where it can
+    /// be written safely (C1b).
+    platform: Arc<dyn tc_store::Platform>,
+    /// Folders whose lock the person said names a computer that is closed (C1b): the next
+    /// open of each takes the lock.
+    trusted: Mutex<std::collections::BTreeSet<ProjectRef>>,
+    /// This server run, which each open's drafts record (C1b).
+    run: Mutex<Option<String>>,
 }
 
 impl std::fmt::Debug for StoreBackend {
@@ -138,6 +147,7 @@ impl StoreBackend {
     ) -> Result<Self, StoreError> {
         let projects = config.projects.clone();
         let vfs = config.vfs.clone();
+        let platform = config.platform.clone();
         let store =
             tc_store::Store::start_with_hooks(config, hooks.clone()).map_err(store_error)?;
         Ok(Self {
@@ -145,6 +155,9 @@ impl StoreBackend {
             projects,
             vfs,
             hooks,
+            platform,
+            trusted: Mutex::default(),
+            run: Mutex::default(),
         })
     }
 
@@ -484,6 +497,20 @@ impl ProjectStore for StoreBackend {
         Ok(files)
     }
 
+    fn derived_file(
+        &self,
+        folder: &ProjectRef,
+        file: &tc_journal::fold::DerivedFile,
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        let path = self.listed(folder).map_err(|_| StoreError::NotAProject)?;
+        let rel = file.path();
+        match self.vfs.read(&under(&path, &rel)) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(e) if absent(&e) => Ok(None),
+            Err(e) => Err(store_error(format!("{rel}: {e}"))),
+        }
+    }
+
     /// Reads the projects folder itself: tc-store's `Store::list` keeps only the folders with a
     /// `project.json`, and would hide one that holds someone's work without it.
     fn list(&self) -> Result<Listing, StoreError> {
@@ -515,16 +542,43 @@ impl ProjectStore for StoreBackend {
         let path = self.listed(folder)?;
         let options = tc_store::OpenOptions {
             progress: forward_open(progress),
-            // C1b lets the person say that the computer the lock names is closed; until then
-            // such a project opens read-only.
-            other_computer_closed: false,
+            // Once: a later open meets the lock afresh, since another computer may open the
+            // project again meanwhile.
+            other_computer_closed: lock(&self.trusted).remove(folder),
             creation_pins: creation_pins(),
+            run: lock(&self.run).clone(),
         };
         let handle = self.store.open(&path, &options).map_err(open_failure)?;
         let handle = StoreHandle::start(handle).map_err(|reason| OpenFailure::Unreadable {
             reason: format!("the project could not be served: {reason}"),
         })?;
         Ok(handle)
+    }
+
+    /// The copy goes into the projects folder, so it is refused where the projects folder
+    /// itself is what made the project read-only: a copy there would be read-only too.
+    fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), CopyFailure> {
+        let from = self
+            .listed(folder)
+            .map_err(|_| CopyFailure::Failed(format!("{folder} is not in the projects folder")))?;
+        if let Some(place) = self.platform.folder(&self.projects).unsafe_folder {
+            return Err(CopyFailure::Unsafe(read_only_reason(
+                &tc_store::ReadOnlyReason::UnsafeFolder(place),
+            )));
+        }
+        match self.store.copy_project(&from, name.as_str()) {
+            Ok(_) => Ok(()),
+            Err(tc_store::CreateError::NameExists(_)) => Err(CopyFailure::NameExists),
+            Err(error) => Err(CopyFailure::Failed(error.to_string())),
+        }
+    }
+
+    fn trust_lock(&self, folder: &ProjectRef) {
+        lock(&self.trusted).insert(folder.clone());
+    }
+
+    fn name_run(&self, run: tc_api::ids::ServerInstance) {
+        *lock(&self.run) = Some(run.to_string());
     }
 
     /// Projects on disk have no seed to go back to: a parity scenario's store
@@ -752,7 +806,11 @@ fn reply(reply: tc_store::StoreReply) -> StoreReply {
 }
 
 fn offered(draft: tc_store::OfferedDraft) -> OfferedDraft {
-    OfferedDraft::new(draft.id, draft.verified, draft.at, draft.draft)
+    let run = draft
+        .run
+        .as_deref()
+        .and_then(|run| tc_api::ids::ServerInstance::parse(run).ok());
+    OfferedDraft::new(draft.id, run, draft.verified, draft.at, draft.draft)
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1185,6 +1243,30 @@ impl ProjectHandle for StoreHandle {
             .as_ref()
             .map(|handle| handle.offered_drafts().into_iter().map(offered).collect())
             .unwrap_or_default()
+    }
+
+    fn discard_draft(&self, id: u64) -> bool {
+        self.inner()
+            .as_ref()
+            .is_some_and(|handle| handle.discard_draft(id))
+    }
+
+    fn offer_draft(
+        &self,
+        field: DraftField,
+        shown: Vec<DraftToken>,
+        text: String,
+        verified: bool,
+        at: tc_journal::WallTime,
+    ) -> Option<u64> {
+        let draft = Draft {
+            field,
+            shown: shown.into_iter().map(|token| token.0).collect(),
+            text,
+        };
+        self.inner()
+            .as_ref()
+            .and_then(|handle| handle.offer_draft(draft, verified, at))
     }
 
     /// Holds the handle's read lock while it waits, so a close meanwhile waits too: a test's

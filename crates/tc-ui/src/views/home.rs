@@ -36,6 +36,7 @@ use crate::ds::{
     Overline, Size, Toast, ToastTone,
 };
 use crate::i18n::{keys, t, t_dyn};
+use crate::views::sync_result::SyncResult;
 
 fn dir_str(dir: Direction) -> &'static str {
     match dir {
@@ -175,7 +176,7 @@ pub fn Home() -> impl IntoView {
                     {unusable}
                 </div>
             </div>
-            // The sync result (B10) shows here, above the import toast.
+            {sync_toast(&s, &actions)}
             {import_toast(&s, &actions)}
         </main>
     }
@@ -262,6 +263,39 @@ fn ask_for_help(
             {move || t(keys::feedback::ASK, &[])}
         </Button>
     })
+}
+
+/// The result of the last sync (X10), above the import toast when both show.
+fn sync_toast(s: &AppState, actions: &Actions) -> impl IntoView + use<> {
+    let (result, import, actions) = (
+        s.sync_result.clone(),
+        s.import_toast.clone(),
+        actions.clone(),
+    );
+    move || {
+        result.get().map(|toast| {
+            let wrap = crate::css! {
+                "position": "fixed",
+                "inset-block-end": if import.get().is_some() { 88 } else { 24 },
+                "inset-inline-start": "50%",
+                "transform": "translateX(-50%)",
+                "z-index": 90,
+                "width": "max-content",
+                "max-width": "calc(100% - 48px)",
+            };
+            let (review, download, dismiss) = (actions.clone(), actions.clone(), actions.clone());
+            view! {
+                <div style=wrap.to_style()>
+                    <SyncResult
+                        toast=toast
+                        on_review=Callback::new(move |()| review.sync_review())
+                        on_download=Callback::new(move |()| download.sync_download())
+                        on_dismiss=Callback::new(move |()| dismiss.dismiss_sync_result())
+                    />
+                </div>
+            }
+        })
+    }
 }
 
 fn import_toast(s: &AppState, actions: &Actions) -> impl IntoView + use<> {

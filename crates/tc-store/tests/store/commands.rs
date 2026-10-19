@@ -1304,11 +1304,14 @@ fn read_only_refuses_every_command_and_writes_nothing() {
     }
     let draft = submit(
         &reader,
-        Command::Draft(Draft {
-            field: DraftField::Words,
-            shown: vec![token(&reader, &verse(1, 1))],
-            text: "unsaved".into(),
-        }),
+        Command::Draft {
+            draft: Draft {
+                field: DraftField::Words,
+                shown: vec![token(&reader, &verse(1, 1))],
+                text: "unsaved".into(),
+            },
+            at: tc_journal::WallTime(0),
+        },
     );
     assert!(matches!(draft, Err(CommandError::ReadOnly(_))));
     reader.wait_idle();

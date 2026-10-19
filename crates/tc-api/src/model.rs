@@ -1,9 +1,12 @@
-//! Pure models the server and the UI share (APP-DESIGN §3.8).
+//! Pure models the server and the UI share (APP-DESIGN §3.8): logic both run, here so the two
+//! cannot drift.
 //!
-//! [`ArticleBlock`] is a block of help text as the helps panes draw it: tc-helps renders it on
-//! the server (`tc_helps::blocks`, a port of tC4's `renderArticleBlocks`), and the UI cuts a
-//! long note's preview with [`take_spans`], tC4's `takeSpans`. A differential test in tc-app
-//! holds this copy to tc-helps' own.
+//! [`draft`] is the draft machine of C1b. [`ArticleBlock`] is a block of help text as the helps
+//! panes draw it: tc-helps renders it on the server (`tc_helps::blocks`, a port of tC4's
+//! `renderArticleBlocks`), and the UI cuts a long note's preview with [`take_spans`], tC4's
+//! `takeSpans`. A differential test in tc-app holds this copy to tc-helps' own.
+
+pub mod draft;
 
 use serde::{Deserialize, Serialize};
 

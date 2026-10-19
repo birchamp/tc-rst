@@ -239,6 +239,10 @@ pub struct Mask {
     pub target: TargetSpec,
     /// The rebuild's element when it is not `target`.
     pub rust: Option<TargetSpec>,
+    /// Why the rebuild has no such element on these screens yet. The rest of the row's
+    /// difference is then a residual's, and the gate fails once the rebuild draws the element.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rust_absent: Option<String>,
     /// The rectangle the mask covers in tC4's screenshot of each screen it applies to.
     pub rects: BTreeMap<String, Rect>,
     pub meaning: Option<MaskMeaning>,

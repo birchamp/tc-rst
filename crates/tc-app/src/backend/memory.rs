@@ -18,7 +18,7 @@ use std::time::Duration;
 use tc_api::event::{CheckpointOutcome, SessionMode};
 use tc_api::ids::ProjectRef;
 use tc_api::write::ReadOnlyReason;
-use tc_journal::command::Command;
+use tc_journal::command::{Command, DraftField};
 use tc_journal::fold::{Delta, FoldInput, FoldState, ProjectKind};
 use tc_journal::token::TokenError;
 use tc_journal::{Change, ChangeId, DeviceId, GitOid, RecordKey, ShownToken, TokenKey};
@@ -26,10 +26,10 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use super::seed::StateSeed;
 use super::{
-    BoxFuture, CheckpointReason, CommandError, EditToken, Listing, OfferedDraft, OpenFailure,
-    ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore, Published, ReviewToken, Snapshot,
-    StoreCause, StoreCommand, StoreCounters, StoreError, StoreEvent, StoreReply, Stored,
-    SummaryFiles, SummaryStamp, SummaryWatch,
+    BoxFuture, CheckpointReason, CommandError, CopyFailure, DraftToken, EditToken, Listing,
+    OfferedDraft, OpenFailure, ProjectEntry, ProjectFacts, ProjectHandle, ProjectStore, Published,
+    ReviewToken, Snapshot, StoreCause, StoreCommand, StoreCounters, StoreError, StoreEvent,
+    StoreReply, Stored, SummaryFiles, SummaryStamp, SummaryWatch,
 };
 use crate::counters::CountingSnapshot;
 use crate::jobs::ProgressSink;
@@ -468,6 +468,16 @@ impl ProjectStore for MemoryBackend {
         Ok(files)
     }
 
+    fn derived_file(
+        &self,
+        folder: &ProjectRef,
+        file: &tc_journal::fold::DerivedFile,
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        let (_, snapshot, _) = self.current(folder)?;
+        // The read the dialog makes is not one of a screen's counted reads.
+        Ok(CountingSnapshot::new(snapshot, Arc::default()).render(file))
+    }
+
     fn list(&self) -> Result<Listing, StoreError> {
         // By folder name: the map is ordered by it. A memory project is never unusable.
         Ok(Listing {
@@ -507,6 +517,18 @@ impl ProjectStore for MemoryBackend {
         };
         Ok(Arc::new(MemoryHandle { state, open }))
     }
+
+    /// A memory project has no folder to copy.
+    fn copy(&self, _folder: &ProjectRef, _name: &ProjectRef) -> Result<(), CopyFailure> {
+        Err(CopyFailure::Failed(
+            "the memory backend copies no project".to_owned(),
+        ))
+    }
+
+    /// A memory project has no lock file.
+    fn trust_lock(&self, _folder: &ProjectRef) {}
+
+    fn name_run(&self, _run: tc_api::ids::ServerInstance) {}
 
     #[cfg(feature = "test-hooks")]
     fn reset(&self) -> Result<(), StoreError> {
@@ -690,6 +712,21 @@ impl ProjectHandle for MemoryHandle {
     /// Drafts are no-ops here (§4.2), so none is ever offered.
     fn offered_drafts(&self) -> Vec<OfferedDraft> {
         Vec::new()
+    }
+
+    fn discard_draft(&self, _id: u64) -> bool {
+        false
+    }
+
+    fn offer_draft(
+        &self,
+        _field: DraftField,
+        _shown: Vec<DraftToken>,
+        _text: String,
+        _verified: bool,
+        _at: tc_journal::WallTime,
+    ) -> Option<u64> {
+        None
     }
 
     /// Nothing runs in the background.

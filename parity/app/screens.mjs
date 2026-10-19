@@ -359,7 +359,8 @@ export const SCREEN_LIST = [
     rebuildDiffers: { ruling: 'Q3', rebuild: 'The refusal sentence (openDoor43.refused.other) says "Make sure that the repository is public". The rebuild opens private repositories, so its sentence must not say this. The delta document replaces only openDoor43.where, so the new text of this sentence is not decided yet. When Door43 answers 401 or 404 and nobody is signed in, the rebuild shows the sign-in step instead of this refusal.' },
     run: async (app) => {
       const { page } = app;
-      await app.home(); await page.getByTestId('add-project').click();
+      await app.home(); await app.door43Lacks(OPEN_REPO);
+      await page.getByTestId('add-project').click();
       await page.getByText('Open a project from Door43', { exact: true }).click();
       await page.getByTestId('open-door43-repo').fill(OPEN_REPO);
       await page.getByTestId('open-door43-submit').click();
@@ -608,7 +609,7 @@ export const SCREEN_LIST = [
     incomplete: `${MISSING_VERSIONS} Its dot is then green.`,
     rebuildDiffers: OBS_SYNCS,
     run: async (app) => {
-      await app.home(); await app.openTitus(); await app.home();
+      await app.home(); await app.openOnceBeforePush();
       await app.pushToDoor43(BIBLE);
       await app.syncFromHome(BIBLE);
       await app.page.locator('[data-testid="sync-result"][data-ok="1"]').waitFor({ timeout: 120_000 });
@@ -621,7 +622,7 @@ export const SCREEN_LIST = [
     incomplete: MISSING_VERSIONS,
     rebuildDiffers: OBS_SYNCS,
     run: async (app) => {
-      await app.home(); await app.openTitus(); await app.home();
+      await app.home(); await app.openOnceBeforePush();
       await app.teammatesChangeOneVerse(BIBLE);
       await app.syncFromHome(BIBLE);
       await app.page.locator('[data-testid="sync-result"][data-ok="1"]').waitFor({ timeout: 120_000 });
@@ -634,7 +635,7 @@ export const SCREEN_LIST = [
     incomplete: MISSING_VERSIONS,
     rebuildDiffers: OBS_SYNCS,
     run: async (app) => {
-      await app.home(); await app.openTitus(); await app.home();
+      await app.home(); await app.openOnceBeforePush();
       const [, second] = await app.teammatesChangeOneVerse(BIBLE);
       await app.syncFromHome(BIBLE);
       const toast = app.page.getByTestId('sync-result');

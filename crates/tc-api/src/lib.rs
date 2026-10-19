@@ -43,7 +43,9 @@ pub mod net;
 pub mod prefs;
 pub mod query;
 pub mod refusal;
+pub mod resources;
 pub mod session;
+pub mod settings;
 pub mod shown;
 #[cfg(feature = "test-hooks")]
 pub mod test;
@@ -86,6 +88,12 @@ macro_rules! endpoint_table {
             command "prefs/setAlignSuggestions": $crate::prefs::SetAlignSuggestions => ();
             command "prefs/recordPlace": $crate::prefs::RecordPlace => ();
 
+            command "session/drafts": $crate::session::Drafts => $crate::session::OfferedDrafts;
+            command "session/keepDraft": $crate::session::KeepDraft => $crate::session::KeptDraft;
+            command "session/discardDraft": $crate::session::DiscardDraft => ();
+            command "session/copy": $crate::session::CopyProject => $crate::session::ProjectCopy;
+            command "session/otherComputerClosed": $crate::session::OtherComputerClosed => ();
+
             query "net/state": $crate::net::State => $crate::net::NetView;
             command "net/set": $crate::net::Set => $crate::net::NetView;
 
@@ -108,6 +116,7 @@ macro_rules! endpoint_table {
             query [Share] "account/orgs": $crate::account::Orgs => $crate::account::ShareTargets;
 
             job [Open] "door43/open": $crate::door43::OpenDoor43 => $crate::ids::JobId;
+            job [Sync] "door43/sync": $crate::door43::SyncProject => $crate::ids::JobId;
 
             query "feedback/compose": $crate::feedback::Compose => $crate::feedback::FeedbackDraft;
 
@@ -132,6 +141,13 @@ macro_rules! endpoint_table {
 
             query "resources/fixState": $crate::check::FixState
                 => Option<$crate::check::FixView>;
+            query "settings/viewFromHome": $crate::settings::ViewFromHome
+                => $crate::settings::SettingsView;
+
+            query "resources/sources": $crate::resources::Sources => $crate::resources::SourcesView;
+            query [Sources] "resources/catalog": $crate::resources::Catalog
+                => $crate::resources::CatalogView;
+            job [Sources] "resources/download": $crate::resources::Download => $crate::ids::JobId;
         }
     };
 }
@@ -156,6 +172,7 @@ macro_rules! test_hook_table {
             command "test/keychain": $crate::test::Keychain => $crate::test::KeychainView;
             command "test/reset": $crate::test::Reset => ();
             command "test/lastEdit": $crate::test::LastEdit => ();
+            command "test/script": $crate::test::Script => ();
         }
     };
 }

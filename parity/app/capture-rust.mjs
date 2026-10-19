@@ -9,7 +9,8 @@
 //
 // Needs `tc4` built with `--features test-hooks,fixture-backend` (each scenario's projects are
 // written with `--scenario` into the run's projects folder and opened through the store, the
-// default since unit C1a; `memory` and `memory+scripted` start it with `--backend memory`) and
+// default since unit C1a; `memory` starts it with `--backend memory`, and `memory+scripted`
+// marks a screen whose Door43 job ends as `test/script` set it, on the store since B10) and
 // the UI folder of crates/tc-ui/build-app.sh.
 // `--unit` names the unit of docs/APP-DESIGN.md §10 that captures (the gate checks it has
 // landed); `--layers` the layers the capture claims (`dom` alone is a DOM-first capture of a
@@ -111,7 +112,7 @@ async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit,
   const door43 = door43Fake ? await startDoor43Fake(door43Fake) : undefined;
   let env;
   try {
-    env = await startRustEnv({ scenario, tc4, ui, door43, backend: backend === 'store' ? 'store' : 'memory' });
+    env = await startRustEnv({ scenario, tc4, ui, door43, backend: backend === 'memory' ? 'memory' : 'store' });
   } catch (error) {
     await door43?.close();
     throw error;

@@ -8,5 +8,7 @@ pub mod import;
 pub mod language_name_field;
 pub mod new_bible;
 pub mod open_door43;
+pub mod project_settings;
 pub mod share;
 pub mod sign_in;
+pub mod source_texts;
