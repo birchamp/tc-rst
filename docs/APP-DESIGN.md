@@ -2635,7 +2635,7 @@ tC4's spec assertions are the reference.
 | J26 team sync | E1a, C7b | store + X, three app-data folders (DELTA:945-969) | plus resolving a check conflict (PLAN P2), once C7b has landed |
 | USB both directions (rebuild) | E2 | store + X | STORAGE §10 |
 | sync-button (`e2e/sync-button.spec.ts:107-270`) | B10, E1a | store + X | no request at launch or after 5 s idle |
-| app-language a–k, help a–i, feedback, internet-consent a–j | A5, A8, B2 | memory, then store | — *(A5: A5 runs help a (Home half) and b to i, app-language a, b, b2, c, d, f and the no-project halves of g, h, j, and feedback c to i from Report a problem, in `parity/app/journeys/`; B2 the Home halves of app-language a, g, h, j; B3 and B4a app-language e, i, k and the in-project halves of help a and app-language h, j; B1b or B3, whichever first refuses an open, feedback a and b; A8 internet-consent a–j)* |
+| app-language a–k, help a–i, feedback, internet-consent a–j | A5, A8, B2 | memory, then store | — *(A5: A5 runs help a (Home half) and b to i, app-language a, b, b2, c, d, f and the no-project halves of g, h, j, and feedback c to i from Report a problem, in `parity/app/journeys/`; B2 the Home halves of app-language a, g, h, j; B3 and B4a app-language e, i, k and the in-project halves of help a and app-language h, j; B3 feedback a and b, which need a screen that opens a project and is refused (B1b, the other candidate, landed first with no screen that opens one); A8 internet-consent a–j)* |
 | check-keyboard, item-navigation, ds-labels, check-project-switch, check-returns-draft | B4a, B5a, B5b, B6, C4 | memory, then store | geometry within 1 px |
 | settings-contract, language-suggestions, language-tags | B2, C6 | memory, then store | — |
 

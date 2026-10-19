@@ -2,8 +2,9 @@
 // parity capture makes them (env-rust.mjs: the token header, every other origin aborted), and
 // small helpers over tC4's test ids.
 //
-// A browser test runs when `TC4_BIN` (tc4 built with `--features test-hooks`), `TC4_UI` (the
-// folder of crates/tc-ui/build-app.sh) and Playwright (PLAYWRIGHT_MODULE, or
+// A browser test runs when `TC4_BIN` (tc4 built with `--features test-hooks,fixture-backend`,
+// which the environment's `--scenario` needs since B1b), `TC4_UI` (the folder of
+// crates/tc-ui/build-app.sh) and Playwright (PLAYWRIGHT_MODULE, or
 // parity/tc4-baseline/node_modules) are there; a test of the no-loss probe also needs
 // `TC4_UI_HOOKS` (`build-app.sh --test-hooks`). Otherwise it is skipped and says why, so CI's
 // node job runs these files with no browser. Each test starts its own `tc4` and ends it, and
@@ -18,7 +19,7 @@ import { CHROMIUM_ARGS, domSnapshot } from '../observe.mjs';
 
 function browserSetup() {
   const { TC4_BIN, TC4_UI, TC4_UI_HOOKS } = process.env;
-  if (!TC4_BIN || !TC4_UI) return { skip: 'set TC4_BIN (tc4 built with --features test-hooks) and TC4_UI (target/tc-ui-app)' };
+  if (!TC4_BIN || !TC4_UI) return { skip: 'set TC4_BIN (tc4 built with --features test-hooks,fixture-backend) and TC4_UI (target/tc-ui-app)' };
   try {
     const dir = process.env.PLAYWRIGHT_MODULE ?? path.join(REPO, 'parity', 'tc4-baseline', 'node_modules', 'playwright');
     return { tc4: TC4_BIN, ui: TC4_UI, hooks: TC4_UI_HOOKS, chromium: createRequire(import.meta.url)(dir).chromium };
