@@ -110,8 +110,9 @@ fn words(folded: &str) -> Vec<&str> {
 #[derive(Debug, Clone)]
 struct Name {
     folded: String,
-    /// The words of the name, joined by one space.
-    words: String,
+    /// The words of the name, each after one space: `" {words}"` of tC4's `rankNames`, made
+    /// once here rather than at every keystroke.
+    spaced: String,
     /// The first UTF-16 code unit of each word, as `part[0]` takes it in JavaScript: half of
     /// a character above U+FFFF.
     acronym: Vec<u16>,
@@ -124,10 +125,10 @@ fn to_name(text: &str) -> Name {
         .iter()
         .filter_map(|part| part.encode_utf16().next())
         .collect();
-    let words = parts.join(" ");
+    let spaced = format!(" {}", parts.join(" "));
     Name {
         folded,
-        words,
+        spaced,
         acronym,
     }
 }
@@ -161,7 +162,8 @@ fn includes(haystack: &[u16], needle: &[u16]) -> bool {
 /// The query as `rankNames` reads it.
 struct Query<'a> {
     folded: &'a str,
-    words: String,
+    /// `" {queryWords}"`, or empty when the query has no word.
+    spaced: String,
     utf16: Vec<u16>,
 }
 
@@ -172,8 +174,7 @@ fn rank_names(names: &[Name], query: &Query<'_>) -> u8 {
             WHOLE
         } else if name.folded.starts_with(query.folded) {
             STARTS
-        } else if (!query.words.is_empty()
-            && format!(" {}", name.words).contains(&format!(" {}", query.words)))
+        } else if (!query.spaced.is_empty() && name.spaced.contains(&query.spaced))
             // The acronym, for a query of more than one code unit.
             || (query.utf16.len() > 1 && includes(&name.acronym, &query.utf16))
         {
@@ -246,9 +247,14 @@ impl LanguageIndex {
         if folded.is_empty() {
             return Vec::new();
         }
+        let query_words = words(&folded).join(" ");
         let query = Query {
             folded: &folded,
-            words: words(&folded).join(" "),
+            spaced: if query_words.is_empty() {
+                String::new()
+            } else {
+                format!(" {query_words}")
+            },
             utf16: folded.encode_utf16().collect(),
         };
         struct Hit<'a> {

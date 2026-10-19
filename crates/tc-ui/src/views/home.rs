@@ -478,8 +478,8 @@ fn conflicts_chip(
 /// The chip's branch icon. Built with the SVG builders: `view!` would wrap each shape in a
 /// group.
 fn branch_icon() -> AnyView {
-    use leptos::svg;
     use crate::ds::fixed;
+    use leptos::svg;
     svg::svg()
         .add_any_attr(fixed(&[
             ("aria-hidden", "true"),
