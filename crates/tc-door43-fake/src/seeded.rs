@@ -7,6 +7,7 @@
 //! fake's commit when it is served, as DCS writes the commit it exported.
 //!
 //! The users, organizations and the `v92` pre-release are invented for tests.
+//! [`parity_account`] is the one account the parity captures sign in with.
 //!
 //! | Repository | Tags (release kind) | Subject |
 //! |---|---|---|
@@ -34,6 +35,40 @@ pub const OTP_CODE: &str = "424242";
 pub const TEAM_ORG: &str = "Kaleo-Translators";
 /// [`USER`] is a member here but may not create repositories.
 pub const READ_ONLY_ORG: &str = "es-419_gl";
+
+/// The account of the parity captures and the app's browser tests: the user of tC4's own e2e
+/// fake (`parity/tc4-baseline/mock-server/fake-door43.mjs`, `FAKE_USER`), so the two fakes
+/// sign in the same person. A test reads the `.mjs` and checks that these values agree.
+pub const PARITY_USER: &str = "facilitator-zq";
+pub const PARITY_PASSWORD: &str = "a pass-word";
+pub const PARITY_EMAIL: &str = "facilitator-zq@example.org";
+/// The parity user's organizations, as `FAKE_ORGANIZATIONS` lists them: the name, the full
+/// name, and whether the user may create a repository there.
+pub const PARITY_ORGS: [(&str, &str, bool); 2] = [
+    ("Equipo-Ejemplo", "Equipo Ejemplo", true),
+    ("es-419_gl", "Latin American Spanish Gateway", false),
+];
+
+/// Adds the parity user and organizations. Use it on a fake made with
+/// [`FakeDoor43::start`]: [`FakeDoor43::start_seeded`] already has an `es-419_gl`.
+pub fn parity_account(fake: &FakeDoor43) {
+    fake.add_user(FakeUser {
+        login: PARITY_USER.to_owned(),
+        email: PARITY_EMAIL.to_owned(),
+        password: PARITY_PASSWORD.to_owned(),
+        one_time_code: None,
+    });
+    for (name, full_name, can_create_repository) in PARITY_ORGS {
+        fake.add_org(FakeOrg {
+            name: name.to_owned(),
+            full_name: full_name.to_owned(),
+            members: vec![OrgMember {
+                login: PARITY_USER.to_owned(),
+                can_create_repository,
+            }],
+        });
+    }
+}
 
 fn resources_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/tc4/test-fixtures/resources")
