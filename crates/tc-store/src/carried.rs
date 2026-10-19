@@ -269,7 +269,13 @@ impl Writer {
         let Some(git) = &self.git else {
             return Ok(false);
         };
-        let Some((oid, stored_md5, len)) = self.store_file(git, rel)? else {
+        // An unreachable loose object with these bytes may be in a repack's list to prune:
+        // the batch being removed ends first, and the run removes no more (§9.8). The next
+        // repack finds the version in `refs/tc/carried`.
+        git.commit_begin();
+        let stored = self.store_file(git, rel);
+        git.commit_end();
+        let Some((oid, stored_md5, len)) = stored? else {
             return Ok(false);
         };
         if stored_md5 != md5 || len != size {

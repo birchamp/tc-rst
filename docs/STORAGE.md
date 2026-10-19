@@ -3552,7 +3552,7 @@ immutable files, add one pending batch, commit".
 |---|---|
 | `.gitignore`, `.gitattributes` | the fixed constants of §3.1 (an edit of them on Door43 is reset, with a notice) |
 | derived files | the fold's projection (not the disk, so a file held open by another program does not leak stale bytes into a commit) |
-| carried files and their conflict copies | blob ids from the `CarriedFile` projection; a head whose blob is not in the object database keeps the first parent's blob at that path (unchanged, so no reader sees a change), or is left out when the first parent has none, with `CarriedBytesMissing`; the commit is never refused for it |
+| carried files and their conflict copies | blob ids from the `CarriedFile` projection; a head whose blob is not in the object database is stored again from the working tree when the file there has the head's md5 and size; else it keeps the first parent's blob at that path (unchanged, so no reader sees a change), or is left out when the first parent has none, with `CarriedBytesMissing`; the commit is never refused for it |
 | `ingredients/tc/project.json` | the local file |
 | packs | the expected pack set (§4.4), minus redundant packs: every pack of the working tree and every non-redundant pack of HEAD's tree, valid, damaged and newer packs alike, except that a pack failing P2–P4 is replaced by a valid blob of the same path when one exists. A local loss can therefore never reach Door43 by fast-forward |
 | newer-format derived paths | the working-tree file, verbatim (or the blob, for a path kept out of the working tree, §3.3) |
@@ -3728,10 +3728,13 @@ near 400 MiB, and it took 26 s for the loose objects of 250 checkpoints of a who
    HEAD), and collect the commits, trees and blobs they reach. A walk that fails (a reference that
    does not read, an object that is missing) stops the repack: nothing is pruned unless every
    reference was read. `refs/tc/carried` is a commit with no parent that the writer sets at every
-   checkpoint when the set changed: its tree names, by blob id, every version of every carried
-   file that a `CarriedFile` change in the fold names and the object database has, the
-   superseded ones included, so a version replaced between two checkpoints is never pruned
-   (§11.4, L73). The set only grows.
+   checkpoint and before every repack, when the set changed: its tree names, by blob id, every
+   version of every carried file that a `CarriedFile` change in the fold names and the object
+   database has, the superseded ones included, so a version replaced between two checkpoints,
+   or recorded in a session that ended before its first checkpoint, is never pruned (§11.4,
+   L73). The set only grows. A repack does not start while the reference cannot be written.
+   Storing a carried file's bytes holds off the removal of unreachable objects as a commit does,
+   so bytes stored again are never removed by a repack that listed their old loose file.
 2. `repo.packbuilder()`; insert the loose objects the walk reached that no pack holds, and write
    the pack and its index into `.git/objects/pack/`. The history already in packs is not written
    again, so a repack adds the size of the new objects to the disk, not the size of the history.
@@ -4570,7 +4573,7 @@ and the on-disk end state, not only what the fold returns.
 | L70 | *Start empty* silently beats a concurrent *Restore the text*, or is silently absorbed by a concurrent edit | `Present` carries `how`, so the race is a `BookPresence` conflict; *Start empty* writes `StartOver` changes, never seed stubs; the stub rules are defined for one head plus stubs (§5.7, §7.3, §7.6) | `loss_restore_text_vs_start_empty_conflict`, `loss_start_empty_vs_concurrent_edit_conflict`, `stub_rules_one_head_plus_stubs` |
 | L71 | A comment or alignment made concurrently with a carry-over, a renumber or a join appears on no screen | the projection places attached records by anchor, follows `MovedTo` and `moved_to`, shows inner-verse alignments in the run's aligner, and lists the rest under Detached (§7.7) | `loss_comment_follows_moved_check`, `loss_comment_follows_renumber`, `loss_alignment_inside_join_reachable`, `property: every_head_reachable_from_a_screen` |
 | L72 | A field from a newer minor makes an older app fold the change under another key; the two versions write different derived bytes and trade false Door43 edits | a known kind with unknown fields keeps its own key; unknown fields are compared, not projected; non-inert additions raise `minReaderMinor` (§4.5 V1, §12.2) | `loss_newer_field_keeps_known_key`, `property: mixed_minor_versions_converge` |
-| L73 | Restoring a carried version whose blob is not local makes every checkpoint, sync and export fail | `refs/tc/carried` keeps every recorded version; Restore is offered only for local bytes; a missing blob keeps the previous blob in the tree and never fails a commit (§9.4, §9.8, §11.4) | `loss_carried_version_missing_blob_never_blocks_commit`, `carried_superseded_version_survives_repack` |
+| L73 | Restoring a carried version whose blob is not local makes every checkpoint, sync and export fail | `refs/tc/carried` keeps every recorded version, and is written before every repack; Restore is offered only for local bytes; a missing blob is stored again from the folder when the file there holds its bytes, else keeps the previous blob in the tree, and never fails a commit (§9.4, §9.8, §11.4) | `loss_carried_version_missing_blob_never_blocks_commit`, `carried_superseded_version_survives_repack`, `carried_versions_recorded_before_a_crash_survive_the_repack_at_the_next_open`, `a_placed_file_whose_blob_is_gone_is_stored_again_from_the_folder` |
 | L74 | A section save is refused on every retry because a teammate's span arrived after the screen was drawn | tokens for every displayed verse; coherence is checked on the author's view; overlap is a `Passage` conflict; the section buffer is a draft (§5.2, §5.14) | `loss_section_save_after_teammate_join_conflicts` |
 | L75 | A verse added to a book with a `BookLayout` is skipped by the projection | the save updates `BookLayout`; the projection places every unlisted record after its numeric predecessor (§5.2, §7.5) | `loss_booklayout_new_verse_projected` |
 | L76 | A batch that can never be completed hides its recovered changes forever, and its descendants show false conflicts | *Apply what was recovered* writes a `BatchRelease`; conflicts with a missing parent are marked incomplete history (§7.4) | `loss_unrecoverable_batch_release`, `incomplete_history_conflict_labelled`, `a_restore_race_verse_continuing_a_held_change_marks_the_presence_conflict`, `a_restore_race_candidate_with_a_missing_parent_is_incomplete_history` (properties), `a_start_empty_verse_head_with_a_missing_parent_marks_the_presence_conflict`, `a_restore_race_lists_the_batches_of_its_verse_candidates`, `an_incomplete_restore_race_offers_every_choice` |
@@ -4907,6 +4910,8 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the writer's own retry of an outside edit the disk refused | `a_disk_that_refuses_the_batch_of_an_outside_edit_is_tried_again_by_the_writer` |
 | the raw commit object (libgit2's signature, which refuses an empty email) | `the_author_is_translationcore_user_with_no_email` |
 | `refs/tc/carried` (reach only what a branch reaches) | `carried_superseded_version_survives_repack` |
+| `refs/tc/carried` written before the open's repack (write it at checkpoints only) | `carried_versions_recorded_before_a_crash_survive_the_repack_at_the_next_open` |
+| a missing carried blob stored again from the folder (leave the file out of the commit) | `a_placed_file_whose_blob_is_gone_is_stored_again_from_the_folder` |
 | the read-back of a repack's index before it removes a loose object, and the 14 days | `repack_keeps_every_reachable_object`, `repack_prunes_unreachable_objects_by_age_and_keeps_what_a_ref_reaches`, `crash_r1_pack_written_loose_not_removed` |
 | G4's copy of the carried blobs (start a new repository empty) | `crash_g4_rebuild_keeps_carried_blobs` |
 | the choices of a conflict marked as incomplete history (offer only *Apply what was recovered*) | `an_incomplete_restore_race_offers_every_choice`, `release_batch_is_accepted_beside_the_other_choices` |

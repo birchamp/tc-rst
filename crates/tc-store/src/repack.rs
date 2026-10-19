@@ -97,8 +97,8 @@ impl Writer {
     /// §9.8: after a checkpoint moved the branch, and once after the open, the repository is
     /// repacked when it holds more than 2,000 loose objects or 64 MiB of them. The repack runs
     /// on a thread of its own (the writer goes on with its jobs), never starts while the
-    /// project closes, and loses nothing if it fails: the next check tries again. Never call
-    /// it during a sync.
+    /// project closes or while `refs/tc/carried` lacks a version the fold names, and loses
+    /// nothing if it fails: the next check tries again. Never call it during a sync.
     pub(crate) fn maybe_repack(&mut self) {
         if let Some(run) = self.repack.take() {
             if !run.done.load(Ordering::Acquire) {
@@ -128,7 +128,11 @@ impl Writer {
         // The estimate counts objects the database already had; the folders are the truth.
         if due(objects, bytes, after) {
             counted = git.loose_objects();
-            if due(counted.0, counted.1, after) {
+            // A version recorded since the last checkpoint (in this session, or in one that
+            // ended before its first) is reachable only once `refs/tc/carried` names it.
+            let versions = self.shared.snapshot().fold().carried_versions();
+            if due(counted.0, counted.1, after) && self.keep_carried_versions(self.device, versions)
+            {
                 self.start_repack();
             }
         }

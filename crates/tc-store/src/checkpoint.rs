@@ -115,7 +115,8 @@ impl Writer {
             device,
             reply,
         } = job;
-        self.keep_carried_versions(device);
+        let versions = self.fold.carried_versions();
+        self.keep_carried_versions(device, versions);
         let outcome = sealed.and_then(|sealed| {
             materialized?;
             let mut report = CheckpointReport {
@@ -163,33 +164,38 @@ impl Writer {
     /// §9.8, §11.4: `refs/tc/carried` is a commit with no parent whose tree names, by blob id,
     /// every version of every carried file the history holds and the object database has.
     /// Superseded versions and ones no checkpoint committed are reachable through it, so a
-    /// repack never prunes a version a person may restore (L73). The set only grows. A
-    /// reference that cannot be written is tried again at the next checkpoint: the bytes are
-    /// in the object database either way.
-    pub(crate) fn keep_carried_versions(&mut self, device: DeviceId) {
+    /// repack never prunes a version a person may restore (L73). The set only grows. It is
+    /// written at every checkpoint and before every repack, so a version recorded in a session
+    /// that ended before its first checkpoint is kept by the next session's first repack.
+    /// `versions`: the versions the fold names. `true` when the reference keeps every one of
+    /// them the object database has; a reference that cannot be written is tried again later,
+    /// and no repack runs until it is (the bytes are in the object database either way).
+    pub(crate) fn keep_carried_versions(
+        &mut self,
+        device: DeviceId,
+        versions: Vec<GitOid>,
+    ) -> bool {
         if self.read_only().is_some() {
-            return;
+            return false;
         }
         let Some(git) = self.git.take() else {
-            return;
+            return false;
         };
         git.commit_begin();
-        let _ = self.keep_carried_versions_with(&git, device);
+        let kept = self.keep_carried_versions_with(&git, device, versions);
         git.commit_end();
         self.git = Some(git);
+        kept.is_ok()
     }
 
     fn keep_carried_versions_with(
         &mut self,
         git: &Git,
         device: DeviceId,
+        versions: Vec<GitOid>,
     ) -> Result<(), StoreError> {
-        let mut wanted: BTreeSet<GitOid> = self
-            .fold
-            .carried_versions()
-            .into_iter()
-            .filter(|oid| git.has(*oid))
-            .collect();
+        let mut wanted: BTreeSet<GitOid> =
+            versions.into_iter().filter(|oid| git.has(*oid)).collect();
         if self.carried_kept.is_none() {
             let kept: BTreeSet<GitOid> = match git.find_ref(CARRIED_REF)? {
                 Some(commit) => git
@@ -273,17 +279,30 @@ impl Writer {
         // in the working tree next.
         let _ = git.adopt_blobs(&broken.join("objects"), &wanted);
         for placement in self.fold.carried_files() {
-            if git.has(placement.oid) {
-                continue;
-            }
-            let Ok((md5, size)) = self.hash_file(&placement.path) else {
-                continue;
-            };
-            if md5 == placement.md5 && size == placement.size {
-                let _ = self.store_file_as_blob(&git, &placement.path, placement.oid);
-            }
+            self.store_placed_bytes(&git, &placement);
         }
         self.git = Some(git);
+    }
+
+    /// A placed carried file whose blob the object database lacks (lost with a damaged
+    /// repository, or pruned) is stored again from the folder when the file there holds the
+    /// placement's bytes. `true` when the object database has the blob after it.
+    fn store_placed_bytes(
+        &self,
+        git: &Git,
+        placement: &tc_journal::fold::CarriedPlacement,
+    ) -> bool {
+        if git.has(placement.oid) {
+            return true;
+        }
+        let Ok((md5, size)) = self.hash_file(&placement.path) else {
+            return false;
+        };
+        md5 == placement.md5
+            && size == placement.size
+            && self
+                .store_file_as_blob(git, &placement.path, placement.oid)
+                .unwrap_or(false)
     }
 
     /// C3 to C5 up to the commit object.
@@ -626,9 +645,10 @@ impl Writer {
         }
 
         // Carried files: the bytes are blobs the object database holds (§11.4). A blob it
-        // lacks keeps the head's blob at that path, or leaves the file out; the commit is
-        // never refused for it (§9.4).
+        // lacks is stored again when the folder holds its bytes; else the head's blob stays at
+        // that path, or the file is left out; the commit is never refused for it (§9.4).
         for placement in self.fold.carried_files() {
+            self.store_placed_bytes(git, &placement);
             if let Some(d) =
                 self.carried_entry(git, &placement, head_entries.get(&placement.path))?
             {

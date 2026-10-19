@@ -477,6 +477,45 @@ fn loss_carried_version_missing_blob_never_blocks_commit() {
     handle.close().unwrap();
 }
 
+/// §9.4, §11.4: a placed carried file whose blob the object database lost (a prune, a damaged
+/// repository) is stored again from the folder when the file there holds the placement's
+/// bytes, so the checkpoint commits it and tells of no missing bytes.
+#[test]
+fn a_placed_file_whose_blob_is_gone_is_stored_again_from_the_folder() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let bytes = b"my recording of the song".to_vec();
+    arrive(&rig, &handle, &folder, SONG, &bytes);
+    let oid = git2::Oid::hash_object(git2::ObjectType::Blob, &bytes).unwrap();
+    let hex = oid.to_string();
+    let loose = git_dir_of(&rig.fs, &folder)
+        .join("objects")
+        .join(&hex[..2])
+        .join(&hex[2..]);
+    std::fs::remove_file(&loose).unwrap();
+    assert!(!stored(&rig, &folder, &bytes));
+
+    leave(&handle);
+    let report = handle
+        .checkpoint(CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert!(report.commit.is_some(), "{report:?}");
+    let repo = repo_of(&rig.fs, &folder);
+    let head = commits_of(&repo)[0];
+    assert_eq!(commit_files(&repo, head).get(SONG), Some(&bytes));
+    assert!(
+        !handle
+            .notices()
+            .iter()
+            .any(|n| matches!(n.notice, Notice::CarriedBytesMissing { .. })),
+        "{:?}",
+        handle.notices()
+    );
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
+}
+
 /// §11.4: a file is never held in memory whole. A 20 MiB file is hashed and stored in chunks
 /// (the filesystem is read in pieces of at most 64 KiB), and written from its blob the same
 /// way.

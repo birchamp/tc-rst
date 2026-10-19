@@ -398,3 +398,61 @@ fn a_closing_project_starts_no_repack() {
     );
     assert!(!loose(&rig, &folder).is_empty());
 }
+
+/// §9.8, §11.4, L73: two versions of a carried file recorded through focus, and the process
+/// killed before any checkpoint wrote `refs/tc/carried`. Fourteen days later the repack after
+/// the open keeps both versions, and the next checkpoint commits the file as it is.
+#[test]
+fn carried_versions_recorded_before_a_crash_survive_the_repack_at_the_next_open() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let first = b"my first recording of the song".to_vec();
+    let second = b"my second recording of the song, longer".to_vec();
+    for bytes in [&first, &second] {
+        rig.fs.put_unseen(&folder.join(SONG), bytes, None);
+        handle.focus().wait().unwrap();
+        handle.wait_idle();
+    }
+    assert_eq!(handle.snapshot().fold().history(&song_key()).len(), 2);
+    let fs = rig.fs.crash(false);
+    drop(handle);
+
+    let rig = rig_as(fs, APP, "host-1");
+    let v1 = git2::Oid::hash_object(git2::ObjectType::Blob, &first).unwrap();
+    let v2 = git2::Oid::hash_object(git2::ObjectType::Blob, &second).unwrap();
+    {
+        let repo = repo_of(&rig.fs, &folder);
+        assert!(
+            repo.find_reference("refs/tc/carried").is_err(),
+            "no checkpoint wrote the reference"
+        );
+    }
+    for oid in [v1, v2] {
+        age(&loose_path(&rig, &folder, oid), 15);
+    }
+    repack_always(&rig);
+    let handle = open(&rig, &folder);
+    assert!(handle.counters().git_repacks >= 1, "a repack ran");
+    let repo = repo_of(&rig.fs, &folder);
+    assert!(repo.find_blob(v1).is_ok(), "the superseded version is kept");
+    assert!(repo.find_blob(v2).is_ok(), "the current version is kept");
+    assert_eq!(handle.snapshot().fold().history(&song_key()).len(), 2);
+
+    checkpoint(&handle);
+    let head = commits_of(&repo)[0];
+    assert_eq!(
+        commit_files(&repo, head).get(SONG),
+        Some(&second),
+        "the checkpoint commits the file"
+    );
+    assert!(
+        !handle.notices().iter().any(|n| matches!(
+            n.notice,
+            tc_journal::fold::Notice::CarriedBytesMissing { .. }
+        )),
+        "{:?}",
+        handle.notices()
+    );
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
+}
