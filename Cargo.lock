@@ -3333,6 +3333,7 @@ dependencies = [
  "tc-core",
  "thiserror 2.0.21",
  "unicode-general-category",
+ "unicode-normalization",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",

@@ -27,6 +27,9 @@ tc-api = { path = "../tc-api" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+# The NFC the save machine compares with the server's stored text: the crate and version tc-app
+# and tc-journal normalize with, so the two sides agree on every character (APP-DESIGN 6.5).
+unicode-normalization = { workspace = true }
 
 [build-dependencies]
 serde_json = { workspace = true }

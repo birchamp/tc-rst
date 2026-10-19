@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod app {
+    mod buffer;
     mod cache;
     mod client;
     mod effects;
