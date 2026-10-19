@@ -108,8 +108,13 @@ the rebuild fixed it or does as tC4 does:
   `a_skipped_marker_right_before_a_letter_leaves_a_space`). The woven form of a ruby word
   (`\rb \w 神|…\w*|かみ\rb*`) still shows its gloss ("神|かみ"); the import's split reads it
   back to the plain form, whose bank is the export's.
-- **A stray end marker** (`a\nd* b` with no `\nd`) hides the text after it, which usfm-js keeps
-  as the marker's `content`. tC4 does the same.
+- **Text after a character span that holds a note** (`\wj Blessed are the poor\f + \ft Or
+  humble\f* in spirit\wj* and he went on`, valid USFM common in red-letter Gospels), and after
+  a stray end marker (`a\nd* b`): usfm-js keeps it as the `content` of the end marker's own
+  object, which tC4 hides, so the bank lacks words the export counts and the verse save drops
+  their links. Fixed in the rebuild as a declared difference (`docs/PLAN.md`;
+  `words_after_a_span_that_holds_a_note_show`). The rebuild's walk of a span's children had
+  also shown the words of a character span nested in such a note; they stay hidden now.
 
 ## 2. Align
 

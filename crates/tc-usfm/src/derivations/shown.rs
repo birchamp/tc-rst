@@ -11,17 +11,31 @@
 //! 3. A word (`type` "word") gives its `text`.
 //! 4. Any other object with a `text`, unless it is a section heading, gives that text, and
 //!    then its `children` are walked if they are a list.
-//! 5. Otherwise its `children` are walked, if it has any; an object with neither (a cross
+//! 5. An object with a string `content` gives that content, and then its `children`, when
+//!    the content is verse text: the object of an end marker (a `tag` ending in `*` that is
+//!    not a milestone's `\*`).
+//! 6. Otherwise its `children` are walked, if it has any; an object with neither (a cross
 //!    reference, a figure, a marker usfm-js keeps no text for) is skipped.
 //!
-//! tC4 does not walk the children in rule 4, so it hides every word of a character span
-//! after a span nested in it: usfm-js reads `\wj Worship the \+nd Lord\+nd* your God\wj*` as
-//! a `wj` with the text "Worship the " and the children `+nd` "Lord" and " your God", and tC4
-//! shows "Worship the ". The export counts all five words, so tC4's Check and Align bank
-//! cannot select or align "Lord", "your" and "God", and a bank without them cannot be woven
-//! (#796). The rebuild walks them, a declared difference (`docs/PLAN.md`); usfm-js puts a
-//! span's text before its first nested marker in `text` and the rest in `children`, so the
-//! words come in file order and none twice. On the ULT and UST v91 this changes no verse.
+//! The rebuild differs from tC4 where tC4 hides words the export counts, so that Check and
+//! the Align bank cannot reach them and a bank without them cannot be woven (#796); each is a
+//! declared difference (`docs/PLAN.md`):
+//!
+//! - tC4 does not walk the children in rule 4, so it hides every word of a character span
+//!   after a span nested in it: usfm-js reads `\wj Worship the \+nd Lord\+nd* your God\wj*`
+//!   as a `wj` with the text "Worship the " and the children `+nd` "Lord" and " your God", and
+//!   tC4 shows "Worship the ". usfm-js puts a span's text before its first nested marker in
+//!   `text` and the rest in `children`, so the words come in file order and none twice.
+//! - tC4 has no rule 5. usfm-js keeps the text after an end marker it cannot match as that
+//!   marker's `content`, and it cannot match the end of a span that holds a note, a cross
+//!   reference or a figure: `\wj Blessed are the poor\f + \ft Or humble\f* in spirit\wj* and
+//!   he went on` gives an object `{tag: "wj*", content: "and he went on"}`, which tC4 hides,
+//!   as it hides the text after a stray end marker (`a\nd* b`).
+//!
+//! A note, cross reference or figure that usfm-js reads inside a character span has no
+//! `endTag`, and the objects of its parts follow it (`ft`, `fq`, `fq*` …), so every object
+//! after it is left out up to the note's own end marker (`f*`, `x*`, `fig*` …), which is
+//! walked by the rules, or up to the end of a list whose owner has its end marker.
 //!
 //! The pieces are joined as they are, so the file's whitespace and line breaks stay, with
 //! two additions, so that words never join across a marker: an object left out, or the start
@@ -31,9 +45,10 @@
 //! First (tC4 #795, the rule of tC4's open PR #800 at 5dcd147): usfm-js keeps the space or
 //! line break after an object's end marker in its `nextChar`, which a skipped object takes
 //! with it, so `siervo\f + \ft o esclavo\f* de` would read "siervode". A skipped object
-//! therefore offers its `nextChar`, and the first one offered since the last text is put back
-//! before the next text when the text before it ends in a character that is not whitespace
-//! and the next text starts with one: "siervo de", while `siervo \f …\f* de` and
+//! therefore offers its `nextChar`, and an end marker's object its `endMarkerChar`, the space
+//! usfm-js took from before its content; the first one offered since the last text is put
+//! back before the next text when the text before it ends in a character that is not
+//! whitespace and the next text starts with one: "siervo de", while `siervo \f …\f* de` and
 //! `siervo\f …\f*, de` keep the text they have. Characters are UTF-16 code units and
 //! whitespace is JavaScript's `\s`, as in tC4's `slice(-1)` and `/^\S/`. PR #800 lets only a
 //! footnote, a cross reference, an extended note and a figure offer it (`tag` `f`, `fe`, `ef`,
@@ -68,6 +83,9 @@ use super::js::{JsStr, eq, is_space};
 use super::usfmjs::{Heap, Key, Parsed, Ref, Thrown, Val, truthy};
 use crate::words::TokenKind;
 
+/// Notes, cross references and figures.
+const NOTES: [&str; 6] = ["f", "fe", "ef", "x", "ex", "fig"];
+
 /// The shown text of every verse of `parsed`, in order, joined and not yet trimmed; `Err`
 /// where tC4's walk throws.
 pub(super) fn text(parsed: &Parsed) -> Result<JsStr, Thrown> {
@@ -78,12 +96,14 @@ pub(super) fn text(parsed: &Parsed) -> Result<JsStr, Thrown> {
         text: Vec::new(),
         gap: Vec::new(),
         apart: false,
+        in_note: false,
         last: None,
     };
     for (_, verse) in &parsed.verses {
         // tC4 tokenizes each verse on its own.
         walk.gap.clear();
         walk.apart = false;
+        walk.in_note = false;
         walk.last = None;
         walk.verse(*verse)?;
     }
@@ -92,11 +112,11 @@ pub(super) fn text(parsed: &Parsed) -> Result<JsStr, Thrown> {
 
 /// What one verse object gives, by the rules of the module documentation.
 enum Step<'h> {
-    /// Rules 1 and 5: the object is left out.
+    /// Rules 1 and 6: the object is left out.
     Skip,
-    /// Rules 3 and 4: this text, then, for rule 4, walk this list.
+    /// Rules 3 to 5: this text, then walk this list.
     Text(&'h [u16], Option<Ref>),
-    /// Rules 2 and 5: walk this list.
+    /// Rules 2 and 6: walk this list.
     Walk(Ref),
     /// The object gives nothing and is not skipped: an empty milestone, a word with no text,
     /// or `children` that are a string.
@@ -109,6 +129,8 @@ struct Frame {
     at: usize,
     /// The list is the `children` of a marker's object, so leaving it ends the marker.
     marker: bool,
+    /// The list's owner has its end marker, so a note left open in the list ends with it.
+    closed: bool,
 }
 
 struct Walk<'h> {
@@ -116,10 +138,12 @@ struct Walk<'h> {
     /// The lists on the path of the walk, to find a list inside itself.
     on_path: Vec<bool>,
     text: JsStr,
-    /// The `nextChar` the first object skipped since the last text offered.
+    /// The `nextChar` or `endMarkerChar` first offered since the last text.
     gap: JsStr,
     /// Whether a marker stands between the last text and the next.
     apart: bool,
+    /// Whether the walk is inside a note left open (see the module documentation).
+    in_note: bool,
     /// The last code unit of the last text.
     last: Option<u16>,
 }
@@ -129,39 +153,52 @@ impl<'h> Walk<'h> {
     fn verse(&mut self, verse: Ref) -> Result<(), Thrown> {
         let heap = self.heap;
         let mut stack: Vec<Frame> = Vec::new();
-        self.enter(verse, false, &mut stack)?;
+        self.enter(verse, false, false, &mut stack)?;
         while let Some(frame) = stack.last_mut() {
             let Some(&object) = heap.elems(frame.list).get(frame.at) else {
                 if let Some(seen) = self.on_path.get_mut(frame.list) {
                     *seen = false;
                 }
                 self.apart |= frame.marker;
+                self.in_note &= !frame.closed;
                 stack.pop();
                 continue;
             };
             frame.at += 1;
+            let step = step(heap, object)?;
+            if self.in_note && !ends_note(heap, object) {
+                self.apart = true;
+                continue;
+            }
+            self.in_note = false;
             let marker = is_marker(heap, object);
             self.apart |= marker;
-            match step(heap, object)? {
+            let closed = heap
+                .s(object, &Key::EndTag)
+                .is_some_and(|tag| !tag.is_empty());
+            match step {
                 Step::Skip => {
                     self.apart = true;
                     self.offer(heap.get(object, &Key::NextChar));
+                    self.in_note = opens_note(heap, object);
                 }
                 Step::Nothing => {}
                 Step::Text(text, children) => {
+                    self.offer(heap.get(object, &Key::EndMarkerChar));
                     self.push(text);
                     match children {
-                        Some(list) => self.enter(list, marker, &mut stack)?,
+                        Some(list) => self.enter(list, marker, closed, &mut stack)?,
                         None => self.apart |= marker,
                     }
                 }
-                Step::Walk(list) => self.enter(list, marker, &mut stack)?,
+                Step::Walk(list) => self.enter(list, marker, closed, &mut stack)?,
             }
         }
         Ok(())
     }
 
-    /// PR #800's `noteGap`, for every skipped object (see the module documentation).
+    /// PR #800's `noteGap`, for every object that offers a space (see the module
+    /// documentation).
     fn offer(&mut self, space: Option<&Val>) {
         if self.gap.is_empty()
             && let Some(Val::Str(space)) = space
@@ -189,7 +226,13 @@ impl<'h> Walk<'h> {
         self.text.extend_from_slice(text);
     }
 
-    fn enter(&mut self, list: Ref, marker: bool, stack: &mut Vec<Frame>) -> Result<(), Thrown> {
+    fn enter(
+        &mut self,
+        list: Ref,
+        marker: bool,
+        closed: bool,
+        stack: &mut Vec<Frame>,
+    ) -> Result<(), Thrown> {
         match self.on_path.get_mut(list) {
             Some(seen) if !*seen => *seen = true,
             _ => return Err(Thrown),
@@ -198,6 +241,7 @@ impl<'h> Walk<'h> {
             list,
             at: 0,
             marker,
+            closed,
         });
         Ok(())
     }
@@ -225,18 +269,24 @@ fn step(heap: &Heap, object: Ref) -> Result<Step<'_>, Thrown> {
             Some(_) => Err(Thrown),
         };
     }
+    let children = match heap.get(object, &Key::Children) {
+        Some(Val::Ref(list)) if heap.is_array(*list) => Some(*list),
+        _ => None,
+    };
     if let Some(text) = heap.get(object, &Key::Text)
         && !is(&Key::Type, "section")
     {
         // tC4 stops here; the rebuild walks the children too (see the module documentation).
-        let children = match heap.get(object, &Key::Children) {
-            Some(Val::Ref(list)) if heap.is_array(*list) => Some(*list),
-            _ => None,
-        };
         return match text {
             Val::Str(text) => Ok(Step::Text(text, children)),
             _ => Err(Thrown),
         };
+    }
+    // Rule 5, which tC4 does not have.
+    if let (Some(content), Some(tag)) = (heap.s(object, &Key::Content), heap.s(object, &Key::Tag))
+        && content_is_verse_text(tag)
+    {
+        return Ok(Step::Text(content, children));
     }
     // `if (vo.children) walk(vo.children)`.
     match heap.get(object, &Key::Children) {
@@ -249,11 +299,37 @@ fn step(heap: &Heap, object: Ref) -> Result<Step<'_>, Thrown> {
     }
 }
 
+/// Whether the `content` usfm-js keeps for an object of `tag` is verse text (rule 5): the
+/// tag of an end marker but a milestone's `\*`.
+fn content_is_verse_text(tag: &[u16]) -> bool {
+    tag.split_last().is_some_and(|(&star, name)| {
+        star == u16::from(b'*') && name.last().is_some_and(|&unit| unit != u16::from(b'\\'))
+    })
+}
+
 /// Whether `object` is a marker's whose start and end keep words apart: anything but plain
 /// text, a word or an alignment milestone.
 fn is_marker(heap: &Heap, object: Ref) -> bool {
     let is = |key: &Key, value: &str| heap.s(object, key).is_some_and(|s| eq(s, value));
     heap.s(object, &Key::Tag).is_some() && !is(&Key::Type, "word") && !is(&Key::Tag, "zaln")
+}
+
+/// Whether `object` is a note, cross reference or figure that usfm-js left open: one it read
+/// inside a character span, which has no `endTag`.
+fn opens_note(heap: &Heap, object: Ref) -> bool {
+    heap.get(object, &Key::EndTag).is_none()
+        && heap
+            .s(object, &Key::Tag)
+            .is_some_and(|tag| NOTES.iter().any(|note| eq(tag, note)))
+}
+
+/// Whether `object` is the end marker of a note, cross reference or figure.
+fn ends_note(heap: &Heap, object: Ref) -> bool {
+    heap.s(object, &Key::Tag).is_some_and(|tag| {
+        tag.split_last().is_some_and(|(&star, name)| {
+            star == u16::from(b'*') && NOTES.iter().any(|note| eq(name, note))
+        })
+    })
 }
 
 /// Whether the code units `a` then `b` read as one word or number to tC4's tokenizer, so that

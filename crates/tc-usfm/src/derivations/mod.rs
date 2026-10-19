@@ -67,10 +67,12 @@ pub fn plain_text_v1(content: &str) -> String {
 ///   the words of `\add`, `\nd` and other character spans, also after a span nested in them
 ///   (`\wj Worship the \+nd Lord\+nd* your God\wj*`, which tC4 shows as "Worship the ", a
 ///   declared difference), a superscription (`\d`) and a `\qs` Selah, with the file's
-///   whitespace and line breaks.
-/// - Not shown: footnotes, cross references and figures, a section heading's own text, the
-///   items of a `\li1` list, and the text usfm-js keeps for a marker it does not know
-///   (`\qm1`), as in tC4.
+///   whitespace and line breaks. Also, where tC4 hides it (a declared difference): the text
+///   after the end marker of a span that holds a note, a cross reference or a figure, or after
+///   a stray end marker, which usfm-js keeps as the end marker's `content`.
+/// - Not shown: footnotes, cross references and figures, also inside a character span, a
+///   section heading's own text, the items of a `\li1` list, and the text usfm-js keeps for a
+///   marker it does not know (`\qm1`), as in tC4.
 /// - Words never join across a marker: an object left out, or the start or end of a
 ///   character span or paragraph marker. Where an object left out stands between two characters
 ///   that are not whitespace, the space or line break usfm-js keeps after its end marker is

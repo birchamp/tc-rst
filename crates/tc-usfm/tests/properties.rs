@@ -482,10 +482,10 @@ fn plain_verse(line_breaks: bool) -> impl Strategy<Value = String> {
 
 /// A plain verse whose words may have a note, a cross reference, a figure or another marker
 /// the shown text leaves out right after them, with or without a space before the next word,
-/// a character span with a span nested in it, or a character span or a paragraph marker right
-/// before the next word (no ruby: its woven form shows the gloss, `\rb \w 神|…\w*|かみ\rb*`).
-/// A `\nd` span is always closed: text after a stray `\nd*` is hidden from the shown text,
-/// as in tC4, and so are `\li` items and `\qm` lines, which this verse never holds.
+/// a character span with a span, a note, a cross reference or a figure nested in it, or a
+/// character span or a paragraph marker right before the next word (no ruby: its woven form
+/// shows the gloss, `\rb \w 神|…\w*|かみ\rb*`). It holds no `\li` item and no `\qm` line,
+/// which the shown text hides, as tC4 does.
 fn note_verse() -> impl Strategy<Value = String> {
     let word = proptest::sample::select(WORDS);
     let gap = proptest::sample::select(
@@ -517,6 +517,11 @@ fn note_verse() -> impl Strategy<Value = String> {
             ", \\nd x\\nd* ",
             " \\add Lord\\add*",
             "\\q2 ",
+            " \\wj a\\f + \\ft n\\f* b\\wj* ",
+            " \\wj a \\fig x|src=\"y\"\\fig* b\\wj*",
+            " \\add a\\x - \\xt R\\x*b\\add* ",
+            " \\add a \\+nd b\\f + \\ft n\\f* c\\+nd* d\\add* ",
+            " \\wj a\\f + \\fq q\\fq* r\\f* b\\wj* ",
         ][..],
     );
     let end = proptest::sample::select(&["", ".", ".\n", "\\f + \\ft end\\f*", "\n\\p\n"][..]);

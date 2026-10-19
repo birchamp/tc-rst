@@ -82,6 +82,12 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
   print: `\wj Worship the \+nd Lord\+nd* your God\wj*` shows "Worship the Lord your God",
   where tC4 shows "Worship the " and hides from Check and the Align bank words the export
   counts (#796).
+- The words after a character span that holds a footnote, cross reference or figure show:
+  `\wj Blessed are the poor\f + \ft Or humble\f* in spirit\wj* and he went on` shows "… in
+  spirit and he went on", where tC4 hides "and he went on" (usfm-js keeps it as the `content`
+  of the span's end marker), so Check and the Align bank miss it, a woven alignment for the
+  verse cannot be made, and the store's verse save drops the links to it. So does the text
+  after a stray end marker (`a\nd* b`). The note's own words stay hidden.
 
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9

@@ -332,6 +332,43 @@ fn words_after_a_nested_character_span_show() {
     }
 }
 
+/// The words after a character span that holds a note, a cross reference or a figure show,
+/// nested or not, and so does the text after a stray end marker; the note's words stay hidden
+/// (a declared difference: usfm-js keeps that text as the `content` of the span's end marker,
+/// which tC4 hides from Check and the Align bank while the export counts it).
+#[test]
+fn words_after_a_span_that_holds_a_note_show() {
+    for (content, shown) in [
+        (
+            "Jesus said, \\wj Blessed are the poor\\f + \\ft Or humble\\f* in spirit\\wj* and he went on to teach them.",
+            "Jesus said, Blessed are the poor in spirit and he went on to teach them.",
+        ),
+        (
+            "Jesus said, \\wj Truly I say\\f + \\ft Some manuscripts add: amen\\f* to you.\\wj* Then he left the house.",
+            "Jesus said, Truly I say to you. Then he left the house.",
+        ),
+        ("\\wj a\\f + \\ft n\\f* b\\wj* c", "a b c"),
+        ("\\add a\\f + \\ft n\\f*b\\add* c", "a b c"),
+        ("\\wj a \\fig x|src=\"y\"\\fig* c\\wj* d e f", "a c d e f"),
+        ("\\nd a\\x - \\xt R\\x* b\\nd* c", "a b c"),
+        ("\\qt a \\f + \\ft n\\f* b\\qt* c", "a  b c"),
+        (
+            "\\add a \\+nd b\\f + \\ft n\\f* c\\+nd* d\\add* e",
+            "a b c d e",
+        ),
+        ("\\wj a\\fig x|src=\"y\"\\fig*b\\wj*c", "a b c"),
+        (
+            "\\wj a\\f + \\fq b\\fq* c \\fq d\\fq* e\\f* g\\wj* h",
+            "a g h",
+        ),
+        ("\\wj a\\f + \\ft b \\+wj c\\+wj* d\\f* e\\wj* f", "a e f"),
+        ("\\wj a\\f + \\ft n\\wj* b", "a b"),
+        ("a\\nd* b", "a b"),
+    ] {
+        assert_eq!(shown_text_v1(content), shown, "{content}");
+    }
+}
+
 /// The verses on which the rebuild keeps words apart that tC4 (PR #800 included) joins, with
 /// tC4's joined text and the rebuild's: a marker other than a note, a cross reference or a
 /// figure between "siervo" and "de", and notes that usfm-js misreads inside an alignment run,

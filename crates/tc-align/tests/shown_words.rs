@@ -234,13 +234,16 @@ fn banks_the_export_words_and_weaves(plain: &str) -> String {
 /// TC4-ISSUES row 5: a footnote right after "siervo", with or without a space after it. The
 /// bank holds "siervo" and "de", the export's words, so a value that places every word
 /// weaves (before, the bank held "siervode" and the weave failed with `TargetWordNotFound`,
-/// dropping the verse's alignment from the export).
+/// dropping the verse's alignment from the export). So does a footnote inside a `\wj` span,
+/// whose words after the span the bank holds (before, it held 8 of the verse's 15 words).
 #[test]
 fn a_footnote_right_after_a_word_banks_both_words_and_weaves() {
     for plain in [
         "Pablo, siervo\\f + \\ft o esclavo\\f* de Dios.",
         "Pablo, siervo\\f + \\ft o esclavo\\f*de Dios.",
         "a\\fig x|src=\"y\"\\fig*b",
+        "Jesus said, \\wj Blessed are the poor\\f + \\ft Or humble\\f* in spirit\\wj* and he went on to teach them.",
+        "\\wj a\\f + \\ft n\\f* b\\wj* c",
     ] {
         let woven = banks_the_export_words_and_weaves(plain);
         if plain.starts_with("Pablo") {
