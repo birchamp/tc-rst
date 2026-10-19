@@ -98,10 +98,13 @@ pub fn machine_line() -> String {
 }
 
 /// Private bytes of this process in MiB: Linux `Private_Clean + Private_Dirty` of
-/// `smaps_rollup`; `None` elsewhere (the Windows runner samples the private working set from
-/// outside at each `MARK` line).
+/// `smaps_rollup`; elsewhere what `sysinfo` calls the process's virtual memory, which on
+/// Windows is its private commit (`PrivateUsage`), the counter Task Manager shows as
+/// "Commit size" and the review's "private bytes".
 pub fn private_mib() -> Option<f64> {
-    let rollup = std::fs::read_to_string("/proc/self/smaps_rollup").ok()?;
+    let Ok(rollup) = std::fs::read_to_string("/proc/self/smaps_rollup") else {
+        return commit_mib();
+    };
     let kb = |field: &str| -> f64 {
         rollup
             .lines()
@@ -111,6 +114,19 @@ pub fn private_mib() -> Option<f64> {
             .unwrap_or(0.0)
     };
     Some((kb("Private_Clean:") + kb("Private_Dirty:")) / 1024.0)
+}
+
+/// The process's private commit in MiB where there is no `/proc`, from `sysinfo`.
+fn commit_mib() -> Option<f64> {
+    let pid = sysinfo::get_current_pid().ok()?;
+    let mut system = sysinfo::System::new();
+    system.refresh_processes_specifics(
+        sysinfo::ProcessesToUpdate::Some(&[pid]),
+        true,
+        sysinfo::ProcessRefreshKind::nothing().with_memory(),
+    );
+    let bytes = system.process(pid)?.virtual_memory();
+    Some(bytes as f64 / (1u64 << 20) as f64)
 }
 
 /// A `/proc/self/status` field in MiB (`VmHWM:`, `RssAnon:`, `VmRSS:`).

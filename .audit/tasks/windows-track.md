@@ -174,6 +174,32 @@ Branch: `windows-proxy`, from `origin/claude/focused-ride-5uzj7p`.
    never the network.
 3. Push `windows-proxy` and tell the owner it is ready.
 
+## Task 8: unit P's report on the laptop (added 2026-10-19)
+
+Branch: `windows-perfreport`, from `origin/storage` once unit P is merged there (or from the
+branch that holds `crates/tc-corpus/examples/perfreport` and `spikes/perfreport-windows/`).
+This is the run that settles every figure the Linux session could only estimate from the
+laptop's foldbench ratios (`docs/evidence/storage-scale-2026-10-19.md`, "What only the laptop
+run can settle").
+
+1. Reboot, wait five minutes without running anything, and run from the repository root, with
+   Defender on and the laptop on mains power:
+   `powershell -ExecutionPolicy Bypass -File spikes\perfreport-windows\run-perfreport.ps1 -Dir C:\tc4-perf -Only cold`.
+   It builds `perfreport` (several minutes), sets the whole-Bible project and the bundled
+   resource store up, and measures the cases that need files nothing has read since the boot:
+   the first open after a restart, the first load of Psalms resources, the first launch's
+   seeding (the seeding part of the 60 s gate, Q24).
+2. Run the full report: `... -Dir C:\tc4-perf -Rounds 3 -Years` (about two hours; `-Years` adds
+   the three simulated years, opening every tenth day). It runs the table, the saves while
+   materialize, checkpoint, merge, repack, consolidation and a 150 MB upgrade write (R9, tC4's
+   J8), memory (private commit, both heaps do not apply on Windows), and the growth of memory
+   with history.
+3. Copy the two Markdown reports and their folders from `docs/evidence/` into a branch
+   `windows-perfreport` and push it. Say in your notes which rows the laptop misses, and the
+   machine's facts the script prints (CPU, SHA, AVX-512, disk, Defender, power plan).
+4. If `seed.first` is over 40 s, do not change anything: write the number down. The owner
+   decides whether the installer writes its files on several threads.
+
 ## When everything is done
 
 Tell the owner which branches are ready. The cloud session merges them after running its own

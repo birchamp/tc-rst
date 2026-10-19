@@ -163,7 +163,7 @@ pub fn load(dir: &Path) -> Vec<Measured> {
     let after = private_mib().unwrap_or(f64::NAN);
     let articles = opened
         .iter()
-        .filter(|p| p.to_string_lossy().contains("/en_tw/"))
+        .filter(|p| p.components().any(|c| c.as_os_str() == "en_tw"))
         .count();
     let mut rows = vec![Measured::new(
         "res.load_psalms",
