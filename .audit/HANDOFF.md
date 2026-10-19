@@ -45,7 +45,9 @@ authoritative list of what is done and what is next. Read, in order:
 - `.audit/tools/winvm/run.sh <commit> '<powershell>'` ships a commit as a git bundle and runs a
   command in `C:\src\<name>`; give each concurrent caller its own `WINVM_DIR`. Run cargo through
   `cmd /c` so its stderr is not taken for an error. `gates.ps1` runs fmt, clippy, the tests and the
-  wasm check.
+  wasm check. The VM's disk is 80 GB: delete a one-off checkout (`C:\src\<name>` and its bundle)
+  when its run is done, and keep incremental builds off (gates.ps1 does). A 'disk full' failure there
+  is the VM, not the code.
 - The watcher runs `gates.ps1` on each new main as a systemd user unit (`tc-wingate-<sha>`), one
   at a time, and reports only problems.
 
