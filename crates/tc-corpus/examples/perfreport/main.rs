@@ -26,6 +26,7 @@ mod ratios;
 mod rows;
 mod store_rows;
 mod table;
+mod years;
 
 use common::{collect, merge, run_child};
 use ratios::Ratios;
@@ -50,6 +51,7 @@ fn main() {
         "r9" => r9_command(&dir, &flags),
         "memory" => memory_command(&dir, &flags),
         "growth" => growth_command(&dir, &flags),
+        "years" => years_command(&dir, &flags),
         "child" => {
             // `child CASE DIR`: the case is the second word, the folder the third.
             let case = args[1].clone();
@@ -79,6 +81,9 @@ struct Flags {
     rounds: usize,
     strict: bool,
     tolerance: u32,
+    days: u32,
+    open_every: u32,
+    months: Option<usize>,
 }
 
 impl Flags {
@@ -86,6 +91,8 @@ impl Flags {
         let mut f = Self {
             rounds: 1,
             tolerance: 3,
+            days: 750,
+            open_every: 1,
             ..Self::default()
         };
         let mut it = args.iter();
@@ -98,6 +105,11 @@ impl Flags {
                 "--rounds" => f.rounds = it.next().and_then(|v| v.parse().ok()).unwrap_or(1),
                 "--tolerance" => f.tolerance = it.next().and_then(|v| v.parse().ok()).unwrap_or(3),
                 "--strict" => f.strict = true,
+                "--days" => f.days = it.next().and_then(|v| v.parse().ok()).unwrap_or(750),
+                "--open-every" => {
+                    f.open_every = it.next().and_then(|v| v.parse().ok()).unwrap_or(1)
+                }
+                "--months" => f.months = it.next().and_then(|v| v.parse().ok()),
                 _ => {}
             }
         }
@@ -140,6 +152,8 @@ fn child(case: &str, dir: &Path, flags: &Flags) -> Vec<Measured> {
         "r9-j8" => r9::j8(dir),
         "memory-nocache" => memory::nocache(dir),
         "memory-app" => memory::app_case(dir),
+        "years-prepare" => years::prepare(dir, flags.days),
+        "years-run" => years::run(dir, flags.open_every, flags.months),
         other => {
             eprintln!("unknown case {other}");
             std::process::exit(2);
@@ -393,4 +407,45 @@ fn growth_command(dir: &Path, flags: &Flags) -> i32 {
     }
     let ratios = Ratios::read_or_identity(flags.ratios.as_deref());
     report(dir, &rows, &ratios, false, flags)
+}
+
+/// Three simulated years: the days are prepared once in a child (it holds the generated
+/// corpus), then played into a project in a child of their own.
+fn years_command(dir: &Path, flags: &Flags) -> i32 {
+    println!("{}", machine::machine_line());
+    let days = flags.days.to_string();
+    let prepared = dir.join("years/prepared.json");
+    let have = std::fs::read_to_string(&prepared)
+        .ok()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        .is_some_and(|v| v["days"].as_u64() == Some(u64::from(flags.days)));
+    let mut rows = Vec::new();
+    if !have {
+        match run_child("years-prepare", dir, &["--days", &days]) {
+            Ok(more) => merge(&mut rows, more),
+            Err(e) => {
+                eprintln!("{e}");
+                return 1;
+            }
+        }
+    }
+    let mut args: Vec<String> = vec!["--open-every".into(), flags.open_every.to_string()];
+    if let Some(n) = flags.months {
+        args.push("--months".into());
+        args.push(n.to_string());
+    }
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    match run_child("years-run", dir, &args) {
+        Ok(more) => merge(&mut rows, more),
+        Err(e) => {
+            eprintln!("{e}");
+            return 1;
+        }
+    }
+    let ratios = Ratios::read_or_identity(flags.ratios.as_deref());
+    let failed = rows
+        .iter()
+        .any(|m| m.id == "years.failures" && m.samples.first().is_some_and(|n| *n > 0.0));
+    let code = report(dir, &rows, &ratios, false, flags);
+    if failed { 1 } else { code }
 }

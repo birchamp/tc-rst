@@ -1813,3 +1813,8 @@ pub fn check_key(row: &CheckRow) -> Result<CheckKey, CorpusError> {
         occurrence: row.occurrence,
     })
 }
+
+/// tC4's `contextId` of a check row: what a decision records about the check it is for.
+pub fn check_context(row: &CheckRow) -> JsonMap {
+    Sim::context(row)
+}

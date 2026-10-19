@@ -29,7 +29,7 @@ pub use domain::{
 };
 pub mod timeline;
 
-pub use history::{Journal, PackFile, Stats, check_key};
+pub use history::{Journal, PackFile, Stats, check_context, check_key};
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
