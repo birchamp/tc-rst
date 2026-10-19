@@ -1117,7 +1117,12 @@ reuses it. The two `compile_fail` doctests on `StoreCommand` and wire's
   gone Home, a request with that scope is stale at once, even while the leave checkpoint runs or
   a side user keeps the session open, because the person is on Home and nothing they do there
   names the project; a side user acts through its lease, never through a scope. A screen open
-  of another folder leaves the old one first, as going Home would. An open that meets a running
+  of another folder leaves the old one first, as going Home would; the check of the other folders
+  and the taking of the screen happen under one lock, so two screen opens of two folders at once
+  never both find the screen free, and a screen open waits for another folder's screen open to end
+  before it leaves it. Screen opens that wait for one folder's open share its screen: one that is
+  cancelled hands it to those still waiting, and only the last takes it away, so a cancelled open
+  never closes the session another screen open is about to return. An open that meets a running
   leave checkpoint or close waits for both; if a side user kept the session open it joins it with
   its epoch, otherwise it opens anew with a new epoch. A failed open reaches every waiter, adds
   one `Open` report, uses no epoch and leaves nothing. A failed leave checkpoint is reported and

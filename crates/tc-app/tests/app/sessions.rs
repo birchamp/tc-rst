@@ -746,3 +746,103 @@ async fn a_screen_open_waits_for_another_folders_screen_open_and_leaves_it() {
     assert_eq!(open[0].at, second);
     assert!(f.t.app.read(&first).is_err());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn two_screen_opens_of_two_folders_at_once_leave_one_screen() {
+    let f = started(vec![("first", empty(1)), ("second", empty(2))]).await;
+    for round in 0..64 {
+        // Both opens leave the barrier together, each on its own worker thread.
+        let barrier = Arc::new(std::sync::Barrier::new(2));
+        let open = |name: &'static str| {
+            let sessions = f.sessions().clone();
+            let barrier = barrier.clone();
+            tokio::spawn(async move {
+                barrier.wait();
+                sessions.open_screen(&folder(name), open_progress()).await
+            })
+        };
+        let (first, second) = (open("first"), open("second"));
+        let first = first.await.unwrap().unwrap().at;
+        let second = second.await.unwrap().unwrap().at;
+        f.settled("first").await;
+        f.settled("second").await;
+        let screens: Vec<_> = f
+            .sessions()
+            .open_sessions()
+            .into_iter()
+            .filter(|s| s.role == SessionRole::Screen)
+            .collect();
+        assert_eq!(screens.len(), 1, "round {round}: {screens:?}");
+        assert!(screens[0].at == first || screens[0].at == second);
+        let (left, kept) = if screens[0].at == first {
+            (&second, &first)
+        } else {
+            (&first, &second)
+        };
+        assert!(f.t.app.read(left).is_err(), "round {round}");
+        assert!(f.t.app.read(kept).is_ok(), "round {round}");
+        f.sessions().leave_screen(kept).unwrap();
+        f.settled("first").await;
+        f.settled("second").await;
+        assert!(f.sessions().open_sessions().is_empty(), "round {round}");
+    }
+}
+
+#[tokio::test]
+async fn a_cancelled_screen_open_leaves_the_screen_to_another_open_of_that_folder() {
+    let f = one_project().await;
+    let project = folder("kr_ulb");
+    f.store.hold_open(&project);
+    let spawn = || {
+        let sessions = f.sessions().clone();
+        let project = project.clone();
+        tokio::spawn(async move { sessions.open_screen(&project, open_progress()).await })
+    };
+    let first = spawn();
+    super::common::until("the open reaches the store", || {
+        f.store.opens(&project) == 1
+    })
+    .await;
+    let second = spawn();
+    // The second open joins the first's and waits for it.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    first.abort();
+    assert!(first.await.unwrap_err().is_cancelled());
+    f.store.release_open(&project);
+    let at = second.await.unwrap().unwrap().at;
+    f.settled("kr_ulb").await;
+    let open = f.sessions().open_sessions();
+    assert_eq!(open.len(), 1, "{open:?}");
+    assert_eq!(open[0].at, at);
+    assert_eq!(open[0].role, SessionRole::Screen);
+    assert!(f.t.app.read(&at).is_ok());
+    assert_eq!(f.store.opens(&project), 1);
+    assert_eq!(f.store.closes(&project), 0);
+    // The screen is the person's: going Home closes it once.
+    f.sessions().leave_screen(&at).unwrap();
+    f.settled("kr_ulb").await;
+    assert_eq!(f.store.closes(&project), 1);
+}
+
+#[tokio::test]
+async fn a_cancelled_screen_open_with_no_other_caller_closes_the_project() {
+    let f = one_project().await;
+    let project = folder("kr_ulb");
+    f.store.hold_open(&project);
+    let only = {
+        let sessions = f.sessions().clone();
+        let project = project.clone();
+        tokio::spawn(async move { sessions.open_screen(&project, open_progress()).await })
+    };
+    super::common::until("the open reaches the store", || {
+        f.store.opens(&project) == 1
+    })
+    .await;
+    only.abort();
+    assert!(only.await.unwrap_err().is_cancelled());
+    f.store.release_open(&project);
+    super::common::until("the project closes", || f.store.closes(&project) == 1).await;
+    f.settled("kr_ulb").await;
+    assert!(f.sessions().open_sessions().is_empty());
+    assert!(!f.sessions().busy());
+}

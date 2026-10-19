@@ -122,13 +122,37 @@ enum Phase {
     Closing(watch::Receiver<bool>),
 }
 
+/// Who has a folder's screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Screen {
+    /// No one: the person is on Home or in another project.
+    Free,
+    /// This many screen opens wait for the folder's open, or have its outcome and have not
+    /// returned yet, each with an armed guard. One that goes away hands the screen to those still waiting; the last one takes
+    /// it with it, so a cancelled open never closes a session another screen open is about
+    /// to return.
+    Waiting(u32),
+    /// A screen open returned: the screen is the person's until `leave_screen`, a screen
+    /// open of another folder, or `close_all`.
+    Held,
+}
+
 struct Slot {
     /// This slot's own number: a lease of an earlier slot of the folder changes nothing here.
     id: u64,
     phase: Phase,
-    screen: bool,
+    screen: Screen,
     side: u32,
     writes: u32,
+}
+
+/// A leave of the screen that has begun: the "leaving the project" checkpoint is to run
+/// ([`SessionRegistry::run_leave`]).
+struct Leave {
+    session: Arc<ProjectSession>,
+    slot: u64,
+    /// `true` when the checkpoint ends.
+    done: watch::Sender<bool>,
 }
 
 impl Slot {
@@ -139,14 +163,55 @@ impl Slot {
         }
     }
 
+    fn has_screen(&self) -> bool {
+        self.screen != Screen::Free
+    }
+
     /// The screen's session at `epoch`, which answers project-scoped requests.
     fn screen_session(&self, epoch: Epoch) -> Option<&Arc<ProjectSession>> {
         self.session()
-            .filter(|session| self.screen && session.scope.epoch == epoch)
+            .filter(|session| self.has_screen() && session.scope.epoch == epoch)
     }
 
     fn unused(&self) -> bool {
-        !self.screen && self.side == 0 && self.writes == 0
+        !self.has_screen() && self.side == 0 && self.writes == 0
+    }
+
+    /// The leave checkpoint or the close a caller waits for before it can join the folder.
+    fn settling(&self) -> Option<watch::Receiver<bool>> {
+        match &self.phase {
+            Phase::Open {
+                leaving: Some(done),
+                ..
+            }
+            | Phase::Closing(done) => Some(done.clone()),
+            Phase::Opening(_) | Phase::Open { leaving: None, .. } => None,
+        }
+    }
+
+    /// The close at Home begins: the screen is no one's from now on, and an open session's
+    /// leave checkpoint is to run. `None` while the folder is still opening: the open closes
+    /// it if no one else uses it.
+    fn begin_leave(&mut self) -> Option<Leave> {
+        self.screen = Screen::Free;
+        let Phase::Open {
+            session,
+            leaving: None,
+        } = &self.phase
+        else {
+            return None;
+        };
+        let session = session.clone();
+        let (done, rx) = watch::channel(false);
+        self.phase = Phase::Open {
+            session: session.clone(),
+            leaving: Some(rx),
+        };
+        Some(Leave {
+            session,
+            slot: self.id,
+            done,
+        })
     }
 }
 
@@ -175,6 +240,18 @@ pub struct SessionRegistry {
 enum Wait {
     Open(watch::Receiver<OpenResult>),
     Settle(watch::Receiver<bool>),
+}
+
+/// What one look at a folder under the registry's lock gives a caller who wants to join it.
+enum Step {
+    /// The session is open: the caller is one of its users.
+    Joined(Arc<ProjectSession>, UserGuard),
+    /// The folder's open runs: the caller is counted and waits for its outcome.
+    Open(watch::Receiver<OpenResult>, UserGuard),
+    /// A leave checkpoint or a close of the folder runs: the caller waits, then looks again.
+    Settle(watch::Receiver<bool>),
+    /// Another folder's screen open runs: a screen open waits for it, then leaves it.
+    OtherScreen(ProjectRef),
 }
 
 /// A user of a slot that leaves the slot when dropped, unless it was handed on.
@@ -268,43 +345,15 @@ impl SessionRegistry {
     /// Opens `folder` for the screen, or joins the session a side user holds or is opening.
     /// At most one folder has the screen: a screen open of another folder first leaves the
     /// old one, as going Home would. Waits for a leave checkpoint or a close of `folder` that
-    /// is still running.
+    /// is still running. A scope it returns may already be stale, when a screen open of
+    /// another folder or a quit came while it waited.
     pub async fn open_screen(
         &self,
         folder: &ProjectRef,
         progress: ProgressSink,
     ) -> Result<OpenSession, OpenFailure> {
-        loop {
-            let (open, opening): (Vec<Scope>, Vec<ProjectRef>) = {
-                let slots = lock(&self.inner.slots);
-                let others = || {
-                    slots
-                        .iter()
-                        .filter(|(other, slot)| *other != folder && slot.screen)
-                };
-                (
-                    others()
-                        .filter_map(|(_, slot)| slot.session().map(|s| s.scope.clone()))
-                        .collect(),
-                    others()
-                        .filter(|(_, slot)| matches!(slot.phase, Phase::Opening(_)))
-                        .map(|(other, _)| other.clone())
-                        .collect(),
-                )
-            };
-            for scope in &open {
-                // Its screen user may have just left; then there is nothing to leave.
-                let _ = self.leave_screen(scope);
-            }
-            if opening.is_empty() {
-                break;
-            }
-            // Another folder's screen open is running: it ends first, then it is left.
-            for other in &opening {
-                self.settled(other).await;
-            }
-        }
         let (session, mut guard) = self.join(folder, Role::Screen, progress).await?;
+        self.claim_screen(folder, guard.slot);
         // The screen stays a user until it leaves: `leave_screen`, a screen open elsewhere,
         // or `close_all`.
         guard.armed = false;
@@ -314,6 +363,17 @@ impl SessionRegistry {
             mode: session.handle.facts().mode,
             role: SessionRole::Screen,
         })
+    }
+
+    /// A screen open returns: the screen is the person's, unless it was given away while the
+    /// open waited.
+    fn claim_screen(&self, folder: &ProjectRef, slot_id: u64) {
+        let mut slots = lock(&self.inner.slots);
+        if let Some(slot) = slots.get_mut(folder).filter(|slot| slot.id == slot_id)
+            && matches!(slot.screen, Screen::Waiting(_))
+        {
+            slot.screen = Screen::Held;
+        }
     }
 
     /// A side user: shares the session, or opens one of its own; leaves when dropped.
@@ -337,58 +397,28 @@ impl SessionRegistry {
         progress: ProgressSink,
     ) -> Result<(Arc<ProjectSession>, UserGuard), OpenFailure> {
         loop {
-            let (wait, guard) = {
+            let mut leaves = Vec::new();
+            let step = {
                 let mut slots = lock(&self.inner.slots);
-                match slots.get_mut(folder) {
-                    None => {
-                        let id = self.inner.slot_ids.fetch_add(1, Ordering::SeqCst);
-                        let (tx, rx) = watch::channel(None);
-                        let mut slot = Slot {
-                            id,
-                            phase: Phase::Opening(rx.clone()),
-                            screen: false,
-                            side: 0,
-                            writes: 0,
-                        };
-                        let guard = self.register(&mut slot, folder, role);
-                        slots.insert(folder.clone(), slot);
-                        self.spawn_open(folder.clone(), id, tx, progress.clone());
-                        (Wait::Open(rx), Some(guard))
-                    }
-                    Some(slot) => match &slot.phase {
-                        Phase::Opening(rx) => {
-                            let rx = rx.clone();
-                            (Wait::Open(rx), Some(self.register(slot, folder, role)))
-                        }
-                        Phase::Open {
-                            leaving: Some(done),
-                            ..
-                        } => (Wait::Settle(done.clone()), None),
-                        Phase::Closing(done) => (Wait::Settle(done.clone()), None),
-                        Phase::Open {
-                            session,
-                            leaving: None,
-                        } => {
-                            let session = session.clone();
-                            let guard = self.register(slot, folder, role);
-                            return Ok((session, guard));
-                        }
-                    },
-                }
+                self.enter(&mut slots, folder, role, &progress, &mut leaves)
             };
-            match wait {
-                Wait::Settle(mut done) => {
+            for leave in leaves {
+                self.run_leave(leave);
+            }
+            match step {
+                Step::Joined(session, guard) => return Ok((session, guard)),
+                Step::Settle(mut done) => {
                     // A closed channel means the step ended too.
                     let _ = done.wait_for(|done| *done).await;
                 }
-                Wait::Open(mut rx) => {
+                Step::OtherScreen(other) => self.settled(&other).await,
+                Step::Open(mut rx, guard) => {
                     let outcome = match rx.wait_for(Option::is_some).await {
                         Ok(outcome) => outcome.clone(),
                         Err(_) => Some(Err(OpenFailure::Unreadable {
                             reason: "the open stopped without an outcome".to_owned(),
                         })),
                     };
-                    let guard = guard.ok_or(OpenFailure::Unavailable)?;
                     return match outcome {
                         Some(Ok(session)) => Ok((session, guard)),
                         Some(Err(failure)) => {
@@ -404,17 +434,93 @@ impl SessionRegistry {
         }
     }
 
+    /// One look at `folder` under the registry's lock. A screen open checks the other folders
+    /// and takes the screen in this same look, so two screen opens of two folders at once
+    /// never both find no other screen: the second sees the first. The leaves it begins are
+    /// left in `leaves`, to run once the lock is let go.
+    fn enter(
+        &self,
+        slots: &mut BTreeMap<ProjectRef, Slot>,
+        folder: &ProjectRef,
+        role: Role,
+        progress: &ProgressSink,
+        leaves: &mut Vec<Leave>,
+    ) -> Step {
+        if let Some(done) = slots.get(folder).and_then(Slot::settling) {
+            return Step::Settle(done);
+        }
+        if role == Role::Screen {
+            // Another folder's screen open is running: it ends first, then it is left.
+            if let Some(other) = slots
+                .iter()
+                .find(|(other, slot)| {
+                    *other != folder && slot.has_screen() && matches!(slot.phase, Phase::Opening(_))
+                })
+                .map(|(other, _)| other.clone())
+            {
+                return Step::OtherScreen(other);
+            }
+            leaves.extend(
+                slots
+                    .iter_mut()
+                    .filter(|(other, slot)| *other != folder && slot.has_screen())
+                    .filter_map(|(_, slot)| slot.begin_leave()),
+            );
+        }
+        match slots.get_mut(folder) {
+            None => {
+                let id = self.inner.slot_ids.fetch_add(1, Ordering::SeqCst);
+                let (tx, rx) = watch::channel(None);
+                let mut slot = Slot {
+                    id,
+                    phase: Phase::Opening(rx.clone()),
+                    screen: Screen::Free,
+                    side: 0,
+                    writes: 0,
+                };
+                let guard = self.register(&mut slot, folder, role);
+                slots.insert(folder.clone(), slot);
+                self.spawn_open(folder.clone(), id, tx, progress.clone());
+                Step::Open(rx, guard)
+            }
+            Some(slot) => match &slot.phase {
+                Phase::Opening(rx) => {
+                    let rx = rx.clone();
+                    Step::Open(rx, self.register(slot, folder, role))
+                }
+                Phase::Open {
+                    session,
+                    leaving: None,
+                } => {
+                    let session = session.clone();
+                    Step::Joined(session, self.register(slot, folder, role))
+                }
+                Phase::Open {
+                    leaving: Some(done),
+                    ..
+                }
+                | Phase::Closing(done) => Step::Settle(done.clone()),
+            },
+        }
+    }
+
     /// Counts a user in `slot` and hands back the guard that counts it out.
     fn register(&self, slot: &mut Slot, folder: &ProjectRef, role: Role) -> UserGuard {
         let mut guard = self.guard(folder, slot.id, role);
-        match role {
-            Role::Screen if slot.screen => {
-                // The screen is a user already; this caller does not own it.
+        match (role, slot.screen) {
+            // The screen is the person's already: this caller joins it and owns nothing.
+            (Role::Screen, Screen::Held) => guard.armed = false,
+            // The session is open, so the caller returns without waiting: the screen is the
+            // person's now. Only screen opens that wait for the folder's open are counted, so
+            // the guard of one whose screen was given away never counts out a later one.
+            (Role::Screen, _) if slot.session().is_some() => {
+                slot.screen = Screen::Held;
                 guard.armed = false;
             }
-            Role::Screen => slot.screen = true,
-            Role::Side => slot.side += 1,
-            Role::Write => slot.writes += 1,
+            (Role::Screen, Screen::Free) => slot.screen = Screen::Waiting(1),
+            (Role::Screen, Screen::Waiting(n)) => slot.screen = Screen::Waiting(n + 1),
+            (Role::Side, _) => slot.side += 1,
+            (Role::Write, _) => slot.writes += 1,
         }
         guard
     }
@@ -538,18 +644,23 @@ impl SessionRegistry {
     /// "leaving the project" checkpoint runs behind it, and the session closes when its last
     /// user and its last write are gone. A scope that is not the screen's is stale.
     pub fn leave_screen(&self, at: &Scope) -> Result<(), StaleScope> {
-        let (session, slot_id, done) = {
+        let leave = {
             let mut slots = lock(&self.inner.slots);
             let slot = slots.get_mut(&at.project).ok_or(StaleScope)?;
-            let session = slot.screen_session(at.epoch).ok_or(StaleScope)?.clone();
-            let (done, rx) = watch::channel(false);
-            slot.screen = false;
-            slot.phase = Phase::Open {
-                session: session.clone(),
-                leaving: Some(rx),
-            };
-            (session, slot.id, done)
+            slot.screen_session(at.epoch).ok_or(StaleScope)?;
+            slot.begin_leave().ok_or(StaleScope)?
         };
+        self.run_leave(leave);
+        Ok(())
+    }
+
+    /// Runs a leave's checkpoint behind the caller, then closes the session if no one uses it.
+    fn run_leave(&self, leave: Leave) {
+        let Leave {
+            session,
+            slot: slot_id,
+            done,
+        } = leave;
         let registry = self.clone();
         self.inner.runtime.spawn(async move {
             let started = registry.inner.clock.now();
@@ -588,7 +699,6 @@ impl SessionRegistry {
             registry.inner.changed.notify_waiters();
             registry.maybe_close(&session.scope.project, slot_id);
         });
-        Ok(())
     }
 
     /// Holds the screen's session open for one write. `None`: the scope is closed, replaced,
@@ -615,7 +725,7 @@ impl SessionRegistry {
             Some(session) => Ok(session.clone()),
             None => Err(slot
                 .session()
-                .filter(|_| slot.screen)
+                .filter(|_| slot.has_screen())
                 .map(|session| session.scope.epoch)),
         }
     }
@@ -640,14 +750,14 @@ impl SessionRegistry {
         let slots = lock(&self.inner.slots);
         slots
             .values()
-            .filter(|slot| slot.screen || slot.side > 0)
+            .filter(|slot| slot.has_screen() || slot.side > 0)
             .filter_map(|slot| {
                 let session = slot.session()?;
                 Some(OpenSession {
                     at: session.scope.clone(),
                     id: session.id.clone(),
                     mode: session.handle.facts().mode,
-                    role: if slot.screen {
+                    role: if slot.has_screen() {
                         SessionRole::Screen
                     } else {
                         SessionRole::Side
@@ -699,7 +809,7 @@ impl SessionRegistry {
                 }
                 let screens: Vec<Scope> = slots
                     .values()
-                    .filter(|slot| slot.screen)
+                    .filter(|slot| slot.has_screen())
                     .filter_map(|slot| slot.session().map(|s| s.scope.clone()))
                     .collect();
                 let folders: Vec<(ProjectRef, u64)> = slots
@@ -742,15 +852,18 @@ impl SessionRegistry {
                 return;
             };
             match role {
-                Role::Screen => {
-                    // A screen caller that went away: a leave of the screen, if it is open.
-                    if matches!(slot.phase, Phase::Opening(_)) {
-                        slot.screen = false;
+                // A screen open that went away before it returned.
+                Role::Screen => match slot.screen {
+                    Screen::Waiting(n) if n > 1 => {
+                        slot.screen = Screen::Waiting(n - 1);
                         None
-                    } else {
-                        slot.session().map(|s| s.scope.clone())
                     }
-                }
+                    // The last one: no one has the screen, and an open session is left.
+                    Screen::Waiting(_) => slot.begin_leave(),
+                    // Another screen open returned, or the screen was given away: none of
+                    // it was this caller's.
+                    Screen::Held | Screen::Free => None,
+                },
                 Role::Side => {
                     slot.side = slot.side.saturating_sub(1);
                     None
@@ -761,8 +874,8 @@ impl SessionRegistry {
                 }
             }
         };
-        if let Some(scope) = leave {
-            let _ = self.leave_screen(&scope);
+        if let Some(leave) = leave {
+            self.run_leave(leave);
         }
         self.maybe_close(folder, slot_id);
     }
