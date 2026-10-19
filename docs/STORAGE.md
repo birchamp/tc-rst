@@ -4849,6 +4849,9 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the checkpoint job's M1 leaving a path a newer snapshot wrote (write the older projection) | `a_checkpoint_never_writes_an_older_projection_over_a_save_a_retry_wrote` |
 | the tree's paths from the snapshot (waiting outside edit, written from a newer snapshot) | `a_commit_takes_a_file_waiting_for_an_outside_edit_from_the_snapshot`, `a_retry_that_wrote_a_newer_snapshot_does_not_reach_the_tree` |
 | the freshening of a reused blob and the repack's guard while a commit is made | `a_blob_a_new_commit_names_again_is_kept_young`, `a_repack_prunes_nothing_while_a_commit_is_being_made` (`git.rs`) |
+| the marks of the commits the repack looks at (remove whatever it listed) | `a_repack_prunes_nothing_while_a_commit_is_being_made`, `a_commit_that_begins_during_the_removals_loses_no_object` (`git.rs`) |
+| the lock the marks are kept under while a batch is removed (let go of it first) | `a_commit_cannot_begin_while_a_batch_of_removals_runs` (`git.rs`) |
+| the look at an object's time before its unlink (remove what was listed) | `an_object_written_again_since_the_listing_is_not_pruned` (`git.rs`) |
 | the notice of a rewrite whose every digest equals its base | `a_whitespace_only_rewrite_records_nothing` |
 | the recording of the fields of an outside edit of `metadata.json` | `arbitrary_meta_never_blocks_commit`, `every_kind_of_outside_edit_in_one_project_conserves` |
 | the removal of a `Failed` notice by a job that wrote | `a_group_that_fails_after_a_rename_does_not_mistake_its_bytes_for_an_outside_edit` |

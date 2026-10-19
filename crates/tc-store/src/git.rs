@@ -1025,10 +1025,13 @@ mod tests {
     fn orphans_and_a_repack(
         count: usize,
         between: impl Fn(&Git, &[(Vec<u8>, GitOid)], u64) + Send + Sync + 'static,
-    ) -> (Git, Vec<(Vec<u8>, GitOid)>, crate::repack::Repacked) {
+    ) -> (
+        tempfile::TempDir,
+        Git,
+        Vec<(Vec<u8>, GitOid)>,
+        crate::repack::Repacked,
+    ) {
         let (dir, git) = fresh();
-        // The folder lives as long as the handle that points into it.
-        std::mem::forget(dir);
         let orphans: Vec<(Vec<u8>, GitOid)> = (0..count)
             .map(|i| {
                 let bytes = format!("an orphan, number {i}").into_bytes();
@@ -1053,7 +1056,7 @@ mod tests {
                 crate::repack::MAX_RAW,
             )
             .unwrap();
-        (git, orphans, done)
+        (dir, git, orphans, done)
     }
 
     /// §9.8: a checkpoint that begins its commit while a repack is removing the objects it
@@ -1064,7 +1067,7 @@ mod tests {
     #[test]
     fn a_commit_that_begins_during_the_removals_loses_no_object() {
         let named = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let (git, orphans, done) = {
+        let (_dir, git, orphans, done) = {
             let named = named.clone();
             orphans_and_a_repack(300, move |other, orphans, pruned| {
                 if pruned == 0 || !named.lock().unwrap().is_empty() {
@@ -1138,7 +1141,7 @@ mod tests {
     #[test]
     fn an_object_written_again_since_the_listing_is_not_pruned() {
         let kept = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let (git, orphans, done) = {
+        let (_dir, git, orphans, done) = {
             let kept = kept.clone();
             orphans_and_a_repack(200, move |other, orphans, pruned| {
                 if pruned == 0 || !kept.lock().unwrap().is_empty() {
