@@ -972,7 +972,7 @@ async fn pump(
                 }
             }
             StoreEvent::Mode(mode) => SessionEvent::Mode(mode),
-            // Shown by C1b (`session/notices` reads the store's list) and D1 (what could not
+            // Shown by `session/notices`, which reads the store's list, and D1 (what could not
             // be written); a skipped event never ends the pump.
             StoreEvent::Notice(_) | StoreEvent::Materialized { .. } => continue,
         };

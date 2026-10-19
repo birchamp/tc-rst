@@ -114,7 +114,8 @@ pub enum SaveRefusal {
 
 /// Why a project is open read-only (STORAGE §5.0, §6.1, O1, O4, O5). Unit variants only, so
 /// each is a plain string on the wire; the host a lock names and the reason a write failed
-/// stay in the store's facts and notices, which the banners read (C1b).
+/// stay in the store's facts and notices, and the banners (`tc_ui::app::offer::banner`, C1b)
+/// name neither.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
@@ -128,7 +129,8 @@ pub enum ReadOnlyReason {
     /// Another installation saves into this folder now.
     SecondWriter,
     /// O1: the project's lock names another computer; the project may be open there
-    /// (STORAGE §5.0). The person can say that computer is closed (C1b).
+    /// (STORAGE §5.0). The person can say that computer is closed
+    /// (`session/otherComputerClosed`).
     OpenOnAnotherComputer,
     /// A write the open needed failed (a full disk, a folder that went read-only): the
     /// project shows everything it holds, and the next open finishes the work (STORAGE §6.1).
