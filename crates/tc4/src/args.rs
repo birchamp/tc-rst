@@ -22,7 +22,7 @@ macro_rules! hook_flags {
 #[cfg(feature = "fixture-backend")]
 macro_rules! fixture_flags {
     () => {
-        " [--scenario <state dir>]"
+        " [--scenario <state dir> [--backend memory]]"
     };
 }
 #[cfg(not(feature = "fixture-backend"))]
@@ -61,11 +61,27 @@ pub(crate) struct Args {
     /// can watch it and close it on any disk. Exists only with the cargo feature.
     #[cfg(feature = "test-hooks")]
     pub seed_pace: Option<Duration>,
-    /// `--scenario <state dir>`: the projects are a parity scenario's, held by the memory
-    /// backend, and its sideloaded resources are installed into the app's store (APP-DESIGN
-    /// §4.2). Exists only with the cargo feature `fixture-backend`.
+    /// `--scenario <state dir>`: the projects are a parity scenario's, written into the
+    /// `--projects` folder through the store (or held by the memory backend with `--backend
+    /// memory`), and its sideloaded resources are installed into the app's store (APP-DESIGN
+    /// §4.2, §5.1). Exists only with the cargo feature `fixture-backend`.
     #[cfg(feature = "fixture-backend")]
     pub scenario: Option<PathBuf>,
+    /// What holds a scenario's projects. Exists only with the cargo feature
+    /// `fixture-backend`.
+    #[cfg(feature = "fixture-backend")]
+    pub backend: ScenarioBackend,
+}
+
+/// What holds a scenario's projects (APP-DESIGN §5.1, unit C1a).
+#[cfg(feature = "fixture-backend")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum ScenarioBackend {
+    /// The projects are written into the `--projects` folder and opened through tc-store.
+    #[default]
+    Store,
+    /// `--backend memory`: held in memory; nothing is written (phase 1's environment).
+    Memory,
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -107,6 +123,8 @@ pub(crate) fn parse(mut args: impl Iterator<Item = OsString>) -> Result<Args, Ar
     let mut seed_pace = None;
     #[cfg(feature = "fixture-backend")]
     let mut scenario = None;
+    #[cfg(feature = "fixture-backend")]
+    let mut backend = None;
     while let Some(flag) = args.next() {
         let name = flag.to_str().unwrap_or_default();
         match name {
@@ -146,8 +164,30 @@ pub(crate) fn parse(mut args: impl Iterator<Item = OsString>) -> Result<Args, Ar
             }
             #[cfg(feature = "fixture-backend")]
             "--scenario" => once("--scenario", &mut scenario, value("--scenario", &mut args)?)?,
+            #[cfg(feature = "fixture-backend")]
+            "--backend" => {
+                let chosen = match value("--backend", &mut args)?.to_str() {
+                    Some("memory") => ScenarioBackend::Memory,
+                    Some("store") => ScenarioBackend::Store,
+                    _ => return Err(bad("--backend", "memory or store")),
+                };
+                once("--backend", &mut backend, chosen)?;
+            }
             _ => return Err(ArgsError::UnknownFlag(flag.to_string_lossy().into_owned())),
         }
+    }
+    #[cfg(feature = "fixture-backend")]
+    if backend.is_some() && scenario.is_none() {
+        return Err(bad("--backend", "needs --scenario"));
+    }
+    #[cfg(feature = "fixture-backend")]
+    let backend = backend.unwrap_or_default();
+    #[cfg(feature = "fixture-backend")]
+    if scenario.is_some() && backend == ScenarioBackend::Store && projects.is_none() {
+        return Err(bad(
+            "--scenario",
+            "needs --projects: the scenario writes its projects there",
+        ));
     }
     Ok(Args {
         app_data: PathBuf::from(app_data.ok_or(ArgsError::Required("--app-data"))?),
@@ -161,6 +201,8 @@ pub(crate) fn parse(mut args: impl Iterator<Item = OsString>) -> Result<Args, Ar
         seed_pace,
         #[cfg(feature = "fixture-backend")]
         scenario: scenario.map(PathBuf::from),
+        #[cfg(feature = "fixture-backend")]
+        backend,
     })
 }
 
@@ -303,7 +345,10 @@ mod tests {
             parse_all(&all).map(|args| args.scenario)
         };
         assert_eq!(with(&[]), Ok(None));
-        assert_eq!(with(&["--scenario", "/s"]), Ok(Some(PathBuf::from("/s"))));
+        assert_eq!(
+            with(&["--projects", "/p", "--scenario", "/s"]),
+            Ok(Some(PathBuf::from("/s")))
+        );
         assert_eq!(
             with(&["--scenario"]),
             Err(ArgsError::MissingValue("--scenario"))
@@ -312,7 +357,59 @@ mod tests {
             with(&["--scenario", "/s", "--scenario", "/t"]),
             Err(ArgsError::Repeated("--scenario"))
         );
-        assert!(USAGE.contains("[--scenario <state dir>]"));
+        assert!(USAGE.contains("[--scenario <state dir> [--backend memory]]"));
+    }
+
+    /// On the store a scenario writes its projects into the `--projects` folder, so it needs
+    /// one; `--backend memory` keeps phase 1's memory backend, which writes nothing.
+    #[cfg(feature = "fixture-backend")]
+    #[test]
+    fn the_scenario_backend_is_the_store_unless_memory_is_asked_for() {
+        let with = |extra: &[&str]| {
+            let mut all = vec!["serve", "--app-data", "/a", "--ui", "/u"];
+            all.extend_from_slice(extra);
+            parse_all(&all).map(|args| args.backend)
+        };
+        assert_eq!(
+            with(&["--projects", "/p", "--scenario", "/s"]),
+            Ok(ScenarioBackend::Store)
+        );
+        assert_eq!(
+            with(&["--scenario", "/s", "--backend", "memory"]),
+            Ok(ScenarioBackend::Memory)
+        );
+        assert_eq!(
+            with(&["--scenario", "/s"]),
+            Err(ArgsError::BadValue {
+                flag: "--scenario",
+                reason: "needs --projects: the scenario writes its projects there".into()
+            })
+        );
+        assert_eq!(
+            with(&["--backend", "memory"]),
+            Err(ArgsError::BadValue {
+                flag: "--backend",
+                reason: "needs --scenario".into()
+            })
+        );
+        assert_eq!(
+            with(&["--scenario", "/s", "--backend", "disk"]),
+            Err(ArgsError::BadValue {
+                flag: "--backend",
+                reason: "memory or store".into()
+            })
+        );
+        assert_eq!(
+            with(&[
+                "--scenario",
+                "/s",
+                "--backend",
+                "memory",
+                "--backend",
+                "memory"
+            ]),
+            Err(ArgsError::Repeated("--backend"))
+        );
     }
 
     #[cfg(not(feature = "fixture-backend"))]
@@ -331,7 +428,21 @@ mod tests {
             refused.unwrap_err(),
             ArgsError::UnknownFlag("--scenario".into())
         );
+        let backend = parse_all(&[
+            "serve",
+            "--app-data",
+            "/a",
+            "--ui",
+            "/u",
+            "--backend",
+            "memory",
+        ]);
+        assert_eq!(
+            backend.unwrap_err(),
+            ArgsError::UnknownFlag("--backend".into())
+        );
         assert!(!USAGE.contains("--scenario"));
+        assert!(!USAGE.contains("--backend"));
     }
 
     #[test]

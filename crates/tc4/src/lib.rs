@@ -80,21 +80,54 @@ fn app_config(args: &Args) -> AppConfig {
     }
 }
 
-/// `--scenario <dir>`: the parity scenario's projects on the memory backend, and its
-/// sideloaded resources in the app's store, before the app starts (APP-DESIGN §4.2, §7.1). Each
-/// project is named on stderr, loaded or refused with every mismatch: a refused project shows
-/// nowhere, and the harness's log says why.
+/// `--scenario <dir>`: the parity scenario's projects, and its sideloaded resources in the
+/// app's store, before the app starts (APP-DESIGN §4.2, §5.1, §7.1). The projects are written
+/// into the `--projects` folder through tc-store (unit C1a), which must be an empty folder: a
+/// scenario never writes into a folder that holds anyone's work. `--backend memory` holds them
+/// in memory instead and writes nothing. Each project is named on stderr, loaded or refused
+/// with every mismatch: a refused project shows nowhere, and the harness's log says why.
 #[cfg(feature = "fixture-backend")]
-fn scenario_deps(dir: &std::path::Path, app_data: &std::path::Path) -> Result<AppDeps, String> {
+fn scenario_deps(dir: &std::path::Path, args: &Args) -> Result<AppDeps, String> {
+    use tc_app::backend::ProjectStore;
     use tc_app::backend::memory::MemoryBackend;
     use tc_app::backend::scenario::{ScenarioState, install_resources_into};
+    use tc_app::backend::scenario_store::ScenarioStore;
     use tc_app::backend::seed::SeedRefusal;
+    use tc_app::backend::store::StoreBackend;
 
     let at = dir.display();
     let failed =
         |error: tc_app::backend::scenario::ScenarioError| format!("scenario {at}: {error}");
+    // The scenario first, so a missing scenario folder is the error that names it.
     let state = ScenarioState::read(dir).map_err(failed)?;
-    let (backend, report) = MemoryBackend::from_scenario(&state).map_err(failed)?;
+    let (store, report, written): (Arc<dyn ProjectStore>, _, _) = match args.backend {
+        args::ScenarioBackend::Memory => {
+            let (backend, report) = MemoryBackend::from_scenario(&state).map_err(failed)?;
+            (Arc::new(backend), report, None)
+        }
+        args::ScenarioBackend::Store => {
+            // `args::parse` refuses a scenario on the store without `--projects`.
+            let projects = args
+                .projects
+                .as_deref()
+                .ok_or_else(|| format!("scenario {at}: needs --projects"))?;
+            // Before the store starts: tc-store's start makes a missing projects folder, and a
+            // folder named on the command line that is not there stops the start (§5.1).
+            let entries = std::fs::read_dir(projects)
+                .map_err(|e| format!("scenario {at}: {}: {e}", projects.display()))?;
+            if entries.count() > 0 {
+                return Err(format!(
+                    "scenario {at}: the projects folder {} is not empty: a scenario writes its \
+                     projects only into an empty folder",
+                    projects.display()
+                ));
+            }
+            let backend = StoreBackend::on_disk(&args.app_data, projects)
+                .map_err(|e| format!("scenario {at}: {e}"))?;
+            let (store, report) = ScenarioStore::write(backend, &state).map_err(failed)?;
+            (Arc::new(store), report, Some(projects))
+        }
+    };
     for (folder, seed) in &report.loaded {
         eprintln!(
             "tc4: scenario {at}: loaded {folder} ({} declared differences)",
@@ -116,14 +149,21 @@ fn scenario_deps(dir: &std::path::Path, app_data: &std::path::Path) -> Result<Ap
             other => eprintln!("tc4: scenario {at}: refused {folder}: {other}"),
         }
     }
-    let installed =
-        install_resources_into(app_data, &state.resources().map_err(failed)?).map_err(failed)?;
+    if let Some(projects) = written {
+        eprintln!(
+            "tc4: scenario {at}: {} projects written to {}",
+            report.loaded.len(),
+            projects.display()
+        );
+    }
+    let installed = install_resources_into(&args.app_data, &state.resources().map_err(failed)?)
+        .map_err(failed)?;
     eprintln!(
         "tc4: scenario {at}: {} resources installed",
         installed.len()
     );
     Ok(AppDeps {
-        store: tc_app::StoreChoice::Given(Arc::new(backend)),
+        store: tc_app::StoreChoice::Given(store),
         ..AppDeps::production()
     })
 }
@@ -172,7 +212,7 @@ fn serve(args: &Args) -> ExitCode {
     };
     #[cfg(feature = "fixture-backend")]
     let deps = match &args.scenario {
-        Some(dir) => match scenario_deps(dir, &args.app_data) {
+        Some(dir) => match scenario_deps(dir, args) {
             Ok(deps) => deps,
             Err(error) => return start_failed(error),
         },
