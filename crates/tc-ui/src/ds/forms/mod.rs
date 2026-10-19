@@ -45,8 +45,8 @@ pub fn Checkbox(
     match label.filter(|l| !l.is_empty()) {
         None => bare(mark(), style, attrs).into_any(),
         Some(label) => Field(FieldProps {
-            label: Some(label),
-            hint: description,
+            label: Some(Signal::from(label)),
+            hint: description.map(Signal::from),
             disabled,
             placement: Placement::End,
             style,
@@ -272,8 +272,8 @@ pub fn Radio(
     match label.filter(|l| !l.is_empty()) {
         None => bare(mark(), style, attrs).into_any(),
         Some(label) => Field(FieldProps {
-            label: Some(label),
-            hint: description,
+            label: Some(Signal::from(label)),
+            hint: description.map(Signal::from),
             disabled,
             placement: Placement::End,
             style,
@@ -341,8 +341,8 @@ pub fn RadioGroup(
                     .into_any()
                 };
                 Field(FieldProps {
-                    label: Some(o.label),
-                    hint: o.description,
+                    label: Some(Signal::from(o.label)),
+                    hint: o.description.map(Signal::from),
                     placement: Placement::End,
                     id: Some(id),
                     children: Some(Box::new(mark)),
@@ -413,8 +413,10 @@ pub fn SearchField(
     #[prop(optional, into)] value: Option<Signal<String>>,
     #[prop(optional)] on_change: Option<Callback<web_sys::Event>>,
     #[prop(optional)] on_clear: Option<Callback<MouseEvent>>,
-    #[prop(optional, into)] placeholder: Option<String>,
-    #[prop(optional, into)] clear_label: Option<String>,
+    /// Follows the shown language while the field is on screen, as the clear label does.
+    #[prop(optional, into)]
+    placeholder: Option<Signal<String>>,
+    #[prop(optional, into)] clear_label: Option<Signal<String>>,
     #[prop(optional, into)] disabled: MaybeProp<bool>,
     #[prop(optional)] style: Css,
     /// Extra attributes of the native input.
@@ -422,7 +424,13 @@ pub fn SearchField(
     attrs: Attrs,
     #[prop(optional)] live_attrs: Vec<(&'static str, Signal<Option<String>>)>,
 ) -> impl IntoView {
-    let clear_label = clear_label.unwrap_or_else(|| "Clear".into());
+    let clear_label = clear_label.unwrap_or_else(|| Signal::from("Clear"));
+    let placeholder = placeholder.unwrap_or_else(|| Signal::from("Search…"));
+    let mut live_attrs = live_attrs;
+    live_attrs.push((
+        "placeholder",
+        Signal::derive(move || Some(placeholder.get())),
+    ));
     // The clear button comes and goes with the value, and stays the same node while the
     // translator types.
     let has = Memo::new(move |_| value.is_some_and(|v| v.with(|v| !v.is_empty())));
@@ -430,7 +438,7 @@ pub fn SearchField(
         let cb = on_clear.filter(|_| has.get())?;
         Some(
             crate::ds::feedback::close_button(
-                clear_label.clone(),
+                clear_label,
                 cb,
                 Weight::Text,
                 crate::ds::Shape::Pill,
@@ -447,7 +455,6 @@ pub fn SearchField(
         // attribute even when there is none: an empty one.
         default_value: value.is_none().then(String::new),
         value,
-        placeholder: Some(placeholder.unwrap_or_else(|| "Search…".into())),
         on_change,
         style,
         attrs,
@@ -460,7 +467,7 @@ pub fn SearchField(
 /// Field, so the label reaches the control.
 #[component]
 pub fn TextArea(
-    #[prop(optional, into)] label: Option<String>,
+    #[prop(optional, into)] label: Option<Signal<String>>,
     #[prop(optional)] variant: InputVariant,
     #[prop(optional, into)] dir: Option<String>,
     #[prop(default = 3)] rows: u32,
@@ -506,8 +513,8 @@ pub fn TextArea(
 
 /// A Field above one control, with no disabled or error state of its own.
 fn field_around(
-    label: Option<String>,
-    hint: Option<String>,
+    label: Option<Signal<String>>,
+    hint: Option<Signal<String>>,
     id: Option<String>,
     style: Css,
     control: impl FnOnce() -> AnyView + Send + 'static,
@@ -526,8 +533,8 @@ fn field_around(
 /// Field `error` also wires the ARIA.
 #[component]
 pub fn TextField(
-    #[prop(optional, into)] label: Option<String>,
-    #[prop(optional, into)] hint: Option<String>,
+    #[prop(optional, into)] label: Option<Signal<String>>,
+    #[prop(optional, into)] hint: Option<Signal<String>>,
     #[prop(optional, into)] invalid: MaybeProp<bool>,
     #[prop(optional, into)] id: Option<String>,
     #[prop(optional)] size: Option<Size>,
@@ -586,7 +593,7 @@ pub fn Toggle(
     match label.filter(|l| !l.is_empty()) {
         None => bare(mark(), style, attrs).into_any(),
         Some(label) => Field(FieldProps {
-            label: Some(label),
+            label: Some(Signal::from(label)),
             disabled,
             placement: Placement::Start,
             style,

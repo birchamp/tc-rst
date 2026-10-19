@@ -16,8 +16,8 @@ use wasm_bindgen::prelude::Closure;
 
 use crate::css::js_number;
 use crate::ds::{
-    Attrs, Css, LayerAlign, LayerPlacement, Level, Navigate, Scrim, ScrimToken, Side, provide,
-    spread,
+    Attrs, Css, LayerAlign, LayerPlacement, Level, Navigate, Scrim, ScrimToken, Side, live,
+    provide, spread,
 };
 use crate::geometry::{Rect, place};
 
@@ -209,6 +209,9 @@ pub fn Layer(
     /// Extra attributes of the scrim (React's `scrimProps`).
     #[prop(optional)]
     scrim_attrs: Attrs,
+    /// Attributes of the scrim whose values follow signals; `None` removes one.
+    #[prop(optional)]
+    scrim_live: Vec<(&'static str, Signal<Option<String>>)>,
     #[prop(optional, into)] role: Option<String>,
     #[prop(optional, into)] label: Option<String>,
     #[prop(optional, into)] labelled_by: Option<String>,
@@ -651,11 +654,13 @@ pub fn Layer(
         s.to_style()
     };
     let scrim_attrs = StoredValue::new(scrim_attrs);
+    let scrim_live = StoredValue::new(scrim_live);
     (move || {
         mounted.get().then(|| {
             view! {
                 <div
                     {..scrim_attrs.with_value(spread)}
+                    {..scrim_live.with_value(|l| live(l.clone()))}
                     data-layer-placement=placement.as_str()
                     on:mousedown=move |e: MouseEvent| {
                         // A press inside the panel is not a press on the scrim.

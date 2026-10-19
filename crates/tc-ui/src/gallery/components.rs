@@ -365,8 +365,8 @@ fn choice(p: Props) -> AnyView {
 
 fn field(p: Props) -> AnyView {
     Field(FieldProps {
-        label: p.str("label"),
-        hint: p.str("hint"),
+        label: p.str("label").map(Signal::from),
+        hint: p.str("hint").map(Signal::from),
         error: p.str("error"),
         required: p.flag("required"),
         optional: p.flag("optional"),
@@ -454,6 +454,7 @@ fn layer(p: Props) -> AnyView {
         navigate: p.keyword("navigate"),
         animate: p.bool("animate").unwrap_or(d.animate),
         scrim_attrs: Attrs::new(),
+        scrim_live: Vec::new(),
         role: p.str("role"),
         label: p.str("label"),
         labelled_by: p.str("labelledBy"),
@@ -878,8 +879,8 @@ fn search_field(p: Props) -> AnyView {
         value: controlled(&p, "value"),
         on_change: handler(&p, "onChange"),
         on_clear: handler(&p, "onClear"),
-        placeholder: p.str("placeholder"),
-        clear_label: p.str("clearLabel"),
+        placeholder: p.str("placeholder").map(Signal::from),
+        clear_label: p.str("clearLabel").map(Signal::from),
         disabled: MaybeProp::from(p.bool("disabled")),
         style: p.css("style"),
         live_attrs: Vec::new(),
@@ -890,16 +891,16 @@ fn search_field(p: Props) -> AnyView {
 
 fn select(p: Props) -> AnyView {
     Select(SelectProps {
-        label: p.str("label"),
+        label: p.str("label").map(Signal::from),
         options: select_options(&p, "options"),
-        hint: p.str("hint"),
+        hint: p.str("hint").map(Signal::from),
         id: p.str("id"),
         value: p.str_signal("value"),
         on_change: handler(&p, "onChange"),
         disabled: MaybeProp::from(p.bool("disabled")),
-        search_placeholder: p.str("searchPlaceholder"),
-        no_matches_label: p.str("noMatchesLabel"),
-        clear_label: p.str("clearLabel"),
+        search_placeholder: p.str("searchPlaceholder").map(Signal::from),
+        no_matches_label: p.str("noMatchesLabel").map(Signal::from),
+        clear_label: p.str("clearLabel").map(Signal::from),
         style: p.css("style"),
         attrs: p.rest(),
     })
@@ -925,7 +926,7 @@ fn suggest_field(p: Props) -> AnyView {
 fn text_area(p: Props) -> AnyView {
     let d = TextAreaProps::default();
     TextArea(TextAreaProps {
-        label: p.str("label"),
+        label: p.str("label").map(Signal::from),
         variant: p.keyword("variant").unwrap_or_default(),
         dir: p.str("dir"),
         rows: p.num("rows").map_or(d.rows, |n| n as u32),
@@ -946,8 +947,8 @@ fn text_area(p: Props) -> AnyView {
 
 fn text_field(p: Props) -> AnyView {
     TextField(TextFieldProps {
-        label: p.str("label"),
-        hint: p.str("hint"),
+        label: p.str("label").map(Signal::from),
+        hint: p.str("hint").map(Signal::from),
         invalid: MaybeProp::from(p.bool("invalid")),
         id: p.str("id"),
         size: p.keyword("size"),
@@ -1106,7 +1107,7 @@ fn drawer(p: Props) -> AnyView {
         title_dir: p.str("titleDir"),
         width: css_value(p.value("width")),
         on_close: handler(&p, "onClose"),
-        close_label: p.str("closeLabel"),
+        close_label: p.str("closeLabel").map(Signal::from),
         children: children_fn(&p, "children"),
         attrs: p.rest(),
     })
@@ -1137,12 +1138,13 @@ fn modal(p: Props) -> AnyView {
         title: p.content("title"),
         subtitle: p.content("subtitle"),
         width: css_value(p.value("width")),
-        close_label: p.str("closeLabel"),
+        close_label: p.str("closeLabel").map(Signal::from),
         on_close: p.screen_handler("onClose"),
         closable: p.handler_on("onClose"),
         footer: children_fn(&p, "footer"),
         children: children_fn(&p, "children"),
         attrs: p.rest(),
+        live_attrs: Vec::new(),
     })
     .into_any()
 }

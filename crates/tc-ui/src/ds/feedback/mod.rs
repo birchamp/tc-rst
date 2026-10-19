@@ -205,7 +205,7 @@ pub fn Toast(
     });
     let dismiss_view = on_dismiss.map(|cb| {
         close_button(
-            dismiss_label,
+            Signal::from(dismiss_label),
             cb,
             Weight::Text,
             Shape::Pill,
@@ -231,9 +231,10 @@ pub fn Toast(
     }
 }
 
-/// The small ✕ icon-only Action that closes a toast, a modal or a drawer.
+/// The small ✕ icon-only Action that closes a toast, a modal or a drawer. Its title, which
+/// also names it, follows the shown language while it is on screen (the App language preview).
 pub(crate) fn close_button(
-    title: String,
+    title: Signal<String>,
     on_click: Callback<MouseEvent>,
     weight: Weight,
     shape: Shape,
@@ -245,7 +246,7 @@ pub(crate) fn close_button(
         size: Size::Sm,
         shape,
         icon_only: true,
-        title: Some(title).into(),
+        title: Signal::derive(move || Some(title.get())),
         on_click: Some(on_click),
         style: Signal::from(style),
         children: Some(Box::new(|| "✕".into_any())),
