@@ -1,6 +1,6 @@
 //! Times STORAGE §13.2's state seed on a parity state (docs/PERFORMANCE.md rule 5, unit B1a).
-//! The fixture backend seeds every project of a scenario when `tc4 serve --backend memory`
-//! starts, so the seed's time is part of that start. Build a state first:
+//! The fixture backend seeds every project of a scenario when `tc4 serve --scenario` starts,
+//! so the seed's time is part of that start. Build a state first:
 //!
 //! ```text
 //! node parity/app/state.mjs --scenario sample --out target/b1a/state-sample

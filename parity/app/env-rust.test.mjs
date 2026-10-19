@@ -4,16 +4,18 @@
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app node --test parity/app/env-rust.test.mjs
 //
 // The first group needs nothing and runs in CI. The browser group needs `tc4` built with
-// `--features test-hooks` (TC4_BIN), the folder of crates/tc-ui/build-app.sh (TC4_UI) and
+// `--features test-hooks,fixture-backend` (TC4_BIN), the folder of crates/tc-ui/build-app.sh (TC4_UI) and
 // Playwright (parity/tc4-baseline/node_modules, or PLAYWRIGHT_MODULE); without them each of its
 // tests is skipped and says why. Each test starts its own `tc4` and ends it.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { recordSequence } from './behaviour.mjs';
-import { REPO, newRequestId, notYet, rustTracks, startRustEnv } from './env-rust.mjs';
+import { caseRoute, mergeCaptures } from './capture-rust.mjs';
+import { REPO, newRequestId, notYet, rustTracks, scenarioArgs, startRustEnv } from './env-rust.mjs';
 import { CHROMIUM_ARGS, captureScreen, settle, trackRequests } from './observe.mjs';
 import { designUnits } from './units.mjs';
 
@@ -34,6 +36,20 @@ test('every Door43 step names the unit that brings it', async () => {
   }
 });
 
+test('a scenario reaches tc4 as the state folder it was built into', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-env-rust-'));
+  try {
+    const args = scenarioArgs('shared', dir);
+    assert.deepEqual(args, ['--scenario', path.join(dir, 'state')]);
+    for (const file of ['client_settings/uw-tc4.json', 'repos/_local_/_local_/sample_burrito/metadata.json',
+      'repos/_local_/_local_/sample_burrito/.remotes.json', 'repos/_local_/_sideloaded_/en_tn/metadata.json']) {
+      assert.ok(fs.existsSync(path.join(args[1], file)), file);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('a request id is 16 random bytes in lowercase hex', () => {
   const a = newRequestId();
   assert.match(a, /^[0-9a-f]{32}$/);
@@ -46,11 +62,44 @@ test('the units of the design are read from its section 10', () => {
   assert.deepEqual([...designUnits(doc)], ['A6b', 'G0', 'B1a']);
 });
 
+test('a screens-only rerun keeps the case entries, and a case rerun keeps the screens', () => {
+  const screens = [{ name: 'home' }, { name: 'about' }];
+  const cases = [{ name: 'home-empty' }, { name: 'license' }];
+  const previous = [
+    { name: 'about', kind: 'screen', by: 'A5' },
+    { name: 'license', kind: 'case', by: 'A5' },
+  ];
+  assert.deepEqual(
+    mergeCaptures(previous, [{ name: 'home', kind: 'screen', by: 'B2' }], screens, cases).map((e) => `${e.kind}:${e.name}:${e.by}`),
+    ['screen:home:B2', 'screen:about:A5', 'case:license:A5'],
+  );
+  assert.deepEqual(
+    mergeCaptures(previous, [{ name: 'license', kind: 'case', by: 'B2' }, { name: 'home-empty', kind: 'case', by: 'B2' }], screens, cases).map((e) => `${e.kind}:${e.name}:${e.by}`),
+    ['screen:about:A5', 'case:home-empty:B2', 'case:license:B2'],
+  );
+  // A case and a screen of one name are two entries (the gate refuses such a case anyway).
+  assert.equal(mergeCaptures([{ name: 'home', kind: 'screen' }], [{ name: 'home', kind: 'case' }], screens, [{ name: 'home' }]).length, 2);
+});
+
+test('a case takes its rust route, or its state\'s route when it is that state as tC4 drew it', async () => {
+  const route = async () => {};
+  const rust = async () => {};
+  const portable = { portable: true, route };
+  assert.equal(caseRoute({ rust }, { portable: false, route }), rust);
+  assert.equal(caseRoute({}, { portable: false, route }), null, 'a route that writes into the project is not the Rust app\'s');
+  assert.equal(caseRoute({ patch: () => ({}) }, portable), null, 'a patched case is a state the route does not reach');
+  assert.equal(caseRoute({ returns: { x: { value: 1 } } }, portable), null);
+  const steps = [];
+  const run = caseRoute({ steps: [] }, { portable: true, route: async (app) => steps.push(['route', app.page]) });
+  await run({ page: 'the page' }, null);
+  assert.deepEqual(steps, [['route', 'the page']]);
+});
+
 // ---- with tc4 and a browser ----------------------------------------------------------------
 
 function browserSetup() {
   const { TC4_BIN, TC4_UI } = process.env;
-  if (!TC4_BIN || !TC4_UI) return { skip: 'set TC4_BIN (tc4 built with --features test-hooks) and TC4_UI (target/tc-ui-app)' };
+  if (!TC4_BIN || !TC4_UI) return { skip: 'set TC4_BIN (tc4 built with --features test-hooks,fixture-backend) and TC4_UI (target/tc-ui-app)' };
   try {
     const dir = process.env.PLAYWRIGHT_MODULE ?? path.join(REPO, 'parity', 'tc4-baseline', 'node_modules', 'playwright');
     return { tc4: TC4_BIN, ui: TC4_UI, chromium: createRequire(import.meta.url)(dir).chromium };

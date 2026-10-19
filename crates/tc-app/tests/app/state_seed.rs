@@ -127,7 +127,7 @@ fn mismatches(result: Result<StateSeed, SeedRefusal>) -> Vec<Mismatch> {
 }
 
 /// A mismatch as the tuple the write-up lists: (path, record, field, rule).
-fn tuple(m: &Mismatch) -> (String, Option<String>, Option<String>, CheckRule) {
+pub(crate) fn tuple(m: &Mismatch) -> (String, Option<String>, Option<String>, CheckRule) {
     (m.path.clone(), m.record.clone(), m.field.clone(), m.rule)
 }
 
@@ -213,7 +213,7 @@ fn scenario_projects_are_the_recorded_state_bytes() {
 
 /// What the Bible sample declares in every scenario: its two decision files' summary
 /// caches, and gr8c's verseEdits, which the fold computes from the current verse.
-fn bible_declared() -> Vec<DeclaredDifference> {
+pub(crate) fn bible_declared() -> Vec<DeclaredDifference> {
     vec![
         DeclaredDifference::SummaryDropped { path: TN.into() },
         DeclaredDifference::VerseEditsRecomputed {
@@ -291,7 +291,7 @@ fn bible_project_reproduces_every_file_in_every_scenario() {
 
 /// The OBS sample's mismatches, written up in docs/evidence/state-seed-check-2026-10-18.md
 /// and handed to the storage team: the same in every scenario.
-fn obs_written_up() -> Vec<(String, Option<String>, Option<String>, CheckRule)> {
+pub(crate) fn obs_written_up() -> Vec<(String, Option<String>, Option<String>, CheckRule)> {
     let mut out = vec![
         (
             RESOURCES.to_owned(),

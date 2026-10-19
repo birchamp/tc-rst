@@ -42,6 +42,8 @@ pub enum ReportOp {
     /// The machine's resource store at start: what an interrupted install left and could not
     /// be removed (§4.9).
     Resources,
+    /// A project's close that failed; the session is gone all the same.
+    Close,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

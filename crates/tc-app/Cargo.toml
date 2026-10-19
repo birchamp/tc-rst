@@ -11,8 +11,10 @@ rust-version.workspace = true
 # Release builds never enable it.
 test-hooks = ["tc-api/test-hooks"]
 # The fixture backend and its seed (APP-DESIGN AD6, AD7, AD35): STORAGE §13.2's state seed of
-# the parity projects, checked against their files. Release builds never enable it.
-fixture-backend = []
+# the parity projects, checked against their files, the memory backend that holds them, and the
+# loader of a parity scenario, which zips each sideloaded resource to install it. Release builds
+# never enable it.
+fixture-backend = ["dep:zip"]
 
 [dependencies]
 tc-api = { path = "../tc-api", features = ["server"] }
@@ -30,18 +32,28 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
 unicode-normalization.workspace = true
+zip = { workspace = true, optional = true }
 
 [dev-dependencies]
 # The integration tests use the test hooks and the fixture backend's seed, as tc-api's own
 # tests enable its features.
 tc-app = { path = ".", features = ["test-hooks", "fixture-backend"] }
 tc-api = { path = "../tc-api", features = ["server", "test-hooks", "proptest"] }
+# The scale corpus of docs/PERFORMANCE.md for the operation-count tests (§8.1, AD32).
+tc-corpus = { path = "../tc-corpus" }
 proptest.workspace = true
 tempfile.workspace = true
+# The UI's save machine and draft buffer, played against the real test/fieldStore (A4b). tc-ui's
+# host build is its pure modules only.
+tc-ui = { path = "../tc-ui" }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "sync", "time", "test-util"] }
 
 [[example]]
 name = "state_seed_bench"
+required-features = ["fixture-backend"]
+
+[[example]]
+name = "memory_bench"
 required-features = ["fixture-backend"]
 
 [lints]

@@ -13,6 +13,11 @@
 //!   `test/crash` and then read what was stored. Each store rewrites that one small file, so
 //!   its cost grows with the stores of that app: a property test gives each case a fresh
 //!   app-data folder.
+//! - **Test drafts** (`test/fieldDraft`) keep the newest draft of a test field in the same
+//!   file, as `editor/draft` will keep a verse's in `.tc/drafts.json`, and change neither its
+//!   value nor its stores. A draft waits at its hold point before it takes the lane, so a held
+//!   draft never delays a store (R22); it takes the lane only for the write of the file that
+//!   drafts and stores share.
 //!
 //! Unit C1a replaces the atomic write here with `tc_store::atomic_write`.
 
@@ -32,8 +37,8 @@ use tc_api::endpoint::Kind;
 use tc_api::ids::{ConflictRef, RecordRef, ViewSeq};
 use tc_api::shown::{PersonLabel, Who};
 use tc_api::test::{
-    Crash, CrashPoint, Echo, EchoView, FieldLog, FieldLogView, FieldStore, Hold, HoldPoint,
-    MAX_ECHO, Quiet, QuietView, Release, Reset, StoredText, TokenBase,
+    Crash, CrashPoint, Echo, EchoView, FieldDraft, FieldLog, FieldLogView, FieldStore, Hold,
+    HoldPoint, MAX_ECHO, Quiet, QuietView, Release, Reset, StoredDraft, StoredText, TokenBase,
 };
 use tc_api::write::{Ack, ConflictBrief, SavedValue, Stored, TokenUpdate};
 use tc_api::{ALL, ApiError, NotSaved, Shown, ShownToken};
@@ -304,6 +309,17 @@ struct FieldsFile {
     /// store's installation secret does.
     key: String,
     fields: BTreeMap<String, Vec<StoredText>>,
+    /// The newest draft of each field and how many came. A file written before drafts
+    /// existed has none.
+    #[serde(default)]
+    drafts: BTreeMap<String, KeptDraft>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct KeptDraft {
+    draft: StoredDraft,
+    count: u32,
 }
 
 /// What a token says: the field and the version of it that was shown.
@@ -358,6 +374,7 @@ impl TestFields {
                     schema_version: FIELDS_SCHEMA,
                     key: hex(&key),
                     fields: BTreeMap::new(),
+                    drafts: BTreeMap::new(),
                 };
                 let bytes = serde_json::to_vec_pretty(&file).map_err(|e| e.to_string())?;
                 write_file_atomically(&dir, FIELDS_FILE, &bytes)
@@ -428,6 +445,30 @@ impl TestFields {
         ConflictRef::parse(&hex(context.finish().as_ref())).map_err(|e| e.to_string())
     }
 
+    fn check_name(name: &str) -> Result<(), ApiError> {
+        if name.is_empty() || name.len() > MAX_FIELD_NAME || name.chars().any(char::is_control) {
+            return Err(ApiError::BadRequest {
+                field: "field".to_owned(),
+                reason: format!("a name of 1 to {MAX_FIELD_NAME} bytes with no control character"),
+            });
+        }
+        Ok(())
+    }
+
+    /// Writes `file` atomically on the blocking pool: an fsync on a runtime worker would stall
+    /// every other request.
+    async fn write_file(&self, file: &FieldsFile) -> Result<(), NotSaved> {
+        let bytes = serde_json::to_vec_pretty(file).map_err(|e| NotSaved::Disk(e.to_string()))?;
+        let dir = self.dir.clone();
+        match tokio::task::spawn_blocking(move || write_file_atomically(&dir, FIELDS_FILE, &bytes))
+            .await
+        {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(NotSaved::Disk(e.to_string())),
+            Err(stopped) => Err(NotSaved::Disk(crate::jobs::stop_reason(stopped))),
+        }
+    }
+
     async fn store(&self, app: &App, hooks: &TestHooks, req: FieldStore) -> Result<Ack, ApiError> {
         let internal = |reason: String| {
             app.internal(
@@ -436,12 +477,7 @@ impl TestFields {
             )
         };
         let name = req.field.as_str();
-        if name.is_empty() || name.len() > MAX_FIELD_NAME || name.chars().any(char::is_control) {
-            return Err(ApiError::BadRequest {
-                field: "field".to_owned(),
-                reason: format!("a name of 1 to {MAX_FIELD_NAME} bytes with no control character"),
-            });
-        }
+        Self::check_name(name)?;
         let named = self
             .read_token(name, &req.shown)
             .ok_or(ApiError::NotSaved(NotSaved::BadToken))?;
@@ -501,21 +537,7 @@ impl TestFields {
                     TokenBase::Current
                 },
             });
-        let bytes = serde_json::to_vec_pretty(&file).map_err(|e| internal(e.to_string()))?;
-        let dir = self.dir.clone();
-        // An fsync on a runtime worker would stall every other request.
-        let written =
-            tokio::task::spawn_blocking(move || write_file_atomically(&dir, FIELDS_FILE, &bytes))
-                .await;
-        match written {
-            Ok(Ok(())) => {}
-            Ok(Err(e)) => return Err(ApiError::NotSaved(NotSaved::Disk(e.to_string()))),
-            Err(stopped) => {
-                return Err(ApiError::NotSaved(NotSaved::Disk(
-                    crate::jobs::stop_reason(stopped),
-                )));
-            }
-        }
+        self.write_file(&file).await.map_err(ApiError::NotSaved)?;
         *lock(&self.state) = file;
 
         let new_conflicts = if stale {
@@ -544,12 +566,54 @@ impl TestFields {
         })
     }
 
+    /// Keeps `req` as the field's newest draft. The value and the stores do not change.
+    async fn draft(&self, hooks: &TestHooks, req: FieldDraft) -> Result<(), ApiError> {
+        let name = req.field.as_str();
+        Self::check_name(name)?;
+        let named = self
+            .read_token(name, &req.shown)
+            .ok_or(ApiError::NotSaved(NotSaved::BadToken))?;
+        // Before the lane: a draft held here never holds a store back.
+        hooks.holds.reach(HoldPoint::DraftWrite).await;
+        let _lane = self.lane.lock().await;
+        if hooks.is_dead() {
+            return Err(ApiError::NotSaved(NotSaved::Disk("tc4 ended".to_owned())));
+        }
+        let mut file = lock(&self.state).clone();
+        let version = file.fields.get(name).map_or(0, Vec::len) as u64;
+        if named > version {
+            return Err(ApiError::NotSaved(NotSaved::BadToken));
+        }
+        let draft = StoredDraft {
+            request: req.request,
+            text: req.text.nfc().collect(),
+            base: if named < version {
+                TokenBase::Stale
+            } else {
+                TokenBase::Current
+            },
+        };
+        let count = file.drafts.get(name).map_or(0, |kept| kept.count);
+        file.drafts.insert(
+            name.to_owned(),
+            KeptDraft {
+                draft,
+                count: count.saturating_add(1),
+            },
+        );
+        self.write_file(&file).await.map_err(ApiError::NotSaved)?;
+        *lock(&self.state) = file;
+        Ok(())
+    }
+
     fn log(&self, app: &App, field: &str) -> Result<FieldLogView, ApiError> {
-        let stores = lock(&self.state)
-            .fields
-            .get(field)
-            .cloned()
-            .unwrap_or_default();
+        let (stores, kept) = {
+            let state = lock(&self.state);
+            (
+                state.fields.get(field).cloned().unwrap_or_default(),
+                state.drafts.get(field).cloned(),
+            )
+        };
         let version = stores.len() as u64;
         let token = self.mint(field, version).map_err(|reason| {
             app.internal(
@@ -564,6 +628,8 @@ impl TestFields {
                 marker: None,
             },
             stores,
+            draft: kept.as_ref().map(|kept| kept.draft.clone()),
+            drafts: kept.map_or(0, |kept| kept.count),
         })
     }
 }
@@ -579,6 +645,7 @@ impl Handle<Quiet> for App {
         let busy = self.inner.calls.load(Ordering::SeqCst) > 0
             || self.inner.replies.running() > 0
             || self.inner.jobs.live() > 0
+            || self.inner.sessions.busy()
             || hooks.holds.holding() > 0;
         Ok(QuietView { busy })
     }
@@ -646,6 +713,13 @@ impl Handle<FieldStore> for App {
     }
 }
 
+impl Handle<FieldDraft> for App {
+    async fn handle(&self, req: FieldDraft) -> Result<(), ApiError> {
+        let hooks = self.hooks()?;
+        hooks.fields.draft(hooks, req).await
+    }
+}
+
 impl Handle<FieldLog> for App {
     async fn handle(&self, req: FieldLog) -> Result<FieldLogView, ApiError> {
         self.hooks()?.fields.log(self, &req.field)
@@ -653,8 +727,9 @@ impl Handle<FieldLog> for App {
 }
 
 impl Handle<Reset> for App {
-    /// The parity harness's `home()`: preferences and reports back to the seed, the crash
-    /// disarmed, every hold released, the kept replies forgotten (a write still running is
+    /// The parity harness's `home()`: every session closed, the projects and the preferences
+    /// and reports back to the seed, the crash disarmed, every hold released, the kept
+    /// replies forgotten (a write still running is
     /// kept, so its retry waits for it) and the internet off as a launch finds it (tC4's
     /// switch is page state that a reload turns off). The test fields are kept: tests name
     /// their own. The reset's own reply is not kept either (`dispatch::kept_reply`), so the
@@ -662,7 +737,17 @@ impl Handle<Reset> for App {
     async fn handle(&self, _req: Reset) -> Result<(), ApiError> {
         let hooks = self.hooks()?;
         *lock(&hooks.crash) = None;
+        // Holds go first: a held operation could keep a session from closing.
         hooks.holds.release_all();
+        // Every session closes after its leave checkpoint, then every project goes back to
+        // its seed. Epochs go on counting, so a page from before the reset is stale.
+        self.inner.sessions.close_all().await;
+        if let Err(error) = self.inner.sessions.store().reset() {
+            return Err(self.internal(
+                "the projects could not be reset",
+                crate::reports::facts(serde_json::json!({"reason": error.to_string()})),
+            ));
+        }
         // A launch starts with no kept replies, so a request id may be used again.
         self.inner.replies.forget_settled();
         self.inner.prefs.reset().await;

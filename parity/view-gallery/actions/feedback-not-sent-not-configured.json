@@ -1,0 +1,89 @@
+{
+  "case": "feedback-not-sent-not-configured",
+  "calls": [
+    {
+      "at": "mount",
+      "name": "loadShared",
+      "args": [
+        {
+          "id": "_local_/_local_/sample_burrito",
+          "name": "Equipo Ejemplo — Tito y Jonás",
+          "languageTag": "es-419",
+          "scriptDirection": "ltr",
+          "flavor": "textTranslation",
+          "bookCodes": [
+            "JON",
+            "TIT"
+          ],
+          "timestamp": 1782993600000
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "loadConflicts",
+      "args": [
+        {
+          "id": "_local_/_local_/sample_burrito",
+          "name": "Equipo Ejemplo — Tito y Jonás",
+          "languageTag": "es-419",
+          "scriptDirection": "ltr",
+          "flavor": "textTranslation",
+          "bookCodes": [
+            "JON",
+            "TIT"
+          ],
+          "timestamp": 1782993600000
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "loadProgress",
+      "args": [
+        {
+          "id": "_local_/_local_/sample_burrito",
+          "name": "Equipo Ejemplo — Tito y Jonás",
+          "languageTag": "es-419",
+          "scriptDirection": "ltr",
+          "flavor": "textTranslation",
+          "bookCodes": [
+            "JON",
+            "TIT"
+          ],
+          "timestamp": 1782993600000
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "loadShared",
+      "args": [
+        {
+          "id": "_local_/_local_/sample_burrito_obs",
+          "name": "Equipo Ejemplo — Historias Bíblicas Abiertas",
+          "languageTag": "es-419",
+          "scriptDirection": "ltr",
+          "flavor": "textStories",
+          "bookCodes": [],
+          "timestamp": 1789473600000
+        }
+      ]
+    },
+    {
+      "at": "mount",
+      "name": "loadProgress",
+      "args": [
+        {
+          "id": "_local_/_local_/sample_burrito_obs",
+          "name": "Equipo Ejemplo — Historias Bíblicas Abiertas",
+          "languageTag": "es-419",
+          "scriptDirection": "ltr",
+          "flavor": "textStories",
+          "bookCodes": [],
+          "timestamp": 1789473600000
+        }
+      ]
+    }
+  ]
+}

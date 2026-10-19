@@ -1,10 +1,11 @@
 //! The gate of P7 for the app's screens (APP-DESIGN §7.5). Every run recomputes the four layers
 //! (pixels, DOM, what the DOM shows, behaviour) from the committed captures of tC4
-//! (`parity/tc4-baseline`) and of the Rust app (`parity/app`), checks that the committed
-//! `parity/app/report.json` is exactly what they give, and applies the rules of `gate.rs`:
-//! every baseline screen has a row, a row that differs is explained in `residuals.json` with
-//! exactly the layers it differs in, a failed screen fails whatever is written there, and a
-//! unit that has landed has captured its layers. `UPDATE_REPORT=1 cargo test -p tc-ui --test
+//! (`parity/tc4-baseline`, and `parity/view-gallery` for the gallery's cases) and of the Rust
+//! app (`parity/app`), checks that the committed `parity/app/report.json` is exactly what they
+//! give, and applies the rules of `gate.rs`: every baseline screen and gallery case has a row,
+//! a case belongs to a group of §7.4 and takes its units, a row that differs is explained in
+//! `residuals.json` with exactly the layers it differs in, a failed screen fails whatever is
+//! written there, and a unit that has landed has captured its layers. `UPDATE_REPORT=1 cargo test -p tc-ui --test
 //! screen_record` rewrites the report and its diff images. The planted tests (`planted.rs`)
 //! prove that a planted pixel, DOM, meaning or behaviour difference and a screen that reached
 //! the settle deadline fail it.
@@ -152,4 +153,81 @@ fn section_7_6_names_every_baseline_screen_with_its_units() {
         );
     }
     assert_eq!(design.units.len(), 48);
+}
+
+/// A gallery group named for a screen or dialog of the screen map (`S4`, `M18`) is built by the
+/// units §7.4 gives it, so no other unit of §10 lists that id in its scope: a unit that did
+/// would build a screen whose gallery case another unit captures.
+#[test]
+fn only_a_gallery_screens_own_units_list_it_in_their_scope() {
+    let design = doc(&Paths::committed());
+    let mut screens = Vec::new();
+    for group in &design.gallery {
+        let mut chars = group.name.chars();
+        let screen_id = chars.next().is_some_and(|c| "SMX".contains(c))
+            && chars.as_str().parse::<u32>().is_ok();
+        if !screen_id {
+            continue;
+        }
+        screens.push(group.name.as_str());
+        for scope in design.scopes.iter().filter(|s| s.names(&group.name)) {
+            assert!(
+                scope.unit == group.dom || scope.unit == group.pixels,
+                "§10: {}'s scope lists {}, which §7.4 gives to {} (DOM) and {} (pixels)",
+                scope.unit,
+                group.name,
+                group.dom,
+                group.pixels
+            );
+        }
+    }
+    assert_eq!(screens, ["S4", "S12", "S14", "M9", "M10", "M18"]);
+    let b4b = design
+        .scopes
+        .iter()
+        .find(|s| s.unit.as_str() == "B4b")
+        .unwrap();
+    assert!(
+        b4b.names("M18"),
+        "§10: B4b, which builds M18, does not list it"
+    );
+}
+
+#[test]
+fn section_7_4_names_every_gallery_group_with_its_units() {
+    let paths = Paths::committed();
+    let design = doc(&paths);
+    let record = Record::load(paths).unwrap();
+    assert_eq!(design.gallery.len(), 18);
+    let units = |name: &str| {
+        let group = design
+            .group(name)
+            .unwrap_or_else(|| panic!("§7.4 has no group {name}"));
+        (group.dom.as_str(), group.pixels.as_str())
+    };
+    assert_eq!(units("license"), ("A5", "B2"));
+    assert_eq!(units("sign-in"), ("A8", "B9b"));
+    assert_eq!(units("net-failed"), ("A8", "B2"));
+    assert_eq!(units("M18"), ("B4b", "B4b"));
+    assert_eq!(units("S4"), ("B11", "B11"));
+    assert_eq!(units("check-empty"), ("B5a", "B5a"));
+    for case in &record.cases.cases {
+        let group = design
+            .group(&case.group)
+            .unwrap_or_else(|| panic!("case {}: no §7.4 group {}", case.name, case.group));
+        assert_eq!(
+            (&case.dom_unit, &case.pixels_unit),
+            (&group.dom, &group.pixels),
+            "{}",
+            case.name
+        );
+    }
+    for group in &design.gallery {
+        assert!(
+            record.cases.cases.iter().any(|c| c.group == group.name),
+            "§7.4 group {} has no gallery case",
+            group.name
+        );
+    }
+    assert_eq!(record.cases.cases.len(), 68);
 }

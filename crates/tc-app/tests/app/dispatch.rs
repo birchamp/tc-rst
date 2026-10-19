@@ -22,8 +22,8 @@ use tc_app::reports::{ReportOp, ReportOutcome};
 use tc_app::{Answer, App, Then};
 
 use super::common::{
-    ManualJob, PROJECT_ID, Parts, TestApp, hello_value, last_edit, open_session, rid, scope,
-    settle, step,
+    ManualJob, PROJECT_ID, Parts, TestApp, hello_value, last_edit, open_kr_ulb, rid, scope, settle,
+    step,
 };
 
 async fn started() -> (tempfile::TempDir, TestApp) {
@@ -251,11 +251,10 @@ async fn scoped_prefs_need_an_open_session() {
 async fn scoped_prefs_land_where_the_session_says() {
     let dir = tempfile::tempdir().unwrap();
     let parts = Parts::new();
-    let (at, info, open) = open_session(3);
-    let (id, folder) = (info.id.clone(), info.project.clone());
-    parts.sessions.add(at, info, open);
     let t = TestApp::start_with(dir.path(), &parts, |_, _| {}).await;
-    let at = scope(3);
+    let open = open_kr_ulb(&t.app).await;
+    let (id, folder) = (open.id.clone(), open.at.project.clone());
+    let at = open.at.clone();
     t.app
         .request(&SetDraftUnit {
             at: at.clone(),
@@ -295,7 +294,7 @@ async fn scoped_prefs_land_where_the_session_says() {
     let stale = t
         .app
         .request(&SetDraftUnit {
-            at: scope(4),
+            at: scope(open.at.epoch.get() + 1),
             request: rid(4),
             unit: DraftUnit::Section,
         })

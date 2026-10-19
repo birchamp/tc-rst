@@ -3123,15 +3123,18 @@ dependencies = [
  "tc-app",
  "tc-burrito",
  "tc-core",
+ "tc-corpus",
  "tc-door43",
  "tc-journal",
  "tc-obs",
  "tc-resources",
+ "tc-ui",
  "tc-usfm",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "unicode-normalization",
+ "zip",
 ]
 
 [[package]]
@@ -3395,6 +3398,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "unicode-general-category",
+ "unicode-normalization",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",

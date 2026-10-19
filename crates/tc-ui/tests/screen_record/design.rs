@@ -1,6 +1,7 @@
-//! What docs/APP-DESIGN.md says the gate must know: the work units of §10 and, for each of the
-//! 62 baseline screens of §7.6, which unit captures which layer, on which backend, and which
-//! unit captures it again.
+//! What docs/APP-DESIGN.md says the gate must know: the work units of §10 and the scope each
+//! builds; for each of the 62 baseline screens of §7.6, which unit captures which layer, on
+//! which backend, and which unit captures it again; and for each group of gallery cases in
+//! §7.4, which units capture its DOM and its pixels.
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -120,15 +121,46 @@ impl ScreenPlan {
     }
 }
 
+/// One row of §7.4's group table: the units that capture a gallery group's Rust side.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GalleryGroup {
+    pub name: String,
+    pub dom: UnitId,
+    pub pixels: UnitId,
+}
+
+/// A unit of §10 and its scope cell, with the italic notes `*(…)*` left out: what the unit
+/// builds, not what a note says about it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnitScope {
+    pub unit: UnitId,
+    pub scope: String,
+}
+
+impl UnitScope {
+    /// True when the scope names `id` as a whole word (`M18`, never `M180`).
+    pub fn names(&self, id: &str) -> bool {
+        self.scope
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|word| word == id)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Design {
     pub units: BTreeSet<UnitId>,
+    pub scopes: Vec<UnitScope>,
     pub screens: Vec<ScreenPlan>,
+    pub gallery: Vec<GalleryGroup>,
 }
 
 impl Design {
     pub fn screen(&self, name: &str) -> Option<&ScreenPlan> {
         self.screens.iter().find(|s| s.name == name)
+    }
+
+    pub fn group(&self, name: &str) -> Option<&GalleryGroup> {
+        self.gallery.iter().find(|g| g.name == name)
     }
 }
 
@@ -149,31 +181,63 @@ fn section<'a>(doc: &'a str, heading: &str) -> Result<Vec<&'a str>, String> {
         .collect())
 }
 
+/// `text` without its italic notes, each from `*(` to the next `)*`.
+fn without_notes(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("*(") {
+        out.push_str(&rest[..start]);
+        match rest[start..].find(")*") {
+            Some(end) => rest = &rest[start + end + 2..],
+            None => {
+                rest = "";
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 fn cells(line: &str) -> Vec<&str> {
     let inner = line.trim().trim_start_matches('|').trim_end_matches('|');
     inner.split('|').map(str::trim).collect()
 }
 
-fn named_unit(units: &BTreeSet<UnitId>, text: &str, line: &str) -> Result<UnitId, String> {
-    let unit = UnitId::parse(text.trim()).map_err(|e| format!("§7.6 line {line:?}: {e}"))?;
+/// The unit `text` names on `line` of section `section` (`"§7.6"`), one that §10 lists.
+fn named_unit(
+    units: &BTreeSet<UnitId>,
+    text: &str,
+    line: &str,
+    section: &str,
+) -> Result<UnitId, String> {
+    let unit = UnitId::parse(text.trim()).map_err(|e| format!("{section} line {line:?}: {e}"))?;
     if units.contains(&unit) {
         Ok(unit)
     } else {
         Err(format!(
-            "§7.6 line {line:?} names {unit}, which is no unit of §10"
+            "{section} line {line:?} names {unit}, which is no unit of §10"
         ))
     }
 }
 
-/// Reads §10's units and §7.6's screens. Any §7.6 row that does not parse is an error naming
-/// the line.
+/// Reads §10's units, §7.6's screens and §7.4's gallery groups. Any row of §7.6 or §7.4 that
+/// does not parse is an error naming the line.
 pub fn parse(doc: &str) -> Result<Design, String> {
     let mut units = BTreeSet::new();
+    let mut scopes = Vec::new();
     for line in section(doc, "## 10. Work breakdown")? {
         if let Some(rest) = line.strip_prefix("| ")
             && let Some(first) = rest.split(' ').next()
             && let Ok(unit) = UnitId::parse(first)
         {
+            let scope = cells(line)
+                .get(1)
+                .map(|cell| without_notes(cell))
+                .ok_or_else(|| format!("§10 line {line:?} has no scope cell"))?;
+            scopes.push(UnitScope {
+                unit: unit.clone(),
+                scope,
+            });
             units.insert(unit);
         }
     }
@@ -203,8 +267,8 @@ pub fn parse(doc: &str) -> Result<Design, String> {
                 format!("§7.6 line {line:?}: {first:?} is not \"<unit> DOM; <unit> pixels\"")
             })?;
             (
-                named_unit(&units, pixels, line)?,
-                named_unit(&units, dom, line)?,
+                named_unit(&units, pixels, line, S76)?,
+                named_unit(&units, dom, line, S76)?,
                 Backend::Memory,
             )
         } else {
@@ -216,12 +280,12 @@ pub fn parse(doc: &str) -> Result<Design, String> {
                 "M+S" => Backend::MemoryScripted,
                 other => return Err(format!("§7.6 line {line:?}: unknown backend {other:?}")),
             };
-            let unit = named_unit(&units, unit, line)?;
+            let unit = named_unit(&units, unit, line, S76)?;
             (unit.clone(), unit, backend)
         };
         let recapture = match *recapture {
             "—" => None,
-            unit => Some(named_unit(&units, unit, line)?),
+            unit => Some(named_unit(&units, unit, line, S76)?),
         };
         let pending_until = if backend == Backend::MemoryScripted {
             let until = recapture.clone().ok_or_else(|| {
@@ -233,7 +297,7 @@ pub fn parse(doc: &str) -> Result<Design, String> {
         };
         if let Some((_, rest)) = notes.split_once("`pending_until: ") {
             let named = rest.split('`').next().unwrap_or_default();
-            let named = named_unit(&units, named, line)?;
+            let named = named_unit(&units, named, line, S76)?;
             if Some(&named) != pending_until.as_ref() {
                 return Err(format!(
                     "§7.6 line {line:?}: pending_until {named} is not the unit that recaptures it"
@@ -251,5 +315,35 @@ pub fn parse(doc: &str) -> Result<Design, String> {
             pending_until,
         });
     }
-    Ok(Design { units, screens })
+    let mut gallery = Vec::new();
+    for line in section(doc, "### 7.4")? {
+        if !line.starts_with("| `") {
+            continue;
+        }
+        let row = cells(line);
+        let [name, _views, dom, pixels] = row.as_slice() else {
+            return Err(format!("§7.4 line {line:?} does not have four cells"));
+        };
+        let name = name
+            .strip_prefix('`')
+            .and_then(|n| n.strip_suffix('`'))
+            .ok_or_else(|| format!("§7.4 line {line:?}: the group is not in backticks"))?;
+        if gallery.iter().any(|g: &GalleryGroup| g.name == name) {
+            return Err(format!("§7.4 lists the group {name} twice"));
+        }
+        gallery.push(GalleryGroup {
+            name: name.to_owned(),
+            dom: named_unit(&units, dom, line, S74)?,
+            pixels: named_unit(&units, pixels, line, S74)?,
+        });
+    }
+    Ok(Design {
+        units,
+        scopes,
+        screens,
+        gallery,
+    })
 }
+
+const S76: &str = "§7.6";
+const S74: &str = "§7.4";

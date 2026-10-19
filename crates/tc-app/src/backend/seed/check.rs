@@ -192,6 +192,12 @@ const DECISION_JOURNAL: &[&str] = &[
     "checkKey",
 ];
 
+// On the whole impl, because the rules between them read all of the fold: its conflicts, its
+// derived files, each file rendered, and what metadata.json is built from.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the seed check reads the whole fold once, when a fixture loads; no interactive path runs it"
+)]
 impl Checker<'_> {
     fn push(
         &mut self,

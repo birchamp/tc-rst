@@ -20,10 +20,12 @@ use tc_resources::ResourceStore;
 use tokio::sync::watch;
 
 use crate::account::{AccountState, Keychain, MemKeychain};
+use crate::backend::{NoProjects, ProjectStore};
 use crate::clock::{Clock, SystemClock};
 use crate::config::{
     AppConfig, ConfigError, HostEnv, ProjectsRoot, RootChoice, choose_projects_root,
 };
+use crate::counters::{AppCounters, AppCounts};
 use crate::events::EventBus;
 use crate::flows::FlowGate;
 use crate::folders::{FolderCheck, HostFolders};
@@ -34,7 +36,7 @@ use crate::prefs::{AppDataFiles, MemoryFiles, PrefsWriter};
 use crate::replies::ReplyCache;
 use crate::reports::{ReportLog, ReportOp, ReportOutcome, facts};
 use crate::seed::{self, RESOURCES_FOLDER};
-use crate::sessions::{NoSessions, SessionDirectory};
+use crate::session::{ProjectSession, SessionRegistry};
 use crate::startup::Startup;
 
 /// What a test replaces when it starts the app. [`AppDeps::production`] is what `tc4 serve`
@@ -49,7 +51,9 @@ pub struct AppDeps {
     pub host: HostEnv,
     /// The app-data files `PrefsWriter` writes.
     pub files: Arc<dyn AppDataFiles>,
-    pub sessions: Arc<dyn SessionDirectory>,
+    /// The projects: [`NoProjects`] until C0's store adapter; the memory backend in tests and
+    /// parity captures (feature `fixture-backend`).
+    pub store: Arc<dyn ProjectStore>,
     /// What ends the process at a test crash point.
     #[cfg(feature = "test-hooks")]
     pub ender: Arc<dyn Ender>,
@@ -58,7 +62,7 @@ pub struct AppDeps {
 impl AppDeps {
     /// This computer's clock, folders and variables; an in-memory keychain (the operating
     /// system's comes with unit E1a, Q-3); in-memory app data (§4.9: before unit S1); no
-    /// sessions (before unit B1b); and, with test hooks, an ender that ends the process.
+    /// projects (before unit C0); and, with test hooks, an ender that ends the process.
     pub fn production() -> Self {
         let host = HostEnv::current();
         Self {
@@ -67,7 +71,7 @@ impl AppDeps {
             folders: Arc::new(HostFolders::new(host.clone())),
             host,
             files: Arc::new(MemoryFiles::new()),
-            sessions: Arc::new(NoSessions),
+            store: Arc::new(NoProjects),
             #[cfg(feature = "test-hooks")]
             ender: Arc::new(ExitProcess),
         }
@@ -144,8 +148,10 @@ pub(crate) struct Inner {
     pub(crate) flows: FlowGate,
     pub(crate) prefs: PrefsWriter,
     pub(crate) reports: ReportLog,
+    /// The reply cache of writes that name no project; a project's writes use its session's.
     pub(crate) replies: Arc<ReplyCache>,
-    pub(crate) sessions: Arc<dyn SessionDirectory>,
+    pub(crate) sessions: SessionRegistry,
+    pub(crate) counters: Arc<AppCounters>,
     pub(crate) startup: Startup,
     /// This machine's resource store, under app data (STORAGE §3.7).
     pub(crate) resources: ResourceStore,
@@ -194,7 +200,7 @@ impl App {
             folders,
             host,
             files,
-            sessions,
+            store,
             #[cfg(feature = "test-hooks")]
             ender,
         } = deps;
@@ -291,6 +297,15 @@ impl App {
 
         let prefs = PrefsWriter::start(files, reports.clone(), clock.clone());
         let jobs = JobRegistry::new(bus.clone(), reports.clone(), clock.clone());
+        let counters = Arc::new(AppCounters::default());
+        let sessions = SessionRegistry::new(
+            store,
+            bus.clone(),
+            reports.clone(),
+            clock.clone(),
+            counters.clone(),
+            tokio::runtime::Handle::current(),
+        );
         let startup = Startup::new(seed::initial_state(&seed_start), bus.clone());
         let inner = Inner {
             config,
@@ -307,6 +322,7 @@ impl App {
             reports,
             replies: ReplyCache::new(ReplyCache::FINISHED),
             sessions,
+            counters,
             startup,
             resources,
             seed_job: Mutex::new(None),
@@ -401,6 +417,25 @@ impl App {
         self.inner.clock.as_ref()
     }
 
+    /// Every open project of this run.
+    pub fn sessions(&self) -> &SessionRegistry {
+        &self.inner.sessions
+    }
+
+    /// What the reads of projects have cost so far (§8.1).
+    pub fn counters(&self) -> AppCounts {
+        self.inner.counters.read()
+    }
+
+    /// The request guard of a project-scoped query (§4.3): the screen's session at `at`, or
+    /// `StaleScope` naming the folder's current epoch. It runs before any work.
+    pub fn read(&self, at: &tc_api::Scope) -> Result<Arc<ProjectSession>, ApiError> {
+        self.inner
+            .sessions
+            .reader(at)
+            .map_err(|current| ApiError::StaleScope { current })
+    }
+
     /// The first-launch state `hello` answers: `Ready` unless a seeding is under way or
     /// stopped (unit A9).
     pub fn startup(&self) -> StartupState {
@@ -408,13 +443,14 @@ impl App {
     }
 
     /// What `app/quit`, a quit line and a closed stdin do: stops the first-launch seed and
-    /// waits for it, writes what is pending, then resolves [`App::quitting`]. Safe to call
-    /// more than once (the server calls it after `app/quit` did). Later units save aligner
-    /// links and checkpoint their sessions first (§5.1).
+    /// waits for it, closes every session after its leave checkpoint, writes what is
+    /// pending, then resolves [`App::quitting`]. Safe to call more than once (the server
+    /// calls it after `app/quit` did). Later units save aligner links first (§5.1).
     pub async fn quit(&self) {
         // Close is a quit, and a quit stops the seed first: the process lets go of
         // `app.lock` only when no seed writer runs (unit A9).
         self.stop_seed().await;
+        self.inner.sessions.close_all().await;
         self.inner.prefs.flush().await;
         self.inner.quit.send_replace(true);
     }

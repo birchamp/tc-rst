@@ -16,6 +16,9 @@ path = "src/main.rs"
 [features]
 # `tc4 serve --test-hooks` and the `test` service (AD35). A release build has neither.
 test-hooks = ["tc-app/test-hooks", "tc-server/test-hooks", "tc-api/test-hooks"]
+# `tc4 serve --scenario <state dir>`: a parity scenario's projects on the memory backend
+# (APP-DESIGN §4.2, AD35). A release build never has it.
+fixture-backend = ["tc-app/fixture-backend"]
 
 [dependencies]
 tc-api = { path = "../tc-api" }
@@ -27,8 +30,9 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "io-std", "io-util"] }
 
 [dev-dependencies]
-# Test builds carry the hooks, so the process tests can crash the real binary.
-tc4 = { path = ".", features = ["test-hooks"] }
+# Test builds carry the hooks and the fixture backend, so the process tests can crash the real
+# binary and start it on a parity scenario.
+tc4 = { path = ".", features = ["test-hooks", "fixture-backend"] }
 # The seed tests read the machine's resource store after the process is gone.
 tc-resources = { path = "../tc-resources" }
 # The HTTP client of tc-server's tests, which these tests share.

@@ -21,6 +21,9 @@ use tc_api::align::AlignSave;
 use tc_api::app::{
     AppPrefsView, BuildInfo, ClientError, Hello, HelloView, OpenSession, Quit, SessionRole,
 };
+use tc_api::buffer::{
+    BufferEntry, BufferKey, BufferLine, DraftCall, FieldKey, FieldKind, FieldPlace, SentSave,
+};
 use tc_api::check::{
     Category, CheckListRef, CheckPlace, CheckUnit, Dot, NoteCategory, RailRow, RailRowPatch,
     RowFlags, Tool,
@@ -46,8 +49,8 @@ use tc_api::prefs::{
 use tc_api::refusal::Message;
 use tc_api::shown::{ConflictMarker, PersonLabel, Shown, Who};
 use tc_api::test::{
-    Crash, CrashPoint, Echo, EchoView, EchoWord, FieldLog, FieldLogView, FieldStore, Hold,
-    HoldPoint, Quiet, QuietView, Release, Reset, StoredText, TokenBase,
+    Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
+    Hold, HoldPoint, Quiet, QuietView, Release, Reset, StoredDraft, StoredText, TokenBase,
 };
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
@@ -533,6 +536,23 @@ impl Example for FieldLogView {
                 text: "Paul, a servant of God".into(),
                 base: TokenBase::Current,
             }],
+            draft: Some(StoredDraft {
+                request: request(19),
+                text: "Paul, a servant of God and".into(),
+                base: TokenBase::Current,
+            }),
+            drafts: 2,
+        }
+    }
+}
+
+impl Example for FieldDraft {
+    fn example() -> Self {
+        FieldDraft {
+            request: request(19),
+            field: "verse-1".into(),
+            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            text: "Paul, a servant of God and".into(),
         }
     }
 }
@@ -625,6 +645,62 @@ fn all_endpoint_goldens() -> Vec<(String, Value)> {
     let mut all = tc_api::endpoint_table!(endpoint_goldens);
     all.extend(tc_api::test_hook_table!(endpoint_goldens));
     all
+}
+
+/// The scope a write's example names, and its path: `Some` exactly when the example's JSON
+/// has a top-level `at` that reads as a [`Scope`]. Other writes have an `at` of another kind
+/// (`app/clientError`'s time, `test/crash`'s point) or none.
+fn write_scope<E: tc_api::Write + Example>() -> (&'static str, Option<Scope>, Option<Scope>) {
+    let example = E::example();
+    let json = serde_json::to_value(&example).unwrap();
+    let in_json = json
+        .get("at")
+        .and_then(|at| serde_json::from_value::<Scope>(at.clone()).ok());
+    (E::PATH, example.at().cloned(), in_json)
+}
+
+macro_rules! write_scopes {
+    ($( $kind:ident $([$net:ident])? $path:literal : $req:path => $ok:ty; )*) => {{
+        let mut out = Vec::new();
+        $( write_scopes!(@row out $kind $req); )*
+        out
+    }};
+    (@row $out:ident query $req:path) => {};
+    (@row $out:ident command $req:path) => {
+        $out.push(write_scope::<$req>());
+    };
+    (@row $out:ident job $req:path) => {
+        $out.push(write_scope::<$req>());
+    };
+}
+
+/// tc-app checks a write's scope before its reply cache (APP-DESIGN §4.3, §4.4), so every
+/// write must name the project it applies to exactly when its request carries one.
+#[test]
+fn a_write_names_its_scope_exactly_when_its_json_has_at() {
+    let mut rows = tc_api::endpoint_table!(write_scopes);
+    rows.extend(tc_api::test_hook_table!(write_scopes));
+    let writes = ALL
+        .iter()
+        .filter(|e| matches!(e.kind, Kind::Command | Kind::StartJob))
+        .count();
+    assert_eq!(rows.len(), writes, "every write row is checked");
+    for (path, at, in_json) in &rows {
+        assert_eq!(at, in_json, "{path}");
+    }
+    let scoped: BTreeSet<&str> = rows
+        .iter()
+        .filter(|(_, at, _)| at.is_some())
+        .map(|(path, _, _)| *path)
+        .collect();
+    assert_eq!(
+        scoped,
+        BTreeSet::from([
+            "prefs/recordPlace",
+            "prefs/setAlignSuggestions",
+            "prefs/setDraftUnit"
+        ])
+    );
 }
 
 #[test]
@@ -864,6 +940,68 @@ fn session_events() -> Vec<SessionEvent> {
     ]
 }
 
+/// The draft buffer's item keys, entries and log lines (§6.6): the forms the UI, `boot.js`,
+/// the shell and the server read.
+fn buffer() -> Value {
+    let verse = BufferKey {
+        project: ProjectRef::parse("en_ult | draft \"2\"").unwrap(),
+        id: ProjectId::parse("6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50").unwrap(),
+        field: FieldKey {
+            kind: FieldKind::Verse,
+            place: FieldPlace::parse("TIT 1:4").unwrap(),
+        },
+    };
+    let comment = BufferKey {
+        field: FieldKey {
+            kind: FieldKind::CheckComment,
+            place: FieldPlace::parse("tn TIT 1:4 abc1").unwrap(),
+        },
+        ..verse.clone()
+    };
+    let saving = BufferEntry {
+        api: 1,
+        instance: ServerInstance::from_bytes([0xab; 16]),
+        base: vec![token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")],
+        text: "Paul, a servant of God and".into(),
+        sent: Some(SentSave {
+            request: request(20),
+            text: "Paul, a servant of God".into(),
+            scope: Some(Scope {
+                project: verse.project.clone(),
+                epoch: Epoch::new(3),
+            }),
+        }),
+        at: WallMs(1_760_000_000_123),
+        draft: Some(DraftCall {
+            path: "test/fieldDraft".into(),
+            body: r#"{"field":"verse-1","shown":"st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"}"#.into(),
+        }),
+    };
+    let typed = BufferEntry {
+        sent: None,
+        draft: None,
+        text: "\u{5d1}\u{5bc}\u{5b0}".into(),
+        ..saving.clone()
+    };
+    let item = |key: &BufferKey| {
+        format!(
+            "{}{}",
+            tc_api::buffer::BUFFER_ITEM_PREFIX,
+            serde_json::to_string(key).unwrap()
+        )
+    };
+    json!({
+        "itemKeys": [item(&verse), item(&comment)],
+        "keys": plain_samples(&[verse.clone(), comment.clone()]),
+        "entries": plain_samples(&[saving.clone(), typed.clone()]),
+        "lines": wire_samples(&[
+            BufferLine::Changed { key: verse.clone(), entry: saving },
+            BufferLine::Changed { key: comment.clone(), entry: typed },
+            BufferLine::Removed { key: verse, instance: ServerInstance::from_bytes([0xab; 16]) },
+        ]),
+    })
+}
+
 #[test]
 fn shared_types_have_golden_json() {
     let refusals: Vec<Value> = common::samples::refusals()
@@ -908,6 +1046,7 @@ fn shared_types_have_golden_json() {
         ),
         ("types/refusals.json", Value::Array(refusals)),
         ("types/uploads.json", uploads()),
+        ("types/buffer.json", buffer()),
         ("types/check-places.json", plain_samples(&check_places())),
         ("types/check-units.json", wire_samples(&check_units())),
         (
@@ -959,6 +1098,7 @@ fn no_golden_file_is_left_without_its_endpoint_or_type() {
         "check-places",
         "check-units",
         "check-lists",
+        "buffer",
     ] {
         expected.insert(golden_dir().join(format!("types/{file}.json")));
     }
