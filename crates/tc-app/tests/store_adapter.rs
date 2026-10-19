@@ -1,0 +1,1007 @@
+//! The store adapter's own tests (unit C0, APP-DESIGN §4.2): what `StoreBackend` adds to
+//! tc-store (every fold step reaches the seam with who asked for it, events that end with the
+//! project, a close that lets go of the lock, a listing that hides no folder, exact names,
+//! forwarded open progress, drafts beside the actor), a property test over random command
+//! sequences, a crash at every write point of a save, and a count test that the adapter adds
+//! no store work.
+// Tests read whole folds to check results; the lint on whole-fold walks guards the product's
+// paths (crates/tc-app/clippy.toml).
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::disallowed_methods
+)]
+
+#[path = "app/common.rs"]
+mod common;
+#[path = "support/store_world.rs"]
+mod store_world;
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use proptest::prelude::*;
+use tc_api::event::{ChangeCause, CheckpointOutcome, Event, SessionEvent};
+use tc_api::jobs::{OpenPhase, Phase};
+use tc_app::StoreChoice;
+use tc_app::backend::{
+    CheckpointReason, CommandError, EditToken, OpenFailure, Origin, ProjectHandle, ProjectStore,
+    StoreCause, StoreCommand, StoreEvent, StoreReply, Stored,
+};
+use tc_app::config::ProjectsFolder;
+use tc_app::events::Next;
+use tc_app::jobs::ProgressSink;
+use tc_app::wire::token::{edit_token, shown};
+use tc_journal::command::{Command, DraftField};
+use tc_journal::fold::Counters;
+use tc_journal::{BookId, ChangeId, RecordKey};
+use tc_store::{FakePlatform, Point, Vfs};
+
+use common::{Parts, TestApp, rid};
+use store_world::{
+    APP, PROJECTS, StoreWorld, assert_valid_burrito, backend_over, folder, progress, save,
+    store_world, tit, token, words_of,
+};
+
+fn runtime() -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
+}
+
+/// The store events a subscriber gets until it holds the batch of `last`, or `timeout`.
+async fn committed_until(
+    events: &mut tokio::sync::mpsc::UnboundedReceiver<StoreEvent>,
+    last: u64,
+) -> Vec<(u64, tc_journal::fold::Delta, StoreCause)> {
+    let mut out = Vec::new();
+    while out.last().is_none_or(|(seq, _, _)| *seq < last) {
+        let event = tokio::time::timeout(Duration::from_secs(10), events.recv())
+            .await
+            .expect("the event comes")
+            .expect("the channel is open");
+        if let StoreEvent::Committed { seq, delta, cause } = event {
+            out.push((seq, delta, cause));
+        }
+    }
+    out
+}
+
+// ---- What the adapter adds ----------------------------------------------------------------
+
+/// Every fold step S1 makes after an open is a command's or a second writer's, and each
+/// reaches the seam as a `Committed`: the seqs a subscriber gets are consecutive and end at
+/// the newest snapshot's, so a step without an event would be a gap. This is why C0 builds no
+/// frontier check.
+#[tokio::test]
+async fn every_fold_step_reaches_the_seam() {
+    let world = store_world();
+    let handle = world.open(&world.bible);
+    let first = handle.snapshot().seq();
+    let mut events = handle.subscribe();
+    let mut by_seq = BTreeMap::new();
+    for v in [1, 2] {
+        let reply = save(handle.as_ref(), &tit(1, v), "one at a time")
+            .await
+            .unwrap();
+        by_seq.insert(reply.seq, tit(1, v));
+    }
+    // Two at once, neither awaited before the other is submitted.
+    let a = handle.submit(StoreCommand::save_verse(
+        token(handle.as_ref(), &tit(1, 3)),
+        "together, first".to_owned(),
+    ));
+    let b = handle.submit(StoreCommand::save_verse(
+        token(handle.as_ref(), &tit(1, 4)),
+        "together, second".to_owned(),
+    ));
+    let (a, b) = tokio::join!(a, b);
+    by_seq.insert(a.unwrap().seq, tit(1, 3));
+    by_seq.insert(b.unwrap().seq, tit(1, 4));
+    let reply = save(handle.as_ref(), &tit(1, 5), "the last").await.unwrap();
+    by_seq.insert(reply.seq, tit(1, 5));
+
+    let last = handle.snapshot().seq();
+    let got = committed_until(&mut events, last).await;
+    let seqs: Vec<u64> = got.iter().map(|(seq, _, _)| *seq).collect();
+    assert_eq!(seqs, ((first + 1)..=last).collect::<Vec<_>>());
+    for (seq, delta, _) in &got {
+        assert!(delta.keys.contains(&by_seq[seq]), "{seq}: {:?}", delta.keys);
+    }
+}
+
+/// AD37: a command `requested_by` a request is announced with that origin, one without as the
+/// server's; the pump makes them `LocalSave { request }` and `System`.
+#[tokio::test]
+async fn a_command_is_announced_with_its_origin() {
+    let world = store_world();
+    let handle = world.open(&world.bible);
+    let mut events = handle.subscribe();
+    let asked = handle
+        .submit(
+            StoreCommand::save_verse(token(handle.as_ref(), &tit(1, 2)), "asked".to_owned())
+                .requested_by(rid(9)),
+        )
+        .await
+        .unwrap();
+    let own = save(handle.as_ref(), &tit(1, 3), "the server's")
+        .await
+        .unwrap();
+    let got = committed_until(&mut events, own.seq).await;
+    assert_eq!(
+        got.iter()
+            .map(|(seq, _, cause)| (*seq, cause.clone()))
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                asked.seq,
+                StoreCause::Command {
+                    origin: Origin::Request(rid(9))
+                }
+            ),
+            (
+                own.seq,
+                StoreCause::Command {
+                    origin: Origin::Server
+                }
+            ),
+        ]
+    );
+    drop(handle);
+
+    // Through the app: the session's pump and the bus.
+    let dir = tempfile::tempdir().unwrap();
+    let projects = dir.path().join("projects");
+    std::fs::create_dir(&projects).unwrap();
+    let store = world.store();
+    let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
+        config.projects = ProjectsFolder::Given(projects.clone());
+        deps.store = StoreChoice::Given(store);
+    })
+    .await;
+    // The handle above closes on a thread of its own; the registry's open waits for its lock.
+    let open = loop {
+        match t.app.sessions().open_screen(&world.bible, progress()).await {
+            Ok(open) => break open,
+            Err(OpenFailure::LockHeld { .. }) => {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            Err(other) => panic!("{other:?}"),
+        }
+    };
+    let bus = t.app.events();
+    let mut frames = bus.subscribe(bus.head());
+    let session = t.app.sessions().reader(&open.at).unwrap();
+    let handle = session.handle().clone();
+    handle
+        .submit(
+            StoreCommand::save_verse(token(handle.as_ref(), &tit(1, 4)), "mine".to_owned())
+                .requested_by(rid(10)),
+        )
+        .await
+        .unwrap();
+    save(handle.as_ref(), &tit(1, 5), "the server's")
+        .await
+        .unwrap();
+    let mut causes = Vec::new();
+    while causes.len() < 2 {
+        let next = tokio::time::timeout(Duration::from_secs(5), frames.next())
+            .await
+            .expect("the frame comes");
+        let Next::Frame(frame) = next else {
+            panic!("{next:?}")
+        };
+        if let Event::Session {
+            event: SessionEvent::Changed { cause, .. },
+            ..
+        } = frame.event
+        {
+            causes.push(cause);
+        }
+    }
+    assert_eq!(
+        causes,
+        vec![
+            ChangeCause::LocalSave { request: rid(10) },
+            ChangeCause::System
+        ]
+    );
+}
+
+/// "The channel ends when the handle closes": every subscriber's channel ends with the close,
+/// and a subscription after it ends at once.
+#[tokio::test]
+async fn events_end_when_the_handle_closes() {
+    let world = store_world();
+    let handle = world.open(&world.bible);
+    let mut events = handle.subscribe();
+    handle.clone().close().await.unwrap();
+    let ended = tokio::time::timeout(Duration::from_secs(5), async {
+        while events.recv().await.is_some() {}
+    })
+    .await;
+    assert!(ended.is_ok(), "the channel ended");
+    let mut late = handle.subscribe();
+    assert!(late.try_recv().is_err());
+    assert!(late.recv().await.is_none(), "ended at once");
+    // A closed handle refuses commands and answers reads from its last state.
+    assert_eq!(
+        save(handle.as_ref(), &tit(1, 2), "after the close")
+            .await
+            .unwrap_err(),
+        CommandError::Closed
+    );
+    assert!(handle.snapshot().seq() >= 1);
+    assert!(handle.clone().close().await.is_ok(), "a second close");
+}
+
+/// A close writes what is due, keeps every save and lets go of the lock.
+#[tokio::test]
+async fn close_keeps_every_save_and_lets_go_of_the_lock() {
+    let world = store_world();
+    let handle = world.open(&world.bible);
+    for v in [2, 3, 4] {
+        save(handle.as_ref(), &tit(1, v), &format!("kept {v}"))
+            .await
+            .unwrap();
+    }
+    handle.close().await.unwrap();
+    let path = world.folder(&world.bible);
+    let direct = world
+        .backend
+        .store()
+        .open(&path, &tc_store::OpenOptions::default())
+        .expect("the lock is free");
+    for v in [2, 3, 4] {
+        let snapshot = direct.snapshot();
+        let words = match snapshot.fold().projected(&tit(1, v)) {
+            Some(tc_journal::Record::Verse {
+                value: tc_journal::record::VerseValue::Text { words, .. },
+                ..
+            }) => words,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(words, format!("kept {v}"));
+    }
+    direct.close().unwrap();
+    assert_valid_burrito(&world.fs, &path);
+}
+
+const STAGING_FOLDER: &str = ".staging-create-0123456789abcdef";
+
+/// AD12: no folder that holds a project is left off Home. A folder whose `project.json` does
+/// not read, or whose name tc-api cannot carry, is listed as unusable with its reason; a
+/// staging folder a create is still writing is no project; a folder with no `project.json`
+/// is neither.
+#[tokio::test]
+async fn list_names_each_project_and_reports_unusable_folders() {
+    let world = store_world();
+    let project_json = |name: &str| {
+        Path::new(PROJECTS)
+            .join(name)
+            .join("ingredients/tc/project.json")
+    };
+    let valid = world
+        .fs
+        .peek(&project_json("sample_burrito"))
+        .expect("a project.json");
+    world.fs.put(&project_json(STAGING_FOLDER), &valid, None);
+    world.fs.put(&project_json("broken"), b"{}", None);
+    world.fs.put(&project_json("..."), &valid, None);
+    world
+        .fs
+        .put(&Path::new(PROJECTS).join("notes/readme.txt"), b"x", None);
+
+    let listing = world.backend.list().unwrap();
+    let names: Vec<&str> = listing.projects.iter().map(|e| e.folder.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "another_project",
+            "sample_burrito",
+            "sample_burrito_teammates"
+        ]
+    );
+    for entry in &listing.projects {
+        assert_eq!(entry.kind, tc_journal::fold::ProjectKind::Bible);
+        let handle = world.open(&entry.folder);
+        assert_eq!(handle.facts().id, entry.id, "{}", entry.folder);
+    }
+    let unusable: Vec<&str> = listing.unusable.iter().map(|u| u.name.as_str()).collect();
+    assert_eq!(unusable, ["...", "broken"]);
+    assert!(listing.unusable.iter().all(|u| !u.reason.is_empty()));
+}
+
+/// The registry opens only a folder it lists, by the name it listed: another spelling, or a
+/// staging folder a create is still writing, is not a project, and nothing is written.
+#[tokio::test]
+async fn open_refuses_a_name_the_store_does_not_list() {
+    let world = store_world();
+    let valid = world
+        .fs
+        .peek(
+            &world
+                .folder(&world.bible)
+                .join("ingredients/tc/project.json"),
+        )
+        .unwrap();
+    world.fs.put(
+        &Path::new(PROJECTS)
+            .join(STAGING_FOLDER)
+            .join("ingredients/tc/project.json"),
+        &valid,
+        None,
+    );
+    world.fs.clear_log();
+    for name in ["Sample_Burrito", STAGING_FOLDER] {
+        assert!(
+            matches!(
+                world.backend.open(&folder(name), progress()),
+                Err(OpenFailure::NotAProject)
+            ),
+            "{name}"
+        );
+    }
+    assert!(world.fs.log().is_empty(), "{:?}", world.fs.log());
+}
+
+/// STORAGE §6.1 O1: a lock another program holds refuses the open and names the holder when
+/// the lock does; the refused open writes nothing.
+#[tokio::test]
+async fn open_of_a_folder_another_program_holds_is_lock_held() {
+    let world = store_world();
+    let lock = world.folder(&world.bible).join(".tc/lock");
+    let held = world.fs.lock(&lock).unwrap().expect("the lock is free");
+    world.fs.clear_log();
+    assert!(matches!(
+        world.backend.open(&world.bible, progress()),
+        Err(OpenFailure::LockHeld { holder: None })
+    ));
+    assert!(world.fs.log().is_empty());
+    drop(held);
+
+    // The project open in this installation (pid 4242 on host-1); another installation on
+    // the same files asks.
+    let handle = world.open(&world.bible);
+    let other = backend_over(
+        &world.fs,
+        "/app2",
+        FakePlatform {
+            pid: 77,
+            ..FakePlatform::default()
+        },
+        Arc::default(),
+    );
+    world.fs.clear_log();
+    let refused = match other.open(&world.bible, progress()) {
+        Err(refused) => refused,
+        Ok(_) => panic!("opened a held project"),
+    };
+    assert_eq!(
+        refused,
+        OpenFailure::LockHeld {
+            holder: Some(("host-1".to_owned(), 4242))
+        },
+        "the lock names its holder, not the asker"
+    );
+    assert_eq!(
+        tc_app::wire::error::open_failure(refused),
+        tc_api::ApiError::Refused(tc_api::Refusal::Open(
+            tc_api::refusal::OpenRefusal::LockHeld {
+                holder: Some(tc_api::refusal::LockHolder {
+                    host: "host-1".to_owned(),
+                    pid: 4242
+                })
+            }
+        ))
+    );
+    assert!(world.fs.log().is_empty(), "{:?}", world.fs.log());
+    drop(handle);
+}
+
+fn phase_index(phase: &Phase) -> usize {
+    match phase {
+        Phase::Open(OpenPhase::FinishingWork) => 0,
+        Phase::Open(OpenPhase::ReadingChanges) => 1,
+        Phase::Open(OpenPhase::Folding) => 2,
+        Phase::Open(OpenPhase::CheckingFiles) => 3,
+        Phase::Open(OpenPhase::WritingFiles) => 4,
+        other => panic!("not an open's phase: {other:?}"),
+    }
+}
+
+/// AD8, PERF rule 4: the open's progress is tc-store's reporter, forwarded with no timer of
+/// tc-app's: nothing before 300 ms after the open began, then the store's phases in order,
+/// counts that never fall within a phase, and the last report at its total.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn app_forwards_open_reports_unchanged() {
+    let world = store_world();
+    let dir = tempfile::tempdir().unwrap();
+    let projects = dir.path().join("projects");
+    std::fs::create_dir(&projects).unwrap();
+    let store = world.store();
+    let t = TestApp::start_with(dir.path(), &Parts::new(), |config, deps| {
+        config.projects = ProjectsFolder::Given(projects.clone());
+        deps.store = StoreChoice::Given(store);
+    })
+    .await;
+    world.fs.set_read_delay(Some(Duration::from_millis(60)));
+    let sink = ProgressSink::new(Phase::Open(OpenPhase::ReadingChanges));
+    let initial = sink.snapshot();
+    let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let began = Instant::now();
+    let sampler = {
+        let (sink, done) = (sink.clone(), done.clone());
+        std::thread::spawn(move || {
+            let mut samples = Vec::new();
+            loop {
+                let finished = done.load(std::sync::atomic::Ordering::SeqCst);
+                samples.push((began.elapsed(), sink.snapshot()));
+                if finished {
+                    return samples;
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        })
+    };
+    let open = t
+        .app
+        .sessions()
+        .open_screen(&world.bible, sink.clone())
+        .await
+        .unwrap();
+    let took = began.elapsed();
+    done.store(true, std::sync::atomic::Ordering::SeqCst);
+    let samples = sampler.join().unwrap();
+    world.fs.set_read_delay(None);
+    assert!(took > Duration::from_millis(600), "the open took {took:?}");
+
+    let first_change = samples
+        .iter()
+        .position(|(_, p)| *p != initial)
+        .expect("the store reported");
+    assert!(
+        samples[first_change].0 >= Duration::from_millis(290),
+        "the first report came at {:?}",
+        samples[first_change].0
+    );
+    let reported = &samples[first_change..];
+    for pair in reported.windows(2) {
+        let (a, b) = (&pair[0].1, &pair[1].1);
+        let (pa, pb) = (phase_index(&a.phase), phase_index(&b.phase));
+        assert!(pa <= pb, "phases move forward: {a:?} then {b:?}");
+        if pa == pb {
+            assert!(a.done <= b.done, "counts never fall: {a:?} then {b:?}");
+        }
+    }
+    let last = &reported.last().unwrap().1;
+    assert_eq!(
+        Some(last.done),
+        last.total,
+        "the last report is at its total"
+    );
+    t.app.sessions().leave_screen(&open.at).unwrap();
+}
+
+/// R22, A-20: a draft is answered beside the actor, so it never waits behind a long command.
+#[tokio::test]
+async fn a_draft_never_waits_behind_a_long_command() {
+    let world = store_world();
+    let handle = world.open(&world.bible);
+    world.hooks.hold(Point::BeforeDurablePending);
+    let saving = handle.submit(StoreCommand::save_verse(
+        token(handle.as_ref(), &tit(1, 6)),
+        "held at the durability point".to_owned(),
+    ));
+    let hooks = world.hooks.clone();
+    tokio::task::spawn_blocking(move || hooks.wait_reached(Point::BeforeDurablePending, 1))
+        .await
+        .unwrap();
+    let draft = tokio::time::timeout(
+        Duration::from_secs(1),
+        handle.submit(StoreCommand::draft(
+            DraftField::Words,
+            vec![token(handle.as_ref(), &tit(1, 7))],
+            "typed meanwhile".to_owned(),
+        )),
+    )
+    .await
+    .expect("the draft did not wait")
+    .unwrap();
+    assert_eq!(draft.stored, Stored::Unchanged);
+    world.hooks.release(Point::BeforeDurablePending);
+    assert_eq!(saving.await.unwrap().stored, Stored::Durable);
+}
+
+/// The adapter adds no store work: the same save through tc-store and through the seam costs
+/// the same file operations, and the seam's reads, mints and parses cost none.
+#[tokio::test]
+async fn the_adapter_adds_no_store_work() {
+    let world = store_world();
+    let (a, b) = (world.fs.copy(), world.fs.copy());
+    let path = world.folder(&world.bible);
+    let key = tit(1, 11);
+
+    let direct_store = backend_over(&a, APP, FakePlatform::default(), Arc::default());
+    let direct = direct_store
+        .store()
+        .open(&path, &tc_store::OpenOptions::default())
+        .unwrap();
+    direct.wait_idle();
+    let before = direct.counters();
+    direct
+        .submit(Command::SaveVerse {
+            shown: direct.snapshot().token(&key, None).unwrap(),
+            words: "the same save".to_owned(),
+        })
+        .wait()
+        .unwrap();
+    direct.wait_idle();
+    let through_store = direct.counters().since(&before);
+
+    let seam_store = backend_over(&b, APP, FakePlatform::default(), Arc::default());
+    let seam = seam_store.open(&world.bible, progress()).unwrap();
+    seam.wait_idle();
+    let before = seam.counters();
+    save(seam.as_ref(), &key, "the same save").await.unwrap();
+    seam.wait_idle();
+    let through_seam = seam.counters().since(&before);
+
+    let picked = |c: &tc_store::StoreCounters| {
+        [
+            ("commands", c.commands),
+            ("files_opened", c.files_opened),
+            ("files_created", c.files_created),
+            ("fsyncs", c.fsyncs),
+            ("renames", c.renames),
+            ("removes", c.removes),
+            ("listings", c.listings),
+            ("stats", c.stats),
+            ("derived_written", c.derived_written),
+            ("drafts_written", c.drafts_written),
+        ]
+    };
+    assert_eq!(picked(&through_seam), picked(&through_store));
+    assert_eq!(through_seam.commands, 1);
+
+    let counters = seam.counters();
+    let folds = seam.snapshot().fold().counters();
+    for _ in 0..1_000 {
+        let snapshot = seam.snapshot();
+        let minted = snapshot.mint(&key, None).unwrap();
+        edit_token(seam.as_ref(), &shown(&minted).unwrap()).unwrap();
+    }
+    assert_eq!(
+        seam.counters().since(&counters),
+        tc_store::StoreCounters::default()
+    );
+    let after = seam.snapshot().fold().counters().since(&folds);
+    assert_eq!(after, Counters::default(), "{after:?}");
+    direct.close().unwrap();
+}
+
+// ---- The property test ------------------------------------------------------------------
+
+const WORDS: [&str; 4] = ["alpha", "beta", "gamma", "delta"];
+
+#[derive(Debug, Clone)]
+enum Tok {
+    Fresh,
+    /// A token minted this many saves ago, if there was one.
+    Old(u8),
+}
+
+#[derive(Debug, Clone)]
+enum Who {
+    Request(u8),
+    Server,
+}
+
+#[derive(Debug, Clone)]
+enum Leaf {
+    Save {
+        verse: u16,
+        words: u8,
+        token: Tok,
+        by: Who,
+    },
+    Draft {
+        verse: u16,
+        words: u8,
+    },
+}
+
+#[derive(Debug, Clone)]
+enum Op {
+    One(Leaf),
+    Checkpoint,
+    /// Two submits before either is awaited.
+    Together(Leaf, Leaf),
+}
+
+fn leaf() -> impl Strategy<Value = Leaf> {
+    let tok = prop_oneof![Just(Tok::Fresh), (0u8..4).prop_map(Tok::Old)];
+    let who = prop_oneof![(0u8..3).prop_map(Who::Request), Just(Who::Server)];
+    prop_oneof![
+        4 => (1u16..=6, 0u8..4, tok, who).prop_map(|(verse, words, token, by)| Leaf::Save {
+            verse,
+            words,
+            token,
+            by
+        }),
+        1 => (1u16..=6, 0u8..4).prop_map(|(verse, words)| Leaf::Draft { verse, words }),
+    ]
+}
+
+fn op() -> impl Strategy<Value = Op> {
+    prop_oneof![
+        6 => leaf().prop_map(Op::One),
+        1 => Just(Op::Checkpoint),
+        2 => (leaf(), leaf()).prop_map(|(a, b)| Op::Together(a, b)),
+    ]
+}
+
+/// One submitted leaf and what is known of it before its reply.
+struct Sent {
+    key: RecordKey,
+    origin: Origin,
+    /// The heads the token named; `None` for a draft.
+    named: Option<Vec<ChangeId>>,
+}
+
+struct Run {
+    handle: Arc<dyn ProjectHandle>,
+    minted: Vec<EditToken>,
+    replies: Vec<(Sent, Result<StoreReply, CommandError>)>,
+}
+
+impl Run {
+    fn command(&mut self, leaf: &Leaf) -> (Sent, StoreCommand) {
+        match leaf {
+            Leaf::Save {
+                verse,
+                words,
+                token: tok,
+                by,
+            } => {
+                let key = tit(1, *verse);
+                let fresh = token(self.handle.as_ref(), &key);
+                let shown = match tok {
+                    Tok::Old(n) => self
+                        .minted
+                        .iter()
+                        .rev()
+                        .filter(|t| t.key() == &key)
+                        .nth(usize::from(*n))
+                        .cloned()
+                        .unwrap_or(fresh),
+                    Tok::Fresh => fresh,
+                };
+                self.minted.push(shown.clone());
+                let origin = match by {
+                    Who::Request(n) => Origin::Request(rid(*n)),
+                    Who::Server => Origin::Server,
+                };
+                let mut command =
+                    StoreCommand::save_verse(shown.clone(), WORDS[usize::from(*words)].to_owned());
+                if let Origin::Request(id) = origin {
+                    command = command.requested_by(id);
+                }
+                (
+                    Sent {
+                        key,
+                        origin,
+                        named: Some(shown.heads().to_vec()),
+                    },
+                    command,
+                )
+            }
+            Leaf::Draft { verse, words } => {
+                let key = tit(1, *verse);
+                let command = StoreCommand::draft(
+                    DraftField::Words,
+                    vec![token(self.handle.as_ref(), &key)],
+                    format!("{} (typed)", WORDS[usize::from(*words)]),
+                );
+                (
+                    Sent {
+                        key,
+                        origin: Origin::Server,
+                        named: None,
+                    },
+                    command,
+                )
+            }
+        }
+    }
+
+    /// Submits the leaves one after the other, then awaits their replies, and checks each
+    /// save's heads against the heads before it (STORAGE I4): a save replaces exactly the
+    /// heads its token named and adds its change.
+    async fn submit(&mut self, leaves: &[&Leaf]) -> Result<(), TestCaseError> {
+        let mut heads: BTreeMap<RecordKey, BTreeSet<ChangeId>> = BTreeMap::new();
+        let mut pending = Vec::new();
+        for leaf in leaves {
+            let (sent, command) = self.command(leaf);
+            heads.entry(sent.key.clone()).or_insert_with(|| {
+                self.handle
+                    .snapshot()
+                    .fold()
+                    .heads(&sent.key)
+                    .into_iter()
+                    .collect()
+            });
+            pending.push((sent, self.handle.submit(command)));
+        }
+        for (sent, future) in pending {
+            let reply = future.await;
+            if let (Ok(reply), Some(named)) = (&reply, &sent.named) {
+                let expected = heads.get_mut(&sent.key).unwrap();
+                if let Some(new) = reply.changes.iter().find(|id| {
+                    self.handle
+                        .snapshot()
+                        .fold()
+                        .body(id)
+                        .is_some_and(|b| b.record.key() == sent.key)
+                }) {
+                    for head in named {
+                        expected.remove(head);
+                    }
+                    expected.insert(*new);
+                }
+            }
+            self.replies.push((sent, reply));
+        }
+        for (key, expected) in heads {
+            let now: BTreeSet<ChangeId> = self
+                .handle
+                .snapshot()
+                .fold()
+                .heads(&key)
+                .into_iter()
+                .collect();
+            prop_assert_eq!(now, expected, "{:?}", key);
+        }
+        Ok(())
+    }
+}
+
+fn check_run(ops: Vec<Op>) -> Result<(), TestCaseError> {
+    let world = store_world();
+    let rt = runtime();
+    rt.block_on(async {
+        let handle = world.open(&world.bible);
+        let first = handle.snapshot().seq();
+        let mut events = handle.subscribe();
+        let mut run = Run {
+            handle: handle.clone(),
+            minted: Vec::new(),
+            replies: Vec::new(),
+        };
+        for op in &ops {
+            match op {
+                Op::One(leaf) => run.submit(&[leaf]).await?,
+                Op::Together(a, b) => run.submit(&[a, b]).await?,
+                Op::Checkpoint => {
+                    let outcome = handle
+                        .checkpoint(CheckpointReason::Other("prop".into()))
+                        .await;
+                    prop_assert_eq!(outcome, CheckpointOutcome::Unchanged);
+                }
+            }
+        }
+        let last = handle.snapshot().seq();
+        let keys: BTreeSet<RecordKey> = (1..=6).map(|v| tit(1, v)).collect();
+        let heads_before: BTreeMap<RecordKey, Vec<ChangeId>> = keys
+            .iter()
+            .map(|k| (k.clone(), sorted(handle.snapshot().fold().heads(k))))
+            .collect();
+        handle.clone().close().await.unwrap();
+        let mut committed = Vec::new();
+        while let Some(event) = tokio::time::timeout(Duration::from_secs(10), events.recv())
+            .await
+            .expect("the channel ends with the close")
+        {
+            if let StoreEvent::Committed { seq, delta, cause } = event {
+                committed.push((seq, delta, cause));
+            }
+        }
+
+        // 3: consecutive seqs ending at the newest snapshot.
+        let seqs: Vec<u64> = committed.iter().map(|(seq, _, _)| *seq).collect();
+        prop_assert_eq!(&seqs, &((first + 1)..=last).collect::<Vec<_>>());
+        // 1 and 2: one reply each; one event per stored batch, with its origin.
+        let mut by_seq: BTreeMap<u64, (tc_journal::fold::Delta, StoreCause)> = committed
+            .into_iter()
+            .map(|(seq, delta, cause)| (seq, (delta, cause)))
+            .collect();
+        let mut stored = Vec::new();
+        for (sent, reply) in &run.replies {
+            match reply {
+                Ok(reply) if !reply.changes.is_empty() => {
+                    let (delta, cause) = by_seq
+                        .remove(&reply.seq)
+                        .ok_or_else(|| TestCaseError::fail(format!("no event for {reply:?}")))?;
+                    prop_assert_eq!(
+                        cause,
+                        StoreCause::Command {
+                            origin: sent.origin.clone()
+                        }
+                    );
+                    prop_assert!(delta.keys.contains(&sent.key));
+                    stored.extend(reply.changes.iter().copied());
+                }
+                Ok(reply) => prop_assert_eq!(&reply.stored, &Stored::Unchanged),
+                Err(error) => {
+                    return Err(TestCaseError::fail(format!("refused: {error:?}")));
+                }
+            }
+        }
+        prop_assert!(
+            by_seq.is_empty(),
+            "events no reply names: {:?}",
+            by_seq.keys()
+        );
+
+        // 5: after a close and a reopen on the files a killed process leaves, every change
+        // a reply listed is there, and so is every head.
+        let after = world.fs.crash(false);
+        let backend = backend_over(&after, APP, FakePlatform::default(), Arc::default());
+        let reopened = backend.open(&world.bible, progress()).unwrap();
+        for id in &stored {
+            prop_assert!(reopened.snapshot().fold().body(id).is_some(), "{id:?} lost");
+        }
+        for (key, heads) in &heads_before {
+            prop_assert_eq!(&sorted(reopened.snapshot().fold().heads(key)), heads);
+        }
+        reopened.close().await.unwrap();
+        assert_valid_burrito(&after, &world.folder(&world.bible));
+        Ok(())
+    })
+}
+
+fn sorted(mut ids: Vec<ChangeId>) -> Vec<ChangeId> {
+    ids.sort();
+    ids
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: 24,
+        max_shrink_iters: 64,
+        .. ProptestConfig::default()
+    })]
+
+    /// Every command submitted through the seam gets exactly one reply; every batch the store
+    /// keeps reaches the seam as one `Committed` with the origin of the command that wrote it,
+    /// in consecutive seqs; no save removes a head its token did not name; and a close and a
+    /// reopen keep every change a reply listed.
+    #[test]
+    fn the_seam_answers_every_command_once_and_loses_nothing(
+        ops in prop::collection::vec(op(), 1..12)
+    ) {
+        check_run(ops)?;
+    }
+}
+
+// ---- The crash test ---------------------------------------------------------------------
+
+/// The words of every verse of Titus, by key.
+fn titus(snapshot: &tc_app::backend::Snapshot) -> BTreeMap<RecordKey, Option<String>> {
+    let fold = snapshot.fold();
+    fold.chapters_of(BookId::Titus)
+        .into_iter()
+        .flat_map(|c| fold.chapter_keys(BookId::Titus, c).verses)
+        .map(|key| {
+            let words = words_of(snapshot, &key);
+            (key, words)
+        })
+        .collect()
+}
+
+/// PLAN P4 through the adapter: the writer killed at every write point of a save, and at the
+/// first write points of the close that follows it, with a power cut after it. The project
+/// always opens and validates; a save the seam reported durable is there; a save it reported
+/// not written, or written but not durable, is there or not, and nothing else changed.
+#[test]
+fn a_crash_at_any_write_point_of_a_save_through_the_seam_keeps_every_durable_save() {
+    let world: StoreWorld = store_world();
+    let base = world.fs.crash(false);
+    let key = tit(1, 3);
+    let new_words = "kept through a crash";
+    let rt = runtime();
+
+    let (old, points) = {
+        let fs = base.copy();
+        let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+        let handle = backend.open(&world.bible, progress()).unwrap();
+        handle.wait_idle();
+        let old = titus(&handle.snapshot());
+        let start = fs.ops();
+        rt.block_on(save(handle.as_ref(), &key, new_words)).unwrap();
+        let points = fs.ops() - start;
+        rt.block_on(handle.close()).unwrap();
+        (old, points)
+    };
+    assert!(points >= 3, "a save has write points: {points}");
+
+    let mut outcomes = BTreeMap::new();
+    for k in 0..points + 3 {
+        for torn in [false, true] {
+            let fs = base.copy();
+            let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+            let handle = backend.open(&world.bible, progress()).unwrap();
+            handle.wait_idle();
+            fs.kill_before(k, torn);
+            let result = rt.block_on(save(handle.as_ref(), &key, new_words));
+            *outcomes
+                .entry(match &result {
+                    Ok(reply) => format!("{:?}", reply.stored).chars().take(18).collect(),
+                    Err(error) => format!("{error:?}").chars().take(10).collect::<String>(),
+                })
+                .or_insert(0) += 1;
+            drop(handle);
+            let after = fs.crash(true);
+            let backend = backend_over(&after, APP, FakePlatform::default(), Arc::default());
+            let reopened = backend
+                .open(&world.bible, progress())
+                .unwrap_or_else(|e| panic!("k {k} torn {torn}: {e:?}"));
+            let now = titus(&reopened.snapshot());
+            let heads = reopened.snapshot().fold().heads(&key);
+            let held: Vec<Option<String>> = heads
+                .iter()
+                .map(
+                    |h| match reopened.snapshot().fold().body(h).map(|b| b.record) {
+                        Some(tc_journal::Record::Verse {
+                            value: tc_journal::record::VerseValue::Text { words, .. },
+                            ..
+                        }) => Some(words),
+                        _ => None,
+                    },
+                )
+                .collect();
+            match &result {
+                Ok(reply) if reply.stored == Stored::Durable => {
+                    assert!(
+                        held.iter().any(|w| w.as_deref() == Some(new_words)),
+                        "k {k} torn {torn}: a durable save was lost: {held:?}"
+                    );
+                }
+                Ok(_) | Err(CommandError::NotWritten(_)) => {
+                    let shown = now[&key].as_deref();
+                    assert!(
+                        shown == Some(new_words) || shown == old[&key].as_deref(),
+                        "k {k} torn {torn}: {shown:?}"
+                    );
+                }
+                Err(other) => panic!("k {k} torn {torn}: {other:?}"),
+            }
+            for (verse, words) in &old {
+                if *verse != key {
+                    assert_eq!(&now[verse], words, "k {k} torn {torn}: {verse:?}");
+                }
+            }
+            rt.block_on(reopened.close()).unwrap();
+            assert_valid_burrito(&after, &world.folder(&world.bible));
+        }
+    }
+    // Every kind of outcome was met: killed before the file was in place, after it was in
+    // place but before its folder was flushed, and after the save was durable.
+    let kinds: Vec<&String> = outcomes.keys().collect();
+    assert!(
+        kinds.iter().any(|k| k.starts_with("NotWritten")),
+        "{outcomes:?}"
+    );
+    assert!(
+        kinds.iter().any(|k| k.starts_with("WrittenNotDurable")),
+        "{outcomes:?}"
+    );
+    assert!(
+        kinds.iter().any(|k| k.starts_with("Durable")),
+        "{outcomes:?}"
+    );
+}
