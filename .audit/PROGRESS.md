@@ -31,7 +31,7 @@ orchestrating session merges it into main with `merge-main.js`.
 | Phase | Units done | Running | Waiting |
 |---|---|---|---|
 | 0 | A1, A2, A3, A4a, A4b, A6a, A6b, A7, A9, A10, A11, G0 (run on Windows) | A5 | A8 (A5) |
-| 1 | B1a, B1b (merging) | | B2 (A5); B3 to B11 after B2 |
+| 1 | B1a, B1b | | B2 (A5); B3 to B11 after B2 |
 | 2 | | C0 | C1a, C1b, then C2 to C8 with their B units |
 | 3 | | | D1 (S2, C2, C5), D2 (S2, B8) |
 | 4 | | | E1a, E1b, E2 (X and their units) |
