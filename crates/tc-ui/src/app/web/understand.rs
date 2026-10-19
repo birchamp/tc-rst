@@ -1,0 +1,521 @@
+//! The open and the Understand screen's state and actions (unit B3): tC4's `s.opening`,
+//! `book`, `chapter`, `rail`, `helps`, `helpsTab`, `helpsWidth`, `sourceTab`, `helpsHover`,
+//! `helpsActive` and `understand.article`, and the actions `openProjectAt`, `openBook`,
+//! `setChapter`, `setSourceTab`, `toggleRail`, `toggleHelps`, `setHelpsTab`, `setHelpsWidth`,
+//! `hoverHelp`, `focusHelp`, `loadHelpArticle` and `closeHelpArticle`. The decisions are in
+//! [`crate::app::understand`].
+
+use std::cell::Cell;
+
+use leptos::prelude::*;
+use tc_api::ApiError;
+use tc_api::helps::{Article, ArticleLink, ArticleView};
+use tc_api::home::{LastEditView, ProjectKind, ResumePlace};
+use tc_api::ids::{JobId, ProjectRef};
+use tc_api::jobs::{Get as JobsGet, JobOutcome, JobState};
+use tc_api::prefs::{DraftUnit, PlaceChange, PlaceMode, PlaceUpdate, RecordPlace, SetDraftUnit};
+use tc_api::refusal::Message;
+use tc_api::session::{Close, Open, OpenUnit, OpenedProject};
+use tc_core::BookId;
+use wasm_bindgen_futures::spawn_local;
+
+use super::app_ctx::{Actions, HomeBanner, OpenTarget};
+use super::js;
+use crate::app::client::CallError;
+use crate::app::feedback::HelpRequest;
+use crate::app::shell::{CurrentProject, Editing, ProjectFlavor, View};
+use crate::app::understand::{HelpFocus, HelpsTab, Opening, UnitMode};
+use crate::i18n::t_dyn;
+
+/// An article the pane shows: loading, read, or failed (tC4's `understand.article`).
+#[derive(Debug, Clone, PartialEq)]
+pub enum ArticleState {
+    Loading(ArticleLink),
+    Read(ArticleLink, ArticleView),
+    Failed(ArticleLink, String),
+}
+
+impl ArticleState {
+    pub fn link(&self) -> &ArticleLink {
+        match self {
+            Self::Loading(link) | Self::Read(link, _) | Self::Failed(link, _) => link,
+        }
+    }
+}
+
+/// The open's and the Understand screen's view state.
+#[derive(Clone)]
+pub struct UnderstandState {
+    pub opening: ArcRwSignal<Option<Opening>>,
+    pub book: ArcRwSignal<Option<BookId>>,
+    pub chapter: ArcRwSignal<u16>,
+    pub rail: ArcRwSignal<bool>,
+    pub helps: ArcRwSignal<bool>,
+    /// The dragged width of the helps panel; none for the design's width (#602).
+    pub helps_width: ArcRwSignal<Option<f64>>,
+    pub helps_tab: ArcRwSignal<HelpsTab>,
+    pub source_tab: ArcRwSignal<String>,
+    pub helps_hover: ArcRwSignal<Option<HelpFocus>>,
+    pub helps_active: ArcRwSignal<Option<HelpFocus>>,
+    pub article: ArcRwSignal<Option<ArticleState>>,
+    /// Section or Verse, as this computer last showed the open project.
+    pub unit_mode: ArcRwSignal<UnitMode>,
+}
+
+impl UnderstandState {
+    pub fn new(book: Option<BookId>, chapter: u16) -> Self {
+        Self {
+            opening: ArcRwSignal::new(None),
+            book: ArcRwSignal::new(book),
+            chapter: ArcRwSignal::new(chapter),
+            rail: ArcRwSignal::new(true),
+            helps: ArcRwSignal::new(true),
+            helps_width: ArcRwSignal::new(None),
+            helps_tab: ArcRwSignal::new(HelpsTab::Notes),
+            source_tab: ArcRwSignal::new("ult".to_owned()),
+            helps_hover: ArcRwSignal::new(None),
+            helps_active: ArcRwSignal::new(None),
+            article: ArcRwSignal::new(None),
+            unit_mode: ArcRwSignal::new(UnitMode::Section),
+        }
+    }
+
+    /// A new project or book: nothing of the last one's focus or article stays.
+    fn clear_focus(&self) {
+        self.helps_hover.try_set(None);
+        self.helps_active.try_set(None);
+        self.article.try_set(None);
+    }
+}
+
+thread_local! {
+    /// Counts the opens asked for: only the newest may land (tC4's `openProjectSeqRef`).
+    static OPENS: Cell<u64> = const { Cell::new(0) };
+    /// Counts the articles asked for (tC4's `articleSeqRef`).
+    static ARTICLES: Cell<u64> = const { Cell::new(0) };
+}
+
+fn next(counter: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
+    counter.with(|c| {
+        c.set(c.get() + 1);
+        c.get()
+    })
+}
+
+fn current(counter: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
+    counter.with(Cell::get)
+}
+
+/// Where an open lands, when the person's action names it (the Resume card).
+#[derive(Debug, Clone, Copy)]
+struct Landing {
+    mode: PlaceMode,
+    chapter: u16,
+}
+
+fn view_of(mode: PlaceMode) -> View {
+    match mode {
+        PlaceMode::Read => View::Read,
+        PlaceMode::Draft => View::Draft,
+        PlaceMode::Check => View::Check,
+    }
+}
+
+/// The words of a refused open on Home, with the "Ask for help" it offers (tC4 #378).
+fn refused_banner(error: &ApiError) -> HomeBanner {
+    let (code, text, report) = match error {
+        ApiError::Refused(refusal) => {
+            let owned = refusal.vars();
+            let vars: Vec<(&str, &dyn std::fmt::Display)> = owned
+                .iter()
+                .map(|(k, v)| (*k, v as &dyn std::fmt::Display))
+                .collect();
+            (
+                refusal.code().unwrap_or("open").to_owned(),
+                t_dyn(refusal.key(), &vars, None),
+                None,
+            )
+        }
+        ApiError::Internal { report } => ("internal".to_owned(), error.to_string(), Some(*report)),
+        other => ("open".to_owned(), other.to_string(), None),
+    };
+    HomeBanner {
+        help: Some(HelpRequest {
+            code,
+            text: text.clone(),
+            report,
+        }),
+        text,
+    }
+}
+
+impl Actions {
+    // ---- the open (S14) --------------------------------------------------------------------
+
+    /// A book tile or a story tile (tC4 `openProjectAt`): the project opens there, at the
+    /// place remembered for it, else in Understand at chapter 1 (#507).
+    pub fn open_project_at(&self, project: ProjectRef, target: OpenTarget) {
+        let unit = match target {
+            OpenTarget::Book(book) => OpenUnit::Book(book),
+            OpenTarget::Story(story) => OpenUnit::Story(story),
+        };
+        self.open(project, Some(unit), None);
+    }
+
+    /// The Resume card (tC4's `ResumeCard`): the project opens at the record's book and
+    /// chapter, in its mode.
+    pub fn resume(&self, resume: &LastEditView) {
+        let (unit, chapter) = match &resume.place {
+            ResumePlace::Book { book, chapter, .. } => (OpenUnit::Book(*book), *chapter),
+            ResumePlace::Story { story, .. } => (OpenUnit::Story(*story), u16::from(story.get())),
+        };
+        self.open(
+            resume.project.clone(),
+            Some(unit),
+            Some(Landing {
+                mode: resume.mode,
+                chapter,
+            }),
+        );
+    }
+
+    fn open(&self, project: ProjectRef, unit: Option<OpenUnit>, landing: Option<Landing>) {
+        let attempt = next(&OPENS);
+        let s = self.s().clone();
+        s.u.opening.try_set(Some(Opening::new(js::now_ms())));
+        s.book_error.try_set(None);
+        let this = self.clone();
+        spawn_local(async move {
+            if !this.runtime().saves().gate().await {
+                if current(&OPENS) == attempt {
+                    this.s().u.opening.try_set(None);
+                }
+                return;
+            }
+            let request = Open {
+                request: js::random_request_id(),
+                project,
+                unit,
+            };
+            let ended = match this.runtime().api().call(&request).await {
+                Ok(job) => this.follow_open(job, attempt).await,
+                Err(error) => Some(Err(match error {
+                    CallError::Api(error) => error,
+                    other => ApiError::BadRequest {
+                        field: "open".to_owned(),
+                        reason: other.to_string(),
+                    },
+                })),
+            };
+            if current(&OPENS) != attempt {
+                return;
+            }
+            match ended {
+                Some(Ok(opened)) => this.opened(opened, unit, landing),
+                Some(Err(error)) => {
+                    let s = this.s();
+                    s.u.opening.try_set(None);
+                    s.book_error.try_set(Some(refused_banner(&error)));
+                }
+                None => {
+                    this.s().u.opening.try_set(None);
+                }
+            }
+        });
+    }
+
+    /// Follows the open job until it ends: its frames as they come, and `jobs/get` once a
+    /// second in case a frame was lost. Each report goes to the overlay. `None` for a job
+    /// cancelled or superseded.
+    async fn follow_open(
+        &self,
+        job: JobId,
+        attempt: u64,
+    ) -> Option<Result<OpenedProject, ApiError>> {
+        let mut waited = 0;
+        loop {
+            if current(&OPENS) != attempt {
+                return None;
+            }
+            let state = self
+                .s()
+                .server
+                .jobs
+                .with_untracked(|jobs| jobs.get(&job).map(|view| view.state.clone()));
+            match state {
+                Some(JobState::Done(JobOutcome::Opened(opened))) => return Some(Ok(*opened)),
+                Some(JobState::Done(_)) => return None,
+                Some(JobState::Failed(error)) => return Some(Err(error)),
+                Some(JobState::Cancelled) => return None,
+                Some(JobState::Running(progress)) => {
+                    self.s().u.opening.try_update(|opening| {
+                        if let Some(opening) = opening {
+                            opening.report(&progress);
+                        }
+                    });
+                }
+                Some(JobState::Queued | JobState::Cancelling) | None => {}
+            }
+            js::sleep(50).await;
+            waited += 50;
+            if waited >= 1000 {
+                waited = 0;
+                if let Ok(Some(view)) = self.runtime().api().call(&JobsGet { job }).await {
+                    self.s()
+                        .server
+                        .jobs
+                        .try_update(|jobs| crate::app::effects::merge_job(jobs, view));
+                }
+            }
+        }
+    }
+
+    /// The open's outcome: the project's screens, at the place the person returns to.
+    fn opened(&self, opened: OpenedProject, unit: Option<OpenUnit>, landing: Option<Landing>) {
+        let s = self.s();
+        let flavor = match opened.kind {
+            ProjectKind::Bible => ProjectFlavor::TextTranslation,
+            ProjectKind::Stories => ProjectFlavor::TextStories,
+        };
+        let place = landing.or(opened.place.map(|p| Landing {
+            mode: p.mode,
+            chapter: p.chapter,
+        }));
+        let book = match unit {
+            Some(OpenUnit::Book(book)) => Some(book),
+            _ => opened.books.first().copied(),
+        };
+        s.u.clear_focus();
+        s.u.unit_mode.try_set(match opened.draft_unit {
+            DraftUnit::Section => UnitMode::Section,
+            DraftUnit::Verse => UnitMode::Verse,
+        });
+        s.u.book
+            .try_set(book.filter(|_| flavor == ProjectFlavor::TextTranslation));
+        s.u.chapter.try_set(place.map_or(1, |p| p.chapter.max(1)));
+        s.editing.try_set(Editing::None);
+        s.view_error.try_set(None);
+        s.project.try_set(Some(CurrentProject {
+            at: opened.session.at,
+            id: opened.session.id,
+            name: opened.name,
+            language_tag: opened.tag,
+            dir: opened.dir,
+            flavor,
+        }));
+        let view = place.map_or(View::Read, |p| view_of(p.mode));
+        s.view.try_set(view);
+        // Understand keeps the overlay up, as tC4's 'prepare' stage, until its book is read;
+        // the screens later units build have no read yet.
+        if view == View::Read && flavor == ProjectFlavor::TextTranslation {
+            s.u.opening.try_update(|opening| {
+                if let Some(opening) = opening {
+                    opening.preparing();
+                }
+            });
+        } else {
+            s.u.opening.try_set(None);
+        }
+    }
+
+    /// The screen has its book: the open is over (tC4 clears `s.opening` after `openBook`).
+    pub fn book_shown(&self) {
+        self.s().u.opening.try_set(None);
+    }
+
+    /// The close of the screen's session at Home, behind the person (§4.3). A stale scope
+    /// (the server ran again) closes nothing.
+    pub(super) fn close_session(&self, project: Option<CurrentProject>) {
+        let s = self.s();
+        s.u.clear_focus();
+        s.u.book.try_set(None);
+        s.u.chapter.try_set(1);
+        s.u.opening.try_set(None);
+        let Some(project) = project else {
+            return;
+        };
+        let this = self.clone();
+        spawn_local(async move {
+            let close = Close {
+                request: js::random_request_id(),
+                at: project.at,
+            };
+            let _ = this.runtime().api().call(&close).await;
+        });
+    }
+
+    // ---- the book and the chapter --------------------------------------------------------
+
+    /// A book of the rail (tC4 `openBook`): drained first; chapter 1 of that book.
+    pub fn open_book(&self, book: BookId) {
+        let this = self.clone();
+        spawn_local(async move {
+            if !this.runtime().saves().gate().await {
+                return;
+            }
+            let u = &this.s().u;
+            u.clear_focus();
+            u.chapter.try_set(1);
+            u.book.try_set(Some(book));
+        });
+    }
+
+    /// A chapter of the rail (tC4 `setChapter`): a help's focus names a verse of the chapter
+    /// left, so it goes; the place is remembered.
+    pub fn set_chapter(&self, chapter: u16) {
+        let this = self.clone();
+        spawn_local(async move {
+            if !this.runtime().saves().gate().await {
+                return;
+            }
+            let s = this.s();
+            s.u.helps_hover.try_set(None);
+            s.u.helps_active.try_set(None);
+            s.u.chapter.try_set(chapter);
+            let (Some(project), Some(book)) = (s.project.get_untracked(), s.u.book.get_untracked())
+            else {
+                return;
+            };
+            let place = RecordPlace {
+                at: project.at,
+                request: js::random_request_id(),
+                place: PlaceUpdate::Book {
+                    book,
+                    mode: Some(PlaceMode::Read),
+                    chapter: Some(chapter),
+                    verse: PlaceChange::Clear,
+                    tool: None,
+                },
+            };
+            let _ = this.runtime().api().call(&place).await;
+        });
+    }
+
+    pub fn set_source_tab(&self, tab: String) {
+        self.s().u.source_tab.try_set(tab);
+    }
+
+    pub fn toggle_rail(&self) {
+        self.s().u.rail.try_update(|on| *on = !*on);
+    }
+
+    pub fn toggle_helps(&self) {
+        self.s().u.helps.try_update(|on| *on = !*on);
+    }
+
+    pub fn set_helps_tab(&self, tab: HelpsTab) {
+        self.s().u.helps_tab.try_set(tab);
+    }
+
+    pub fn set_helps_width(&self, width: f64) {
+        self.s().u.helps_width.try_set(Some(width));
+    }
+
+    /// The Section/Verse switch: the screen's grouping now, and this computer's for the
+    /// project.
+    pub fn set_unit_mode(&self, mode: UnitMode) {
+        let s = self.s();
+        s.u.unit_mode.try_set(mode);
+        let Some(project) = s.project.get_untracked() else {
+            return;
+        };
+        let request = SetDraftUnit {
+            at: project.at,
+            request: js::random_request_id(),
+            unit: match mode {
+                UnitMode::Section => DraftUnit::Section,
+                UnitMode::Verse => DraftUnit::Verse,
+            },
+        };
+        let this = self.clone();
+        spawn_local(async move {
+            let _ = this.runtime().api().call(&request).await;
+        });
+    }
+
+    // ---- the helps' focus and articles ---------------------------------------------------
+
+    /// Hovering a card lights its words in the source; leaving it ends that.
+    pub fn hover_help(&self, focus: Option<HelpFocus>) {
+        self.s().u.helps_hover.try_set(focus);
+    }
+
+    /// A click on a card focuses it, or ends the focus when it had it (tC4 `focusHelp`).
+    pub fn focus_help(&self, focus: Option<HelpFocus>) {
+        self.s().u.helps_active.try_update(|active| {
+            *active = match (active.take(), focus) {
+                (Some(was), Some(new)) if was.id == new.id => None,
+                (_, new) => new,
+            };
+        });
+    }
+
+    /// An article link (tC4 `loadHelpArticle`): the pane opens on it; a second click on the
+    /// article shown changes nothing, a failed one reads again.
+    pub fn load_help_article(&self, link: ArticleLink) {
+        let s = self.s().clone();
+        let same = s.u.article.with_untracked(|article| {
+            matches!(article, Some(ArticleState::Loading(l) | ArticleState::Read(l, _)) if *l == link)
+        });
+        if same {
+            return;
+        }
+        let (Some(project), Some(book)) = (s.project.get_untracked(), s.u.book.get_untracked())
+        else {
+            return;
+        };
+        let attempt = next(&ARTICLES);
+        s.u.article
+            .try_set(Some(ArticleState::Loading(link.clone())));
+        let this = self.clone();
+        spawn_local(async move {
+            let request = Article {
+                at: project.at.clone(),
+                book,
+                link: link.clone(),
+            };
+            let result = this.runtime().read_once(&request).await;
+            if current(&ARTICLES) != attempt {
+                return;
+            }
+            let state = match result {
+                Ok(view) => ArticleState::Read(link, view),
+                Err(CallError::Dropped) => return,
+                Err(error) => ArticleState::Failed(link, error.to_string()),
+            };
+            this.s().u.article.try_set(Some(state));
+        });
+    }
+
+    /// Retry on a tab that failed: the chapter's helps are read again.
+    pub fn reload_helps(&self) {
+        if let Some((at, book, chapter)) = self.place() {
+            self.runtime()
+                .cache()
+                .refresh(&tc_api::helps::Passage { at, book, chapter });
+        }
+    }
+
+    /// Retry on a pane that failed: the chapter's panes are read again.
+    pub fn reload_sources(&self) {
+        if let Some((at, book, chapter)) = self.place() {
+            self.runtime()
+                .cache()
+                .refresh(&tc_api::editor::Sources { at, book, chapter });
+        }
+    }
+
+    fn place(&self) -> Option<(tc_api::ids::Scope, BookId, u16)> {
+        let s = self.s();
+        Some((
+            s.project.get_untracked()?.at,
+            s.u.book.get_untracked()?,
+            s.u.chapter.get_untracked(),
+        ))
+    }
+
+    pub fn close_help_article(&self) {
+        next(&ARTICLES);
+        self.s().u.article.try_set(None);
+    }
+}

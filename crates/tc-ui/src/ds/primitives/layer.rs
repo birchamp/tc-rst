@@ -221,6 +221,10 @@ pub fn Layer(
     /// A press on the panel (React passes `onMouseDown` through `...rest`).
     #[prop(optional)]
     on_mouse_down: Option<Callback<MouseEvent>>,
+    /// A key on the panel (React passes `onKeyDown` through `...rest`; the open overlay keeps
+    /// Tab on its panel, B3).
+    #[prop(optional)]
+    on_key_down: Option<Callback<web_sys::KeyboardEvent>>,
     #[prop(optional)] style: Css,
     /// Extra attributes of the panel.
     #[prop(optional)]
@@ -606,6 +610,11 @@ pub fn Layer(
                 on:click=|e: MouseEvent| e.stop_propagation()
                 on:mousedown=move |e: MouseEvent| {
                     if let Some(cb) = on_mouse_down {
+                        cb.run(e);
+                    }
+                }
+                on:keydown=move |e: web_sys::KeyboardEvent| {
+                    if let Some(cb) = on_key_down {
                         cb.run(e);
                     }
                 }

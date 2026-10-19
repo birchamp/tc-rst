@@ -22,4 +22,5 @@ mod app {
     mod save_refresh;
     mod shell;
     mod sse;
+    mod understand;
 }

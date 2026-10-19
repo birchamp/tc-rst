@@ -15,6 +15,7 @@
   "home.unusable.projectFileUnreadable": "Its project file (ingredients/tc/project.json) could not be read: {reason}. Nothing in the folder was changed.",
   "newBible.codeAdjusted": "Door43 lists this language as {door43}, a code a project cannot hold. The project uses {code} and keeps {door43} as its Door43 code.",
   "newBible.codeUnusable": "Door43 lists this language as {door43}, a code a project cannot use. Type a code for it.",
+  "open.changeFiles": "{done} of {total} files",
   "prepare.failed": "The bundled resources could not be prepared. Please quit and try again.",
   "prepare.failedTitle": "translationCore4 could not start",
   "prepare.handoff": "Starting…",

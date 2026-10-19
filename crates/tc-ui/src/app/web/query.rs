@@ -229,3 +229,46 @@ impl CachedQuery for tc_api::home::Card {
         crate::app::cache::ReadOf::App(vec![AppTopic::HomeCard(self.project.clone())])
     }
 }
+
+/// The project reads of Understand (B3), each read again by the changes its value is made of.
+fn project_read(at: &Scope, keys: Vec<tc_api::query::QueryKey>) -> crate::app::cache::ReadOf {
+    crate::app::cache::ReadOf::Project {
+        at: at.clone(),
+        keys,
+    }
+}
+
+impl CachedQuery for tc_api::editor::Book {
+    /// The book's chapters, drafted share and comments: any change in the book.
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(&self.at, vec![tc_api::query::QueryKey::Book(self.book)])
+    }
+}
+
+/// The resources a book's panes and helps are read from follow the pins and the helps
+/// setting.
+fn resource_keys() -> Vec<tc_api::query::QueryKey> {
+    use tc_api::event::Aspect;
+    vec![
+        tc_api::query::QueryKey::Aspect(Aspect::Pins),
+        tc_api::query::QueryKey::Aspect(Aspect::Settings),
+    ]
+}
+
+impl CachedQuery for tc_api::editor::Sources {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(&self.at, resource_keys())
+    }
+}
+
+impl CachedQuery for tc_api::helps::Passage {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(&self.at, resource_keys())
+    }
+}
+
+impl CachedQuery for tc_api::helps::Article {
+    fn read_of(&self) -> crate::app::cache::ReadOf {
+        project_read(&self.at, resource_keys())
+    }
+}
