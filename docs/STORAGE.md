@@ -1152,6 +1152,7 @@ None of these files is project data that another device needs. Each is written w
 | `lock` | `{host, pid, device, at}` | exclusive advisory lock (`std::fs::File::try_lock`) while the project is open. It guards the folder against a process a crash left running and against other programs; translationCore itself runs once per computer (§5.0). A lock another process holds refuses the open (O1), and the content names the holder in the error. It is written through the locked handle (truncate, write, flush), never with `atomic_write`: a new file renamed over it would be a file whose lock nobody holds, and another process could take it |
 | `device.json` | `{device, fingerprint, created}` | this folder's Local device (§6.3) |
 | `pending/<device>-<hash32>.batch` | header + change lines (§4.2) | saves not yet sealed: the commit point of every save |
+| `staged/<batch>/` | the packs of a large batch (§5.0 "A large batch"), each `<pack32>.ndjson` (`….part` while it is written), and `commit.json` `{staged, batch, packs: [repository paths]}` once the batch is decided | outside the burrito; a folder with `commit.json` is finished at the next open, one without it is removed whole (§6.1 O2) |
 | `materialized.json` | `{minor, derivations, paths: {<path>: {md5, size, mtimeNs, settled, scope, held, oid, nfc}}, packs: {<path>: {md5, size, fingerprint}}}`: the format minor and derivation versions (§12.1) the files were projected with; per derived or carried path what was written (md5, size, mtime), whether its bytes were read back after its timestamp tick was over (`settled`), the digest of the heads its projection stands for (`scope`), and the bytes the app holds there without writing over them (`held`: their md5, why they are held, and the path of their copy in `.tc/external/`), §6.2; for a USFM or story file whether its bytes are NFC (`nfc`), so `metadata.json` states its `normalization` without projecting every book again; per derived path the git blob that holds exactly those bytes once a checkpoint stored it (`blob`, §9.4); per pack the md5 that `metadata.json` lists and its blob, which also makes the manifest's pack list part of the expected pack set (§4.4: a listed pack that is gone and that no valid pack's `replaces` names is missing) | the manifest: what the app last wrote (§5.10). Its own mtime, which the filesystem sets when it is written, is a time stamp that settles entries (§6.2) |
 | `heads/<escaped path>.bin` | postcard `HeadsFile` (version 2; version 1 is read, without digests): for every record the file was built from, the heads the written bytes stand for, by the token rule of §2.7 (every head of a settled or merged record; only the provisional candidate and its equal heads for a conflict), and, for a book's USFM, a 16-byte digest of how the written file showed the record (MD5 of its piece of the file after line ends and blanks at line ends are normalized, `tc_journal::outside::shown_digest`). `metadata.json` has one too (its project details, no digests), written after the file | the base of an outside edit (§11.1); an outside editor saw only the provisional text, so its edit never resolves a conflict. The digests let the examination skip every record whose decoded digest equals its base digest, so it costs the records that differ (§14); a heads file without them is as good, and costs the book |
 | `materialize.intent.json` | `{writes: [{path, oldMd5, newMd5}], removes: [path]}` | present only during a materialization |
@@ -1441,8 +1442,9 @@ change, so they are handled by the projection (§7.7), never by quarantine.
 
 A change line is at most 4 MiB. A pack is at most 64 MiB; a seal writes as many packs as it
 needs, and a batch may span packs (batch completeness, §7.2, keeps it atomic for readers). A
-pending file holds one or more whole batches and has no size limit; a gateway change over a
-checked Bible is one pending file of about 150 MB.
+pending file holds one or more whole batches and has no size limit up to 2,048 changes; a larger
+batch (a gateway change or resource upgrade over a checked Bible is 150 to 260 MB) is written as
+packs of at most 48 MiB of lines, staged and moved into place together (§5.0 "A large batch").
 
 ### 4.7 Consolidation and redundant packs
 
@@ -1452,6 +1454,9 @@ Packs are never edited. To bound the number of files, a device merges its own pa
   current UTC month and holds two or more of its packs (all of them are merged); and in the
   current month when it holds more than 32 packs smaller than 1 MiB (those are merged, so a
   month's data is rewritten only two or three times in all).
+- **Left alone.** A pack of 16 MiB or more (`LARGE_PACK_BYTES`) is neither read nor rewritten: it
+  is already worth its file, and a resource upgrade writes packs of 48 MiB that merging a few
+  small packs into would rewrite for their sake.
 - **What.** Only packs that pass P2 to P4 on this device. The new pack's lines are the union of
   their lines, sorted, and its header `replaces` lists the names of the packs merged and every
   name those packs themselves listed. If the union is over 64 MiB, whole old packs are grouped
@@ -1632,6 +1637,48 @@ returns `WrittenNotDurable`, the file is in place, so the save counts as written
 the counter advances, and the person sees `SavedWithDiskError` ("Saved, but the disk reported an
 error: <reason>. Your work may not survive a power cut. Check the disk."). The app never reports
 "Not saved" for a file that exists, so a retry can never reuse its seq.
+
+**A large batch.** A planned batch of more than 2,048 changes (in practice only `ApplyUpgrade`:
+the carry-over of a checked Bible is 215,767 decisions, 150 to 260 MB) is not checked, built,
+written and folded on the actor. Measured so, a save waited 5.6 s behind it and the process grew
+by 2 GB (`docs/evidence/storage-scale-2026-10-19.md`). Written as a pending file it would also
+have held the actor at the next seal, which reads, verifies and packs that file. So the batch is
+written as packs, by a worker thread, and the actor does O(1) work at receipt and a swap at the
+end:
+
+```
+L1  At receipt (actor): reserve the sequence numbers [next_seq, next_seq + n), take `at`, the
+    batch id and a copy F0 of the fold (O(1), the fold is persistent), start the worker, and
+    record from now on the records and the inputs of every batch the actor commits. One staged
+    batch at a time; another waits, in order. A job for close and wait_idle.
+L2  Worker: B1 against F0 (every record has the parents the plan was made from, no record
+    twice; otherwise PlanStale or the refusal, nothing written). Build the changes with their
+    reserved numbers. Write them as packs of at most 48 MiB of lines into
+    .tc/staged/<batch>/<pack32>.ndjson, in pieces of 4 MiB that each end in a flush and wait
+    for the saves in flight first (no flush carries more than a piece while a save waits); read
+    each pack back (P2 to P4 and byte equality) and load it, so the values stay in the packs.
+    Fold the batch into F0.
+L3  Worker -> actor: ready. The actor refuses the batch with PlanStale when a batch it
+    committed since L1 changed a record of this one; otherwise it says go (and opens a write
+    group, I7: from L4 the packs are in the folder and metadata.json does not list them).
+L4  Worker: atomic_write(.tc/staged/<batch>, "commit.json", the packs' repository paths,
+    SyncDir::Now): the decision. Rename each pack into ingredients/tc/changes/<me>/<yyyy-mm>/
+    (atomic_create_dirs of the folder first), flush each folder once, remove .tc/staged/<batch>.
+    ← the durability point of the batch. The reply is never sent before it.
+L5  Actor: add the inputs of the batches committed since L1 to the worker's fold, take it as the
+    project's fold, record the packs (journal, fold cache sections), set durable_max_seq,
+    publish, mark the files dirty, re-arm the materialize timer (the first materialization
+    after the swap lists the packs and closes the write group) and reply
+    Ok(StoreReply { tokens: [], changes: ids, .. }). A staged batch's reply carries no tokens.
+```
+
+The fold is a function of the set of changes (I1), so the fold of L5 is the one the batches would
+have given in the order of arrival. A save that changed a record of the batch after L3's check
+and before L5 is a sibling of the carried change: the record is a visible conflict (I2, I3), and
+nothing is replaced. The ledger (K5) names the largest sequence number a durable file holds
+(`durable_max_seq`), not the next number minus one: a refused batch's numbers are in no file, and
+the next open must not take them for a restored backup (§6.3). Progress: `Progress { work: Batch }`
+from 300 ms on (PERFORMANCE.md rule 4). A staged batch ends before a close, like any job.
 
 **Closing.** A close runs a checkpoint (§5.13; the actor serves the writer's messages until the
 checkpoint ends, so neither waits for the other), writes the fold cache,
@@ -1927,7 +1974,12 @@ neither text is lost. An empty text is refused (a retraction is the record kind 
    - The dialog says "N checks carried over, M to check again, K alignments to review".
 3. **Confirm.** The actor checks that every record the plan touches still has the heads it had
    in `S`. If any moved (a sync landed, a teammate's check arrived), it rebuilds the plan and
-   shows the dialog again. Otherwise the whole plan is one batch, `commit_batch`.
+   shows the dialog again. Otherwise the whole plan is one batch, `commit_batch`; a plan of more than
+   2,048 changes is a large batch (§5.0 "A large batch"), which checks the plan on a worker against
+   the fold as it was at receipt and refuses it with `PlanStale` when a save changed one of its
+   records since. Either way nothing is replaced: after a crash the batch is all there or not at
+   all, and a record a save changed meanwhile shows a conflict between the save and the carried
+   decision.
 
 Fsync order: resource directories, then the pending file. The project never points at a
 resource that is not fully installed.
@@ -2159,6 +2211,14 @@ Q3  Re-read; P2–P4 must pass and its ids must include every id of the packs it
 Q4  atomic_remove each replaced pack (directory fsync once).
 ```
 
+Q1 to Q3 of a group run on a worker thread (read, verify, merge, write in flushed pieces of 4 MiB
+behind the saves in flight, read back, and the map that moves the fold's values from each old
+pack to the new one), while the actor waits for it two milliseconds at a time and serves the saves
+that arrived; Q4 is applied on the actor, eight old packs a step, with the map. Measured as one
+actor step, a month's packs (84 small packs, 6 MB) held a save for 1.4 s. The new pack is stored
+as a git blob by the checkpoint that follows the seal, not by Q3: the old packs it replaces are in
+the repository from earlier checkpoints, or are in this checkpoint's commit.
+
 ### 5.13 Checkpoint: seal, materialize, commit
 
 A checkpoint runs on leaving Translate or the project (tC4 J8), before a sync, an export or a USB
@@ -2308,6 +2368,10 @@ O2  Finish or remove temporary files. A `.tc/pending/` or `ingredients/tc/change
     and a conflict with their own text. Remove every other `.~*.tmp` outside .git, every
     `*.lock` file under `.git` (index, refs, HEAD, config, packed-refs, shallow), and
     `.git/objects/pack/tmp_*` (safe: we hold the project lock and the app is single-instance).
+    A `.tc/staged/<batch>/` folder is a large batch (§5.0): with `commit.json` it was decided, so
+    every pack it lists that is not in place is verified (P2 to P4) and renamed into place and the
+    folder is removed; without it the batch was never decided (its reply never came) and the folder
+    is removed whole. Both happen before the journal is read.
     A temp that cannot be read is never removed (a pending temp so left counts as an
     unreadable pending file, §6.3), and a rename or removal that another program still holds
     after the retries (§5.0 step 3) leaves the file for the next open: the open never fails
@@ -2684,6 +2748,9 @@ next starts, so power loss is covered by the same rows (the row says where a los
 | K3 | seal | some pending files removed | pack + some pending files | as K2 | after |
 | K4 | seal | pending removed, before materialize | the pack is not listed in `metadata.json` | O10 materializes | after |
 | K0 | seal | the pack folder of a new month made, its entry in the parent not flushed | the folder only in the page cache; no pack | the next seal flushes the entry of the folder it finds (§5.0) before it writes the pack into it and removes the pending files | before or after; a power cut after the restart's seal keeps the pack |
+| S1 | large batch | the worker is writing the packs, or has written them; `commit.json` is not | `.tc/staged/<batch>/` without `commit.json` | O2 removes the folder | before; the reply never came, and the upgrade can be confirmed again |
+| S2 | large batch | `commit.json` written, some packs not yet renamed | `commit.json` and the packs, some in place | O2 verifies the rest, renames them, removes the folder | after; a record a save changed since L1 shows a conflict, never a replacement |
+| S3 | large batch | every pack in place, the folder not removed | `commit.json`, the folder | O2 removes the folder; O10 lists the packs in `metadata.json` | after |
 | Q1 | consolidate | new pack temp | temp + old packs | O2 (rename if it verifies, then as Q2; else remove) | before or after |
 | Q2 | consolidate | new pack renamed, old packs not removed | both | O7 removes redundant packs | after |
 | M1 | materialize | intent written | intent, old files | O9: `d ∈ {o}` → rewrite | after |
@@ -4815,6 +4882,19 @@ outside edit (§11.1), on the same two corpora; each asserts the same counts on 
 | `reconciling_an_outside_edit_costs_what_it_changed` | three Psalms verses replaced inside `PSA.usfm`, told by one watcher event: one derived file and its heads file read, one decode, three keys compared value by value (`outside_keys_examined`), three changes written, on both corpora (D10: a record whose shown digest is the heads file's is not looked at) |
 | `a_focus_reads_only_what_is_not_clean_by_stat` | the window focus stats each path the app wrote once and reads those whose size or time differ |
 
+Unit P adds the counts of the editor's other actions and of the large batch, on the same two
+corpora (tc-journal's tests run on `Spec::psalms` and `Spec::scaled(1, 10)`):
+
+| Test | Asserts |
+|---|---|
+| `a_decision_save_reads_no_pack_and_writes_one_pending_file`, `an_alignment_save_reads_no_pack_and_writes_one_pending_file`, `a_resolution_reads_no_pack_and_writes_one_pending_file` (`tc-store`) | each of the three commands opens no file, reads under 64 KiB, creates one pending file and flushes twice, the same write points on both corpora; the resolution's conflict is made by a teammate's pack that arrives between two opens |
+| `reading_a_book_reads_only_its_values` (`tc-store`) | `read_book(Psalms)` opens no file that is not a journal file and none twice, reads about 470 bytes for each record of the book's text (1.24 MB on both corpora, under a bound of 1 KiB a record; the packs are 17 MB and 170 MB), and a second read opens nothing |
+| `opening_a_book_costs_that_book`, `moving_to_a_chapter_costs_that_chapter` (`tc-journal`) | opening Psalms projects at most one record per header, chapter front and verse of the book and decodes and reads at most one value per head of them, indexes and builds nothing; a chapter projects exactly its verse and front records, on both corpora |
+| `the_conflict_counts_after_a_save_cost_nothing_per_conflict` (`tc-journal`) | a verse save and the conflict counts after it build no conflict and change no count, and cost the same work in Psalms with 2,000 more conflicts as in plain Psalms |
+| `a_verse_save_costs_nothing_per_year_of_history` (`tc-journal`) | the same save with 4,000 more changes of history, 500 of them on the saved verse, counts no more work |
+| `a_save_is_durable_while_a_large_batch_is_written`, `a_large_batch_shows_determinate_progress_by_300_ms`, `a_large_batch_keeps_its_values_in_the_packs` (`tc-store`) | a save is `Durable` while a 2,300-change upgrade waits in its worker; `Progress { work: Batch }` first comes at 300 ms or a little after and only grows, none for a batch that ends sooner; after the swap the fold reads the carried decisions from the packs (`values_read` rises) |
+| `a_save_is_durable_while_a_consolidation_is_held` (`tc-store`) | a month of packs merged by the worker: five saves are `Durable` while it is held before writing, and the packs are merged after |
+
 Where an earlier unit's row says "recorded" for a file that is not clean by stat, it is recorded;
 a file clean by stat whose bytes differ is held (§6.2). A pack a teammate sealed is put into the
 folder between two opens, since sync is unit X's.
@@ -4871,6 +4951,12 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the removal of a temp the open cannot read (remove it as damaged) | `an_open_never_removes_a_temp_it_cannot_read` |
 | the flush of a directory found existing (trust it) | `crash_checkpoint_into_a_months_folder_that_does_not_exist_yet`, `a_directory_found_existing_is_made_durable_once` (`atomic.rs`) |
 | the compare-and-swap before each rename retry | `loss_rename_retry_never_overwrites_outside_save` |
+| the large batch's worker (check, build, write and fold on the actor) | `a_save_is_durable_while_a_large_batch_is_written` |
+| the touched-record check before the swap | `a_large_batch_whose_records_moved_is_refused_and_leaves_no_file` |
+| the ledger from the largest durable sequence number (use the next number minus one) | `a_refused_large_batch_never_rotates_the_device` |
+| `commit.json` as the decision, and O2's roll-forward and removal of `.tc/staged` | `crash_during_a_large_batch` |
+| the temp name of a staged pack (list it as a pack) | `a_checkpoint_while_a_large_batch_is_written_finds_no_second_writer` |
+| the consolidation's worker (merge on the actor) | `a_save_is_durable_while_a_consolidation_is_held` |
 | anchors and Detached (place attached records by number) | `every_head_reachable_from_a_screen` |
 | foreign entries (build merge trees from owned paths only) | `loss_foreign_entries_kept_on_tip` |
 | `commit_received` (stamp received changes) | `door43_ingest_written_verbatim` |

@@ -528,6 +528,7 @@ pub fn upgrade(dir: &Path) -> Vec<Measured> {
     let plan = upgrade_plan(&handle);
     let planned = plan.changes.len();
     let plan_ms = ms(started);
+    let with_plan = crate::machine::private_mib().unwrap_or(f64::NAN);
     let w = during(&handle, &targets, "an upgrade write", false, || {
         let started = Instant::now();
         let reply = handle.submit(Command::ApplyUpgrade { plan }).wait();
@@ -539,7 +540,7 @@ pub fn upgrade(dir: &Path) -> Vec<Measured> {
         "r9.upgrade",
         &w,
         &format!(
-            "{planned} planned changes in {plan_ms:.0} ms, reply {reply_ms:.0} ms {result:?}; private {before:.0} MiB before, {replied:.0} MiB at the reply"
+            "{planned} planned changes in {plan_ms:.0} ms, reply {reply_ms:.0} ms {result:?}; private {before:.0} MiB before, {with_plan:.0} MiB with the plan built, {replied:.0} MiB at the reply"
         ),
     );
     let w2 = during(

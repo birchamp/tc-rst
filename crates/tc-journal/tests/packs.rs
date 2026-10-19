@@ -10,7 +10,8 @@ use proptest::prelude::*;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use tc_journal::consolidate::{
-    OwnPack, Redundancy, SMALL_PACK_BYTES, consolidate, consolidation_groups, redundancy,
+    LARGE_PACK_BYTES, OwnPack, Redundancy, SMALL_PACK_BYTES, consolidate, consolidation_groups,
+    redundancy,
 };
 use tc_journal::json::Json;
 use tc_journal::line::{LINE_OVERHEAD, encode_line};
@@ -897,6 +898,30 @@ fn consolidation_merges_completed_months_and_many_small_packs() {
     assert_eq!(groups.len(), 3);
     assert_eq!(groups[2].len(), 33);
     assert!(!groups[2].contains(&name(200)));
+}
+
+/// §4.7: a pack of 16 MiB or more is already worth its file; consolidation neither reads nor
+/// rewrites it, in a completed month or in the current one.
+#[test]
+fn consolidation_leaves_large_packs_alone() {
+    let month = |m| YearMonth::new(2026, m).unwrap();
+    let own = |n, m, size| OwnPack {
+        name: name(n),
+        month: month(m),
+        size,
+    };
+    let packs = vec![
+        own(1, 8, 10),
+        own(2, 8, 10),
+        own(3, 8, LARGE_PACK_BYTES),
+        own(4, 8, 48 * 1024 * 1024),
+        own(5, 9, LARGE_PACK_BYTES - 1),
+    ];
+    assert_eq!(
+        consolidation_groups(&packs, month(10)),
+        vec![vec![name(1), name(2)]],
+        "the large packs of August stay, and September has one small pack"
+    );
 }
 
 #[test]

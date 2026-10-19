@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 /// `.tc/`: local state, never exchanged, not an ingredient (§3.6).
 pub const TC: &str = ".tc";
 pub const PENDING: &str = ".tc/pending";
+/// Large batches being written (`docs/STORAGE.md` §5.0 "A large batch"): outside the burrito.
+pub const STAGED: &str = ".tc/staged";
 pub const QUARANTINE: &str = ".tc/quarantine";
 pub const EXTERNAL: &str = ".tc/external";
 pub const HEADS: &str = ".tc/heads";

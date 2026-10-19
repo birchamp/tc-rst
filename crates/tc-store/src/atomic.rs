@@ -287,6 +287,45 @@ pub fn atomic_write_streamed(
     Ok(Written::Renamed)
 }
 
+/// [`atomic_write`] for a file written by a thread that is not the actor's: the bytes go in
+/// pieces of `piece` bytes, each followed by a flush, because a flush waits for the drive's
+/// queue and no single one may carry more than a piece while a save waits (PERFORMANCE.md).
+/// The rename is flushed at once.
+pub fn atomic_write_in_pieces(
+    vfs: &dyn Vfs,
+    dir: &Path,
+    name: &str,
+    bytes: &[u8],
+    piece: usize,
+) -> Result<(), WriteError> {
+    let temp = dir.join(temp_name(name));
+    let target = dir.join(name);
+    let written = (|| {
+        let mut file = vfs.create_new(&temp).at("create", &temp)?;
+        for chunk in bytes.chunks(piece.max(1)) {
+            file.write_all(chunk).at("write", &temp)?;
+            file.sync_all().at("flush", &temp)?;
+        }
+        file.sync_all().at("flush", &temp)?;
+        drop(file);
+        rename_held(vfs, &temp, &target, &HeldRetry::SAVE).at("rename", &target)?;
+        Ok(())
+    })();
+    if let Err(error) = written {
+        let _ = remove_held(vfs, &temp, &HeldRetry::SAVE);
+        return Err(WriteError::NotWritten(error));
+    }
+    vfs.sync_dir(dir)
+        .at("flush the folder", dir)
+        .map_err(WriteError::WrittenNotDurable)?;
+    if cfg!(windows) {
+        vfs.sync_file(&target)
+            .at("flush the file", &target)
+            .map_err(WriteError::WrittenNotDurable)?;
+    }
+    Ok(())
+}
+
 /// Creates each missing directory of `path`, flushing its parent after each one. A
 /// directory that already exists is not trusted to be durable: its creator may have stopped
 /// before it flushed the parent, and a seal that wrote a pack into it would then remove the

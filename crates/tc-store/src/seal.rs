@@ -20,11 +20,11 @@ use crate::load::{JournalFile, JournalKind, relocation};
 use crate::project::{PackInfo, Project};
 use crate::vfs::is_not_found;
 use std::collections::BTreeSet;
-use tc_journal::consolidate::{OwnPack, consolidate, consolidation_groups};
+use tc_journal::consolidate::{OwnPack, consolidation_groups};
 use tc_journal::fold::Notice;
 use tc_journal::index::load_pack;
 use tc_journal::line::encode_line;
-use tc_journal::pack::{EncodedPack, PackPath, PackRead, PackSpec, YearMonth, read_pack, seal};
+use tc_journal::pack::{EncodedPack, PackPath, PackSpec, YearMonth, read_pack, seal};
 use tc_journal::pending::{PendingStatus, read_pending};
 use tc_journal::{ChangeId, PackName, Verified};
 
@@ -65,9 +65,15 @@ enum SealPhase {
     Remove,
     /// The ledger (K5).
     Ledger,
-    /// The consolidation (K6).
+    /// The consolidation (K6): the groups to merge are listed.
     #[default]
     Consolidate,
+    /// The next group goes to a worker thread (Q1 to Q3).
+    ConsNext,
+    /// The worker is reading, merging, writing and verifying; saves are served meanwhile.
+    ConsWait,
+    /// The packs the new pack absorbed go, a few a step (Q4).
+    ConsApply,
     Done,
 }
 
@@ -89,7 +95,18 @@ pub(crate) struct SealRun {
     /// are all in it may go.
     held: BTreeSet<ChangeId>,
     dirs: DirSet,
+    /// The groups of packs the consolidation still has to merge (repository paths).
+    groups: std::collections::VecDeque<Vec<String>>,
+    /// The worker merging the current group.
+    worker: Option<std::sync::mpsc::Receiver<Result<crate::cons::ConsDone, StoreError>>>,
+    /// What the worker made, to be applied.
+    applying: Option<crate::cons::ConsDone>,
+    /// The old packs removed so far, by the new pack that absorbed them.
+    gone: Vec<(String, String)>,
 }
+
+/// Old packs one step of Q4 removes.
+const CONS_REMOVALS_PER_STEP: usize = 8;
 
 /// A pack written and read back.
 struct Written {
@@ -97,8 +114,6 @@ struct Written {
     number: u32,
     bytes: Vec<u8>,
     ids: BTreeSet<ChangeId>,
-    /// The names its header says it replaces.
-    replaces: Vec<PackName>,
 }
 
 impl Project {
@@ -175,7 +190,6 @@ impl Project {
             number,
             bytes: back,
             ids,
-            replaces,
         })
     }
 
@@ -409,7 +423,7 @@ impl Project {
             }
             SealPhase::Ledger => {
                 // K5.
-                let last_seq = self.next_seq.saturating_sub(1);
+                let last_seq = self.durable_max_seq;
                 if last_seq > 0 {
                     self.app.record_ledger(
                         self.device,
@@ -423,18 +437,53 @@ impl Project {
                 Ok(true)
             }
             SealPhase::Consolidate => {
-                // K6.
-                let report = std::mem::take(&mut run.report);
-                run.report = self.consolidate(report)?;
-                run.phase = SealPhase::Done;
-                Ok(false)
+                // K6: which groups, then each group's Q1 to Q3 on a worker.
+                run.groups = self.consolidation_plan();
+                run.phase = SealPhase::ConsNext;
+                Ok(true)
+            }
+            SealPhase::ConsNext => {
+                let Some(rels) = run.groups.pop_front() else {
+                    run.phase = SealPhase::Done;
+                    return Ok(false);
+                };
+                run.worker = Some(self.start_consolidation(rels));
+                run.phase = SealPhase::ConsWait;
+                Ok(true)
+            }
+            SealPhase::ConsWait => {
+                let Some(worker) = run.worker.as_ref() else {
+                    run.phase = SealPhase::ConsNext;
+                    return Ok(true);
+                };
+                match worker.recv_timeout(std::time::Duration::from_millis(2)) {
+                    Ok(done) => {
+                        run.worker = None;
+                        let done = done?;
+                        self.cons_adopt(&done);
+                        run.applying = Some(done);
+                        run.phase = SealPhase::ConsApply;
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                        run.worker = None;
+                        return Err(StoreError::Other(
+                            "the consolidation stopped before it ended".into(),
+                        ));
+                    }
+                }
+                Ok(true)
+            }
+            SealPhase::ConsApply => {
+                self.cons_apply(run)?;
+                Ok(true)
             }
             SealPhase::Done => Ok(false),
         }
     }
 
-    /// Q1 to Q4 (§5.12) when §4.7 says so.
-    fn consolidate(&mut self, mut report: SealReport) -> Result<SealReport, StoreError> {
+    /// Which of this device's packs to merge (§4.7 "When"), as groups of repository paths.
+    fn consolidation_plan(&self) -> std::collections::VecDeque<Vec<String>> {
         let own: Vec<(String, PackPath, u64)> = self
             .journal
             .packs
@@ -450,76 +499,131 @@ impl Project {
                 size: *size,
             })
             .collect();
-        let groups = consolidation_groups(&listing, YearMonth::of(self.clock.now()));
-        for group in groups {
-            let rels: Vec<String> = own
-                .iter()
-                .filter(|(_, path, _)| group.contains(&path.name))
-                .map(|(rel, _, _)| rel.clone())
-                .collect();
-            // Q1: read and verify each; a pack that fails stays as it is.
-            let mut reads: Vec<(String, Vec<u8>, PackRead)> = Vec::new();
-            for rel in rels {
-                let abs = self.folder.path(&rel);
-                let Ok(bytes) = self.vfs.read(&abs) else {
-                    continue;
-                };
-                let read = read_pack(&rel, &bytes, self.id);
-                if read.is_valid() {
-                    reads.push((rel, bytes, read));
+        consolidation_groups(&listing, YearMonth::of(self.clock.now()))
+            .into_iter()
+            .map(|group| {
+                own.iter()
+                    .filter(|(_, path, _)| group.contains(&path.name))
+                    .map(|(rel, _, _)| rel.clone())
+                    .collect()
+            })
+            .collect()
+    }
+
+    /// Q1 to Q3 of one group on a thread of its own: the actor serves saves while it reads,
+    /// merges, writes (in flushed pieces, behind the saves in flight) and reads back.
+    fn start_consolidation(
+        &self,
+        rels: Vec<String>,
+    ) -> std::sync::mpsc::Receiver<Result<crate::cons::ConsDone, StoreError>> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let job = crate::cons::ConsJob {
+            vfs: std::sync::Arc::new(crate::pace::PacedVfs::new(
+                self.vfs.clone(),
+                self.shared.gate.clone(),
+                self.counters.clone(),
+            )),
+            folder: self.folder.clone(),
+            project: self.id,
+            spec: self.pack_spec(),
+            rels,
+            source: self.source.clone(),
+            hooks: self.shared.hooks.clone(),
+        };
+        let spawned = std::thread::Builder::new()
+            .name("tc-store consolidation".into())
+            .spawn({
+                let tx = tx.clone();
+                move || {
+                    let _ = tx.send(crate::cons::run(job));
                 }
-            }
-            if reads.len() < 2 {
-                continue;
-            }
-            let refs: Vec<&PackRead> = reads.iter().map(|(_, _, r)| r).collect();
-            let new_packs = consolidate(&self.pack_spec(), &refs)
-                .map_err(|e| StoreError::Other(format!("consolidation: {e}")))?;
-            for pack in new_packs {
-                // Q2, Q3: the packs it absorbed are those whose every change it holds; the
-                // pack read back must hold them all, and only packs its header lists go.
-                let holds: BTreeSet<ChangeId> = pack.changes.iter().copied().collect();
-                let absorbed: Vec<&(String, Vec<u8>, PackRead)> = reads
-                    .iter()
-                    .filter(|(_, _, r)| r.entries.iter().all(|e| holds.contains(&e.id())))
-                    .collect();
-                let expected: BTreeSet<ChangeId> = absorbed
-                    .iter()
-                    .flat_map(|(_, _, r)| r.entries.iter().map(Verified::id))
-                    .collect();
-                let w = self.write_pack(&pack, &expected)?;
-                let replaced: Vec<&(String, Vec<u8>, PackRead)> = absorbed
-                    .into_iter()
-                    .filter(|(_, _, r)| r.path.is_some_and(|p| w.replaces.contains(&p.name)))
-                    .collect();
-                let written = vec![w];
-                // Q4.
-                let mut dirs = DirSet::new();
-                let mut gone = Vec::new();
-                for (rel, bytes, _) in replaced {
-                    let number = self.journal.packs.get(rel).and_then(|p| p.number);
-                    if !self.relocate(rel, JournalKind::Pack, number, bytes, &written) {
-                        continue;
-                    }
-                    // A pack a scanner still holds stays; the next open removes it (O7).
-                    let removed = atomic_remove_if_free(
-                        &*self.vfs,
-                        &self.folder.path(rel),
-                        SyncDir::Deferred(&mut dirs),
-                    )?;
-                    self.journal.packs.remove(rel);
-                    if self.index.sections.remove(rel).is_some() {
-                        self.index.changed = true;
-                    }
-                    if removed {
-                        gone.push(rel.clone());
-                    }
-                }
-                dirs.sync(&*self.vfs)?;
-                report.consolidated.push((written[0].rel.clone(), gone));
+            });
+        if spawned.is_err() {
+            let _ = tx.send(Err(StoreError::Other(
+                "a thread for the consolidation could not start".into(),
+            )));
+        }
+        rx
+    }
+
+    /// The new packs a worker wrote are known to the session before any old pack goes.
+    fn cons_adopt(&mut self, done: &crate::cons::ConsDone) {
+        for pack in &done.new {
+            self.journal.packs.insert(
+                pack.rel.clone(),
+                PackInfo {
+                    id: pack.id,
+                    size: pack.size,
+                    fingerprint: pack.fingerprint,
+                    number: Some(pack.number),
+                    valid: true,
+                    sealer: Some(self.device),
+                    replaces: pack.replaces.clone(),
+                    ids: Vec::new(),
+                    // The checkpoint that follows stores the pack as a blob with the rest.
+                    blob: None,
+                    seen: None,
+                    damaged: false,
+                },
+            );
+            if let Some(section) = &pack.section {
+                self.index
+                    .sections
+                    .insert(pack.rel.clone(), section.clone());
+                self.index.changed = true;
             }
         }
-        Ok(report)
+        if !done.new.is_empty() {
+            self.dirty.metadata = true;
+        }
+    }
+
+    /// Q4, a few old packs a step: the fold's values move to the new pack, then the old file
+    /// goes. A pack a scanner still holds stays; the next open removes it (O7).
+    fn cons_apply(&mut self, run: &mut SealRun) -> Result<(), StoreError> {
+        let Some(done) = run.applying.as_mut() else {
+            run.phase = SealPhase::ConsNext;
+            return Ok(());
+        };
+        for _ in 0..CONS_REMOVALS_PER_STEP {
+            let Some(old) = done.old.pop() else {
+                break;
+            };
+            let Some(map) = old.map else {
+                continue;
+            };
+            if let Some(number) = self.journal.packs.get(&old.rel).and_then(|p| p.number) {
+                self.source.moved(number, map);
+            }
+            let removed = atomic_remove_if_free(
+                &*self.vfs,
+                &self.folder.path(&old.rel),
+                SyncDir::Deferred(&mut run.dirs),
+            )?;
+            self.journal.packs.remove(&old.rel);
+            if self.index.sections.remove(&old.rel).is_some() {
+                self.index.changed = true;
+            }
+            if removed {
+                run.gone.push((old.new_rel, old.rel));
+            }
+        }
+        if done.old.is_empty() {
+            run.dirs.sync(&*self.vfs)?;
+            let done = run.applying.take().unwrap_or_default();
+            for pack in done.new {
+                let gone: Vec<String> = run
+                    .gone
+                    .iter()
+                    .filter(|(new, _)| *new == pack.rel)
+                    .map(|(_, old)| old.clone())
+                    .collect();
+                run.report.consolidated.push((pack.rel, gone));
+            }
+            run.gone.clear();
+            run.phase = SealPhase::ConsNext;
+        }
+        Ok(())
     }
 
     /// The journal files in the folder now that this session does not know: another

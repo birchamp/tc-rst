@@ -17,12 +17,14 @@ use crate::handle::{
 use crate::layout::TC;
 use crate::load::JournalKind;
 use crate::project::{PackInfo, PendingInfo, Project};
-use crate::reply::{CommandError, ReadOnlyReason};
+use crate::reply::{CommandError, ReadOnlyReason, StoreReply, Stored};
+use crate::stage::{Ready, STAGE_CHANGES, StageJob};
 use crate::vfs::LockHandle;
 use crate::writer::{CheckpointJob, Job, Origin};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tc_journal::command::Command;
 use tc_journal::fold::Notice;
 use tc_journal::index::{Facts, load_pack, load_pending};
 use tc_journal::pack::PackStatus;
@@ -47,6 +49,28 @@ struct Actor {
     /// Messages that arrived while a seal ran and are not commands: handled first, in order,
     /// when it is over.
     deferred: std::collections::VecDeque<Msg>,
+    /// A large batch is written by a worker thread (§5.0 "A large batch"); one at a time.
+    staged: Option<Staging>,
+    /// Large batches that arrived while one was being written, in order.
+    staged_waiting: std::collections::VecDeque<(Box<Command>, Resolver<CommandResult>)>,
+    /// A sender to this actor's own queue, for the worker.
+    self_tx: Sender<Msg>,
+    next_staged: u64,
+}
+
+/// What a command's reply says.
+type CommandResult = Result<StoreReply, CommandError>;
+
+/// A large batch in progress.
+struct Staging {
+    id: u64,
+    reply: Resolver<CommandResult>,
+    /// The worker waits for this: `true` to commit, `false` (or dropped) to give up.
+    verdict: Sender<bool>,
+    /// The worker is ready and was told to commit.
+    ready: Option<Box<Ready>>,
+    /// The write group of the packs it moves into the folder is open (I7).
+    group: bool,
 }
 
 /// Starts the actor of an opened project and returns its handle. `writer` is the queue of
@@ -62,6 +86,7 @@ pub(crate) fn spawn(
     rx: Receiver<Msg>,
 ) -> ProjectHandle {
     let tx = actor_tx;
+    let self_tx = tx.clone();
     project.writer = Some(writer.clone());
     let shared = project.shared.clone();
     let index_lock = Arc::new(Mutex::new(()));
@@ -82,6 +107,10 @@ pub(crate) fn spawn(
         index_lock: index_lock.clone(),
         writer_thread,
         deferred: std::collections::VecDeque::new(),
+        staged: None,
+        staged_waiting: std::collections::VecDeque::new(),
+        self_tx,
+        next_staged: 0,
     };
     let thread = std::thread::Builder::new()
         .name("tc-store actor".into())
@@ -157,6 +186,11 @@ impl Actor {
                     reply.resolve(Err(CommandError::ReadOnly(reason)));
                     return;
                 }
+                if matches!(&*command, Command::ApplyUpgrade { plan } if plan.changes.len() > STAGE_CHANGES)
+                {
+                    self.begin_staged(command, reply);
+                    return;
+                }
                 let cleared = cleared_by(&command, &self.project.fold);
                 let result = commands::plan(&self.project.ctx(), &command)
                     .and_then(|plan| self.project.commit(plan));
@@ -200,10 +234,205 @@ impl Actor {
                 }
             }
             Msg::Sync { reply } => reply.resolve(()),
+            Msg::StagedReady(ready) => self.staged_ready(*ready),
+            Msg::StagedCommitted { id, result } => self.staged_committed(id, result),
+            Msg::StagedFailed { id, error } => self.staged_ended(id, Err(error)),
             Msg::Close { reply } => {
                 let result = self.close();
                 reply.resolve(result);
             }
+        }
+    }
+
+    /// §5.0 "A large batch": reserves the batch's sequence numbers and hands the plan to a
+    /// worker thread. O(1) on the actor; saves go on meanwhile.
+    fn begin_staged(
+        &mut self,
+        command: Box<Command>,
+        reply: Resolver<Result<StoreReply, CommandError>>,
+    ) {
+        if self.staged.is_some() {
+            self.staged_waiting.push_back((command, reply));
+            return;
+        }
+        let Command::ApplyUpgrade { plan } = *command else {
+            reply.resolve(Err(CommandError::Closed));
+            return;
+        };
+        let first_seq = self.project.next_seq;
+        let Some(count) = u64::try_from(plan.changes.len()).ok() else {
+            reply.resolve(Err(CommandError::Closed));
+            return;
+        };
+        self.next_staged += 1;
+        let id = self.next_staged;
+        let (verdict, wait) = std::sync::mpsc::channel();
+        let job = StageJob {
+            id,
+            plan,
+            fold: self.project.fold.clone(),
+            project: self.project.id,
+            device: self.project.device,
+            first_seq,
+            at: self.project.clock.now(),
+            batch: tc_journal::BatchId::from_bytes(crate::random::bytes::<16>()),
+            folder: self.project.folder.clone(),
+            vfs: self.project.vfs.clone(),
+            source: self.project.source.clone(),
+            shared: self.project.shared.clone(),
+            actor: self.self_tx.clone(),
+            verdict: wait,
+        };
+        self.project.next_seq += count;
+        self.project.staging = Some(crate::project::StagingLog::default());
+        self.project.shared.job_started();
+        let counters = &self.project.counters;
+        counters.add(&counters.staged_batches, 1);
+        let spawned = std::thread::Builder::new()
+            .name("tc-store batch".into())
+            .spawn(move || crate::stage::run(job));
+        if spawned.is_err() {
+            self.project.staging = None;
+            self.project.shared.job_done();
+            reply.resolve(Err(CommandError::NotWritten(
+                "a thread for the batch could not start".into(),
+            )));
+            return;
+        }
+        self.staged = Some(Staging {
+            id,
+            reply,
+            verdict,
+            ready: None,
+            group: false,
+        });
+    }
+
+    /// The worker wrote and folded the batch. It goes on unless a save touched one of its
+    /// records since the actor received it (the person looks again), or the project turned
+    /// read-only.
+    fn staged_ready(&mut self, ready: Ready) {
+        if !self.staged.as_ref().is_some_and(|s| s.id == ready.id) {
+            return;
+        }
+        if let Some(reason) = self.read_only() {
+            return self.staged_ended(ready.id, Err(CommandError::ReadOnly(reason)));
+        }
+        let touched = self
+            .project
+            .staging
+            .as_ref()
+            .is_some_and(|log| log.touched.iter().any(|key| ready.keys.contains(key)));
+        if touched {
+            return self.staged_ended(ready.id, Err(CommandError::PlanStale));
+        }
+        if let Some(staging) = self.staged.as_mut() {
+            // The packs are about to be in the folder without `metadata.json` listing them (I7):
+            // the write group opens before the worker moves them.
+            self.project.shared.open_group();
+            staging.group = true;
+            // The worker commits; the swap waits for its word.
+            let _ = staging.verdict.send(true);
+            staging.ready = Some(Box::new(ready));
+        }
+    }
+
+    /// The worker moved the packs into the project: add the batches committed meanwhile to
+    /// its fold, take it as the project's, and answer.
+    fn staged_committed(&mut self, id: u64, result: Result<(), String>) {
+        let Some(staging) = self.staged.as_mut().filter(|s| s.id == id) else {
+            return;
+        };
+        let Some(ready) = staging.ready.take() else {
+            return;
+        };
+        if let Err(reason) = result {
+            // The batch was decided: the next open finishes it. This session cannot show it.
+            self.project
+                .shared
+                .set_mode(Mode::ReadOnly(ReadOnlyReason::WriteFailed(reason.clone())));
+            return self.staged_ended(id, Err(CommandError::NotWritten(reason)));
+        }
+        let Ready {
+            packs,
+            ids,
+            mut fold,
+            delta,
+            last_seq,
+            ..
+        } = *ready;
+        let log = self.project.staging.take().unwrap_or_default();
+        for inputs in log.served {
+            fold.add(inputs);
+        }
+        self.project.fold = fold;
+        for pack in packs {
+            self.project.journal.packs.insert(
+                pack.rel.clone(),
+                PackInfo {
+                    id: pack.id,
+                    size: pack.size,
+                    fingerprint: pack.fingerprint,
+                    number: Some(pack.number),
+                    valid: true,
+                    sealer: Some(self.project.device),
+                    replaces: Vec::new(),
+                    ids: Vec::new(),
+                    blob: None,
+                    seen: None,
+                    damaged: false,
+                },
+            );
+            if let Some(section) = pack.section {
+                self.project.index.sections.insert(pack.rel, section);
+                self.project.index.changed = true;
+            }
+        }
+        self.project.durable_max_seq = self.project.durable_max_seq.max(last_seq);
+        let conflicted = crate::project::conflicts_touched(&self.project.fold, &delta);
+        let kind = self.project.kind;
+        self.project.dirty.mark(kind, &delta, conflicted);
+        self.project.dirty.metadata = true;
+        // The next materialization lists the packs and closes the write group.
+        if let Some(staging) = self.staged.as_mut() {
+            staging.group = false;
+        }
+        self.project.close_group_next = true;
+        self.due = Some(Instant::now() + MATERIALIZE_AFTER);
+        let seq = self.project.publish();
+        self.project.shared.emit(StoreEvent::Committed {
+            seq,
+            delta: delta.clone(),
+            changes: ids.clone(),
+        });
+        let reply = StoreReply {
+            tokens: Vec::new(),
+            new_conflicts: delta.new_conflicts,
+            stored: Stored::Durable,
+            seq,
+            changes: ids,
+            skipped: Vec::new(),
+            kept: Vec::new(),
+        };
+        self.staged_ended(id, Ok(reply));
+    }
+
+    /// The batch is over, written or given up: the person is answered, the log dropped, and
+    /// the next large batch that waited starts.
+    fn staged_ended(&mut self, id: u64, result: Result<StoreReply, CommandError>) {
+        let Some(staging) = self.staged.take().filter(|s| s.id == id) else {
+            return;
+        };
+        // A worker still waiting for a word gets "no" when the sender goes.
+        drop(staging.verdict);
+        if staging.group {
+            self.project.shared.close_group();
+        }
+        self.project.staging = None;
+        staging.reply.resolve(result);
+        self.project.shared.job_done();
+        if let Some((command, reply)) = self.staged_waiting.pop_front() {
+            self.begin_staged(command, reply);
         }
     }
 
@@ -564,6 +793,9 @@ impl Actor {
                     copy,
                 }) => self.record_outside(rel, seen, *plan, derived, copy),
                 Ok(Msg::Sync { reply }) => reply.resolve(()),
+                Ok(Msg::StagedReady(ready)) => self.staged_ready(*ready),
+                Ok(Msg::StagedCommitted { id, result }) => self.staged_committed(id, result),
+                Ok(Msg::StagedFailed { id, error }) => self.staged_ended(id, Err(error)),
                 Ok(Msg::Materialize { reply }) => {
                     if let Some(reply) = reply {
                         reply.resolve(Ok(()));

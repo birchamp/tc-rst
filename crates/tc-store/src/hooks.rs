@@ -34,6 +34,14 @@ pub enum Point {
     /// A repack has written its pack and index and has not removed a loose object (§9.8,
     /// §6.4 R1); a test stops it with [`Failure::Stop`].
     AfterPackWritten,
+    /// A large batch is written and folded and the worker is about to tell the actor (§5.0 "A
+    /// large batch").
+    BeforeStagedReady,
+    /// The actor said go and the worker is about to write `commit.json`.
+    BeforeStagedCommit,
+    /// A consolidation's worker has merged a group of packs and is about to write the new one
+    /// (§5.12 Q2); the actor serves saves meanwhile.
+    BeforeConsolidationWrite,
 }
 
 /// What a test makes a [`Point`] do instead of passing.

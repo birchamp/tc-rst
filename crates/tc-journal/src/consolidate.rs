@@ -16,6 +16,10 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const SMALL_PACK_BYTES: u64 = 1024 * 1024;
 /// The current month is consolidated when it holds more small packs than this.
 pub const SMALL_PACKS_TRIGGER: usize = 32;
+/// A pack this large is already worth its file: consolidation neither reads nor rewrites it
+/// (a resource upgrade writes packs of 48 MiB, and merging a few small ones into such a pack
+/// would rewrite its 48 MiB for their sake).
+pub const LARGE_PACK_BYTES: u64 = 16 * 1024 * 1024;
 
 /// One of this device's packs, as a directory listing shows it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,13 +30,14 @@ pub struct OwnPack {
 }
 
 /// Which of this device's packs to merge at a seal (§4.7 "When"): every month before
-/// `current` that holds two or more packs (all of them, one group per month), and the
-/// current month's small packs when there are more than [`SMALL_PACKS_TRIGGER`] of them.
+/// `current` that holds two or more packs (all of them but the [`LARGE_PACK_BYTES`] ones, one
+/// group per month), and the current month's small packs when there are more than
+/// [`SMALL_PACKS_TRIGGER`] of them.
 /// Groups come in month order; names in each group are sorted.
 pub fn consolidation_groups(own: &[OwnPack], current: YearMonth) -> Vec<Vec<PackName>> {
     let mut by_month: BTreeMap<YearMonth, BTreeSet<PackName>> = BTreeMap::new();
     let mut small: BTreeSet<PackName> = BTreeSet::new();
-    for pack in own {
+    for pack in own.iter().filter(|p| p.size < LARGE_PACK_BYTES) {
         if pack.month < current {
             by_month.entry(pack.month).or_default().insert(pack.name);
         } else if pack.month == current && pack.size < SMALL_PACK_BYTES {

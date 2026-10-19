@@ -458,3 +458,77 @@ fn a_checkpoint_never_writes_an_older_projection_over_a_save_a_retry_wrote() {
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+/// R21, the owner's ruling and the month's consolidation (§5.12): merging a month of packs is
+/// read, merged, written and read back on a thread of its own, so a save is durable while the
+/// consolidation is held, and the actor serves it between the steps of the seal.
+#[test]
+fn a_save_is_durable_while_a_consolidation_is_held() {
+    let hooks = Arc::new(Hooks::default());
+    let (first, folder) = titus();
+    let fs = first.fs.clone();
+    drop(first);
+    let (config, clock) = config(&fs, APP, "host-1");
+    let store = tc_store::Store::start_with_hooks(config, hooks.clone()).unwrap();
+    store.wait_cleanup();
+    watch_burrito(&store, &fs);
+    let handle = store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    // A month of small packs: a save and a checkpoint, six times.
+    for i in 0..6 {
+        save_verse(
+            &handle,
+            1,
+            1 + i,
+            &format!("a verse saved in the old month {i}"),
+        )
+        .unwrap();
+        handle
+            .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+            .wait()
+            .unwrap();
+        clock.advance(60_000);
+    }
+    let old_packs = packs(&fs, &folder).len();
+    assert!(old_packs >= 6, "{old_packs} packs");
+    // The next month: the next seal merges them.
+    clock.advance(40 * 24 * 60 * 60 * 1000);
+    save_verse(&handle, 1, 7, "a verse saved in the new month").unwrap();
+    hooks.hold(Point::BeforeConsolidationWrite);
+    let checkpoint = handle.checkpoint(tc_store::CheckpointReason::LeavingTranslate);
+    hooks.wait_reached(Point::BeforeConsolidationWrite, 1);
+    for v in 1..=5 {
+        let reply = save_verse(
+            &handle,
+            2,
+            v,
+            &format!("saved while the consolidation is held {v}"),
+        )
+        .unwrap();
+        assert_eq!(reply.stored, Stored::Durable);
+    }
+    assert!(!checkpoint.is_ready(), "the consolidation is held");
+    hooks.release(Point::BeforeConsolidationWrite);
+    let report = checkpoint.wait().unwrap();
+    assert!(report.commit.is_some(), "{report:?}");
+    handle.wait_idle();
+    assert!(
+        packs(&fs, &folder).len() < old_packs + 2,
+        "the old month's packs were merged"
+    );
+    handle.close().unwrap();
+    let handle = store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    for i in 0..6 {
+        assert_eq!(
+            words(&handle, 1, 1 + i).as_deref(),
+            Some(format!("a verse saved in the old month {i}").as_str())
+        );
+    }
+    assert_eq!(
+        words(&handle, 2, 5).as_deref(),
+        Some("saved while the consolidation is held 5")
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&fs, &folder);
+}

@@ -81,6 +81,8 @@ counters! {
     journal_files_cached,
     /// Commands the actor ran.
     commands,
+    /// Large batches written off the actor (a resource upgrade past 2,048 changes).
+    staged_batches,
     /// Nanoseconds commands waited in the actor's queue before it took them.
     queue_wait_ns,
     /// The longest wait of one command, in nanoseconds.

@@ -330,6 +330,41 @@ pub fn spans_of(
         .collect()
 }
 
+/// [`relocation`] of several files at once: the new files' spans are read once, not once per
+/// file that goes. One map per file of `froms`, in order; `None` where a change of the file is
+/// in no file of `to`.
+pub fn relocations(
+    project: ProjectId,
+    froms: &[(&JournalFile, &[u8])],
+    to: &[(&JournalFile, u32, &[u8])],
+) -> Vec<Option<HashMap<u64, ValueAt>>> {
+    let mut new: HashMap<ChangeId, ValueAt> = HashMap::new();
+    for (file, number, bytes) in to {
+        for (id, (offset, len)) in spans_of(file.kind, &file.rel, bytes, project) {
+            new.entry(id).or_insert(ValueAt {
+                offset,
+                file: *number,
+                len,
+            });
+        }
+    }
+    froms
+        .iter()
+        .map(|(file, bytes)| {
+            let old = spans_of(file.kind, &file.rel, bytes, project);
+            let mut map = HashMap::with_capacity(old.len());
+            for (id, (offset, len)) in old {
+                let at = new.get(&id)?;
+                if at.len != len {
+                    return None;
+                }
+                map.insert(offset, *at);
+            }
+            Some(map)
+        })
+        .collect()
+}
+
 /// The map that moves the values of file `from` (bytes `from_bytes`) to the files `to`
 /// (each with its number and bytes) that hold the same changes: what [`FileSource::moved`]
 /// takes before `from` is removed. A change no file of `to` holds is left out; the caller

@@ -227,6 +227,15 @@ pub(crate) fn conflicts_touched(fold: &FoldState, delta: &Delta) -> bool {
         })
 }
 
+/// What happens while a large batch is written off the actor (§5.0 "A large batch"): the
+/// records the batches committed meanwhile changed, and those batches, to be added to the fold
+/// the worker made.
+#[derive(Debug, Default)]
+pub(crate) struct StagingLog {
+    pub touched: std::collections::HashSet<RecordKey>,
+    pub served: Vec<Vec<FoldInput>>,
+}
+
 /// See the module documentation.
 pub(crate) struct Project {
     pub vfs: Arc<dyn Vfs>,
@@ -236,6 +245,13 @@ pub(crate) struct Project {
     pub kind: ProjectKind,
     pub device: DeviceId,
     pub next_seq: u64,
+    /// The largest sequence number of this device that a durable file holds: what the ledger
+    /// (K5) names. `next_seq` runs ahead of it while a large batch has its numbers reserved.
+    pub durable_max_seq: u64,
+    /// A large batch is being written.
+    pub staging: Option<StagingLog>,
+    /// A large batch put packs into the folder that no materialization has listed yet.
+    pub close_group_next: bool,
     pub signing: Arc<TokenKey>,
     pub fold: FoldState,
     pub source: Arc<FileSource>,
@@ -290,6 +306,7 @@ impl Project {
             origin,
             reply,
             checkpoint,
+            closes_group: std::mem::take(&mut self.close_group_next),
         }
     }
 
@@ -311,6 +328,7 @@ impl Project {
             origin: crate::writer::Origin::Checkpoint,
             reply: None,
             checkpoint: Some(checkpoint),
+            closes_group: std::mem::take(&mut self.close_group_next),
         }
     }
 
@@ -364,9 +382,15 @@ impl Project {
         let changes = self.build(&plan.changes)?;
         let stored = self.write_pending(&changes, Purpose::Save, reconciles)?;
         self.next_seq += changes.len() as u64;
+        self.durable_max_seq = self.durable_max_seq.max(self.next_seq - 1);
         let ids: Vec<ChangeId> = changes.iter().map(Change::id).collect();
         let keys: Vec<RecordKey> = changes.iter().map(|c| c.body().record.key()).collect();
-        let delta = self.fold.add(changes.into_iter().map(FoldInput::from));
+        let inputs: Vec<FoldInput> = changes.into_iter().map(FoldInput::from).collect();
+        if let Some(log) = &mut self.staging {
+            log.touched.extend(keys.iter().cloned());
+            log.served.push(inputs.clone());
+        }
+        let delta = self.fold.add(inputs);
         let conflicted = conflicts_touched(&self.fold, &delta);
         self.dirty.mark(self.kind, &delta, conflicted);
         let seq = self.publish();

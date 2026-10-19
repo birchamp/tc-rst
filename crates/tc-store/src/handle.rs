@@ -254,6 +254,9 @@ pub enum Work {
     /// rescoped, a pin change, a resource upgrade, a sync's intake, or the open's first
     /// write of many books.
     Materialize,
+    /// A large batch (a resource upgrade that carries the decisions of a whole Bible) is built
+    /// and written off the actor, change by change.
+    Batch,
 }
 
 /// A book's text read from one snapshot (`docs/TC4-DELTA-2026-10-16.md` §3.10 item 2): a
@@ -641,6 +644,19 @@ pub(crate) enum Msg {
     JournalChanged,
     Sync {
         reply: Resolver<()>,
+    },
+    /// A large batch is written and folded; the worker waits for the actor's word (§5.0 "A
+    /// large batch").
+    StagedReady(Box<crate::stage::Ready>),
+    /// The worker moved a decided batch's packs into the project, or could not.
+    StagedCommitted {
+        id: u64,
+        result: Result<(), String>,
+    },
+    /// The worker gave the batch up before it was decided.
+    StagedFailed {
+        id: u64,
+        error: CommandError,
     },
     Close {
         reply: Resolver<Result<(), StoreError>>,

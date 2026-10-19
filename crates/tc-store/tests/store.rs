@@ -69,3 +69,6 @@ mod repack;
 
 #[path = "store/burrito.rs"]
 mod burrito;
+
+#[path = "store/stage.rs"]
+mod stage;

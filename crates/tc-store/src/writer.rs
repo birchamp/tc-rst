@@ -75,6 +75,9 @@ pub(crate) struct MaterializeJob {
     pub reply: Option<Resolver<Result<(), StoreError>>>,
     /// The rest of a checkpoint: the writer builds and commits the tree after the files.
     pub checkpoint: Option<CheckpointJob>,
+    /// The packs of a large batch that `metadata.json` lists once this job has written it: the
+    /// write group it closes (§5.0 "A large batch", I7).
+    pub closes_group: bool,
 }
 
 /// What the writer does for a checkpoint after the seal and the files (§5.13 C3 to C5).
@@ -310,6 +313,7 @@ impl Writer {
             origin,
             reply,
             checkpoint,
+            closes_group,
         } = job;
         if checkpoint.is_some() {
             self.begin_exact(&snapshot, packs, complete);
@@ -326,6 +330,11 @@ impl Writer {
         self.opening = false;
         if checkpoint.is_some() {
             // The seal's packs are listed now, or the job failed and the next open repairs it.
+            self.shared.close_group();
+        }
+        if closes_group {
+            // A large batch's packs are listed now, or the job failed and the next open
+            // repairs it.
             self.shared.close_group();
         }
         if let Err(e) = &result {

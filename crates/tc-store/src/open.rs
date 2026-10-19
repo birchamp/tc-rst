@@ -354,6 +354,8 @@ fn open_inner(
         // damaged one is written as this app's; a newer one was never damaged here.
         let repaired = finish_temps(&*vfs, &folder, id).and_then(|found| {
             temps = found;
+            // A large batch that was decided is finished; one that was not is removed.
+            crate::stage::recover(&*vfs, &folder, id)?;
             // The folder every save goes into is made durable now (once, §5.0), not by the
             // first save.
             atomic_create_dirs(&*vfs, &folder.path(PENDING))?;
@@ -589,6 +591,9 @@ fn open_inner(
         kind,
         device,
         next_seq,
+        durable_max_seq: next_seq.saturating_sub(1),
+        staging: None,
+        close_group_next: false,
         signing: signing.clone(),
         fold,
         source,
