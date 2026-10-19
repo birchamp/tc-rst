@@ -9,20 +9,25 @@ use std::time::Duration;
 use tc_api::app::OpenSession;
 use tc_api::event::{ChangeCause, ChangeScope, ChapterRef, Event, SessionEvent};
 use tc_api::ids::RequestId;
+use tc_api::shown::Who;
 use tc_api::test::SaveVerse;
-use tc_api::write::{Ack, Stored};
+use tc_api::write::{Ack, Stored, TokenUpdate};
 use tc_api::{ApiError, Endpoint, NotSaved, Reply};
 use tc_app::Answer;
+use tc_app::backend::ProjectStore;
 use tc_app::config::ProjectsFolder;
 use tc_app::events::Next;
 use tc_app::session::ProjectSession;
+use tc_app::wire::scope::record_ref;
 use tc_app::wire::token::{review, shown};
 use tc_journal::{BookId, ChangeId, RecordKey};
-use tc_store::Point;
+use tc_store::{FakePlatform, Point};
 
 use crate::common::{Parts, TestApp, answer, rid, until};
 use crate::counting_store::{CountingStore, SharedStore};
-use crate::store_world::{StoreWorld, progress, store_world, tit, words_of};
+use crate::store_world::{
+    StoreWorld, backend_over, pending_files, progress, save, store_world, tit, token, words_of,
+};
 
 /// An app over the world's store, with test hooks on.
 struct Rig {
@@ -319,4 +324,131 @@ async fn a_save_through_the_app_is_announced_as_its_own_request() {
         }));
         break;
     }
+}
+
+/// STORAGE §5.1, AD4 (A-2): a save of the words the field already holds, sent in another
+/// Unicode form, stores nothing, and its `Ack` hands back the request's own token and the NFC
+/// text, so the field stays clean on its own token: the clean check compares `saved` with the
+/// NFC form of the field's text, and the next save sends that token.
+#[tokio::test]
+async fn an_unchanged_save_hands_back_its_own_token_and_the_nfc_text() {
+    let rig = Rig::new().await;
+    let open = rig.open(&rig.world.bible).await;
+    let session = rig.session(&open);
+    let key = tit(1, 12);
+    let nfc = "caf\u{e9} ok";
+    let nfd = "cafe\u{301} ok";
+    let first = result_of(&rig.send(&rig.request(&open, 20, &key, nfc)).await).unwrap();
+    assert_eq!(first.stored, Stored::Written);
+    session.handle().wait_idle();
+    let folder = rig.world.folder(&rig.world.bible);
+    let (journal, counters) = (
+        pending_files(&rig.world.fs, &folder),
+        session.handle().counters(),
+    );
+
+    let again = SaveVerse {
+        at: open.at.clone(),
+        request: rid(21),
+        shown: first.tokens[0].token.clone(),
+        words: nfd.to_owned(),
+    };
+    let ack = result_of(&rig.send(&again).await).unwrap();
+    assert_eq!(ack.stored, Stored::Unchanged);
+    assert_eq!(
+        ack.tokens,
+        vec![TokenUpdate {
+            record: record_ref(&key).unwrap(),
+            token: again.shown.clone(),
+        }],
+        "exactly the request's own token"
+    );
+    assert_eq!(ack.saved.len(), 1);
+    assert_eq!(ack.saved[0].record, record_ref(&key).unwrap());
+    assert_eq!(
+        ack.saved[0].text, nfc,
+        "the NFC text, not the NFD the request sent"
+    );
+    session.handle().wait_idle();
+    assert_eq!(pending_files(&rig.world.fs, &folder), journal, "no file");
+    let spent = session.handle().counters().since(&counters);
+    assert_eq!(
+        (spent.files_created, spent.fsyncs, spent.renames),
+        (0, 0, 0),
+        "{spent:?}"
+    );
+}
+
+/// A verse save stores the NFC form of the words sent, and the `Ack` reports exactly that.
+#[tokio::test]
+async fn a_save_sent_in_nfd_is_stored_and_acknowledged_in_nfc() {
+    let rig = Rig::new().await;
+    let open = rig.open(&rig.world.bible).await;
+    let session = rig.session(&open);
+    let key = tit(1, 13);
+    let ack = result_of(
+        &rig.send(&rig.request(&open, 22, &key, "cafe\u{301} ok"))
+            .await,
+    )
+    .unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    assert_eq!(ack.saved[0].text, "caf\u{e9} ok");
+    assert_eq!(
+        words_of(&session.handle().snapshot(), &key).as_deref(),
+        Some("caf\u{e9} ok"),
+        "the stored body"
+    );
+}
+
+/// §3.4: a save over a head another computer wrote, which the screen never showed, makes a
+/// conflict whose `Ack` names that computer's person, never the person saving ("Juan changed
+/// this verse while you were editing"). The other head comes from a second installation over
+/// the same files, as a copied or shared folder brings one.
+#[tokio::test]
+async fn a_conflict_with_another_computers_head_names_its_writer() {
+    let rig = Rig::new().await;
+    let key = tit(1, 3);
+    // The screen showed Titus 1:3 before the other computer wrote it.
+    let stale = {
+        let handle = rig.world.open(&rig.world.bible);
+        let stale = shown(&token(handle.as_ref(), &key)).unwrap();
+        handle.close().await.unwrap();
+        stale
+    };
+    {
+        let other = backend_over(
+            &rig.world.fs,
+            "/app2",
+            FakePlatform {
+                pid: 77,
+                ..FakePlatform::default()
+            },
+            Arc::default(),
+        );
+        let handle = other.open(&rig.world.bible, progress()).unwrap();
+        handle.wait_idle();
+        save(handle.as_ref(), &key, "the other computer's words")
+            .await
+            .unwrap();
+        handle.close().await.unwrap();
+    }
+
+    let open = rig.open(&rig.world.bible).await;
+    let session = rig.session(&open);
+    let req = SaveVerse {
+        at: open.at.clone(),
+        request: rid(23),
+        shown: stale,
+        words: "this computer's words".to_owned(),
+    };
+    let ack = result_of(&rig.send(&req).await).unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    assert_eq!(ack.new_conflicts.len(), 1, "{ack:?}");
+    assert_eq!(ack.new_conflicts[0].record, record_ref(&key).unwrap());
+    assert_ne!(
+        ack.new_conflicts[0].by.who,
+        Who::Mine,
+        "the conflict is with the other computer's head"
+    );
+    assert_eq!(heads(&session, &key).len(), 2, "both heads stand");
 }
