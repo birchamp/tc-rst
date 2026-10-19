@@ -190,6 +190,8 @@ pub(crate) struct Inner {
     pub(crate) seed_job: Mutex<Option<JobId>>,
     /// Home's summaries (B2).
     pub(crate) home: crate::home::SummaryCache,
+    /// The open from Door43 until unit X (B9b).
+    pub(crate) open_door43: crate::share::ScriptedOpenDoor43,
     /// Calls in flight, for `test/quiet`.
     pub(crate) calls: AtomicUsize,
     quit: watch::Sender<bool>,
@@ -418,6 +420,7 @@ impl App {
             resources,
             seed_job: Mutex::new(None),
             home: crate::home::SummaryCache::default(),
+            open_door43: crate::share::ScriptedOpenDoor43::default(),
             calls: AtomicUsize::new(0),
             quit: watch::channel(false).0,
             #[cfg(feature = "test-hooks")]

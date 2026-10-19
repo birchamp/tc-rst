@@ -1,0 +1,35 @@
+{
+  "path": "account/orgs",
+  "kind": "query",
+  "net": "share",
+  "request": {
+    "language": "es-419"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "user": "facilitator-zq",
+      "orgs": [
+        {
+          "name": "Equipo-Ejemplo",
+          "fullName": "Equipo Ejemplo",
+          "canCreate": true,
+          "recommended": true
+        },
+        {
+          "name": "es-419_gl",
+          "fullName": "Latin American Spanish Gateway",
+          "canCreate": false,
+          "recommended": false
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "share"
+    }
+  }
+}

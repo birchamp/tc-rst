@@ -171,6 +171,53 @@ pub struct HelpLink {
     pub url: WebUrl,
 }
 
+/// `account/repoLink`: the address of a repository on the app's Door43 server, which the shell
+/// opens in the system browser once the internet question was answered (the share dialog's
+/// "Open on Door43"). An address on another server is refused.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RepoLink {
+    pub url: WebUrl,
+}
+
+/// `account/orgs`: where a first share may go (the share dialog's first step, tC4
+/// `organizationChoices`): the signed-in person's account and their organizations. Door43 is
+/// asked how many repositories each organization has in `language`, the project's language
+/// tag, for "Recommended" (R12).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Orgs {
+    pub language: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct ShareTargets {
+    /// The signed-in Door43 username: "Your account ({user})", "Sharing as @{user}".
+    pub user: String,
+    /// In Door43's order.
+    pub orgs: Vec<OrgChoice>,
+}
+
+/// An organization a share may go to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct OrgChoice {
+    /// The account name, which the repository's address carries.
+    pub name: String,
+    /// The name people read; the account name when Door43 has none.
+    pub full_name: String,
+    /// False: shown, cannot be chosen, and says why (`shareDialog.orgCannot`).
+    pub can_create: bool,
+    /// Of the organizations the person can create in, the one with the most repositories in the
+    /// project's language; none when there is no such repository or two share the most.
+    pub recommended: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]

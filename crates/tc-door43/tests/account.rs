@@ -347,3 +347,40 @@ async fn repositories_are_counted_per_owner_and_language() {
         "no listing is read: {searches:?}"
     );
 }
+
+/// tC4's "a count that is not in X-Total-Count is an error, not zero": no recommendation is
+/// made from a count Door43 did not give.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_search_answer_without_a_count_is_an_error_not_zero() {
+    use tc_door43_fake::{Fault, FaultRule};
+    let fake = FakeDoor43::start().await.unwrap();
+    seeded::parity_account(&fake).await.unwrap();
+    let client = client(&fake);
+    let owner = "Equipo-Ejemplo".parse().unwrap();
+    for header in [None, Some("many"), Some("")] {
+        fake.inject(FaultRule::once(
+            "GET",
+            "/api/v1/repos/search",
+            Fault::Raw {
+                status: 200,
+                headers: header
+                    .map(|v| ("X-Total-Count".to_owned(), v.to_owned()))
+                    .into_iter()
+                    .collect(),
+                body: br#"{"ok":true,"data":[]}"#.to_vec(),
+            },
+        ));
+        let counted = client.count_repositories(None, &owner, "es-419").await;
+        assert!(
+            matches!(&counted, Err(Door43Error::UnexpectedResponse { reason, .. }) if reason.contains("X-Total-Count")),
+            "{header:?}: {counted:?}"
+        );
+    }
+    assert_eq!(
+        client
+            .count_repositories(None, &owner, "es-419")
+            .await
+            .unwrap(),
+        4
+    );
+}

@@ -729,7 +729,7 @@ impl App {
     }
 
     /// Runs `f` with the store on the blocking pool: the store's reads read files.
-    async fn with_store<T: Send + 'static>(
+    pub(crate) async fn with_store<T: Send + 'static>(
         &self,
         f: impl FnOnce(&dyn ProjectStore) -> T + Send + 'static,
     ) -> Result<T, ApiError> {

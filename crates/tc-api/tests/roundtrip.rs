@@ -64,6 +64,7 @@ fn every_shared_type_round_trips() {
     use tc_api::app::*;
     use tc_api::buffer::*;
     use tc_api::check::*;
+    use tc_api::door43::*;
     use tc_api::error::*;
     use tc_api::event::*;
     use tc_api::feedback::*;
@@ -210,6 +211,10 @@ fn every_shared_type_round_trips() {
             ResumeView,
             LinkView,
             WebUrl,
+            ShareTargets,
+            OrgChoice,
+            RepoSource,
+            ProjectName,
             HelloView,
             BuildInfo,
             OpenSession,
