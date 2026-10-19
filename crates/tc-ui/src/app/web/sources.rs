@@ -265,20 +265,19 @@ impl Actions {
                 src.dl = Some(Dl::Run { job, repo: None });
             });
             let ended = this.follow_download(job).await;
+            // Whatever the end, a repository may have installed before it: what a pane or a
+            // help lacked may be here now, so Understand reads again (tC4 bumps
+            // `installEpoch`), and step 1 counts the package.
+            let installed = ChangeScope::Parts(ChangeParts {
+                aspects: vec![Aspect::Pins],
+                ..ChangeParts::default()
+            });
+            this.runtime().cache().changed(&at, &installed);
+            if let Ok(view) = this.runtime().api().call(&Sources { at }).await {
+                this.patch_src(|src| src.packages = Some(view));
+            }
             match ended {
-                Ok(()) => {
-                    this.patch_src(|src| src.dl = Some(Dl::Done));
-                    // What a pane or a help lacked may be installed now: Understand reads again
-                    // (tC4 bumps `installEpoch`), and step 1 counts the package.
-                    let installed = ChangeScope::Parts(ChangeParts {
-                        aspects: vec![Aspect::Pins],
-                        ..ChangeParts::default()
-                    });
-                    this.runtime().cache().changed(&at, &installed);
-                    if let Ok(view) = this.runtime().api().call(&Sources { at }).await {
-                        this.patch_src(|src| src.packages = Some(view));
-                    }
-                }
+                Ok(()) => this.patch_src(|src| src.dl = Some(Dl::Done)),
                 Err(None) => this.patch_src(|src| src.dl = None),
                 Err(Some(ApiError::NeedsInternet(_))) => {
                     this.patch_src(|src| src.dl = None);

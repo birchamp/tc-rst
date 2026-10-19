@@ -381,8 +381,12 @@ impl Handle<Download> for App {
             let installed = app.inner.resources.installed_dcs_pins().unwrap_or_default();
             let mut failed = Vec::new();
             let mut fetched_any = false;
+            let mut stopped = None;
             for path in &paths {
-                ctx.cancel.check()?;
+                if ctx.cancel.check().is_err() {
+                    stopped = Some(JobEnd::Cancelled);
+                    break;
+                }
                 let name = path.repo().name.to_string();
                 let phase = Phase::Install { repo: name.clone() };
                 ctx.progress.phase(phase.clone(), None);
@@ -400,21 +404,28 @@ impl Handle<Download> for App {
                     Ok(Fetched::Installed) => fetched_any = true,
                     Ok(Fetched::Present) => {}
                     Err(InstallError::Door43(Door43Error::Cancelled { .. })) => {
-                        return Err(JobEnd::Cancelled);
+                        stopped = Some(JobEnd::Cancelled);
+                        break;
                     }
                     Err(InstallError::Door43(Door43Error::Offline { .. })) => {
-                        return Err(JobEnd::Failed(ApiError::NeedsInternet(NetKind::Sources)));
+                        stopped = Some(JobEnd::Failed(ApiError::NeedsInternet(NetKind::Sources)));
+                        break;
                     }
                     Err(e) => failed.push(format!("{name}: {e}")),
                 }
             }
+            // Each repository installs whole, so one finished before a cancel or a failure stays.
             if fetched_any {
                 // The open book's panes and helps read again: what was missing may be here now
                 // (tC4 bumps `installEpoch`, which Understand's loader watches).
                 runtime.block_on(session.books().forget());
             }
-            if failed.len() < paths.len() {
+            // tC4 counts a package for step 1 once any of its repositories is here.
+            if fetched_any || (stopped.is_none() && failed.len() < paths.len()) {
                 lock(&app.inner.downloaded).insert((key, book));
+            }
+            if let Some(end) = stopped {
+                return Err(end);
             }
             if failed.is_empty() {
                 Ok(JobOutcome::Finished)
