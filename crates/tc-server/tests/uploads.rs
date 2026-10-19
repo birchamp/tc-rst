@@ -136,6 +136,21 @@ fn an_import_upload_of_exactly_the_cap_is_taken_up() {
 }
 
 #[test]
+fn an_upload_well_over_its_cap_is_taken_whole_and_answered_413() {
+    let server = TestServer::start_with(stub(), |c| c.limits.upload_cap = |_| MIB as u64, true);
+    // More than loopback buffers hold: a server that closed on the unread rest would cut the
+    // client off while it writes, as it would a browser.
+    let request = server.upload_req(UploadFlow::Import, "a", &vec![0; 32 * MIB]);
+    let mut stream = server.connect();
+    stream
+        .write_all(&request.to_bytes())
+        .expect("the server takes the whole body");
+    let response = read_response(&mut stream);
+    assert_eq!(response.status, 413, "{}", response.text());
+    assert_empties(&server.uploads_dir());
+}
+
+#[test]
 fn an_exchange_upload_may_be_larger_than_512_mib() {
     let server = TestServer::start(stub());
     let declared = 513 * MIB as u64;

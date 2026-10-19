@@ -213,6 +213,24 @@ fn an_api_body_over_the_cap_is_413() {
 }
 
 #[test]
+fn an_api_body_well_over_the_cap_is_taken_whole_and_answered_413() {
+    let recorder = Arc::new(Recorder::default());
+    let server = TestServer::start(Arc::clone(&recorder));
+    // Four times the cap, and more than loopback buffers hold: a server that closed on the
+    // unread rest would cut the client off while it writes, as it would a browser.
+    let request = server
+        .api_req("app/hello", "")
+        .body(&vec![b' '; 32 * 1024 * 1024]);
+    let mut stream = server.connect();
+    stream
+        .write_all(&request.to_bytes())
+        .expect("the server takes the whole body");
+    let response = common::read_response(&mut stream);
+    assert_eq!(response.status, 413);
+    assert!(recorder.paths().is_empty());
+}
+
+#[test]
 fn a_body_at_the_cap_reaches_the_backend() {
     let recorder = Arc::new(Recorder::default());
     let server = TestServer::start(Arc::clone(&recorder));

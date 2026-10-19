@@ -221,7 +221,7 @@ impl Drop for PartFile {
 
 /// `POST /api/v1/uploads`.
 pub(crate) async fn upload(State(shared): State<Arc<Shared>>, request: Request) -> Response {
-    // Order matters: each early answer leaves the body unread, so it costs nothing to send.
+    // Order matters: each early answer comes before any of the body is stored.
     let headers = request.headers();
     let mut flows = headers.get_all(UPLOAD_FLOW_HEADER).iter();
     let flow = match (flows.next(), flows.next()) {
@@ -236,7 +236,7 @@ pub(crate) async fn upload(State(shared): State<Arc<Shared>>, request: Request) 
     };
     let cap = (shared.limits.upload_cap)(flow);
     if declared_length(&request).is_some_and(|length| length > cap) {
-        return too_large();
+        return too_large(request.into_body().into_data_stream());
     }
     let name = match name_from(headers) {
         Ok(name) => name,
@@ -280,7 +280,7 @@ pub(crate) async fn upload(State(shared): State<Arc<Shared>>, request: Request) 
         size += chunk.len() as u64;
         // A chunked body has no length to check first.
         if size > cap {
-            return too_large();
+            return too_large(body);
         }
         if let Err(error) = writer.write_all(&chunk).await {
             return not_written(error);
