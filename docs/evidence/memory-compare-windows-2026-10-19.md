@@ -213,10 +213,35 @@ cache. A cold start needs a reboot first; see below.
 - **The first open of the Psalms project** (tC4 seeds its journal then) was not timed. The run
   that was timed opened the first version of the project, the one where tC4 read only 22
   verses: from the click, it took 2.59 s.
-- **Cold starts** are one start each of tC4, Word and Edge, in that order, right after a reboot
-  with nothing else opened. Run them with
+- **Cold starts** are one start each of tC4, Word and Edge, in that order, started 2 minutes
+  after a reboot with nothing else opened, with
   `warm-starts.ps1 -Runs 1 -Programs tc4,word,edge -Tag 'cold (first start after a reboot)'`.
-  They wait for the owner's reboot, and their rows will be added here.
+  One run each, on 2026-10-19 (boot 12:43:52, the starts from 12:46), so there is no median:
+
+  | Program, with Psalms | Window | Painted | Usable | Warm median, for comparison |
+  |---|---:|---:|---:|---:|
+  | Word 2016 (the `.docx`) | 392 ms | 648 ms | **2.80 s** | 2.82 s |
+  | Edge 155 (the page) | 205 ms | 290 ms | **0.49 s** | 0.58 s |
+  | tC4 4.0.0-rc.2 | 1.07 s | 2.14 s | Home **13.2 s** | 2.73 s |
+  | tC4, then Psalms open | | | **16.4 s** from the launch | 4.90 s |
+  | tC4, then Translate with Psalm 1 drawn | | | **18.9 s** from the launch | 6.34 s |
+
+  Free memory held at 2,754, 2,590 and 2,247 MB, and no build ran.
+  - **Word and Edge** start as fast cold as warm. Edge was already running, started at login.
+  - **tC4** takes about five times as long to reach Home on a cold start, 13.2 s against 2.7 s,
+    and its window needs 1 s to appear and 2.1 s to be painted, against 0.34 s and 0.36 s warm.
+  - **How tC4 was started.** The Start-menu shortcut was not there at 2 minutes after the boot
+    (`launch-failures.jsonl`: `shortcut_exists` false, at 12:32, 12:37 and 12:46, always 2.2
+    minutes after a boot). It is there later, with its timestamp unchanged from 09:39 that
+    morning, and it had started tC4 about twenty times earlier that day. Why it is missing for
+    the first minutes after a boot is not known. `tc4-time.ps1` then starts what the shortcut
+    starts, the installed `electron.exe` with the app folder, and the row says so (`launch`:
+    "target (the shortcut failed)"). A real double-click on the shortcut would need it to be
+    there; its lookup is not in this number.
+  - **Runs not used.** A run at 12:39 is kept apart in `startup-cold-contaminated-2026-10-19.jsonl`.
+    Another program was opened during it: Home took 100 s, and free memory fell from 2,224 to
+    1,283 MB. Two earlier runs, at 12:22 and 12:32, stopped at the missing shortcut before the
+    fallback existed, and wrote no row.
 
 ### What the startup times say
 
@@ -224,7 +249,9 @@ cache. A cold start needs a reboot first; see below.
 - **tC4 4.0.**
   - It shows its window within 0.4 s, and Home in 2.7 s.
   - Psalms in Translate takes 6.3 s from a double-click, including the two clicks.
-  - Its first launch takes 16 s to reach Home.
+  - Its first launch takes 16 s to reach Home, and so does its first start after a reboot: 13 s.
+    The rebuild's repeat-launch budget of about 3 s holds for tC4 only when the program has run
+    since the boot, so it needs a measurement of its own for the first start after a boot.
 - **The rebuild's budgets.**
   - The window within 1 s: tC4 already does this on a warm start.
   - A usable Home in about 3 s on repeat launches: tC4's 2.7 s is just inside it.
