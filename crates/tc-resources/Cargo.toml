@@ -12,6 +12,8 @@ tc-door43 = { path = "../tc-door43" }
 tc-helps = { path = "../tc-helps" }
 # The pin model and the D30 ladder, shared with the fold and the Check screens.
 tc-journal = { path = "../tc-journal" }
+# A book's linked articles are read together.
+rayon.workspace = true
 reqwest = { workspace = true, features = ["rustls", "system-proxy"] }
 serde.workspace = true
 serde_json.workspace = true

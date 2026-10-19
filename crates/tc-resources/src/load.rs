@@ -315,7 +315,12 @@ fn open_dcs(store: &ResourceStore, pin: &ResourcePin) -> Result<Installed, Missi
 }
 
 fn read_text(installed: &Installed, path: &str, source: &str) -> Result<String, Missing> {
-    installed.read_text(path).map_err(|e| Missing::Unreadable {
+    read_result(installed.read_text(path), source)
+}
+
+/// A read file, or why the source is unreadable.
+fn read_result(read: Result<String, crate::StoreError>, source: &str) -> Result<String, Missing> {
+    read.map_err(|e| Missing::Unreadable {
         source: source.to_owned(),
         problem: e.to_string(),
     })
@@ -466,8 +471,8 @@ fn load_articles(
                 .iter()
                 .map(|l| l.article.clone())
                 .collect();
-            let mut articles = Vec::new();
             let mut held = 0usize;
+            let mut wanted_files: Vec<(WordArticleId, String)> = Vec::new();
             let paths: Vec<String> = installed
                 .files()
                 .filter(|p| layout::is_word_article(p))
@@ -476,13 +481,19 @@ fn load_articles(
             for path in paths {
                 held += 1;
                 match word_article_id(&path) {
-                    Ok(id) if wanted.contains(&id) => articles.push(parse_word_article(
-                        id,
-                        &read_text(&installed, &path, &name)?,
-                    )),
+                    Ok(id) if wanted.contains(&id) => wanted_files.push((id, path)),
                     Ok(_) => {}
                     Err(e) => refused.push(format!("{path}: {e}")),
                 }
+            }
+            // The articles Psalms links are hundreds of small files: read together.
+            let files: Vec<String> = wanted_files.iter().map(|(_, p)| p.clone()).collect();
+            let mut articles = Vec::new();
+            for ((id, _), text) in wanted_files
+                .into_iter()
+                .zip(installed.read_text_many(&files))
+            {
+                articles.push(parse_word_article(id, &read_result(text, &name)?));
             }
             if held == 0 {
                 return Err(Missing::Unreadable {
@@ -497,9 +508,11 @@ fn load_articles(
                 .iter()
                 .filter_map(|n| n.support_reference.clone())
                 .collect();
-            let mut articles = Vec::new();
             let folders = layout::academy_folders(installed.files());
             let held = folders.len();
+            // The files of every wanted article, read together: title, sub-title if any, body.
+            let mut chosen = Vec::new();
+            let mut files: Vec<String> = Vec::new();
             for folder in folders {
                 let id = AcademyArticleId::Dcs {
                     manual: folder.manual,
@@ -509,13 +522,33 @@ fn load_articles(
                     continue;
                 }
                 let file = |leaf: &str| format!("{}{leaf}", folder.folder);
-                let title = read_text(&installed, &file("title.md"), &name)?;
-                let subtitle = if installed.has_file(&file("sub-title.md")) {
-                    Some(read_text(&installed, &file("sub-title.md"), &name)?)
+                let has_subtitle = installed.has_file(&file("sub-title.md"));
+                files.push(file("title.md"));
+                if has_subtitle {
+                    files.push(file("sub-title.md"));
+                }
+                files.push(file("01.md"));
+                chosen.push((folder, has_subtitle));
+            }
+            let mut texts = installed.read_text_many(&files).into_iter();
+            let mut next = |what: &str| -> Result<String, Missing> {
+                match texts.next() {
+                    Some(text) => read_result(text, &name),
+                    None => Err(Missing::Unreadable {
+                        source: name.clone(),
+                        problem: format!("the {what} of an article was not read"),
+                    }),
+                }
+            };
+            let mut articles = Vec::new();
+            for (folder, has_subtitle) in chosen {
+                let title = next("title")?;
+                let subtitle = if has_subtitle {
+                    Some(next("sub-title")?)
                 } else {
                     None
                 };
-                let body = read_text(&installed, &file("01.md"), &name)?;
+                let body = next("body")?;
                 articles.push(academy_article(
                     folder.manual,
                     folder.slug,

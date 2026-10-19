@@ -505,6 +505,12 @@ fn check_bible_in(dir: &Path) -> Vec<Measured> {
     // gone and 2% of the quotes changed), the fold's decisions what is carried.
     let decisions = decisions_found;
     let domain = Corpus::domain(&Spec::whole_bible(1)).expect("the corpus domain");
+    let rows_total = domain.check_count();
+    let distinct_keys: std::collections::HashSet<_> = domain
+        .books
+        .iter()
+        .flat_map(|b| b.checks.iter().filter_map(|r| tc_corpus::check_key(r).ok()))
+        .collect();
     let resource = ResourceRef {
         repo_path: "git.door43.org/unfoldingWord/en_tn".into(),
         sha: GitOid::parse(&"cd".repeat(20)).expect("a commit id"),
@@ -613,9 +619,10 @@ fn check_bible_in(dir: &Path) -> Vec<Measured> {
         "check.carry_bible",
         per_pass,
         format!(
-            "{} units, {decisions} decisions, a gateway-language change, units planned together \
-             on four threads, 5 passes",
-            lists.len()
+            "{} units, {decisions} decisions (the corpus has {rows_total} check rows with {} distinct \
+             keys), a gateway-language change, units planned together on four threads, 5 passes",
+            lists.len(),
+            distinct_keys.len()
         ),
     ));
     rows

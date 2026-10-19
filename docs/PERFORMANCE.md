@@ -40,8 +40,10 @@ rebuild must stay quick at that size for the whole life of a project.
 5. **Measure release builds** on the corpus below. Record the median and p95 of at least 20
    runs (5 runs for actions over 1 s), the machine (with whether its CPU has SHA and
    AVX-512 instructions) and the commit in `docs/evidence/`. CI
-   runs the same benchmarks and fails a budget only above three times its value, because CI
-   machines vary.
+   runs the same benchmarks (the `perf` job: `perfreport ci`, the report of unit P,
+   `crates/tc-corpus/examples/perfreport`, on the corpus below) and fails a budget only above
+   three times its value, because CI machines vary. The reference laptop runs the same report
+   without the ratios (`spikes/perfreport-windows/run-perfreport.ps1`).
 6. **When a budget is missed,** profile, then fix the data structure or the algorithm. Add a
    cache only after that. A budget changes only with evidence, recorded here with the reason.
 
@@ -84,7 +86,7 @@ show that a budget is met.
 | Editor | Save one verse until "Saved" | Psalms | 25 ms including fsync; fold update and the chapter's projection 2 ms |
 | Editor | Move to another chapter | Psalms | 16 ms |
 | Editor | Update project-wide counts and the conflict list after a save | whole Bible | 1 ms incremental; 100 ms from scratch |
-| Checking | Open the Check screen: derive, map versification, place decisions, compute status | Psalms tN and tW | 250 ms the first time; 20 ms from the cache (keyed by pins and book) |
+| Checking | Open the Check screen: derive, map versification, place decisions, compute status | Psalms tN and tW, one tool's screen | 250 ms the first time; 20 ms from the cache. The cache holds the session (the derived list and each check's state, keyed by pins, book and scope), and a decision or a verse edit patches its rows (`Session::set_state`, `Session::reassess`); a list cached alone would still project and place the book's decisions again, which is not this row |
 | Checking | Change filter, sort or grouping in the rail | Psalms | 16 ms |
 | Checking | Record a decision until "Saved" | Psalms | 25 ms; progress counts update in 1 ms |
 | Checking | Re-assess checks after a verse edit | one verse | 1 ms: only that verse's checks |

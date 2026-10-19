@@ -218,13 +218,19 @@ pub fn content_files_written() -> u64 {
     CONTENT_FILES_WRITTEN.with(Cell::get)
 }
 
-fn read_content(path: &Path) -> std::io::Result<Vec<u8>> {
+/// Counts a content file opened on this thread ([`content_files_opened`],
+/// [`with_opened_paths`]).
+fn count_opened(path: &Path) {
     CONTENT_FILES_OPENED.with(|opened| opened.set(opened.get() + 1));
     OPENED_PATHS.with(|paths| {
         if let Some(paths) = paths.borrow_mut().as_mut() {
             paths.push(path.to_owned());
         }
     });
+}
+
+fn read_content(path: &Path) -> std::io::Result<Vec<u8>> {
+    count_opened(path);
     fs::read(path)
 }
 
@@ -312,6 +318,51 @@ impl Installed {
             });
         }
         Ok(bytes)
+    }
+
+    /// Several files as UTF-8 text, read together on the worker pool, in the order of `paths`.
+    /// Each file is checked and counted as [`Installed::read_text`] does, on the calling
+    /// thread, so a count test sees the opens it would see of a read one by one. A book's
+    /// linked articles are hundreds of small files, and on Windows each open is a scan the
+    /// scanner makes beside the others.
+    pub fn read_text_many(&self, paths: &[String]) -> Vec<Result<String, StoreError>> {
+        use rayon::prelude::*;
+        let full = |path: &str| self.dir.join(CONTENT).join(path);
+        let listed: Vec<Option<&FileRecord>> = paths.iter().map(|p| self.record(p)).collect();
+        let bytes: Vec<Option<std::io::Result<Vec<u8>>>> = paths
+            .par_iter()
+            .zip(&listed)
+            .with_min_len(8)
+            .map(|(path, record)| record.map(|_| fs::read(full(path))))
+            .collect();
+        paths
+            .iter()
+            .zip(listed)
+            .zip(bytes)
+            .map(|((path, record), bytes)| {
+                let (Some(record), Some(bytes)) = (record, bytes) else {
+                    return Err(StoreError::NoSuchFile {
+                        install: self.receipt.origin.describe(),
+                        file: path.clone(),
+                    });
+                };
+                let full = full(path);
+                count_opened(&full);
+                let bytes = bytes.map_err(|e| StoreError::io("read", &full, e))?;
+                if bytes.len() as u64 != record.size {
+                    return Err(StoreError::Damaged {
+                        path: self.dir.clone(),
+                        file: path.clone(),
+                        problem: format!("{} bytes, the receipt says {}", bytes.len(), record.size),
+                    });
+                }
+                String::from_utf8(bytes).map_err(|_| StoreError::Damaged {
+                    path: self.dir.clone(),
+                    file: path.clone(),
+                    problem: "it is not UTF-8 text".to_owned(),
+                })
+            })
+            .collect()
     }
 
     /// A file as UTF-8 text.

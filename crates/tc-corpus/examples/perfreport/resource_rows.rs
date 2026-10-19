@@ -13,7 +13,7 @@
 //! - `lex.load` and `lex.lookup`: the Hebrew lexicon, loaded and looked up with every
 //!   `strong` of the UHB Psalms.
 
-use crate::common::{evict_page_cache, header, ms};
+use crate::common::{evict_page_cache, header, ms, on_pool};
 use crate::machine::private_mib;
 use crate::table::Measured;
 use std::collections::BTreeSet;
@@ -150,6 +150,10 @@ pub fn seed(dir: &Path) -> Vec<Measured> {
 /// Psalms loaded from the machine store: the first time with the store out of the page cache
 /// and then warm, and the memory the loaded book keeps.
 pub fn load(dir: &Path) -> Vec<Measured> {
+    on_pool(|| load_in(dir))
+}
+
+fn load_in(dir: &Path) -> Vec<Measured> {
     header("res-load");
     let machine_root = machine_dir(dir);
     let store = ResourceStore::open_read_only(&machine_root).expect("the machine store");

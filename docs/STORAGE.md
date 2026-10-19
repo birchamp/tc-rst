@@ -1972,7 +1972,11 @@ neither text is lost. An empty text is refused (a retraction is the record kind 
        fold shows it invalidated and kept (§7.7). Pinning the old resource again makes it valid.
    - alignments: no change. An original-language upgrade changes the pin; every alignment whose
      `source.sha` differs computes as invalid and is kept.
-   - The dialog says "N checks carried over, M to check again, K alignments to review".
+   - The dialog says "N checks carried over, M to check again, K alignments to review". Its
+     numbers come from `tc_check::carry::plan` per (tool, book) unit; the units are independent,
+     so a background job plans the 132 of a whole Bible together on the worker pool, and the
+     count before it (what the change would put at risk) reads only the resources the decisions
+     were made against (§7.7).
 3. **Confirm.** The actor checks that every record the plan touches still has the heads it had
    in `S`. If any moved (a sync landed, a teammate's check arrived), it rebuilds the plan and
    shows the dialog again. Otherwise the whole plan is one batch, `commit_batch`; a plan of more than
@@ -3218,6 +3222,30 @@ the fold's flags, one shown on another check is assessed against that check's te
 function, and one no check carries is listed off the list (`tc_check::session`). The texts a
 screen assesses with are the fold's (`FoldState::check_texts`, by the no-text rule below), so
 the screen and the file read one text.
+
+What a Check screen's steps cost is pinned by operation counts (PERFORMANCE.md rule 2;
+`crates/tc-check/tests/operation_counts.rs`, `crates/tc-journal/tests/operation_counts.rs`):
+
+- `FoldState::decisions` reads the Check records of the tool in the collection and the verse
+  texts they are assessed against, and no other record of the book: a record's key says whether it
+  is such a decision, so the book's verses, alignments, comments and the other tool's decisions are
+  never decoded (it read and decoded all 23,937 records of Psalms to return 8,212; it reads 10,819
+  now). The decisions are taken in the order of their targets, so the decisions of one verse read
+  its text once, and are projected in chunks on the worker pool.
+- `FoldState::decision_resources(tool, collection)` returns the resource each decision was made
+  against from what the fold keeps beside the change (`Shape::Decision`): no value is read or
+  decoded for a decision with one head. `tc_check::change::consequences_by_resource` counts what
+  an upgrade or a gateway change would invalidate from them (§5.8 step 2's dialog), with the
+  numbers `consequences` gives from whole decisions.
+- A `tc_check::session::Session` keeps its progress and an index of the checks of each verse (a
+  span such as `9-10` is under both verses): `reassess(chapter, verse, ..)` computes again the
+  state of that verse's checks and no other, `set_state` replaces one check's state, and
+  `Progress::update` follows either in O(1). The screens' session cache (APP-DESIGN
+  `CheckListCache`) holds the session and patches it with these, which is what makes a reopened
+  Check screen cost the rows that changed and not a second projection of the decisions.
+- The rail's groups read each check's sort key once and put each row in its group once;
+  a carry-over looks a decision up by place, quote and occurrence in an index built when the first
+  decision needs it. Neither multiplies two sizes any more.
 
 **The ladder** (`tc_journal::pins`), every rule tC4's (`src/data/resolve.ts` at d310bf3):
 
