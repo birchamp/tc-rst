@@ -212,7 +212,11 @@ async fn a_link_to_a_project_elsewhere_is_listed_as_unusable() {
 
 /// tc-store's start removes the staging folders that an interrupted create, copy, join or
 /// import left (STORAGE §6.4 N1). The app records each in the report log, so "Ask for help"
-/// carries it and E1b and F1 can tell the person; a project beside them is untouched.
+/// carries it and E1b and F1 can tell the person; a project beside them is untouched. An
+/// import and a join are reported as tC4's start reports them
+/// (`tC4:src/data/journal/opsLog.ts:603-614, 677-691`): under their own operation, interrupted
+/// and rolled back, the import with tC4's refusal. A create, which tC4 has no staging folder
+/// for, is this app's `staging-removed`.
 #[tokio::test]
 async fn a_staging_folder_removed_at_start_is_reported() {
     use tc_app::reports::{ReportOp, ReportOutcome};
@@ -223,51 +227,80 @@ async fn a_staging_folder_removed_at_start_is_reported() {
     std::fs::write(join.join("ingredients/TIT.usfm"), b"\\id TIT\n").unwrap();
     let import = disk.projects.join(".staging-import-0123456789abcdef");
     std::fs::create_dir(&import).unwrap();
+    let create = disk.projects.join(".staging-create-00000000deadbeef");
+    std::fs::create_dir(&create).unwrap();
     let t = disk.start().await;
 
+    let ops = [
+        ReportOp::Import,
+        ReportOp::OpenDoor43,
+        ReportOp::StagingRemoved,
+    ];
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    let removed = loop {
+    let mut removed = loop {
         let removed: Vec<_> = t
             .app
             .reports()
             .all()
             .into_iter()
-            .filter(|r| r.op == ReportOp::StagingRemoved)
+            .filter(|r| ops.contains(&r.op))
             .collect();
-        if removed.len() >= 2 || std::time::Instant::now() > deadline {
+        if removed.len() >= 3 || std::time::Instant::now() > deadline {
             break removed;
         }
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     };
-    let mut seen: Vec<(String, String)> = removed
+    removed.sort_by_key(|r| r.facts["folder"].as_str().unwrap().to_owned());
+    let seen: Vec<_> = removed
         .iter()
         .map(|r| {
-            assert!(
-                matches!(&r.outcome, ReportOutcome::Failed { reason } if reason.contains("did not finish")),
-                "{:?}",
-                r.outcome
-            );
             (
-                r.facts["folder"].as_str().unwrap().to_owned(),
-                r.facts["kind"].as_str().unwrap().to_owned(),
+                r.op,
+                r.outcome.clone(),
+                serde_json::Value::Object(r.facts.clone()),
             )
         })
         .collect();
-    seen.sort();
     assert_eq!(
         seen,
         [
             (
-                ".staging-import-0123456789abcdef".to_owned(),
-                "import".to_owned()
+                ReportOp::StagingRemoved,
+                ReportOutcome::Failed {
+                    reason: "creating a project did not finish, so its part copy was removed"
+                        .to_owned()
+                },
+                serde_json::json!({
+                    "folder": ".staging-create-00000000deadbeef",
+                    "kind": "create",
+                }),
             ),
             (
-                ".staging-join-feedfacefeedface".to_owned(),
-                "join".to_owned()
+                ReportOp::Import,
+                ReportOutcome::Refused {
+                    code: Some("import.write-failed".to_owned()),
+                    key: "refusal.import.write-failed".to_owned(),
+                },
+                serde_json::json!({
+                    "folder": ".staging-import-0123456789abcdef",
+                    "interrupted": true,
+                    "rolledBack": true,
+                }),
+            ),
+            (
+                ReportOp::OpenDoor43,
+                ReportOutcome::Failed {
+                    reason: "the open from Door43 was interrupted; no project was kept".to_owned()
+                },
+                serde_json::json!({
+                    "folder": ".staging-join-feedfacefeedface",
+                    "interrupted": true,
+                    "rolledBack": true,
+                }),
             ),
         ]
     );
-    assert!(!join.exists() && !import.exists());
+    assert!(!join.exists() && !import.exists() && !create.exists());
     let listing = t.app.sessions().store().list().unwrap();
     let names: Vec<&str> = listing.projects.iter().map(|e| e.folder.as_str()).collect();
     assert_eq!(names, ["titus_on_disk"]);

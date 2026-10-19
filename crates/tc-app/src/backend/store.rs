@@ -351,15 +351,11 @@ pub(crate) fn report_removed_staging(
 ) {
     fn record(backend: &StoreBackend, reports: &ReportLog, clock: &dyn Clock, started: WallMs) {
         for removed in backend.removed_at_start() {
-            let (kind, work) = staging_work(removed.kind);
+            let (op, outcome, facts) = staging_report(&removed);
             reports.add(
-                ReportOp::StagingRemoved,
-                ReportOutcome::Failed {
-                    reason: format!("{work} did not finish, so its part copy was removed"),
-                },
-                crate::reports::facts(
-                    serde_json::json!({ "folder": removed.folder, "kind": kind }),
-                ),
+                op,
+                outcome,
+                crate::reports::facts(facts),
                 started,
                 clock.now(),
             );
@@ -378,15 +374,50 @@ pub(crate) fn report_removed_staging(
     }
 }
 
-/// A staging folder's kind as a report names it, and the work it was for.
-fn staging_work(kind: Option<tc_store::StagingKind>) -> (Option<&'static str>, &'static str) {
+/// The report of one staging folder the start removed. An import and a join are reported as
+/// tC4's start reports the same moment (`tC4:src/data/journal/opsLog.ts:603-614, 677-691`):
+/// under their own operation, with `interrupted` and `rolledBack`, an import with tC4's
+/// refusal `import.write-failed` and a join with tC4's sentence, so "Ask for help" names
+/// them as tC4's Feedback dialog does ("Report: import, …"). tC4 makes no staging folder for a
+/// create or a copy, so those, and a folder whose name does not say its work, are this app's
+/// `staging-removed`, with the folder's kind.
+fn staging_report(
+    removed: &tc_store::RemovedStaging,
+) -> (ReportOp, ReportOutcome, serde_json::Value) {
+    use tc_api::Message;
+    use tc_api::refusal::ImportRefusal;
     use tc_store::StagingKind;
-    match kind {
-        Some(StagingKind::Create) => (Some("create"), "creating a project"),
-        Some(StagingKind::Copy) => (Some("copy"), "copying a project"),
-        Some(StagingKind::Join) => (Some("join"), "opening a project from Door43"),
-        Some(StagingKind::Import) => (Some("import"), "importing a project"),
-        None => (None, "work in the projects folder"),
+    let folder = &removed.folder;
+    let rolled_back =
+        || serde_json::json!({ "folder": folder, "interrupted": true, "rolledBack": true });
+    let removed_work = |kind: Option<&str>, work: &str| {
+        (
+            ReportOp::StagingRemoved,
+            ReportOutcome::Failed {
+                reason: format!("{work} did not finish, so its part copy was removed"),
+            },
+            serde_json::json!({ "folder": folder, "kind": kind }),
+        )
+    };
+    match removed.kind {
+        Some(StagingKind::Import) => (
+            ReportOp::Import,
+            ReportOutcome::Refused {
+                code: ImportRefusal::WriteFailed.code().map(str::to_owned),
+                key: ImportRefusal::WriteFailed.key().to_owned(),
+            },
+            rolled_back(),
+        ),
+        Some(StagingKind::Join) => (
+            ReportOp::OpenDoor43,
+            ReportOutcome::Failed {
+                reason: "the open from Door43 was interrupted; no project was kept".to_owned(),
+            },
+            rolled_back(),
+        ),
+        Some(StagingKind::Create) => removed_work(Some("create"), "creating a project"),
+        Some(StagingKind::Copy) => removed_work(Some("copy"), "copying a project"),
+        None => removed_work(None, "work in the projects folder"),
     }
 }
 
@@ -1180,6 +1211,69 @@ mod tests {
                 .to_owned(),
         ] {
             assert!(read(&refused).is_err(), "{refused}");
+        }
+    }
+
+    /// A removed import and join are reported under tC4's operations (`import`,
+    /// `open-door43`), interrupted and rolled back; a create, a copy and a folder whose name
+    /// says no work, which tC4 has no staging folder for, are `staging-removed` with the kind.
+    #[test]
+    fn each_removed_staging_folder_is_reported_under_its_operation() {
+        use tc_store::{RemovedStaging, StagingKind};
+        let report = |folder: &str, kind| {
+            staging_report(&RemovedStaging {
+                folder: folder.to_owned(),
+                kind,
+            })
+        };
+        let rolled_back = |folder: &str| serde_json::json!({ "folder": folder, "interrupted": true, "rolledBack": true });
+        assert_eq!(
+            report(".staging-import-01", Some(StagingKind::Import)),
+            (
+                ReportOp::Import,
+                ReportOutcome::Refused {
+                    code: Some("import.write-failed".to_owned()),
+                    key: "refusal.import.write-failed".to_owned(),
+                },
+                rolled_back(".staging-import-01"),
+            )
+        );
+        assert_eq!(
+            report(".staging-join-02", Some(StagingKind::Join)),
+            (
+                ReportOp::OpenDoor43,
+                ReportOutcome::Failed {
+                    reason: "the open from Door43 was interrupted; no project was kept".to_owned(),
+                },
+                rolled_back(".staging-join-02"),
+            )
+        );
+        for (folder, kind, name, work) in [
+            (
+                ".staging-create-03",
+                Some(StagingKind::Create),
+                Some("create"),
+                "creating a project",
+            ),
+            (
+                ".staging-copy-04",
+                Some(StagingKind::Copy),
+                Some("copy"),
+                "copying a project",
+            ),
+            (".staging-05", None, None, "work in the projects folder"),
+        ] {
+            assert_eq!(
+                report(folder, kind),
+                (
+                    ReportOp::StagingRemoved,
+                    ReportOutcome::Failed {
+                        reason: format!("{work} did not finish, so its part copy was removed"),
+                    },
+                    serde_json::json!({ "folder": folder, "kind": name }),
+                ),
+                "{folder}"
+            );
         }
     }
 

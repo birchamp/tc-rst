@@ -44,8 +44,9 @@ pub enum ReportOp {
     Resources,
     /// A project's close that failed; the session is gone all the same.
     Close,
-    /// A staging folder that an interrupted create, copy, join or import left, which
-    /// tc-store's start removed (STORAGE §6.4 N1).
+    /// A staging folder that an interrupted create or copy left, or one whose name does not say
+    /// its work, which tC4 has none of and tc-store's start removed (STORAGE §6.4 N1). A
+    /// removed import's or join's is `Import` or `OpenDoor43`, as tC4 reports them.
     StagingRemoved,
 }
 
