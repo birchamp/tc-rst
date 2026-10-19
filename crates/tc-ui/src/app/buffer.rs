@@ -189,10 +189,10 @@ pub struct Written {
 /// What a `Write` command of the save machine does to the storage, the same in the browser glue
 /// and in the tests' pages. The entry is written over this run's item, keeping the keys this
 /// build does not know. An item of another run, or one this build cannot read, is left as it is
-/// (6.6). When the storage refuses, an item that names another save in flight than `entry` is
-/// removed, so a reload never sends again a request the field no longer waits for; one that
-/// names the same save keeps the older text, which is better than none. The mirror's line
-/// always carries the entry, so the shell holds the text even where the storage does not.
+/// (6.6). When the storage refuses, the stored item is left as it is too: an older text of the
+/// field is better than none, and a save it names is one this run's reply cache answers, so a
+/// reload that sends it again gets the answer it had. The mirror's line always carries the
+/// entry, so the shell holds the text even where the storage does not.
 pub fn write_entry(store: &mut dyn Store, key: &BufferKey, entry: &BufferEntry) -> Written {
     let failure = match write(store, key, entry) {
         Ok(text) => {
@@ -202,14 +202,7 @@ pub fn write_entry(store: &mut dyn Store, key: &BufferKey, entry: &BufferEntry) 
             };
         }
         Err(StoreError::Foreign) => None,
-        Err(error) => {
-            if read(store, key).is_some_and(|stored| {
-                stored.instance == entry.instance && stored.sent != entry.sent
-            }) {
-                let _ = remove(store, key, None, entry.instance);
-            }
-            Some(error)
-        }
+        Err(error) => Some(error),
     };
     Written {
         line: encode(entry)

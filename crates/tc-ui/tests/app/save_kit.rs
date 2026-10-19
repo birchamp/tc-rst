@@ -192,7 +192,9 @@ impl Page {
                     base: base.clone(),
                     resend: false,
                 }),
-                Command::Resend { key, sent, base } => self.inflight.push_back(InFlight {
+                Command::Resend {
+                    key, sent, base, ..
+                } => self.inflight.push_back(InFlight {
                     key: key.clone(),
                     sent: sent.clone(),
                     base: base.clone(),

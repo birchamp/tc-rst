@@ -305,7 +305,9 @@ impl World {
         for command in commands {
             let (k, sent, base, resend) = match command {
                 Command::Send { key, sent, base } => (key, sent, base, false),
-                Command::Resend { key, sent, base } => (key, sent, base, true),
+                Command::Resend {
+                    key, sent, base, ..
+                } => (key, sent, base, true),
                 _ => continue,
             };
             let body = (sent.text.clone(), base.clone(), sent.scope.clone());
@@ -656,7 +658,9 @@ impl World {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(512))]
+    // 512 cases missed a history that 40,000 found (the reissue with no open); both properties
+    // passed at 60,000 cases on 2026-10-19. 2,048 keeps the run to a few seconds.
+    #![proptest_config(ProptestConfig::with_cases(2048))]
 
     /// The row's proptest: no `current` is dropped. Unsaved text is never clean and always in
     /// the buffer, a clean field holds exactly the text its token stands for, a reload brings
@@ -671,6 +675,28 @@ proptest! {
             world.apply(step)?;
         }
         world.settle()?;
+    }
+}
+
+/// The shortest history `no_current_is_dropped` found at 40,000 cases: a reissue after
+/// `RequestReused` while the project had no open left the answered request in the entry, and
+/// the reload after the project opened again sent it.
+#[test]
+fn a_reissue_with_no_open_and_two_reloads_send_no_answered_id() {
+    for pending in [false, true] {
+        let mut world = World::new();
+        for step in [
+            Step::Type(3, 1),
+            Step::Blur(3),
+            Step::Session(None),
+            Step::Deliver(0, Reply::Reused),
+            Step::Reload(pending),
+            Step::Session(Some(0)),
+            Step::Reload(pending),
+        ] {
+            world.apply(&step).unwrap();
+        }
+        world.settle().unwrap();
     }
 }
 

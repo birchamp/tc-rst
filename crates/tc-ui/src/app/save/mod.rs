@@ -171,13 +171,15 @@ pub enum Command {
         sent: SentSave,
         base: Vec<ShownToken>,
     },
-    /// Send a save whose reply was lost, with the same id and body. The glue first checks with
-    /// `app/hello` that the server run is the one the field sent to: a run that started again
-    /// has no reply cache, and the resend would store the text twice.
+    /// Send a save whose reply was lost, with the same id and body, to the run `instance` it
+    /// went to. The glue first asks `app/hello` and sends only on
+    /// [`SaveMachine::resend_check`]'s word: a run that started again has no reply cache, and
+    /// the resend would store the text twice.
     Resend {
         key: BufferKey,
         sent: SentSave,
         base: Vec<ShownToken>,
+        instance: ServerInstance,
     },
     /// Send the field's draft (STORAGE §5.14). Best effort: its answer changes nothing here.
     Draft {
@@ -192,6 +194,19 @@ pub enum Command {
     /// Read the open sessions again (`app/hello`): a save was refused as `StaleScope` by the
     /// open the page still holds, so the page has not heard of its project's new open yet.
     ReadSessions,
+}
+
+/// What a lost reply's resend does once `app/hello` has named the server's run (6.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ResendCheck {
+    /// The run the request went to answers, and the field still waits for this request.
+    Send,
+    /// Another run answers: the server started again (AD4). The runtime's one restart path
+    /// takes it, which changes nothing when the page already knows.
+    Restarted(ServerInstance),
+    /// The field no longer waits for this request, or the page has moved on to another run.
+    #[default]
+    Nothing,
 }
 
 /// Where the navigation gate stands (6.5, D9 of the A4b plan).
@@ -1006,15 +1021,21 @@ impl SaveMachine {
         out
     }
 
-    /// The page is hidden (`pagehide`): every field that may save now is sent, best effort, as
-    /// tC4 drains its schedulers then (`tC4:src/state.jsx:3699-3704`). Each entry names its save
-    /// before the request goes, so the next load of the same run sends the same request again
-    /// if no answer came. A failure is not retried: only Retry and the gate do that (FR-32).
+    /// The page is hidden (`pagehide`): every field that may save now is sent, best effort, and
+    /// each standing failure is retried once with a new id, as tC4's `drain` does for each of
+    /// its schedulers then (`tC4:src/state.jsx:3699-3704`, `saveScheduler.ts:139-146`): the
+    /// cause may be gone, and the page is leaving. Each entry names its save before the request
+    /// goes, so the next load of the same run sends the same request again if no answer came.
     pub fn hide(&mut self, now: Ms) -> Vec<Command> {
         let mut out = Vec::new();
         for (key, field) in &mut self.fields {
-            if field.sendable_by_gate() && matches!(field.state, FieldSave::Dirty { .. }) {
-                send(key, field, &mut self.ids, now, &mut out);
+            if !field.sendable_by_gate() {
+                continue;
+            }
+            match field.state {
+                FieldSave::Dirty { .. } => send(key, field, &mut self.ids, now, &mut out),
+                FieldSave::Failed(_) => retry_field(key, field, &mut self.ids, now, &mut out),
+                _ => {}
             }
         }
         out
@@ -1039,6 +1060,31 @@ impl SaveMachine {
             return GateState::Again;
         }
         GateState::Pass
+    }
+
+    /// Whether a lost reply's resend goes, now that `app/hello` named the run `hello`. It goes
+    /// only to the run it was sent to, and only while that is still this machine's run and the
+    /// field still waits for this very request: another part of the page (the event stream's
+    /// `Resync`, a read of the sessions) may have found a restart while the `hello` was on its
+    /// way, and the new run, which has no reply cache, would store the text a second time.
+    pub fn resend_check(
+        &self,
+        key: &BufferKey,
+        request: RequestId,
+        sent_to: ServerInstance,
+        hello: ServerInstance,
+    ) -> ResendCheck {
+        if hello != sent_to {
+            return ResendCheck::Restarted(hello);
+        }
+        let waits = self.fields.get(key).is_some_and(
+            |field| matches!(&field.state, FieldSave::Saving { sent } if sent.request == request),
+        );
+        if self.instance == sent_to && waits {
+            ResendCheck::Send
+        } else {
+            ResendCheck::Nothing
+        }
     }
 
     pub fn state(&self, key: &BufferKey) -> Option<&FieldSave> {
@@ -1142,6 +1188,7 @@ impl SaveMachine {
                         key: key.clone(),
                         sent,
                         base: field.base.clone(),
+                        instance: field.instance,
                     });
                 }
                 FieldSave::Dirty { .. } if field.due.is_some_and(|due| due <= now) => {
@@ -1216,9 +1263,20 @@ fn send(
         }
         FieldScope::Project(Some(at)) => Some(at.clone()),
         FieldScope::Project(None) => {
+            let named_a_save = field.is_saving();
             field.state = FieldSave::Held(Hold::NoOpen);
             field.send_on_open = true;
             field.due = None;
+            if named_a_save {
+                // A reissue after `RequestReused`: the entry no longer names the answered
+                // request, so a reload never sends it again.
+                out.push(Command::Write {
+                    key: key.clone(),
+                    entry: entry_of(field),
+                    mirror: true,
+                });
+                field.mirrored = true;
+            }
             return;
         }
     };

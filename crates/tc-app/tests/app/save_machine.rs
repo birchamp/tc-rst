@@ -29,7 +29,7 @@ use tc_app::{Answer, App, Then};
 use tc_ui::app::buffer::{self, MemStore};
 use tc_ui::app::client::{CallError, Transport};
 use tc_ui::app::save::classify::{Answered, classify};
-use tc_ui::app::save::{Command, FieldSave, FieldScope, Pair, SaveMachine, Source};
+use tc_ui::app::save::{Command, FieldSave, FieldScope, Pair, ResendCheck, SaveMachine, Source};
 use tokio::task::JoinHandle;
 
 use super::common::{TestApp, field_log};
@@ -168,7 +168,12 @@ impl World {
                     }
                 }
                 Command::Send { sent, base, .. } => self.send(sent, &base),
-                Command::Resend { key, sent, base } => {
+                Command::Resend {
+                    key,
+                    sent,
+                    base,
+                    instance,
+                } => {
                     // Only to the run the field sent to (D8): a run that started again has no
                     // reply cache.
                     match self.t.app.call("app/hello", b"{}").await {
@@ -178,15 +183,23 @@ impl World {
                             let Reply::Ok(hello) = hello else {
                                 panic!("hello: {hello:?}")
                             };
-                            if hello.instance == self.page.m.instance() {
-                                self.send(sent, &base);
-                            } else {
-                                // The restart path; A5 then goes Home, which closes the editor.
-                                self.page.m.restarted(hello.instance);
-                                let commands = self.page.m.close(&key, self.now);
-                                self.page.editor = false;
-                                self.page.focused = false;
-                                Box::pin(self.run(commands)).await;
+                            match self.page.m.resend_check(
+                                &key,
+                                sent.request,
+                                instance,
+                                hello.instance,
+                            ) {
+                                ResendCheck::Send => self.send(sent, &base),
+                                ResendCheck::Restarted(run) => {
+                                    // The restart path; A5 then goes Home, which closes the
+                                    // editor.
+                                    self.page.m.restarted(run);
+                                    let commands = self.page.m.close(&key, self.now);
+                                    self.page.editor = false;
+                                    self.page.focused = false;
+                                    Box::pin(self.run(commands)).await;
+                                }
+                                ResendCheck::Nothing => {}
                             }
                         }
                         _ => {

@@ -36,7 +36,7 @@ use crate::app::client::CallError;
 use crate::app::save::classify::{Answered, classify};
 use crate::app::save::indicator::{self, Indicator, Worst};
 use crate::app::save::{
-    Command, FieldSave, FieldScope, GateState, Notice, Pair, SaveMachine, Source, View,
+    Command, FieldSave, FieldScope, GateState, Notice, Pair, ResendCheck, SaveMachine, Source, View,
 };
 
 /// A future that stays on the page's one thread.
@@ -541,7 +541,12 @@ impl Saves {
                     }
                 }
                 Command::Send { key, sent, base } => self.send(key, sent, base),
-                Command::Resend { key, sent, base } => self.resend(key, sent, base),
+                Command::Resend {
+                    key,
+                    sent,
+                    base,
+                    instance,
+                } => self.resend(key, sent, base, instance),
                 Command::Draft { key, text, base } => {
                     if let Some(future) = self
                         .writer(key.field.kind)
@@ -621,18 +626,28 @@ impl Saves {
     }
 
     /// A lost reply goes again only to the run the field sent to (6.5): a run that started
-    /// again has no reply cache and would store the text twice.
-    fn resend(&self, key: BufferKey, sent: SentSave, base: Vec<ShownToken>) {
+    /// again has no reply cache and would store the text twice. The machine decides after the
+    /// `hello`, since a restart found meanwhile elsewhere on the page changes the answer.
+    fn resend(
+        &self,
+        key: BufferKey,
+        sent: SentSave,
+        base: Vec<ShownToken>,
+        sent_to: ServerInstance,
+    ) {
         let saves = self.clone();
         spawn_local(async move {
             match saves.0.api.call(&Hello {}).await {
-                Ok(hello) if Some(hello.instance) == saves.machine(|m| Some(m.instance())) => {
-                    saves.send(key, sent, base);
-                }
-                // The runtime's restart path tells the saves, and the screens too (AD4).
-                Ok(hello) => match saves.0.runtime.borrow().as_ref() {
-                    Some(hooks) => (hooks.restarted)(hello.instance),
-                    None => saves.restarted(hello.instance),
+                Ok(hello) => match saves
+                    .machine(|m| m.resend_check(&key, sent.request, sent_to, hello.instance))
+                {
+                    ResendCheck::Send => saves.send(key, sent, base),
+                    // The runtime's restart path tells the saves, and the screens too (AD4).
+                    ResendCheck::Restarted(run) => match saves.0.runtime.borrow().as_ref() {
+                        Some(hooks) => (hooks.restarted)(run),
+                        None => saves.restarted(run),
+                    },
+                    ResendCheck::Nothing => {}
                 },
                 Err(_) => {
                     let commands = saves

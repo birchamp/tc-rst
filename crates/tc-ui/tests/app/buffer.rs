@@ -465,33 +465,42 @@ fn a_keystroke_writes_this_pages_save_and_tokens_never_another_pages() {
     assert_eq!(read(&store, &k).unwrap().sent, own.sent);
 }
 
+/// A full storage refuses the write: whatever the stored item names, it stays, since an older
+/// text of the field is better than none, and the mirror's line carries the new entry. A save the
+/// item names is one this run's reply cache answers again after a reload.
 #[test]
-fn a_refused_write_keeps_an_item_of_the_same_save_and_drops_one_of_another() {
+fn a_refused_write_leaves_the_stored_item_as_it_is() {
     let k = key("TIT 1:1");
-    // The same save in flight, older text: the older text is better than none.
-    let mut store = MemStore::new();
-    write(&mut store, &k, &saving("older", 7)).unwrap();
-    store.fail_writes = true;
-    let written = write_entry(
-        &mut store,
-        &k,
-        &BufferEntry {
-            text: "newer".into(),
-            ..saving("older", 7)
-        },
-    );
-    assert!(matches!(written.failure, Some(StoreError::Refused(_))));
-    assert!(
-        written.line.unwrap().contains("\"newer\""),
-        "the mirror gets the text"
-    );
-    assert_eq!(read(&store, &k).unwrap().text, "older");
-    // Another save in flight: a reload must not send a request the field no longer waits for.
-    let mut store = MemStore::new();
-    write(&mut store, &k, &saving("older", 7)).unwrap();
-    store.fail_writes = true;
-    let _ = write_entry(&mut store, &k, &saving("newer", 8));
-    assert_eq!(read(&store, &k), None);
+    let newer = BufferEntry {
+        text: "newer".into(),
+        ..saving("older", 7)
+    };
+    let cases = [
+        // The same save in flight, older text.
+        (saving("older", 7), newer.clone()),
+        // Another save: the item's was answered, and the field sends its next one.
+        (saving("older", 7), saving("newer", 8)),
+        // No save in the item, and the write names the save that starts now.
+        (entry("older", 1), saving("newer", 8)),
+        // The item's save was refused, and the write no longer names it.
+        (saving("older", 7), entry("newer", 2)),
+    ];
+    for (stored, refused) in cases {
+        let mut store = MemStore::new();
+        write(&mut store, &k, &stored).unwrap();
+        store.fail_writes = true;
+        let written = write_entry(&mut store, &k, &refused);
+        assert!(matches!(written.failure, Some(StoreError::Refused(_))));
+        assert!(
+            written.line.unwrap().contains("\"newer\""),
+            "the mirror gets the text"
+        );
+        assert_eq!(
+            read(&store, &k),
+            Some(stored),
+            "the older item stays: {refused:?}"
+        );
+    }
 }
 
 /// The shell's mirror after a restart behind a reused port: run 1 left an unsaved text, run 2

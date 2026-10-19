@@ -5,14 +5,14 @@ use tc_api::align::AlignSave;
 use tc_api::app::{OpenSession, SessionRole};
 use tc_api::buffer::{FieldKind, SentSave};
 use tc_api::event::SessionMode;
-use tc_api::ids::ProjectId;
+use tc_api::ids::{ProjectId, ServerInstance};
 use tc_api::write::ReadOnlyReason;
 use tc_api::{ApiError, NotSaved};
 use tc_ui::app::client::{CallError, Transport};
 use tc_ui::app::save::classify::{Answered, SaveError, classify};
 use tc_ui::app::save::indicator::{Worst, all_clean, indicator};
 use tc_ui::app::save::{
-    Command, FieldSave, FieldScope, GateState, Hold, RETRY_MAX_MS, SaveMachine,
+    Command, FieldSave, FieldScope, GateState, Hold, RETRY_MAX_MS, ResendCheck, SaveMachine,
 };
 
 use super::save_kit::{
@@ -375,6 +375,64 @@ fn a_lost_reply_is_retried_with_the_same_request_and_body() {
     assert_ne!(sends[2].0.request, first.sent.request);
 }
 
+/// 6.5: a resend goes only to the run it was sent to, decided after its `app/hello`. The event
+/// stream can find the restart while that `hello` is on its way; the `hello` then names the run
+/// the page already knows, and the request must still not go to it, which has no reply cache.
+#[test]
+fn a_resend_goes_only_to_the_run_it_was_sent_to() {
+    let mut page = Page::new();
+    let k = key("a");
+    page.open(&k, "", 1);
+    page.focus(&k);
+    page.type_text(&k, "kept");
+    page.blur(&k);
+    let first = page.deliver(Answered::Lost);
+    let commands = page.advance(250.0);
+    let sent_to = commands
+        .iter()
+        .find_map(|c| match c {
+            Command::Resend { instance, .. } => Some(*instance),
+            _ => None,
+        })
+        .expect("a resend");
+    assert_eq!(sent_to, instance(), "the run the request went to");
+    let request = first.sent.request;
+    let new_run = ServerInstance::from_bytes([2; 16]);
+    assert_eq!(
+        page.m.resend_check(&k, request, sent_to, sent_to),
+        ResendCheck::Send
+    );
+    assert_eq!(
+        page.m.resend_check(&k, request, sent_to, new_run),
+        ResendCheck::Restarted(new_run)
+    );
+    // The stream finds the restart first; the field stays, held, with its editor on screen.
+    page.m.restarted(new_run);
+    assert_eq!(
+        page.m.resend_check(&k, request, sent_to, new_run),
+        ResendCheck::Restarted(new_run),
+        "the hello names the new run, which the page knows: still nothing is sent"
+    );
+    assert_eq!(
+        page.m.resend_check(&k, request, sent_to, sent_to),
+        ResendCheck::Nothing,
+        "the page has moved on from the run the request went to"
+    );
+    // A field that no longer waits for the request sends nothing either.
+    let mut page = Page::new();
+    page.open(&k, "", 1);
+    page.focus(&k);
+    page.type_text(&k, "kept");
+    page.blur(&k);
+    let first = page.deliver(Answered::Lost);
+    page.answer(&first, disk("full"));
+    assert_eq!(
+        page.m
+            .resend_check(&k, first.sent.request, instance(), instance()),
+        ResendCheck::Nothing
+    );
+}
+
 #[test]
 fn a_lost_reply_backs_off_to_five_seconds() {
     let mut page = Page::new();
@@ -574,6 +632,38 @@ fn stale_scope_with_no_open_holds_until_the_project_opens_again() {
     assert_eq!(page.sends().len(), 2);
     assert_eq!(again.0.scope, Some(scope(3)));
     assert_eq!(again.1, vec![tok(7)]);
+}
+
+/// A reissue after `RequestReused` while the project has no open holds the field. Its entry
+/// no longer names the answered request, so a reload never sends that id again.
+#[test]
+fn request_reused_with_no_open_drops_the_answered_request_from_the_entry() {
+    let mut page = Page::new();
+    let k = key_of(FieldKind::Verse, "TIT 1:1");
+    page.open_with(
+        &k,
+        FieldScope::Project(Some(scope(1))),
+        pair("old", 7, Some(1)),
+    );
+    page.focus(&k);
+    page.type_text(&k, "new");
+    page.blur(&k);
+    let commands = page.m.sessions(&[], page.now);
+    page.run(commands);
+    page.deliver(Answered::Reissue);
+    assert_eq!(page.state(&k), Some(FieldSave::Held(Hold::NoOpen)));
+    let entry = page.entry(&k).unwrap();
+    assert_eq!((entry.text.as_str(), entry.sent), ("new", None));
+    let line = page.mirror.last().unwrap();
+    assert!(line.contains("\"sent\":null"), "the mirror's too: {line}");
+    let commands = page.m.sessions(&[writable(2)], page.now);
+    page.run(commands);
+    let again = page.sends().last().unwrap().clone();
+    assert_eq!(page.sends().len(), 2);
+    assert_eq!(
+        (again.0.text.as_str(), again.0.scope),
+        ("new", Some(scope(2)))
+    );
 }
 
 #[test]
@@ -1096,8 +1186,11 @@ fn typing_into_a_field_whose_item_is_not_this_runs_reaches_the_mirror_at_once() 
 }
 
 /// tC4 drains its schedulers on `pagehide`; so does the page, best effort.
+/// tC4's `pagehide` drains each scheduler (`state.jsx:3699-3704`), and `drain` retries a
+/// standing failure once (`saveScheduler.ts:139-146`): leaving the page sends what may save and
+/// retries each failure with a new id, never a section card's buffer.
 #[test]
-fn hiding_the_page_sends_what_may_save_and_retries_no_failure() {
+fn hiding_the_page_sends_what_may_save_and_retries_each_failure_once() {
     let mut page = Page::new();
     let (typed, failed) = (key("typed"), key("failed"));
     let section = key_of(FieldKind::Section, "TIT 1:1-4");
@@ -1107,7 +1200,7 @@ fn hiding_the_page_sends_what_may_save_and_retries_no_failure() {
     page.focus(&failed);
     page.type_text(&failed, "refused");
     page.blur(&failed);
-    page.deliver(disk("full"));
+    let refused = page.deliver(disk("full"));
     page.focus(&section);
     page.type_text(&section, "a card");
     page.focused.clear();
@@ -1115,12 +1208,25 @@ fn hiding_the_page_sends_what_may_save_and_retries_no_failure() {
     page.type_text(&typed, "half a sentence");
     let commands = page.m.hide(page.now);
     page.run(commands);
-    assert_eq!(page.sent_texts(), ["refused", "half a sentence"]);
+    let sends = page.sends();
+    assert_eq!(page.sent_texts(), ["refused", "refused", "half a sentence"]);
+    assert_ne!(
+        sends[1].0.request, refused.sent.request,
+        "a retry has a new id: the reply cache keeps the refusal"
+    );
     let entry = page.entry(&typed).unwrap();
     assert_eq!(
         entry.sent.map(|sent| sent.text),
         Some("half a sentence".to_owned()),
         "the next load of this run sends the same request again"
+    );
+    assert_eq!(
+        page.entry(&failed).unwrap().sent.map(|sent| sent.request),
+        Some(sends[1].0.request)
+    );
+    assert!(
+        page.entry(&section).unwrap().sent.is_none(),
+        "a card's buffer is saved only by its Save"
     );
 }
 
@@ -1145,8 +1251,19 @@ fn the_entry_is_written_before_the_send() {
     assert_eq!(entry.sent, Some(saving(&page, &k)));
 }
 
+/// The page after a reload in the same run: each entry of the run becomes a field again.
+fn reloaded(page: &Page) -> Page {
+    let mut after = Page::on(page.store.clone());
+    after.now = page.now;
+    for (k, entry) in tc_ui::app::buffer::entries(&after.store) {
+        let commands = after.m.restore(k, entry, FieldScope::App, after.now);
+        after.run(commands);
+    }
+    after
+}
+
 #[test]
-fn a_buffer_write_that_fails_still_saves_and_leaves_no_stale_sent() {
+fn a_buffer_write_that_fails_still_saves_and_keeps_the_older_entry() {
     let mut page = Page::new();
     let k = key("a");
     page.open(&k, "", 1);
@@ -1155,13 +1272,70 @@ fn a_buffer_write_that_fails_still_saves_and_leaves_no_stale_sent() {
     page.store.fail_writes = true;
     page.blur(&k);
     assert_eq!(page.sends().len(), 1, "the save goes anyway");
-    assert!(
-        page.entry(&k).is_none(),
-        "no entry with an older text and no `sent`"
-    );
+    let kept = page.entry(&k).expect("the keystroke's entry stays");
+    assert_eq!((kept.text.as_str(), kept.sent), ("text", None));
     page.store.fail_writes = false;
     page.deliver_ok();
     assert_eq!(page.state(&k), Some(FieldSave::Clean));
+    assert!(page.entry(&k).is_none(), "removed once its text is stored");
+}
+
+/// 6.6: a full storage refuses the write that drops a refused save from the entry. The item
+/// keeps the text with that save, and a reload sends it again under its id, which the reply
+/// cache answers with the refusal it already gave; removing the item lost the text.
+#[test]
+fn a_full_storage_keeps_the_text_of_a_refused_save_through_a_reload() {
+    let mut page = Page::new();
+    let k = key("a");
+    page.open(&k, "v0", 1);
+    page.focus(&k);
+    page.type_text(&k, "v0 x");
+    page.blur(&k);
+    let first = saving(&page, &k);
+    page.store.fail_writes = true;
+    page.deliver(disk("full"));
+    assert!(matches!(page.state(&k), Some(FieldSave::Failed(_))));
+    let mut after = reloaded(&page);
+    assert_eq!(
+        after.m.text(&k),
+        Some("v0 x"),
+        "the reload brings the text back"
+    );
+    assert_eq!(
+        after.sends()[0].0,
+        first,
+        "the same request, which the cache answers"
+    );
+    after.deliver(disk("full"));
+    assert!(matches!(after.state(&k), Some(FieldSave::Failed(_))));
+}
+
+/// 6.6: a full storage refuses the write that names the save starting now. The item keeps the
+/// keystroke's entry, and a reload before that save lands brings the text back and saves it.
+#[test]
+fn a_full_storage_keeps_the_text_when_the_write_naming_a_save_is_refused() {
+    let mut page = Page::new();
+    let k = key("a");
+    page.open(&k, "v0", 1);
+    page.focus(&k);
+    page.type_text(&k, "v0 x");
+    page.store.fail_writes = true;
+    page.blur(&k);
+    assert_eq!(page.sends().len(), 1);
+    // The page goes before the save reaches the store.
+    let mut after = reloaded(&page);
+    assert_eq!(
+        after.m.text(&k),
+        Some("v0 x"),
+        "the reload brings the text back"
+    );
+    after.advance(2000.0);
+    let sends = after.sends();
+    assert_eq!(sends.len(), 1);
+    assert_eq!(
+        (sends[0].0.text.as_str(), sends[0].1.clone()),
+        ("v0 x", vec![tok(1)])
+    );
 }
 
 /// Trap 5 of the plan: an Ack cleans a focused field and removes its entry; the next
