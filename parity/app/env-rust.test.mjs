@@ -80,6 +80,22 @@ test('a case takes its rust route, or its state\'s route when it is that state a
   assert.deepEqual(steps, [['route', 'the page']]);
 });
 
+// A journey file left out of CI's node step is never even loaded there (A5's About journeys
+// were), so this checks the step's own arguments, a bash glob or a path, against the folder.
+test('CI loads every journey file over this environment', () => {
+  const ci = fs.readFileSync(path.join(REPO, '.github', 'workflows', 'ci.yml'), 'utf8');
+  const run = ci.split('\n').find((line) => /^\s*- run: node --test .*parity\/app\/env-rust\.test\.mjs/.test(line));
+  assert.ok(run, 'the parity-baseline job runs node --test with this file');
+  const args = run.replace(/^\s*- run: node --test /, '').trim().split(/\s+/);
+  const matches = (arg, file) => new RegExp(`^${arg.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*')}$`).test(file);
+  const journeys = fs.readdirSync(path.join(REPO, 'parity', 'app', 'journeys'))
+    .filter((f) => f.endsWith('.test.mjs'))
+    .map((f) => `parity/app/journeys/${f}`);
+  assert.ok(journeys.length > 0);
+  const missing = journeys.filter((file) => !args.some((arg) => matches(arg, file)));
+  assert.deepEqual(missing, [], 'every journey file is in the node step of .github/workflows/ci.yml');
+});
+
 // ---- with tc4 and a browser ----------------------------------------------------------------
 
 function browserSetup() {
