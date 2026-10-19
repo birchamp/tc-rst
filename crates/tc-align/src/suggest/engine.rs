@@ -234,17 +234,31 @@ impl Model {
     /// candidate that contradicts a placed link scores 0. A memory-only model answers
     /// with plain wordMAP. A model with an empty memory answers nothing.
     pub fn predict(&self, input: &SessionInput) -> Vec<RawLink> {
+        self.predict_counted(input).0
+    }
+
+    /// [`Model::predict`] with what it did: the work of a suggestion is the verse's, not the
+    /// project's (`docs/PERFORMANCE.md` rule 2).
+    pub fn predict_counted(&self, input: &SessionInput) -> (Vec<RawLink>, Work) {
         if self.verses == 0 {
-            return Vec::new();
+            return (Vec::new(), Work::default());
         }
         let source = wordmap::tokens(&input.source);
         let target = wordmap::tokens(&input.target);
         let mut run = wordmap::run(&self.memory, &source, &target);
+        let mut work = Work {
+            candidates: run.predictions.len(),
+            memory_reads: run.memory_reads,
+            tree_walks: 0,
+        };
         match self.booster.as_ref().filter(|_| self.boosted > 0) {
-            Some(booster) => score_with_context(&mut run, &input.manual, booster),
-            None => wordmap::score(&self.memory, &mut run.predictions),
+            Some(booster) => {
+                work.tree_walks = run.predictions.len() * booster.trees();
+                score_with_context(&mut run, &input.manual, booster);
+            }
+            None => wordmap::score(&mut run.predictions),
         }
-        wordmap::suggest(&run)
+        let links = wordmap::suggest(&run)
             .into_iter()
             .map(|i| {
                 let p = &run.predictions[i];
@@ -254,9 +268,25 @@ impl Model {
                     confidence: p.scores.confidence,
                 }
             })
-            .collect()
+            .collect();
+        (links, work)
     }
 }
+
+/// What a prediction did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Work {
+    /// Candidate alignments scored: source n-grams times target n-grams of the verse.
+    pub candidates: usize,
+    /// Reads of the alignment memory.
+    pub memory_reads: usize,
+    /// Trees walked, when a booster scored the candidates.
+    pub tree_walks: usize,
+}
+
+/// How many candidates one task of the worker pool scores: a suggestion for a short verse
+/// has hundreds and stays on the calling thread.
+const SCORE_CHUNK: usize = 512;
 
 /// uw-wordmapbooster's `score_with_context`: a candidate that would break a placed link
 /// (a token of it placed with a token the candidate does not hold) scores 0; the rest are
@@ -272,27 +302,46 @@ fn score_with_context(run: &mut Run<'_>, manual: &[PositionLink], booster: &Boos
             }
         }
     }
-    let scores: Vec<f64> = run
-        .predictions
+    // The morphology a candidate is scored on is its source words': read once for each
+    // source n-gram of the run, not for each of the thousands of candidates.
+    let categorical: Vec<[u32; boost::CATEGORICAL]> = run
+        .source_ngrams
         .iter()
+        .map(|n| booster.categorical_of_tokens(&run.source[n.start..n.start + n.len]))
+        .collect();
+    // The candidates are independent of one another, so they are scored on the worker pool
+    // in chunks; the scores come back in the candidates' order.
+    use rayon::prelude::*;
+    let run_ref: &Run<'_> = run;
+    let scores: Vec<f64> = run_ref
+        .predictions
+        .par_iter()
+        .with_min_len(SCORE_CHUNK)
         .map(|p| {
-            let source: Vec<usize> = run.source_tokens(p).iter().map(|t| t.position).collect();
-            let target: Vec<usize> = run.target_tokens(p).iter().map(|t| t.position).collect();
+            // The positions of a candidate's words are the runs of tokens it covers.
+            let source = &run_ref.source_ngrams[p.source];
+            let source = source.start..source.start + source.len;
+            let target = p.target.map(|t| {
+                let n = &run_ref.target_ngrams[t];
+                n.start..n.start + n.len
+            });
             // A candidate matched to nothing has no connections to compare.
-            let breaks = !target.is_empty()
-                && (source.iter().any(|s| {
-                    source_to_target
-                        .get(s)
-                        .is_some_and(|placed| placed.iter().any(|t| !target.contains(t)))
-                }) || target.iter().any(|t| {
-                    target_to_source
-                        .get(t)
-                        .is_some_and(|placed| placed.iter().any(|s| !source.contains(s)))
-                }));
+            let breaks = target.as_ref().is_some_and(|target| {
+                !target.is_empty()
+                    && (source.clone().any(|s| {
+                        source_to_target
+                            .get(&s)
+                            .is_some_and(|placed| placed.iter().any(|t| !target.contains(t)))
+                    }) || target.clone().any(|t| {
+                        target_to_source
+                            .get(&t)
+                            .is_some_and(|placed| placed.iter().any(|s| !source.contains(s)))
+                    }))
+            });
             if breaks {
                 0.0
             } else {
-                booster.score(&Features::of(run, p))
+                booster.score_row(&boost::numeric_of(&p.scores), &categorical[p.source])
             }
         })
         .collect();

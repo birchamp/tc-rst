@@ -1,6 +1,8 @@
 // Each test file uses a different subset of these helpers, and test helpers may panic.
 #![allow(dead_code, clippy::panic, clippy::unwrap_used, clippy::expect_used)]
 
+use std::collections::BTreeSet;
+use std::io::Read;
 use std::path::PathBuf;
 
 use serde_json::{Value, json};
@@ -13,8 +15,9 @@ use tc_check::{
     Pin, RefPart, ResourceRef, Selection, SetSlot, SlotPin, TargetText, ToolId, UserStatus,
 };
 use tc_core::{BookId, GitOid, VerseSpan};
+use tc_helps::metadata::parse_burrito_metadata;
 use tc_helps::tsv::{TsvScope, parse_notes, parse_word_links};
-use tc_helps::{Note, WordLink};
+use tc_helps::{Note, WordArticleId, WordLink};
 use tc_journal::decision::verse_text_md5_v1;
 use tc_journal::json::{Json, JsonMap};
 use tc_journal::keys::SlotName;
@@ -36,6 +39,19 @@ pub fn fixture(rel: &str) -> String {
 /// A Door43 resource fixture from tC4: `resource("en_tn@v86/TIT.tsv")`.
 pub fn resource(rel: &str) -> String {
     fixture(&format!("tc4/test-fixtures/resources/{rel}"))
+}
+
+/// The articles of the en_tw v91 pin, which gate the tW checks.
+pub fn tw_articles() -> BTreeSet<WordArticleId> {
+    let path = fixture_path("../bundle/en/en_tw_v91.sb.zip");
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(path).unwrap()).unwrap();
+    let mut text = String::new();
+    archive
+        .by_name("en_tw/metadata.json")
+        .unwrap()
+        .read_to_string(&mut text)
+        .unwrap();
+    parse_burrito_metadata(&text).unwrap().word_articles()
 }
 
 pub fn notes(rel: &str, book: BookId) -> Vec<Note> {

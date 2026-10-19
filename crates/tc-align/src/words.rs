@@ -345,6 +345,17 @@ pub struct TargetVerse {
     places: HashMap<String, Vec<usize>>,
 }
 
+thread_local! {
+    static POSITION_LOOKUPS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many words this thread has looked up in a [`TargetVerse`] ([`TargetVerse::position`]):
+/// what a reflow finds the places of the kept links with. The count tests of the aligner
+/// read it (`docs/PERFORMANCE.md` rule 2).
+pub fn position_lookups() -> u64 {
+    POSITION_LOOKUPS.with(std::cell::Cell::get)
+}
+
 impl TargetVerse {
     /// The verse whose content is `content`.
     pub fn new(content: &str) -> Self {
@@ -387,6 +398,7 @@ impl TargetVerse {
 
     /// Where `word` stands in the verse, by text and occurrence.
     pub fn position(&self, word: &TargetWord) -> Option<usize> {
+        POSITION_LOOKUPS.with(|n| n.set(n.get() + 1));
         let index = usize::try_from(word.occurrence.checked_sub(1)?).ok()?;
         self.places.get(word.word.as_str())?.get(index).copied()
     }

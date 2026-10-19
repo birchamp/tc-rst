@@ -107,6 +107,17 @@ impl AlignmentValue {
     }
 }
 
+thread_local! {
+    static LOOKUPS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many positions this thread has looked up in a [`VerseOrder`]: what the bank and the
+/// cards were put in verse order with. A sort looks up each word it sorts once, which the
+/// count tests of the aligner read (`docs/PERFORMANCE.md` rule 2).
+pub fn verse_order_lookups() -> u64 {
+    LOOKUPS.with(std::cell::Cell::get)
+}
+
 /// Where each word of a verse stands, by its text and occurrence: the order §5.3 keeps the
 /// bank and the cards in.
 #[derive(Debug, Clone, Default)]
@@ -128,6 +139,7 @@ impl<'a> VerseOrder<'a> {
 
     /// Where `word` stands in the verse, by its text and occurrence.
     pub fn position(&self, word: &str, occurrence: u32) -> Option<usize> {
+        LOOKUPS.with(|n| n.set(n.get() + 1));
         self.rank.get(&(word, occurrence)).copied()
     }
 

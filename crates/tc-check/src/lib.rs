@@ -37,6 +37,7 @@ pub mod scope;
 pub mod selection;
 pub mod session;
 pub mod status;
+mod work;
 
 pub use error::Error;
 pub use item::{Category, CheckItem, NoteCategory, QuoteWord};
@@ -49,3 +50,4 @@ pub use tc_journal::pins::{
     Answer, Coverage, Ladder, LanguageSets, Pin, Rung, SetSlot, SlotPin, Unrecorded, UnusablePin,
 };
 pub use tc_journal::record::ResourceRef;
+pub use work::Work;

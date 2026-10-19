@@ -19,6 +19,7 @@
 use tc_journal::pins::{Coverage, Ladder, Unrecorded};
 use tc_journal::record::ResourceRef;
 
+use crate::Work;
 use crate::carry::{StoredDecision, Summary};
 use crate::key::{Collection, ToolId};
 
@@ -86,8 +87,23 @@ pub fn consequences(
     units: &[Unit<'_>],
     local: impl Fn(&ResourceRef) -> Option<Coverage>,
 ) -> Consequences {
+    consequences_counted(current, next, units, local, &mut Work::default())
+}
+
+/// [`consequences`], adding what it touched to `work`: two answers of the ladders per unit
+/// with decisions, and each stored decision looked at once (`ladder_answers`,
+/// `decisions_visited`).
+pub fn consequences_counted(
+    current: &dyn Ladder,
+    next: &dyn Ladder,
+    units: &[Unit<'_>],
+    local: impl Fn(&ResourceRef) -> Option<Coverage>,
+    work: &mut Work,
+) -> Consequences {
     let mut out = Consequences::default();
-    let resolve = |pins: &dyn Ladder, unit: &Unit<'_>| {
+    let mut answered = 0usize;
+    let mut resolve = |pins: &dyn Ladder, unit: &Unit<'_>| {
+        answered += 1;
         pins.answer(unit.tool, unit.collection, Unrecorded::Installed(&local))
             .and_then(|a| a.resource().cloned())
     };
@@ -97,19 +113,20 @@ pub fn consequences(
         }
         let before = resolve(current, unit);
         let after = resolve(next, unit);
-        let holds = |d: &&StoredDecision, on: Option<&ResourceRef>| {
+        let holds = |d: &StoredDecision, on: Option<&ResourceRef>| {
             on.is_some_and(|r| r.same_resource(&d.decision.resource))
         };
-        let holding = unit
-            .decisions
-            .iter()
-            .filter(|d| holds(d, before.as_ref()))
-            .count();
-        let revived = unit
-            .decisions
-            .iter()
-            .filter(|d| !holds(d, before.as_ref()) && holds(d, after.as_ref()))
-            .count();
+        // One look at each decision: it holds now, or it holds after the change, or it
+        // holds on neither side.
+        let (mut holding, mut revived) = (0usize, 0usize);
+        for d in unit.decisions {
+            work.decisions_visited += 1;
+            if holds(d, before.as_ref()) {
+                holding += 1;
+            } else if holds(d, after.as_ref()) {
+                revived += 1;
+            }
+        }
         out.revived += revived;
         out.detached += unit.decisions.len() - holding - revived;
         let moves_away = match (&before, &after) {
@@ -127,6 +144,7 @@ pub fn consequences(
             _ => out.unaffected += 1,
         }
     }
+    work.ladder_answers += answered;
     out
 }
 

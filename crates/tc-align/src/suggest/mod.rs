@@ -27,10 +27,11 @@
 
 mod boost;
 mod engine;
+mod fx;
 mod wordmap;
 
 pub use boost::Booster;
-pub use engine::{MIN_BOOST_VERSES, Model, bound_corpus, max_complexity};
+pub use engine::{MIN_BOOST_VERSES, Model, Work, bound_corpus, max_complexity};
 
 use crate::edit::Alignment;
 use crate::words::TargetVerse;

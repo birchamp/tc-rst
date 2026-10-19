@@ -16,7 +16,7 @@
 //! Ported from uw-wordmapbooster 1.0.5, © Joshua Lansford, ISC licence; the notice is in
 //! the crate's `NOTICE` file.
 
-use super::wordmap::{Prediction, Run, Scores};
+use super::wordmap::{Prediction, Run, Scores, Token};
 use std::collections::HashMap;
 
 /// The generator tC4's suggestion tests install as `Math.random` (and the one
@@ -58,43 +58,52 @@ pub(crate) struct Features {
 
 impl Features {
     pub fn of(run: &Run<'_>, p: &Prediction) -> Self {
-        let s: &Scores = &p.scores;
-        let numeric = [
-            0.0, // sourceCorpusPermutationsFrequencyRatio
-            0.0, // targetCorpusPermutationsFrequencyRatio
-            s.source_memory_ratio,
-            s.target_memory_ratio,
-            0.0, // frequencyRatioCorpusFiltered
-            s.memory_filtered,
-            0.0, // sourceCorpusLemmaPermutationsFrequencyRatio
-            0.0, // targetCorpusLemmaPermutationsFrequencyRatio
-            s.source_memory_lemma_ratio,
-            s.target_memory_lemma_ratio,
-            0.0, // lemmaFrequencyRatioCorpusFiltered
-            s.memory_lemma_filtered,
-            0.0, // ngramRelativeTokenDistance: no algorithm sets it
-            s.relative_occurrence.unwrap_or(0.0),
-            s.alignment_position,
-            s.phrase_plausibility,
-            s.lemma_phrase_plausibility,
-            s.ngram_length,
-            s.character_length,
-            s.alignment_occurrences,
-            s.lemma_alignment_occurrences,
-            s.uniqueness,
-            s.lemma_uniqueness,
-        ];
-        let mut categorical: [String; CATEGORICAL] = Default::default();
-        for token in run.source_tokens(p) {
-            for (piece, slot) in token.morph.split(',').zip(categorical.iter_mut()) {
-                slot.push_str(piece);
-            }
-        }
         Self {
-            numeric,
-            categorical,
+            numeric: numeric_of(&p.scores),
+            categorical: morph_pieces(run.source_tokens(p)),
         }
     }
+}
+
+/// The numeric features of a candidate's scores.
+pub(crate) fn numeric_of(s: &Scores) -> [f64; NUMERIC] {
+    [
+        0.0, // sourceCorpusPermutationsFrequencyRatio
+        0.0, // targetCorpusPermutationsFrequencyRatio
+        s.source_memory_ratio,
+        s.target_memory_ratio,
+        0.0, // frequencyRatioCorpusFiltered
+        s.memory_filtered,
+        0.0, // sourceCorpusLemmaPermutationsFrequencyRatio
+        0.0, // targetCorpusLemmaPermutationsFrequencyRatio
+        s.source_memory_lemma_ratio,
+        s.target_memory_lemma_ratio,
+        0.0, // lemmaFrequencyRatioCorpusFiltered
+        s.memory_lemma_filtered,
+        0.0, // ngramRelativeTokenDistance: no algorithm sets it
+        s.relative_occurrence.unwrap_or(0.0),
+        s.alignment_position,
+        s.phrase_plausibility,
+        s.lemma_phrase_plausibility,
+        s.ngram_length,
+        s.character_length,
+        s.alignment_occurrences,
+        s.lemma_alignment_occurrences,
+        s.uniqueness,
+        s.lemma_uniqueness,
+    ]
+}
+
+/// The categorical features of source words: the morphology pieces `src_morph_0` to
+/// `src_morph_7`, each the pieces of that position joined over the words.
+fn morph_pieces(tokens: &[Token]) -> [String; CATEGORICAL] {
+    let mut categorical: [String; CATEGORICAL] = Default::default();
+    for token in tokens {
+        for (piece, slot) in token.morph.split(',').zip(categorical.iter_mut()) {
+            slot.push_str(piece);
+        }
+    }
+    categorical
 }
 
 /// Why a booster could not be fitted. tC4 then answers from the alignment memory alone.
@@ -169,23 +178,186 @@ pub struct Booster {
     trees: Vec<Node>,
     learning_rate: f64,
     values: HashMap<String, u32>,
+    /// The trees laid out in one array, which is what scoring walks.
+    compiled: Compiled,
 }
 
 /// A value the booster never saw: equal to no split.
 const UNSEEN: u32 = u32::MAX;
 
-impl Booster {
-    /// JLBoost's `predict_single`: the trees' outputs summed, times the learning rate.
-    pub(crate) fn score(&self, features: &Features) -> f64 {
-        let categorical = features
-            .categorical
-            .each_ref()
-            .map(|v| self.values.get(v).copied().unwrap_or(UNSEEN));
-        let mut output = 0.0;
-        for tree in &self.trees {
-            output += tree.predict(&features.numeric, &categorical);
+/// What a node of the laid-out trees does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    /// Holds a value, and its branches are itself, so a walk that goes on stays.
+    Leaf,
+    /// Goes left when the feature is at most `split`.
+    AtMost,
+    /// Goes left when the feature is exactly `split` (a category's id).
+    Is,
+}
+
+/// One node of the laid-out trees. A leaf holds its value in `split`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Flat {
+    kind: Kind,
+    /// An index into a [`Row`].
+    feature: u32,
+    split: f64,
+    left: u32,
+    right: u32,
+}
+
+/// What the trees read of a candidate: the numeric features, a NaN read as -1, then the
+/// ids of the categories as numbers, so a node is one comparison of one value.
+type Row = [f64; NUMERIC + CATEGORICAL];
+
+/// How many trees are walked together. The walk of one tree is a chain of dependent loads;
+/// eight chains in step keep the processor busy while each waits.
+const LANES: usize = 8;
+
+/// Every tree in one array, the nodes of a tree after its root in the order a walk meets
+/// them, so scoring a candidate follows indices through one allocation and not a chain of
+/// boxes.
+#[derive(Debug, Clone, PartialEq)]
+struct Compiled {
+    nodes: Vec<Flat>,
+    roots: Vec<u32>,
+    /// The steps that take a walk from a root to a leaf of the deepest tree.
+    depth: usize,
+}
+
+impl Compiled {
+    fn of(trees: &[Node]) -> Self {
+        fn push(nodes: &mut Vec<Flat>, node: &Node, depth: usize, deepest: &mut usize) -> u32 {
+            *deepest = (*deepest).max(depth);
+            let at = nodes.len() as u32;
+            nodes.push(Flat {
+                kind: Kind::Leaf,
+                feature: 0,
+                split: 0.0,
+                left: at,
+                right: at,
+            });
+            let flat = match node {
+                Node::Leaf(v) => Flat {
+                    kind: Kind::Leaf,
+                    feature: 0,
+                    split: *v,
+                    left: at,
+                    right: at,
+                },
+                Node::Numeric {
+                    feature,
+                    split,
+                    left,
+                    right,
+                } => Flat {
+                    kind: Kind::AtMost,
+                    feature: *feature as u32,
+                    split: *split,
+                    left: push(nodes, left, depth + 1, deepest),
+                    right: push(nodes, right, depth + 1, deepest),
+                },
+                Node::Categorical {
+                    feature,
+                    split,
+                    left,
+                    right,
+                } => Flat {
+                    kind: Kind::Is,
+                    feature: (NUMERIC + *feature) as u32,
+                    split: f64::from(*split),
+                    left: push(nodes, left, depth + 1, deepest),
+                    right: push(nodes, right, depth + 1, deepest),
+                },
+            };
+            nodes[at as usize] = flat;
+            at
         }
-        output * self.learning_rate
+        let mut nodes = Vec::new();
+        let mut depth = 0;
+        let roots = trees
+            .iter()
+            .map(|t| push(&mut nodes, t, 0, &mut depth))
+            .collect();
+        Self {
+            nodes,
+            roots,
+            depth,
+        }
+    }
+
+    /// The walk of one node: where it goes from `at` on `row`.
+    #[inline(always)]
+    fn step(&self, at: u32, row: &Row) -> u32 {
+        let node = &self.nodes[at as usize];
+        let value = row[node.feature as usize];
+        let left = match node.kind {
+            Kind::Leaf => true,
+            Kind::AtMost => value <= node.split,
+            Kind::Is => value == node.split,
+        };
+        if left { node.left } else { node.right }
+    }
+
+    /// The trees' outputs added in the order of the trees.
+    fn sum(&self, row: &Row) -> f64 {
+        let mut output = 0.0;
+        for group in self.roots.chunks(LANES) {
+            let mut at = [group[0]; LANES];
+            at[..group.len()].copy_from_slice(group);
+            for _ in 0..self.depth {
+                for lane in &mut at {
+                    *lane = self.step(*lane, row);
+                }
+            }
+            for lane in &at[..group.len()] {
+                output += self.nodes[*lane as usize].split;
+            }
+        }
+        output
+    }
+}
+
+impl Booster {
+    fn new(trees: Vec<Node>, learning_rate: f64, values: HashMap<String, u32>) -> Self {
+        let compiled = Compiled::of(&trees);
+        Self {
+            trees,
+            learning_rate,
+            values,
+            compiled,
+        }
+    }
+
+    /// The ids of the categorical values the booster has seen; a value it has not is equal
+    /// to no split.
+    pub(crate) fn categorical_of(&self, pieces: &[String; CATEGORICAL]) -> [u32; CATEGORICAL] {
+        pieces
+            .each_ref()
+            .map(|v| self.values.get(v).copied().unwrap_or(UNSEEN))
+    }
+
+    /// [`Booster::categorical_of`] for the morphology of source words: it depends on the
+    /// source n-gram alone, so a run reads it once for each n-gram, not for each candidate.
+    pub(crate) fn categorical_of_tokens(&self, tokens: &[Token]) -> [u32; CATEGORICAL] {
+        self.categorical_of(&morph_pieces(tokens))
+    }
+
+    /// The trees' outputs summed in order, times the learning rate.
+    pub(crate) fn score_row(
+        &self,
+        numeric: &[f64; NUMERIC],
+        categorical: &[u32; CATEGORICAL],
+    ) -> f64 {
+        let mut row: Row = [0.0; NUMERIC + CATEGORICAL];
+        for (slot, v) in row.iter_mut().zip(numeric) {
+            *slot = numeric_value(*v);
+        }
+        for (slot, id) in row[NUMERIC..].iter_mut().zip(categorical) {
+            *slot = f64::from(*id);
+        }
+        self.compiled.sum(&row) * self.learning_rate
     }
 
     /// The number of trees accepted by training.
@@ -448,9 +620,5 @@ pub(crate) fn fit(
             current = new_output;
         }
     }
-    Ok(Booster {
-        trees,
-        learning_rate,
-        values,
-    })
+    Ok(Booster::new(trees, learning_rate, values))
 }

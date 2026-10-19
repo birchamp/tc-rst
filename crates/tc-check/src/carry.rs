@@ -17,12 +17,13 @@
 //! context. A decision moved to another key is a `MovedTo` at the old key and the whole
 //! decision at the new one (STORAGE.md §5.8).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use tc_journal::json::Json;
 use tc_journal::record::ResourceRef;
 use tc_usfm::words::words;
 
+use crate::Work;
 use crate::item::CheckItem;
 use crate::key::{CheckKey, CheckTarget};
 use crate::status::{CheckState, DecisionRecord, TargetText};
@@ -55,6 +56,44 @@ impl StoredDecision {
             group_id: text("groupId"),
             key,
             decision,
+        }
+    }
+}
+
+/// What the placement reads of a stored decision, borrowed: the key and the two strings of
+/// its context. A session opens thousands of decisions and copies none of them.
+#[derive(Clone, Copy)]
+pub(crate) struct Stored<'a> {
+    pub key: &'a CheckKey,
+    pub quote: &'a str,
+    pub group_id: &'a str,
+}
+
+impl StoredDecision {
+    pub(crate) fn view(&self) -> Stored<'_> {
+        Stored {
+            key: &self.key,
+            quote: &self.quote,
+            group_id: &self.group_id,
+        }
+    }
+}
+
+impl<'a> Stored<'a> {
+    /// The view of a decision stored under `key`, read from its context as
+    /// [`StoredDecision::of`] reads it.
+    pub(crate) fn of(key: &'a CheckKey, decision: &'a DecisionRecord) -> Self {
+        let text = |name: &str| {
+            decision
+                .context
+                .get(name)
+                .and_then(Json::as_str)
+                .unwrap_or_default()
+        };
+        Self {
+            key,
+            quote: text("quoteString"),
+            group_id: text("groupId"),
         }
     }
 }
@@ -147,12 +186,6 @@ pub fn same_quote(a: &str, b: &str) -> bool {
     norm(a) == norm(b)
 }
 
-/// What a cross-language match compares (tC4 `crossKey`): the place, the quote text and
-/// the occurrence.
-fn place_of(target: &CheckTarget, quote: &str, occurrence: u32) -> (CheckTarget, String, u32) {
-    (target.clone(), quote.to_owned(), occurrence)
-}
-
 /// Plans carrying `stored` over to `items`, the list derived from `resource`.
 ///
 /// tC4 runs the same two passes when a check session opens, against the list of the
@@ -160,7 +193,23 @@ fn place_of(target: &CheckTarget, quote: &str, occurrence: u32) -> (CheckTarget,
 /// (an import, an older list) shows on the check it re-attaches to. [`crate::session`]
 /// does that.
 pub fn plan(items: &[CheckItem], resource: &ResourceRef, stored: &[StoredDecision]) -> Plan {
-    let (outcomes, undecided) = placements(items, stored);
+    plan_counted(items, resource, stored, &mut Work::default())
+}
+
+/// [`plan`], adding what it touched to `work`. Each check and each decision is probed in
+/// the identity pass once; the second pass looks each waiting decision up by check id,
+/// compares its quote with the one check that id names, and looks it up by place, quote
+/// and occurrence in an index built once, so the work grows with the list and the
+/// decisions, not with their product (`identity_probes`, `id_probes`, `quote_comparisons`,
+/// `place_probes`, `place_candidates`, `contest_probes`).
+pub fn plan_counted(
+    items: &[CheckItem],
+    resource: &ResourceRef,
+    stored: &[StoredDecision],
+    work: &mut Work,
+) -> Plan {
+    let views: Vec<Stored<'_>> = stored.iter().map(StoredDecision::view).collect();
+    let (outcomes, undecided) = placements_counted(items, &views, work);
     Plan {
         resource: resource.clone(),
         entries: stored
@@ -177,7 +226,15 @@ pub fn plan(items: &[CheckItem], resource: &ResourceRef, stored: &[StoredDecisio
 }
 
 /// Where each stored decision goes on `items`, and how many checks receive none.
-pub(crate) fn placements(items: &[CheckItem], stored: &[StoredDecision]) -> (Vec<Outcome>, usize) {
+pub(crate) fn placements(items: &[CheckItem], stored: &[Stored<'_>]) -> (Vec<Outcome>, usize) {
+    placements_counted(items, stored, &mut Work::default())
+}
+
+fn placements_counted(
+    items: &[CheckItem],
+    stored: &[Stored<'_>],
+    work: &mut Work,
+) -> (Vec<Outcome>, usize) {
     let mut placed_item: Vec<bool> = vec![false; items.len()];
     let mut outcomes: Vec<Option<Outcome>> = vec![None; stored.len()];
 
@@ -186,9 +243,11 @@ pub(crate) fn placements(items: &[CheckItem], stored: &[StoredDecision]) -> (Vec
     let by_identity: HashMap<(&CheckKey, &str), usize> = stored
         .iter()
         .enumerate()
-        .map(|(s, d)| ((&d.key, d.quote.as_str()), s))
+        .map(|(s, d)| ((d.key, d.quote), s))
         .collect();
+    work.identity_probes += stored.len();
     for (i, item) in items.iter().enumerate() {
+        work.identity_probes += 1;
         if let Some(&s) = by_identity.get(&(&item.key, item.quote.as_str()))
             && outcomes[s].is_none()
         {
@@ -206,7 +265,7 @@ pub(crate) fn placements(items: &[CheckItem], stored: &[StoredDecision]) -> (Vec
     let waiting: Vec<usize> = (0..stored.len())
         .filter(|&s| outcomes[s].is_none())
         .collect();
-    let attached = across(stored, &waiting, items, &open);
+    let attached = across(stored, &waiting, items, &open, work);
 
     // tC4 kept one decision per check here and dropped the others from the file; every
     // decision that attaches is placed, and two on one check are a conflict.
@@ -217,7 +276,7 @@ pub(crate) fn placements(items: &[CheckItem], stored: &[StoredDecision]) -> (Vec
     for &(s, i, by) in &attached {
         placed_item[i] = true;
         let to = items[i].key.clone();
-        outcomes[s] = Some(if to == stored[s].key {
+        outcomes[s] = Some(if to == *stored[s].key {
             Outcome::Stays { item: i, by }
         } else {
             Outcome::Moves {
@@ -230,11 +289,11 @@ pub(crate) fn placements(items: &[CheckItem], stored: &[StoredDecision]) -> (Vec
     }
     // A move is contested when another decision arrives at the same check, or when the
     // decision already at the new key stays there unplaced.
-    let unplaced_at: Vec<&CheckKey> = stored
+    let unplaced_at: HashSet<&CheckKey> = stored
         .iter()
         .zip(&outcomes)
         .filter(|(_, o)| o.is_none())
-        .map(|(d, _)| &d.key)
+        .map(|(d, _)| d.key)
         .collect();
     for outcome in outcomes.iter_mut().flatten() {
         if let Outcome::Moves {
@@ -244,7 +303,8 @@ pub(crate) fn placements(items: &[CheckItem], stored: &[StoredDecision]) -> (Vec
             ..
         } = outcome
         {
-            *contested = arrivals.get(item).is_some_and(|&n| n > 1) || unplaced_at.contains(&&*to);
+            work.contest_probes += 1;
+            *contested = arrivals.get(item).is_some_and(|&n| n > 1) || unplaced_at.contains(&*to);
         }
     }
 
@@ -261,55 +321,76 @@ pub(crate) fn placements(items: &[CheckItem], stored: &[StoredDecision]) -> (Vec
 /// decision, the check of `items` it attaches to and how, or `None` when no single check
 /// matches. [`plan`] runs it on what its first pass leaves.
 pub fn reattach(stored: &[StoredDecision], items: &[CheckItem]) -> Vec<Option<(usize, Match)>> {
+    let stored: Vec<Stored<'_>> = stored.iter().map(StoredDecision::view).collect();
     let waiting: Vec<usize> = (0..stored.len()).collect();
     let open: Vec<usize> = (0..items.len()).collect();
     let mut out = vec![None; stored.len()];
-    for (s, i, by) in across(stored, &waiting, items, &open) {
+    for (s, i, by) in across(&stored, &waiting, items, &open, &mut Work::default()) {
         out[s] = Some((i, by));
     }
     out
 }
 
+/// The checks by what the place pass compares: target, quote and occurrence.
+type PlaceIndex<'a> = HashMap<(&'a CheckTarget, &'a str, u32), Vec<usize>>;
+
 /// The second pass over the decisions `waiting` and the checks `open`: by check id when
 /// the quote names the same words, else by place, quote and occurrence with the group id
 /// breaking a tie. Several decisions can attach to one check.
 fn across(
-    stored: &[StoredDecision],
+    stored: &[Stored<'_>],
     waiting: &[usize],
     items: &[CheckItem],
     open: &[usize],
+    work: &mut Work,
 ) -> Vec<(usize, usize, Match)> {
     let mut by_id: HashMap<&str, usize> = HashMap::new();
     for &i in open {
         // A later check with the same id replaces an earlier one, as in tC4's Map.
         by_id.insert(items[i].key.check_id.as_str(), i);
     }
+    // The open checks by what the place pass compares, in list order, built when the
+    // first decision needs it: a list whose decisions keep their ids never builds it.
+    let mut by_place: Option<PlaceIndex<'_>> = None;
     let mut attached = Vec::new();
     for &s in waiting {
         let d = &stored[s];
-        if let Some(&i) = by_id.get(d.key.check_id.as_str())
-            && same_quote(items[i].quote.as_str(), &d.quote)
-        {
-            attached.push((s, i, Match::CheckId));
+        work.id_probes += 1;
+        if let Some(&i) = by_id.get(d.key.check_id.as_str()) {
+            work.quote_comparisons += 1;
+            if same_quote(items[i].quote.as_str(), d.quote) {
+                attached.push((s, i, Match::CheckId));
+                continue;
+            }
+        }
+        let index = by_place.get_or_insert_with(|| {
+            let mut index = PlaceIndex::new();
+            for &i in open {
+                let item = &items[i];
+                index
+                    .entry((&item.key.target, item.quote.as_str(), item.key.occurrence))
+                    .or_default()
+                    .push(i);
+            }
+            index
+        });
+        work.place_probes += 1;
+        let Some(found) = index.get(&(&d.key.target, d.quote, d.key.occurrence)) else {
             continue;
-        }
-        let wanted = place_of(&d.key.target, &d.quote, d.key.occurrence);
-        let mut candidates: Vec<usize> = open
-            .iter()
-            .copied()
-            .filter(|&i| {
-                place_of(
-                    &items[i].key.target,
-                    items[i].quote.as_str(),
-                    items[i].key.occurrence,
-                ) == wanted
-            })
-            .collect();
+        };
+        work.place_candidates += found.len();
+        let mut candidates = found.as_slice();
+        let tied: Vec<usize>;
         if candidates.len() > 1 {
-            candidates.retain(|&i| items[i].group_id == d.group_id);
+            tied = candidates
+                .iter()
+                .copied()
+                .filter(|&i| items[i].group_id == d.group_id)
+                .collect();
+            candidates = &tied;
         }
-        if let [i] = candidates[..] {
-            attached.push((s, i, Match::Place));
+        if let [i] = candidates {
+            attached.push((s, *i, Match::Place));
         }
     }
     attached

@@ -22,6 +22,7 @@
 //! notice is in the crate's `NOTICE` file.
 
 use super::TokenSeed;
+use super::fx::FxMap;
 use std::collections::HashMap;
 
 /// A word of a sentence with wordMAP's positional metrics, built as tC4 builds it:
@@ -123,7 +124,7 @@ pub(crate) fn alignment_keys(source: &NgramKeys, target: &NgramKeys) -> (String,
 /// wordMAP's `FrequencyIndex`: counts by key. An n-gram or alignment increments its key
 /// and then its lemma key, in the same map.
 #[derive(Debug, Clone, Default)]
-pub(crate) struct Frequencies(HashMap<String, u32>);
+pub(crate) struct Frequencies(FxMap<String, u32>);
 
 impl Frequencies {
     fn increment(&mut self, key: &str, lemma_key: Option<&str>) {
@@ -218,8 +219,8 @@ pub(crate) struct Scores {
 pub(crate) struct Prediction {
     pub source: usize,
     pub target: Option<usize>,
-    pub key: String,
-    pub lemma_key: Option<String>,
+    /// The alignment memory holds this candidate, by its key or its lemma key.
+    pub in_memory: bool,
     pub scores: Scores,
 }
 
@@ -231,6 +232,8 @@ pub(crate) struct Run<'a> {
     pub source_ngrams: Vec<Ngram>,
     pub target_ngrams: Vec<Ngram>,
     pub predictions: Vec<Prediction>,
+    /// Reads of the alignment memory the run made.
+    pub memory_reads: usize,
 }
 
 impl Run<'_> {
@@ -274,10 +277,36 @@ fn similarity(source: f64, target: f64) -> f64 {
     }
 }
 
+/// The strings of a run's n-grams as numbers: equal keys share a number, so candidates
+/// that name the same pair of keys can be told apart without comparing or hashing the keys.
+fn intern<'a>(keys: impl Iterator<Item = &'a str>) -> (Vec<usize>, usize) {
+    let mut ids: FxMap<&str, usize> = FxMap::default();
+    let numbers: Vec<usize> = keys
+        .map(|key| {
+            let next = ids.len();
+            *ids.entry(key).or_insert(next)
+        })
+        .collect();
+    (numbers, ids.len())
+}
+
+/// What the alignment memory holds of an n-gram of this sentence pair, read once for each.
+#[derive(Debug, Clone, Copy)]
+struct Counts {
+    /// How often the memory counts the n-gram under its key.
+    key: f64,
+    /// And under its lemma key, or its key when it has none.
+    lemma: f64,
+}
+
 /// wordMAP's `Engine.run`: generate every candidate and run its algorithms, in order:
 /// n-gram frequency and lemma n-gram frequency over all candidates, then for each one
 /// relative occurrence, position, phrase plausibility, n-gram length, character length,
 /// occurrences and uniqueness. `confidence` is left at 0 for [`score`] or the booster.
+///
+/// A candidate is a pair of n-grams, so what depends on one n-gram is read once for it (its
+/// counts in the memory, its place among the keys of the sentence), not once for each of
+/// the thousands of pairs it is in.
 pub(crate) fn run<'a>(memory: &Memory, source: &'a [Token], target: &'a [Token]) -> Run<'a> {
     let source_ngrams = ngrams(source, SOURCE_NGRAM_LENGTH);
     let target_ngrams = ngrams(target, TARGET_NGRAM_LENGTH);
@@ -293,89 +322,92 @@ pub(crate) fn run<'a>(memory: &Memory, source: &'a [Token], target: &'a [Token])
         sentence_targets.increment(&n.keys.key, n.keys.lemma_key.as_deref());
     }
 
-    let mut predictions = Vec::with_capacity(source_ngrams.len() * (target_ngrams.len() + 1));
+    // The sides of the candidates: the sentence's n-grams, and for the target also "nothing"
+    // after them (the empty n-gram).
+    let target_keys = |t: usize| -> &NgramKeys { target_ngrams.get(t).map_or(&empty, |n| &n.keys) };
+    let n_targets = target_ngrams.len() + 1;
+    let (source_key_ids, n_source_keys) = intern(source_ngrams.iter().map(|n| n.keys.key.as_str()));
+    let (target_key_ids, n_target_keys) =
+        intern((0..n_targets).map(|t| target_keys(t).key.as_str()));
+    let counts = |frequencies: &Frequencies, k: &NgramKeys| Counts {
+        key: frequencies.read(&k.key),
+        lemma: frequencies.read(k.lemma_key.as_deref().unwrap_or(&k.key)),
+    };
+    let source_counts: Vec<Counts> = source_ngrams
+        .iter()
+        .map(|n| counts(&memory.sources, &n.keys))
+        .collect();
+    let target_counts: Vec<Counts> = (0..n_targets)
+        .map(|t| counts(&memory.targets, target_keys(t)))
+        .collect();
+
+    // Every candidate: the alignment's count in the memory under its key and its lemma key,
+    // and the sums of those over the candidates that share a key (wordMAP's `filtered`).
+    let mut predictions = Vec::with_capacity(source_ngrams.len() * n_targets);
+    let mut alignment_counts: Vec<(f64, Option<f64>)> = Vec::with_capacity(predictions.capacity());
+    let mut sums = vec![0.0; n_source_keys * n_target_keys];
+    let mut lemma_sums = vec![0.0; n_source_keys * n_target_keys];
+    let mut buffer = String::new();
+    let mut lookup = |frequencies: &Frequencies, parts: [&str; 3]| {
+        buffer.clear();
+        buffer.extend(parts);
+        frequencies.read(&buffer)
+    };
     for (s, source_ngram) in source_ngrams.iter().enumerate() {
-        let targets = target_ngrams
-            .iter()
-            .enumerate()
-            .map(|(t, n)| (Some(t), &n.keys))
-            .chain(std::iter::once((None, &empty)));
-        for (t, target_keys) in targets {
-            let (key, lemma_key) = alignment_keys(&source_ngram.keys, target_keys);
+        for (t, &target_key_id) in target_key_ids.iter().enumerate() {
+            let target_ngram = target_keys(t);
+            // `alignment_keys`: `source->target`, and a lemma key when either side has one,
+            // falling back to the plain key on the other side.
+            let alignment = lookup(
+                &memory.alignments,
+                [&source_ngram.keys.key, "->", &target_ngram.key],
+            );
+            let lemma = (source_ngram.keys.lemma_key.is_some() || target_ngram.lemma_key.is_some())
+                .then(|| {
+                    lookup(
+                        &memory.alignments,
+                        [
+                            source_ngram
+                                .keys
+                                .lemma_key
+                                .as_deref()
+                                .unwrap_or(&source_ngram.keys.key),
+                            "->",
+                            target_ngram
+                                .lemma_key
+                                .as_deref()
+                                .unwrap_or(&target_ngram.key),
+                        ],
+                    )
+                });
+            let group = source_key_ids[s] * n_target_keys + target_key_id;
+            sums[group] += alignment;
+            if let Some(lemma) = lemma {
+                lemma_sums[group] += lemma;
+            }
+            alignment_counts.push((alignment, lemma));
             predictions.push(Prediction {
                 source: s,
-                target: t,
-                key,
-                lemma_key,
+                target: (t < target_ngrams.len()).then_some(t),
+                in_memory: alignment != 0.0 || lemma.is_some_and(|l| l != 0.0),
                 scores: Scores::default(),
             });
         }
     }
 
-    let target_keys =
-        |p: &Prediction| -> &NgramKeys { p.target.map_or(&empty, |t| &target_ngrams[t].keys) };
-
-    // NgramFrequency.
-    let mut sums: HashMap<&str, f64> = HashMap::new();
-    let mut frequencies = Vec::with_capacity(predictions.len());
-    for p in &predictions {
-        let alignment = memory.alignments.read(&p.key);
-        let source_frequency = memory.sources.read(&source_ngrams[p.source].keys.key);
-        let target_frequency = memory.targets.read(&target_keys(p).key);
-        frequencies.push((alignment, source_frequency, target_frequency));
-        *sums.entry(p.key.as_str()).or_default() += alignment;
-    }
-    let filtered: Vec<f64> = predictions
-        .iter()
-        .zip(&frequencies)
-        .map(|(p, (alignment, _, _))| divide_safe(*alignment, sums[p.key.as_str()]))
-        .collect();
-    for ((p, (alignment, source_frequency, target_frequency)), filtered) in
-        predictions.iter_mut().zip(frequencies).zip(filtered)
-    {
-        p.scores.source_memory_ratio = divide_safe(alignment, source_frequency);
-        p.scores.target_memory_ratio = divide_safe(alignment, target_frequency);
-        p.scores.memory_filtered = filtered;
-    }
-
-    // LemmaNgramFrequency.
-    let mut lemma_sums: HashMap<&str, f64> = HashMap::new();
-    let mut lemma_frequencies = Vec::with_capacity(predictions.len());
-    for p in &predictions {
-        let Some(lemma) = &p.lemma_key else {
-            lemma_frequencies.push(None);
-            continue;
-        };
-        let alignment = memory.alignments.read(lemma);
-        let s = &source_ngrams[p.source].keys;
-        let t = target_keys(p);
-        let source_frequency = memory
-            .sources
-            .read(s.lemma_key.as_deref().unwrap_or(&s.key));
-        let target_frequency = memory
-            .targets
-            .read(t.lemma_key.as_deref().unwrap_or(&t.key));
-        lemma_frequencies.push(Some((alignment, source_frequency, target_frequency)));
-        *lemma_sums.entry(p.key.as_str()).or_default() += alignment;
-    }
-    let lemma_filtered: Vec<f64> = predictions
-        .iter()
-        .zip(&lemma_frequencies)
-        .map(|(p, f)| match f {
-            Some((alignment, _, _)) => divide_safe(*alignment, lemma_sums[p.key.as_str()]),
-            None => 0.0,
-        })
-        .collect();
-    for ((p, f), filtered) in predictions
-        .iter_mut()
-        .zip(lemma_frequencies)
-        .zip(lemma_filtered)
-    {
-        if let Some((alignment, source_frequency, target_frequency)) = f {
-            p.scores.source_memory_lemma_ratio = divide_safe(alignment, source_frequency);
-            p.scores.target_memory_lemma_ratio = divide_safe(alignment, target_frequency);
+    // NgramFrequency and LemmaNgramFrequency.
+    for (i, p) in predictions.iter_mut().enumerate() {
+        let (s, t) = (p.source, i % n_targets);
+        let group = source_key_ids[s] * n_target_keys + target_key_ids[t];
+        let (alignment, lemma) = alignment_counts[i];
+        p.scores.source_memory_ratio = divide_safe(alignment, source_counts[s].key);
+        p.scores.target_memory_ratio = divide_safe(alignment, target_counts[t].key);
+        p.scores.memory_filtered = divide_safe(alignment, sums[group]);
+        if let Some(lemma) = lemma {
+            p.scores.source_memory_lemma_ratio = divide_safe(lemma, source_counts[s].lemma);
+            p.scores.target_memory_lemma_ratio = divide_safe(lemma, target_counts[t].lemma);
+            p.scores.memory_lemma_filtered = divide_safe(lemma, lemma_sums[group]);
         }
-        p.scores.memory_lemma_filtered = filtered;
     }
 
     // The per-prediction algorithms.
@@ -457,12 +489,21 @@ pub(crate) fn run<'a>(memory: &Memory, source: &'a [Token], target: &'a [Token])
         p.scores.lemma_uniqueness = 0.0;
     }
 
+    // Two reads for each n-gram of either side (under its key and its lemma key), and one or
+    // two for each candidate (its alignment under its key and its lemma key).
+    let memory_reads = 2 * (source_ngrams.len() + n_targets)
+        + alignment_counts
+            .iter()
+            .map(|(_, lemma)| 1 + usize::from(lemma.is_some()))
+            .sum::<usize>();
+
     Run {
         source,
         target,
         source_ngrams,
         target_ngrams,
         predictions,
+        memory_reads,
     }
 }
 
@@ -494,14 +535,10 @@ fn weighted(ratios: [f64; 4], s: &Scores) -> f64 {
 /// wordMAP's `Engine.calculateConfidence`: a candidate found in the alignment memory (by
 /// key, else by lemma key) scores 1 plus its memory-weighted confidence; any other scores
 /// its corpus-weighted confidence times its phrase plausibility.
-pub(crate) fn score(memory: &Memory, predictions: &mut [Prediction]) {
+pub(crate) fn score(predictions: &mut [Prediction]) {
     for p in predictions {
-        let mut in_memory = memory.alignments.read(&p.key) != 0.0;
-        if !in_memory && let Some(lemma) = &p.lemma_key {
-            in_memory = memory.alignments.read(lemma) != 0.0;
-        }
         let s = &p.scores;
-        let confidence = if in_memory {
+        let confidence = if p.in_memory {
             weighted(
                 [
                     s.source_memory_ratio,

@@ -12,30 +12,15 @@
 mod common;
 
 use std::collections::BTreeSet;
-use std::io::Read;
 use std::time::{Duration, Instant};
 
-use common::{eng, fixture};
+use common::{eng, fixture, tw_articles};
 use tc_check::derive::{CheckList, notes_for_book, word_links_for_book};
 use tc_core::BookId;
 use tc_helps::WordArticleId;
-use tc_helps::metadata::parse_burrito_metadata;
 use tc_helps::tsv::{TsvScope, parse_notes, parse_word_links};
 
 const PSA: TsvScope = TsvScope::Book(BookId::Psalms);
-
-/// The articles of the en_tw v91 pin, which gate the tW checks.
-fn tw_articles() -> BTreeSet<WordArticleId> {
-    let path = common::fixture_path("../bundle/en/en_tw_v91.sb.zip");
-    let mut archive = zip::ZipArchive::new(std::fs::File::open(path).unwrap()).unwrap();
-    let mut text = String::new();
-    archive
-        .by_name("en_tw/metadata.json")
-        .unwrap()
-        .read_to_string(&mut text)
-        .unwrap();
-    parse_burrito_metadata(&text).unwrap().word_articles()
-}
 
 /// Reads both Psalms tables and derives both lists, as the Check screen does on open.
 fn open(tn: &str, twl: &str, articles: &BTreeSet<WordArticleId>) -> (CheckList, CheckList) {

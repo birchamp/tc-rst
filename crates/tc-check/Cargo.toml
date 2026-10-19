@@ -21,6 +21,8 @@ thiserror.workspace = true
 proptest.workspace = true
 # The Psalms vectors are checked against the burrito exports in bundle/en.
 zip.workspace = true
+# The operation-count tests open sessions on the decisions of the scale corpus.
+tc-corpus = { path = "../tc-corpus" }
 
 [lints]
 workspace = true
