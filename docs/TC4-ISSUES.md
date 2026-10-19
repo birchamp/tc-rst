@@ -466,8 +466,9 @@ rows also carry notes for builders; see their rows.
 - **B7:** a story project opens at story 1 (#507).
 - **B9a:** autonyms (#579); Aquifer attribution (#606); downloads always from production
   (#120).
-- **B9b:** team-access line for every project (#724); QA only for account and write calls
-  (#120); J11 steps (#372).
+- **B9b:** QA only for account and write calls (#120); J11 steps up to the check step (#372).
+  The team-access line for every project (#724) is on the share's done step, which is E1b's
+  (APP-DESIGN B9b D4).
 - **B10:** rows for verses with two alignments (#791); toast links survive a failed open
   (#724); one label function (#680); the toast (#678).
 - **B11:** "2 versions" in Align (#791); labels (#680); the Text tab (#679); History (#78);
@@ -490,7 +491,7 @@ rows also carry notes for builders; see their rows.
   the button flow (#678); a failed branch lookup is a failed sync (#724); one test per
   guarantee (#24); rows for verses with two alignments (#791).
 - **E1b:** creation pins at first open (#766); stories (#761); J17 (#677); the done step
-  (#724); J11 (#372).
+  with the team-access line for every project, OBS included (#724); J11 (#372).
 - **E2:** audio through an exchange file (#705).
 - **F1:** singular keys (#577); typed name (#499); two-file drop (#502); split aligned files
   (#553); creation pins (#766); J9 (#373).
