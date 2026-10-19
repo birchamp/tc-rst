@@ -2,8 +2,10 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use super::check::{alignment_differences, decision_differences};
+use super::records::{carried_record, meta_field, meta_fields, migrate_pins_v1, pins_records};
 use super::*;
-use serde_json::json;
+use serde_json::{Map, json};
+use tc_journal::{Md5, MetaField, PinGroup, ResourcesKey, ResourcesLevel};
 
 fn sample(dir: &str) -> Tc4Folder {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
