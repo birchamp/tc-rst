@@ -39,6 +39,8 @@ zip = { workspace = true, optional = true }
 # tests enable its features.
 tc-app = { path = ".", features = ["test-hooks", "fixture-backend"] }
 tc-api = { path = "../tc-api", features = ["server", "test-hooks", "proptest"] }
+# The scale corpus of docs/PERFORMANCE.md for the operation-count tests (§8.1, AD32).
+tc-corpus = { path = "../tc-corpus" }
 proptest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "sync", "time", "test-util"] }

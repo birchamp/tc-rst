@@ -3123,6 +3123,7 @@ dependencies = [
  "tc-app",
  "tc-burrito",
  "tc-core",
+ "tc-corpus",
  "tc-door43",
  "tc-journal",
  "tc-obs",

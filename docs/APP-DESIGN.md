@@ -173,7 +173,7 @@ Evidence: `docs/evidence/electronite-spike-2026-10-17.md` and
 |---|---|---|---|
 | AD1 | Core-first is the base; parity-first and slice-first supply grafts (§2.2 lists each). | Judge 1 scored no-loss highest and picked core-first; judge 2 scored parity and delivery highest and picked parity-first. Their graft lists converge. | Parity-first as the base: one opaque token type, no write capability, no retry dedupe. Slice-first: no retry dedupe, list round trips inside 16 ms budgets. |
 | AD2 | `tc-api` holds wire types only and does not depend on `tc-journal`. `tc-app::wire` converts. | The UI must never reach storage types (ARCH:88), and the wire must not move when the journal changes. | Re-exporting journal types through tc-api. |
-| AD3 | Two opaque token types, `ShownToken` and `ReviewToken`, with no constructor, no accessor and no conversion to or from text in the UI's build: there a token is made only by deserializing JSON and its text leaves only by serializing it. Code that re-encodes one through JSON on purpose could still relabel it, so the types stop slips and the MAC, which covers the kind (R19), stops misuse *(A1)*. The seam keeps them apart too: `mint` returns an `EditToken` and `mint_review` a `ReviewToken`, two tc-app types around tc-journal's one token, and `tc-app::wire` converts each to its own wire type only. The wire forms carry the prefixes `st1.` and `rt1.`; parsing refuses the wrong prefix. R19 asks tc-journal to put the purpose under the MAC, so the actor also refuses a review token in a save and an edit token in a `Resolve`. Tokens never enter the DOM; the DOM test looks for the two prefixes. *(A-7)* | STORAGE:756-765: a conflict's edit token lists only the shown candidate; `Resolve` needs every head (STORAGE:1610-1616). tc-journal has one `ShownToken` for both (`storage:crates/tc-journal/src/token.rs:54`) and its MAC does not say which kind it is, so a review token used in a save would supersede every head and end the conflict unseen. | One `ShownTokenText` for both; separate types in tc-api only, which stop at the wire. |
+| AD3 | Two opaque token types, `ShownToken` and `ReviewToken`, with no constructor, no accessor and no conversion to or from text in the UI's build: there a token is made only by deserializing JSON and its text leaves only by serializing it. Code that re-encodes one through JSON on purpose could still relabel it, so the types stop slips and the MAC, which covers the kind (R19), stops misuse *(A1)*. The seam keeps them apart too: `mint` returns an `EditToken` and `mint_review` a `ReviewToken`, two tc-app types around tc-journal's one token, and `tc-app::wire` converts each to its own wire type only. The wire forms carry the prefixes `st1.` and `rt1.`; parsing refuses the wrong prefix. tc-journal puts the purpose under the MAC (R19, provided), so the actor also refuses a review token in a save and an edit token in a `Resolve`, and tc-app's parse refuses a relabelled one before any command is built (B1b). Tokens never enter the DOM; the DOM test looks for the two prefixes. *(A-7)* | STORAGE:756-765: a conflict's edit token lists only the shown candidate; `Resolve` needs every head (STORAGE:1610-1616). tc-journal has one `ShownToken` for both (`storage:crates/tc-journal/src/token.rs:54`) and its MAC does not say which kind it is, so a review token used in a save would supersede every head and end the conflict unseen. | One `ShownTokenText` for both; separate types in tc-api only, which stop at the wire. |
 | AD4 | Every write carries a `RequestId`. The browser buffer entry keeps the id with the text that was sent (`sent`) beside the current text. A per-session `ReplyCache` (1,024 entries, memory only) keys each id with a digest of the request body: a retry of a finished request gets the first reply, a retry of a request still running waits for its reply, and a retry whose body differs gets `ApiError::RequestReused`, never the cached `Ack`. A field is clean only when `Ack.saved` equals the NFC form of its current text. A new `ServerInstance` means the cache is gone: the UI goes Home and resends nothing. Each buffered entry is offered at the next open of its project, beside the entries of `drafts.json`, unless the stored value already equals its text; a comment entry is dropped when the newest comment at its target has its text (tC4's rule, `tC4:src/data/journal/journalingStore.ts:3048-3058`). *(A-2, A-3)* | A retry rebuilt from the same token after a lost reply would otherwise make a person conflict with their own save (STORAGE:1422-1428, 1447). A retry matched by id alone could carry newer text and be answered with the older text's `Ack`, or run twice while the first attempt waits on the actor. `AddComment` has no token and mints a new id each time (STORAGE:1536). After a restart the old page cannot reach the server on its new port (§5.2), so an in-place resend cannot happen. | An echo-only request tag; matching retries by id alone; resending in place after a server restart. |
 | AD5 | `Ack` arrives only after B3 and says exactly what was stored: `written`, the NFC text, the new tokens, new conflicts, `ViewSeq`, and the disk warning. | STORAGE:1415-1428. | An optimistic "Saved". |
 | AD6 | One seam to storage. Before S1, `MemoryBackend` executes no command: it answers `Unavailable`, or a scripted outcome under the `test-hooks` feature. | No second copy of STORAGE's B1–B2 rules. Save behaviour in the UI is still testable before S1. | Core-first's temporary command builder, whose deletion depended on S1 publishing a pure `build_batch`. |
@@ -1134,6 +1134,19 @@ reuses it. The two `compile_fail` doctests on `StoreCommand` and wire's
   beyond its versification, so a probe that misses a record fails a test instead of hiding
   work.
 
+  *(B1b: R1 is provided, by tc-journal's `fold/ranges.rs` (`c4b8663`): `chapters_of`,
+  `chapter_keys` (a chapter's front, verses, alignments, comments and decisions), `decisions_of`
+  (tool, book), `alignments_of`, `comments_of` and `book_keys`, each costing what it returns, with
+  tc-journal's own differential test (`tests/scope.rs`, `range_reads_find_what_a_scan_finds`). So
+  the reads of this section are R1's, wrapped and counted in `CountingSnapshot` (`keys_probed`), and
+  no probe above is built. A chapter's verses come from `chapter_keys`, not from its USFM, so a
+  verse beyond the versification is found all the same. A book-wide read of alignments or comments
+  uses `alignments_of` or `comments_of`, never a loop over `chapters_of`, which lists only chapters
+  with a verse or a front and misses a record anchored in a chapter with neither (after a
+  renumber). The test keeps its name; it runs in `crates/tc-app/tests/op_counts/probes.rs` on the
+  sample Bible project, the same with two teammates on Titus 1:1, a project with verses beyond its
+  versification and records in chapters with no verse, Psalms and ten times Psalms.)*
+
 ### 4.4 Caches
 
 | Cache | Key | Owner | Filled | Invalidated by | Budget |
@@ -1150,7 +1163,8 @@ reuses it. The two `compile_fail` doctests on `StoreCommand` and wire's
 | `SummaryCache` | folder | app, persisted | while open, from deltas; on a miss, from derived files | stamp change | Home costs O(projects) |
 | `ReplyCache` | `RequestId`, with a SHA-256 of the request body | the session's cache for project-scoped writes; the app-wide cache for writes with no scope (B1b; until then one app-wide cache served every write, A3). Dispatch checks a write's scope (`Write::at`) before it picks the cache, so a stale-scope refusal is never kept under its id | when a write starts (in flight), then its reply | bounded at 1,024 finished replies; in-flight entries are never evicted *(A-2)*; a session's cache goes with the session; `test/reset` keeps no reply (§5.8) | — |
 
-There is no `ProjectIndex` *(A-21)*: §4.3 says how each read finds its keys.
+There is no `ProjectIndex` *(A-21)*: §4.3 says how each read finds its keys (R1's range reads,
+B1b).
 
 ### 4.5 Home and the project registry
 
@@ -1257,7 +1271,7 @@ There is no `ProjectIndex` *(A-21)*: §4.3 says how each read finds its keys.
 
 | Service | Uses | Notes |
 |---|---|---|
-| `editor` | `FoldState::projected`, `key_state`, `token`; `chapter_usfm` (`storage:…/fold/project.rs:505`); the tc-usfm codec | builds a chapter from that chapter's keys (R1, or the probes of §4.3) *(A-21)*; section values from `model::SectionBuffer`; empty words become `___` as in tC4 (`tC4:src/state.jsx:7183-7186`) |
+| `editor` | `CountingSnapshot::projected`, `key_state`, `mint`; `chapter_usfm` (`storage:…/fold/project.rs:505`); the tc-usfm codec | builds a chapter from that chapter's keys (R1's `chapter_keys`, provided, B1b) *(A-21)*; section values from `model::SectionBuffer`; empty words become `___` as in tC4 (`tC4:src/state.jsx:7183-7186`) |
 | `story` | `tc_obs` `present_story`, `resolve_image`, the frame rules | text rules checked before the command; the store checks again |
 | `helps` | `tc_helps::Helps`, `highlight_quote`, tc-helps' block renderer | titles are gateway renderings, as `glTitleFor` |
 | `check` | `tc_check` after unit C: derive, `session::open` over the fold, `rail`, `status`, `selection`; `tc_resources::resolve::preflight_tool_book` | `decide` returns the new row and counts; a verse delta re-assesses only that verse's checks |
@@ -2361,6 +2375,12 @@ tC4's spec assertions are the reference.
 
 Every count test runs the action on tc-corpus Psalms and on ten times Psalms and fails if a count
 grows (PERF:20-24). From B1b to C1a they run on `MemoryBackend`; from C1a on, on `StoreBackend` too.
+*(B1b: the harness is `crates/tc-app/tests/op_counts/harness.rs`: `costs_what_it_touches(name,
+before, action)` runs an action through a fresh `App` over each corpus, compares `AppCounts` and
+the project's fold counters, and names every field that grew. Its rows are `open_lists_no_key`,
+`snapshot_costs_nothing_at_any_size`, `a_chapter_read_costs_one_chapter` and
+`a_token_round_trip_costs_one_record`; `the_harness_fails_an_action_that_costs_the_project` is the
+planted case that shows it can fail. Each later unit adds its rows there.)*
 
 ### 8.2 Budgets and count tests per screen
 
@@ -2371,7 +2391,7 @@ Count tests live in `crates/tc-app/tests/op_counts.rs` unless named otherwise.
 | Home list, 10 cards | proposed 3 s repeat launch (PERF:100); no cost per history (PERF:12-19) | `home_costs_projects_not_history`: fresh summaries mean 0 folds, 0 pack reads, at most 5 files per card; a stale card starts one summary job | store only: the memory backend's `peek` folds, which the product never does *(A-25)* |
 | First launch | 60 s with a determinate count (PERF:99, rule 4); a read of each bundled file once, a write of each once, no read back (PERF:133-138) | `first_launch_opens_each_bundled_file_once_and_writes_each_once` (`crates/tc-app/tests/app/seed.rs`, in process, because the counters are per thread); `quit_while_seeding_stops_the_seed_and_waits_for_it`; `c29_a_stop_asked_at_the_last_file_of_a_copy_leaves_that_copy_finished` (`crates/tc-resources/tests/seed.rs`: a copy whose files are all written is finished, whatever the watch says); `a_bundle_that_lost_an_install_fails_the_startup_at_once_and_copies_nothing` and `a_leftover_that_cannot_be_removed_stops_neither_the_start_nor_the_seed` (same file); Playwright `prepare-smoke.mjs`. Until the installer ships the archives themselves (DELTA §3.6 item 3), the count is per bundled file, not per archive; the measurement is `docs/evidence/first-launch-seeding-2026-10-18.md` *(A9)* | none (A9) |
 | Repeat launch | 0 resource content reads (PERF:100) | `repeat_launch_reads_no_resource_content_file` (`crates/tc-app/tests/app/seed.rs`, in process, because the counters are per thread), with `a_repeat_launch_is_ready_at_once_and_changes_no_resource_file` (`crates/tc4/tests/seed.rs`, the real binary) *(A9)* | none (A9) |
-| Open project | 3 s / 10 s; first report within 300 ms (PERF:89-90) | tc-store owns it; tc-app adds `app_forwards_open_reports_unchanged` and `open_lists_no_key` (`record_keys` 0, no index) *(A-21)* | store |
+| Open project | 3 s / 10 s; first report within 300 ms (PERF:89-90) | tc-store owns it; tc-app adds `app_forwards_open_reports_unchanged` and `open_lists_no_key` (`record_keys` 0, no index) *(A-21)*. *(B1b: `open_lists_no_key` runs on the memory backend now: an open and `hello` read no key and do no fold work, every `AppCounts` field and fold counter 0, on Psalms and ten times Psalms)* | store (memory for `open_lists_no_key`) |
 | Open a book (Understand, Translate) | 150 ms; first chapter 50 ms (PERF:73) | `open_book_touches_one_book`: records read equal that book's | memory |
 | Move to another chapter | 16 ms (PERF:75) | `chapter_switch_sends_no_request` (harness) | memory |
 | Save one verse until "Saved" | 25 ms with fsync (PERF:74) | `save_verse_touches_one_verse`: one command, `record_keys` 0, summary update one chapter; `saves_waiting_behind_a_draft_write` is counted and must stay 0 once R22 lands *(A-20)* | store |
@@ -2462,7 +2482,7 @@ it today *(A-5)*.
 
 | R | Need | Owner | In a task text | Fallback |
 |---|---|---|---|---|
-| R1 | Range reads: one chapter's verses, one (tool, book)'s decisions, one book's alignments and comments, each costing its result. The fold already keeps them per chapter in `ChapterEntry` (`storage:crates/tc-journal/src/fold/state.rs:242-257`), which is crate-private. | C or P | no | the probes of §4.3, which cost what they show; no project-wide index *(A-21)* |
+| R1 | Range reads: one chapter's verses, one (tool, book)'s decisions, one book's alignments and comments, each costing its result. The fold already keeps them per chapter in `ChapterEntry` (`storage:crates/tc-journal/src/fold/state.rs:242-257`), which is crate-private. | C or P | provided: tc-journal `c4b8663`, `fold/ranges.rs` (B1b uses it) | the probes of §4.3, which cost what they show; no project-wide index *(A-21)* |
 | R2 | Create a project in a staging folder and rename it into place without replacing (DELTA:619-624) | S1 | no | create waits; parity projects stay on `MemoryBackend` until then |
 | R3 | Add a book with imported text (tC4 `addUsfmBooks`) | S1 or I | no | `AddBook` with the imported USFM as `SeedSource`, then one `SaveSection` per chapter on the stub tokens; History shows a seed and an edit |
 | R4 | The `ProjectHandle` surface of §4.2: snapshot with its sequence, mint and parse, an async submit, typed events, drafts, leave, checkpoint, counters, close | S1, S2 | partly: STORAGE specifies the actor and its commands, not this surface | C0 builds the surface around the actor (§4.2). C0 cannot build an O(1) snapshot or a command's `Delta`; without them phase 2 waits *(A-5)* |
@@ -2480,7 +2500,7 @@ it today *(A-5)*.
 | R16 | `StoreReply.seq` for read-your-writes; typed notices for `SecondWriter`, `SavedWithDiskError`, a blocked materialize | S1, S2 | no | C0's own `seq`, raised with each published snapshot; notices mapped from tc-store's error types *(A-5)* |
 | R17 | A checkpoint on every mode switch with pending batches (amends STORAGE:1723) | S2, owner | no | as STORAGE says today if the owner declines; adopted only after R9 *(A-11)* |
 | R18 | Two settings in one batch (direction and font) | S1 | no | two batches; the dialog says which failed |
-| R19 | The token's kind (edit or review) under its MAC, a purpose byte in the payload or a second derived key, so the actor refuses a review token in a save and an edit token in `Resolve` (STORAGE §2.7) | C, which is editing tc-journal now | no | the seam's two types and the wire prefixes (AD3) *(A-7)* |
+| R19 | The token's kind (edit or review) under its MAC, a purpose byte in the payload or a second derived key, so the actor refuses a review token in a save and an edit token in `Resolve` (STORAGE §2.7) | C, which is editing tc-journal now | provided: tc-journal `token.rs` (`TokenKind`, `"kind"` in the payload under the MAC); tc-app's `parse_edit` and `parse_review` check the MAC, then the kind (B1b) | the seam's two types and the wire prefixes (AD3) *(A-7)* |
 | R20 | A draft whose token fails its MAC is offered as text, and Keep records it as a change with no parents, which stands as a conflict, as STORAGE does for outside edits it cannot place (STORAGE:3637). Stated in §5.14 and O12. | S1 | no | the offer shows the text with "Copy text" and stays until Discard (§6.6) *(A-9)* |
 | R21 | Keep a checkpoint's long work off the actor: only the seal and the final reference update are actor steps; materialize, the tree build and `tc_burrito::check` run on a snapshot (STORAGE:1725-1735) | S2, measured by P | no | Q-5's limit of one mode-switch checkpoint every two minutes *(A-11)* |
 | R22 | A draft write never delays a command: drafts are not journal data, so they are written beside the actor, not as one of its steps (STORAGE:1752-1753) | S1 | no | saves that waited behind a draft write are counted (§8.2) *(A-20)* |
