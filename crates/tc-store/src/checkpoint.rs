@@ -167,7 +167,9 @@ impl Writer {
         let Some(git) = self.git.take() else {
             return;
         };
+        git.commit_begin();
         let _ = self.keep_carried_versions_with(&git, device);
+        git.commit_end();
         self.git = Some(git);
     }
 
@@ -306,7 +308,13 @@ impl Writer {
         let Some(git) = self.git.take() else {
             return Ok(Outcome::Skip(CheckpointSkip::NoHistory));
         };
+        // A repack removes no unreachable object until the branch has moved to the commit
+        // (or the commit was given up): the tree may name objects nothing references yet.
+        git.commit_begin();
         let result = self.commit_with(&git, subject, device);
+        if !matches!(result, Ok(Outcome::Commit { .. })) {
+            git.commit_end();
+        }
         self.git = Some(git);
         result
     }

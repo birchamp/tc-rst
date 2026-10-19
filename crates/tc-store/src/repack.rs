@@ -249,6 +249,7 @@ impl Git {
     ) -> Result<Repacked, GitError> {
         let repo = self.repo();
         let objects = repo.path().join("objects");
+        let generation = self.commit_generation();
         let loose = list_loose(&objects)?;
         let mut done = Repacked::default();
         if loose.is_empty() {
@@ -295,7 +296,11 @@ impl Git {
                 done.removed += 1;
             }
         }
-        for oid in &plan.prune {
+        // The walk found nothing reaching these; a commit made since may name them. Nothing
+        // unreachable goes while one is being made or was made during the run: the next run
+        // has them again.
+        let quiet = generation.is_multiple_of(2) && self.commit_generation() == generation;
+        for oid in plan.prune.iter().filter(|_| quiet) {
             if remove_loose(&by_oid[oid].path) {
                 done.pruned += 1;
             }

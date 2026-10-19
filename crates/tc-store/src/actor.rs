@@ -357,6 +357,22 @@ impl Actor {
         commit: tc_journal::GitOid,
         expected: Option<tc_journal::GitOid>,
         tree: tc_journal::GitOid,
+        report: CheckpointReport,
+    ) -> Result<CheckpointReport, StoreError> {
+        let result = self.move_branch_to(commit, expected, tree, report);
+        // The commit is referenced or was given up: a repack may remove unreachable objects
+        // again (§9.8).
+        if let Some(git) = &self.project.git {
+            git.commit_end();
+        }
+        result
+    }
+
+    fn move_branch_to(
+        &mut self,
+        commit: tc_journal::GitOid,
+        expected: Option<tc_journal::GitOid>,
+        tree: tc_journal::GitOid,
         mut report: CheckpointReport,
     ) -> Result<CheckpointReport, StoreError> {
         let Some(git) = &self.project.git else {

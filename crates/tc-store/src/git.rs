@@ -24,6 +24,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tc_journal::GitOid;
 
 /// The branch a new repository starts on.
@@ -127,6 +128,10 @@ pub struct Author {
 pub struct Git {
     repo: Repository,
     counters: Arc<Counters>,
+    /// Odd while a commit is being made from objects the database may hold unreferenced, even
+    /// when none is; every commit made adds two. Shared by every handle on the repository
+    /// ([`Git::another`]), so a repack on its own thread sees it ([`Git::commit_begin`]).
+    making: Arc<AtomicU64>,
 }
 
 impl std::fmt::Debug for Git {
@@ -185,7 +190,11 @@ impl Git {
                 };
             }
         };
-        let mut git = Git { repo, counters };
+        let mut git = Git {
+            repo,
+            counters,
+            making: Arc::default(),
+        };
         // HEAD must read, as an unborn branch or as a commit that exists.
         if let Err(e) = git.head() {
             return Opened::Broken {
@@ -229,11 +238,13 @@ impl Git {
         let git = Git {
             repo: at("open the new repository", open_repo(outside))?,
             counters: counters.clone(),
+            making: Arc::default(),
         };
         git.ensure_config()?;
         Ok(Git {
             repo: at("open the new repository", open_repo(outside))?,
             counters,
+            making: git.making.clone(),
         })
     }
 
@@ -349,7 +360,26 @@ impl Git {
         Ok(Git {
             repo: at("open the repository", open_repo(folder))?,
             counters: self.counters.clone(),
+            making: self.making.clone(),
         })
+    }
+
+    /// A commit is about to be made from a tree that may name objects the database already
+    /// holds and nothing references (a blob an abandoned checkpoint stored, older than the
+    /// 14 days a repack waits): until [`Git::commit_end`], which follows the move of the
+    /// branch, a repack removes no unreachable object (§9.8).
+    pub fn commit_begin(&self) {
+        self.making.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// The commit made since [`Git::commit_begin`] is referenced, or was given up.
+    pub fn commit_end(&self) {
+        self.making.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// Where the commits are now: odd while one is being made.
+    pub(crate) fn commit_generation(&self) -> u64 {
+        self.making.load(Ordering::Acquire)
     }
 
     /// The repository's `.git` folder.
@@ -530,6 +560,11 @@ impl Git {
     pub fn ensure_blob(&self, bytes: &[u8]) -> Result<GitOid, GitError> {
         let oid = self.blob_id(bytes)?;
         if self.has(oid) {
+            // Writing an object the database holds only brings its time up to date (libgit2
+            // freshens it, as git does), which keeps a repack from removing an old object
+            // nothing references that the commit being made names now (§9.8).
+            let odb = at("open its objects", self.repo.odb())?;
+            at("keep a stored file", odb.write(ObjectType::Blob, bytes))?;
             Ok(oid)
         } else {
             self.write_blob(bytes)
@@ -849,6 +884,99 @@ mod tests {
             name: "translationCore user".into(),
             time_ms: secs * 1000,
         }
+    }
+
+    /// Makes the loose file of `oid` look `days` old.
+    fn age(git: &Git, oid: GitOid, days: u64) {
+        let hex = oid.to_hex();
+        let path = git
+            .git_dir()
+            .join("objects")
+            .join(&hex[..2])
+            .join(&hex[2..]);
+        let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        permissions.set_readonly(false);
+        std::fs::set_permissions(&path, permissions).unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(
+                std::time::SystemTime::now() - std::time::Duration::from_secs(days * 86_400),
+            )
+            .unwrap();
+    }
+
+    fn loose_age(git: &Git, oid: GitOid) -> std::time::Duration {
+        let hex = oid.to_hex();
+        let path = git
+            .git_dir()
+            .join("objects")
+            .join(&hex[..2])
+            .join(&hex[2..]);
+        std::fs::metadata(path)
+            .unwrap()
+            .modified()
+            .unwrap()
+            .elapsed()
+            .unwrap_or_default()
+    }
+
+    /// A blob an abandoned checkpoint stored long ago, named again by the commit being made,
+    /// is brought up to date: a repack that decided it was unreachable earlier does not remove
+    /// it before the branch has moved (§9.8).
+    #[test]
+    fn a_blob_a_new_commit_names_again_is_kept_young() {
+        let (_dir, git) = fresh();
+        let oid = git
+            .write_blob(b"stored by an abandoned checkpoint")
+            .unwrap();
+        age(&git, oid, 20);
+        assert!(loose_age(&git, oid) > std::time::Duration::from_secs(19 * 86_400));
+        assert_eq!(
+            git.ensure_blob(b"stored by an abandoned checkpoint")
+                .unwrap(),
+            oid
+        );
+        assert!(
+            loose_age(&git, oid) < std::time::Duration::from_secs(3600),
+            "the object is as old as before"
+        );
+        assert_eq!(
+            git.counters.read().git_blobs_written,
+            1,
+            "nothing was written twice"
+        );
+    }
+
+    /// A repack removes no unreachable object while a commit is being made, or when one was
+    /// made during its run, whatever the objects' age (§9.8).
+    #[test]
+    fn a_repack_prunes_nothing_while_a_commit_is_being_made() {
+        let (_dir, git) = fresh();
+        let orphan = git.write_blob(b"old, unreferenced").unwrap();
+        age(&git, orphan, 20);
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let repack = || {
+            git.repack(
+                std::time::SystemTime::now(),
+                &Hooks::default(),
+                &stop,
+                crate::repack::MAX_RAW,
+            )
+            .unwrap()
+        };
+        git.commit_begin();
+        assert_eq!(repack().pruned, 0, "a commit is being made");
+        assert!(git.has(orphan));
+        git.commit_end();
+        assert_eq!(
+            repack().pruned,
+            1,
+            "the commit is referenced; nothing names it"
+        );
+        assert!(!git.has(orphan));
     }
 
     /// A repository is made for bytes: nothing is converted, objects and references are
