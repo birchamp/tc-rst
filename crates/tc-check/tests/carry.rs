@@ -765,9 +765,11 @@ fn a_tw_only_change_that_drops_a_decided_article_is_counted() {
     let session = open(after, &decisions, Some(&ark.twl.resource), no_text);
     assert_eq!(session.off_list, [0]);
     assert_eq!(session.placed.iter().flatten().collect::<Vec<_>>(), [&1]);
-    // If a later release carries the article again, the check comes back with it, decided.
+    // If a later release carries the article again, the decision is placed on its check
+    // again, as it was.
     let back = open(before, &decisions, Some(&ark.twl.resource), no_text);
     assert!(back.off_list.is_empty());
+    assert!(back.placed.iter().any(|on| on.contains(&0)));
 }
 
 #[test]
