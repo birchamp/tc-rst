@@ -384,29 +384,6 @@ fn next_ladder(current: &LanguageSets) -> LanguageSets {
     next
 }
 
-type Units = Vec<(ToolId, BookId, Vec<StoredDecision>)>;
-
-/// Every (tool, book) unit with the decisions the fold holds for it.
-fn gather(fold: &FoldState) -> Units {
-    let mut units = Vec::new();
-    for ordinal in 1..=66u8 {
-        let Some(book) = BookId::from_ordinal(ordinal) else {
-            continue;
-        };
-        for tool in [TN, TW] {
-            let decisions: Vec<StoredDecision> = fold
-                .decisions(tool, Collection::Book(book))
-                .into_iter()
-                .map(|d| StoredDecision::of(d.key, d.record))
-                .collect();
-            if !decisions.is_empty() {
-                units.push((tool, book, decisions));
-            }
-        }
-    }
-    units
-}
-
 /// The check items a corpus book's rows make: the key, group, category and quote are what a
 /// carry-over reads.
 fn items_of(rows: &[CheckRow], tool: CheckTool) -> Vec<CheckItem> {
@@ -482,6 +459,7 @@ fn check_bible_in(dir: &Path) -> Vec<Measured> {
     let (mut gathering, mut counting) = (0.0, 0.0);
     let mut at_risk = 0;
     let (mut units_found, mut decisions_found) = (0, 0);
+    let mut unit_keys: Vec<(ToolId, BookId)> = Vec::new();
     for _ in 0..5 {
         let started = Instant::now();
         let mut resources: Vec<(ToolId, BookId, Vec<std::sync::Arc<ResourceRef>>)> = Vec::new();
@@ -511,6 +489,7 @@ fn check_bible_in(dir: &Path) -> Vec<Measured> {
         times.push(ms(started));
         at_risk = out.at_risk();
         units_found = resources.len();
+        unit_keys = resources.iter().map(|(t, b, _)| (*t, *b)).collect();
         decisions_found = resources.iter().map(|(_, _, r)| r.len()).sum::<usize>();
     }
     rows.push(Measured::new(
@@ -522,21 +501,16 @@ fn check_bible_in(dir: &Path) -> Vec<Measured> {
         ),
     ));
 
-    // The carry-over's decisions: whole, as the plan carries them.
-    let started = Instant::now();
-    let units = gather(fold);
-    let gathered = ms(started);
-    let decisions: usize = units.iter().map(|(_, _, d)| d.len()).sum();
-
     // The carry-over: the corpus's rows are the lists of the new release (2% of the rows
     // gone and 2% of the quotes changed), the fold's decisions what is carried.
+    let decisions = decisions_found;
     let domain = Corpus::domain(&Spec::whole_bible(1)).expect("the corpus domain");
     let resource = ResourceRef {
         repo_path: "git.door43.org/unfoldingWord/en_tn".into(),
         sha: GitOid::parse(&"cd".repeat(20)).expect("a commit id"),
     };
     let mut lists: Vec<(ToolId, BookId, Vec<CheckItem>)> = Vec::new();
-    for (tool, book, _) in &units {
+    for (tool, book) in &unit_keys {
         let Some(input) = domain.books.iter().find(|b| b.book == *book) else {
             continue;
         };
@@ -564,46 +538,83 @@ fn check_bible_in(dir: &Path) -> Vec<Measured> {
                 .collect()
         })
         .collect();
+    // A unit's plan, end to end: its decisions read from the fold and the plan over the new
+    // list. Returns the milliseconds of each part.
+    let plan_unit = |tool: ToolId,
+                     book: BookId,
+                     items: &[CheckItem],
+                     counted: &mut tc_check::Work|
+     -> (f64, f64) {
+        let started = Instant::now();
+        let stored: Vec<StoredDecision> = fold
+            .decisions(tool, Collection::Book(book))
+            .into_iter()
+            .map(|d| StoredDecision::of(d.key, d.record))
+            .collect();
+        let read = ms(started);
+        let started = Instant::now();
+        let plan = carry::plan_counted(items, &resource, &stored, counted);
+        std::hint::black_box(&plan);
+        (read, ms(started))
+    };
     let mut per_unit = Vec::new();
-    let mut per_pass = Vec::new();
     let mut worst = (0.0f64, String::new());
     let mut work = tc_check::Work::default();
-    for pass in 0..5 {
-        let pass_started = Instant::now();
-        for (n, ((tool, book, items), (_, _, stored))) in lists.iter().zip(&units).enumerate() {
+    let mut split = (0.0, 0.0);
+    for pass in 0..3 {
+        for (n, (tool, book, items)) in lists.iter().enumerate() {
             for (what, items) in [("release", items), ("language", &language[n])] {
-                let started = Instant::now();
                 let mut counted = tc_check::Work::default();
-                let plan = carry::plan_counted(items, &resource, stored, &mut counted);
-                let took = ms(started);
-                std::hint::black_box(&plan);
+                let (read, plan) = plan_unit(*tool, *book, items, &mut counted);
                 if pass < 3 {
-                    per_unit.push(took);
+                    per_unit.push(read + plan);
                 }
-                if took > worst.0 {
-                    worst = (took, format!("{tool:?} {} {what}", book.code()));
+                if read + plan > worst.0 {
+                    worst = (read + plan, format!("{tool:?} {} {what}", book.code()));
+                    split = (read, plan);
                 }
                 work = counted;
             }
         }
-        per_pass.push(ms(pass_started) / 2.0);
     }
     rows.push(Measured::new(
         "check.carry_book",
         per_unit,
         format!(
-            "{} units, a release and a language change, three times; slowest {:.0} ms ({}); the \
-             last unit's work {work:?}",
+            "{} units, a release and a language change, three times, each unit's decisions read \
+             and planned; slowest {:.0} ms ({}: read {:.0}, plan {:.0}); the last unit's work {work:?}",
             lists.len(),
             worst.0,
-            worst.1
+            worst.1,
+            split.0,
+            split.1
         ),
     ));
+
+    // The whole Bible, a gateway-language change (every unit its worst case), the units
+    // planned together on the pool as a background job would.
+    use rayon::prelude::*;
+    let mut per_pass = Vec::new();
+    for _ in 0..5 {
+        let started = Instant::now();
+        let planned: usize = lists
+            .par_iter()
+            .enumerate()
+            .map(|(n, (tool, book, _))| {
+                let mut counted = tc_check::Work::default();
+                plan_unit(*tool, *book, &language[n], &mut counted);
+                1
+            })
+            .sum();
+        assert_eq!(planned, lists.len());
+        per_pass.push(ms(started));
+    }
     rows.push(Measured::new(
         "check.carry_bible",
         per_pass,
         format!(
-            "{} units, {decisions} decisions, 5 passes; the decisions were read from the fold in {gathered:.0} ms",
+            "{} units, {decisions} decisions, a gateway-language change, units planned together \
+             on four threads, 5 passes",
             lists.len()
         ),
     ));
