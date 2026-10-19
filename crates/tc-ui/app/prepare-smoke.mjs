@@ -1,13 +1,17 @@
 // Proves the first-launch window in Chromium (docs/APP-DESIGN.md §10, unit A9): the window shows
 // "Preparing resources: n of total" while `tc4 serve --bundle` seeds, Close cancels the seed and
 // leaves only whole installs, the next launch finishes it and hands off to Home, a repeat launch
-// shows no count, and a damaged bundle shows tC4's failure words with the reason.
+// shows no count, and a damaged bundle shows tC4's failure words with the reason. With
+// `--app-ui <dir>` (the folder of crates/tc-ui/build-app.sh) it also shows that the app's own
+// page, opened while the resources are still being prepared, goes to the window and comes
+// back to the app at `Ready` (unit A5, D14).
 //
 //   cargo build -p tc4 --features test-hooks -j 2
 //   cargo run -p tc-app --example bundle_store -j 2 -- --from bundle/en \
 //     --out target/a9/bundle-smoke --only en_tw,en_obs,en_obs-tn,en_obs-tq,en_obs-twl
 //   node crates/tc-ui/app/prepare-smoke.mjs --tc4 target/debug/tc4 \
-//     --bundle target/a9/bundle-smoke --out docs/evidence/first-launch-seeding-2026-10-18
+//     --bundle target/a9/bundle-smoke --out docs/evidence/first-launch-seeding-2026-10-18 \
+//     [--app-ui target/tc-ui-app]
 //
 // The page is served the way the shell serves it (AD11): a request filter adds the token to what
 // the browser loads by itself, and leaves `/api/` out, where the page sends the token itself.
@@ -39,6 +43,7 @@ for (const required of ['tc4', 'bundle', 'out']) {
 const tc4Path = path.resolve(args.tc4);
 const bundle = path.resolve(args.bundle);
 const outDir = path.resolve(args.out);
+const appUi = args['app-ui'] ? path.resolve(args['app-ui']) : null;
 const work = path.join(root, 'target', 'a9');
 const pace = Number(args.pace ?? 4);
 
@@ -89,14 +94,14 @@ function newRun() {
 
 // --- tc4 --------------------------------------------------------------------------------------
 class Tc4 {
-  static async start(run, { bundleDir, seedPace } = {}) {
+  static async start(run, { bundleDir, seedPace, uiDir = ui } = {}) {
     const extra = [];
     if (bundleDir) extra.push('--bundle', bundleDir);
     if (seedPace !== undefined) extra.push('--test-hooks', '--test-seed-pace', String(seedPace));
     // stdin stays open: a closed stdin makes tc4 quit, as the shell's Close does.
     const child = spawn(
       tc4Path,
-      ['serve', '--app-data', run.appData, '--projects', run.projects, '--ui', ui, ...extra],
+      ['serve', '--app-data', run.appData, '--projects', run.projects, '--ui', uiDir, ...extra],
       { stdio: ['pipe', 'pipe', 'pipe'] },
     );
     const tc4 = new Tc4(child);
@@ -423,6 +428,26 @@ try {
   results.steps['6-failure'] = { ...failed };
   await context.close();
   check((await tc4.quit()).exit.code === 0, 'the failed start quit on request');
+
+  // --- 7 (A5, D14): the app's page, opened while the resources are prepared, goes to the window,
+  // which comes back to the app at `Ready` ------------------------------------------------------
+  if (appUi) {
+    const appRun = newRun();
+    tc4 = track(await Tc4.start(appRun, { bundleDir: bundle, seedPace: pace, uiDir: appUi }));
+    check((await tc4.hello()).startup.type === 'preparing', 'the app run starts preparing');
+    ({ context, page } = await newWindow(browser, tc4));
+    const visited = [];
+    page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) visited.push(new URL(frame.url()).pathname); });
+    await page.goto(`${tc4.url}#t=${tc4.token}`);
+    await page.waitForURL((url) => url.pathname === '/prepare.html', { timeout: 15000 });
+    check(new URL(page.url()).hash === `#t=${tc4.token}`, 'the window gets the key in its address');
+    await page.waitForSelector('[data-testid="account-menu"]', { timeout: 120000 });
+    check(new URL(page.url()).pathname === '/', `the app ended at ${page.url()}`);
+    check((await tc4.hello()).startup.type === 'ready', 'ready when the app mounts');
+    results.steps['7-app-goes-to-the-window'] = { visited };
+    await context.close();
+    check((await tc4.quit()).exit.code === 0, 'the app run quit');
+  }
 
   fs.writeFileSync(path.join(outDir, 'prepare-smoke.json'), `${JSON.stringify(results, null, 2)}\n`);
   console.log(JSON.stringify(results, null, 2));
