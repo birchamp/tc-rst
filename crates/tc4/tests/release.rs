@@ -3,6 +3,7 @@
 
 mod common;
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -12,7 +13,10 @@ use tempfile::TempDir;
 
 /// The words no release binary may hold: every endpoint name of the test service, the
 /// application's and the stand-in's alike, every flag only a test build has, and the batch
-/// tag of the fixture backend's seed (feature `fixture-backend`).
+/// tag of the fixture backend's seed (feature `fixture-backend`). The tag guards the binary
+/// only once `tc4` calls the seed (B1b): until then the linker drops the seed from a build
+/// with the feature as well, and `release_build_resolves_no_fixture_backend_and_no_test_hook`
+/// is what keeps the feature out.
 const HOOK_TEXT: [&str; 10] = [
     "test/crash",
     "test/fieldStore",
@@ -48,6 +52,58 @@ fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack
         .windows(needle.len())
         .position(|window| window == needle)
+}
+
+/// The features `cargo build --release -p tc4` resolves, as `cargo tree` gives them without
+/// dev-dependencies: no crate of the workspace has `fixture-backend` or `test-hooks` (AD35).
+/// A dev-dependency turns them on in test builds only, so this checks what the release
+/// build compiles, whether or not the binary keeps a trace of it. `cargo tree` reads the
+/// manifests and the lock file: it builds nothing and, offline, reaches no network.
+#[test]
+fn release_build_resolves_no_fixture_backend_and_no_test_hook() {
+    let output = Command::new(env!("CARGO"))
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .args([
+            "tree",
+            "-p",
+            "tc4",
+            "-e",
+            "no-dev",
+            "--offline",
+            "--locked",
+            "--prefix",
+            "none",
+            "-f",
+            "{p}|{f}",
+        ])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let tree = String::from_utf8(output.stdout).unwrap();
+    let mut crates = BTreeSet::new();
+    for line in tree.lines() {
+        let line = line.trim_end_matches(" (*)");
+        let Some((package, features)) = line.split_once('|') else {
+            continue;
+        };
+        let name = package.split_whitespace().next().unwrap_or_default();
+        crates.insert(name.to_owned());
+        for feature in features.split(',') {
+            assert!(
+                !["fixture-backend", "test-hooks"].contains(&feature),
+                "a release build of tc4 turns on {name}/{feature}:\n{tree}"
+            );
+        }
+    }
+    // The tree is the one meant: tc4 and the crates that have the two features.
+    for name in ["tc4", "tc-app", "tc-server", "tc-api"] {
+        assert!(crates.contains(name), "{name} is not in:\n{tree}");
+    }
 }
 
 /// Checks the release binary itself, so the pipeline checks what it ships. Run after
