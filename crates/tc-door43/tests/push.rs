@@ -54,39 +54,123 @@ async fn push(url: String, login: &str, token: String, branch: &str, files: usiz
                 &[],
             )
             .unwrap();
-
-        let statuses = Arc::new(Mutex::new(Vec::new()));
-        let remote_text = Arc::new(Mutex::new(String::new()));
-        let mut callbacks = git2::RemoteCallbacks::new();
-        callbacks.credentials(|_, _, _| git2::Cred::userpass_plaintext(&login, &token));
-        let seen = Arc::clone(&statuses);
-        callbacks.push_update_reference(move |name, status| {
-            let entry = (name.to_owned(), status.map(str::to_owned));
-            seen.lock().unwrap().push(entry);
-            Ok(())
-        });
-        let heard = Arc::clone(&remote_text);
-        callbacks.sideband_progress(move |text| {
-            heard
-                .lock()
-                .unwrap()
-                .push_str(&String::from_utf8_lossy(text));
-            true
-        });
-        let mut options = git2::PushOptions::new();
-        options.remote_callbacks(callbacks);
-        let mut remote = local.remote_anonymous(&url).unwrap();
-        let result = remote.push(&[format!("{reference}:{reference}")], Some(&mut options));
-        drop(remote);
-        Pushed {
-            commit: commit.to_string(),
-            result,
-            statuses: statuses.lock().unwrap().clone(),
-            remote_text: remote_text.lock().unwrap().clone(),
-        }
+        push_reference(&local, &url, &login, &token, &reference, commit, || {})
     })
     .await
     .unwrap()
+}
+
+/// Push `reference` of `local`, which holds `commit`, to `url`, signed in as `login` with
+/// `token`. `before_pack` runs after libgit2 has read the advertisement and checked the push
+/// against it, before it sends the pack.
+fn push_reference(
+    local: &git2::Repository,
+    url: &str,
+    login: &str,
+    token: &str,
+    reference: &str,
+    commit: git2::Oid,
+    mut before_pack: impl FnMut(),
+) -> Pushed {
+    let statuses = Arc::new(Mutex::new(Vec::new()));
+    let remote_text = Arc::new(Mutex::new(String::new()));
+    let mut callbacks = git2::RemoteCallbacks::new();
+    callbacks.credentials(|_, _, _| git2::Cred::userpass_plaintext(login, token));
+    let seen = Arc::clone(&statuses);
+    callbacks.push_update_reference(move |name, status| {
+        let entry = (name.to_owned(), status.map(str::to_owned));
+        seen.lock().unwrap().push(entry);
+        Ok(())
+    });
+    let heard = Arc::clone(&remote_text);
+    callbacks.sideband_progress(move |text| {
+        heard
+            .lock()
+            .unwrap()
+            .push_str(&String::from_utf8_lossy(text));
+        true
+    });
+    callbacks.push_negotiation(move |_| {
+        before_pack();
+        Ok(())
+    });
+    let mut options = git2::PushOptions::new();
+    options.remote_callbacks(callbacks);
+    let mut remote = local.remote_anonymous(url).unwrap();
+    let result = remote.push(&[format!("{reference}:{reference}")], Some(&mut options));
+    drop(remote);
+    Pushed {
+        commit: commit.to_string(),
+        result,
+        statuses: statuses.lock().unwrap().clone(),
+        remote_text: remote_text.lock().unwrap().clone(),
+    }
+}
+
+/// Where a teammate's push lands while this push is between the advertisement and the pack.
+#[derive(Debug, Clone, Copy)]
+enum Race {
+    /// On top of the branch this push builds on.
+    Moved,
+    /// On a branch that did not exist when this push read the advertisement.
+    Created,
+}
+
+/// Push one commit to `main` of `url`, signed in as `login` with `token`, while a teammate's
+/// commit lands on `main` in `server`, the fake's repository, after libgit2 has checked this
+/// push against the advertisement. Returns what libgit2 reported and the teammate's commit.
+async fn push_losing_a_race(
+    url: String,
+    login: &str,
+    token: String,
+    server: std::path::PathBuf,
+    race: Race,
+) -> (Pushed, String) {
+    let login = login.to_owned();
+    tokio::task::spawn_blocking(move || {
+        let dir = tempfile::tempdir().unwrap();
+        let local = git2::Repository::init_bare(dir.path()).unwrap();
+        let reference = "refs/heads/main";
+        let mut parents = Vec::new();
+        if let Race::Moved = race {
+            let first = readme_commit(&local, "first\n", &[]);
+            local.reference(reference, first, true, "first").unwrap();
+            let landed = push_reference(&local, &url, &login, &token, reference, first, || {});
+            assert!(landed.result.is_ok(), "{:?}", landed.result);
+            assert_eq!(landed.statuses, [(reference.to_owned(), None)]);
+            parents.push(first);
+        }
+        let mine = readme_commit(&local, "mine\n", &parents);
+        local.reference(reference, mine, true, "mine").unwrap();
+        let mut theirs = None;
+        let pushed = push_reference(&local, &url, &login, &token, reference, mine, || {
+            let server = git2::Repository::open_bare(&server).unwrap();
+            let commit = readme_commit(&server, "theirs\n", &parents);
+            server
+                .reference(reference, commit, true, "a teammate's push")
+                .unwrap();
+            theirs = Some(commit);
+        });
+        (pushed, theirs.unwrap().to_string())
+    })
+    .await
+    .unwrap()
+}
+
+/// A commit in `repo` whose tree holds only `README.md` with `text`.
+fn readme_commit(repo: &git2::Repository, text: &str, parents: &[git2::Oid]) -> git2::Oid {
+    let mut tree = repo.treebuilder(None).unwrap();
+    let blob = repo.blob(text.as_bytes()).unwrap();
+    tree.insert("README.md", blob, 0o100_644).unwrap();
+    let tree = repo.find_tree(tree.write().unwrap()).unwrap();
+    let parents: Vec<git2::Commit> = parents
+        .iter()
+        .map(|id| repo.find_commit(*id).unwrap())
+        .collect();
+    let parents: Vec<&git2::Commit> = parents.iter().collect();
+    let signature = git2::Signature::now("Test", "test@example.org").unwrap();
+    repo.commit(None, &signature, &signature, text, &tree, &parents)
+        .unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -256,4 +340,58 @@ async fn a_403_on_push_is_an_http_error_and_makes_no_branch() {
             .await
             .is_err()
     );
+}
+
+/// A teammate's push lands after libgit2 has checked this push against the advertisement, so
+/// git's receive-pack refuses the ref, with `failed to update ref` before git 2.51 and with
+/// `incorrect old value provided` or `reference already exists` from 2.51 on, as on Door43.
+/// Each is `RefMoved`, so the sync fetches again and retries, and the teammate's commit stays.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_push_that_loses_a_race_is_ref_moved_and_keeps_the_teammates_commit() {
+    for race in [Race::Moved, Race::Created] {
+        let fake = FakeDoor43::start_seeded().await.unwrap();
+        let client = client(&fake);
+        let session = client
+            .mint_token(&credentials(), &token_name(), &TokenScope::FOR_SHARING)
+            .await
+            .unwrap();
+        let created = client
+            .create_repo(
+                &session,
+                &NewRepoOwner::SignedInUser,
+                &"raced-project".parse().unwrap(),
+                Visibility::Public,
+            )
+            .await
+            .unwrap();
+        let target: RepoRef = repo(&format!("{}/raced-project", seeded::USER));
+
+        let (pushed, theirs) = push_losing_a_race(
+            created.clone_url.to_string(),
+            session.username.as_str(),
+            session.token.expose_secret().to_owned(),
+            fake.git_dir(seeded::USER, "raced-project"),
+            race,
+        )
+        .await;
+
+        assert!(pushed.result.is_ok(), "{race:?}: {:?}", pushed.result);
+        let [(name, Some(status))] = &pushed.statuses[..] else {
+            panic!("{race:?}: one refused ref expected: {:?}", pushed.statuses);
+        };
+        assert_eq!(name, "refs/heads/main");
+        let error = refused_push(&target, status, &pushed.remote_text);
+        assert!(
+            matches!(&error, Door43Error::RefMoved { .. }),
+            "{race:?}: {error:?}"
+        );
+        assert_eq!(
+            fake.resolve(seeded::USER, "raced-project", "main")
+                .await
+                .unwrap(),
+            theirs,
+            "{race:?}"
+        );
+        assert_ne!(pushed.commit, theirs);
+    }
 }

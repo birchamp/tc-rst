@@ -19,11 +19,20 @@ use crate::names::RepoRef;
 /// Door43's pre-receive hook says this to an account that may not write to the repository.
 const NO_WRITE_ACCESS: &str = "User permission denied for writing";
 
-/// `git receive-pack`'s status for a ref it could not lock or move, with `cannot lock ref …:
-/// is at X but expected Y` on the side band: another push moved or held the branch after
-/// this push read it. libgit2 checks a fast-forward against the advertisement it just read
-/// (`ErrorCode::NotFastForward`), so this is how a race lost on the server comes back.
-const REF_NOT_UPDATED: &str = "failed to update ref";
+/// `git receive-pack`'s statuses for a ref that another push moved, created, deleted or held
+/// after this push read the advertisement. libgit2 checks a fast-forward against the
+/// advertisement it just read (`ErrorCode::NotFastForward`), so this is how a race lost on the
+/// server comes back. Git before 2.51 says `failed to update ref`, with `cannot lock ref …: is
+/// at X but expected Y` on the side band. Git 2.51 and later update refs in a batch and name
+/// only the check that failed, with nothing on the side band; Door43 advertises git 2.54
+/// (docs/evidence/door43-live-2026-10-17.md, step 6). Their `failed to update refs` means the
+/// server could not write the ref at all, which no retry mends, so it is not here.
+const BRANCH_MOVED: [&str; 4] = [
+    "failed to update ref",
+    "incorrect old value provided",
+    "reference already exists",
+    "reference does not exist",
+];
 
 /// Prefixes git and Gitea put before a message. A line that starts with one is never
 /// progress.
@@ -52,7 +61,7 @@ pub fn refused_push(repo: &RepoRef, status: &str, remote_text: &str) -> Door43Er
     } else {
         format!("{} ({status})", said.join("\n"))
     };
-    if status == REF_NOT_UPDATED {
+    if BRANCH_MOVED.contains(&status) {
         return Door43Error::RefMoved {
             route,
             server_message,
@@ -244,6 +253,43 @@ mod tests {
                     if route == "POST /birch/test.git/git-receive-pack"
                         && server_message.starts_with("cannot lock ref 'refs/heads/main'")
                         && server_message.ends_with("(failed to update ref)")
+            ),
+            "{error:?}"
+        );
+    }
+
+    /// Git 2.51 and later, as git 2.53 answers a ref that another push moved, created or held
+    /// the lock of, or deleted: the status alone, with nothing on the side band.
+    #[test]
+    fn newer_gits_lost_races_are_ref_moved() {
+        for status in [
+            "incorrect old value provided",
+            "reference already exists",
+            "reference does not exist",
+        ] {
+            let error = refused_push(&repo(), status, "");
+            assert!(
+                matches!(&error, Door43Error::RefMoved { server_message, .. }
+                    if server_message == status),
+                "{status}: {error:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_ref_the_server_cannot_write_is_rejected_with_its_text() {
+        let error = refused_push(
+            &repo(),
+            "failed to update refs",
+            "error: cannot lock ref 'refs/heads/main': Unable to create \
+             '/srv/birch/test.git/refs/heads/main.lock': Permission denied\n",
+        );
+        assert!(
+            matches!(
+                &error,
+                Door43Error::RefRejected { server_message, .. }
+                    if server_message.starts_with("cannot lock ref 'refs/heads/main'")
+                        && server_message.ends_with("Permission denied (failed to update refs)")
             ),
             "{error:?}"
         );

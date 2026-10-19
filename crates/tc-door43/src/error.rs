@@ -44,10 +44,10 @@ pub enum Door43Error {
         route: String,
         server_message: String,
     },
-    /// A push whose ref Door43 could not move (`failed to update ref`) because another push
-    /// moved or held the branch after this push read it. Fetch again and retry, as for a push
-    /// that is not a fast-forward (STORAGE.md §9.5). `server_message` is Door43's text and
-    /// the ref's status.
+    /// A push whose ref Door43 could not move because another push moved, created, deleted or
+    /// held the branch after this push read it; [`crate::refused_push`] lists the statuses.
+    /// Fetch again and retry, as for a push that is not a fast-forward (STORAGE.md §9.5).
+    /// `server_message` is Door43's text and the ref's status.
     #[error("{route}: another push moved the branch first: {server_message}")]
     RefMoved {
         route: String,

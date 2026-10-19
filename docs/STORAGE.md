@@ -3372,10 +3372,15 @@ let res = origin.push(&[format!("refs/heads/{b}:refs/heads/{b}")], Some(&mut po)
 - `ErrorCode::NotFastForward` or `Door43Error::RefMoved`: someone pushed after S3. libgit2
   compares the push with the advertisement it has just read and refuses a non-fast-forward
   itself, before it sends anything (`NotFastForward`). A race lost on the server comes back as
-  the ref status `failed to update ref`, with `cannot lock ref … is at X but expected Y` on the
-  side band (`RefMoved`). `attempt += 1`; after 6 attempts refuse `sync.busy` ("Door43 is busy
-  with other syncs. Your work is saved on this computer. Try again in a minute."). Otherwise wait
-  `min(2^attempt, 16) s × U(0.7, 1.3)` and go back to S3. A retry costs one incremental fetch,
+  a ref status (`RefMoved`): `failed to update ref` from git before 2.51, with `cannot lock ref
+  … is at X but expected Y` on the side band; `incorrect old value provided`, `reference already
+  exists` (also for a branch another push holds locked) or `reference does not exist` from git
+  2.51 on, with nothing on the side band. Door43 advertises git 2.54. Git 2.51's `failed to
+  update refs` means the server could not write the ref at all, so it stays `RefRejected`
+  (`tc-door43` test `a_push_that_loses_a_race_is_ref_moved_and_keeps_the_teammates_commit`).
+  `attempt += 1`; after 6 attempts refuse `sync.busy` ("Door43 is busy with other syncs. Your
+  work is saved on this computer. Try again in a minute."). Otherwise wait `min(2^attempt, 16) s
+  × U(0.7, 1.3)` and go back to S3. A retry costs one incremental fetch,
   the intake of the few new packs and one tree build, about a second, not a new clone.
 - `Door43Error::NoWriteAccess` → `sync.no-write-access`, offering "Save an exchange file
   instead" (§10). Door43 refuses a push from an account that may read the repository but not
