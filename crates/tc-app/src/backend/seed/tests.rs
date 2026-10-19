@@ -635,3 +635,70 @@ fn a_derived_file_the_fold_does_not_list_is_a_mismatch() {
         .collect();
     assert_eq!(at_settings, [CheckRule::FileNotDerived]);
 }
+
+/// The OBS sample's built seed with one edit of story 1 by a person on this computer, and
+/// story 1's file as the fold then projects it.
+fn obs_story_one_after(frame: u16, text: &str) -> (String, String) {
+    let folder = sample("sample-burrito-obs");
+    let built = build(&folder, fixture_project_id("sample_burrito_obs")).unwrap();
+    let story = StoryNo::new(1).unwrap();
+    let base = String::from_utf8(folder.files()["ingredients/content/01.md"].clone()).unwrap();
+    let edit = Change::new(ChangeBody {
+        v: FORMAT_MINOR,
+        record: Record::Frame {
+            story,
+            frame: tc_journal::FrameNo(frame),
+            value: text.to_owned(),
+        },
+        parents: Vec::new(),
+        device: DeviceId::local([7; 15]),
+        seq: DeviceSeq(1),
+        at: WallTime(1_790_000_000_000),
+        batch: BatchRef::new(BatchId::from_bytes([9; 16]), 1).unwrap(),
+        cause: Cause::Edit,
+    })
+    .unwrap();
+    let mut fold = built.fold.clone();
+    fold.add([FoldInput::from(edit)]);
+    let projected = String::from_utf8(fold.render(&DerivedFile::Story(story)).unwrap()).unwrap();
+    (base, projected)
+}
+
+/// Storage findings outside the seed check (docs/evidence/state-seed-check-2026-10-18.md,
+/// part 5), asserted as they stand today so this test fails the day storage changes them.
+#[test]
+fn obs_frame_edits_project_other_bytes_than_tc4_writes_today() {
+    // tC4's title box sends the title without the number; the fold writes `# ` and the text,
+    // so the number is lost and tC4's TITLE_RE no longer reads the line as a title.
+    let (base, projected) = obs_story_one_after(0, "La Creación");
+    let tc4 = tc_obs::story::write_title(&base, "La Creación").unwrap();
+    assert_eq!(tc4.lines().next(), Some("# 1. La Creación"));
+    assert_eq!(projected.lines().next(), Some("# La Creación"));
+    assert!(tc_obs::StoryFile::parse(projected.clone()).is_err());
+    // An edit of an empty frame: the fold keeps the template's blank lines and adds the
+    // text after them; tC4's writer puts one blank line on each side.
+    let (base, projected) = obs_story_one_after(3, "Texto nuevo.");
+    let tc4 = tc_obs::story::write_frame(&base, tc_obs::FrameNo(3), "Texto nuevo.").unwrap();
+    let image3 = "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-03.jpg)";
+    let image4 = "![OBS Image](https://cdn.door43.org/obs/jpg/360px/obs-en-01-04.jpg)";
+    let between = |text: &str| -> String {
+        let start = text.find(image3).unwrap() + image3.len();
+        let end = text.find(image4).unwrap();
+        text[start..end].to_owned()
+    };
+    assert_eq!(between(&tc4), "\n\nTexto nuevo.\n\n");
+    assert_eq!(between(&projected), "\n\n\n\nTexto nuevo.\n");
+    assert_ne!(projected, tc4);
+    // tC4 still reads the frame's text there, but not in its writers' layout: reading the
+    // file back, as an outside edit is read, names frame 3 as reformatted.
+    let read = tc_obs::StoryFile::parse(projected.clone()).unwrap();
+    assert_eq!(read.text(tc_obs::FrameNo(3)), Some("Texto nuevo."));
+    let decoded = tc_obs::decode_story(&projected).unwrap();
+    assert!(
+        decoded
+            .reformatted
+            .contains(&tc_obs::Reformatted::Frame(tc_obs::FrameNo(3))),
+        "{:?}",
+        decoded.reformatted
+    );
+}

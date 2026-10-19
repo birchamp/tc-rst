@@ -40,5 +40,9 @@ proptest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "sync", "time", "test-util"] }
 
+[[example]]
+name = "state_seed_bench"
+required-features = ["fixture-backend"]
+
 [lints]
 workspace = true
