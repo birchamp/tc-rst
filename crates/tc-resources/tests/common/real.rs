@@ -23,9 +23,11 @@ pub fn store_with(repos: &[&str]) -> (tempfile::TempDir, ResourceStore) {
     (dir, store)
 }
 
-/// The repositories Psalms and Numbers need: the helps, the three Bible panes and the
-/// original-language text of the Old Testament.
-pub const BOOK_REPOS: &[&str] = &["en_tw", "en_twl", "en_tn", "en_ult", "en_ust", "hbo_uhb"];
+/// The repositories Psalms and Numbers need: the helps and the articles they link, the three
+/// Bible panes and the original-language text of the Old Testament.
+pub const BOOK_REPOS: &[&str] = &[
+    "en_tw", "en_twl", "en_tn", "en_ta", "en_ult", "en_ust", "hbo_uhb",
+];
 
 /// The export `file` of `bundle/en` with `replace` applied to its entries: an entry whose
 /// name `replace` returns bytes for gets them (and its `metadata.json` listing the new md5 and

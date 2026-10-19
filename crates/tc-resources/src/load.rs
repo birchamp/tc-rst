@@ -24,7 +24,7 @@
 // costs nothing; boxing it would only make every match harder to read.
 #![allow(clippy::result_large_err)]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use tc_core::BookId;
 use tc_helps::aquifer::{
@@ -35,7 +35,7 @@ use tc_helps::articles::{academy_article, parse_word_article, word_article_id};
 use tc_helps::metadata::{AquiferPin as HelpsAquiferPin, DcsPin, HelpsSource};
 use tc_helps::obs::{ObsStory, parse_obs_story};
 use tc_helps::tsv::{TsvScope, parse_notes, parse_questions, parse_word_links};
-use tc_helps::{HelpRef, Helps, HelpsPart};
+use tc_helps::{AcademyArticleId, HelpRef, Helps, HelpsPart, WordArticleId};
 use tc_journal::pins::{Collection, UnusablePin};
 
 use crate::aquifer::{bible_book, canonical_book, is_article_file};
@@ -454,23 +454,37 @@ fn load_articles(
         let installed = open_dcs(store, pin)?;
         let source = dcs_source(pin);
         let mut refused = Vec::new();
+        // Only the articles the loaded items link to are opened (docs/PERFORMANCE.md: "linked
+        // tW articles"): a book names a few hundred of the thousand tW articles and of the
+        // seven hundred Translation Academy folders, and on Windows every file opened is a
+        // scan. Psalms opened 3,163 content files when every article was read, and opens 724
+        // now. An article that only a link inside another article names is not read here:
+        // the service that follows such a link reads it then.
         let added = if slot == SetSlot::TranslationWords {
+            let wanted: BTreeSet<WordArticleId> = helps
+                .word_links()
+                .iter()
+                .map(|l| l.article.clone())
+                .collect();
             let mut articles = Vec::new();
+            let mut held = 0usize;
             let paths: Vec<String> = installed
                 .files()
                 .filter(|p| layout::is_word_article(p))
                 .map(str::to_owned)
                 .collect();
             for path in paths {
+                held += 1;
                 match word_article_id(&path) {
-                    Ok(id) => articles.push(parse_word_article(
+                    Ok(id) if wanted.contains(&id) => articles.push(parse_word_article(
                         id,
                         &read_text(&installed, &path, &name)?,
                     )),
+                    Ok(_) => {}
                     Err(e) => refused.push(format!("{path}: {e}")),
                 }
             }
-            if articles.is_empty() {
+            if held == 0 {
                 return Err(Missing::Unreadable {
                     source: name.clone(),
                     problem: "it holds no translation words articles".to_owned(),
@@ -478,8 +492,22 @@ fn load_articles(
             }
             helps.add_word_articles(&source, articles)
         } else {
+            let wanted: BTreeSet<AcademyArticleId> = helps
+                .notes()
+                .iter()
+                .filter_map(|n| n.support_reference.clone())
+                .collect();
             let mut articles = Vec::new();
-            for folder in layout::academy_folders(installed.files()) {
+            let folders = layout::academy_folders(installed.files());
+            let held = folders.len();
+            for folder in folders {
+                let id = AcademyArticleId::Dcs {
+                    manual: folder.manual,
+                    slug: folder.slug.clone(),
+                };
+                if !wanted.contains(&id) {
+                    continue;
+                }
                 let file = |leaf: &str| format!("{}{leaf}", folder.folder);
                 let title = read_text(&installed, &file("title.md"), &name)?;
                 let subtitle = if installed.has_file(&file("sub-title.md")) {
@@ -496,7 +524,7 @@ fn load_articles(
                     &body,
                 ));
             }
-            if articles.is_empty() {
+            if held == 0 {
                 return Err(Missing::Unreadable {
                     source: name.clone(),
                     problem: "it holds no Translation Academy articles".to_owned(),
@@ -750,11 +778,33 @@ fn aquifer_part(
     }
 }
 
+/// The USFM of `book` in each pinned text, each file opened once: a resource that is both a
+/// pane and the simplified text (`en_ust`) is read for the first and shared with the second.
 fn load_texts(store: &ResourceStore, pins: &ProjectPins, book: BookId) -> Vec<SourceText> {
+    let mut read: Vec<(ResourcePin, Result<String, Missing>)> = Vec::new();
+    let mut load = |pin: &ResourcePin, rung: Option<Rung>| -> TextStatus {
+        let found = read.iter().find(|(held, _)| held.same_identity(pin));
+        let result = match found {
+            Some((_, result)) => result.clone(),
+            None => {
+                let result = read_usfm(store, pin, book);
+                read.push((pin.clone(), result.clone()));
+                result
+            }
+        };
+        match result {
+            Ok(usfm) => TextStatus::Loaded {
+                pin: pin.clone(),
+                rung,
+                usfm,
+            },
+            Err(missing) => TextStatus::Missing(missing),
+        }
+    };
     let mut texts = Vec::new();
     let original = match pins.original_language.for_book(book) {
         None => TextStatus::Missing(Missing::NotPinned),
-        Some(pin) => load_usfm(store, pin, None, book),
+        Some(pin) => load(pin, None),
     };
     texts.push(SourceText {
         role: TextRole::OriginalLanguage,
@@ -763,14 +813,12 @@ fn load_texts(store: &ResourceStore, pins: &ProjectPins, book: BookId) -> Vec<So
     for pane in &pins.extra_scripture {
         texts.push(SourceText {
             role: TextRole::Pane(pane.id.clone()),
-            status: load_usfm(store, &pane.pin, None, book),
+            status: load(&pane.pin, None),
         });
     }
     let simplified =
         match resolve_slot(pins, SetSlot::SimplifiedText, Collection::Book(book), store) {
-            Some(Resolved::Pin(resolution)) => {
-                load_usfm(store, &resolution.pin, Some(resolution.rung), book)
-            }
+            Some(Resolved::Pin(resolution)) => load(&resolution.pin, Some(resolution.rung)),
             Some(Resolved::Unusable { rung, pin }) => {
                 TextStatus::Missing(Missing::UnusablePin { rung, pin })
             }
@@ -783,28 +831,13 @@ fn load_texts(store: &ResourceStore, pins: &ProjectPins, book: BookId) -> Vec<So
     texts
 }
 
-fn load_usfm(
-    store: &ResourceStore,
-    pin: &ResourcePin,
-    rung: Option<Rung>,
-    book: BookId,
-) -> TextStatus {
+fn read_usfm(store: &ResourceStore, pin: &ResourcePin, book: BookId) -> Result<String, Missing> {
     let name = pin.to_string();
-    let result = (|| -> Result<String, Missing> {
-        let installed = open_dcs(store, pin)?;
-        let path = layout::book_file(installed.files(), book, "usfm")
-            .map(str::to_owned)
-            .ok_or_else(|| Missing::BookNotInResource {
-                source: name.clone(),
-            })?;
-        read_text(&installed, &path, &name)
-    })();
-    match result {
-        Ok(usfm) => TextStatus::Loaded {
-            pin: pin.clone(),
-            rung,
-            usfm,
-        },
-        Err(missing) => TextStatus::Missing(missing),
-    }
+    let installed = open_dcs(store, pin)?;
+    let path = layout::book_file(installed.files(), book, "usfm")
+        .map(str::to_owned)
+        .ok_or_else(|| Missing::BookNotInResource {
+            source: name.clone(),
+        })?;
+    read_text(&installed, &path, &name)
 }
