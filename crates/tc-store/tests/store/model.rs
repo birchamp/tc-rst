@@ -5,7 +5,8 @@
 //! The model keeps two kinds of work. A **save** is words the person saved through the app (a
 //! verse, a section of several verses in one batch, the project's name) and was told were saved.
 //! A **put** is the whole bytes another program wrote into the folder (an edit of a verse in the
-//! book file, an edit of `metadata.json`, a version of either put back). The no-loss invariant:
+//! book file, an edit of `metadata.json`, a version of either put back, a byte the disk changed
+//! under the same size and time). The no-loss invariant:
 //!
 //! - every save is a version of its record in History (readable), unless the damage the run did
 //!   took every copy of it (a journal line cut away, and no file in the folder showing it; for a
@@ -16,7 +17,14 @@
 //!   unless a file in the folder showed it when the open read the journal: those bytes are then
 //!   the record of it, and the app must record them, not write the file over without it;
 //! - every put is in the folder still, is what the project would write there, or is copied to
-//!   `.tc/external/` (§11.1 X1); a put the person overwrote before the app looked is retired.
+//!   `.tc/external/` (§11.1 X1); a put the person overwrote before the app looked is retired,
+//!   and so is a put the app's look found converged or the ledger names as the app's own.
+//!
+//! Two more oracles catch work kept twice or refused: a history with no outside step (a put, a
+//! cut, a deletion or change of a journal file, a lost `.tc/`) shows no outside-edit notice and
+//! makes no copy in `.tc/external/`, except of the bytes a write under way replaced, which a
+//! crash leaves for R9 (§6.2); and saves and checkpoints succeed unless the process died, or a
+//! file another program holds or damaged stops the seal.
 //!
 //! While a session runs, a save may also be only in a file in the folder (a journal file another
 //! program cut in place leaves the session unable to read it; the next open reads the journal
@@ -24,9 +32,13 @@
 //! run, it may not.
 //!
 //! The steps: saves, materializations and checkpoints, each of which can be killed before any of
-//! its write points (with or without a power cut); a kill right after the rename of a file;
-//! outside edits and reverts while open and while closed; pending files and packs cut at a line
-//! or inside one, in place while open or while closed; restarts; the window's focus; the clock.
+//! its write points (with or without a power cut, a torn write or not); a kill right after the
+//! rename of a file; outside edits, reverts (keeping the old time or not), same-size damage and
+//! deletions while open and while closed; pending files and packs cut, changed or deleted, in
+//! place while open or while closed, or held open by another program; a lost manifest or heads
+//! files; the person's choice on a held file; restarts; the window's focus; the clock. The
+//! generator favours the sequences the reviews found bugs in: a crash followed by damage while
+//! closed, a kill after a rename followed by a revert, a file held around an open.
 
 use crate::common::*;
 use proptest::prelude::*;
@@ -35,14 +47,18 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::Duration;
 use tc_journal::command::{Command, SectionValue};
-use tc_journal::fold::DerivedFile;
+use tc_journal::fold::{DerivedFile, Notice};
 use tc_journal::record::VerseValue;
 use tc_journal::{MetaField, Record, RecordKey};
 use tc_store::fault::FaultFs;
-use tc_store::{CheckpointReason, Leave, OpenOptions, ProjectHandle};
+use tc_store::handle::CheckpointSkip;
+use tc_store::ledger::State;
+use tc_store::manifest::Manifest;
+use tc_store::{CheckpointReason, CommandError, Leave, OpenOptions, ProjectHandle};
 
 const USFM: &str = "ingredients/TIT.usfm";
 const META: &str = "metadata.json";
+const MANIFEST: &str = ".tc/materialized.json";
 
 /// What the person does in the app.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,23 +93,43 @@ impl File {
     }
 }
 
-/// A journal file another program cuts.
+/// A journal file another program cuts, changes or deletes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Journal {
     Pending,
     Pack,
 }
 
+/// A file another program holds open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Holdable {
+    File(File),
+    /// The `which`-th pending file (letting go lets go of every pending file held);
+    /// `readable`: the program shares it for reading (a scanner), so only its removal fails.
+    Pending {
+        which: u8,
+        readable: bool,
+    },
+}
+
+/// The process dies before the `at`-th write point from now (during the act, or the work it
+/// starts), with a power cut or not; `torn`: the write stopped there writes half its bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Kill {
+    pub at: u16,
+    pub power_cut: bool,
+    pub torn: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Step {
-    /// The person acts. With `kill`, the process dies before the `at`-th write point from now
-    /// (during the act, or the work it starts), with a power cut or not.
-    Act { act: Act, kill: Option<(u16, bool)> },
+    /// The person acts, and the process may die meanwhile.
+    Act { act: Act, kill: Option<Kill> },
     /// The process will die right after it next renames `file` into place.
     KillAfterRename { file: File },
     /// Another program holds a file open (`on`), or lets go of it: it cannot be read, renamed
     /// over or removed meanwhile.
-    Lock { file: File, on: bool },
+    Lock { what: Holdable, on: bool },
     /// The app opens the project (it does at any act while closed, too).
     Open,
     /// Another program puts new words in verse 1:v of the book file; `told`: the watcher sees it.
@@ -105,6 +141,13 @@ pub enum Step {
     /// A backup tool (`cp -p`, `rsync -a`, Time Machine) puts back the `back`-th older version
     /// of a file with the modification time it had when the run first saw it, unseen.
     RevertKeepTime { file: File, back: u8 },
+    /// The disk changes a letter of a file and leaves its size and time as they were, unseen.
+    Damage { file: File },
+    /// Another program deletes a file the app derives.
+    Delete { file: File },
+    /// Another program sets a file's modification time to now and leaves its bytes (a sync
+    /// client, `touch`).
+    Touch { file: File },
     /// Another program cuts a journal file: the `which`-th, keeping `keep` (a share of its
     /// lines), at a line end or inside a line.
     Cut {
@@ -113,6 +156,18 @@ pub enum Step {
         keep: u8,
         at_line: bool,
     },
+    /// Another program deletes the `which`-th journal file.
+    DeleteJournal { journal: Journal, which: u8 },
+    /// Another program changes one byte after the header of the `which`-th journal file.
+    Flip {
+        journal: Journal,
+        which: u8,
+        at: u16,
+    },
+    /// `.tc/` loses the manifest, or every heads file, while the app is closed.
+    LoseTc { heads: bool },
+    /// The person settles a held file: takes it in as an edit, or restores it.
+    Choose { take_in: bool },
     /// The window gets focus.
     Focus,
     /// Ten seconds pass.
@@ -167,12 +222,25 @@ pub struct Run {
     /// Every version of each file the run saw in the folder, oldest first, with its
     /// modification time when the run first saw it.
     versions: BTreeMap<&'static str, Vec<(Vec<u8>, i64)>>,
-    /// The bytes the app last left at each file: a put of the same bytes changes nothing.
-    placed: BTreeMap<&'static str, Vec<u8>>,
     /// Whether the kill armed is a power cut.
     power_cut: bool,
-    /// The files another program holds.
-    locked: std::collections::BTreeSet<&'static str>,
+    /// The files another program holds, relative to the folder, and whether they can be read.
+    locked: BTreeMap<String, bool>,
+    /// An outside step changed the folder: a put, a cut, a journal file changed, deleted or
+    /// held unreadable, `.tc/` lost. Until then the app keeps nothing twice.
+    outside: bool,
+    /// The bytes a crash left at a path whose write was under way, the ones it replaced: R9
+    /// keeps them (an extra conflict the owner accepted).
+    replaced: Vec<Vec<u8>>,
+    /// Another program held a pending file unreadable during this session: a session never reads again
+    /// a journal file it could not read, so until the next open its seal and its checkpoints
+    /// stop, and a save of a version whose value lies there is refused.
+    journal_held: bool,
+    /// The project's name as the fold showed it at the last check.
+    name: String,
+    /// Every journal file the run saw, in the order it first saw them: a step names a journal
+    /// file by its place here, never by its name, which holds a random batch id.
+    journal_seen: Vec<String>,
     log: Vec<String>,
 }
 
@@ -196,6 +264,25 @@ fn contains(haystack: &[u8], needle: &str) -> bool {
         .any(|w| w == needle.as_bytes())
 }
 
+fn md5(bytes: &[u8]) -> String {
+    tc_journal::Md5::of(bytes).to_hex()
+}
+
+/// Notices that say the app found bytes it did not write.
+fn outside_notice(notice: &Notice) -> bool {
+    matches!(
+        notice,
+        Notice::OutsideEditRecorded { .. }
+            | Notice::OutsideEditHeld { .. }
+            | Notice::OutsideEditUnreadable { .. }
+            | Notice::OutsideRemovalKept { .. }
+            | Notice::StorageDamage { .. }
+            | Notice::MetadataEditedOutside { .. }
+            | Notice::DerivedFieldsEdited { .. }
+            | Notice::FixedFileRestored { .. }
+    )
+}
+
 impl Run {
     pub fn new() -> Self {
         let (fs, folder) = template();
@@ -209,12 +296,16 @@ impl Run {
             saves: Vec::new(),
             puts: Vec::new(),
             versions: BTreeMap::new(),
-            placed: BTreeMap::new(),
             power_cut: false,
-            locked: std::collections::BTreeSet::new(),
+            locked: BTreeMap::new(),
+            outside: false,
+            replaced: Vec::new(),
+            journal_held: false,
+            name: String::new(),
+            journal_seen: Vec::new(),
             log: Vec::new(),
         };
-        run.see_versions(true);
+        run.see_versions();
         run
     }
 
@@ -233,6 +324,13 @@ impl Run {
 
     fn handle(&self) -> &ProjectHandle {
         self.handle.as_ref().expect("open")
+    }
+
+    /// The ledger's record of `rel`, as the manifest on disk holds it.
+    fn ledger(&self, rel: &str) -> Option<State> {
+        let bytes = self.fs().peek(&self.path(MANIFEST))?;
+        let manifest: Manifest = serde_json::from_slice(&bytes).ok()?;
+        manifest.paths.get(rel).map(|e| e.state.clone())
     }
 
     /// Opens the project, and checks the store once the open's first job is done.
@@ -257,6 +355,10 @@ impl Run {
             let handle = opened.map_err(|e| format!("the open failed: {e:?}"))?;
             handle.wait_idle();
             self.session += 1;
+            self.journal_held = self
+                .locked
+                .iter()
+                .any(|(rel, readable)| rel.starts_with(".tc/pending/") && !readable);
             self.handle = Some(handle);
             self.log.push(format!("opened (session {})", self.session));
             if !self.died() {
@@ -288,6 +390,16 @@ impl Run {
                 save.fate = if kept { Fate::Kept } else { Fate::Destroyed };
             }
         }
+        // A write under way whose rename did not happen leaves the bytes before it, which the
+        // next look keeps (R9).
+        for rel in [USFM, META] {
+            if let (Some(State::Writing { old: Some(old), .. }), Some(bytes)) =
+                (self.ledger(rel), self.fs().peek(&self.path(rel)))
+                && old.md5 == md5(&bytes)
+            {
+                self.replaced.push(bytes);
+            }
+        }
         self.relock();
         self.log.push(format!("crashed (power cut: {power_cut})"));
     }
@@ -296,17 +408,47 @@ impl Run {
     /// later write point); if so, the next one starts.
     fn died(&mut self) -> bool {
         if self.fs().is_dead() {
+            if std::env::var_os("TC_MODEL_TRACE").is_some() {
+                for op in self.fs().log() {
+                    let path = op.path.display().to_string();
+                    eprintln!(
+                        "  op {} {:?} {}",
+                        op.index,
+                        op.kind,
+                        path.rsplit("Titus/").next().unwrap_or(&path)
+                    );
+                }
+            }
             self.crash(self.power_cut);
             return true;
         }
         false
     }
 
-    fn act(&mut self, act: Act, kill: Option<(u16, bool)>) -> Result<(), String> {
+    /// A checkpoint or a choice the store refused: a failure unless the process died.
+    fn refused(&mut self, what: &str, error: impl std::fmt::Debug) -> Result<(), String> {
+        if self.fs().is_dead() {
+            return Ok(());
+        }
+        Err(format!("{what} was refused: {error:?}"))
+    }
+
+    /// A save the store refused: a loss of the person's work unless the process died, or an
+    /// outside step changed what the screen showed (a refusal by a rule, "look again").
+    fn refused_save(&mut self, what: &str, error: CommandError) -> Result<(), String> {
+        if (self.outside || self.journal_held)
+            && matches!(error, CommandError::Refused(_) | CommandError::LookAgain)
+        {
+            return Ok(());
+        }
+        self.refused(what, error)
+    }
+
+    fn act(&mut self, act: Act, kill: Option<Kill>) -> Result<(), String> {
         self.open()?;
-        if let Some((at, power_cut)) = kill {
-            self.fs().kill_before(u64::from(at), false);
-            self.power_cut = power_cut;
+        if let Some(kill) = kill {
+            self.fs().kill_before(u64::from(kill.at), kill.torn);
+            self.power_cut = kill.power_cut;
         }
         let handle = self.handle();
         let session = self.session;
@@ -314,14 +456,15 @@ impl Run {
             Act::Save(v) => {
                 let text = self.token();
                 let handle = self.handle();
-                if save_verse(handle, 1, v, &text).is_ok() {
-                    self.saves.push(Save {
+                match save_verse(handle, 1, v, &text) {
+                    Ok(_) => self.saves.push(Save {
                         text,
                         target: Target::Verse(v),
                         session,
                         fate: Fate::Kept,
                         shown: false,
-                    });
+                    }),
+                    Err(e) => self.refused_save(&format!("the save of 1:{v}"), e)?,
                 }
             }
             Act::Section(v) => {
@@ -362,16 +505,19 @@ impl Run {
                         layout: None,
                     })
                     .wait();
-                if saved.is_ok() {
-                    for (i, text) in texts.into_iter().enumerate() {
-                        self.saves.push(Save {
-                            text,
-                            target: Target::Verse(v + i as u16),
-                            session,
-                            fate: Fate::Kept,
-                            shown: false,
-                        });
+                match saved {
+                    Ok(_) => {
+                        for (i, text) in texts.into_iter().enumerate() {
+                            self.saves.push(Save {
+                                text,
+                                target: Target::Verse(v + i as u16),
+                                session,
+                                fate: Fate::Kept,
+                                shown: false,
+                            });
+                        }
                     }
+                    Err(e) => self.refused_save(&format!("the section save of 1:{v}"), e)?,
                 }
             }
             Act::Name => {
@@ -388,21 +534,34 @@ impl Run {
                         value: Some(value),
                     })
                     .wait();
-                if saved.is_ok() {
-                    self.saves.push(Save {
+                match saved {
+                    Ok(_) => self.saves.push(Save {
                         text,
                         target: Target::Name,
                         session,
                         fate: Fate::Kept,
                         shown: false,
-                    });
+                    }),
+                    Err(e) => self.refused_save("the save of the name", e)?,
                 }
             }
             Act::Leave => {
                 let _ = handle.leave(Leave::Book(TIT)).wait();
             }
             Act::Checkpoint => {
-                let _ = handle.checkpoint(CheckpointReason::LeavingTranslate).wait();
+                let done = handle.checkpoint(CheckpointReason::LeavingTranslate).wait();
+                // A seal stops for a journal file another program holds, damaged or removed;
+                // nothing else in the model stops a checkpoint.
+                let excused = self.outside || self.journal_held || !self.locked.is_empty();
+                match done {
+                    Ok(report) => match report.skipped {
+                        None | Some(CheckpointSkip::NoChanges) => {}
+                        Some(CheckpointSkip::SealFailed | CheckpointSkip::PackMissing)
+                            if excused => {}
+                        Some(skip) => self.refused("the checkpoint", skip)?,
+                    },
+                    Err(e) => self.refused("the checkpoint", e)?,
+                }
             }
             Act::Close => {
                 let handle = self.handle.take().expect("open");
@@ -425,6 +584,11 @@ impl Run {
                 return Ok(());
             }
         }
+        self.settle()
+    }
+
+    /// Waits for the store's work, and checks it unless the process died.
+    fn settle(&mut self) -> Result<(), String> {
         if !self.fs().is_dead() {
             self.handle().wait_idle();
         }
@@ -437,34 +601,76 @@ impl Run {
     /// The files other programs hold, held again on a new process's filesystem.
     fn relock(&self) {
         let fs = self.fs();
-        for rel in &self.locked {
-            fs.set_unreadable(&self.path(rel), true);
+        for (rel, readable) in &self.locked {
+            fs.set_unreadable(&self.path(rel), !readable);
             fs.set_busy(&self.path(rel), true);
         }
     }
 
-    fn lock(&mut self, file: File, on: bool) -> Result<(), String> {
-        if on {
-            self.locked.insert(file.rel());
-        } else {
-            self.locked.remove(file.rel());
+    /// The `which`-th journal file of a kind in the order the run first saw them, relative to
+    /// the folder, with its bytes.
+    fn journal_file(&self, journal: Journal, which: u8) -> Option<(String, Vec<u8>)> {
+        let mut files: Vec<(String, Vec<u8>)> = files(&self.fs(), &self.folder)
+            .into_iter()
+            .filter(|(rel, _)| match journal {
+                Journal::Pending => rel.starts_with(".tc/pending/") && !rel.contains(".~"),
+                Journal::Pack => rel.starts_with("ingredients/tc/changes/") && !rel.contains(".~"),
+            })
+            .collect();
+        files.sort_by_key(|(rel, _)| {
+            self.journal_seen
+                .iter()
+                .position(|seen| seen == rel)
+                .unwrap_or(usize::MAX)
+        });
+        if files.is_empty() {
+            return None;
         }
+        Some(files[usize::from(which) % files.len()].clone())
+    }
+
+    fn lock(&mut self, what: Holdable, on: bool) -> Result<(), String> {
+        let (rels, readable): (Vec<String>, bool) = match (what, on) {
+            (Holdable::File(file), _) => (vec![file.rel().to_owned()], false),
+            (Holdable::Pending { which, readable }, true) => (
+                self.journal_file(Journal::Pending, which)
+                    .map(|(rel, _)| rel)
+                    .into_iter()
+                    .collect(),
+                readable,
+            ),
+            (Holdable::Pending { .. }, false) => (
+                self.locked
+                    .keys()
+                    .filter(|rel| rel.starts_with(".tc/pending/"))
+                    .cloned()
+                    .collect(),
+                false,
+            ),
+        };
         let fs = self.fs();
-        let path = self.path(file.rel());
-        fs.set_unreadable(&path, on);
-        fs.set_busy(&path, on);
+        for rel in rels {
+            if on && !readable && rel.starts_with(".tc/pending/") {
+                // The fold of the session that cannot read it lacks its saves: a book file
+                // that shows them is kept as someone's work (R4), a copy that stays.
+                self.journal_held = true;
+                self.outside = true;
+            }
+            if on {
+                self.locked.insert(rel.clone(), readable);
+            } else {
+                self.locked.remove(&rel);
+            }
+            let path = self.path(&rel);
+            fs.set_unreadable(&path, on && !readable);
+            fs.set_busy(&path, on);
+        }
         if on || self.handle.is_none() {
             return Ok(());
         }
         // The writer tries a refused path again within 3 s; a leave does it now.
         let _ = self.handle().leave(Leave::Book(TIT)).wait();
-        if !fs.is_dead() {
-            self.handle().wait_idle();
-        }
-        if self.died() {
-            return Ok(());
-        }
-        self.check(false)
+        self.settle()
     }
 
     /// Another program writes `bytes` at `rel`, with the modification time now or `mtime_ns`.
@@ -482,7 +688,13 @@ impl Run {
         if now.as_deref() == Some(bytes.as_slice()) {
             return;
         }
-        let placed = self.placed.get(rel) == Some(&bytes);
+        self.outside = true;
+        // Bytes the ledger names as the app's own: what they show the project holds.
+        let ours = match self.ledger(rel) {
+            Some(State::Placed { placed }) => placed.md5 == md5(&bytes),
+            Some(State::Writing { new, .. }) => new == md5(&bytes),
+            _ => false,
+        };
         // Bytes of an earlier put the app has not looked at yet: the person writes over them.
         for put in &mut self.puts {
             if put.rel == rel && !put.retired && now.as_deref() == Some(put.bytes.as_slice()) {
@@ -502,8 +714,25 @@ impl Run {
             rel,
             bytes,
             what,
-            retired: placed,
+            retired: ours,
         });
+        // A put of `metadata.json` in the folder that lists the folder as it is now and the
+        // project's name: the app's look finds it converged (R2), whatever happens later. A
+        // put of the book file can make an earlier one so.
+        let name = match &self.handle {
+            Some(handle) => name_of(handle),
+            None => self.name.clone(),
+        };
+        let meta = fs.peek(&self.path(META));
+        for put in &mut self.puts {
+            if put.rel == META
+                && !put.retired
+                && meta.as_deref() == Some(put.bytes.as_slice())
+                && describes_the_folder(&fs, &self.folder, &put.bytes, &name)
+            {
+                put.retired = true;
+            }
+        }
     }
 
     fn edit(&mut self, v: u16, told: bool) -> Result<(), String> {
@@ -573,17 +802,169 @@ impl Run {
         self.settle_put(told)
     }
 
+    /// The disk changes a letter in the words of a file and keeps its size and time.
+    fn damage(&mut self, file: File) -> Result<(), String> {
+        let rel = file.rel();
+        let fs = self.fs();
+        let path = self.path(rel);
+        let (Some(mut bytes), Ok(meta)) = (fs.peek(&path), tc_store::Vfs::metadata(&fs, &path))
+        else {
+            return Ok(());
+        };
+        // The first letter of a word of the book file (never a marker's), or of the name.
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        let from = match file {
+            File::Usfm => Some(0),
+            File::Meta => text
+                .find("\"name\"")
+                .and_then(|i| text[i..].find("\"en\": \"").map(|j| i + j + 7)),
+        };
+        let Some(at) = from.and_then(|from| {
+            let mut marker = false;
+            for (i, b) in bytes.iter().enumerate().skip(from) {
+                match *b {
+                    b'\\' => marker = true,
+                    b'\n' if file == File::Meta => return None,
+                    b if b.is_ascii_whitespace() => marker = false,
+                    b if b.is_ascii_lowercase() && !marker => return Some(i),
+                    _ => {}
+                }
+            }
+            None
+        }) else {
+            return Ok(());
+        };
+        bytes[at] = b'a' + (bytes[at] - b'a' + 1) % 26;
+        self.put(
+            rel,
+            bytes,
+            Some(meta.mtime_ns),
+            false,
+            format!("damage of {rel}"),
+        );
+        Ok(())
+    }
+
+    /// Another program deletes a derived file: a deletion is never an edit (I11).
+    fn delete(&mut self, file: File) -> Result<(), String> {
+        let fs = self.fs();
+        let path = self.path(file.rel());
+        let Some(now) = fs.peek(&path) else {
+            return Ok(());
+        };
+        // A put the app has not looked at yet: the person deletes it.
+        for put in &mut self.puts {
+            if put.rel == file.rel() && put.bytes == now {
+                put.retired = true;
+            }
+        }
+        self.by_another_program(|| {
+            let _ = fs.delete(&path);
+        });
+        self.settle_put(true)
+    }
+
+    fn delete_journal(&mut self, journal: Journal, which: u8) -> Result<(), String> {
+        let Some((rel, _)) = self.journal_file(journal, which) else {
+            return Ok(());
+        };
+        let fs = self.fs();
+        let path = self.path(&rel);
+        self.outside = true;
+        self.by_another_program(|| {
+            let _ = fs.delete(&path);
+        });
+        self.log.push(format!("deleted {rel}"));
+        if self.handle.is_some() {
+            self.check(false)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn flip(&mut self, journal: Journal, which: u8, at: u16) -> Result<(), String> {
+        let Some((rel, mut bytes)) = self.journal_file(journal, which) else {
+            return Ok(());
+        };
+        let Some(header) = bytes.iter().position(|b| *b == b'\n').map(|i| i + 1) else {
+            return Ok(());
+        };
+        let body: Vec<usize> = (header..bytes.len())
+            .filter(|i| bytes[*i].is_ascii_alphanumeric())
+            .collect();
+        if body.is_empty() {
+            return Ok(());
+        }
+        let i = body[usize::from(at) % body.len()];
+        bytes[i] = if bytes[i] == b'0' { b'1' } else { b'0' };
+        let fs = self.fs();
+        let path = self.path(&rel);
+        self.outside = true;
+        self.by_another_program(|| fs.put_unseen(&path, &bytes, None));
+        self.log.push(format!("changed byte {i} of {rel}"));
+        if self.handle.is_some() {
+            self.check(false)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// `.tc/` loses the manifest or the heads files while the app is closed.
+    fn lose_tc(&mut self, heads: bool) -> Result<(), String> {
+        if self.handle.is_some() {
+            return Ok(());
+        }
+        let fs = self.fs();
+        let gone: Vec<PathBuf> = if heads {
+            fs.files_under(&self.path(".tc/heads"))
+                .into_keys()
+                .collect()
+        } else {
+            vec![self.path(MANIFEST)]
+        };
+        for path in gone {
+            if fs.delete(&path).is_ok() {
+                self.outside = true;
+            }
+        }
+        Ok(())
+    }
+
+    /// The person settles the first held file.
+    fn choose(&mut self, take_in: bool) -> Result<(), String> {
+        if self.handle.is_none() {
+            return Ok(());
+        }
+        let held = self
+            .handle()
+            .notices()
+            .into_iter()
+            .find_map(|n| match n.notice {
+                Notice::OutsideEditHeld { path, .. } | Notice::StorageDamage { path, .. } => {
+                    Some(path.as_str().to_owned())
+                }
+                _ => None,
+            });
+        let Some(rel) = held else {
+            return Ok(());
+        };
+        self.log.push(format!("chose {rel} (take in: {take_in})"));
+        let done = if take_in {
+            self.handle().take_in_held(&rel).wait().map(|_| ())
+        } else {
+            self.handle().restore_held(&rel).wait()
+        };
+        if let Err(e) = done {
+            self.refused(&format!("the choice for {rel}"), e)?;
+        }
+        self.settle()
+    }
+
     /// After a put while open, the store's watcher may act on it.
     fn settle_put(&mut self, told: bool) -> Result<(), String> {
         if told && self.handle.is_some() {
             std::thread::sleep(Duration::from_millis(60));
-            if !self.fs().is_dead() {
-                self.handle().wait_idle();
-            }
-            if self.died() {
-                return Ok(());
-            }
-            return self.check(false);
+            return self.settle();
         }
         Ok(())
     }
@@ -593,29 +974,15 @@ impl Run {
             return Ok(());
         }
         let _ = self.handle().focus().wait();
-        if !self.fs().is_dead() {
-            self.handle().wait_idle();
-        }
-        if self.died() {
-            return Ok(());
-        }
-        self.check(false)
+        self.settle()
     }
 
     fn cut(&mut self, journal: Journal, which: u8, keep: u8, at_line: bool) -> Result<(), String> {
-        let fs = self.fs();
-        let files: Vec<(PathBuf, Vec<u8>)> = files(&fs, &self.folder)
-            .into_iter()
-            .filter(|(rel, _)| match journal {
-                Journal::Pending => rel.starts_with(".tc/pending/") && !rel.contains(".~"),
-                Journal::Pack => rel.starts_with("ingredients/tc/changes/") && !rel.contains(".~"),
-            })
-            .map(|(rel, bytes)| (self.path(&rel), bytes))
-            .collect();
-        if files.is_empty() {
+        let Some((rel, bytes)) = self.journal_file(journal, which) else {
             return Ok(());
-        }
-        let (path, bytes) = files[usize::from(which) % files.len()].clone();
+        };
+        let fs = self.fs();
+        let path = self.path(&rel);
         let ends: Vec<usize> = bytes
             .iter()
             .enumerate()
@@ -634,6 +1001,7 @@ impl Run {
             start + (ends[kept_lines] - start) / 2
         };
         let open = self.handle.is_some();
+        self.outside = true;
         self.by_another_program(|| {
             if open {
                 fs.cut_in_place(&path, len);
@@ -641,11 +1009,8 @@ impl Run {
                 fs.put_unseen(&path, &bytes[..len], None);
             }
         });
-        self.log.push(format!(
-            "cut {} to {len} of {} bytes",
-            path.display(),
-            bytes.len()
-        ));
+        self.log
+            .push(format!("cut {rel} to {len} of {} bytes", bytes.len()));
         if open { self.check(false) } else { Ok(()) }
     }
 
@@ -824,13 +1189,50 @@ impl Run {
         false
     }
 
+    /// With no outside step yet, the app kept nothing twice: no outside-edit notice and no copy
+    /// in `.tc/external/`, except of the bytes a write under way replaced (R9).
+    fn kept_nothing_twice(&self, lost: &mut Vec<String>) {
+        if self.outside {
+            return;
+        }
+        let fs = self.fs();
+        for (path, bytes) in fs.files_under(&self.path(".tc/external")) {
+            if !self.replaced.contains(&bytes) {
+                lost.push(format!(
+                    "a copy {} with no outside step: the app kept its own bytes twice",
+                    path.display()
+                ));
+            }
+        }
+        for notice in self.handle().notices() {
+            if !outside_notice(&notice.notice) {
+                continue;
+            }
+            let explained = match &notice.copy {
+                Some(copy) => fs
+                    .peek(&self.path(copy))
+                    .is_some_and(|b| self.replaced.contains(&b)),
+                None => !self.replaced.is_empty(),
+            };
+            if !explained {
+                lost.push(format!(
+                    "the notice {:?} with no outside step: the app took its own bytes for \
+                     someone's",
+                    notice.notice
+                ));
+            }
+        }
+    }
+
     /// The no-loss invariant (see the module documentation). `settled`: an open and its first
     /// job are done, so a save shown only by a file in the folder is not kept.
     fn check(&mut self, settled: bool) -> Result<(), String> {
         if self.handle.is_none() {
             return Ok(());
         }
+        self.name = name_of(self.handle());
         let mut lost = Vec::new();
+        self.kept_nothing_twice(&mut lost);
         let fs = self.fs();
         for save in &self.saves {
             if save.fate == Fate::Destroyed {
@@ -847,8 +1249,10 @@ impl Run {
             if !settled && self.on_disk(&save.text) {
                 continue;
             }
-            // A file another program holds is not read yet: what it shows is not lost yet.
-            if self.locked.iter().any(|rel| {
+            // A file another program holds is not read yet: what it shows is not lost yet. Nor
+            // is what a derived file shows while a journal file is held: the app cannot tell
+            // whether the save is in it, and leaves the file as it is (R6).
+            if self.locked.keys().any(|rel| {
                 fs.peek(&self.folder.join(rel))
                     .is_some_and(|b| contains(&b, &save.text))
             }) {
@@ -871,7 +1275,6 @@ impl Run {
                 }
             ));
         }
-        let fs = self.fs();
         let projection = self
             .handle()
             .snapshot()
@@ -881,30 +1284,13 @@ impl Run {
             .files_under(&self.path(".tc/external"))
             .into_values()
             .collect();
-        let name = match self
-            .handle()
-            .snapshot()
-            .fold()
-            .projected(&RecordKey::ProjectMeta(MetaField::Name))
-        {
-            Some(Record::ProjectMeta {
-                value: Some(value), ..
-            }) => format!("{value:?}"),
-            _ => String::new(),
-        };
-        let folder = self.folder.clone();
-        let current_metadata = |bytes: &[u8]| describes_the_folder(&fs, &folder, bytes, &name);
         for put in &mut self.puts {
             if put.retired {
                 continue;
             }
             let on_disk =
                 fs.peek(&self.folder.join(put.rel)).as_deref() == Some(put.bytes.as_slice());
-            let projected = match put.rel {
-                USFM => projection.as_deref() == Some(put.bytes.as_slice()),
-                _ => current_metadata(&put.bytes),
-            };
-            if projected {
+            if put.rel == USFM && projection.as_deref() == Some(put.bytes.as_slice()) {
                 // What the project would write there: nothing in the bytes is the app's to
                 // keep apart from the project, now or later.
                 put.retired = true;
@@ -919,22 +1305,35 @@ impl Run {
             ));
         }
         if lost.is_empty() {
-            Ok(())
-        } else {
-            Err(lost.join("\n"))
+            return Ok(());
         }
+        // What the app knew, for the reader of a failure.
+        lost.push(format!(
+            "ledger: {USFM} {:?}; {META} {:?}\nnotices: {:?}",
+            self.ledger(USFM),
+            self.ledger(META),
+            self.handle()
+                .notices()
+                .into_iter()
+                .map(|n| n.notice)
+                .collect::<Vec<_>>()
+        ));
+        Err(lost.join("\n"))
     }
 
-    /// Notes the versions of the files the folder holds now; `app`: the app acted last.
-    fn see_versions(&mut self, app: bool) {
+    /// Notes the versions of the files the folder holds now, and the journal files.
+    fn see_versions(&mut self) {
         let fs = self.fs();
+        for rel in files(&fs, &self.folder).into_keys() {
+            if (rel.starts_with(".tc/pending/") || rel.starts_with("ingredients/tc/changes/"))
+                && !rel.contains(".~")
+                && !self.journal_seen.contains(&rel)
+            {
+                self.journal_seen.push(rel);
+            }
+        }
         for rel in [USFM, META] {
             if let Some(bytes) = fs.peek(&self.path(rel)) {
-                // Bytes of a put the app has not written over yet are not the app's.
-                let put = self.puts.iter().any(|p| !p.retired && p.bytes == bytes);
-                if app && !put {
-                    self.placed.insert(rel, bytes.clone());
-                }
                 let mtime_ns = tc_store::Vfs::metadata(&fs, &self.path(rel))
                     .map_or(fs.now_ns(), |m| m.mtime_ns);
                 let seen = self.versions.entry(rel).or_default();
@@ -954,18 +1353,29 @@ impl Run {
                 self.power_cut = false;
                 Ok(())
             }
-            Step::Lock { file, on } => self.lock(*file, *on),
+            Step::Lock { what, on } => self.lock(*what, *on),
             Step::Open => self.open(),
             Step::Edit { verse, told } => self.edit(*verse, *told),
             Step::EditName { told } => self.edit_name(*told),
             Step::Revert { file, back, told } => self.revert(*file, *back, *told, false),
             Step::RevertKeepTime { file, back } => self.revert(*file, *back, false, true),
+            Step::Damage { file } => self.damage(*file),
+            Step::Delete { file } => self.delete(*file),
+            Step::Touch { file } => {
+                let fs = self.fs();
+                let _ = fs.set_mtime(&self.path(file.rel()), fs.now_ns());
+                Ok(())
+            }
             Step::Cut {
                 journal,
                 which,
                 keep,
                 at_line,
             } => self.cut(*journal, *which, *keep, *at_line),
+            Step::DeleteJournal { journal, which } => self.delete_journal(*journal, *which),
+            Step::Flip { journal, which, at } => self.flip(*journal, *which, *at),
+            Step::LoseTc { heads } => self.lose_tc(*heads),
+            Step::Choose { take_in } => self.choose(*take_in),
             Step::Focus => self.focus(),
             Step::Advance => {
                 self.fs().advance(Duration::from_secs(10));
@@ -973,16 +1383,64 @@ impl Run {
             }
         };
         self.died();
-        let app = !matches!(
-            step,
-            Step::Edit { .. }
-                | Step::EditName { .. }
-                | Step::Revert { .. }
-                | Step::RevertKeepTime { .. }
-                | Step::Cut { .. }
-        );
-        self.see_versions(app);
+        self.see_versions();
+        if std::env::var_os("TC_MODEL_TRACE").is_some() {
+            self.trace(step);
+        }
         done
+    }
+
+    /// With `TC_MODEL_TRACE` set: what each step left, for the reader of a failure.
+    fn trace(&self, step: &Step) {
+        let fs = self.fs();
+        let short = |b: &[u8]| md5(b)[..6].to_owned();
+        let disk: Vec<String> = [USFM, META]
+            .iter()
+            .map(|rel| fs.peek(&self.path(rel)).map_or("-".into(), |b| short(&b)))
+            .collect();
+        let external: Vec<String> = fs
+            .files_under(&self.path(".tc/external"))
+            .values()
+            .map(|b| short(b))
+            .collect();
+        let puts: Vec<String> = self
+            .puts
+            .iter()
+            .map(|p| format!("{}{}", short(&p.bytes), if p.retired { "r" } else { "" }))
+            .collect();
+        let journal: Vec<String> = files(&fs, &self.folder)
+            .into_iter()
+            .filter(|(rel, _)| {
+                rel.starts_with(".tc/pending/")
+                    || rel.starts_with(".tc/quarantine/")
+                    || rel.starts_with("ingredients/tc/changes/")
+            })
+            .map(|(rel, bytes)| {
+                let texts: Vec<&str> = self
+                    .saves
+                    .iter()
+                    .filter(|save| contains(&bytes, &save.text))
+                    .map(|save| save.text.as_str())
+                    .collect();
+                format!(
+                    "{}:{texts:?}",
+                    rel.rsplit('/')
+                        .next()
+                        .unwrap_or("")
+                        .chars()
+                        .take(12)
+                        .collect::<String>()
+                )
+            })
+            .collect();
+        eprintln!("  journal {journal:?}");
+        eprintln!(
+            "TRACE {step:?}\n  disk {disk:?} ledger {:?} / {:?}\n  external {external:?} puts {puts:?}",
+            self.ledger(USFM)
+                .map(|s| format!("{s:?}").chars().take(90).collect::<String>()),
+            self.ledger(META)
+                .map(|s| format!("{s:?}").chars().take(90).collect::<String>()),
+        );
     }
 
     /// The end of a run: a close if the project is open, an open, a leave, and the check.
@@ -995,9 +1453,9 @@ impl Run {
         }
         // Every program lets go of the files in the end.
         let fs = self.fs();
-        for rel in std::mem::take(&mut self.locked) {
-            fs.set_unreadable(&self.path(rel), false);
-            fs.set_busy(&self.path(rel), false);
+        for rel in std::mem::take(&mut self.locked).into_keys() {
+            fs.set_unreadable(&self.path(&rel), false);
+            fs.set_busy(&self.path(&rel), false);
         }
         self.log.push("the last open".into());
         self.open()?;
@@ -1031,6 +1489,20 @@ impl Drop for Run {
     }
 }
 
+/// The project's name as the fold shows it.
+fn name_of(handle: &ProjectHandle) -> String {
+    match handle
+        .snapshot()
+        .fold()
+        .projected(&RecordKey::ProjectMeta(MetaField::Name))
+    {
+        Some(Record::ProjectMeta {
+            value: Some(value), ..
+        }) => format!("{value:?}"),
+        _ => String::new(),
+    }
+}
+
 /// Whether `metadata.json` bytes are what the project writes now: they list every ingredient
 /// with the md5 of the bytes in the folder, every ingredient file the folder holds, and the
 /// project's name (`name`, as the fold shows it).
@@ -1049,9 +1521,9 @@ fn describes_the_folder(fs: &FaultFs, folder: &std::path::Path, bytes: &[u8], na
         return false;
     }
     let same_files = listed.iter().all(|(rel, entry)| {
-        on_disk.get(rel).is_some_and(|bytes| {
-            entry["checksum"]["md5"].as_str() == Some(tc_journal::Md5::of(bytes).to_hex().as_str())
-        })
+        on_disk
+            .get(rel)
+            .is_some_and(|bytes| entry["checksum"]["md5"].as_str() == Some(md5(bytes).as_str()))
     });
     let shown = json["identification"]["name"]["en"]
         .as_str()
@@ -1068,6 +1540,10 @@ fn with_verse_words(text: &str, v: u16, words: &str) -> Option<String> {
     Some(format!("{}{words}{}", &text[..start], &text[end..]))
 }
 
+// ---------------------------------------------------------------------------------------
+// The generator
+// ---------------------------------------------------------------------------------------
+
 fn an_act() -> impl Strategy<Value = Act> {
     prop_oneof![
         4 => (1u16..=4).prop_map(Act::Save),
@@ -1079,70 +1555,231 @@ fn an_act() -> impl Strategy<Value = Act> {
     ]
 }
 
+/// A kill at any write point of an act: a checkpoint after a save on a fresh project has 51,
+/// a close 58.
+fn a_kill() -> impl Strategy<Value = Kill> {
+    (0u16..80, any::<bool>(), any::<bool>()).prop_map(|(at, power_cut, torn)| Kill {
+        at,
+        power_cut,
+        torn,
+    })
+}
+
 fn a_file() -> impl Strategy<Value = File> {
     prop_oneof![3 => Just(File::Usfm), 1 => Just(File::Meta)]
+}
+
+fn a_journal() -> impl Strategy<Value = Journal> {
+    prop_oneof![3 => Just(Journal::Pending), 1 => Just(Journal::Pack)]
+}
+
+fn a_holdable() -> impl Strategy<Value = Holdable> {
+    prop_oneof![
+        2 => a_file().prop_map(Holdable::File),
+        1 => (any::<u8>(), any::<bool>())
+            .prop_map(|(which, readable)| Holdable::Pending { which, readable }),
+    ]
+}
+
+/// What another program or the disk does to the folder, unseen by the watcher.
+fn a_fault() -> impl Strategy<Value = Step> {
+    prop_oneof![
+        3 => (a_journal(), any::<u8>(), any::<u8>(), any::<bool>()).prop_map(
+            |(journal, which, keep, at_line)| Step::Cut {
+                journal,
+                which,
+                keep,
+                at_line
+            }
+        ),
+        2 => (a_file(), 0u8..3).prop_map(|(file, back)| Step::Revert {
+            file,
+            back,
+            told: false
+        }),
+        2 => (a_file(), 0u8..3).prop_map(|(file, back)| Step::RevertKeepTime { file, back }),
+        1 => a_file().prop_map(|file| Step::Damage { file }),
+        1 => a_file().prop_map(|file| Step::Delete { file }),
+        1 => (a_journal(), any::<u8>())
+            .prop_map(|(journal, which)| Step::DeleteJournal { journal, which }),
+        1 => (a_journal(), any::<u8>(), any::<u16>())
+            .prop_map(|(journal, which, at)| Step::Flip { journal, which, at }),
+        1 => any::<bool>().prop_map(|heads| Step::LoseTc { heads }),
+    ]
 }
 
 fn a_step() -> impl Strategy<Value = Step> {
     prop_oneof![
         12 => an_act().prop_map(|act| Step::Act { act, kill: None }),
-        3 => (an_act(), 0u16..40, any::<bool>())
-            .prop_map(|(act, at, power)| Step::Act { act, kill: Some((at, power)) }),
+        3 => (an_act(), a_kill()).prop_map(|(act, kill)| Step::Act { act, kill: Some(kill) }),
         2 => a_file().prop_map(|file| Step::KillAfterRename { file }),
-        1 => (a_file(), any::<bool>()).prop_map(|(file, on)| Step::Lock { file, on }),
+        1 => (a_holdable(), any::<bool>()).prop_map(|(what, on)| Step::Lock { what, on }),
         2 => Just(Step::Open),
         2 => (1u16..=4, any::<bool>()).prop_map(|(verse, told)| Step::Edit { verse, told }),
         1 => any::<bool>().prop_map(|told| Step::EditName { told }),
         2 => (a_file(), 0u8..3, any::<bool>())
             .prop_map(|(file, back, told)| Step::Revert { file, back, told }),
-        1 => (a_file(), 0u8..3).prop_map(|(file, back)| Step::RevertKeepTime { file, back }),
-        2 => (
-            prop_oneof![3 => Just(Journal::Pending), 1 => Just(Journal::Pack)],
-            any::<u8>(),
-            any::<u8>(),
-            any::<bool>()
-        )
-            .prop_map(|(journal, which, keep, at_line)| Step::Cut {
-                journal,
-                which,
-                keep,
-                at_line
-            }),
+        3 => a_fault(),
+        1 => any::<bool>().prop_map(|take_in| Step::Choose { take_in }),
+        1 => a_file().prop_map(|file| Step::Touch { file }),
         1 => Just(Step::Focus),
-        1 => Just(Step::Advance),
+        2 => Just(Step::Advance),
     ]
 }
 
-fn histories(cases: u32, steps: usize) {
+/// A short sequence of steps: one step, or one of the sequences the reviews found bugs in.
+fn a_chunk() -> impl Strategy<Value = Vec<Step>> {
+    prop_oneof![
+        8 => a_step().prop_map(|step| vec![step]),
+        // A crash, then damage while the app is closed.
+        3 => (an_act(), a_kill(), a_fault()).prop_map(|(act, kill, fault)| {
+            vec![Step::Act { act, kill: Some(Kill { at: kill.at % 40, ..kill }) }, fault]
+        }),
+        2 => a_fault().prop_map(|fault| vec![crash(), fault]),
+        // A kill right after a rename, then a revert of that file while closed.
+        3 => (a_file(), an_act(), any::<bool>(), 0u8..3, any::<bool>()).prop_map(
+            |(file, act, advance, back, keep_time)| {
+                let mut steps = vec![
+                    Step::KillAfterRename { file },
+                    Step::Act { act, kill: None },
+                ];
+                if advance {
+                    steps.push(Step::Advance);
+                }
+                steps.push(if keep_time {
+                    Step::RevertKeepTime { file, back }
+                } else {
+                    Step::Revert {
+                        file,
+                        back,
+                        told: false,
+                    }
+                });
+                steps
+            }
+        ),
+        // A file held around an open and an act.
+        2 => (a_holdable(), an_act()).prop_map(|(what, act)| {
+            vec![
+                Step::Lock { what, on: true },
+                Step::Open,
+                Step::Act { act, kill: None },
+                Step::Lock { what, on: false },
+            ]
+        }),
+        // A kill right after a rename, and the file held at the next open.
+        2 => (a_file(), an_act()).prop_map(|(file, act)| {
+            let what = Holdable::File(file);
+            vec![
+                Step::KillAfterRename { file },
+                Step::Act { act, kill: None },
+                Step::Act { act: Act::Leave, kill: None },
+                Step::Lock { what, on: true },
+                Step::Open,
+                Step::Act { act: Act::Save(1), kill: None },
+                Step::Lock { what, on: false },
+            ]
+        }),
+        // A pending file another program deletes while the app runs, then a checkpoint.
+        1 => any::<u8>().prop_map(|which| {
+            vec![
+                Step::Act { act: Act::Save(1), kill: None },
+                Step::DeleteJournal { journal: Journal::Pending, which },
+                Step::Act { act: Act::Checkpoint, kill: None },
+            ]
+        }),
+        // A pending file a scanner holds through a checkpoint, then more saves.
+        1 => (any::<u8>(), any::<bool>()).prop_map(|(which, readable)| {
+            let what = Holdable::Pending { which, readable };
+            vec![
+                Step::Act { act: Act::Save(1), kill: None },
+                Step::Lock { what, on: true },
+                Step::Act { act: Act::Checkpoint, kill: None },
+                Step::Act { act: Act::Save(2), kill: None },
+                Step::Lock { what, on: false },
+                Step::Act { act: Act::Save(3), kill: None },
+            ]
+        }),
+        // Bytes settled by a read after their time stamp, damaged, found by the next open's
+        // storage check and held, and the person's choice.
+        1 => (a_file(), any::<bool>()).prop_map(|(file, take_in)| {
+            vec![
+                Step::Act { act: Act::Leave, kill: None },
+                Step::Advance,
+                crash(),
+                Step::Open,
+                Step::Damage { file },
+                crash(),
+                Step::Open,
+                Step::Advance,
+                Step::Touch { file },
+                Step::Focus,
+                Step::Choose { take_in },
+            ]
+        }),
+    ]
+}
+
+fn a_history(chunks: usize) -> impl Strategy<Value = Vec<Step>> {
+    proptest::collection::vec(a_chunk(), 1..chunks)
+        .prop_map(|chunks| chunks.into_iter().flatten().collect())
+}
+
+/// The rows and events of the ledger's table (§6.2) the model cannot reach, and the tests
+/// that take them: R1 needs a save served while a checkpoint's job runs
+/// (`a_checkpoint_job_never_places_an_older_version_over_a_newer_edit`); R7, R17 and Removed
+/// a book removed (`a_book_is_added_with_stubs_removed_with_what_was_seen_and_restored_either_way`).
+const ROWS_OUT_OF_REACH: [&str; 4] = ["R1", "R7", "R17", "Removed"];
+
+fn histories(cases: u32, chunks: usize, every_row: bool) {
+    // The histories the reviews found, on every run.
+    for (name, history) in named_histories() {
+        if let Err(lost) = Run::run(&history) {
+            panic!("{name}: {lost}");
+        }
+    }
     let config = ProptestConfig {
         cases,
         max_shrink_iters: 2000,
         failure_persistence: None,
         ..ProptestConfig::default()
     };
-    proptest!(config, |(history in proptest::collection::vec(a_step(), 1..steps))| {
+    proptest!(config, |(history in a_history(chunks))| {
         if let Err(lost) = Run::run(&history) {
             return Err(TestCaseError::fail(lost));
         }
     });
+    let hits = tc_store::ledger::hits();
+    if std::env::var_os("TC_MODEL_ROWS").is_some() {
+        eprintln!("ledger rows and events taken: {hits:?}");
+    }
+    if every_row {
+        let missed: Vec<&str> = hits
+            .iter()
+            .filter(|(name, n)| **n == 0 && !ROWS_OUT_OF_REACH.contains(name))
+            .map(|(name, _)| *name)
+            .collect();
+        assert!(missed.is_empty(), "rows and events never taken: {missed:?}");
+    }
 }
 
 /// §16.1: random histories of saves, materializations and checkpoints killed at any write
-/// point, outside edits and reverts, cut journal files and restarts lose no work.
+/// point, outside edits and reverts, damaged journal files and restarts lose no work.
 #[test]
 fn random_histories_lose_no_work() {
-    histories(200, 12);
+    histories(200, 8, false);
 }
 
-/// The nightly variant: more histories, and longer ones.
+/// The nightly variant: more histories, and longer ones, which take every row of the
+/// ledger's table the model can reach.
 #[test]
 #[ignore = "long: run nightly with --ignored"]
 fn random_histories_lose_no_work_long() {
-    histories(5000, 24);
+    histories(5000, 16, true);
 }
 
 // ---------------------------------------------------------------------------------------
-// The cases the review of 2026-10-19 found, as histories of the model
+// The cases the reviews of 2026-10-19 found, as histories of the model
 // ---------------------------------------------------------------------------------------
 
 fn act(act: Act) -> Step {
@@ -1153,21 +1790,18 @@ fn act(act: Act) -> Step {
 fn crash() -> Step {
     Step::Act {
         act: Act::Close,
-        kill: Some((0, false)),
-    }
-}
-
-fn assert_kept(steps: &[Step]) {
-    if let Err(lost) = Run::run(steps) {
-        panic!("{lost}");
+        kill: Some(Kill {
+            at: 0,
+            power_cut: false,
+            torn: false,
+        }),
     }
 }
 
 /// A pending file holding one section save (one batch of two changes), cut at a line while the
 /// app is closed after a crash: the book file shows both changes, and they are kept.
-#[test]
-fn a_batch_cut_at_a_line_while_closed_is_kept_from_the_book_file() {
-    assert_kept(&[
+fn a_batch_cut_at_a_line_while_closed() -> Vec<Step> {
+    vec![
         act(Act::Section(1)),
         act(Act::Leave),
         crash(),
@@ -1177,14 +1811,13 @@ fn a_batch_cut_at_a_line_while_closed_is_kept_from_the_book_file() {
             keep: 1,
             at_line: true,
         },
-    ]);
+    ]
 }
 
 /// The same batch cut inside a line: the change salvaged from the file waits for the member
 /// the file lost, and the book file that shows both is the record of both.
-#[test]
-fn a_salvaged_change_whose_batch_lost_a_member_is_kept_from_the_book_file() {
-    assert_kept(&[
+fn a_salvaged_change_whose_batch_lost_a_member() -> Vec<Step> {
+    vec![
         act(Act::Section(1)),
         act(Act::Leave),
         crash(),
@@ -1194,14 +1827,13 @@ fn a_salvaged_change_whose_batch_lost_a_member_is_kept_from_the_book_file() {
             keep: 1,
             at_line: false,
         },
-    ]);
+    ]
 }
 
 /// A pending file the open read is cut in place: the value of a verse's head can no longer be
 /// read, and the next job must not write the book without the verse.
-#[test]
-fn a_head_whose_value_can_no_longer_be_read_is_never_written_as_absent() {
-    assert_kept(&[
+fn a_head_whose_value_can_no_longer_be_read() -> Vec<Step> {
+    vec![
         act(Act::Save(1)),
         act(Act::Leave),
         crash(),
@@ -1214,28 +1846,28 @@ fn a_head_whose_value_can_no_longer_be_read_is_never_written_as_absent() {
         },
         act(Act::Save(2)),
         act(Act::Leave),
-    ]);
+    ]
 }
 
 /// Two writes of the book file killed after their renames, in two sessions, and a revert to
 /// the bytes of the first while the app is closed: the revert is the person's, and is kept.
-#[test]
-fn a_revert_to_an_earlier_write_of_two_stopped_ones_is_kept() {
-    assert_kept(&[
+fn a_revert_to_an_earlier_write_of_two_stopped_ones() -> Vec<Step> {
+    let usfm = Holdable::File(File::Usfm);
+    vec![
         act(Act::Save(1)),
         act(Act::Leave),
         act(Act::Save(1)),
         Step::KillAfterRename { file: File::Usfm },
         act(Act::Leave),
         Step::Lock {
-            file: File::Usfm,
+            what: usfm,
             on: true,
         },
         Step::Open,
         act(Act::Save(1)),
         Step::KillAfterRename { file: File::Usfm },
         Step::Lock {
-            file: File::Usfm,
+            what: usfm,
             on: false,
         },
         Step::Advance,
@@ -1244,14 +1876,13 @@ fn a_revert_to_an_earlier_write_of_two_stopped_ones_is_kept() {
             back: 0,
             told: false,
         },
-    ]);
+    ]
 }
 
 /// `metadata.json` written by a group killed after its rename, and put back by another program
 /// while the app is closed: the revert is the person's, and is kept.
-#[test]
-fn a_revert_of_metadata_json_after_a_kill_past_its_rename_is_kept() {
-    assert_kept(&[
+fn a_revert_of_metadata_json_after_a_kill_past_its_rename() -> Vec<Step> {
+    vec![
         act(Act::Name),
         act(Act::Leave),
         act(Act::Name),
@@ -1263,41 +1894,376 @@ fn a_revert_of_metadata_json_after_a_kill_past_its_rename_is_kept() {
             back: 0,
             told: false,
         },
-    ]);
+    ]
 }
 
-/// A book file written by a group killed right after its rename, and put back while the app
-/// is closed by a backup tool that keeps the old version's size and time: the restore is the
+/// A file written by a group killed right after its rename, and put back while the app is
+/// closed by a backup tool that keeps the old version's size and time: the restore is the
 /// person's, and is kept.
-#[test]
-fn a_restore_of_the_book_file_with_its_old_time_after_a_kill_past_its_rename_is_kept() {
-    assert_kept(&[
-        act(Act::Save(1)),
+fn a_restore_with_its_old_time_after_a_kill_past_its_rename(file: File) -> Vec<Step> {
+    let save = match file {
+        File::Usfm => Act::Save(1),
+        File::Meta => Act::Name,
+    };
+    vec![
+        act(save),
         act(Act::Leave),
         Step::Advance,
-        act(Act::Save(1)),
-        Step::KillAfterRename { file: File::Usfm },
+        act(save),
+        Step::KillAfterRename { file },
         act(Act::Leave),
-        Step::RevertKeepTime {
+        Step::RevertKeepTime { file, back: 0 },
+    ]
+}
+
+/// The metadata.json put back while open, listing the book file another program put back
+/// first: the app's look finds it converged, and writes it again with the book (nightly seed
+/// 5 found the oracle calling that a loss).
+fn a_converged_metadata_json_written_again() -> Vec<Step> {
+    vec![
+        Step::Edit {
+            verse: 1,
+            told: false,
+        },
+        act(Act::Leave),
+        Step::Revert {
             file: File::Usfm,
             back: 0,
+            told: false,
         },
-    ]);
+        act(Act::Save(1)),
+        Step::Revert {
+            file: File::Meta,
+            back: 0,
+            told: false,
+        },
+        act(Act::Leave),
+    ]
 }
 
-/// The same for `metadata.json`.
-#[test]
-fn a_restore_of_metadata_json_with_its_old_time_after_a_kill_past_its_rename_is_kept() {
-    assert_kept(&[
+/// `metadata.json` showing a name whose pending file is cut inside its line while the app runs,
+/// then a crash: at the next open the file is clean by stat (settled), and the job must decide
+/// it before writing it over, not take its stat for leave to write.
+fn a_settled_metadata_json_holding_a_lost_name() -> Vec<Step> {
+    vec![
         act(Act::Name),
         act(Act::Leave),
         Step::Advance,
-        act(Act::Name),
-        Step::KillAfterRename { file: File::Meta },
-        act(Act::Leave),
-        Step::RevertKeepTime {
-            file: File::Meta,
-            back: 0,
+        crash(),
+        Step::Open,
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
         },
-    ]);
+        crash(),
+    ]
+}
+
+/// The book file held by another program at an open that finds `.tc/` without its manifest:
+/// no valid `metadata.json` can list the folder, and the job waits for the file instead of
+/// failing as a bug that makes the project read-only (oracle 2).
+fn a_held_book_file_with_its_manifest_lost() -> Vec<Step> {
+    vec![
+        act(Act::Save(1)),
+        act(Act::Leave),
+        crash(),
+        Step::LoseTc { heads: false },
+        Step::Lock {
+            what: Holdable::File(File::Usfm),
+            on: true,
+        },
+        Step::Open,
+        act(Act::Save(2)),
+    ]
+}
+
+/// The book file deleted while the app runs, the process killed while it rebuilds it, and the
+/// path held by another program at the next open: the rebuild cannot be renamed into place, and
+/// `metadata.json` stays as it is instead of failing as a bug that makes the project read-only.
+fn a_deleted_book_file_whose_path_is_held() -> Vec<Step> {
+    vec![
+        Step::Act {
+            act: Act::Leave,
+            kill: Some(Kill {
+                at: 5,
+                power_cut: false,
+                torn: false,
+            }),
+        },
+        Step::Delete { file: File::Usfm },
+        Step::Lock {
+            what: Holdable::File(File::Usfm),
+            on: true,
+        },
+        Step::Open,
+        act(Act::Save(1)),
+    ]
+}
+
+/// A pending file cut inside its line while the app is closed, and held by a scanner that
+/// lets it be read: the open cannot move it to quarantine, and leaves it for the next open
+/// instead of turning the project read-only (oracle 2).
+fn a_damaged_pending_file_a_scanner_holds() -> Vec<Step> {
+    vec![
+        act(Act::Save(1)),
+        Step::Lock {
+            what: Holdable::Pending {
+                which: 0,
+                readable: true,
+            },
+            on: true,
+        },
+        crash(),
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        act(Act::Save(2)),
+    ]
+}
+
+/// A pending file held at an open (the device rotates), a checkpoint of the new device killed
+/// after it made its pack folder and before it flushed the folder's entry, and a power cut
+/// during a later session's seal into that folder: the seal flushes the entries of the folders
+/// a killed process made, or the power cut takes the pack and the pending files it replaced.
+fn a_pack_folder_a_killed_seal_made() -> Vec<Step> {
+    let usfm = Holdable::File(File::Usfm);
+    let pending = Holdable::Pending {
+        which: 0,
+        readable: false,
+    };
+    vec![
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(1)),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        Step::Lock {
+            what: usfm,
+            on: true,
+        },
+        Step::Open,
+        act(Act::Save(1)),
+        Step::Lock {
+            what: usfm,
+            on: false,
+        },
+        Step::Lock {
+            what: pending,
+            on: true,
+        },
+        Step::Open,
+        act(Act::Save(1)),
+        Step::Lock {
+            what: pending,
+            on: false,
+        },
+        Step::Act {
+            act: Act::Save(1),
+            kill: Some(Kill {
+                at: 6,
+                power_cut: false,
+                torn: false,
+            }),
+        },
+        Step::Lock {
+            what: usfm,
+            on: true,
+        },
+        Step::Open,
+        act(Act::Checkpoint),
+        Step::Lock {
+            what: usfm,
+            on: false,
+        },
+        Step::Open,
+        Step::Act {
+            act: Act::Leave,
+            kill: Some(Kill {
+                at: 12,
+                power_cut: true,
+                torn: false,
+            }),
+        },
+    ]
+}
+
+/// The held book file of `a_held_book_file_with_its_manifest_lost`, edited outside first, so
+/// the files of no book are a group of their own that finds the listing invalid.
+fn a_held_edited_book_file_with_its_manifest_lost() -> Vec<Step> {
+    vec![
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Section(2)),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        Step::Edit {
+            verse: 2,
+            told: false,
+        },
+        Step::Act {
+            act: Act::Leave,
+            kill: Some(Kill {
+                at: 9,
+                power_cut: false,
+                torn: false,
+            }),
+        },
+        Step::LoseTc { heads: false },
+        Step::Lock {
+            what: Holdable::File(File::Usfm),
+            on: true,
+        },
+        Step::Open,
+        act(Act::Save(1)),
+    ]
+}
+
+fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
+    vec![
+        (
+            "a_pack_folder_a_killed_seal_made",
+            a_pack_folder_a_killed_seal_made(),
+        ),
+        (
+            "a_held_edited_book_file_with_its_manifest_lost",
+            a_held_edited_book_file_with_its_manifest_lost(),
+        ),
+        (
+            "a_damaged_pending_file_a_scanner_holds",
+            a_damaged_pending_file_a_scanner_holds(),
+        ),
+        (
+            "a_held_book_file_with_its_manifest_lost",
+            a_held_book_file_with_its_manifest_lost(),
+        ),
+        (
+            "a_deleted_book_file_whose_path_is_held",
+            a_deleted_book_file_whose_path_is_held(),
+        ),
+        (
+            "a_settled_metadata_json_holding_a_lost_name",
+            a_settled_metadata_json_holding_a_lost_name(),
+        ),
+        (
+            "a_batch_cut_at_a_line_while_closed",
+            a_batch_cut_at_a_line_while_closed(),
+        ),
+        (
+            "a_salvaged_change_whose_batch_lost_a_member",
+            a_salvaged_change_whose_batch_lost_a_member(),
+        ),
+        (
+            "a_head_whose_value_can_no_longer_be_read",
+            a_head_whose_value_can_no_longer_be_read(),
+        ),
+        (
+            "a_revert_to_an_earlier_write_of_two_stopped_ones",
+            a_revert_to_an_earlier_write_of_two_stopped_ones(),
+        ),
+        (
+            "a_revert_of_metadata_json_after_a_kill_past_its_rename",
+            a_revert_of_metadata_json_after_a_kill_past_its_rename(),
+        ),
+        (
+            "a_restore_of_the_book_file_with_its_old_time",
+            a_restore_with_its_old_time_after_a_kill_past_its_rename(File::Usfm),
+        ),
+        (
+            "a_restore_of_metadata_json_with_its_old_time",
+            a_restore_with_its_old_time_after_a_kill_past_its_rename(File::Meta),
+        ),
+        (
+            "a_converged_metadata_json_written_again",
+            a_converged_metadata_json_written_again(),
+        ),
+    ]
+}
+
+fn assert_kept(steps: &[Step]) {
+    if let Err(lost) = Run::run(steps) {
+        panic!("{lost}");
+    }
+}
+
+#[test]
+fn a_batch_cut_at_a_line_while_closed_is_kept_from_the_book_file() {
+    assert_kept(&a_batch_cut_at_a_line_while_closed());
+}
+
+#[test]
+fn a_salvaged_change_whose_batch_lost_a_member_is_kept_from_the_book_file() {
+    assert_kept(&a_salvaged_change_whose_batch_lost_a_member());
+}
+
+#[test]
+fn a_head_whose_value_can_no_longer_be_read_is_never_written_as_absent() {
+    assert_kept(&a_head_whose_value_can_no_longer_be_read());
+}
+
+#[test]
+fn a_revert_to_an_earlier_write_of_two_stopped_ones_is_kept() {
+    assert_kept(&a_revert_to_an_earlier_write_of_two_stopped_ones());
+}
+
+#[test]
+fn a_revert_of_metadata_json_after_a_kill_past_its_rename_is_kept() {
+    assert_kept(&a_revert_of_metadata_json_after_a_kill_past_its_rename());
+}
+
+#[test]
+fn a_restore_of_the_book_file_with_its_old_time_after_a_kill_past_its_rename_is_kept() {
+    assert_kept(&a_restore_with_its_old_time_after_a_kill_past_its_rename(
+        File::Usfm,
+    ));
+}
+
+#[test]
+fn a_restore_of_metadata_json_with_its_old_time_after_a_kill_past_its_rename_is_kept() {
+    assert_kept(&a_restore_with_its_old_time_after_a_kill_past_its_rename(
+        File::Meta,
+    ));
+}
+
+#[test]
+fn a_converged_metadata_json_written_again_is_no_loss() {
+    assert_kept(&a_converged_metadata_json_written_again());
+}
+
+#[test]
+fn a_settled_metadata_json_holding_a_lost_name_is_recorded_before_it_is_written_over() {
+    assert_kept(&a_settled_metadata_json_holding_a_lost_name());
+}
+
+#[test]
+fn a_held_book_file_with_its_manifest_lost_leaves_the_project_writable() {
+    assert_kept(&a_held_book_file_with_its_manifest_lost());
+}
+
+#[test]
+fn a_deleted_book_file_whose_path_is_held_leaves_the_project_writable() {
+    assert_kept(&a_deleted_book_file_whose_path_is_held());
+}
+
+#[test]
+fn a_damaged_pending_file_a_scanner_holds_leaves_the_project_writable() {
+    assert_kept(&a_damaged_pending_file_a_scanner_holds());
+}
+
+#[test]
+fn a_pack_in_a_folder_a_killed_seal_made_survives_a_power_cut() {
+    assert_kept(&a_pack_folder_a_killed_seal_made());
+}
+
+#[test]
+fn a_held_edited_book_file_with_its_manifest_lost_leaves_the_project_writable() {
+    assert_kept(&a_held_edited_book_file_with_its_manifest_lost());
 }

@@ -316,18 +316,24 @@ impl Vfs for CountingVfs {
         else {
             return self.inner.secure_dir_chain(dir, made);
         };
+        // The directories just made had their entries flushed as they were made; the ones
+        // above them were found, and a killed process may have made them unflushed, so the
+        // walk goes on past the made ones (§6.1, "A directory found existing is not
+        // trusted").
         let todo: Vec<PathBuf> = {
             let mut secured = self.secured.lock().unwrap_or_else(|e| e.into_inner());
-            secured.extend(made.iter().cloned());
             let mut todo = Vec::new();
             let mut at = dir;
             while at != root && !secured.contains(at) {
-                todo.push(at.to_owned());
+                if !made.iter().any(|m| m == at) {
+                    todo.push(at.to_owned());
+                }
                 match at.parent() {
                     Some(parent) => at = parent,
                     None => break,
                 }
             }
+            secured.extend(made.iter().cloned());
             todo
         };
         // Outermost first; a directory is remembered only once its entry was flushed, so a

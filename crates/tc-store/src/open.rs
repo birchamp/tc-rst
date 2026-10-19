@@ -1365,15 +1365,23 @@ impl Project {
     }
 
     /// Moves a file to `.tc/quarantine/`, where it stays until the person dismisses the
-    /// notice (§3.6).
+    /// notice (§3.6). A file another program holds stays where it is for the next open, as
+    /// the seal leaves one (§5.11 K4): the open never fails for it, and the session that left
+    /// it never takes it for a second writer's.
     fn quarantine(&mut self, rel: &str, dirs: &mut DirSet) -> Result<(), StoreError> {
         let dir = self.folder.path(QUARANTINE);
         atomic_create_dirs(&*self.vfs, &dir)?;
         let name = layout::escaped(rel);
         let from = self.folder.path(rel);
         let to = dir.join(&name);
-        rename_held(&*self.vfs, &from, &to, &HeldRetry::SAVE)
-            .map_err(|e| StoreError::io("move to quarantine", &from, e))?;
+        match rename_held(&*self.vfs, &from, &to, &HeldRetry::SAVE) {
+            Ok(()) => {}
+            Err(e) if self.vfs.is_held(&e) => {
+                self.journal.left.insert(rel.to_owned());
+                return Ok(());
+            }
+            Err(e) => return Err(StoreError::io("move to quarantine", &from, e)),
+        }
         dirs.add_dir(&dir);
         if let Some(parent) = from.parent() {
             dirs.add_dir(parent);

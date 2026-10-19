@@ -15,6 +15,8 @@
 //! settles. A head whose value cannot be read is never shown as absent.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// A file's size and modification time as a stat gives them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -239,6 +241,94 @@ pub enum Action {
     Forget,
 }
 
+/// The rows of the transition table for a read (§6.2): R1 to R14 for bytes found, R15 to R18
+/// for no file, R19 for a file that cannot be read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Row {
+    R1,
+    R2,
+    R3,
+    R4,
+    R5,
+    R6,
+    R7,
+    R8,
+    R9,
+    R10,
+    R11,
+    R12,
+    R13,
+    R14,
+    R15,
+    R16,
+    R17,
+    R18,
+    R19,
+}
+
+/// The names [`hits`] counts under: the rows of a read, then the other events.
+pub const HIT_NAMES: [&str; 29] = [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "R7",
+    "R8",
+    "R9",
+    "R10",
+    "R11",
+    "R12",
+    "R13",
+    "R14",
+    "R15",
+    "R16",
+    "R17",
+    "R18",
+    "R19",
+    "WriteBegun",
+    "Renamed",
+    "WriteFailed",
+    "Stat",
+    "Adopted",
+    "Kept",
+    "Recorded",
+    "TakeIn",
+    "Restore",
+    "Removed",
+];
+
+static HITS: [AtomicU64; HIT_NAMES.len()] = [const { AtomicU64::new(0) }; HIT_NAMES.len()];
+
+/// How often this process took each row of a read and each other event, for the coverage
+/// check of the model-based test (`tests/store/model.rs`).
+pub fn hits() -> BTreeMap<&'static str, u64> {
+    HIT_NAMES
+        .iter()
+        .zip(&HITS)
+        .map(|(name, n)| (*name, n.load(Ordering::Relaxed)))
+        .collect()
+}
+
+fn hit(event: &Event, row: Option<Row>) {
+    let i = match (event, row) {
+        (_, Some(row)) => row as usize,
+        (Event::Read(_), None) => return,
+        (Event::WriteBegun { .. }, None) => 19,
+        (Event::Renamed { .. }, None) => 20,
+        (Event::WriteFailed, None) => 21,
+        (Event::Stat { .. }, None) => 22,
+        (Event::Adopted { .. }, None) => 23,
+        (Event::Kept { .. }, None) => 24,
+        (Event::Recorded { .. }, None) => 25,
+        (Event::TakeIn, None) => 26,
+        (Event::Restore, None) => 27,
+        (Event::Removed, None) => 28,
+    };
+    HITS[i].fetch_add(1, Ordering::Relaxed);
+}
+
 /// Who the bytes found are to the ledger.
 enum Who {
     /// The app's own, placed as `Placement`.
@@ -279,10 +369,10 @@ fn who(state: &State, md5: &str, facts: &Facts) -> Who {
 }
 
 /// The table of §6.2 for a read that found bytes `md5`.
-fn read_bytes(state: &State, md5: &str, facts: &Facts) -> (State, Vec<Action>) {
+fn read_bytes(state: &State, md5: &str, facts: &Facts) -> (Row, State, Vec<Action>) {
     let stay = || state.clone();
     if facts.newer_fold {
-        return (stay(), vec![Action::Wait(WaitFor::NewerFold)]);
+        return (Row::R1, stay(), vec![Action::Wait(WaitFor::NewerFold)]);
     }
     let converged = facts.heads_readable
         && matches!(&facts.projection, Projection::Bytes { md5: e } if e == md5);
@@ -295,63 +385,101 @@ fn read_bytes(state: &State, md5: &str, facts: &Facts) -> (State, Vec<Action>) {
                 State::Placed { placed } if placed.md5 == md5 => placed.clone(),
                 _ => Placement::renamed(md5.to_owned(), 0),
             };
-            (ours(placed), vec![Action::Refresh])
+            (Row::R2, ours(placed), vec![Action::Refresh])
         }
-        Who::Held => (stay(), vec![Action::Refresh]),
+        Who::Held => (Row::R3, stay(), vec![Action::Refresh]),
         Who::Ours(placed) => match facts.holds {
             // The bytes show changes the fold does not hold applied (a journal file lost
             // them, cut or removed; a batch lost a member), or the ledger cannot say what
             // they show: they may be the only record of that work.
             Some(false) | None => (
+                Row::R4,
                 ours(placed.clone()),
                 vec![Action::Record(Base::Placed(placed.md5))],
             ),
             Some(true) => match &facts.projection {
-                Projection::NotAsked => (ours(placed), vec![Action::Refresh]),
-                _ if !facts.heads_readable => {
-                    (ours(placed), vec![Action::Wait(WaitFor::ValuesUnreadable)])
-                }
-                Projection::Absent => (ours(placed), vec![Action::Remove]),
-                Projection::Bytes { .. } => (ours(placed), vec![Action::Write]),
+                Projection::NotAsked => (Row::R5, ours(placed), vec![Action::Refresh]),
+                _ if !facts.heads_readable => (
+                    Row::R6,
+                    ours(placed),
+                    vec![Action::Wait(WaitFor::ValuesUnreadable)],
+                ),
+                Projection::Absent => (Row::R7, ours(placed), vec![Action::Remove]),
+                Projection::Bytes { .. } => (Row::R8, ours(placed), vec![Action::Write]),
             },
         },
-        Who::Ambiguous => (stay(), vec![Action::Record(Base::Unknown)]),
-        Who::Other { damage: true, .. } => (stay(), vec![Action::Hold(HeldCause::Damage)]),
-        Who::Other { base, .. } => (stay(), vec![Action::Record(base)]),
-        Who::Stranger => (stay(), vec![Action::Record(Base::Head)]),
+        Who::Ambiguous => (Row::R9, stay(), vec![Action::Record(Base::Unknown)]),
+        Who::Other { damage: true, .. } => {
+            (Row::R10, stay(), vec![Action::Hold(HeldCause::Damage)])
+        }
+        Who::Other {
+            base: base @ Base::Placed(_),
+            ..
+        } => (Row::R11, stay(), vec![Action::Record(base)]),
+        Who::Other { base, .. } => match state {
+            State::Held { .. } => (Row::R13, stay(), vec![Action::Record(base)]),
+            _ => (Row::R12, stay(), vec![Action::Record(base)]),
+        },
+        Who::Stranger => (Row::R14, stay(), vec![Action::Record(Base::Head)]),
     }
 }
 
 /// The table of §6.2 for a read that found no file.
-fn read_missing(state: &State, facts: &Facts) -> (State, Vec<Action>) {
+fn read_missing(state: &State, facts: &Facts) -> (Row, State, Vec<Action>) {
     if facts.newer_fold {
-        return (state.clone(), vec![Action::Wait(WaitFor::NewerFold)]);
+        return (
+            Row::R1,
+            state.clone(),
+            vec![Action::Wait(WaitFor::NewerFold)],
+        );
     }
     let told = !matches!(state, State::Unknown);
     match &facts.projection {
         // A deletion is never read as an edit (I11); the file the project holds comes back,
         // never with a value shown as absent.
         Projection::Bytes { .. } if !facts.heads_readable => (
+            Row::R15,
             State::Unknown,
             vec![Action::Wait(WaitFor::ValuesUnreadable)],
         ),
-        Projection::Bytes { .. } => (State::Unknown, vec![Action::Rebuild { told }]),
-        Projection::Absent => (State::Unknown, vec![Action::Forget]),
+        Projection::Bytes { .. } => (Row::R16, State::Unknown, vec![Action::Rebuild { told }]),
+        Projection::Absent => (Row::R17, State::Unknown, vec![Action::Forget]),
         // A held file that is gone ends its hold; the next job writes it.
-        Projection::NotAsked => (State::Unknown, vec![Action::Rebuild { told }]),
+        Projection::NotAsked => (Row::R18, State::Unknown, vec![Action::Rebuild { told }]),
     }
 }
 
 /// The next state of a path and what the writer does (`docs/STORAGE.md` §6.2, the transition
 /// table). Every pair is listed; none drops bytes.
 pub fn next(state: &State, event: &Event, facts: &Facts) -> (State, Vec<Action>) {
+    let (row, after, actions) = match event {
+        Event::Read(Disk::Unreadable) => (
+            Some(Row::R19),
+            state.clone(),
+            vec![Action::Wait(WaitFor::FileUnreadable)],
+        ),
+        Event::Read(Disk::Missing) => {
+            let (row, after, actions) = read_missing(state, facts);
+            (Some(row), after, actions)
+        }
+        Event::Read(Disk::Bytes { md5 }) => {
+            let (row, after, actions) = read_bytes(state, md5, facts);
+            (Some(row), after, actions)
+        }
+        _ => {
+            let (after, actions) = other_event(state, event);
+            (None, after, actions)
+        }
+    };
+    hit(event, row);
+    (after, actions)
+}
+
+/// The table of §6.2 for the events other than a read.
+fn other_event(state: &State, event: &Event) -> (State, Vec<Action>) {
     let stay = || (state.clone(), Vec::new());
     match (state, event) {
-        (_, Event::Read(Disk::Unreadable)) => {
-            (state.clone(), vec![Action::Wait(WaitFor::FileUnreadable)])
-        }
-        (_, Event::Read(Disk::Missing)) => read_missing(state, facts),
-        (_, Event::Read(Disk::Bytes { md5 })) => read_bytes(state, md5, facts),
+        (_, Event::Read(_)) => stay(),
         (State::Unknown, Event::WriteBegun { new }) => (
             State::Writing {
                 old: None,

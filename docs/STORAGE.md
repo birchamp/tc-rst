@@ -1544,7 +1544,8 @@ power cut would lose the folder, the pack and the saves with it (the crash matri
 a seal into a month folder that did not exist yet; after a consolidation the folder held the
 whole journal). On a project's filesystem (`Vfs::secure_dir_chain`) the first time a session
 creates or finds a directory below the project folder, `atomic_create_dirs` flushes the entry
-of every directory on the way to it that the session has not flushed yet; the session
+of every directory on the way to it that the session has not flushed yet, above the ones it has
+just made too (a killed seal can leave a device's folder unflushed, L121); the session
 remembers them, so each directory costs its flushes once, and the open does it for `.tc` and
 `.tc/pending`, so the first save pays nothing.
 
@@ -2665,12 +2666,18 @@ A read that found bytes `d`, the first row that applies:
 | R13 | `Held{h}`, `d ≠ h` | | same | Record, no base: saved again while held |
 | R14 | `Unknown` | | same | Record, base = for each record the heads among the changes the packs of HEAD's tree hold when HEAD was made by this app (a change another pack or only a pending file holds is newer than the file the person started from, so the edit conflicts with it and replaces nothing; a file HEAD does not have: every record new); no usable HEAD: no base |
 
-A read that found no file: R1 first; then with a projection whose values could not all be read,
-`Unknown` and Wait; with a projection, `Unknown` and Rebuild ("TIT.usfm was missing and was
-rebuilt" when the ledger knew the path: a deletion is never an edit, I11; a hold ends); with no
-projection, `Unknown` and Forget (a removal by this app that stopped before the manifest was
-written); for a look that does not project, `Unknown`, and the path is marked for the next job.
-A read that found the file unreadable keeps the state and waits (`FileUnreadable`).
+A read that found no file (R1 first), or a file it cannot read:
+
+| # | State | Condition | Next state | Action |
+|---|---|---|---|---|
+| R15 | any | no file; a projection whose values could not all be read | `Unknown` | Wait: the file the project holds comes back, never with a value shown as absent |
+| R16 | any | no file; a projection | `Unknown` | Rebuild ("TIT.usfm was missing and was rebuilt" when the ledger knew the path: a deletion is never an edit, I11; a hold ends) |
+| R17 | any | no file; the projection has no file there | `Unknown` | Forget (a removal by this app that stopped before the manifest was written) |
+| R18 | any | no file; a look that does not project | `Unknown` | Rebuild: the path is marked for the next job |
+| R19 | any | the file is there and cannot be read (another program holds it) | same | Wait (`FileUnreadable`) |
+
+`ledger::hits` counts the rows and events taken in a process; the nightly model-based test
+(§16.1) asserts that it took every one but R1, R7, R17 and Removed, which named tests take.
 
 The other events:
 
@@ -2698,9 +2705,18 @@ entry and its rename, instead of the app guessing. A group that stops with an er
 still running, knows which renames it never tried or that left their target unchanged, and
 records WriteFailed for them, so that conflict follows only a crash.
 
+A pending file another program holds at the open leaves the fold without the saves it holds:
+a book file that shows them is kept as someone's work by R4 (a copy, a recorded edit, at worst
+a conflict), and the saves come back with the file at the next open.
+
 `metadata.json` follows the same table with one difference: it must list the files as they are
 (I7), so after a Record or a Hold it is written over at once; the copy and the recorded fields
-keep the person's bytes (§11.1, `MetadataEditedOutside`). A fixed file (`project.json`,
+keep the person's bytes (§11.1, `MetadataEditedOutside`). Bytes about to be written over are
+decided even when clean by stat: the table is asked about the md5 the ledger placed, and the
+file is read only when the table keeps them. When a file the group cannot read or write leaves no valid listing (the only book file
+held by another program, with no ledger entry or with no file to list), nothing is written and
+the paths wait for the file (`MaterializeBlocked`): never a failed write that turns the project
+read-only. A fixed file (`project.json`,
 `format.json`) shows no record (holds is true), and its Record restores it after a copy (§3.5).
 A carried file shows no record either; its edits are recorded by §11.4.
 
@@ -4746,6 +4762,11 @@ and the on-disk end state, not only what the fold returns.
 | L115 | Bytes recorded once (a save the fold still held was skipped by its digest), then the journal loses that save and the next look records the same bytes again: a batch that reconciles the same path and md5 makes the second recording write nothing, and the file is written over without the save | only the records the earlier batch changed are left out of the second recording (§11.1 X4) | `random_histories_lose_no_work_long` |
 | L116 | A process killed after a rename and before its directory flush; the next open takes the new bytes as placed and writes nothing, so the rename stays in the page cache; the journal line of a save the file shows is cut, and a power cut puts the bytes before the rename back: the save is gone | a read that settles `Writing` on its new bytes flushes the file and its directory before the ledger names them placed (§6.2, §6.4 M7) | `random_histories_lose_no_work_long` |
 | L117 | A process killed right after the rename of a book file or `metadata.json`, then a backup tool (`cp -p`, `rsync -a`, Time Machine, File History) puts the earlier version back with its size and mtime while the app is closed: the stat matched the ledger's old placement, so the open took the restore for a rename that never happened and wrote over it | the bytes a write under way replaced are never the app's own, whatever their stat: R9 keeps them (an extra conflict after a crash, owner 2026-10-19); a group that stops with the app still running records WriteFailed for the renames it never tried, so that conflict follows only a crash (§6.2) | `a_restore_of_the_book_file_with_its_old_time_after_a_kill_past_its_rename_is_kept`, `a_restore_of_metadata_json_with_its_old_time_after_a_kill_past_its_rename_is_kept` (`tests/store/model.rs`) |
+| L118 | `metadata.json` showing a project detail whose pending line was cut while the app ran, then a crash: at the next open the file was clean by stat (settled), so M1 took its stat for the bytes placed, never asked the table, and the job wrote it over without the detail | bytes about to be written over are decided even when clean by stat, and read when the table keeps them (§6.2, R4) | `a_settled_metadata_json_holding_a_lost_name_is_recorded_before_it_is_written_over` (`tests/store/model.rs`) |
+| L119 | The only book file held by another program at an open that finds no ledger entry for it (`.tc/` lost), or its path held where a rebuild must go: `metadata.json` could list no book, the build failed as a bug, and the project turned read-only, refusing every save | a listing a blocked file leaves invalid writes nothing and waits for the file (§6.2) | `a_held_book_file_with_its_manifest_lost_leaves_the_project_writable`, `a_deleted_book_file_whose_path_is_held_leaves_the_project_writable` |
+| L120 | A pending file damaged while the app was closed and held by a scanner that lets it be read: the open could not move it to quarantine, failed the write, and turned the project read-only | a file another program holds stays where it is for the next open, as the seal leaves one, and is never taken for a second writer's (§6.1 O2, §5.11 K4) | `a_damaged_pending_file_a_scanner_holds_leaves_the_project_writable` (`tests/store/model.rs`) |
+| L121 | A seal of a new device killed after it made the device's pack folder and before it flushed the folder's entry; a later session's seal made the month folder inside it, flushed only the month folder's entry, wrote the pack, removed the pending files, and a power cut took the device folder with the pack: four saves gone | `secure_dir_chain` flushes the entry of every directory on the way that the session did not make, past the ones it just made (§6.1, "A directory found existing is not trusted") | `a_pack_in_a_folder_a_killed_seal_made_survives_a_power_cut` (`tests/store/model.rs`) |
+| L122 | A held book file with no ledger entry, or its path held where a rebuild must go, in a job whose files of no book are a group of their own: that group found the listing invalid and failed as a bug, turning the project read-only (L119's fix counted only its own group's blocked paths) | any path the job could not read or write excuses an invalid listing (§6.2) | `a_held_edited_book_file_with_its_manifest_lost_leaves_the_project_writable` |
 
 ---
 
@@ -4801,7 +4822,7 @@ and are covered by the projection tests.
 | `a_changed_byte_in_the_corpus_opens_as_without_the_cache` | a fold cache of the operation-count corpus, then any byte of any of its files changed (the deterministic tests beside it: every byte and every length of every file of a small project, a file replaced by one of the same size, files added, removed, renamed and grown, a consolidation, a damaged, truncated, foreign, older or newer cache) | the open with the cache gives the full fold output (heads, conflicts, anomalies, Detached, every derived file) and the per-file reports of the open without it; the changed file is read | a section stands for bytes other than those it was made from, or hides a damaged file |
 | `sidecar_decode_render` | random decisions and alignments | decoding a rendered sidecar gives the same records | an outside-edit decode would invent a change |
 | `every_written_state_is_a_valid_burrito` | every state any test writes (§16.6) | `tc_burrito::check` passes | a writer skips the check or lists a wrong md5 |
-| `random_histories_lose_no_work` (`tc-store/tests/store/model.rs`; 200 histories of up to 12 steps in `cargo test`, `random_histories_lose_no_work_long` with 5,000 of up to 24 nightly) | a reference model of a Titus project run against the real store on a `FaultFs`: saves of a verse, of a section (one batch of two changes) and of the project's name; leaves and checkpoints, each killable before any write point, with or without a power cut, or right after the rename of a file; outside edits and reverts of the book file and of `metadata.json`, told to the watcher or not, while open and while closed; files another program holds; pending files and packs cut at a line or inside one, in place while open or while closed; restarts; the window's focus; the clock | after every step and every open: every save is a readable version in History, or waits in a batch that lost a member no file in the folder showed when the open read the journal; every put is in the folder, is what the project writes there, or is copied to `.tc/external/`; unless damage took every copy (a save of the running session counts as held until its next seal) | the ledger lets bytes be written over that are the only record of a person's work |
+| `random_histories_lose_no_work` (`tc-store/tests/store/model.rs`; the named histories the reviews found, then 200 histories of up to 7 chunks in `cargo test` (about 20 s); `random_histories_lose_no_work_long` with 5,000 of up to 15 chunks nightly, which must take every row of the ledger's table but R1, R7, R17 and Removed) | a reference model of a Titus project run against the real store on a `FaultFs`: saves of a verse, of a section (one batch of two changes) and of the project's name; leaves, checkpoints and closes, each killable before any of their first 80 write points, with or without a power cut, torn or not, or right after the rename of a file; outside edits and reverts of the book file and of `metadata.json`, told to the watcher or not, reverts that keep the old mtime, same-size same-mtime damage, deletions and touches, while open and while closed; pending files and packs cut at a line or inside one, changed in a byte or deleted, in place while open or while closed; files and pending files another program holds; a lost manifest or heads files; *Take in* and *Restore* on a held file; restarts; the window's focus; the clock. The generator favours a crash followed by damage while closed, a kill after a rename followed by a revert, and a file held around an open | after every step and every open: every save is a readable version in History, or waits in a batch that lost a member no file in the folder showed when the open read the journal; every put is in the folder, is what the project writes there (a `metadata.json` put is retired once it lists the folder as it is), or is copied to `.tc/external/`; unless damage took every copy (a save of the running session counts as held until its next seal). With no outside step, no outside-edit notice and no copy in `.tc/external/` but of the bytes a crash left where a write was under way (R9). Saves succeed unless the process died, or an outside step or a held pending file explains a refusal by a rule; checkpoints too, and skip only for no changes, or for a seal or pack an outside step or a held file stops | the ledger lets bytes be written over that are the only record of a person's work; the app keeps its own bytes twice or turns the project read-only by mistake |
 | `every_pair_of_the_table_keeps_every_byte` (`tc-store/src/ledger.rs`) | every state × event × facts of the transition table (§6.2) | a write or removal only of bytes the ledger names as the app's whose changes the fold holds and can read, or of the projection; bytes the ledger never named are recorded or held; a hold is written over only when restored | a row drops bytes |
 
 ### 16.2 Crash injection (P4)
@@ -5030,6 +5051,10 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the heads of an outside edit's base cut to those the fold holds (compare with a digest of a version the journal lost) | `a_book_file_holding_a_save_its_pending_file_lost_in_place_is_recorded_at_the_next_open`, `a_book_file_holding_a_save_whose_pending_file_was_deleted_before_a_crash_is_recorded` |
 | R9 for a `Writing` state's old bytes (take `d = old` as the app's own when its size and mtime are the ones the ledger kept) | `a_restore_of_the_book_file_with_its_old_time_after_a_kill_past_its_rename_is_kept`, `a_restore_of_metadata_json_with_its_old_time_after_a_kill_past_its_rename_is_kept`, `a_revert_made_while_the_app_is_closed_after_a_crash_past_the_rename_is_recorded`, `a_revert_the_open_could_not_read_is_recorded_by_the_first_compare_and_swap`, `a_revert_to_an_earlier_write_of_two_stopped_ones_is_kept`, `a_revert_of_metadata_json_after_a_kill_past_its_rename_is_kept` |
 | WriteFailed for the renames a group that stopped with an error never tried or left unchanged (keep `Writing`) | `a_focus_after_a_group_stopped_does_not_take_its_bytes_for_an_outside_edit`, `an_outside_revert_after_a_stopped_group_is_recorded_as_a_conflict` |
+| M1 deciding `metadata.json` bytes about to be written over when clean by stat (trust the stat) | `a_settled_metadata_json_holding_a_lost_name_is_recorded_before_it_is_written_over` |
+| a listing a blocked file leaves invalid treated as blocked (fail the group) | `a_held_book_file_with_its_manifest_lost_leaves_the_project_writable`, `a_held_edited_book_file_with_its_manifest_lost_leaves_the_project_writable`, `a_deleted_book_file_whose_path_is_held_leaves_the_project_writable` |
+| the open leaving a held damaged pending file for the next open (fail the open's write) | `a_damaged_pending_file_a_scanner_holds_leaves_the_project_writable` |
+| `secure_dir_chain` walking past the directories just made (stop at the first one) | `a_pack_in_a_folder_a_killed_seal_made_survives_a_power_cut` |
 | `holds` asking for applied and readable changes (ask only whether the fold's index holds them) | `a_batch_cut_at_a_line_while_closed_is_kept_from_the_book_file`, `a_salvaged_change_whose_batch_lost_a_member_is_kept_from_the_book_file`, `a_book_file_whose_heads_were_put_back_is_recorded_not_written_over` |
 | R6, a rendering that read an unreadable value (write it) | `a_head_whose_value_can_no_longer_be_read_is_never_written_as_absent` |
 | the journal files a session left because another program held them (list them as unknown: a second writer) | `a_pending_file_the_seal_could_not_remove_is_no_second_writer`, `a_pending_file_the_open_could_not_remove_is_no_second_writer` |

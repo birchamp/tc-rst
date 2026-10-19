@@ -87,7 +87,8 @@ impl Writer {
         actions
     }
 
-    /// An event that needs no facts (a write's steps, a stat, a recording).
+    /// An event that needs no facts (a write's steps, a stat, a recording, a file that cannot
+    /// be read).
     pub(crate) fn note(&mut self, rel: &str, event: Event) {
         let facts = Facts::look(None, false);
         let _ = self.apply(rel, event, &facts);

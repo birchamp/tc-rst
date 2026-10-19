@@ -327,6 +327,8 @@ impl Writer {
                 return;
             }
         };
+        // The table's TakeIn: the held bytes are recorded with no base.
+        self.note(rel, crate::ledger::Event::TakeIn);
         let sent = self.found_outside_answering(rel, &bytes, reply);
         if let Err(e) = sent {
             self.job_failed(&e);

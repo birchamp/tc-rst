@@ -715,6 +715,8 @@ impl Writer {
             let stat = self.vfs.metadata(&self.folder.path(&path)).ok();
             let disk = match self.read_disk(&path) {
                 Disk::Unreadable => {
+                    // R19: the state stays, and the path waits.
+                    self.note(&path, Event::Read(ledger::Disk::Unreadable));
                     self.reasons.insert(path.clone(), Blocked::FileUnreadable);
                     report.blocked.push(path);
                     continue;
@@ -765,6 +767,8 @@ impl Writer {
             }
             let disk = match self.read_disk(&path) {
                 Disk::Unreadable => {
+                    // R19: the state stays, and the path waits.
+                    self.note(&path, Event::Read(ledger::Disk::Unreadable));
                     self.reasons.insert(path.clone(), Blocked::FileUnreadable);
                     report.blocked.push(path);
                     continue;
@@ -804,6 +808,15 @@ impl Writer {
             Ok(metadata) => metadata,
             Err(_) if self.kind == ProjectKind::Bible && self.fold.projected_books().is_empty() => {
                 // The paths stay dirty until a book is there.
+                self.restore_group(group);
+                self.dirty.metadata = true;
+                return Ok(());
+            }
+            // A file this job cannot read or write leaves no valid listing (the only book
+            // file held by another program, `.tc/` lost): nothing is written, and the paths
+            // are tried again with the file, never taken for a failed write that makes the
+            // project read-only.
+            Err(_) if !self.reasons.is_empty() => {
                 self.restore_group(group);
                 self.dirty.metadata = true;
                 return Ok(());
@@ -968,7 +981,18 @@ impl Writer {
                 .iter()
                 .map(|(p, _, m, s, n, _)| (p.clone(), (*m, *s, *n)))
                 .collect();
-            let metadata = self.build_metadata(&planned, &departing)?;
+            let metadata = match self.build_metadata(&planned, &departing) {
+                Ok(metadata) => metadata,
+                // The files the group could not write leave no valid listing (a book file
+                // another program holds where none is): `metadata.json` stays as it is, and
+                // the job tries again with them.
+                Err(_) => {
+                    self.note(METADATA, Event::WriteFailed);
+                    self.unattempted.remove(METADATA);
+                    self.dirty.metadata = true;
+                    return self.finish_entries(written, converged, unread, None);
+                }
+            };
             let md5 = self.hash(&metadata);
             self.write_metadata_heads(&md5, SyncDir::Now)?;
             self.note(METADATA, Event::WriteBegun { new: md5.clone() });
@@ -1022,6 +1046,9 @@ impl Writer {
     /// its bytes as read.
     fn look_at_metadata(&mut self, new: &str) -> Result<MetadataSeen, StoreError> {
         let meta = self.vfs.metadata(&self.folder.path(METADATA)).ok();
+        // Clean by stat: the bytes are the ones placed. They are decided before they are
+        // written over, without a read unless the table keeps them: they may hold a save the
+        // journal lost (R4).
         if self.clean_by_stat(METADATA) {
             let placed = self
                 .manifest
@@ -1029,7 +1056,21 @@ impl Writer {
                 .get(METADATA)
                 .and_then(Entry::md5)
                 .map(str::to_owned);
-            return Ok((meta, placed));
+            let Some(md5) = placed.clone() else {
+                return Ok((meta, placed));
+            };
+            if md5 == new {
+                return Ok((meta, placed));
+            }
+            let disk = ledger::Disk::Bytes { md5 };
+            let projection = Projection::Bytes {
+                md5: new.to_owned(),
+            };
+            let facts = self.facts_of(METADATA, &disk, projection, true);
+            let (_, actions) = ledger::next(&self.state_of(METADATA), &Event::Read(disk), &facts);
+            if actions == [Action::Write] {
+                return Ok((meta, placed));
+            }
         }
         let disk = match self.read_disk(METADATA) {
             Disk::Bytes(disk) => disk,
