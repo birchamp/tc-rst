@@ -6,15 +6,17 @@
 
 mod common;
 
-use common::{fixture, resource};
+use std::collections::{BTreeSet, HashMap};
+
+use common::{fixture, repo_text, resource};
 use proptest::prelude::*;
 use tc_core::BookId;
 use tc_helps::highlight::{
     AlignedVerse, MatchQuality, SourceWord, TokenKind, gateway_quote, highlight_plain,
-    highlight_quote, tokenize_plain,
+    highlight_quote, normalize_word, tokenize_plain,
 };
-use tc_helps::tsv::{TsvScope, parse_notes};
-use tc_helps::{BibleLocus, Error, HelpRef, Occurrence, Quote};
+use tc_helps::tsv::{TsvScope, parse_notes, parse_word_links};
+use tc_helps::{BibleLocus, Error, HelpItemId, HelpRef, Note, Occurrence, Quote};
 
 fn attr<'a>(attrs: &'a str, name: &str) -> &'a str {
     let key = format!("{name}=\"");
@@ -77,6 +79,30 @@ fn ult(chapter: u16, verse: u16) -> AlignedVerse {
     let marker = format!("\\v {verse} ");
     let text = &body[body.find(&marker).unwrap() + marker.len()..];
     aligned(&text[..text.find("\\v ").unwrap_or(text.len())])
+}
+
+/// The verses of a USFM book by chapter and verse, each as [`ult`] cuts one: the text after
+/// `\\v N ` up to the next `\\v` or `\\c`.
+fn verse_bodies(usfm: &str) -> HashMap<(u16, u16), &str> {
+    let mut out = HashMap::new();
+    for chapter in usfm.split("\\c ").skip(1) {
+        let Some(c) = chapter
+            .split_whitespace()
+            .next()
+            .and_then(|n| n.parse().ok())
+        else {
+            continue;
+        };
+        for verse in chapter.split("\\v ").skip(1) {
+            let Some((n, body)) = verse.split_once(char::is_whitespace) else {
+                continue;
+            };
+            if let Ok(v) = n.parse() {
+                out.insert((c, v), body);
+            }
+        }
+    }
+    out
 }
 
 fn lit(verse: &AlignedVerse, quote: &str, occurrence: u32) -> Vec<String> {
@@ -372,6 +398,143 @@ fn every_jonah_note_quote_finds_its_words_in_the_uhb_verse() {
     assert_eq!(tally, want);
 }
 
+/// The single verse a help row is on, or `None` for any other place.
+fn single_verse(reference: &HelpRef) -> Option<(u16, u16)> {
+    let HelpRef::Bible(r) = reference else {
+        return None;
+    };
+    let BibleLocus::Verses(list) = &r.locus else {
+        return None;
+    };
+    let [range] = list.ranges() else {
+        return None;
+    };
+    (range.start() == range.end()).then_some((range.start().chapter, range.start().verse))
+}
+
+/// One verse of a USFM fixture.
+fn fixture_verse(path: &str, chapter: u16, verse: u16) -> AlignedVerse {
+    let usfm = fixture(path);
+    aligned(verse_bodies(&usfm)[&(chapter, verse)])
+}
+
+/// The notes of a book in en_tn v91, as the bundled export holds them.
+fn v91_notes(book: BookId) -> Vec<Note> {
+    let entry = format!(
+        "bundle/en/en_tn_v91.sb.zip:en_tn/ingredients/{}.tsv",
+        book.code()
+    );
+    parse_notes(&repo_text(&entry), TsvScope::Book(book))
+        .unwrap()
+        .notes
+}
+
+fn row<'a, T>(rows: &'a [T], id: &str, id_of: impl Fn(&T) -> &HelpItemId) -> &'a T {
+    rows.iter()
+        .find(|r| id_of(r).upstream_row_id().is_some_and(|r| r.as_str() == id))
+        .unwrap_or_else(|| panic!("no row {id}"))
+}
+
+#[test]
+fn a_reordered_quote_lights_only_its_own_phrase() {
+    // tC4 9ad4d5c's #773 vectors (test/sourceHighlight.test.ts): real en_tn v91 rows against
+    // its extract of en_ult v91 Genesis. The quotes are read from the table, so no Hebrew is
+    // retyped; tC4's test passes occurrence 1, as each row says.
+    let notes = v91_notes(BookId::Genesis);
+    let cases = [
+        // The shortest run, not every group that names a quote word: GEN 33:5 repeats אֶת
+        // ("his eyes … the women … whom God …" before the fix).
+        (
+            "mix3",
+            (33, 5),
+            "whom God has graciously given to your servant",
+        ),
+        ("gyfv", (24, 48), "the daughter of my master s brother"),
+        (
+            "r2u9",
+            (9, 11),
+            "that never again will all flesh be cut off",
+        ),
+        // A word the quote names twice (בֶּן) is needed twice.
+        ("zczu", (11, 31), "and Lot Haran s son his son s son"),
+        // The run is measured over every group its instances are rendered by: תָּבֹא is
+        // "Do … let … enter", so a run from "enter" to the second אַל only looks short.
+        ("h9hm", (49, 6), "Do not let … enter into their council"),
+    ];
+    let mut wrong = Vec::new();
+    for (id, (chapter, verse), want) in cases {
+        let note = row(&notes, id, |n| &n.id);
+        assert_eq!(
+            single_verse(&note.reference),
+            Some((chapter, verse)),
+            "{id}"
+        );
+        assert_eq!(note.occurrence, Occurrence::nth(1).unwrap(), "{id}");
+        let v = fixture_verse("tc4/test-fixtures/en_ult/GEN-773.usfm", chapter, verse);
+        let got = gateway_quote(&v, &note.quote, note.occurrence);
+        if got.as_deref() != Some(want) {
+            wrong.push(format!("{id} {chapter}:{verse}: {got:?}, tC4 {want:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+
+    // mix3 took the fallback: the verse holds אֶת more often than the quote does.
+    let mix3 = row(&notes, "mix3", |n| &n.id);
+    let v = fixture_verse("tc4/test-fixtures/en_ult/GEN-773.usfm", 33, 5);
+    let h = highlight_quote(&v, &mix3.quote, mix3.occurrence);
+    assert_eq!(h.quality, MatchQuality::Approximate);
+
+    // The strict match still runs first: en_tn TIT 2:2's τῇ ἀγάπῃ is "in love", whose
+    // anchor is the second τῇ (the tightest candidate of its class), never "in faith".
+    assert_eq!(
+        gateway_quote(
+            &ult(2, 2),
+            &Quote::new("τῇ ἀγάπῃ"),
+            Occurrence::nth(1).unwrap()
+        )
+        .as_deref(),
+        Some("in love")
+    );
+}
+
+#[test]
+fn genesis_maqaf_quotes_title_in_the_ult() {
+    // tC4 9ad4d5c's #765 vectors: real en_tn and en_twl v91 rows against en_ult v91 Genesis 1.
+    let notes = v91_notes(BookId::Genesis);
+    let links = parse_word_links(
+        &repo_text("bundle/en/en_twl_v91.sb.zip:en_twl/ingredients/GEN.tsv"),
+        TsvScope::Book(BookId::Genesis),
+    )
+    .unwrap();
+    let title = |verse: u16, quote: &Quote| {
+        let v = fixture_verse("tc4/test-fixtures/en_ult/GEN-1.usfm", 1, verse);
+        gateway_quote(&v, quote, Occurrence::nth(1).unwrap())
+    };
+    let note = |id: &str, verse: u16| {
+        let n = row(&notes, id, |n| &n.id);
+        assert_eq!(single_verse(&n.reference), Some((1, verse)), "{id}");
+        &n.quote
+    };
+    let vzz2 = row(&links, "vzz2", |l| &l.id);
+    assert_eq!(single_verse(&vzz2.reference), Some((1, 28)));
+    let maqaf = [
+        (
+            note("xxe6", 5),
+            5,
+            "Then there was evening and there was morning",
+        ),
+        (note("xfx7", 7), 7, "And it was so"),
+        (&vzz2.orig_words, 28, "the earth"),
+    ];
+    for (quote, verse, want) in maqaf {
+        assert!(quote.as_str().contains('\u{05BE}'), "{quote}");
+        assert_eq!(title(verse, quote).as_deref(), Some(want), "{quote}");
+    }
+    // Quotes without a maqaf stay as they were.
+    assert_eq!(title(5, note("c9yz", 5)).as_deref(), Some("And God called"));
+    assert_eq!(title(5, note("xmx5", 5)).as_deref(), Some("one day"));
+}
+
 // Story 1 of en_obs v9, quoted as tC4's test quotes it, with the en_obs-tn v13 quotes.
 const OBS_1_1: &str = "This is how God made everything in the beginning. He created the universe and everything in it in six days. After God created the earth it was dark and empty because he had not yet formed anything in it. But God’s Spirit was there over the water.";
 const OBS_1_2: &str = "Then God said, “Let there be light!” And there was light. God saw that the light was good and called it “day.”";
@@ -434,6 +597,58 @@ proptest! {
         prop_assert_eq!(h.tokens.is_empty(), h.quality == MatchQuality::None);
         let gl = gateway_quote(&verse, &Quote::new(quote), occurrence);
         prop_assert_eq!(gl.is_none(), h.tokens.is_empty());
+    }
+
+    #[test]
+    fn a_highlight_lights_only_quote_words_and_each_one_the_verse_renders(
+        words in prop::collection::vec(("[a-c]{1,2}", prop::option::of(0usize..6)), 0..30),
+        groups in prop::collection::vec(prop::collection::vec(("[a-c]{1,2}", 1u32..3), 1..3), 6),
+        quote in "[a-c &…,]{0,12}",
+        occurrence in prop_oneof![
+            Just(Occurrence::NotTied), Just(Occurrence::All), Just(Occurrence::Unrecorded),
+            (1u32..4).prop_map(|n| Occurrence::nth(n).unwrap())
+        ],
+    ) {
+        let mut verse = AlignedVerse::new();
+        let ids: Vec<_> = groups
+            .iter()
+            .map(|g| verse.add_alignment(g.iter().map(|(c, o)| SourceWord::new(c.clone(), *o)).collect()))
+            .collect();
+        for (text, group) in &words {
+            verse.push_word(text.clone(), group.map(|g| ids[g])).unwrap();
+            verse.push_text(" ");
+        }
+        // The quote's words as highlight_quote reads them.
+        let qw: BTreeSet<String> = quote
+            .split(|c: char| c.is_whitespace() || c == '\u{05BE}')
+            .filter(|w| *w != "&" && *w != "…")
+            .map(normalize_word)
+            .filter(|w| !w.is_empty())
+            .collect();
+        let held = |i: usize| -> BTreeSet<String> {
+            match verse.tokens()[i].kind {
+                TokenKind::Word(Some(id)) => verse
+                    .sources(id)
+                    .unwrap()
+                    .iter()
+                    .map(|s| normalize_word(&s.content))
+                    .collect(),
+                _ => BTreeSet::new(),
+            }
+        };
+        let h = highlight_quote(&verse, &Quote::new(quote.clone()), occurrence);
+        // Nothing invented: every lit word renders a quote word.
+        for &i in &h.tokens {
+            prop_assert!(!held(i).is_disjoint(&qw), "token {i} lit for {quote:?}");
+        }
+        // Nothing lost: unless a one-word quote resolved through its own occurrence number,
+        // every quote word the verse renders is lit (the shortest run included).
+        if !matches!(h.quality, MatchQuality::None | MatchQuality::WordOccurrence) {
+            let lit: BTreeSet<String> = h.tokens.iter().flat_map(|&i| held(i)).collect();
+            let rendered: BTreeSet<String> =
+                (0..verse.tokens().len()).flat_map(held).filter(|w| qw.contains(w)).collect();
+            prop_assert!(rendered.is_subset(&lit), "{quote:?}: {rendered:?} not all in {lit:?}");
+        }
     }
 
     #[test]
