@@ -9,7 +9,9 @@ mod common;
 
 use common::repo;
 use std::sync::{Arc, Mutex, PoisonError};
-use tc_door43::{Door43Client, Door43Error, InternetSwitch, Limits, ProxyFinder, UnreachableCause};
+use tc_door43::{
+    Door43Client, Door43Error, InternetSwitch, Limits, ProxyAnswer, ProxyFinder, UnreachableCause,
+};
 use tc_door43_fake::{FakeDoor43, FakeProxy};
 use url::Url;
 
@@ -36,12 +38,12 @@ impl Always {
 }
 
 impl ProxyFinder for Always {
-    fn proxy_for(&self, origin: &Url) -> Option<Url> {
+    fn proxy_for(&self, origin: &Url) -> Option<ProxyAnswer> {
         self.asked
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .push(origin.as_str().to_owned());
-        Some(self.proxy.clone())
+        Some(ProxyAnswer::Through(self.proxy.clone()))
     }
 }
 
@@ -137,7 +139,7 @@ async fn a_server_on_this_computer_never_sees_a_proxy() {
 struct Nothing;
 
 impl ProxyFinder for Nothing {
-    fn proxy_for(&self, _: &Url) -> Option<Url> {
+    fn proxy_for(&self, _: &Url) -> Option<ProxyAnswer> {
         None
     }
 }

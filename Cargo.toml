@@ -50,6 +50,11 @@ http-body = "1.1.0"
 # proxy settings with its matcher, as reqwest's own system proxy does.
 hyper-util = { version = "0.1.21", default-features = false }
 percent-encoding = "2.3.2"
+# Windows only (tc-door43's WinHTTP proxy lookup). Pinned: before any upgrade, read the diff of
+# src/pac/winhttp.rs, src/sys/win/ and build.rs, and check that the version's crates.io
+# trusted-publishing commit is on its main branch with CI green. Its MIT licence is the one
+# taken; its notice ships with the app.
+proxy-watch = { version = "=0.3.1", default-features = false }
 subtle = "2.6.1"
 md-5 = "0.11.0"
 rayon = "1.12.0"

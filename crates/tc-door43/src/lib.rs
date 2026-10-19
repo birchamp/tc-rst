@@ -53,13 +53,17 @@ mod repos;
 mod secret;
 mod unpack;
 pub mod verify;
+#[cfg(windows)]
+mod winproxy;
 
 pub use catalog::{CatalogEntry, CatalogQuery, CatalogRef, Ingredient, Stage};
 pub use client::{Door43Client, Limits};
 pub use download::{DownloadTo, DownloadWatch, DownloadedZip, Unwatched};
 pub use error::{AuthStatus, Door43Error, UnreachableCause, VerificationError};
 pub use git_tree::ObjectId;
-pub use http::{Http, HttpSpec, ProxyFinder, system_proxy_finder};
+pub use http::{Http, HttpSpec, ProxyAnswer, ProxyFinder, system_proxy_finder};
+#[cfg(windows)]
+pub use winproxy::WinHttpFinder;
 pub use internet::{InternetSwitch, Offline};
 pub use listing::{Listing, Skipped};
 pub use names::{
