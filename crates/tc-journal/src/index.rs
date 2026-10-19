@@ -781,7 +781,7 @@ fn read_pending_header(input: &mut In<'_>) -> R<PendingHeader> {
     let reconciles = match input.u8()? {
         0 => None,
         1 => Some(Reconciles {
-            path: RepoPath::parse(input.str()?)
+            path: RepoPath::parse_source(input.str()?)
                 .map_err(|_| IndexError::Malformed("a reconciled path"))?,
             seen_md5: Md5::from_bytes(input.array()?),
         }),

@@ -122,6 +122,12 @@ impl Writer {
                 sealed: sealed.packs,
                 ..CheckpointReport::default()
             };
+            if !sealed.unsealed.is_empty() {
+                // The snapshot shows changes of a file the seal could not take, and no pack
+                // holds them (C3).
+                report.skipped = Some(CheckpointSkip::SealFailed);
+                return Ok((report, None));
+            }
             match self.commit_stage(&Subject::Checkpoint(reason), device)? {
                 Outcome::Skip(why) => {
                     report.skipped = Some(why);

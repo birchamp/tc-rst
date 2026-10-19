@@ -2076,6 +2076,16 @@ impl<'a> HeaderReader<'a> {
     pub(crate) fn req<T: Wire>(&mut self, key: &'static str) -> Result<T, String> {
         self.0.req(key).map_err(|e| e.into_violation().to_string())
     }
+
+    /// A path as the file of an outside edit: any [`RepoPath`], or `metadata.json`
+    /// ([`RepoPath::parse_source`]).
+    pub(crate) fn req_source_path(&mut self, key: &'static str) -> Result<RepoPath, String> {
+        self.0
+            .req_with(key, |j| {
+                RepoPath::parse_source(string(j)?).map_err(DecodeError::identity)
+            })
+            .map_err(|e| e.into_violation().to_string())
+    }
 }
 
 /// Builds header objects.

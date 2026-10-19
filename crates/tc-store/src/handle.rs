@@ -581,7 +581,8 @@ pub enum CheckpointSkip {
     SecondWriter,
     /// The session has no repository (libgit2 refuses the folder, or it cannot be made).
     NoHistory,
-    /// The seal failed: the tree's files would show changes its packs lack.
+    /// The seal failed, or left a pending file it could not read or verify: the tree's files
+    /// would show changes its packs lack.
     SealFailed,
     /// An expected pack is missing or unreadable: a commit without it would remove it from
     /// Door43 (§4.4).

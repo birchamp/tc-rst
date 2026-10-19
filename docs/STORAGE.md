@@ -1238,7 +1238,10 @@ order from the names; the fold is order-independent. Content:
 
 `purpose` is `save`, `intake` (changes recorded by an intake, such as ingested Door43 edits) or
 `salvage` (changes recovered from a damaged pack, §4.4). An outside-edit batch adds
-`"reconciles":{"path":…,"seenMd5":…}` so that recording the same file twice is a no-op (§11.1).
+`"reconciles":{"path":…,"seenMd5":…}` so that recording the same file twice is a no-op (§11.1);
+`path` is the file the edit came from, read as the path of an `External` cause is: an ingredient
+path, or `metadata.json`. A header that read `metadata.json` as a path no ingredient may have
+would make the app's own file fail to verify when it is read again, and the seal could not take it.
 One file holds whole batches only: a section save that creates a span is one file. `device` is a
 Local device. `pending` is the framing version, 1: a file whose verified header declares a larger
 one is from a newer format and is kept, not read, never quarantined or removed. Readers ignore
@@ -2101,7 +2104,12 @@ meanwhile is a pending file that K1 did not read, so K4 leaves it. Each one:
 K1  L = every verified change line of every pending file, deduplicated by id, sorted by
     (device, seq, id); split at line boundaries into chunks of at most 64 MiB. A line too long
     for a pack even alone with its header is set aside: only a change V7 quarantines can be
-    that long (a salvaged line, §4.4), and it must never stop the seal of every other line.
+    that long (a salvaged line, §4.4), and it must never stop the seal of every other line. A
+    pending file the fold holds the changes of that K1 cannot take (a program holds it open and
+    the read fails, or its lines no longer verify) is left where it is, never removed, and
+    listed in the seal's report as unsealed; the person is told once (`FileUnreadable`, which
+    goes when a later seal takes the file). A file of a newer format was never read by the
+    fold, so nothing of it is lacking and it is left without a word.
 K2  For each chunk: atomic_create_dirs(ingredients/tc/changes/<me>/<yyyy-mm>);
     atomic_write(<that dir>, "<pack32>.ndjson", header + lines, SyncDir::Now). Each line set
     aside: atomic_write(.tc/quarantine, "<id>.line", line, SyncDir::Now); it is listed with the
@@ -2141,7 +2149,8 @@ C1  On the actor: list the journal folders for a second writer (§5.0), check th
     seal starts, with the dirty marks of that moment. The actor serves saves between the seal's
     steps; each is a pending file the seal never reads, so it is in neither the snapshot nor the
     marks, and it belongs to the next checkpoint and to a materialization of its own (a timer is
-    set). The commit shows the project as its packs hold it.
+    set). The commit shows the project as its packs hold it: a seal that leaves a pending file
+    unsealed (K1) therefore makes no commit (C3).
 C2  On the writer: materialize (§5.10) from that snapshot. The new packs are now listed in
     metadata.json. This closes the write group the seal opened (I7). A path the writer's own
     retry or a look at the folder wrote meanwhile from a newer snapshot (it holds a save served
@@ -2150,7 +2159,9 @@ C2  On the writer: materialize (§5.10) from that snapshot. The new packs are no
     to its projection. `metadata.json` is listed and written from the job's snapshot, so the
     project details of such a newer write show their older values in the folder, never in the
     tree or the journal, until that job (about 3 s).
-C3  On the writer. If the seal failed, stop: the tree's files would show changes its packs lack.
+C3  On the writer. If the seal failed, or finished with a pending file unsealed (K1: the snapshot
+    shows its changes, which no pack holds), stop: the tree's files would show changes its packs
+    lack (`SealFailed`; the next checkpoint reads the file again).
     If an expected pack could be neither restored nor read, stop: no commit, and the notice
     (`MaterializeBlocked`, reason `PackMissing`) names the file ("translationCore can't read a
     file of changes; sync waits until it can"). Otherwise build the commit tree in memory (§9.4)
@@ -4868,6 +4879,9 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | a read of a path whose heads file is held in memory (take a settled entry as unchanged) | `a_file_with_an_unwritten_heads_file_is_not_taken_as_unchanged_when_its_entry_settles` |
 | the heads file of `metadata.json` due after its rename (take the file as current) | `a_retry_after_metadata_json_was_renamed_writes_its_heads_file` |
 | the entry of `metadata.json` naming the bytes M6 wrote (the md5 M2 checked) | `the_manifest_names_the_metadata_json_a_group_that_skipped_a_file_wrote` |
+| the commit after a seal that left a file unsealed (commit the snapshot) | `a_commit_waits_for_a_pending_file_the_seal_could_not_read`, `a_commit_waits_for_a_pending_file_that_no_longer_verifies` |
+| a pending file of a newer format left out of the unsealed (stop the commit for it) | `a_pending_file_of_a_newer_format_does_not_stop_a_commit` |
+| the `reconciles` path of a pending header read as the path of an outside edit's file (as an ingredient's, which `metadata.json` cannot be) | `a_pending_file_that_reconciles_metadata_json_verifies_and_caches_like_any_other` (`tc-journal/tests/index.rs`), `an_outside_edit_of_metadata_json_is_sealed_and_committed_with_its_packs`, `arbitrary_meta_never_blocks_commit` |
 | the heads file kept in memory while it cannot be written (read the one in the folder) | `an_outside_edit_of_the_bytes_a_stopped_group_left_continues_them`, `edits_made_while_the_heads_file_cannot_be_written_make_no_conflict` |
 | the heads file written when an outside edit is durable | `two_saves_from_a_program_that_keeps_the_file_open_are_no_conflict` |
 | the parents of a carried file's edit (the newest head instead of the placed version) | `an_edit_of_a_placed_file_does_not_replace_a_teammates_newer_version` |

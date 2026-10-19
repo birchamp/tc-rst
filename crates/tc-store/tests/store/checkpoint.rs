@@ -5,6 +5,7 @@
 
 use crate::common::*;
 use crate::corpus::{OnDisk, psalms, psalms_x10};
+use sha2::Digest;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -515,6 +516,200 @@ fn a_commit_takes_a_file_waiting_for_an_outside_edit_from_the_snapshot() {
     assert_eq!(
         words(&handle, 1, 2).as_deref(),
         Some("to Titus, edited by a program")
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+    assert_commits_valid(&rig.fs, &folder);
+}
+
+/// The pending files of the project folder, as paths.
+fn pending_files(rig: &Rig, folder: &Path) -> Vec<std::path::PathBuf> {
+    rig.fs
+        .files_under(&folder.join(".tc/pending"))
+        .into_keys()
+        .collect()
+}
+
+/// §5.11 K1, §5.13 C3: a pending file the seal cannot read (a program holds it open) holds a
+/// save the snapshot shows and no pack holds, so the checkpoint makes no commit: a tree that
+/// shows the save would reach teammates with packs that lack it (§11.2 D1 would take it for
+/// a Door43 edit). The person is told; the next checkpoint seals the file and commits.
+#[test]
+fn a_commit_waits_for_a_pending_file_the_seal_could_not_read() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 3, "my true child").unwrap();
+    assert!(checkpoint(&handle).commit.is_some());
+    let repo = repo_of(&rig.fs, &folder);
+    let commits = commits_of(&repo).len();
+    save_verse(&handle, 1, 1, "saved while an antivirus holds the file").unwrap();
+    let pending = pending_files(&rig, &folder);
+    assert_eq!(pending.len(), 1, "{pending:?}");
+    rig.fs.set_unreadable(&pending[0], true);
+    let report = checkpoint(&handle);
+    assert_eq!(report.commit, None);
+    assert_eq!(report.skipped, Some(CheckpointSkip::SealFailed));
+    assert_eq!(commits_of(&repo).len(), commits, "no commit was made");
+    let told: Vec<String> = notices(&handle)
+        .into_iter()
+        .filter_map(|n| match n {
+            Notice::FileUnreadable { path, .. } => Some(path.to_string()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(told.len(), 1, "told once: {told:?}");
+    assert!(pending[0].ends_with(&told[0]), "{told:?} {pending:?}");
+    // Asking again does not tell again.
+    assert_eq!(
+        checkpoint(&handle).skipped,
+        Some(CheckpointSkip::SealFailed)
+    );
+    assert_eq!(
+        notices(&handle)
+            .iter()
+            .filter(|n| matches!(n, Notice::FileUnreadable { .. }))
+            .count(),
+        1
+    );
+    // The program lets go: the next checkpoint seals the file and commits what its packs hold.
+    rig.fs.set_unreadable(&pending[0], false);
+    let report = checkpoint(&handle);
+    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    assert!(
+        String::from_utf8(commit_files(&repo, commit)["ingredients/TIT.usfm"].clone())
+            .unwrap()
+            .contains("saved while an antivirus holds the file")
+    );
+    assert_eq!(
+        tree_differs_from_its_packs(
+            &repo,
+            commit,
+            project_of(&rig.fs, &folder),
+            tc_journal::fold::ProjectKind::Bible
+        ),
+        Vec::<String>::new()
+    );
+    assert!(
+        notices(&handle)
+            .iter()
+            .all(|n| !matches!(n, Notice::FileUnreadable { .. })),
+        "the notice goes when the file is sealed"
+    );
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+    assert_commits_valid(&rig.fs, &folder);
+}
+
+/// A pending file a newer app wrote is kept and not read: the fold holds nothing of it, so
+/// no commit lacks anything for it, and the seal leaves it alone without stopping one.
+#[test]
+fn a_pending_file_of_a_newer_format_does_not_stop_a_commit() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 3, "my true child").unwrap();
+    let pending = pending_files(&rig, &folder).remove(0);
+    // The header of this file with the framing version a newer app writes, hashed again.
+    let text = String::from_utf8(rig.fs.peek(&pending).unwrap()).unwrap();
+    let header = text.lines().next().unwrap().split('\t').next().unwrap();
+    let header = header.replacen("\"pending\":1", "\"pending\":2", 1);
+    let newer = format!(
+        "{header}\t{}\n{{\"a body this app does not read\":true}}\n",
+        sha2::Sha256::digest(header.as_bytes())
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>()
+    );
+    handle.close().unwrap();
+    let kept = folder.join(".tc/pending/from-a-newer-app.batch");
+    rig.fs.put(&kept, newer.as_bytes(), None);
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 1, "saved beside a newer app's file").unwrap();
+    let report = checkpoint(&handle);
+    assert!(report.commit.is_some(), "{report:?}");
+    assert_eq!(
+        rig.fs.peek(&kept),
+        Some(newer.into_bytes()),
+        "kept as it is"
+    );
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
+}
+
+/// A pending file that was valid when the project opened and no longer verifies (its bytes
+/// were changed by something else): the seal cannot take its lines, so no commit shows them.
+#[test]
+fn a_commit_waits_for_a_pending_file_that_no_longer_verifies() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 3, "my true child").unwrap();
+    assert!(checkpoint(&handle).commit.is_some());
+    save_verse(&handle, 1, 1, "saved before the file was damaged").unwrap();
+    let pending = pending_files(&rig, &folder).remove(0);
+    let mut bytes = rig.fs.peek(&pending).unwrap();
+    let last = bytes.len() - 3;
+    bytes[last] ^= 0x20;
+    rig.fs.put_unseen(&pending, &bytes, None);
+    let report = checkpoint(&handle);
+    assert_eq!(report.commit, None);
+    assert_eq!(report.skipped, Some(CheckpointSkip::SealFailed));
+    assert!(
+        notices(&handle)
+            .iter()
+            .any(|n| matches!(n, Notice::FileUnreadable { .. }))
+    );
+    assert_eq!(
+        rig.fs.peek(&pending),
+        Some(bytes),
+        "the file is never removed"
+    );
+    handle.close().unwrap();
+}
+
+/// The batch of an outside edit of `metadata.json` is a pending file whose header names
+/// `metadata.json` as the file it reconciles. The seal reads it back like any other file, so the
+/// checkpoint seals the edit into a pack and commits a tree that its packs account for.
+#[test]
+fn an_outside_edit_of_metadata_json_is_sealed_and_committed_with_its_packs() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let metadata = folder.join("metadata.json");
+    let mut document: serde_json::Value =
+        serde_json::from_slice(&rig.fs.peek(&metadata).unwrap()).unwrap();
+    document["identification"]["name"]["en"] =
+        serde_json::Value::from("Titus, renamed by a text editor");
+    rig.fs
+        .put_unseen(&metadata, document.to_string().as_bytes(), None);
+    handle.focus().wait().unwrap();
+    handle.wait_idle();
+    assert!(
+        notices(&handle)
+            .iter()
+            .any(|n| matches!(n, Notice::OutsideEditRecorded { .. })),
+        "{:?}",
+        notices(&handle)
+    );
+    let report = checkpoint(&handle);
+    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    assert_eq!(report.sealed.len(), 1, "{report:?}");
+    let repo = repo_of(&rig.fs, &folder);
+    let files = commit_files(&repo, commit);
+    let committed: serde_json::Value = serde_json::from_slice(&files["metadata.json"]).unwrap();
+    assert_eq!(
+        committed["identification"]["name"]["en"],
+        "Titus, renamed by a text editor"
+    );
+    assert_eq!(
+        tree_differs_from_its_packs(
+            &repo,
+            commit,
+            project_of(&rig.fs, &folder),
+            tc_journal::fold::ProjectKind::Bible
+        ),
+        Vec::<String>::new()
+    );
+    assert!(
+        pending_files(&rig, &folder).is_empty(),
+        "the batch is sealed"
     );
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);

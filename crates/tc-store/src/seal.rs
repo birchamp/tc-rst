@@ -21,6 +21,7 @@ use crate::project::{PackInfo, Project};
 use crate::vfs::is_not_found;
 use std::collections::BTreeSet;
 use tc_journal::consolidate::{OwnPack, consolidate, consolidation_groups};
+use tc_journal::fold::Notice;
 use tc_journal::index::load_pack;
 use tc_journal::line::encode_line;
 use tc_journal::pack::{EncodedPack, PackPath, PackRead, PackSpec, YearMonth, read_pack, seal};
@@ -38,6 +39,11 @@ pub struct SealReport {
     pub set_aside: Vec<ChangeId>,
     /// The packs a consolidation wrote and the packs they replaced.
     pub consolidated: Vec<(String, Vec<String>)>,
+    /// Pending files the fold holds the changes of that the seal could not take: a program
+    /// holds the file open, or its lines no longer verify. They stay as they are and the
+    /// snapshot shows their changes while no pack holds them, so the checkpoint makes no
+    /// commit (§5.13 C3); the next checkpoint reads them again.
+    pub unsealed: Vec<String>,
 }
 
 /// Pending files one step of the seal's K4 removes (each is an unlink; the folder is flushed
@@ -240,6 +246,7 @@ impl Project {
                 break;
             };
             if self.journal.unreadable.contains(&rel) {
+                self.leave_unsealed(run, &rel, "it cannot be read");
                 continue;
             }
             let abs = self.folder.path(&rel);
@@ -249,12 +256,19 @@ impl Project {
                     self.journal.pending.remove(&rel);
                     continue;
                 }
-                Err(_) => continue,
+                Err(e) => {
+                    self.leave_unsealed(run, &rel, &StoreError::io("read", &abs, e).to_string());
+                    continue;
+                }
             };
             let read = read_pending(&bytes, self.id);
             if read.status != PendingStatus::Valid {
+                self.leave_unsealed(run, &rel, "its lines no longer verify");
                 continue;
             }
+            self.shared.remove_notices_matching(
+                |n| matches!(n, Notice::FileUnreadable { path, .. } if **path == *rel),
+            );
             let ids = read.entries.iter().map(Verified::id).collect();
             run.lines.extend(read.entries);
             run.files.push((rel, bytes, ids));
@@ -265,6 +279,35 @@ impl Project {
             } else {
                 SealPhase::Build
             };
+        }
+    }
+
+    /// K1 could not take `rel`. When the fold holds its changes (it was read, valid, at the
+    /// open or when this session wrote it) the seal is incomplete: the file is reported, the
+    /// person is told once, and the checkpoint makes no commit. A file of a newer format was
+    /// never read, so the fold holds nothing of it and nothing is lacking.
+    fn leave_unsealed(&mut self, run: &mut SealRun, rel: &str, reason: &str) {
+        let folded = self
+            .journal
+            .pending
+            .get(rel)
+            .is_some_and(|p| p.status == PendingStatus::Valid);
+        if !folded {
+            return;
+        }
+        run.report.unsealed.push(rel.to_owned());
+        let told =
+            self.shared.notices().iter().any(
+                |n| matches!(&n.notice, Notice::FileUnreadable { path, .. } if **path == *rel),
+            );
+        if !told {
+            self.notice(
+                Notice::FileUnreadable {
+                    path: rel.into(),
+                    reason: reason.into(),
+                },
+                None,
+            );
         }
     }
 
