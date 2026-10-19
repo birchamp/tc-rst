@@ -9,8 +9,9 @@
 //!
 //! The rules of §6.2 hold: a path whose bytes are none the app wrote is the person's (an
 //! outside edit, recorded as a new version of the file whose parent is the version the app
-//! placed there), a missing file is written again and never read as a removal (I11, L43), and
-//! no file is written over bytes the app did not place (I8).
+//! placed there, which its manifest entry names by blob and which the newest version need not
+//! be), a missing file is written again and never read as a removal (I11, L43), and no file is
+//! written over bytes the app did not place (I8).
 
 use crate::atomic::{HeldRetry, SyncDir, Written, atomic_write_streamed};
 use crate::error::StoreError;
@@ -131,7 +132,13 @@ impl Writer {
         }
         // Bytes the app did not place: an edit of a placed file, or a new one.
         let (record, parents, unknown) = match &placement {
-            Some(p) => (p.record.clone(), vec![p.head], false),
+            Some(p) => {
+                // The edit starts from the version the app placed here, which the fold's
+                // newest head need not be: a teammate's version the folder never showed is
+                // a sibling of the edit, not something it replaces.
+                let (parents, unknown) = self.parents_of_edit(&p.record, entry.as_ref());
+                (p.record.clone(), parents, unknown)
+            }
             None => {
                 let Ok(record) = RepoPath::parse(rel) else {
                     return Ok(());
@@ -144,6 +151,49 @@ impl Writer {
             report.found.push(rel.to_owned());
         }
         Ok(())
+    }
+
+    /// The parents of an edit of the file the app placed at a path whose record is `record`
+    /// (§11.4): the head of the version the entry names, by its blob; when the project holds
+    /// no such version, the rules for a version the project did not place.
+    fn parents_of_edit(&self, record: &RepoPath, entry: Option<&Entry>) -> (Vec<ChangeId>, bool) {
+        match self.placed_version(record, entry) {
+            Some(parents) => (parents, false),
+            None => self.parents_for_new_version(record),
+        }
+    }
+
+    /// The change(s) of `record` whose bytes the entry says the app placed at the path: the
+    /// heads among those with that blob (the token rule of §2.7: equal heads are one version),
+    /// else the newest of them, which a later version replaced.
+    fn placed_version(&self, record: &RepoPath, entry: Option<&Entry>) -> Option<Vec<ChangeId>> {
+        let oid = GitOid::parse(entry?.oid.as_deref()?)?;
+        let key = RecordKey::CarriedFile(record.clone());
+        let same: Vec<ChangeId> = self
+            .fold
+            .history(&key)
+            .into_iter()
+            .filter(|id| {
+                matches!(
+                    self.fold.body(id).map(|b| b.record),
+                    Some(Record::CarriedFile {
+                        value: CarriedValue::Present { oid: held, .. },
+                        ..
+                    }) if held == oid
+                )
+            })
+            .collect();
+        let heads = self.fold.heads(&key);
+        let current: Vec<ChangeId> = same
+            .iter()
+            .copied()
+            .filter(|id| heads.contains(id))
+            .collect();
+        if current.is_empty() {
+            same.last().map(|newest| vec![*newest])
+        } else {
+            Some(current)
+        }
     }
 
     /// The parents of a version of the file at `record` that the project did not place: the

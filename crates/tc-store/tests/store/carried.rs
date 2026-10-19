@@ -245,6 +245,56 @@ fn loss_conflict_copy_edit_kept() {
     handle.close().unwrap();
 }
 
+/// §11.4: an edit of a placed file continues the version the app placed there, not the newest
+/// head of the record. A teammate's version the folder never showed is a sibling of the edit,
+/// so both are kept and listed as a conflict (I4), and neither replaces the other.
+#[test]
+fn an_edit_of_a_placed_file_does_not_replace_a_teammates_newer_version() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let first = b"first recording of the song".to_vec();
+    arrive(&rig, &handle, &folder, SONG, &first);
+    let h1 = handle.snapshot().fold().heads(&song_key());
+    assert_eq!(h1.len(), 1);
+    handle.close().unwrap();
+    let theirs = b"a teammate's longer second recording".to_vec();
+    let oid = store_blob(&rig, &folder, &theirs);
+    let h2 = teammate_version(&rig, &folder, 5, SONG, oid, &theirs, h1.clone());
+    // While the project is closed the person edits the file they were shown.
+    let edited = b"first recording of the song, trimmed".to_vec();
+    rig.fs.put_unseen(&folder.join(SONG), &edited, None);
+    let handle = open(&rig, &folder);
+    let fold = handle.snapshot().fold().clone();
+    let heads = fold.heads(&song_key());
+    assert_eq!(heads.len(), 2, "both versions are heads: {heads:?}");
+    assert!(
+        heads.contains(&h2),
+        "the teammate's version is still a head"
+    );
+    let mine = heads.iter().find(|h| **h != h2).unwrap();
+    assert_eq!(
+        fold.body(mine).unwrap().parents,
+        h1,
+        "the edit continues the version the app placed"
+    );
+    assert_eq!(
+        fold.conflicts_of(ConflictKind::CarriedFile).count(),
+        1,
+        "the two versions are listed"
+    );
+    leave(&handle);
+    let held: Vec<Vec<u8>> = placements(&handle)
+        .iter()
+        .filter_map(|p| rig.fs.peek(&folder.join(&p.path)))
+        .collect();
+    assert!(
+        held.contains(&edited) && held.contains(&theirs),
+        "both are on disk"
+    );
+    assert_valid_burrito(&rig.fs, &folder);
+    handle.close().unwrap();
+}
+
 /// *Keep both* (§8.3): the other version becomes a file of its own, and the conflict is gone.
 #[test]
 fn keep_both_gives_the_other_version_its_own_file() {
