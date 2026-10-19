@@ -325,8 +325,9 @@ pub enum Action<V> {
     Settle(BufferSlot),
     /// The copy: `slot` is written under `to`, in the buffer and the mirror, then settled.
     Rekey { slot: BufferSlot, to: BufferKey },
-    /// `drafts.json`'s current entry of the field.
-    Draft { text: String, base: V },
+    /// `drafts.json`'s current entry of the field, with the page's clock at the text's last
+    /// keystroke: the clock of the buffer entries rule 1 compares it with.
+    Draft { text: String, at: i64, base: V },
     /// The field's save over `base`.
     Send { text: String, base: V },
     /// An offered entry of `drafts.json`, written before the server answers; only then are
@@ -594,6 +595,7 @@ pub fn next<V: Clone>(
         (Live::Typed { base, current }, Event::DraftTick) => {
             let action = Action::Draft {
                 text: current.text.clone(),
+                at: current.at,
                 base: base.clone(),
             };
             (Live::Typed { base, current }, vec![action])
@@ -658,6 +660,7 @@ pub fn next<V: Clone>(
                     write(&current, &over, None),
                     Action::Draft {
                         text: current.text.clone(),
+                        at: current.at,
                         base: over.clone(),
                     },
                 ];

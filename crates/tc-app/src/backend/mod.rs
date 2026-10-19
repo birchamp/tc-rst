@@ -354,19 +354,28 @@ impl StoreCommand {
     }
 
     /// `Draft` (STORAGE §5.14): unsaved editor text with the tokens of what the editor
-    /// displayed. The store keeps it beside the actor (R22), so it writes no change and never
-    /// waits behind a command.
-    pub fn draft(field: DraftField, shown: Vec<EditToken>, text: String) -> Self {
+    /// displayed, and `at`, the page's clock at the text's last keystroke (its buffer entry's
+    /// `at`, APP-DESIGN §6.6). The store keeps it beside the actor (R22), so it writes no
+    /// change and never waits behind a command.
+    pub fn draft(
+        field: DraftField,
+        shown: Vec<EditToken>,
+        text: String,
+        at: tc_journal::WallTime,
+    ) -> Self {
         let listed = shown
             .iter()
             .map(|t| (t.key().clone(), t.heads().to_vec()))
             .collect();
         Self::new(
-            Command::Draft(Draft {
-                field,
-                shown: shown.into_iter().map(|t| t.0).collect(),
-                text,
-            }),
+            Command::Draft {
+                draft: Draft {
+                    field,
+                    shown: shown.into_iter().map(|t| t.0).collect(),
+                    text,
+                },
+                at,
+            },
             listed,
         )
     }

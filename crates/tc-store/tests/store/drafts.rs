@@ -13,11 +13,14 @@ use tc_store::{OpenOptions, ProjectHandle};
 fn draft(handle: &ProjectHandle, field: DraftField, keys: &[RecordKey], text: &str) {
     let shown = keys.iter().map(|k| handle.mint(k, None).unwrap()).collect();
     handle
-        .submit(Command::Draft(Draft {
-            field,
-            shown,
-            text: text.into(),
-        }))
+        .submit(Command::Draft {
+            draft: Draft {
+                field,
+                shown,
+                text: text.into(),
+            },
+            at: tc_journal::WallTime(0),
+        })
         .wait()
         .unwrap();
 }

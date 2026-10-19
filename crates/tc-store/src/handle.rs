@@ -563,11 +563,11 @@ impl ProjectHandle {
     /// Hands a command to the actor. The reply comes after the batch is durable and folded
     /// (B6); the caller never blocks. A draft goes to the draft writer instead (R22).
     pub fn submit(&self, command: Command) -> Pending<Result<StoreReply, CommandError>> {
-        if let Command::Draft(draft) = command {
+        if let Command::Draft { draft, at } = command {
             if let Mode::ReadOnly(reason) = self.facts().mode {
                 return ready(Err(CommandError::ReadOnly(reason)));
             }
-            self.drafts.put(draft);
+            self.drafts.put(draft, at);
             return ready(Ok(StoreReply {
                 tokens: Vec::new(),
                 new_conflicts: Vec::new(),

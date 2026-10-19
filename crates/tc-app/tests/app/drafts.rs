@@ -22,14 +22,14 @@ use tc_app::config::ProjectsFolder;
 use tc_app::session::ProjectSession;
 use tc_app::wire::token::shown;
 use tc_app::{Answer, StoreChoice};
-use tc_journal::RecordKey;
 use tc_journal::command::DraftField;
+use tc_journal::{RecordKey, WallTime};
 use tc_store::FakePlatform;
 use tc_store::fault::FaultFs;
 use tc_ui::app::buffer::{self as page, MemStore};
 
 use super::common::{Parts, TestApp, post, rid, tit};
-use crate::store_world::{APP, backend_over, folder, store_world, words_of};
+use crate::store_world::{APP, START_MS, backend_over, folder, store_world, words_of};
 
 /// A request id no other request of the test binary uses.
 fn fresh() -> RequestId {
@@ -140,9 +140,21 @@ impl Rig {
         .await
     }
 
-    /// A draft of `key` as an editor sends it, through the store (C2 sends it with
-    /// `editor/draft`), written to `drafts.json` before this returns.
+    /// A draft of `key` as an editor sends it, typed before every change the store stamps.
     async fn stored_draft(&self, session: &ProjectSession, key: &RecordKey, text: &str) {
+        self.stored_draft_at(session, key, text, START_MS).await;
+    }
+
+    /// A draft of `key` as an editor sends it, through the store (C2 sends it with
+    /// `editor/draft`), with the page's time of its last keystroke, written to `drafts.json`
+    /// before this returns.
+    async fn stored_draft_at(
+        &self,
+        session: &ProjectSession,
+        key: &RecordKey,
+        text: &str,
+        at: i64,
+    ) {
         let token = session.read().mint(key, None).unwrap();
         session
             .handle()
@@ -150,6 +162,7 @@ impl Rig {
                 DraftField::Words,
                 vec![token],
                 text.to_owned(),
+                WallTime(at),
             ))
             .await
             .unwrap();
@@ -846,6 +859,35 @@ async fn a_stored_draft_gives_way_only_to_newer_typing_of_its_own_run() {
         ["TIT 2:2", "TIT 2:2"],
         "the older copy went too: {after:#?}"
     );
+}
+
+/// A keystroke while the draft request is on its way: the buffer entry is newer than the
+/// stored draft by the page's clock, whenever the draft reaches the store, so one question is
+/// asked, of the newest text.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_keystroke_during_the_draft_request_is_the_one_text_offered() {
+    let mut rig = Rig::new().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let run = rig.t.app.instance();
+    let key = tit(2, 1);
+    let typed = now_ms();
+    let newer = entry(
+        run,
+        rig.token(&session, &key),
+        "But as for you, speak!",
+        None,
+        typed - 1,
+    );
+    rig.stored_draft_at(&session, &key, "But as for you, speak", typed - 6)
+        .await;
+    let buffered = vec![line(&key_of(&session, "TIT 2:1"), &newer)];
+    drop(session);
+
+    rig.relaunch().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    let offers = rig.offer_with(&session, &buffered, true).await;
+    let texts: Vec<&str> = offers.offers.iter().map(|o| o.text.as_str()).collect();
+    assert_eq!(texts, ["But as for you, speak!"], "{offers:#?}");
 }
 
 /// Finding 5: the session's own save replaced a draft, and the process ended before the

@@ -438,6 +438,7 @@ fn saves_racing_drafts_are_each_announced_as_their_own_request() {
                             DraftField::Words,
                             vec![typed.clone()],
                             format!("typist {typist}, keystroke {sent}"),
+                            tc_journal::WallTime(0),
                         )));
                         sent += 1;
                     }
@@ -1084,6 +1085,7 @@ async fn a_draft_never_waits_behind_a_long_command() {
             DraftField::Words,
             vec![token(handle.as_ref(), &tit(1, 7))],
             "typed meanwhile".to_owned(),
+            tc_journal::WallTime(0),
         )),
     )
     .await
@@ -1283,6 +1285,7 @@ impl Run {
                     DraftField::Words,
                     vec![token(self.handle.as_ref(), &key)],
                     format!("{} (typed)", WORDS[usize::from(*words)]),
+                    tc_journal::WallTime(0),
                 );
                 (
                     Sent {

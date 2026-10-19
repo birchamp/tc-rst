@@ -20,7 +20,6 @@
 //! secret) is offered as text, and *Keep* writes it with no parents (R20).
 
 use crate::atomic::{SyncDir, atomic_create_dirs, atomic_write};
-use crate::clock::Clock;
 use crate::counters::Counters;
 use crate::hooks::{Hooks, Point};
 use crate::layout::{Folder, TC};
@@ -450,14 +449,10 @@ impl DraftWriter {
         }
     }
 
-    /// The field's current draft. Drafts are not journal data, so their time is the system
-    /// clock's.
-    pub(crate) fn put(&self, draft: Draft) {
-        self.send(Msg::Put(
-            Box::new(draft),
-            crate::clock::SystemClock.now(),
-            self.run.clone(),
-        ));
+    /// The field's current draft, with the page's time of its text: the open compares it with
+    /// the page's buffer entries, which carry that clock (APP-DESIGN §6.6).
+    pub(crate) fn put(&self, draft: Draft, at: WallTime) {
+        self.send(Msg::Put(Box::new(draft), at, self.run.clone()));
     }
 
     /// A save of these drafts' fields succeeded: their current entries go. Offered entries

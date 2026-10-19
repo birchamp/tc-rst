@@ -597,9 +597,8 @@ impl World {
                     let line = buffer::removed_line_if(&key, instance(self.run), &text).ok();
                     self.mirror_line(line);
                 }
-                Action::Draft { text, base } => {
+                Action::Draft { text, at, base } => {
                     if self.mode == Mode::Writable {
-                        let at = self.tick();
                         self.drafts.current.insert(
                             field,
                             Entry {
