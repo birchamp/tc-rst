@@ -2000,8 +2000,22 @@ M7  atomic_write(.tc, "materialized.json", manifest). The entry of each path M4 
     size and mtime of the file renamed into place, the scope digest it was projected from, and
     is unsettled; every other entry keeps its own state, so an unsettled entry is never written
     again as settled (§6.2). Stat the manifest: its mtime is a time stamp (§6.2).
-M8  atomic_remove(.tc/materialize.intent.json).
+M8  Settle the intent: remove what this group wrote, found equal or removed from it, and
+    atomic_remove(.tc/materialize.intent.json) when nothing is left.
 ```
+
+**The intent outlives a group that stopped.** A group that fails after one of its renames (a full
+disk at the heads file) leaves its new bytes on disk and its intent in the folder, and the
+session keeps that intent in memory. M3 writes the union of the intent the session still holds
+(from the open, or from a group that stopped or whose path another program still refuses) and
+the group's own writes; M8 removes from it only the paths this group has written, found equal or
+removed, and the end of a job without an error only those that were not refused. The md5s it names
+are the app's own in M1, in the last look before a rename, in a look at the folder (focus and
+watcher) and in a storage check, as they are at the open (§6.2): the retry, the next save and a
+focus never record the app's own bytes as an outside edit, and no false conflict follows. A file M1
+finds equal to the projection while its entry names other bytes or another scope (the group
+stopped between the rename and the heads file) gets its heads file written again, so a later
+outside edit has the right base (§11.1 X3).
 
 The burrito is valid before M4 and after M6; in between, `metadata.json` lags by milliseconds. A
 crash there is repaired at open (§6.4, rows M1 to M6).
@@ -2032,7 +2046,8 @@ saved by the other program while the app waited, and it is recorded (§11.1), or
 is clean by stat (§6.2), instead of written over. After 2 s the path stays dirty and the person sees "translationCore
 can't update TIT.usfm because another program has it open. Your work is saved."
 (`MaterializeBlocked` with `Blocked::FileBusy`; the other reasons are in §2.6, and a notice is
-listed once for each reason and path set and goes when the path is written). A file the open cannot read, or a compare-and-swap that cannot read the file,
+listed once for each reason and path set and goes when the path is written; a `Failed` notice goes
+when a later job finishes without an error). A file the open cannot read, or a compare-and-swap that cannot read the file,
 is treated the same way: nothing is written over it, and it is tried again. While a path waits
 for a retry, the watcher does not treat the intent's new md5 as the app's own write for that
 path. Writes of pending files are never blocked by a derived file. A checkpoint
@@ -2092,7 +2107,11 @@ commit object are the writer's work from a snapshot, so saves go on meanwhile (R
 C1  On the actor: list the journal folders for a second writer (§5.0), check the expected pack
     set (§4.4: a pack that is missing from the working tree, or changed and failing P2 to P4, is
     written back from a blob at the same path and its changes are folded, `PackRestored`), seal
-    (§5.11; K3 stores each new pack as a blob), and hand the writer the snapshot after the seal.
+    (§5.11; K3 stores each new pack as a blob), and hand the writer the snapshot taken when the
+    seal starts, with the dirty marks of that moment. The actor serves saves between the seal's
+    steps; each is a pending file the seal never reads, so it is in neither the snapshot nor the
+    marks, and it belongs to the next checkpoint and to a materialization of its own (a timer is
+    set). The commit shows the project as its packs hold it.
 C2  On the writer: materialize (§5.10) from that snapshot. The new packs are now listed in
     metadata.json. This closes the write group the seal opened (I7).
 C3  On the writer. If the seal failed, stop: the tree's files would show changes its packs lack.
@@ -2100,8 +2119,10 @@ C3  On the writer. If the seal failed, stop: the tree's files would show changes
     (`MaterializeBlocked`, reason `PackMissing`) names the file ("translationCore can't read a
     file of changes; sync waits until it can"). Otherwise build the commit tree in memory (§9.4)
     from the manifest's blobs for the derived files the last materialization made equal to the
-    snapshot's projection, from the snapshot for the rest, the expected pack set, the carried
-    bytes, and the files kept verbatim (§9.4), and run tc_burrito::validate_project over the tree's
+    snapshot's projection, from the snapshot for the rest (a held path, a path another program
+    refuses, a path left dirty, a path whose outside edit waits to be recorded, and a path the
+    writer wrote from a newer snapshot meanwhile, which a retry or a look at the folder may do),
+    the expected pack set, the carried bytes, and the files kept verbatim (§9.4), and run tc_burrito::validate_project over the tree's
     entries. Failure: bug report (`MaterializeBlocked`, reason `TreeInvalid`), no commit.
 C4  If the tree equals HEAD's tree, stop: no empty commits (tC4 J8).
 C5  The writer writes the commit object itself. The message is "Checkpoint, <reason>: <books>
@@ -3679,6 +3700,26 @@ A repack that stops between steps 2 and 3 leaves objects twice and never fewer (
 next repack finds them in a pack and only removes the loose copies. An unreachable object younger
 than 14 days is neither packed nor removed.
 
+**A commit being made.** The walk decides once what is reachable, and the unreachable objects
+older than 14 days go later; a checkpoint's tree can name an old object nothing references (a
+blob an abandoned checkpoint stored) before the actor has moved the branch to the commit. Two
+things keep it: `ensure_blob` writes through the object database when the object exists, which
+only brings its time up to date (libgit2 does what git does) and counts no second write; and the
+repack prunes nothing unreachable when a commit was being made at its start, is being made at the
+moment it would prune, or was made during its run. The writer marks the span from the start of
+the tree build to the branch's move (the actor ends it; the carried-versions reference is
+covered the same way); every handle on the repository shares the mark. The objects are pruned by
+the next run.
+
+A commit being made can name an object the walk found unreachable: a blob an abandoned checkpoint
+stored (`HeadMoved`, G1), older than 14 days, which the tree reuses. Two things keep the repack
+from removing it before the branch has moved. The writer's `ensure_blob` writes through the
+object database even when it holds the object, which libgit2 answers by bringing the loose
+file's time up to date (as git does). And the repository's handles share a counter that is odd
+while a commit is being made (from the start of the tree build to the move of the branch, or its
+giving up) and goes up by two for every commit: a repack that began, or ran, while the counter
+was odd or moved removes no unreachable object that run, and the next run has them again.
+
 ### 9.9 Editing during a sync
 
 The worker never holds the project. A verse that receives a teammate's change while it is open
@@ -3874,7 +3915,22 @@ decodes and compares it (X2, X3) and sends the plan to the actor (X4, X5); the p
 folder (I7). The actor answers when the batch is durable (or when the plan was empty, or
 refused). The writer then **accepts** the bytes it examined: the path's manifest entry gets
 their md5, unsettled, with no scope and no hold, so the next materialization finds them to be
-the app's own and writes the file again from the project (X6). The same acceptance follows
+the app's own and writes the file again from the project (X6). Before that, when the batch is
+durable the writer also writes the path's heads file for the bytes now in the folder: the changes
+the batch recorded are the heads of the records it changed (a batch an earlier session recorded
+gives them from its pending file), a record it left alone keeps its base, and the digests are
+those of the bytes found (kept from the examination, so the file is decoded once). A program that
+keeps the file open (Paratext on Windows) may save it again from these bytes while the app cannot
+write the file back; that save is an edit of the recorded bytes, not of the version the app wrote
+before, so the person's two saves are one line of changes and no conflict. The heads file of the path is
+written then too, before the rewrite: for each record the batch changed it names the batch's
+change as the heads, for each record of a book's USFM the digest of the bytes found, and the
+other records keep the base they had. The bytes stay in the folder for as long as a program
+keeps the file open (Paratext on Windows, §5.10), and that program's next save starts from
+them: compared with the base from before the first edit it would be a sibling of the first, a
+conflict between the person's own two saves. A file the materialization finds already equal to
+the projection (the write stopped after its rename, or the projection moved with the same bytes)
+gets its heads file written again as well. The same acceptance follows
 a plan that records nothing (a rewrite of line ends only, or a file whose records all equal
 what the project shows) and a file that could not be decoded; if the disk refused the batch,
 nothing is accepted and the file is looked at again with the next job. A decoded record that
@@ -3974,7 +4030,16 @@ paths break the grammar or have a dot segment are foreign entries (§9.4), kept 
   md5 is taken once more, and the file is recorded only if the two agree, else it changed
   meanwhile and the next look finds it. The blob is the copy of the person's bytes, so X1 is
   skipped. Then an External change whose `parents` are the head of the version the app placed
-  there (the token rule of §2.7), or `[]` by the revert rule (the bytes are an older version's).
+  there: the change(s) of the record whose blob is the one the path's manifest entry names (the
+  heads among them by the token rule of §2.7, else the newest of them), not the newest head of
+  the record, which may be a teammate's version the folder never showed; a project that holds
+  no such version records it by the rules for a new file below; or `[]` by the revert rule (the
+  bytes are an older version's).
+  The version the app placed is the one the manifest entry's blob names, not the newest head of
+  the record: the changes of `CarriedFile(path)` whose blob is that one (the heads among them,
+  else the newest), so a teammate's version the folder never showed is a sibling of the edit and
+  the two are a conflict, and an entry that names no recorded version gives the rules for a
+  version the project did not place.
   A new file nobody tracked: an External change with no parents; where a removed file was, it
   replaces the removal. A session with no repository (`HistoryUnavailable`) cannot keep the
   bytes and records nothing; the file is left as it is.
@@ -4760,6 +4825,16 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the coherence view of an unverified section draft (current values, no parents) | `an_unverified_section_draft_that_holds_a_span_can_be_kept` |
 | the look at a file just before its rename (rename over what M1 read) | `an_outside_save_during_the_rename_window_is_never_overwritten` |
 | the compare-and-swap reading the bytes (trust an entry's size and mtime) | `the_compare_and_swap_reads_a_file_whose_size_and_mtime_are_unchanged` |
+| the intent kept by the session after a group stopped (forget it once M4 fails) | `a_group_that_fails_after_a_rename_does_not_mistake_its_bytes_for_an_outside_edit`, `a_focus_after_a_group_stopped_does_not_take_its_bytes_for_an_outside_edit` |
+| the intent at the open (read the md5s of the intent as no one's) | `crash_materialize_intent_tells_its_bytes_from_an_outside_edit` |
+| the heads file written again for a converged file | `a_retry_that_finds_the_file_converged_writes_its_heads_file` |
+| the heads file written when an outside edit is durable | `two_saves_from_a_program_that_keeps_the_file_open_are_no_conflict` |
+| the parents of a carried file's edit (the newest head instead of the placed version) | `an_edit_of_a_placed_file_does_not_replace_a_teammates_newer_version` |
+| the snapshot taken when the seal starts (hand the writer the newest) | `a_commit_made_while_a_save_is_served_shows_only_what_its_packs_hold` |
+| the tree's paths from the snapshot (waiting outside edit, written from a newer snapshot) | `a_commit_takes_a_file_waiting_for_an_outside_edit_from_the_snapshot`, `a_retry_that_wrote_a_newer_snapshot_does_not_reach_the_tree` |
+| the freshening of a reused blob and the repack's guard while a commit is made | `a_blob_a_new_commit_names_again_is_kept_young`, `a_repack_prunes_nothing_while_a_commit_is_being_made` (`git.rs`) |
+| the removal of a `Failed` notice by a job that wrote | `a_group_that_fails_after_a_rename_does_not_mistake_its_bytes_for_an_outside_edit` |
+| the revert rule and the removal rule of the planner (switch either off) | `every_kind_of_outside_edit_in_one_project_conserves`, `outside_edit_reconcile_conserves` |
 | the writer thread (materialize on the actor, as unit S1 did) | `a_save_is_durable_while_a_materialize_is_held`, `a_save_is_durable_while_a_checkpoint_is_held`, `a_save_is_durable_while_the_tree_is_built`, `the_opens_first_materialization_runs_after_the_open_returns` |
 | a job never goes back to an older snapshot | `a_job_from_an_older_snapshot_never_writes_over_newer_bytes` (`writer.rs`) |
 | marking by book (mark every file of the project) | `a_book_change_marks_only_that_books_files`, `a_books_materialize_touches_only_that_books_files` |
