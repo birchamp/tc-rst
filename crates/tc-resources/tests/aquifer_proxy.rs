@@ -7,7 +7,7 @@
 
 use std::sync::{Arc, Mutex, PoisonError};
 
-use tc_door43::{InternetSwitch, ProxyFinder, UnreachableCause};
+use tc_door43::{InternetSwitch, ProxyAnswer, ProxyFinder, UnreachableCause};
 use tc_door43_fake::FakeProxy;
 use tc_resources::{AquiferClient, AquiferError, AquiferLimits, AquiferRepo};
 use url::Url;
@@ -18,12 +18,12 @@ struct Always {
 }
 
 impl ProxyFinder for Always {
-    fn proxy_for(&self, origin: &Url) -> Option<Url> {
+    fn proxy_for(&self, origin: &Url) -> Option<ProxyAnswer> {
         self.asked
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .push(origin.as_str().to_owned());
-        Some(self.proxy.clone())
+        Some(ProxyAnswer::Through(self.proxy.clone()))
     }
 }
 

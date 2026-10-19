@@ -9,18 +9,16 @@
 //!   PAC script), so [`Http::client`] asks only while the internet switch is on. It asks
 //!   once for each origin the client may reach, and again each time the switch goes from
 //!   off to on, because the computer may have joined another network meanwhile.
-//! - A proxy the finder names is used for that origin. For every other origin the system's
-//!   own settings apply: the `*_PROXY` variables, and on Windows the manual proxy setting.
-//!   reqwest drops its system proxy as soon as the client has a proxy of its own, so
-//!   [`Http`] reads those settings itself, once when the client is built, with the matcher
-//!   reqwest uses (`SystemProxy`), and falls back to them when the finder names none.
+//! - What the finder answers for an origin decides: a proxy, or going directly. For an origin
+//!   it has no answer for, the system's own settings apply: the `*_PROXY` variables, and on
+//!   Windows the manual proxy setting. reqwest drops its system proxy as soon as the client
+//!   has a proxy of its own, so [`Http`] reads those settings itself, once when the client is
+//!   built, with the matcher reqwest uses (`SystemProxy`), and falls back to them.
 //!
 //! reqwest's system proxy on Windows reads only the manual proxy setting. A school or
 //! office network that hands out a PAC script or a WPAD host (hazard 6 of
-//! `docs/evidence/windows-build-2026-10-17.md`) therefore needs a finder that asks WinHTTP,
-//! and that finder does not exist yet. It must call WinHTTP, which this workspace cannot do
-//! while `unsafe` is forbidden (`AGENTS.md`): the owner chooses between an exception for
-//! one small crate and a vetted dependency. [`system_proxy_finder`] is where it goes.
+//! `docs/evidence/windows-build-2026-10-17.md`) needs WinHTTP's answer, so on Windows
+//! [`system_proxy_finder`] is [`crate::WinHttpFinder`].
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -34,22 +32,40 @@ use url::Url;
 
 use crate::internet::{InternetSwitch, Offline};
 
+/// What a [`ProxyFinder`] says about one origin.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ProxyAnswer {
+    /// Requests to the origin go through this proxy. The URL can carry the proxy's user name
+    /// and password, so it is never logged.
+    Through(Url),
+    /// Requests to the origin go directly, whatever the system's manual proxy setting says: a
+    /// PAC script that answers `DIRECT` overrides it, as it does in a browser.
+    Direct,
+}
+
 /// Asks the system which proxy serves a server.
 pub trait ProxyFinder: Send + Sync + 'static {
-    /// The proxy that serves `origin` (a scheme, host and port), or `None` when this finder
-    /// names none. Then the system's own settings decide (the `*_PROXY` variables, and on
-    /// Windows and macOS the manual proxy setting), so a finder need not repeat them. This
-    /// blocks, may take seconds and may use the network, so it runs on the blocking pool,
-    /// and only while the internet switch is on.
-    fn proxy_for(&self, origin: &Url) -> Option<Url>;
+    /// The proxy that serves `origin` (a scheme, host and port), going directly, or `None`
+    /// when this finder has no answer. Then the system's own settings decide (the `*_PROXY`
+    /// variables, and on Windows and macOS the manual proxy setting), so a finder need not
+    /// repeat them. This blocks, may take seconds and may use the network, so it runs on the
+    /// blocking pool, and only while the internet switch is on.
+    fn proxy_for(&self, origin: &Url) -> Option<ProxyAnswer>;
 }
 
 /// What the platform's own proxy settings say, for the clients that do not choose a finder.
-/// `None` means that reqwest's system proxy is all there is: the `*_PROXY` variables, and
-/// on Windows the manual proxy setting. No platform has a finder yet; see the module
-/// documentation.
+/// On Windows that is [`crate::WinHttpFinder`], which asks WinHTTP (WPAD and PAC included).
+/// Elsewhere it is `None`: reqwest's system proxy is all there is, the `*_PROXY` variables
+/// and, on macOS, the manual proxy setting.
 pub fn system_proxy_finder() -> Option<Arc<dyn ProxyFinder>> {
-    None
+    #[cfg(windows)]
+    {
+        Some(Arc::new(crate::WinHttpFinder::current_user()))
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
 }
 
 /// How one client reaches the network.
@@ -116,6 +132,7 @@ impl Http {
                     finder,
                     origins: spec.origins,
                     found,
+                    limit_per_origin: FIND_LIMIT_PER_ORIGIN,
                 }));
             }
         }
@@ -146,15 +163,19 @@ impl Http {
     }
 }
 
-/// The proxy for `url`: the one the finder named for its origin, else the system's.
+/// The proxy for `url`: what the finder answered for its origin, else the system's.
 fn choose(found: &RwLock<Found>, system: &SystemProxy, url: &Url) -> Option<Url> {
-    let named = found
+    let answer = found
         .read()
         .unwrap_or_else(PoisonError::into_inner)
         .proxies
         .get(&origin_key(url))
         .cloned();
-    named.or_else(|| system.proxy_for(url))
+    match answer {
+        Some(ProxyAnswer::Through(proxy)) => Some(proxy),
+        Some(ProxyAnswer::Direct) => None,
+        None => system.proxy_for(url),
+    }
 }
 
 /// The system's own proxy settings: what reqwest's system proxy would apply, were it not
@@ -198,14 +219,20 @@ struct Routes {
     finder: Arc<dyn ProxyFinder>,
     origins: Vec<Url>,
     found: Arc<RwLock<Found>>,
+    limit_per_origin: Duration,
 }
 
-/// The proxies found, and the turn-on count they were found for.
+/// The finder's answers, and the turn-on count they were found for.
 #[derive(Default)]
 struct Found {
     for_turn_on: Option<u64>,
-    proxies: BTreeMap<String, Url>,
+    proxies: BTreeMap<String, ProxyAnswer>,
 }
+
+/// The longest wait for the finder's answer about one origin. A finder bounds its own wait
+/// (the Windows one tells WinHTTP 10 s), but not every call it makes; past this, the origin
+/// has no answer until the switch is next turned on.
+const FIND_LIMIT_PER_ORIGIN: Duration = Duration::from_secs(15);
 
 impl Routes {
     /// Asks the finder about every origin, unless it was asked since the switch was last
@@ -220,18 +247,24 @@ impl Routes {
             return;
         }
         let (finder, origins) = (self.finder.clone(), self.origins.clone());
+        let limit = self
+            .limit_per_origin
+            .saturating_mul(u32::try_from(origins.len()).unwrap_or(u32::MAX));
         let task = tokio::task::spawn_blocking(move || {
             origins
                 .iter()
                 .filter_map(|origin| Some((origin_key(origin), finder.proxy_for(origin)?)))
                 .collect::<BTreeMap<_, _>>()
         });
-        let proxies = match task.await {
-            Ok(proxies) => proxies,
+        let proxies = match tokio::time::timeout(limit, task).await {
+            Ok(Ok(proxies)) => proxies,
             // A panic in the finder is raised here, as if it had run on this task.
-            Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
+            Ok(Err(e)) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
             // The runtime is shutting down.
-            Err(_) => return,
+            Ok(Err(_)) => return,
+            // A lookup that never ends: the system's own settings serve every origin, and it is
+            // not started again for each request. Its thread finishes on its own.
+            Err(_) => BTreeMap::new(),
         };
         *self.found.write().unwrap_or_else(PoisonError::into_inner) = Found {
             for_turn_on: Some(turn_on),
@@ -279,13 +312,13 @@ mod tests {
     }
 
     impl ProxyFinder for Named {
-        fn proxy_for(&self, origin: &Url) -> Option<Url> {
+        fn proxy_for(&self, origin: &Url) -> Option<ProxyAnswer> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             self.asked.lock().unwrap().push(origin_key(origin));
             self.proxied
                 .iter()
                 .any(|p| origin_key(p) == origin_key(origin))
-                .then(|| self.proxy.clone())
+                .then(|| ProxyAnswer::Through(self.proxy.clone()))
         }
     }
 
@@ -300,7 +333,14 @@ mod tests {
         }
     }
 
-    fn found_for(http: &Http, url: &str) -> Option<Url> {
+    /// The client with a shorter wait for its finder, for a test of that wait.
+    fn with_limit(mut http: Http, limit: Duration) -> Http {
+        let routes = http.routes.as_mut().and_then(Arc::get_mut).unwrap();
+        routes.limit_per_origin = limit;
+        http
+    }
+
+    fn found_for(http: &Http, url: &str) -> Option<ProxyAnswer> {
         let routes = http.routes.as_ref().unwrap();
         let found = routes.found.read().unwrap();
         found
@@ -327,7 +367,9 @@ mod tests {
         assert_eq!(finder.asked(), ["https://a.test", "https://b.test"]);
         assert_eq!(
             found_for(&http, "https://a.test/x"),
-            Some("http://proxy.test:8080".parse().unwrap())
+            Some(ProxyAnswer::Through(
+                "http://proxy.test:8080".parse().unwrap()
+            ))
         );
         assert_eq!(found_for(&http, "https://b.test/x"), None);
     }
@@ -378,7 +420,7 @@ mod tests {
     }
 
     impl ProxyFinder for Interrupted {
-        fn proxy_for(&self, _: &Url) -> Option<Url> {
+        fn proxy_for(&self, _: &Url) -> Option<ProxyAnswer> {
             if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
                 self.switch.turn_off();
                 if self.on_again {
@@ -426,15 +468,67 @@ mod tests {
         assert_eq!(finder.calls.load(Ordering::SeqCst), 2);
     }
 
+    /// A finder whose lookup never returns until the test ends, as a WinHTTP call that hangs.
+    struct Stuck {
+        release: Mutex<std::sync::mpsc::Receiver<()>>,
+        calls: AtomicUsize,
+    }
+
+    impl ProxyFinder for Stuck {
+        fn proxy_for(&self, _: &Url) -> Option<ProxyAnswer> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let _ = self.release.lock().unwrap().recv();
+            Some(ProxyAnswer::Through(
+                "http://late.test:8080".parse().unwrap(),
+            ))
+        }
+    }
+
+    #[tokio::test]
+    async fn a_lookup_that_never_ends_is_given_up_and_not_started_again() {
+        let (_hold, release) = std::sync::mpsc::channel::<()>();
+        let finder = Arc::new(Stuck {
+            release: Mutex::new(release),
+            calls: AtomicUsize::new(0),
+        });
+        let switch = InternetSwitch::new();
+        switch.turn_on();
+        let http = Http::with_finder(
+            spec(&["https://a.test"], false),
+            switch,
+            Some(finder.clone()),
+        )
+        .unwrap();
+        let http = with_limit(http, Duration::from_millis(200));
+        let started = std::time::Instant::now();
+        http.client().await.unwrap();
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "{:?}",
+            started.elapsed()
+        );
+        assert_eq!(
+            found_for(&http, "https://a.test/x"),
+            None,
+            "the system's settings serve it"
+        );
+        http.client().await.unwrap();
+        assert_eq!(finder.calls.load(Ordering::SeqCst), 1, "not asked again");
+    }
+
     fn system(https: &str, no: &str) -> SystemProxy {
         SystemProxy(Matcher::builder().https(https).no(no).build())
     }
 
-    fn found_with(origin: &str, proxy: &str) -> RwLock<Found> {
+    fn found_with(origin: &str, answer: ProxyAnswer) -> RwLock<Found> {
         RwLock::new(Found {
             for_turn_on: Some(1),
-            proxies: BTreeMap::from([(origin.to_owned(), proxy.parse().unwrap())]),
+            proxies: BTreeMap::from([(origin.to_owned(), answer)]),
         })
+    }
+
+    fn through(proxy: &str) -> ProxyAnswer {
+        ProxyAnswer::Through(proxy.parse().unwrap())
     }
 
     fn url(text: &str) -> Url {
@@ -443,7 +537,7 @@ mod tests {
 
     #[test]
     fn the_proxy_the_finder_names_comes_before_the_systems() {
-        let found = found_with("https://a.test", "http://finder.test:8080");
+        let found = found_with("https://a.test", through("http://finder.test:8080"));
         let system = system("http://system.test:3128", "");
         assert_eq!(
             choose(&found, &system, &url("https://a.test/x")),
@@ -453,11 +547,24 @@ mod tests {
 
     #[test]
     fn the_systems_proxy_serves_an_origin_the_finder_names_none_for() {
-        let found = found_with("https://a.test", "http://finder.test:8080");
+        let found = found_with("https://a.test", through("http://finder.test:8080"));
         let system = system("http://system.test:3128", "");
         assert_eq!(
             choose(&found, &system, &url("https://b.test/x")),
             Some(url("http://system.test:3128"))
+        );
+    }
+
+    #[test]
+    fn going_directly_is_not_overridden_by_the_systems_proxy() {
+        // A PAC script that answers DIRECT for a server: the manual proxy beneath it is not used.
+        let found = found_with("https://a.test", ProxyAnswer::Direct);
+        let system = system("http://system.test:3128", "");
+        assert_eq!(choose(&found, &system, &url("https://a.test/x")), None);
+        assert_eq!(
+            choose(&found, &system, &url("https://b.test/x")),
+            Some(url("http://system.test:3128")),
+            "an origin the finder has no answer for still gets the system's proxy"
         );
     }
 
@@ -509,7 +616,7 @@ mod tests {
     async fn a_panic_in_the_finder_is_not_hidden() {
         struct Broken;
         impl ProxyFinder for Broken {
-            fn proxy_for(&self, _: &Url) -> Option<Url> {
+            fn proxy_for(&self, _: &Url) -> Option<ProxyAnswer> {
                 panic!("the finder broke")
             }
         }
