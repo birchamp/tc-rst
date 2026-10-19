@@ -199,7 +199,6 @@ fn screen(
     };
     leptos::html::div()
         .attr("style", root.to_style())
-        .attr("data-testid", "translate")
         .on(leptos::ev::capture(leptos::ev::pointerdown), keep_focus)
         .child((rail, rest))
         .into_any()
@@ -1131,6 +1130,8 @@ fn VerseEditor(
         let close = close.clone();
         move |_: leptos::ev::FocusEvent| close()
     };
+    // tC4's field holds its text as its default value: the text the card opened with.
+    let initial = before.clone();
     let cancel = {
         let saves = SendWrapper::new(saves.clone());
         let key = SendWrapper::new(key.clone());
@@ -1178,7 +1179,9 @@ fn VerseEditor(
             on:focus=on_focus
             on:blur=on_blur
             on:compositionstart=on_composition
-        ></textarea>
+        >
+            {initial}
+        </textarea>
         {notice_view}
     }
     .into_any();

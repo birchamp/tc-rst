@@ -297,6 +297,20 @@
       ],
       "why": "The user-comment box of each unit carries `readonly`: B3 shows the comment tC4's rule picks (APP-DESIGN §6.5, A-18) and C3 writes it (`editor/addComment`, R24), so until C3 lands nothing typed into the box could be saved, and a box that took typing would lose it (AGENTS.md: never lose a translator's text). Every other line of the DOM, every computed style included, is tC4's, and the screenshot is tC4's pixel for pixel. C3 removes `readonly` and this residual.",
       "until": "C3"
+    },
+    "translate-tit1": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The titles of two Titus 1 note cards in the helps panel are tC4 9ad4d5c's, “It is necessary to stop them” and “teaching what they should not”, where the d310bf3 capture shows “It is necessary to stop them … they should” and “It is necessary … teaching what they should not”: FIX-helps adopted tC4's later rendering of a note's quote early (C39, docs/TC4-DELTA-2026-10-19.md §3.11; tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code by `every_gateway_title_of_genesis_psalms_and_titus_is_tc4s`). Both cards are below the fold, so the screenshot is tC4's pixel for pixel, and every other line of the DOM, every computed style included, is tC4's. The difference goes when the reference moves to v4.0.0 and the screens are captured again (DELTA §3.11 item 1).",
+      "until": null
+    },
+    "en-translate-tit1": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The title of a Titus 1 note card in the helps panel is tC4 9ad4d5c's, “It is necessary to stop them”, where the d310bf3 capture shows “It is necessary to stop them … they should”: FIX-helps adopted tC4's later rendering of a note's quote early (C39, docs/TC4-DELTA-2026-10-19.md §3.11; tc-helps `highlight_quote`, held to tC4 9ad4d5c's own code by `every_gateway_title_of_genesis_psalms_and_titus_is_tc4s`). The card is below the fold, so the screenshot is tC4's pixel for pixel, and every other line of the DOM, every computed style included, is tC4's. The difference goes when the reference moves to v4.0.0 and the screens are captured again (DELTA §3.11 item 1).",
+      "until": null
     }
   }
 }
