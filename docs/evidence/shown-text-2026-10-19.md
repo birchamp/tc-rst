@@ -21,7 +21,7 @@ output are byte-identical.
 ## Words lost and joined
 
 From `shown_text_census_of_the_bundle` (`cargo test --release -p tc-align --test shown_words --
---ignored --nocapture`). "Lose `\w` words": the file's `\w` words (notes left out) are not all in
+--ignored --nocapture` at `d86689d`; removed with the fourth review's one word list, below). "Lose `\w` words": the file's `\w` words (notes left out) are not all in
 the shown words, in order. "Differ from split": the verse's shown words are not the shown words of
 its split plain text (`parse_aligned`). "Kept as written": `split_aligned` gives `None`, so the
 import keeps the markup. "Bank is not export": on the split plain text, the shown words are not
@@ -64,13 +64,12 @@ After, what is left is what tC4 does too:
   (`imported_ust_exo_15_21_opens_with_all_its_links`).
 
 The tests that hold these numbers: `every_genesis_and_psalms_verse_of_the_bundle_keeps_every_word`
-(all 7,983 Genesis and Psalms verses of both, three ways) and
-`the_bank_and_the_export_split_every_plain_verse_into_the_same_words` (427 fixture and draft verses,
-47,680 split bundle verses, no exception) in `crates/tc-usfm/tests/shown_text.rs`.
+(all 7,983 Genesis and Psalms verses of both, the shown text) in
+`crates/tc-usfm/tests/shown_text.rs`, and, for the bank, the fourth review's property below.
 
 ## Links kept at open
 
-`imported_mat_5_22_opens_with_all_44_links` (`crates/tc-align/tests/shown_words.rs`): the ULT verse
+`imported_mat_5_22_opens_with_all_44_links` (`crates/tc-align/tests/bank_words.rs`): the ULT verse
 split as the import splits it, opened against the UGNT v0.34 verse.
 
 | Verse | Links the split places | Kept at open, before | Kept at open, after |
@@ -104,7 +103,8 @@ PR #800 puts the character after a note's end marker back only for `\f`, `\fe`, 
 `\va 2\va*`, `\vp 1b\vp*`, `\ca 3\ca*`, `\rq …\rq*`, `\cat …\cat*`, `\ndx …\ndx*`, `\pro …\pro*`,
 a lone `\xt …\xt*`, `\fdc …\fdc*` and the chunk milestone `\ts\*` (the `hidden-*` drafts of the
 vectors hold six of them). The rebuild lets every skipped object offer it.
-`woven_verses_show_the_words_of_their_plain_text` (`crates/tc-usfm/tests/properties.rs`) passes
+`woven_verses_show_the_words_of_their_plain_text` (`crates/tc-usfm/tests/properties.rs`, since the
+fourth review `woven_verses_keep_the_words_of_their_plain_text`) passed
 30,000 cases with the rebuild's rule and fails at once with PR #800's alone (minimal case
 `a\va 2\va* a`).
 
@@ -147,6 +147,35 @@ is unchanged (no ULT or UST v91 verse holds such a marker), and the parity run a
 head still differs on the same 2 of 47,723 verses. The woven-verse property, whose generator now
 holds `\pp` lines and `\zx` spans, passes 10,000 cases and fails at once on the walk before the
 fix (minimal case `a\n\pp a`).
+
+## The fourth review: one word list
+
+The fourth review found two more places where the bank was not the export's word list, both from
+keeping two word extractors in step: the attributes of a marker usfm-js does not know
+(`a \zx b|x-note="the hidden word"\zx* c` banked "x", "note", "the", "hidden" and "word"), and
+the text after a heading that an unknown marker follows (`\s A heading \zx with|x-y="z"\zx*
+more` banked the heading's words, which the export leaves out). Neither can be woven.
+
+The fix removes the second extractor. `tc_usfm::target_words` is the one word list of a verse:
+`tc_align::TargetVerse` banks it, `parse_aligned` numbers the import's aligned words by it, and
+`weave` wraps it in `\w` (one walk, `flatten` in `crates/tc-usfm/src/align.rs`; weave also refuses
+word markup it meets on the way). It reads word markup through, so a verse kept as written banks
+the words of its split plain text, "the heavens" and the Psalms' "Yahweh" included (#782), and it
+tokenizes each stretch of text between two markers on its own, so no word joins across a note
+(#795). `text::verse_words` and `VerseUnit::words`, a third walk, are gone. The shown text still
+renders the verse for Translate, Check and the aligner, and decides no word of an alignment.
+
+`the_bank_is_the_export_for_every_verse_of_the_bundle_and_the_fixtures`
+(`crates/tc-align/tests/bank_words.rs`) places every banked word of every verse of the ULT v91 and
+UST v91 (all 66 books, alignment inline as the codec cuts it) and of 29 fixture books and drafts on
+a card of its own, weaves it into the import's split plain text and reads it back: 48,109 verses
+weave exactly the bank, 45 are kept as written (the split refuses them, so the export writes their
+bytes) and 1 holds a glossary `\w` word, which weave refuses. The proptest
+`the_bank_is_the_export_for_generated_verses` does the same for generated verses with unknown
+markers and their attributes, headings, notes, nested spans, paragraph markers and nested `\zaln`
+milestones (512 cases a run). With the bank taken from the shown text again, the proptest and
+`the_bank_is_the_export_for_every_vector` fail at once, on the two cases above; no bundle verse
+holds either.
 
 ## Cost
 

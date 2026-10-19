@@ -5,7 +5,7 @@
 //! in tC4's `applyAlignEdit` (`src/state.jsx:5225-5247` at d310bf3): the edit, then the
 //! bank and every card in verse order ([`Alignment::bank_in_verse_order`],
 //! [`Alignment::cards_in_verse_order`]), then [`Alignment::settle`] against the
-//! shown text, then the suggestions are bound again to the edited cards
+//! verse's words, then the suggestions are bound again to the edited cards
 //! ([`suggest::rebind`]). An edit that places words also clears the selection. Suggestions
 //! are proposals (D72): the value changes only when the translator accepts one, which is
 //! the same placement a click makes, and Mark valid is refused while any stands.
@@ -75,10 +75,10 @@ impl Aligner {
     ///   words shown: the verse starts from the bootstrap, and the stored value is kept
     ///   aside in [`Aligner::earlier`] for the app to offer, as STORAGE.md §7.7 does.
     /// - A stored value made against this text opens as it is, if it is
-    ///   [well formed](Alignment::well_formed) and holds the words of the verse shown.
+    ///   [well formed](Alignment::well_formed) and holds the words of the verse.
     /// - A stored value made against other text, one that holds a word twice, or one whose
-    ///   words are not the shown verse's (the hash is of `plain_text_v1`, which leaves out
-    ///   some shown words, such as a `\qs` Selah, so an edit of such a word keeps the
+    ///   words are not the verse's (the hash is of `plain_text_v1`, which leaves out
+    ///   some words, such as a `\qs` Selah, so an edit of such a word keeps the
     ///   hash), opens
     ///   carried over to `verse` (see [`crate::reflow`]), so every word the aligner
     ///   offers is a word of the verse, in one place: a bank copy of a placed word goes,

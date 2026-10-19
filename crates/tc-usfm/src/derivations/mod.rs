@@ -57,7 +57,7 @@ pub fn plain_text_v1(content: &str) -> String {
 }
 
 /// The text tC4's Translate, Check and Align screens and its print preview show for a verse's
-/// content, and the text whose words the Check screen selects in and the aligner banks:
+/// content, and the text whose words the Check screen selects in:
 /// `verseText` of `src/data/bookModel.js` at tC4 9ad4d5c (#782), the walk of `tokenizeVerse`
 /// in `src/data/sourceHighlight.ts` over usfm-js's verse objects of `"\v 1 " + content`,
 /// joined and trimmed with JavaScript's `trim`. The walk is in `shown.rs`.
@@ -87,8 +87,8 @@ pub fn plain_text_v1(content: &str) -> String {
 ///   Words still join where usfm-js misreads alignment markup (UST 2SA 23:8), as in tC4.
 ///
 /// It is never hashed: hashes are of [`plain_text_v1`]. It is not one of `format.json`'s
-/// derivations (`docs/STORAGE.md` §12.1), since no fold output reads it, but it decides
-/// which words an alignment holds and which links the reflow of a verse save keeps. It has
+/// derivations (`docs/STORAGE.md` §12.1), since no fold output reads it. It decides no word
+/// of an alignment: the aligner banks [`crate::target_words`], the export's words. It has
 /// no depth limit. Where usfm-js throws, or the walk would (a `children` that is neither a
 /// list nor a string, a `text` that is not a string, an object inside itself), the value is
 /// the content trimmed, as for [`plain_text_v1`].

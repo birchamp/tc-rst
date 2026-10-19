@@ -1,5 +1,6 @@
 //! The readable text of a verse, as tC4's source panes show it. The Check screen and the
-//! aligner show and split [`crate::shown_text_v1`] instead.
+//! aligner show [`crate::shown_text_v1`] instead. The words of a verse are
+//! [`crate::target_words`].
 //!
 //! [`display_text`] reads a verse body (the USFM after `\v N `) and keeps only what a reader
 //! sees as the verse, as tC4's `verseText` does (`src/views/verseText.js:9` at d310bf3, the
@@ -36,7 +37,6 @@
 
 use crate::doc::{Document, Marker, Node};
 use crate::markers::{self, MarkerClass};
-use crate::words::{self, TokenKind, WordToken};
 
 /// The readable text of a verse body, whitespace normalized. See the module documentation.
 pub fn display_text(body: &str) -> String {
@@ -51,35 +51,15 @@ pub fn display_text(body: &str) -> String {
     normalize_whitespace(&raw)
 }
 
-/// The words of a verse body in order, numbered by occurrence across the verse. Each
-/// stretch of verse text between markers is tokenized on its own, so `\w` words of an
-/// aligned verse are found as well. `start` is the byte offset in `body`.
-pub fn verse_words(body: &str) -> Vec<WordToken<'_>> {
-    let doc = Document::parse(body);
-    let mut found = Vec::new();
-    for piece in text_pieces(doc.nodes()) {
-        let TextPiece::Text(text) = piece else {
-            continue;
-        };
-        let base = offset_in(body, text);
-        for token in words::classify(text) {
-            if matches!(token.kind, TokenKind::Word | TokenKind::Number) {
-                found.push((token.text, base + token.start));
-            }
-        }
-    }
-    words::number_occurrences(found)
-}
-
 /// What the reader sees of a verse, in order: stretches of text, and breaks where a
 /// paragraph-level marker stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TextPiece<'a> {
+enum TextPiece<'a> {
     Text(&'a str),
     Break,
 }
 
-pub(crate) fn text_pieces<'a>(nodes: &[Node<'a>]) -> Vec<TextPiece<'a>> {
+fn text_pieces<'a>(nodes: &[Node<'a>]) -> Vec<TextPiece<'a>> {
     let mut pieces = Vec::new();
     let mut flow = Flow::default();
     collect(nodes, &mut pieces, &mut flow);
@@ -198,7 +178,7 @@ mod tests {
             display_text(body),
             "A psalm of David. Yahweh, hear David. and this too."
         );
-        let david: Vec<(u32, u32)> = verse_words(body)
+        let david: Vec<(u32, u32)> = crate::target_words(body)
             .iter()
             .filter(|w| w.text == "David")
             .map(|w| (w.occurrence, w.occurrences))
@@ -207,14 +187,14 @@ mod tests {
     }
 
     #[test]
-    fn verse_words_are_found_inside_word_markers_with_their_offsets() {
+    fn words_are_found_inside_word_markers_with_their_offsets() {
         let body = "\\zaln-s |x-content=\"x\"\\*\\w non\\w*-\\w lying\\w*\\zaln-e\\* non \\f + \\ft lying\\f*";
-        let found: Vec<(&str, u32, u32)> = verse_words(body)
+        let found: Vec<(&str, u32, u32)> = crate::align::word_tokens(body)
             .iter()
             .map(|w| (w.text, w.occurrence, w.occurrences))
             .collect();
         assert_eq!(found, vec![("non", 1, 2), ("lying", 1, 1), ("non", 2, 2)]);
-        let first = verse_words(body)[0];
+        let first = crate::align::word_tokens(body)[0];
         assert_eq!(&body[first.start..first.start + 3], "non");
     }
 

@@ -56,8 +56,9 @@ impl TargetText {
     }
 
     /// The text a screen shows ([`tc_usfm::shown_text_v1`] of the content, tC4's
-    /// `verseText` of `src/data/bookModel.js`): the Check screen's tappable words and the
-    /// aligner's words are this text's words.
+    /// `verseText` of `src/data/bookModel.js`): the Check screen's tappable words are this
+    /// text's words. The aligner shows it too, but banks the export's words
+    /// ([`tc_usfm::target_words`]).
     pub fn shown(&self) -> &str {
         self.shown
             .get_or_init(|| tc_usfm::shown_text_v1(&self.content))

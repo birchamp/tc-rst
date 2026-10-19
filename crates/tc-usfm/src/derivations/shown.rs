@@ -18,9 +18,9 @@
 //! 6. Otherwise its `children` are walked, if it has any; an object with neither (a cross
 //!    reference, a figure, a marker usfm-js keeps no text for) is skipped.
 //!
-//! The rebuild differs from tC4 where tC4 hides words the export counts, so that Check and
-//! the Align bank cannot reach them and a bank without them cannot be woven (#796); each is a
-//! declared difference (`docs/PLAN.md`):
+//! The rebuild differs from tC4 where tC4 hides words the export counts, so that Check cannot
+//! reach them (#796); each is a declared difference (`docs/PLAN.md`). The Align bank holds
+//! them whatever this text shows: it is [`crate::target_words`].
 //!
 //! - tC4 does not walk the children in rule 4, so it hides every word of a character span
 //!   after a span nested in it: usfm-js reads `\wj Worship the \+nd Lord\+nd* your God\wj*`
@@ -71,9 +71,9 @@
 //! space is put back: "siervo de", "Lord s", "Yahweh que", "神 愛". Nothing is put back before
 //! punctuation (`siervo\f …\f*, de`). tC4, PR #800 too, joins them.
 //!
-//! A joined word can be neither checked nor aligned, and the export, which splits words at
-//! every marker, cannot weave it (#796), so both additions beyond PR #800 are a declared
-//! difference (`docs/PLAN.md`). On the ULT and UST v91 they change one verse from tC4's text:
+//! A joined word cannot be checked, and the export splits words at every marker, so both
+//! additions beyond PR #800 are a declared difference (`docs/PLAN.md`). On the ULT and UST
+//! v91 they change one verse from tC4's text:
 //! ULT 2SA 23:8 as written, where usfm-js makes an object of an unbalanced `\zaln-e\*` that
 //! keeps the line break after it, and tC4 shows "spearagainst". Words still join where usfm-js
 //! misreads alignment markup in other ways (UST 2SA 23:8 and 1KI 10:12), as in tC4.

@@ -178,7 +178,7 @@ fn verses_with_a_superscription_read_as_tc4_reads_them() {
         assert_eq!(display_text(body), str_of(&case, "text"), "{at}");
         assert_eq!(display_text(&parsed.plain), str_of(&case, "text"), "{at}");
         assert_eq!(parsed.words, words(&case["words"]), "{at}");
-        assert_eq!(target_words(&parsed.plain).unwrap(), parsed.words, "{at}");
+        assert_eq!(target_words(&parsed.plain), parsed.words, "{at}");
         // The Check screen and the aligner show these words too.
         assert_eq!(shown_words(&parsed.plain), parsed.words, "{at}");
         if let Some(aligned) = case.get("aligned") {
