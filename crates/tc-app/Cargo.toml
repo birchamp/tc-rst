@@ -49,5 +49,9 @@ tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "sync
 name = "state_seed_bench"
 required-features = ["fixture-backend"]
 
+[[example]]
+name = "memory_bench"
+required-features = ["fixture-backend"]
+
 [lints]
 workspace = true

@@ -132,9 +132,10 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// A fold with the key its tokens are signed with.
+/// A fold with the key its tokens are signed with. The fold is shared: a snapshot of each open
+/// and of each step is an `Arc` clone, never a copy of the fold.
 struct SignedFold {
-    fold: FoldState,
+    fold: Arc<FoldState>,
     seq: u64,
     signing: Arc<TokenKey>,
 }
@@ -170,7 +171,7 @@ struct ProjectState {
 
 struct Live {
     /// The project now: what the next open gets, and an open handle's newest snapshot.
-    current: FoldState,
+    current: Arc<FoldState>,
     /// The open handle, by the number of its open; `None` while closed.
     open: Option<u64>,
     opens: u64,
@@ -189,7 +190,7 @@ impl ProjectState {
         // project counts its own work, or parallel tests count into each other's.
         project.fold.own_counters();
         let signing = Arc::new(TokenKey::derive(&MEMORY_INSTALLATION_SECRET, project.id));
-        let current = project.fold.clone();
+        let current = Arc::new(project.fold.clone());
         let published = Snapshot::new(SignedFold {
             fold: current.clone(),
             seq: 0,
@@ -234,7 +235,9 @@ impl ProjectState {
             .into_iter()
             .collect();
         let mut live = lock(&self.live);
-        let delta = live.current.add(changes.into_iter().map(FoldInput::from));
+        // Snapshots taken before keep the fold they had: the step works on a copy of the
+        // shared state, which shares every part it does not touch.
+        let delta = Arc::make_mut(&mut live.current).add(changes.into_iter().map(FoldInput::from));
         if live.open.is_some() {
             live.seq += 1;
             self.publish(&mut live);
@@ -306,7 +309,7 @@ impl MemoryBackend {
     pub fn fold(&self, folder: &ProjectRef) -> Option<FoldState> {
         let state = self.state(folder).ok()?;
         let live = lock(&state.live);
-        Some(live.current.clone())
+        Some(FoldState::clone(&live.current))
     }
 
     /// The project as it was added, with its Door43 remote.
@@ -374,7 +377,7 @@ impl ProjectStore for MemoryBackend {
             let mut live = lock(&state.live);
             let mut fold = state.seeded.fold.clone();
             fold.own_counters();
-            live.current = fold;
+            live.current = Arc::new(fold);
             live.scripts.clear();
             live.submitted.clear();
             live.mode = SessionMode::Writable;
