@@ -1,0 +1,178 @@
+//! The shown text ([`tc_usfm::shown_text_v1`]): what tC4's Translate, Check and Align screens
+//! show of a verse, and the words the Check screen selects in and the aligner banks. tC4 #782
+//! (words inside nested alignments) is ported from tC4 9ad4d5c's
+//! `test/bookModel-nested-alignment.test.ts`, on its own fixtures.
+//!
+//! The #782 cases read a verse with its alignment markup inline, as a tC4 4.0 book added from
+//! aligned USFM stores it and as the import keeps a verse it cannot split: on the split plain
+//! text nothing is nested, so those cases would pass before the fix and prove nothing.
+
+// Helpers outside `#[test]` functions read fixtures and may fail loudly.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+use std::path::PathBuf;
+use tc_usfm::{Document, Node, codec, shown_text_v1};
+
+fn root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn read(rel: &str) -> String {
+    std::fs::read_to_string(root().join(rel)).unwrap_or_else(|e| panic!("{rel}: {e}"))
+}
+
+/// Every verse of a book as the codec cuts it: `chapter:verse` and its content (`words +
+/// layout`, the USFM after `\v N `).
+fn verses(raw: &str) -> Vec<(String, String)> {
+    let parts = codec::decompose(raw).unwrap();
+    let mut out = Vec::new();
+    for (c, chapter) in &parts.chapters {
+        for (v, part) in &chapter.verses {
+            if let codec::VersePart::Text(verse) = part {
+                out.push((
+                    format!("{c}:{}", codec::label(*v, verse.last)),
+                    codec::join_verse(&verse.words, &verse.layout),
+                ));
+            }
+        }
+    }
+    out
+}
+
+/// The content of one verse of a fixture book.
+fn verse(rel: &str, reference: &str) -> String {
+    verses(&read(rel))
+        .into_iter()
+        .find(|(r, _)| r == reference)
+        .unwrap_or_else(|| panic!("{rel} has no {reference}"))
+        .1
+}
+
+const TC4: &str = "fixtures/tc4/test-fixtures";
+
+/// The words of `text` with their occurrences, as the aligner banks them.
+fn words(text: &str) -> Vec<(String, u32, u32)> {
+    tc_usfm::words::words(text)
+        .into_iter()
+        .map(|w| (w.text.to_owned(), w.occurrence, w.occurrences))
+        .collect()
+}
+
+/// Notes, cross references and figures: their words are not verse text.
+const NOTES: &[&str] = &["f", "fe", "ef", "x", "ex", "fig"];
+
+/// The `\w` words of a verse's content in file order, read from the USFM tree without
+/// usfm-js (tC4's `rawWords`), notes left out, each split into words.
+fn raw_words(content: &str) -> Vec<String> {
+    fn walk(nodes: &[Node<'_>], out: &mut Vec<String>) {
+        for node in nodes {
+            let Node::Span(span) = node else { continue };
+            if NOTES.contains(&span.name()) {
+                continue;
+            }
+            if span.name() != "w" {
+                walk(&span.children, out);
+                continue;
+            }
+            let text: String = span
+                .children
+                .iter()
+                .filter_map(|c| match c {
+                    Node::Text(t) => Some(*t),
+                    _ => None,
+                })
+                .collect();
+            let word = text.split('|').next().unwrap_or("");
+            out.extend(
+                tc_usfm::words::words(word)
+                    .iter()
+                    .map(|w| w.text.to_owned()),
+            );
+        }
+    }
+    let mut out = Vec::new();
+    walk(Document::parse(content).nodes(), &mut out);
+    out
+}
+
+/// True when `raw` appears in `shown` in order, each word taken once (tC4's `holdsInOrder`).
+fn holds_in_order(shown: &[(String, u32, u32)], raw: &[String]) -> bool {
+    let mut rest = shown.iter();
+    raw.iter().all(|w| rest.any(|(s, _, _)| s == w))
+}
+
+/// tC4's way 1: Genesis 1:1 of the en_ult aligns "the heavens" to one Hebrew word inside
+/// another `\zaln`, two levels down; the one-level walk read "created  and the earth.".
+#[test]
+fn shown_text_reads_words_inside_nested_alignments() {
+    let sentence = "In the beginning God created the heavens and the earth.";
+    let content = verse(&format!("{TC4}/en_ult/GEN-1-1.usfm"), "1:1");
+    assert!(content.contains("\\zaln-s"));
+    assert_eq!(shown_text_v1(&content), sentence);
+    let found = words(&shown_text_v1(&content));
+    assert_eq!(found.len(), 10);
+    let the: Vec<_> = found.iter().filter(|w| w.0 == "the").collect();
+    assert_eq!(
+        the.iter().map(|w| (w.1, w.2)).collect::<Vec<_>>(),
+        [(1, 3), (2, 3), (3, 3)]
+    );
+    assert!(found.contains(&("heavens".to_owned(), 1, 1)));
+    // tC4's "Translate reads the same text" case, on the chapter.
+    let chapter = format!("{TC4}/en_ult/GEN-1.usfm");
+    assert_eq!(shown_text_v1(&verse(&chapter, "1:1")), sentence);
+    assert_eq!(
+        shown_text_v1(&verse(&chapter, "1:4")),
+        "And God saw the light, that {it was} good. Then God separated between the light and the darkness."
+    );
+}
+
+/// tC4's ways 1 and 4: every verse of the en_ult Genesis 1 holds its `\w` words in file
+/// order, each once.
+#[test]
+fn every_verse_of_genesis_1_holds_its_words_in_file_order() {
+    let all = verses(&read(&format!("{TC4}/en_ult/GEN-1.usfm")));
+    assert_eq!(all.len(), 31);
+    let mut wrong = Vec::new();
+    for (reference, content) in &all {
+        let shown = words(&shown_text_v1(content));
+        let raw = raw_words(content);
+        assert!(!raw.is_empty(), "{reference}");
+        // Every word of the en_ult is a `\w` word, so the counts say no word came twice.
+        if !holds_in_order(&shown, &raw) || shown.len() != raw.len() {
+            wrong.push(format!("{reference}: {:?}", shown_text_v1(content)));
+        }
+    }
+    assert_eq!(wrong, Vec::<String>::new());
+}
+
+/// tC4's way 1 on Psalm 3:2, whose aligned "Selah" the en_ult wraps in `\qs … \qs*`.
+#[test]
+fn selah_inside_qs_shows() {
+    let content = verse(&format!("{TC4}/en_ult/PSA-3.usfm"), "3:2");
+    assert!(content.contains("\\qs\n\\zaln-s"));
+    assert_eq!(
+        shown_text_v1(&content),
+        "{There are} many sayers about me,\n“There is no salvation for him in God.”\nSelah"
+    );
+}
+
+/// tC4's way 2: walking deeper does not bring footnote text or a section heading into the
+/// verse.
+#[test]
+fn footnotes_and_headings_stay_out_of_the_shown_text() {
+    let book = read(&format!("{TC4}/usfm-corpus/exotic-poetry-footnotes.usfm"));
+    let all = verses(&book);
+    for reference in ["1:1", "1:2", "1:3", "1:4-5"] {
+        let (_, content) = all.iter().find(|(r, _)| r == reference).unwrap();
+        let shown = shown_text_v1(content);
+        for hidden in [
+            "manuscripts",
+            "explained",
+            "carry a footnote",
+            "one span verse",
+            "Poetry",
+        ] {
+            assert!(!shown.contains(hidden), "{reference}: {shown:?}");
+        }
+    }
+}

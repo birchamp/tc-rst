@@ -1,10 +1,9 @@
-//! The readable text of a verse: what a screen shows, and what the Check screen and the
-//! aligner split into words.
+//! The readable text of a verse, as tC4's source panes show it. The Check screen and the
+//! aligner show and split [`crate::shown_text_v1`] instead.
 //!
 //! [`display_text`] reads a verse body (the USFM after `\v N `) and keeps only what a reader
 //! sees as the verse, as tC4's `verseText` does (`src/views/verseText.js:9` at d310bf3, the
-//! text of `verseTextIndex` that tC4's Check screen shows and its aligner banks the words
-//! of):
+//! text tC4's source panes show):
 //!
 //! - Text outside markers, and the text inside character spans such as `\w`, `\add` or
 //!   `\nd`, is kept. Attribute lists (`|x-occurrence="1"`) are not text.
