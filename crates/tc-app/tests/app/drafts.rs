@@ -654,6 +654,70 @@ async fn a_lock_of_another_computer_is_read_only_until_the_person_says_it_is_clo
     );
 }
 
+/// Finding 6: after "That computer is closed", the read-only session the person left is
+/// never joined again, even while another user (a sync from Home) keeps it open: the open
+/// waits for its close and takes the lock afresh, writable, and the one-time trust is used up.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_reopen_after_that_computer_is_closed_never_joins_the_read_only_session() {
+    let mut rig = Rig::new().await;
+    let session = rig.open(&rig.bible.clone()).await;
+    drop(session);
+    rig.relaunch_on(FakePlatform {
+        machine: "machine-2".to_owned(),
+        host: "host-2".to_owned(),
+        ..FakePlatform::default()
+    })
+    .await;
+    let session = rig.open(&rig.bible.clone()).await;
+    assert_eq!(
+        session.handle().facts().mode,
+        SessionMode::ReadOnly(ReadOnlyReason::OpenOnAnotherComputer)
+    );
+    let side = rig
+        .t
+        .app
+        .sessions()
+        .open_side(&rig.bible, crate::store_world::progress())
+        .await
+        .unwrap();
+    post(
+        &rig.t.app,
+        &OtherComputerClosed {
+            at: session.scope().clone(),
+            request: rid(81),
+        },
+    )
+    .await
+    .unwrap();
+    rig.t.app.sessions().leave_screen(session.scope()).unwrap();
+    drop(session);
+    let sessions = rig.t.app.sessions().clone();
+    let bible = rig.bible.clone();
+    let reopen = tokio::spawn(async move {
+        sessions
+            .open_screen(&bible, crate::store_world::progress())
+            .await
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert!(!reopen.is_finished(), "the read-only session is not joined");
+    drop(side);
+    let reopened = reopen.await.unwrap().unwrap();
+    assert_eq!(reopened.mode, SessionMode::Writable);
+    // The trust was used: the next computer's lock is met afresh.
+    rig.t.app.sessions().leave_screen(&reopened.at).unwrap();
+    rig.relaunch_on(FakePlatform {
+        machine: "machine-3".to_owned(),
+        host: "host-3".to_owned(),
+        ..FakePlatform::default()
+    })
+    .await;
+    let session = rig.open(&rig.bible.clone()).await;
+    assert_eq!(
+        session.handle().facts().mode,
+        SessionMode::ReadOnly(ReadOnlyReason::OpenOnAnotherComputer)
+    );
+}
+
 fn now_ms() -> i64 {
     let since = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
