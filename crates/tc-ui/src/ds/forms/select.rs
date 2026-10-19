@@ -332,6 +332,11 @@ fn Dropdown(
         close();
     };
     let choose = move |i: usize| {
+        // A Select turned off while its list is open must not change (tC4 #552), even for a
+        // choice that arrives before the list has closed.
+        if disabled() {
+            return;
+        }
         let Some(o) = opts.with_value(|o| o.get(i).cloned()) else {
             return;
         };
@@ -343,6 +348,13 @@ fn Dropdown(
         }
         close();
     };
+    // A Select that turns off closes its list: nothing in it may be chosen (tC4 #552, where the
+    // list stayed and took a row click). The focus is not sent back to the field, which is off.
+    Effect::new(move |_| {
+        if disabled() && open.get_untracked() {
+            open.set(false);
+        }
+    });
     let move_hi = move |delta: i64| {
         let n = visible.with_untracked(Vec::len) as i64;
         hi.update(|i| *i = (*i as i64 + delta).clamp(0, (n - 1).max(0)) as usize);
