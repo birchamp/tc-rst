@@ -144,6 +144,8 @@ pub struct Release {
 pub enum HoldPoint {
     /// A save, before it is durable.
     Save,
+    /// A project's open for the screens, before the store opens it (B3).
+    Open,
     BookRead,
     Checkpoint,
     Materialize,

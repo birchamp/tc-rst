@@ -54,6 +54,19 @@ pub fn book_draft(parts: &BookParts) -> BookDraft {
     draft
 }
 
+/// Counts one verse record into `draft`: a span counts every verse it covers, a covered or
+/// absent verse nothing (the span that covers it is counted).
+pub fn count_verse(draft: &mut BookDraft, verse: u16, value: &tc_journal::record::VerseValue) {
+    let tc_journal::record::VerseValue::Text { words, last, .. } = value else {
+        return;
+    };
+    let covered = u32::from(last.get().max(verse) - verse) + 1;
+    draft.total += covered;
+    if words_drafted(words) {
+        draft.drafted += covered;
+    }
+}
+
 /// The drafted count of a book's USFM text.
 pub fn usfm_draft(usfm: &str) -> Result<BookDraft, DecomposeError> {
     decompose(usfm).map(|parts| book_draft(&parts))

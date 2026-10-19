@@ -248,6 +248,23 @@ pub struct NavSnapshot {
     pub instance: ServerInstance,
     pub view: View,
     pub project: Option<CurrentProject>,
+    /// The open book and chapter (B3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub place: Option<BookPlace>,
+}
+
+/// The book and chapter a project's screens show.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookPlace {
+    pub book: tc_core::BookId,
+    pub chapter: u16,
+}
+
+/// The book and chapter a reload returns to, read from the snapshot [`restore`] read; the
+/// caller asks only when [`restore`] gave back the project.
+pub fn restore_place(kept: Option<&str>) -> Option<BookPlace> {
+    serde_json::from_str::<NavSnapshot>(kept?).ok()?.place
 }
 
 /// Where a load of the page starts, from the snapshot it kept: the view and the project, only

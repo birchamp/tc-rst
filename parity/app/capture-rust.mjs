@@ -134,8 +134,12 @@ async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit,
       // A route takes the environment too (a state's route, or one that needs the fake Door43).
       const route = screen.kind === 'case' ? screen.run : screenRoute(screen, layers);
       const shot = { ...screen, run: (driver) => route(driver, env) };
+      // A case that photographs work in flight (`held`: an open held on the server, a read left
+      // unanswered) asks no busy question and waits for no request it holds (B3).
+      const held = (screen.heldRequests ?? []).map((p) => (r) => new URL(r.url).pathname === p);
       const { error, homeCards, syncToast, dom } = await captureScreen({
-        page, app, screen: shot, inFlight, file, busy: () => env.busy(page), failureTestIds: env.failureTestIds,
+        page, app, screen: shot, inFlight, file, busy: screen.held ? null : () => env.busy(page), failureTestIds: env.failureTestIds,
+        settleOptions: { ignore: (r) => held.some((h) => h(r)) },
       });
       const maskRects = await measureTargets(page, rustMaskTargets(masks, screen.name, env.projectId));
       const domFile = path.join(out, 'dom', `${screen.name}.json`);
@@ -198,7 +202,7 @@ async function main() {
       const state = stateNamed(c.state);
       const route = caseRoute(c, state);
       if (!route) throw new Error(`gallery case ${c.name} has no Rust route: the unit that ports its group (${c.group}) adds \`rust\` to it in parity/view-gallery/cases.mjs`);
-      return { name: c.name, kind: 'case', scenario: state.scenario, locale: state.locale, run: route };
+      return { name: c.name, kind: 'case', scenario: state.scenario, locale: state.locale, run: route, held: c.held, heldRequests: c.heldRequests };
     })
     : SCREEN_LIST.filter((s) => !only || only.includes(s.name));
   const masks = JSON.parse(fs.readFileSync(path.join(REPO, 'parity', 'app', 'masks.json'), 'utf8')).masks;

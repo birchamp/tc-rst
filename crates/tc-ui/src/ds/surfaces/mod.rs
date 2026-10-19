@@ -301,6 +301,8 @@ pub fn HelpCard(
     #[prop(optional, into)] action_label: Option<String>,
     #[prop(optional)] on_action: Option<Callback<()>>,
     #[prop(optional)] on_click: Option<Callback<web_sys::Event>>,
+    #[prop(optional)] on_mouse_enter: Option<Callback<MouseEvent>>,
+    #[prop(optional)] on_mouse_leave: Option<Callback<MouseEvent>>,
     #[prop(optional)] style: Css,
     #[prop(optional)] attrs: Attrs,
 ) -> impl IntoView {
@@ -315,6 +317,8 @@ pub fn HelpCard(
         interactive: Some(Interactive::Choice),
         selected: active,
         on_click,
+        on_mouse_enter,
+        on_mouse_leave,
         style: style.into(),
         attrs,
         children: Some(Box::new(move || {

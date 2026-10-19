@@ -182,6 +182,7 @@ fn snapshot(instance: ServerInstance, view: View, project: Option<CurrentProject
         instance,
         view,
         project,
+        place: None,
     })
     .unwrap()
 }
@@ -240,6 +241,10 @@ fn nav_snapshot_round_trips_and_keeps_unknown_fields_out() {
         instance: run,
         view: View::Read,
         project: Some(project(ProjectFlavor::TextStories, 2)),
+        place: Some(tc_ui::app::shell::BookPlace {
+            book: tc_core::BookId::Titus,
+            chapter: 2,
+        }),
     };
     let text = serde_json::to_string(&snap).unwrap();
     assert_eq!(serde_json::from_str::<NavSnapshot>(&text).unwrap(), snap);

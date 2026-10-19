@@ -6,9 +6,16 @@
 #![deny(clippy::indexing_slicing)]
 
 pub mod account_menu;
+pub mod book_rail;
 pub mod help_panel;
+pub mod helps_panel;
 pub mod home;
 pub mod modals;
+pub mod open_progress;
+pub mod panel_icons;
+pub mod rail_chrome;
+pub mod source_verse;
+pub mod understand;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;

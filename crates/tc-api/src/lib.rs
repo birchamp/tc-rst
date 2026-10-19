@@ -29,17 +29,21 @@ pub mod app;
 pub mod buffer;
 pub mod check;
 pub mod door43;
+pub mod editor;
 pub mod endpoint;
 pub mod error;
 pub mod event;
 pub mod feedback;
+pub mod helps;
 pub mod home;
 pub mod ids;
 pub mod jobs;
+pub mod model;
 pub mod net;
 pub mod prefs;
 pub mod query;
 pub mod refusal;
+pub mod session;
 pub mod shown;
 #[cfg(feature = "test-hooks")]
 pub mod test;
@@ -112,6 +116,15 @@ macro_rules! endpoint_table {
             query "home/versifications": $crate::home::Versifications
                 => $crate::home::VersificationsView;
             query "home/languages": $crate::home::Languages => $crate::home::LanguagesView;
+
+            job "session/open": $crate::session::Open => $crate::ids::JobId;
+            command "session/close": $crate::session::Close => ();
+
+            query "editor/book": $crate::editor::Book => $crate::editor::BookView;
+            query "editor/sources": $crate::editor::Sources => $crate::editor::SourcesView;
+
+            query "helps/passage": $crate::helps::Passage => $crate::helps::PassageView;
+            query "helps/article": $crate::helps::Article => $crate::helps::ArticleView;
         }
     };
 }

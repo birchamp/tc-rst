@@ -166,8 +166,8 @@ the rebuild fixed it or does as tC4 does:
 | #365 | Import a book into an existing project | not applicable | later F1, C7a | — | tC4 4.1.0. Build on the §11.1 outside-edit path when wanted. |
 | #353 | ULT and UST side by side in Translate | not applicable | B4a if adopted | — | Post-4.0, no layout decided. |
 | #131 | Translate's source pane in projects with other verse numbers | unit todo | B4a | `cross_frame_translate_shows_the_mapped_source_verse` (2:2 maps to 1:1, fan-out, unmapped, cross-book) | Map through `map_reference`, as Understand does. Show tC4's statements when a verse cannot be placed. Declared difference; tell the owner. |
-| #121 | Understand: source text for verses mapped into another book | unit todo | B3 | `cross_book_verse_shows_the_statement_and_keys_comments_to_the_project_verse` | Port 4.0: show `understand.verseCrossBook`, never the open book's text. |
-| #118 | Understand: Section view in projects with other verse numbers | unit todo | B3, B4a | `cross_frame_project_shows_the_verse_only_statement_instead_of_the_switch` | One unit per verse; `understand.crossFrameVerseOnly` replaces the switch on both screens. |
+| #121 | Understand: source text for verses mapped into another book | covered | B3 | `cross_book_verse_shows_the_statement_and_keys_comments_to_the_project_verse` (tc-ui); `a_verse_in_another_book_names_that_book` (tc-app) | Done by B3: a project verse the sources have in another book is `understand.verseCrossBook` with its place (`DAG 13:1`), never this book's text; the comment box keeps the project verse; a chapter wholly in another book says `understand.helpsCrossBook`. |
+| #118 | Understand: Section view in projects with other verse numbers | unit todo | B4a (B3 done) | `cross_frame_project_shows_the_verse_only_statement_instead_of_the_switch` (B3 journey); `a_project_in_another_numbering_reads_each_verse_where_the_sources_have_it` (tc-app) | B3: one unit per project verse, each the source verse the project's numbering names (`editor/sources` `frame`), `understand.crossFrameVerseOnly` in place of the switch, `understand.frameUnavailable` when the scheme is unknown. B4a: the same on Translate. |
 | #55 | Draft book introductions | not applicable | — | — | tC4 4.1.0. The introduction is kept byte for byte. |
 | #27 | Merge concurrent edits automatically | covered | tc-journal | `merge_bookmark_and_status`; `loss_check_two_ways_visible` | None. |
 | #767 | Import creates an empty book after the size warning | unit todo | C6 | `adding_a_book_from_usfm_is_one_batch_whole_or_absent`; J9 en_ult EXO and LEV add whole | See §1 row 17. Make the fallback safe, or get the one-batch command (a change to Q-17). Vendor `addBook.usfmTooLarge` if a refusal stays. |
@@ -183,22 +183,22 @@ the rebuild fixed it or does as tC4 does:
 | #576 | Update the Resume banner after a span save | unit todo | C2 | J8 `last_edited_names_the_span_then_its_first_verse` | A join records "2-3"; a break records the first verse of the old span. |
 | #575 | A paragraph break inside a new span | unit todo | B4b | `joined_span_collapses_blank_lines_to_one_space` | Follow D94. |
 | #574 | The book's name in a new blank book's header | covered | tc-store | `a_seed_keeps_structure_and_drops_words` | J7 asserts the header. Optional: a seed test for a source with no `\h`. |
-| #572 | A span counts as all of its verses in the drafted percentage | unit todo | B2, B3 | `joining_verses_keeps_the_drafted_percentage` | One shared function for tile and rail. Record the drafted rule for poem verses as a declared difference and tell the owner. |
-| #603 | A tooltip on each book's percentage | unit todo | B3 | J2 `titus_row_tooltip_matches_its_percentage` | Use `draft.bookPercentTitle`. |
+| #572 | A span counts as all of its verses in the drafted percentage | covered | B2, B3 | `joining_verses_keeps_the_drafted_percentage` | Done by B2 and B3: the tiles and the rail count with `drafted::count_verse`. The poem-verse rule is a declared difference the owner was told (DELTA-10-19 §5). |
+| #603 | A tooltip on each book's percentage | covered | B3 | journey `a_tile_opens_understand_at_chapter_1_with_the_rails_tooltips` | Done by B3: `draft.bookPercentTitle` on each rail row. |
 | #577 | "1 chapter" and "1 verse" | unit todo | C6, F1 | `one_chapter_book_says_1_chapter` | Choose the singular keys when the count is 1. |
-| #507 | Open a new project in Understand | unit todo | B3, B7 | J1 `new_project_lands_in_understand_at_chapter_1` | A remembered place still wins. |
+| #507 | Open a new project in Understand | unit todo | B7 (B3 done) | journey `a_tile_opens_understand_at_chapter_1_with_the_rails_tooltips` | B3: an open with no remembered place lands in Understand at chapter 1; a remembered place still wins. B7: a story project at story 1. |
 | #499 | Use the Bible name typed on the import review page | unit todo | F1, I | `typed_import_name_is_the_project_name` | Leave review-edited fields out of the P9 comparison, or the import refuses. |
 | #484 | Add a book from a USFM file | unit todo | C6 | J9 `add_a_missing_book_from_a_file_and_refuse_one_present` | One batch (#767), the alignment split (#553), `addBook.usfmExists`. |
 | #564 | Add-a-book USFM step polish | unit todo | C6 | `removing_rows_from_25_aligned_books_removes_the_intended_rows` | Label "Add book" while disabled; keep an Add error until the next Add; classify each file once. |
 | #502 | Two USFM files never reach the review page | unit todo | F1 | J9 `a_two_file_drop_is_one_new_project` | Port the J9 case. |
-| #619 | Quotes and bold in helps, not raw `>` and `__` | unit todo | B3, B5b | `article_shows_no_raw_quote_or_bold_marks` | Port `renderArticleBlocks`. |
-| #621 | Superscript verse numbers in the simplified-text tab | unit todo | B3 | `simplified_tab_verse_numbers_are_superscript` | As the main passage, including c:v labels. |
-| #628 | Full Markdown in helps | unit todo | B3 | `ta_article_with_a_table_renders_a_table` | Render tables, nested and numbered lists, links in the pane, installed images. Declared difference; tell the owner. |
-| #602 | Resize the helps panel by dragging | unit todo | B3, B4a | `helps_panel_width_follows_the_divider_drag` | One show/hide button on both screens. |
-| #601 | Keep the article title and close button visible | unit todo | B3 | `article_close_button_visible_after_scroll` | Sticky header. |
-| #234 | Widen the helps pane | unit todo | B3 | `helps_panel_width_follows_the_divider_drag` | Port #602's divider, not the old widen button. |
+| #619 | Quotes and bold in helps, not raw `>` and `__` | unit todo | B5b (B3 done) | `article_shows_no_raw_quote_or_bold_marks` | B3: `tc_helps::blocks`, tC4's renderer, held to tC4's own output on every Titus note (608 blocks). B5b: the Check article panel draws the same blocks. |
+| #621 | Superscript verse numbers in the simplified-text tab | covered | B3 | journey `simplified_tab_verse_numbers_are_superscript` | Done by B3, the source verse's `c:v` in another numbering. |
+| #628 | Full Markdown in helps | covered | B3 | `ta_article_with_a_table_renders_a_table` (tc-helps); journey `an_article_draws_its_table_numbers_and_nesting` | Done by B3 for tables, numbered items and nested lists, a declared difference the owner was told (DELTA-10-19 §5). Links stay their label until tC4 decides. Installed images are not drawn: tA names them by Door43 address, which no install keeps on this computer yet. |
+| #602 | Resize the helps panel by dragging | unit todo | B4a (B3 done) | `helps_panel_width_follows_the_divider_drag` | B3: the divider resizes the panel within 280 to 720 px; one show/hide button. B4a reuses both. |
+| #601 | Keep the article title and close button visible | covered | B3 | `article_close_button_visible_after_scroll` | Done by B3: the article's header stays in view. |
+| #234 | Widen the helps pane | covered | B3 | `helps_panel_width_follows_the_divider_drag` | Done by B3 with #602's divider. |
 | #728 | Make "Draft section" look like a button | unit todo | B4a | DOM parity of `en-translate-tit1` | `Button(Secondary, Sm)`, end-aligned, accent text while enabled. |
-| #650 | An Arabic gateway package end to end | unit todo | B3 | `arabic_helps_panes_are_rtl_in_an_english_interface` | Help cards take their direction from the gateway package. |
+| #650 | An Arabic gateway package end to end | covered | B3 | journey `arabic_helps_panes_are_rtl_in_an_english_interface` | Done by B3: each helps slot carries its gateway's direction (`rung_dir`), and the cards, questions, simplified text and article read in it. |
 | #29 | Right-to-left and complex scripts end to end | unit todo | B4a, B5b, B6, G2 | J10 `rtl_project_drafts_checks_and_aligns` | Each journey adds the Arabic case; G2 captures the `ar` screens. |
 | #614 | Four English literals in design-system props | unit todo | B4b, B5b, C6, A5 | port of tC4 `ds-labels` a–d | Pass the catalog strings; consider making them required props. |
 | #702 | Text zoom sliders | not applicable | — | — | tC4 4.1.0. |
@@ -222,7 +222,7 @@ the rebuild fixed it or does as tC4 does:
 | #594 | Mark valid on an invalidated check is swallowed | covered | tc-check | `deciding_again_judges_the_text_and_the_list_in_front_of_the_person` | If tC4 rules that To do clears the flag, change `DecisionEdit::apply`. |
 | #595 | The language-change preview retries without limit | unit todo | C8 | `gateway_preview_appears_while_the_open_verse_keeps_changing`; `a_stale_confirm_reshows_the_dialog_with_new_counts` | Compute once from a snapshot; on PlanStale recompute once. |
 | #518 | Polish the return to the last Check tool | unit todo | B5a, B3 | `resume_shows_no_clickable_picker`; `a_tool_chosen_during_resume_stays_open` | Part 3 (the late write) is covered by the prefs flush tests. |
-| #628 | Full Markdown in helps | unit todo | B3 | `ta_article_with_a_table_renders_a_table` | As in §3. Links stay plain text until tC4 decides. |
+| #628 | Full Markdown in helps | covered | B3 | `ta_article_with_a_table_renders_a_table` | Done by B3 (§3). Links stay plain text until tC4 decides. |
 | #663 | Door43 releases missing books | covered | tc-resources | `coverage_follows_what_the_files_hold` | None. |
 | #139 | Check % on Home tiles | not applicable | B2 if adopted | — | tC4 4.1.0. |
 | #259 | Check for newer releases automatically | not applicable | C8 if adopted | — | Post-4.0. Pins never move on their own. |
@@ -242,7 +242,7 @@ the rebuild fixed it or does as tC4 does:
 | #662 | Non-unfoldingWord Aquifer helps | not applicable | — | — | The rebuild reads only unfoldingWord's Aquifer repositories. |
 | #701 | Is Urdu (Devanagari) right to left? | rebuild bug | tc-resources; B3 | `ur_deva_helps_read_left_to_right_and_are_named_in_devanagari` | See §1 row 12. |
 | #704 | BSOJ's Arabic Bible as the source text | covered | tc-resources | `a_literal_bible_with_another_name_fills_the_glt_pane` | None. |
-| #650 | An Arabic gateway package end to end | unit todo | B3 | `arabic_helps_panes_are_rtl_in_an_english_interface` | Only the data half is covered; helps panes take the gateway's direction. |
+| #650 | An Arabic gateway package end to end | covered | B3 | journey `arabic_helps_panes_are_rtl_in_an_english_interface` | Done by B3 (§3). |
 | #648 | tW checking uses released TWL | covered | tc-resources, tc-check | see #643, #644 and #646 | The follow-up gap is #661. |
 | #643 | Hide a tW item with no article in the gateway language | covered | tc-check | `a_decision_on_a_link_whose_article_left_is_kept_and_counted_as_to_check` | None. |
 | #644 | Pin English TWL to en_twl v91 | covered | tc-resources | `the_v91_export_lists_59_book_tsvs` | None. |
@@ -252,10 +252,10 @@ the rebuild fixed it or does as tC4 does:
 | #504 | Bundle the latest English releases | covered | tc-resources | `fetched_lock.rs` (8 tests) | None. |
 | #580 | Invalid stays Invalid after a language change and back | covered | tc-check | `a_change_back_to_the_resource_a_decision_was_made_against_revives_it` | A decision invalidated only by the change becomes valid again; tC4 brings it back as To do (STORAGE §7.7 difference). |
 | #579 | Name a gateway language the same way everywhere | unit todo | B9a, C8 | `gateway_change_dialog_names_both_languages_by_autonym` | Use the autonym, never the code, including both buttons. |
-| #621 | Superscript verse numbers in the simplified tab | unit todo | B3 | `simplified_tab_verse_numbers_are_superscript` | As in §3. |
-| #619 | Quotes and bold in helps | unit todo | B3 | `article_shows_no_raw_quote_or_bold_marks` | As in §3, with #628's differences. |
-| #601 | Sticky article header | unit todo | B3 | `article_close_button_visible_after_scroll` | As in §3. |
-| #602 | Resize the helps panel | unit todo | B3, B4a | `helps_panel_width_follows_the_divider_drag` | As in §3. |
+| #621 | Superscript verse numbers in the simplified tab | covered | B3 | `simplified_tab_verse_numbers_are_superscript` | Done by B3 (§3). |
+| #619 | Quotes and bold in helps | unit todo | B5b (B3 done) | `article_shows_no_raw_quote_or_bold_marks` | As in §3, with #628's differences. |
+| #601 | Sticky article header | covered | B3 | `article_close_button_visible_after_scroll` | Done by B3 (§3). |
+| #602 | Resize the helps panel | unit todo | B4a (B3 done) | `helps_panel_width_follows_the_divider_drag` | As in §3. |
 | #606 | Third-party licenses in About, offline | unit todo | A5, B9a, G1 | `about_lists_aquifer_attribution_offline` | Also list each installed Aquifer resource's attribution (CC BY-SA). |
 | #532 | Show a verse's new draft on return to the check | unit todo | B5b, C4 | `check_shows_new_draft_after_switching_back` | Read the verse again on return or when the book text arrives. |
 | #42 | Keyboard pass on the Check pages | unit todo | B5a, B5b | port of `check-keyboard.spec.ts` and `checkKeyboard.test.tsx` | Include the focus-rule table and #769's heading stops. |

@@ -1,0 +1,130 @@
+{
+  "path": "helps/passage",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "book": "TIT",
+    "chapter": 1
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "notes": {
+        "type": "ready",
+        "value": {
+          "items": [
+            {
+              "id": "rtc9",
+              "chapter": "1",
+              "verse": "1",
+              "quote": "Θεοῦ",
+              "occurrence": 1,
+              "note": [
+                {
+                  "kind": "p",
+                  "quote": 0,
+                  "spans": [
+                    {
+                      "text": "Faith",
+                      "bold": true
+                    },
+                    {
+                      "text": " is an abstract noun."
+                    }
+                  ],
+                  "depth": 0,
+                  "number": null,
+                  "cells": [],
+                  "header": false
+                }
+              ],
+              "academy": "figs-abstractnouns",
+              "panes": [
+                {
+                  "pane": "ult",
+                  "title": "of God",
+                  "lit": [
+                    {
+                      "verse": "1",
+                      "tokens": [
+                        6,
+                        8
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "dir": "ltr",
+          "fallback": false
+        }
+      },
+      "words": {
+        "type": "ready",
+        "value": {
+          "items": [
+            {
+              "id": "x4ab",
+              "chapter": "1",
+              "verse": "1",
+              "quote": "Θεοῦ",
+              "occurrence": 1,
+              "category": "kt",
+              "slug": "god",
+              "panes": [
+                {
+                  "pane": "ult",
+                  "title": "of God",
+                  "lit": [
+                    {
+                      "verse": "1",
+                      "tokens": [
+                        6,
+                        8
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "dir": null,
+          "fallback": true
+        }
+      },
+      "questions": {
+        "type": "fetch"
+      },
+      "simplified": {
+        "type": "ready",
+        "value": {
+          "items": [
+            {
+              "key": "1",
+              "text": "I, Paul, serve God.",
+              "source": "1:1"
+            }
+          ],
+          "dir": "ltr",
+          "fallback": false
+        }
+      },
+      "simplifiedPin": "en_ust",
+      "otherBook": null
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

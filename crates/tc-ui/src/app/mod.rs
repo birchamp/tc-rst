@@ -34,6 +34,7 @@ pub mod recovery;
 pub mod save;
 pub mod share;
 pub mod shell;
+pub mod understand;
 
 #[cfg(all(target_arch = "wasm32", feature = "app"))]
 pub mod web;

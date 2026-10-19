@@ -174,6 +174,14 @@ impl CountingSnapshot {
         fold.change(&change).map(|view| view.device)
     }
 
+    /// When the change the record shows was written, when it shows one change.
+    pub fn written_at(&self, key: &RecordKey) -> Option<tc_journal::WallTime> {
+        self.count(AppCounter::RecordsRead, 1);
+        let fold = self.snapshot.fold();
+        let change = fold.projected_change(key)?;
+        fold.change(&change).map(|view| view.at)
+    }
+
     /// One change's body: who wrote it, when, and the record it holds.
     pub fn body(&self, change: &ChangeId) -> Option<ChangeBody> {
         self.count(AppCounter::RecordsRead, 1);

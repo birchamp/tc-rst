@@ -23,4 +23,5 @@ mod app {
     mod share;
     mod shell;
     mod sse;
+    mod understand;
 }

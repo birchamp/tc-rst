@@ -143,6 +143,11 @@ pub fn Surface(
     /// React's `onPointerDownCapture`, which tC4's screens pass through `...rest`.
     #[prop(optional)]
     on_pointer_down_capture: Option<Callback<PointerEvent>>,
+    /// React's `onMouseEnter` and `onMouseLeave`, passed through `...rest` (the helps cards'
+    /// hover focus, B3).
+    #[prop(optional)]
+    on_mouse_enter: Option<Callback<web_sys::MouseEvent>>,
+    #[prop(optional)] on_mouse_leave: Option<Callback<web_sys::MouseEvent>>,
     #[prop(optional, into)] style: Signal<Css>,
     #[prop(optional)] attrs: Attrs,
     #[prop(optional)] children: Option<Children>,
@@ -202,6 +207,16 @@ pub fn Surface(
         })
         .on(ev::capture(ev::pointerdown), move |e| {
             if let Some(cb) = on_pointer_down_capture {
+                cb.run(e);
+            }
+        })
+        .on(ev::mouseenter, move |e| {
+            if let Some(cb) = on_mouse_enter {
+                cb.run(e);
+            }
+        })
+        .on(ev::mouseleave, move |e| {
+            if let Some(cb) = on_mouse_leave {
                 cb.run(e);
             }
         })

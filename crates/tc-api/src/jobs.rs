@@ -1,7 +1,7 @@
 //! Background jobs and their progress (APP-DESIGN §3.6, §4.6), and the `jobs` service.
 //!
 //! The units that build a job add its outcome and, where a screen shows its steps, its
-//! phase: an open's `Opened` session (B1b), a sync's result (B10), a plan (C8), and the
+//! phase: an open's `Opened` session (B3), a sync's result (B10), a plan (C8), and the
 //! phases of share, exchange, import and export.
 
 use serde::{Deserialize, Serialize};
@@ -148,6 +148,8 @@ pub enum SyncPhase {
 pub enum JobOutcome {
     /// A job whose end is its whole result: a seed, a download, a summary, a training.
     Finished,
+    /// A project opened for the screens (B3).
+    Opened(Box<crate::session::OpenedProject>),
     Created {
         project: ProjectRef,
     },

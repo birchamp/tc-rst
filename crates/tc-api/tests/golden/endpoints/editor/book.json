@@ -1,0 +1,55 @@
+{
+  "path": "editor/book",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "book": "TIT"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "book": "TIT",
+      "chapters": [
+        1,
+        2,
+        3
+      ],
+      "rail": [
+        {
+          "book": "JON",
+          "drafted": {
+            "type": "unknown"
+          }
+        },
+        {
+          "book": "TIT",
+          "drafted": {
+            "type": "known",
+            "value": 11
+          }
+        }
+      ],
+      "comments": [
+        {
+          "chapter": 1,
+          "verse": 4,
+          "text": "Pablo escribe a Tito.",
+          "at": 1792378282100
+        }
+      ]
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

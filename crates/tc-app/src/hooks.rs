@@ -213,6 +213,13 @@ impl App {
             .is_some_and(|hooks| hooks.take_crash(CrashPoint::AfterReply, path))
     }
 
+    /// Where an operation of the app passes `at`: it waits there while the point is armed.
+    pub(crate) async fn hold_at(&self, at: HoldPoint) {
+        if let Some(hooks) = self.inner.hooks.as_ref() {
+            hooks.holds.reach(at).await;
+        }
+    }
+
     /// The operations held now, for tests that wait until one has reached its hold.
     pub fn holding(&self) -> usize {
         self.inner.hooks.as_ref().map_or(0, |h| h.holds.holding())
@@ -237,15 +244,17 @@ struct Holds {
     armed: Mutex<HashMap<HoldPoint, u64>>,
 }
 
-/// tc-store's point for each of the app's (C1a).
-fn store_point(at: HoldPoint) -> tc_store::Point {
+/// tc-store's point for each of the app's (C1a); none for the open, which the app holds
+/// before it asks the store (B3).
+fn store_point(at: HoldPoint) -> Option<tc_store::Point> {
     use tc_store::Point;
     match at {
-        HoldPoint::Save => Point::BeforeDurablePending,
-        HoldPoint::BookRead => Point::BeforeBookRead,
-        HoldPoint::Checkpoint => Point::BeforeCheckpoint,
-        HoldPoint::Materialize => Point::BeforeMaterialize,
-        HoldPoint::DraftWrite => Point::BeforeDraftWrite,
+        HoldPoint::Save => Some(Point::BeforeDurablePending),
+        HoldPoint::BookRead => Some(Point::BeforeBookRead),
+        HoldPoint::Checkpoint => Some(Point::BeforeCheckpoint),
+        HoldPoint::Materialize => Some(Point::BeforeMaterialize),
+        HoldPoint::DraftWrite => Some(Point::BeforeDraftWrite),
+        HoldPoint::Open => None,
     }
 }
 
@@ -256,8 +265,7 @@ impl Holds {
         lock(&self.points)
             .entry(at)
             .or_insert_with(|| HoldState::Armed(Arc::new(Notify::new())));
-        if let Some(store) = &self.store {
-            let point = store_point(at);
+        if let (Some(store), Some(point)) = (&self.store, store_point(at)) {
             lock(&self.armed)
                 .entry(at)
                 .or_insert_with(|| store.reached(point));
@@ -288,9 +296,9 @@ impl Holds {
         if let Some(HoldState::Holding(notify)) = lock(&self.points).remove(&at) {
             notify.notify_one();
         }
-        if let Some(store) = &self.store {
+        if let (Some(store), Some(point)) = (&self.store, store_point(at)) {
             lock(&self.armed).remove(&at);
-            store.release(store_point(at));
+            store.release(point);
         }
     }
 
@@ -303,8 +311,8 @@ impl Holds {
         }
         if let Some(store) = &self.store {
             let armed: Vec<HoldPoint> = lock(&self.armed).drain().map(|(at, _)| at).collect();
-            for at in armed {
-                store.release(store_point(at));
+            for point in armed.into_iter().filter_map(store_point) {
+                store.release(point);
             }
         }
     }
@@ -317,7 +325,9 @@ impl Holds {
         let store = self.store.as_ref().map_or(0, |store| {
             lock(&self.armed)
                 .iter()
-                .filter(|(at, then)| store.reached(store_point(**at)) > **then)
+                .filter(|(at, then)| {
+                    store_point(**at).is_some_and(|point| store.reached(point) > **then)
+                })
                 .count()
         });
         app + store

@@ -30,12 +30,20 @@ use tc_api::check::{
     RowFlags, Tool,
 };
 use tc_api::door43::{OpenDoor43, ProjectName, RepoSource};
+use tc_api::editor::{
+    Book, BookView, CommentView, FrameRow, PaneChapter, PaneText, PaneVerse, RailBook, RowSource,
+    SourceFrame, SourcePane, Sources, SourcesView,
+};
 use tc_api::error::{ApiError, Feature, Flow, SignInReason};
 use tc_api::event::{
     Aspect, ChangeCause, ChangeParts, ChangeScope, ChapterRef, CheckpointOutcome, Event,
     EventFrame, RecordChange, SessionEvent, SessionMode, StartupProgress, StartupState,
 };
 use tc_api::feedback::{Compose, FeedbackDraft};
+use tc_api::helps::{
+    Article, ArticleLink, ArticleView, LitVerse, NoteCard, PaneFocus, Passage, PassageView,
+    ReadySlot, SimplifiedVerse, Slot, WordCard,
+};
 use tc_api::home::{
     BookTileView, Card, Door43Card, HomeCard, HomeView, LanguageSuggestion, Languages,
     LanguagesView, LastEditView, List, ProjectKind, RecentStory, RepoPlace, ResumePlace,
@@ -48,12 +56,14 @@ use tc_api::ids::{
 use tc_api::jobs::{
     Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress,
 };
+use tc_api::model::{ArticleBlock, ArticleSpan, BlockKind};
 use tc_api::net::{NetView, Set, State as NetState};
 use tc_api::prefs::{
     DraftUnit, PlaceChange, PlaceMode, PlaceUpdate, RecordPlace, SetAlignSuggestions, SetDraftUnit,
     SetLocale,
 };
 use tc_api::refusal::Message;
+use tc_api::session::{Close, KeptPlace, Open, OpenUnit, OpenedProject};
 use tc_api::shown::{ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
@@ -849,6 +859,284 @@ impl Example for LastEdit {
     }
 }
 
+// ---- B3: open, the book, the source panes, the helps ---------------------------------------
+
+fn opened() -> OpenedProject {
+    OpenedProject {
+        session: OpenSession {
+            at: Scope {
+                project: ProjectRef::parse("sample_burrito").unwrap(),
+                epoch: Epoch::new(4),
+            },
+            id: ProjectId::parse("0a1b2c3d-0000-4000-8000-000000000001").unwrap(),
+            mode: SessionMode::Writable,
+            role: SessionRole::Screen,
+        },
+        name: "Equipo Ejemplo — Tito y Jonás".into(),
+        tag: "es-419".into(),
+        dir: Direction::Ltr,
+        kind: ProjectKind::Bible,
+        books: vec![BookId::Jonah, BookId::Titus],
+        draft_unit: DraftUnit::Section,
+        place: Some(KeptPlace {
+            mode: PlaceMode::Read,
+            chapter: 2,
+        }),
+    }
+}
+
+impl Example for Open {
+    fn example() -> Self {
+        Open {
+            request: request(30),
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+            unit: Some(OpenUnit::Book(BookId::Titus)),
+        }
+    }
+}
+
+impl Example for Close {
+    fn example() -> Self {
+        Close {
+            request: request(31),
+            at: scope(),
+        }
+    }
+}
+
+impl Example for Book {
+    fn example() -> Self {
+        Book {
+            at: scope(),
+            book: BookId::Titus,
+        }
+    }
+}
+
+impl Example for BookView {
+    fn example() -> Self {
+        BookView {
+            book: BookId::Titus,
+            chapters: vec![1, 2, 3],
+            rail: vec![
+                RailBook {
+                    book: BookId::Jonah,
+                    drafted: Known::Unknown,
+                },
+                RailBook {
+                    book: BookId::Titus,
+                    drafted: Known::Known(11),
+                },
+            ],
+            comments: vec![CommentView {
+                chapter: 1,
+                verse: 4,
+                text: "Pablo escribe a Tito.".into(),
+                at: WallMs(1_792_378_282_100),
+            }],
+        }
+    }
+}
+
+impl Example for Sources {
+    fn example() -> Self {
+        Sources {
+            at: scope(),
+            book: BookId::Titus,
+            chapter: 1,
+        }
+    }
+}
+
+impl Example for SourcesView {
+    fn example() -> Self {
+        SourcesView {
+            panes: vec![
+                SourcePane {
+                    id: "ult".into(),
+                    dir: Direction::Ltr,
+                    text: PaneText::Ready(PaneChapter {
+                        sections: vec![1, 4],
+                        verses: vec![PaneVerse {
+                            key: RefPart::parse("1").unwrap(),
+                            text: "Paul, a servant of God".into(),
+                            tokens: vec![
+                                "Paul".into(),
+                                ", ".into(),
+                                "a".into(),
+                                " ".into(),
+                                "servant".into(),
+                                " ".into(),
+                                "of".into(),
+                                " ".into(),
+                                "God".into(),
+                            ],
+                            lead: None,
+                            before: Some(0),
+                        }],
+                    }),
+                },
+                SourcePane {
+                    id: "ust".into(),
+                    dir: Direction::Ltr,
+                    text: PaneText::NotInstalled,
+                },
+                SourcePane {
+                    id: "glt".into(),
+                    dir: Direction::Rtl,
+                    text: PaneText::Error {
+                        reason: "the book could not be read".into(),
+                    },
+                },
+            ],
+            // A project in another numbering: `rsc` Jonah 2 holds `eng` 1:17 and 2:1-10.
+            frame: SourceFrame::Mapped {
+                rows: vec![
+                    FrameRow {
+                        verse: RefPart::parse("1").unwrap(),
+                        source: RowSource::Verse {
+                            chapter: 1,
+                            verse: RefPart::parse("17").unwrap(),
+                        },
+                    },
+                    FrameRow {
+                        verse: RefPart::parse("2").unwrap(),
+                        source: RowSource::OtherBook {
+                            to: "NEH 1:1".into(),
+                        },
+                    },
+                    FrameRow {
+                        verse: RefPart::parse("3").unwrap(),
+                        source: RowSource::Unmapped,
+                    },
+                ],
+            },
+        }
+    }
+}
+
+impl Example for Passage {
+    fn example() -> Self {
+        Passage {
+            at: scope(),
+            book: BookId::Titus,
+            chapter: 1,
+        }
+    }
+}
+
+fn spans(text: &str, bold: &str) -> Vec<ArticleSpan> {
+    vec![
+        ArticleSpan {
+            text: bold.into(),
+            bold: true,
+            italic: false,
+        },
+        ArticleSpan {
+            text: text.into(),
+            bold: false,
+            italic: false,
+        },
+    ]
+}
+
+impl Example for PassageView {
+    fn example() -> Self {
+        let focus = PaneFocus {
+            pane: "ult".into(),
+            title: Some("of God".into()),
+            lit: vec![LitVerse {
+                verse: RefPart::parse("1").unwrap(),
+                tokens: vec![6, 8],
+            }],
+        };
+        PassageView {
+            notes: Slot::Ready(ReadySlot {
+                items: vec![NoteCard {
+                    id: "rtc9".into(),
+                    chapter: RefPart::parse("1").unwrap(),
+                    verse: RefPart::parse("1").unwrap(),
+                    quote: "Θεοῦ".into(),
+                    occurrence: 1,
+                    note: vec![ArticleBlock::new(
+                        BlockKind::P,
+                        0,
+                        spans(" is an abstract noun.", "Faith"),
+                    )],
+                    academy: Some("figs-abstractnouns".into()),
+                    panes: vec![focus.clone()],
+                }],
+                dir: Some(Direction::Ltr),
+                fallback: false,
+            }),
+            words: Slot::Ready(ReadySlot {
+                items: vec![WordCard {
+                    id: "x4ab".into(),
+                    chapter: RefPart::parse("1").unwrap(),
+                    verse: RefPart::parse("1").unwrap(),
+                    quote: "Θεοῦ".into(),
+                    occurrence: 1,
+                    category: Some("kt".into()),
+                    slug: "god".into(),
+                    panes: vec![focus],
+                }],
+                dir: None,
+                fallback: true,
+            }),
+            questions: Slot::Fetch,
+            simplified: Slot::Ready(ReadySlot {
+                items: vec![SimplifiedVerse {
+                    key: RefPart::parse("1").unwrap(),
+                    text: "I, Paul, serve God.".into(),
+                    source: Some("1:1".into()),
+                }],
+                dir: Some(Direction::Ltr),
+                fallback: false,
+            }),
+            simplified_pin: Some("en_ust".into()),
+            other_book: None,
+        }
+    }
+}
+
+impl Example for Article {
+    fn example() -> Self {
+        Article {
+            at: scope(),
+            book: BookId::Titus,
+            link: ArticleLink::Words {
+                category: Some("kt".into()),
+                slug: "god".into(),
+            },
+        }
+    }
+}
+
+impl Example for ArticleView {
+    fn example() -> Self {
+        ArticleView::Found {
+            title: "God".into(),
+            blocks: vec![
+                ArticleBlock::new(BlockKind::H, 0, spans("", "Definition:")),
+                ArticleBlock {
+                    depth: 1,
+                    ..ArticleBlock::new(BlockKind::Li, 1, spans(" created the universe.", "God"))
+                },
+                ArticleBlock {
+                    number: Some("1".into()),
+                    ..ArticleBlock::new(BlockKind::Ol, 0, spans(" is one.", "God"))
+                },
+                ArticleBlock {
+                    cells: vec![spans("", "Word"), spans("", "Meaning")],
+                    header: true,
+                    ..ArticleBlock::new(BlockKind::Tr, 0, spans(" Meaning", "Word"))
+                },
+            ],
+            dir: Direction::Ltr,
+        }
+    }
+}
+
 fn golden_dir() -> PathBuf {
     common::crate_dir().join("tests/golden")
 }
@@ -983,6 +1271,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",
+            "session/close",
             "test/saveVerse",
         ])
     );
@@ -1158,6 +1447,12 @@ fn events() -> Vec<Event> {
             kind: JobKind::Seed,
             project: None,
             state: JobState::Done(JobOutcome::Finished),
+        }),
+        Event::Job(JobView {
+            id: JobId::new(10),
+            kind: JobKind::Open,
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+            state: JobState::Done(JobOutcome::Opened(Box::new(opened()))),
         }),
         Event::ProjectsChanged,
         Event::HomeCard {

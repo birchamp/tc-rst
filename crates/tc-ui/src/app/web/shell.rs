@@ -30,6 +30,8 @@ use crate::views::modals::new_bible::{NewBible, NewObs};
 use crate::views::modals::open_door43::OpenFromDoor43;
 use crate::views::modals::share::ShareDialog;
 use crate::views::modals::sign_in::ShareSignIn;
+use crate::views::open_progress::OpenProgress;
+use crate::views::understand::Understand;
 
 /// tC4's `App`: the frame, the top bar, the screen in its boundary, and the dialogs in tC4's
 /// mount order, which is their stacking order (`tC4:src/App.jsx:138-154`).
@@ -80,7 +82,8 @@ pub fn App() -> impl IntoView {
             {move || share_open.get().then(|| view! { <ShareDialog /> })}
             {move || feedback_open.get().then(|| view! { <Feedback /> })}
             <InternetDialog />
-            // OpenProgress (B3) and the Inspector (late) mount here.
+            <OpenProgress />
+            // The Inspector (late) mounts here.
         </div>
     }
     .into_any()
@@ -131,11 +134,16 @@ fn home_dialogs(s: &AppState) -> impl IntoView + use<> {
 /// the run, so a reload after it does not take the snapshot of the old run for this one.
 fn remember_place(s: &AppState) {
     let (instance, view, project) = (s.server.instance.clone(), s.view.clone(), s.project.clone());
+    let (book, chapter) = (s.u.book.clone(), s.u.chapter.clone());
     Effect::new(move |_| {
         let snapshot = NavSnapshot {
             instance: instance.get(),
             view: view.get(),
             project: project.get(),
+            place: book.get().map(|book| crate::app::shell::BookPlace {
+                book,
+                chapter: chapter.get(),
+            }),
         };
         if let Ok(text) = serde_json::to_string(&snapshot) {
             js::session_set(NAV_KEY, &text);
@@ -443,7 +451,9 @@ fn ViewBoundary() -> impl IntoView {
         None => {
             let s = s.clone();
             (move || {
-                key.track();
+                // Read, not only tracked: a memo that is tracked and never read is never
+                // computed again, so the screen stayed Home when a project opened (B3).
+                let _shown = key.get();
                 main_view(&s)
             })
             .into_any()
@@ -459,10 +469,9 @@ fn main_view(s: &AppState) -> AnyView {
         .with_untracked(|p| screen(s.view.get_untracked(), p.as_ref()));
     match screen {
         Screen::Home => view! { <Home /> }.into_any(),
-        // B3 Understand, B4a Translate, B5a/B5b Check, B8 Community Checking, B7 the story
-        // views.
-        Screen::Understand
-        | Screen::Draft
+        Screen::Understand => view! { <Understand /> }.into_any(),
+        // B4a Translate, B5a/B5b Check, B8 Community Checking, B7 the story views.
+        Screen::Draft
         | Screen::Check
         | Screen::CommunityChecking
         | Screen::StoryUnderstand

@@ -126,6 +126,8 @@ pub struct AppState {
     pub import_toast: ArcRwSignal<Option<ImportToast>>,
     /// The project an import of this page made: its card carries "Imported" (F1 sets it).
     pub imported_repo: ArcRwSignal<Option<ProjectRef>>,
+    /// The open and the Understand screen (B3).
+    pub u: super::understand::UnderstandState,
     /// `/ui/<build>/`, where the logo and the catalogs are.
     pub base: Arc<str>,
     /// What the server holds: the internet switch, the account, the saved language, the
@@ -139,6 +141,7 @@ impl AppState {
         server: ServerState,
         view: View,
         project: Option<CurrentProject>,
+        place: Option<crate::app::shell::BookPlace>,
         view_error: Option<String>,
     ) -> Self {
         Self {
@@ -162,6 +165,10 @@ impl AppState {
             syncing: ArcRwSignal::new(None),
             import_toast: ArcRwSignal::new(None),
             imported_repo: ArcRwSignal::new(None),
+            u: super::understand::UnderstandState::new(
+                place.map(|p| p.book),
+                place.map_or(1, |p| p.chapter),
+            ),
             base: Arc::from(base),
             server,
         }
@@ -224,8 +231,12 @@ impl Actions {
         })))
     }
 
-    fn s(&self) -> &AppState {
+    pub(crate) fn s(&self) -> &AppState {
         &self.0.s
+    }
+
+    pub(crate) fn runtime(&self) -> &Runtime {
+        &self.0.runtime
     }
 
     // ---- navigation (6.5): flush, and go only when everything could be saved -----------
@@ -246,15 +257,15 @@ impl Actions {
     }
 
     /// The brand, the project chip and "Back to Home" (tC4 `backToProjects`,
-    /// `tC4:src/state.jsx:7286-7326`): drained first; Home, no project, no editing card. B1b and
-    /// B3 add the close of the screen session.
+    /// `tC4:src/state.jsx:7286-7326`): drained first; Home, no project, no editing card, and the
+    /// screen's session closes behind (B3).
     pub fn back_to_projects(&self) {
         let this = self.clone();
         spawn_local(async move {
             if !this.0.runtime.saves().gate().await {
                 return;
             }
-            this.leave_project();
+            this.leave_project(true);
         });
     }
 
@@ -262,15 +273,19 @@ impl Actions {
     /// page goes Home at once, with no gate, which could only save into the new run over tokens
     /// of the old one. The fields of the old run keep their entries for the offer.
     pub(crate) fn home_after_restart(&self) {
-        self.leave_project();
+        self.leave_project(false);
     }
 
-    fn leave_project(&self) {
+    /// Home, with no project. `close` ends the screen's session on the server (B3); after a
+    /// restart there is none to end.
+    fn leave_project(&self, close: bool) {
         let s = self.s();
         s.view_error.try_set(None);
         s.editing.try_set(Editing::None);
+        let project = s.project.get_untracked();
         s.project.try_set(None);
         s.view.try_set(View::Home);
+        self.close_session(project.filter(|_| close));
     }
 
     // ---- the internet switch (5.6) -------------------------------------------------------
@@ -742,12 +757,6 @@ impl Actions {
             tc_api::home::Door43Card::Local => Pending::Share(Box::new(ShareProject::of(card))),
         });
     }
-
-    /// A book tile or a story tile: B3 opens the project there.
-    pub fn open_project_at(&self, _project: ProjectRef, _target: OpenTarget) {}
-
-    /// The Resume card: B3 opens the project at the record's place, mode and tool.
-    pub fn resume(&self, _resume: &tc_api::home::LastEditView) {}
 
     /// A card's Settings: B9a opens the project's settings from Home.
     pub fn open_settings(&self, _card: &HomeCard) {}

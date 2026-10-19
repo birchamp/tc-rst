@@ -42,7 +42,9 @@ pub use derivations::{
     SelectionCount, SelectionText, plain_text_v1, selections_v1, shown_text_v1, tokenize_v1,
 };
 pub use doc::{Document, Marker, Milestone, Node, Span};
-pub use text::display_text;
+pub use text::{
+    DisplaySource, DisplayToken, DisplayVerse, display_text, display_tokens, edge_markers,
+};
 
 use tc_core::VerseSpan;
 

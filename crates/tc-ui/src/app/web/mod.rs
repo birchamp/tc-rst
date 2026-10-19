@@ -19,6 +19,7 @@ mod saves;
 mod shell;
 mod state;
 mod stream;
+pub mod understand;
 mod view_error;
 
 use std::any::Any;
@@ -85,6 +86,12 @@ struct Inner {
 /// What every screen stands on: the API, the cache and the server's state. Cheap to clone.
 #[derive(Clone)]
 pub struct Runtime(Rc<Inner>);
+
+/// The page's clock in milliseconds (`performance.now()`), for timers that start at an
+/// action, such as the open overlay's (B3).
+pub fn now_ms() -> f64 {
+    js::now_ms()
+}
 
 /// The runtime the page provides, from the reactive context.
 pub fn use_runtime() -> Option<Runtime> {
@@ -534,15 +541,17 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
 
     // Where a reload in the same launch returns to (6.6, D16). After a panic the view comes
     // back too, and the boundary shows the callout in place of its screen (AD22).
-    let (view, project) = crate::app::shell::restore(
-        js::session_get(crate::app::shell::NAV_KEY).as_deref(),
-        &hello,
-    );
+    let kept = js::session_get(crate::app::shell::NAV_KEY);
+    let (view, project) = crate::app::shell::restore(kept.as_deref(), &hello);
+    let place = project
+        .as_ref()
+        .and_then(|_| crate::app::shell::restore_place(kept.as_deref()));
     let s = AppState::new(
         base,
         runtime.state().clone(),
         view,
         project,
+        place,
         after.as_ref().map(|marker| marker.message.clone()),
     );
     let ctx = AppCtx {

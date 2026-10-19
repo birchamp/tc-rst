@@ -34,6 +34,13 @@ const PHASE_0: &[&str] = &[
     "home/card",
     "home/versifications",
     "home/languages",
+    // B3: open and Understand.
+    "session/open",
+    "session/close",
+    "editor/book",
+    "editor/sources",
+    "helps/passage",
+    "helps/article",
     // B9b: the share dialog's first step, the repository link, and Open from Door43.
     "account/repoLink",
     "account/orgs",
