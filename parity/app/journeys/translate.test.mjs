@@ -199,3 +199,44 @@ browserTest('refresh_under_typed_editor_keeps_text_and_token_through_an_arabic_i
     assert.equal(await page.getByTestId('conflicts-review').getAttribute('data-count'), '1');
   }, { hooks: true });
 }, { hooks: true });
+
+// tC4 #131, #118: in a project of another numbering, Translate's source column shows for each
+// project verse the source verse its numbering names, under that verse's place, one verse per
+// row with the verse-only statement in place of the switch; a verse in another book or in no
+// place is stated. The sample is in `eng`, so the reply is the server's for a project of this
+// shape: Titus 1 whose verse 1 is the source's 1:2, verse 2 in another book, verse 3 nowhere.
+browserTest('cross_frame_translate_shows_the_mapped_source_verse', async () => {
+  await withApp(async ({ page }) => {
+    await page.route('**/api/v1/editor/sources', async (route) => {
+      const reply = await (await route.fetch()).json();
+      const source = (key) => ({ '1': { type: 'verse', value: { chapter: 1, verse: '2' } }, '2': { type: 'otherBook', value: { to: 'NEH 1:1' } }, '3': { type: 'unmapped' } })[key]
+        ?? { type: 'verse', value: { chapter: 1, verse: key } };
+      const rows = reply.value.panes[0].text.value.verses.map((v) => ({ verse: v.key, source: source(v.key) }));
+      for (const pane of [...reply.value.panes, reply.value.original].filter(Boolean)) {
+        if (pane.text.type !== 'ready') continue;
+        const byKey = Object.fromEntries(pane.text.value.verses.map((v) => [v.key, v]));
+        pane.text.value.sections = [];
+        pane.text.value.verses = rows.filter((r) => r.source.type === 'verse')
+          .map((r) => ({ ...byKey[r.source.value.verse], key: r.verse }));
+      }
+      reply.value.frame = { type: 'mapped', value: { rows } };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reply) });
+    });
+    await titus(page).click();
+    await page.getByTestId('understand').waitFor();
+    await page.getByTestId('mode-switch').getByRole('tab', { name: 'Translate' }).click();
+    await page.getByTestId('draft-verse-only').waitFor();
+    assert.equal(await page.getByRole('tab', { name: 'Verse', exact: true }).count(), 0, 'no Section or Verse switch');
+    const first = page.getByTestId('draft-source-text').first();
+    assert.ok((await first.textContent()).startsWith('2with the certain hope'), await first.textContent());
+    const stated = await page.getByTestId('draft-source-stated').allTextContents();
+    assert.deepEqual(stated, [
+      'Project verse 1:2 corresponds to NEH 1:1 in the source\'s numbering — a different book, so it cannot be shown here yet.',
+      'Project verse 1:3 has no place in the source\'s verse numbering — nothing to show for it here.',
+    ]);
+    const labels = await page.locator('main span').filter({ hasText: /^Titus 1:/ }).allTextContents();
+    assert.equal(labels[0], 'Titus 1:2', 'the first row is labelled with the source verse it shows');
+    // One row per project verse, each with its own verse of the translation.
+    assert.equal(await page.getByTestId('draft-target-text').count(), 16);
+  }, { scenario: 'en-pins' });
+});

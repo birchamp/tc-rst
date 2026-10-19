@@ -21,7 +21,7 @@
       }
     },
     "build": {
-      "ui": "f07ba5f1e24c6d2b",
+      "ui": "072ce1100c8ff794",
       "commit": "dev",
       "api": 1
     }
@@ -127,7 +127,7 @@
       },
       "dom": {
         "tc4Sha256": "3e27eb9e669b3cf153ed6418ca4a7e7ddb19bc88bbec2d03b415730c91075a7e",
-        "rustSha256": "5e3f4441e87497afcff1c1e6e67d4e2a196475adcbe21dee2945b693c0072c42",
+        "rustSha256": "5c6444c20b441eaaf077b594415a677b3ecc5dac37acee6618a3ad99d9c18c9b",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1087,7 +1087,7 @@
       },
       "dom": {
         "tc4Sha256": "8252bdeb4bb17728b64be6834f74ddc0db7492dc1bb26e3466a73db46b105f9e",
-        "rustSha256": "b4d3bf6c42bc617198ec9d9da25561049480dfe7fefd3184ceff42aa4a420ec7",
+        "rustSha256": "0b910f4e4812386ac5f3026b837e7fb33eff51fd61bba440c993b1c0be57e961",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1131,7 +1131,7 @@
       },
       "dom": {
         "tc4Sha256": "4eadd4501bc0afaf5835272e9a343f38c7273091f49c825608fdc22187d5db82",
-        "rustSha256": "411f91fe4d271e6e7f3ca1b65a023a5bc6865a84cb360c48ad2371ff473f30c3",
+        "rustSha256": "ccde2fd9be5fd90f4090f32cc2e28a8fea7bc731dc069a1920ab8b3c1d1233b6",
         "scope": null,
         "same": true,
         "declared": [],

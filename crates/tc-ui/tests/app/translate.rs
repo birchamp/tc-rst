@@ -3,15 +3,17 @@
 //! card is open, the Comments tab, and the "changed while typing" notice.
 
 use tc_api::buffer::{BufferKey, FieldKey, FieldKind, FieldPlace};
-use tc_api::editor::{ChapterText, CommentView, PaneChapter, PaneVerse, VerseRow};
+use tc_api::editor::{
+    ChapterText, CommentView, FrameRow, PaneChapter, PaneVerse, RowSource, SourceFrame, VerseRow,
+};
 use tc_api::ids::{ProjectId, ProjectRef, RecordRef, RefPart, WallMs};
 use tc_api::shown::{PersonLabel, Shown, Who};
 use tc_core::BookId;
 use tc_ui::app::shell::Editing;
 use tc_ui::app::translate::{
-    box_text, changed_while_typing, comments_in_focus, editing_focus, parse_verse_place,
-    range_span, section_ranges, sections, source_keys_for, target_paragraphs, verse_key,
-    verse_place,
+    SourcePlace, box_text, changed_while_typing, comments_in_focus, editing_focus,
+    parse_verse_place, range_span, section_ranges, sections, source_keys_for, source_place,
+    target_paragraphs, verse_key, verse_place,
 };
 
 fn keys(list: &[&str]) -> Vec<String> {
@@ -218,4 +220,65 @@ fn the_notice_names_who_changed_the_verse() {
             "This verse was changed while you were typing. Your text will be kept as a second version."
         );
     }
+}
+
+/// tC4 #131: in a project of another numbering each project verse shows the source verse its
+/// numbering names, under that verse's place and number; a verse in another book or in no place
+/// is stated, never shown as another verse's text.
+#[test]
+fn cross_frame_translate_shows_the_mapped_source_verse() {
+    let row = |verse: &str, source: RowSource| FrameRow {
+        verse: RefPart::parse(verse).unwrap(),
+        source,
+    };
+    let at = |chapter: u16, verse: &str| RowSource::Verse {
+        chapter,
+        verse: RefPart::parse(verse).unwrap(),
+    };
+    let frame = SourceFrame::Mapped {
+        rows: vec![
+            row("1", at(1, "17")),
+            row("2", at(2, "1-2")),
+            row(
+                "3",
+                RowSource::OtherBook {
+                    to: "NEH 1:1".into(),
+                },
+            ),
+            row("4", RowSource::Unmapped),
+        ],
+    };
+    let place = |key: &str| source_place(BookId::Jonah, 2, key, &frame);
+    assert_eq!(
+        place("1"),
+        SourcePlace::Verse {
+            label: "Jonah 1:17".into(),
+            number: "17".into()
+        }
+    );
+    // A fan-out: one project verse carries a source span.
+    assert_eq!(
+        place("2"),
+        SourcePlace::Verse {
+            label: "Jonah 2:1-2".into(),
+            number: "1-2".into()
+        }
+    );
+    assert_eq!(
+        place("3"),
+        SourcePlace::OtherBook {
+            at: "2:3".into(),
+            to: "NEH 1:1".into()
+        }
+    );
+    assert_eq!(place("4"), SourcePlace::Unmapped { at: "2:4".into() });
+    assert_eq!(place("9"), SourcePlace::Unmapped { at: "2:9".into() });
+    assert_eq!(
+        source_place(BookId::Jonah, 2, "1", &SourceFrame::Unknown),
+        SourcePlace::Unknown
+    );
+    assert_eq!(
+        source_place(BookId::Jonah, 2, "1", &SourceFrame::Same),
+        SourcePlace::Same
+    );
 }

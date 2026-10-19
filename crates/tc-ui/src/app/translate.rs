@@ -2,7 +2,7 @@
 //! `helpsFocus.js` that are not drawing. Pure, so they are tested on the host.
 
 use tc_api::buffer::{BufferKey, FieldKey, FieldKind, FieldPlace};
-use tc_api::editor::{ChapterText, CommentView, PaneChapter, VerseRow};
+use tc_api::editor::{ChapterText, CommentView, PaneChapter, RowSource, SourceFrame, VerseRow};
 use tc_api::ids::{ProjectId, ProjectRef};
 use tc_api::shown::{PersonLabel, Who};
 use tc_core::BookId;
@@ -65,6 +65,45 @@ pub fn sections(
         _ => &[],
     };
     section_ranges(starts, &keys)
+}
+
+/// Where a section's source verse is in a project of another numbering (#131): Translate
+/// shows the source verse the project's numbering names, never the one with the same number.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SourcePlace {
+    /// The same numbering: the section's own keys.
+    Same,
+    /// The source verse at `chapter:verse`, which the pane carries under the project's key; its
+    /// number is the one the passage shows.
+    Verse { label: String, number: String },
+    /// Another book (#121): stated, never shown as this book's text.
+    OtherBook { at: String, to: String },
+    /// No place in the sources' numbering: stated.
+    Unmapped { at: String },
+    /// The project's numbering could not be established: no passage.
+    Unknown,
+}
+
+/// The source place of a project verse `key` of `chapter` under `frame`.
+pub fn source_place(book: BookId, chapter: u16, key: &str, frame: &SourceFrame) -> SourcePlace {
+    let rows = match frame {
+        SourceFrame::Same => return SourcePlace::Same,
+        SourceFrame::Unknown => return SourcePlace::Unknown,
+        SourceFrame::Mapped { rows } => rows,
+    };
+    let at = format!("{chapter}:{key}");
+    match rows
+        .iter()
+        .find(|r| r.verse.as_str() == key)
+        .map(|r| &r.source)
+    {
+        Some(RowSource::Verse { chapter, verse }) => SourcePlace::Verse {
+            label: format!("{} {chapter}:{verse}", book.english_name()),
+            number: verse.as_str().to_owned(),
+        },
+        Some(RowSource::OtherBook { to }) => SourcePlace::OtherBook { at, to: to.clone() },
+        Some(RowSource::Unmapped) | None => SourcePlace::Unmapped { at },
+    }
 }
 
 /// tC4's `rangeSpan`: "9–10", "9", or "9-10" for a single span key.

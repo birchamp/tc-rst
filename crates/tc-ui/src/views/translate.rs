@@ -35,8 +35,8 @@ use super::source_verse::source_verse;
 use crate::app::save::{FieldScope, Pair, Source, View};
 use crate::app::shell::Editing;
 use crate::app::translate::{
-    box_text, changed_while_typing, editing_focus, editing_verse, range_span, sections,
-    shown_words, source_unit, target_paragraphs,
+    SourcePlace, box_text, changed_while_typing, editing_focus, editing_verse, range_span,
+    sections, shown_words, source_place, source_unit, target_paragraphs,
 };
 use crate::app::understand::{HelpFocus, UnitMode, literal_pane};
 use crate::app::web::{Actions, AppCtx, AppState, use_app, use_runtime};
@@ -290,12 +290,10 @@ fn chapter_view(
                 .map(|pane| pane.text.clone())
         })
     });
-    let cross_frame = Memo::new(move |_| {
-        panes.with(|p| {
-            p.as_ref()
-                .is_some_and(|v| !matches!(v.frame, SourceFrame::Same))
-        })
+    let frame = Memo::new(move |_| {
+        panes.with(|p| p.as_ref().map_or(SourceFrame::Same, |v| v.frame.clone()))
     });
+    let cross_frame = Memo::new(move |_| frame.with(|f| !matches!(f, SourceFrame::Same)));
     let chapter_text = Memo::new(move |_| {
         text.with(|v| {
             v.as_ref()
@@ -395,8 +393,12 @@ fn chapter_view(
                             let keys = keys.clone();
                             move || {
                                 let pane = chosen.get().unwrap_or_default();
+                                let place = frame.with(|f| match keys.as_slice() {
+                                    [key] => source_place(book_id, chapter, key, f),
+                                    _ => SourcePlace::Same,
+                                });
                                 pane_text.with(|text| {
-                                    source_cell(book_id, &pane, text.as_ref(), &keys, label.clone(), pane_focus)
+                                    source_cell(book_id, &pane, text.as_ref(), &keys, &label, &place, pane_focus)
                                 })
                             }
                         };
@@ -656,7 +658,8 @@ fn source_cell(
     pane: &str,
     text: Option<&PaneText>,
     keys: &[String],
-    label: String,
+    label: &str,
+    place: &SourcePlace,
     focus: Memo<Option<HelpFocus>>,
 ) -> AnyView {
     let mut style = cell();
@@ -667,7 +670,37 @@ fn source_cell(
         "font-style": "italic",
         "margin": "6px 0 0",
     };
+    // In another numbering the section is one project verse, labelled with the source verse it
+    // shows, or stating why it shows none (#131, as Understand's units do).
+    let (label, number) = match place {
+        SourcePlace::Verse { label, number } => (label.clone(), Some(number.clone())),
+        _ => (label.to_owned(), None),
+    };
     let overline = view! { <Overline style=crate::css! { "margin-bottom": 6 }>{label}</Overline> };
+    let stated = match place {
+        SourcePlace::OtherBook { at, to } => Some(t(
+            keys::understand::VERSE_CROSS_BOOK,
+            &[
+                ("ref", at as &dyn std::fmt::Display),
+                ("to", to as &dyn std::fmt::Display),
+            ],
+        )),
+        SourcePlace::Unmapped { at } => Some(t(
+            keys::understand::VERSE_UNMAPPED,
+            &[("ref", at as &dyn std::fmt::Display)],
+        )),
+        SourcePlace::Unknown => Some(t(keys::understand::FRAME_UNAVAILABLE, &[])),
+        SourcePlace::Same | SourcePlace::Verse { .. } => None,
+    };
+    if let Some(stated) = stated {
+        return view! {
+            <div style=style.to_style()>
+                {overline}
+                <p data-testid="draft-source-stated" style=italic.to_style()>{stated}</p>
+            </div>
+        }
+        .into_any();
+    }
     let body = match text {
         Some(PaneText::NotInstalled) => {
             view! { <p style=italic.to_style()>{t(keys::source::NOT_INSTALLED, &[])}</p> }.into_any()
@@ -679,7 +712,9 @@ fn source_cell(
             <p style=italic.to_style()>{t(keys::understand::SOURCE_ERROR, &[])}" "{reason.clone()}</p>
         }
         .into_any(),
-        Some(PaneText::Ready(chapter)) => source_paragraphs(book, pane, chapter, keys, focus),
+        Some(PaneText::Ready(chapter)) => {
+            source_paragraphs(book, pane, chapter, keys, number.as_deref(), focus)
+        }
         None => ().into_any(),
     };
     view! { <div style=style.to_style()>{overline}{body}</div> }.into_any()
@@ -690,8 +725,10 @@ fn source_paragraphs(
     pane: &str,
     chapter: &PaneChapter,
     keys: &[String],
+    number: Option<&str>,
     focus: Memo<Option<HelpFocus>>,
 ) -> AnyView {
+    let number = number.map(str::to_owned);
     let orig = pane == "orig";
     let ot = book.testament() == Testament::Old;
     let (dir, lang, family) = match (orig, ot) {
@@ -748,7 +785,8 @@ fn source_paragraphs(
                         }
                         None => view! { <span style=waiting.clone()>{t(keys::draft::SOURCES_LOAD, &[])}</span> }.into_any(),
                     };
-                    view! { <sup style=sup()>{k}</sup>{text} }
+                    let shown = number.clone().unwrap_or(k);
+                    view! { <sup style=sup()>{shown}</sup>{text} }
                 })
                 .collect_view();
             view! { <p data-testid="draft-source-text" dir=dir lang=lang style=style.clone()>{body}</p> }

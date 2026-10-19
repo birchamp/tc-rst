@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "f07ba5f1e24c6d2b",
+    "ui": "072ce1100c8ff794",
     "commit": "dev",
     "api": 1
   },
@@ -93,7 +93,7 @@
       "png": "screens/translate-tit1.png",
       "sha256": "9d8ce65b9444201fc13a573cda5b29b24bf5da9854d90a823559370762c2d545",
       "dom": "dom/translate-tit1.json",
-      "domSha256": "5e3f4441e87497afcff1c1e6e67d4e2a196475adcbe21dee2945b693c0072c42"
+      "domSha256": "5c6444c20b441eaaf077b594415a677b3ecc5dac37acee6618a3ad99d9c18c9b"
     },
     {
       "name": "add-project",
@@ -616,7 +616,7 @@
       "png": "screens/en-translate-tit1.png",
       "sha256": "fa34c1afb1c2ae6272e4eb7ca5841308773c209249ed39d888e029d7cee572bb",
       "dom": "dom/en-translate-tit1.json",
-      "domSha256": "b4d3bf6c42bc617198ec9d9da25561049480dfe7fefd3184ceff42aa4a420ec7"
+      "domSha256": "0b910f4e4812386ac5f3026b837e7fb33eff51fd61bba440c993b1c0be57e961"
     },
     {
       "name": "en-translate-verse-editor",
@@ -639,7 +639,7 @@
       "png": "screens/en-translate-verse-editor.png",
       "sha256": "f3392a70b3eaf2e941eeed9bc192fe4a0f30cb7a29cd4afc609ea80be926ae94",
       "dom": "dom/en-translate-verse-editor.json",
-      "domSha256": "411f91fe4d271e6e7f3ca1b65a023a5bc6865a84cb360c48ad2371ff473f30c3"
+      "domSha256": "ccde2fd9be5fd90f4090f32cc2e28a8fea7bc731dc069a1920ab8b3c1d1233b6"
     },
     {
       "name": "open-progress-journal",
