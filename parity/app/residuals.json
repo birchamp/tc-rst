@@ -202,7 +202,7 @@
         "pixels",
         "dom"
       ],
-      "why": "tC4 reaches this state by writing a file outside the app and opening again: its store refuses the open, and the checkpoint of the project just left fails too, so tC4's Home shows both banners. The rebuild reads a file written outside the app as an outside edit and opens (STORAGE §11.1), so the Rust route answers `session/open` with a refusal it does give, a project file it cannot read (`replies/home-open-error.json`): the banner is tC4's, `The project could not be opened.` with the store's reason and Ask for help, and there is no checkpoint banner. The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up..",
+      "why": "tC4 reaches this state by writing a file outside the app and opening again: its store refuses the open, and the checkpoint of the project just left fails too, so tC4's Home shows both banners. The rebuild reads a file written outside the app as an outside edit and opens (STORAGE §11.1), so the Rust route answers `session/open` with a refusal it does give, a project file it cannot read (`replies/home-open-error.json`): the banner is tC4's, `The project could not be opened.` with the store's reason and Ask for help, and there is no checkpoint banner. The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up.",
       "until": null
     },
     "open-progress-journal": {
@@ -210,7 +210,7 @@
         "pixels",
         "dom"
       ],
-      "why": "The overlay itself is tC4's (`OpenProgress.jsx`): its dialog, title, caption and bar, through its own 300 ms timer (A-22). The Rust route holds the open (`test/hold` at `open`) and answers `jobs/get` with the stage the case shows; STORAGE's phases map on tC4's three stages (Q-7). While the changes are read, the count names files (`open.changeFiles`, \"{done} of {total} files\", a rebuild key pending in nine languages, Q-10), where tC4's names saved actions: the store reads the project's change files, not tC4's journal segments, so tC4's words would misname what is counted (Q-7, a declared difference). Behind the overlay: The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up..",
+      "why": "The overlay itself is tC4's (`OpenProgress.jsx`): its dialog, title, caption and bar, through its own 300 ms timer (A-22). The Rust route holds the open (`test/hold` at `open`) and answers `jobs/get` with the stage the case shows; STORAGE's phases map on tC4's three stages (Q-7). While the changes are read, the count names files (`open.changeFiles`, \"{done} of {total} files\", a rebuild key pending in nine languages, Q-10), where tC4's names saved actions: the store reads the project's change files, not tC4's journal segments, so tC4's words would misname what is counted (Q-7, a declared difference). Behind the overlay: The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up.",
       "until": null
     },
     "open-progress-prepare": {
@@ -218,7 +218,7 @@
         "pixels",
         "dom"
       ],
-      "why": "The overlay itself is tC4's (`OpenProgress.jsx`): its dialog, title, caption and bar, through its own 300 ms timer (A-22). The Rust route holds the open (`test/hold` at `open`) and answers `jobs/get` with the stage the case shows; STORAGE's phases map on tC4's three stages (Q-7). The overlay's DOM and pixels are tC4's; behind it: The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up..",
+      "why": "The overlay itself is tC4's (`OpenProgress.jsx`): its dialog, title, caption and bar, through its own 300 ms timer (A-22). The Rust route holds the open (`test/hold` at `open`) and answers `jobs/get` with the stage the case shows; STORAGE's phases map on tC4's three stages (Q-7). The overlay's DOM and pixels are tC4's; behind it: The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up.",
       "until": null
     },
     "open-progress-state": {
@@ -226,7 +226,7 @@
         "pixels",
         "dom"
       ],
-      "why": "The overlay itself is tC4's (`OpenProgress.jsx`): its dialog, title, caption and bar, through its own 300 ms timer (A-22). The Rust route holds the open (`test/hold` at `open`) and answers `jobs/get` with the stage the case shows; STORAGE's phases map on tC4's three stages (Q-7). The overlay's DOM and pixels are tC4's; behind it: The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up..",
+      "why": "The overlay itself is tC4's (`OpenProgress.jsx`): its dialog, title, caption and bar, through its own 300 ms timer (A-22). The Rust route holds the open (`test/hold` at `open`) and answers `jobs/get` with the stage the case shows; STORAGE's phases map on tC4's three stages (Q-7). The overlay's DOM and pixels are tC4's; behind it: The seed check refuses the OBS sample (docs/evidence/state-seed-check-2026-10-18.md §4.1-4.3, the storage team's to fix; AD7 forbids loading it), so the Rust Home lists only the scenario's Bible project: tC4's OBS card is missing and what is below it moves up.",
       "until": null
     },
     "understand-tit1": {

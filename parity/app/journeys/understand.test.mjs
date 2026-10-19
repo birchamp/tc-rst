@@ -1,6 +1,6 @@
 // Open and Understand (B3): J15's overlay on a held open, the open from a tile and its refusal,
 // the close at Home, the book rail's tooltip, a unit's focus and its lit words, the helps
-// panel's divider and the article pane.
+// panel's divider, its tabs and the article pane, and a project in another numbering.
 //
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app node --test parity/app/journeys/understand.test.mjs
 import assert from 'node:assert/strict';
@@ -179,5 +179,100 @@ browserTest('article_close_button_visible_after_scroll', async () => {
     assert.ok(await page.getByTestId('helps-article-close').isVisible());
     await page.getByTestId('helps-article-close').click();
     await page.getByTestId('helps-article-pane').waitFor({ state: 'detached' });
+  }, { scenario: 'en-pins' });
+});
+
+// tC4 #118, #121: a project in another numbering (New Bible offers six) reads one unit per
+// project verse, labelled with the source verse it shows, with the verse-only statement in
+// place of the switch; a verse the sources have in another book is stated. The sample is in
+// `eng`, so the reply is the server's for an `rsc` project of this shape: Titus 1 with its
+// verse 2 in another book.
+browserTest('cross_frame_project_shows_the_verse_only_statement_instead_of_the_switch', async () => {
+  await withApp(async ({ page }) => {
+    await page.route('**/api/v1/editor/sources', async (route) => {
+      const reply = await (await route.fetch()).json();
+      const rows = reply.value.panes[0].text.value.verses.map((v) => (v.key === '2'
+        ? { verse: v.key, source: { type: 'otherBook', value: { to: 'NEH 1:1' } } }
+        : { verse: v.key, source: { type: 'verse', value: { chapter: 1, verse: v.key } } }));
+      for (const pane of reply.value.panes) {
+        if (pane.text.type === 'ready') {
+          pane.text.value.sections = [];
+          pane.text.value.verses = pane.text.value.verses.filter((v) => v.key !== '2');
+        }
+      }
+      reply.value.frame = { type: 'mapped', value: { rows } };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reply) });
+    });
+    await titus(page).click();
+    await page.getByTestId('understand-unit-m1:1').waitFor();
+    assert.equal(await page.getByTestId('understand-verse-only').textContent(), 'Verse view. This project\'s verse numbering differs from the source, so sections are not available.');
+    assert.equal(await page.getByRole('tab', { name: 'Verse', exact: true }).count(), 0, 'no Section or Verse switch');
+    const units = await page.locator('[data-testid^="understand-unit-"]').count();
+    assert.equal(units, 16, 'one unit per project verse');
+    assert.match(await page.getByTestId('understand-unit-x1:2').textContent(), /Project verse 1:2 corresponds to NEH 1:1/);
+    assert.equal(await page.getByTestId('understand-unit-m1:3').locator('sup').first().textContent(), '3');
+  });
+});
+
+// tC4 #628: an article's table is a table, its numbered items keep their numbers, and a
+// nested item sits further in. The sample's articles hold none, so the reply is the server's
+// for an article that does (tc-helps' `ta_article_with_a_table_renders_a_table`).
+browserTest('an_article_draws_its_table_numbers_and_nesting', async () => {
+  await withApp(async ({ page }) => {
+    const span = (text, bold = false) => ({ text, bold, italic: false });
+    const block = (kind, text, more = {}) => ({ kind, quote: 0, spans: [span(text)], depth: 0, number: null, cells: [], header: false, ...more });
+    const row = (cells, header) => block('tr', cells.join(' '), { cells: cells.map((c) => [span(c, header)]), header });
+    const blocks = [
+      block('h', 'Numbers'),
+      row(['Word', 'Meaning'], true),
+      row(['hesed', 'loyal love'], false),
+      block('ol', 'one', { number: '1' }),
+      block('li', 'top'),
+      block('li', 'under', { depth: 1 }),
+    ];
+    await page.route('**/api/v1/helps/article', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({ type: 'ok', value: { type: 'found', value: { title: 'God', blocks, dir: 'ltr' } } }) }));
+    await openTitus(page);
+    await page.getByRole('tab', { name: 'Words', exact: true }).click();
+    await page.getByTestId('helps-word').first().getByText('Read the article').click();
+    const article = page.getByTestId('understand-article');
+    await article.waitFor();
+    assert.deepEqual(await article.locator('th').allTextContents(), ['Word', 'Meaning']);
+    assert.deepEqual(await article.locator('td').allTextContents(), ['hesed', 'loyal love']);
+    assert.ok((await article.textContent()).includes('1. one'));
+    const indent = async (text) => article.getByText(text, { exact: true }).evaluate((el) => getComputedStyle(el).paddingInlineStart);
+    assert.deepEqual([await indent('top'), await indent('under')], ['14px', '28px']);
+  }, { scenario: 'en-pins' });
+});
+
+// tC4 #621: the simplified text's verse numbers are superscript, as in the passage.
+browserTest('simplified_tab_verse_numbers_are_superscript', async () => {
+  await withApp(async ({ page }) => {
+    await openTitus(page);
+    await page.getByRole('tab', { name: 'UST', exact: true }).click();
+    const simplified = page.getByTestId('understand-simplified');
+    await simplified.waitFor();
+    const numbers = await simplified.locator('sup').allTextContents();
+    assert.equal(numbers[0], '1', 'the focused unit Titus 1:1-3 starts at verse 1');
+    assert.equal(await simplified.locator('sup').first().evaluate((el) => getComputedStyle(el).verticalAlign), 'super');
+  }, { scenario: 'en-pins' });
+});
+
+// tC4 #650: helps in a right-to-left gateway read right to left in an English interface. The
+// sample's helps are English, so the reply is the server's for a project whose helps rung is
+// an Arabic gateway (`rung_dir`).
+browserTest('arabic_helps_panes_are_rtl_in_an_english_interface', async () => {
+  await withApp(async ({ page }) => {
+    await page.route('**/api/v1/helps/passage', async (route) => {
+      const reply = await (await route.fetch()).json();
+      for (const slot of ['notes', 'words', 'questions']) {
+        if (reply.value[slot].type === 'ready') reply.value[slot].value.dir = 'rtl';
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reply) });
+    });
+    await openTitus(page);
+    await page.getByTestId('helps-note').first().waitFor();
+    assert.equal(await page.getByTestId('helps-note').first().getAttribute('dir'), 'rtl');
+    assert.equal(await page.evaluate(() => document.documentElement.dir || 'ltr'), 'ltr', 'the interface stays English');
   }, { scenario: 'en-pins' });
 });

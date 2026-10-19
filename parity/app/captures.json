@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "065d2c1889c4d476",
+    "ui": "4974bcf934cef8ae",
     "commit": "dev",
     "api": 1
   },
@@ -70,7 +70,7 @@
       "png": "screens/understand-tit1.png",
       "sha256": "4b0909eb72838734562c4b54c3fd259bc738f6c19a3ec4541bd68ea89974ac5e",
       "dom": "dom/understand-tit1.json",
-      "domSha256": "d775321b602ebc7bf2ff14cff7dcf1660d075152df7a01fa2acbf8a6bd271ee9"
+      "domSha256": "45ddd9c75960664afb9618c1010afbcc1f6544b4f98bc1da873520bae7a4c313"
     },
     {
       "name": "add-project",
@@ -381,7 +381,7 @@
       "png": "screens/en-understand-tit1.png",
       "sha256": "f99e9dfadf99a65cc1134dafdacddaa95fcc30610ae016f3ccd0d5cd2bad7165",
       "dom": "dom/en-understand-tit1.json",
-      "domSha256": "e7fc8ea7df6cc4d2f36a96d33727893c680b47ed929b2e6fefb2113cea291771"
+      "domSha256": "63bdf176158aa4098705b9d2ac946f8e76999a2a5184015578cd6ac1d22eaa84"
     },
     {
       "name": "en-understand-tw-article",
@@ -404,7 +404,7 @@
       "png": "screens/en-understand-tw-article.png",
       "sha256": "36679e4f73fb85d9c048e49679b9272910d1d7225fde6a06848daf1b56adcbc1",
       "dom": "dom/en-understand-tw-article.json",
-      "domSha256": "a8fbd4c066334819da73ca17b0aa3a455223ede38e299e29435d7672e4b259e2"
+      "domSha256": "ffdef63557d37fc36b68529084c39cf2aebb7de647cb38cf241f0a631281b50c"
     },
     {
       "name": "en-understand-questions",
@@ -427,7 +427,7 @@
       "png": "screens/en-understand-questions.png",
       "sha256": "0485e0b4b5fe9cf86cdad4517f98ad044039f0477935fecfe87ae33277e067c0",
       "dom": "dom/en-understand-questions.json",
-      "domSha256": "cd87d65fe7339300979d5eff6883779b2323136cf3329c5964f7aea3b25ef483"
+      "domSha256": "ca0f05c4a5da535d854da4848d6ac93bcf3a1387585ca744bf2401766a26d04d"
     },
     {
       "name": "open-progress-journal",

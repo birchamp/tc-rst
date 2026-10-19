@@ -9,11 +9,12 @@
 use std::sync::Arc;
 
 use tc_api::editor::{
-    Book, BookView, CommentView, PaneText, RailBook, SourcePane, Sources, SourcesView,
+    Book, BookView, CommentView, FrameRow, PaneChapter, PaneText, RailBook, RowSource, SourceFrame,
+    SourcePane, Sources, SourcesView,
 };
 use tc_api::helps::{
-    Article, ArticleLink, ArticleView, NoteCard, PaneFocus, Passage, PassageView, QuestionCard,
-    ReadySlot, SimplifiedVerse, Slot, WordCard,
+    Article, ArticleLink, ArticleView, LitVerse, NoteCard, PaneFocus, Passage, PassageView,
+    QuestionCard, ReadySlot, SimplifiedVerse, Slot, WordCard,
 };
 use tc_api::ids::{JobId, RefPart, WallMs};
 use tc_api::jobs::{JobKind, JobOutcome, OpenPhase, Phase};
@@ -27,7 +28,7 @@ use tc_helps::{
     AcademyArticleId, HelpItemId, HelpRef, HelpsPart, Manual, Occurrence, Quote, Slug,
     WordArticleId, WordCategory,
 };
-use tc_journal::record::CommentTarget;
+use tc_journal::record::{CommentTarget, VerseValue, VersificationValue};
 use tc_journal::{ChangeId, PinGroup, Record, RecordKey};
 use tc_resources::{
     BookResources, HelpsChoice, Missing, PartStatus, ProjectPins, Rung, TextRole, TextStatus,
@@ -37,8 +38,9 @@ use crate::app::App;
 use crate::counters::{AppCounter, CountingSnapshot};
 use crate::dispatch::Handle;
 use crate::jobs::{JobCtx, JobEnd, JobSpec};
+use crate::numbering::{self, Numbering};
 use crate::session::ProjectSession;
-use crate::sources::{ChapterModel, PaneBook, pane_book};
+use crate::sources::{ChapterModel, PaneBook, VerseModel, pane_book, verse_range};
 
 /// How many books a session keeps loaded: the current and the previous (§4.4).
 const BOOKS_KEPT: usize = 2;
@@ -67,6 +69,8 @@ pub(crate) struct LoadedBook {
     panes: Vec<LoadedPane>,
     simplified: Slot<PaneBook>,
     simplified_pin: Option<String>,
+    /// How the project numbers the book's verses against its sources.
+    numbering: Numbering,
 }
 
 /// The books a session has read, newest last. The lock is held across a load, so two reads of
@@ -104,15 +108,84 @@ fn helps_setting() -> Option<RecordKey> {
         .map(RecordKey::Setting)
 }
 
-/// The versions of what a book's resources are read under: each pin group's and the helps
-/// setting's heads. They are in memory, so a book read again costs no value read.
+/// The versions of what a book's resources are read under: each pin group's, the helps
+/// setting's and the versification's heads. They are in memory, so a book read again costs no
+/// value read.
 fn resources_stamp(read: &CountingSnapshot) -> Vec<Vec<ChangeId>> {
     PinGroup::ALL
         .into_iter()
         .map(RecordKey::Pins)
         .chain(helps_setting())
+        .chain([RecordKey::Versification])
         .map(|key| read.heads(&key))
         .collect()
+}
+
+/// The project's versification register, when it has one.
+fn versification(read: &CountingSnapshot) -> Option<VersificationValue> {
+    match read.projected(&RecordKey::Versification) {
+        Some(Record::Versification { value }) => Some(value),
+        _ => None,
+    }
+}
+
+/// A chapter's project verses in order, each a verse or the first and last of a span (tC4's
+/// `indexBook` entries): a verse inside a span, or not in the translation, is none.
+fn project_verses(read: &CountingSnapshot, book: BookId, chapter: u16) -> Vec<(u16, u16)> {
+    let mut verses: Vec<(u16, u16)> = read
+        .chapter_keys(book, chapter)
+        .verses
+        .iter()
+        .filter_map(|key| match read.projected(key) {
+            Some(Record::Verse {
+                verse,
+                value: VerseValue::Text { last, .. },
+                ..
+            }) => Some((verse.get(), last.get().max(verse.get()))),
+            _ => None,
+        })
+        .collect();
+    verses.sort_unstable();
+    verses
+}
+
+/// The source verse a row of another numbering shows in a pane: the one that carries its first
+/// verse.
+fn row_verse<'a>(pane: &'a PaneBook, row: &FrameRow) -> Option<&'a VerseModel> {
+    let RowSource::Verse { chapter, verse } = &row.source else {
+        return None;
+    };
+    let (from, _) = verse_range(verse.as_str())?;
+    pane.chapters
+        .get(chapter)?
+        .verses
+        .iter()
+        .find(|m| m.from <= from && from <= m.to)
+}
+
+/// A pane's chapter in another numbering: each row's source verse under the project verse's
+/// key, with no section.
+fn mapped_chapter(pane: &PaneBook, rows: &[FrameRow]) -> PaneChapter {
+    PaneChapter {
+        sections: Vec::new(),
+        verses: rows
+            .iter()
+            .filter_map(|row| {
+                let mut view = row_verse(pane, row)?.view.clone();
+                view.key = row.verse.clone();
+                Some(view)
+            })
+            .collect(),
+    }
+}
+
+/// Where a help stands: the source chapter and verse its quote is found at, and the chapter and
+/// verse it is shown at.
+struct Placed {
+    source_chapter: u16,
+    source_verse: RefPart,
+    chapter: RefPart,
+    verse: RefPart,
 }
 
 /// The helps source the project's setting names; Door43 without one.
@@ -198,6 +271,7 @@ fn load(
     stamp: Vec<Vec<ChangeId>>,
     pins: Option<ProjectPins>,
     choice: &HelpsChoice,
+    register: Option<&VersificationValue>,
     app: &App,
 ) -> LoadedBook {
     let store = &app.inner.resources;
@@ -240,6 +314,7 @@ fn load(
         panes,
         simplified,
         simplified_pin,
+        numbering: Numbering::of(register),
     }
 }
 
@@ -262,18 +337,21 @@ impl App {
             reason,
         })?;
         let choice = helps_choice(&read);
+        let register = versification(&read);
         let app = self.clone();
-        let loaded = tokio::task::spawn_blocking(move || load(book, stamp, pins, &choice, &app))
-            .await
-            .map_err(|stopped| {
-                self.internal(
-                    "a book's resources could not be read",
-                    crate::reports::facts(serde_json::json!({
-                        "book": book.code(),
-                        "stopped": crate::jobs::stop_reason(stopped),
-                    })),
-                )
-            })?;
+        let loaded = tokio::task::spawn_blocking(move || {
+            load(book, stamp, pins, &choice, register.as_ref(), &app)
+        })
+        .await
+        .map_err(|stopped| {
+            self.internal(
+                "a book's resources could not be read",
+                crate::reports::facts(serde_json::json!({
+                    "book": book.code(),
+                    "stopped": crate::jobs::stop_reason(stopped),
+                })),
+            )
+        })?;
         let loaded = Arc::new(loaded);
         books.retain(|b| b.book != book);
         books.push(loaded.clone());
@@ -435,6 +513,7 @@ impl Handle<Sources> for App {
     async fn handle(&self, req: Sources) -> Result<SourcesView, ApiError> {
         let session = self.read(&req.at)?;
         let loaded = self.loaded_book(&session, req.book).await?;
+        let frame = loaded.frame(&session.read(), req.chapter);
         let panes = loaded
             .panes
             .iter()
@@ -442,12 +521,15 @@ impl Handle<Sources> for App {
                 id: pane.id.clone(),
                 dir: Direction::Ltr,
                 text: match &pane.text {
-                    LoadedText::Ready(book) => PaneText::Ready(
-                        book.chapters
+                    LoadedText::Ready(book) => PaneText::Ready(match &frame {
+                        SourceFrame::Same => book
+                            .chapters
                             .get(&req.chapter)
                             .map(ChapterModel::view)
                             .unwrap_or_default(),
-                    ),
+                        SourceFrame::Mapped { rows } => mapped_chapter(book, rows),
+                        SourceFrame::Unknown => PaneChapter::default(),
+                    }),
                     LoadedText::NotInstalled => PaneText::NotInstalled,
                     LoadedText::Missing => PaneText::Missing,
                     LoadedText::Error(reason) => PaneText::Error {
@@ -456,7 +538,7 @@ impl Handle<Sources> for App {
                 },
             })
             .collect();
-        Ok(SourcesView { panes })
+        Ok(SourcesView { panes, frame })
     }
 }
 
@@ -476,25 +558,35 @@ fn in_chapter(chapter: &RefPart, wanted: u16) -> bool {
     chapter.as_str().parse::<u16>().ok() == Some(wanted)
 }
 
+fn api_spans(spans: Vec<tc_helps::blocks::Span>) -> Vec<ArticleSpan> {
+    spans
+        .into_iter()
+        .map(|s| ArticleSpan {
+            text: s.text,
+            bold: s.bold,
+            italic: s.italic,
+        })
+        .collect()
+}
+
 fn blocks(markdown: &str) -> Vec<ArticleBlock> {
+    use tc_helps::blocks::BlockKind as Kind;
     tc_helps::blocks::render_article_blocks(markdown)
         .into_iter()
         .map(|b| ArticleBlock {
             kind: match b.kind {
-                tc_helps::blocks::BlockKind::Heading => BlockKind::H,
-                tc_helps::blocks::BlockKind::Item => BlockKind::Li,
-                tc_helps::blocks::BlockKind::Paragraph => BlockKind::P,
+                Kind::Heading => BlockKind::H,
+                Kind::Item => BlockKind::Li,
+                Kind::Numbered => BlockKind::Ol,
+                Kind::Paragraph => BlockKind::P,
+                Kind::Row => BlockKind::Tr,
             },
             quote: b.quote,
-            spans: b
-                .spans
-                .into_iter()
-                .map(|s| ArticleSpan {
-                    text: s.text,
-                    bold: s.bold,
-                    italic: s.italic,
-                })
-                .collect(),
+            spans: api_spans(b.spans),
+            depth: b.depth,
+            number: b.number,
+            cells: b.cells.into_iter().map(api_spans).collect(),
+            header: b.header,
         })
         .collect()
 }
@@ -535,6 +627,88 @@ const MANUALS: [Manual; 4] = [
 ];
 
 impl LoadedBook {
+    /// How the project numbers `chapter` against the sources.
+    fn frame(&self, read: &CountingSnapshot, chapter: u16) -> SourceFrame {
+        match self.numbering {
+            Numbering::Same => SourceFrame::Same,
+            Numbering::Unknown => SourceFrame::Unknown,
+            Numbering::Other(scheme) => SourceFrame::Mapped {
+                rows: numbering::rows(
+                    scheme,
+                    self.book,
+                    chapter,
+                    &project_verses(read, self.book, chapter),
+                ),
+            },
+        }
+    }
+
+    /// Where a help of the sources stands in the project's `chapter`, if it is there.
+    fn place(&self, frame: &SourceFrame, chapter: u16, reference: &HelpRef) -> Option<Placed> {
+        let (c, v) = parts(reference)?;
+        match (frame, self.numbering) {
+            (SourceFrame::Same, _) => in_chapter(&c, chapter).then(|| Placed {
+                source_chapter: chapter,
+                source_verse: v.clone(),
+                chapter: c,
+                verse: v,
+            }),
+            (SourceFrame::Mapped { .. }, Numbering::Other(scheme)) => {
+                let (at, verse) = numbering::place(scheme, self.book, &c, &v)?;
+                (at == chapter).then_some(Placed {
+                    source_chapter: c.as_str().parse().ok()?,
+                    source_verse: v,
+                    chapter: RefPart::parse(&chapter.to_string()).ok()?,
+                    verse,
+                })
+            }
+            _ => None,
+        }
+    }
+
+    /// Each pane's rendering of a placed help's quote, its tokens under the verse keys the
+    /// pane shows them at.
+    fn placed_focus(
+        &self,
+        frame: &SourceFrame,
+        placed: &Placed,
+        quote: &Quote,
+        occurrence: Occurrence,
+    ) -> Vec<PaneFocus> {
+        let mut focus = self.focus(
+            placed.source_chapter,
+            &placed.source_verse,
+            quote,
+            occurrence,
+        );
+        let SourceFrame::Mapped { rows } = frame else {
+            return focus;
+        };
+        for pane in &mut focus {
+            let Some(LoadedPane {
+                text: LoadedText::Ready(book),
+                ..
+            }) = self.panes.iter().find(|p| p.id == pane.pane)
+            else {
+                continue;
+            };
+            pane.lit = std::mem::take(&mut pane.lit)
+                .into_iter()
+                .filter_map(|lit| {
+                    let row = rows.iter().find(|row| {
+                        matches!(row.source, RowSource::Verse { chapter, .. } if chapter == placed.source_chapter)
+                            && row_verse(book, row).is_some_and(|m| m.key == lit.verse)
+                    })?;
+                    Some(LitVerse {
+                        verse: row.verse.clone(),
+                        tokens: lit.tokens,
+                    })
+                })
+                .collect();
+        }
+        focus
+    }
+
     /// Each ready pane's rendering of a quote and the tokens that render it.
     fn focus(
         &self,
@@ -563,7 +737,7 @@ impl LoadedBook {
             .collect()
     }
 
-    fn passage(&self, chapter: u16) -> PassageView {
+    fn passage(&self, chapter: u16, frame: &SourceFrame) -> PassageView {
         let helps = &self.resources.helps;
         let parts_of = |part| self.resources.parts.get(&part);
         let pins = self.pins.as_ref();
@@ -572,12 +746,12 @@ impl LoadedBook {
                 .notes()
                 .iter()
                 .filter_map(|note| {
-                    let (c, v) = parts(&note.reference)?;
-                    in_chapter(&c, chapter).then(|| NoteCard {
+                    let at = self.place(frame, chapter, &note.reference)?;
+                    Some(NoteCard {
                         id: item_id(&note.id),
-                        panes: self.focus(chapter, &v, &note.quote, note.occurrence),
-                        chapter: c,
-                        verse: v,
+                        panes: self.placed_focus(frame, &at, &note.quote, note.occurrence),
+                        chapter: at.chapter,
+                        verse: at.verse,
                         quote: note.quote.as_str().to_owned(),
                         occurrence: occurrence(note.occurrence),
                         note: blocks(&note.text),
@@ -595,12 +769,12 @@ impl LoadedBook {
                 .word_links()
                 .iter()
                 .filter_map(|link| {
-                    let (c, v) = parts(&link.reference)?;
-                    in_chapter(&c, chapter).then(|| WordCard {
+                    let at = self.place(frame, chapter, &link.reference)?;
+                    Some(WordCard {
                         id: item_id(&link.id),
-                        panes: self.focus(chapter, &v, &link.orig_words, link.occurrence),
-                        chapter: c,
-                        verse: v,
+                        panes: self.placed_focus(frame, &at, &link.orig_words, link.occurrence),
+                        chapter: at.chapter,
+                        verse: at.verse,
                         quote: link.orig_words.as_str().to_owned(),
                         occurrence: occurrence(link.occurrence),
                         category: link.article.category().map(|c| c.folder().to_owned()),
@@ -614,11 +788,11 @@ impl LoadedBook {
                 .questions()
                 .iter()
                 .filter_map(|q| {
-                    let (c, v) = parts(&q.reference)?;
-                    in_chapter(&c, chapter).then(|| QuestionCard {
+                    let at = self.place(frame, chapter, &q.reference)?;
+                    Some(QuestionCard {
                         id: item_id(&q.id),
-                        chapter: c,
-                        verse: v,
+                        chapter: at.chapter,
+                        verse: at.verse,
                         question: q.question.clone(),
                         response: q.response.clone(),
                     })
@@ -630,16 +804,7 @@ impl LoadedBook {
                 items: ready
                     .items
                     .first()
-                    .and_then(|book| book.chapters.get(&chapter))
-                    .map(|c| {
-                        c.verses
-                            .iter()
-                            .map(|v| SimplifiedVerse {
-                                key: v.key.clone(),
-                                text: v.view.text.clone(),
-                            })
-                            .collect()
-                    })
+                    .map(|book| simplified_verses(book, chapter, frame))
                     .unwrap_or_default(),
                 dir: ready.dir,
                 fallback: ready.fallback,
@@ -652,13 +817,62 @@ impl LoadedBook {
                 reason: reason.clone(),
             },
         };
+        let other_book = match frame {
+            SourceFrame::Mapped { rows } => match rows.first().map(|row| &row.source) {
+                Some(RowSource::OtherBook { to })
+                    if rows
+                        .iter()
+                        .all(|row| matches!(row.source, RowSource::OtherBook { .. })) =>
+                {
+                    Some(to.clone())
+                }
+                _ => None,
+            },
+            _ => None,
+        };
         PassageView {
             notes,
             words,
             questions,
             simplified,
             simplified_pin: self.simplified_pin.clone(),
+            other_book,
         }
+    }
+}
+
+/// The simplified text's verses of a project chapter: under another numbering, each row's
+/// source verse, labelled with its place in the sources (tC4's `simplifiedVerses`).
+fn simplified_verses(book: &PaneBook, chapter: u16, frame: &SourceFrame) -> Vec<SimplifiedVerse> {
+    match frame {
+        SourceFrame::Same => book
+            .chapters
+            .get(&chapter)
+            .map(|c| {
+                c.verses
+                    .iter()
+                    .map(|v| SimplifiedVerse {
+                        key: v.key.clone(),
+                        text: v.view.text.clone(),
+                        source: None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        SourceFrame::Mapped { rows } => rows
+            .iter()
+            .filter_map(|row| {
+                let RowSource::Verse { chapter, verse } = &row.source else {
+                    return None;
+                };
+                Some(SimplifiedVerse {
+                    key: row.verse.clone(),
+                    text: row_verse(book, row)?.view.text.clone(),
+                    source: Some(format!("{chapter}:{verse}")),
+                })
+            })
+            .collect(),
+        SourceFrame::Unknown => Vec::new(),
     }
 }
 
@@ -666,7 +880,8 @@ impl Handle<Passage> for App {
     async fn handle(&self, req: Passage) -> Result<PassageView, ApiError> {
         let session = self.read(&req.at)?;
         let loaded = self.loaded_book(&session, req.book).await?;
-        let view = tokio::task::spawn_blocking(move || loaded.passage(req.chapter))
+        let frame = loaded.frame(&session.read(), req.chapter);
+        let view = tokio::task::spawn_blocking(move || loaded.passage(req.chapter, &frame))
             .await
             .map_err(|stopped| {
                 self.internal(
@@ -740,5 +955,38 @@ impl Handle<Article> for App {
             },
             None => ArticleView::Missing,
         })
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    /// tC4 #118: in `rsc`, Jonah 2:1 is the sources' 1:17. The pane shows that verse under the
+    /// project's key, and the next under the next.
+    #[test]
+    fn a_pane_in_another_numbering_shows_the_source_verse_under_the_projects_key() {
+        let usfm = "\\id JON\n\\c 1\n\\p\n\\v 16 The men feared.\n\\v 17 A great fish swallowed Jonah.\n\\c 2\n\\p\n\\v 1 Jonah prayed.\n";
+        let pane = pane_book(usfm);
+        let rsc = tc_versification::StandardScheme::Rsc.scheme();
+        let rows = numbering::rows(rsc, BookId::Jonah, 2, &[(1, 1), (2, 2)]);
+        let chapter = mapped_chapter(&pane, &rows);
+        assert!(chapter.sections.is_empty(), "one unit per verse");
+        let shown: Vec<(&str, &str)> = chapter
+            .verses
+            .iter()
+            .map(|v| (v.key.as_str(), v.text.as_str()))
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                ("1", "A great fish swallowed Jonah."),
+                ("2", "Jonah prayed.")
+            ]
+        );
+        let simplified = simplified_verses(&pane, 2, &SourceFrame::Mapped { rows });
+        assert_eq!(simplified[0].source.as_deref(), Some("1:17"));
+        assert_eq!(simplified[0].key.as_str(), "1");
     }
 }

@@ -74,7 +74,63 @@ pub struct Sources {
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct SourcesView {
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub panes: Vec<SourcePane>,
+    /// How the project numbers the chapter's verses against the sources (tC4's `sourceRefs`).
+    pub frame: SourceFrame,
+}
+
+/// The project's verse numbering against the sources', which are all in `eng` (tC4's
+/// `RESOURCE_FRAME`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum SourceFrame {
+    /// The same numbering: the panes are the source chapter of the project chapter's number.
+    Same,
+    /// Another numbering (#118): the chapter's project verses in order, each with where the
+    /// sources have it, and each pane's verses are the source verses under the project verse's
+    /// key. One unit per verse, and no sections.
+    Mapped {
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+        rows: Vec<FrameRow>,
+    },
+    /// The project's numbering could not be established: no passage is shown, never one under
+    /// numbers the project does not have (`understand.frameUnavailable`).
+    Unknown,
+}
+
+/// One project verse of a chapter in another numbering.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct FrameRow {
+    /// The project's verse key, `4` or `4-5`: the panes' verses and the comments use it.
+    pub verse: RefPart,
+    pub source: RowSource,
+}
+
+/// Where the sources have a project verse.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum RowSource {
+    /// This book's chapter and verse in the sources' numbering: the unit's label.
+    Verse { chapter: u16, verse: RefPart },
+    /// Another book (#121), `NEH 1:1`: stated, never shown as this book's text.
+    OtherBook { to: String },
+    /// No place in the sources' numbering.
+    Unmapped,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -116,8 +172,10 @@ pub enum PaneText {
 pub struct PaneChapter {
     /// The first verse of each translator's section (`\ts\*`), ascending: tC4's
     /// `sectionStarts`. Empty when the chapter has no verse.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub sections: Vec<u16>,
     /// The chapter's verses in order, a bridge (`4-5`) as one.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub verses: Vec<PaneVerse>,
 }
 
@@ -132,6 +190,7 @@ pub struct PaneVerse {
     pub text: String,
     /// The same text as tokens, words and what lies between them, as written: a card's
     /// highlight names tokens by their index here.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub tokens: Vec<String>,
     /// The poetry level of the paragraph marker that opens the verse's own text (`\v 5 \q2
     /// …`), 0 for a plain paragraph; none when its text opens with no marker.

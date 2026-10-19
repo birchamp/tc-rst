@@ -63,7 +63,39 @@
             }
           }
         }
-      ]
+      ],
+      "frame": {
+        "type": "mapped",
+        "value": {
+          "rows": [
+            {
+              "verse": "1",
+              "source": {
+                "type": "verse",
+                "value": {
+                  "chapter": 1,
+                  "verse": "17"
+                }
+              }
+            },
+            {
+              "verse": "2",
+              "source": {
+                "type": "otherBook",
+                "value": {
+                  "to": "NEH 1:1"
+                }
+              }
+            },
+            {
+              "verse": "3",
+              "source": {
+                "type": "unmapped"
+              }
+            }
+          ]
+        }
+      }
     }
   },
   "error": {

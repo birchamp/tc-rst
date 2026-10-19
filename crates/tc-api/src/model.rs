@@ -18,6 +18,10 @@ pub enum BlockKind {
     P,
     /// A list item.
     Li,
+    /// A numbered list item (#628).
+    Ol,
+    /// A table row (#628).
+    Tr,
 }
 
 /// One run of text with its style.
@@ -44,10 +48,34 @@ pub struct ArticleBlock {
     pub kind: BlockKind,
     /// The depth of the `>` quote around the block: 0 for none.
     pub quote: u8,
+    /// A row's are its cells', a space between.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub spans: Vec<ArticleSpan>,
+    /// A list item's nesting under the items above it: 0 at the left edge (#628).
+    pub depth: u8,
+    /// A numbered item's number as written.
+    pub number: Option<String>,
+    /// A table row's cells.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few_lists()"))]
+    pub cells: Vec<Vec<ArticleSpan>>,
+    /// A table's heading row.
+    pub header: bool,
 }
 
 impl ArticleBlock {
+    /// A block that is not in a list or a table.
+    pub fn new(kind: BlockKind, quote: u8, spans: Vec<ArticleSpan>) -> Self {
+        Self {
+            kind,
+            quote,
+            spans,
+            depth: 0,
+            number: None,
+            cells: Vec::new(),
+            header: false,
+        }
+    }
+
     /// The block's plain text: its spans joined (tC4's `text`).
     pub fn text(&self) -> String {
         self.spans.iter().map(|s| s.text.as_str()).collect()

@@ -2,7 +2,7 @@
 //! `OpenProgress.jsx`, `Understand.jsx`, `sections.js`, `SourceVerse.jsx`, `helpsFocus.js` and
 //! `HelpsPanel.jsx` that are not drawing. Pure, so they are tested on the host.
 
-use tc_api::editor::{CommentView, PaneChapter, PaneVerse};
+use tc_api::editor::{CommentView, FrameRow, PaneChapter, PaneVerse, RowSource};
 use tc_api::helps::{PaneFocus, Slot};
 use tc_api::jobs::{OpenPhase, Phase, Progress};
 use tc_api::model::{ArticleBlock, ArticleSpan, js_len, take_spans};
@@ -225,13 +225,26 @@ pub enum UnitMode {
 /// One unit of the passage: a section, a verse, or the whole chapter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Unit {
-    /// `s4`, `v4` or `whole`.
+    /// `s4`, `v4` or `whole`; in another numbering `m2:1`, `x2:1` or `u2:1`.
     pub key: String,
     /// Its first verse key.
     pub head: String,
-    /// "Titus 1:1–3".
+    /// "Titus 1:1–3"; in another numbering, the source verse's place.
     pub label: String,
     pub verses: Vec<String>,
+    /// In another numbering, the source verse's number, which the passage shows for it.
+    pub number: Option<String>,
+    /// In another numbering, why the unit has no passage.
+    pub notice: Option<UnitNotice>,
+}
+
+/// Why a unit of another numbering shows no passage (tC4's `unitNotice`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UnitNotice {
+    /// The project verse (`2:1`) has no place in the sources' numbering.
+    Unmapped { at: String },
+    /// The sources have it in another book (`NEH 1:1`), whose text this book never shows.
+    OtherBook { at: String, to: String },
 }
 
 /// The design's unit label (tC4's `refLabel`): "John 1:1–2".
@@ -283,6 +296,8 @@ pub fn units(mode: UnitMode, book: BookId, chapter: u16, pane: Option<&PaneChapt
                 head: k.clone(),
                 label: ref_label(book, chapter, std::slice::from_ref(k)),
                 verses: vec![k.clone()],
+                number: None,
+                notice: None,
             })
             .collect(),
         UnitMode::Section if pane.sections.is_empty() => keys
@@ -292,6 +307,8 @@ pub fn units(mode: UnitMode, book: BookId, chapter: u16, pane: Option<&PaneChapt
                 head: head.clone(),
                 label: format!("{} {chapter}", book.english_name()),
                 verses: keys.clone(),
+                number: None,
+                notice: None,
             })
             .into_iter()
             .collect(),
@@ -314,11 +331,59 @@ pub fn units(mode: UnitMode, book: BookId, chapter: u16, pane: Option<&PaneChapt
                         head,
                         label: ref_label(book, chapter, &within),
                         verses: within,
+                        number: None,
+                        notice: None,
                     })
                 })
                 .collect()
         }
     }
+}
+
+/// tC4's `crossFrameUnits`: in another numbering, one unit per project verse, labelled with
+/// the source verse it shows, or stating why it shows none. The comment box keeps the project's
+/// verse (#121).
+pub fn frame_units(book: BookId, chapter: u16, rows: &[FrameRow]) -> Vec<Unit> {
+    rows.iter()
+        .map(|row| {
+            let verse = row.verse.as_str().to_owned();
+            let at = format!("{chapter}:{verse}");
+            let (key, label, number, notice) = match &row.source {
+                RowSource::Verse {
+                    chapter: c,
+                    verse: v,
+                } => (
+                    format!("m{at}"),
+                    format!("{} {c}:{v}", book.english_name()),
+                    Some(v.as_str().to_owned()),
+                    None,
+                ),
+                RowSource::OtherBook { to } => (
+                    format!("x{at}"),
+                    String::new(),
+                    None,
+                    Some(UnitNotice::OtherBook {
+                        at: at.clone(),
+                        to: to.clone(),
+                    }),
+                ),
+                RowSource::Unmapped => (
+                    format!("u{at}"),
+                    String::new(),
+                    None,
+                    Some(UnitNotice::Unmapped { at: at.clone() }),
+                ),
+            };
+            Unit {
+                key,
+                head: verse.clone(),
+                label,
+                verses: vec![verse],
+                number,
+                notice,
+            }
+        })
+        .collect()
 }
 
 /// A unit's display paragraphs (tC4's `paragraphsOf` and `paragraphLevel`): a verse opens a

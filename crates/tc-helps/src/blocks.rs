@@ -5,8 +5,12 @@
 //! (`- ` or `* `) or a paragraph, inside `>` quotes of some depth; links show their label,
 //! `[[target]]` its target; `***`, `**`, `__`, `*` and `_` mark bold and italic runs. Anything
 //! else stays literal, so a line never loses a word. The screens of tC4 4.0 draw these blocks,
-//! so the rebuild draws the same ones (the parity screens compare them). tC4 #628 asks for
-//! fuller markdown; that waits for tC4.
+//! so the rebuild draws the same ones (the parity screens compare them).
+//!
+//! Three differences, for tC4 #628, which the owner was told of (DELTA-10-19 §5): a numbered
+//! line (`1. `) is a numbered item, a list item indented under another is nested, and a table
+//! (a `|` row above a `|---|` line) is a table, where tC4 shows each as plain lines, pipes and
+//! dashes included. Links stay their label until tC4 decides (TC4-ISSUES §4).
 //!
 //! Lengths are counted as JavaScript counts them, in UTF-16 code units, because tC4 cuts a
 //! long note at 400 of them (`previewBlocks`); [`take_spans`] cuts the same text tC4 cuts,
@@ -24,7 +28,11 @@ pub enum BlockKind {
     Heading,
     /// A list item, `- ` or `* `.
     Item,
+    /// A numbered list item, `1. ` or `1) ` (#628).
+    Numbered,
     Paragraph,
+    /// A table row (#628).
+    Row,
 }
 
 /// One run of inline text, with no markdown marks left in it.
@@ -52,8 +60,17 @@ pub struct Block {
     pub level: Option<u8>,
     /// The depth of the `>` quote that holds the block: 0 for none, 1 for `>`, 2 for `> >`.
     pub quote: u8,
-    /// The block's spans; their texts joined are the block's plain text.
+    /// The block's spans; their texts joined are the block's plain text. A row's are its
+    /// cells', a space between.
     pub spans: Vec<Span>,
+    /// A list item's nesting under the items above it: 0 at the left edge (#628).
+    pub depth: u8,
+    /// A numbered item's number as written (`1`).
+    pub number: Option<String>,
+    /// A table row's cells (#628).
+    pub cells: Vec<Vec<Span>>,
+    /// A table's heading row, above its `---` line.
+    pub header: bool,
 }
 
 impl Block {
@@ -84,6 +101,10 @@ static HEADING: LazyLock<Regex> = LazyLock::new(|| {
     ))
 });
 static ITEM: LazyLock<Regex> = LazyLock::new(|| pattern(&format!("^[-*][{JS_SPACE}]+")));
+static NUMBERED: LazyLock<Regex> =
+    LazyLock::new(|| pattern(&format!("^([0-9]{{1,4}})[.)][{JS_SPACE}]+")));
+static TABLE_RULE: LazyLock<Regex> =
+    LazyLock::new(|| pattern(r"^\|?[ \t]*:?-{3,}:?[ \t]*(\|[ \t]*:?-{3,}:?[ \t]*)*\|?$"));
 static WIKI_LINK: LazyLock<Regex> = LazyLock::new(|| pattern(r"\[\[([^\]]+)\]\]"));
 static LINK: LazyLock<Regex> = LazyLock::new(|| pattern(r"\[([^\]]*)\]\([^)]*\)"));
 static SPACES: LazyLock<Regex> = LazyLock::new(|| pattern(&format!("[{JS_SPACE}]+")));
@@ -212,11 +233,61 @@ fn inline(text: &str) -> Vec<Span> {
         .collect()
 }
 
-/// The blocks of `markdown`, line by line, as tC4's `renderArticleBlocks` gives them. An
-/// empty line gives no block.
+impl Block {
+    fn new(kind: BlockKind, quote: u8, spans: Vec<Span>) -> Self {
+        Self {
+            kind,
+            level: None,
+            quote,
+            spans,
+            depth: 0,
+            number: None,
+            cells: Vec::new(),
+            header: false,
+        }
+    }
+}
+
+/// A table row's cells: the text between its `|`s.
+fn row_cells(line: &str) -> Vec<Vec<Span>> {
+    let inner = line.strip_prefix('|').unwrap_or(line);
+    let inner = inner.strip_suffix('|').unwrap_or(inner);
+    inner.split('|').map(inline).collect()
+}
+
+/// The open list levels' indents, for the depth of the next item (#628).
+#[derive(Default)]
+struct Nesting(Vec<usize>);
+
+impl Nesting {
+    fn depth(&mut self, indent: usize) -> u8 {
+        while self.0.last().is_some_and(|top| indent < *top) {
+            self.0.pop();
+        }
+        if self.0.last() != Some(&indent) {
+            self.0.push(indent);
+        }
+        u8::try_from(self.0.len().saturating_sub(1)).unwrap_or(u8::MAX)
+    }
+}
+
+/// How far `raw` is indented, a tab as four spaces.
+fn indent(raw: &str) -> usize {
+    raw.chars()
+        .take_while(|c| *c == ' ' || *c == '\t')
+        .map(|c| if c == '\t' { 4 } else { 1 })
+        .sum()
+}
+
+/// The blocks of `markdown`, line by line, as tC4's `renderArticleBlocks` gives them, with
+/// #628's numbered items, nesting and tables. An empty line gives no block.
 pub fn render_article_blocks(markdown: &str) -> Vec<Block> {
     let mut blocks = Vec::new();
-    for raw in markdown.split('\n') {
+    let lines: Vec<&str> = markdown.split('\n').collect();
+    let mut nesting = Nesting::default();
+    // In a table, after its heading row.
+    let mut in_table = false;
+    for (at, raw) in lines.iter().copied().enumerate() {
         let trimmed = js_trim(raw);
         let marks = QUOTE_MARKS
             .find(trimmed)
@@ -226,33 +297,77 @@ pub fn render_article_blocks(markdown: &str) -> Vec<Block> {
         let quote = u8::try_from(marks.chars().filter(|c| *c == '>').count()).unwrap_or(u8::MAX);
         let line = trimmed.get(marks.len()..).unwrap_or_default();
         if line.is_empty() {
+            in_table = false;
             continue;
         }
+        let is_rule = |text: &str| TABLE_RULE.is_match(js_trim(text)).unwrap_or(false);
+        if in_table && is_rule(line) {
+            continue;
+        }
+        if line.starts_with('|') {
+            let next = lines.get(at + 1).map(|n| {
+                let n = js_trim(n);
+                let marks = QUOTE_MARKS.find(n).ok().flatten().map_or(0, |m| m.end());
+                n.get(marks..).unwrap_or_default()
+            });
+            if in_table || next.is_some_and(is_rule) {
+                let cells = row_cells(line);
+                let mut spans: Vec<Span> = Vec::new();
+                for cell in &cells {
+                    if !spans.is_empty() {
+                        spans.push(Span::plain(" "));
+                    }
+                    spans.extend(cell.iter().cloned());
+                }
+                blocks.push(Block {
+                    cells,
+                    header: !in_table,
+                    ..Block::new(BlockKind::Row, quote, spans)
+                });
+                in_table = true;
+                continue;
+            }
+        }
+        in_table = false;
         if let Ok(Some(heading)) = HEADING.captures(line) {
+            nesting = Nesting::default();
             let level = heading.get(1).map_or(1, |m| m.as_str().len());
             blocks.push(Block {
-                kind: BlockKind::Heading,
                 level: u8::try_from(level).ok(),
-                quote,
-                spans: inline(heading.get(2).map_or("", |m| m.as_str())),
+                ..Block::new(
+                    BlockKind::Heading,
+                    quote,
+                    inline(heading.get(2).map_or("", |m| m.as_str())),
+                )
             });
             continue;
         }
         if let Ok(Some(item)) = ITEM.find(line) {
             blocks.push(Block {
-                kind: BlockKind::Item,
-                level: None,
-                quote,
-                spans: inline(line.get(item.end()..).unwrap_or_default()),
+                depth: nesting.depth(indent(raw)),
+                ..Block::new(
+                    BlockKind::Item,
+                    quote,
+                    inline(line.get(item.end()..).unwrap_or_default()),
+                )
             });
             continue;
         }
-        blocks.push(Block {
-            kind: BlockKind::Paragraph,
-            level: None,
-            quote,
-            spans: inline(line),
-        });
+        if let Ok(Some(numbered)) = NUMBERED.captures(line) {
+            let end = numbered.get(0).map_or(0, |m| m.end());
+            blocks.push(Block {
+                depth: nesting.depth(indent(raw)),
+                number: numbered.get(1).map(|n| n.as_str().to_owned()),
+                ..Block::new(
+                    BlockKind::Numbered,
+                    quote,
+                    inline(line.get(end..).unwrap_or_default()),
+                )
+            });
+            continue;
+        }
+        nesting = Nesting::default();
+        blocks.push(Block::new(BlockKind::Paragraph, quote, inline(line)));
     }
     blocks
 }

@@ -29,8 +29,8 @@ use tc_api::check::{
     RowFlags, Tool,
 };
 use tc_api::editor::{
-    Book, BookView, CommentView, PaneChapter, PaneText, PaneVerse, RailBook, SourcePane, Sources,
-    SourcesView,
+    Book, BookView, CommentView, FrameRow, PaneChapter, PaneText, PaneVerse, RailBook, RowSource,
+    SourceFrame, SourcePane, Sources, SourcesView,
 };
 use tc_api::error::{ApiError, Feature, Flow, SignInReason};
 use tc_api::event::{
@@ -938,6 +938,28 @@ impl Example for SourcesView {
                     },
                 },
             ],
+            // A project in another numbering: `rsc` Jonah 2 holds `eng` 1:17 and 2:1-10.
+            frame: SourceFrame::Mapped {
+                rows: vec![
+                    FrameRow {
+                        verse: RefPart::parse("1").unwrap(),
+                        source: RowSource::Verse {
+                            chapter: 1,
+                            verse: RefPart::parse("17").unwrap(),
+                        },
+                    },
+                    FrameRow {
+                        verse: RefPart::parse("2").unwrap(),
+                        source: RowSource::OtherBook {
+                            to: "NEH 1:1".into(),
+                        },
+                    },
+                    FrameRow {
+                        verse: RefPart::parse("3").unwrap(),
+                        source: RowSource::Unmapped,
+                    },
+                ],
+            },
         }
     }
 }
@@ -985,11 +1007,11 @@ impl Example for PassageView {
                     verse: RefPart::parse("1").unwrap(),
                     quote: "Θεοῦ".into(),
                     occurrence: 1,
-                    note: vec![ArticleBlock {
-                        kind: BlockKind::P,
-                        quote: 0,
-                        spans: spans(" is an abstract noun.", "Faith"),
-                    }],
+                    note: vec![ArticleBlock::new(
+                        BlockKind::P,
+                        0,
+                        spans(" is an abstract noun.", "Faith"),
+                    )],
                     academy: Some("figs-abstractnouns".into()),
                     panes: vec![focus.clone()],
                 }],
@@ -1015,11 +1037,13 @@ impl Example for PassageView {
                 items: vec![SimplifiedVerse {
                     key: RefPart::parse("1").unwrap(),
                     text: "I, Paul, serve God.".into(),
+                    source: Some("1:1".into()),
                 }],
                 dir: Some(Direction::Ltr),
                 fallback: false,
             }),
             simplified_pin: Some("en_ust".into()),
+            other_book: None,
         }
     }
 }
@@ -1042,15 +1066,19 @@ impl Example for ArticleView {
         ArticleView::Found {
             title: "God".into(),
             blocks: vec![
+                ArticleBlock::new(BlockKind::H, 0, spans("", "Definition:")),
                 ArticleBlock {
-                    kind: BlockKind::H,
-                    quote: 0,
-                    spans: spans("", "Definition:"),
+                    depth: 1,
+                    ..ArticleBlock::new(BlockKind::Li, 1, spans(" created the universe.", "God"))
                 },
                 ArticleBlock {
-                    kind: BlockKind::Li,
-                    quote: 1,
-                    spans: spans(" created the universe.", "God"),
+                    number: Some("1".into()),
+                    ..ArticleBlock::new(BlockKind::Ol, 0, spans(" is one.", "God"))
+                },
+                ArticleBlock {
+                    cells: vec![spans("", "Word"), spans("", "Meaning")],
+                    header: true,
+                    ..ArticleBlock::new(BlockKind::Tr, 0, spans(" Meaning", "Word"))
                 },
             ],
             dir: Direction::Ltr,

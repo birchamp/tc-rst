@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use tc_api::ApiError;
 use tc_api::app::Hello;
-use tc_api::editor::{Book, PaneText, Sources};
+use tc_api::editor::{Book, FrameRow, PaneText, RowSource, SourceFrame, Sources};
 use tc_api::helps::{Article, ArticleLink, ArticleView, Passage, Slot};
 use tc_api::home::ProjectKind;
 use tc_api::ids::{JobId, Scope};
@@ -18,9 +18,10 @@ use tc_api::session::{Close, Open, OpenUnit, OpenedProject};
 use tc_api::shown::{Direction, Known};
 use tc_api::{Refusal, Reply};
 use tc_app::backend::memory::MemoryBackend;
-use tc_app::backend::scenario::install_resources_into;
+use tc_app::backend::scenario::{ScenarioState, install_resources_into};
 use tc_app::{App, StoreChoice};
 use tc_core::BookId;
+use tc_versification::StandardScheme;
 
 use super::common::{Parts, TestApp, folder, rid};
 use super::scenario::scenario;
@@ -28,8 +29,26 @@ use super::scenario::scenario;
 /// An app over a parity scenario's projects with its resources installed, as `tc4 serve
 /// --scenario` starts.
 async fn start(name: &str) -> (tempfile::TempDir, TestApp) {
-    let state = scenario(name);
-    let (backend, _) = MemoryBackend::from_scenario(state).unwrap();
+    start_over(scenario(name)).await
+}
+
+/// The same, its Bible project created in another versification (New Bible offers six).
+async fn start_in(name: &str, scheme: StandardScheme) -> (tempfile::TempDir, TestApp) {
+    let files = scenario(name).files().iter().map(|(path, bytes)| {
+        let vrs = path.ends_with("sample_burrito/ingredients/vrs.json");
+        let bytes = if vrs {
+            scheme.json().as_bytes().to_vec()
+        } else {
+            bytes.clone()
+        };
+        (path.clone(), bytes)
+    });
+    start_over(&ScenarioState::from_files(files).unwrap()).await
+}
+
+async fn start_over(state: &ScenarioState) -> (tempfile::TempDir, TestApp) {
+    let (backend, report) = MemoryBackend::from_scenario(state).unwrap();
+    assert!(report.refused.len() <= 1, "{:?}", report.refused);
     let dir = tempfile::tempdir().unwrap();
     install_resources_into(&dir.path().join("app-data"), &state.resources().unwrap()).unwrap();
     let t = TestApp::start_with(dir.path(), &Parts::new(), |_, deps| {
@@ -222,6 +241,66 @@ async fn a_chapters_panes_have_tc4s_sections_and_verse_text() {
         "{:?}",
         ult.verses[4]
     );
+}
+
+/// tC4 #118: a project in another numbering reads one unit per project verse, each with the
+/// source verse its numbering names, and every help at its place in the project, a chapter's
+/// introduction kept. Titus is numbered alike in `rsc`, so each verse is its own and the
+/// helps are the same project's in `eng` (the shift itself: `numbering`'s tests).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_project_in_another_numbering_reads_each_verse_where_the_sources_have_it() {
+    let read = async |t: &TestApp| {
+        let at = at(t).await;
+        let sources = ok(
+            &t.app,
+            &Sources {
+                at: at.clone(),
+                book: BookId::Titus,
+                chapter: 1,
+            },
+        )
+        .await;
+        let helps = ok(
+            &t.app,
+            &Passage {
+                at,
+                book: BookId::Titus,
+                chapter: 1,
+            },
+        )
+        .await;
+        (sources, helps)
+    };
+    let (_eng_dir, eng) = start("en-pins").await;
+    let (same, same_helps) = read(&eng).await;
+    assert_eq!(same.frame, SourceFrame::Same);
+    let (_dir, t) = start_in("en-pins", StandardScheme::Rsc).await;
+    let (sources, helps) = read(&t).await;
+    let SourceFrame::Mapped { rows } = &sources.frame else {
+        panic!("{:?}", sources.frame)
+    };
+    assert_eq!(rows.len(), 16);
+    assert_eq!(
+        rows[3],
+        FrameRow {
+            verse: "4".to_owned().try_into().unwrap(),
+            source: RowSource::Verse {
+                chapter: 1,
+                verse: "4".to_owned().try_into().unwrap(),
+            },
+        }
+    );
+    let (PaneText::Ready(ult), PaneText::Ready(eng_ult)) =
+        (&sources.panes[0].text, &same.panes[0].text)
+    else {
+        panic!("{:?}", sources.panes[0].text)
+    };
+    assert!(ult.sections.is_empty(), "one unit per verse");
+    assert_eq!(ult.verses, eng_ult.verses);
+    assert_eq!(helps.notes, same_helps.notes, "the intro note included");
+    assert_eq!(helps.words, same_helps.words);
+    assert_eq!(helps.questions, same_helps.questions);
+    assert_eq!(helps.other_book, None);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -32,6 +32,10 @@ pub struct PassageView {
     /// The repository of the pinned simplified text (`en_ust`): its tab is named after it
     /// (tC4's `simplifiedLabel`), whatever its state.
     pub simplified_pin: Option<String>,
+    /// In a project with other verse numbers, the book and place every verse of the chapter
+    /// has in the sources' numbering when it is another book (`NEH 1:1`): the chapter's
+    /// helps are there and are not shown (tC4's `helpsCrossBook`).
+    pub other_book: Option<String>,
 }
 
 /// One tab's content, or why it has none (tC4's `SlotState`, D30: absence is stated).
@@ -81,6 +85,7 @@ pub struct PaneFocus {
     pub pane: String,
     /// The pane's rendering of the quote; none when nothing renders it.
     pub title: Option<String>,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub lit: Vec<LitVerse>,
 }
 
@@ -90,6 +95,7 @@ pub struct PaneFocus {
 #[serde(rename_all = "camelCase")]
 pub struct LitVerse {
     pub verse: RefPart,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub tokens: Vec<u32>,
 }
 
@@ -106,9 +112,11 @@ pub struct NoteCard {
     /// The original-language quote; empty for an introduction.
     pub quote: String,
     pub occurrence: i32,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub note: Vec<ArticleBlock>,
     /// The Translation Academy article the note names (its slug).
     pub academy: Option<String>,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub panes: Vec<PaneFocus>,
 }
 
@@ -127,6 +135,7 @@ pub struct WordCard {
     pub category: Option<String>,
     /// The article's name: the card's body, and the link.
     pub slug: String,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub panes: Vec<PaneFocus>,
 }
 
@@ -149,6 +158,9 @@ pub struct QuestionCard {
 pub struct SimplifiedVerse {
     pub key: RefPart,
     pub text: String,
+    /// In a project with other verse numbers, the source verse it shows (`1:17`), which the
+    /// tab labels it with; `key` is the project's verse.
+    pub source: Option<String>,
 }
 
 /// `helps/article`: a Translation Academy or Translation Words article of the open book's
@@ -194,6 +206,7 @@ pub enum ArticleLink {
 pub enum ArticleView {
     Found {
         title: String,
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
         blocks: Vec<ArticleBlock>,
         dir: Direction,
     },

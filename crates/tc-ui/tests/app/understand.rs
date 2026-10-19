@@ -2,16 +2,16 @@
 //! and stages, the units, sections and paragraphs of a passage, the help focus, the comment
 //! box's selection rule, and the note preview.
 
-use tc_api::editor::{CommentView, PaneChapter, PaneVerse};
+use tc_api::editor::{CommentView, FrameRow, PaneChapter, PaneVerse, RowSource};
 use tc_api::helps::{LitVerse, PaneFocus, Slot};
 use tc_api::ids::{RefPart, WallMs};
 use tc_api::jobs::{OpenPhase, Phase, Progress};
 use tc_api::model::{ArticleBlock, ArticleSpan, BlockKind};
 use tc_core::BookId;
 use tc_ui::app::understand::{
-    HelpFocus, OpenStage, Opening, SHOW_THRESHOLD_MS, UnitMode, clamp_helps, drag_width, in_focus,
-    key_carries, paragraphs, preview_blocks, ref_label, shown_comment, simplified_label,
-    slot_state, units,
+    HelpFocus, OpenStage, Opening, SHOW_THRESHOLD_MS, UnitMode, UnitNotice, clamp_helps,
+    drag_width, frame_units, in_focus, key_carries, paragraphs, preview_blocks, ref_label,
+    shown_comment, simplified_label, slot_state, units,
 };
 
 fn progress(phase: OpenPhase, done: u64, total: Option<u64>) -> Progress {
@@ -235,16 +235,70 @@ fn the_box_shows_the_head_comment_or_the_only_one_and_counts_the_rest() {
     assert_eq!((newest.text.as_str(), newest.hidden), ("new", 0));
 }
 
+/// tC4 #118 and #121: in another numbering each project verse is a unit labelled with the
+/// source verse it shows (`rsc` Jonah 2:1 is the sources' 1:17); one the sources have in
+/// another book, or nowhere, is a statement and never this book's text; the comment box keeps
+/// the project's verse.
+#[test]
+fn cross_book_verse_shows_the_statement_and_keys_comments_to_the_project_verse() {
+    let part = |s: &str| RefPart::parse(s).unwrap();
+    let rows = [
+        FrameRow {
+            verse: part("1"),
+            source: RowSource::Verse {
+                chapter: 1,
+                verse: part("17"),
+            },
+        },
+        FrameRow {
+            verse: part("2"),
+            source: RowSource::OtherBook {
+                to: "NEH 1:1".into(),
+            },
+        },
+        FrameRow {
+            verse: part("3"),
+            source: RowSource::Unmapped,
+        },
+    ];
+    let units = frame_units(BookId::Jonah, 2, &rows);
+    let keys: Vec<&str> = units.iter().map(|u| u.key.as_str()).collect();
+    assert_eq!(keys, ["m2:1", "x2:2", "u2:3"]);
+    assert_eq!(units[0].label, "Jonah 1:17");
+    assert_eq!(units[0].number.as_deref(), Some("17"));
+    assert_eq!(units[0].notice, None);
+    assert_eq!(
+        units[1].notice,
+        Some(UnitNotice::OtherBook {
+            at: "2:2".into(),
+            to: "NEH 1:1".into()
+        })
+    );
+    assert_eq!(
+        units[2].notice,
+        Some(UnitNotice::Unmapped { at: "2:3".into() })
+    );
+    let shown = shown_comment(
+        &[
+            comment(2, 1, "mine", 1),
+            comment(1, 17, "the source's number", 2),
+        ],
+        2,
+        &units[0],
+    );
+    assert_eq!((shown.text.as_str(), shown.target.as_str()), ("mine", "1"));
+}
+
 fn block(text: &str) -> ArticleBlock {
-    ArticleBlock {
-        kind: BlockKind::P,
-        quote: 0,
-        spans: vec![ArticleSpan {
+    ArticleBlock::new(
+        BlockKind::P,
+        0,
+        vec![ArticleSpan {
             text: text.into(),
             bold: false,
             italic: false,
         }],
-    }
+    )
 }
 
 #[test]

@@ -271,6 +271,20 @@ fn helps_tab(
     focus_verses: Memo<Option<Vec<String>>>,
     pane: &str,
 ) -> AnyView {
+    // tC4's `chapterAllCrossBook`: a chapter the sources have in another book has its helps
+    // there.
+    if let Some(to) = &view.other_book {
+        let text = t(
+            keys::understand::HELPS_CROSS_BOOK,
+            &[("to", to as &dyn std::fmt::Display)],
+        );
+        return view! {
+            <Callout tone=CalloutTone::Info style=crate::css! { "overflow-wrap": "anywhere" } attrs=Attrs::from([("data-testid", "helps-cross-book")])>
+                {text}
+            </Callout>
+        }
+        .into_any();
+    }
     let focus = focus_verses.get();
     let focus = focus.as_deref();
     match tab {
@@ -651,7 +665,14 @@ fn simplified_tab(
     } else {
         verses
             .into_iter()
-            .map(|v| view! { <sup style=sup.clone()>{v.key.as_str().to_owned()}</sup>{v.text.clone()}" " })
+            .map(|v| {
+                // In another numbering, the source verse's place (tC4's `simplifiedVerses`).
+                let n = v
+                    .source
+                    .clone()
+                    .unwrap_or_else(|| v.key.as_str().to_owned());
+                view! { <sup style=sup.clone()>{n}</sup>{v.text.clone()}" " }
+            })
             .collect_view()
             .into_any()
     };
@@ -683,6 +704,84 @@ fn block_text(block: &ArticleBlock) -> AnyView {
         .into_any()
 }
 
+/// A table's rows (#628): the heading row's cells as `th`, the rest as `td`, each cell's marks
+/// drawn.
+fn table_view(rows: &[&ArticleBlock]) -> AnyView {
+    let table = crate::css! {
+        "border-collapse": "collapse",
+        "margin": "4px 0 10px",
+        "font-size": "inherit",
+    };
+    let cell = crate::css! {
+        "border": "var(--stroke-hair) solid var(--border)",
+        "padding": "4px 8px",
+        "text-align": "start",
+        "vertical-align": "top",
+    }
+    .to_style();
+    let quote = rows.first().map_or(0, |r| r.quote);
+    let body = rows
+        .iter()
+        .map(|row| {
+            let cells = row
+                .cells
+                .iter()
+                .map(|spans| {
+                    let inner = block_text(&ArticleBlock::new(BlockKind::P, 0, spans.clone()));
+                    if row.header {
+                        view! { <th style=cell.clone()>{inner}</th> }.into_any()
+                    } else {
+                        view! { <td style=cell.clone()>{inner}</td> }.into_any()
+                    }
+                })
+                .collect_view();
+            view! { <tr>{cells}</tr> }
+        })
+        .collect_view();
+    quoted(
+        quote,
+        view! { <table style=table.to_style()><tbody>{body}</tbody></table> }.into_any(),
+    )
+}
+
+/// `blocks` drawn one by one with `one`, a run of table rows as one table (#628).
+fn with_tables(blocks: &[ArticleBlock], one: impl Fn(&ArticleBlock) -> AnyView) -> AnyView {
+    let mut out: Vec<AnyView> = Vec::new();
+    let mut rows: Vec<&ArticleBlock> = Vec::new();
+    for b in blocks {
+        if b.kind == BlockKind::Tr {
+            if b.header && !rows.is_empty() {
+                out.push(table_view(&rows));
+                rows.clear();
+            }
+            rows.push(b);
+            continue;
+        }
+        if !rows.is_empty() {
+            out.push(table_view(&rows));
+            rows.clear();
+        }
+        out.push(one(b));
+    }
+    if !rows.is_empty() {
+        out.push(table_view(&rows));
+    }
+    out.into_iter().collect_view().into_any()
+}
+
+/// How far a list item is set in: tC4's 14 px, and 14 more for each level it is nested (#628).
+fn list_indent(b: &ArticleBlock) -> u32 {
+    match b.kind {
+        BlockKind::Li | BlockKind::Ol => 14 + 14 * u32::from(b.depth),
+        _ => 0,
+    }
+}
+
+/// A numbered item's number, before its text (#628).
+fn number_mark(b: &ArticleBlock) -> Option<String> {
+    (b.kind == BlockKind::Ol).then(|| format!("{}. ", b.number.as_deref().unwrap_or_default()))
+}
+
 /// A block inside `depth` quotes (tC4's `Quoted`): one bar per level.
 fn quoted(depth: u8, inner: AnyView) -> AnyView {
     if depth == 0 {
@@ -699,39 +798,33 @@ fn quoted(depth: u8, inner: AnyView) -> AnyView {
 
 /// A note's blocks as spans, so the last sits beside "Show more" (tC4's `NoteBlocks`).
 fn note_blocks(blocks: &[ArticleBlock]) -> AnyView {
-    blocks
-        .iter()
-        .map(|b| {
-            let heading = b.kind == BlockKind::H;
-            let mut style = crate::css! { "display": "block" };
-            style.set(
-                "font-weight",
-                if heading {
-                    "var(--fw-heavy)"
-                } else {
-                    "var(--fw-regular)"
-                },
-            );
-            style.set(
-                "color",
-                if heading {
-                    "var(--uw-ocean)"
-                } else {
-                    "inherit"
-                },
-            );
-            style.set("margin", if heading { "8px 0 2px" } else { "0 0 6px" });
-            style.set(
-                "padding-inline-start",
-                if b.kind == BlockKind::Li { 14 } else { 0 },
-            );
-            let bullet = (b.kind == BlockKind::Li).then_some("• ");
-            let span =
-                view! { <span style=style.to_style()>{bullet}{block_text(b)}</span> }.into_any();
-            quoted(b.quote, span)
-        })
-        .collect_view()
-        .into_any()
+    with_tables(blocks, |b| {
+        let heading = b.kind == BlockKind::H;
+        let mut style = crate::css! { "display": "block" };
+        style.set(
+            "font-weight",
+            if heading {
+                "var(--fw-heavy)"
+            } else {
+                "var(--fw-regular)"
+            },
+        );
+        style.set(
+            "color",
+            if heading {
+                "var(--uw-ocean)"
+            } else {
+                "inherit"
+            },
+        );
+        style.set("margin", if heading { "8px 0 2px" } else { "0 0 6px" });
+        style.set("padding-inline-start", list_indent(b));
+        let bullet = (b.kind == BlockKind::Li).then_some("• ");
+        let number = number_mark(b);
+        let span = view! { <span style=style.to_style()>{bullet}{number}{block_text(b)}</span> }
+            .into_any();
+        quoted(b.quote, span)
+    })
 }
 
 /// A note, cut to a preview with "Show more" when long (tC4's `ExpandableNote`).
@@ -834,9 +927,7 @@ fn article_view(actions: &Actions, state: ArticleState) -> AnyView {
         }
         .into_any(),
         ArticleState::Read(_, ArticleView::Found { blocks, dir, .. }) => {
-            let paras = blocks
-                .iter()
-                .map(|b| {
+            let paras = with_tables(&blocks, |b| {
                     let heading = b.kind == BlockKind::H;
                     let mut style = crate::css! {};
                     style.set("font-size", if heading { "var(--fs-caption-lg)" } else { "var(--fs-ui-sm)" });
@@ -844,10 +935,10 @@ fn article_view(actions: &Actions, state: ArticleState) -> AnyView {
                     style.set("color", if heading { "var(--uw-ocean)" } else { "var(--text-secondary)" });
                     style.set("line-height", "var(--lh-body)");
                     style.set("margin", if heading { "12px 0 4px" } else { "0 0 8px" });
-                    style.set("padding-inline-start", if b.kind == BlockKind::Li { 14 } else { 0 });
-                    quoted(b.quote, view! { <p style=style.to_style()>{block_text(b)}</p> }.into_any())
-                })
-                .collect_view();
+                    style.set("padding-inline-start", list_indent(b));
+                    let number = number_mark(b);
+                    quoted(b.quote, view! { <p style=style.to_style()>{number}{block_text(b)}</p> }.into_any())
+                });
             view! { <div data-testid="understand-article" dir=dir_str(Some(dir))>{paras}</div> }.into_any()
         }
     };

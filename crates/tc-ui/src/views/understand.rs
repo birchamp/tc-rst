@@ -11,7 +11,8 @@ use std::sync::Arc;
 
 use leptos::prelude::*;
 use tc_api::editor::{
-    Book as BookRead, BookView, CommentView, PaneChapter, PaneText, Sources, SourcesView,
+    Book as BookRead, BookView, CommentView, PaneChapter, PaneText, SourceFrame, Sources,
+    SourcesView,
 };
 use tc_api::helps::{Passage, PassageView, Slot};
 use tc_api::ids::Scope;
@@ -24,7 +25,8 @@ use super::panel_icons::rail_icon;
 use super::source_verse::source_verse;
 use crate::app::load::Load;
 use crate::app::understand::{
-    HelpFocus, Unit, UnitMode, literal_pane, paragraphs, shown_comment, units,
+    HelpFocus, Unit, UnitMode, UnitNotice, frame_units, literal_pane, paragraphs, shown_comment,
+    units,
 };
 use crate::app::web::{Actions, AppCtx, AppState, use_app, use_runtime};
 use crate::attrs::Attrs;
@@ -181,9 +183,25 @@ fn chapter_view(
                 })
         })
     });
+    // tC4's `crossFrame`: the project numbers its verses otherwise, or its numbering is not
+    // known (#118).
+    let cross_frame = Memo::new(move |_| {
+        panes.with(|p| {
+            p.as_ref()
+                .is_some_and(|v| !matches!(v.frame, SourceFrame::Same))
+        })
+    });
     let all = Memo::new(move |_| {
         let mode = mode.get();
-        chapter_text.with(|c| units(mode, book_id, chapter, c.as_ref()))
+        let rows = panes.with(|p| match p.as_ref().map(|v| &v.frame) {
+            Some(SourceFrame::Mapped { rows }) => Some(rows.clone()),
+            Some(SourceFrame::Unknown) => Some(Vec::new()),
+            _ => None,
+        });
+        match rows {
+            Some(rows) => frame_units(book_id, chapter, &rows),
+            None => chapter_text.with(|c| units(mode, book_id, chapter, c.as_ref())),
+        }
     });
     let active_key: RwSignal<Option<String>> = RwSignal::new(None);
     let focused_key = Memo::new(move |_| {
@@ -252,7 +270,22 @@ fn chapter_view(
             })
         }
     };
-    let switch = unit_switch(s, actions);
+    let switch = {
+        let (s, actions) = (s.clone(), actions.clone());
+        move || {
+            if cross_frame.get() {
+                // Round 32 (D30): one unit per project verse, so no Section or Verse choice.
+                view! {
+                    <Overline attrs=Attrs::from([("data-testid", "understand-verse-only")])>
+                        {t(keys::understand::CROSS_FRAME_VERSE_ONLY, &[])}
+                    </Overline>
+                }
+                .into_any()
+            } else {
+                unit_switch(&s, &actions).into_any()
+            }
+        }
+    };
     let source_name = move || {
         chosen.get().map(|id| {
             let style = crate::css! {
@@ -274,6 +307,17 @@ fn chapter_view(
                 panes.with(|p| passage_status(&actions, loaded, p.as_ref(), tab.as_deref()))
             })
         }
+    };
+    // tC4's `FrameUnavailableNote`: no unit in another numbering, the passage loaded.
+    let unavailable = move || {
+        let loaded = sources.with(|l| l.value().is_some());
+        (cross_frame.get() && loaded && all.with(Vec::is_empty)).then(|| {
+            view! {
+                <Callout tone=CalloutTone::Warn style=crate::css! { "margin-top": 10 } attrs=Attrs::from([("data-testid", "understand-frame-unavailable")])>
+                    {t(keys::understand::FRAME_UNAVAILABLE, &[])}
+                </Callout>
+            }
+        })
     };
     let comments = Arc::new(book.comments.clone());
     let unit_views = {
@@ -322,6 +366,7 @@ fn chapter_view(
                     </div>
                     {source_name}
                     {status}
+                    {unavailable}
                     {unit_views}
                 </div>
             </div>
@@ -538,6 +583,28 @@ fn understand_unit(
     comments: &[CommentView],
     helps: Signal<Load<Arc<PassageView>>>,
 ) -> AnyView {
+    if let Some(notice) = &unit.notice {
+        let text = match notice {
+            UnitNotice::Unmapped { at } => t(
+                keys::understand::VERSE_UNMAPPED,
+                &[("ref", at as &dyn std::fmt::Display)],
+            ),
+            UnitNotice::OtherBook { at, to } => t(
+                keys::understand::VERSE_CROSS_BOOK,
+                &[
+                    ("ref", at as &dyn std::fmt::Display),
+                    ("to", to as &dyn std::fmt::Display),
+                ],
+            ),
+        };
+        let test_id = format!("understand-unit-{}", unit.key);
+        return view! {
+            <Callout tone=CalloutTone::Info style=crate::css! { "margin-bottom": 18 } attrs=Attrs::from([("data-testid", test_id.as_str())])>
+                {text}
+            </Callout>
+        }
+        .into_any();
+    }
     let shown = shown_comment(comments, chapter, unit);
     let key = unit.key.clone();
     let focused = Memo::new({
@@ -604,8 +671,12 @@ fn understand_unit(
                 .map(|v| {
                     let verse = v.clone();
                     let pane = pane.to_owned();
+                    let number = unit
+                        .number
+                        .clone()
+                        .unwrap_or_else(|| v.key.as_str().to_owned());
                     view! {
-                        <sup style=sup.clone()>{v.key.as_str().to_owned()}</sup>
+                        <sup style=sup.clone()>{number}</sup>
                         {move || focus.with(|f| source_verse(&verse, &pane, f.as_ref()))}
                         " "
                     }
