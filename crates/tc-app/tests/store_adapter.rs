@@ -411,6 +411,78 @@ fn concurrent_submits_are_each_announced_as_their_own_request() {
     });
 }
 
+/// D1, AD37 while someone types: a draft's reply carries the newest snapshot's `seq` and is
+/// settled by its submit, out of the actor's order, so it must not end a save's wait for its
+/// record. Threads send drafts on one verse without pause while saves of another, each its own
+/// request, run one after another: every save is announced as its request, never as the
+/// store's own. (Were a draft settled as the relay settles, most saves here would reach the
+/// pump as `System`.)
+#[test]
+fn saves_racing_drafts_are_each_announced_as_their_own_request() {
+    const SAVES: u16 = 400;
+    const TYPISTS: usize = 4;
+    multi_thread().block_on(async {
+        let world = store_world();
+        let handle = world.open(&world.bible);
+        let mut events = handle.subscribe();
+        let typed = token(handle.as_ref(), &tit(1, 15));
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let typists: Vec<_> = (0..TYPISTS)
+            .map(|typist| {
+                let (handle, typed, stop) = (handle.clone(), typed.clone(), stop.clone());
+                std::thread::spawn(move || {
+                    let mut sent = 0_u64;
+                    while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                        // The store answers a draft at once; its future holds only that answer.
+                        drop(handle.submit(StoreCommand::draft(
+                            DraftField::Words,
+                            vec![typed.clone()],
+                            format!("typist {typist}, keystroke {sent}"),
+                        )));
+                        sent += 1;
+                    }
+                    sent
+                })
+            })
+            .collect();
+        let saved = tit(1, 12);
+        let mut wrong = Vec::new();
+        for n in 0..SAVES {
+            let mut bytes = [0xcc; 16];
+            bytes[..2].copy_from_slice(&n.to_be_bytes());
+            let id = tc_api::ids::RequestId::from_bytes(bytes);
+            let reply = handle
+                .submit(
+                    StoreCommand::save_verse(token(handle.as_ref(), &saved), format!("save {n}"))
+                        .requested_by(id),
+                )
+                .await
+                .unwrap();
+            let (_, _, cause) = committed_until(&mut events, reply.seq)
+                .await
+                .pop()
+                .expect("the save's batch is announced");
+            if cause
+                != (StoreCause::Command {
+                    origin: Origin::Request(id),
+                })
+            {
+                wrong.push((n, cause));
+            }
+        }
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        let drafts: u64 = typists.into_iter().map(|t| t.join().unwrap()).sum();
+        assert!(drafts > 0, "the typists sent drafts");
+        assert!(
+            wrong.is_empty(),
+            "{} of {SAVES} saves announced as another's, among {drafts} drafts: {:?}",
+            wrong.len(),
+            &wrong[..wrong.len().min(5)]
+        );
+        handle.close().await.unwrap();
+    });
+}
+
 /// D1, AD37: a close that races submits on several threads. Every save answered as stored is
 /// on disk and was announced as its own request before the events ended; every save answered
 /// `Closed` is not on disk and was never announced; a save nobody awaited is on disk only if
