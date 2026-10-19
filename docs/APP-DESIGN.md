@@ -1940,8 +1940,10 @@ is split as `parity/ds-gallery` was:
 | `parity/app/driver.mjs` | `appDriver` over an environment (`AppEnv`: `load`, `catalog`, `projectId` and the four Door43 steps) |
 | `parity/app/observe.mjs` | the capture rules, `trackRequests`, `settle`, `captureScreen`, `observe`, `domSnapshot` rooted at `#root` |
 | `parity/app/env-tc4.mjs` | today's mock, `.state` and in-browser fake Door43; tC4's catalogs and journal writers |
-| `parity/app/env-rust.mjs` | launches `tc4 serve`; `extraHTTPHeaders` with the token |
+| `parity/app/env-rust.mjs` | launches `tc4 serve` with `--test-hooks`, an empty app-data and projects folder under `target/` and a dead `--door43`; `extraHTTPHeaders` with the token, and a context route that aborts every request to another origin before it is sent, so the token never leaves the machine *(A6b, D10)* |
 | `parity/tc4-baseline/capture.mjs` | a short entry over `env-tc4` |
+| `parity/app/capture-rust.mjs` | the Rust entry over `env-rust`: the same screens, driver and rules, into `parity/app/screens`, `dom` and `captures.json`, each capture naming the unit that made it and the layers it claims *(A6b)* |
+| `parity/app/behaviour.mjs` | the recorder of layer 4: a sequence's steps from a baseline screen, on either environment, with node numbers *(A6b)* |
 
 **Proof the split changed nothing.** The baseline test checked sizes and byte counts only
 (`parity/tc4-baseline/baseline.test.mjs:45-59`). Unit A6a adds a sha256 per PNG to `manifest.json`
@@ -1952,10 +1954,10 @@ The Rust environment's seams:
 
 | Seam | Rust environment |
 |---|---|
-| `home()` | `test/reset` with the scenario's prefs and locale, `localStorage.clear()`, load `/#t=<token>`, wait for both cards and `<html lang>` |
+| `home()` | `test/reset` (prefs back to the seed, holds released, the internet off); `prefs/setLocale` when the screen's language is not English, because `test/reset` carries no locale and there is no scenario seed before B1b; `localStorage` and `sessionStorage` cleared; a load of `/#t=<token>` through `about:blank`, because a `goto` to the address the page already shows only moves to its fragment; then wait for both cards and `<html lang>` *(A6b, D9)* |
 | `card(repo)`, `shareButton(repo)`, `shareCard(repo)` | `projectId` maps `BIBLE` and `OBS` paths to the folder, for the `project-`, `share-` and `share-card-` test ids; screen runs name a project's test ids only through these three |
 | `trackRequests` | counts `/api/v1/` and `/media/`, never `/api/v1/events`; otherwise `settle` never sees 800 ms of quiet and silently waits out 30 s (`capture.mjs:136-155`). Shared since A6a: requests are tracked per document through the DevTools protocol, because Playwright's request events can leave a request of a replaced page "in flight" for good, which made later tC4 screens wait out the deadline |
-| `settle` | also waits for `test/quiet` to answer `{busy:false}`; a screen that hits the deadline fails (in both environments since A6a; with requests tracked per document, no tC4 screen reaches it) |
+| `settle` | also waits for `test/quiet` to answer `{busy:false}` and for the page's `window.__tcIdle`, which also covers the catalogs under `/ui/` that the tracker does not count; once either says busy it is asked at every look, and the quiet counts again from the first idle answer *(A6b, D9)*; a screen that hits the deadline fails (in both environments since A6a; with requests tracked per document, no tC4 screen reaches it), and its error says when the server still answered busy |
 | `routeFakeDoor43` | removed: `tc4 serve --door43 <url>` points at a tc-door43-fake process seeded with `facilitator-zq` and the organisations of `fake-door43.mjs:16-21`; the guard that refuses other origins stays |
 | `pushToDoor43`, `teammatesChangeOneVerse`, `loseFromDoor43`, `dropNextClone` | phase 1: scenario files for the scripted doubles plus teammate heads in the fold; from E1a: real packs written by tc-journal and tc-store into the fake's bare repositories, and R13's dropped connection |
 
