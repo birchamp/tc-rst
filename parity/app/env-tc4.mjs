@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildState, DEFAULT_TC4 } from '../tc4-baseline/fixtures/build-state.mjs';
 import { routeFakeDoor43 } from '../tc4-baseline/mock-server/fake-door43.mjs';
 import { startMockServer } from '../tc4-baseline/mock-server/server.mjs';
+import { BIBLE, OBS } from './screens.mjs';
 
 const BASELINE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'tc4-baseline');
 export const TC4 = path.resolve(process.env.TC4_ROOT ?? DEFAULT_TC4);
@@ -169,6 +170,11 @@ export async function startTc4Env({ scenario, port }) {
       fs.writeFileSync(settingsFile, locale === 'en' ? pristineSettings
         : `${JSON.stringify({ ...JSON.parse(pristineSettings), appLocale: locale }, null, 2)}\n`);
       await page.goto(`${mock.origin}/clients/uw-tc4/`);
+    },
+    /** Home is ready when both project cards are drawn. */
+    async homeReady(page, card) {
+      await card(BIBLE).waitFor();
+      await card(OBS).waitFor();
     },
     projectId: (repo) => repo,
     /** tC4 seeds the journal of a conformance sample when it first opens it, so the project

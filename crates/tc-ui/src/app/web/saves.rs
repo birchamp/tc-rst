@@ -140,6 +140,7 @@ impl Saves {
                 indicator: ArcRwSignal::new(Indicator {
                     state: Worst::Saved,
                     commit_error: false,
+                    retry: indicator::Retry::Save,
                 }),
                 can_close: Cell::new(None),
                 hooks: RefCell::new(Vec::new()),
@@ -664,13 +665,13 @@ impl Saves {
         if super::panic::has_panicked() {
             return;
         }
-        let (busy, deadline, worst) = self
-            .machine(|m| Some((m.busy(), m.next_deadline(), m.worst())))
-            .unwrap_or((0, None, Worst::Error));
+        let (busy, deadline, worst, failed) = self
+            .machine(|m| Some((m.busy(), m.next_deadline(), m.worst(), m.failed_kinds())))
+            .unwrap_or((0, None, Worst::Error, Vec::new()));
         self.0.busy.set_saves(busy);
         self.arm(deadline);
         let aligns = self.align_saves();
-        let shown = indicator::indicator(worst, &aligns, self.checkpoint_failed());
+        let shown = indicator::indicator(worst, &aligns, self.checkpoint_failed(), &failed);
         self.0.indicator.try_set(shown);
         let clean = indicator::all_clean(worst, &aligns);
         if self.0.can_close.replace(Some(clean)) != Some(clean) {

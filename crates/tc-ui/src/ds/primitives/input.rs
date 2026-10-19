@@ -11,6 +11,17 @@ use crate::ds::{
     Attrs, Css, InputVariant, MaybeView, NativeInput, Size, Slot, Tag, element, live, spread,
 };
 
+/// `node.defaultValue = v` when it differs, as React's `updateWrapper` keeps a controlled
+/// textarea's text in step with its value. The text a person typed stays: the textarea's value
+/// no longer follows its text once it has been set.
+fn set_default_text(el: &web_sys::HtmlElement, want: &str) {
+    if let Some(area) = el.dyn_ref::<web_sys::HtmlTextAreaElement>()
+        && area.default_value().ok().as_deref() != Some(want)
+    {
+        let _ = area.set_default_value(want);
+    }
+}
+
 /// `node.value = v` when it differs, as React restores a controlled field.
 fn set_value(el: &web_sys::HtmlElement, want: &str) {
     let key = wasm_bindgen::JsValue::from_str("value");
@@ -122,7 +133,9 @@ pub fn Input(
     };
 
     // React writes a text field's initial value as its `value` attribute and a textarea's as
-    // its text; a controlled field keeps both the attribute and the property in step.
+    // its text; a controlled field keeps both the attribute (a textarea's text, unless a
+    // `default_value` is given) and the property in step.
+    let follows_text = multiline && default_value.is_none();
     let initial = value.map(|v| v.get_untracked()).or(default_value);
     let text = multiline.then(|| initial.clone()).flatten();
     let value_attr = move || {
@@ -138,6 +151,9 @@ pub fn Input(
             let want = v.get();
             if let Some(el) = node.get() {
                 set_value(&el, &want);
+                if follows_text {
+                    set_default_text(&el, &want);
+                }
             }
         });
     }

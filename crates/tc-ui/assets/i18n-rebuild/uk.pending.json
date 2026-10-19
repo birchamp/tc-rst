@@ -4,6 +4,7 @@
   "exchange.error.notWritten",
   "exchange.error.unreadable",
   "exchange.error.verifyFailed",
+  "feedback.attachmentFailed",
   "prepare.failed",
   "prepare.failedTitle",
   "prepare.handoff",
