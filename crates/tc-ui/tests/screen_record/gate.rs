@@ -4,12 +4,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use regex::Regex;
-
 use super::design::{Backend, Design, DiffLayer, Layer, UnitId};
 use super::inputs::{Record, RowKind, sorted_files};
 use super::pixels;
 use super::report::{FailureKind, Report, Status, file_sha256, to_json};
+use crate::plan_rulings::plan_rulings;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Rule {
@@ -100,24 +99,6 @@ impl Failures {
 
 const UPDATE: &str =
     "run `UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record` and review the diff";
-
-/// The rulings docs/PLAN.md lists under "Where the rebuild differs from tC4 4.0 on purpose".
-fn plan_rulings(plan: &str) -> BTreeSet<String> {
-    let mut lines = plan.lines();
-    lines
-        .by_ref()
-        .find(|l| l.starts_with("### Where the rebuild differs from tC4 4.0 on purpose"));
-    let section: String = lines
-        .take_while(|l| !l.starts_with('#'))
-        .collect::<Vec<_>>()
-        .join("\n");
-    // A constant pattern.
-    let ruling = Regex::new(r"\((Q\d+)[,)]").unwrap();
-    ruling
-        .captures_iter(&section)
-        .map(|c| c[1].to_owned())
-        .collect()
-}
 
 pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) -> Vec<Failure> {
     let mut out = Failures(Vec::new());
@@ -613,6 +594,9 @@ pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) ->
             let view = if let Some(screen) =
                 manifest.screens.iter().find(|s| &s.name == screen_name)
             {
+                // The baseline marks the screens of the owner's answers (Q) in `rebuildDiffers`.
+                // A tC4 issue (#) came after the capture, so PLAN's entry and the mask's `why`
+                // alone say where it applies, and the row's own difference demands its mask.
                 if mask.ruling.starts_with('Q')
                     && screen.rebuild_differs.as_ref().map(|r| &r.ruling) != Some(&mask.ruling)
                 {

@@ -35,7 +35,7 @@ const PROTOCOL = {
     focus: 'Press Tab until the first element inside the frame that matches `target` has the focus. Keyboard focus is what makes :focus-visible match.',
     hover: 'Move the pointer to the centre of the first element inside the frame that matches `target`.',
     press: 'Move the pointer to the centre of the target and press the primary button without releasing it (:active).',
-    click: 'Click the centre of the target.',
+    click: 'Click the centre of the target. With `force`, click it without waiting for it to be enabled: Playwright takes a label\'s control as the element that must be enabled, and a case may press the label of a field that is off. With `script`, call the target\'s click() by script instead: every listener then runs inside that one script, with no microtask between them, so what an earlier listener changes is not yet drawn when the target\'s own listener runs.',
     key: 'Press `key` on the focused element.',
     type: 'Type `text` into the focused element, one key at a time.',
     select: 'Select the text from the start of the first element inside the frame that matches `target` to the end of the first that matches `to` (`target` when absent), by script, as one range.',
@@ -46,7 +46,7 @@ const PROTOCOL = {
 };
 
 const NODES = {
-  element: '{ "$el": "<Name>", "props": { ... } } — a DS export (index.js) when the name is capitalised, an HTML or SVG tag when it is lower case. `children` is a prop.',
+  element: '{ "$el": "<Name>", "props": { ... } } — a DS export (index.js) when the name is capitalised, an HTML or SVG tag when it is lower case. `children` is a prop. An HTML element may take `onClickCapture`, a callback called in the click\'s capture phase, before the component under test sees the click.',
   callback: '{ "$fn": "noop" } — a callback that does nothing. Several components draw a control only when they are given a callback (Modal\'s ✕, Toast\'s action, Breadcrumb\'s links, a clickable Surface).',
   asset: '{ "$asset": "<path>" } — a file of the tC4 checkout, by its path relative to the checkout, served as a URL.',
   json: 'Everything else is a plain JSON value. Style objects are React inline styles: camelCase properties, a bare number means px except on unitless properties (lineHeight, flex, opacity, fontWeight, zIndex). defaultValue is the initial value of an uncontrolled field.',
