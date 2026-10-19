@@ -13,6 +13,7 @@ use proptest::prelude::*;
 use tc_check::carry::{Match, Outcome, StoredDecision, Summary, plan, same_quote};
 use tc_check::change::{Affected, Unit, consequences};
 use tc_check::derive::{notes_for_book, word_links_for_book};
+use tc_check::fix::{Machine, PreflightState, preflight};
 use tc_check::session::open;
 use tc_check::status::{CheckState, Edit, Triage, assess, decision_edit};
 use tc_check::{
@@ -842,16 +843,174 @@ fn an_article_change_is_judged_by_the_set_that_answers_the_list() {
 }
 
 #[test]
-fn article_sets_are_read_only_when_the_translation_words_pin_moves() {
+fn a_decision_comes_back_only_when_its_check_is_on_the_new_list() {
+    let ark = Ark::new();
+    let articles = |r: &ResourceRef| ark.articles(r);
+    let en = |twl: &Pin, tw: &Pin| {
+        both(set_of(&[
+            (Slot::TranslationWordsLinks, twl),
+            (Slot::TranslationWords, tw),
+        ]))
+    };
+    // vwrw and a check whose article stays, decided against en_twl v90, which 2 Samuel
+    // resolves to only after the change.
+    let twl90 = pin("unfoldingWord/en_twl", "v90", &["2SA"]);
+    let stored = ark.decisions(&twl90.resource);
+    let units = [words(BookId::SecondSamuel, &stored)];
+    let decisions = projected(&stored, Some(&twl90.resource), no_text);
+
+    // en_twl goes back to v90 and en_tw moves to v91, which lacks vwrw's article: only the
+    // other decision comes back, and the session lists vwrw off the list.
+    let c = consequences(
+        &en(&ark.twl, &ark.tw90),
+        &en(&twl90, &ark.tw91),
+        &units,
+        |_| None,
+        articles,
+    );
+    assert!(c.harmless(), "{c:?}");
+    assert_eq!((c.unaffected, c.revived, c.detached), (1, 1, 1));
+    let session = open(
+        ark.items(&ark.after),
+        &decisions,
+        Some(&twl90.resource),
+        no_text,
+    );
+    assert_eq!(session.off_list, [0]);
+    assert_eq!(session.placed.iter().flatten().collect::<Vec<_>>(), [&1]);
+
+    // The same when en_tw stays at v91: its pin does not move, and the list still decides.
+    let c = consequences(
+        &en(&ark.twl, &ark.tw91),
+        &en(&twl90, &ark.tw91),
+        &units,
+        |_| None,
+        articles,
+    );
+    assert_eq!((c.unaffected, c.revived, c.detached), (1, 1, 1));
+
+    // On a list that keeps vwrw's article, both come back.
+    let c = consequences(
+        &en(&ark.twl, &ark.tw90),
+        &en(&twl90, &ark.tw90),
+        &units,
+        |_| None,
+        articles,
+    );
+    assert_eq!((c.revived, c.detached), (2, 0));
+    let session = open(
+        ark.items(&ark.before),
+        &decisions,
+        Some(&twl90.resource),
+        no_text,
+    );
+    assert!(session.off_list.is_empty());
+
+    // A change of only en_tw that brings vwrw's article back puts it on its check again.
+    let stored = ark.decisions(&ark.twl.resource);
+    let c = consequences(
+        &en(&ark.twl, &ark.tw91),
+        &en(&ark.twl, &ark.tw90),
+        &[words(BookId::SecondSamuel, &stored)],
+        |_| None,
+        articles,
+    );
+    assert!(c.harmless(), "{c:?}");
+    assert_eq!((c.unaffected, c.revived, c.detached), (1, 1, 0));
+}
+
+#[test]
+fn a_change_onto_an_unusable_translation_words_pin_is_blocked() {
+    // en_twl v91 answers 2 Samuel on both sides; en_tw moves from v90 to a tag with no
+    // commit, which the tool refuses (UnusablePin), so the decided checks become
+    // unreachable.
+    let ark = Ark::new();
+    let articles = |r: &ResourceRef| ark.articles(r);
+    let mut broken = LanguageSet::from_json(&serde_json::json!({
+        "translationWords": {
+            "repoPath": "git.door43.org/unfoldingWord/en_tw",
+            "version": "v92"
+        }
+    }))
+    .unwrap();
+    assert_eq!(broken.unusable().len(), 1);
+    broken.set_pin(Slot::TranslationWordsLinks, &ark.twl);
+    let working = set_of(&[
+        (Slot::TranslationWordsLinks, &ark.twl),
+        (Slot::TranslationWords, &ark.tw90),
+    ]);
+    let stored = ark.decisions(&ark.twl.resource);
+    let units = [words(BookId::SecondSamuel, &stored)];
+    let offline = Machine {
+        installed: &[],
+        online: false,
+    };
+    let opens = |pins: &Pins| {
+        preflight(
+            Some(pins),
+            ToolId::TranslationWords,
+            Collection::Book(BookId::SecondSamuel),
+            &offline,
+        )
+        .state
+    };
+    assert_eq!(opens(&both(broken.clone())), PreflightState::UnusablePin);
+
+    let c = consequences(
+        &both(working.clone()),
+        &both(broken.clone()),
+        &units,
+        |_| None,
+        articles,
+    );
+    assert_eq!(
+        c.affected,
+        [Affected {
+            tool: ToolId::TranslationWords,
+            collection: Collection::Book(BookId::SecondSamuel),
+            checked_against: ark.twl.resource.clone(),
+            decisions: 2,
+            articles_left: 0,
+            blocked: true,
+        }]
+    );
+    assert!(c.blocked());
+
+    // A pin that was already unusable does not refuse a change that leaves it alone.
+    let mut with_notes = broken.clone();
+    with_notes.set_pin(
+        Slot::TranslationNotes,
+        &pin("unfoldingWord/en_tn", "v91", &["2SA"]),
+    );
+    let c = consequences(
+        &both(broken.clone()),
+        &both(with_notes),
+        &units,
+        |_| None,
+        articles,
+    );
+    assert!(c.harmless() && !c.blocked(), "{c:?}");
+
+    // Repairing it opens the list again: both decisions are back on their checks.
+    let c = consequences(&both(broken), &both(working), &units, |_| None, articles);
+    assert!(c.harmless(), "{c:?}");
+    assert_eq!((c.unaffected, c.revived, c.detached), (1, 2, 0));
+}
+
+#[test]
+fn article_sets_are_read_once_each_and_only_when_a_check_depends_on_them() {
     let ark = Ark::new();
     let reads = Cell::new(0);
     let articles = |r: &ResourceRef| {
         reads.set(reads.get() + 1);
         ark.articles(r)
     };
-    let tn = pin("unfoldingWord/en_tn", "v91", &["TIT", "2SA"]);
-    let tn92 = pin("unfoldingWord/en_tn", "v92", &["TIT", "2SA"]);
-    let twl90 = pin("unfoldingWord/en_twl", "v90", &["2SA"]);
+    let books = ["TIT", "2SA", "GEN", "EXO"];
+    let tn = pin("unfoldingWord/en_tn", "v91", &books);
+    let tn92 = pin("unfoldingWord/en_tn", "v92", &books);
+    let twl = pin("unfoldingWord/en_twl", "v91", &books);
+    let twl90 = pin("unfoldingWord/en_twl", "v90", &books);
+    assert!(twl.resource.same_resource(&ark.twl.resource));
     let sets = |tn: &Pin, twl: &Pin, tw: &Pin| {
         both(set_of(&[
             (Slot::TranslationNotes, tn),
@@ -859,40 +1018,59 @@ fn article_sets_are_read_only_when_the_translation_words_pin_moves() {
             (Slot::TranslationWords, tw),
         ]))
     };
+    // Three books' Words lists filtered by the same translation words, and a Notes list.
     let decided_words = ark.decisions(&ark.twl.resource);
     let decided_notes = stored_against(BookId::Titus, &tn.resource, 3);
+    let notes_unit = Unit {
+        tool: ToolId::TranslationNotes,
+        collection: Collection::Book(BookId::Titus),
+        decisions: &decided_notes,
+    };
     let units = [
         words(BookId::SecondSamuel, &decided_words),
-        Unit {
-            tool: ToolId::TranslationNotes,
-            collection: Collection::Book(BookId::Titus),
-            decisions: &decided_notes,
-        },
+        words(BookId::Genesis, &decided_words),
+        words(BookId::Exodus, &decided_words),
+        notes_unit,
     ];
 
-    // The translation words pin moves: one read per side for the Words unit, none for the
-    // Notes unit.
+    // The translation words pin moves: each side's set is read once for the three Words
+    // units, and none for the Notes unit.
     let c = consequences(
-        &sets(&tn, &ark.twl, &ark.tw90),
-        &sets(&tn, &ark.twl, &ark.tw91),
+        &sets(&tn, &twl, &ark.tw90),
+        &sets(&tn, &twl, &ark.tw91),
         &units,
         |_| None,
         articles,
     );
-    assert_eq!((c.at_risk(), reads.get()), (1, 2));
+    assert_eq!((c.at_risk(), reads.get()), (3, 2));
 
     // A change of the links or the notes alone reads no article set.
     reads.set(0);
     let decided_words90 = ark.decisions(&twl90.resource);
-    let units90 = [words(BookId::SecondSamuel, &decided_words90), units[1]];
+    let units90 = [words(BookId::SecondSamuel, &decided_words90), notes_unit];
     let c = consequences(
         &sets(&tn, &twl90, &ark.tw90),
-        &sets(&tn92, &ark.twl, &ark.tw90),
+        &sets(&tn92, &twl, &ark.tw90),
         &units90,
         |_| None,
         articles,
     );
     assert_eq!((c.at_risk(), reads.get()), (5, 0));
+
+    // A change back to the links the decisions were made against reads the new list's set,
+    // once, though its pin does not move.
+    let units90 = [
+        words(BookId::SecondSamuel, &decided_words90),
+        words(BookId::Genesis, &decided_words90),
+    ];
+    let c = consequences(
+        &sets(&tn, &twl, &ark.tw91),
+        &sets(&tn, &twl90, &ark.tw91),
+        &units90,
+        |_| None,
+        articles,
+    );
+    assert_eq!((c.revived, c.detached, reads.get()), (2, 2, 1));
 }
 
 // ---- properties ----------------------------------------------------------------------
