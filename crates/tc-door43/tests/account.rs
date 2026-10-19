@@ -289,3 +289,61 @@ async fn a_created_repository_takes_a_push_with_the_minted_token() {
     let info = client.repo(&created.repo, Some(&session)).await.unwrap();
     assert!(!info.empty);
 }
+
+/// R12: the share dialog's "Recommended" counts an organization's repositories in the project's
+/// language from Door43's `X-Total-Count`; a private one counts only for a member who asks with
+/// a token.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn repositories_are_counted_per_owner_and_language() {
+    let fake = FakeDoor43::start().await.unwrap();
+    seeded::parity_account(&fake).await.unwrap();
+    fake.add_repo(tc_door43_fake::RepoSeed {
+        owner: "Equipo-Ejemplo".to_owned(),
+        name: "privado".to_owned(),
+        subject: "Bible".to_owned(),
+        language: seeded::PARITY_LANGUAGE.to_owned(),
+        topics: Vec::new(),
+        private: true,
+        commits: Vec::new(),
+    })
+    .await
+    .unwrap();
+    let client = client(&fake);
+    let parity = Credentials::new(
+        seeded::PARITY_USER,
+        Password::new(seeded::PARITY_PASSWORD.to_owned()),
+    )
+    .unwrap();
+    let session = client
+        .mint_token(&parity, &token_name(), &TokenScope::FOR_SHARING)
+        .await
+        .unwrap();
+    let count = |owner: &str, language: &str, signed_in: bool| {
+        let owner = owner.parse().unwrap();
+        let language = language.to_owned();
+        let client = &client;
+        let session = &session;
+        async move {
+            client
+                .count_repositories(signed_in.then_some(session), &owner, &language)
+                .await
+                .unwrap()
+        }
+    };
+    assert_eq!(count("Equipo-Ejemplo", "es-419", false).await, 4);
+    assert_eq!(count("Equipo-Ejemplo", "es-419", true).await, 5);
+    assert_eq!(count("equipo-ejemplo", "es-419", true).await, 5);
+    assert_eq!(count("es-419_gl", "es-419", true).await, 12);
+    assert_eq!(count("Equipo-Ejemplo", "es", true).await, 0);
+    let searches: Vec<String> = fake
+        .requests()
+        .into_iter()
+        .filter(|r| r.path == "/api/v1/repos/search")
+        .map(|r| r.query.unwrap_or_default())
+        .collect();
+    assert_eq!(searches.len(), 5);
+    assert!(
+        searches.iter().all(|q| q.contains("limit=1")),
+        "no listing is read: {searches:?}"
+    );
+}
